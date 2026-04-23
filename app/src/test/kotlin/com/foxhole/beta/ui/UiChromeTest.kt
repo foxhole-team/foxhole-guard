@@ -1,0 +1,85 @@
+package com.foxhole.beta.ui
+
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHostState
+import org.junit.Assert.assertEquals
+import org.junit.Test
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.yield
+
+class UiChromeTest {
+    @Test
+    fun `show banner keeps success tone and short duration`() =
+        runBlocking {
+            val hostState = SnackbarHostState()
+            val job = launch {
+                hostState.showBanner("Profile imported", FoxholeBannerTone.SUCCESS)
+            }
+            yield()
+            val visuals = hostState.currentSnackbarData?.visuals as FoxholeBannerVisuals
+            assertEquals("Profile imported", visuals.message)
+            assertEquals(FoxholeBannerTone.SUCCESS, visuals.tone)
+            assertEquals(SnackbarDuration.Short, visuals.duration)
+            hostState.currentSnackbarData?.dismiss()
+            job.join()
+        }
+
+    @Test
+    fun `show banner keeps error tone and long duration`() =
+        runBlocking {
+            val hostState = SnackbarHostState()
+            val job = launch {
+                hostState.showBanner("Profile refresh failed", FoxholeBannerTone.ERROR)
+            }
+            yield()
+            val visuals = hostState.currentSnackbarData?.visuals as FoxholeBannerVisuals
+            assertEquals("Profile refresh failed", visuals.message)
+            assertEquals(FoxholeBannerTone.ERROR, visuals.tone)
+            assertEquals(SnackbarDuration.Long, visuals.duration)
+            hostState.currentSnackbarData?.dismiss()
+            job.join()
+        }
+
+    @Test
+    fun `diagnostic message parts split structured network details`() {
+        assertEquals(
+            DiagnosticMessageParts(
+                headline = "Default network changed",
+                bulletDetails = listOf("wifi", "internet", "validated"),
+            ),
+            diagnosticMessageParts("default network changed: wifi • internet • validated"),
+        )
+    }
+
+    @Test
+    fun `diagnostic message parts humanize key value state lines`() {
+        assertEquals(
+            DiagnosticMessageParts(
+                headline = "State: connected",
+                bulletDetails = listOf("Reason: manual"),
+            ),
+            diagnosticMessageParts("state=connected reason=manual"),
+        )
+    }
+
+    @Test
+    fun `diagnostic message parts humanize app activity details`() {
+        assertEquals(
+            DiagnosticMessageParts(
+                headline = "App connection",
+                bulletDetails =
+                    listOf(
+                        "App: Chrome",
+                        "Packages: com.android.chrome",
+                        "UID: 10234",
+                        "Protocol: TCP",
+                        "Remote: 1.1.1.1:443",
+                    ),
+            ),
+            diagnosticMessageParts(
+                "App connection: app=Chrome • packages=com.android.chrome • uid=10234 • protocol=TCP • remote=1.1.1.1:443",
+            ),
+        )
+    }
+}

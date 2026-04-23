@@ -1,0 +1,10 @@
+title = "Foxhole gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "vendored sing-box examples and docs"
+paths = [
+  '''(?:^|/)third_party/sing-box(?:/.*)?$''',
+]

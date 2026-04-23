@@ -1,0 +1,59 @@
+# === vless / profile_0 ===
+vless://11111111-1111-1111-1111-111111111111@direct.example.com:8443?encryption=none&security=none&type=tcp#profile_0
+
+# === trojan / profile_0 ===
+trojan://secret-direct@trojan-direct.example.com:8444?security=tls&type=tcp#profile_0
+
+# === hysteria2 / profile_0 ===
+hysteria2://secret-direct@hy2-direct.example.com:8447/#profile_0
+
+# === shadowsocks-2022 / profile_0 ===
+ss://2022-blake3-aes-128-gcm:direct-password@ss-direct.example.com:8446#profile_0
+
+# === outline / profile_0 ===
+outline://c3M6Ly8yMDIyLWJsYWtlMy1hZXMtMTI4LWdjbTpvdXRsaW5lLXBhc3N3b3JkQG91dGxpbmUtZGlyZWN0LmV4YW1wbGUuY29tOjg0NDgjRm94aG9sZSUyMHNtYXJ0JTIwZGlyZWN0
+
+# === wireguard / profile_0 ===
+[Interface]
+PrivateKey = change-me-direct-private-key
+Address = 10.77.0.2/32
+DNS = 1.1.1.1
+MTU = 1280
+
+[Peer]
+PublicKey = change-me-direct-public-key
+PresharedKey = change-me-direct-preshared-key
+AllowedIPs = 0.0.0.0/0, ::/0
+Endpoint = wg-direct.example.com:51820
+PersistentKeepalive = 25
+# user_id=1; type=direct; profile_id=sample-profile-1; expire=1779563665
+
+# === vless / profile_1===
+vless://22222222-2222-2222-2222-222222222222@tor.example.com:9443?encryption=none&security=none&type=tcp#profile_1
+
+# === trojan / profile_1===
+trojan://secret-tor@trojan-tor.example.com:9444?security=tls&type=tcp#profile_1
+
+# === hysteria2 / profile_1===
+hysteria2://secret-tor@hy2-tor.example.com:9447/#profile_1
+
+# === shadowsocks-2022 / profile_1===
+ss://2022-blake3-aes-128-gcm:tor-password@ss-tor.example.com:9446#profile_1
+
+# === outline / profile_1===
+outline://c3M6Ly8yMDIyLWJsYWtlMy1hZXMtMTI4LWdjbTpvdXRsaW5lLXBhc3N3b3JkQG91dGxpbmUtdG9yLmV4YW1wbGUuY29tOjk0NDgjRm94aG9sZSUyMHNtYXJ0JTIwdG9yJTJCaTJw
+
+# === wireguard / profile_1===
+[Interface]
+PrivateKey = change-me-tor-private-key
+Address = 10.78.0.2/32
+DNS = 10.79.0.1
+MTU = 1280
+
+[Peer]
+PublicKey = change-me-tor-public-key
+PresharedKey = change-me-tor-preshared-key
+AllowedIPs = 0.0.0.0/0, ::/0
+Endpoint = wg-tor.example.com:51821
+PersistentKeepalive = 25
+# user_id=1; type=tor+i2p; profile_id=sample-profile-2; expire=1779563665

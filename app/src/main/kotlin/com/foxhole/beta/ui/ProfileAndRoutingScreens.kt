@@ -1,0 +1,1251 @@
+package com.foxhole.beta.ui
+
+import android.content.Intent
+import android.graphics.Bitmap
+import android.util.LruCache
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.HelpOutline
+import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.Apps
+import androidx.compose.material.icons.outlined.ArrowOutward
+import androidx.compose.material.icons.outlined.Block
+import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.ExpandLess
+import androidx.compose.material.icons.outlined.ExpandMore
+import androidx.compose.material.icons.outlined.FileDownload
+import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.outlined.RadioButtonUnchecked
+import androidx.compose.material.icons.outlined.RemoveCircleOutline
+import androidx.compose.material.icons.outlined.Save
+import androidx.compose.material.icons.outlined.Security
+import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.Speed
+import androidx.compose.material.icons.outlined.Tune
+import androidx.compose.material.icons.outlined.VpnKey
+import androidx.compose.material.icons.outlined.Bolt
+import androidx.compose.material.icons.outlined.Cloud
+import androidx.compose.material.icons.outlined.Hub
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.Surface
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.DpOffset
+import androidx.compose.ui.unit.dp
+import androidx.core.graphics.drawable.toBitmap
+import com.foxhole.beta.R
+import com.foxhole.beta.core.model.InstalledAppOption
+import com.foxhole.beta.core.model.PerAppRoutingMode
+import com.foxhole.beta.core.model.Profile
+import com.foxhole.beta.core.model.ProfileSourceType
+import com.foxhole.beta.core.model.RoutingRule
+import com.foxhole.beta.core.model.RoutingRuleAction
+import com.foxhole.beta.core.profile.PreparedProfileExport
+import com.foxhole.beta.core.profile.ProfileExportChoice
+import com.foxhole.beta.core.profile.exportableProfileChoices
+import com.foxhole.beta.core.profile.EditableProfileConfig
+import com.foxhole.beta.core.profile.ProfileConfigFormCodec
+import com.foxhole.beta.core.profile.MultiProtocolProfileSupport
+import com.foxhole.beta.ui.FoxholeCard
+import com.foxhole.beta.ui.FoxholeChoiceCard
+import com.foxhole.beta.ui.FoxholePreferenceCard
+import com.foxhole.beta.ui.FoxholeScaffold
+import com.foxhole.beta.ui.FoxholeSearchField
+import com.foxhole.beta.ui.FoxholeValuePill
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.text.DateFormat
+
+internal enum class InstalledAppFilter {
+    ALL,
+    USER,
+    SYSTEM,
+}
+
+@Composable
+fun ProfilesScreen(
+    state: ProfilesRouteUiState,
+    snackbarHostState: SnackbarHostState,
+    onNavigateUp: () -> Unit,
+    onSetActiveProfile: (Long) -> Unit,
+    onEditProfile: (Long) -> Unit,
+    onSelectProtocolOption: (Long, String) -> Unit,
+    onUpdateAutoConnectExcludedOptions: (Long, Set<String>) -> Unit,
+    onRefreshProfile: (Long) -> Unit,
+    onDeleteProfile: (Long) -> Unit,
+    onCreateProfileExport: suspend (List<ProfileExportSelectionRequest>) -> PreparedProfileExport,
+    onCreateProfileExportShareIntent: (PreparedProfileExport) -> Intent,
+) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val exportChoicesByProfileId =
+        remember(state.profiles) {
+            state.profiles.associate { profile ->
+                profile.id to exportableProfileChoices(profile)
+            }
+        }
+    var deleteProfileId by rememberSaveable { mutableStateOf<Long?>(null) }
+    var refreshProfileId by rememberSaveable { mutableStateOf<Long?>(null) }
+    var exportMode by rememberSaveable { mutableStateOf(false) }
+    var exportSelectionState by rememberSaveable(stateSaver = ProfilesExportSelectionStateSaver) {
+        mutableStateOf(ProfilesExportSelectionState())
+    }
+    var exportDestinationDialogVisible by rememberSaveable { mutableStateOf(false) }
+    var exportInFlight by rememberSaveable { mutableStateOf(false) }
+    var pendingProfileExportPath by rememberSaveable { mutableStateOf<String?>(null) }
+    var pendingProfileExportFileName by rememberSaveable { mutableStateOf<String?>(null) }
+    var pendingProfileExportMimeType by rememberSaveable { mutableStateOf<String?>(null) }
+    val selectedExportRequests =
+        remember(exportSelectionState) {
+            exportSelectionState.requests()
+        }
+    val selectedExportConfigCount =
+        remember(selectedExportRequests) {
+            selectedExportRequests.sumOf { request -> request.selectionKeys.size }
+        }
+    val rememberedSmartStartLatenciesByProfileId = state.smartStartRememberedLatenciesByProfileId
+    var sessionProfileOrderIds by rememberSaveable { mutableStateOf<List<Long>>(emptyList()) }
+    val profileMembershipKey =
+        remember(state.profiles) {
+            state.profiles.map(Profile::id).sorted()
+        }
+    val visibleProfiles =
+        remember(state.profiles, sessionProfileOrderIds) {
+            visibleProfilesForProfilesSession(
+                currentProfiles = state.profiles,
+                currentSessionOrderIds = sessionProfileOrderIds,
+            )
+        }
+
+    LaunchedEffect(state.profiles, exportMode) {
+        if (!exportMode) {
+            exportSelectionState = ProfilesExportSelectionState()
+            return@LaunchedEffect
+        }
+        exportSelectionState = exportSelectionState.pruneTo(state.profiles)
+    }
+
+    LaunchedEffect(state.profilesLoaded, profileMembershipKey) {
+        if (!state.profilesLoaded) {
+            return@LaunchedEffect
+        }
+        sessionProfileOrderIds =
+            reconcileProfilesScreenSessionOrderIds(
+                currentProfiles = state.profiles,
+                currentSessionOrderIds = sessionProfileOrderIds,
+            )
+    }
+
+    val saveProfileExportLauncher =
+        rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("*/*")) { uri ->
+            val export =
+                pendingProfileExportPath
+                    ?.let { filePath ->
+                        pendingProfileExportFileName?.let { fileName ->
+                            pendingProfileExportMimeType?.let { mimeType ->
+                                PreparedProfileExport(
+                                    file = java.io.File(filePath),
+                                    fileName = fileName,
+                                    mimeType = mimeType,
+                                )
+                            }
+                        }
+                    }
+            pendingProfileExportPath = null
+            pendingProfileExportFileName = null
+            pendingProfileExportMimeType = null
+            if (uri == null || export == null) {
+                return@rememberLauncherForActivityResult
+            }
+            scope.launch {
+                runCatching {
+                    withContext(Dispatchers.IO) {
+                        context.contentResolver.openOutputStream(uri)?.use { output ->
+                            export.file.inputStream().use { input -> input.copyTo(output) }
+                        } ?: error("failed to open export target")
+                    }
+                }.onSuccess {
+                    snackbarHostState.showSnackbar(context.getString(R.string.profile_export_saved))
+                }.onFailure {
+                    snackbarHostState.showSnackbar(context.getString(R.string.profile_export_save_failed))
+                }
+            }
+        }
+
+    SettingsScaffold(
+        title = stringResource(R.string.profile_list_title),
+        snackbarHostState = snackbarHostState,
+        onNavigateUp = onNavigateUp,
+        actions = {
+            if (exportMode) {
+                IconButton(
+                    onClick = {
+                        exportMode = false
+                        exportSelectionState = ProfilesExportSelectionState()
+                        exportDestinationDialogVisible = false
+                    },
+                    modifier = Modifier.testTag("profiles_export_cancel_action"),
+                ) {
+                    Icon(Icons.Outlined.RemoveCircleOutline, contentDescription = stringResource(R.string.cancel))
+                }
+                FoxholeSaveAction(
+                    onClick = { exportDestinationDialogVisible = true },
+                    enabled = selectedExportRequests.isNotEmpty() && !exportInFlight,
+                    icon = Icons.Outlined.Save,
+                    modifier = Modifier.testTag("profiles_export_action"),
+                )
+            } else {
+                IconButton(
+                    onClick = { exportMode = true },
+                    enabled = state.profiles.isNotEmpty(),
+                    modifier = Modifier.testTag("profiles_export_action"),
+                ) {
+                    Icon(Icons.Outlined.FileDownload, contentDescription = stringResource(R.string.export_label))
+                }
+            }
+        },
+    ) {
+        if (!state.profilesLoaded) {
+            items(3) { index ->
+                ProfileListLoadingCard(tag = "profiles_loading_$index")
+            }
+        } else if (state.profiles.isEmpty()) {
+            item {
+                WarningBlock(
+                    title = stringResource(R.string.no_profiles),
+                    body = stringResource(R.string.manage_profiles_summary),
+                )
+            }
+        }
+        items(visibleProfiles, key = Profile::id) { profile ->
+            val isSelected = profile.id == state.activeProfileId
+            val isSmartProfile = MultiProtocolProfileSupport.hasMultipleSupportedOptions(profile)
+            val showInlineRefreshAction =
+                isSmartProfile && profile.sourceType == ProfileSourceType.SUBSCRIPTION_URL
+            val exportChoices = exportChoicesByProfileId[profile.id].orEmpty()
+            val exportSelectedKeys = exportSelectionState.selectedKeys(profile.id)
+            val exportSelectionMode =
+                if (exportChoices.size > 1) {
+                    exportSelectionState.smartProfileSelectionState(profile)
+                } else if (exportSelectedKeys.isNotEmpty()) {
+                    SmartProfileExportSelectionState.ALL
+                } else {
+                    SmartProfileExportSelectionState.NONE
+                }
+            val exportCardSelected = exportMode && exportSelectedKeys.isNotEmpty()
+            FoxholeCard(
+                onClick = {
+                    if (exportMode) {
+                        exportSelectionState =
+                            when {
+                                exportChoices.size > 1 -> exportSelectionState.toggleSmartProfileExpanded(profile.id)
+                                else -> exportSelectionState.toggleSingleProfile(profile)
+                            }
+                    } else if (!isSelected) {
+                        onSetActiveProfile(profile.id)
+                    }
+                },
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .testTag("profiles_profile_row_${profile.id}"),
+                containerColor =
+                    if (exportCardSelected) {
+                        FoxholeInfoAccent.copy(alpha = 0.08f)
+                    } else if (isSelected) {
+                        FoxholePositiveAccent.copy(alpha = 0.05f)
+                    } else {
+                        Color.Unspecified
+                    },
+                borderColor =
+                    if (exportCardSelected) {
+                        FoxholeInfoAccent.copy(alpha = 0.42f)
+                    } else if (isSelected) {
+                        FoxholePositiveAccent.copy(alpha = 0.42f)
+                    } else {
+                        Color.Unspecified
+                    },
+            ) {
+                Row(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .foxholeAnimateContentSize(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.Top,
+                ) {
+                    if (exportMode) {
+                        ProfileExportSelector(
+                            selectionState = exportSelectionMode,
+                            onClick = {
+                                exportSelectionState =
+                                    when {
+                                        exportChoices.size > 1 -> exportSelectionState.toggleSmartProfileAll(profile)
+                                        else -> exportSelectionState.toggleSingleProfile(profile)
+                                    }
+                            },
+                            modifier = Modifier.padding(top = 2.dp).testTag("profiles_export_profile_selector_${profile.id}"),
+                        )
+                    }
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        InlineSmartProfileTitle(
+                            title = profile.name,
+                            isSmartProfile = isSmartProfile,
+                        )
+                        Text(
+                            text = rememberProfileSourceSummary(profile),
+                            style =
+                                if (profile.sourceType == ProfileSourceType.SUBSCRIPTION_URL && profile.subscriptionExpiresAt != null) {
+                                    MaterialTheme.typography.labelLarge
+                                } else {
+                                    MaterialTheme.typography.bodyMedium
+                                },
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        ProtocolMetadataRow(
+                            protocol = profile.protocolHint,
+                            subscriptionExpiresAt = null,
+                            protocolOptions = profile.protocolOptions,
+                            selectedProtocolOptionId = profile.selectedProtocolOptionId,
+                            onProtocolOptionSelected = { optionId -> onSelectProtocolOption(profile.id, optionId) },
+                            compact = true,
+                            reserveTrailingSpace = false,
+                            expand = false,
+                            leadingContent =
+                                if (isSmartProfile) {
+                                    {
+                                        SmartProfileAutoConnectMenu(
+                                            profile = profile,
+                                            excludedOptionIds = state.smartProfileExcludedOptionIdsByProfileId[profile.id].orEmpty(),
+                                            onUpdateExcludedOptionIds = { excludedIds ->
+                                                onUpdateAutoConnectExcludedOptions(profile.id, excludedIds)
+                                            },
+                                            latencyByOptionId = rememberedSmartStartLatenciesByProfileId[profile.id].orEmpty(),
+                                            showLatency = rememberedSmartStartLatenciesByProfileId[profile.id]?.isNotEmpty() == true,
+                                            compact = true,
+                                        )
+                                    }
+                                } else {
+                                    null
+                                },
+                        )
+                        if (exportMode && exportChoices.size > 1) {
+                            Text(
+                                text =
+                                    stringResource(
+                                        R.string.profile_export_selection_summary,
+                                        exportSelectedKeys.size,
+                                        exportChoices.size,
+                                    ),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                    if (exportMode) {
+                        if (exportChoices.size > 1) {
+                            Icon(
+                                imageVector =
+                                    if (exportSelectionState.isSmartProfileExpanded(profile.id)) {
+                                        Icons.Outlined.ExpandLess
+                                    } else {
+                                        Icons.Outlined.ExpandMore
+                                    },
+                                contentDescription = null,
+                                modifier = Modifier.padding(top = 4.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    } else {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        ) {
+                            if (showInlineRefreshAction) {
+                                IconButton(
+                                    onClick = { refreshProfileId = profile.id },
+                                    modifier =
+                                        Modifier
+                                            .size(34.dp)
+                                            .testTag("profiles_profile_refresh_action_${profile.id}"),
+                                ) {
+                                    Icon(Icons.Outlined.Refresh, contentDescription = stringResource(R.string.refresh))
+                                }
+                            }
+                            IconButton(
+                                onClick = { onEditProfile(profile.id) },
+                                modifier =
+                                    Modifier
+                                        .size(34.dp)
+                                        .testTag("profiles_profile_edit_action_${profile.id}"),
+                            ) {
+                                Icon(Icons.Outlined.Edit, contentDescription = stringResource(R.string.edit_label))
+                            }
+                            IconButton(
+                                onClick = { deleteProfileId = profile.id },
+                                modifier =
+                                    Modifier
+                                        .size(34.dp)
+                                        .testTag("profiles_profile_delete_action_${profile.id}"),
+                            ) {
+                                Icon(
+                                    Icons.Outlined.Delete,
+                                    contentDescription = stringResource(R.string.delete_label),
+                                    tint = MaterialTheme.colorScheme.error,
+                                )
+                            }
+                        }
+                    }
+                }
+                if (exportMode && exportChoices.size > 1 && exportSelectionState.isSmartProfileExpanded(profile.id)) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth().padding(start = 42.dp, top = 10.dp),
+                        verticalArrangement = Arrangement.spacedBy(0.dp),
+                    ) {
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.34f))
+                        exportChoices.forEachIndexed { index, choice ->
+                            ProfileExportChoiceRow(
+                                title = choice.displayName,
+                                selected = choice.selectionKey in exportSelectedKeys,
+                                onClick = {
+                                    exportSelectionState =
+                                        exportSelectionState.toggleSmartProfileChoice(
+                                            profile = profile,
+                                            selectionKey = choice.selectionKey,
+                                        )
+                                },
+                                modifier = Modifier.testTag("profiles_export_protocol_selector_${profile.id}_$index"),
+                                showDivider = index < exportChoices.lastIndex,
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if (exportDestinationDialogVisible) {
+        AlertDialog(
+            onDismissRequest = {
+                if (!exportInFlight) {
+                    exportDestinationDialogVisible = false
+                }
+            },
+            title = { Text(stringResource(R.string.profile_export_destination_title)) },
+            text = { Text(stringResource(R.string.profile_export_destination_summary, selectedExportConfigCount)) },
+            confirmButton = {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TextButton(
+                        onClick = {
+                            val exportRequests = selectedExportRequests
+                            scope.launch {
+                                exportInFlight = true
+                                try {
+                                    val export = onCreateProfileExport(exportRequests)
+                                    pendingProfileExportPath = export.file.absolutePath
+                                    pendingProfileExportFileName = export.fileName
+                                    pendingProfileExportMimeType = export.mimeType
+                                    exportDestinationDialogVisible = false
+                                    saveProfileExportLauncher.launch(export.fileName)
+                                    exportMode = false
+                                    exportSelectionState = ProfilesExportSelectionState()
+                                } finally {
+                                    exportInFlight = false
+                                }
+                            }
+                        },
+                        enabled = selectedExportRequests.isNotEmpty() && !exportInFlight,
+                    ) {
+                        Text(stringResource(R.string.profile_export_save_to_disk))
+                    }
+                    TextButton(
+                        onClick = {
+                            val exportRequests = selectedExportRequests
+                            scope.launch {
+                                exportInFlight = true
+                                try {
+                                    val export = onCreateProfileExport(exportRequests)
+                                    exportDestinationDialogVisible = false
+                                    val chooser =
+                                        Intent.createChooser(
+                                            onCreateProfileExportShareIntent(export),
+                                            context.getString(R.string.share_archive),
+                                        )
+                                    context.startActivity(chooser)
+                                    exportMode = false
+                                    exportSelectionState = ProfilesExportSelectionState()
+                                } finally {
+                                    exportInFlight = false
+                                }
+                            }
+                        },
+                        enabled = selectedExportRequests.isNotEmpty() && !exportInFlight,
+                    ) {
+                        Text(stringResource(R.string.share_archive))
+                    }
+                    TextButton(
+                        onClick = { exportDestinationDialogVisible = false },
+                        enabled = !exportInFlight,
+                    ) {
+                        Text(stringResource(R.string.cancel))
+                    }
+                }
+            },
+            dismissButton = {},
+        )
+    }
+
+    deleteProfileId?.let { profileId ->
+        ConfirmDialog(
+            title = stringResource(R.string.delete_profile_title),
+            body = state.profile(profileId)?.name.orEmpty(),
+            confirmLabel = stringResource(R.string.yes_label),
+            dismissLabel = stringResource(R.string.no_label),
+            onDismiss = { deleteProfileId = null },
+            onConfirm = {
+                onDeleteProfile(profileId)
+                deleteProfileId = null
+            },
+        )
+    }
+
+    refreshProfileId?.let { profileId ->
+        ProfileRefreshConfirmDialog(
+            onDismiss = { refreshProfileId = null },
+            onConfirm = {
+                onRefreshProfile(profileId)
+                refreshProfileId = null
+            },
+        )
+    }
+}
+
+@Composable
+private fun ProfileExportSelector(
+    selectionState: SmartProfileExportSelectionState,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        onClick = onClick,
+        modifier = modifier.size(28.dp),
+        shape = CircleShape,
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.36f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.42f)),
+    ) {
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center,
+        ) {
+            val (icon, tint) =
+                when (selectionState) {
+                    SmartProfileExportSelectionState.ALL -> Icons.Outlined.CheckCircle to FoxholePositiveAccent
+                    SmartProfileExportSelectionState.PARTIAL -> Icons.Outlined.RemoveCircleOutline to FoxholeInfoAccent
+                    SmartProfileExportSelectionState.NONE -> Icons.Outlined.RadioButtonUnchecked to MaterialTheme.colorScheme.onSurfaceVariant
+                }
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = tint,
+                modifier = Modifier.size(18.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun ProfileExportChoiceRow(
+    title: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    showDivider: Boolean,
+) {
+    Column(modifier = modifier.fillMaxWidth()) {
+        Row(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .clickable(onClick = onClick)
+                    .padding(vertical = 10.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            ProfileExportSelector(
+                selectionState =
+                    if (selected) {
+                        SmartProfileExportSelectionState.ALL
+                    } else {
+                        SmartProfileExportSelectionState.NONE
+                    },
+                onClick = onClick,
+            )
+            Text(
+                text = title,
+                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        if (showDivider) {
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.28f))
+        }
+    }
+}
+
+@Composable
+fun ProfileDetailScreen(
+    profile: Profile?,
+    activeProfileId: Long?,
+    excludedAutoConnectOptionIds: Set<String>,
+    rememberedSmartStartLatenciesByOptionId: Map<String, Long>,
+    snackbarHostState: SnackbarHostState,
+    onNavigateUp: () -> Unit,
+    onSetActiveProfile: (Long) -> Unit,
+    onSelectProtocolOption: (Long, String) -> Unit,
+    onUpdateAutoConnectExcludedOptions: (Long, Set<String>) -> Unit,
+    onRefreshProfile: (Long) -> Unit,
+    onDeleteProfile: () -> Unit,
+    onViewConfig: () -> Unit,
+    onEditConfig: () -> Unit,
+) {
+    var showDeleteDialog by rememberSaveable { mutableStateOf(false) }
+    var showRefreshDialog by rememberSaveable { mutableStateOf(false) }
+
+    if (profile == null) {
+        SettingsScaffold(
+            title = stringResource(R.string.profile),
+            snackbarHostState = snackbarHostState,
+            onNavigateUp = onNavigateUp,
+        ) {
+            item {
+                WarningBlock(
+                    title = stringResource(R.string.profile_not_found_title),
+                    body = stringResource(R.string.profile_not_found_summary),
+                )
+            }
+        }
+        return
+    }
+
+    SettingsScaffold(
+        title = profile.name,
+        snackbarHostState = snackbarHostState,
+        onNavigateUp = onNavigateUp,
+    ) {
+        item {
+            val sourceTitle =
+                if (profile.sourceType == ProfileSourceType.SUBSCRIPTION_URL) {
+                    stringResource(R.string.profile_source_subscription)
+                } else {
+                    stringResource(R.string.profile_source)
+                }
+            val sourceValue = rememberProfileDetailSourceValue(profile)
+            SettingValueRow(
+                title = sourceTitle,
+                value = sourceValue,
+                onClick = null,
+                trailingContent = {
+                    Text(
+                        text = sourceValue,
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                },
+            )
+        }
+        item {
+            FoxholeCard {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    InlineSmartProfileTitle(
+                        title = stringResource(R.string.protocol),
+                        isSmartProfile = MultiProtocolProfileSupport.hasMultipleSupportedOptions(profile),
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Clip,
+                    )
+                    ProtocolMetadataRow(
+                        protocol = profile.protocolHint,
+                        subscriptionExpiresAt = null,
+                        protocolOptions = profile.protocolOptions,
+                        selectedProtocolOptionId = profile.selectedProtocolOptionId,
+                        onProtocolOptionSelected = { optionId -> onSelectProtocolOption(profile.id, optionId) },
+                        compact = true,
+                        reserveTrailingSpace = false,
+                        expand = false,
+                        leadingContent =
+                            if (MultiProtocolProfileSupport.hasMultipleSupportedOptions(profile)) {
+                                {
+                                    SmartProfileAutoConnectMenu(
+                                        profile = profile,
+                                        excludedOptionIds = excludedAutoConnectOptionIds,
+                                        onUpdateExcludedOptionIds = { excludedIds ->
+                                            onUpdateAutoConnectExcludedOptions(profile.id, excludedIds)
+                                        },
+                                        latencyByOptionId = rememberedSmartStartLatenciesByOptionId,
+                                        showLatency = rememberedSmartStartLatenciesByOptionId.isNotEmpty(),
+                                        compact = true,
+                                    )
+                                }
+                            } else {
+                                null
+                            },
+                    )
+                }
+            }
+        }
+        item {
+            SettingValueRow(
+                title = stringResource(R.string.last_updated),
+                value = formatProfileUpdatedAt(profile.lastUpdatedAt),
+                onClick = null,
+            )
+        }
+        item {
+            SettingValueRow(
+                title = stringResource(R.string.profile_status),
+                value =
+                    if (activeProfileId == profile.id) {
+                        stringResource(R.string.active_label)
+                    } else {
+                        stringResource(R.string.inactive_label)
+                    },
+                onClick = null,
+            )
+        }
+        if (activeProfileId != profile.id) {
+            item {
+                SettingsNavigationRow(
+                    icon = Icons.Outlined.CheckCircle,
+                    title = stringResource(R.string.use_profile),
+                    summary = stringResource(R.string.use_profile_summary),
+                    onClick = { onSetActiveProfile(profile.id) },
+                )
+            }
+        }
+        if (profile.sourceType == ProfileSourceType.SUBSCRIPTION_URL) {
+            item {
+                SettingsNavigationRow(
+                    icon = Icons.Outlined.Refresh,
+                    title = stringResource(R.string.refresh),
+                    summary = stringResource(R.string.profile_refresh_summary),
+                    onClick = { showRefreshDialog = true },
+                )
+            }
+        }
+        item {
+            SettingsNavigationRow(
+                icon = Icons.Outlined.Apps,
+                title = stringResource(R.string.view_profile_config),
+                summary = stringResource(R.string.view_profile_config_summary),
+                onClick = onViewConfig,
+            )
+        }
+        item {
+            SettingsNavigationRow(
+                icon = Icons.Outlined.Edit,
+                title = stringResource(R.string.edit_profile_config),
+                summary = stringResource(R.string.edit_profile_config_summary),
+                onClick = onEditConfig,
+            )
+        }
+        item {
+            SettingsNavigationRow(
+                icon = Icons.Outlined.Delete,
+                title = stringResource(R.string.delete_profile_title),
+                summary = stringResource(R.string.delete_profile_summary),
+                onClick = { showDeleteDialog = true },
+            )
+        }
+    }
+
+    if (showDeleteDialog) {
+        ConfirmDialog(
+            title = stringResource(R.string.delete_profile_title),
+            body = stringResource(R.string.delete_profile_summary),
+            confirmLabel = stringResource(R.string.delete_label),
+            onDismiss = { showDeleteDialog = false },
+            onConfirm = {
+                showDeleteDialog = false
+                onDeleteProfile()
+            },
+        )
+    }
+
+    if (showRefreshDialog) {
+        ProfileRefreshConfirmDialog(
+            onDismiss = { showRefreshDialog = false },
+            onConfirm = {
+                showRefreshDialog = false
+                onRefreshProfile(profile.id)
+            },
+        )
+    }
+}
+
+@Composable
+internal fun SmartProfileAutoConnectMenu(
+    profile: Profile,
+    excludedOptionIds: Set<String>,
+    onUpdateExcludedOptionIds: (Set<String>) -> Unit,
+    latencyByOptionId: Map<String, Long> = emptyMap(),
+    unavailableOptionIds: Set<String> = emptySet(),
+    latencyUnavailableOptionIds: Set<String> = emptySet(),
+    showLatency: Boolean = false,
+    compact: Boolean = false,
+    enabled: Boolean = true,
+    actionIconSize: Dp? = null,
+) {
+    val options = MultiProtocolProfileSupport.supportedOptions(profile)
+    if (options.size < 2) {
+        return
+    }
+    var expanded by rememberSaveable(profile.id) { mutableStateOf(false) }
+    val minMenuWidth =
+        when {
+            compact && showLatency -> 238.dp
+            compact -> 206.dp
+            showLatency -> 280.dp
+            else -> 244.dp
+        }
+    val maxMenuWidth =
+        when {
+            compact && showLatency -> 288.dp
+            compact -> 236.dp
+            showLatency -> 324.dp
+            else -> 286.dp
+        }
+    Box {
+        Surface(
+            modifier =
+                Modifier
+                    .size(if (compact) 30.dp else 36.dp)
+                    .clip(CircleShape)
+                    .clickable(enabled = enabled) { expanded = true }
+                    .testTag("smart_profile_auto_connect_menu_action"),
+            shape = CircleShape,
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.58f),
+            border = BorderStroke(1.dp, FoxholeInfoAccent.copy(alpha = 0.18f)),
+        ) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.Settings,
+                    contentDescription = stringResource(R.string.smart_profile_menu_title),
+                    modifier = Modifier.size(actionIconSize ?: if (compact) 16.dp else 20.dp),
+                    tint = FoxholeInfoAccent,
+                )
+            }
+        }
+        FoxholeDropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+            modifier =
+                Modifier
+                    .testTag("smart_profile_auto_connect_menu")
+                    .widthIn(min = minMenuWidth, max = maxMenuWidth),
+            offset = DpOffset(x = 0.dp, y = if (compact) (-6).dp else 0.dp),
+        ) {
+            Column(
+                modifier = Modifier.padding(if (compact) 0.dp else 2.dp),
+                verticalArrangement = Arrangement.spacedBy(if (compact) 0.dp else 2.dp),
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(if (compact) 3.dp else 6.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = if (compact) 3.dp else 6.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.Top,
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.Info,
+                            contentDescription = null,
+                            modifier = Modifier.size(if (compact) 14.dp else 16.dp),
+                            tint = FoxholeInfoAccent,
+                        )
+                        Text(
+                            text = stringResource(R.string.smart_profile_menu_title),
+                            modifier = Modifier.weight(1f),
+                            style =
+                                if (compact) {
+                                    MaterialTheme.typography.bodySmall
+                                } else {
+                                    MaterialTheme.typography.labelMedium
+                                },
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    HorizontalDivider(
+                        modifier = Modifier.padding(horizontal = if (compact) 8.dp else 10.dp),
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.34f),
+                    )
+                }
+                options.forEach { option ->
+                    val included = option.id !in excludedOptionIds
+                    val includedCount = options.count { candidate -> candidate.id !in excludedOptionIds }
+                    FoxholeDropdownItem(
+                        onClick = {
+                            val nextExcluded =
+                                if (included) {
+                                    if (includedCount <= 1) {
+                                        null
+                                    } else {
+                                        excludedOptionIds + option.id
+                                    }
+                                } else {
+                                    excludedOptionIds - option.id
+                                }
+                            nextExcluded?.let(onUpdateExcludedOptionIds)
+                        },
+                        selected = included,
+                        highlightSelected = false,
+                        accentColor = FoxholePositiveAccent,
+                        contentPadding =
+                            PaddingValues(
+                                horizontal = 12.dp,
+                                vertical = 0.dp,
+                            ),
+                        trailingContent = {
+                            if (showLatency && included) {
+                                if (option.id in unavailableOptionIds) {
+                                    ProtocolLatencyPill(
+                                        compact = true,
+                                        isDown = true,
+                                        showLabel = false,
+                                    )
+                                } else if (option.id in latencyUnavailableOptionIds) {
+                                    ProtocolLatencyPill(
+                                        compact = true,
+                                        isUnavailable = true,
+                                        showLabel = false,
+                                    )
+                                } else {
+                                    latencyByOptionId[option.id]?.let { latencyMs ->
+                                        ProtocolLatencyPill(
+                                            latencyMs = latencyMs,
+                                            compact = true,
+                                            showLabel = false,
+                                        )
+                                    }
+                                }
+                            }
+                            Icon(
+                                imageVector =
+                                    if (included) {
+                                        Icons.Outlined.CheckCircle
+                                    } else {
+                                        Icons.Outlined.RadioButtonUnchecked
+                                    },
+                                contentDescription = null,
+                                modifier = Modifier.size(if (compact) 18.dp else 20.dp),
+                                tint =
+                                    if (included) {
+                                        FoxholePositiveAccent
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurfaceVariant
+                                    },
+                            )
+                        },
+                    ) {
+                        ProtocolSelectorLabel(
+                            option = option,
+                            modifier = Modifier.weight(1f),
+                            compact = true,
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+internal fun reconcileProfilesScreenSessionOrderIds(
+    currentProfiles: List<Profile>,
+    currentSessionOrderIds: List<Long>,
+): List<Long> {
+    if (currentProfiles.isEmpty()) {
+        return emptyList()
+    }
+    if (currentSessionOrderIds.isEmpty()) {
+        return currentProfiles.map(Profile::id)
+    }
+    val currentIds = currentProfiles.map(Profile::id)
+    val currentIdSet = currentIds.toSet()
+    val retainedIds = currentSessionOrderIds.filter(currentIdSet::contains)
+    val retainedIdSet = retainedIds.toSet()
+    val appendedIds = currentIds.filterNot(retainedIdSet::contains)
+    return retainedIds + appendedIds
+}
+
+internal fun visibleProfilesForProfilesSession(
+    currentProfiles: List<Profile>,
+    currentSessionOrderIds: List<Long>,
+): List<Profile> {
+    if (currentProfiles.isEmpty()) {
+        return emptyList()
+    }
+    if (currentSessionOrderIds.isEmpty()) {
+        return currentProfiles
+    }
+    val profilesById = currentProfiles.associateBy(Profile::id)
+    val orderedProfiles = currentSessionOrderIds.mapNotNull(profilesById::get)
+    if (orderedProfiles.size == currentProfiles.size) {
+        return orderedProfiles
+    }
+    val orderedIds = orderedProfiles.map(Profile::id).toSet()
+    return orderedProfiles + currentProfiles.filterNot { profile -> profile.id in orderedIds }
+}
+
+@Composable
+fun ProfileConfigViewScreen(
+    profile: Profile?,
+    snackbarHostState: SnackbarHostState,
+    onNavigateUp: () -> Unit,
+    onEditConfig: () -> Unit,
+    onLoadConfig: suspend (Long) -> String,
+) {
+    val codec = remember { ProfileConfigFormCodec() }
+    var draft by remember(profile?.id) { mutableStateOf<EditableProfileConfig?>(null) }
+    var loadError by remember(profile?.id) { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(profile?.id) {
+        draft = null
+        loadError = null
+        val currentProfile = profile ?: return@LaunchedEffect
+        runCatching {
+            codec.decode(onLoadConfig(currentProfile.id))
+        }.onSuccess { draft = it }
+            .onFailure { loadError = it.message ?: "failed to load config" }
+    }
+
+    SettingsScaffold(
+        title = profile?.name ?: stringResource(R.string.view_profile_config),
+        snackbarHostState = snackbarHostState,
+        onNavigateUp = onNavigateUp,
+        actions = {
+            if (profile != null) {
+                IconButton(onClick = onEditConfig) {
+                    Icon(Icons.Outlined.Edit, contentDescription = stringResource(R.string.edit_label))
+                }
+            }
+        },
+    ) {
+        item {
+            if (profile == null) {
+                WarningBlock(
+                    title = stringResource(R.string.profile_not_found_title),
+                    body = stringResource(R.string.profile_not_found_summary),
+                )
+            } else {
+                when {
+                    loadError != null -> {
+                        Text(loadError.orEmpty(), color = MaterialTheme.colorScheme.error)
+                    }
+                    draft == null -> {
+                        Text(stringResource(R.string.loading_label))
+                    }
+                    else -> {
+                        ProfileConfigForm(
+                            profile = profile,
+                            draft = draft ?: return@item,
+                            editable = false,
+                            onDraftChanged = {},
+                            onEditRequested = { _, _, _, _ -> },
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun ProfileConfigEditScreen(
+    profile: Profile?,
+    canReconnectNow: Boolean,
+    snackbarHostState: SnackbarHostState,
+    onNavigateUp: () -> Unit,
+    onLoadConfig: suspend (Long) -> String,
+    onSaveConfig: suspend (Long, String, Boolean) -> Unit,
+) {
+    val codec = remember { ProfileConfigFormCodec() }
+    val scope = rememberCoroutineScope()
+    var sourceConfig by remember(profile?.id) { mutableStateOf<String?>(null) }
+    var draft by remember(profile?.id) { mutableStateOf<EditableProfileConfig?>(null) }
+    var loadError by remember(profile?.id) { mutableStateOf<String?>(null) }
+    var saving by rememberSaveable { mutableStateOf(false) }
+    var showSaveDialog by rememberSaveable { mutableStateOf(false) }
+    var fieldDialog by remember { mutableStateOf<ProfileFieldDialogState?>(null) }
+
+    LaunchedEffect(profile?.id) {
+        sourceConfig = null
+        draft = null
+        loadError = null
+        val currentProfile = profile ?: return@LaunchedEffect
+        runCatching { onLoadConfig(currentProfile.id) }
+            .onSuccess {
+                sourceConfig = it
+                draft = codec.decode(it)
+            }.onFailure {
+                loadError = it.message ?: "failed to load config"
+            }
+    }
+
+    SettingsScaffold(
+        title = profile?.name ?: stringResource(R.string.edit_profile_config),
+        snackbarHostState = snackbarHostState,
+        onNavigateUp = onNavigateUp,
+        actions = {
+            FoxholeSaveAction(
+                enabled = profile != null && sourceConfig != null && draft != null && !saving,
+                onClick = { showSaveDialog = true },
+                label = stringResource(R.string.save),
+                icon = Icons.Outlined.Save,
+            )
+        },
+    ) {
+        item {
+            if (profile == null) {
+                WarningBlock(
+                    title = stringResource(R.string.profile_not_found_title),
+                    body = stringResource(R.string.profile_not_found_summary),
+                )
+            } else {
+                when {
+                    loadError != null -> {
+                        Text(loadError.orEmpty(), color = MaterialTheme.colorScheme.error)
+                    }
+                    draft == null -> {
+                        Text(stringResource(R.string.loading_label))
+                    }
+                    else -> {
+                        ProfileConfigForm(
+                            profile = profile,
+                            draft = draft ?: return@item,
+                            editable = true,
+                            onDraftChanged = { draft = it },
+                            onEditRequested = { title, value, singleLine, onConfirm ->
+                                fieldDialog =
+                                    ProfileFieldDialogState(
+                                        title = title,
+                                        initialValue = value,
+                                        singleLine = singleLine,
+                                        onConfirm = onConfirm,
+                                    )
+                            },
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    fieldDialog?.let { dialog ->
+        ProfileFieldDialog(
+            title = dialog.title,
+            initialValue = dialog.initialValue,
+            singleLine = dialog.singleLine,
+            onDismiss = { fieldDialog = null },
+            onConfirm = {
+                dialog.onConfirm(it)
+                fieldDialog = null
+            },
+        )
+    }
+
+    if (showSaveDialog) {
+        fun saveProfile(reconnectAfterSave: Boolean) {
+            val currentProfile = profile ?: return
+            val currentSourceConfig = sourceConfig ?: return
+            val currentDraft = draft ?: return
+            showSaveDialog = false
+            scope.launch {
+                saving = true
+                try {
+                    val updatedConfig = codec.encode(currentSourceConfig, currentDraft)
+                    onSaveConfig(currentProfile.id, updatedConfig, reconnectAfterSave)
+                } finally {
+                    saving = false
+                }
+            }
+        }
+
+        ProfileSaveConfirmDialog(
+            canReconnectNow = canReconnectNow,
+            onDismiss = { showSaveDialog = false },
+            onSave = { saveProfile(reconnectAfterSave = false) },
+            onSaveAndReconnect = { saveProfile(reconnectAfterSave = true) },
+        )
+    }
+}
+
+private data class ProfileFieldDialogState(
+    val title: String,
+    val initialValue: String,
+    val singleLine: Boolean,
+    val onConfirm: (String) -> Unit,
+)

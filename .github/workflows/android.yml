@@ -1,0 +1,259 @@
+name: android
+
+on:
+  push:
+    branches:
+      - main
+      - "codex/**"
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    steps:
+      - name: checkout
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8
+
+      - name: setup java
+        uses: actions/setup-java@dded0888837ed1f317902acf8a20df0ad188d165
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      - name: setup go
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c
+        with:
+          go-version: '1.24.7'
+          cache: false
+
+      - name: setup gradle
+        uses: gradle/actions/setup-gradle@4d9f0ba0025fe599b4ebab900eb7f3a1d93ef4c2
+
+      - name: install android sdk components for libbox
+        shell: bash
+        run: |
+          set -euo pipefail
+          ANDROID_SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}"
+          if [[ ! -d "$ANDROID_SDK_ROOT" ]]; then
+            echo "Android SDK root not found: $ANDROID_SDK_ROOT" >&2
+            exit 1
+          fi
+          SDKMANAGER="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
+          if [[ ! -x "$SDKMANAGER" ]]; then
+            SDKMANAGER="$(find "$ANDROID_SDK_ROOT/cmdline-tools" -path '*/bin/sdkmanager' | sort | tail -n 1)"
+          fi
+          if [[ -z "${SDKMANAGER:-}" || ! -x "$SDKMANAGER" ]]; then
+            echo "sdkmanager not found under $ANDROID_SDK_ROOT/cmdline-tools" >&2
+            exit 1
+          fi
+          {
+            echo "ANDROID_HOME=$ANDROID_SDK_ROOT"
+            echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
+            echo "ANDROID_NDK_HOME=$ANDROID_SDK_ROOT/ndk/28.0.13004108"
+          } >> "$GITHUB_ENV"
+          {
+            dirname "$SDKMANAGER"
+            echo "$ANDROID_SDK_ROOT/platform-tools"
+          } >> "$GITHUB_PATH"
+          set +o pipefail
+          yes | "$SDKMANAGER" --licenses >/dev/null
+          set -o pipefail
+          "$SDKMANAGER" "platform-tools" "platforms;android-36" "build-tools;36.0.0" "ndk;28.0.13004108"
+
+      - name: verify wrapper
+        run: ./gradlew --version
+
+      - name: lint and unit tests
+        run: ./gradlew lintDebug lintRelease testDebugUnitTest
+
+      - name: build release
+        run: ./gradlew assembleRelease
+
+      - name: secret scan
+        run: |
+          go install github.com/zricethezav/gitleaks/v8@v8.24.2
+          "$(go env GOPATH)/bin/gitleaks" dir . -c .gitleaks.toml --redact --no-banner
+
+      - name: dependency vulnerability scan
+        run: |
+          mkdir -p build/reports/security
+          OSV_VERSION="v2.3.5"
+          OSV_ASSET="osv-scanner_linux_amd64"
+          curl -fsSL -o "$RUNNER_TEMP/$OSV_ASSET" "https://github.com/google/osv-scanner/releases/download/$OSV_VERSION/$OSV_ASSET"
+          curl -fsSL -o "$RUNNER_TEMP/osv-scanner_SHA256SUMS" "https://github.com/google/osv-scanner/releases/download/$OSV_VERSION/osv-scanner_SHA256SUMS"
+          (
+            cd "$RUNNER_TEMP"
+            grep "  $OSV_ASSET\$" osv-scanner_SHA256SUMS | sha256sum -c -
+          )
+          chmod +x "$RUNNER_TEMP/$OSV_ASSET"
+          set +e
+          "$RUNNER_TEMP/$OSV_ASSET" scan source -r . \
+            --experimental-exclude app/build \
+            --experimental-exclude build \
+            --experimental-exclude output \
+            --experimental-exclude artifacts \
+            --experimental-exclude .tmp \
+            --experimental-exclude third_party/sing-box \
+            --format json \
+            --output-file build/reports/security/osv-source.json
+          scanner_status=$?
+          echo "osv-scanner exit code: $scanner_status"
+          set -e
+          python3 - <<'PY'
+          import json
+          import pathlib
+          import sys
+
+          report_path = pathlib.Path("build/reports/security/osv-source.json")
+          if not report_path.exists():
+              sys.exit("OSV report was not generated")
+          data = json.loads(report_path.read_text())
+          runtime_findings = []
+          build_metadata_findings = []
+          for result in data.get("results", []):
+              source_path = result.get("source", {}).get("path", "")
+              for package in result.get("packages", []):
+                  vulnerabilities = package.get("vulnerabilities", [])
+                  if not vulnerabilities:
+                      continue
+                  package_name = package.get("package", {}).get("name", "unknown")
+                  ids = ",".join(vulnerability.get("id", "unknown") for vulnerability in vulnerabilities)
+                  finding = f"{source_path}: {package_name} [{ids}]"
+                  if source_path.endswith("gradle/verification-metadata.xml"):
+                      build_metadata_findings.append(finding)
+                  else:
+                      runtime_findings.append(finding)
+          if build_metadata_findings:
+              print("Known build-tool metadata OSV findings:")
+              for finding in build_metadata_findings:
+                  print(f"- {finding}")
+          if runtime_findings:
+              print("Runtime/source dependency OSV findings:")
+              for finding in runtime_findings:
+                  print(f"- {finding}")
+              sys.exit(1)
+          PY
+
+      - name: upload reports
+        if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4
+        with:
+          name: android-reports
+          path: |
+            app/build/reports
+            app/build/test-results
+            build/reports
+
+  connected-tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    steps:
+      - name: checkout
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8
+
+      - name: setup java
+        uses: actions/setup-java@dded0888837ed1f317902acf8a20df0ad188d165
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      - name: setup go
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c
+        with:
+          go-version: '1.24.7'
+          cache: false
+
+      - name: setup gradle
+        uses: gradle/actions/setup-gradle@4d9f0ba0025fe599b4ebab900eb7f3a1d93ef4c2
+
+      - name: install android sdk components for libbox
+        shell: bash
+        run: |
+          set -euo pipefail
+          ANDROID_SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}"
+          if [[ ! -d "$ANDROID_SDK_ROOT" ]]; then
+            echo "Android SDK root not found: $ANDROID_SDK_ROOT" >&2
+            exit 1
+          fi
+          SDKMANAGER="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
+          if [[ ! -x "$SDKMANAGER" ]]; then
+            SDKMANAGER="$(find "$ANDROID_SDK_ROOT/cmdline-tools" -path '*/bin/sdkmanager' | sort | tail -n 1)"
+          fi
+          if [[ -z "${SDKMANAGER:-}" || ! -x "$SDKMANAGER" ]]; then
+            echo "sdkmanager not found under $ANDROID_SDK_ROOT/cmdline-tools" >&2
+            exit 1
+          fi
+          {
+            echo "ANDROID_HOME=$ANDROID_SDK_ROOT"
+            echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
+            echo "ANDROID_NDK_HOME=$ANDROID_SDK_ROOT/ndk/28.0.13004108"
+          } >> "$GITHUB_ENV"
+          {
+            dirname "$SDKMANAGER"
+            echo "$ANDROID_SDK_ROOT/platform-tools"
+          } >> "$GITHUB_PATH"
+          set +o pipefail
+          yes | "$SDKMANAGER" --licenses >/dev/null
+          set -o pipefail
+          "$SDKMANAGER" "platform-tools" "platforms;android-36" "build-tools;36.0.0" "ndk;28.0.13004108"
+
+      - name: prebuild connected test artifacts
+        run: ./gradlew assembleDebug assembleDebugAndroidTest
+
+      - name: reclaim disk for emulator
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Disk before cleanup:"
+          df -h
+          du -sh \
+            "${ANDROID_NDK_HOME:-}" \
+            "$HOME/go/pkg/mod" \
+            "$HOME/go/pkg/sumdb" \
+            "$HOME/.cache/go-build" \
+            "$GITHUB_WORKSPACE/third_party/sing-box" 2>/dev/null || true
+          sudo rm -rf \
+            "${ANDROID_NDK_HOME:-}" \
+            "$HOME/go/pkg/mod" \
+            "$HOME/go/pkg/sumdb" \
+            "$HOME/.cache/go-build" \
+            "$GITHUB_WORKSPACE/third_party/sing-box"
+          echo "Disk after cleanup:"
+          df -h
+
+      - name: enable kvm
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: run emulator tests
+        uses: ReactiveCircus/android-emulator-runner@324029e2f414c084d8b15ba075288885e74aef9c
+        with:
+          api-level: 35
+          arch: x86_64
+          profile: pixel_7
+          disk-size: 2048M
+          disable-animations: true
+          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: bash scripts/run-connected-android-tests.sh
+
+      - name: upload connected test reports
+        if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4
+        with:
+          name: connected-android-test-reports
+          path: |
+            app/build/reports/androidTests
+            app/build/outputs/androidTest-results
+            app/build/outputs/connected_android_test_additional_output

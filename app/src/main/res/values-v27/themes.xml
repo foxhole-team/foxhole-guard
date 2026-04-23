@@ -1,0 +1,6 @@
+<resources>
+    <style name="Theme.Foxhole" parent="Theme.AppCompat.DayNight.NoActionBar">
+        <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
+    </style>
+</resources>
+

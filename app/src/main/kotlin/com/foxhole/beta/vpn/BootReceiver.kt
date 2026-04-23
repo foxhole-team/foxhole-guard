@@ -1,0 +1,40 @@
+package com.foxhole.beta.vpn
+
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import com.foxhole.beta.FoxholeApplication
+import com.foxhole.beta.FoxholeTileDependencies
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
+
+class BootReceiver : BroadcastReceiver() {
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+    override fun onReceive(context: Context, intent: Intent) {
+        val action = intent.action
+        if (action != Intent.ACTION_BOOT_COMPLETED && action != Intent.ACTION_MY_PACKAGE_REPLACED) {
+            return
+        }
+        val pendingResult = goAsync()
+        val app = context.applicationContext as FoxholeApplication
+        scope.launch {
+            try {
+                val dependencies: FoxholeTileDependencies = app.appGraph
+                val settings = dependencies.settingsRepository.settings.first()
+                if (settings.connection.autoStartOnBoot) {
+                    FoxholeConnectionServiceContract.startForegroundService(
+                        context = context,
+                        mode = settings.traffic.mode,
+                        action = FoxholeConnectionServiceContract.ACTION_RESTORE,
+                    )
+                }
+            } finally {
+                pendingResult.finish()
+            }
+        }
+    }
+}

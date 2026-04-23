@@ -1,0 +1,210 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "public_beta_*"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      EXPECTED_RELEASE_CERT_SHA256: fcbf14862040fbe26726f06f3016ec3b027d8431c76cb4c25c13c5a06837177c
+    steps:
+      - name: checkout
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8
+
+      - name: setup java
+        uses: actions/setup-java@dded0888837ed1f317902acf8a20df0ad188d165
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      - name: setup go
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c
+        with:
+          go-version: "1.24.7"
+          cache: false
+
+      - name: setup gradle
+        uses: gradle/actions/setup-gradle@4d9f0ba0025fe599b4ebab900eb7f3a1d93ef4c2
+
+      - name: install android sdk components for libbox
+        shell: bash
+        run: |
+          set -euo pipefail
+          ANDROID_SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}"
+          if [[ ! -d "$ANDROID_SDK_ROOT" ]]; then
+            echo "Android SDK root not found: $ANDROID_SDK_ROOT" >&2
+            exit 1
+          fi
+          SDKMANAGER="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
+          if [[ ! -x "$SDKMANAGER" ]]; then
+            SDKMANAGER="$(find "$ANDROID_SDK_ROOT/cmdline-tools" -path '*/bin/sdkmanager' | sort | tail -n 1)"
+          fi
+          if [[ -z "${SDKMANAGER:-}" || ! -x "$SDKMANAGER" ]]; then
+            echo "sdkmanager not found under $ANDROID_SDK_ROOT/cmdline-tools" >&2
+            exit 1
+          fi
+          {
+            echo "ANDROID_HOME=$ANDROID_SDK_ROOT"
+            echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
+            echo "ANDROID_NDK_HOME=$ANDROID_SDK_ROOT/ndk/28.0.13004108"
+          } >> "$GITHUB_ENV"
+          {
+            dirname "$SDKMANAGER"
+            echo "$ANDROID_SDK_ROOT/platform-tools"
+          } >> "$GITHUB_PATH"
+          set +o pipefail
+          yes | "$SDKMANAGER" --licenses >/dev/null
+          set -o pipefail
+          "$SDKMANAGER" "platform-tools" "platforms;android-36" "build-tools;36.0.0" "ndk;28.0.13004108"
+
+      - name: prepare release signing inputs
+        shell: bash
+        env:
+          FOXHOLE_RELEASE_STORE_FILE_B64: ${{ secrets.FOXHOLE_RELEASE_STORE_FILE_B64 }}
+          FOXHOLE_RELEASE_STORE_PASSWORD: ${{ secrets.FOXHOLE_RELEASE_STORE_PASSWORD }}
+          FOXHOLE_RELEASE_KEY_ALIAS: ${{ secrets.FOXHOLE_RELEASE_KEY_ALIAS }}
+          FOXHOLE_RELEASE_KEY_PASSWORD: ${{ secrets.FOXHOLE_RELEASE_KEY_PASSWORD }}
+          FOXHOLE_RELEASE_STORE_TYPE: ${{ secrets.FOXHOLE_RELEASE_STORE_TYPE }}
+        run: |
+          set -euo pipefail
+          missing=()
+          for secret_name in \
+            FOXHOLE_RELEASE_STORE_FILE_B64 \
+            FOXHOLE_RELEASE_STORE_PASSWORD \
+            FOXHOLE_RELEASE_KEY_ALIAS \
+            FOXHOLE_RELEASE_KEY_PASSWORD
+          do
+            if [[ -z "${!secret_name:-}" ]]; then
+              missing+=("$secret_name")
+            fi
+          done
+          if (( ${#missing[@]} > 0 )); then
+            printf 'Release signing secrets are required. Missing: %s\n' "${missing[*]}" >&2
+            exit 1
+          fi
+          keystore_path="$RUNNER_TEMP/foxhole-release.p12"
+          if ! printf '%s' "$FOXHOLE_RELEASE_STORE_FILE_B64" | base64 --decode > "$keystore_path"; then
+            echo "FOXHOLE_RELEASE_STORE_FILE_B64 is not valid base64" >&2
+            exit 1
+          fi
+          chmod 600 "$keystore_path"
+          {
+            echo "FOXHOLE_RELEASE_STORE_FILE=$keystore_path"
+            echo "FOXHOLE_RELEASE_STORE_PASSWORD=$FOXHOLE_RELEASE_STORE_PASSWORD"
+            echo "FOXHOLE_RELEASE_KEY_ALIAS=$FOXHOLE_RELEASE_KEY_ALIAS"
+            echo "FOXHOLE_RELEASE_KEY_PASSWORD=$FOXHOLE_RELEASE_KEY_PASSWORD"
+            echo "FOXHOLE_RELEASE_STORE_TYPE=${FOXHOLE_RELEASE_STORE_TYPE:-PKCS12}"
+          } >> "$GITHUB_ENV"
+
+      - name: build release
+        run: ./gradlew validateSigningRelease assembleRelease
+
+      - name: verify signed release APK
+        id: release_apk
+        shell: bash
+        run: |
+          set -euo pipefail
+          apks=()
+          while IFS= read -r apk; do
+            apks+=("$apk")
+          done < <(find app/build/outputs/apk/release -maxdepth 1 -type f -name '*.apk' | sort)
+          if [[ "${#apks[@]}" -ne 1 ]]; then
+            printf 'Expected exactly one release APK, found %s:\n' "${#apks[@]}" >&2
+            if [[ "${#apks[@]}" -gt 0 ]]; then
+              printf ' - %s\n' "${apks[@]}" >&2
+            fi
+            exit 1
+          fi
+
+          apk_path="${apks[0]}"
+          apk_name="$(basename "$apk_path")"
+          if [[ "$apk_name" == *unsigned* ]]; then
+            echo "Refusing to publish unsigned release output: $apk_name" >&2
+            exit 1
+          fi
+
+          apksigner="$ANDROID_SDK_ROOT/build-tools/36.0.0/apksigner"
+          if [[ ! -x "$apksigner" ]]; then
+            apksigner="$(find "$ANDROID_SDK_ROOT/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
+          fi
+          if [[ -z "${apksigner:-}" || ! -x "$apksigner" ]]; then
+            echo "apksigner not found under $ANDROID_SDK_ROOT/build-tools" >&2
+            exit 1
+          fi
+
+          cert_report="$RUNNER_TEMP/release-certs.txt"
+          "$apksigner" verify --print-certs "$apk_path" | tee "$cert_report"
+          actual_cert_sha256="$(
+            awk -F': ' '/Signer #1 certificate SHA-256 digest/ { print $2; exit }' "$cert_report" |
+              tr -d ':' |
+              tr '[:upper:]' '[:lower:]'
+          )"
+          expected_cert_sha256="$(printf '%s' "$EXPECTED_RELEASE_CERT_SHA256" | tr -d ':' | tr '[:upper:]' '[:lower:]')"
+          if [[ -z "$actual_cert_sha256" ]]; then
+            echo "Could not read signing certificate SHA-256 digest from apksigner output" >&2
+            exit 1
+          fi
+          if [[ "$actual_cert_sha256" != "$expected_cert_sha256" ]]; then
+            echo "Release signing certificate mismatch" >&2
+            echo "Expected: $expected_cert_sha256" >&2
+            echo "Actual:   $actual_cert_sha256" >&2
+            exit 1
+          fi
+
+          asset_path="$RUNNER_TEMP/Foxhole-${GITHUB_REF_NAME}-release.apk"
+          cp "$apk_path" "$asset_path"
+          (
+            cd "$RUNNER_TEMP"
+            sha256sum "$(basename "$asset_path")" > SHA256SUMS
+          )
+          apk_sha256="$(cut -d ' ' -f1 "$RUNNER_TEMP/SHA256SUMS")"
+          echo "APK SHA-256: $apk_sha256"
+          echo "Signing cert SHA-256: $actual_cert_sha256"
+          {
+            echo "apk_path=$asset_path"
+            echo "sha256sums_path=$RUNNER_TEMP/SHA256SUMS"
+            echo "apk_sha256=$apk_sha256"
+            echo "cert_sha256=$actual_cert_sha256"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: upload release artifact
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4
+        with:
+          name: release-apk-${{ github.ref_name }}
+          path: |
+            ${{ steps.release_apk.outputs.apk_path }}
+            ${{ steps.release_apk.outputs.sha256sums_path }}
+
+      - name: publish github release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          apk_asset="${{ steps.release_apk.outputs.apk_path }}"
+          sha256sums_asset="${{ steps.release_apk.outputs.sha256sums_path }}"
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release view "$GITHUB_REF_NAME" --json assets -q '.assets[].name' |
+              while IFS= read -r asset_name; do
+                case "$asset_name" in
+                  "Foxhole-${GITHUB_REF_NAME}-"*.apk|SHA256SUMS|release-certs.txt)
+                    gh release delete-asset "$GITHUB_REF_NAME" "$asset_name" --yes
+                    ;;
+                esac
+              done
+            gh release upload "$GITHUB_REF_NAME" "$apk_asset" "$sha256sums_asset" --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" "$apk_asset" "$sha256sums_asset" --title "$GITHUB_REF_NAME" --generate-notes
+          fi

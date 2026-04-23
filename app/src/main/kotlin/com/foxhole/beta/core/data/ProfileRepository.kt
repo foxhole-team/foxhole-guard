@@ -1,0 +1,989 @@
+package com.foxhole.beta.core.data
+
+import android.util.Log
+import androidx.room.withTransaction
+import com.foxhole.beta.core.diagnostics.DiagnosticsLogger
+import com.foxhole.beta.core.importer.ProfileImportParser
+import com.foxhole.beta.core.importer.SubscriptionMetadataParser
+import com.foxhole.beta.core.model.CachedActiveProfile
+import com.foxhole.beta.core.model.ParsedImport
+import com.foxhole.beta.core.model.ParsedSubscriptionImport
+import com.foxhole.beta.core.model.ParsedSubscriptionProfile
+import com.foxhole.beta.core.model.Profile
+import com.foxhole.beta.core.model.ProfileProtocolOption
+import com.foxhole.beta.core.model.ProfileSourceType
+import com.foxhole.beta.core.model.StoredProfileSecret
+import com.foxhole.beta.core.model.StoredProfileProtocolOption
+import com.foxhole.beta.core.model.VpnSession
+import com.foxhole.beta.core.network.ensurePublicUrl
+import com.foxhole.beta.core.network.requirePublicUrl
+import com.foxhole.beta.core.settings.SettingsRepository
+import com.foxhole.beta.vpn.RuntimeConfigAssembler
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.Json
+import okhttp3.HttpUrl
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.Response
+import java.net.URI
+import java.nio.charset.StandardCharsets
+import java.security.cert.X509Certificate
+import java.util.Base64
+import java.util.UUID
+
+class ProfileRepository(
+    private val database: ProfileDatabase,
+    private val secretStore: ProfileSecretStore,
+    private val parser: ProfileImportParser,
+    private val httpClient: OkHttpClient,
+    private val diagnosticsLogger: DiagnosticsLogger,
+    private val settingsRepository: SettingsRepository,
+    private val routingRepository: RoutingRepository,
+    private val runtimeConfigAssembler: RuntimeConfigAssembler,
+    private val json: Json,
+) {
+    private data class SubscriptionResponse(
+        val body: String? = null,
+        val etag: String? = null,
+        val metadataTitle: String? = null,
+        val subscriptionExpiresAt: Long? = null,
+        val notModified: Boolean = false,
+    )
+
+    private data class SubscriptionTransportResult(
+        val response: SubscriptionResponse,
+        val certificate: SubscriptionCertificateInfo? = null,
+    )
+
+    private data class SubscriptionGroupMember(
+        val entity: ProfileEntity,
+        val storedSecret: StoredProfileSecret,
+    )
+
+    private data class AppliedSubscriptionProfile(
+        val id: Long,
+        val secretRef: String,
+        val importedProfile: ParsedSubscriptionProfile,
+        val previousProfileId: Long?,
+        val wasActive: Boolean,
+        val previousSelectedProtocolOptionId: String?,
+    )
+
+    private data class PreparedLocalImportProfile(
+        val entity: ProfileEntity,
+        val importedProfile: ParsedSubscriptionProfile,
+        val previousSelectedProtocolOptionId: String?,
+        val stagedSecretWrite: StagedProfileSecretWrite,
+    )
+
+    private data class PreparedSubscriptionRefreshProfile(
+        val existingEntity: ProfileEntity?,
+        val resolvedName: String,
+        val stagedSecretWrite: StagedProfileSecretWrite,
+        val importedProfile: ParsedSubscriptionProfile,
+        val previousSelectedProtocolOptionId: String?,
+    )
+
+    private data class CommittedSubscriptionRefresh(
+        val appliedProfiles: List<AppliedSubscriptionProfile>,
+        val replacementActiveId: Long?,
+    )
+
+    private val dao = database.profileDao()
+    private val subscriptionHttpClient: OkHttpClient by lazy {
+        httpClient
+            .newBuilder()
+            .followRedirects(true)
+            .followSslRedirects(true)
+            .build()
+    }
+    private val insecureSubscriptionHttpClient: OkHttpClient by lazy {
+        insecureSubscriptionClient(subscriptionHttpClient)
+    }
+
+    val profiles: Flow<List<Profile>> = dao.observeProfiles().map { list -> list.map { entity -> resolveDomainProfile(entity) } }
+    val activeProfile: Flow<Profile?> =
+        combine(dao.observeProfiles(), dao.observeActiveProfile()) { profiles, active ->
+            val resolvedProfiles = profiles.map { entity -> resolveDomainProfile(entity) }
+            active?.id?.let { activeId -> resolvedProfiles.firstOrNull { it.id == activeId } } ?: resolvedProfiles.firstOrNull()
+        }
+
+    suspend fun importProfile(rawInput: String, preferredName: String? = null): Profile {
+        val settings = settingsRepository.current()
+        val resolvedPreferredName = preferredName?.trim().takeUnless { it.isNullOrBlank() }
+        diagnosticsLogger.record(
+            "profile",
+            "import parse started bytes=${rawInput.toByteArray(Charsets.UTF_8).size}",
+        )
+        val parsed =
+            withContext(Dispatchers.IO) {
+                runCatching {
+                    parser.parseUserInput(
+                        input = rawInput,
+                        allowPrivateOutboundHosts = settings.expert.allowPrivateOutboundHosts,
+                        allowHttpSubscriptionUrls = settings.expert.allowHttpConfigImports,
+                        allowInsecureTls = settings.expert.allowInsecureTls,
+                    )
+                }
+            }.onSuccess { result ->
+                diagnosticsLogger.record(
+                    "profile",
+                    "import parse finished sourceType=${result.sourceType.name.lowercase()} protocol=${result.protocolHint.name.lowercase()} options=${result.protocolOptions.size}",
+                )
+            }.onFailure { error ->
+                diagnosticsLogger.record(
+                    "profile",
+                    "import parse failed: ${error.javaClass.simpleName}: ${error.message.orEmpty()}",
+                )
+            }.getOrThrow()
+        val importPlan =
+            resolveImportProfilePlan(
+                parsed = parsed,
+                localParsedProfiles =
+                    if (parsed.sourceType == ProfileSourceType.SUBSCRIPTION_URL) {
+                        null
+                    } else {
+                        withContext(Dispatchers.IO) {
+                            runCatching {
+                                parser.parseSubscriptionProfiles(
+                                    rawContent = rawInput,
+                                    fallbackName = resolvedPreferredName ?: parsed.displayName,
+                                    allowPrivateOutboundHosts = settings.expert.allowPrivateOutboundHosts,
+                                    allowHttpSubscriptionUrls = settings.expert.allowHttpConfigImports,
+                                    allowInsecureTls = settings.expert.allowInsecureTls,
+                                )
+                            }
+                        }.onSuccess { result ->
+                            diagnosticsLogger.record(
+                                "profile",
+                                "local config group parse finished profiles=${result.profiles.size} nodes=${result.nodesCount} protocols=${result.protocolSummary()}",
+                            )
+                        }.onFailure { error ->
+                            diagnosticsLogger.record(
+                                "profile",
+                                "local config group parse failed: ${error.javaClass.simpleName}: ${error.message.orEmpty()}",
+                            )
+                        }.getOrNull()
+                    },
+            )
+        if (importPlan is ImportProfilePlan.Multi) {
+            return importLocalProfileGroup(
+                rawInput = rawInput,
+                sourceType = parsed.sourceType,
+                parsed = importPlan.parsed,
+            )
+        }
+        val secretRef = UUID.randomUUID().toString()
+        val now = System.currentTimeMillis()
+        val count = dao.count()
+        val entity =
+            ProfileEntity(
+                name = resolvedPreferredName ?: parsed.displayName,
+                sourceType = parsed.sourceType.name,
+                secretRef = secretRef,
+                protocolHint = parsed.protocolHint.name,
+                lastUpdatedAt = if (parsed.sourceType == ProfileSourceType.SUBSCRIPTION_URL) null else now,
+                lastEtag = null,
+                isActive = count == 0,
+            )
+        val stagedSecretWrite =
+            StagedProfileSecretWrite(
+                secretRef = secretRef,
+                value =
+                    StoredProfileSecret(
+                        rawInput = rawInput.trim(),
+                        subscriptionUrl = parsed.sourceUrl,
+                        resolvedConfigJson = parsed.normalizedConfigJson,
+                        subscriptionExpiresAt = parsed.subscriptionExpiresAt,
+                        protocolOptions = parsed.protocolOptions,
+                        selectedProtocolOptionId = parsed.selectedProtocolOptionId,
+                    ),
+            )
+        val id =
+            executeSecretFirstMutation(
+                secretStore = secretStore,
+                stagedWrites = listOf(stagedSecretWrite),
+                onCleanupFailure = ::recordSecretCleanupFailure,
+            ) {
+                database.withTransaction {
+                    if (entity.isActive) {
+                        dao.clearActive()
+                    }
+                    dao.insert(entity)
+                }
+            }
+        val saved = requireProfile(id)
+        if (saved.isActive) {
+            persistCachedActiveProfile(saved)
+        }
+        diagnosticsLogger.record("profile", "profile imported")
+        if (parsed.sourceType == ProfileSourceType.SUBSCRIPTION_URL) {
+            return runCatching { refreshProfile(id) }
+                .onFailure { error ->
+                    runCatching { deleteProfile(id) }
+                    diagnosticsLogger.record(
+                        "profile",
+                        "initial refresh failed: ${error.message ?: error.javaClass.simpleName}",
+                    )
+                }.getOrThrow()
+        }
+        return saved
+    }
+
+    private suspend fun importLocalProfileGroup(
+        rawInput: String,
+        sourceType: ProfileSourceType,
+        parsed: ParsedSubscriptionImport,
+    ): Profile {
+        val now = System.currentTimeMillis()
+        val count = dao.count()
+        val trimmedRawInput = rawInput.trim()
+        val preparedProfiles =
+            parsed.profiles.mapIndexed { index, importedProfile ->
+                val secretRef = UUID.randomUUID().toString()
+                val selectedProtocolOptionId = importedProfile.resolveSelectedProtocolOptionId(previousSelectedProtocolOptionId = null)
+                PreparedLocalImportProfile(
+                    entity =
+                        ProfileEntity(
+                            name =
+                                resolveImportedProfileName(
+                                    importedProfile = importedProfile,
+                                    fallbackName = parsed.displayName,
+                                    profileCount = parsed.nodesCount,
+                                    profileIndex = index,
+                                ),
+                            sourceType = sourceType.name,
+                            secretRef = secretRef,
+                            protocolHint = importedProfile.resolveProtocolHint(selectedProtocolOptionId).name,
+                            lastUpdatedAt = now,
+                            lastEtag = null,
+                            isActive = count == 0 && index == 0,
+                        ),
+                    importedProfile = importedProfile,
+                    previousSelectedProtocolOptionId = null,
+                    stagedSecretWrite =
+                        StagedProfileSecretWrite(
+                            secretRef = secretRef,
+                            value =
+                                StoredProfileSecret(
+                                    rawInput = trimmedRawInput,
+                                    resolvedConfigJson = importedProfile.resolveNormalizedConfigJson(selectedProtocolOptionId),
+                                    subscriptionExpiresAt = importedProfile.subscriptionExpiresAt ?: parsed.subscriptionExpiresAt,
+                                    protocolOptions = importedProfile.protocolOptions,
+                                    selectedProtocolOptionId = selectedProtocolOptionId,
+                                ),
+                        ),
+                )
+            }
+        val appliedProfiles =
+            executeSecretFirstMutation(
+                secretStore = secretStore,
+                stagedWrites = preparedProfiles.map(PreparedLocalImportProfile::stagedSecretWrite),
+                onCleanupFailure = ::recordSecretCleanupFailure,
+            ) {
+                val committedProfiles = mutableListOf<AppliedSubscriptionProfile>()
+                database.withTransaction {
+                    preparedProfiles.forEach { prepared ->
+                        val insertedId = dao.insert(prepared.entity)
+                        committedProfiles +=
+                            AppliedSubscriptionProfile(
+                                id = insertedId,
+                                secretRef = prepared.stagedSecretWrite.secretRef,
+                                importedProfile = prepared.importedProfile,
+                                previousProfileId = null,
+                                wasActive = prepared.entity.isActive,
+                                previousSelectedProtocolOptionId = prepared.previousSelectedProtocolOptionId,
+                            )
+                    }
+                }
+                committedProfiles
+            }
+        val saved = requireProfile(appliedProfiles.first().id)
+        if (saved.isActive) {
+            persistCachedActiveProfile(saved)
+        }
+        diagnosticsLogger.record("profile", "profile imported: ${parsed.profiles.size} profiles")
+        return saved
+    }
+
+    suspend fun deleteProfile(profileId: Long) {
+        val entity = dao.getById(profileId) ?: return
+        var nextActiveId: Long? = null
+        database.withTransaction {
+            dao.delete(profileId)
+            if (entity.isActive) {
+                val replacementId = dao.getMostRecentProfileId()
+                if (replacementId != null) {
+                    dao.setActive(replacementId)
+                    nextActiveId = replacementId
+                }
+            }
+        }
+        if (!secretStore.delete(entity.secretRef)) {
+            diagnosticsLogger.record("profile", "profile secret cleanup failed")
+        }
+        settingsRepository.updateSmartProfileExcludedProtocolOptionIds(profileId, emptySet())
+        persistCachedActiveProfile(if (nextActiveId != null) requireProfile(nextActiveId!!) else null)
+        diagnosticsLogger.record("profile", "profile deleted")
+    }
+
+    suspend fun setActiveProfile(profileId: Long) {
+        database.withTransaction {
+            dao.clearActive()
+            dao.setActive(profileId)
+        }
+        persistCachedActiveProfile(requireProfile(profileId))
+        diagnosticsLogger.record("profile", "active profile changed")
+    }
+
+    suspend fun selectProfileProtocolOption(
+        profileId: Long,
+        optionId: String,
+    ): Profile {
+        val entity = dao.getById(profileId) ?: error("profile not found")
+        val secret = secretStore.read(entity.secretRef) ?: error("profile secret is missing")
+        val selected =
+            secret.protocolOptions.firstOrNull { option ->
+                option.id == optionId && option.normalizedConfigJson.isNotBlank()
+            } ?: error("protocol option not found")
+        secretStore.write(
+            secretRef = entity.secretRef,
+            value = secret.copy(selectedProtocolOptionId = selected.id),
+        )
+        dao.updateProtocolHint(profileId, selected.protocolHint.name)
+        val updated = requireProfile(profileId)
+        if (updated.isActive) {
+            persistCachedActiveProfile(updated)
+        }
+        diagnosticsLogger.record("profile", "profile protocol option changed")
+        return updated
+    }
+
+    suspend fun getActiveProfile(): Profile? {
+        ensureActiveProfileInvariant()
+        val activeEntity = dao.getActiveProfile()
+        val active =
+            if (activeEntity != null) {
+                resolveDomainProfile(activeEntity)
+            } else {
+                dao.getMostRecentProfileId()?.let { profileId -> requireProfile(profileId) }
+            }
+        persistCachedActiveProfile(active)
+        return active
+    }
+
+    suspend fun ensureActiveProfileInvariant() {
+        var recovered = false
+        database.withTransaction {
+            if (dao.getActiveProfile() != null) {
+                return@withTransaction
+            }
+            val replacementId = dao.getMostRecentProfileId() ?: return@withTransaction
+            dao.clearActive()
+            dao.setActive(replacementId)
+            recovered = true
+        }
+        if (recovered) {
+            persistCachedActiveProfile(dao.getActiveProfile()?.let { entity -> resolveDomainProfile(entity) })
+            diagnosticsLogger.record("profile", "active profile recovered")
+        }
+    }
+
+    suspend fun getProfile(profileId: Long): Profile? = dao.getById(profileId)?.let { entity -> resolveDomainProfile(entity) }
+
+    suspend fun getResolvedConfig(
+        profileId: Long,
+        protocolOptionIdOverride: String? = null,
+    ): String {
+        val profile = requireProfile(profileId)
+        var secret = secretStore.read(profile.secretRef) ?: error("profile secret is missing")
+        val settings = settingsRepository.current()
+        var selectedOption = secret.selectedStoredProtocolOption(protocolOptionIdOverride)
+        val baseConfig =
+            selectedOption?.normalizedConfigJson ?: secret.resolvedConfigJson ?: if (profile.sourceType == ProfileSourceType.SUBSCRIPTION_URL) {
+                refreshProfile(profileId)
+                secret = secretStore.read(profile.secretRef) ?: error("profile secret is missing after refresh")
+                selectedOption = secret.selectedStoredProtocolOption(protocolOptionIdOverride)
+                selectedOption?.normalizedConfigJson ?: secret.resolvedConfigJson
+            } else {
+                null
+            }
+        val resolvedConfig = baseConfig ?: error("profile has no resolved config")
+        val sanitized =
+            withContext(Dispatchers.IO) {
+                parser.sanitizeResolvedConfig(
+                    raw = resolvedConfig,
+                    allowPrivateOutboundHosts = settings.expert.allowPrivateOutboundHosts,
+                    allowInsecureTls = settings.expert.allowInsecureTls,
+                )
+            }
+        if (sanitized != resolvedConfig && protocolOptionIdOverride == null) {
+            val nextSecret =
+                selectedOption?.let { option ->
+                    secret.copy(
+                        protocolOptions =
+                            secret.protocolOptions.map { storedOption ->
+                                if (storedOption.id == option.id) {
+                                    storedOption.copy(normalizedConfigJson = sanitized)
+                                } else {
+                                    storedOption
+                                }
+                            },
+                    )
+                } ?: secret.copy(resolvedConfigJson = sanitized)
+            secretStore.write(
+                secretRef = profile.secretRef,
+                value = nextSecret,
+            )
+            diagnosticsLogger.record("profile", "resolved config normalized")
+        }
+        return sanitized
+    }
+
+    suspend fun updateResolvedConfig(
+        profileId: Long,
+        editedJson: String,
+    ) {
+        val entity = dao.getById(profileId) ?: error("profile not found")
+        val secret = secretStore.read(entity.secretRef) ?: error("profile secret is missing")
+        val settings = settingsRepository.current()
+        val sanitized =
+            withContext(Dispatchers.IO) {
+                parser.sanitizeResolvedConfig(
+                    raw = editedJson,
+                    allowPrivateOutboundHosts = settings.expert.allowPrivateOutboundHosts,
+                    allowInsecureTls = settings.expert.allowInsecureTls,
+                )
+            }
+        secretStore.write(
+            secretRef = entity.secretRef,
+            value = secret.copy(resolvedConfigJson = sanitized),
+        )
+        diagnosticsLogger.record("profile", "resolved config updated")
+    }
+
+    suspend fun getSession(
+        profileId: Long,
+        protocolOptionIdOverride: String? = null,
+    ): VpnSession {
+        val profile = requireProfile(profileId)
+        val secret = secretStore.read(profile.secretRef) ?: error("profile secret is missing")
+        val selectedOption = secret.selectedStoredProtocolOption(protocolOptionIdOverride)
+        val assembled =
+            runCatching {
+                runtimeConfigAssembler.assemble(
+                    baseConfigJson = getResolvedConfig(profileId, protocolOptionIdOverride),
+                    settings = settingsRepository.current(),
+                    activePreset = routingRepository.currentPresetForRuntime(),
+                )
+            }.onFailure { error ->
+                diagnosticsLogger.record(
+                    "profile",
+                    "session build failed: ${error.javaClass.simpleName}: ${error.message.orEmpty()}",
+                )
+                Log.e(
+                    LOG_TAG,
+                    "session build failed profileId=$profileId optionId=${protocolOptionIdOverride.orEmpty()}",
+                    error,
+                )
+            }.getOrThrow()
+        return VpnSession(
+            profileId = profile.id,
+            profileName = profile.name,
+            protocolHint = selectedOption?.protocolHint ?: profile.protocolHint,
+            configJson = assembled,
+        )
+    }
+
+    suspend fun refreshProfile(profileId: Long): Profile {
+        val entity = dao.getById(profileId) ?: error("profile not found")
+        require(entity.sourceType == ProfileSourceType.SUBSCRIPTION_URL.name) { "profile is not refreshable" }
+        val secret = secretStore.read(entity.secretRef) ?: error("profile secret is missing")
+        val sourceUrl = secret.subscriptionUrl ?: error("subscription url is missing")
+        diagnosticsLogger.record(
+            "profile",
+            "subscription refresh started profileId=$profileId etagPresent=${!entity.lastEtag.isNullOrBlank()}",
+        )
+        val settings = settingsRepository.current()
+        val safeUrl =
+            withContext(Dispatchers.IO) {
+                sourceUrl
+                    .ensurePublicUrl(allowHttp = settings.expert.allowHttpConfigImports)
+                    .requirePublicUrl(
+                        allowHttp = settings.expert.allowHttpConfigImports,
+                        resolveHost = true,
+                    )
+            }
+        val response =
+            runCatching {
+                fetchSubscriptionResponse(
+                    sourceUrl = sourceUrl,
+                    safeUrl = safeUrl,
+                    lastEtag = entity.lastEtag,
+                    trustedCertificates = settings.connection.trustedSubscriptionCertificates,
+                )
+            }.getOrElse { error ->
+                if (error is SubscriptionTlsTrustRequiredException) {
+                    throw error
+                }
+                throw IllegalStateException(describeSubscriptionTransportFailure(sourceUrl, error), error)
+            }
+        diagnosticsLogger.record(
+            "profile",
+            "subscription transport finished notModified=${response.notModified} bodyBytes=${response.body.orEmpty().toByteArray(Charsets.UTF_8).size} etagPresent=${!response.etag.isNullOrBlank()} metadataTitlePresent=${!response.metadataTitle.isNullOrBlank()} expirationPresent=${response.subscriptionExpiresAt != null}",
+        )
+
+        if (response.notModified) {
+            diagnosticsLogger.record("profile", "subscription not modified")
+            return resolveDomainProfile(entity)
+        }
+
+        diagnosticsLogger.record(
+            "profile",
+            "subscription parse started bodyBytes=${response.body.orEmpty().toByteArray(Charsets.UTF_8).size}",
+        )
+        val parsed =
+            withContext(Dispatchers.IO) {
+                runCatching {
+                    parser.parseSubscriptionProfiles(
+                        rawContent = response.body.orEmpty(),
+                        fallbackName = entity.name,
+                        allowPrivateOutboundHosts = settings.expert.allowPrivateOutboundHosts,
+                        allowHttpSubscriptionUrls = settings.expert.allowHttpConfigImports,
+                        allowInsecureTls = settings.expert.allowInsecureTls,
+                    )
+                }
+            }.onSuccess { result ->
+                diagnosticsLogger.record(
+                    "profile",
+                    "subscription parse finished profiles=${result.profiles.size} nodes=${result.nodesCount} protocols=${result.protocolSummary()}",
+                )
+            }.onFailure { error ->
+                diagnosticsLogger.record(
+                    "profile",
+                    "subscription parse failed: ${error.javaClass.simpleName}: ${error.message.orEmpty()}",
+                )
+            }.getOrThrow()
+        val subscriptionGroup = loadSubscriptionGroup(sourceUrl)
+        val refreshPlan =
+            planSubscriptionRefresh(
+                existingProfiles =
+                    subscriptionGroup.map { member ->
+                        ExistingSubscriptionProfile(
+                            id = member.entity.id,
+                            name = member.entity.name,
+            protocolHint = member.entity.toDomain().protocolHint,
+                        )
+                    },
+                importedProfiles =
+                    parsed.profiles.map { imported ->
+                        ImportedSubscriptionProfile(
+                            displayName = imported.displayName,
+                            protocolHint = imported.protocolHint,
+                        )
+                    },
+            )
+        val matchedProfiles = refreshPlan.assignments.count { assignment -> assignment.existingProfileId != null }
+        val insertedProfiles = refreshPlan.assignments.size - matchedProfiles
+        diagnosticsLogger.record(
+            "profile",
+            "subscription apply plan prepared matched=$matchedProfiles inserted=$insertedProfiles deleted=${refreshPlan.deletedProfileIds.size}",
+        )
+        val subscriptionGroupById = subscriptionGroup.associateBy { it.entity.id }
+        val defaultImportedName = subscriptionDefaultName(sourceUrl)
+        val now = System.currentTimeMillis()
+        val removedProfiles = refreshPlan.deletedProfileIds.mapNotNull(subscriptionGroupById::get)
+        val preparedProfiles =
+            refreshPlan.assignments.mapIndexed { index, assignment ->
+                val importedProfile = parsed.profiles[index]
+                val matchedProfile = assignment.existingProfileId?.let(subscriptionGroupById::get)
+                val resolvedName =
+                    resolveSubscriptionProfileName(
+                        importedProfile = importedProfile,
+                        fallbackName = parsed.displayName,
+                        metadataTitle = response.metadataTitle,
+                        defaultImportedName = defaultImportedName,
+                        existingName = matchedProfile?.entity?.name,
+                        profileCount = parsed.nodesCount,
+                        profileIndex = index,
+                    )
+                val nextSecretRef = UUID.randomUUID().toString()
+                val selectedProtocolOptionId =
+                    importedProfile.resolveSelectedProtocolOptionId(matchedProfile?.storedSecret?.selectedProtocolOptionId)
+                PreparedSubscriptionRefreshProfile(
+                    existingEntity = matchedProfile?.entity,
+                    resolvedName = resolvedName,
+                    stagedSecretWrite =
+                        StagedProfileSecretWrite(
+                            secretRef = nextSecretRef,
+                            value =
+                                StoredProfileSecret(
+                                    rawInput = sourceUrl,
+                                    subscriptionUrl = sourceUrl,
+                                    resolvedConfigJson = importedProfile.resolveNormalizedConfigJson(selectedProtocolOptionId),
+                                    subscriptionExpiresAt =
+                                        importedProfile.subscriptionExpiresAt
+                                            ?: parsed.subscriptionExpiresAt
+                                            ?: response.subscriptionExpiresAt,
+                                    protocolOptions = importedProfile.protocolOptions,
+                                    selectedProtocolOptionId = selectedProtocolOptionId,
+                                ),
+                        ),
+                    importedProfile = importedProfile,
+                    previousSelectedProtocolOptionId = matchedProfile?.storedSecret?.selectedProtocolOptionId,
+                )
+            }
+        val committedRefresh =
+            executeSecretFirstMutation(
+                secretStore = secretStore,
+                stagedWrites = preparedProfiles.map(PreparedSubscriptionRefreshProfile::stagedSecretWrite),
+                cleanupSecretRefsAfterSuccess =
+                    preparedProfiles.mapNotNull { prepared -> prepared.existingEntity?.secretRef } +
+                        removedProfiles.map { member -> member.entity.secretRef },
+                onCleanupFailure = ::recordSecretCleanupFailure,
+            ) {
+                val committedProfiles = mutableListOf<AppliedSubscriptionProfile>()
+                var replacementActiveId: Long? = null
+                database.withTransaction {
+                    preparedProfiles.forEach { prepared ->
+                        val existingEntity = prepared.existingEntity
+                        if (existingEntity != null) {
+                            dao.updateMetadataAndSecretRef(
+                                id = existingEntity.id,
+                                name = prepared.resolvedName,
+                                secretRef = prepared.stagedSecretWrite.secretRef,
+                                protocolHint =
+                                    prepared.importedProfile
+                                        .resolveProtocolHint(
+                                            prepared.importedProfile.resolveSelectedProtocolOptionId(prepared.previousSelectedProtocolOptionId),
+                                        ).name,
+                                lastUpdatedAt = now,
+                                lastEtag = response.etag,
+                            )
+                            committedProfiles +=
+                                AppliedSubscriptionProfile(
+                                    id = existingEntity.id,
+                                    secretRef = prepared.stagedSecretWrite.secretRef,
+                                    importedProfile = prepared.importedProfile,
+                                    previousProfileId = existingEntity.id,
+                                    wasActive = existingEntity.isActive,
+                                    previousSelectedProtocolOptionId = prepared.previousSelectedProtocolOptionId,
+                                )
+                        } else {
+                            val insertedId =
+                                dao.insert(
+                                    ProfileEntity(
+                                        name = prepared.resolvedName,
+                                        sourceType = ProfileSourceType.SUBSCRIPTION_URL.name,
+                                        secretRef = prepared.stagedSecretWrite.secretRef,
+                                        protocolHint =
+                                            prepared.importedProfile
+                                                .resolveProtocolHint(
+                                                    prepared.importedProfile.resolveSelectedProtocolOptionId(
+                                                        prepared.previousSelectedProtocolOptionId,
+                                                    ),
+                                                ).name,
+                                        lastUpdatedAt = now,
+                                        lastEtag = response.etag,
+                                        isActive = false,
+                                    ),
+                                )
+                            committedProfiles +=
+                                AppliedSubscriptionProfile(
+                                    id = insertedId,
+                                    secretRef = prepared.stagedSecretWrite.secretRef,
+                                    importedProfile = prepared.importedProfile,
+                                    previousProfileId = null,
+                                    wasActive = false,
+                                    previousSelectedProtocolOptionId = prepared.previousSelectedProtocolOptionId,
+                                )
+                        }
+                    }
+                    removedProfiles.forEach { member ->
+                        dao.delete(member.entity.id)
+                    }
+                    val groupHadActive = subscriptionGroup.any { it.entity.isActive }
+                    val preservedActive = committedProfiles.any(AppliedSubscriptionProfile::wasActive)
+                    if (groupHadActive && !preservedActive && committedProfiles.isNotEmpty()) {
+                        replacementActiveId = committedProfiles.first().id
+                        dao.clearActive()
+                        dao.setActive(replacementActiveId!!)
+                    }
+                }
+                CommittedSubscriptionRefresh(
+                    appliedProfiles = committedProfiles,
+                    replacementActiveId = replacementActiveId,
+                )
+            }
+        val appliedProfiles = committedRefresh.appliedProfiles
+        dao.getActiveProfile()?.let { entity -> persistCachedActiveProfile(resolveDomainProfile(entity)) }
+        diagnosticsLogger.record(
+            "profile",
+            "subscription apply finished updated=$matchedProfiles inserted=$insertedProfiles deleted=${removedProfiles.size} replacementActive=${committedRefresh.replacementActiveId != null}",
+        )
+        diagnosticsLogger.record("profile", "subscription refreshed: ${parsed.nodesCount} profiles")
+
+        val refreshedProfileId =
+            appliedProfiles.firstOrNull { it.previousProfileId == profileId }?.id
+                ?: committedRefresh.replacementActiveId
+                ?: appliedProfiles.firstOrNull()?.id
+                ?: profileId
+        return requireProfile(refreshedProfileId)
+    }
+
+    private suspend fun fetchSubscriptionResponse(
+        sourceUrl: String,
+        safeUrl: HttpUrl,
+        lastEtag: String?,
+        trustedCertificates: List<com.foxhole.beta.core.model.TrustedSubscriptionCertificate>,
+    ): SubscriptionResponse =
+        withContext(Dispatchers.IO) {
+            val request = buildSubscriptionRequest(safeUrl = safeUrl, lastEtag = lastEtag)
+            runCatching {
+                executeSubscriptionRequest(
+                    client = subscriptionHttpClient,
+                    request = request,
+                    sourceUrl = sourceUrl,
+                )
+            }.mapCatching(SubscriptionTransportResult::response).getOrElse { error ->
+                if (!isTlsTrustFailure(error)) {
+                    throw error
+                }
+                val insecureResult =
+                    executeSubscriptionRequest(
+                        client = insecureSubscriptionHttpClient,
+                        request = request,
+                        sourceUrl = sourceUrl,
+                    )
+                val certificate =
+                    insecureResult.certificate
+                        ?: error("subscription certificate details are unavailable for ${safeUrl.host}")
+                if (!trustedCertificates.containsCertificate(certificate.host, certificate.sha256Fingerprint)) {
+                    throw SubscriptionTlsTrustRequiredException(
+                        sourceUrl = sourceUrl,
+                        certificate = certificate,
+                    )
+                }
+                diagnosticsLogger.record(
+                    "profile",
+                    "trusted subscription certificate accepted",
+                )
+                insecureResult.response
+            }
+        }
+
+    private fun buildSubscriptionRequest(
+        safeUrl: HttpUrl,
+        lastEtag: String?,
+    ): Request =
+        Request.Builder()
+            .url(safeUrl)
+            .get()
+            .header("User-Agent", "foxhole/0.1.0")
+            .apply {
+                lastEtag?.takeIf(String::isNotBlank)?.let { header("If-None-Match", it) }
+            }.build()
+
+    private fun executeSubscriptionRequest(
+        client: OkHttpClient,
+        request: Request,
+        sourceUrl: String,
+    ): SubscriptionTransportResult =
+        client.newCall(request).execute().use { rawResponse ->
+            val certificate = rawResponse.subscriptionCertificateInfo()
+            if (rawResponse.code == 304) {
+                return SubscriptionTransportResult(
+                    response = SubscriptionResponse(notModified = true),
+                    certificate = certificate,
+                )
+            }
+            if (!rawResponse.isSuccessful) {
+                val responseBody = rawResponse.body?.string().orEmpty()
+                error(
+                    describeSubscriptionHttpFailure(
+                        code = rawResponse.code,
+                        serverHeader = rawResponse.header("Server"),
+                        responseBody = responseBody,
+                    ),
+                )
+            }
+            SubscriptionTransportResult(
+                response =
+                    SubscriptionResponse(
+                        body = rawResponse.body?.string().orEmpty(),
+                        etag = rawResponse.header("ETag"),
+                        metadataTitle = rawResponse.header("profile-title").decodeSubscriptionMetadataHeader(),
+                        subscriptionExpiresAt =
+                            SubscriptionMetadataParser
+                                .expirationFromSubscriptionUserinfo(rawResponse.header("subscription-userinfo"))
+                                ?: SubscriptionMetadataParser.expirationFromSubscriptionUrl(sourceUrl),
+                    ),
+                certificate = certificate,
+            )
+        }
+
+    private fun Response.subscriptionCertificateInfo(): SubscriptionCertificateInfo? =
+        (handshake?.peerCertificates?.firstOrNull() as? X509Certificate)?.toSubscriptionCertificateInfo(request.url.host)
+
+    private suspend fun persistCachedActiveProfile(profile: Profile?) {
+        settingsRepository.updateLastActiveProfile(
+            profile?.let {
+                CachedActiveProfile(
+                    id = it.id,
+                    name = it.name,
+                    sourceType = it.sourceType,
+                    protocolHint = it.protocolHint,
+                )
+            },
+        )
+    }
+
+    private suspend fun resolveDomainProfile(entity: ProfileEntity): Profile =
+        entity.toDomain().let { profile ->
+            val secret = secretStore.read(entity.secretRef)
+            profile.copy(
+                subscriptionExpiresAt = secret?.subscriptionExpiresAt,
+                protocolOptions = secret?.profileProtocolOptions().orEmpty(),
+                selectedProtocolOptionId = secret?.selectedProtocolOptionId,
+            )
+        }
+
+    private suspend fun requireProfile(profileId: Long): Profile =
+        dao.getById(profileId)?.let { entity -> resolveDomainProfile(entity) } ?: error("profile not found")
+
+    private fun subscriptionDefaultName(sourceUrl: String): String = runCatching { URI(sourceUrl).host }.getOrNull().orEmpty().ifBlank { "subscription" }
+
+    private fun recordSecretCleanupFailure(
+        secretRef: String,
+        error: Throwable,
+    ) {
+        diagnosticsLogger.record(
+            "profile",
+            "profile secret cleanup failed for $secretRef: ${error.message ?: error.javaClass.simpleName}",
+        )
+    }
+
+    private suspend fun loadSubscriptionGroup(sourceUrl: String): List<SubscriptionGroupMember> {
+        val members = mutableListOf<SubscriptionGroupMember>()
+        for (entity in dao.getAllProfiles().filter { it.sourceType == ProfileSourceType.SUBSCRIPTION_URL.name }.sortedBy(ProfileEntity::id)) {
+            val storedSecret = secretStore.read(entity.secretRef) ?: continue
+            if (storedSecret.subscriptionUrl != sourceUrl) {
+                continue
+            }
+            members += SubscriptionGroupMember(entity = entity, storedSecret = storedSecret)
+        }
+        return members
+    }
+
+    private fun resolveSubscriptionProfileName(
+        importedProfile: ParsedSubscriptionProfile,
+        fallbackName: String,
+        metadataTitle: String?,
+        defaultImportedName: String,
+        existingName: String?,
+        profileCount: Int,
+        profileIndex: Int,
+    ): String {
+        val importedName =
+            importedProfile.displayName.ifBlank {
+                if (profileCount == 1) {
+                    fallbackName
+                } else {
+                    "$fallbackName ${profileIndex + 1}"
+                }
+            }
+        val singleProfileResolvedName =
+            importedName
+                .takeUnless { it.isBlank() || it == defaultImportedName }
+                ?: metadataTitle
+                ?: importedName
+        return if (profileCount == 1) {
+            if (existingName == null || existingName.shouldReplaceSubscriptionName(defaultImportedName)) {
+                singleProfileResolvedName
+            } else {
+                existingName
+            }
+        } else {
+            importedName
+        }
+    }
+
+    private fun resolveImportedProfileName(
+        importedProfile: ParsedSubscriptionProfile,
+        fallbackName: String,
+        profileCount: Int,
+        profileIndex: Int,
+    ): String =
+        importedProfile.displayName.ifBlank {
+            if (profileCount == 1) {
+                fallbackName
+            } else {
+                "$fallbackName ${profileIndex + 1}"
+            }
+        }
+
+    private fun String?.decodeSubscriptionMetadataHeader(): String? {
+        val raw = this?.trim()?.takeIf { it.isNotBlank() } ?: return null
+        val value =
+            if (raw.startsWith("base64:", ignoreCase = true)) {
+                runCatching {
+                    String(
+                        Base64.getDecoder().decode(raw.removePrefix("base64:").removePrefix("BASE64:")),
+                        StandardCharsets.UTF_8,
+                    )
+                }.getOrNull()
+            } else {
+                raw
+            }
+        return value?.trim()?.takeIf { it.isNotBlank() }
+    }
+
+    private fun String.shouldReplaceSubscriptionName(defaultImportedName: String): Boolean =
+        isBlank() || this == "subscription" || this == defaultImportedName
+
+    private fun StoredProfileSecret.selectedStoredProtocolOption(
+        overrideOptionId: String? = null,
+    ): StoredProfileProtocolOption? {
+        if (protocolOptions.isEmpty()) {
+            return null
+        }
+        val resolvedOptionId = overrideOptionId?.takeIf(String::isNotBlank) ?: selectedProtocolOptionId
+        return protocolOptions.firstOrNull { it.id == resolvedOptionId }
+            ?: protocolOptions.firstOrNull()
+    }
+
+    private fun StoredProfileSecret.profileProtocolOptions(): List<ProfileProtocolOption> =
+        protocolOptions.map { option ->
+            ProfileProtocolOption(
+                id = option.id,
+                displayName = option.displayName,
+                protocolHint = option.protocolHint,
+                isSelected = option.id == selectedProtocolOptionId ||
+                    (selectedProtocolOptionId == null && option.id == protocolOptions.firstOrNull()?.id),
+            )
+        }
+
+    private fun ParsedSubscriptionProfile.resolveSelectedProtocolOptionId(previousSelectedProtocolOptionId: String?): String? =
+        previousSelectedProtocolOptionId?.takeIf { selectedId -> protocolOptions.any { option -> option.id == selectedId } }
+            ?: selectedProtocolOptionId
+
+    private fun ParsedSubscriptionProfile.resolveProtocolHint(selectedProtocolOptionId: String?): com.foxhole.beta.core.model.ProtocolHint =
+        protocolOptions.firstOrNull { option -> option.id == selectedProtocolOptionId }?.protocolHint ?: protocolHint
+
+    private fun ParsedSubscriptionProfile.resolveNormalizedConfigJson(selectedProtocolOptionId: String?): String =
+        protocolOptions.firstOrNull { option -> option.id == selectedProtocolOptionId }?.normalizedConfigJson ?: normalizedConfigJson
+
+    private fun ParsedSubscriptionImport.protocolSummary(): String =
+        profiles
+            .map(ParsedSubscriptionProfile::protocolHint)
+            .distinct()
+            .joinToString(separator = ",") { hint -> hint.name.lowercase() }
+
+    private companion object {
+        private const val LOG_TAG = "FoxholeProfileRepo"
+    }
+}

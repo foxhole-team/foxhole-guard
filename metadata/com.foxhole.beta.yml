@@ -1,0 +1,59 @@
+Disabled: Source repository is not public yet; keep F-Droid metadata disabled until GitHub source can be cloned anonymously.
+
+Categories:
+  - VPN & Proxy
+License: GPL-3.0-or-later
+AuthorName: Foxhole
+
+AutoName: Foxhole
+Summary: Foxhole - public beta 1.0 sing-box client
+Description: |
+  Foxhole is currently released as public beta 1.0 for Android. It is
+  a simple client for connecting to and managing sing-box profiles. It
+  supports Tunnel and Proxy, as well as Split
+  Tunnel for apps and sites and LAN Proxy. It supports profile import
+  from files, the clipboard, QR codes, and HTTPS subscriptions,
+  including compatible v2raytun-style subscriptions. No ads,
+  analytics, or telemetry. It supports compatible configurations and
+  its own smart config for fast Smart start with automatic VPN
+  protocol selection.
+
+  Key features:
+  - Modes: Tunnel, Proxy
+  - Split Tunnel for apps and sites
+  - LAN Proxy over Wi-Fi for access from other devices
+  - Proxy authentication
+  - Site-based routing rules
+  - Import from files, clipboard, QR codes, and HTTPS subscriptions
+  - Supports Foxhole smart config with protocol selection and Smart start that checks available connection options and chooses the best available one
+  - Local traffic statistics
+  - Subscription expiration date display
+  - Encrypted local profile storage
+  - No ads
+  - No analytics
+  - No telemetry
+
+  Supported protocols:
+  - VLESS
+  - Trojan
+  - Shadowsocks
+  - VMess
+  - Hysteria2
+  - WireGuard
+  - Outline
+
+RepoType: git
+Repo: https://github.com/foxhole-app/foxhole.git
+
+Builds:
+  - versionName: 'public beta 1.0'
+    versionCode: 1
+    commit: v1.0.0
+    gradle:
+      - yes
+    output: app/build/outputs/apk/release/app-release-unsigned.apk
+
+AutoUpdateMode: None
+UpdateCheckMode: None
+CurrentVersion: 'public beta 1.0'
+CurrentVersionCode: 1
