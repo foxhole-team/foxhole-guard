@@ -51,9 +51,9 @@ abstract class VerifyBundledLibboxInReleaseApkTask : DefaultTask() {
 
 plugins {
     id("com.android.application")
-    id("com.google.devtools.ksp") version "2.3.6"
-    id("org.jetbrains.kotlin.plugin.compose") version "2.3.10"
-    id("org.jetbrains.kotlin.plugin.serialization") version "2.3.10"
+    id("com.google.devtools.ksp") version "2.3.7"
+    id("org.jetbrains.kotlin.plugin.compose") version "2.3.21"
+    id("org.jetbrains.kotlin.plugin.serialization") version "2.3.21"
 }
 
 val enableAbiSplitApks = providers.gradleProperty("foxhole.splitApks").map(String::toBoolean).orElse(false).get()
@@ -136,16 +136,21 @@ tasks.matching { task -> task.name == "assembleRelease" }.configureEach {
 
 android {
     namespace = "com.foxhole.beta"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "com.foxhole.beta"
         minSdk = 26
-        targetSdk = 36
+        targetSdk = 37
         versionCode = 1
-        versionName = "public beta 1.0"
+        versionName = "1.0.0-beta1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
+        if (enableAbiSplitApks) {
+            ndk {
+                abiFilters += listOf("arm64-v8a", "armeabi-v7a")
+            }
+        }
         buildConfigField("String", "DEFAULT_IP_INFO_ENDPOINT", "\"https://ipwho.is/\"")
         buildConfigField("String", "DEFAULT_SUPPORT_BOT_HANDLE", "\"@foxhole_app_support_bot\"")
         buildConfigField("String", "LIBBOX_SOURCE_VERSION", "\"1.13.6\"")
@@ -172,7 +177,7 @@ android {
         debug {
             applicationIdSuffix = ".debug"
             versionNameSuffix = "-Debug"
-            buildConfigField("boolean", "ALLOW_INSECURE_TLS_BY_DEFAULT", "false")
+            buildConfigField("boolean", "ALLOW_INSECURE_TLS_BY_DEFAULT", "true")
             buildConfigField("boolean", "ENABLE_DIAGNOSTIC_LOGCAT", "true")
             if (!enableAbiSplitApks) {
                 ndk {
@@ -222,13 +227,18 @@ android {
         jniLibs.useLegacyPackaging = false
     }
 
+    lint {
+        // Release distribution is intentionally ARM-only: arm64-v8a, armeabi-v7a, and an ARM universal APK.
+        disable += "ChromeOsAbiSupport"
+    }
+
     if (enableAbiSplitApks) {
         splits {
             abi {
                 isEnable = true
                 reset()
                 include("arm64-v8a", "armeabi-v7a")
-                isUniversalApk = false
+                isUniversalApk = true
             }
         }
     }
@@ -253,6 +263,19 @@ composeCompiler {
 
 dependencies {
     implementation(files(bundledLibbox))
+
+    constraints {
+        listOf(
+            "protobuf-java",
+            "protobuf-javalite",
+            "protobuf-java-util",
+            "protobuf-kotlin",
+        ).forEach { moduleName ->
+            implementation("com.google.protobuf:$moduleName:3.25.5") {
+                because("CVE-2024-7254 affects protobuf-java/protobuf-javalite before 3.25.5")
+            }
+        }
+    }
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.appcompat)

@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <strong>public beta 1.0</strong>
+  <strong>1.0.0-beta1</strong>
 </p>
 
 <p align="center">
@@ -23,16 +23,15 @@
 
 Foxhole это простой Android-клиент для подключения и управления профилями sing-box. Поддерживает Tunnel и Proxy, а также Split Tunnel по приложениям и сайтам и LAN Proxy. Поддерживает импорт профилей из файла, буфера обмена, QR-кода и HTTPS-подписок, включая совместимые подписки по типу v2raytun. Без рекламы, аналитики и телеметрии. Поддерживает совместимые конфигурации и кастом смарт конфиг для быстрого Smart start с автовыбором протоколов VPN.
 
-
-<table>
+<table style="border: none; border-collapse: collapse;">
   <tr>
-    <td align="center">
+    <td align="center" style="border: none;">
       <img src="fastlane/metadata/android/ru-RU/images/phoneScreenshots/img_foxhole_0.png" alt="Foxhole dashboard" width="260">
     </td>
-    <td align="center">
+    <td align="center" style="border: none;">
       <img src="fastlane/metadata/android/ru-RU/images/phoneScreenshots/img_foxhole_1.png" alt="Foxhole settings" width="260">
     </td>
-    <td align="center">
+    <td align="center" style="border: none;">
       <img src="fastlane/metadata/android/ru-RU/images/phoneScreenshots/img_foxhole_2.png" alt="Foxhole settings" width="260">
     </td>
   </tr>
@@ -64,12 +63,14 @@ Foxhole это простой Android-клиент для подключения
 - WireGuard
 - Outline
 
-<table>
+<hr style="border: none; height: 1px; background: #ccc;">
+
+<table style="border: none; border-collapse: collapse;">
   <tr>
-    <td>
-      <img src="media/have_the_courage_use_your_own_reason-fuck_you-1984.png" alt="1984" width="84" height="84">
+    <td style="border: none;">
+      <img src="media/have_the_courage_use_your_own_reason-fuck_you-1984.png" alt="1984" width="80" height="80">
     </td>
-    <td>
+    <td style="border: none;">
       <h2>Foxhole smart config</h2>
     </td>
   </tr>
@@ -93,15 +94,21 @@ Foxhole это простой Android-клиент для подключения
 
 Пример формата лежит в [foxhole-smart-config.sample.txt](foxhole-sample-smart-config/foxhole-smart-config.sample.txt).
 
+<hr style="border: none; height: 1px; background: #ccc;">
+
 ## Проверка подписи релиза
 
 - Скачайте APK и `SHA256SUMS` из одного GitHub Release, затем выполните `sha256sum -c SHA256SUMS`.
 - Signing cert SHA-256: `fcbf14862040fbe26726f06f3016ec3b027d8431c76cb4c25c13c5a06837177c`
 - Signing cert SHA-1: `ae609bb369398071cc5ac53c9ac10f20f43c4d01`
 
+<hr style="border: none; height: 1px; background: #ccc;">
+
 ## Дисклеймер
 
 > Разработка Android-приложений не является нашим профильным направлением. Наш ключевой опыт сосредоточен в backend-разработке, безопасности, машинном обучении, криптографии и других инженерных областях.
+
+<hr style="border: none; height: 1px; background: #ccc;">
 
 ## Donate
 

@@ -2,13 +2,10 @@ package com.foxhole.beta.vpn
 
 import android.content.Context
 import android.net.ConnectivityManager
-import android.net.DnsResolver
 import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.wifi.WifiManager
 import android.os.Build
-import android.os.CancellationSignal
-import android.system.ErrnoException
 import android.system.OsConstants
 import android.util.Base64
 import android.util.Log
@@ -23,15 +20,9 @@ import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.net.InterfaceAddress
 import java.net.NetworkInterface
-import java.net.UnknownHostException
 import java.security.KeyStore
 import java.util.Locale
 import java.util.concurrent.atomic.AtomicBoolean
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.asExecutor
-import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.suspendCancellableCoroutine
-import kotlin.coroutines.resume
 
 internal class LibboxReflection(
     private val context: Context,
@@ -53,9 +44,7 @@ internal class LibboxReflection(
     private val networkInterfaceClass by lazy { requireClass("io.nekohasekai.libbox.NetworkInterface") }
     private val networkInterfaceIteratorClass by lazy { requireClass("io.nekohasekai.libbox.NetworkInterfaceIterator") }
     private val stringIteratorClass by lazy { requireClass("io.nekohasekai.libbox.StringIterator") }
-    private val localDnsTransportClass by lazy { requireClass("io.nekohasekai.libbox.LocalDNSTransport") }
     private val interfaceUpdateListenerClass by lazy { requireClass("io.nekohasekai.libbox.InterfaceUpdateListener") }
-    private val funcClass by lazy { requireClass("io.nekohasekai.libbox.Func") }
     private val wifiStateClass by lazy { requireClass("io.nekohasekai.libbox.WIFIState") }
     private val routePrefixClass by lazy { requireClass("io.nekohasekai.libbox.RoutePrefix") }
 
@@ -140,11 +129,11 @@ internal class LibboxReflection(
                 "getInterfaces" -> getInterfaces(host.runtimeContext)
                 "includeAllNetworks" -> false
                 "localDNSTransport" -> {
-                    diagnosticsLogger.record("dns", "platform requested local dns transport")
+                    diagnosticsLogger.record("dns", "platform local dns transport disabled; sing-box resolves domains")
                     if (BuildConfig.DEBUG) {
-                        Log.d(LOG_TAG, "platform requested localDNSTransport")
+                        Log.d(LOG_TAG, "platform localDNSTransport disabled")
                     }
-                    localDnsTransport(defaultNetworkMonitor)
+                    defaultValue(method)
                 }
                 "openTun" -> openTun(host, args?.firstOrNull() ?: error("tun options missing"))
                 "readWIFIState" -> readWifiState()
@@ -306,244 +295,6 @@ internal class LibboxReflection(
             values += "-----BEGIN CERTIFICATE-----\n$encoded\n-----END CERTIFICATE-----"
         }
         return stringIterator(values)
-    }
-
-    private fun localDnsTransport(defaultNetworkMonitor: DefaultNetworkMonitor): Any =
-        Proxy.newProxyInstance(
-            localDnsTransportClass.classLoader,
-            arrayOf(localDnsTransportClass),
-        ) { _, method, args ->
-            when (method.name) {
-                "exchange" -> {
-                    diagnosticsLogger.record("dns", "local dns exchange callback invoked")
-                    exchangeLocalDns(
-                        defaultNetworkMonitor = defaultNetworkMonitor,
-                        ctx = args?.getOrNull(0) ?: error("missing exchange context"),
-                        message = args.getOrNull(1) as? ByteArray ?: error("missing dns packet"),
-                    )
-                    Unit
-                }
-                "lookup" -> {
-                    diagnosticsLogger.record("dns", "local dns lookup callback invoked")
-                    lookupLocalDns(
-                        defaultNetworkMonitor = defaultNetworkMonitor,
-                        ctx = args?.getOrNull(0) ?: error("missing exchange context"),
-                        network = args.getOrNull(1)?.toString().orEmpty(),
-                        domain = args.getOrNull(2)?.toString().orEmpty(),
-                    )
-                    Unit
-                }
-                "raw" -> {
-                    val supported = Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q
-                    diagnosticsLogger.record("dns", "local dns raw mode=$supported")
-                    supported
-                }
-                else -> defaultValue(method)
-            }
-        }.also {
-            diagnosticsLogger.record("dns", "local dns transport proxy created")
-            if (BuildConfig.DEBUG) {
-                Log.d(LOG_TAG, "localDNSTransport proxy created")
-            }
-        }
-
-    private fun exchangeLocalDns(
-        defaultNetworkMonitor: DefaultNetworkMonitor,
-        ctx: Any,
-        message: ByteArray,
-    ) {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
-            call(ctx, "errorCode", DNS_RCODE_SERVFAIL)
-            return
-        }
-        if (BuildConfig.DEBUG) {
-            Log.d("FoxholeDns", "exchange start bytes=${message.size}")
-        }
-        runBlocking {
-            val defaultNetwork = defaultNetworkMonitor.requireNetwork()
-            if (BuildConfig.DEBUG) {
-                Log.d("FoxholeDns", "exchange using network=$defaultNetwork")
-            }
-            suspendCancellableCoroutine<Unit> { continuation ->
-                val signal = CancellationSignal()
-                registerCancellation(ctx, signal)
-                val callback =
-                    object : DnsResolver.Callback<ByteArray> {
-                        override fun onAnswer(answer: ByteArray, rcode: Int) {
-                            if (BuildConfig.DEBUG) {
-                                Log.d("FoxholeDns", "exchange answer rcode=$rcode bytes=${answer.size}")
-                            }
-                            if (rcode == 0) {
-                                call(ctx, "rawSuccess", answer)
-                            } else {
-                                call(ctx, "errorCode", rcode)
-                            }
-                            if (continuation.isActive) {
-                                continuation.resume(Unit)
-                            }
-                        }
-
-                        override fun onError(error: DnsResolver.DnsException) {
-                            if (BuildConfig.DEBUG) {
-                                Log.w("FoxholeDns", "exchange error", error)
-                            }
-                            reportDnsError(ctx, error)
-                            if (continuation.isActive) {
-                                continuation.resume(Unit)
-                            }
-                        }
-                    }
-                DnsResolver.getInstance().rawQuery(
-                    defaultNetwork,
-                    message,
-                    DnsResolver.FLAG_NO_RETRY,
-                    Dispatchers.IO.asExecutor(),
-                    signal,
-                    callback,
-                )
-                continuation.invokeOnCancellation { signal.cancel() }
-            }
-        }
-    }
-
-    private fun lookupLocalDns(
-        defaultNetworkMonitor: DefaultNetworkMonitor,
-        ctx: Any,
-        network: String,
-        domain: String,
-    ) {
-        if (domain.isBlank()) {
-            call(ctx, "errorCode", DNS_RCODE_SERVFAIL)
-            return
-        }
-        if (BuildConfig.DEBUG) {
-            Log.d("FoxholeDns", "lookup start network=$network domain=$domain")
-        }
-        runBlocking {
-            val defaultNetwork = defaultNetworkMonitor.requireNetwork()
-            if (BuildConfig.DEBUG) {
-                Log.d("FoxholeDns", "lookup using network=$defaultNetwork domain=$domain")
-            }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                suspendCancellableCoroutine<Unit> { continuation ->
-                    val signal = CancellationSignal()
-                    registerCancellation(ctx, signal)
-                    val callback =
-                        object : DnsResolver.Callback<Collection<InetAddress>> {
-                            override fun onAnswer(answer: Collection<InetAddress>, rcode: Int) {
-                                if (BuildConfig.DEBUG) {
-                                    Log.d("FoxholeDns", "lookup answer domain=$domain rcode=$rcode count=${answer.size}")
-                                }
-                                if (rcode == 0) {
-                                    call(
-                                        ctx,
-                                        "success",
-                                        answer.mapNotNull { it.hostAddress }.joinToString("\n"),
-                                    )
-                                } else {
-                                    call(ctx, "errorCode", rcode)
-                                }
-                                if (continuation.isActive) {
-                                    continuation.resume(Unit)
-                                }
-                            }
-
-                            override fun onError(error: DnsResolver.DnsException) {
-                                if (BuildConfig.DEBUG) {
-                                    Log.w("FoxholeDns", "lookup error domain=$domain", error)
-                                }
-                                reportDnsError(ctx, error)
-                                if (continuation.isActive) {
-                                    continuation.resume(Unit)
-                                }
-                            }
-                        }
-                    val type =
-                        when {
-                            network.endsWith("4") -> DnsResolver.TYPE_A
-                            network.endsWith("6") -> DnsResolver.TYPE_AAAA
-                            else -> null
-                        }
-                    if (type != null) {
-                        DnsResolver.getInstance().query(
-                            defaultNetwork,
-                            domain,
-                            type,
-                            DnsResolver.FLAG_NO_RETRY,
-                            Dispatchers.IO.asExecutor(),
-                            signal,
-                            callback,
-                        )
-                    } else {
-                        DnsResolver.getInstance().query(
-                            defaultNetwork,
-                            domain,
-                            DnsResolver.FLAG_NO_RETRY,
-                            Dispatchers.IO.asExecutor(),
-                            signal,
-                            callback,
-                        )
-                    }
-                    continuation.invokeOnCancellation { signal.cancel() }
-                }
-            } else {
-                val answer =
-                    try {
-                        defaultNetwork.getAllByName(domain)
-                    } catch (_: UnknownHostException) {
-                        if (BuildConfig.DEBUG) {
-                            Log.d("FoxholeDns", "lookup nxdomain domain=$domain")
-                        }
-                        call(ctx, "errorCode", DNS_RCODE_NXDOMAIN)
-                        return@runBlocking
-                    } catch (error: Exception) {
-                        diagnosticsLogger.record("dns", "local lookup failed: ${error.javaClass.simpleName}")
-                        if (BuildConfig.DEBUG) {
-                            Log.w("FoxholeDns", "lookup exception domain=$domain", error)
-                        }
-                        call(ctx, "errorCode", DNS_RCODE_SERVFAIL)
-                        return@runBlocking
-                    }
-                if (BuildConfig.DEBUG) {
-                    Log.d("FoxholeDns", "lookup success domain=$domain count=${answer.size}")
-                }
-                call(ctx, "success", answer.mapNotNull { it.hostAddress }.joinToString("\n"))
-            }
-        }
-    }
-
-    private fun registerCancellation(
-        ctx: Any,
-        signal: CancellationSignal,
-    ) {
-        val callback =
-            Proxy.newProxyInstance(
-                funcClass.classLoader,
-                arrayOf(funcClass),
-            ) { _, method, _ ->
-                when (method.name) {
-                    "invoke" -> {
-                        signal.cancel()
-                        Unit
-                    }
-                    else -> defaultValue(method)
-                }
-            }
-        call(ctx, "onCancel", callback)
-    }
-
-    private fun reportDnsError(
-        ctx: Any,
-        error: DnsResolver.DnsException,
-    ) {
-        when (val cause = error.cause) {
-            is ErrnoException -> {
-                call(ctx, "errnoCode", cause.errno)
-                return
-            }
-        }
-        diagnosticsLogger.record("dns", "local resolver error: ${error.javaClass.simpleName}")
-        call(ctx, "errorCode", DNS_RCODE_SERVFAIL)
     }
 
     private fun stringIterator(values: List<String>): Any = iteratorProxy(stringIteratorClass, values)
@@ -781,8 +532,6 @@ internal class LibboxReflection(
 
     private companion object {
         const val LOG_TAG = "FoxholeLibbox"
-        const val DNS_RCODE_NXDOMAIN = 3
-        const val DNS_RCODE_SERVFAIL = 2
         const val NETWORK_ACTIVITY_THROTTLE_MS = 2_000L
         const val LIBBOX_LOG_MAX_LINES = 4_000L
     }

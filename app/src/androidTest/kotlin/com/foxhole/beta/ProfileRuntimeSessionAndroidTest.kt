@@ -1,11 +1,13 @@
 package com.foxhole.beta
 
+import android.content.Intent
 import android.net.VpnService
 import android.util.Log
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.foxhole.beta.core.model.PerAppRoutingMode
+import com.foxhole.beta.core.model.ProtocolHint
 import com.foxhole.beta.core.model.Settings
 import com.foxhole.beta.core.model.TrafficMode
 import com.foxhole.beta.core.model.TunStack
@@ -195,6 +197,100 @@ class ProfileRuntimeSessionAndroidTest {
     }
 
     @Test
+    fun manualSmartSubscriptionLogsImportAndTargetProtocolRuntime() {
+        if (InstrumentationRegistry.getArguments().getString("foxhole.liveSmartSubscription") != "1") {
+            Log.d(TEST_TAG, "manual smart subscription live connect skipped")
+            return
+        }
+        runBlocking {
+            val app = ApplicationProvider.getApplicationContext<FoxholeApplication>()
+            val subscriptionUrl =
+                InstrumentationRegistry
+                    .getArguments()
+                    .getString("foxhole.smartSubscriptionUrl")
+                    ?.trim()
+                    ?.takeIf { it.startsWith("https://", ignoreCase = true) }
+            if (subscriptionUrl == null) {
+                Log.d(TEST_TAG, "manual smart subscription skipped: https url arg missing")
+                return@runBlocking
+            }
+            if (!ensureVpnPermission(app)) {
+                Log.d(TEST_TAG, "manual smart subscription skipped: vpn permission missing")
+                return@runBlocking
+            }
+            val targetProtocols = requestedSmartProbeProtocols()
+            resetRelevantSettings(app)
+            clearProfiles(app)
+
+            val imported = app.container.profileRepository.importProfile(subscriptionUrl, preferredName = "Live Smart")
+            app.container.connectionController.setActiveProfile(imported.id)
+            val profiles = app.container.profileRepository.profiles.first()
+            val targetProtocolSummary = targetProtocols.joinToString { it.name.lowercase() }
+            val profileProtocolSummary =
+                profiles.joinToString { profile ->
+                    profile.protocolOptions
+                        .map { it.protocolHint.name.lowercase() }
+                        .distinct()
+                        .joinToString("|")
+                }
+            Log.d(
+                TEST_TAG,
+                "liveSmart import profiles=${profiles.size} targets=$targetProtocolSummary protocolOptions=$profileProtocolSummary",
+            )
+
+            profiles.forEach { profile ->
+                profile.protocolOptions
+                    .filter { it.protocolHint in targetProtocols }
+                    .forEach { option ->
+                        app.container.connectionController.disconnect()
+                        delay(3_000)
+                        baselineRuntimeSettings(app)
+                        app.container.connectionController.setActiveProfile(profile.id)
+                        val startedAt = System.currentTimeMillis()
+                        Log.d(
+                            TEST_TAG,
+                            "liveSmart start profileId=${profile.id} protocol=${option.protocolHint.name.lowercase()} optionId=${option.id}",
+                        )
+                        app.container.connectionController.connect(profile.id, protocolOptionId = option.id)
+                        val terminalState =
+                            withTimeoutOrNull(liveSmartTerminalTimeoutMs(option.protocolHint)) {
+                                waitForTerminalState(app)
+                            }
+                        delay(2_000)
+                        val ipRefreshResult =
+                            if (terminalState == ConnectionState.CONNECTED) {
+                                runCatching {
+                                    withTimeoutOrNull(20_000) {
+                                        app.container.connectionController.refreshIpInfo()
+                                    } ?: error("timeout")
+                                }.fold(
+                                    onSuccess = { "ok" },
+                                    onFailure = { "fail:${it.javaClass.simpleName}" },
+                                )
+                            } else {
+                                "skipped"
+                            }
+                        val evidence =
+                            TunnelValidationEvidenceClassifier.classify(
+                                entries = app.container.diagnosticsLogger.entries.value,
+                                sinceMs = startedAt,
+                            )
+                        val snapshot = app.container.connectionController.snapshot.value
+                        val terminalStateLabel = terminalState?.name ?: "TIMEOUT"
+                        val snapshotMessage = snapshot.message.orEmpty().take(160)
+                        val fatalMessage = evidence.fatalRuntimeMessage.orEmpty().take(200)
+                        Log.d(
+                            TEST_TAG,
+                            "liveSmart result profileId=${profile.id} protocol=${option.protocolHint.name.lowercase()} terminalState=$terminalStateLabel ipRefresh=$ipRefreshResult message=$snapshotMessage fatal=$fatalMessage successTraffic=${evidence.hasSuccessfulTunnelActivity}",
+                        )
+                    }
+            }
+            app.container.connectionController.disconnect()
+            delay(3_000)
+        }
+    }
+
+    @Test
     fun restoreBaselineRuntimeSettingsWhenRequested() {
         if (InstrumentationRegistry.getArguments().getString("foxhole.restoreRuntimeBaseline") != "1") {
             Log.d(TEST_TAG, "restore runtime baseline skipped")
@@ -366,8 +462,60 @@ class ProfileRuntimeSessionAndroidTest {
         }
     }
 
+    private fun requestedSmartProbeProtocols(): Set<ProtocolHint> {
+        val requested =
+            InstrumentationRegistry
+                .getArguments()
+                .getString("foxhole.smartProtocols")
+                ?.split(',')
+                ?.mapNotNull { raw ->
+                    runCatching {
+                        ProtocolHint.valueOf(raw.trim().uppercase())
+                    }.getOrNull()
+                }
+                ?.toSet()
+                .orEmpty()
+        return requested.ifEmpty { setOf(ProtocolHint.TROJAN, ProtocolHint.WIREGUARD) }
+    }
+
+    private fun liveSmartTerminalTimeoutMs(protocolHint: ProtocolHint): Long =
+        when (protocolHint) {
+            ProtocolHint.WIREGUARD -> 90_000L
+            else -> 45_000L
+        }
+
+    private suspend fun ensureVpnPermission(app: FoxholeApplication): Boolean {
+        VpnService.prepare(app)?.let { prepareIntent ->
+            if (InstrumentationRegistry.getArguments().getString("foxhole.requestVpnPermission") != "1") {
+                return false
+            }
+            val instrumentation = InstrumentationRegistry.getInstrumentation()
+            val activity =
+                instrumentation.startActivitySync(
+                    Intent(app, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                )
+            instrumentation.runOnMainSync {
+                activity.startActivityForResult(prepareIntent, VPN_PERMISSION_REQUEST_CODE)
+            }
+            Log.d(TEST_TAG, "waiting for vpn permission dialog approval")
+            val granted =
+                withTimeoutOrNull(45_000) {
+                    while (VpnService.prepare(app) != null) {
+                        delay(500)
+                    }
+                    true
+                } ?: false
+            if (granted) {
+                Log.d(TEST_TAG, "vpn permission approved")
+            }
+            return granted
+        }
+        return true
+    }
+
     companion object {
         private const val TEST_TAG = "FoxholeSessionTest"
+        private const val VPN_PERMISSION_REQUEST_CODE = 7301
         private data class DirectLinkCase(
             val label: String,
             val rawLink: String,

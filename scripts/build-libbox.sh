@@ -20,7 +20,8 @@ if ! command -v go >/dev/null 2>&1; then
   exit 1
 fi
 
-export PATH="$(go env GOPATH)/bin:$PATH"
+go_path="$(go env GOPATH)"
+export PATH="$go_path/bin:$PATH"
 
 if [[ -z "${JAVA_HOME:-}" ]]; then
   echo "java_home must point to a java 17 installation" >&2

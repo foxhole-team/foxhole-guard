@@ -61,16 +61,6 @@ internal data class HomeRealtimeStreams(
     val traffic: TrafficSnapshot,
 )
 
-data class SubscriptionTrustPromptUiState(
-    val sourceUrl: String,
-    val host: String,
-    val sha256Fingerprint: String,
-    val subject: String,
-    val issuer: String,
-    val retryRawImport: String? = null,
-    val retryProfileId: Long? = null,
-)
-
 internal data class HomeRoutingStreams(
     val presets: List<RoutingPreset>,
     val activePreset: RoutingPreset?,

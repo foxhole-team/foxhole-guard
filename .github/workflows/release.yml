@@ -2,11 +2,18 @@ name: release
 
 on:
   push:
+    branches:
+      - main
     tags:
       - "public_beta_*"
+      - "v*.*.*-*"
+  workflow_dispatch:
 
 permissions:
   contents: write
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 concurrency:
   group: release-${{ github.ref }}
@@ -67,7 +74,7 @@ jobs:
           set +o pipefail
           yes | "$SDKMANAGER" --licenses >/dev/null
           set -o pipefail
-          "$SDKMANAGER" "platform-tools" "platforms;android-36" "build-tools;36.0.0" "ndk;28.0.13004108"
+          "$SDKMANAGER" --channel=3 "platform-tools" "platforms;android-37.0" "build-tools;37.0.0" "ndk;28.0.13004108"
 
       - name: prepare release signing inputs
         shell: bash
@@ -109,9 +116,9 @@ jobs:
           } >> "$GITHUB_ENV"
 
       - name: build release
-        run: ./gradlew validateSigningRelease assembleRelease
+        run: ./gradlew --no-daemon --console=plain --stacktrace -Pfoxhole.splitApks=true validateSigningRelease assembleRelease
 
-      - name: verify signed release APK
+      - name: verify signed release APKs
         id: release_apk
         shell: bash
         run: |
@@ -120,22 +127,25 @@ jobs:
           while IFS= read -r apk; do
             apks+=("$apk")
           done < <(find app/build/outputs/apk/release -maxdepth 1 -type f -name '*.apk' | sort)
-          if [[ "${#apks[@]}" -ne 1 ]]; then
-            printf 'Expected exactly one release APK, found %s:\n' "${#apks[@]}" >&2
+          if [[ "${#apks[@]}" -ne 3 ]]; then
+            printf 'Expected exactly three release APKs, found %s:\n' "${#apks[@]}" >&2
             if [[ "${#apks[@]}" -gt 0 ]]; then
               printf ' - %s\n' "${apks[@]}" >&2
             fi
             exit 1
           fi
 
-          apk_path="${apks[0]}"
-          apk_name="$(basename "$apk_path")"
-          if [[ "$apk_name" == *unsigned* ]]; then
-            echo "Refusing to publish unsigned release output: $apk_name" >&2
-            exit 1
-          fi
+          for required_pattern in '*arm64-v8a*.apk' '*armeabi-v7a*.apk' '*universal*.apk'; do
+            matches=(app/build/outputs/apk/release/$required_pattern)
+            if [[ "${#matches[@]}" -ne 1 || ! -f "${matches[0]}" ]]; then
+              echo "Expected exactly one release APK matching $required_pattern" >&2
+              printf 'Found APKs:\n' >&2
+              printf ' - %s\n' "${apks[@]}" >&2
+              exit 1
+            fi
+          done
 
-          apksigner="$ANDROID_SDK_ROOT/build-tools/36.0.0/apksigner"
+          apksigner="$ANDROID_SDK_ROOT/build-tools/37.0.0/apksigner"
           if [[ ! -x "$apksigner" ]]; then
             apksigner="$(find "$ANDROID_SDK_ROOT/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
           fi
@@ -144,67 +154,85 @@ jobs:
             exit 1
           fi
 
-          cert_report="$RUNNER_TEMP/release-certs.txt"
-          "$apksigner" verify --print-certs "$apk_path" | tee "$cert_report"
-          actual_cert_sha256="$(
-            awk -F': ' '/Signer #1 certificate SHA-256 digest/ { print $2; exit }' "$cert_report" |
-              tr -d ':' |
-              tr '[:upper:]' '[:lower:]'
-          )"
           expected_cert_sha256="$(printf '%s' "$EXPECTED_RELEASE_CERT_SHA256" | tr -d ':' | tr '[:upper:]' '[:lower:]')"
-          if [[ -z "$actual_cert_sha256" ]]; then
-            echo "Could not read signing certificate SHA-256 digest from apksigner output" >&2
-            exit 1
-          fi
-          if [[ "$actual_cert_sha256" != "$expected_cert_sha256" ]]; then
-            echo "Release signing certificate mismatch" >&2
-            echo "Expected: $expected_cert_sha256" >&2
-            echo "Actual:   $actual_cert_sha256" >&2
-            exit 1
-          fi
-
-          asset_path="$RUNNER_TEMP/Foxhole-${GITHUB_REF_NAME}-release.apk"
-          cp "$apk_path" "$asset_path"
+          asset_dir="$RUNNER_TEMP/release-apks"
+          mkdir -p "$asset_dir"
+          cert_report="$asset_dir/release-certs.txt"
+          : > "$cert_report"
+          for apk_path in "${apks[@]}"; do
+            apk_name="$(basename "$apk_path")"
+            if [[ "$apk_name" == *unsigned* ]]; then
+              echo "Refusing to publish unsigned release output: $apk_name" >&2
+              exit 1
+            fi
+            current_cert_report="$RUNNER_TEMP/${apk_name}.certs.txt"
+            "$apksigner" verify --print-certs "$apk_path" | tee "$current_cert_report"
+            cat "$current_cert_report" >> "$cert_report"
+            actual_cert_sha256="$(
+              awk -F': ' '/Signer #1 certificate SHA-256 digest/ { print $2; exit }' "$current_cert_report" |
+                tr -d ':' |
+                tr '[:upper:]' '[:lower:]'
+            )"
+            if [[ -z "$actual_cert_sha256" ]]; then
+              echo "Could not read signing certificate SHA-256 digest from apksigner output for $apk_name" >&2
+              exit 1
+            fi
+            if [[ "$actual_cert_sha256" != "$expected_cert_sha256" ]]; then
+              echo "Release signing certificate mismatch for $apk_name" >&2
+              echo "Expected: $expected_cert_sha256" >&2
+              echo "Actual:   $actual_cert_sha256" >&2
+              exit 1
+            fi
+            case "$apk_name" in
+              *arm64-v8a*) asset_name="Foxhole-${GITHUB_REF_NAME}-arm64-v8a-release.apk" ;;
+              *armeabi-v7a*) asset_name="Foxhole-${GITHUB_REF_NAME}-armeabi-v7a-release.apk" ;;
+              *universal*) asset_name="Foxhole-${GITHUB_REF_NAME}-universal-release.apk" ;;
+              *)
+                echo "Unexpected release APK name: $apk_name" >&2
+                exit 1
+                ;;
+            esac
+            cp "$apk_path" "$asset_dir/$asset_name"
+          done
           (
-            cd "$RUNNER_TEMP"
-            sha256sum "$(basename "$asset_path")" > SHA256SUMS
+            cd "$asset_dir"
+            sha256sum Foxhole-${GITHUB_REF_NAME}-*.apk release-certs.txt > SHA256SUMS
           )
-          apk_sha256="$(cut -d ' ' -f1 "$RUNNER_TEMP/SHA256SUMS")"
-          echo "APK SHA-256: $apk_sha256"
-          echo "Signing cert SHA-256: $actual_cert_sha256"
+          echo "Release APK SHA-256 sums:"
+          cat "$asset_dir/SHA256SUMS"
+          echo "Signing cert SHA-256: $expected_cert_sha256"
           {
-            echo "apk_path=$asset_path"
-            echo "sha256sums_path=$RUNNER_TEMP/SHA256SUMS"
-            echo "apk_sha256=$apk_sha256"
-            echo "cert_sha256=$actual_cert_sha256"
+            echo "asset_dir=$asset_dir"
+            echo "sha256sums_path=$asset_dir/SHA256SUMS"
+            echo "cert_sha256=$expected_cert_sha256"
           } >> "$GITHUB_OUTPUT"
 
       - name: upload release artifact
-        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
-          name: release-apk-${{ github.ref_name }}
+          name: release-apks-${{ github.ref_name }}
           path: |
-            ${{ steps.release_apk.outputs.apk_path }}
-            ${{ steps.release_apk.outputs.sha256sums_path }}
+            ${{ steps.release_apk.outputs.asset_dir }}/*
 
       - name: publish github release
+        if: startsWith(github.ref, 'refs/tags/')
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          apk_asset="${{ steps.release_apk.outputs.apk_path }}"
-          sha256sums_asset="${{ steps.release_apk.outputs.sha256sums_path }}"
+          asset_dir="${{ steps.release_apk.outputs.asset_dir }}"
+          assets=("$asset_dir"/*.apk "$asset_dir/SHA256SUMS" "$asset_dir/release-certs.txt")
           if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
             gh release view "$GITHUB_REF_NAME" --json assets -q '.assets[].name' |
               while IFS= read -r asset_name; do
                 case "$asset_name" in
                   "Foxhole-${GITHUB_REF_NAME}-"*.apk|SHA256SUMS|release-certs.txt)
                     gh release delete-asset "$GITHUB_REF_NAME" "$asset_name" --yes
-                    ;;
+                  ;;
                 esac
               done
-            gh release upload "$GITHUB_REF_NAME" "$apk_asset" "$sha256sums_asset" --clobber
+            gh release upload "$GITHUB_REF_NAME" "${assets[@]}" --clobber
           else
-            gh release create "$GITHUB_REF_NAME" "$apk_asset" "$sha256sums_asset" --title "$GITHUB_REF_NAME" --generate-notes
+            gh release create "$GITHUB_REF_NAME" "${assets[@]}" --title "$GITHUB_REF_NAME" --generate-notes
           fi

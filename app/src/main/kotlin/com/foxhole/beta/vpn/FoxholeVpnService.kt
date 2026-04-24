@@ -442,24 +442,22 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
     }
 
     internal fun ensureNotificationChannel() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            notificationManager.createNotificationChannel(
-                NotificationChannel(
-                    FoxholeConnectionServiceContract.NOTIFICATION_CHANNEL_ID,
-                    getString(R.string.notification_channel_name),
-                    NotificationManager.IMPORTANCE_LOW,
-                ).apply {
-                    setSound(null, null)
-                    enableVibration(false)
-                    enableLights(false)
-                    setShowBadge(false)
-                    lockscreenVisibility = Notification.VISIBILITY_SECRET
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                        setAllowBubbles(false)
-                    }
-                },
-            )
-        }
+        notificationManager.createNotificationChannel(
+            NotificationChannel(
+                FoxholeConnectionServiceContract.NOTIFICATION_CHANNEL_ID,
+                getString(R.string.notification_channel_name),
+                NotificationManager.IMPORTANCE_LOW,
+            ).apply {
+                setSound(null, null)
+                enableVibration(false)
+                enableLights(false)
+                setShowBadge(false)
+                lockscreenVisibility = Notification.VISIBILITY_SECRET
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    setAllowBubbles(false)
+                }
+            },
+        )
     }
 
     internal fun launchCommand(block: suspend () -> Unit) {
@@ -559,16 +557,10 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
                         connectivityManager.registerBestMatchingNetworkCallback(trackedNetworkRequest, networkCallback, mainHandler)
                     Build.VERSION.SDK_INT >= Build.VERSION_CODES.P ->
                         connectivityManager.requestNetwork(trackedNetworkRequest, networkCallback, mainHandler)
-                    Build.VERSION.SDK_INT >= Build.VERSION_CODES.O ->
-                        connectivityManager.registerDefaultNetworkCallback(networkCallback, mainHandler)
-                    else -> connectivityManager.registerDefaultNetworkCallback(networkCallback)
+                    else -> connectivityManager.registerDefaultNetworkCallback(networkCallback, mainHandler)
                 }
             }.recoverCatching {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    connectivityManager.registerDefaultNetworkCallback(networkCallback, mainHandler)
-                } else {
-                    connectivityManager.registerDefaultNetworkCallback(networkCallback)
-                }
+                connectivityManager.registerDefaultNetworkCallback(networkCallback, mainHandler)
             }
         registration
             .onSuccess { networkCallbackRegistered = true }
@@ -583,11 +575,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         refreshDefaultNetworkAvailability()
         val registration =
             runCatching {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    connectivityManager.registerDefaultNetworkCallback(defaultNetworkCallback, mainHandler)
-                } else {
-                    connectivityManager.registerDefaultNetworkCallback(defaultNetworkCallback)
-                }
+                connectivityManager.registerDefaultNetworkCallback(defaultNetworkCallback, mainHandler)
             }
         registration
             .onSuccess { defaultNetworkCallbackRegistered = true }
@@ -787,10 +775,13 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
     internal suspend fun retryValidatedTunnelConnectivityWithGrace(
         vpnNetwork: Network,
         policy: TunnelValidationGracePolicy,
-    ): Result<Unit> = retryValidatedTunnelConnectivityWithGraceInternal(vpnNetwork, policy)
+        preferIpv4: Boolean = false,
+    ): Result<Unit> = retryValidatedTunnelConnectivityWithGraceInternal(vpnNetwork, policy, preferIpv4)
 
-    internal suspend fun probeDnsIndependentConnectivityFallback(callTimeoutMs: Long) =
-        probeDnsIndependentConnectivityFallbackInternal(callTimeoutMs)
+    internal suspend fun probeDnsIndependentConnectivityFallback(
+        callTimeoutMs: Long,
+        network: Network? = null,
+    ) = probeDnsIndependentConnectivityFallbackInternal(callTimeoutMs, network)
 
     internal suspend fun refreshValidatedTunnelIpInfoBestEffort(vpnNetwork: Network) =
         refreshValidatedTunnelIpInfoBestEffortInternal(vpnNetwork)
@@ -798,7 +789,8 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
     internal suspend fun probeConnectivityEndpoints(
         callTimeoutMs: Long = CONNECTIVITY_PROBE_CALL_TIMEOUT_MS,
         network: Network? = null,
-    ) = probeConnectivityEndpointsInternal(callTimeoutMs, network)
+        preferIpv4: Boolean = false,
+    ) = probeConnectivityEndpointsInternal(callTimeoutMs, network, preferIpv4)
 
     internal suspend fun connectivityProbeEndpoints(): List<String> = connectivityProbeEndpointsInternal()
 
@@ -810,9 +802,16 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         callTimeoutMs: Long,
     ) = probeConnectivityEndpointsOverLocalProxyInternal(proxy, callTimeoutMs)
 
-    internal fun probeSessionTarget(target: VpnHealthProbeTarget) = probeSessionTargetInternal(target)
+    internal fun probeSessionTarget(
+        target: VpnHealthProbeTarget,
+        network: Network? = null,
+        timeoutMs: Long = NOTIFICATION_HEALTH_PROBE_TIMEOUT_MS,
+    ) = probeSessionTargetInternal(target, network, timeoutMs)
 
-    internal fun resolveProbeAddress(host: String): InetAddress = resolveProbeAddressInternal(host)
+    internal fun resolveProbeAddress(
+        host: String,
+        network: Network? = null,
+    ): InetAddress = resolveProbeAddressInternal(host, network)
 
     internal fun refreshDefaultNetworkAvailability() = refreshDefaultNetworkAvailabilityInternal()
 

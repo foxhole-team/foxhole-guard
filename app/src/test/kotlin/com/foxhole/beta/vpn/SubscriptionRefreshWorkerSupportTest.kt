@@ -1,8 +1,7 @@
 package com.foxhole.beta.vpn
 
-import com.foxhole.beta.core.data.SubscriptionCertificateInfo
-import com.foxhole.beta.core.data.SubscriptionTlsTrustRequiredException
 import java.io.IOException
+import javax.net.ssl.SSLHandshakeException
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -48,17 +47,11 @@ class SubscriptionRefreshWorkerSupportTest {
     }
 
     @Test
-    fun `does not retry trust-required subscription failures`() {
+    fun `does not retry tls trust failures`() {
         val trustFailure =
-            SubscriptionTlsTrustRequiredException(
-                sourceUrl = "https://example.org/subscription",
-                certificate =
-                    SubscriptionCertificateInfo(
-                        host = "example.org",
-                        sha256Fingerprint = "ABCD",
-                        subject = "CN=example.org",
-                        issuer = "CN=example.org",
-                    ),
+            IllegalStateException(
+                "Subscription update failed for example.org: untrusted TLS certificate chain",
+                SSLHandshakeException("self signed certificate"),
             )
 
         assertFalse(isRetryableScheduledRefreshFailure(trustFailure))

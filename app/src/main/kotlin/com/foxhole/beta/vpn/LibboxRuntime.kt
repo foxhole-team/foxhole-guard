@@ -3,45 +3,22 @@ package com.foxhole.beta.vpn
 import android.content.Context
 import android.content.pm.PackageManager
 import android.net.ConnectivityManager
-import android.net.DnsResolver
 import android.net.IpPrefix
 import android.net.LinkProperties
 import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.NetworkRequest
 import android.net.VpnService
-import android.net.wifi.WifiManager
 import android.os.Build
-import android.os.CancellationSignal
 import android.os.Handler
 import android.os.Looper
 import android.os.ParcelFileDescriptor
-import android.system.ErrnoException
-import android.system.OsConstants
-import android.util.Base64
 import android.util.Log
 import androidx.annotation.RequiresApi
 import androidx.core.content.getSystemService
-import com.foxhole.beta.BuildConfig
 import com.foxhole.beta.core.diagnostics.DiagnosticsLogger
 import com.foxhole.beta.core.model.VpnSession
-import java.io.File
-import java.lang.reflect.Method
-import java.lang.reflect.Proxy
 import java.net.InetAddress
-import java.net.Inet6Address
-import java.net.InetSocketAddress
-import java.net.InterfaceAddress
-import java.net.NetworkInterface
-import java.net.UnknownHostException
-import java.security.KeyStore
-import java.util.Locale
-import java.util.concurrent.atomic.AtomicBoolean
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.asExecutor
-import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.suspendCancellableCoroutine
-import kotlin.coroutines.resume
 
 internal fun createVpnRuntime(
     context: Context,
@@ -206,20 +183,21 @@ private class ReflectiveLibboxRuntime(
         }
 
         if (reflection.callBoolean(tunOptions, "getAutoRoute")) {
-            reflection.call(reflection.call(tunOptions, "getDNSServerAddress"), "getValue")
-                ?.toString()
-                ?.takeIf { it.isNotBlank() }
-                ?.also { dnsServerAddress ->
-                    currentDnsServerAddress =
-                        VpnDnsServerSelector.advertisedDnsServerAddress(
-                            configJson = currentConfig,
-                            fallbackServerAddress = dnsServerAddress,
-                        )
-                    diagnosticsLogger.record(
-                        "dns",
-                        "advertising vpn dns server=$currentDnsServerAddress",
-                    )
-                }?.let { builder.addDnsServer(it) }
+            val fallbackDnsServerAddress =
+                reflection.call(reflection.call(tunOptions, "getDNSServerAddress"), "getValue")
+                    ?.toString()
+                    ?.takeIf { it.isNotBlank() }
+            val advertisedDnsServers =
+                VpnDnsServerSelector.advertisedDnsServerAddresses(
+                    configJson = currentConfig,
+                    fallbackServerAddress = fallbackDnsServerAddress,
+                )
+            currentDnsServerAddress = advertisedDnsServers.firstOrNull()
+            diagnosticsLogger.record(
+                "dns",
+                "advertising vpn dns servers=${advertisedDnsServers.joinToString()}",
+            )
+            advertisedDnsServers.forEach(builder::addDnsServer)
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 addRoutesApi33(builder, tunOptions)
@@ -449,9 +427,7 @@ internal class DefaultNetworkMonitor(
     }
 
     private fun preferredNetwork(): Network? {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            connectivity.activeNetwork?.takeIf(::isUpstreamNetwork)?.let { return it }
-        }
+        connectivity.activeNetwork?.takeIf(::isUpstreamNetwork)?.let { return it }
         return ConnectivityNetworkRegistry.snapshot(appContext).firstOrNull(::isUpstreamNetwork)
     }
 
@@ -462,22 +438,14 @@ internal class DefaultNetworkMonitor(
             when {
                 Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> connectivity.registerBestMatchingNetworkCallback(request, callback, mainHandler)
                 Build.VERSION.SDK_INT >= Build.VERSION_CODES.P -> connectivity.requestNetwork(request, callback, mainHandler)
-                Build.VERSION.SDK_INT >= Build.VERSION_CODES.O -> connectivity.registerDefaultNetworkCallback(callback, mainHandler)
-                Build.VERSION.SDK_INT >= Build.VERSION_CODES.N -> connectivity.registerDefaultNetworkCallback(callback)
-                else -> connectivity.requestNetwork(request, callback)
+                else -> connectivity.registerDefaultNetworkCallback(callback, mainHandler)
             }
         }.onFailure { error ->
             diagnosticsLogger.record("libbox", "default network monitor registration failed: ${error.javaClass.simpleName}")
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                runCatching {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                        connectivity.registerDefaultNetworkCallback(callback, mainHandler)
-                    } else {
-                        connectivity.registerDefaultNetworkCallback(callback)
-                    }
-                }.onFailure {
-                    diagnosticsLogger.record("libbox", "default network monitor fallback failed")
-                }
+            runCatching {
+                connectivity.registerDefaultNetworkCallback(callback, mainHandler)
+            }.onFailure {
+                diagnosticsLogger.record("libbox", "default network monitor fallback failed")
             }
         }
     }

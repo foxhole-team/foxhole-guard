@@ -142,7 +142,12 @@ internal fun parseTrojanUri(
             put("server", host)
             put("server_port", port)
             put("password", uri.userInfo ?: error("missing password"))
-            buildTls(query, host, tlsDefault = true, allowInsecureTls = allowInsecureTls)?.let { put("tls", it) }
+            buildTls(
+                query = query,
+                host = host,
+                tlsDefault = !query["security"].equals("none", ignoreCase = true),
+                allowInsecureTls = allowInsecureTls,
+            )?.let { put("tls", it) }
             buildTransport(query)?.let { put("transport", it) }
         }
     return ProxyNode(
@@ -324,6 +329,7 @@ internal fun parseWireGuardConfig(
     raw.lineSequence().forEach { line ->
         val trimmed = line.trim()
         when {
+            trimmed.isBlank() || trimmed.startsWith("#") || trimmed.startsWith(";") -> Unit
             trimmed.startsWith("[interface]", ignoreCase = true) -> currentSection = "interface"
             trimmed.startsWith("[peer]", ignoreCase = true) -> currentSection = "peer"
             trimmed.contains("=") -> {
@@ -336,27 +342,33 @@ internal fun parseWireGuardConfig(
             }
         }
     }
-    val endpoint = peerSection["Endpoint"]?.firstOrNull() ?: error("wireguard endpoint is missing")
-    val remoteEndpoint = parseRemoteEndpoint(endpoint, defaultPort = 51820)
+    val rawEndpoint = peerSection["Endpoint"]?.firstOrNull() ?: error("wireguard endpoint is missing")
+    val remoteEndpoint = parseRemoteEndpoint(rawEndpoint, defaultPort = 51820)
     val host = remoteEndpoint.host
     validateOutboundHost(host, allowPrivateOutboundHosts)
     val port = remoteEndpoint.port ?: 51820
     val localAddress = interfaceSection["Address"]?.flatMap { it.split(',') }?.map(String::trim).orEmpty()
-    val outbound =
+    val allowedIps =
+        filterWireGuardAllowedIpsForLocalAddresses(
+            allowedIps = peerSection["AllowedIPs"]?.flatMap { it.split(',') }?.map(String::trim).orEmpty(),
+            localAddresses = localAddress,
+        )
+    val wireGuardEndpoint =
         buildJsonObject {
             put("type", "wireguard")
             put("tag", tagFor(displayName))
             put("private_key", interfaceSection["PrivateKey"]?.firstOrNull() ?: error("wireguard private key is missing"))
             put(
-                "local_address",
+                "address",
                 buildStringArray(localAddress),
             )
-            val allowedIps = peerSection["AllowedIPs"]?.flatMap { it.split(',') }?.map(String::trim).orEmpty()
+            interfaceSection["ListenPort"]?.firstOrNull()?.toIntOrNull()?.let { put("listen_port", it) }
+            interfaceSection["MTU"]?.firstOrNull()?.toIntOrNull()?.let { put("mtu", it) }
             putJsonArray("peers") {
                 add(
                     buildJsonObject {
-                        put("server", host)
-                        put("server_port", port)
+                        put("address", host)
+                        put("port", port)
                         put("public_key", peerSection["PublicKey"]?.firstOrNull() ?: error("wireguard public key is missing"))
                         peerSection["PresharedKey"]?.firstOrNull()?.let { put("pre_shared_key", it) }
                         if (allowedIps.isNotEmpty()) {
@@ -368,11 +380,33 @@ internal fun parseWireGuardConfig(
                         peerSection["PersistentKeepalive"]?.firstOrNull()?.toIntOrNull()?.let {
                             put("persistent_keepalive_interval", it)
                         }
+                        parseWireGuardReserved(peerSection["Reserved"]?.firstOrNull())?.let { reserved ->
+                            put("reserved", reserved)
+                        }
                     },
                 )
             }
         }
-    return ProxyNode(displayName, ProtocolHint.WIREGUARD, outbound)
+    return ProxyNode(displayName, ProtocolHint.WIREGUARD, outbound = null, endpoint = wireGuardEndpoint)
+}
+
+internal fun filterWireGuardAllowedIpsForLocalAddresses(
+    allowedIps: List<String>,
+    localAddresses: List<String>,
+): List<String> {
+    val hasIpv4Local = localAddresses.any { !it.substringBefore('/').contains(':') }
+    val hasIpv6Local = localAddresses.any { it.substringBefore('/').contains(':') }
+    return allowedIps
+        .map(String::trim)
+        .filter(String::isNotBlank)
+        .filter { allowedIp ->
+            val isIpv6 = allowedIp.substringBefore('/').contains(':')
+            if (isIpv6) {
+                hasIpv6Local
+            } else {
+                hasIpv4Local
+            }
+        }
 }
 
 internal fun buildConfigFromNodes(
@@ -380,16 +414,41 @@ internal fun buildConfigFromNodes(
     allowPrivateOutboundHosts: Boolean = false,
 ): String {
     require(nodes.isNotEmpty()) { "empty node list" }
-    val normalizedConfig = buildBaseConfig(outbounds = JsonArray(nodes.map { it.outbound }))
+    val normalizedConfig = buildBaseConfig(
+        outbounds = JsonArray(nodes.mapNotNull { it.outbound }),
+        endpoints = JsonArray(nodes.mapNotNull { it.endpoint }),
+        proxyTags = nodes.map { it.tag },
+        tunAddresses = tunAddressesForProxyNodes(nodes),
+    )
     requireAllowedRemoteHosts(normalizedConfig, allowPrivateOutboundHosts)
     return json.encodeToString(JsonObject.serializer(), normalizedConfig)
 }
+
+internal fun parseWireGuardReserved(value: String?): JsonArray? {
+    val normalized = value?.trim()?.takeIf(String::isNotBlank) ?: return null
+    val bytes =
+        normalized
+            .split(',')
+            .map { item -> item.trim().toIntOrNull() ?: return null }
+            .takeIf { it.isNotEmpty() }
+            ?: return null
+    return buildJsonArray {
+        bytes.forEach { add(JsonPrimitive(it)) }
+    }
+}
+
 internal fun buildBaseConfig(
     outbounds: JsonArray,
+    endpoints: JsonArray = JsonArray(emptyList()),
+    proxyTags: List<String> =
+        outbounds.map {
+            it.jsonObject["tag"]?.jsonPrimitive?.content ?: error("missing tag")
+        },
+    tunAddresses: List<String> = DEFAULT_TUN_ADDRESSES,
     routeOverride: JsonObject? = null,
     dnsOverride: JsonObject? = null,
 ): JsonObject {
-    val proxyTags = outbounds.map { it.jsonObject["tag"]?.jsonPrimitive?.content ?: error("missing tag") }
+    require(proxyTags.isNotEmpty()) { "empty proxy tag list" }
     return buildJsonObject {
         putJsonObject("log") {
             put("level", FOXHOLE_RUNTIME_LOG_LEVEL)
@@ -444,12 +503,15 @@ internal fun buildBaseConfig(
                         put("stack", "system")
                         put(
                             "address",
-                            buildStringArray(listOf("172.19.0.1/30", "fdfe:dcba:9876::1/126")),
+                            buildStringArray(tunAddresses),
                         )
                     },
                 )
             },
         )
+        if (endpoints.isNotEmpty()) {
+            put("endpoints", endpoints)
+        }
         put(
             "outbounds",
             buildJsonArray {
@@ -505,6 +567,35 @@ internal fun buildBaseConfig(
         )
     }
 }
+
+internal fun tunAddressesForProxyNodes(nodes: List<ProxyNode>): List<String> {
+    val endpoints = nodes.mapNotNull { it.endpoint }
+    if (endpoints.isEmpty() || nodes.any { it.outbound != null }) {
+        return DEFAULT_TUN_ADDRESSES
+    }
+    val allWireGuardEndpoints =
+        endpoints.all { endpoint ->
+            endpoint["type"]?.jsonPrimitive?.contentOrNull.equals("wireguard", ignoreCase = true)
+        }
+    if (!allWireGuardEndpoints) {
+        return DEFAULT_TUN_ADDRESSES
+    }
+    val hasIpv6WireGuardAddress =
+        endpoints.any { endpoint ->
+            endpoint.stringValues("address").any { address -> address.substringBefore('/').contains(':') }
+        }
+    return if (hasIpv6WireGuardAddress) DEFAULT_TUN_ADDRESSES else IPV4_ONLY_TUN_ADDRESSES
+}
+
+private fun JsonObject.stringValues(key: String): List<String> =
+    when (val value = this[key]) {
+        is JsonArray -> value.mapNotNull { it.jsonPrimitive.contentOrNull }
+        null -> emptyList()
+        else -> listOfNotNull(value.jsonPrimitive.contentOrNull)
+    }
+
+private val DEFAULT_TUN_ADDRESSES = listOf("172.19.0.1/30", "fdfe:dcba:9876::1/126")
+private val IPV4_ONLY_TUN_ADDRESSES = listOf("172.19.0.1/30")
 
 internal fun buildTls(
     query: Map<String, String>,

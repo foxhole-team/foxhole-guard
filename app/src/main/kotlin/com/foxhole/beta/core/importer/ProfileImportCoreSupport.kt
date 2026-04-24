@@ -358,6 +358,16 @@ private fun extractNormalizedRemoteHosts(config: JsonObject): List<String> =
                 addAll(transport["headers"]?.jsonObject?.get("Host")?.collectHostValues().orEmpty())
             }
         }
+        config["endpoints"]?.jsonArray?.forEach { endpointElement ->
+            val endpoint = endpointElement.jsonObject
+            endpoint["peers"]?.jsonArray?.forEach { peerElement ->
+                peerElement.jsonObject["address"]
+                    ?.jsonPrimitive
+                    ?.contentOrNull
+                    ?.let(::normalizeRemoteHostValue)
+                    ?.let(::add)
+            }
+        }
         config["dns"]?.jsonObject?.get("servers")?.jsonArray?.forEach { serverElement ->
             extractDnsServerHost(serverElement)?.let(::add)
         }
@@ -409,9 +419,18 @@ private fun normalizeRemoteHostValue(value: String): String? {
 internal data class ProxyNode(
     val displayName: String,
     val protocolHint: ProtocolHint,
-    val outbound: JsonObject,
+    val outbound: JsonObject?,
+    val endpoint: JsonObject? = null,
     val subscriptionExpiresAt: Long? = null,
-)
+) {
+    val tag: String
+        get() =
+            (outbound ?: endpoint)
+                ?.get("tag")
+                ?.jsonPrimitive
+                ?.contentOrNull
+                ?: error("missing node tag")
+}
 
 internal data class RemoteEndpoint(
     val host: String,

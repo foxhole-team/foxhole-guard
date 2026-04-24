@@ -14,8 +14,8 @@ import com.foxhole.beta.R
 
 internal object ProfileRefreshResultNotifier {
     private const val CHANNEL_ID = "foxhole-profile-refresh-results"
-    private const val CHANNEL_NAME_RES = R.string.profile_refresh_notification_channel_name
-    private const val CHANNEL_DESCRIPTION_RES = R.string.profile_refresh_notification_channel_description
+    private val CHANNEL_NAME_RES = R.string.profile_refresh_notification_channel_name
+    private val CHANNEL_DESCRIPTION_RES = R.string.profile_refresh_notification_channel_description
     private const val NOTIFICATION_GROUP_KEY = "foxhole-profile-refresh"
     private const val NOTIFICATION_ID_BASE = 2_100
 
@@ -92,9 +92,6 @@ internal object ProfileRefreshResultNotifier {
     }
 
     private fun ensureChannel(context: Context) {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
-            return
-        }
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager ?: return
         val existing = manager.getNotificationChannel(CHANNEL_ID)
         if (existing != null) {

@@ -5,15 +5,11 @@ import android.content.ClipData
 import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
-import android.net.Uri
 import android.os.Build
 import android.os.SystemClock
 import androidx.lifecycle.viewModelScope
 import androidx.core.content.FileProvider
 import com.foxhole.beta.R
-import com.foxhole.beta.core.data.SubscriptionCertificateInfo
-import com.foxhole.beta.core.data.SubscriptionTlsTrustRequiredException
-import com.foxhole.beta.core.data.toTrustedCertificate
 import com.foxhole.beta.core.model.ConnectionState
 import com.foxhole.beta.core.model.InstalledAppOption
 import com.foxhole.beta.core.model.RoutingPresetSource
@@ -27,7 +23,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import android.provider.Settings as AndroidSettings
 
 internal fun HomeViewModel.importPresetTextInternal(
     raw: String,
@@ -204,16 +199,6 @@ internal fun HomeViewModel.exportDiagnosticsInternal(file: File = createDiagnost
     }
 }
 
-internal fun HomeViewModel.batteryOptimizationIntentInternal(): Intent {
-    val packageName = getApplication<Application>().packageName
-    val ignoring = powerManager.isIgnoringBatteryOptimizations(packageName)
-    return if (ignoring) {
-        Intent(AndroidSettings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
-    } else {
-        Intent(AndroidSettings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:$packageName"))
-    }
-}
-
 internal fun HomeViewModel.importRawInternal(value: String) {
     viewModelScope.launch {
         runCatching { container.profileRepository.importProfile(value) }
@@ -273,14 +258,6 @@ internal suspend fun HomeViewModel.handleProfileRefreshFailureInternal(
     profileId: Long,
     throwable: Throwable,
 ) {
-    val trustFailure = throwable as? SubscriptionTlsTrustRequiredException
-    if (trustFailure != null) {
-        showSubscriptionTrustPrompt(
-            failure = trustFailure,
-            retryProfileId = profileId,
-        )
-        return
-    }
     val app = getApplication<Application>()
     val message = throwable.message ?: app.getString(R.string.profile_refresh_failed)
     ProfileRefreshResultNotifier.showFailure(
@@ -300,32 +277,7 @@ internal suspend fun HomeViewModel.handleProfileImportFailureInternal(
     rawInput: String,
     throwable: Throwable,
 ) {
-    val trustFailure = throwable as? SubscriptionTlsTrustRequiredException
-    if (trustFailure != null) {
-        showSubscriptionTrustPrompt(
-            failure = trustFailure,
-            retryRawImport = rawInput,
-        )
-        return
-    }
     emitError(profileImportFailureMessage(rawInput, throwable))
-}
-
-internal fun HomeViewModel.showSubscriptionTrustPromptInternal(
-    failure: SubscriptionTlsTrustRequiredException,
-    retryRawImport: String? = null,
-    retryProfileId: Long? = null,
-) {
-    subscriptionTrustPromptMutable.value =
-        SubscriptionTrustPromptUiState(
-            sourceUrl = failure.sourceUrl,
-            host = failure.certificate.host,
-            sha256Fingerprint = failure.certificate.sha256Fingerprint,
-            subject = failure.certificate.subject,
-            issuer = failure.certificate.issuer,
-            retryRawImport = retryRawImport,
-            retryProfileId = retryProfileId,
-        )
 }
 
 internal suspend fun HomeViewModel.reconnectProfileIfRequestedInternal(

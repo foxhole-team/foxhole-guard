@@ -81,6 +81,41 @@ class VpnHealthProbeTargetSelectorTest {
     }
 
     @Test
+    fun `marks wireguard endpoint selected through proxy as udp probe transport`() {
+        val target =
+            VpnHealthProbeTargetSelector.select(
+                """
+                {
+                  "endpoints": [
+                    {
+                      "type": "wireguard",
+                      "tag": "wg",
+                      "private_key": "private",
+                      "address": ["10.0.0.2/32"],
+                      "peers": [
+                        {
+                          "address": "wg.example.com",
+                          "port": 51820,
+                          "public_key": "public"
+                        }
+                      ]
+                    }
+                  ],
+                  "outbounds": [
+                    { "type": "selector", "tag": "proxy", "outbounds": ["wg"] },
+                    { "type": "direct", "tag": "direct" }
+                  ]
+                }
+                """.trimIndent(),
+            )
+
+        requireNotNull(target)
+        assertEquals("wg.example.com", target.host)
+        assertEquals(51820, target.port)
+        assertEquals(VpnHealthProbeTransport.UDP, target.transport)
+    }
+
+    @Test
     fun `returns null when config has no remote outbound target`() {
         val target =
             VpnHealthProbeTargetSelector.select(

@@ -32,15 +32,16 @@ internal object VpnHealthProbeTargetSelector {
             }
             val root = json.parseToJsonElement(configJson).jsonObject
             val outbounds = root["outbounds"]?.jsonArray.orEmpty().map { it.jsonObject }
+            val endpoints = root["endpoints"]?.jsonArray.orEmpty().map { it.jsonObject }
             val outboundsByTag =
-                outbounds.mapNotNull { outbound ->
+                (outbounds + endpoints).mapNotNull { outbound ->
                     outbound["tag"]?.jsonPrimitive?.contentOrNull?.takeIf(String::isNotBlank)?.let { it to outbound }
                 }.toMap()
             resolveTag(
                 tag = PREFERRED_PROXY_TAG,
                 outboundsByTag = outboundsByTag,
                 visitedTags = mutableSetOf(),
-            ) ?: outbounds.firstNotNullOfOrNull(::resolveDirectTarget)
+            ) ?: (outbounds + endpoints).firstNotNullOfOrNull(::resolveDirectTarget)
         }.getOrNull()
 
     private fun resolveTag(
@@ -83,10 +84,17 @@ internal object VpnHealthProbeTargetSelector {
                     ?.contentOrNull
                     ?.trim()
                     ?.takeIf(String::isNotBlank)
+                ?: wireGuardPeer
+                    ?.get("address")
+                    ?.jsonPrimitive
+                    ?.contentOrNull
+                    ?.trim()
+                    ?.takeIf(String::isNotBlank)
                 ?: return null
         val port =
             outbound["server_port"]?.jsonPrimitive?.contentOrNull?.toIntOrNull()
                 ?: wireGuardPeer?.get("server_port")?.jsonPrimitive?.contentOrNull?.toIntOrNull()
+                ?: wireGuardPeer?.get("port")?.jsonPrimitive?.contentOrNull?.toIntOrNull()
                 ?: return null
         return VpnHealthProbeTarget(
             host = host,

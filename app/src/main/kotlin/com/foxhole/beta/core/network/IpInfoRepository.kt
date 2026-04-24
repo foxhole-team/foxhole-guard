@@ -68,6 +68,25 @@ class IpInfoRepository(
         }
     }
 
+    suspend fun probeIpv4(
+        endpoint: String,
+        callTimeoutMs: Long? = null,
+        network: Network? = null,
+        proxy: HttpProxyAccess? = null,
+    ) {
+        withContext(Dispatchers.IO) {
+            execute(
+                endpoint = endpoint,
+                callTimeoutMs = callTimeoutMs,
+                network = network,
+                addressFamilyPreference = AddressFamilyPreference.IPV4,
+                proxy = proxy,
+            ).use { response ->
+                require(response.isSuccessful) { "connectivity probe failed: ${response.code}" }
+            }
+        }
+    }
+
     suspend fun probeLatency(
         endpoint: String,
         callTimeoutMs: Long? = null,
@@ -274,8 +293,8 @@ class IpInfoRepository(
     ): List<InetAddress> =
         when (preference) {
             AddressFamilyPreference.ANY -> addresses
-            AddressFamilyPreference.IPV4 -> addresses.sortedByDescending { it is Inet4Address }
-            AddressFamilyPreference.IPV6 -> addresses.sortedByDescending { it is Inet6Address }
+            AddressFamilyPreference.IPV4 -> addresses.filterIsInstance<Inet4Address>()
+            AddressFamilyPreference.IPV6 -> addresses.filterIsInstance<Inet6Address>()
         }
 
     private fun resolveAddresses(

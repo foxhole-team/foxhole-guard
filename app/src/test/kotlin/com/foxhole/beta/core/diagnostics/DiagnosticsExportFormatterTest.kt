@@ -19,7 +19,7 @@ class DiagnosticsExportFormatterTest {
                 metadata =
                     DiagnosticsExportMetadata(
                         generatedAt = 1_700_000_000_000L,
-                        appVersion = "public beta 1.0",
+                        appVersion = "1.0.0-beta1",
                         versionCode = 1,
                         coreVersion = "1.13.6",
                         androidRelease = "16",
@@ -44,7 +44,7 @@ class DiagnosticsExportFormatterTest {
             )
 
         assertTrue(payload.contains("Foxhole Diagnostics Export"))
-        assertTrue(payload.contains("App Version: public beta 1.0 (1)"))
+        assertTrue(payload.contains("App Version: 1.0.0-beta1 (1)"))
         assertTrue(payload.contains("CPU ABI: arm64-v8a, armeabi-v7a"))
         assertTrue(payload.contains("Diagnostics Retention: 3 days"))
         assertTrue(payload.contains("App Network Activity Logging: disabled"))
@@ -61,7 +61,7 @@ class DiagnosticsExportFormatterTest {
                 metadata =
                     DiagnosticsExportMetadata(
                         generatedAt = 1_700_000_000_000L,
-                        appVersion = "public beta 1.0",
+                        appVersion = "1.0.0-beta1",
                         versionCode = 1,
                         coreVersion = "1.13.6",
                         androidRelease = "16",

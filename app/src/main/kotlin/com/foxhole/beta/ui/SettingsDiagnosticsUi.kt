@@ -19,6 +19,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -62,7 +63,14 @@ internal fun LiveLogsDialog(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 Text(
-                    text = stringResource(R.string.logs_dialog_summary, visibleEntries.size, entries.size, retentionLabel),
+                    text =
+                        pluralStringResource(
+                            R.plurals.logs_dialog_summary,
+                            entries.size,
+                            visibleEntries.size,
+                            entries.size,
+                            retentionLabel,
+                        ),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

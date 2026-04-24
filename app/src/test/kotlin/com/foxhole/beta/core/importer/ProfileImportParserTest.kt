@@ -270,6 +270,22 @@ class ProfileImportParserTest {
     }
 
     @Test
+    fun `parses trojan security none without forcing tls`() {
+        val parsed =
+            parser.parseUserInput(
+                "trojan://secret@example.org:8444?security=none&type=tcp#trojan",
+            )
+
+        val root = json.parseToJsonElement(parsed.normalizedConfigJson!!).jsonObject
+        val outbound = root["outbounds"]!!.jsonArray.first().jsonObject
+
+        assertEquals(ProtocolHint.TROJAN, parsed.protocolHint)
+        assertEquals("trojan", outbound["type"]!!.jsonPrimitive.content)
+        assertEquals("8444", outbound["server_port"]!!.jsonPrimitive.content)
+        assertEquals(false, outbound.containsKey("tls"))
+    }
+
+    @Test
     fun `parses multi line subscription list`() {
         val parsed =
             parser.parseSubscriptionContent(
@@ -407,18 +423,18 @@ class ProfileImportParserTest {
                 .jsonArray
                 .first()
                 .jsonObject
-        val wireguardOutbound =
-            json.parseToJsonElement(wireguardOption.normalizedConfigJson).jsonObject["outbounds"]!!
+        val wireguardEndpoint =
+            json.parseToJsonElement(wireguardOption.normalizedConfigJson).jsonObject["endpoints"]!!
                 .jsonArray
                 .first()
                 .jsonObject
-        val wireguardPeer = wireguardOutbound["peers"]!!.jsonArray.first().jsonObject
+        val wireguardPeer = wireguardEndpoint["peers"]!!.jsonArray.first().jsonObject
 
         assertEquals("shadowsocks", outlineOutbound["type"]!!.jsonPrimitive.content)
         assertEquals("outline-direct.example.com", outlineOutbound["server"]!!.jsonPrimitive.content)
-        assertEquals("wireguard", wireguardOutbound["type"]!!.jsonPrimitive.content)
-        assertEquals("wg-direct.example.com", wireguardPeer["server"]!!.jsonPrimitive.content)
-        assertTrue(wireguardOutbound.containsKey("local_address"))
+        assertEquals("wireguard", wireguardEndpoint["type"]!!.jsonPrimitive.content)
+        assertEquals("wg-direct.example.com", wireguardPeer["address"]!!.jsonPrimitive.content)
+        assertTrue(wireguardEndpoint.containsKey("address"))
     }
 
     @Test
@@ -964,12 +980,16 @@ class ProfileImportParserTest {
     }
 
     @Test
-    fun `rejects insecure tls in share uri by default`() {
-        expectIllegalArgument {
+    fun `allows insecure tls in share uri when build default enables it`() {
+        val parsed =
             parser.parseUserInput(
                 "vless://11111111-1111-1111-1111-111111111111@example.com:443?security=tls&allowInsecure=1#edge",
             )
-        }
+
+        val root = json.parseToJsonElement(parsed.normalizedConfigJson!!).jsonObject
+        val tls = root["outbounds"]!!.jsonArray.first().jsonObject["tls"]!!.jsonObject
+
+        assertEquals("true", tls["insecure"]!!.jsonPrimitive.content)
     }
 
     @Test
@@ -1045,14 +1065,66 @@ class ProfileImportParserTest {
             )
 
         val root = json.parseToJsonElement(parsed.normalizedConfigJson!!).jsonObject
-        val outbounds = root["outbounds"]!!.jsonArray
-        val peer = outbounds.first().jsonObject["peers"]!!.jsonArray.first().jsonObject
+        val tunAddresses =
+            root["inbounds"]!!
+                .jsonArray
+                .first()
+                .jsonObject["address"]!!
+                .jsonArray
+                .map { it.jsonPrimitive.content }
+        val endpoints = root["endpoints"]!!.jsonArray
+        val peer = endpoints.first().jsonObject["peers"]!!.jsonArray.first().jsonObject
 
         assertEquals(ProtocolHint.WIREGUARD, parsed.protocolHint)
-        assertEquals("wireguard", outbounds.first().jsonObject["type"]!!.jsonPrimitive.content)
-        assertNotNull(outbounds.first().jsonObject["local_address"])
-        assertEquals("wg.example.com", peer["server"]!!.jsonPrimitive.content)
-        assertEquals("51820", peer["server_port"]!!.jsonPrimitive.content)
+        assertEquals(listOf("172.19.0.1/30"), tunAddresses)
+        assertEquals("wireguard", endpoints.first().jsonObject["type"]!!.jsonPrimitive.content)
+        assertNotNull(endpoints.first().jsonObject["address"])
+        assertEquals("wg.example.com", peer["address"]!!.jsonPrimitive.content)
+        assertEquals("51820", peer["port"]!!.jsonPrimitive.content)
+        assertEquals(
+            listOf("0.0.0.0/0"),
+            peer["allowed_ips"]!!.jsonArray.map { it.jsonPrimitive.content },
+        )
+    }
+
+    @Test
+    fun `keeps dual stack tun inbound for dual stack wireguard config`() {
+        val parsed =
+            parser.parseUserInput(
+                """
+                [Interface]
+                PrivateKey = private
+                Address = 10.0.0.2/32, fd00::2/128
+
+                [Peer]
+                PublicKey = public
+                Endpoint = wg.example.com:51820
+                AllowedIPs = 0.0.0.0/0, ::/0
+                """.trimIndent(),
+            )
+
+        val root = json.parseToJsonElement(parsed.normalizedConfigJson!!).jsonObject
+        val tunAddresses =
+            root["inbounds"]!!
+                .jsonArray
+                .first()
+                .jsonObject["address"]!!
+                .jsonArray
+                .map { it.jsonPrimitive.content }
+        val peer =
+            root["endpoints"]!!
+                .jsonArray
+                .first()
+                .jsonObject["peers"]!!
+                .jsonArray
+                .first()
+                .jsonObject
+
+        assertEquals(listOf("172.19.0.1/30", "fdfe:dcba:9876::1/126"), tunAddresses)
+        assertEquals(
+            listOf("0.0.0.0/0", "::/0"),
+            peer["allowed_ips"]!!.jsonArray.map { it.jsonPrimitive.content },
+        )
     }
 
     @Test
@@ -1072,7 +1144,7 @@ class ProfileImportParserTest {
             )
 
         val peer =
-            json.parseToJsonElement(parsed.normalizedConfigJson!!).jsonObject["outbounds"]!!
+            json.parseToJsonElement(parsed.normalizedConfigJson!!).jsonObject["endpoints"]!!
                 .jsonArray
                 .first()
                 .jsonObject["peers"]!!
@@ -1080,8 +1152,8 @@ class ProfileImportParserTest {
                 .first()
                 .jsonObject
 
-        assertEquals("2606:4700:4700::1111", peer["server"]!!.jsonPrimitive.content)
-        assertEquals("51820", peer["server_port"]!!.jsonPrimitive.content)
+        assertEquals("2606:4700:4700::1111", peer["address"]!!.jsonPrimitive.content)
+        assertEquals("51820", peer["port"]!!.jsonPrimitive.content)
     }
 
     @Test

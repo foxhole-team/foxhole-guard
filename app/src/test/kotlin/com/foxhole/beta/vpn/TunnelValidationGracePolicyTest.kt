@@ -43,10 +43,22 @@ class TunnelValidationGracePolicyTest {
                 protocolHint = ProtocolHint.SHADOWSOCKS,
                 evidence = TunnelValidationEvidence(hasSuccessfulTunnelActivity = true),
             )
+        val wireGuardPolicy =
+            selectTunnelValidationGracePolicy(
+                protocolHint = ProtocolHint.WIREGUARD,
+                evidence = TunnelValidationEvidence(hasSuccessfulTunnelActivity = true),
+            )
 
         assertEquals(CONNECTIVITY_PROBE_GRACE_MAX_TIMEOUT_MS, hysteria2Policy?.totalTimeoutMs)
         assertEquals(CONNECTIVITY_PROBE_GRACE_MAX_TIMEOUT_MS, shadowsocksPolicy?.totalTimeoutMs)
+        assertEquals(CONNECTIVITY_PROBE_GRACE_MAX_TIMEOUT_MS, wireGuardPolicy?.totalTimeoutMs)
         assertTrue((hysteria2Policy?.attempts ?: 0) > 2)
+        assertTrue((wireGuardPolicy?.attempts ?: 0) > 2)
+    }
+
+    @Test
+    fun `wireguard reserves the maximum outer validation grace budget`() {
+        assertEquals(CONNECTIVITY_PROBE_GRACE_MAX_TIMEOUT_MS, maxTunnelValidationGraceTimeoutMs(ProtocolHint.WIREGUARD))
     }
 
     @Test

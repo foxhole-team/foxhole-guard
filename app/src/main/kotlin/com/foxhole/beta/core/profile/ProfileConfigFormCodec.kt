@@ -74,8 +74,14 @@ class ProfileConfigFormCodec(
         return EditableProfileConfig(
             type = outboundRef.type,
             nodeCount = outboundRef.nodeCount,
-            server = outbound["server"]?.jsonPrimitive?.contentOrNull ?: wireGuardPeer?.get("server")?.jsonPrimitive?.contentOrNull.orEmpty(),
-            port = outbound["server_port"]?.jsonPrimitive?.contentOrNull ?: wireGuardPeer?.get("server_port")?.jsonPrimitive?.contentOrNull.orEmpty(),
+            server =
+                outbound["server"]?.jsonPrimitive?.contentOrNull
+                    ?: wireGuardPeer?.get("server")?.jsonPrimitive?.contentOrNull
+                    ?: wireGuardPeer?.get("address")?.jsonPrimitive?.contentOrNull.orEmpty(),
+            port =
+                outbound["server_port"]?.jsonPrimitive?.contentOrNull
+                    ?: wireGuardPeer?.get("server_port")?.jsonPrimitive?.contentOrNull
+                    ?: wireGuardPeer?.get("port")?.jsonPrimitive?.contentOrNull.orEmpty(),
             uuid = outbound["uuid"]?.jsonPrimitive?.contentOrNull.orEmpty(),
             password = outbound["password"]?.jsonPrimitive?.contentOrNull.orEmpty(),
             method = outbound["method"]?.jsonPrimitive?.contentOrNull.orEmpty(),
@@ -127,7 +133,10 @@ class ProfileConfigFormCodec(
             privateKey = outbound["private_key"]?.jsonPrimitive?.contentOrNull.orEmpty(),
             peerPublicKey = outbound["peer_public_key"]?.jsonPrimitive?.contentOrNull ?: wireGuardPeer?.get("public_key")?.jsonPrimitive?.contentOrNull.orEmpty(),
             preSharedKey = outbound["pre_shared_key"]?.jsonPrimitive?.contentOrNull ?: wireGuardPeer?.get("pre_shared_key")?.jsonPrimitive?.contentOrNull.orEmpty(),
-            localAddress = outbound["local_address"]?.jsonArray.toCsv(),
+            localAddress =
+                outbound["local_address"]?.jsonArray.toCsv().ifBlank {
+                    outbound["address"]?.jsonArray.toCsv()
+                },
             allowedIps =
                 outbound["allowed_ips"]?.jsonArray.toCsv().ifBlank {
                     wireGuardPeer?.get("allowed_ips")?.jsonArray.toCsv()
@@ -146,19 +155,19 @@ class ProfileConfigFormCodec(
 
         val root = json.parseToJsonElement(baseResolvedConfigJson).jsonObject
         val target = locateEditableOutbound(root)
-        val outbounds = root["outbounds"]?.jsonArray ?: error("resolved config must define outbounds")
+        val items = root[target.containerKey]?.jsonArray ?: error("resolved config must define ${target.containerKey}")
         val updatedOutbound = updateOutbound(target.objectValue, draft, port)
-        val updatedOutbounds =
+        val updatedItems =
             buildJsonArray {
-                outbounds.forEachIndexed { index, element ->
+                items.forEachIndexed { index, element ->
                     add(if (index == target.index) updatedOutbound else element)
                 }
             }
         val updatedRoot =
             buildJsonObject {
                 root.forEach { (key, value) ->
-                    if (key == "outbounds") {
-                        put(key, updatedOutbounds)
+                    if (key == target.containerKey) {
+                        put(key, updatedItems)
                     } else {
                         put(key, value)
                     }
@@ -224,27 +233,7 @@ class ProfileConfigFormCodec(
                 map.putIntStringOrRemove("down_mbps", draft.downMbps)
             }
             "wireguard" -> {
-                map.remove("server")
-                map.remove("server_port")
-                map["private_key"] = JsonPrimitive(draft.privateKey.trim())
-                map.remove("peer_public_key")
-                map.remove("pre_shared_key")
-                map["local_address"] = draft.localAddress.toJsonArray() ?: error("local address is required")
-                map.remove("allowed_ips")
-                map.remove("persistent_keepalive_interval")
-                map["peers"] =
-                    buildJsonArray {
-                        add(
-                            buildJsonObject {
-                                put("server", draft.server.trim())
-                                put("server_port", port)
-                                put("public_key", draft.peerPublicKey.trim())
-                                draft.preSharedKey.trim().takeIf(String::isNotBlank)?.let { put("pre_shared_key", it) }
-                                draft.allowedIps.toJsonArray()?.let { put("allowed_ips", it) }
-                                draft.persistentKeepalive.trim().toIntOrNull()?.let { put("persistent_keepalive_interval", it) }
-                            },
-                        )
-                    }
+                updateWireGuardNode(map, outbound, draft, port)
             }
         }
 
@@ -345,9 +334,52 @@ class ProfileConfigFormCodec(
             ?.firstOrNull()
             ?.jsonObject
 
+    private fun updateWireGuardNode(
+        map: MutableMap<String, JsonElement>,
+        original: JsonObject,
+        draft: EditableProfileConfig,
+        port: Int,
+    ) {
+        val endpointShape =
+            original["address"] != null ||
+                original.wireGuardPeerOrNull()?.get("address") != null
+        map.remove("server")
+        map.remove("server_port")
+        map["private_key"] = JsonPrimitive(draft.privateKey.trim())
+        map.remove("peer_public_key")
+        map.remove("pre_shared_key")
+        map.remove("allowed_ips")
+        map.remove("persistent_keepalive_interval")
+        map["peers"] =
+            buildJsonArray {
+                add(
+                    buildJsonObject {
+                        if (endpointShape) {
+                            put("address", draft.server.trim())
+                            put("port", port)
+                        } else {
+                            put("server", draft.server.trim())
+                            put("server_port", port)
+                        }
+                        put("public_key", draft.peerPublicKey.trim())
+                        draft.preSharedKey.trim().takeIf(String::isNotBlank)?.let { put("pre_shared_key", it) }
+                        draft.allowedIps.toJsonArray()?.let { put("allowed_ips", it) }
+                        draft.persistentKeepalive.trim().toIntOrNull()?.let { put("persistent_keepalive_interval", it) }
+                    },
+                )
+            }
+        if (endpointShape) {
+            map.remove("local_address")
+            map["address"] = draft.localAddress.toJsonArray() ?: error("local address is required")
+        } else {
+            map.remove("address")
+            map["local_address"] = draft.localAddress.toJsonArray() ?: error("local address is required")
+        }
+    }
+
     private fun locateEditableOutbound(root: JsonObject): EditableOutboundRef {
         val outbounds = root["outbounds"]?.jsonArray ?: error("resolved config must define outbounds")
-        val editable =
+        val editableOutbounds =
             outbounds.mapIndexedNotNull { index, element ->
                 val objectValue = element.jsonObject
                 val type = objectValue["type"]?.jsonPrimitive?.contentOrNull.orEmpty()
@@ -358,6 +390,7 @@ class ProfileConfigFormCodec(
                     null
                 } else {
                     EditableOutboundRef(
+                        containerKey = "outbounds",
                         index = index,
                         type = type,
                         tag = objectValue["tag"]?.jsonPrimitive?.contentOrNull,
@@ -366,6 +399,25 @@ class ProfileConfigFormCodec(
                     )
                 }
             }
+        val editableEndpoints =
+            root["endpoints"]?.jsonArray.orEmpty().mapIndexedNotNull { index, element ->
+                val objectValue = element.jsonObject
+                val type = objectValue["type"]?.jsonPrimitive?.contentOrNull.orEmpty()
+                val server = objectValue.wireGuardPeerOrNull()?.get("address")?.jsonPrimitive?.contentOrNull
+                if (server.isNullOrBlank() || type != "wireguard") {
+                    null
+                } else {
+                    EditableOutboundRef(
+                        containerKey = "endpoints",
+                        index = index,
+                        type = type,
+                        tag = objectValue["tag"]?.jsonPrimitive?.contentOrNull,
+                        objectValue = objectValue,
+                        nodeCount = 0,
+                    )
+                }
+            }
+        val editable = editableOutbounds + editableEndpoints
         require(editable.isNotEmpty()) { "profile editor supports proxy outbounds only" }
 
         val selectorDefault =
@@ -443,6 +495,7 @@ class ProfileConfigFormCodec(
     }
 
     private data class EditableOutboundRef(
+        val containerKey: String,
         val index: Int,
         val type: String,
         val tag: String?,

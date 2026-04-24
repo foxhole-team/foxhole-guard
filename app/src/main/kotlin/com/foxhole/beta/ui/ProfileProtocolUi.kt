@@ -387,8 +387,8 @@ internal fun ProtocolSelectorLabel(
 
 @Composable
 internal fun ProtocolLatencyPill(
-    latencyMs: Long? = null,
     modifier: Modifier = Modifier,
+    latencyMs: Long? = null,
     compact: Boolean = false,
     isDown: Boolean = false,
     isUnavailable: Boolean = false,

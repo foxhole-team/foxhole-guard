@@ -59,6 +59,8 @@ internal fun ProxySurfaceDialog(
     onConfirm: (ProxyInboundSettings) -> Unit,
 ) {
     val context = LocalContext.current
+    val usernameLabel = stringResource(R.string.username)
+    val passwordLabel = stringResource(R.string.password)
     var enabled by rememberSaveable { mutableStateOf(initialValue.enabled) }
     var port by rememberSaveable { mutableStateOf(initialValue.port.toString()) }
     AlertDialog(
@@ -116,7 +118,7 @@ internal fun ProxySurfaceDialog(
                     trailingIcon = {
                         IconButton(
                             onClick = {
-                                copyTextToClipboard(context, context.getString(R.string.username), auth.username)
+                                copyTextToClipboard(context, usernameLabel, auth.username)
                             },
                         ) {
                             Icon(Icons.Outlined.ContentCopy, contentDescription = stringResource(R.string.copy_username))
@@ -132,7 +134,7 @@ internal fun ProxySurfaceDialog(
                     trailingIcon = {
                         IconButton(
                             onClick = {
-                                copyTextToClipboard(context, context.getString(R.string.password), auth.password)
+                                copyTextToClipboard(context, passwordLabel, auth.password)
                             },
                         ) {
                             Icon(Icons.Outlined.ContentCopy, contentDescription = stringResource(R.string.copy_password))

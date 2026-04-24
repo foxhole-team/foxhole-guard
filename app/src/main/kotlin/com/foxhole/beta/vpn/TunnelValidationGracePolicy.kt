@@ -10,7 +10,7 @@ internal data class TunnelValidationGracePolicy(
     val totalTimeoutMs: Long,
 )
 
-internal const val CONNECTIVITY_PROBE_GRACE_MAX_TIMEOUT_MS = 12_000L
+internal const val CONNECTIVITY_PROBE_GRACE_MAX_TIMEOUT_MS = 24_000L
 
 internal fun selectTunnelValidationGracePolicy(
     protocolHint: ProtocolHint?,
@@ -22,12 +22,13 @@ internal fun selectTunnelValidationGracePolicy(
     return when (protocolHint) {
         ProtocolHint.HYSTERIA2,
         ProtocolHint.SHADOWSOCKS,
+        ProtocolHint.WIREGUARD,
         ProtocolHint.OUTLINE ->
             TunnelValidationGracePolicy(
-                attempts = 3,
+                attempts = 4,
                 initialDelayMs = 1_500L,
                 retryDelayMs = 1_500L,
-                callTimeoutMs = 4_000L,
+                callTimeoutMs = 5_000L,
                 totalTimeoutMs = CONNECTIVITY_PROBE_GRACE_MAX_TIMEOUT_MS,
             )
 
@@ -41,3 +42,13 @@ internal fun selectTunnelValidationGracePolicy(
             )
     }
 }
+
+internal fun maxTunnelValidationGraceTimeoutMs(protocolHint: ProtocolHint?): Long =
+    when (protocolHint) {
+        ProtocolHint.HYSTERIA2,
+        ProtocolHint.SHADOWSOCKS,
+        ProtocolHint.WIREGUARD,
+        ProtocolHint.OUTLINE -> CONNECTIVITY_PROBE_GRACE_MAX_TIMEOUT_MS
+
+        else -> 8_000L
+    }

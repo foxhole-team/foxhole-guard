@@ -54,6 +54,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavDestination
@@ -127,7 +128,6 @@ fun FoxholeApp(
     val scope = rememberCoroutineScope()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentSection = navBackStackEntry?.destination?.appSection()
-    val subscriptionTrustPrompt by viewModel.subscriptionTrustPrompt.collectAsStateWithLifecycle()
     var qrScannerVisible by rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
     val importProfileLauncher =
         rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -406,7 +406,6 @@ fun FoxholeApp(
                         onAutoStartChanged = viewModel::onAutoStartChanged,
                         onBlockScreenshotsChanged = viewModel::onBlockScreenshotsChanged,
                         onIpInfoEndpointChanged = viewModel::onIpInfoEndpointChanged,
-                        onOpenBatterySettings = { viewModel.batteryOptimizationIntent() },
                     )
                 }
                 composable(AppRoute.HELP) {
@@ -478,25 +477,6 @@ fun FoxholeApp(
         )
     }
 
-    subscriptionTrustPrompt?.let { prompt ->
-        val unavailable = stringResource(R.string.subscription_certificate_trust_unavailable)
-        ConfirmDialog(
-            title = stringResource(R.string.subscription_certificate_trust_title),
-            body =
-                stringResource(
-                    R.string.subscription_certificate_trust_body,
-                    prompt.host,
-                    prompt.sha256Fingerprint,
-                    prompt.subject.ifBlank { unavailable },
-                    prompt.issuer.ifBlank { unavailable },
-                ),
-            confirmLabel = stringResource(R.string.subscription_certificate_trust_confirm),
-            dismissOnBackPress = false,
-            dismissOnClickOutside = false,
-            onDismiss = viewModel::dismissSubscriptionTrustPrompt,
-            onConfirm = viewModel::confirmSubscriptionTrustPrompt,
-        )
-    }
 }
 
 @Composable
@@ -560,7 +540,7 @@ private fun FoxholeBottomBar(
                         Surface(
                             modifier =
                                 Modifier
-                                    .offset(x = indicatorOffset)
+                                    .offset { IntOffset(x = indicatorOffset.roundToPx(), y = 0) }
                                     .width(tabWidth)
                                     .fillMaxHeight(),
                             shape = MaterialTheme.shapes.medium,

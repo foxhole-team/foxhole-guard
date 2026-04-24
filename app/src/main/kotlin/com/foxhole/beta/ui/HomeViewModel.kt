@@ -7,9 +7,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
-import android.net.Uri
 import android.os.Build
-import android.os.PowerManager
 import android.os.SystemClock
 import androidx.core.content.FileProvider
 import androidx.lifecycle.AndroidViewModel
@@ -21,8 +19,6 @@ import com.foxhole.beta.FoxholeHomeDependencies
 import com.foxhole.beta.R
 import com.foxhole.beta.applyAppLocale
 import com.foxhole.beta.core.data.RoutingRepository
-import com.foxhole.beta.core.data.SubscriptionCertificateInfo
-import com.foxhole.beta.core.data.SubscriptionTlsTrustRequiredException
 import com.foxhole.beta.core.diagnostics.DiagnosticEntry
 import com.foxhole.beta.core.model.AppLocale
 import com.foxhole.beta.core.model.AutoConnectReasonCode
@@ -50,7 +46,6 @@ import com.foxhole.beta.core.model.Settings as FoxholeSettings
 import com.foxhole.beta.core.model.ThemeMode
 import com.foxhole.beta.core.model.TrafficMode
 import com.foxhole.beta.core.model.TrafficSnapshot
-import com.foxhole.beta.core.data.toTrustedCertificate
 import com.foxhole.beta.core.model.TunStack
 import com.foxhole.beta.core.model.V2RayApiSettings
 import com.foxhole.beta.core.network.NetworkFingerprint
@@ -83,7 +78,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
-import android.provider.Settings as AndroidSettings
 
 class HomeViewModel(
     application: Application,
@@ -91,7 +85,6 @@ class HomeViewModel(
     internal val container: FoxholeHomeDependencies = (application as FoxholeApplication).appGraph
     internal val initialSettings = container.settingsRepository.settings.value
     internal val clipboard = application.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-    internal val powerManager = application.getSystemService(Context.POWER_SERVICE) as PowerManager
     internal val installedAppsMutable = MutableStateFlow<List<InstalledAppOption>>(emptyList())
     internal val profilesLoadedMutable = MutableStateFlow(false)
     internal val installedAppsLoadingMutable = MutableStateFlow(false)
@@ -381,8 +374,6 @@ class HomeViewModel(
 
     internal val snackbars = MutableSharedFlow<FoxholeBannerEvent>(extraBufferCapacity = 16)
     val requestVpnPermission = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
-    internal val subscriptionTrustPromptMutable = MutableStateFlow<SubscriptionTrustPromptUiState?>(null)
-    val subscriptionTrustPrompt: StateFlow<SubscriptionTrustPromptUiState?> = subscriptionTrustPromptMutable
     internal var pendingConnectRequest: PendingConnectRequest? = null
     internal var ipInfoRefreshJob: Job? = null
     internal var ipInfoRefreshToken: Long = 0L
@@ -534,29 +525,6 @@ class HomeViewModel(
         viewModelScope.launch {
             runCatching { refreshProfileAndMaybeReconnect(activeProfile.id) }
                 .onFailure { handleProfileRefreshFailure(activeProfile.id, it) }
-        }
-    }
-
-    fun dismissSubscriptionTrustPrompt() {
-        subscriptionTrustPromptMutable.value = null
-    }
-
-    fun confirmSubscriptionTrustPrompt() {
-        val prompt = subscriptionTrustPromptMutable.value ?: return
-        subscriptionTrustPromptMutable.value = null
-        viewModelScope.launch {
-            container.settingsRepository.trustSubscriptionCertificate(
-                SubscriptionCertificateInfo(
-                    host = prompt.host,
-                    sha256Fingerprint = prompt.sha256Fingerprint,
-                    subject = prompt.subject,
-                    issuer = prompt.issuer,
-                ).toTrustedCertificate(),
-            )
-            when {
-                prompt.retryRawImport != null -> importRaw(prompt.retryRawImport)
-                prompt.retryProfileId != null -> refreshProfile(prompt.retryProfileId)
-            }
         }
     }
 
@@ -895,8 +863,6 @@ class HomeViewModel(
 
     fun exportDiagnostics(file: File = createDiagnosticsArchive()): Intent = exportDiagnosticsInternal(file)
 
-    fun batteryOptimizationIntent(): Intent = batteryOptimizationIntentInternal()
-
     internal fun importRaw(value: String) = importRawInternal(value)
 
     internal fun profileImportFailureMessage(
@@ -916,12 +882,6 @@ class HomeViewModel(
         rawInput: String,
         throwable: Throwable,
     ) = handleProfileImportFailureInternal(rawInput, throwable)
-
-    internal fun showSubscriptionTrustPrompt(
-        failure: SubscriptionTlsTrustRequiredException,
-        retryRawImport: String? = null,
-        retryProfileId: Long? = null,
-    ) = showSubscriptionTrustPromptInternal(failure, retryRawImport, retryProfileId)
 
     internal suspend fun reconnectProfileIfRequested(
         profileId: Long,

@@ -143,6 +143,8 @@ fun HomeScreen(
     onLocalProxyAuthChanged: (LocalAuthSettings) -> Unit,
 ) {
     val context = LocalContext.current
+    val usernameLabel = stringResource(R.string.username)
+    val passwordLabel = stringResource(R.string.password)
     var importMenuExpanded by rememberSaveable { mutableStateOf(false) }
     var showRefreshProfileDialog by rememberSaveable { mutableStateOf(false) }
     var editProxyUsernameVisible by rememberSaveable { mutableStateOf(false) }
@@ -913,7 +915,7 @@ fun HomeScreen(
                                     onCopy = {
                                         copyTextToClipboard(
                                             context = context,
-                                            label = context.getString(R.string.username),
+                                            label = usernameLabel,
                                             value = proxyAuth.username,
                                         )
                                     },
@@ -926,7 +928,7 @@ fun HomeScreen(
                                     onCopy = {
                                         copyTextToClipboard(
                                             context = context,
-                                            label = context.getString(R.string.password),
+                                            label = passwordLabel,
                                             value = proxyAuth.password,
                                         )
                                     },

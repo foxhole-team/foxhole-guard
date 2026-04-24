@@ -69,6 +69,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -86,6 +87,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.core.net.toUri
 import com.foxhole.beta.R
 import com.foxhole.beta.BuildConfig
 import com.foxhole.beta.core.data.RoutingRepository
@@ -142,9 +144,9 @@ fun SettingsHomeScreen(
     val repositoryOpenFailed = stringResource(R.string.open_repository_failed)
     val supportChannelOpenFailed = stringResource(R.string.support_channel_open_failed)
     var unlockDialogVisible by rememberSaveable { mutableStateOf(false) }
-    var versionTapCount by rememberSaveable { mutableStateOf(0) }
+    var versionTapCount by rememberSaveable { mutableIntStateOf(0) }
     val expertVisible = state.settings.ui.showExpertSettings
-    val expertLockedOrHidden = !expertVisible
+    val expertUnlocked = state.settings.expert.unlockedAt != null
 
     SettingsScaffold(
         title = stringResource(R.string.settings),
@@ -255,7 +257,7 @@ fun SettingsHomeScreen(
                     if (unlockDialogVisible) {
                         return@SettingsFooterVersionText
                     }
-                    if (!expertLockedOrHidden) {
+                    if (expertVisible || expertUnlocked) {
                         versionTapCount = 0
                         return@SettingsFooterVersionText
                     }
@@ -293,7 +295,7 @@ fun SettingsHomeScreen(
 
 private fun openFoxholeRepository(context: Context): Boolean {
     val intent =
-        Intent(Intent.ACTION_VIEW, Uri.parse(FOXHOLE_REPOSITORY_URL))
+        Intent(Intent.ACTION_VIEW, FOXHOLE_REPOSITORY_URL.toUri())
             .addCategory(Intent.CATEGORY_BROWSABLE)
     return try {
         context.startActivity(intent)
@@ -350,13 +352,13 @@ private fun installedTelegramPackage(packageManager: PackageManager): String? =
 
 private const val FOXHOLE_TELEGRAM_CHANNEL = "foxhole_app"
 
-private fun supportBotBrowserUri(handle: String): Uri = Uri.parse("https://t.me/${supportBotUsername(handle)}")
+private fun supportBotBrowserUri(handle: String): Uri = "https://t.me/${supportBotUsername(handle)}".toUri()
 
-private fun supportBotTelegramUri(handle: String): Uri = Uri.parse("tg://resolve?domain=${supportBotUsername(handle)}")
+private fun supportBotTelegramUri(handle: String): Uri = "tg://resolve?domain=${supportBotUsername(handle)}".toUri()
 
-private fun supportChannelBrowserUri(): Uri = Uri.parse("https://t.me/$FOXHOLE_TELEGRAM_CHANNEL")
+private fun supportChannelBrowserUri(): Uri = "https://t.me/$FOXHOLE_TELEGRAM_CHANNEL".toUri()
 
-private fun supportChannelTelegramUri(): Uri = Uri.parse("tg://resolve?domain=$FOXHOLE_TELEGRAM_CHANNEL")
+private fun supportChannelTelegramUri(): Uri = "tg://resolve?domain=$FOXHOLE_TELEGRAM_CHANNEL".toUri()
 
 private fun openSupportBot(context: Context, handle: String): Boolean {
     val browserIntent =
@@ -756,7 +758,6 @@ fun ApplicationSettingsScreen(
     onAutoStartChanged: (Boolean) -> Unit,
     onBlockScreenshotsChanged: (Boolean) -> Unit,
     onIpInfoEndpointChanged: (String) -> Unit,
-    onOpenBatterySettings: () -> Intent,
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
@@ -766,6 +767,11 @@ fun ApplicationSettingsScreen(
     val systemLocaleLabel = stringResource(R.string.language_system)
     val russianLocaleLabel = stringResource(R.string.language_russian)
     val englishLocaleLabel = stringResource(R.string.language_english)
+    val quickSettingsTileUnavailable = stringResource(R.string.quick_settings_tile_unavailable)
+    val quickSettingsTileAdded = stringResource(R.string.quick_settings_tile_added)
+    val quickSettingsTileAlreadyAdded = stringResource(R.string.quick_settings_tile_already_added)
+    val quickSettingsTileNotAdded = stringResource(R.string.quick_settings_tile_not_added)
+    val appName = stringResource(R.string.app_name)
     val themeModeLabel: (ThemeMode) -> String = { value ->
         when (value) {
             ThemeMode.SYSTEM -> systemThemeLabel
@@ -867,24 +873,24 @@ fun ApplicationSettingsScreen(
                         if (statusBarManager == null) {
                             coroutineScope.launch {
                                 snackbarHostState.showBanner(
-                                    context.getString(R.string.quick_settings_tile_unavailable),
+                                    quickSettingsTileUnavailable,
                                     FoxholeBannerTone.INFO,
                                 )
                             }
                         } else {
                             statusBarManager.requestAddTileService(
                                 ComponentName(context, FoxholeTileService::class.java),
-                                context.getString(R.string.app_name),
+                                appName,
                                 Icon.createWithResource(context, R.drawable.foxhole_logo_bitmap),
                                 context.mainExecutor,
                             ) { result ->
-                                val messageRes =
+                                val message =
                                     when (result) {
                                         StatusBarManager.TILE_ADD_REQUEST_RESULT_TILE_ADDED ->
-                                            R.string.quick_settings_tile_added
+                                            quickSettingsTileAdded
                                         StatusBarManager.TILE_ADD_REQUEST_RESULT_TILE_ALREADY_ADDED ->
-                                            R.string.quick_settings_tile_already_added
-                                        else -> R.string.quick_settings_tile_not_added
+                                            quickSettingsTileAlreadyAdded
+                                        else -> quickSettingsTileNotAdded
                                     }
                                 val tone =
                                     when (result) {
@@ -893,33 +899,18 @@ fun ApplicationSettingsScreen(
                                         else -> FoxholeBannerTone.ERROR
                                     }
                                 coroutineScope.launch {
-                                    snackbarHostState.showBanner(context.getString(messageRes), tone)
+                                    snackbarHostState.showBanner(message, tone)
                                 }
                             }
                         }
                     } else {
                         coroutineScope.launch {
                             snackbarHostState.showBanner(
-                                context.getString(R.string.quick_settings_tile_unavailable),
+                                quickSettingsTileUnavailable,
                                 FoxholeBannerTone.INFO,
                             )
                         }
                     }
-                },
-            )
-        }
-        item {
-            SettingsNavigationRow(
-                icon = Icons.Outlined.Shield,
-                title = stringResource(R.string.battery_optimization),
-                summary = stringResource(R.string.battery_optimization_summary),
-                containerColor = Color(0xFF173126),
-                borderColor = FoxholePositiveAccent.copy(alpha = 0.46f),
-                leadingIconContainerColor = FoxholePositiveAccent.copy(alpha = 0.16f),
-                leadingIconTint = FoxholePositiveAccent,
-                summaryMaxLines = 2,
-                onClick = {
-                    context.startActivity(onOpenBatterySettings())
                 },
             )
         }
@@ -1112,6 +1103,9 @@ fun DiagnosticsScreen(
     val supportBotOpenFailed = stringResource(R.string.support_bot_open_failed)
     val supportBotBrowserFallback = stringResource(R.string.support_bot_browser_fallback)
     val supportBotSaved = stringResource(R.string.support_bot_saved)
+    val diagnosticsArchiveSaved = stringResource(R.string.diagnostics_archive_saved)
+    val diagnosticsArchiveSaveFailed = stringResource(R.string.diagnostics_archive_save_failed)
+    val exportDiagnosticsTitle = stringResource(R.string.export_diagnostics)
     var liveLogsVisible by rememberSaveable { mutableStateOf(false) }
     var sendLogToBotVisible by rememberSaveable { mutableStateOf(false) }
     var supportBotSettingsVisible by rememberSaveable { mutableStateOf(false) }
@@ -1132,12 +1126,12 @@ fun DiagnosticsScreen(
                         }
                 }.onSuccess {
                     snackbarHostState.showBanner(
-                        context.getString(R.string.diagnostics_archive_saved),
+                        diagnosticsArchiveSaved,
                         FoxholeBannerTone.SUCCESS,
                     )
                 }.onFailure {
                     snackbarHostState.showBanner(
-                        it.message ?: context.getString(R.string.diagnostics_archive_save_failed),
+                        it.message ?: diagnosticsArchiveSaveFailed,
                         FoxholeBannerTone.ERROR,
                     )
                 }
@@ -1150,7 +1144,7 @@ fun DiagnosticsScreen(
             context.startActivity(
                 Intent.createChooser(
                     onShareDiagnosticsArchive(archive),
-                    context.getString(R.string.export_diagnostics),
+                    exportDiagnosticsTitle,
                 ),
             )
         } else {

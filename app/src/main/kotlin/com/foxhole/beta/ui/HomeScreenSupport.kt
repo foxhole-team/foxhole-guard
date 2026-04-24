@@ -59,6 +59,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalLocale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
@@ -507,7 +508,7 @@ internal fun rememberConnectionDurationText(snapshot: ConnectionSnapshot): Strin
     if (!shouldShowConnectionDuration(snapshot)) {
         return null
     }
-    val locale = LocalConfiguration.current.locales[0] ?: Locale.getDefault()
+    val locale = LocalLocale.current.platformLocale
     val now by
         produceState(
             initialValue = System.currentTimeMillis(),

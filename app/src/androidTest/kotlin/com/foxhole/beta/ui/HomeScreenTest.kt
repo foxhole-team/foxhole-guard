@@ -191,11 +191,10 @@ class HomeScreenTest {
 
     @Test
     fun settingsHomeShowsApplicationsAndSitesShortcuts() {
-        val context = InstrumentationRegistry.getInstrumentation().targetContext
         composeRule.onNodeWithTag("bottom_nav_settings").performClick()
         composeRule.onNodeWithTag("settings_routing_apps_action").assertIsDisplayed()
         composeRule.onNodeWithTag("settings_routing_sites_action").assertIsDisplayed()
-        composeRule.onAllNodesWithText(context.getString(R.string.safe_defaults_title)).assertCountEquals(0)
+        composeRule.onAllNodesWithText("Safe defaults").assertCountEquals(0)
     }
 
     @Test
@@ -235,8 +234,14 @@ class HomeScreenTest {
 
     @Test
     fun versionCardDoesNothingWhenExpertSettingsAreAlreadyVisible() {
+        val app = InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as FoxholeApplication
         setExpertSettingsVisible(visible = true)
         composeRule.onNodeWithTag("bottom_nav_settings").performClick()
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            runBlocking { app.container.settingsRepository.settings.first().ui.showExpertSettings }
+        }
+        composeRule.onNodeWithTag("settings_screen").performScrollToNode(hasTestTag("settings_expert_action"))
+        composeRule.onNodeWithTag("settings_expert_action").assertIsDisplayed()
         composeRule.onNodeWithTag("settings_screen").performScrollToNode(hasTestTag("settings_footer_version_card"))
         repeat(5) {
             composeRule.onNodeWithTag("settings_footer_version_card").performClick()
@@ -245,6 +250,7 @@ class HomeScreenTest {
         composeRule.onAllNodesWithText(
             InstrumentationRegistry.getInstrumentation().targetContext.getString(R.string.expert_unlock_confirm_title),
         ).assertCountEquals(0)
+        composeRule.onNodeWithTag("settings_screen").performScrollToNode(hasTestTag("settings_expert_action"))
         composeRule.onNodeWithTag("settings_expert_action").assertIsDisplayed()
     }
 
@@ -350,10 +356,10 @@ class HomeScreenTest {
             app.container.profileDatabase.clearAllTables()
             deleteChildren(File(app.filesDir, "profile-secrets"))
             app.container.profileRepository.importProfile(
-                "vless://11111111-1111-1111-1111-111111111111@www.cloudflare.com:443?encryption=none&security=none&type=tcp#Selection%20A",
+                "vless://11111111-1111-1111-1111-111111111111@1.1.1.1:443?encryption=none&security=none&type=tcp#Selection%20A",
             )
             app.container.profileRepository.importProfile(
-                "trojan://secret@www.google.com:443?security=tls&type=tcp#Selection%20B",
+                "trojan://secret@8.8.8.8:443?security=tls&type=tcp#Selection%20B",
             )
         }
         composeRule.waitForIdle()

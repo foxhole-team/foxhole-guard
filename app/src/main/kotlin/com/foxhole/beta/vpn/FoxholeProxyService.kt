@@ -341,24 +341,22 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
     }
 
     private fun ensureNotificationChannel() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            notificationManager.createNotificationChannel(
-                NotificationChannel(
-                    FoxholeConnectionServiceContract.NOTIFICATION_CHANNEL_ID,
-                    getString(R.string.notification_channel_name),
-                    NotificationManager.IMPORTANCE_LOW,
-                ).apply {
-                    setSound(null, null)
-                    enableVibration(false)
-                    enableLights(false)
-                    setShowBadge(false)
-                    lockscreenVisibility = Notification.VISIBILITY_SECRET
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                        setAllowBubbles(false)
-                    }
-                },
-            )
-        }
+        notificationManager.createNotificationChannel(
+            NotificationChannel(
+                FoxholeConnectionServiceContract.NOTIFICATION_CHANNEL_ID,
+                getString(R.string.notification_channel_name),
+                NotificationManager.IMPORTANCE_LOW,
+            ).apply {
+                setSound(null, null)
+                enableVibration(false)
+                enableLights(false)
+                setShowBadge(false)
+                lockscreenVisibility = Notification.VISIBILITY_SECRET
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    setAllowBubbles(false)
+                }
+            },
+        )
     }
 
     private fun launchCommand(block: suspend () -> Unit) {
@@ -454,11 +452,7 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
         refreshDefaultNetworkAvailability()
         val registration =
             runCatching {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    connectivityManager.registerDefaultNetworkCallback(defaultNetworkCallback, mainHandler)
-                } else {
-                    connectivityManager.registerDefaultNetworkCallback(defaultNetworkCallback)
-                }
+                connectivityManager.registerDefaultNetworkCallback(defaultNetworkCallback, mainHandler)
             }
         registration
             .onSuccess { defaultNetworkCallbackRegistered = true }

@@ -74,6 +74,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
@@ -499,7 +500,7 @@ internal fun profileEditorInfoBody(
     buildList {
         add(stringResource(R.string.profile_editor_info_body))
         if (draft.nodeCount > 1) {
-            add(stringResource(R.string.profile_editor_multi_node_summary, draft.nodeCount))
+            add(pluralStringResource(R.plurals.profile_editor_multi_node_summary, draft.nodeCount, draft.nodeCount))
         }
         if (profile.sourceType == ProfileSourceType.SUBSCRIPTION_URL) {
             add(stringResource(R.string.profile_editor_subscription_summary))
@@ -730,8 +731,8 @@ internal fun SmartProfileBadge(
 internal fun InlineSmartProfileTitle(
     title: String,
     isSmartProfile: Boolean,
-    showSmartBadge: Boolean = true,
     modifier: Modifier = Modifier,
+    showSmartBadge: Boolean = true,
     style: TextStyle = MaterialTheme.typography.titleMedium,
     fontWeight: FontWeight = FontWeight.SemiBold,
     maxLines: Int = 1,

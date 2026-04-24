@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <strong>public beta 1.0</strong>
+  <strong>1.0.0-beta1</strong>
 </p>
 
 <p align="center">
@@ -23,16 +23,15 @@
 
 Foxhole is a simple Android client for connecting to and managing sing-box profiles. It supports Tunnel and Proxy, as well as Split Tunnel for apps and sites and LAN Proxy. It supports profile import from files, the clipboard, QR codes, and HTTPS subscriptions, including compatible v2raytun-style subscriptions. No ads, analytics, or telemetry. It supports compatible configurations and its own smart config for fast Smart start with automatic VPN protocol selection.
 
-
-<table>
+<table style="border: none; border-collapse: collapse;">
   <tr>
-    <td align="center">
+    <td align="center" style="border: none;">
       <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/img_foxhole_0.png" alt="Foxhole dashboard" width="260">
     </td>
-    <td align="center">
+    <td align="center" style="border: none;">
       <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/img_foxhole_1.png" alt="Foxhole settings" width="260">
     </td>
-        <td align="center">
+        <td align="center" style="border: none;">
       <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/img_foxhole_2.png" alt="Foxhole settings" width="260">
     </td>
   </tr>
@@ -64,12 +63,14 @@ Supported protocols:
 - WireGuard
 - Outline
 
-<table>
+<hr style="border: none; height: 1px; background: #ccc;">
+
+<table style="border: none; border-collapse: collapse;">
   <tr>
-    <td>
+    <td style="border: none;">
       <img src="media/have_the_courage_use_your_own_reason-fuck_you-1984.png" alt="1984" width="80" height="80">
     </td>
-    <td>
+    <td style="border: none;">
       <h2>Foxhole smart config</h2>
     </td>
   </tr>
@@ -94,19 +95,23 @@ Foxhole Smart start:
 
 An example format lives in [foxhole-smart-config.sample.txt](foxhole-sample-smart-config/foxhole-smart-config.sample.txt).
 
+<hr style="border: none; height: 1px; background: #ccc;">
+
 ## Verifying release signatures
 
 - Download the APK and `SHA256SUMS` from the same GitHub Release, then run `sha256sum -c SHA256SUMS`.
 - Signing cert SHA-256: `fcbf14862040fbe26726f06f3016ec3b027d8431c76cb4c25c13c5a06837177c`
 - Signing cert SHA-1: `ae609bb369398071cc5ac53c9ac10f20f43c4d01`
 
+<hr style="border: none; height: 1px; background: #ccc;">
+
 ## Disclaimer
 
 >Android application development is not our primary area of specialization. Our core expertise is focused on backend engineering, security, machine learning, cryptography, and other engineering domains.
 
-## Donate
+<hr style="border: none; height: 1px; background: #ccc;">
 
-If you want to support the project, crypto donations are welcome.
+## Donate
 
 - **XMR (Monero):** `48yBVPTdcyJ1WoJtnKmVpEZziEsDy4HvbCW7eQDS9mfdiWPFXwZ8F5h9YZ2UTTBLxPcJgQgvth7iqLZM2yMCaQ432qaouqr`
 - **BTC (Bitcoin):** `bc1qatnyy7jcpqrp0d3dk9rta9vqfejgh4mysd6m2f`

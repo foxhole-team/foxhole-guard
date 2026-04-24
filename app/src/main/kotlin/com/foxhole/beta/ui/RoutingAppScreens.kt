@@ -34,6 +34,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -90,7 +91,7 @@ fun RoutingAppsScreen(
         item {
             FoxholeCard {
                 Text(
-                    text = stringResource(R.string.selected_apps_count_summary, selectedPackages.size),
+                    text = pluralStringResource(R.plurals.selected_apps_count_summary, selectedPackages.size, selectedPackages.size),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
                 )
@@ -148,7 +149,7 @@ fun RoutingAppsScreen(
                                 fontWeight = FontWeight.SemiBold,
                             )
                             Text(
-                                text = stringResource(R.string.selected_apps_count_summary, selectedPackages.size),
+                                text = pluralStringResource(R.plurals.selected_apps_count_summary, selectedPackages.size, selectedPackages.size),
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -229,7 +230,7 @@ fun AppPickerScreen(
         item {
             WarningBlock(
                 title = stringResource(R.string.all_installed_apps_title),
-                body = stringResource(R.string.all_installed_apps_summary, state.installedApps.size),
+                body = pluralStringResource(R.plurals.all_installed_apps_summary, state.installedApps.size, state.installedApps.size),
             )
         }
         item {

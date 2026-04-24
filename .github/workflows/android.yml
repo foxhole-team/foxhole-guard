@@ -4,11 +4,18 @@ on:
   push:
     branches:
       - main
+      - dev
       - "codex/**"
   pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 3 * * *"
 
 permissions:
   contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 concurrency:
   group: android-${{ github.ref }}
@@ -67,16 +74,19 @@ jobs:
           set +o pipefail
           yes | "$SDKMANAGER" --licenses >/dev/null
           set -o pipefail
-          "$SDKMANAGER" "platform-tools" "platforms;android-36" "build-tools;36.0.0" "ndk;28.0.13004108"
+          "$SDKMANAGER" --channel=3 "platform-tools" "platforms;android-37.0" "build-tools;37.0.0" "ndk;28.0.13004108"
 
       - name: verify wrapper
-        run: ./gradlew --version
+        run: ./gradlew --no-daemon --console=plain --version
 
       - name: lint and unit tests
-        run: ./gradlew lintDebug lintRelease testDebugUnitTest
+        run: ./gradlew --no-daemon --console=plain --stacktrace lintDebug lintRelease testDebugUnitTest
+
+      - name: build connected test artifacts
+        run: ./gradlew --no-daemon --console=plain --stacktrace assembleDebug assembleDebugAndroidTest
 
       - name: build release
-        run: ./gradlew assembleRelease
+        run: ./gradlew --no-daemon --console=plain --stacktrace -Pfoxhole.splitApks=true assembleRelease
 
       - name: secret scan
         run: |
@@ -145,7 +155,7 @@ jobs:
 
       - name: upload reports
         if: always()
-        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: android-reports
           path: |
@@ -154,6 +164,7 @@ jobs:
             build/reports
 
   connected-tests:
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule' || (github.event_name == 'push' && github.ref == 'refs/heads/dev')
     runs-on: ubuntu-24.04
     timeout-minutes: 150
     steps:
@@ -205,10 +216,10 @@ jobs:
           set +o pipefail
           yes | "$SDKMANAGER" --licenses >/dev/null
           set -o pipefail
-          "$SDKMANAGER" "platform-tools" "platforms;android-36" "build-tools;36.0.0" "ndk;28.0.13004108"
+          "$SDKMANAGER" --channel=3 "platform-tools" "platforms;android-37.0" "build-tools;37.0.0" "ndk;28.0.13004108"
 
       - name: prebuild connected test artifacts
-        run: ./gradlew assembleDebug assembleDebugAndroidTest
+        run: ./gradlew --no-daemon --console=plain --stacktrace assembleDebug assembleDebugAndroidTest
 
       - name: reclaim disk for emulator
         shell: bash
@@ -237,20 +248,44 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
 
+      - name: precreate emulator avd
+        shell: bash
+        run: |
+          set -euo pipefail
+          ANDROID_SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}"
+          SDKMANAGER="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
+          AVDMANAGER="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/avdmanager"
+          if [[ ! -x "$SDKMANAGER" || ! -x "$AVDMANAGER" ]]; then
+            echo "Android command-line tools are missing under $ANDROID_SDK_ROOT" >&2
+            exit 1
+          fi
+          export ANDROID_AVD_HOME="$HOME/.android/avd"
+          echo "ANDROID_AVD_HOME=$ANDROID_AVD_HOME" >> "$GITHUB_ENV"
+          mkdir -p "$ANDROID_AVD_HOME"
+          set +o pipefail
+          yes | "$SDKMANAGER" --licenses >/dev/null
+          set -o pipefail
+          "$SDKMANAGER" --channel=0 --install "emulator" "platform-tools" "platforms;android-35" "system-images;android-35;default;x86_64"
+          echo no | "$AVDMANAGER" create avd --force -n foxhole-ci --abi "default/x86_64" --package "system-images;android-35;default;x86_64" --device "pixel_7"
+          test -f "$ANDROID_AVD_HOME/foxhole-ci.avd/config.ini"
+          echo "hw.cpu.ncore=2" >> "$ANDROID_AVD_HOME/foxhole-ci.avd/config.ini"
+
       - name: run emulator tests
-        uses: ReactiveCircus/android-emulator-runner@324029e2f414c084d8b15ba075288885e74aef9c
+        uses: ReactiveCircus/android-emulator-runner@2243bf8839fca53021d5d61857fd2bf668721de4
         with:
           api-level: 35
           arch: x86_64
           profile: pixel_7
           disk-size: 2048M
+          avd-name: foxhole-ci
+          force-avd-creation: false
           disable-animations: true
           emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           script: bash scripts/run-connected-android-tests.sh
 
       - name: upload connected test reports
         if: always()
-        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: connected-android-test-reports
           path: |

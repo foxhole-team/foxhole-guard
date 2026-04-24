@@ -146,16 +146,6 @@ data class ConnectionSettings(
     val autoStartOnBoot: Boolean = false,
     val ipInfoEndpoint: String = "",
     val stealthModeEnabled: Boolean = true,
-    val trustedSubscriptionCertificates: List<TrustedSubscriptionCertificate> = emptyList(),
-)
-
-@Serializable
-data class TrustedSubscriptionCertificate(
-    val host: String,
-    val sha256Fingerprint: String,
-    val subject: String = "",
-    val issuer: String = "",
-    val acceptedAt: Long = System.currentTimeMillis(),
 )
 
 @Serializable

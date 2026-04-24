@@ -2,10 +2,29 @@
 set -euo pipefail
 
 readonly TEST_CLASS_TIMEOUT_SECONDS="${FOXHOLE_ANDROID_TEST_CLASS_TIMEOUT_SECONDS:-1200}"
-readonly TEST_CLASSES=(
+readonly TEST_METHOD_TIMEOUT_SECONDS="${FOXHOLE_ANDROID_TEST_METHOD_TIMEOUT_SECONDS:-900}"
+readonly TEST_SPECS=(
   "com.foxhole.beta.ProfileRuntimeSessionAndroidTest"
   "com.foxhole.beta.ui.HomeRuntimeBehaviorTest"
-  "com.foxhole.beta.ui.HomeScreenTest"
+  "com.foxhole.beta.ui.HomeScreenTest#opensSettingsFromBottomNavigation"
+  "com.foxhole.beta.ui.HomeScreenTest#legacySwipeZonesAreRemoved"
+  "com.foxhole.beta.ui.HomeScreenTest#horizontalSwipesSwitchDashboardAndSettingsSections"
+  "com.foxhole.beta.ui.HomeScreenTest#systemBackFromRoutingAppsReturnsSettingsHome"
+  "com.foxhole.beta.ui.HomeScreenTest#settingsTabAlwaysReturnsToSettingsRootAfterSwitchingSections"
+  "com.foxhole.beta.ui.HomeScreenTest#rapidBottomNavigationTapsKeepUiResponsive"
+  "com.foxhole.beta.ui.HomeScreenTest#opensProfilesFromHomeAction"
+  "com.foxhole.beta.ui.HomeScreenTest#profilesExportActionSelectsInlineTargetsAndOpensDestinationDialog"
+  "com.foxhole.beta.ui.HomeScreenTest#profilesRowTapSelectsProfileWithoutOpeningDetailAndDeleteDialogShowsName"
+  "com.foxhole.beta.ui.HomeScreenTest#opensUniversalImportMenuFromHomeAction"
+  "com.foxhole.beta.ui.HomeScreenTest#settingsHomeShowsApplicationsAndSitesShortcuts"
+  "com.foxhole.beta.ui.HomeScreenTest#settingsFooterShowsGithubRepositoryAction"
+  "com.foxhole.beta.ui.HomeScreenTest#hiddenExpertSettingsCanBeRestoredFromVersionCard"
+  "com.foxhole.beta.ui.HomeScreenTest#versionCardDoesNothingWhenExpertSettingsAreAlreadyVisible"
+  "com.foxhole.beta.ui.HomeScreenTest#screenshotToggleUpdatesWindowSecureFlag"
+  "com.foxhole.beta.ui.HomeScreenTest#appSettingsExposeScreenshotToggleAndUpdateWindowSecureFlag"
+  "com.foxhole.beta.ui.HomeScreenTest#routingAppsScreenOpensPickerFromAddExceptionButton"
+  "com.foxhole.beta.ui.HomeScreenTest#routingAppsPickerFiltersInstalledPackages"
+  "com.foxhole.beta.ui.HomeScreenTest#routingSitesScreenOpensAddExceptionDialog"
   "com.foxhole.beta.vpn.ProxyRuntimeSmokeTest"
   "com.foxhole.beta.vpn.VpnRuntimeSmokeTest"
 )
@@ -56,18 +75,22 @@ PY
 
 adb wait-for-device
 
-for test_class in "${TEST_CLASSES[@]}"; do
-  echo "::group::connectedDebugAndroidTest ${test_class}"
+for test_spec in "${TEST_SPECS[@]}"; do
+  echo "::group::connectedDebugAndroidTest ${test_spec}"
   adb logcat -c || true
+  test_timeout="$TEST_CLASS_TIMEOUT_SECONDS"
+  if [[ "$test_spec" == *"#"* ]]; then
+    test_timeout="$TEST_METHOD_TIMEOUT_SECONDS"
+  fi
   set +e
-  run_with_timeout "$TEST_CLASS_TIMEOUT_SECONDS" \
+  run_with_timeout "$test_timeout" \
     ./gradlew connectedDebugAndroidTest --info \
-      -Pandroid.testInstrumentationRunnerArguments.class="$test_class"
+      -Pandroid.testInstrumentationRunnerArguments.class="$test_spec"
   status=$?
   set -e
   if [[ "$status" -ne 0 ]]; then
-    echo "connectedDebugAndroidTest failed for ${test_class} with exit code ${status}" >&2
-    dump_diagnostics "$test_class"
+    echo "connectedDebugAndroidTest failed for ${test_spec} with exit code ${status}" >&2
+    dump_diagnostics "$test_spec"
     echo "::endgroup::"
     exit "$status"
   fi

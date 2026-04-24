@@ -102,14 +102,14 @@ class ProfileConfigFormCodecTest {
             )
 
         val encoded = json.parseToJsonElement(codec.encode(config, updated)).jsonObject
-        val outbound = encoded["outbounds"]!!.jsonArray.first().jsonObject
-        val peer = outbound["peers"]!!.jsonArray.first().jsonObject
+        val endpoint = encoded["endpoints"]!!.jsonArray.first().jsonObject
+        val peer = endpoint["peers"]!!.jsonArray.first().jsonObject
 
-        assertEquals("new-private", outbound["private_key"]!!.jsonPrimitive.content)
-        assertEquals("vpn.example.com", peer["server"]!!.jsonPrimitive.content)
-        assertEquals("51821", peer["server_port"]!!.jsonPrimitive.content)
+        assertEquals("new-private", endpoint["private_key"]!!.jsonPrimitive.content)
+        assertEquals("vpn.example.com", peer["address"]!!.jsonPrimitive.content)
+        assertEquals("51821", peer["port"]!!.jsonPrimitive.content)
         assertEquals("new-public", peer["public_key"]!!.jsonPrimitive.content)
-        assertEquals("10.1.0.2/32", outbound["local_address"]!!.jsonArray.first().jsonPrimitive.content)
+        assertEquals("10.1.0.2/32", endpoint["address"]!!.jsonArray.first().jsonPrimitive.content)
         assertEquals("10.1.0.0/16", peer["allowed_ips"]!!.jsonArray.first().jsonPrimitive.content)
         assertEquals("30", peer["persistent_keepalive_interval"]!!.jsonPrimitive.content)
         assertTrue(!peer.containsKey("pre_shared_key"))

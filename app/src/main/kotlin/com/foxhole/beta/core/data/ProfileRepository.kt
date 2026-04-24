@@ -28,10 +28,8 @@ import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import okhttp3.Response
 import java.net.URI
 import java.nio.charset.StandardCharsets
-import java.security.cert.X509Certificate
 import java.util.Base64
 import java.util.UUID
 
@@ -52,11 +50,6 @@ class ProfileRepository(
         val metadataTitle: String? = null,
         val subscriptionExpiresAt: Long? = null,
         val notModified: Boolean = false,
-    )
-
-    private data class SubscriptionTransportResult(
-        val response: SubscriptionResponse,
-        val certificate: SubscriptionCertificateInfo? = null,
     )
 
     private data class SubscriptionGroupMember(
@@ -100,9 +93,6 @@ class ProfileRepository(
             .followRedirects(true)
             .followSslRedirects(true)
             .build()
-    }
-    private val insecureSubscriptionHttpClient: OkHttpClient by lazy {
-        insecureSubscriptionClient(subscriptionHttpClient)
     }
 
     val profiles: Flow<List<Profile>> = dao.observeProfiles().map { list -> list.map { entity -> resolveDomainProfile(entity) } }
@@ -524,12 +514,8 @@ class ProfileRepository(
                     sourceUrl = sourceUrl,
                     safeUrl = safeUrl,
                     lastEtag = entity.lastEtag,
-                    trustedCertificates = settings.connection.trustedSubscriptionCertificates,
                 )
             }.getOrElse { error ->
-                if (error is SubscriptionTlsTrustRequiredException) {
-                    throw error
-                }
                 throw IllegalStateException(describeSubscriptionTransportFailure(sourceUrl, error), error)
             }
         diagnosticsLogger.record(
@@ -739,41 +725,14 @@ class ProfileRepository(
         sourceUrl: String,
         safeUrl: HttpUrl,
         lastEtag: String?,
-        trustedCertificates: List<com.foxhole.beta.core.model.TrustedSubscriptionCertificate>,
     ): SubscriptionResponse =
         withContext(Dispatchers.IO) {
             val request = buildSubscriptionRequest(safeUrl = safeUrl, lastEtag = lastEtag)
-            runCatching {
-                executeSubscriptionRequest(
-                    client = subscriptionHttpClient,
-                    request = request,
-                    sourceUrl = sourceUrl,
-                )
-            }.mapCatching(SubscriptionTransportResult::response).getOrElse { error ->
-                if (!isTlsTrustFailure(error)) {
-                    throw error
-                }
-                val insecureResult =
-                    executeSubscriptionRequest(
-                        client = insecureSubscriptionHttpClient,
-                        request = request,
-                        sourceUrl = sourceUrl,
-                    )
-                val certificate =
-                    insecureResult.certificate
-                        ?: error("subscription certificate details are unavailable for ${safeUrl.host}")
-                if (!trustedCertificates.containsCertificate(certificate.host, certificate.sha256Fingerprint)) {
-                    throw SubscriptionTlsTrustRequiredException(
-                        sourceUrl = sourceUrl,
-                        certificate = certificate,
-                    )
-                }
-                diagnosticsLogger.record(
-                    "profile",
-                    "trusted subscription certificate accepted",
-                )
-                insecureResult.response
-            }
+            executeSubscriptionRequest(
+                client = subscriptionHttpClient,
+                request = request,
+                sourceUrl = sourceUrl,
+            )
         }
 
     private fun buildSubscriptionRequest(
@@ -792,14 +751,10 @@ class ProfileRepository(
         client: OkHttpClient,
         request: Request,
         sourceUrl: String,
-    ): SubscriptionTransportResult =
+    ): SubscriptionResponse =
         client.newCall(request).execute().use { rawResponse ->
-            val certificate = rawResponse.subscriptionCertificateInfo()
             if (rawResponse.code == 304) {
-                return SubscriptionTransportResult(
-                    response = SubscriptionResponse(notModified = true),
-                    certificate = certificate,
-                )
+                return SubscriptionResponse(notModified = true)
             }
             if (!rawResponse.isSuccessful) {
                 val responseBody = rawResponse.body?.string().orEmpty()
@@ -811,23 +766,16 @@ class ProfileRepository(
                     ),
                 )
             }
-            SubscriptionTransportResult(
-                response =
-                    SubscriptionResponse(
-                        body = rawResponse.body?.string().orEmpty(),
-                        etag = rawResponse.header("ETag"),
-                        metadataTitle = rawResponse.header("profile-title").decodeSubscriptionMetadataHeader(),
-                        subscriptionExpiresAt =
-                            SubscriptionMetadataParser
-                                .expirationFromSubscriptionUserinfo(rawResponse.header("subscription-userinfo"))
-                                ?: SubscriptionMetadataParser.expirationFromSubscriptionUrl(sourceUrl),
-                    ),
-                certificate = certificate,
+            SubscriptionResponse(
+                body = rawResponse.body?.string().orEmpty(),
+                etag = rawResponse.header("ETag"),
+                metadataTitle = rawResponse.header("profile-title").decodeSubscriptionMetadataHeader(),
+                subscriptionExpiresAt =
+                    SubscriptionMetadataParser
+                        .expirationFromSubscriptionUserinfo(rawResponse.header("subscription-userinfo"))
+                        ?: SubscriptionMetadataParser.expirationFromSubscriptionUrl(sourceUrl),
             )
         }
-
-    private fun Response.subscriptionCertificateInfo(): SubscriptionCertificateInfo? =
-        (handshake?.peerCertificates?.firstOrNull() as? X509Certificate)?.toSubscriptionCertificateInfo(request.url.host)
 
     private suspend fun persistCachedActiveProfile(profile: Profile?) {
         settingsRepository.updateLastActiveProfile(

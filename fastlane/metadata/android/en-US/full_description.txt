@@ -1,12 +1,12 @@
-Foxhole is a simple Android client for connecting to and managing sing-box profiles. It supports Tunnel, Split Tunnel for apps and sites, Proxy, and LAN Proxy, profile import from files, the clipboard, QR codes, and HTTPS subscriptions, including compatible v2raytun-style subscriptions. No ads, analytics, or telemetry. It supports compatible configurations and its own smart config for fast Smart start with automatic VPN protocol selection.
+Foxhole is a simple Android client for connecting to and managing sing-box profiles. It supports tunnel, split tunnel for apps and sites, proxy, and LAN proxy, profile import from files, the clipboard, QR codes, and HTTPS subscriptions, including compatible v2raytun-style subscriptions. No ads, analytics, or telemetry. It supports compatible configurations and its own smart config for fast smart start with automatic VPN protocol selection.
 
 Key features:
-- Modes: Tunnel, Split Tunnel, Proxy
+- Modes: tunnel, split tunnel, proxy
 - LAN Proxy over Wi-Fi for access from other devices
 - Proxy authentication
 - Site-based routing rules
 - Import from files, clipboard, QR codes, and HTTPS subscriptions
-- Supports Foxhole smart config with protocol selection and Smart start that checks available connection options and chooses the best available one
+- Supports Foxhole smart config with protocol selection and smart start that checks available connection options and chooses the best available one
 - Local traffic statistics
 - Subscription expiration date display
 - Encrypted local profile storage

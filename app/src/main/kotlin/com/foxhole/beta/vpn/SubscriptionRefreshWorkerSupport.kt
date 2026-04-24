@@ -1,6 +1,6 @@
 package com.foxhole.beta.vpn
 
-import com.foxhole.beta.core.data.SubscriptionTlsTrustRequiredException
+import com.foxhole.beta.core.data.isTlsTrustFailure
 import java.io.IOException
 
 internal enum class SubscriptionRefreshWorkDecision {
@@ -20,7 +20,7 @@ internal fun decideScheduledRefreshOutcome(
     }
 
 internal fun isRetryableScheduledRefreshFailure(error: Throwable): Boolean {
-    if (error is SubscriptionTlsTrustRequiredException || error.hasCause<SubscriptionTlsTrustRequiredException>()) {
+    if (isTlsTrustFailure(error)) {
         return false
     }
     if (error.hasCause<IOException>()) {

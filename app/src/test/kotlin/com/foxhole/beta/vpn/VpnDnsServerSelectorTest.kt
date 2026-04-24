@@ -46,6 +46,17 @@ class VpnDnsServerSelectorTest {
         assertEquals("172.19.0.2", selected)
     }
 
+    @Test
+    fun `advertises required public dns servers inside the tunnel`() {
+        val selected =
+            VpnDnsServerSelector.advertisedDnsServerAddresses(
+                configJson = foxholeConfig(server = "cloudflare-dns.com"),
+                fallbackServerAddress = "172.19.0.2",
+            )
+
+        assertEquals(listOf("172.19.0.2", "1.1.1.1", "8.8.8.8"), selected)
+    }
+
     private fun foxholeConfig(server: String): String =
         """
         {

@@ -37,7 +37,7 @@ internal fun normalizeRawXrayConfig(
 
     val normalizedConfig =
         buildBaseConfig(
-            outbounds = JsonArray(convertedOutbounds.nodes.map { it.outbound }),
+            outbounds = JsonArray(convertedOutbounds.nodes.mapNotNull { it.outbound }),
             routeOverride = convertXrayRoute(normalizedObject["routing"]?.jsonObject, convertedOutbounds.tagMapping),
             dnsOverride = convertXrayDns(normalizedObject["dns"]?.jsonObject),
         )
@@ -83,7 +83,7 @@ internal fun convertXrayOutbounds(
                         if (originalTag.equals("proxy", ignoreCase = true)) {
                             "proxy"
                         } else {
-                            node.outbound["tag"]!!.jsonPrimitive.content
+                            node.tag
                         }
                 }
             }
@@ -95,7 +95,7 @@ internal fun convertXrayOutbounds(
                         if (originalTag.equals("proxy", ignoreCase = true)) {
                             "proxy"
                         } else {
-                            node.outbound["tag"]!!.jsonPrimitive.content
+                            node.tag
                         }
                 }
             }
@@ -107,7 +107,7 @@ internal fun convertXrayOutbounds(
                         if (originalTag.equals("proxy", ignoreCase = true)) {
                             "proxy"
                         } else {
-                            node.outbound["tag"]!!.jsonPrimitive.content
+                            node.tag
                         }
                 }
             }
@@ -119,7 +119,7 @@ internal fun convertXrayOutbounds(
                         if (originalTag.equals("proxy", ignoreCase = true)) {
                             "proxy"
                         } else {
-                            node.outbound["tag"]!!.jsonPrimitive.content
+                            node.tag
                         }
                 }
             }

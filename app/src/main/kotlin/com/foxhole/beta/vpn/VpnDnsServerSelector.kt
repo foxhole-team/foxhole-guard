@@ -16,9 +16,21 @@ internal object VpnDnsServerSelector {
     fun advertisedDnsServerAddress(
         configJson: String?,
         fallbackServerAddress: String,
-    ): String {
+    ): String =
+        advertisedDnsServerAddresses(
+            configJson = configJson,
+            fallbackServerAddress = fallbackServerAddress,
+        ).first()
+
+    fun advertisedDnsServerAddresses(
+        configJson: String?,
+        fallbackServerAddress: String?,
+    ): List<String> {
         val remoteServerAddress = remoteDnsServerAddresses(configJson).firstOrNull()
-        return remoteServerAddress ?: fallbackServerAddress
+        return listOfNotNull(remoteServerAddress, fallbackServerAddress)
+            .plus(REQUIRED_TUN_DNS_SERVERS)
+            .filter { it.isNotBlank() }
+            .distinct()
     }
 
     fun remoteDnsServerAddresses(configJson: String?): List<String> =
@@ -48,4 +60,6 @@ internal object VpnDnsServerSelector {
         Regex(
             pattern = """^(25[0-5]|2[0-4]\d|1?\d?\d)(\.(25[0-5]|2[0-4]\d|1?\d?\d)){3}$""",
         )
+
+    private val REQUIRED_TUN_DNS_SERVERS = listOf("1.1.1.1", "8.8.8.8")
 }

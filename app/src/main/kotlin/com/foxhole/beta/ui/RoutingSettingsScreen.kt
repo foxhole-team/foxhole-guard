@@ -32,6 +32,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -167,7 +168,7 @@ fun RoutingSettingsScreen(
                                     append(" • ")
                                     append(preset.overrideMode.name.lowercase())
                                     append(" • ")
-                                    append(stringResource(R.string.rules_count, preset.rules.size))
+                                    append(pluralStringResource(R.plurals.rules_count, preset.rules.size, preset.rules.size))
                                 },
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -272,7 +273,7 @@ fun RoutingSettingsScreen(
                             fontWeight = FontWeight.SemiBold,
                         )
                         Text(
-                            text = "${catalog.url} • ${stringResource(R.string.rules_count, catalog.cachedPresetCount)}",
+                            text = "${catalog.url} • ${pluralStringResource(R.plurals.rules_count, catalog.cachedPresetCount, catalog.cachedPresetCount)}",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )

@@ -1,6 +1,7 @@
 package com.foxhole.beta.core.settings
 
 import android.content.Context
+import androidx.core.content.edit
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
@@ -28,7 +29,6 @@ import com.foxhole.beta.core.model.SmartProfileProtocolMemory
 import com.foxhole.beta.core.model.ThemeMode
 import com.foxhole.beta.core.model.TrafficMode
 import com.foxhole.beta.core.model.TrafficSettings
-import com.foxhole.beta.core.model.TrustedSubscriptionCertificate
 import com.foxhole.beta.core.model.TunStack
 import com.foxhole.beta.core.model.UiSettings
 import com.foxhole.beta.core.model.V2RayApiSettings
@@ -167,19 +167,6 @@ class SettingsRepository(
                 connection =
                     it.connection.copy(
                         ipInfoEndpoint = normalizeIpInfoEndpoint(value),
-                    ),
-            )
-        }
-
-    suspend fun trustSubscriptionCertificate(value: TrustedSubscriptionCertificate) =
-        update { current ->
-            current.copy(
-                connection =
-                    current.connection.copy(
-                        trustedSubscriptionCertificates =
-                            normalizeTrustedSubscriptionCertificates(
-                                current.connection.trustedSubscriptionCertificates + value,
-                            ),
                     ),
             )
         }
@@ -702,11 +689,15 @@ class SettingsRepository(
         parseOptionalStoredAppLocale(fastUiPreferences.getString(FAST_LOCALE_KEY, null))
 
     private fun writeFastThemeMode(value: ThemeMode) {
-        fastUiPreferences.edit().putString(FAST_THEME_MODE_KEY, value.name).apply()
+        fastUiPreferences.edit {
+            putString(FAST_THEME_MODE_KEY, value.name)
+        }
     }
 
     private fun writeFastLocale(value: AppLocale) {
-        fastUiPreferences.edit().putString(FAST_LOCALE_KEY, value.name).apply()
+        fastUiPreferences.edit {
+            putString(FAST_LOCALE_KEY, value.name)
+        }
     }
 
     private fun deleteLegacySettings() {
@@ -745,7 +736,6 @@ class SettingsRepository(
                 connection =
                     connection.copy(
                         ipInfoEndpoint = normalizeIpInfoEndpoint(connection.ipInfoEndpoint),
-                        trustedSubscriptionCertificates = normalizeTrustedSubscriptionCertificates(connection.trustedSubscriptionCertificates),
                     ),
                 traffic =
                     if (connection.stealthModeEnabled) {
@@ -1003,25 +993,3 @@ internal fun normalizeSmartProfilePreferences(
             }
         }.distinctBy(SmartProfilePreference::profileId)
         .sortedBy(SmartProfilePreference::profileId)
-
-internal fun normalizeTrustedSubscriptionCertificates(
-    certificates: List<TrustedSubscriptionCertificate>,
-): List<TrustedSubscriptionCertificate> =
-    certificates
-        .mapNotNull { certificate ->
-            val host = certificate.host.trim().lowercase().takeIf(String::isNotBlank) ?: return@mapNotNull null
-            val fingerprint =
-                certificate.sha256Fingerprint
-                    .trim()
-                    .uppercase()
-                    .takeIf(String::isNotBlank)
-                    ?: return@mapNotNull null
-            certificate.copy(
-                host = host,
-                sha256Fingerprint = fingerprint,
-                subject = certificate.subject.trim(),
-                issuer = certificate.issuer.trim(),
-                acceptedAt = certificate.acceptedAt.takeIf { it > 0L } ?: System.currentTimeMillis(),
-            )
-        }.distinctBy { certificate -> certificate.host to certificate.sha256Fingerprint }
-        .sortedWith(compareBy(TrustedSubscriptionCertificate::host, TrustedSubscriptionCertificate::sha256Fingerprint))

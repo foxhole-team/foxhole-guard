@@ -881,8 +881,8 @@ internal fun FoxholeChoiceCard(
     title: String,
     selected: Boolean,
     onClick: () -> Unit,
-    summary: String? = null,
     modifier: Modifier = Modifier,
+    summary: String? = null,
 ) {
     FoxholePreferenceCard(
         title = title,

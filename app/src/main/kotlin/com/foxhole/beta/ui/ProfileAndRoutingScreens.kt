@@ -78,6 +78,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -131,6 +132,9 @@ fun ProfilesScreen(
     onCreateProfileExportShareIntent: (PreparedProfileExport) -> Intent,
 ) {
     val context = LocalContext.current
+    val profileExportSavedMessage = stringResource(R.string.profile_export_saved)
+    val profileExportSaveFailedMessage = stringResource(R.string.profile_export_save_failed)
+    val shareArchiveTitle = stringResource(R.string.share_archive)
     val scope = rememberCoroutineScope()
     val exportChoicesByProfileId =
         remember(state.profiles) {
@@ -219,9 +223,9 @@ fun ProfilesScreen(
                         } ?: error("failed to open export target")
                     }
                 }.onSuccess {
-                    snackbarHostState.showSnackbar(context.getString(R.string.profile_export_saved))
+                    snackbarHostState.showSnackbar(profileExportSavedMessage)
                 }.onFailure {
-                    snackbarHostState.showSnackbar(context.getString(R.string.profile_export_save_failed))
+                    snackbarHostState.showSnackbar(profileExportSaveFailedMessage)
                 }
             }
         }
@@ -389,8 +393,9 @@ fun ProfilesScreen(
                         if (exportMode && exportChoices.size > 1) {
                             Text(
                                 text =
-                                    stringResource(
-                                        R.string.profile_export_selection_summary,
+                                    pluralStringResource(
+                                        R.plurals.profile_export_selection_summary,
+                                        exportChoices.size,
                                         exportSelectedKeys.size,
                                         exportChoices.size,
                                     ),
@@ -489,7 +494,15 @@ fun ProfilesScreen(
                 }
             },
             title = { Text(stringResource(R.string.profile_export_destination_title)) },
-            text = { Text(stringResource(R.string.profile_export_destination_summary, selectedExportConfigCount)) },
+            text = {
+                Text(
+                    pluralStringResource(
+                        R.plurals.profile_export_destination_summary,
+                        selectedExportConfigCount,
+                        selectedExportConfigCount,
+                    ),
+                )
+            },
             confirmButton = {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     TextButton(
@@ -526,7 +539,7 @@ fun ProfilesScreen(
                                     val chooser =
                                         Intent.createChooser(
                                             onCreateProfileExportShareIntent(export),
-                                            context.getString(R.string.share_archive),
+                                            shareArchiveTitle,
                                         )
                                     context.startActivity(chooser)
                                     exportMode = false

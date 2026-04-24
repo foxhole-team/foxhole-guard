@@ -10,7 +10,6 @@ import com.foxhole.beta.core.model.SmartProfileNetworkMemory
 import com.foxhole.beta.core.model.SmartProfilePreference
 import com.foxhole.beta.core.model.SmartProfileProtocolMemory
 import com.foxhole.beta.core.model.ThemeMode
-import com.foxhole.beta.core.model.TrustedSubscriptionCertificate
 import com.foxhole.beta.core.model.UiSettings
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -105,8 +104,8 @@ class SettingsRepositoryTest {
     }
 
     @Test
-    fun `expert insecure tls override stays off by default`() {
-        assertFalse(ExpertSettings().allowInsecureTls)
+    fun `expert insecure tls override follows build default`() {
+        assertEquals(BuildConfig.ALLOW_INSECURE_TLS_BY_DEFAULT, ExpertSettings().allowInsecureTls)
     }
 
     @Test
@@ -432,30 +431,4 @@ class SettingsRepositoryTest {
         )
     }
 
-    @Test
-    fun `trusted subscription certificates are normalized and deduplicated`() {
-        val normalized =
-            normalizeTrustedSubscriptionCertificates(
-                listOf(
-                    TrustedSubscriptionCertificate(
-                        host = " CONNECT.STEALTHSURF.APP ",
-                        sha256Fingerprint = "aa:bb:cc",
-                        subject = " subject ",
-                        issuer = " issuer ",
-                        acceptedAt = 0L,
-                    ),
-                    TrustedSubscriptionCertificate(
-                        host = "connect.stealthsurf.app",
-                        sha256Fingerprint = "AA:BB:CC",
-                    ),
-                ),
-            )
-
-        assertEquals(1, normalized.size)
-        assertEquals("connect.stealthsurf.app", normalized.first().host)
-        assertEquals("AA:BB:CC", normalized.first().sha256Fingerprint)
-        assertEquals("subject", normalized.first().subject)
-        assertEquals("issuer", normalized.first().issuer)
-        assertTrue(normalized.first().acceptedAt > 0L)
-    }
 }

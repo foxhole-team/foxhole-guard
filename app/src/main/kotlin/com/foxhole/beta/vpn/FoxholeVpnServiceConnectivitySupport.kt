@@ -9,6 +9,7 @@ import com.foxhole.beta.core.model.ConnectivityHealthState
 import com.foxhole.beta.core.model.ConnectionState
 import com.foxhole.beta.core.model.IpInfo
 import com.foxhole.beta.core.model.NotificationSnapshot
+import com.foxhole.beta.core.model.ProtocolHint
 import com.foxhole.beta.core.model.TrafficMode
 import com.foxhole.beta.core.model.TrafficSnapshot
 import com.foxhole.beta.core.model.VpnSession
@@ -26,6 +27,11 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 
 internal suspend fun FoxholeVpnService.refreshVpnIpInfoInternal(
     callTimeoutMs: Long,
@@ -40,13 +46,22 @@ internal suspend fun FoxholeVpnService.refreshVpnIpInfoInternal(
                 excludedHandle = expectedFreshVpnNetworkHandle,
             )
             ?: error("vpn network unavailable")
+    val requestNetwork = network ?: boundNetworkForAppOwnedRequest(vpnNetwork)
     val remoteDnsServers = VpnDnsServerSelector.remoteDnsServerAddresses(activeSession?.configJson)
     val info =
-        container.ipInfoRepository.fetch(
-            endpoint = endpoint,
-            callTimeoutMs = callTimeoutMs,
-            network = boundNetworkForAppOwnedRequest(vpnNetwork),
-        )
+        if (shouldPreferIpv4TunnelValidation(activeSession?.protocolHint, activeSession?.configJson)) {
+            container.ipInfoRepository.fetchIpv4(
+                endpoint = endpoint,
+                callTimeoutMs = callTimeoutMs,
+                network = requestNetwork,
+            ) ?: error("vpn ipv4 refresh failed")
+        } else {
+            container.ipInfoRepository.fetch(
+                endpoint = endpoint,
+                callTimeoutMs = callTimeoutMs,
+                network = requestNetwork,
+            )
+        }
     return info.withDnsServers(
         localDnsServers = connectivityManager.dnsServerAddresses(vpnNetwork),
         remoteDnsServers = remoteDnsServers,
@@ -92,12 +107,13 @@ internal suspend fun FoxholeVpnService.refreshVpnIpv4InfoInternal(
 ): IpInfo? {
     val endpoint = container.settingsRepository.current().connection.ipInfoEndpoint
     val vpnNetwork = network ?: awaitVpnNetworkOrNull(FoxholeVpnService.VPN_NETWORK_WAIT_TIMEOUT_MS) ?: return null
+    val requestNetwork = network ?: boundNetworkForAppOwnedRequest(vpnNetwork)
     val remoteDnsServers = VpnDnsServerSelector.remoteDnsServerAddresses(activeSession?.configJson)
     val info =
         container.ipInfoRepository.fetchIpv4(
             endpoint = endpoint,
             callTimeoutMs = callTimeoutMs,
-            network = boundNetworkForAppOwnedRequest(vpnNetwork),
+            network = requestNetwork,
         )
     return info?.withDnsServers(
         localDnsServers = connectivityManager.dnsServerAddresses(vpnNetwork),
@@ -153,17 +169,23 @@ internal suspend fun FoxholeVpnService.validateTunnelConnectivityInternal(
     withContext(Dispatchers.IO) {
         val validationStartedAt = System.currentTimeMillis()
         val activeProtocolHint = activeSession?.protocolHint
+        val preferIpv4Validation = shouldPreferIpv4TunnelValidation(activeProtocolHint, activeSession?.configJson)
+        val validationTimeoutMs =
+            FoxholeVpnService.CONNECTIVITY_PROBE_TOTAL_TIMEOUT_MS +
+                maxTunnelValidationGraceTimeoutMs(activeProtocolHint)
         container.diagnosticsLogger.recordStructured(
             "dns",
             "Tunnel validation started",
             activeProtocolHint?.name?.lowercase(),
+            if (preferIpv4Validation) "address_family=ipv4" else null,
+            "timeout_ms=$validationTimeoutMs",
         )
         val result =
             TunnelConnectivityProbe.run(
                 attempts = FoxholeVpnService.CONNECTIVITY_PROBE_ATTEMPTS,
                 initialDelayMs = FoxholeVpnService.CONNECTIVITY_PROBE_INITIAL_DELAY_MS,
                 retryDelayMs = FoxholeVpnService.CONNECTIVITY_PROBE_RETRY_DELAY_MS,
-                timeoutMs = FoxholeVpnService.CONNECTIVITY_PROBE_TOTAL_TIMEOUT_MS,
+                timeoutMs = validationTimeoutMs,
                 onFailure = { attemptIndex, error ->
                     container.diagnosticsLogger.record(
                         "dns",
@@ -180,12 +202,35 @@ internal suspend fun FoxholeVpnService.validateTunnelConnectivityInternal(
                     runCatching {
                         val endpoint = container.settingsRepository.current().connection.ipInfoEndpoint
                         val remoteDnsServers = VpnDnsServerSelector.remoteDnsServerAddresses(activeSession?.configJson)
-                        container.ipInfoRepository.fetch(
-                            endpoint = endpoint,
-                            callTimeoutMs = FoxholeVpnService.CONNECTIVITY_PROBE_CALL_TIMEOUT_MS,
-                            network = boundNetworkForAppOwnedRequest(vpnNetwork),
-                            mode = IpInfoFetchMode.ENTRY_QUICK,
-                        ).withDnsServers(
+                        val info =
+                            if (preferIpv4Validation) {
+                                container.ipInfoRepository.fetchIpv4(
+                                    endpoint = endpoint,
+                                    callTimeoutMs = FoxholeVpnService.CONNECTIVITY_PROBE_CALL_TIMEOUT_MS,
+                                    network = vpnNetwork,
+                                ) ?: error("vpn ipv4 refresh failed")
+                            } else {
+                                container.ipInfoRepository.fetch(
+                                    endpoint = endpoint,
+                                    callTimeoutMs = FoxholeVpnService.CONNECTIVITY_PROBE_CALL_TIMEOUT_MS,
+                                    network = vpnNetwork,
+                                    mode = IpInfoFetchMode.ENTRY_QUICK,
+                                )
+                            }
+                        info.withDnsServers(
+                            localDnsServers = connectivityManager.dnsServerAddresses(vpnNetwork),
+                            remoteDnsServers = remoteDnsServers,
+                        )
+                    }.recoverCatching { primaryError ->
+                        val endpoint = container.settingsRepository.current().connection.ipInfoEndpoint
+                        val remoteDnsServers = VpnDnsServerSelector.remoteDnsServerAddresses(activeSession?.configJson)
+                        val ipv4Info =
+                            container.ipInfoRepository.fetchIpv4(
+                                endpoint = endpoint,
+                                callTimeoutMs = FoxholeVpnService.CONNECTIVITY_PROBE_CALL_TIMEOUT_MS,
+                                network = vpnNetwork,
+                            ) ?: throw primaryError
+                        ipv4Info.withDnsServers(
                             localDnsServers = connectivityManager.dnsServerAddresses(vpnNetwork),
                             remoteDnsServers = remoteDnsServers,
                         )
@@ -201,34 +246,35 @@ internal suspend fun FoxholeVpnService.validateTunnelConnectivityInternal(
                 val ipErrorMessage = ipRefresh.exceptionOrNull()?.message.orEmpty()
                 container.diagnosticsLogger.record(
                     "dns",
-                    "vpn network validated by android; in-process ip refresh failed, probing connectivity: $ipErrorMessage",
-                )
-                val dnsIndependentFallback =
-                    runCatching {
-                        probeDnsIndependentConnectivityFallback(FoxholeVpnService.CONNECTIVITY_PROBE_CALL_TIMEOUT_MS)
-                    }
-                if (dnsIndependentFallback.isSuccess) {
-                    container.diagnosticsLogger.record(
-                        "dns",
-                        "dns-independent public reachability probe passed after ip refresh failure",
-                    )
-                    scope.launch(Dispatchers.IO) {
-                        refreshValidatedTunnelIpInfoBestEffort(vpnNetwork)
-                    }
-                    return@run vpnNetwork
-                }
-                container.diagnosticsLogger.record(
-                    "dns",
-                    "dns-independent public reachability probe failed: ${dnsIndependentFallback.exceptionOrNull()?.message.orEmpty()}",
+                    "vpn network validated by android; vpn-bound ip refresh failed, probing validation endpoints: $ipErrorMessage",
                 )
                 val endpointProbe =
                     runCatching {
                         probeConnectivityEndpoints(
                             callTimeoutMs = FoxholeVpnService.CONNECTIVITY_PROBE_CALL_TIMEOUT_MS,
-                            network = boundNetworkForAppOwnedRequest(vpnNetwork),
+                            network = vpnNetwork,
+                            preferIpv4 = preferIpv4Validation,
                         )
                     }
                 if (endpointProbe.isFailure) {
+                    val dnsIndependentFallback =
+                        runCatching {
+                            probeDnsIndependentConnectivityFallback(
+                                callTimeoutMs = FoxholeVpnService.CONNECTIVITY_PROBE_CALL_TIMEOUT_MS,
+                                network = vpnNetwork,
+                            )
+                        }
+                    if (dnsIndependentFallback.isSuccess) {
+                        container.diagnosticsLogger.record(
+                            "dns",
+                            "dns-independent public reachability probe passed but is not accepted as tunnel validation",
+                        )
+                    } else {
+                        container.diagnosticsLogger.record(
+                            "dns",
+                            "dns-independent public reachability probe failed: ${dnsIndependentFallback.exceptionOrNull()?.message.orEmpty()}",
+                        )
+                    }
                     val evidence = inspectValidatedTunnelEvidence(validationStartedAt)
                     val gracePolicy = selectTunnelValidationGracePolicy(activeProtocolHint, evidence)
                     if (gracePolicy != null) {
@@ -239,7 +285,12 @@ internal suspend fun FoxholeVpnService.validateTunnelConnectivityInternal(
                             "attempts=${gracePolicy.attempts}",
                             "window_ms=${gracePolicy.totalTimeoutMs}",
                         )
-                        val graceResult = retryValidatedTunnelConnectivityWithGrace(vpnNetwork, gracePolicy)
+                        val graceResult =
+                            retryValidatedTunnelConnectivityWithGrace(
+                                vpnNetwork = vpnNetwork,
+                                policy = gracePolicy,
+                                preferIpv4 = preferIpv4Validation,
+                            )
                         if (graceResult.isSuccess) {
                             container.diagnosticsLogger.record("dns", "validated tunnel grace retry passed")
                             return@run vpnNetwork
@@ -272,6 +323,7 @@ internal suspend fun FoxholeVpnService.validateTunnelConnectivityInternal(
 internal suspend fun FoxholeVpnService.retryValidatedTunnelConnectivityWithGraceInternal(
     vpnNetwork: Network,
     policy: TunnelValidationGracePolicy,
+    preferIpv4: Boolean = false,
 ): Result<Unit> =
     TunnelConnectivityProbe.run(
         attempts = policy.attempts,
@@ -296,14 +348,31 @@ internal suspend fun FoxholeVpnService.retryValidatedTunnelConnectivityWithGrace
             FoxholeVpnRuntimeBridge.updateIpInfo(ipRefresh.getOrThrow())
             return@run Unit
         }
-        runCatching {
-            probeDnsIndependentConnectivityFallback(policy.callTimeoutMs)
-        }.recoverCatching {
-            probeConnectivityEndpoints(
-                callTimeoutMs = policy.callTimeoutMs,
-                network = boundNetworkForAppOwnedRequest(vpnNetwork),
-            )
-        }.getOrThrow()
+        val endpointProbe =
+            runCatching {
+                probeConnectivityEndpoints(
+                    callTimeoutMs = policy.callTimeoutMs,
+                    network = vpnNetwork,
+                    preferIpv4 = preferIpv4,
+                )
+            }
+        if (endpointProbe.isFailure) {
+            val dnsIndependentFallback =
+                runCatching {
+                    probeDnsIndependentConnectivityFallback(
+                        callTimeoutMs = policy.callTimeoutMs,
+                        network = vpnNetwork,
+                    )
+                }
+            if (dnsIndependentFallback.isSuccess && !acceptsTunnelValidationProbe(TunnelValidationProbeKind.DNS_INDEPENDENT_LITERAL_IP)) {
+                container.diagnosticsLogger.record(
+                    "dns",
+                    "grace retry dns-independent probe passed but is not accepted as tunnel validation",
+                )
+            }
+            throw (endpointProbe.exceptionOrNull() ?: IllegalStateException("connectivity probe failed"))
+        }
+        endpointProbe.getOrThrow()
         refreshValidatedTunnelIpInfoBestEffort(vpnNetwork)
     }
 
@@ -327,12 +396,35 @@ internal suspend fun FoxholeVpnService.refreshValidatedTunnelIpInfoBestEffortInt
     runCatching {
         val endpoint = container.settingsRepository.current().connection.ipInfoEndpoint
         val remoteDnsServers = VpnDnsServerSelector.remoteDnsServerAddresses(activeSession?.configJson)
-        container.ipInfoRepository.fetch(
-            endpoint = endpoint,
-            callTimeoutMs = FoxholeVpnService.CONNECTIVITY_PROBE_CALL_TIMEOUT_MS,
-            network = boundNetworkForAppOwnedRequest(vpnNetwork),
-            mode = IpInfoFetchMode.ENTRY_QUICK,
-        ).withDnsServers(
+        val info =
+            if (shouldPreferIpv4TunnelValidation(activeSession?.protocolHint, activeSession?.configJson)) {
+                container.ipInfoRepository.fetchIpv4(
+                    endpoint = endpoint,
+                    callTimeoutMs = FoxholeVpnService.CONNECTIVITY_PROBE_CALL_TIMEOUT_MS,
+                    network = vpnNetwork,
+                ) ?: error("vpn ipv4 refresh failed")
+            } else {
+                container.ipInfoRepository.fetch(
+                    endpoint = endpoint,
+                    callTimeoutMs = FoxholeVpnService.CONNECTIVITY_PROBE_CALL_TIMEOUT_MS,
+                    network = vpnNetwork,
+                    mode = IpInfoFetchMode.ENTRY_QUICK,
+                )
+            }
+        info.withDnsServers(
+            localDnsServers = connectivityManager.dnsServerAddresses(vpnNetwork),
+            remoteDnsServers = remoteDnsServers,
+        )
+    }.recoverCatching { primaryError ->
+        val endpoint = container.settingsRepository.current().connection.ipInfoEndpoint
+        val remoteDnsServers = VpnDnsServerSelector.remoteDnsServerAddresses(activeSession?.configJson)
+        val ipv4Info =
+            container.ipInfoRepository.fetchIpv4(
+                endpoint = endpoint,
+                callTimeoutMs = FoxholeVpnService.CONNECTIVITY_PROBE_CALL_TIMEOUT_MS,
+                network = vpnNetwork,
+            ) ?: throw primaryError
+        ipv4Info.withDnsServers(
             localDnsServers = connectivityManager.dnsServerAddresses(vpnNetwork),
             remoteDnsServers = remoteDnsServers,
         )
@@ -349,19 +441,43 @@ internal suspend fun FoxholeVpnService.refreshValidatedTunnelIpInfoBestEffortInt
 internal suspend fun FoxholeVpnService.probeConnectivityEndpointsInternal(
     callTimeoutMs: Long = FoxholeVpnService.CONNECTIVITY_PROBE_CALL_TIMEOUT_MS,
     network: Network? = null,
+    preferIpv4: Boolean = false,
 ) {
     var lastFailure: Throwable? = null
     connectivityProbeEndpoints().forEach { endpoint ->
+        var usedIpv4 = preferIpv4
         val result =
             runCatching {
-                container.ipInfoRepository.probe(
+                if (preferIpv4) {
+                    container.ipInfoRepository.probeIpv4(
+                        endpoint = endpoint,
+                        callTimeoutMs = callTimeoutMs,
+                        network = network,
+                    )
+                } else {
+                    container.ipInfoRepository.probe(
+                        endpoint = endpoint,
+                        callTimeoutMs = callTimeoutMs,
+                        network = network,
+                    )
+                }
+            }.recoverCatching {
+                usedIpv4 = true
+                container.ipInfoRepository.probeIpv4(
                     endpoint = endpoint,
                     callTimeoutMs = callTimeoutMs,
                     network = network,
                 )
             }
         if (result.isSuccess) {
-            container.diagnosticsLogger.record("dns", "validation endpoint ok: $endpoint")
+            container.diagnosticsLogger.record(
+                "dns",
+                if (usedIpv4) {
+                    "validation endpoint ipv4 ok: $endpoint"
+                } else {
+                    "validation endpoint ok: $endpoint"
+                },
+            )
             return
         }
         lastFailure = result.exceptionOrNull()
@@ -375,6 +491,46 @@ internal suspend fun FoxholeVpnService.probeConnectivityEndpointsInternal(
     }
     throw lastFailure ?: IllegalStateException("connectivity probe failed")
 }
+
+internal fun shouldPreferIpv4TunnelValidation(
+    protocolHint: ProtocolHint?,
+    configJson: String?,
+): Boolean {
+    if (protocolHint != ProtocolHint.WIREGUARD) {
+        return false
+    }
+    if (configJson.isNullOrBlank()) {
+        return true
+    }
+    return runCatching {
+        val root = tunnelValidationJson.parseToJsonElement(configJson).jsonObject
+        val wireGuardEndpoints =
+            root["endpoints"]
+                ?.jsonArray
+                .orEmpty()
+                .map { it.jsonObject }
+                .filter { endpoint ->
+                    endpoint["type"]?.jsonPrimitive?.contentOrNull.equals("wireguard", ignoreCase = true)
+                }
+        if (wireGuardEndpoints.isEmpty()) {
+            true
+        } else {
+            wireGuardEndpoints.none { endpoint ->
+                endpoint["address"]
+                    ?.jsonArray
+                    .orEmpty()
+                    .mapNotNull { it.jsonPrimitive.contentOrNull }
+                    .any { address -> address.substringBefore('/').contains(':') }
+            }
+        }
+    }.getOrDefault(true)
+}
+
+private val tunnelValidationJson =
+    Json {
+        ignoreUnknownKeys = true
+        explicitNulls = false
+    }
 
 internal suspend fun FoxholeVpnService.connectivityProbeEndpointsInternal(): List<String> {
     val preferredEndpoint = container.settingsRepository.current().connection.ipInfoEndpoint.trim()
@@ -394,14 +550,19 @@ internal suspend fun FoxholeVpnService.runNotificationConnectivityProbeInternal(
             runCatching {
                 when (FoxholeVpnRuntimeBridge.snapshot.value.trafficMode) {
                     TrafficMode.TUNNEL -> {
-                        if (runCatching { currentVpnNetwork() }.getOrNull() == null) {
-                            return@withContext false
-                        }
+                        val vpnNetwork = runCatching { currentVpnNetwork() }.getOrNull() ?: return@withContext false
                         val target = VpnHealthProbeTargetSelector.select(session.configJson)
                         if (target != null) {
-                            probeSessionTarget(target)
+                            probeSessionTarget(
+                                target = target,
+                                network = vpnNetwork,
+                                timeoutMs = FoxholeVpnService.NOTIFICATION_HEALTH_PROBE_TIMEOUT_MS,
+                            )
                         } else {
-                            probeConnectivityEndpoints(callTimeoutMs = FoxholeVpnService.NOTIFICATION_HEALTH_PROBE_TIMEOUT_MS)
+                            probeConnectivityEndpoints(
+                                callTimeoutMs = FoxholeVpnService.NOTIFICATION_HEALTH_PROBE_TIMEOUT_MS,
+                                network = vpnNetwork,
+                            )
                         }
                     }
                     TrafficMode.PROXY -> {
@@ -453,12 +614,19 @@ internal suspend fun FoxholeVpnService.probeConnectivityEndpointsOverLocalProxyI
     throw lastFailure ?: IllegalStateException("proxy probe failed")
 }
 
-internal suspend fun FoxholeVpnService.probeDnsIndependentConnectivityFallbackInternal(callTimeoutMs: Long) {
+internal suspend fun FoxholeVpnService.probeDnsIndependentConnectivityFallbackInternal(
+    callTimeoutMs: Long,
+    network: Network? = null,
+) {
     var lastFailure: Throwable? = null
     dnsIndependentConnectivityProbeTargets().forEach { target ->
         val result =
             runCatching {
-                probeSessionTarget(target)
+                probeSessionTarget(
+                    target = target,
+                    network = network,
+                    timeoutMs = callTimeoutMs,
+                )
             }
         if (result.isSuccess) {
             container.diagnosticsLogger.record(
@@ -479,22 +647,28 @@ internal suspend fun FoxholeVpnService.probeDnsIndependentConnectivityFallbackIn
     throw lastFailure ?: IllegalStateException("dns-independent connectivity probe failed")
 }
 
-internal fun FoxholeVpnService.probeSessionTargetInternal(target: VpnHealthProbeTarget) {
-    val address = resolveProbeAddress(target.host)
+internal fun FoxholeVpnService.probeSessionTargetInternal(
+    target: VpnHealthProbeTarget,
+    network: Network? = null,
+    timeoutMs: Long = FoxholeVpnService.NOTIFICATION_HEALTH_PROBE_TIMEOUT_MS,
+) {
+    val address = resolveProbeAddress(target.host, network)
+    val timeout = timeoutMs.toInt()
     when (target.transport) {
         VpnHealthProbeTransport.TCP -> {
-            Socket().use {
-                it.soTimeout = FoxholeVpnService.NOTIFICATION_HEALTH_PROBE_TIMEOUT_MS.toInt()
+            (network?.socketFactory?.createSocket() ?: Socket()).use {
+                it.soTimeout = timeout
                 it.connect(
                     InetSocketAddress(address, target.port),
-                    FoxholeVpnService.NOTIFICATION_HEALTH_PROBE_TIMEOUT_MS.toInt(),
+                    timeout,
                 )
             }
         }
 
         VpnHealthProbeTransport.UDP -> {
             DatagramSocket().use { socket ->
-                socket.soTimeout = FoxholeVpnService.NOTIFICATION_HEALTH_PROBE_TIMEOUT_MS.toInt()
+                network?.bindSocket(socket)
+                socket.soTimeout = timeout
                 socket.connect(address, target.port)
                 socket.send(
                     DatagramPacket(
@@ -507,8 +681,20 @@ internal fun FoxholeVpnService.probeSessionTargetInternal(target: VpnHealthProbe
     }
 }
 
-internal fun FoxholeVpnService.resolveProbeAddressInternal(host: String): InetAddress =
-    InetAddress.getAllByName(host).firstOrNull() ?: error("probe target unavailable")
+internal fun FoxholeVpnService.resolveProbeAddressInternal(
+    host: String,
+    network: Network? = null,
+): InetAddress {
+    if (host.isProbeIpLiteral()) {
+        return InetAddress.getByName(host)
+    }
+    val addresses =
+        runCatching {
+            network?.getAllByName(host)?.toList().orEmpty()
+        }.getOrDefault(emptyList())
+            .ifEmpty { InetAddress.getAllByName(host).toList() }
+    return addresses.firstOrNull() ?: error("probe target unavailable")
+}
 
 internal fun FoxholeVpnService.refreshDefaultNetworkAvailabilityInternal() {
     val activeNetwork = connectivityManager.activeNetwork
@@ -741,3 +927,10 @@ internal fun FoxholeVpnService.notificationStateLabelInternal(snapshot: Notifica
             getString(R.string.notification_status_analysis)
         else -> getString(R.string.notification_status_disconnected)
     }
+
+private fun String.isProbeIpLiteral(): Boolean = contains(':') || PROBE_IPV4_REGEX.matches(this)
+
+private val PROBE_IPV4_REGEX =
+    Regex(
+        pattern = """^(25[0-5]|2[0-4]\d|1?\d?\d)(\.(25[0-5]|2[0-4]\d|1?\d?\d)){3}$""",
+    )
