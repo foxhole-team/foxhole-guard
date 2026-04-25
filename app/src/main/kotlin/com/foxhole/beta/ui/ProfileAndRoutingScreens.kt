@@ -1067,7 +1067,7 @@ internal fun SmartProfileAutoConnectMenu(
                         minHeight = 32.dp,
                         contentPadding =
                             PaddingValues(
-                                horizontal = 7.dp,
+                                horizontal = SmartProfileMenuHorizontalPadding,
                                 vertical = 0.dp,
                             ),
                     ) {
@@ -1174,7 +1174,8 @@ private fun SmartProfileProtocolMenuHeader(compact: Boolean) {
         modifier =
             Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 8.dp, vertical = if (compact) 3.dp else 6.dp),
+                .height(if (compact) SmartProfileProtocolCompactHeaderHeight else SmartProfileProtocolHeaderHeight)
+                .padding(horizontal = SmartProfileMenuHorizontalPadding),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         SmartProfileProtocolHeaderText(
@@ -1182,24 +1183,30 @@ private fun SmartProfileProtocolMenuHeader(compact: Boolean) {
             modifier = Modifier.weight(1f),
             textAlign = TextAlign.Start,
         )
-        SmartProfileProtocolMenuDivider()
+        SmartProfileProtocolMenuDivider(
+            height = if (compact) SmartProfileProtocolCompactHeaderHeight else SmartProfileProtocolHeaderHeight,
+        )
         SmartProfileProtocolHeaderText(
             text = stringResource(R.string.smart_profile_menu_server_ping_column),
             modifier = Modifier.width(SmartProfileMetricColumnWidth),
         )
-        SmartProfileProtocolMenuDivider()
+        SmartProfileProtocolMenuDivider(
+            height = if (compact) SmartProfileProtocolCompactHeaderHeight else SmartProfileProtocolHeaderHeight,
+        )
         SmartProfileProtocolHeaderText(
             text = stringResource(R.string.smart_profile_menu_latency_column),
             modifier = Modifier.width(SmartProfileMetricColumnWidth),
         )
-        SmartProfileProtocolMenuDivider()
+        SmartProfileProtocolMenuDivider(
+            height = if (compact) SmartProfileProtocolCompactHeaderHeight else SmartProfileProtocolHeaderHeight,
+        )
         SmartProfileProtocolHeaderText(
             text = stringResource(R.string.smart_profile_menu_on_column),
             modifier = Modifier.width(SmartProfileOnColumnWidth),
         )
     }
     HorizontalDivider(
-        modifier = Modifier.padding(horizontal = if (compact) 8.dp else 10.dp),
+        modifier = Modifier.padding(horizontal = SmartProfileMenuHorizontalPadding),
         color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.24f),
     )
 }
@@ -1250,7 +1257,10 @@ private fun SmartProfileProtocolMenuRow(
     transportKnown: Boolean,
 ) {
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .height(if (compact) SmartProfileProtocolCompactRowHeight else SmartProfileProtocolRowHeight),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         SmartProfileProtocolCell(
@@ -1260,20 +1270,26 @@ private fun SmartProfileProtocolMenuRow(
             transportKnown = transportKnown,
             modifier = Modifier.weight(1f),
         )
-        SmartProfileProtocolMenuDivider()
+        SmartProfileProtocolMenuDivider(
+            height = if (compact) SmartProfileProtocolCompactRowHeight else SmartProfileProtocolRowHeight,
+        )
         SmartProfileMetricCell(
             latencyMs = serverPingMs,
             unavailable = serverPingUnavailable || serverPingMs == null,
             modifier = Modifier.width(SmartProfileMetricColumnWidth),
         )
-        SmartProfileProtocolMenuDivider()
+        SmartProfileProtocolMenuDivider(
+            height = if (compact) SmartProfileProtocolCompactRowHeight else SmartProfileProtocolRowHeight,
+        )
         SmartProfileMetricCell(
             latencyMs = latencyMs,
             down = latencyDown,
             unavailable = latencyUnavailable || latencyMs == null,
             modifier = Modifier.width(SmartProfileMetricColumnWidth),
         )
-        SmartProfileProtocolMenuDivider()
+        SmartProfileProtocolMenuDivider(
+            height = if (compact) SmartProfileProtocolCompactRowHeight else SmartProfileProtocolRowHeight,
+        )
         Box(
             modifier = Modifier.width(SmartProfileOnColumnWidth),
             contentAlignment = Alignment.Center,
@@ -1416,6 +1432,7 @@ private fun SmartProfileMetricCell(
     SmartProfileMetricPill(
         text = text,
         tone = tone,
+        roundUnavailable = latencyMs == null && !down,
         modifier = modifier,
     )
 }
@@ -1425,6 +1442,7 @@ private fun SmartProfileMetricPill(
     text: String,
     tone: SmartProfileMetricTone,
     modifier: Modifier = Modifier,
+    roundUnavailable: Boolean = false,
 ) {
     val color =
         when (tone) {
@@ -1438,34 +1456,57 @@ private fun SmartProfileMetricPill(
         contentAlignment = Alignment.Center,
     ) {
         Surface(
-            shape = MaterialTheme.shapes.medium,
+            modifier =
+                if (roundUnavailable) {
+                    Modifier.size(SmartProfileMetricUnavailableSize)
+                } else {
+                    Modifier
+                },
+            shape = if (roundUnavailable) CircleShape else MaterialTheme.shapes.medium,
             color = color.copy(alpha = if (tone == SmartProfileMetricTone.NEUTRAL) 0.10f else 0.16f),
             border = BorderStroke(1.dp, color.copy(alpha = 0.32f)),
         ) {
-            Text(
-                text = text,
-                modifier = Modifier.padding(horizontal = 2.dp, vertical = 2.dp),
-                style =
-                    MaterialTheme.typography.labelSmall.copy(
-                        fontSize = 9.sp,
-                        lineHeight = 10.sp,
-                        fontWeight = FontWeight.SemiBold,
-                    ),
-                color = color,
-                maxLines = 1,
-                softWrap = false,
-                overflow = TextOverflow.Ellipsis,
-            )
+            val textStyle =
+                MaterialTheme.typography.labelSmall.copy(
+                    fontSize = 9.sp,
+                    lineHeight = 10.sp,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            if (roundUnavailable) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = text,
+                        style = textStyle,
+                        color = color,
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            } else {
+                Text(
+                    text = text,
+                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                    style = textStyle,
+                    color = color,
+                    maxLines = 1,
+                    softWrap = false,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
         }
     }
 }
 
 @Composable
-private fun SmartProfileProtocolMenuDivider() {
+private fun SmartProfileProtocolMenuDivider(height: Dp) {
     Spacer(
         modifier =
             Modifier
-                .height(24.dp)
+                .height(height)
                 .width(1.dp)
                 .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.18f)),
     )
@@ -1498,8 +1539,14 @@ private enum class SmartProfileMetricTone {
     NEUTRAL,
 }
 
-private val SmartProfileOnColumnWidth = 24.dp
-private val SmartProfileMetricColumnWidth = 58.dp
+private val SmartProfileMenuHorizontalPadding = 8.dp
+private val SmartProfileOnColumnWidth = 34.dp
+private val SmartProfileMetricColumnWidth = 62.dp
+private val SmartProfileProtocolCompactHeaderHeight = 32.dp
+private val SmartProfileProtocolHeaderHeight = 36.dp
+private val SmartProfileProtocolCompactRowHeight = 34.dp
+private val SmartProfileProtocolRowHeight = 38.dp
+private val SmartProfileMetricUnavailableSize = 18.dp
 private val SmartProfileTcpAccent = Color(0xFF3F7DD9)
 private val SmartProfileUdpAccent = Color(0xFFE28131)
 private val SmartProfileCurrentWarningAccent = Color(0xFFE28131)

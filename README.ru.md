@@ -25,7 +25,7 @@ Foxhole — простой Android-клиент для подключения и
 
 Импорт профилей: файл, буфер обмена, QR-код, HTTPS-подписки (включая v2raytun-совместимые).
 
-Без рекламы. Без аналитики. Без телеметрии.
+>Без рекламы. Без аналитики. Без телеметрии.
 
 ---
 
@@ -68,8 +68,8 @@ Foxhole — простой Android-клиент для подключения и
 
 ## Foxhole smart config
 
-<p>
-  <img src="media/have_the_courage_use_your_own_reason-fuck_you-1984.png" width="80" height="80">
+<p align="center">
+  <img src="media/have_the_courage_use_your_own_reason-fuck_you-1984.png" width="84" height="84">
 </p>
 
 Одна подписка может содержать один или несколько профилей.
@@ -115,7 +115,14 @@ Foxhole превращает каждую route group в отдельный пр
 
 > Разработка Android-приложений не является нашим основным направлением.
 > Основная экспертиза: backend, безопасность, ML, криптография.
+
 ## Donate
 
-- **XMR (Monero):** `48yBVPTdcyJ1WoJtnKmVpEZziEsDy4HvbCW7eQDS9mfdiWPFXwZ8F5h9YZ2UTTBLxPcJgQgvth7iqLZM2yMCaQ432qaouqr`
-- **BTC (Bitcoin):** `bc1qatnyy7jcpqrp0d3dk9rta9vqfejgh4mysd6m2f`
+- **XMR (Monero):** 
+```
+48yBVPTdcyJ1WoJtnKmVpEZziEsDy4HvbCW7eQDS9mfdiWPFXwZ8F5h9YZ2UTTBLxPcJgQgvth7iqLZM2yMCaQ432qaouqr
+```
+- **BTC (Bitcoin):**  
+ ```
+bc1qatnyy7jcpqrp0d3dk9rta9vqfejgh4mysd6m2f
+  ```

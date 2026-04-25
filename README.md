@@ -24,7 +24,7 @@ Foxhole is a simple Android client for connecting to and managing sing-box profi
 
 Supports profile import from files, clipboard, QR codes, and HTTPS subscriptions (including v2raytun-style).
 
-No ads. No analytics. No telemetry.
+>No ads. No analytics. No telemetry.
 
 ---
 
@@ -66,8 +66,8 @@ No ads. No analytics. No telemetry.
 
 ## Foxhole smart config
 
-<p>
-  <img src="media/have_the_courage_use_your_own_reason-fuck_you-1984.png" width="80" height="80">
+<p align="center">
+  <img src="media/have_the_courage_use_your_own_reason-fuck_you-1984.png" width="84" height="84">
 </p>
 
 One subscription can contain one or more profiles. Foxhole converts route groups into profiles, where each entry becomes a protocol option.
@@ -113,7 +113,4 @@ One subscription can contain one or more profiles. Foxhole converts route groups
 > Android development is not our primary specialization.
 > Core expertise: backend, security, ML, cryptography.
 
-## Donate
 
-- **XMR (Monero):** `48yBVPTdcyJ1WoJtnKmVpEZziEsDy4HvbCW7eQDS9mfdiWPFXwZ8F5h9YZ2UTTBLxPcJgQgvth7iqLZM2yMCaQ432qaouqr`
-- **BTC (Bitcoin):** `bc1qatnyy7jcpqrp0d3dk9rta9vqfejgh4mysd6m2f`
