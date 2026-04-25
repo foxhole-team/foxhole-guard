@@ -111,6 +111,7 @@ internal fun ProtocolMetadataRow(
     selectorMenuInfoText: String? = null,
     selectorBorderColor: Color? = null,
     requiresInsecureTls: Boolean = false,
+    showInsecureTlsBadge: Boolean = true,
     reserveTrailingSpace: Boolean = true,
     expand: Boolean = true,
     leadingContent: (@Composable RowScope.() -> Unit)? = null,
@@ -120,7 +121,8 @@ internal fun ProtocolMetadataRow(
     val selectedOption =
         supportedProtocolOptions.firstOrNull { it.id == selectedProtocolOptionId }
             ?: supportedProtocolOptions.firstOrNull(ProfileProtocolOption::isSelected)
-    val selectedRequiresInsecureTls = requiresInsecureTls || selectedOption?.requiresInsecureTls == true
+    val selectedRequiresInsecureTls =
+        showInsecureTlsBadge && (requiresInsecureTls || selectedOption?.requiresInsecureTls == true)
     Row(
         modifier = if (expand) modifier.fillMaxWidth() else modifier,
         horizontalArrangement = Arrangement.spacedBy(if (compact) 8.dp else 12.dp),

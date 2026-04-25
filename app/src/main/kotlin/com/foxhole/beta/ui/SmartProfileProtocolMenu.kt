@@ -84,16 +84,16 @@ internal fun SmartProfileAutoConnectMenu(
     var expanded by rememberSaveable(profile.id) { mutableStateOf(false) }
     val minMenuWidth =
         when {
-            showMetricsTable && compact -> 328.dp
-            showMetricsTable -> 348.dp
-            compact -> 276.dp
+            showMetricsTable && compact -> 334.dp
+            showMetricsTable -> 356.dp
+            compact -> 272.dp
             else -> 304.dp
         }
     val maxMenuWidth =
         when {
-            showMetricsTable && compact -> 342.dp
-            showMetricsTable -> 366.dp
-            compact -> 310.dp
+            showMetricsTable && compact -> 348.dp
+            showMetricsTable -> 376.dp
+            compact -> 292.dp
             else -> 336.dp
         }
     Box {
@@ -159,8 +159,8 @@ internal fun SmartProfileAutoConnectMenu(
                                     },
                                 fontWeight = FontWeight.SemiBold,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis,
+                                maxLines = if (compact) 3 else 2,
+                                overflow = TextOverflow.Clip,
                             )
                             Text(
                                 text = stringResource(R.string.smart_profile_metrics_refresh_hint),
@@ -369,7 +369,7 @@ private fun SmartProfileProtocolMenuHeader(compact: Boolean) {
     ) {
         SmartProfileProtocolHeaderText(
             text = stringResource(R.string.smart_profile_menu_protocol_column),
-            modifier = Modifier.weight(1f),
+            modifier = Modifier.width(SmartProfileProtocolColumnWidth),
             textAlign = TextAlign.Start,
         )
         SmartProfileProtocolMenuDivider(
@@ -616,7 +616,6 @@ private fun SmartProfileProtocolCell(
             ProtocolMarkIcon(protocol = option.protocolHint, compact = compact)
             Text(
                 text = protocolDisplayLabel(option.protocolHint),
-                modifier = Modifier.weight(1f, fill = false),
                 style =
                     MaterialTheme.typography.labelSmall.copy(
                         fontSize = if (compact) 13.sp else 14.sp,
@@ -915,7 +914,7 @@ private enum class SmartProfileMetricTone {
 private val SmartProfileMenuHorizontalPadding = 8.dp
 private val SmartProfileProtocolColumnWidth = 154.dp
 private val SmartProfileOnColumnWidth = 32.dp
-private val SmartProfileMetricColumnWidth = 60.dp
+private val SmartProfileMetricColumnWidth = 62.dp
 private val SmartProfileProtocolCompactHeaderHeight = 32.dp
 private val SmartProfileProtocolHeaderHeight = 36.dp
 private val SmartProfileProtocolCompactRowHeight = 34.dp

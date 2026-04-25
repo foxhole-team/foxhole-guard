@@ -507,9 +507,9 @@ fun HomeScreen(
                                     onProtocolOptionSelected = onSelectActiveProtocolOption,
                                     compact = true,
                                     animateSelection = true,
-                                    requiresInsecureTls = state.activeProfile.requiresInsecureTls,
                                     latencyByOptionId = dashboardProtocolLatencies,
                                     selectorBorderColor = dashboardSelectorBorderColor,
+                                    showInsecureTlsBadge = false,
                                     leadingContent =
                                         if (MultiProtocolProfileSupport.hasMultipleSupportedOptions(state.activeProfile)) {
                                             {
