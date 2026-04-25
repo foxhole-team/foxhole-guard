@@ -85,10 +85,16 @@ for test_spec in "${TEST_SPECS[@]}"; do
   if [[ "$test_spec" == *"#"* ]]; then
     test_timeout="$TEST_METHOD_TIMEOUT_SECONDS"
   fi
+  live_smoke_args=()
+  if [[ "$test_spec" == com.foxhole.beta.vpn.VpnRuntimeSmokeTest* ]]; then
+    adb shell cmd appops set "$TARGET_PACKAGE" ACTIVATE_VPN allow >/dev/null 2>&1 || true
+    live_smoke_args=(-Pandroid.testInstrumentationRunnerArguments.foxhole.liveVpnSmoke=1)
+  fi
   set +e
   run_with_timeout "$test_timeout" \
     ./gradlew connectedDebugAndroidTest --info \
-      -Pandroid.testInstrumentationRunnerArguments.class="$test_spec"
+      -Pandroid.testInstrumentationRunnerArguments.class="$test_spec" \
+      "${live_smoke_args[@]}"
   status=$?
   set -e
   if [[ "$status" -ne 0 ]]; then

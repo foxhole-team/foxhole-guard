@@ -129,6 +129,7 @@ fun FoxholeApp(
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentSection = navBackStackEntry?.destination?.appSection()
     var qrScannerVisible by rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
+    val insecureTlsImportWarning by viewModel.insecureTlsImportWarning.collectAsStateWithLifecycle()
     val importProfileLauncher =
         rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
             if (uri == null) {
@@ -485,6 +486,19 @@ fun FoxholeApp(
                 qrScannerVisible = false
                 viewModel.importProfileRaw(value)
             },
+        )
+    }
+
+    insecureTlsImportWarning?.let {
+        ConfirmDialog(
+            title = stringResource(R.string.insecure_tls_import_warning_title),
+            body = stringResource(R.string.insecure_tls_import_warning_body),
+            confirmLabel = stringResource(R.string.yes_label),
+            dismissLabel = stringResource(R.string.no_label),
+            dismissOnBackPress = false,
+            dismissOnClickOutside = false,
+            onDismiss = viewModel::dismissInsecureTlsImportWarning,
+            onConfirm = viewModel::confirmInsecureTlsImport,
         )
     }
 

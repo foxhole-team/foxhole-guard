@@ -50,6 +50,8 @@ Supports profile import from files, clipboard, QR codes, and HTTPS subscriptions
 - Encrypted local storage
 - No ads / analytics / telemetry
 
+QUERY_ALL_PACKAGES is used only for the Split Tunnel app picker, so Foxhole can list installed apps for include/exclude routing. Package lists stay local; if Android limits package visibility, saved package ids remain in the routing config and are shown by package name.
+
 ---
 
 ## Supported protocols
@@ -112,5 +114,4 @@ One subscription can contain one or more profiles. Foxhole converts route groups
 
 > Android development is not our primary specialization.
 > Core expertise: backend, security, ML, cryptography.
-
 

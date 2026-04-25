@@ -90,6 +90,9 @@
     <string name="profile_update_failed">Не удалось обновить профиль</string>
     <string name="profile_import_https_only">Поддерживаются только публичные HTTPS-ссылки подписки</string>
     <string name="profile_import_subscription_invalid">Эта ссылка подписки недействительна или сервер вернул неподдерживаемый ответ</string>
+    <string name="profile_import_insecure_tls_required">Эта конфигурация требует подтверждения Insecure TLS</string>
+    <string name="insecure_tls_import_warning_title">WARNING! Insecure TLS</string>
+    <string name="insecure_tls_import_warning_body">Эта VPN-конфигурация отключает проверку TLS. Принимайте только если доверяете именно этой конфигурации. Решение сохраняется только для этого профиля.</string>
     <string name="profile_config_saved">Конфигурация профиля сохранена</string>
     <string name="profile_config_saved_reconnecting">Конфигурация сохранена. Идет переподключение.</string>
     <string name="profile_config_save_failed">Не удалось сохранить конфигурацию профиля</string>
@@ -142,7 +145,15 @@
     <string name="smart_profile_menu_server_ping_column">Server ping</string>
     <string name="smart_profile_menu_latency_column">Latency</string>
     <string name="smart_profile_menu_on_column">ON</string>
+    <string name="smart_profile_menu_selected_label">Selected</string>
+    <string name="smart_profile_menu_active_badge">Current</string>
+    <string name="smart_profile_menu_recommended_badge">Fastest</string>
     <string name="smart_profile_metric_unavailable">-</string>
+    <string name="smart_profile_metric_fast">Fast</string>
+    <string name="smart_profile_metric_slow">Slow</string>
+    <string name="smart_profile_metric_down">Down</string>
+    <string name="smart_profile_metric_status_unknown">No data</string>
+    <string name="insecure_tls_profile_badge">INSECURE TLS</string>
     <string name="smart_profile_metrics_refresh_action">Обновить данные протоколов</string>
     <string name="smart_profile_metrics_cancel_action">Остановить обновление данных протоколов</string>
     <string name="smart_profile_metrics_refresh_hint">Для обновления данных нажмите обновить.</string>

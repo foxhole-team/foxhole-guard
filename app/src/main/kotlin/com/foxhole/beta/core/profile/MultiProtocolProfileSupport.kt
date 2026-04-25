@@ -8,6 +8,7 @@ import com.foxhole.beta.core.model.SmartProfilePreference
 import com.foxhole.beta.core.network.NetworkFingerprint
 import com.foxhole.beta.core.smart.AdaptiveProtocolCandidateScore
 import com.foxhole.beta.core.smart.AdaptiveProtocolRanker
+import kotlin.random.Random
 
 data class AutoConnectProbeCandidate(
     val profileId: Long,
@@ -65,6 +66,9 @@ object MultiProtocolProfileSupport {
         networkFingerprint: String? = null,
         networkContext: NetworkFingerprint? = null,
         now: Long = System.currentTimeMillis(),
+        controlledExploration: Boolean = false,
+        randomDouble: () -> Double = { Random.nextDouble() },
+        randomIndex: (Int) -> Int = { bound -> Random.nextInt(bound) },
     ): List<AdaptiveProtocolCandidateScore> {
         val candidates =
             supportedOptions(profile).map { option ->
@@ -74,14 +78,24 @@ object MultiProtocolProfileSupport {
                     protocolHint = option.protocolHint,
                     displayName = option.displayName.ifBlank { option.protocolHint.name },
                 )
-            }
-        return AdaptiveProtocolRanker.scoreCandidates(
-            candidates = candidates,
-            preference = preference,
-            networkFingerprintKey = networkFingerprint,
-            networkContext = networkContext,
-            now = now,
-        )
+        }
+        val ranked =
+            AdaptiveProtocolRanker.scoreCandidates(
+                candidates = candidates,
+                preference = preference,
+                networkFingerprintKey = networkFingerprint,
+                networkContext = networkContext,
+                now = now,
+            )
+        return if (controlledExploration) {
+            AdaptiveProtocolRanker.applyControlledExploration(
+                rankedCandidates = ranked,
+                randomDouble = randomDouble,
+                randomIndex = randomIndex,
+            )
+        } else {
+            ranked
+        }
     }
 
     fun probeCandidates(

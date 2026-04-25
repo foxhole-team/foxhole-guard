@@ -14,6 +14,9 @@ Key features:
 - No analytics
 - No telemetry
 
+Permission note:
+Foxhole requests QUERY_ALL_PACKAGES only for Split Tunnel app selection, so the app picker can show installed apps for include/exclude routing. The list stays on the device and is not uploaded. If package visibility is restricted by the platform, already selected package ids are still kept locally and shown by package name.
+
 Supported protocols:
 - VLESS
 - Trojan

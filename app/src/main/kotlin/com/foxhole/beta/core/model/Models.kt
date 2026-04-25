@@ -294,6 +294,7 @@ data class Profile(
     val subscriptionExpiresAt: Long? = null,
     val protocolOptions: List<ProfileProtocolOption> = emptyList(),
     val selectedProtocolOptionId: String? = null,
+    val requiresInsecureTls: Boolean = false,
     val isActive: Boolean,
 )
 
@@ -301,6 +302,7 @@ data class ProfileProtocolOption(
     val id: String,
     val displayName: String,
     val protocolHint: ProtocolHint,
+    val requiresInsecureTls: Boolean = false,
     val isSelected: Boolean = false,
 )
 
@@ -442,6 +444,7 @@ data class StoredProfileSecret(
     val subscriptionExpiresAt: Long? = null,
     val protocolOptions: List<StoredProfileProtocolOption> = emptyList(),
     val selectedProtocolOptionId: String? = null,
+    val requiresInsecureTls: Boolean = false,
 )
 
 @Serializable
@@ -450,6 +453,7 @@ data class StoredProfileProtocolOption(
     val displayName: String,
     val protocolHint: ProtocolHint,
     val normalizedConfigJson: String,
+    val requiresInsecureTls: Boolean = false,
 )
 
 data class VpnSession(

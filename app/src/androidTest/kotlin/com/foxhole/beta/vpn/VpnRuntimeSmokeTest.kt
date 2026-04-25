@@ -116,10 +116,13 @@ class VpnRuntimeSmokeTest {
         shell("pm grant ${context.packageName} android.permission.POST_NOTIFICATIONS")
         disconnectAndWait(context)
 
-        val activeProfile = container.profileRepository.getActiveProfile()
-        assumeTrue("device smoke requires an existing active profile", activeProfile != null)
+        val activeProfile =
+            container.profileRepository.importProfile(
+                rawInput = LIVE_SMOKE_DIRECT_PROFILE,
+                preferredName = "Live Smoke Direct",
+            )
         assumeTrue("device smoke requires pre-granted Android VPN consent", VpnService.prepare(context) == null)
-        return requireNotNull(activeProfile)
+        return activeProfile
     }
 
     private suspend fun connectAndAssertReady(
@@ -276,4 +279,15 @@ class VpnRuntimeSmokeTest {
 
     private fun diagnosticSummary(logger: DiagnosticsLogger): String =
         logger.entries.value.joinToString(" || ") { entry -> "[${entry.tag}] ${entry.message}" }
+
+    private companion object {
+        private val LIVE_SMOKE_DIRECT_PROFILE =
+            """
+            {
+              "outbounds": [
+                { "type": "direct", "tag": "direct-upstream" }
+              ]
+            }
+            """.trimIndent()
+    }
 }

@@ -109,6 +109,10 @@ internal data class PendingConnectRequest(
     val action: PendingConnectAction,
 )
 
+data class InsecureTlsImportWarningState(
+    val rawInput: String,
+)
+
 internal data class ProfileOptionLatencyKey(
     val profileId: Long,
     val optionId: String,

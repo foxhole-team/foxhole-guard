@@ -110,12 +110,17 @@ internal fun ProtocolMetadataRow(
     latencyByOptionId: Map<String, Long> = emptyMap(),
     selectorMenuInfoText: String? = null,
     selectorBorderColor: Color? = null,
+    requiresInsecureTls: Boolean = false,
     reserveTrailingSpace: Boolean = true,
     expand: Boolean = true,
     leadingContent: (@Composable RowScope.() -> Unit)? = null,
     trailingContent: (@Composable RowScope.() -> Unit)? = null,
 ) {
     val supportedProtocolOptions = MultiProtocolProfileSupport.supportedOptions(protocolOptions)
+    val selectedOption =
+        supportedProtocolOptions.firstOrNull { it.id == selectedProtocolOptionId }
+            ?: supportedProtocolOptions.firstOrNull(ProfileProtocolOption::isSelected)
+    val selectedRequiresInsecureTls = requiresInsecureTls || selectedOption?.requiresInsecureTls == true
     Row(
         modifier = if (expand) modifier.fillMaxWidth() else modifier,
         horizontalArrangement = Arrangement.spacedBy(if (compact) 8.dp else 12.dp),
@@ -133,8 +138,14 @@ internal fun ProtocolMetadataRow(
             selectorBorderColor = selectorBorderColor,
         )
         trailingContent?.invoke(this)
-        if (expiryPlacement == SubscriptionExpiryPlacement.DASHBOARD) {
+        if (selectedRequiresInsecureTls) {
             if (reserveTrailingSpace) {
+                Spacer(modifier = Modifier.weight(1f))
+            }
+            InsecureTlsProfileBadge(compact = compact)
+        }
+        if (expiryPlacement == SubscriptionExpiryPlacement.DASHBOARD) {
+            if (reserveTrailingSpace && !selectedRequiresInsecureTls) {
                 Spacer(modifier = Modifier.weight(1f))
             }
             if (subscriptionExpiresAt != null) {
@@ -159,6 +170,30 @@ internal fun ProtocolMetadataRow(
                 Spacer(modifier = Modifier.weight(1f))
             } ?: Spacer(modifier = Modifier.weight(1f))
         }
+    }
+}
+
+@Composable
+internal fun InsecureTlsProfileBadge(compact: Boolean = false) {
+    val badgeColor = Color(0xFFE55353)
+    Surface(
+        shape = MaterialTheme.shapes.small,
+        color = Color.Transparent,
+        border = BorderStroke(1.dp, badgeColor.copy(alpha = 0.72f)),
+    ) {
+        Text(
+            text = stringResource(R.string.insecure_tls_profile_badge),
+            modifier = Modifier.padding(horizontal = if (compact) 6.dp else 8.dp, vertical = if (compact) 2.dp else 3.dp),
+            style =
+                MaterialTheme.typography.labelSmall.copy(
+                    fontSize = if (compact) 9.sp else 10.sp,
+                    lineHeight = if (compact) 10.sp else 11.sp,
+                    fontWeight = FontWeight.SemiBold,
+                ),
+            color = badgeColor,
+            maxLines = 1,
+            overflow = TextOverflow.Clip,
+        )
     }
 }
 

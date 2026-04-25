@@ -17,6 +17,7 @@ import com.foxhole.beta.core.profile.AutoConnectProbeResult
 import com.foxhole.beta.core.profile.MultiProtocolProfileSupport
 import com.foxhole.beta.core.profile.classifyAutoConnectProbeFailure
 import com.foxhole.beta.core.smart.AdaptiveProtocolCandidateScore
+import com.foxhole.beta.core.smart.AdaptiveProtocolRanker
 import com.foxhole.beta.core.settings.networkMemory
 import com.foxhole.beta.core.settings.smartProfilePreference
 import kotlinx.coroutines.CancellationException
@@ -799,13 +800,15 @@ internal fun HomeViewModel.scoredAutoConnectCandidatesInternal(
     networkFingerprint: NetworkFingerprint?,
 ): List<AdaptiveProtocolCandidateScore> {
     val excludedOptionIds = excludedAutoConnectOptionIds(profileId)
-    return MultiProtocolProfileSupport
+    val rankedIncluded =
+        MultiProtocolProfileSupport
         .scoredProbeCandidates(
             profile = profile,
             preference = uiState.value.settings.smartProfilePreference(profileId),
             networkFingerprint = networkFingerprint?.key,
             networkContext = networkFingerprint,
         ).filterNot { scoredCandidate -> scoredCandidate.candidate.optionId in excludedOptionIds }
+    return AdaptiveProtocolRanker.applyControlledExploration(rankedIncluded)
 }
 
 internal fun HomeViewModel.excludedAutoConnectOptionIdsInternal(profileId: Long): Set<String> =

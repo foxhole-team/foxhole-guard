@@ -7,6 +7,7 @@ import com.foxhole.beta.core.network.NetworkFingerprint
 import com.foxhole.beta.core.profile.AutoConnectProbeCandidate
 import com.foxhole.beta.core.settings.networkMemory
 import java.util.Locale
+import kotlin.random.Random
 import kotlin.math.roundToInt
 
 data class AdaptiveProtocolCandidateScore(
@@ -80,6 +81,7 @@ data class AdaptiveProtocolScoringConfig(
     val noMemoryExplorationBonus: Int = 6,
     val networkNoMemoryExplorationBonus: Int = 8,
     val unscopedMemoryExplorationBonus: Int = 3,
+    val controlledExplorationEpsilon: Double = 0.05,
 ) {
     init {
         require(version > 0) { "version must be positive" }
@@ -88,6 +90,7 @@ data class AdaptiveProtocolScoringConfig(
         require(latencyStepMs > 0) { "latencyStepMs must be positive" }
         require(connectBaselineMs >= 0) { "connectBaselineMs must not be negative" }
         require(connectStepMs > 0) { "connectStepMs must be positive" }
+        require(controlledExplorationEpsilon in 0.0..1.0) { "controlledExplorationEpsilon must be between 0 and 1" }
     }
 
     companion object {
@@ -164,6 +167,20 @@ object AdaptiveProtocolRanker {
                 compareByDescending<IndexedScore> { it.score.score }
                     .thenBy(IndexedScore::index),
             ).map(IndexedScore::score)
+    }
+
+    fun applyControlledExploration(
+        rankedCandidates: List<AdaptiveProtocolCandidateScore>,
+        config: AdaptiveProtocolScoringConfig = AdaptiveProtocolScoringConfig.Default,
+        randomDouble: () -> Double = { Random.nextDouble() },
+        randomIndex: (Int) -> Int = { bound -> Random.nextInt(bound) },
+    ): List<AdaptiveProtocolCandidateScore> {
+        if (rankedCandidates.size < 2 || randomDouble() >= config.controlledExplorationEpsilon) {
+            return rankedCandidates
+        }
+        val exploredIndex = randomIndex(rankedCandidates.size - 1).coerceIn(0, rankedCandidates.lastIndex - 1) + 1
+        val explored = rankedCandidates[exploredIndex]
+        return listOf(explored) + rankedCandidates.filterIndexed { index, _ -> index != exploredIndex }
     }
 
     private fun resolveSuccessRate(

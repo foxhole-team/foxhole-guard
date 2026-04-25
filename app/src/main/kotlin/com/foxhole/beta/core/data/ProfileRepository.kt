@@ -102,8 +102,23 @@ class ProfileRepository(
             active?.id?.let { activeId -> resolvedProfiles.firstOrNull { it.id == activeId } } ?: resolvedProfiles.firstOrNull()
         }
 
-    suspend fun importProfile(rawInput: String, preferredName: String? = null): Profile {
+    suspend fun rawInputRequiresInsecureTls(rawInput: String): Boolean {
         val settings = settingsRepository.current()
+        return rawImportRequiresInsecureTls(
+            parser = parser,
+            rawInput = rawInput,
+            allowPrivateOutboundHosts = settings.expert.allowPrivateOutboundHosts,
+            allowHttpSubscriptionUrls = settings.expert.allowHttpConfigImports,
+        )
+    }
+
+    suspend fun importProfile(
+        rawInput: String,
+        preferredName: String? = null,
+        allowInsecureTlsForProfile: Boolean = false,
+    ): Profile {
+        val settings = settingsRepository.current()
+        val effectiveAllowInsecureTls = settings.expert.allowInsecureTls || allowInsecureTlsForProfile
         val resolvedPreferredName = preferredName?.trim().takeUnless { it.isNullOrBlank() }
         diagnosticsLogger.record(
             "profile",
@@ -116,7 +131,7 @@ class ProfileRepository(
                         input = rawInput,
                         allowPrivateOutboundHosts = settings.expert.allowPrivateOutboundHosts,
                         allowHttpSubscriptionUrls = settings.expert.allowHttpConfigImports,
-                        allowInsecureTls = settings.expert.allowInsecureTls,
+                        allowInsecureTls = effectiveAllowInsecureTls,
                     )
                 }
             }.onSuccess { result ->
@@ -144,7 +159,7 @@ class ProfileRepository(
                                     fallbackName = resolvedPreferredName ?: parsed.displayName,
                                     allowPrivateOutboundHosts = settings.expert.allowPrivateOutboundHosts,
                                     allowHttpSubscriptionUrls = settings.expert.allowHttpConfigImports,
-                                    allowInsecureTls = settings.expert.allowInsecureTls,
+                                    allowInsecureTls = effectiveAllowInsecureTls,
                                 )
                             }
                         }.onSuccess { result ->
@@ -165,6 +180,7 @@ class ProfileRepository(
                 rawInput = rawInput,
                 sourceType = parsed.sourceType,
                 parsed = importPlan.parsed,
+                forceRequiresInsecureTls = allowInsecureTlsForProfile || importPlan.parsed.requiresInsecureTls(json),
             )
         }
         val secretRef = UUID.randomUUID().toString()
@@ -191,6 +207,9 @@ class ProfileRepository(
                         subscriptionExpiresAt = parsed.subscriptionExpiresAt,
                         protocolOptions = parsed.protocolOptions,
                         selectedProtocolOptionId = parsed.selectedProtocolOptionId,
+                    ).withInsecureTlsMarkers(
+                        json = json,
+                        forceRequiresInsecureTls = allowInsecureTlsForProfile || parsed.requiresInsecureTls(json),
                     ),
             )
         val id =
@@ -228,6 +247,7 @@ class ProfileRepository(
         rawInput: String,
         sourceType: ProfileSourceType,
         parsed: ParsedSubscriptionImport,
+        forceRequiresInsecureTls: Boolean,
     ): Profile {
         val now = System.currentTimeMillis()
         val count = dao.count()
@@ -265,6 +285,9 @@ class ProfileRepository(
                                     subscriptionExpiresAt = importedProfile.subscriptionExpiresAt ?: parsed.subscriptionExpiresAt,
                                     protocolOptions = importedProfile.protocolOptions,
                                     selectedProtocolOptionId = selectedProtocolOptionId,
+                                ).withInsecureTlsMarkers(
+                                    json = json,
+                                    forceRequiresInsecureTls = forceRequiresInsecureTls || importedProfile.requiresInsecureTls(json),
                                 ),
                         ),
                 )
@@ -403,12 +426,18 @@ class ProfileRepository(
                 null
             }
         val resolvedConfig = baseConfig ?: error("profile has no resolved config")
+        val effectiveAllowInsecureTls =
+            settings.expert.allowInsecureTls ||
+                secret.requiresInsecureTls ||
+                selectedOption?.requiresInsecureTls == true ||
+                selectedOption?.normalizedConfigJson?.requiresInsecureTls(json) == true ||
+                resolvedConfig.requiresInsecureTls(json)
         val sanitized =
             withContext(Dispatchers.IO) {
                 parser.sanitizeResolvedConfig(
                     raw = resolvedConfig,
                     allowPrivateOutboundHosts = settings.expert.allowPrivateOutboundHosts,
-                    allowInsecureTls = settings.expert.allowInsecureTls,
+                    allowInsecureTls = effectiveAllowInsecureTls,
                 )
             }
         if (sanitized != resolvedConfig && protocolOptionIdOverride == null) {
@@ -427,7 +456,7 @@ class ProfileRepository(
                 } ?: secret.copy(resolvedConfigJson = sanitized)
             secretStore.write(
                 secretRef = profile.secretRef,
-                value = nextSecret,
+                value = nextSecret.withInsecureTlsMarkers(json),
             )
             diagnosticsLogger.record("profile", "resolved config normalized")
         }
@@ -441,17 +470,18 @@ class ProfileRepository(
         val entity = dao.getById(profileId) ?: error("profile not found")
         val secret = secretStore.read(entity.secretRef) ?: error("profile secret is missing")
         val settings = settingsRepository.current()
+        val effectiveAllowInsecureTls = settings.expert.allowInsecureTls || secret.requiresInsecureTls
         val sanitized =
             withContext(Dispatchers.IO) {
                 parser.sanitizeResolvedConfig(
                     raw = editedJson,
                     allowPrivateOutboundHosts = settings.expert.allowPrivateOutboundHosts,
-                    allowInsecureTls = settings.expert.allowInsecureTls,
+                    allowInsecureTls = effectiveAllowInsecureTls,
                 )
             }
         secretStore.write(
             secretRef = entity.secretRef,
-            value = secret.copy(resolvedConfigJson = sanitized),
+            value = secret.copy(resolvedConfigJson = sanitized).withInsecureTlsMarkers(json),
         )
         diagnosticsLogger.record("profile", "resolved config updated")
     }
@@ -532,6 +562,25 @@ class ProfileRepository(
             "profile",
             "subscription parse started bodyBytes=${response.body.orEmpty().toByteArray(Charsets.UTF_8).size}",
         )
+        val subscriptionRequiresInsecureTlsConsent =
+            !secret.requiresInsecureTls &&
+                withContext(Dispatchers.IO) {
+                    runCatching {
+                        parser.parseSubscriptionProfiles(
+                            rawContent = response.body.orEmpty(),
+                            fallbackName = entity.name,
+                            allowPrivateOutboundHosts = settings.expert.allowPrivateOutboundHosts,
+                            allowHttpSubscriptionUrls = settings.expert.allowHttpConfigImports,
+                            allowInsecureTls = false,
+                        )
+                    }.exceptionOrNull()
+                        ?.isInsecureTlsPolicyFailure() == true
+                }
+        if (subscriptionRequiresInsecureTlsConsent) {
+            diagnosticsLogger.record("profile", "subscription requires insecure tls consent")
+            throw InsecureTlsProfileConsentRequiredException()
+        }
+        val effectiveAllowInsecureTls = settings.expert.allowInsecureTls || secret.requiresInsecureTls
         val parsed =
             withContext(Dispatchers.IO) {
                 runCatching {
@@ -540,7 +589,7 @@ class ProfileRepository(
                         fallbackName = entity.name,
                         allowPrivateOutboundHosts = settings.expert.allowPrivateOutboundHosts,
                         allowHttpSubscriptionUrls = settings.expert.allowHttpConfigImports,
-                        allowInsecureTls = settings.expert.allowInsecureTls,
+                        allowInsecureTls = effectiveAllowInsecureTls,
                     )
                 }
             }.onSuccess { result ->
@@ -617,6 +666,9 @@ class ProfileRepository(
                                             ?: response.subscriptionExpiresAt,
                                     protocolOptions = importedProfile.protocolOptions,
                                     selectedProtocolOptionId = selectedProtocolOptionId,
+                                ).withInsecureTlsMarkers(
+                                    json = json,
+                                    forceRequiresInsecureTls = secret.requiresInsecureTls || importedProfile.requiresInsecureTls(json),
                                 ),
                         ),
                     importedProfile = importedProfile,
@@ -797,6 +849,10 @@ class ProfileRepository(
                 subscriptionExpiresAt = secret?.subscriptionExpiresAt,
                 protocolOptions = secret?.profileProtocolOptions().orEmpty(),
                 selectedProtocolOptionId = secret?.selectedProtocolOptionId,
+                requiresInsecureTls =
+                    secret?.requiresInsecureTls == true ||
+                        secret?.resolvedConfigJson?.requiresInsecureTls(json) == true ||
+                        secret?.protocolOptions.orEmpty().any { option -> option.normalizedConfigJson.requiresInsecureTls(json) },
             )
         }
 
@@ -910,6 +966,7 @@ class ProfileRepository(
                 id = option.id,
                 displayName = option.displayName,
                 protocolHint = option.protocolHint,
+                requiresInsecureTls = option.requiresInsecureTls || option.normalizedConfigJson.requiresInsecureTls(json),
                 isSelected = option.id == selectedProtocolOptionId ||
                     (selectedProtocolOptionId == null && option.id == protocolOptions.firstOrNull()?.id),
             )

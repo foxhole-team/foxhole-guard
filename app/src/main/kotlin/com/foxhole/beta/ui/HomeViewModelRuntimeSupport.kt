@@ -14,6 +14,7 @@ import com.foxhole.beta.core.model.ConnectionState
 import com.foxhole.beta.core.model.InstalledAppOption
 import com.foxhole.beta.core.model.RoutingPresetSource
 import com.foxhole.beta.core.model.RoutingRuleAction
+import com.foxhole.beta.core.data.InsecureTlsProfileConsentRequiredException
 import com.foxhole.beta.core.notifications.ProfileRefreshResultNotifier
 import com.foxhole.beta.core.network.IpInfoFetchMode
 import com.foxhole.beta.vpn.FoxholeVpnRuntimeBridge
@@ -201,12 +202,48 @@ internal fun HomeViewModel.exportDiagnosticsInternal(file: File = createDiagnost
 
 internal fun HomeViewModel.importRawInternal(value: String) {
     viewModelScope.launch {
-        runCatching { container.profileRepository.importProfile(value) }
-            .onSuccess { imported ->
-                container.connectionController.setActiveProfile(imported.id)
-                startupActiveProfileMutable.value = imported.copy(isActive = true)
-                emitSuccess(getApplication<Application>().getString(R.string.profile_imported))
-            }.onFailure { handleProfileImportFailure(value, it) }
+        if (container.profileRepository.rawInputRequiresInsecureTls(value)) {
+            insecureTlsImportWarningMutable.value = InsecureTlsImportWarningState(rawInput = value)
+            return@launch
+        }
+        importRawWithInsecureTlsDecision(value, allowInsecureTlsForProfile = false)
+    }
+}
+
+internal fun HomeViewModel.confirmInsecureTlsImportInternal() {
+    val pending = insecureTlsImportWarningMutable.value ?: return
+    insecureTlsImportWarningMutable.value = null
+    viewModelScope.launch {
+        importRawWithInsecureTlsDecision(
+            value = pending.rawInput,
+            allowInsecureTlsForProfile = true,
+        )
+    }
+}
+
+internal fun HomeViewModel.dismissInsecureTlsImportWarningInternal() {
+    insecureTlsImportWarningMutable.value = null
+}
+
+private suspend fun HomeViewModel.importRawWithInsecureTlsDecision(
+    value: String,
+    allowInsecureTlsForProfile: Boolean,
+) {
+    runCatching {
+        container.profileRepository.importProfile(
+            rawInput = value,
+            allowInsecureTlsForProfile = allowInsecureTlsForProfile,
+        )
+    }.onSuccess { imported ->
+        container.connectionController.setActiveProfile(imported.id)
+        startupActiveProfileMutable.value = imported.copy(isActive = true)
+        emitSuccess(getApplication<Application>().getString(R.string.profile_imported))
+    }.onFailure { error ->
+        if (error is InsecureTlsProfileConsentRequiredException) {
+            insecureTlsImportWarningMutable.value = InsecureTlsImportWarningState(rawInput = value)
+        } else {
+            handleProfileImportFailure(value, error)
+        }
     }
 }
 
@@ -226,6 +263,10 @@ internal fun HomeViewModel.profileImportFailureMessageInternal(
         trimmed.startsWith("https://", ignoreCase = true) &&
             message.contains("unsupported subscription payload", ignoreCase = true) ->
             app.getString(R.string.profile_import_subscription_invalid)
+
+        throwable is InsecureTlsProfileConsentRequiredException ||
+            message.contains("insecure tls is not allowed", ignoreCase = true) ->
+            app.getString(R.string.profile_import_insecure_tls_required)
 
         else -> throwable.message ?: app.getString(R.string.profile_import_failed)
         }
@@ -501,8 +542,15 @@ internal fun HomeViewModel.loadInstalledAppsInternal() {
                                 { it.packageName.lowercase() },
                             ),
                         )
-                }
+            }
             installedAppsMutable.value = installed
+            installedAppsLoadedMutable.value = true
+        } catch (error: RuntimeException) {
+            container.diagnosticsLogger.record(
+                "apps",
+                "installed app visibility query failed: ${error.message.orEmpty()}",
+            )
+            installedAppsMutable.value = emptyList()
             installedAppsLoadedMutable.value = true
         } finally {
             installedAppsLoadingMutable.value = false

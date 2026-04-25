@@ -102,6 +102,7 @@ class HomeViewModel(
     internal val recommendedProtocolMutable = MutableStateFlow<ProtocolRecommendationState?>(null)
     internal val runtimeReloadPendingMutable = MutableStateFlow(false)
     internal val profileReconnectPromptUntilMutable = MutableStateFlow(0L)
+    internal val insecureTlsImportWarningMutable = MutableStateFlow<InsecureTlsImportWarningState?>(null)
     internal val catalogPresetPreviewsMutable = MutableStateFlow<Map<Long, List<RoutingRepository.RoutingCatalogPresetPreview>>>(emptyMap())
     internal val startupActiveProfileMutable =
         MutableStateFlow(container.settingsRepository.settings.value.lastActiveProfile?.toStartupProfile())
@@ -279,6 +280,8 @@ class HomeViewModel(
                 SharingStarted.WhileSubscribed(5_000),
                 initialSettings.expert.blockScreenshots,
             )
+
+    val insecureTlsImportWarning: StateFlow<InsecureTlsImportWarningState?> = insecureTlsImportWarningMutable
 
     internal val autoConnectUiStateMutable = MutableStateFlow(AutoConnectUiState())
 
@@ -1018,6 +1021,10 @@ class HomeViewModel(
     fun exportDiagnostics(file: File = createDiagnosticsArchive()): Intent = exportDiagnosticsInternal(file)
 
     internal fun importRaw(value: String) = importRawInternal(value)
+
+    fun confirmInsecureTlsImport() = confirmInsecureTlsImportInternal()
+
+    fun dismissInsecureTlsImportWarning() = dismissInsecureTlsImportWarningInternal()
 
     internal fun profileImportFailureMessage(
         rawInput: String,

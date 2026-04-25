@@ -185,6 +185,127 @@ class AdaptiveProtocolRankerTest {
         assertTrue(ranked[0].score > ranked[1].score)
     }
 
+    @Test
+    fun `controlled exploration can test a non top candidate without losing ranked fallback order`() {
+        val ranked =
+            AdaptiveProtocolRanker.scoreCandidates(
+                candidates =
+                    listOf(
+                        candidate("best", ProtocolHint.WIREGUARD),
+                        candidate("backup", ProtocolHint.TROJAN),
+                        candidate("new", ProtocolHint.VLESS),
+                    ),
+                preference =
+                    SmartProfilePreference(
+                        profileId = 12L,
+                        lastKnownGoodOptionId = "best",
+                        protocolMemories =
+                            listOf(
+                                SmartProfileProtocolMemory(optionId = "best", successCount = 5),
+                                SmartProfileProtocolMemory(optionId = "backup", successCount = 2),
+                            ),
+                    ),
+                now = 40_000L,
+            )
+
+        val explored =
+            AdaptiveProtocolRanker.applyControlledExploration(
+                rankedCandidates = ranked,
+                config = AdaptiveProtocolScoringConfig.Default.copy(controlledExplorationEpsilon = 1.0),
+                randomDouble = { 0.0 },
+                randomIndex = { 1 },
+            )
+
+        assertEquals(listOf("new", "best", "backup"), explored.map { it.candidate.optionId })
+    }
+
+    @Test
+    fun `replay history keeps network scoped winner stable`() {
+        data class ReplayEvent(
+            val networkKey: String,
+            val expectedChoice: String,
+            val preference: SmartProfilePreference,
+        )
+
+        val events =
+            listOf(
+                ReplayEvent(
+                    networkKey = "wifi-home",
+                    expectedChoice = "wireguard",
+                    preference =
+                        SmartProfilePreference(
+                            profileId = 13L,
+                            networkMemories =
+                                listOf(
+                                    SmartProfileNetworkMemory(
+                                        networkFingerprint = "wifi-home",
+                                        lastKnownGoodOptionId = "wireguard",
+                                        protocolMemories =
+                                            listOf(
+                                                SmartProfileProtocolMemory(
+                                                    optionId = "wireguard",
+                                                    successCount = 4,
+                                                    lastLatencyMs = 72L,
+                                                    lastValidatedAt = 1_000L,
+                                                ),
+                                            ),
+                                    ),
+                                ),
+                        ),
+                ),
+                ReplayEvent(
+                    networkKey = "cellular",
+                    expectedChoice = "trojan",
+                    preference =
+                        SmartProfilePreference(
+                            profileId = 13L,
+                            networkMemories =
+                                listOf(
+                                    SmartProfileNetworkMemory(
+                                        networkFingerprint = "cellular",
+                                        lastKnownGoodOptionId = "trojan",
+                                        protocolMemories =
+                                            listOf(
+                                                SmartProfileProtocolMemory(
+                                                    optionId = "trojan",
+                                                    successCount = 3,
+                                                    lastLatencyMs = 118L,
+                                                    lastValidatedAt = 1_000L,
+                                                ),
+                                            ),
+                                    ),
+                                ),
+                        ),
+                ),
+            )
+
+        events.forEach { event ->
+            val choice =
+                AdaptiveProtocolRanker
+                    .scoreCandidates(
+                        candidates =
+                            listOf(
+                                candidate("wireguard", ProtocolHint.WIREGUARD),
+                                candidate("trojan", ProtocolHint.TROJAN),
+                                candidate("vless", ProtocolHint.VLESS),
+                            ),
+                        preference = event.preference,
+                        networkFingerprintKey = event.networkKey,
+                        networkContext =
+                            NetworkFingerprint(
+                                key = event.networkKey,
+                                transport = event.networkKey,
+                                upstreamValidated = true,
+                            ),
+                        now = 50_000L,
+                    ).first()
+                    .candidate
+                    .optionId
+
+            assertEquals(event.expectedChoice, choice)
+        }
+    }
+
     private fun candidate(
         optionId: String,
         protocolHint: ProtocolHint,

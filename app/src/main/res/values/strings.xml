@@ -90,6 +90,9 @@
     <string name="profile_update_failed">Failed to update profile</string>
     <string name="profile_import_https_only">Only public HTTPS subscription links are supported</string>
     <string name="profile_import_subscription_invalid">This subscription link is invalid or returned an unsupported response</string>
+    <string name="profile_import_insecure_tls_required">This configuration requires Insecure TLS consent</string>
+    <string name="insecure_tls_import_warning_title">WARNING! Insecure TLS</string>
+    <string name="insecure_tls_import_warning_body">This VPN configuration disables TLS verification. Accept only if you trust this exact configuration. The decision is stored for this profile only.</string>
     <string name="profile_config_saved">Profile config saved</string>
     <string name="profile_config_saved_reconnecting">Configuration saved. Reconnecting now.</string>
     <string name="profile_config_save_failed">Failed to save profile config</string>
@@ -142,7 +145,15 @@
     <string name="smart_profile_menu_server_ping_column">Server ping</string>
     <string name="smart_profile_menu_latency_column">Latency</string>
     <string name="smart_profile_menu_on_column">ON</string>
+    <string name="smart_profile_menu_selected_label">Selected</string>
+    <string name="smart_profile_menu_active_badge">Current</string>
+    <string name="smart_profile_menu_recommended_badge">Fastest</string>
     <string name="smart_profile_metric_unavailable">-</string>
+    <string name="smart_profile_metric_fast">Fast</string>
+    <string name="smart_profile_metric_slow">Slow</string>
+    <string name="smart_profile_metric_down">Down</string>
+    <string name="smart_profile_metric_status_unknown">No data</string>
+    <string name="insecure_tls_profile_badge">INSECURE TLS</string>
     <string name="smart_profile_metrics_refresh_action">Refresh protocol metrics</string>
     <string name="smart_profile_metrics_cancel_action">Stop protocol metrics refresh</string>
     <string name="smart_profile_metrics_refresh_hint">Tap refresh to update data.</string>

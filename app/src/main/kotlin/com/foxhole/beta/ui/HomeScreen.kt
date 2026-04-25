@@ -507,6 +507,7 @@ fun HomeScreen(
                                     onProtocolOptionSelected = onSelectActiveProtocolOption,
                                     compact = true,
                                     animateSelection = true,
+                                    requiresInsecureTls = state.activeProfile.requiresInsecureTls,
                                     latencyByOptionId = dashboardProtocolLatencies,
                                     selectorBorderColor = dashboardSelectorBorderColor,
                                     leadingContent =
@@ -530,6 +531,7 @@ fun HomeScreen(
                                                     showLatency = dashboardShowSmartStartLatency,
                                                     compact = true,
                                                     actionIconSize = 18.dp,
+                                                    showMetricsTable = false,
                                                 )
                                             }
                                         } else {
