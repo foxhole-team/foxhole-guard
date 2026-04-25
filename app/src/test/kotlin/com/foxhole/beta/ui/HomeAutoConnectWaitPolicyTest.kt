@@ -93,4 +93,36 @@ class HomeAutoConnectWaitPolicyTest {
             HomeViewModel.AUTO_CONNECT_VALIDATION_GRACE_TIMEOUT_MS,
         )
     }
+
+    @Test
+    fun `auto connect latency waits for the settled dashboard refresh window`() {
+        assertEquals(
+            HomeViewModel.CONNECTED_PROTOCOL_LATENCY_REFRESH_DELAY_MS,
+            HomeViewModel.AUTO_CONNECT_LATENCY_MEASUREMENT_SETTLE_MS,
+        )
+    }
+
+    @Test
+    fun `auto connect retries high warmup latency before recording display latency`() {
+        assertFalse(shouldRetryAutoConnectLatencyMeasurement(999L))
+        assertTrue(shouldRetryAutoConnectLatencyMeasurement(1_000L))
+        assertEquals(
+            430L,
+            resolveAutoConnectLatencyMeasurementResult(
+                warmupLatencyMs = 2_181L,
+                settledLatencyMs = 430L,
+            ),
+        )
+    }
+
+    @Test
+    fun `auto connect keeps warmup latency when settled retry is unavailable`() {
+        assertEquals(
+            2_181L,
+            resolveAutoConnectLatencyMeasurementResult(
+                warmupLatencyMs = 2_181L,
+                settledLatencyMs = null,
+            ),
+        )
+    }
 }

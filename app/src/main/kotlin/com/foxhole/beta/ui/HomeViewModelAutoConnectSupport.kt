@@ -276,7 +276,7 @@ internal suspend fun HomeViewModel.probeAutoConnectCandidateInternal(
             fallbackAt = outcomeRecordedAt,
         )
     val measuredLatency =
-        runCatching { container.connectionController.measureCurrentConnectionLatency() }
+        runCatching { measureAutoConnectCandidateLatency() }
             .onFailure { probeError ->
                 container.diagnosticsLogger.record("auto-connect", "latency probe failed: ${probeError.message.orEmpty()}")
             }.getOrElse { error ->
@@ -316,6 +316,26 @@ internal suspend fun HomeViewModel.probeAutoConnectCandidateInternal(
         validatedAt = outcomeRecordedAt,
         trafficObservedAt = trafficObservedAt,
     )
+}
+
+internal suspend fun HomeViewModel.measureAutoConnectCandidateLatency(): Long {
+    delay(HomeViewModel.AUTO_CONNECT_LATENCY_MEASUREMENT_SETTLE_MS)
+    val warmupLatencyMs = container.connectionController.measureCurrentConnectionLatency()
+    if (!shouldRetryAutoConnectLatencyMeasurement(warmupLatencyMs)) {
+        return warmupLatencyMs
+    }
+    delay(HomeViewModel.AUTO_CONNECT_LATENCY_MEASUREMENT_RETRY_DELAY_MS)
+    val settledLatencyMs =
+        runCatching { container.connectionController.measureCurrentConnectionLatency() }
+            .onFailure { error ->
+                container.diagnosticsLogger.record("auto-connect", "latency settled retry failed: ${error.message.orEmpty()}")
+            }.getOrNull()
+    val resolvedLatencyMs = resolveAutoConnectLatencyMeasurementResult(warmupLatencyMs, settledLatencyMs)
+    container.diagnosticsLogger.record(
+        "auto-connect",
+        "latency settled: warmup_ms=$warmupLatencyMs settled_ms=${settledLatencyMs?.toString() ?: "unavailable"} resolved_ms=$resolvedLatencyMs",
+    )
+    return resolvedLatencyMs
 }
 
 internal fun HomeViewModel.autoConnectFailureMessageInternal(
@@ -663,6 +683,14 @@ internal fun resolveAutoConnectFallbackRankingLatency(
     rememberedLatencyMs: Long?,
     penaltyMs: Long,
 ): Long = ((rememberedLatencyMs ?: validatedConnectDurationMs).coerceAtLeast(1L) + penaltyMs.coerceAtLeast(0L)).coerceAtLeast(1L)
+
+internal fun shouldRetryAutoConnectLatencyMeasurement(warmupLatencyMs: Long): Boolean =
+    warmupLatencyMs >= HomeViewModel.AUTO_CONNECT_LATENCY_MEASUREMENT_RETRY_THRESHOLD_MS
+
+internal fun resolveAutoConnectLatencyMeasurementResult(
+    warmupLatencyMs: Long,
+    settledLatencyMs: Long?,
+): Long = (settledLatencyMs ?: warmupLatencyMs).coerceAtLeast(1L)
 
 internal fun currentTrafficObservedAt(
     traffic: TrafficSnapshot,
