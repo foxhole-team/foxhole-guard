@@ -8,6 +8,7 @@ import com.foxhole.beta.core.model.AutoConnectReasonCode
 import com.foxhole.beta.core.model.ConnectionSnapshot
 import com.foxhole.beta.core.model.ConnectionState
 import com.foxhole.beta.core.model.Profile
+import com.foxhole.beta.core.model.ProtocolHint
 import com.foxhole.beta.core.model.TrafficSnapshot
 import com.foxhole.beta.core.model.TrafficMode
 import com.foxhole.beta.core.network.NetworkFingerprint
@@ -19,9 +20,11 @@ import com.foxhole.beta.core.smart.AdaptiveProtocolCandidateScore
 import com.foxhole.beta.core.settings.networkMemory
 import com.foxhole.beta.core.settings.smartProfilePreference
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 
 internal fun HomeViewModel.onAutoConnectActiveProfileInternal() {
@@ -237,6 +240,196 @@ internal fun HomeViewModel.startAutoConnectInternal(profileId: Long) {
         }
 }
 
+internal fun HomeViewModel.refreshSmartProfileMetricsInternal(profileId: Long) {
+    protocolMetricsRefreshJob?.cancel()
+    protocolMetricsRefreshJob =
+        viewModelScope.launch {
+            var initiallyActive = false
+            var selectedOptionId: String? = null
+            var restoredConnection = false
+            try {
+                initiallyActive =
+                    container.connectionController.snapshot.value.state in HomeViewModel.ACTIVE_CONNECTION_STATES &&
+                    container.connectionController.snapshot.value.profileId == profileId
+                val profile = container.profileRepository.getProfile(profileId) ?: error("profile not found")
+                val networkFingerprint = container.networkFingerprintProvider.currentFingerprint()
+                val candidates = availableAutoConnectCandidates(profileId, profile, networkFingerprint)
+                require(candidates.isNotEmpty()) {
+                    getApplication<Application>().getString(R.string.auto_connect_requires_multi_protocol_profile)
+                }
+                selectedOptionId = resolveDashboardLatencyOptionId(profile)
+                recommendedProtocolMutable.value = null
+                protocolMetricsRefreshingProfileIdsMutable.value =
+                    protocolMetricsRefreshingProfileIdsMutable.value + profileId
+                initializeAutoConnectUi(candidates)
+                var previousVpnNetworkHandle = awaitDisconnectedForAutoConnect()
+                val results = mutableListOf<AutoConnectProbeResult>()
+                candidates.forEachIndexed { index, candidate ->
+                    markAutoConnectCandidateTesting(candidate)
+                    delay(HomeViewModel.AUTO_CONNECT_PROTOCOL_TRANSITION_SETTLE_MS)
+                    val result =
+                        probeAutoConnectCandidateForMetricsRefresh(
+                            profileId = profileId,
+                            candidate = candidate,
+                            networkFingerprint = networkFingerprint?.key,
+                            previousVpnNetworkHandle = previousVpnNetworkHandle,
+                        )
+                    results += result
+                    recordAutoConnectCandidateOutcome(
+                        profileId = profileId,
+                        result = result,
+                        networkFingerprint = networkFingerprint?.key,
+                        headline = if (result.success) "manual metrics probe ok" else "manual metrics probe failed",
+                        countTowardOutcomeHistory = false,
+                    )
+                    markAutoConnectCandidateFinished(result)
+                    if (index < candidates.lastIndex) {
+                        previousVpnNetworkHandle =
+                            awaitDisconnectedForAutoConnect(
+                                container.connectionController.currentVpnNetworkHandle(),
+                            )
+                    }
+                }
+                restoreConnectionAfterMetricsRefresh(
+                    profileId = profileId,
+                    selectedOptionId = selectedOptionId,
+                    initiallyActive = initiallyActive,
+                )
+                restoredConnection = true
+                val winner = MultiProtocolProfileSupport.fastestSuccessfulProbe(results)
+                if (winner != null && winner.candidate.optionId != selectedOptionId) {
+                    recommendedProtocolMutable.value =
+                        ProtocolRecommendationState(
+                            profileId = profileId,
+                            optionId = winner.candidate.optionId,
+                            displayName = winner.candidate.displayName,
+                        )
+                    snackbars.emit(
+                        FoxholeBannerEvent(
+                            message =
+                                getApplication<Application>().getString(
+                                    R.string.protocol_metrics_recommendation,
+                                    winner.candidate.displayName,
+                                ),
+                            tone = FoxholeBannerTone.INFO,
+                            actionLabel = getApplication<Application>().getString(R.string.connect),
+                            action = FoxholeBannerAction.ACCEPT_PROTOCOL_RECOMMENDATION,
+                            durationMillis = 8_000L,
+                        ),
+                    )
+                } else {
+                    emitSuccess(getApplication<Application>().getString(R.string.protocol_metrics_refreshed))
+                }
+            } catch (cancelled: CancellationException) {
+                withContext(NonCancellable) {
+                    runCatching {
+                        restoreConnectionAfterMetricsRefresh(
+                            profileId = profileId,
+                            selectedOptionId = selectedOptionId,
+                            initiallyActive = initiallyActive && !restoredConnection,
+                        )
+                    }
+                    emitSuccess(getApplication<Application>().getString(R.string.protocol_metrics_refresh_cancelled))
+                }
+                throw cancelled
+            } catch (error: Throwable) {
+                emitError(error.message ?: getApplication<Application>().getString(R.string.protocol_metrics_refresh_failed))
+            } finally {
+                protocolMetricsRefreshingProfileIdsMutable.value =
+                    protocolMetricsRefreshingProfileIdsMutable.value - profileId
+                protocolMetricsRefreshJob = null
+                delay(HomeViewModel.AUTO_CONNECT_RESULT_SETTLE_MS)
+                clearAutoConnectUiState()
+            }
+        }
+}
+
+internal fun HomeViewModel.cancelSmartProfileMetricsRefreshInternal() {
+    protocolMetricsRefreshJob?.cancel()
+}
+
+private suspend fun HomeViewModel.probeAutoConnectCandidateForMetricsRefresh(
+    profileId: Long,
+    candidate: AutoConnectProbeCandidate,
+    networkFingerprint: String?,
+    previousVpnNetworkHandle: Long?,
+): AutoConnectProbeResult {
+    val startedAt = SystemClock.elapsedRealtime()
+    val result =
+        withTimeoutOrNull(HomeViewModel.PROTOCOL_METRICS_PROBE_TIMEOUT_MS) {
+            probeAutoConnectCandidate(
+                profileId = profileId,
+                candidate = candidate,
+                networkFingerprint = networkFingerprint,
+                previousVpnNetworkHandle = previousVpnNetworkHandle,
+            )
+        }
+    if (result != null) {
+        return result
+    }
+    val elapsedMs = (SystemClock.elapsedRealtime() - startedAt).coerceAtLeast(1L)
+    runCatching { container.connectionController.disconnect() }
+    val reasonCode =
+        classifyAutoConnectProbeFailure(
+            snapshot = null,
+            timedOut = true,
+            vpnNetworkAvailable = container.connectionController.hasActiveVpnNetwork(),
+            dnsFailureMessage = getApplication<Application>().getString(R.string.error_dns_probe_failed),
+        )
+    container.diagnosticsLogger.recordStructured(
+        "auto-connect",
+        "manual metrics probe timed out",
+        "profile_id=$profileId",
+        "option=${candidate.optionId}",
+        "protocol=${candidate.protocolHint.name.lowercase()}",
+        "timeout_ms=${HomeViewModel.PROTOCOL_METRICS_PROBE_TIMEOUT_MS}",
+    )
+    return AutoConnectProbeResult(
+        candidate = candidate,
+        success = false,
+        latencyMs = elapsedMs,
+        rankingLatencyMs = elapsedMs,
+        displayLatencyMs = null,
+        connectDurationMs = elapsedMs,
+        failureReason = autoConnectFailureMessage(reasonCode, null),
+        reasonCode = reasonCode,
+    )
+}
+
+private suspend fun HomeViewModel.restoreConnectionAfterMetricsRefresh(
+    profileId: Long,
+    selectedOptionId: String?,
+    initiallyActive: Boolean,
+) {
+    val previousVpnNetworkHandle =
+        awaitDisconnectedForAutoConnect(
+            container.connectionController.currentVpnNetworkHandle(),
+        )
+    if (initiallyActive) {
+        connectNow(
+            profileId = profileId,
+            protocolOptionId = selectedOptionId,
+            previousVpnNetworkHandle = previousVpnNetworkHandle,
+        )
+    }
+}
+
+internal fun HomeViewModel.onProtocolRecommendationAcceptedInternal() {
+    val recommendation = recommendedProtocolMutable.value ?: return
+    recommendedProtocolMutable.value = null
+    viewModelScope.launch {
+        runCatching {
+            container.profileRepository.selectProfileProtocolOption(
+                profileId = recommendation.profileId,
+                optionId = recommendation.optionId,
+            )
+            requestReconnect(recommendation.profileId)
+        }.onFailure { error ->
+            emitError(error.message ?: getApplication<Application>().getString(R.string.profile_update_failed))
+        }
+    }
+}
+
 internal suspend fun HomeViewModel.probeAutoConnectCandidateInternal(
     profileId: Long,
     candidate: AutoConnectProbeCandidate,
@@ -275,6 +468,7 @@ internal suspend fun HomeViewModel.probeAutoConnectCandidateInternal(
             traffic = container.connectionController.traffic.value,
             fallbackAt = outcomeRecordedAt,
         )
+    measureAndCacheProtocolServerPing(profileId, candidate.optionId, networkFingerprint)
     val measuredLatency =
         runCatching { measureAutoConnectCandidateLatency() }
             .onFailure { probeError ->
@@ -316,6 +510,47 @@ internal suspend fun HomeViewModel.probeAutoConnectCandidateInternal(
         validatedAt = outcomeRecordedAt,
         trafficObservedAt = trafficObservedAt,
     )
+}
+
+private suspend fun HomeViewModel.measureAndCacheProtocolServerPing(
+    profileId: Long,
+    optionId: String,
+    networkFingerprint: String? = null,
+) {
+    val profile = uiState.value.profiles.firstOrNull { it.id == profileId }
+    val protocolHint = profile?.protocolOptions?.firstOrNull { option -> option.id == optionId }?.protocolHint
+    if (!shouldMeasureProtocolServerPing(protocolHint)) {
+        markProtocolServerPingUnavailableInternal(
+            profileId = profileId,
+            optionId = optionId,
+        )
+        container.diagnosticsLogger.record("latency", "server ping skipped for udp transport")
+        return
+    }
+    runCatching {
+        container.connectionController.measureCurrentVpnServerPing(
+            profileId = profileId,
+            protocolOptionId = optionId,
+        )
+    }.onSuccess { pingMs ->
+        cacheProtocolServerPingInternal(
+            profileId = profileId,
+            optionId = optionId,
+            pingMs = pingMs,
+        )
+        container.settingsRepository.recordSmartProfileServerPing(
+            profileId = profileId,
+            optionId = optionId,
+            serverPingMs = pingMs,
+            networkFingerprint = networkFingerprint,
+        )
+    }.onFailure { error ->
+        markProtocolServerPingUnavailableInternal(
+            profileId = profileId,
+            optionId = optionId,
+        )
+        container.diagnosticsLogger.record("latency", "server ping unavailable: ${error.message.orEmpty()}")
+    }
 }
 
 internal suspend fun HomeViewModel.measureAutoConnectCandidateLatency(): Long {
@@ -590,6 +825,7 @@ internal fun HomeViewModel.cacheProtocolLatencyInternal(
         profileOptionLatenciesMutable.value + (key to latencyMs.coerceAtLeast(1L))
     profileOptionLatencyUnavailableMutable.value =
         profileOptionLatencyUnavailableMutable.value - key
+    markProtocolMetricsUpdated(profileId, optionId)
 }
 
 internal fun HomeViewModel.markProtocolLatencyUnavailableInternal(
@@ -601,6 +837,39 @@ internal fun HomeViewModel.markProtocolLatencyUnavailableInternal(
         profileOptionLatenciesMutable.value - key
     profileOptionLatencyUnavailableMutable.value =
         profileOptionLatencyUnavailableMutable.value + key
+    markProtocolMetricsUpdated(profileId, optionId)
+}
+
+internal fun HomeViewModel.cacheProtocolServerPingInternal(
+    profileId: Long,
+    optionId: String,
+    pingMs: Long,
+) {
+    val key = ProfileOptionLatencyKey(profileId, optionId)
+    profileOptionServerPingsMutable.value =
+        profileOptionServerPingsMutable.value +
+            (key to ProfileOptionServerPingState(pingMs = pingMs.coerceAtLeast(1L)))
+    markProtocolMetricsUpdated(profileId, optionId)
+}
+
+internal fun HomeViewModel.markProtocolServerPingUnavailableInternal(
+    profileId: Long,
+    optionId: String,
+) {
+    val key = ProfileOptionLatencyKey(profileId, optionId)
+    profileOptionServerPingsMutable.value =
+        profileOptionServerPingsMutable.value +
+            (key to ProfileOptionServerPingState(unavailable = true))
+    markProtocolMetricsUpdated(profileId, optionId)
+}
+
+private fun HomeViewModel.markProtocolMetricsUpdated(
+    profileId: Long,
+    optionId: String,
+    updatedAt: Long = System.currentTimeMillis(),
+) {
+    profileOptionMetricsUpdatedAtMutable.value =
+        profileOptionMetricsUpdatedAtMutable.value + (ProfileOptionLatencyKey(profileId, optionId) to updatedAt)
 }
 
 internal fun HomeViewModel.clearProtocolLatencyStateInternal(
@@ -623,11 +892,27 @@ internal fun HomeViewModel.clearProtocolLatencyStateInternal(
         } else {
             profileOptionLatencyUnavailableMutable.value.filterNot(::matches).toSet()
         }
+    profileOptionServerPingsMutable.value =
+        if (profileId == null && optionId == null) {
+            emptyMap()
+        } else {
+            profileOptionServerPingsMutable.value.filterKeys { key -> !matches(key) }
+        }
+    profileOptionMetricsUpdatedAtMutable.value =
+        if (profileId == null && optionId == null) {
+            emptyMap()
+        } else {
+            profileOptionMetricsUpdatedAtMutable.value.filterKeys { key -> !matches(key) }
+        }
 }
 
 internal fun HomeViewModel.scheduleActiveProfileLatencyRefreshInternal() {
     val activeProfile = uiState.value.activeProfile ?: return
     val selectedOptionId = resolveDashboardLatencyOptionId(activeProfile) ?: return
+    val selectedProtocolHint =
+        activeProfile.protocolOptions
+            .firstOrNull { option -> option.id == selectedOptionId }
+            ?.protocolHint
     profileLatencyRefreshJob?.cancel()
     clearProtocolLatencyState(
         profileId = activeProfile.id,
@@ -653,6 +938,39 @@ internal fun HomeViewModel.scheduleActiveProfileLatencyRefreshInternal() {
                     )
                     container.diagnosticsLogger.record("latency", "dashboard latency unavailable: ${error.message.orEmpty()}")
                 }
+            if (!shouldMeasureProtocolServerPing(selectedProtocolHint)) {
+                markProtocolServerPingUnavailableInternal(
+                    profileId = activeProfile.id,
+                    optionId = selectedOptionId,
+                )
+                container.diagnosticsLogger.record("latency", "dashboard server ping skipped for udp transport")
+                profileLatencyRefreshJob = null
+                return@launch
+            }
+            runCatching {
+                container.connectionController.measureCurrentVpnServerPing(
+                    profileId = activeProfile.id,
+                    protocolOptionId = selectedOptionId,
+                )
+            }.onSuccess { pingMs ->
+                cacheProtocolServerPingInternal(
+                    profileId = activeProfile.id,
+                    optionId = selectedOptionId,
+                    pingMs = pingMs,
+                )
+                container.settingsRepository.recordSmartProfileServerPing(
+                    profileId = activeProfile.id,
+                    optionId = selectedOptionId,
+                    serverPingMs = pingMs,
+                    networkFingerprint = container.networkFingerprintProvider.currentFingerprint()?.key,
+                )
+            }.onFailure { error ->
+                markProtocolServerPingUnavailableInternal(
+                    profileId = activeProfile.id,
+                    optionId = selectedOptionId,
+                )
+                container.diagnosticsLogger.record("latency", "dashboard server ping unavailable: ${error.message.orEmpty()}")
+            }
             profileLatencyRefreshJob = null
         }
 }
@@ -661,6 +979,9 @@ internal fun HomeViewModel.clearProfileLatencyRefreshInternal() {
     profileLatencyRefreshJob?.cancel()
     profileLatencyRefreshJob = null
 }
+
+private fun shouldMeasureProtocolServerPing(protocolHint: ProtocolHint?): Boolean =
+    protocolHint !in setOf(ProtocolHint.HYSTERIA2, ProtocolHint.WIREGUARD)
 
 internal fun HomeViewModel.rememberedAutoConnectLatency(
     profileId: Long,

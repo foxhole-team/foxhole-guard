@@ -62,6 +62,7 @@ import androidx.compose.material3.SnackbarData
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.SnackbarVisuals
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
@@ -71,6 +72,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
@@ -87,6 +89,7 @@ import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import com.foxhole.beta.R
 import com.foxhole.beta.ui.theme.LocalFoxholeUiPalette
+import kotlinx.coroutines.delay
 
 internal val ScreenHorizontalPadding = 16.dp
 internal val ScreenVerticalPadding = 10.dp
@@ -194,41 +197,57 @@ internal enum class FoxholeBannerTone {
 internal data class FoxholeBannerEvent(
     val message: String,
     val tone: FoxholeBannerTone,
+    val actionLabel: String? = null,
+    val action: FoxholeBannerAction? = null,
+    val durationMillis: Long? = null,
 )
+
+internal enum class FoxholeBannerAction {
+    ACCEPT_PROTOCOL_RECOMMENDATION,
+}
 
 internal data class FoxholeBannerVisuals(
     override val message: String,
     val tone: FoxholeBannerTone,
     override val actionLabel: String? = null,
+    val durationMillis: Long? = null,
     override val withDismissAction: Boolean = false,
     override val duration: SnackbarDuration =
-        when (tone) {
-            FoxholeBannerTone.ERROR -> SnackbarDuration.Long
-            FoxholeBannerTone.INFO,
-            FoxholeBannerTone.SUCCESS,
-            -> SnackbarDuration.Short
+        if (durationMillis != null) {
+            SnackbarDuration.Indefinite
+        } else {
+            when (tone) {
+                FoxholeBannerTone.ERROR -> SnackbarDuration.Long
+                FoxholeBannerTone.INFO,
+                FoxholeBannerTone.SUCCESS,
+                -> SnackbarDuration.Short
+            }
         },
 ) : SnackbarVisuals
 
 internal suspend fun SnackbarHostState.showBanner(
     message: String,
     tone: FoxholeBannerTone,
-) {
+    actionLabel: String? = null,
+    durationMillis: Long? = null,
+): SnackbarResult =
     showSnackbar(
         visuals =
             FoxholeBannerVisuals(
                 message = message,
                 tone = tone,
+                actionLabel = actionLabel,
+                durationMillis = durationMillis,
             ),
     )
-}
 
-internal suspend fun SnackbarHostState.showBanner(event: FoxholeBannerEvent) {
+internal suspend fun SnackbarHostState.showBanner(event: FoxholeBannerEvent): SnackbarResult =
     showBanner(
         message = event.message,
         tone = event.tone,
+        actionLabel = event.actionLabel,
+        durationMillis = event.durationMillis,
     )
-}
 
 @Composable
 private fun FoxholeBannerHost(
@@ -303,6 +322,12 @@ private fun FoxholeBanner(
             FoxholeBannerTone.ERROR -> Icons.Outlined.ErrorOutline
             FoxholeBannerTone.SUCCESS -> Icons.Outlined.CheckCircle
         }
+    LaunchedEffect(data, visuals?.durationMillis) {
+        visuals?.durationMillis?.let { durationMillis ->
+            delay(durationMillis)
+            data.dismiss()
+        }
+    }
 
     Surface(
         modifier =
@@ -349,6 +374,18 @@ private fun FoxholeBanner(
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
+                visuals?.actionLabel?.let { label ->
+                    IconButton(
+                        onClick = data::performAction,
+                        modifier = Modifier.size(28.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.Check,
+                            contentDescription = label,
+                            tint = contentColor,
+                        )
+                    }
+                }
                 IconButton(
                     onClick = data::dismiss,
                     modifier = Modifier.size(28.dp),
@@ -637,6 +674,8 @@ internal fun FoxholeDropdownItem(
     highlightSelected: Boolean = true,
     showBorder: Boolean = true,
     accentColor: Color = FoxholePositiveAccent,
+    selectedContainerColor: Color? = null,
+    minHeight: Dp = 46.dp,
     contentPadding: PaddingValues = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
     leadingContent: (@Composable () -> Unit)? = null,
     trailingContent: (@Composable RowScope.() -> Unit)? = null,
@@ -644,7 +683,7 @@ internal fun FoxholeDropdownItem(
 ) {
     val uiPalette = LocalFoxholeUiPalette.current
     val selectedChrome = selected && highlightSelected
-    val containerColor = if (selectedChrome) uiPalette.menuSelectedRowColor else Color.Transparent
+    val containerColor = if (selectedChrome) selectedContainerColor ?: uiPalette.menuSelectedRowColor else Color.Transparent
     Card(
         onClick = onClick,
         modifier = modifier.fillMaxWidth(),
@@ -658,7 +697,7 @@ internal fun FoxholeDropdownItem(
                 modifier =
                     Modifier
                         .fillMaxWidth()
-                        .heightIn(min = 46.dp)
+                        .heightIn(min = minHeight)
                         .padding(contentPadding),
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                 verticalAlignment = Alignment.CenterVertically,

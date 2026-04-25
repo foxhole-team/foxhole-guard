@@ -166,7 +166,7 @@ jobs:
   connected-tests:
     if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule' || (github.event_name == 'push' && github.ref == 'refs/heads/dev')
     runs-on: ubuntu-24.04
-    timeout-minutes: 150
+    timeout-minutes: 70
     steps:
       - name: checkout
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8
@@ -271,7 +271,7 @@ jobs:
           echo "hw.cpu.ncore=2" >> "$ANDROID_AVD_HOME/foxhole-ci.avd/config.ini"
 
       - name: run emulator tests
-        uses: ReactiveCircus/android-emulator-runner@2243bf8839fca53021d5d61857fd2bf668721de4
+        uses: ReactiveCircus/android-emulator-runner@e89f39f1abbbd05b1113a29cf4db69e7540cae5a
         with:
           api-level: 35
           arch: x86_64

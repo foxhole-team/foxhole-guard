@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-readonly TEST_CLASS_TIMEOUT_SECONDS="${FOXHOLE_ANDROID_TEST_CLASS_TIMEOUT_SECONDS:-1200}"
-readonly TEST_METHOD_TIMEOUT_SECONDS="${FOXHOLE_ANDROID_TEST_METHOD_TIMEOUT_SECONDS:-900}"
+readonly TEST_CLASS_TIMEOUT_SECONDS="${FOXHOLE_ANDROID_TEST_CLASS_TIMEOUT_SECONDS:-900}"
+readonly TEST_METHOD_TIMEOUT_SECONDS="${FOXHOLE_ANDROID_TEST_METHOD_TIMEOUT_SECONDS:-240}"
+readonly TARGET_PACKAGE="${FOXHOLE_ANDROID_TEST_TARGET_PACKAGE:-com.foxhole.beta.debug}"
 readonly TEST_SPECS=(
   "com.foxhole.beta.ProfileRuntimeSessionAndroidTest"
   "com.foxhole.beta.ui.HomeRuntimeBehaviorTest"
@@ -78,6 +79,8 @@ adb wait-for-device
 for test_spec in "${TEST_SPECS[@]}"; do
   echo "::group::connectedDebugAndroidTest ${test_spec}"
   adb logcat -c || true
+  adb shell am force-stop "$TARGET_PACKAGE" >/dev/null 2>&1 || true
+  adb shell pm clear "$TARGET_PACKAGE" >/dev/null 2>&1 || true
   test_timeout="$TEST_CLASS_TIMEOUT_SECONDS"
   if [[ "$test_spec" == *"#"* ]]; then
     test_timeout="$TEST_METHOD_TIMEOUT_SECONDS"

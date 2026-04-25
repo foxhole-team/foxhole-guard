@@ -14,46 +14,45 @@
 </p>
 
 <p align="center">
-  <strong>1.0.0-beta1</strong>
+  <strong>1.0.0-beta1</strong><br>
+  iOS, macOS, and Windows versions — maybe.
 </p>
+
+---
+
+Foxhole is a simple Android client for connecting to and managing sing-box profiles. It supports Tunnel and Proxy modes, Split Tunnel for apps and sites, and LAN Proxy.
+
+Supports profile import from files, clipboard, QR codes, and HTTPS subscriptions (including v2raytun-style).
+
+No ads. No analytics. No telemetry.
+
+---
 
 <p align="center">
-  iOS, macOS, and Windows versions - maybe.
+  <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/img_foxhole_0.png" width="260">
+  <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/img_foxhole_1.png" width="260">
+  <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/img_foxhole_2.png" width="260">
 </p>
 
-Foxhole is a simple Android client for connecting to and managing sing-box profiles. It supports Tunnel and Proxy, as well as Split Tunnel for apps and sites and LAN Proxy. It supports profile import from files, the clipboard, QR codes, and HTTPS subscriptions, including compatible v2raytun-style subscriptions. No ads, analytics, or telemetry. It supports compatible configurations and its own smart config for fast Smart start with automatic VPN protocol selection.
+---
 
-<table style="border: none; border-collapse: collapse;">
-  <tr>
-    <td align="center" style="border: none;">
-      <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/img_foxhole_0.png" alt="Foxhole dashboard" width="260">
-    </td>
-    <td align="center" style="border: none;">
-      <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/img_foxhole_1.png" alt="Foxhole settings" width="260">
-    </td>
-        <td align="center" style="border: none;">
-      <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/img_foxhole_2.png" alt="Foxhole settings" width="260">
-    </td>
-  </tr>
-</table>
-
-Key features:
+## Key features
 
 - Modes: Tunnel, Proxy
-- Split Tunnel for apps and sites
-- LAN Proxy over Wi-Fi for access from other devices
+- Split Tunnel (apps + sites)
+- LAN Proxy over Wi-Fi
 - Proxy authentication
 - Site-based routing rules
-- Import from files, clipboard, QR codes, and HTTPS subscriptions
-- Multi-protocol profiles with protocol selection and Smart start
+- Import: files, clipboard, QR, HTTPS subscriptions
+- Smart start with auto protocol selection
 - Local traffic statistics
-- Subscription expiration date display
-- Encrypted local profile storage
-- No ads
-- No analytics
-- No telemetry
+- Subscription expiration tracking
+- Encrypted local storage
+- No ads / analytics / telemetry
 
-Supported protocols:
+---
+
+## Supported protocols
 
 - VLESS
 - Trojan
@@ -63,53 +62,56 @@ Supported protocols:
 - WireGuard
 - Outline
 
-<hr style="border: none; height: 1px; background: #ccc;">
+---
 
-<table style="border: none; border-collapse: collapse;">
-  <tr>
-    <td style="border: none;">
-      <img src="media/have_the_courage_use_your_own_reason-fuck_you-1984.png" alt="1984" width="80" height="80">
-    </td>
-    <td style="border: none;">
-      <h2>Foxhole smart config</h2>
-    </td>
-  </tr>
-</table>
+## Foxhole smart config
 
-One subscription can contain one or more profiles. Foxhole turns each route group into a separate profile, and all entries inside that group become VPN protocol options for that profile.
+<p>
+  <img src="media/have_the_courage_use_your_own_reason-fuck_you-1984.png" width="80" height="80">
+</p>
 
-Foxhole Smart start:
+One subscription can contain one or more profiles. Foxhole converts route groups into profiles, where each entry becomes a protocol option.
 
-- Checks supported protocols.
-- Remembers successful results by a hash of the current network.
+### Smart start logic
+
+- Checks supported protocols
+- Stores success by network hash
 - Analyzes:
   - success/failure history
   - last known good
   - network-scoped memory
-  - metered/roaming/private DNS/upstream validation
-  - remembered latency
+  - DNS / upstream state
+  - latency
   - connect duration
-  - validation/traffic evidence
+  - validation signals
   - cooldown
 
+##### Example:
+[foxhole-smart-config.sample.txt](foxhole-sample-smart-config/foxhole-smart-config.sample.txt)
 
-An example format lives in [foxhole-smart-config.sample.txt](foxhole-sample-smart-config/foxhole-smart-config.sample.txt).
-
-<hr style="border: none; height: 1px; background: #ccc;">
+---
 
 ## Verifying release signatures
 
-- Download the APK and `SHA256SUMS` from the same GitHub Release, then run `sha256sum -c SHA256SUMS`.
-- Signing cert SHA-256: `fcbf14862040fbe26726f06f3016ec3b027d8431c76cb4c25c13c5a06837177c`
-- Signing cert SHA-1: `ae609bb369398071cc5ac53c9ac10f20f43c4d01`
+- Download APK and `SHA256SUMS` from the same release
+- Run: `sha256sum -c SHA256SUMS`
 
-<hr style="border: none; height: 1px; background: #ccc;">
+- SHA-256:
+  ```
+  fcbf14862040fbe26726f06f3016ec3b027d8431c76cb4c25c13c5a06837177c
+  ```
+
+- SHA-1:
+  ```
+  ae609bb369398071cc5ac53c9ac10f20f43c4d01
+  ```
+
+---
 
 ## Disclaimer
 
->Android application development is not our primary area of specialization. Our core expertise is focused on backend engineering, security, machine learning, cryptography, and other engineering domains.
-
-<hr style="border: none; height: 1px; background: #ccc;">
+> Android development is not our primary specialization.
+> Core expertise: backend, security, ML, cryptography.
 
 ## Donate
 

@@ -200,6 +200,8 @@ fun FoxholeApp(
                                 viewModel.onSmartProfileAutoConnectExcludedOptionsChanged(profileId, excludedIds)
                             }
                         },
+                        onRefreshSmartProfileMetrics = viewModel::refreshSmartProfileMetrics,
+                        onCancelSmartProfileMetricsRefresh = viewModel::cancelSmartProfileMetricsRefresh,
                         onOpenProfiles = { navController.navigateToProfilesRoot() },
                         onRefreshIpInfo = viewModel::refreshIpInfo,
                         onResetUsageTracking = viewModel::resetUsageTracking,
@@ -217,6 +219,8 @@ fun FoxholeApp(
                         onEditProfile = { profileId -> navController.navigate(AppRoute.profileEditConfig(profileId)) },
                         onSelectProtocolOption = viewModel::onSelectProfileProtocolOption,
                         onUpdateAutoConnectExcludedOptions = viewModel::onSmartProfileAutoConnectExcludedOptionsChanged,
+                        onRefreshSmartProfileMetrics = viewModel::refreshSmartProfileMetrics,
+                        onCancelSmartProfileMetricsRefresh = viewModel::cancelSmartProfileMetricsRefresh,
                         onRefreshProfile = viewModel::refreshProfile,
                         onDeleteProfile = viewModel::deleteProfile,
                         onCreateProfileExport = { requests ->
@@ -243,11 +247,18 @@ fun FoxholeApp(
                         activeProfileId = state.activeProfileId,
                         excludedAutoConnectOptionIds = state.smartProfileExcludedOptionIdsByProfileId[profileId].orEmpty(),
                         rememberedSmartStartLatenciesByOptionId = state.smartStartRememberedLatency(profileId),
+                        serverPingByOptionId = state.smartProfileServerPings(profileId),
+                        serverPingUnavailableOptionIds = state.smartProfileServerPingUnavailable(profileId),
+                        metricsUpdatedAtByOptionId = state.smartProfileMetricsUpdatedAt(profileId),
+                        metricsRefreshing = profileId in state.smartProfileMetricsRefreshingProfileIds,
+                        recommendedProtocolOptionId = state.recommendedProtocolOptionByProfileId[profileId],
                         snackbarHostState = snackbarHostState,
                         onNavigateUp = { navController.navigateToProfilesRoot() },
                         onSetActiveProfile = viewModel::onSelectProfile,
                         onSelectProtocolOption = viewModel::onSelectProfileProtocolOption,
                         onUpdateAutoConnectExcludedOptions = viewModel::onSmartProfileAutoConnectExcludedOptionsChanged,
+                        onRefreshSmartProfileMetrics = viewModel::refreshSmartProfileMetrics,
+                        onCancelSmartProfileMetricsRefresh = viewModel::cancelSmartProfileMetricsRefresh,
                         onRefreshProfile = viewModel::refreshProfile,
                         onDeleteProfile = {
                             viewModel.deleteProfile(profileId)

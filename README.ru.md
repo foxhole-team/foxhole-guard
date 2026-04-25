@@ -14,46 +14,47 @@
 </p>
 
 <p align="center">
-  <strong>1.0.0-beta1</strong>
+  <strong>1.0.0-beta1</strong><br>
+  Версии для iOS, macOS и Windows — maybe.
 </p>
+
+---
+
+Foxhole — простой Android-клиент для подключения и управления профилями sing-box.
+Поддерживает режимы Tunnel и Proxy, Split Tunnel по приложениям и сайтам, а также LAN Proxy.
+
+Импорт профилей: файл, буфер обмена, QR-код, HTTPS-подписки (включая v2raytun-совместимые).
+
+Без рекламы. Без аналитики. Без телеметрии.
+
+---
 
 <p align="center">
-  Версии для iOS, macOS и Windows - maybe.
+  <img src="fastlane/metadata/android/ru-RU/images/phoneScreenshots/img_foxhole_0.png" width="260">
+  <img src="fastlane/metadata/android/ru-RU/images/phoneScreenshots/img_foxhole_1.png" width="260">
+  <img src="fastlane/metadata/android/ru-RU/images/phoneScreenshots/img_foxhole_2.png" width="260">
 </p>
 
-Foxhole это простой Android-клиент для подключения и управления профилями sing-box. Поддерживает Tunnel и Proxy, а также Split Tunnel по приложениям и сайтам и LAN Proxy. Поддерживает импорт профилей из файла, буфера обмена, QR-кода и HTTPS-подписок, включая совместимые подписки по типу v2raytun. Без рекламы, аналитики и телеметрии. Поддерживает совместимые конфигурации и кастом смарт конфиг для быстрого Smart start с автовыбором протоколов VPN.
+---
 
-<table style="border: none; border-collapse: collapse;">
-  <tr>
-    <td align="center" style="border: none;">
-      <img src="fastlane/metadata/android/ru-RU/images/phoneScreenshots/img_foxhole_0.png" alt="Foxhole dashboard" width="260">
-    </td>
-    <td align="center" style="border: none;">
-      <img src="fastlane/metadata/android/ru-RU/images/phoneScreenshots/img_foxhole_1.png" alt="Foxhole settings" width="260">
-    </td>
-    <td align="center" style="border: none;">
-      <img src="fastlane/metadata/android/ru-RU/images/phoneScreenshots/img_foxhole_2.png" alt="Foxhole settings" width="260">
-    </td>
-  </tr>
-</table>
-
-Ключевые функции:
+## Ключевые функции
 
 - Режимы: Tunnel, Proxy
-- Split Tunnel по приложениям и сайтам
-- LAN Proxy по Wi‑Fi для доступа с других устройств
+- Split Tunnel (приложения + сайты)
+- LAN Proxy по Wi-Fi
 - Авторизация прокси
 - Правила маршрутизации по сайтам
-- Импорт из файла, буфера обмена, QR-кода и HTTPS-подписок
-- Multi-protocol профили с выбором протокола и Smart start
+- Импорт: файл, буфер обмена, QR, HTTPS-подписки
+- Multi-protocol профили с выбором протокола
+- Smart start (автовыбор протокола)
 - Локальная статистика трафика
-- Отображение даты окончания подписки
-- Зашифрованное локальное хранение профилей
-- Без рекламы
-- Без аналитики
-- Без телеметрии
+- Отображение срока подписки
+- Зашифрованное хранение профилей
+- Без рекламы / аналитики / телеметрии
 
-Поддерживаемые протоколы:
+---
+
+## Поддерживаемые протоколы
 
 - VLESS
 - Trojan
@@ -63,53 +64,57 @@ Foxhole это простой Android-клиент для подключения
 - WireGuard
 - Outline
 
-<hr style="border: none; height: 1px; background: #ccc;">
+---
 
-<table style="border: none; border-collapse: collapse;">
-  <tr>
-    <td style="border: none;">
-      <img src="media/have_the_courage_use_your_own_reason-fuck_you-1984.png" alt="1984" width="80" height="80">
-    </td>
-    <td style="border: none;">
-      <h2>Foxhole smart config</h2>
-    </td>
-  </tr>
-</table>
+## Foxhole smart config
 
-Одна подписка может содержать один или больше профилей. Foxhole превращает каждую такую route group в отдельный профиль, а все записи внутри группы становятся протоколами VPN этого профиля.
+<p>
+  <img src="media/have_the_courage_use_your_own_reason-fuck_you-1984.png" width="80" height="80">
+</p>
 
-#### Foxhole Smart start:
+Одна подписка может содержать один или несколько профилей.
+Foxhole превращает каждую route group в отдельный профиль, а записи внутри — в варианты VPN-протоколов.
 
-- Проверяет поддерживаемые протоколы VPN.
-- Учитывает удачный результат по хешу текущей сети.
+### Smart start
+
+- Проверяет поддерживаемые протоколы
+- Запоминает успешные подключения по хешу сети
 - Анализирует:
-  - success/failure history
+  - историю успехов/ошибок
   - last known good
   - network-scoped memory
-  - metered/roaming/private DNS/upstream validation
-  - remembered latency
-  - connect duration
-  - validation/traffic evidence
+  - состояние DNS / upstream
+  - задержку
+  - время подключения
+  - признаки валидного трафика
   - cooldown
 
-Пример формата лежит в [foxhole-smart-config.sample.txt](foxhole-sample-smart-config/foxhole-smart-config.sample.txt).
+##### Пример:
+[foxhole-smart-config.sample.txt](foxhole-sample-smart-config/foxhole-smart-config.sample.txt)
 
-<hr style="border: none; height: 1px; background: #ccc;">
+---
 
 ## Проверка подписи релиза
 
-- Скачайте APK и `SHA256SUMS` из одного GitHub Release, затем выполните `sha256sum -c SHA256SUMS`.
-- Signing cert SHA-256: `fcbf14862040fbe26726f06f3016ec3b027d8431c76cb4c25c13c5a06837177c`
-- Signing cert SHA-1: `ae609bb369398071cc5ac53c9ac10f20f43c4d01`
+- Скачайте APK и `SHA256SUMS` из одного релиза
+- Выполните: `sha256sum -c SHA256SUMS`
 
-<hr style="border: none; height: 1px; background: #ccc;">
+- SHA-256:
+  ```
+  fcbf14862040fbe26726f06f3016ec3b027d8431c76cb4c25c13c5a06837177c
+  ```
+
+- SHA-1:
+  ```
+  ae609bb369398071cc5ac53c9ac10f20f43c4d01
+  ```
+
+---
 
 ## Дисклеймер
 
-> Разработка Android-приложений не является нашим профильным направлением. Наш ключевой опыт сосредоточен в backend-разработке, безопасности, машинном обучении, криптографии и других инженерных областях.
-
-<hr style="border: none; height: 1px; background: #ccc;">
-
+> Разработка Android-приложений не является нашим основным направлением.
+> Основная экспертиза: backend, безопасность, ML, криптография.
 ## Donate
 
 - **XMR (Monero):** `48yBVPTdcyJ1WoJtnKmVpEZziEsDy4HvbCW7eQDS9mfdiWPFXwZ8F5h9YZ2UTTBLxPcJgQgvth7iqLZM2yMCaQ432qaouqr`

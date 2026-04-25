@@ -10,6 +10,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.core.content.ContextCompat
@@ -19,6 +20,7 @@ import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.foxhole.beta.ui.FoxholeApp
+import com.foxhole.beta.ui.FoxholeBannerAction
 import com.foxhole.beta.ui.HomeViewModel
 import com.foxhole.beta.ui.showBanner
 import com.foxhole.beta.ui.theme.FoxholeTheme
@@ -67,7 +69,13 @@ class MainActivity : AppCompatActivity() {
 
             LaunchedEffect(Unit) {
                 homeViewModel.snackbars.collect { banner ->
-                    snackbarHostState.showBanner(banner)
+                    val result = snackbarHostState.showBanner(banner)
+                    if (
+                        result == SnackbarResult.ActionPerformed &&
+                        banner.action == FoxholeBannerAction.ACCEPT_PROTOCOL_RECOMMENDATION
+                    ) {
+                        homeViewModel.onProtocolRecommendationAccepted()
+                    }
                 }
             }
 

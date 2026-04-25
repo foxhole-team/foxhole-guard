@@ -58,6 +58,10 @@ import com.foxhole.beta.core.profile.ProfileExportRequest
 import com.foxhole.beta.core.profile.classifyAutoConnectProbeFailure
 import com.foxhole.beta.core.settings.rememberedSmartStartLatencyByOptionId
 import com.foxhole.beta.core.settings.rememberedSmartStartLatencyByProfileId
+import com.foxhole.beta.core.settings.rememberedSmartProfileServerPingByOptionId
+import com.foxhole.beta.core.settings.rememberedSmartProfileServerPingByProfileId
+import com.foxhole.beta.core.settings.rememberedSmartProfileMetricsUpdatedAtByOptionId
+import com.foxhole.beta.core.settings.rememberedSmartProfileMetricsUpdatedAtByProfileId
 import com.foxhole.beta.core.settings.smartProfilePreference
 import com.foxhole.beta.vpn.FoxholeVpnService
 import com.foxhole.beta.vpn.FoxholeVpnRuntimeBridge
@@ -92,7 +96,12 @@ class HomeViewModel(
     internal val ipInfoLoadingMutable = MutableStateFlow(false)
     internal val profileOptionLatenciesMutable = MutableStateFlow<Map<ProfileOptionLatencyKey, Long>>(emptyMap())
     internal val profileOptionLatencyUnavailableMutable = MutableStateFlow<Set<ProfileOptionLatencyKey>>(emptySet())
+    internal val profileOptionServerPingsMutable = MutableStateFlow<Map<ProfileOptionLatencyKey, ProfileOptionServerPingState>>(emptyMap())
+    internal val profileOptionMetricsUpdatedAtMutable = MutableStateFlow<Map<ProfileOptionLatencyKey, Long>>(emptyMap())
+    internal val protocolMetricsRefreshingProfileIdsMutable = MutableStateFlow<Set<Long>>(emptySet())
+    internal val recommendedProtocolMutable = MutableStateFlow<ProtocolRecommendationState?>(null)
     internal val runtimeReloadPendingMutable = MutableStateFlow(false)
+    internal val profileReconnectPromptUntilMutable = MutableStateFlow(0L)
     internal val catalogPresetPreviewsMutable = MutableStateFlow<Map<Long, List<RoutingRepository.RoutingCatalogPresetPreview>>>(emptyMap())
     internal val startupActiveProfileMutable =
         MutableStateFlow(container.settingsRepository.settings.value.lastActiveProfile?.toStartupProfile())
@@ -204,7 +213,8 @@ class HomeViewModel(
             routingStreams,
             localState,
             container.diagnosticsLogger.entries,
-        ) { connectionStreams, routingStreams, localState, diagnosticEntries ->
+            profileReconnectPromptUntilMutable,
+        ) { connectionStreams, routingStreams, localState, diagnosticEntries, profileReconnectPromptUntil ->
             val localStreams = localState.streams
             val currentFingerprint =
                 container.runtimeConfigAssembler.runtimeFingerprint(connectionStreams.settings, routingStreams.activePreset)
@@ -214,16 +224,21 @@ class HomeViewModel(
                     activeProfile = connectionStreams.activeProfile,
                     startupFallbackProfile = localState.startupActiveProfile,
                 )
-            val runtimeReconnectRequired =
-                localStreams.appliedRuntimeSignature != null &&
-                    connectionStreams.connection.state in ACTIVE_CONNECTION_STATES &&
-                    localStreams.appliedRuntimeSignature != currentFingerprint &&
-                    !localStreams.runtimeReloadPending
-            val profileReconnectRequired =
+            val profileReconnectRequiredRaw =
                 isProfileReconnectRequired(
                     activeProfile = resolvedActiveProfile,
                     connection = connectionStreams.connection,
                 )
+            val profileReconnectRequired =
+                profileReconnectRequiredRaw &&
+                    profileReconnectPromptUntil > 0L &&
+                    SystemClock.elapsedRealtime() <= profileReconnectPromptUntil
+            val runtimeReconnectRequired =
+                localStreams.appliedRuntimeSignature != null &&
+                    connectionStreams.connection.state in ACTIVE_CONNECTION_STATES &&
+                    localStreams.appliedRuntimeSignature != currentFingerprint &&
+                    !localStreams.runtimeReloadPending &&
+                    !profileReconnectRequiredRaw
             HomeUiState(
                 profiles = connectionStreams.profiles,
                 profilesLoaded = localStreams.profilesLoaded,
@@ -267,13 +282,29 @@ class HomeViewModel(
 
     internal val autoConnectUiStateMutable = MutableStateFlow(AutoConnectUiState())
 
+    private val protocolMetricsState =
+        combine(
+            profileOptionServerPingsMutable,
+            profileOptionMetricsUpdatedAtMutable,
+            protocolMetricsRefreshingProfileIdsMutable,
+            recommendedProtocolMutable,
+        ) { serverPings, updatedAt, refreshingProfileIds, recommendation ->
+            ProtocolMetricsUiState(
+                serverPings = serverPings,
+                updatedAt = updatedAt,
+                refreshingProfileIds = refreshingProfileIds,
+                recommendation = recommendation,
+            )
+        }
+
     val homeRouteState: StateFlow<HomeRouteUiState> =
         combine(
             uiState,
             autoConnectUiStateMutable,
             profileOptionLatenciesMutable,
             profileOptionLatencyUnavailableMutable,
-        ) { state, autoConnect, profileOptionLatencies, profileOptionLatencyUnavailable ->
+            protocolMetricsState,
+        ) { state, autoConnect, profileOptionLatencies, profileOptionLatencyUnavailable, protocolMetrics ->
             val currentNetworkFingerprintKey = container.networkFingerprintProvider.currentFingerprint()?.key
             val activeProfileLatencies =
                 state.activeProfile
@@ -289,6 +320,47 @@ class HomeViewModel(
                             .filter { key -> key.profileId == activeProfile.id }
                             .map(ProfileOptionLatencyKey::optionId)
                             .toSet()
+                    }.orEmpty()
+            val activeProfileServerPings =
+                state.activeProfile
+                    ?.let { activeProfile ->
+                        val rememberedServerPings =
+                            state.settings
+                                .smartProfilePreference(activeProfile.id)
+                                ?.rememberedSmartProfileServerPingByOptionId(currentNetworkFingerprintKey)
+                                .orEmpty()
+                        val liveServerPings =
+                            protocolMetrics.serverPings
+                            .filterKeys { key -> key.profileId == activeProfile.id }
+                            .mapNotNull { (key, value) -> value.pingMs?.let { key.optionId to it } }
+                            .toMap()
+                        rememberedServerPings + liveServerPings
+                    }.orEmpty()
+            val activeProfileServerPingUnavailable =
+                state.activeProfile
+                    ?.let { activeProfile ->
+                        protocolMetrics.serverPings
+                            .filter { (key, value) -> key.profileId == activeProfile.id && value.unavailable }
+                            .map { (key, _) -> key.optionId }
+                            .filterNot(activeProfileServerPings::containsKey)
+                            .toSet()
+                    }.orEmpty()
+            val activeProfileMetricsUpdatedAt =
+                state.activeProfile
+                    ?.let { activeProfile ->
+                        val rememberedUpdatedAt =
+                            state.settings
+                                .smartProfilePreference(activeProfile.id)
+                                ?.rememberedSmartProfileMetricsUpdatedAtByOptionId(currentNetworkFingerprintKey)
+                                .orEmpty()
+                        val liveUpdatedAt =
+                            protocolMetrics.updatedAt
+                            .filterKeys { key -> key.profileId == activeProfile.id }
+                            .mapKeys { (key, _) -> key.optionId }
+                        (rememberedUpdatedAt.keys + liveUpdatedAt.keys)
+                            .associateWith { optionId ->
+                                listOfNotNull(rememberedUpdatedAt[optionId], liveUpdatedAt[optionId]).maxOrNull() ?: 0L
+                            }.filterValues { updatedAt -> updatedAt > 0L }
                     }.orEmpty()
             val selectedLatencyOptionId = resolveDashboardLatencyOptionId(state.activeProfile)
             val selectedProtocolLatencyMs =
@@ -311,6 +383,14 @@ class HomeViewModel(
                 protocolLatenciesByOptionId = activeProfileLatencies,
                 selectedProtocolLatencyUnavailable = selectedProtocolLatencyUnavailable,
                 protocolLatencyUnavailableOptionIds = activeProfileLatencyUnavailable,
+                protocolServerPingsByOptionId = activeProfileServerPings,
+                protocolServerPingUnavailableOptionIds = activeProfileServerPingUnavailable,
+                protocolMetricsUpdatedAtByOptionId = activeProfileMetricsUpdatedAt,
+                protocolMetricsRefreshing = state.activeProfile?.id in protocolMetrics.refreshingProfileIds,
+                recommendedProtocolOptionId =
+                    protocolMetrics.recommendation
+                        ?.takeIf { recommendation -> recommendation.profileId == state.activeProfile?.id }
+                        ?.optionId,
                 smartStartRememberedLatenciesByOptionId = smartStartRememberedLatenciesByOptionId,
             )
         }
@@ -321,13 +401,65 @@ class HomeViewModel(
             )
 
     val profilesRouteState: StateFlow<ProfilesRouteUiState> =
-        uiState
-            .map { state ->
+        combine(
+            uiState,
+            protocolMetricsState,
+        ) { state, protocolMetrics ->
+                val networkFingerprint = container.networkFingerprintProvider.currentFingerprint()?.key
+                val rememberedServerPingsByProfileId =
+                    state.settings.rememberedSmartProfileServerPingByProfileId(
+                        networkFingerprint = networkFingerprint,
+                    )
+                val rememberedMetricsUpdatedAtByProfileId =
+                    state.settings.rememberedSmartProfileMetricsUpdatedAtByProfileId(
+                        networkFingerprint = networkFingerprint,
+                    )
+                val liveServerPingsByProfileId =
+                    protocolMetrics.serverPings
+                        .mapNotNull { (key, value) -> value.pingMs?.let { key.profileId to (key.optionId to it) } }
+                        .groupBy({ it.first }, { it.second })
+                        .mapValues { (_, values) -> values.toMap() }
+                val mergedServerPingsByProfileId =
+                    (rememberedServerPingsByProfileId.keys + liveServerPingsByProfileId.keys)
+                        .associateWith { profileId ->
+                            rememberedServerPingsByProfileId[profileId].orEmpty() +
+                                liveServerPingsByProfileId[profileId].orEmpty()
+                        }
+                val liveMetricsUpdatedAtByProfileId =
+                    protocolMetrics.updatedAt
+                        .map { (key, value) -> key.profileId to (key.optionId to value) }
+                        .groupBy({ it.first }, { it.second })
+                        .mapValues { (_, values) -> values.toMap() }
+                val mergedMetricsUpdatedAtByProfileId =
+                    (rememberedMetricsUpdatedAtByProfileId.keys + liveMetricsUpdatedAtByProfileId.keys)
+                        .associateWith { profileId ->
+                            val rememberedUpdatedAt = rememberedMetricsUpdatedAtByProfileId[profileId].orEmpty()
+                            val liveUpdatedAt = liveMetricsUpdatedAtByProfileId[profileId].orEmpty()
+                            (rememberedUpdatedAt.keys + liveUpdatedAt.keys)
+                                .associateWith { optionId ->
+                                    listOfNotNull(rememberedUpdatedAt[optionId], liveUpdatedAt[optionId]).maxOrNull() ?: 0L
+                                }.filterValues { updatedAt -> updatedAt > 0L }
+                        }
                 state.toProfilesRouteUiState(
                     smartStartRememberedLatenciesByProfileId =
                         state.settings.rememberedSmartStartLatencyByProfileId(
-                            networkFingerprint = container.networkFingerprintProvider.currentFingerprint()?.key,
+                            networkFingerprint = networkFingerprint,
                         ),
+                    smartProfileServerPingsByProfileId = mergedServerPingsByProfileId,
+                    smartProfileServerPingUnavailableByProfileId =
+                        protocolMetrics.serverPings
+                            .filter { (_, value) -> value.unavailable }
+                            .keys
+                            .groupBy(ProfileOptionLatencyKey::profileId, ProfileOptionLatencyKey::optionId)
+                            .mapValues { (profileId, values) ->
+                                values.filterNot(mergedServerPingsByProfileId[profileId].orEmpty()::containsKey).toSet()
+                            },
+                    smartProfileMetricsUpdatedAtByProfileId = mergedMetricsUpdatedAtByProfileId,
+                    smartProfileMetricsRefreshingProfileIds = protocolMetrics.refreshingProfileIds,
+                    recommendedProtocolOptionByProfileId =
+                        protocolMetrics.recommendation
+                            ?.let { recommendation -> mapOf(recommendation.profileId to recommendation.optionId) }
+                            .orEmpty(),
                 )
             }
             .stateIn(
@@ -380,7 +512,9 @@ class HomeViewModel(
     internal var connectedIpRefreshJob: Job? = null
     internal var profileLatencyRefreshJob: Job? = null
     internal var runtimeReloadPendingJob: Job? = null
+    internal var profileReconnectPromptJob: Job? = null
     internal var autoConnectJob: Job? = null
+    internal var protocolMetricsRefreshJob: Job? = null
 
     init {
         viewModelScope.launch {
@@ -536,6 +670,7 @@ class HomeViewModel(
                 container.profileRepository.getProfile(profileId)?.copy(isActive = true)
                     ?: uiState.value.profiles.firstOrNull { it.id == profileId }?.copy(isActive = true)
             startupActiveProfileMutable.value = updated
+            markProfileReconnectPromptWindow()
         }
     }
 
@@ -549,6 +684,7 @@ class HomeViewModel(
                 val updated = container.profileRepository.selectProfileProtocolOption(profileId, optionId)
                 if (updated.isActive) {
                     startupActiveProfileMutable.value = updated
+                    markProfileReconnectPromptWindow()
                 }
                 if (uiState.value.activeProfile?.id == profileId && uiState.value.connection.state in ACTIVE_CONNECTION_STATES) {
                     markRuntimeReloadPending()
@@ -558,6 +694,18 @@ class HomeViewModel(
                 emitError(it.message ?: getApplication<Application>().getString(R.string.profile_update_failed))
             }
         }
+    }
+
+    private fun markProfileReconnectPromptWindow() {
+        profileReconnectPromptJob?.cancel()
+        profileReconnectPromptUntilMutable.value =
+            SystemClock.elapsedRealtime() + PROFILE_RECONNECT_PROMPT_WINDOW_MS
+        profileReconnectPromptJob =
+            viewModelScope.launch {
+                delay(PROFILE_RECONNECT_PROMPT_WINDOW_MS)
+                profileReconnectPromptUntilMutable.value = 0L
+                profileReconnectPromptJob = null
+            }
     }
 
     fun onSmartProfileAutoConnectExcludedOptionsChanged(
@@ -669,6 +817,12 @@ class HomeViewModel(
         profileId: Long? = null,
         optionId: String? = null,
     ) = clearProtocolLatencyStateInternal(profileId, optionId)
+
+    fun refreshSmartProfileMetrics(profileId: Long) = refreshSmartProfileMetricsInternal(profileId)
+
+    fun cancelSmartProfileMetricsRefresh() = cancelSmartProfileMetricsRefreshInternal()
+
+    fun onProtocolRecommendationAccepted() = onProtocolRecommendationAcceptedInternal()
 
     internal fun scheduleActiveProfileLatencyRefresh() = scheduleActiveProfileLatencyRefreshInternal()
 
@@ -938,6 +1092,7 @@ class HomeViewModel(
         internal const val CONNECTED_IP_REFRESH_DELAY_MS = 1_250L
         internal const val MANUAL_IP_REFRESH_MIN_LOADING_MS = 666L
         internal const val CONNECTED_PROTOCOL_LATENCY_REFRESH_DELAY_MS = 900L
+        internal const val PROFILE_RECONNECT_PROMPT_WINDOW_MS = 10_000L
         internal const val RUNTIME_RELOAD_PENDING_TIMEOUT_MS = 1_500L
         internal const val AUTO_CONNECT_CONNECTION_TIMEOUT_MS =
             FoxholeVpnService.CONNECTIVITY_PROBE_TOTAL_TIMEOUT_MS +
@@ -953,6 +1108,7 @@ class HomeViewModel(
         internal const val AUTO_CONNECT_LATENCY_MEASUREMENT_RETRY_DELAY_MS = 300L
         internal const val AUTO_CONNECT_PROTOCOL_TRANSITION_SETTLE_MS = 220L
         internal const val AUTO_CONNECT_RESULT_SETTLE_MS = 850L
+        internal const val PROTOCOL_METRICS_PROBE_TIMEOUT_MS = 12_000L
         internal const val AUTO_CONNECT_LATENCY_FALLBACK_PENALTY_MS = 750L
         internal val ACTIVE_CONNECTION_STATES =
             setOf(

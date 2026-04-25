@@ -18,14 +18,17 @@ import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeLeft
 import androidx.compose.ui.test.swipeRight
 import androidx.test.platform.app.InstrumentationRegistry
+import androidx.work.WorkManager
 import com.foxhole.beta.R
 import com.foxhole.beta.FoxholeApplication
 import com.foxhole.beta.MainActivity
 import java.io.File
+import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.RuleChain
@@ -51,6 +54,15 @@ class HomeScreenTest {
 
     @get:Rule
     val ruleChain: RuleChain = RuleChain.outerRule(notificationsPermissionRule).around(composeRule)
+
+    @Before
+    fun cancelBackgroundWorkForDeterministicUiTests() {
+        val app = InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as FoxholeApplication
+        runCatching {
+            WorkManager.getInstance(app).cancelAllWork().result.get(5, TimeUnit.SECONDS)
+        }
+        composeRule.waitForIdle()
+    }
 
     @Test
     fun opensSettingsFromBottomNavigation() {
@@ -234,15 +246,9 @@ class HomeScreenTest {
 
     @Test
     fun versionCardDoesNothingWhenExpertSettingsAreAlreadyVisible() {
-        setExpertSettingsVisible(visible = false)
+        setExpertSettingsVisible(visible = true)
         composeRule.onNodeWithTag("bottom_nav_settings").performClick()
-        composeRule.onNodeWithTag("settings_screen").performScrollToNode(hasTestTag("settings_footer_version_card"))
-        repeat(5) {
-            composeRule.onNodeWithTag("settings_footer_version_card").performClick()
-        }
-        composeRule.onNodeWithTag("confirm_dialog_confirm_button").performClick()
         composeRule.onNodeWithTag("settings_expert_action").assertIsDisplayed()
-
         composeRule.onNodeWithTag("settings_screen").performScrollToNode(hasTestTag("settings_footer_version_card"))
         repeat(5) {
             composeRule.onNodeWithTag("settings_footer_version_card").performClick()
@@ -289,6 +295,12 @@ class HomeScreenTest {
             runBlocking {
                 app.container.settingsRepository.unlockExpertSettings()
                 app.container.settingsRepository.updateShowExpertSettings(visible)
+            }
+        }
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            val app = InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as FoxholeApplication
+            runBlocking {
+                app.container.settingsRepository.settings.first().ui.showExpertSettings == visible
             }
         }
         composeRule.waitForIdle()

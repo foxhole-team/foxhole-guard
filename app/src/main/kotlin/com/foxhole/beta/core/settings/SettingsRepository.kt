@@ -275,6 +275,46 @@ class SettingsRepository(
         )
     }
 
+    suspend fun recordSmartProfileServerPing(
+        profileId: Long,
+        optionId: String,
+        serverPingMs: Long,
+        networkFingerprint: String? = null,
+        recordedAt: Long = System.currentTimeMillis(),
+    ) = update { current ->
+        val normalizedOptionId = optionId.trim().takeIf(String::isNotBlank) ?: return@update current
+        val normalizedServerPingMs = serverPingMs.coerceAtLeast(1L)
+        val normalizedNetworkFingerprint = networkFingerprint?.trim()?.takeIf(String::isNotBlank)
+        val existing = current.smartProfilePreference(profileId) ?: SmartProfilePreference(profileId = profileId)
+        fun recordInto(memories: List<SmartProfileProtocolMemory>): List<SmartProfileProtocolMemory> {
+            val currentMemories = memories.associateBy(SmartProfileProtocolMemory::optionId).toMutableMap()
+            val previous = currentMemories[normalizedOptionId]
+            currentMemories[normalizedOptionId] =
+                (previous ?: SmartProfileProtocolMemory(optionId = normalizedOptionId)).copy(
+                    lastServerPingMs = normalizedServerPingMs,
+                    lastServerPingAt = recordedAt.takeIf { it > 0L },
+                )
+            return currentMemories.values.sortedBy(SmartProfileProtocolMemory::optionId)
+        }
+        val updatedNetworkMemories =
+            normalizedNetworkFingerprint?.let { fingerprint ->
+                val currentNetworkMemories = existing.networkMemories.associateBy(SmartProfileNetworkMemory::networkFingerprint).toMutableMap()
+                val previousNetworkMemory =
+                    currentNetworkMemories[fingerprint] ?: SmartProfileNetworkMemory(networkFingerprint = fingerprint)
+                currentNetworkMemories[fingerprint] =
+                    previousNetworkMemory.copy(
+                        protocolMemories = recordInto(previousNetworkMemory.protocolMemories),
+                    )
+                currentNetworkMemories.values.sortedBy(SmartProfileNetworkMemory::networkFingerprint)
+            } ?: existing.networkMemories
+        current.withSmartProfilePreference(
+            existing.copy(
+                protocolMemories = recordInto(existing.protocolMemories),
+                networkMemories = updatedNetworkMemories,
+            ),
+        )
+    }
+
     suspend fun accumulateProfileTraffic(
         profileId: Long,
         profileName: String,
@@ -944,6 +984,78 @@ internal fun SmartProfilePreference.rememberedSmartStartLatencyByOptionId(
     }
 }
 
+internal fun Settings.rememberedSmartProfileServerPingByProfileId(
+    networkFingerprint: String?,
+    now: Long = System.currentTimeMillis(),
+): Map<Long, Map<String, Long>> =
+    smartProfilePreferences
+        .mapNotNull { preference ->
+            preference
+                .rememberedSmartProfileServerPingByOptionId(networkFingerprint = networkFingerprint, now = now)
+                .takeIf(Map<String, Long>::isNotEmpty)
+                ?.let { preference.profileId to it }
+        }.toMap()
+
+internal fun SmartProfilePreference.rememberedSmartProfileServerPingByOptionId(
+    networkFingerprint: String?,
+    now: Long = System.currentTimeMillis(),
+): Map<String, Long> {
+    val scopedMemories =
+        networkMemory(networkFingerprint)
+            ?.protocolMemories
+            ?.associateBy(SmartProfileProtocolMemory::optionId)
+            .orEmpty()
+    val globalMemories = protocolMemories.associateBy(SmartProfileProtocolMemory::optionId)
+    return buildMap {
+        (scopedMemories.keys + globalMemories.keys)
+            .sorted()
+            .forEach { optionId ->
+                val scopedServerPing = scopedMemories[optionId].freshRememberedServerPing(now)
+                val globalServerPing = globalMemories[optionId].freshRememberedServerPing(now)
+                val rememberedServerPing = scopedServerPing ?: globalServerPing
+                if (rememberedServerPing != null) {
+                    put(optionId, rememberedServerPing)
+                }
+            }
+    }
+}
+
+internal fun Settings.rememberedSmartProfileMetricsUpdatedAtByProfileId(
+    networkFingerprint: String?,
+    now: Long = System.currentTimeMillis(),
+): Map<Long, Map<String, Long>> =
+    smartProfilePreferences
+        .mapNotNull { preference ->
+            preference
+                .rememberedSmartProfileMetricsUpdatedAtByOptionId(networkFingerprint = networkFingerprint, now = now)
+                .takeIf(Map<String, Long>::isNotEmpty)
+                ?.let { preference.profileId to it }
+        }.toMap()
+
+internal fun SmartProfilePreference.rememberedSmartProfileMetricsUpdatedAtByOptionId(
+    networkFingerprint: String?,
+    now: Long = System.currentTimeMillis(),
+): Map<String, Long> {
+    val scopedMemories =
+        networkMemory(networkFingerprint)
+            ?.protocolMemories
+            ?.associateBy(SmartProfileProtocolMemory::optionId)
+            .orEmpty()
+    val globalMemories = protocolMemories.associateBy(SmartProfileProtocolMemory::optionId)
+    return buildMap {
+        (scopedMemories.keys + globalMemories.keys)
+            .sorted()
+            .forEach { optionId ->
+                val scopedUpdatedAt = scopedMemories[optionId].freshRememberedMetricsUpdatedAt(now)
+                val globalUpdatedAt = globalMemories[optionId].freshRememberedMetricsUpdatedAt(now)
+                val rememberedUpdatedAt = listOfNotNull(scopedUpdatedAt, globalUpdatedAt).maxOrNull()
+                if (rememberedUpdatedAt != null) {
+                    put(optionId, rememberedUpdatedAt)
+                }
+            }
+    }
+}
+
 private fun SmartProfileProtocolMemory?.freshRememberedLatency(
     now: Long,
     retentionMs: Long = SMART_START_REMEMBERED_LATENCY_RETENTION_MS,
@@ -952,6 +1064,30 @@ private fun SmartProfileProtocolMemory?.freshRememberedLatency(
     val latencyMs = memory.lastLatencyMs?.takeIf { it > 0L } ?: return null
     val successAt = memory.lastSuccessAt?.takeIf { it > 0L } ?: return null
     return if (now - successAt <= retentionMs) latencyMs else null
+}
+
+private fun SmartProfileProtocolMemory?.freshRememberedServerPing(
+    now: Long,
+    retentionMs: Long = SMART_START_REMEMBERED_LATENCY_RETENTION_MS,
+): Long? {
+    val memory = this ?: return null
+    val serverPingMs = memory.lastServerPingMs?.takeIf { it > 0L } ?: return null
+    val serverPingAt = memory.lastServerPingAt?.takeIf { it > 0L } ?: return null
+    return if (now - serverPingAt <= retentionMs) serverPingMs else null
+}
+
+private fun SmartProfileProtocolMemory?.freshRememberedMetricsUpdatedAt(
+    now: Long,
+    retentionMs: Long = SMART_START_REMEMBERED_LATENCY_RETENTION_MS,
+): Long? {
+    val memory = this ?: return null
+    val updatedAt =
+        listOfNotNull(
+            memory.lastServerPingAt?.takeIf { it > 0L },
+            memory.lastValidatedAt?.takeIf { it > 0L },
+            memory.lastSuccessAt?.takeIf { it > 0L },
+        ).maxOrNull() ?: return null
+    return if (now - updatedAt <= retentionMs) updatedAt else null
 }
 
 internal fun normalizeSmartProfilePreferences(

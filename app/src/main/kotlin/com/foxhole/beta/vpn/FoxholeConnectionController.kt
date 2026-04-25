@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
+import android.os.SystemClock
 import androidx.core.content.getSystemService
 import com.foxhole.beta.core.data.ProfileRepository
 import com.foxhole.beta.core.data.RoutingRepository
@@ -17,10 +18,14 @@ import com.foxhole.beta.core.model.TrafficSnapshot
 import com.foxhole.beta.core.network.IpInfoFetchMode
 import com.foxhole.beta.core.network.IpInfoRepository
 import com.foxhole.beta.core.settings.SettingsRepository
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.withContext
+import java.net.InetAddress
+import java.net.InetSocketAddress
 
 class FoxholeConnectionController(
     private val context: Context,
@@ -228,6 +233,35 @@ class FoxholeConnectionController(
             ?: throw (lastFailure ?: error("latency probe failed"))
     }
 
+    suspend fun measureCurrentVpnServerPing(
+        profileId: Long,
+        protocolOptionId: String? = null,
+        timeoutMs: Long = SERVER_PING_TIMEOUT_MS,
+    ): Long {
+        snapshot.value.state
+            .takeIf { it in ACTIVE_CONNECTION_STATES }
+            ?: error("active connection is required for server ping measurement")
+        val session = profileRepository.getSession(profileId, protocolOptionId)
+        val target = VpnHealthProbeTargetSelector.select(session.configJson)
+            ?: error("vpn server target unavailable")
+        require(target.transport == VpnHealthProbeTransport.TCP) {
+            "server ping unavailable for ${target.transport.name.lowercase()} transport"
+        }
+        val upstreamNetwork = currentUpstreamNetwork() ?: error("upstream network unavailable")
+        return withContext(Dispatchers.IO) {
+            val address = resolveServerPingAddress(target.host, upstreamNetwork)
+            val startedAt = SystemClock.elapsedRealtime()
+            upstreamNetwork.socketFactory.createSocket().use { socket ->
+                socket.soTimeout = timeoutMs.toInt()
+                socket.connect(
+                    InetSocketAddress(address, target.port),
+                    timeoutMs.toInt(),
+                )
+            }
+            (SystemClock.elapsedRealtime() - startedAt).coerceAtLeast(1L)
+        }
+    }
+
     fun hasActiveVpnNetwork(): Boolean = currentVpnNetwork() != null
 
     fun currentVpnNetworkHandle(): Long? = currentVpnNetwork()?.networkHandle
@@ -281,6 +315,13 @@ class FoxholeConnectionController(
         capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
             capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_RESTRICTED) &&
             !capabilities.hasTransport(NetworkCapabilities.TRANSPORT_VPN)
+
+    private fun resolveServerPingAddress(
+        host: String,
+        network: Network,
+    ): InetAddress =
+        network.getAllByName(host).firstOrNull()
+            ?: InetAddress.getByName(host)
 }
 
 private val ACTIVE_CONNECTION_STATES =
@@ -294,6 +335,7 @@ internal fun disconnectDispatchModeOrNull(snapshot: ConnectionSnapshot): Traffic
     snapshot.trafficMode.takeIf { snapshot.state in ACTIVE_CONNECTION_STATES }
 
 private const val LATENCY_PROBE_TIMEOUT_MS = 6_000L
+private const val SERVER_PING_TIMEOUT_MS = 3_000L
 private val LATENCY_PROBE_ENDPOINTS = FoxholeVpnService.CONNECTIVITY_PROBE_ENDPOINTS
 
 internal fun latencyProbeEndpoints(): List<String> = LATENCY_PROBE_ENDPOINTS

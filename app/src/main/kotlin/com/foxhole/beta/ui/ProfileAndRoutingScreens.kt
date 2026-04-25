@@ -7,6 +7,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -16,11 +17,14 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -29,7 +33,9 @@ import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Apps
 import androidx.compose.material.icons.outlined.ArrowOutward
 import androidx.compose.material.icons.outlined.Block
+import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.ExpandLess
@@ -81,16 +87,20 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
 import com.foxhole.beta.R
 import com.foxhole.beta.core.model.InstalledAppOption
 import com.foxhole.beta.core.model.PerAppRoutingMode
 import com.foxhole.beta.core.model.Profile
+import com.foxhole.beta.core.model.ProfileProtocolOption
+import com.foxhole.beta.core.model.ProtocolHint
 import com.foxhole.beta.core.model.ProfileSourceType
 import com.foxhole.beta.core.model.RoutingRule
 import com.foxhole.beta.core.model.RoutingRuleAction
@@ -110,6 +120,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.text.DateFormat
+import kotlin.math.max
 
 internal enum class InstalledAppFilter {
     ALL,
@@ -126,6 +137,8 @@ fun ProfilesScreen(
     onEditProfile: (Long) -> Unit,
     onSelectProtocolOption: (Long, String) -> Unit,
     onUpdateAutoConnectExcludedOptions: (Long, Set<String>) -> Unit,
+    onRefreshSmartProfileMetrics: (Long) -> Unit,
+    onCancelSmartProfileMetricsRefresh: () -> Unit,
     onRefreshProfile: (Long) -> Unit,
     onDeleteProfile: (Long) -> Unit,
     onCreateProfileExport: suspend (List<ProfileExportSelectionRequest>) -> PreparedProfileExport,
@@ -382,6 +395,13 @@ fun ProfilesScreen(
                                                 onUpdateAutoConnectExcludedOptions(profile.id, excludedIds)
                                             },
                                             latencyByOptionId = rememberedSmartStartLatenciesByProfileId[profile.id].orEmpty(),
+                                            serverPingByOptionId = state.smartProfileServerPings(profile.id),
+                                            serverPingUnavailableOptionIds = state.smartProfileServerPingUnavailable(profile.id),
+                                            metricsUpdatedAtByOptionId = state.smartProfileMetricsUpdatedAt(profile.id),
+                                            metricsRefreshing = profile.id in state.smartProfileMetricsRefreshingProfileIds,
+                                            recommendedOptionId = state.recommendedProtocolOptionByProfileId[profile.id],
+                                            onRefreshMetrics = { onRefreshSmartProfileMetrics(profile.id) },
+                                            onCancelRefreshMetrics = onCancelSmartProfileMetricsRefresh,
                                             showLatency = rememberedSmartStartLatenciesByProfileId[profile.id]?.isNotEmpty() == true,
                                             compact = true,
                                         )
@@ -672,11 +692,18 @@ fun ProfileDetailScreen(
     activeProfileId: Long?,
     excludedAutoConnectOptionIds: Set<String>,
     rememberedSmartStartLatenciesByOptionId: Map<String, Long>,
+    serverPingByOptionId: Map<String, Long>,
+    serverPingUnavailableOptionIds: Set<String>,
+    metricsUpdatedAtByOptionId: Map<String, Long>,
+    metricsRefreshing: Boolean,
+    recommendedProtocolOptionId: String?,
     snackbarHostState: SnackbarHostState,
     onNavigateUp: () -> Unit,
     onSetActiveProfile: (Long) -> Unit,
     onSelectProtocolOption: (Long, String) -> Unit,
     onUpdateAutoConnectExcludedOptions: (Long, Set<String>) -> Unit,
+    onRefreshSmartProfileMetrics: (Long) -> Unit,
+    onCancelSmartProfileMetricsRefresh: () -> Unit,
     onRefreshProfile: (Long) -> Unit,
     onDeleteProfile: () -> Unit,
     onViewConfig: () -> Unit,
@@ -758,6 +785,13 @@ fun ProfileDetailScreen(
                                             onUpdateAutoConnectExcludedOptions(profile.id, excludedIds)
                                         },
                                         latencyByOptionId = rememberedSmartStartLatenciesByOptionId,
+                                        serverPingByOptionId = serverPingByOptionId,
+                                        serverPingUnavailableOptionIds = serverPingUnavailableOptionIds,
+                                        metricsUpdatedAtByOptionId = metricsUpdatedAtByOptionId,
+                                        metricsRefreshing = metricsRefreshing,
+                                        recommendedOptionId = recommendedProtocolOptionId,
+                                        onRefreshMetrics = { onRefreshSmartProfileMetrics(profile.id) },
+                                        onCancelRefreshMetrics = onCancelSmartProfileMetricsRefresh,
                                         showLatency = rememberedSmartStartLatenciesByOptionId.isNotEmpty(),
                                         compact = true,
                                     )
@@ -866,6 +900,14 @@ internal fun SmartProfileAutoConnectMenu(
     latencyByOptionId: Map<String, Long> = emptyMap(),
     unavailableOptionIds: Set<String> = emptySet(),
     latencyUnavailableOptionIds: Set<String> = emptySet(),
+    serverPingByOptionId: Map<String, Long> = emptyMap(),
+    serverPingUnavailableOptionIds: Set<String> = emptySet(),
+    metricsUpdatedAtByOptionId: Map<String, Long> = emptyMap(),
+    metricsRefreshing: Boolean = false,
+    recommendedOptionId: String? = null,
+    activeOptionId: String? = profile.selectedProtocolOptionId ?: MultiProtocolProfileSupport.selectedOption(profile)?.id,
+    onRefreshMetrics: (() -> Unit)? = null,
+    onCancelRefreshMetrics: (() -> Unit)? = null,
     showLatency: Boolean = false,
     compact: Boolean = false,
     enabled: Boolean = true,
@@ -877,18 +919,16 @@ internal fun SmartProfileAutoConnectMenu(
     }
     var expanded by rememberSaveable(profile.id) { mutableStateOf(false) }
     val minMenuWidth =
-        when {
-            compact && showLatency -> 238.dp
-            compact -> 206.dp
-            showLatency -> 280.dp
-            else -> 244.dp
+        if (compact) {
+            316.dp
+        } else {
+            336.dp
         }
     val maxMenuWidth =
-        when {
-            compact && showLatency -> 288.dp
-            compact -> 236.dp
-            showLatency -> 324.dp
-            else -> 286.dp
+        if (compact) {
+            356.dp
+        } else {
+            380.dp
         }
     Box {
         Surface(
@@ -927,7 +967,7 @@ internal fun SmartProfileAutoConnectMenu(
                 modifier = Modifier.padding(if (compact) 0.dp else 2.dp),
                 verticalArrangement = Arrangement.spacedBy(if (compact) 0.dp else 2.dp),
             ) {
-                Column(verticalArrangement = Arrangement.spacedBy(if (compact) 3.dp else 6.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(if (compact) 2.dp else 5.dp)) {
                     Row(
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = if (compact) 3.dp else 6.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -939,27 +979,63 @@ internal fun SmartProfileAutoConnectMenu(
                             modifier = Modifier.size(if (compact) 14.dp else 16.dp),
                             tint = FoxholeInfoAccent,
                         )
-                        Text(
-                            text = stringResource(R.string.smart_profile_menu_title),
+                        Column(
                             modifier = Modifier.weight(1f),
-                            style =
-                                if (compact) {
-                                    MaterialTheme.typography.bodySmall
-                                } else {
-                                    MaterialTheme.typography.labelMedium
-                                },
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            verticalArrangement = Arrangement.spacedBy(if (compact) 2.dp else 4.dp),
+                        ) {
+                            Text(
+                                text = stringResource(R.string.smart_profile_menu_title),
+                                style =
+                                    if (compact) {
+                                        MaterialTheme.typography.bodySmall
+                                    } else {
+                                        MaterialTheme.typography.labelMedium
+                                    },
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            Text(
+                                text = stringResource(R.string.smart_profile_metrics_refresh_hint),
+                                style =
+                                    MaterialTheme.typography.labelSmall.copy(
+                                        fontSize = if (compact) 10.sp else 11.sp,
+                                        lineHeight = if (compact) 11.sp else 12.sp,
+                                    ),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                        SmartProfileMetricsRefreshStatus(
+                            updatedAt = metricsUpdatedAtByOptionId.values.maxOrNull(),
+                            refreshing = metricsRefreshing,
+                            onRefreshMetrics = onRefreshMetrics,
+                            onCancelRefreshMetrics = onCancelRefreshMetrics,
+                            compact = compact,
                         )
                     }
                     HorizontalDivider(
-                        modifier = Modifier.padding(horizontal = if (compact) 8.dp else 10.dp),
+                        modifier = Modifier.padding(horizontal = if (compact) 6.dp else 10.dp),
                         color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.34f),
                     )
+                    SmartProfileProtocolMenuHeader(compact = compact)
                 }
                 options.forEach { option ->
                     val included = option.id !in excludedOptionIds
                     val includedCount = options.count { candidate -> candidate.id !in excludedOptionIds }
+                    val recommended = option.id == recommendedOptionId
+                    val active = option.id == activeOptionId
+                    val latencyMs = latencyByOptionId[option.id]
+                    val latencyDown = option.id in unavailableOptionIds
+                    val latencyUnavailable = option.id in latencyUnavailableOptionIds
+                    val activeAccent =
+                        smartProfileCurrentProtocolAccent(
+                            latencyMs = latencyMs,
+                            down = latencyDown,
+                            unavailable = latencyUnavailable,
+                        )
                     FoxholeDropdownItem(
                         onClick = {
                             val nextExcluded =
@@ -974,65 +1050,477 @@ internal fun SmartProfileAutoConnectMenu(
                                 }
                             nextExcluded?.let(onUpdateExcludedOptionIds)
                         },
-                        selected = included,
-                        highlightSelected = false,
-                        accentColor = FoxholePositiveAccent,
+                        selected = active || recommended,
+                        highlightSelected = active || recommended,
+                        accentColor =
+                            when {
+                                recommended -> FoxholePositiveAccent
+                                active -> activeAccent
+                                else -> FoxholePositiveAccent
+                            },
+                        selectedContainerColor =
+                            when {
+                                recommended -> FoxholePositiveAccent.copy(alpha = 0.15f)
+                                active -> activeAccent.copy(alpha = 0.14f)
+                                else -> null
+                            },
+                        minHeight = 32.dp,
                         contentPadding =
                             PaddingValues(
-                                horizontal = 12.dp,
+                                horizontal = 7.dp,
                                 vertical = 0.dp,
                             ),
-                        trailingContent = {
-                            if (showLatency && included) {
-                                if (option.id in unavailableOptionIds) {
-                                    ProtocolLatencyPill(
-                                        compact = true,
-                                        isDown = true,
-                                        showLabel = false,
-                                    )
-                                } else if (option.id in latencyUnavailableOptionIds) {
-                                    ProtocolLatencyPill(
-                                        compact = true,
-                                        isUnavailable = true,
-                                        showLabel = false,
-                                    )
-                                } else {
-                                    latencyByOptionId[option.id]?.let { latencyMs ->
-                                        ProtocolLatencyPill(
-                                            latencyMs = latencyMs,
-                                            compact = true,
-                                            showLabel = false,
-                                        )
-                                    }
-                                }
-                            }
-                            Icon(
-                                imageVector =
-                                    if (included) {
-                                        Icons.Outlined.CheckCircle
-                                    } else {
-                                        Icons.Outlined.RadioButtonUnchecked
-                                    },
-                                contentDescription = null,
-                                modifier = Modifier.size(if (compact) 18.dp else 20.dp),
-                                tint =
-                                    if (included) {
-                                        FoxholePositiveAccent
-                                    } else {
-                                        MaterialTheme.colorScheme.onSurfaceVariant
-                                    },
-                            )
-                        },
                     ) {
-                        ProtocolSelectorLabel(
+                        SmartProfileProtocolMenuRow(
                             option = option,
-                            modifier = Modifier.weight(1f),
                             compact = true,
+                            included = included,
+                            serverPingMs = serverPingByOptionId[option.id],
+                            serverPingUnavailable =
+                                option.id in serverPingUnavailableOptionIds &&
+                                    option.id !in serverPingByOptionId,
+                            latencyMs = latencyMs,
+                            latencyDown = latencyDown,
+                            latencyUnavailable = latencyUnavailable,
+                            transportKnown =
+                                option.id in metricsUpdatedAtByOptionId ||
+                                    option.id in latencyByOptionId ||
+                                    option.id in serverPingByOptionId ||
+                                    option.id in serverPingUnavailableOptionIds ||
+                                    option.id in unavailableOptionIds ||
+                                    option.id in latencyUnavailableOptionIds,
                         )
                     }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun SmartProfileMetricsRefreshStatus(
+    updatedAt: Long?,
+    refreshing: Boolean,
+    onRefreshMetrics: (() -> Unit)?,
+    onCancelRefreshMetrics: (() -> Unit)?,
+    compact: Boolean,
+) {
+    Column(
+        modifier = Modifier.width(if (compact) 96.dp else 110.dp),
+        horizontalAlignment = Alignment.End,
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        onRefreshMetrics?.let { refreshMetrics ->
+            IconButton(
+                onClick = {
+                    if (refreshing) {
+                        onCancelRefreshMetrics?.invoke()
+                    } else {
+                        refreshMetrics()
+                    }
+                },
+                enabled = !refreshing || onCancelRefreshMetrics != null,
+                modifier = Modifier.size(if (compact) 26.dp else 30.dp),
+            ) {
+                Icon(
+                    imageVector = if (refreshing) Icons.Outlined.Close else Icons.Outlined.Refresh,
+                    contentDescription =
+                        stringResource(
+                            if (refreshing) {
+                                R.string.smart_profile_metrics_cancel_action
+                            } else {
+                                R.string.smart_profile_metrics_refresh_action
+                            },
+                        ),
+                    modifier = Modifier.size(if (compact) 17.dp else 19.dp),
+                    tint =
+                        if (refreshing) {
+                            MaterialTheme.colorScheme.error
+                        } else {
+                            FoxholeInfoAccent
+                        },
+                )
+            }
+        }
+        when {
+            refreshing ->
+                FoxholeSkeletonBlock(
+                    modifier =
+                        Modifier
+                            .width(if (compact) 74.dp else 88.dp)
+                            .height(if (compact) 10.dp else 11.dp),
+                )
+            updatedAt != null ->
+                Text(
+                    text = stringResource(R.string.smart_profile_metrics_last_updated, formatSmartMetricsUpdatedAgo(updatedAt)),
+                    style =
+                        MaterialTheme.typography.labelSmall.copy(
+                            fontSize = if (compact) 9.sp else 10.sp,
+                            lineHeight = if (compact) 10.sp else 11.sp,
+                        ),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.74f),
+                    maxLines = 1,
+                    textAlign = TextAlign.End,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            else -> Spacer(modifier = Modifier.height(if (compact) 10.dp else 11.dp))
+        }
+    }
+}
+
+@Composable
+private fun SmartProfileProtocolMenuHeader(compact: Boolean) {
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp, vertical = if (compact) 3.dp else 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        SmartProfileProtocolHeaderText(
+            text = stringResource(R.string.smart_profile_menu_protocol_column),
+            modifier = Modifier.weight(1f),
+            textAlign = TextAlign.Start,
+        )
+        SmartProfileProtocolMenuDivider()
+        SmartProfileProtocolHeaderText(
+            text = stringResource(R.string.smart_profile_menu_server_ping_column),
+            modifier = Modifier.width(SmartProfileMetricColumnWidth),
+        )
+        SmartProfileProtocolMenuDivider()
+        SmartProfileProtocolHeaderText(
+            text = stringResource(R.string.smart_profile_menu_latency_column),
+            modifier = Modifier.width(SmartProfileMetricColumnWidth),
+        )
+        SmartProfileProtocolMenuDivider()
+        SmartProfileProtocolHeaderText(
+            text = stringResource(R.string.smart_profile_menu_on_column),
+            modifier = Modifier.width(SmartProfileOnColumnWidth),
+        )
+    }
+    HorizontalDivider(
+        modifier = Modifier.padding(horizontal = if (compact) 8.dp else 10.dp),
+        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.24f),
+    )
+}
+
+private fun smartProfileCurrentProtocolAccent(
+    latencyMs: Long?,
+    down: Boolean,
+    unavailable: Boolean,
+): Color =
+    when {
+        down || unavailable || (latencyMs != null && latencyMs > 520L) -> SmartProfileCurrentDangerAccent
+        else -> SmartProfileCurrentWarningAccent
+    }
+
+@Composable
+private fun SmartProfileProtocolHeaderText(
+    text: String,
+    modifier: Modifier = Modifier,
+    textAlign: TextAlign = TextAlign.Center,
+) {
+    Text(
+        text = text,
+        modifier = modifier,
+        style =
+            MaterialTheme.typography.labelSmall.copy(
+                fontSize = 9.sp,
+                lineHeight = 10.sp,
+                fontWeight = FontWeight.SemiBold,
+            ),
+        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.76f),
+        maxLines = 1,
+        softWrap = false,
+        overflow = TextOverflow.Ellipsis,
+        textAlign = textAlign,
+    )
+}
+
+@Composable
+private fun SmartProfileProtocolMenuRow(
+    option: ProfileProtocolOption,
+    compact: Boolean,
+    included: Boolean,
+    serverPingMs: Long?,
+    serverPingUnavailable: Boolean,
+    latencyMs: Long?,
+    latencyDown: Boolean,
+    latencyUnavailable: Boolean,
+    transportKnown: Boolean,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        SmartProfileProtocolCell(
+            option = option,
+            compact = compact,
+            enabled = included,
+            transportKnown = transportKnown,
+            modifier = Modifier.weight(1f),
+        )
+        SmartProfileProtocolMenuDivider()
+        SmartProfileMetricCell(
+            latencyMs = serverPingMs,
+            unavailable = serverPingUnavailable || serverPingMs == null,
+            modifier = Modifier.width(SmartProfileMetricColumnWidth),
+        )
+        SmartProfileProtocolMenuDivider()
+        SmartProfileMetricCell(
+            latencyMs = latencyMs,
+            down = latencyDown,
+            unavailable = latencyUnavailable || latencyMs == null,
+            modifier = Modifier.width(SmartProfileMetricColumnWidth),
+        )
+        SmartProfileProtocolMenuDivider()
+        Box(
+            modifier = Modifier.width(SmartProfileOnColumnWidth),
+            contentAlignment = Alignment.Center,
+        ) {
+            SmartProfileOnToggle(included = included, compact = compact)
+        }
+    }
+}
+
+@Composable
+private fun SmartProfileProtocolCell(
+    option: ProfileProtocolOption,
+    compact: Boolean,
+    enabled: Boolean,
+    transportKnown: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    val contentColor =
+        if (enabled) {
+            MaterialTheme.colorScheme.onSurface
+        } else {
+            MaterialTheme.colorScheme.onSurfaceVariant
+        }
+    Box(modifier = modifier) {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(if (compact) 5.dp else 7.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            ProtocolMarkIcon(protocol = option.protocolHint, compact = compact)
+            Text(
+                text = protocolDisplayLabel(option.protocolHint),
+                modifier = Modifier.weight(1f, fill = false),
+                style =
+                    MaterialTheme.typography.labelSmall.copy(
+                        fontSize = if (compact) 13.sp else 14.sp,
+                        lineHeight = if (compact) 14.sp else 15.sp,
+                        fontWeight = FontWeight.SemiBold,
+                    ),
+                color = contentColor,
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis,
+            )
+            if (transportKnown) {
+                SmartProfileTransportBadge(
+                    transport = protocolTransportBadge(option.protocolHint),
+                    modifier = Modifier.offset(y = if (compact) (-3).dp else (-2).dp),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SmartProfileOnToggle(
+    included: Boolean,
+    compact: Boolean,
+) {
+    if (included) {
+        Surface(
+            modifier = Modifier.size(if (compact) 17.dp else 18.dp),
+            shape = CircleShape,
+            color = FoxholePositiveAccent.copy(alpha = 0.16f),
+            border = BorderStroke(1.dp, FoxholePositiveAccent.copy(alpha = 0.48f)),
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    imageVector = Icons.Outlined.Check,
+                    contentDescription = null,
+                    modifier = Modifier.size(if (compact) 12.dp else 13.dp),
+                    tint = FoxholePositiveAccent,
+                )
+            }
+        }
+    } else {
+        Surface(
+            modifier = Modifier.size(if (compact) 14.dp else 15.dp),
+            shape = CircleShape,
+            color = Color.Transparent,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.48f)),
+            content = {},
+        )
+    }
+}
+
+@Composable
+private fun SmartProfileTransportBadge(
+    transport: SmartProfileTransport,
+    modifier: Modifier = Modifier,
+) {
+    val color =
+        when (transport) {
+            SmartProfileTransport.TCP -> SmartProfileTcpAccent
+            SmartProfileTransport.UDP -> SmartProfileUdpAccent
+        }
+    Surface(
+        modifier = modifier,
+        shape = MaterialTheme.shapes.small,
+        color = color.copy(alpha = 0.15f),
+        border = BorderStroke(1.dp, color.copy(alpha = 0.44f)),
+    ) {
+        Text(
+            text = transport.name,
+            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
+            style =
+                MaterialTheme.typography.labelSmall.copy(
+                    fontSize = 7.sp,
+                    lineHeight = 8.sp,
+                    fontWeight = FontWeight.Bold,
+                ),
+            color = color,
+            maxLines = 1,
+            softWrap = false,
+        )
+    }
+}
+
+@Composable
+private fun SmartProfileMetricCell(
+    modifier: Modifier = Modifier,
+    latencyMs: Long?,
+    down: Boolean = false,
+    unavailable: Boolean = false,
+) {
+    val text =
+        when {
+            down -> stringResource(R.string.latency_pill_down)
+            latencyMs != null -> stringResource(R.string.latency_pill_value, latencyMs)
+            unavailable -> stringResource(R.string.smart_profile_metric_unavailable)
+            else -> stringResource(R.string.smart_profile_metric_unavailable)
+        }
+    val tone =
+        when {
+            down -> SmartProfileMetricTone.DANGER
+            latencyMs == null -> SmartProfileMetricTone.NEUTRAL
+            latencyMs <= 180L -> SmartProfileMetricTone.POSITIVE
+            latencyMs <= 520L -> SmartProfileMetricTone.WARNING
+            else -> SmartProfileMetricTone.DANGER
+        }
+    SmartProfileMetricPill(
+        text = text,
+        tone = tone,
+        modifier = modifier,
+    )
+}
+
+@Composable
+private fun SmartProfileMetricPill(
+    text: String,
+    tone: SmartProfileMetricTone,
+    modifier: Modifier = Modifier,
+) {
+    val color =
+        when (tone) {
+            SmartProfileMetricTone.POSITIVE -> FoxholePositiveAccent
+            SmartProfileMetricTone.WARNING -> Color(0xFFE28131)
+            SmartProfileMetricTone.DANGER -> Color(0xFFC95353)
+            SmartProfileMetricTone.NEUTRAL -> MaterialTheme.colorScheme.onSurfaceVariant
+        }
+    Box(
+        modifier = modifier,
+        contentAlignment = Alignment.Center,
+    ) {
+        Surface(
+            shape = MaterialTheme.shapes.medium,
+            color = color.copy(alpha = if (tone == SmartProfileMetricTone.NEUTRAL) 0.10f else 0.16f),
+            border = BorderStroke(1.dp, color.copy(alpha = 0.32f)),
+        ) {
+            Text(
+                text = text,
+                modifier = Modifier.padding(horizontal = 2.dp, vertical = 2.dp),
+                style =
+                    MaterialTheme.typography.labelSmall.copy(
+                        fontSize = 9.sp,
+                        lineHeight = 10.sp,
+                        fontWeight = FontWeight.SemiBold,
+                    ),
+                color = color,
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
+}
+
+@Composable
+private fun SmartProfileProtocolMenuDivider() {
+    Spacer(
+        modifier =
+            Modifier
+                .height(24.dp)
+                .width(1.dp)
+                .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.18f)),
+    )
+}
+
+private fun protocolTransportBadge(protocol: ProtocolHint): SmartProfileTransport =
+    when (protocol) {
+        ProtocolHint.HYSTERIA2,
+        ProtocolHint.WIREGUARD,
+        -> SmartProfileTransport.UDP
+        ProtocolHint.VLESS,
+        ProtocolHint.TROJAN,
+        ProtocolHint.SHADOWSOCKS,
+        ProtocolHint.VMESS,
+        ProtocolHint.OUTLINE,
+        ProtocolHint.SING_BOX,
+        ProtocolHint.UNKNOWN,
+        -> SmartProfileTransport.TCP
+    }
+
+private enum class SmartProfileTransport {
+    TCP,
+    UDP,
+}
+
+private enum class SmartProfileMetricTone {
+    POSITIVE,
+    WARNING,
+    DANGER,
+    NEUTRAL,
+}
+
+private val SmartProfileOnColumnWidth = 24.dp
+private val SmartProfileMetricColumnWidth = 58.dp
+private val SmartProfileTcpAccent = Color(0xFF3F7DD9)
+private val SmartProfileUdpAccent = Color(0xFFE28131)
+private val SmartProfileCurrentWarningAccent = Color(0xFFE28131)
+private val SmartProfileCurrentDangerAccent = Color(0xFFC95353)
+
+@Composable
+private fun formatSmartMetricsUpdatedAgo(updatedAt: Long): String {
+    val elapsedMs = (System.currentTimeMillis() - updatedAt).coerceAtLeast(0L)
+    val minute = 60_000L
+    val hour = 60L * minute
+    val day = 24L * hour
+    val week = 7L * day
+    return when {
+        elapsedMs < hour ->
+            stringResource(R.string.smart_profile_metrics_ago_minutes, max(1L, elapsedMs / minute))
+        elapsedMs < day ->
+            stringResource(R.string.smart_profile_metrics_ago_hours, max(1L, elapsedMs / hour))
+        elapsedMs < week ->
+            stringResource(R.string.smart_profile_metrics_ago_days, max(1L, elapsedMs / day))
+        else ->
+            stringResource(R.string.smart_profile_metrics_ago_weeks, max(1L, elapsedMs / week))
     }
 }
 

@@ -265,6 +265,8 @@ data class SmartProfileProtocolMemory(
     val lastSuccessAt: Long? = null,
     val lastFailureAt: Long? = null,
     val lastLatencyMs: Long? = null,
+    val lastServerPingMs: Long? = null,
+    val lastServerPingAt: Long? = null,
     val lastReasonCode: AutoConnectReasonCode? = null,
     val failureStreak: Int = 0,
     val successCount: Int = 0,
