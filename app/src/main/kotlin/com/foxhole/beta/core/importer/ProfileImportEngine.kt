@@ -149,66 +149,29 @@ fun parseSubscriptionContent(
         )
     }
 
-    parseSmartConfigImport(
+    parseSubscriptionPayloadImport(
         raw = trimmed,
         fallbackName = fallbackName,
         allowPrivateOutboundHosts = allowPrivateOutboundHosts,
         allowInsecureTls = allowInsecureTls,
-    )?.let { parsed ->
-        return ParsedImport(
-            sourceType = ProfileSourceType.SUBSCRIPTION_URL,
-            protocolHint = parsed.protocolHint,
-            displayName = parsed.displayName,
-            normalizedConfigJson = parsed.normalizedConfigJson,
-            nodesCount = parsed.nodesCount,
-            subscriptionExpiresAt = parsed.subscriptionExpiresAt,
-            protocolOptions = parsed.protocolOptions,
-            selectedProtocolOptionId = parsed.selectedProtocolOptionId,
-        )
-    }
+        includeNodeLines = false,
+    )?.let { return it }
 
     decodeSubscriptionCandidate(trimmed)?.let { decoded ->
-        parseSmartConfigImport(
+        parseSubscriptionPayloadImport(
             raw = decoded,
             fallbackName = fallbackName,
             allowPrivateOutboundHosts = allowPrivateOutboundHosts,
             allowInsecureTls = allowInsecureTls,
-        )?.let { parsed ->
-            return ParsedImport(
-                sourceType = ProfileSourceType.SUBSCRIPTION_URL,
-                protocolHint = parsed.protocolHint,
-                displayName = parsed.displayName,
-                normalizedConfigJson = parsed.normalizedConfigJson,
-                nodesCount = parsed.nodesCount,
-                subscriptionExpiresAt = parsed.subscriptionExpiresAt,
-                protocolOptions = parsed.protocolOptions,
-                selectedProtocolOptionId = parsed.selectedProtocolOptionId,
-            )
-        }
-        val lines = parseNodeLines(decoded, allowPrivateOutboundHosts, allowInsecureTls)
-        if (lines.isNotEmpty()) {
-            return ParsedImport(
-                sourceType = ProfileSourceType.SUBSCRIPTION_URL,
-                protocolHint = lines.first().protocolHint,
-                displayName = fallbackName,
-                normalizedConfigJson = buildConfigFromNodes(lines, allowPrivateOutboundHosts = allowPrivateOutboundHosts),
-                nodesCount = lines.size,
-                subscriptionExpiresAt = lines.mapNotNull(ProxyNode::subscriptionExpiresAt).minOrNull(),
-            )
-        }
+        )?.let { return it }
     }
 
-    val lines = parseNodeLines(trimmed, allowPrivateOutboundHosts, allowInsecureTls)
-    if (lines.isNotEmpty()) {
-        return ParsedImport(
-            sourceType = ProfileSourceType.SUBSCRIPTION_URL,
-            protocolHint = lines.first().protocolHint,
-            displayName = fallbackName,
-            normalizedConfigJson = buildConfigFromNodes(lines, allowPrivateOutboundHosts = allowPrivateOutboundHosts),
-            nodesCount = lines.size,
-            subscriptionExpiresAt = lines.mapNotNull(ProxyNode::subscriptionExpiresAt).minOrNull(),
-        )
-    }
+    parseSubscriptionPayloadImport(
+        raw = trimmed,
+        fallbackName = fallbackName,
+        allowPrivateOutboundHosts = allowPrivateOutboundHosts,
+        allowInsecureTls = allowInsecureTls,
+    )?.let { return it }
 
     throw IllegalArgumentException("unsupported subscription payload")
 }
@@ -223,42 +186,29 @@ fun parseSubscriptionProfiles(
     val trimmed = normalizeInput(rawContent)
     require(trimmed.isNotBlank()) { "subscription is empty" }
 
-    parseSmartConfigSubscriptionImport(
+    parseSubscriptionPayloadProfiles(
         raw = trimmed,
         fallbackName = fallbackName,
         allowPrivateOutboundHosts = allowPrivateOutboundHosts,
         allowInsecureTls = allowInsecureTls,
-    )?.let { parsed ->
-        return parsed
-    }
+        includeNodeLines = false,
+    )?.let { return it }
 
     decodeSubscriptionCandidate(trimmed)?.let { decoded ->
-        parseSmartConfigSubscriptionImport(
+        parseSubscriptionPayloadProfiles(
             raw = decoded,
             fallbackName = fallbackName,
             allowPrivateOutboundHosts = allowPrivateOutboundHosts,
             allowInsecureTls = allowInsecureTls,
-        )?.let { parsed ->
-            return parsed
-        }
-        val nodes = parseNodeLines(decoded, allowPrivateOutboundHosts, allowInsecureTls)
-        if (nodes.isNotEmpty()) {
-            return buildSubscriptionProfiles(
-                nodes = nodes,
-                fallbackName = fallbackName,
-                allowPrivateOutboundHosts = allowPrivateOutboundHosts,
-            )
-        }
+        )?.let { return it }
     }
 
-    val directNodes = parseNodeLines(trimmed, allowPrivateOutboundHosts, allowInsecureTls)
-    if (directNodes.isNotEmpty()) {
-        return buildSubscriptionProfiles(
-            nodes = directNodes,
-            fallbackName = fallbackName,
-            allowPrivateOutboundHosts = allowPrivateOutboundHosts,
-        )
-    }
+    parseSubscriptionPayloadProfiles(
+        raw = trimmed,
+        fallbackName = fallbackName,
+        allowPrivateOutboundHosts = allowPrivateOutboundHosts,
+        allowInsecureTls = allowInsecureTls,
+    )?.let { return it }
 
     runCatching {
         parseUserInput(
@@ -287,6 +237,76 @@ fun parseSubscriptionProfiles(
     }
 
     throw IllegalArgumentException("unsupported subscription payload")
+}
+
+private fun parseSubscriptionPayloadImport(
+    raw: String,
+    fallbackName: String,
+    allowPrivateOutboundHosts: Boolean,
+    allowInsecureTls: Boolean,
+    includeNodeLines: Boolean = true,
+): ParsedImport? {
+    parseSmartConfigImport(
+        raw = raw,
+        fallbackName = fallbackName,
+        allowPrivateOutboundHosts = allowPrivateOutboundHosts,
+        allowInsecureTls = allowInsecureTls,
+    )?.let { parsed ->
+        return ParsedImport(
+            sourceType = ProfileSourceType.SUBSCRIPTION_URL,
+            protocolHint = parsed.protocolHint,
+            displayName = parsed.displayName,
+            normalizedConfigJson = parsed.normalizedConfigJson,
+            nodesCount = parsed.nodesCount,
+            subscriptionExpiresAt = parsed.subscriptionExpiresAt,
+            protocolOptions = parsed.protocolOptions,
+            selectedProtocolOptionId = parsed.selectedProtocolOptionId,
+        )
+    }
+
+    if (!includeNodeLines) {
+        return null
+    }
+    val nodes = parseNodeLines(raw, allowPrivateOutboundHosts, allowInsecureTls)
+    if (nodes.isEmpty()) {
+        return null
+    }
+    return ParsedImport(
+        sourceType = ProfileSourceType.SUBSCRIPTION_URL,
+        protocolHint = nodes.first().protocolHint,
+        displayName = fallbackName,
+        normalizedConfigJson = buildConfigFromNodes(nodes, allowPrivateOutboundHosts = allowPrivateOutboundHosts),
+        nodesCount = nodes.size,
+        subscriptionExpiresAt = nodes.mapNotNull(ProxyNode::subscriptionExpiresAt).minOrNull(),
+    )
+}
+
+private fun parseSubscriptionPayloadProfiles(
+    raw: String,
+    fallbackName: String,
+    allowPrivateOutboundHosts: Boolean,
+    allowInsecureTls: Boolean,
+    includeNodeLines: Boolean = true,
+): ParsedSubscriptionImport? {
+    parseSmartConfigSubscriptionImport(
+        raw = raw,
+        fallbackName = fallbackName,
+        allowPrivateOutboundHosts = allowPrivateOutboundHosts,
+        allowInsecureTls = allowInsecureTls,
+    )?.let { return it }
+
+    if (!includeNodeLines) {
+        return null
+    }
+    val nodes = parseNodeLines(raw, allowPrivateOutboundHosts, allowInsecureTls)
+    if (nodes.isEmpty()) {
+        return null
+    }
+    return buildSubscriptionProfiles(
+        nodes = nodes,
+        fallbackName = fallbackName,
+        allowPrivateOutboundHosts = allowPrivateOutboundHosts,
+    )
 }
 
 fun sanitizeResolvedConfig(

@@ -97,4 +97,66 @@ class SubscriptionRefreshPlannerTest {
         assertEquals(listOf(11L), plan.assignments.map(SubscriptionRefreshAssignment::existingProfileId))
         assertEquals(listOf(10L), plan.deletedProfileIds)
     }
+
+    @Test
+    fun `fallback matching skips profiles already consumed by exact key`() {
+        val plan =
+            planSubscriptionRefresh(
+                existingProfiles =
+                    listOf(
+                        ExistingSubscriptionProfile(
+                            id = 10L,
+                            name = "alpha",
+                            protocolHint = ProtocolHint.TROJAN,
+                        ),
+                        ExistingSubscriptionProfile(
+                            id = 11L,
+                            name = "beta",
+                            protocolHint = ProtocolHint.VLESS,
+                        ),
+                    ),
+                importedProfiles =
+                    listOf(
+                        ImportedSubscriptionProfile(
+                            displayName = "beta",
+                            protocolHint = ProtocolHint.VLESS,
+                        ),
+                        ImportedSubscriptionProfile(
+                            displayName = "new",
+                            protocolHint = ProtocolHint.SHADOWSOCKS,
+                        ),
+                    ),
+            )
+
+        assertEquals(listOf(11L, 10L), plan.assignments.map(SubscriptionRefreshAssignment::existingProfileId))
+        assertEquals(emptyList<Long>(), plan.deletedProfileIds)
+    }
+
+    @Test
+    fun `plans large reordered subscriptions without dropping matches`() {
+        val existingProfiles =
+            (1L..10_000L).map { id ->
+                ExistingSubscriptionProfile(
+                    id = id,
+                    name = "profile-$id",
+                    protocolHint = ProtocolHint.VLESS,
+                )
+            }
+        val importedProfiles =
+            (10_000L downTo 1L).map { id ->
+                ImportedSubscriptionProfile(
+                    displayName = "profile-$id",
+                    protocolHint = ProtocolHint.VLESS,
+                )
+            }
+
+        val plan =
+            planSubscriptionRefresh(
+                existingProfiles = existingProfiles,
+                importedProfiles = importedProfiles,
+            )
+
+        assertEquals((10_000L downTo 1L).toList(), plan.assignments.map(SubscriptionRefreshAssignment::existingProfileId))
+        assertEquals(emptyList<Long>(), plan.deletedProfileIds)
+    }
 }

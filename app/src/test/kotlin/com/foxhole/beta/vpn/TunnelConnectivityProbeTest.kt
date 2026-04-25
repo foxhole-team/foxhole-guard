@@ -72,6 +72,31 @@ class TunnelConnectivityProbeTest {
                 }
 
             assertTrue(result.isFailure)
-            assertEquals("probe timed out", result.exceptionOrNull()?.message)
+            val error = result.exceptionOrNull()
+            assertTrue(error is TunnelConnectivityProbeTimeoutException)
+            assertEquals("probe timed out after 1 attempt and 10 ms", error?.message)
+            assertEquals(1, (error as TunnelConnectivityProbeTimeoutException).attemptsDone)
+            assertEquals(10L, error.timeoutMs)
+        }
+
+    @Test
+    fun `timeout keeps last probe failure as cause`() =
+        runBlocking {
+            var attempts = 0
+
+            val result =
+                TunnelConnectivityProbe.run(
+                    attempts = 3,
+                    retryDelayMs = 50,
+                    timeoutMs = 30,
+                ) {
+                    attempts += 1
+                    error("boom-$attempts")
+                }
+
+            val error = result.exceptionOrNull()
+            assertTrue(error is TunnelConnectivityProbeTimeoutException)
+            assertEquals(1, (error as TunnelConnectivityProbeTimeoutException).attemptsDone)
+            assertEquals("boom-1", error.cause?.message)
         }
 }

@@ -3,6 +3,7 @@ package com.foxhole.beta.core.network
 import com.foxhole.beta.core.model.IpInfo
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -224,5 +225,45 @@ class IpInfoRepositoryTest {
 
         assertEquals("https://example.com/ip", candidates.first())
         assertTrue(candidates.size > 1)
+    }
+
+    @Test
+    fun `full fetch strategy probes address families without overriding caller timeout`() {
+        val repository =
+            IpInfoRepository(
+                client = okhttp3.OkHttpClient(),
+                json = json,
+            )
+
+        val strategy =
+            repository.resolveFetchStrategy(
+                endpoint = "",
+                callTimeoutMs = 4_000L,
+                mode = IpInfoFetchMode.FULL,
+            )
+
+        assertEquals("https://ipwho.is/", strategy.endpointCandidates.first())
+        assertEquals(4_000L, strategy.callTimeoutMs)
+        assertTrue(strategy.includeFamilyProbes)
+    }
+
+    @Test
+    fun `entry quick fetch strategy uses bounded timeout and skips family probes`() {
+        val repository =
+            IpInfoRepository(
+                client = okhttp3.OkHttpClient(),
+                json = json,
+            )
+
+        val strategy =
+            repository.resolveFetchStrategy(
+                endpoint = "https://example.com/ip",
+                callTimeoutMs = null,
+                mode = IpInfoFetchMode.ENTRY_QUICK,
+            )
+
+        assertEquals("https://example.com/ip", strategy.endpointCandidates.first())
+        assertEquals(2_500L, strategy.callTimeoutMs)
+        assertFalse(strategy.includeFamilyProbes)
     }
 }

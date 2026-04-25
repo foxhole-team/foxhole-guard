@@ -14,6 +14,25 @@ class TunnelValidationPolicyTest {
     }
 
     @Test
+    fun `policy context must explicitly opt into literal ip validation`() {
+        assertFalse(
+            acceptsTunnelValidationProbe(
+                kind = TunnelValidationProbeKind.DNS_INDEPENDENT_LITERAL_IP,
+                context = TunnelValidationPolicyContext(),
+            ),
+        )
+        assertTrue(
+            acceptsTunnelValidationProbe(
+                kind = TunnelValidationProbeKind.DNS_INDEPENDENT_LITERAL_IP,
+                context =
+                    TunnelValidationPolicyContext(
+                        allowDnsIndependentLiteralIpValidation = true,
+                    ),
+            ),
+        )
+    }
+
+    @Test
     fun `prefers ipv4 validation for ipv4 only wireguard config`() {
         assertTrue(
             shouldPreferIpv4TunnelValidation(

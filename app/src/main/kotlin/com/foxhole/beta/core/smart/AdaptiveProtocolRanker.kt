@@ -11,6 +11,7 @@ import kotlin.math.roundToInt
 
 data class AdaptiveProtocolCandidateScore(
     val candidate: AutoConnectProbeCandidate,
+    val scoringVersion: Int,
     val score: Int,
     val successRate: Double,
     val lastKnownGoodBonus: Int,
@@ -23,6 +24,8 @@ data class AdaptiveProtocolCandidateScore(
     fun summary(): String =
         buildString {
             append(candidate.optionId)
+            append(": v=")
+            append(scoringVersion)
             append(": score=")
             append(score)
             append(" sr=")
@@ -42,6 +45,57 @@ data class AdaptiveProtocolCandidateScore(
         }
 }
 
+data class AdaptiveProtocolScoringConfig(
+    val version: Int = CURRENT_VERSION,
+    val successRateWeight: Double = 45.0,
+    val scopedLastKnownGoodBonus: Int = 16,
+    val globalLastKnownGoodBonus: Int = 8,
+    val recentFreshnessBonus: Int = 4,
+    val weeklyFreshnessBonus: Int = 2,
+    val scopedMemoryBonus: Int = 12,
+    val globalMemoryBonus: Int = 4,
+    val upstreamValidatedBonus: Int = 4,
+    val privateDnsValidatedBonus: Int = 2,
+    val recentTrafficBonus: Int = 3,
+    val latencyBaselineMs: Long = 120L,
+    val latencyStepMs: Long = 40L,
+    val latencyPenaltyMax: Int = 18,
+    val connectBaselineMs: Long = 1_200L,
+    val connectStepMs: Long = 250L,
+    val connectPenaltyMax: Int = 10,
+    val cooldownBasePenalty: Int = 24,
+    val cooldownPenaltyPerMinute: Int = 3,
+    val cooldownPenaltyMax: Int = 36,
+    val failureStreakPenalty: Int = 4,
+    val failureStreakPenaltyMax: Int = 4,
+    val recentFailurePenalty: Int = 14,
+    val warmFailurePenalty: Int = 10,
+    val staleFailurePenalty: Int = 6,
+    val validationTimeoutPenalty: Int = 16,
+    val dnsFailurePenalty: Int = 12,
+    val privateDnsFailurePenalty: Int = 18,
+    val handshakeTimeoutPenalty: Int = 10,
+    val connectErrorPenalty: Int = 8,
+    val latencyEndpointBlockedPenalty: Int = 4,
+    val noMemoryExplorationBonus: Int = 6,
+    val networkNoMemoryExplorationBonus: Int = 8,
+    val unscopedMemoryExplorationBonus: Int = 3,
+) {
+    init {
+        require(version > 0) { "version must be positive" }
+        require(successRateWeight > 0.0) { "successRateWeight must be positive" }
+        require(latencyBaselineMs >= 0) { "latencyBaselineMs must not be negative" }
+        require(latencyStepMs > 0) { "latencyStepMs must be positive" }
+        require(connectBaselineMs >= 0) { "connectBaselineMs must not be negative" }
+        require(connectStepMs > 0) { "connectStepMs must be positive" }
+    }
+
+    companion object {
+        const val CURRENT_VERSION: Int = 1
+        val Default = AdaptiveProtocolScoringConfig()
+    }
+}
+
 object AdaptiveProtocolRanker {
     fun scoreCandidates(
         candidates: List<AutoConnectProbeCandidate>,
@@ -49,7 +103,10 @@ object AdaptiveProtocolRanker {
         networkFingerprintKey: String? = null,
         networkContext: NetworkFingerprint? = null,
         now: Long = System.currentTimeMillis(),
+        config: AdaptiveProtocolScoringConfig = AdaptiveProtocolScoringConfig.Default,
     ): List<AdaptiveProtocolCandidateScore> {
+        // Score order is intentionally dominated by durable success evidence, then local network fit,
+        // then recent failure/cooldown safety. Exploration only breaks weak or unseen candidates.
         val effectiveFingerprintKey = networkContext?.key ?: networkFingerprintKey
         val scopedPreference = preference?.networkMemory(effectiveFingerprintKey)
         val scopedMemories = scopedPreference?.protocolMemories?.associateBy(SmartProfileProtocolMemory::optionId).orEmpty()
@@ -67,24 +124,27 @@ object AdaptiveProtocolRanker {
                         scopedLastKnownGoodAt = scopedPreference?.lastKnownGoodAt,
                         globalLastKnownGoodAt = preference?.lastKnownGoodAt,
                         now = now,
+                        config = config,
                     )
-                val networkMatchBonus = resolveNetworkMatchBonus(scopedMemory, globalMemory, networkContext)
-                val latencyPenalty = resolveLatencyPenalty(scopedMemory, globalMemory)
-                val recentFailurePenalty = resolveRecentFailurePenalty(scopedMemory, globalMemory, now)
+                val networkMatchBonus = resolveNetworkMatchBonus(scopedMemory, globalMemory, networkContext, config)
+                val latencyPenalty = resolveLatencyPenalty(scopedMemory, globalMemory, config)
+                val recentFailurePenalty = resolveRecentFailurePenalty(scopedMemory, globalMemory, now, config)
                 val validationFailurePenalty =
                     resolveValidationFailurePenalty(
                         scopedMemory = scopedMemory,
                         globalMemory = globalMemory,
                         privateDnsActive = networkContext?.privateDnsActive == true,
+                        config = config,
                     )
-                val explorationBonus = resolveExplorationBonus(scopedMemory, globalMemory, networkContext, now)
+                val explorationBonus = resolveExplorationBonus(scopedMemory, globalMemory, networkContext, now, config)
                 IndexedScore(
                     index = index,
                     score =
                         AdaptiveProtocolCandidateScore(
                             candidate = candidate,
+                            scoringVersion = config.version,
                             score =
-                                (successRate * 45.0).roundToInt() +
+                                (successRate * config.successRateWeight).roundToInt() +
                                     lastKnownGoodBonus +
                                     networkMatchBonus -
                                     latencyPenalty -
@@ -123,10 +183,11 @@ object AdaptiveProtocolRanker {
         scopedLastKnownGoodAt: Long?,
         globalLastKnownGoodAt: Long?,
         now: Long,
+        config: AdaptiveProtocolScoringConfig,
     ): Int =
         when {
-            optionId == scopedLastKnownGoodOptionId -> 16 + freshnessBonus(scopedLastKnownGoodAt, now)
-            optionId == globalLastKnownGoodOptionId -> 8 + freshnessBonus(globalLastKnownGoodAt, now)
+            optionId == scopedLastKnownGoodOptionId -> config.scopedLastKnownGoodBonus + freshnessBonus(scopedLastKnownGoodAt, now, config)
+            optionId == globalLastKnownGoodOptionId -> config.globalLastKnownGoodBonus + freshnessBonus(globalLastKnownGoodAt, now, config)
             else -> 0
         }
 
@@ -134,21 +195,22 @@ object AdaptiveProtocolRanker {
         scopedMemory: SmartProfileProtocolMemory?,
         globalMemory: SmartProfileProtocolMemory?,
         networkContext: NetworkFingerprint?,
+        config: AdaptiveProtocolScoringConfig,
     ): Int {
         var bonus = 0
         if (scopedMemory != null) {
-            bonus += 12
+            bonus += config.scopedMemoryBonus
         } else if (globalMemory != null) {
-            bonus += 4
+            bonus += config.globalMemoryBonus
         }
         if (networkContext?.upstreamValidated == true && (scopedMemory?.lastValidatedAt != null || globalMemory?.lastValidatedAt != null)) {
-            bonus += 4
+            bonus += config.upstreamValidatedBonus
         }
         if (networkContext?.privateDnsActive == true && scopedMemory?.lastValidatedAt != null) {
-            bonus += 2
+            bonus += config.privateDnsValidatedBonus
         }
         if (scopedMemory?.lastTrafficAt != null) {
-            bonus += 3
+            bonus += config.recentTrafficBonus
         }
         return bonus
     }
@@ -156,17 +218,22 @@ object AdaptiveProtocolRanker {
     private fun resolveLatencyPenalty(
         scopedMemory: SmartProfileProtocolMemory?,
         globalMemory: SmartProfileProtocolMemory?,
+        config: AdaptiveProtocolScoringConfig,
     ): Int {
         val memory = scopedMemory ?: globalMemory ?: return 0
         val latencyPenalty =
             memory.lastLatencyMs
                 ?.let { latencyMs ->
-                    ((latencyMs.coerceAtLeast(120L) - 120L) / 40L).toInt().coerceAtMost(18)
+                    ((latencyMs.coerceAtLeast(config.latencyBaselineMs) - config.latencyBaselineMs) / config.latencyStepMs)
+                        .toInt()
+                        .coerceAtMost(config.latencyPenaltyMax)
                 } ?: 0
         val connectPenalty =
             memory.lastConnectDurationMs
                 ?.let { durationMs ->
-                    ((durationMs.coerceAtLeast(1_200L) - 1_200L) / 250L).toInt().coerceAtMost(10)
+                    ((durationMs.coerceAtLeast(config.connectBaselineMs) - config.connectBaselineMs) / config.connectStepMs)
+                        .toInt()
+                        .coerceAtMost(config.connectPenaltyMax)
                 } ?: 0
         return latencyPenalty + connectPenalty
     }
@@ -175,6 +242,7 @@ object AdaptiveProtocolRanker {
         scopedMemory: SmartProfileProtocolMemory?,
         globalMemory: SmartProfileProtocolMemory?,
         now: Long,
+        config: AdaptiveProtocolScoringConfig,
     ): Int {
         val memory = scopedMemory ?: globalMemory ?: return 0
         val cooldownPenalty =
@@ -182,25 +250,29 @@ object AdaptiveProtocolRanker {
                 ?.takeIf { it > now }
                 ?.let { cooldownUntil ->
                     val remainingMinutes = ((cooldownUntil - now) / 60_000L).coerceAtLeast(1L)
-                    24 + minOf(remainingMinutes.toInt() * 3, 36)
+                    config.cooldownBasePenalty +
+                        minOf(remainingMinutes.toInt() * config.cooldownPenaltyPerMinute, config.cooldownPenaltyMax)
                 } ?: 0
         val recencyPenalty =
             memory.lastFailureAt
                 ?.let { lastFailureAt ->
                     when (now - lastFailureAt) {
-                        in 0..(5L * 60L * 1000L) -> 14
-                        in 0..(30L * 60L * 1000L) -> 10
-                        in 0..(6L * 60L * 60L * 1000L) -> 6
+                        in 0..(5L * 60L * 1000L) -> config.recentFailurePenalty
+                        in 0..(30L * 60L * 1000L) -> config.warmFailurePenalty
+                        in 0..(6L * 60L * 60L * 1000L) -> config.staleFailurePenalty
                         else -> 0
                     }
                 } ?: 0
-        return cooldownPenalty + recencyPenalty + memory.failureStreak.coerceAtMost(4) * 4
+        return cooldownPenalty +
+            recencyPenalty +
+            memory.failureStreak.coerceAtMost(config.failureStreakPenaltyMax) * config.failureStreakPenalty
     }
 
     private fun resolveValidationFailurePenalty(
         scopedMemory: SmartProfileProtocolMemory?,
         globalMemory: SmartProfileProtocolMemory?,
         privateDnsActive: Boolean,
+        config: AdaptiveProtocolScoringConfig,
     ): Int {
         val memory = scopedMemory ?: globalMemory ?: return 0
         val lastFailureAt = memory.lastFailureAt ?: return 0
@@ -209,11 +281,11 @@ object AdaptiveProtocolRanker {
             return 0
         }
         return when (memory.lastReasonCode) {
-            AutoConnectReasonCode.VALIDATION_TIMEOUT -> 16
-            AutoConnectReasonCode.DNS_FAILURE -> if (privateDnsActive) 18 else 12
-            AutoConnectReasonCode.HANDSHAKE_TIMEOUT -> 10
-            AutoConnectReasonCode.CONNECT_ERROR -> 8
-            AutoConnectReasonCode.LATENCY_ENDPOINT_BLOCKED -> 4
+            AutoConnectReasonCode.VALIDATION_TIMEOUT -> config.validationTimeoutPenalty
+            AutoConnectReasonCode.DNS_FAILURE -> if (privateDnsActive) config.privateDnsFailurePenalty else config.dnsFailurePenalty
+            AutoConnectReasonCode.HANDSHAKE_TIMEOUT -> config.handshakeTimeoutPenalty
+            AutoConnectReasonCode.CONNECT_ERROR -> config.connectErrorPenalty
+            AutoConnectReasonCode.LATENCY_ENDPOINT_BLOCKED -> config.latencyEndpointBlockedPenalty
             AutoConnectReasonCode.RESTORED_LAST_GOOD,
             null,
             -> 0
@@ -225,6 +297,7 @@ object AdaptiveProtocolRanker {
         globalMemory: SmartProfileProtocolMemory?,
         networkContext: NetworkFingerprint?,
         now: Long,
+        config: AdaptiveProtocolScoringConfig,
     ): Int {
         val memory = scopedMemory ?: globalMemory
         if (memory?.cooldownUntilAt?.let { it > now } == true) {
@@ -233,9 +306,9 @@ object AdaptiveProtocolRanker {
         val successEvidence = memory?.successCount ?: 0
         val failureEvidence = memory?.failureCount ?: 0
         return when {
-            memory == null -> if (networkContext == null) 6 else 8
-            successEvidence == 0 && failureEvidence == 0 -> 6
-            scopedMemory == null -> 3
+            memory == null -> if (networkContext == null) config.noMemoryExplorationBonus else config.networkNoMemoryExplorationBonus
+            successEvidence == 0 && failureEvidence == 0 -> config.noMemoryExplorationBonus
+            scopedMemory == null -> config.unscopedMemoryExplorationBonus
             else -> 0
         }
     }
@@ -243,11 +316,12 @@ object AdaptiveProtocolRanker {
     private fun freshnessBonus(
         referenceAt: Long?,
         now: Long,
+        config: AdaptiveProtocolScoringConfig,
     ): Int =
         when {
             referenceAt == null -> 0
-            now - referenceAt <= 24L * 60L * 60L * 1000L -> 4
-            now - referenceAt <= 7L * 24L * 60L * 60L * 1000L -> 2
+            now - referenceAt <= 24L * 60L * 60L * 1000L -> config.recentFreshnessBonus
+            now - referenceAt <= 7L * 24L * 60L * 60L * 1000L -> config.weeklyFreshnessBonus
             else -> 0
         }
 

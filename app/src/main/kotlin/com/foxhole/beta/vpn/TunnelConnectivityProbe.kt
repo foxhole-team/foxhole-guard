@@ -1,7 +1,27 @@
 package com.foxhole.beta.vpn
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeoutOrNull
+
+internal class TunnelConnectivityProbeTimeoutException(
+    val attemptsDone: Int,
+    val timeoutMs: Long,
+    cause: Throwable?,
+) : IllegalStateException(
+        buildString {
+            append("probe timed out after ")
+            append(attemptsDone)
+            append(" attempt")
+            if (attemptsDone != 1) {
+                append("s")
+            }
+            append(" and ")
+            append(timeoutMs)
+            append(" ms")
+        },
+        cause,
+    )
 
 internal object TunnelConnectivityProbe {
     suspend fun <T> run(
@@ -17,13 +37,23 @@ internal object TunnelConnectivityProbe {
         require(retryDelayMs >= 0) { "retryDelayMs must not be negative" }
         require(timeoutMs == null || timeoutMs > 0) { "timeoutMs must be positive" }
 
+        var attemptsDone = 0
+        var lastFailure: Throwable? = null
+
         suspend fun runAttempts(): Result<T> {
             if (initialDelayMs > 0) {
                 delay(initialDelayMs)
             }
-            var lastFailure: Throwable? = null
             repeat(attempts) { attemptIndex ->
-                val result = runCatching { block() }
+                attemptsDone = attemptIndex + 1
+                val result =
+                    try {
+                        Result.success(block())
+                    } catch (error: CancellationException) {
+                        throw error
+                    } catch (error: Throwable) {
+                        Result.failure(error)
+                    }
                 if (result.isSuccess) {
                     return result
                 }
@@ -41,7 +71,13 @@ internal object TunnelConnectivityProbe {
             runAttempts()
         } else {
             withTimeoutOrNull(timeoutMs) { runAttempts() }
-                ?: Result.failure(IllegalStateException("probe timed out"))
+                ?: Result.failure(
+                    TunnelConnectivityProbeTimeoutException(
+                        attemptsDone = attemptsDone,
+                        timeoutMs = timeoutMs,
+                        cause = lastFailure,
+                    ),
+                )
         }
     }
 }

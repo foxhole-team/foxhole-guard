@@ -31,25 +31,19 @@ internal fun planSubscriptionRefresh(
     require(importedProfiles.isNotEmpty()) { "importedProfiles must not be empty" }
 
     val orderedExisting = existingProfiles.sortedBy(ExistingSubscriptionProfile::id)
-    val unmatchedExisting = orderedExisting.toMutableList()
+    val activeExistingIds = orderedExisting.mapTo(LinkedHashSet()) { it.id }
+    val fallbackQueue = ArrayDeque(orderedExisting)
     val existingByKey =
         orderedExisting
             .groupBy { it.matchKey() }
-            .mapValues { (_, profiles) -> profiles.toMutableList() }
+            .mapValues { (_, profiles) -> ArrayDeque(profiles) }
             .toMutableMap()
 
     val assignments =
         importedProfiles.map { imported ->
-            val exactMatches = existingByKey[imported.matchKey()]
             val matched =
-                when {
-                    !exactMatches.isNullOrEmpty() -> exactMatches.removeAt(0)
-                    unmatchedExisting.isNotEmpty() -> unmatchedExisting.removeAt(0)
-                    else -> null
-                }
-            if (matched != null) {
-                unmatchedExisting.remove(matched)
-            }
+                existingByKey[imported.matchKey()]?.removeFirstActive(activeExistingIds)
+                    ?: fallbackQueue.removeFirstActive(activeExistingIds)
             SubscriptionRefreshAssignment(
                 existingProfileId = matched?.id,
                 importedProfile = imported,
@@ -58,8 +52,18 @@ internal fun planSubscriptionRefresh(
 
     return SubscriptionRefreshPlan(
         assignments = assignments,
-        deletedProfileIds = unmatchedExisting.map(ExistingSubscriptionProfile::id),
+        deletedProfileIds = orderedExisting.mapNotNull { profile -> profile.id.takeIf(activeExistingIds::contains) },
     )
+}
+
+private fun ArrayDeque<ExistingSubscriptionProfile>.removeFirstActive(activeExistingIds: MutableSet<Long>): ExistingSubscriptionProfile? {
+    while (isNotEmpty()) {
+        val candidate = removeFirst()
+        if (activeExistingIds.remove(candidate.id)) {
+            return candidate
+        }
+    }
+    return null
 }
 
 private data class SubscriptionProfileMatchKey(

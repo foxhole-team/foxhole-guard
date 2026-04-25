@@ -109,50 +109,22 @@ class IpInfoRepository(
         mode: IpInfoFetchMode = IpInfoFetchMode.FULL,
     ): IpInfo =
         withContext(Dispatchers.IO) {
-            if (mode == IpInfoFetchMode.ENTRY_QUICK) {
-                val quickTimeoutMs = callTimeoutMs ?: ENTRY_QUICK_CALL_TIMEOUT_MS
-                var lastFailure: Throwable? = null
-                effectiveEndpointCandidates(endpoint, mode).forEach { candidate ->
-                    val result =
-                        runCatching {
+            val strategy = resolveFetchStrategy(endpoint, callTimeoutMs, mode)
+            var lastFailure: Throwable? = null
+            strategy.endpointCandidates.forEach { candidate ->
+                val result =
+                    runCatching {
+                        if (strategy.includeFamilyProbes) {
+                            fetchSingleWithFamilyFallbacks(candidate, strategy.callTimeoutMs, network, proxy)
+                        } else {
                             fetchSingle(
                                 endpoint = candidate,
-                                callTimeoutMs = quickTimeoutMs,
+                                callTimeoutMs = strategy.callTimeoutMs,
                                 network = network,
                                 addressFamilyPreference = AddressFamilyPreference.ANY,
                                 proxy = proxy,
                             )
                         }
-                    if (result.isSuccess) {
-                        return@withContext result.getOrThrow()
-                    }
-                    lastFailure = result.exceptionOrNull()
-                }
-                throw lastFailure ?: IllegalStateException("ip info request failed")
-            }
-            var lastFailure: Throwable? = null
-            effectiveEndpointCandidates(endpoint, mode).forEach { candidate ->
-                val result =
-                    runCatching {
-                        val primary = fetchSingle(candidate, callTimeoutMs, network, AddressFamilyPreference.ANY, proxy)
-                        val familyCallTimeoutMs = callTimeoutMs?.coerceAtMost(FAMILY_PROBE_CALL_TIMEOUT_MS) ?: FAMILY_PROBE_CALL_TIMEOUT_MS
-                        val ipv4 =
-                            if (primary.ipv4 != null) {
-                                Result.success(primary)
-                            } else {
-                                runCatching {
-                                    fetchFamily(candidate, familyCallTimeoutMs, network, AddressFamilyPreference.IPV4, proxy)
-                                }
-                            }
-                        val ipv6 =
-                            if (primary.ipv6 != null) {
-                                Result.success(primary)
-                            } else {
-                                runCatching {
-                                    fetchFamily(candidate, familyCallTimeoutMs, network, AddressFamilyPreference.IPV6, proxy)
-                                }
-                            }
-                        mergeBestEffortIpInfo(primary = primary, ipv4 = ipv4, ipv6 = ipv6)
                     }
                 if (result.isSuccess) {
                     return@withContext result.getOrThrow()
@@ -160,6 +132,59 @@ class IpInfoRepository(
                 lastFailure = result.exceptionOrNull()
             }
             throw lastFailure ?: IllegalStateException("ip info request failed")
+        }
+
+    private fun fetchSingleWithFamilyFallbacks(
+        endpoint: String,
+        callTimeoutMs: Long?,
+        network: Network?,
+        proxy: HttpProxyAccess?,
+    ): IpInfo {
+        val primary = fetchSingle(endpoint, callTimeoutMs, network, AddressFamilyPreference.ANY, proxy)
+        val familyCallTimeoutMs = callTimeoutMs?.coerceAtMost(FAMILY_PROBE_CALL_TIMEOUT_MS) ?: FAMILY_PROBE_CALL_TIMEOUT_MS
+        val ipv4 =
+            if (primary.ipv4 != null) {
+                Result.success(primary)
+            } else {
+                runCatching {
+                    fetchFamily(endpoint, familyCallTimeoutMs, network, AddressFamilyPreference.IPV4, proxy)
+                }
+            }
+        val ipv6 =
+            if (primary.ipv6 != null) {
+                Result.success(primary)
+            } else {
+                runCatching {
+                    fetchFamily(endpoint, familyCallTimeoutMs, network, AddressFamilyPreference.IPV6, proxy)
+                }
+            }
+        return mergeBestEffortIpInfo(primary = primary, ipv4 = ipv4, ipv6 = ipv6)
+    }
+
+    internal data class EndpointFetchStrategy(
+        val endpointCandidates: List<String>,
+        val callTimeoutMs: Long?,
+        val includeFamilyProbes: Boolean,
+    )
+
+    internal fun resolveFetchStrategy(
+        endpoint: String,
+        callTimeoutMs: Long?,
+        mode: IpInfoFetchMode,
+    ): EndpointFetchStrategy =
+        when (mode) {
+            IpInfoFetchMode.FULL ->
+                EndpointFetchStrategy(
+                    endpointCandidates = effectiveEndpoints(endpoint),
+                    callTimeoutMs = callTimeoutMs,
+                    includeFamilyProbes = true,
+                )
+            IpInfoFetchMode.ENTRY_QUICK ->
+                EndpointFetchStrategy(
+                    endpointCandidates = effectiveEndpoints(endpoint),
+                    callTimeoutMs = callTimeoutMs ?: ENTRY_QUICK_CALL_TIMEOUT_MS,
+                    includeFamilyProbes = false,
+                )
         }
 
     private fun fetchSingle(
@@ -261,10 +286,7 @@ class IpInfoRepository(
         endpoint: String,
         mode: IpInfoFetchMode,
     ): List<String> =
-        when (mode) {
-            IpInfoFetchMode.FULL -> effectiveEndpoints(endpoint)
-            IpInfoFetchMode.ENTRY_QUICK -> effectiveEndpoints(endpoint)
-        }
+        resolveFetchStrategy(endpoint = endpoint, callTimeoutMs = null, mode = mode).endpointCandidates
 
     private fun familyEndpoints(
         endpoint: String,

@@ -234,14 +234,15 @@ class HomeScreenTest {
 
     @Test
     fun versionCardDoesNothingWhenExpertSettingsAreAlreadyVisible() {
-        val app = InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as FoxholeApplication
-        setExpertSettingsVisible(visible = true)
+        setExpertSettingsVisible(visible = false)
         composeRule.onNodeWithTag("bottom_nav_settings").performClick()
-        composeRule.waitUntil(timeoutMillis = 5_000) {
-            runBlocking { app.container.settingsRepository.settings.first().ui.showExpertSettings }
+        composeRule.onNodeWithTag("settings_screen").performScrollToNode(hasTestTag("settings_footer_version_card"))
+        repeat(5) {
+            composeRule.onNodeWithTag("settings_footer_version_card").performClick()
         }
-        composeRule.onNodeWithTag("settings_screen").performScrollToNode(hasTestTag("settings_expert_action"))
+        composeRule.onNodeWithTag("confirm_dialog_confirm_button").performClick()
         composeRule.onNodeWithTag("settings_expert_action").assertIsDisplayed()
+
         composeRule.onNodeWithTag("settings_screen").performScrollToNode(hasTestTag("settings_footer_version_card"))
         repeat(5) {
             composeRule.onNodeWithTag("settings_footer_version_card").performClick()
@@ -256,39 +257,20 @@ class HomeScreenTest {
 
     @Test
     fun screenshotToggleUpdatesWindowSecureFlag() {
-        composeRule.activityRule.scenario.onActivity { activity ->
-            val app = activity.application as FoxholeApplication
-            runBlocking {
-                app.container.settingsRepository.updateBlockScreenshots(false)
-            }
-        }
+        setBlockScreenshots(false)
         assertSecureFlag(expected = false)
 
-        composeRule.activityRule.scenario.onActivity { activity ->
-            val app = activity.application as FoxholeApplication
-            runBlocking {
-                app.container.settingsRepository.updateBlockScreenshots(true)
-            }
-        }
+        setBlockScreenshots(true)
         assertSecureFlag(expected = true)
 
-        composeRule.activityRule.scenario.onActivity { activity ->
-            val app = activity.application as FoxholeApplication
-            runBlocking {
-                app.container.settingsRepository.updateBlockScreenshots(false)
-            }
-        }
+        setBlockScreenshots(false)
+        assertSecureFlag(expected = false)
     }
 
     @Test
     fun appSettingsExposeScreenshotToggleAndUpdateWindowSecureFlag() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
-        composeRule.activityRule.scenario.onActivity { activity ->
-            val app = activity.application as FoxholeApplication
-            runBlocking {
-                app.container.settingsRepository.updateBlockScreenshots(true)
-            }
-        }
+        setBlockScreenshots(true)
         assertSecureFlag(expected = true)
 
         composeRule.onNodeWithTag("bottom_nav_settings").performClick()
@@ -297,12 +279,8 @@ class HomeScreenTest {
         composeRule.onNodeWithText(context.getString(R.string.block_screenshots_title)).performClick()
         assertSecureFlag(expected = false)
 
-        composeRule.activityRule.scenario.onActivity { activity ->
-            val app = activity.application as FoxholeApplication
-            runBlocking {
-                app.container.settingsRepository.updateBlockScreenshots(false)
-            }
-        }
+        setBlockScreenshots(false)
+        assertSecureFlag(expected = false)
     }
 
     private fun setExpertSettingsVisible(visible: Boolean) {
@@ -312,6 +290,14 @@ class HomeScreenTest {
                 app.container.settingsRepository.unlockExpertSettings()
                 app.container.settingsRepository.updateShowExpertSettings(visible)
             }
+        }
+        composeRule.waitForIdle()
+    }
+
+    private fun setBlockScreenshots(enabled: Boolean) {
+        val app = InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as FoxholeApplication
+        runBlocking {
+            app.container.settingsRepository.updateBlockScreenshots(enabled)
         }
         composeRule.waitForIdle()
     }
