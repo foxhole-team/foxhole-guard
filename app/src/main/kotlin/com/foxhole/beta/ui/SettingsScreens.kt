@@ -551,6 +551,7 @@ fun TrafficSettingsScreen(
     onMtuChanged: (Int) -> Unit,
     onPreferIpv6Changed: (Boolean) -> Unit,
     onDomainStrategySelected: (DomainStrategy) -> Unit,
+    onAutoRefreshSubscriptionsChanged: (Boolean) -> Unit,
 ) {
     var modeMenuExpanded by rememberSaveable { mutableStateOf(false) }
     var tunStackMenuExpanded by rememberSaveable { mutableStateOf(false) }
@@ -697,6 +698,15 @@ fun TrafficSettingsScreen(
                 onSelect = onDomainStrategySelected,
                 leadingIcon = Icons.Outlined.AccountTree,
                 optionIcon = ::domainStrategyIcon,
+            )
+        }
+        item {
+            SettingSwitchRow(
+                title = stringResource(R.string.auto_refresh_subscriptions_title),
+                checked = state.settings.connection.autoRefreshSubscriptions,
+                leadingIcon = Icons.Outlined.Refresh,
+                summary = stringResource(R.string.auto_refresh_subscriptions_summary),
+                onCheckedChange = onAutoRefreshSubscriptionsChanged,
             )
         }
     }

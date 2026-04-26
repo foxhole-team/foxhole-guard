@@ -549,6 +549,7 @@ class HomeViewModel(
     internal var profileReconnectPromptJob: Job? = null
     internal var autoConnectJob: Job? = null
     internal var protocolMetricsRefreshJob: Job? = null
+    internal var protocolMetricsRestoreOnCancel: Boolean = true
 
     init {
         viewModelScope.launch {
@@ -638,6 +639,15 @@ class HomeViewModel(
     }
 
     fun onToggleConnection() {
+        val protocolSearchRunning = autoConnectUiStateMutable.value.running || protocolMetricsRefreshJob != null
+        if (protocolSearchRunning) {
+            cancelAutoConnect(clearUiOnly = true)
+            cancelSmartProfileMetricsRefreshInternal(restoreConnection = false)
+            if (container.connectionController.snapshot.value.state in ACTIVE_CONNECTION_STATES) {
+                container.connectionController.disconnect()
+            }
+            return
+        }
         cancelAutoConnect(clearUiOnly = true)
         val state = uiState.value
         val activeProfile = state.activeProfile
@@ -792,6 +802,7 @@ class HomeViewModel(
         headline: String,
         markAsLastKnownGood: Boolean = false,
         countTowardOutcomeHistory: Boolean = true,
+        affectsFailureRankingMemory: Boolean = true,
     ) = recordAutoConnectCandidateOutcomeInternal(
         profileId = profileId,
         result = result,
@@ -799,6 +810,7 @@ class HomeViewModel(
         headline = headline,
         markAsLastKnownGood = markAsLastKnownGood,
         countTowardOutcomeHistory = countTowardOutcomeHistory,
+        affectsFailureRankingMemory = affectsFailureRankingMemory,
     )
 
     internal suspend fun awaitAutoConnectConnectionOutcome(): ConnectionSnapshot? =
@@ -854,7 +866,7 @@ class HomeViewModel(
 
     fun refreshSmartProfileMetrics(profileId: Long) = refreshSmartProfileMetricsInternal(profileId)
 
-    fun cancelSmartProfileMetricsRefresh() = cancelSmartProfileMetricsRefreshInternal()
+    fun cancelSmartProfileMetricsRefresh() = cancelSmartProfileMetricsRefreshInternal(restoreConnection = true)
 
     fun onProtocolRecommendationAccepted() = onProtocolRecommendationAcceptedInternal()
 
@@ -877,6 +889,8 @@ class HomeViewModel(
     fun onAutoReconnectChanged(value: Boolean) = onAutoReconnectChangedInternal(value)
 
     fun onAutoStartChanged(value: Boolean) = onAutoStartChangedInternal(value)
+
+    fun onAutoRefreshSubscriptionsChanged(value: Boolean) = onAutoRefreshSubscriptionsChangedInternal(value)
 
     fun onIpInfoEndpointChanged(value: String) = onIpInfoEndpointChangedInternal(value)
 

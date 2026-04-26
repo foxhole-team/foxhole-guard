@@ -631,16 +631,17 @@ class RuntimeConfigAssembler(
                     add(
                         buildJsonObject {
                             put("tag", DNS_REMOTE_TAG)
-                            put("type", "tcp")
+                            put("type", "https")
                             put("server", FOXHOLE_REMOTE_DNS_SERVER)
-                            put("server_port", 53)
+                            put("server_port", 443)
+                            put("path", "/dns-query")
                             put("detour", "proxy")
                         },
                     )
                 },
             )
             put("strategy", strategy)
-            put("final", DNS_DIRECT_TAG)
+            put("final", DNS_REMOTE_TAG)
         }
 
     private fun sniffRule(): JsonObject =
@@ -650,6 +651,7 @@ class RuntimeConfigAssembler(
 
     private fun hijackDnsRule(): JsonObject =
         buildJsonObject {
+            put("protocol", "dns")
             put("port", 53)
             put("action", "hijack-dns")
         }
@@ -675,8 +677,8 @@ class RuntimeConfigAssembler(
             (local["type"]?.jsonPrimitive?.contentOrNull == "local") ||
                 (local["address"]?.jsonPrimitive?.contentOrNull == "local")
         val remoteMatches =
-            (
-                remote["type"]?.jsonPrimitive?.contentOrNull == "tcp" &&
+                (
+                    remote["type"]?.jsonPrimitive?.contentOrNull == "tcp" &&
                     remote["server"]?.jsonPrimitive?.contentOrNull == FOXHOLE_REMOTE_DNS_SERVER &&
                     remote["server_port"]?.jsonPrimitive?.contentOrNull == "53"
                 ) ||
@@ -684,6 +686,12 @@ class RuntimeConfigAssembler(
                     remote["type"]?.jsonPrimitive?.contentOrNull == "udp" &&
                         remote["server"]?.jsonPrimitive?.contentOrNull == FOXHOLE_REMOTE_DNS_SERVER &&
                         remote["server_port"]?.jsonPrimitive?.contentOrNull == "53"
+                    ) ||
+                (
+                    remote["type"]?.jsonPrimitive?.contentOrNull == "https" &&
+                        remote["server"]?.jsonPrimitive?.contentOrNull == FOXHOLE_REMOTE_DNS_SERVER &&
+                        remote["server_port"]?.jsonPrimitive?.contentOrNull == "443" &&
+                        remote["path"]?.jsonPrimitive?.contentOrNull == "/dns-query"
                     ) ||
                 (
                     remote["address"]?.jsonPrimitive?.contentOrNull == FOXHOLE_DOH_ADDRESS

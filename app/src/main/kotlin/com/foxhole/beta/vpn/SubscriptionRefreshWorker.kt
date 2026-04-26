@@ -15,6 +15,10 @@ class SubscriptionRefreshWorker(
 ) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result {
         val dependencies: FoxholeRefreshWorkerDependencies = (applicationContext as FoxholeApplication).appGraph
+        if (!dependencies.settingsRepository.current().connection.autoRefreshSubscriptions) {
+            dependencies.diagnosticsLogger.record("worker", "scheduled refresh skipped: auto refresh disabled")
+            return Result.success()
+        }
         val targets =
             dependencies.profileRepository.profiles.first()
             .filter { it.sourceType == ProfileSourceType.SUBSCRIPTION_URL }

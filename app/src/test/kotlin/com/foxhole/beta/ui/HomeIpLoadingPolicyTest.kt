@@ -84,7 +84,7 @@ class HomeIpLoadingPolicyTest {
     }
 
     @Test
-    fun `shows pending network loading while smart connect is running and upstream internet is available`() {
+    fun `shows pending network loading while smart start is running and upstream internet is available`() {
         assertTrue(
             shouldShowPendingNetworkLoading(
                 visibleIpInfo = null,

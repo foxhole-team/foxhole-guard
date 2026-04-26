@@ -1,1 +1,1 @@
-Foxhole - Android client for sing-box with tunnel, split tunnel, proxy and LAN proxy
+Foxhole is an Android client for sing-box with support for Tunnel, Split Tunnel, Proxy, LAN Proxy, and Smart Start.

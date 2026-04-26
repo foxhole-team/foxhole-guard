@@ -47,6 +47,24 @@ class AutoConnectFailureClassifierTest {
     }
 
     @Test
+    fun `structured error code wins over localized message text`() {
+        assertEquals(
+            AutoConnectReasonCode.DNS_FAILURE,
+            classifyAutoConnectProbeFailure(
+                snapshot =
+                    ConnectionSnapshot(
+                        state = ConnectionState.ERROR,
+                        message = "локализованная ошибка проверки сети",
+                        reasonCode = AutoConnectReasonCode.DNS_FAILURE,
+                    ),
+                timedOut = false,
+                vpnNetworkAvailable = true,
+                dnsFailureMessage = "dns failed",
+            ),
+        )
+    }
+
+    @Test
     fun `other error maps to generic connect error`() {
         assertEquals(
             AutoConnectReasonCode.CONNECT_ERROR,

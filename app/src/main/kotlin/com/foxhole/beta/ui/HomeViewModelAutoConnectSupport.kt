@@ -408,6 +408,7 @@ private fun HomeViewModel.fullScanAutoConnectCandidates(
 ): List<AutoConnectProbeCandidate> =
     MultiProtocolProfileSupport.smartStartFullScanCandidates(
         profile = profile,
+        allowInsecureTlsGlobally = uiState.value.settings.expert.allowInsecureTls,
         excludedOptionIds = excludedAutoConnectOptionIds(profileId),
     )
 
@@ -497,6 +498,7 @@ private data class BudgetedAutoConnectProbe(
 
 internal fun HomeViewModel.refreshSmartProfileMetricsInternal(profileId: Long) {
     protocolMetricsRefreshJob?.cancel()
+    protocolMetricsRestoreOnCancel = true
     protocolMetricsRefreshJob =
         viewModelScope.launch {
             var initiallyActive = false
@@ -538,6 +540,7 @@ internal fun HomeViewModel.refreshSmartProfileMetricsInternal(profileId: Long) {
                         networkFingerprint = networkFingerprint?.key,
                         headline = if (result.success) "manual metrics probe ok" else "manual metrics probe failed",
                         countTowardOutcomeHistory = false,
+                        affectsFailureRankingMemory = false,
                     )
                     markAutoConnectCandidateFinished(result)
                     if (index < candidates.lastIndex) {
@@ -599,15 +602,17 @@ internal fun HomeViewModel.refreshSmartProfileMetricsInternal(profileId: Long) {
                 }
             } catch (cancelled: CancellationException) {
                 withContext(NonCancellable) {
-                    restoredConnection =
-                        runCatching {
-                            restoreConnectionAfterMetricsRefresh(
-                                profileId = profileId,
-                                selectedOptionId = selectedOptionId,
-                                initiallyActive = initiallyActive && !restoredConnection,
-                            )
-                        }.isSuccess
-                    emitSuccess(getApplication<Application>().getString(R.string.protocol_metrics_refresh_cancelled))
+                    if (protocolMetricsRestoreOnCancel) {
+                        restoredConnection =
+                            runCatching {
+                                restoreConnectionAfterMetricsRefresh(
+                                    profileId = profileId,
+                                    selectedOptionId = selectedOptionId,
+                                    initiallyActive = initiallyActive && !restoredConnection,
+                                )
+                            }.isSuccess
+                        emitSuccess(getApplication<Application>().getString(R.string.protocol_metrics_refresh_cancelled))
+                    }
                 }
                 throw cancelled
             } catch (error: Throwable) {
@@ -615,7 +620,7 @@ internal fun HomeViewModel.refreshSmartProfileMetricsInternal(profileId: Long) {
                 emitError(getApplication<Application>().getString(R.string.protocol_metrics_refresh_failed))
             } finally {
                 withContext(NonCancellable) {
-                    if (initiallyActive && !restoredConnection) {
+                    if (protocolMetricsRestoreOnCancel && initiallyActive && !restoredConnection) {
                         restoreFailure =
                             runCatching {
                                 restoreConnectionAfterMetricsRefresh(
@@ -631,6 +636,7 @@ internal fun HomeViewModel.refreshSmartProfileMetricsInternal(profileId: Long) {
                     protocolMetricsRefreshingProfileIdsMutable.value =
                         protocolMetricsRefreshingProfileIdsMutable.value - profileId
                     protocolMetricsRefreshJob = null
+                    protocolMetricsRestoreOnCancel = true
                     delay(HomeViewModel.AUTO_CONNECT_RESULT_SETTLE_MS)
                     clearAutoConnectUiState()
                 }
@@ -638,7 +644,8 @@ internal fun HomeViewModel.refreshSmartProfileMetricsInternal(profileId: Long) {
         }
 }
 
-internal fun HomeViewModel.cancelSmartProfileMetricsRefreshInternal() {
+internal fun HomeViewModel.cancelSmartProfileMetricsRefreshInternal(restoreConnection: Boolean) {
+    protocolMetricsRestoreOnCancel = restoreConnection
     protocolMetricsRefreshJob?.cancel()
 }
 
@@ -923,6 +930,7 @@ internal suspend fun HomeViewModel.recordAutoConnectCandidateOutcomeInternal(
     headline: String,
     markAsLastKnownGood: Boolean = false,
     countTowardOutcomeHistory: Boolean = true,
+    affectsFailureRankingMemory: Boolean = true,
 ) {
     container.settingsRepository.recordSmartProfileProbeResult(
         profileId = profileId,
@@ -936,6 +944,7 @@ internal suspend fun HomeViewModel.recordAutoConnectCandidateOutcomeInternal(
         validatedAt = result.validatedAt,
         trafficObservedAt = result.trafficObservedAt,
         countTowardOutcomeHistory = countTowardOutcomeHistory,
+        affectsFailureRankingMemory = affectsFailureRankingMemory,
     )
     val details =
         buildList {
@@ -1144,6 +1153,7 @@ internal fun HomeViewModel.scoredAutoConnectCandidatesInternal(
         preference = uiState.value.settings.smartProfilePreference(profileId),
         networkFingerprint = networkFingerprint?.key,
         networkContext = networkFingerprint,
+        allowInsecureTlsGlobally = uiState.value.settings.expert.allowInsecureTls,
         excludedOptionIds = excludedOptionIds,
         controlledExploration = true,
     )

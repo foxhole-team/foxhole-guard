@@ -249,7 +249,7 @@ class ProfileRuntimeSessionAndroidTest {
                         val startedAt = System.currentTimeMillis()
                         Log.d(
                             TEST_TAG,
-                            "liveSmart start profileId=${profile.id} protocol=${option.protocolHint.name.lowercase()} optionId=${option.id}",
+                            "liveSmartStart profileId=${profile.id} protocol=${option.protocolHint.name.lowercase()} optionId=${option.id}",
                         )
                         app.container.connectionController.connect(profile.id, protocolOptionId = option.id)
                         val terminalState =

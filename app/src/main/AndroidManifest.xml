@@ -17,6 +17,7 @@
         android:name="android.permission.QUERY_ALL_PACKAGES"
         tools:ignore="QueryAllPackagesPermission" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.VIBRATE" />
 
     <!-- Release defaults stay HTTPS-only at the platform boundary. Debug keeps a
          manifest overlay for local expert HTTP-import diagnostics. -->

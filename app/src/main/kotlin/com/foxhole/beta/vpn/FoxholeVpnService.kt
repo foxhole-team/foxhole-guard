@@ -27,6 +27,7 @@ import com.foxhole.beta.FoxholeApplication
 import com.foxhole.beta.FoxholeRuntimeDependencies
 import com.foxhole.beta.MainActivity
 import com.foxhole.beta.R
+import com.foxhole.beta.core.model.AutoConnectReasonCode
 import com.foxhole.beta.core.model.ConnectionSnapshot
 import com.foxhole.beta.core.model.ConnectivityHealthState
 import com.foxhole.beta.core.model.ConnectionState
@@ -364,6 +365,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
     internal suspend fun disconnect(
         message: String? = null,
         commandStartId: Int? = null,
+        reasonCode: AutoConnectReasonCode? = null,
     ) {
         val session = activeSession
         val finalTraffic =
@@ -398,6 +400,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
                 state = if (message == null) ConnectionState.IDLE else ConnectionState.ERROR,
                 trafficMode = container.settingsRepository.current().traffic.mode,
                 message = message,
+                reasonCode = reasonCode,
             ),
         )
         updateNotification()
@@ -408,9 +411,10 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
     internal fun fail(
         message: String,
         commandStartId: Int? = null,
+        reasonCode: AutoConnectReasonCode? = null,
     ) {
         container.diagnosticsLogger.record("connection", "runtime failure: $message")
-        launchCommand { disconnect(message, commandStartId) }
+        launchCommand { disconnect(message, commandStartId, reasonCode) }
     }
 
     internal suspend fun reload(profileIdHint: Long) {

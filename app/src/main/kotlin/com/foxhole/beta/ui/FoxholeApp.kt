@@ -347,6 +347,7 @@ fun FoxholeApp(
                         onMtuChanged = viewModel::onMtuChanged,
                         onPreferIpv6Changed = viewModel::onPreferIpv6Changed,
                         onDomainStrategySelected = viewModel::onDomainStrategySelected,
+                        onAutoRefreshSubscriptionsChanged = viewModel::onAutoRefreshSubscriptionsChanged,
                     )
                 }
                 composable(AppRoute.ROUTING) {

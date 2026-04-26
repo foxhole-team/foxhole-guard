@@ -144,6 +144,7 @@ data class UiSettings(
 data class ConnectionSettings(
     val autoReconnect: Boolean = true,
     val autoStartOnBoot: Boolean = false,
+    val autoRefreshSubscriptions: Boolean = false,
     val ipInfoEndpoint: String = "",
     val stealthModeEnabled: Boolean = true,
 )
@@ -381,6 +382,7 @@ data class ConnectionSnapshot(
     val profileName: String? = null,
     val protocolHint: ProtocolHint? = null,
     val message: String? = null,
+    val reasonCode: AutoConnectReasonCode? = null,
     val lastChangeAt: Long = System.currentTimeMillis(),
 )
 

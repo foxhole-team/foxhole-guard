@@ -285,6 +285,19 @@ fun HomeScreen(
             autoConnectRunning = state.autoConnect.running,
             deviceInternetAvailable = deviceInternetAvailable,
         )
+    val showNetworkConnectionStatus =
+        state.connection.state in setOf(
+            ConnectionState.CONNECTING,
+            ConnectionState.CONNECTED,
+            ConnectionState.RECONNECTING,
+        )
+    val showResolvedNetworkConnectionStatus = state.connection.state == ConnectionState.CONNECTED
+    val networkInfoTitleRes =
+        if (showNetworkConnectionStatus) {
+            R.string.home_network_connection_info_title
+        } else {
+            R.string.home_network_current_ip_title
+        }
     val isSmartDashboardProfile =
         state.activeProfile?.let(MultiProtocolProfileSupport::hasMultipleSupportedOptions) == true
     val activeProfileId = state.activeProfile?.id
@@ -692,17 +705,27 @@ fun HomeScreen(
                                     verticalAlignment = Alignment.Top,
                                 ) {
                                     HomeNetworkLoadingBlock(
+                                        title = stringResource(networkInfoTitleRes),
+                                        labels =
+                                            listOf(
+                                                stringResource(R.string.home_network_country_label),
+                                                stringResource(R.string.home_network_ip_label),
+                                                stringResource(R.string.home_network_provider_label),
+                                            ),
                                         modifier =
                                             Modifier
-                                                .weight(1f)
+                                                .weight(if (showNetworkConnectionStatus) 1f else 2f)
                                                 .testTag("home_network_loading"),
                                     )
-                                    HomeConnectionStatusLoadingBlock(
-                                        modifier =
-                                            Modifier
-                                                .weight(1f)
-                                                .testTag("home_connection_status_loading"),
-                                    )
+                                    if (showNetworkConnectionStatus) {
+                                        HomeNetworkVerticalDivider()
+                                        HomeConnectionStatusLoadingBlock(
+                                            modifier =
+                                                Modifier
+                                                    .weight(1f)
+                                                    .testTag("home_connection_status_loading"),
+                                        )
+                                    }
                                 }
                             } else {
                                 Row(
@@ -711,123 +734,94 @@ fun HomeScreen(
                                     verticalAlignment = Alignment.Top,
                                 ) {
                                     val networkIpInfo = visibleNetworkIpInfo
-                                    Column(
-                                        modifier = Modifier.weight(1f),
-                                        verticalArrangement = Arrangement.spacedBy(2.dp),
-                                    ) {
-                                        HomeNetworkColumnTitle(stringResource(R.string.home_network_connection_info_title))
-                                        if (networkIpInfo == null) {
-                                            Text(
-                                                text = stringResource(R.string.home_network_unavailable),
-                                                modifier = Modifier.testTag("home_network_country"),
-                                                style = MaterialTheme.typography.labelSmall,
-                                                fontWeight = FontWeight.SemiBold,
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis,
-                                            )
-                                            Text(
-                                                text = "-",
-                                                modifier = Modifier.testTag("home_network_primary_ip"),
-                                                style =
-                                                    MaterialTheme.typography.labelSmall.copy(
-                                                        fontSize = 10.sp,
-                                                        lineHeight = 11.sp,
-                                                    ),
-                                                fontFamily = FontFamily.Monospace,
-                                                fontWeight = FontWeight.SemiBold,
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis,
-                                            )
-                                            Text(
-                                                text = stringResource(R.string.home_network_retry_hint),
-                                                style = MaterialTheme.typography.labelSmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis,
-                                            )
+                                    val countryText =
+                                        if (networkIpInfo != null) {
+                                            buildCountryLine(networkIpInfo)
                                         } else {
-                                            Text(
-                                                text = buildCountryLine(networkIpInfo),
-                                                modifier = Modifier.testTag("home_network_country"),
-                                                style = MaterialTheme.typography.labelSmall,
-                                                fontWeight = FontWeight.SemiBold,
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis,
-                                            )
-                                            Text(
-                                                text = primaryVisibleIp(networkIpInfo),
-                                                modifier = Modifier.testTag("home_network_primary_ip"),
-                                                style =
-                                                    MaterialTheme.typography.labelSmall.copy(
-                                                        fontSize = 10.sp,
-                                                        lineHeight = 11.sp,
-                                                    ),
-                                                fontFamily = FontFamily.Monospace,
-                                                fontWeight = FontWeight.SemiBold,
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis,
-                                            )
-                                            networkIpInfo.isp?.takeIf { it.isNotBlank() }?.let { provider ->
-                                                Text(
-                                                    text = provider,
-                                                    style = MaterialTheme.typography.labelSmall,
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                    maxLines = 1,
-                                                    overflow = TextOverflow.Ellipsis,
-                                                )
-                                            }
+                                            stringResource(R.string.home_network_unavailable)
                                         }
-                                    }
+                                    val ipText = if (networkIpInfo != null) primaryVisibleIp(networkIpInfo) else "-"
+                                    val providerText = networkIpInfo?.isp?.takeIf { it.isNotBlank() } ?: "-"
                                     Column(
                                         modifier = Modifier.weight(1f),
                                         verticalArrangement = Arrangement.spacedBy(2.dp),
                                     ) {
-                                        val vpnLatencyText =
-                                            when {
-                                                dashboardSelectedLatencyDown -> stringResource(R.string.latency_pill_down)
-                                                dashboardSelectedLatencyMs != null ->
-                                                    stringResource(R.string.latency_pill_value, dashboardSelectedLatencyMs)
-                                                dashboardSelectedLatencyUnavailable -> stringResource(R.string.latency_pill_unavailable)
-                                                else -> stringResource(R.string.smart_profile_metric_unavailable)
-                                            }
-                                        val serverPingText =
-                                            when {
-                                                dashboardSelectedServerPingMs != null ->
-                                                    stringResource(R.string.latency_pill_value, dashboardSelectedServerPingMs)
-                                                dashboardSelectedServerPingUnavailable -> stringResource(R.string.latency_pill_unavailable)
-                                                else -> stringResource(R.string.smart_profile_metric_unavailable)
-                                            }
-                                        val profileStatusText =
-                                            when {
-                                                dashboardSelectedLatencyDown -> stringResource(R.string.latency_quality_failed)
-                                                dashboardSelectedLatencyMs != null ->
-                                                    latencyQualityLabel(
-                                                        classifyVpnLatency(
-                                                            latencyMs = dashboardSelectedLatencyMs,
-                                                            failed = false,
-                                                            unavailable = false,
-                                                        ),
-                                                    )
-                                                dashboardSelectedLatencyUnavailable -> stringResource(R.string.latency_quality_unavailable)
-                                                else -> stringResource(R.string.smart_start_protocol_status_no_data)
-                                            }
-                                        HomeNetworkColumnTitle(stringResource(R.string.home_network_profile_info_title))
+                                        HomeNetworkColumnTitle(stringResource(networkInfoTitleRes))
                                         HomeNetworkDetailLine(
-                                            label = stringResource(R.string.home_network_vpn_latency_label),
-                                            value = vpnLatencyText,
-                                            valueMonospace = dashboardSelectedLatencyMs != null,
+                                            label = stringResource(R.string.home_network_country_label),
+                                            value = countryText,
+                                            modifier = Modifier.testTag("home_network_country"),
                                         )
                                         HomeNetworkSubtleDivider()
                                         HomeNetworkDetailLine(
-                                            label = stringResource(R.string.home_network_server_ping_label),
-                                            value = serverPingText,
-                                            valueMonospace = dashboardSelectedServerPingMs != null,
+                                            label = stringResource(R.string.home_network_ip_label),
+                                            value = ipText,
+                                            modifier = Modifier.testTag("home_network_primary_ip"),
+                                            valueMonospace = networkIpInfo != null,
                                         )
                                         HomeNetworkSubtleDivider()
                                         HomeNetworkDetailLine(
-                                            label = stringResource(R.string.home_network_status_label),
-                                            value = profileStatusText,
+                                            label = stringResource(R.string.home_network_provider_label),
+                                            value = providerText,
                                         )
+                                    }
+                                    if (showResolvedNetworkConnectionStatus) {
+                                        HomeNetworkVerticalDivider()
+                                        Column(
+                                            modifier = Modifier.weight(1f),
+                                            verticalArrangement = Arrangement.spacedBy(2.dp),
+                                        ) {
+                                            val connectionMetricsAvailable = state.connection.state == ConnectionState.CONNECTED
+                                            val vpnLatencyText =
+                                                when {
+                                                    !connectionMetricsAvailable -> stringResource(R.string.smart_start_protocol_status_no_data)
+                                                    dashboardSelectedLatencyDown -> stringResource(R.string.latency_pill_down)
+                                                    dashboardSelectedLatencyMs != null ->
+                                                        stringResource(R.string.latency_pill_value, dashboardSelectedLatencyMs)
+                                                    dashboardSelectedLatencyUnavailable -> stringResource(R.string.latency_pill_unavailable)
+                                                    else -> stringResource(R.string.smart_profile_metric_unavailable)
+                                                }
+                                            val serverPingText =
+                                                when {
+                                                    !connectionMetricsAvailable -> stringResource(R.string.smart_start_protocol_status_no_data)
+                                                    dashboardSelectedServerPingMs != null ->
+                                                        stringResource(R.string.latency_pill_value, dashboardSelectedServerPingMs)
+                                                    dashboardSelectedServerPingUnavailable -> stringResource(R.string.latency_pill_unavailable)
+                                                    else -> stringResource(R.string.smart_profile_metric_unavailable)
+                                                }
+                                            val profileStatusText =
+                                                when {
+                                                    !connectionMetricsAvailable -> stringResource(R.string.smart_start_protocol_status_no_data)
+                                                    dashboardSelectedLatencyDown -> stringResource(R.string.latency_quality_failed)
+                                                    dashboardSelectedLatencyMs != null ->
+                                                        latencyQualityLabel(
+                                                            classifyVpnLatency(
+                                                                latencyMs = dashboardSelectedLatencyMs,
+                                                                failed = false,
+                                                                unavailable = false,
+                                                            ),
+                                                        )
+                                                    dashboardSelectedLatencyUnavailable -> stringResource(R.string.latency_quality_unavailable)
+                                                    else -> stringResource(R.string.smart_start_protocol_status_no_data)
+                                                }
+                                            HomeNetworkColumnTitle(stringResource(R.string.home_network_profile_info_title))
+                                            HomeNetworkDetailLine(
+                                                label = stringResource(R.string.home_network_vpn_latency_label),
+                                                value = vpnLatencyText,
+                                                valueMonospace = connectionMetricsAvailable && dashboardSelectedLatencyMs != null,
+                                            )
+                                            HomeNetworkSubtleDivider()
+                                            HomeNetworkDetailLine(
+                                                label = stringResource(R.string.home_network_server_ping_label),
+                                                value = serverPingText,
+                                                valueMonospace = connectionMetricsAvailable && dashboardSelectedServerPingMs != null,
+                                            )
+                                            HomeNetworkSubtleDivider()
+                                            HomeNetworkDetailLine(
+                                                label = stringResource(R.string.home_network_status_label),
+                                                value = profileStatusText,
+                                            )
+                                        }
                                     }
                                 }
                             }
@@ -872,6 +866,7 @@ fun HomeScreen(
                                     fontWeight = FontWeight.SemiBold,
                                     maxLines = 1,
                                 )
+                                Spacer(modifier = Modifier.width(10.dp))
                                 HomeHeaderActionButton(
                                     icon = Icons.Outlined.DeleteSweep,
                                     contentDescription = stringResource(R.string.reset_usage_tracking),

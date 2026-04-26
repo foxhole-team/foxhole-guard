@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.lifecycle.viewModelScope
 import com.foxhole.beta.R
 import com.foxhole.beta.applyAppLocale
+import com.foxhole.beta.applySubscriptionRefreshSchedule
 import com.foxhole.beta.core.model.AppLocale
 import com.foxhole.beta.core.model.ClashApiSettings
 import com.foxhole.beta.core.model.DiagnosticsRetention
@@ -69,6 +70,13 @@ internal fun HomeViewModel.onAutoReconnectChangedInternal(value: Boolean) {
 internal fun HomeViewModel.onAutoStartChangedInternal(value: Boolean) {
     viewModelScope.launch {
         container.settingsRepository.updateAutoStartOnBoot(value)
+    }
+}
+
+internal fun HomeViewModel.onAutoRefreshSubscriptionsChangedInternal(value: Boolean) {
+    viewModelScope.launch {
+        container.settingsRepository.updateAutoRefreshSubscriptions(value)
+        getApplication<Application>().applySubscriptionRefreshSchedule(value)
     }
 }
 

@@ -4,6 +4,7 @@ import android.net.Network
 import android.net.NetworkCapabilities
 import androidx.core.content.getSystemService
 import com.foxhole.beta.R
+import com.foxhole.beta.core.model.AutoConnectReasonCode
 import com.foxhole.beta.core.model.ConnectionSnapshot
 import com.foxhole.beta.core.model.ConnectivityHealthState
 import com.foxhole.beta.core.model.ConnectionState
@@ -156,7 +157,10 @@ internal fun FoxholeVpnService.scheduleValidationInternal(
                 val message = validation.exceptionOrNull()?.message ?: getString(R.string.error_dns_probe_failed)
                 container.diagnosticsLogger.record("dns", "post-start probe failed: $message")
                 if (failOnFailure) {
-                    fail(message)
+                    fail(
+                        message = message,
+                        reasonCode = AutoConnectReasonCode.DNS_FAILURE,
+                    )
                 }
             }
         }

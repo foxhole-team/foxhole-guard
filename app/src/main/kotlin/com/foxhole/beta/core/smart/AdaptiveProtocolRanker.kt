@@ -189,7 +189,7 @@ object AdaptiveProtocolRanker {
         scopedMemory: SmartProfileProtocolMemory?,
         globalMemory: SmartProfileProtocolMemory?,
     ): Double {
-        val memory = scopedMemory ?: globalMemory
+        val memory = evidenceMemory(scopedMemory, globalMemory) { it.hasAdaptiveOutcomeEvidence }
         val successEvidence = maxOf(memory?.successCount ?: 0, if (memory?.lastSuccessAt != null) 1 else 0)
         val failureEvidence = maxOf(memory?.failureCount ?: 0, if (memory?.lastFailureAt != null) 1 else 0)
         return (successEvidence + 1.0) / (successEvidence + failureEvidence + 2.0)
@@ -217,12 +217,15 @@ object AdaptiveProtocolRanker {
         config: AdaptiveProtocolScoringConfig,
     ): Int {
         var bonus = 0
-        if (scopedMemory != null) {
+        val scopedRankingMemory = scopedMemory?.takeIf { it.hasAdaptiveRankingEvidence }
+        val globalRankingMemory = globalMemory?.takeIf { it.hasAdaptiveRankingEvidence }
+        val validationMemory = evidenceMemory(scopedMemory, globalMemory) { it.hasAdaptiveValidationEvidence }
+        if (scopedRankingMemory != null) {
             bonus += config.scopedMemoryBonus
-        } else if (globalMemory != null) {
+        } else if (globalRankingMemory != null) {
             bonus += config.globalMemoryBonus
         }
-        if (networkContext?.upstreamValidated == true && (scopedMemory?.lastValidatedAt != null || globalMemory?.lastValidatedAt != null)) {
+        if (networkContext?.upstreamValidated == true && validationMemory?.lastValidatedAt != null) {
             bonus += config.upstreamValidatedBonus
         }
         if (networkContext?.privateDnsActive == true && scopedMemory?.lastValidatedAt != null) {
@@ -239,7 +242,7 @@ object AdaptiveProtocolRanker {
         globalMemory: SmartProfileProtocolMemory?,
         config: AdaptiveProtocolScoringConfig,
     ): Int {
-        val memory = scopedMemory ?: globalMemory ?: return 0
+        val memory = evidenceMemory(scopedMemory, globalMemory) { it.hasAdaptiveLatencyEvidence } ?: return 0
         val latencyPenalty =
             memory.lastLatencyMs
                 ?.let { latencyMs ->
@@ -263,7 +266,7 @@ object AdaptiveProtocolRanker {
         now: Long,
         config: AdaptiveProtocolScoringConfig,
     ): Int {
-        val memory = scopedMemory ?: globalMemory ?: return 0
+        val memory = evidenceMemory(scopedMemory, globalMemory) { it.hasAdaptiveFailureRankingEvidence } ?: return 0
         val cooldownPenalty =
             memory.cooldownUntilAt
                 ?.takeIf { it > now }
@@ -284,7 +287,7 @@ object AdaptiveProtocolRanker {
                 } ?: 0
         return cooldownPenalty +
             recencyPenalty +
-            memory.failureStreak.coerceAtMost(config.failureStreakPenaltyMax) * config.failureStreakPenalty
+            memory.failureStreak.coerceIn(0, config.failureStreakPenaltyMax) * config.failureStreakPenalty
     }
 
     private fun resolveValidationFailurePenalty(
@@ -293,7 +296,7 @@ object AdaptiveProtocolRanker {
         privateDnsActive: Boolean,
         config: AdaptiveProtocolScoringConfig,
     ): Int {
-        val memory = scopedMemory ?: globalMemory ?: return 0
+        val memory = evidenceMemory(scopedMemory, globalMemory) { it.hasAdaptiveValidationFailureEvidence } ?: return 0
         val lastFailureAt = memory.lastFailureAt ?: return 0
         val lastSuccessAt = memory.lastSuccessAt ?: Long.MIN_VALUE
         if (lastFailureAt < lastSuccessAt) {
@@ -323,8 +326,9 @@ object AdaptiveProtocolRanker {
         now: Long,
         config: AdaptiveProtocolScoringConfig,
     ): Int {
-        val memory = scopedMemory ?: globalMemory
-        if (memory?.cooldownUntilAt?.let { it > now } == true) {
+        val memory = evidenceMemory(scopedMemory, globalMemory) { it.hasAdaptiveOutcomeEvidence }
+        val cooldownMemory = evidenceMemory(scopedMemory, globalMemory) { it.hasAdaptiveFailureRankingEvidence }
+        if (cooldownMemory?.cooldownUntilAt?.let { it > now } == true) {
             return 0
         }
         val successEvidence = memory?.successCount ?: 0
@@ -332,10 +336,55 @@ object AdaptiveProtocolRanker {
         return when {
             memory == null -> if (networkContext == null) config.noMemoryExplorationBonus else config.networkNoMemoryExplorationBonus
             successEvidence == 0 && failureEvidence == 0 -> config.noMemoryExplorationBonus
-            scopedMemory == null -> config.unscopedMemoryExplorationBonus
+            scopedMemory?.hasAdaptiveOutcomeEvidence != true -> config.unscopedMemoryExplorationBonus
             else -> 0
         }
     }
+
+    private fun evidenceMemory(
+        scopedMemory: SmartProfileProtocolMemory?,
+        globalMemory: SmartProfileProtocolMemory?,
+        hasEvidence: (SmartProfileProtocolMemory) -> Boolean,
+    ): SmartProfileProtocolMemory? =
+        scopedMemory?.takeIf(hasEvidence) ?: globalMemory?.takeIf(hasEvidence)
+
+    private val SmartProfileProtocolMemory.hasAdaptiveOutcomeEvidence: Boolean
+        get() =
+            successCount > 0 ||
+                failureCount > 0 ||
+                lastSuccessAt != null ||
+                lastFailureAt != null
+
+    private val SmartProfileProtocolMemory.hasAdaptiveLatencyEvidence: Boolean
+        get() = lastLatencyMs != null || lastConnectDurationMs != null
+
+    private val SmartProfileProtocolMemory.hasAdaptiveValidationEvidence: Boolean
+        get() = lastValidatedAt != null || lastTrafficAt != null
+
+    private val SmartProfileProtocolMemory.hasAdaptiveValidationFailureEvidence: Boolean
+        get() =
+            validationFailureCount > 0 ||
+                lastReasonCode in setOf(
+                    AutoConnectReasonCode.VALIDATION_TIMEOUT,
+                    AutoConnectReasonCode.DNS_FAILURE,
+                    AutoConnectReasonCode.HANDSHAKE_TIMEOUT,
+                    AutoConnectReasonCode.CONNECT_ERROR,
+                    AutoConnectReasonCode.LATENCY_ENDPOINT_BLOCKED,
+                )
+
+    private val SmartProfileProtocolMemory.hasAdaptiveFailureRankingEvidence: Boolean
+        get() =
+            failureStreak > 0 ||
+                lastFailureAt != null ||
+                cooldownUntilAt != null ||
+                hasAdaptiveValidationFailureEvidence
+
+    private val SmartProfileProtocolMemory.hasAdaptiveRankingEvidence: Boolean
+        get() =
+            hasAdaptiveOutcomeEvidence ||
+                hasAdaptiveLatencyEvidence ||
+                hasAdaptiveValidationEvidence ||
+                hasAdaptiveFailureRankingEvidence
 
     private fun freshnessBonus(
         referenceAt: Long?,

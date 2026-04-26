@@ -17,7 +17,7 @@ data class AutoConnectProbeCandidate(
     val protocolHint: ProtocolHint,
     val displayName: String,
     val requiresInsecureTls: Boolean = false,
-    val insecureTlsConsentGranted: Boolean = requiresInsecureTls,
+    val insecureTlsConsentGranted: Boolean = false,
 )
 
 data class AutoConnectProbeResult(
@@ -68,6 +68,7 @@ object MultiProtocolProfileSupport {
         preference: SmartProfilePreference? = null,
         networkFingerprint: String? = null,
         networkContext: NetworkFingerprint? = null,
+        allowInsecureTlsGlobally: Boolean = false,
         now: Long = System.currentTimeMillis(),
         excludedOptionIds: Set<String> = emptySet(),
         controlledExploration: Boolean = false,
@@ -79,6 +80,7 @@ object MultiProtocolProfileSupport {
                 profile = profile,
                 preference = preference,
                 networkFingerprint = networkFingerprint,
+                allowInsecureTlsGlobally = allowInsecureTlsGlobally,
                 excludedOptionIds = excludedOptionIds,
                 now = now,
             )
@@ -105,35 +107,54 @@ object MultiProtocolProfileSupport {
         profile: Profile,
         preference: SmartProfilePreference? = null,
         networkFingerprint: String? = null,
+        allowInsecureTlsGlobally: Boolean = false,
         excludedOptionIds: Set<String> = emptySet(),
         now: Long = System.currentTimeMillis(),
-    ): List<AutoConnectProbeCandidate> =
-        SmartStartController.eligibleCandidatesForRanking(
-            candidates = supportedOptions(profile).map { option -> option.toProbeCandidate(profile.id) },
+    ): List<AutoConnectProbeCandidate> {
+        val insecureTlsConsentGranted = profile.requiresInsecureTls || allowInsecureTlsGlobally
+        return SmartStartController.eligibleCandidatesForRanking(
+            candidates =
+                supportedOptions(profile).map { option ->
+                    option.toProbeCandidate(
+                        profileId = profile.id,
+                        insecureTlsConsentGranted = insecureTlsConsentGranted,
+                    )
+                },
             preference = preference,
             networkFingerprint = networkFingerprint,
             excludedOptionIds = excludedOptionIds,
             subscriptionExpiresAt = profile.subscriptionExpiresAt,
             now = now,
         )
+    }
 
     fun smartStartFullScanCandidates(
         profile: Profile,
+        allowInsecureTlsGlobally: Boolean = false,
         excludedOptionIds: Set<String> = emptySet(),
         now: Long = System.currentTimeMillis(),
-    ): List<AutoConnectProbeCandidate> =
-        SmartStartController.eligibleCandidatesForFullScan(
-            candidates = supportedOptions(profile).map { option -> option.toProbeCandidate(profile.id) },
+    ): List<AutoConnectProbeCandidate> {
+        val insecureTlsConsentGranted = profile.requiresInsecureTls || allowInsecureTlsGlobally
+        return SmartStartController.eligibleCandidatesForFullScan(
+            candidates =
+                supportedOptions(profile).map { option ->
+                    option.toProbeCandidate(
+                        profileId = profile.id,
+                        insecureTlsConsentGranted = insecureTlsConsentGranted,
+                    )
+                },
             excludedOptionIds = excludedOptionIds,
             subscriptionExpiresAt = profile.subscriptionExpiresAt,
             now = now,
         )
+    }
 
     fun probeCandidates(
         profile: Profile,
         preference: SmartProfilePreference? = null,
         networkFingerprint: String? = null,
         networkContext: NetworkFingerprint? = null,
+        allowInsecureTlsGlobally: Boolean = false,
         now: Long = System.currentTimeMillis(),
     ): List<AutoConnectProbeCandidate> =
         scoredProbeCandidates(
@@ -141,6 +162,7 @@ object MultiProtocolProfileSupport {
             preference = preference,
             networkFingerprint = networkFingerprint,
             networkContext = networkContext,
+            allowInsecureTlsGlobally = allowInsecureTlsGlobally,
             now = now,
         ).map(AdaptiveProtocolCandidateScore::candidate)
 
@@ -152,13 +174,16 @@ object MultiProtocolProfileSupport {
                     .thenBy { it.candidate.optionId },
             )
 
-    private fun ProfileProtocolOption.toProbeCandidate(profileId: Long): AutoConnectProbeCandidate =
+    private fun ProfileProtocolOption.toProbeCandidate(
+        profileId: Long,
+        insecureTlsConsentGranted: Boolean,
+    ): AutoConnectProbeCandidate =
         AutoConnectProbeCandidate(
             profileId = profileId,
             optionId = id,
             protocolHint = protocolHint,
             displayName = displayName.ifBlank { protocolHint.name },
             requiresInsecureTls = requiresInsecureTls,
-            insecureTlsConsentGranted = requiresInsecureTls,
+            insecureTlsConsentGranted = insecureTlsConsentGranted,
         )
 }

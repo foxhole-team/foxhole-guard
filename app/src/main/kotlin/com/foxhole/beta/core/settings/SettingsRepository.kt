@@ -141,6 +141,9 @@ class SettingsRepository(
     suspend fun updateAutoStartOnBoot(value: Boolean) =
         update { it.copy(connection = it.connection.copy(autoStartOnBoot = value)) }
 
+    suspend fun updateAutoRefreshSubscriptions(value: Boolean) =
+        update { it.copy(connection = it.connection.copy(autoRefreshSubscriptions = value)) }
+
     suspend fun updateStealthModeEnabled(value: Boolean) =
         update { current ->
             if (value) {
@@ -214,6 +217,7 @@ class SettingsRepository(
         validatedAt: Long? = null,
         trafficObservedAt: Long? = null,
         countTowardOutcomeHistory: Boolean = true,
+        affectsFailureRankingMemory: Boolean = true,
     ) = update { current ->
         val normalizedOptionId = optionId.trim().takeIf(String::isNotBlank) ?: return@update current
         val normalizedLatencyMs = latencyMs?.coerceAtLeast(1L)
@@ -235,6 +239,7 @@ class SettingsRepository(
                 validatedAt = validatedAt,
                 trafficAt = trafficObservedAt,
                 countTowardOutcomeHistory = countTowardOutcomeHistory,
+                affectsFailureRankingMemory = affectsFailureRankingMemory,
             )
         val updatedNetworkMemories =
             normalizedNetworkFingerprint?.let { fingerprint ->
@@ -262,6 +267,7 @@ class SettingsRepository(
                         validatedAt = validatedAt,
                         trafficAt = trafficObservedAt,
                         countTowardOutcomeHistory = countTowardOutcomeHistory,
+                        affectsFailureRankingMemory = affectsFailureRankingMemory,
                     )
                 currentNetworkMemories[fingerprint] =
                     previousNetworkMemory.copy(
@@ -715,7 +721,11 @@ class SettingsRepository(
     private suspend fun update(transform: (Settings) -> Settings) {
         ensureInitialized()
         lock.withLock {
-            val next = transform(settingsMutable.value).normalized()
+            val current = settingsMutable.value
+            val next = transform(current).normalized()
+            if (next == current) {
+                return@withLock
+            }
             withContext(Dispatchers.IO) {
                 writeEncrypted(next)
             }
@@ -884,7 +894,7 @@ class SettingsRepository(
             mixed = mixed.normalized(),
             allowLanAccess = allowLanAccess,
             clashApi = clashApi.normalized(),
-            v2RayApi = V2RayApiSettings(),
+            v2RayApi = v2RayApi.normalized(),
             auth = auth.normalized(),
         )
 

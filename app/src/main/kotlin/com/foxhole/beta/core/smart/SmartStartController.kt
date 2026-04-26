@@ -8,7 +8,6 @@ import kotlin.random.Random
 
 object SmartStartController {
     const val AUTO_CONNECT_MAX_ATTEMPTS: Int = 3
-    private const val HARD_FAILURE_STREAK_THRESHOLD: Int = 3
 
     fun eligibleCandidatesForRanking(
         candidates: List<AutoConnectProbeCandidate>,
@@ -37,7 +36,7 @@ object SmartStartController {
             }
             val scopedMemory = scopedMemories[candidate.optionId]
             val globalMemory = globalMemories[candidate.optionId]
-            !isCoolingDown(scopedMemory, globalMemory, now) && !isHardFailed(scopedMemory, globalMemory, now)
+            !isCoolingDown(scopedMemory, globalMemory, now)
         }
     }
 
@@ -105,16 +104,6 @@ object SmartStartController {
     ): Boolean =
         listOfNotNull(scopedMemory, globalMemory).any { memory ->
             memory.cooldownUntilAt?.let { cooldownUntilAt -> cooldownUntilAt > now } == true
-        }
-
-    private fun isHardFailed(
-        scopedMemory: SmartProfileProtocolMemory?,
-        globalMemory: SmartProfileProtocolMemory?,
-        now: Long,
-    ): Boolean =
-        listOfNotNull(scopedMemory, globalMemory).any { memory ->
-            memory.failureStreak >= HARD_FAILURE_STREAK_THRESHOLD &&
-                memory.cooldownUntilAt?.let { cooldownUntilAt -> cooldownUntilAt > now } == true
         }
 }
 

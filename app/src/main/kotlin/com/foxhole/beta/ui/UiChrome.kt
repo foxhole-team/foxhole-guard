@@ -3,6 +3,10 @@ package com.foxhole.beta.ui
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.os.Build
+import android.os.SystemClock
+import android.os.VibrationEffect
+import android.os.Vibrator
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -89,6 +93,7 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
+import androidx.core.content.getSystemService
 import com.foxhole.beta.R
 import com.foxhole.beta.ui.theme.LocalFoxholeUiPalette
 import kotlinx.coroutines.delay
@@ -196,6 +201,25 @@ internal enum class FoxholeBannerTone {
     SUCCESS,
 }
 
+internal class FoxholeBannerHapticGate(
+    private val nowElapsedMs: () -> Long = SystemClock::elapsedRealtime,
+) {
+    private var lastHapticAt: Long? = null
+
+    fun consume(tone: FoxholeBannerTone): Boolean {
+        if (tone == FoxholeBannerTone.INFO) {
+            return false
+        }
+        val now = nowElapsedMs()
+        val previous = lastHapticAt
+        if (previous != null && now - previous < FoxholeBannerHapticCooldownMs) {
+            return false
+        }
+        lastHapticAt = now
+        return true
+    }
+}
+
 internal data class FoxholeBannerEvent(
     val message: String,
     val tone: FoxholeBannerTone,
@@ -207,6 +231,52 @@ internal data class FoxholeBannerEvent(
 internal enum class FoxholeBannerAction {
     ACCEPT_PROTOCOL_RECOMMENDATION,
 }
+
+internal fun handleSnackbarHaptic(
+    event: FoxholeBannerEvent,
+    context: Context,
+    gate: FoxholeBannerHapticGate,
+) {
+    if (!gate.consume(event.tone)) {
+        return
+    }
+    when (event.tone) {
+        FoxholeBannerTone.SUCCESS -> vibrateBannerSuccess(context)
+        FoxholeBannerTone.ERROR -> vibrateBannerError(context)
+        FoxholeBannerTone.INFO -> Unit
+    }
+}
+
+private fun vibrateBannerSuccess(context: Context) {
+    val vibrator = context.getSystemService<Vibrator>() ?: return
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        vibrator.vibrate(
+            VibrationEffect.createOneShot(
+                FoxholeBannerHapticPulseMs,
+                VibrationEffect.DEFAULT_AMPLITUDE,
+            ),
+        )
+    } else {
+        @Suppress("DEPRECATION")
+        vibrator.vibrate(FoxholeBannerHapticPulseMs)
+    }
+}
+
+private fun vibrateBannerError(context: Context) {
+    val vibrator = context.getSystemService<Vibrator>() ?: return
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        vibrator.vibrate(
+            VibrationEffect.createWaveform(FoxholeBannerErrorWaveformMs, -1),
+        )
+    } else {
+        @Suppress("DEPRECATION")
+        vibrator.vibrate(FoxholeBannerErrorWaveformMs, -1)
+    }
+}
+
+private const val FoxholeBannerHapticCooldownMs = 1_200L
+private const val FoxholeBannerHapticPulseMs = 25L
+private val FoxholeBannerErrorWaveformMs = longArrayOf(0L, 25L, 60L, 25L)
 
 internal data class FoxholeBannerVisuals(
     override val message: String,

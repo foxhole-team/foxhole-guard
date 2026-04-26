@@ -1,6 +1,7 @@
 package com.foxhole.beta
 
 import android.app.Application
+import android.content.Context
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.os.LocaleListCompat
 import androidx.work.BackoffPolicy
@@ -53,30 +54,35 @@ class FoxholeApplication : Application(), Configuration.Provider {
             startupDependencies.profileRepository.getActiveProfile()
         }
         applyAppLocale(settings.ui.locale)
-        scheduleSubscriptionRefresh()
-    }
-
-    private fun scheduleSubscriptionRefresh() {
-        val work =
-            PeriodicWorkRequestBuilder<SubscriptionRefreshWorker>(6, TimeUnit.HOURS)
-                .setConstraints(
-                    Constraints.Builder()
-                        .setRequiredNetworkType(NetworkType.CONNECTED)
-                        .build(),
-                ).setBackoffCriteria(
-                    BackoffPolicy.EXPONENTIAL,
-                    10,
-                    TimeUnit.MINUTES,
-                ).build()
-        WorkManager.getInstance(this).enqueueUniquePeriodicWork(
-            SubscriptionRefreshWorker.WORK_NAME,
-            ExistingPeriodicWorkPolicy.UPDATE,
-            work,
-        )
+        applySubscriptionRefreshSchedule(settings.connection.autoRefreshSubscriptions)
     }
 
     override val workManagerConfiguration: Configuration
         get() = Configuration.Builder().build()
+}
+
+internal fun Context.applySubscriptionRefreshSchedule(enabled: Boolean) {
+    val workManager = WorkManager.getInstance(this)
+    if (!enabled) {
+        workManager.cancelUniqueWork(SubscriptionRefreshWorker.WORK_NAME)
+        return
+    }
+    val work =
+        PeriodicWorkRequestBuilder<SubscriptionRefreshWorker>(6, TimeUnit.HOURS)
+            .setConstraints(
+                Constraints.Builder()
+                    .setRequiredNetworkType(NetworkType.CONNECTED)
+                    .build(),
+            ).setBackoffCriteria(
+                BackoffPolicy.EXPONENTIAL,
+                10,
+                TimeUnit.MINUTES,
+            ).build()
+    workManager.enqueueUniquePeriodicWork(
+        SubscriptionRefreshWorker.WORK_NAME,
+        ExistingPeriodicWorkPolicy.UPDATE,
+        work,
+    )
 }
 
 internal fun applyAppLocale(locale: AppLocale) {

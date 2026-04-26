@@ -163,7 +163,7 @@ class SmartStartControllerTest {
     private fun candidate(
         optionId: String,
         requiresInsecureTls: Boolean = false,
-        insecureTlsConsentGranted: Boolean = requiresInsecureTls,
+        insecureTlsConsentGranted: Boolean = false,
     ): AutoConnectProbeCandidate =
         AutoConnectProbeCandidate(
             profileId = 1L,

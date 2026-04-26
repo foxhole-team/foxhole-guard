@@ -119,6 +119,7 @@ import com.foxhole.beta.ui.FoxholeValuePill
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import java.text.DateFormat
 import kotlin.math.max
 
@@ -942,6 +943,7 @@ fun ProfileConfigViewScreen(
     onLoadConfig: suspend (Long) -> String,
 ) {
     val codec = remember { ProfileConfigFormCodec() }
+    val loadTimeoutMessage = stringResource(R.string.profile_config_load_timeout)
     var draft by remember(profile?.id) { mutableStateOf<EditableProfileConfig?>(null) }
     var loadError by remember(profile?.id) { mutableStateOf<String?>(null) }
 
@@ -950,7 +952,11 @@ fun ProfileConfigViewScreen(
         loadError = null
         val currentProfile = profile ?: return@LaunchedEffect
         runCatching {
-            codec.decode(onLoadConfig(currentProfile.id))
+            val loadedConfig =
+                withTimeoutOrNull(ProfileConfigLoadTimeoutMs) {
+                    onLoadConfig(currentProfile.id)
+                } ?: error(loadTimeoutMessage)
+            codec.decode(loadedConfig)
         }.onSuccess { draft = it }
             .onFailure { loadError = it.message ?: "failed to load config" }
     }
@@ -1007,6 +1013,7 @@ fun ProfileConfigEditScreen(
 ) {
     val codec = remember { ProfileConfigFormCodec() }
     val scope = rememberCoroutineScope()
+    val loadTimeoutMessage = stringResource(R.string.profile_config_load_timeout)
     var sourceConfig by remember(profile?.id) { mutableStateOf<String?>(null) }
     var draft by remember(profile?.id) { mutableStateOf<EditableProfileConfig?>(null) }
     var loadError by remember(profile?.id) { mutableStateOf<String?>(null) }
@@ -1019,7 +1026,11 @@ fun ProfileConfigEditScreen(
         draft = null
         loadError = null
         val currentProfile = profile ?: return@LaunchedEffect
-        runCatching { onLoadConfig(currentProfile.id) }
+        runCatching {
+            withTimeoutOrNull(ProfileConfigLoadTimeoutMs) {
+                onLoadConfig(currentProfile.id)
+            } ?: error(loadTimeoutMessage)
+        }
             .onSuccess {
                 sourceConfig = it
                 draft = codec.decode(it)
@@ -1122,3 +1133,5 @@ private data class ProfileFieldDialogState(
     val singleLine: Boolean,
     val onConfirm: (String) -> Unit,
 )
+
+private const val ProfileConfigLoadTimeoutMs = 8_000L

@@ -400,7 +400,7 @@ internal fun convertXrayDns(dns: JsonObject?): JsonObject? {
             add(primaryServer.asSingboxServer(tag = "dns-remote", detour = "proxy"))
         }
         put("strategy", "prefer_ipv4")
-        put("final", "dns-direct")
+        put("final", "dns-remote")
     }
 }
 

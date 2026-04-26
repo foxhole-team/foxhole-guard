@@ -11,6 +11,7 @@ internal fun classifyAutoConnectProbeFailure(
     dnsFailureMessage: String,
 ): AutoConnectReasonCode =
     when {
+        snapshot?.state == ConnectionState.ERROR && snapshot.reasonCode != null -> snapshot.reasonCode
         timedOut && vpnNetworkAvailable -> AutoConnectReasonCode.VALIDATION_TIMEOUT
         timedOut -> AutoConnectReasonCode.HANDSHAKE_TIMEOUT
         snapshot?.state == ConnectionState.ERROR && snapshot.message == dnsFailureMessage -> AutoConnectReasonCode.DNS_FAILURE

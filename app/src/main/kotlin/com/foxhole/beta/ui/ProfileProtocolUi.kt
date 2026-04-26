@@ -452,10 +452,9 @@ internal fun ProtocolLatencyPill(
         when (classifyVpnLatency(latencyMs = latencyMs, failed = isDown, unavailable = isUnavailable || latencyMs == null)) {
             LatencyQuality.FAST -> Color(0xFF2F9E6A) to Color(0xFF2F9E6A).copy(alpha = 0.16f)
             LatencyQuality.NORMAL -> MaterialTheme.colorScheme.onSurfaceVariant to MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.42f)
-            LatencyQuality.SLOW -> Color(0xFFE28131) to Color(0xFFE28131).copy(alpha = 0.16f)
-            LatencyQuality.VERY_SLOW,
-            LatencyQuality.FAILED,
-            -> Color(0xFFC95353) to Color(0xFFC95353).copy(alpha = 0.16f)
+            LatencyQuality.SLOW -> Color(0xFFE0B84A) to Color(0xFFE0B84A).copy(alpha = 0.16f)
+            LatencyQuality.VERY_SLOW -> Color(0xFFE28131) to Color(0xFFE28131).copy(alpha = 0.16f)
+            LatencyQuality.FAILED -> Color(0xFFC95353) to Color(0xFFC95353).copy(alpha = 0.16f)
             LatencyQuality.UNAVAILABLE -> MaterialTheme.colorScheme.onSurfaceVariant to MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.42f)
         }
     val text =

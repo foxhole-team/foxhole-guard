@@ -67,6 +67,57 @@ class MultiProtocolProfileSupportTest {
     }
 
     @Test
+    fun `smart start does not treat insecure option marker as consent`() {
+        val eligible =
+            MultiProtocolProfileSupport.smartStartEligibleProbeCandidates(
+                profile =
+                    profile(
+                        requiresInsecureTls = false,
+                        options =
+                            listOf(
+                                option("safe", ProtocolHint.TROJAN),
+                                option("insecure", ProtocolHint.VLESS, requiresInsecureTls = true),
+                            ),
+                    ),
+            )
+
+        assertEquals(listOf("safe"), eligible.map(AutoConnectProbeCandidate::optionId))
+    }
+
+    @Test
+    fun `smart start accepts insecure options only with profile or global consent`() {
+        val profile =
+            profile(
+                requiresInsecureTls = true,
+                options =
+                    listOf(
+                        option("safe", ProtocolHint.TROJAN),
+                        option("insecure", ProtocolHint.VLESS, requiresInsecureTls = true),
+                    ),
+            )
+        val globalConsentProfile =
+            profile(
+                requiresInsecureTls = false,
+                options =
+                    listOf(
+                        option("safe", ProtocolHint.TROJAN),
+                        option("insecure", ProtocolHint.VLESS, requiresInsecureTls = true),
+                    ),
+            )
+
+        assertEquals(
+            listOf("safe", "insecure"),
+            MultiProtocolProfileSupport.smartStartEligibleProbeCandidates(profile).map(AutoConnectProbeCandidate::optionId),
+        )
+        assertEquals(
+            listOf("safe", "insecure"),
+            MultiProtocolProfileSupport
+                .smartStartEligibleProbeCandidates(globalConsentProfile, allowInsecureTlsGlobally = true)
+                .map(AutoConnectProbeCandidate::optionId),
+        )
+    }
+
+    @Test
     fun `fastest successful probe ignores failures and chooses lowest latency`() {
         val profile =
             profile(
@@ -247,16 +298,19 @@ class MultiProtocolProfileSupportTest {
         id: String,
         protocolHint: ProtocolHint,
         selected: Boolean = false,
+        requiresInsecureTls: Boolean = false,
     ): ProfileProtocolOption =
         ProfileProtocolOption(
             id = id,
             displayName = id,
             protocolHint = protocolHint,
+            requiresInsecureTls = requiresInsecureTls,
             isSelected = selected,
         )
 
     private fun profile(
         selectedOptionId: String? = null,
+        requiresInsecureTls: Boolean = false,
         options: List<ProfileProtocolOption>,
     ): Profile =
         Profile(
@@ -269,6 +323,7 @@ class MultiProtocolProfileSupportTest {
             lastEtag = null,
             protocolOptions = options,
             selectedProtocolOptionId = selectedOptionId,
+            requiresInsecureTls = requiresInsecureTls,
             isActive = true,
         )
 }

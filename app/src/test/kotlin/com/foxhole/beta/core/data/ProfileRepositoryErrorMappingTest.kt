@@ -21,7 +21,21 @@ class ProfileRepositoryErrorMappingTest {
             )
 
         assertEquals(
-            "Subscription update failed for connect.stealthsurf.app: untrusted TLS certificate chain",
+            "Subscription update failed for connect.stealthsurf.app: untrusted TLS certificate chain; self-signed subscription certificates are not supported",
+            message,
+        )
+    }
+
+    @Test
+    fun `maps self signed subscription certificates to unsupported transport message`() {
+        val message =
+            describeSubscriptionTransportFailure(
+                sourceUrl = "https://example.org/subscription",
+                error = SSLHandshakeException("self signed certificate"),
+            )
+
+        assertEquals(
+            "Subscription update failed for example.org: untrusted TLS certificate chain; self-signed subscription certificates are not supported",
             message,
         )
     }

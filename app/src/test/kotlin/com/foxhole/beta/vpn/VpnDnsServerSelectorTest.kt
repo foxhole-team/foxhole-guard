@@ -5,18 +5,18 @@ import org.junit.Test
 
 class VpnDnsServerSelectorTest {
     @Test
-    fun `prefers foxhole remote dns server when it is an ip literal`() {
+    fun `advertises local tun dns server to Android before remote resolver`() {
         val selected =
             VpnDnsServerSelector.advertisedDnsServerAddress(
                 configJson = foxholeConfig(server = "1.1.1.1"),
                 fallbackServerAddress = "172.19.0.2",
             )
 
-        assertEquals("1.1.1.1", selected)
+        assertEquals("172.19.0.2", selected)
     }
 
     @Test
-    fun `returns legacy foxhole address host when available`() {
+    fun `falls back to legacy remote address host when local tun dns is unavailable`() {
         val selected =
             VpnDnsServerSelector.advertisedDnsServerAddress(
                 configJson =
@@ -29,10 +29,21 @@ class VpnDnsServerSelectorTest {
                       }
                     }
                     """.trimIndent(),
-                fallbackServerAddress = "172.19.0.2",
+                fallbackServerAddress = "",
             )
 
         assertEquals("1.1.1.1", selected)
+    }
+
+    @Test
+    fun `falls back to local tun dns server when no remote ip exists`() {
+        val selected =
+            VpnDnsServerSelector.advertisedDnsServerAddresses(
+                configJson = foxholeConfig(server = "dns.example"),
+                fallbackServerAddress = "172.19.0.2",
+            )
+
+        assertEquals(listOf("172.19.0.2"), selected)
     }
 
     @Test
@@ -47,14 +58,14 @@ class VpnDnsServerSelectorTest {
     }
 
     @Test
-    fun `advertises required public dns servers inside the tunnel`() {
+    fun `does not synthesize public dns servers when config has no ip literal`() {
         val selected =
             VpnDnsServerSelector.advertisedDnsServerAddresses(
                 configJson = foxholeConfig(server = "cloudflare-dns.com"),
                 fallbackServerAddress = "172.19.0.2",
             )
 
-        assertEquals(listOf("172.19.0.2", "1.1.1.1", "8.8.8.8"), selected)
+        assertEquals(listOf("172.19.0.2"), selected)
     }
 
     private fun foxholeConfig(server: String): String =

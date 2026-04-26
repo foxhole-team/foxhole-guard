@@ -49,7 +49,7 @@ internal fun describeSubscriptionTransportFailure(
             error.hasCause<CertPathValidatorException>() ||
             errorMessages.contains("trust anchor") ||
             errorMessages.contains("self signed") ->
-            "$prefix: untrusted TLS certificate chain"
+            "$prefix: untrusted TLS certificate chain; self-signed subscription certificates are not supported"
 
         else -> error.message ?: error.javaClass.simpleName
     }

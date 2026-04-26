@@ -82,9 +82,18 @@ internal fun recordProbeResultIntoMemory(
     validatedAt: Long? = null,
     trafficAt: Long? = null,
     countTowardOutcomeHistory: Boolean = true,
+    affectsFailureRankingMemory: Boolean = true,
 ): SmartProfileMemoryUpdate {
     val existingMemories = protocolMemories.associateBy(SmartProfileProtocolMemory::optionId).toMutableMap()
     val previous = existingMemories[optionId]
+    if (!success && !affectsFailureRankingMemory) {
+        return SmartProfileMemoryUpdate(
+            lastKnownGoodOptionId = lastKnownGoodOptionId,
+            lastKnownGoodLatencyMs = lastKnownGoodLatencyMs,
+            lastKnownGoodAt = lastKnownGoodAt,
+            protocolMemories = existingMemories.values.sortedBy(SmartProfileProtocolMemory::optionId),
+        )
+    }
     val nextFailureStreak =
         when {
             success -> 0

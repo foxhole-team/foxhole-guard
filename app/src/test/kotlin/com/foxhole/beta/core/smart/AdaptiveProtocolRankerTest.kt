@@ -117,6 +117,77 @@ class AdaptiveProtocolRankerTest {
     }
 
     @Test
+    fun `ping only scoped memory does not mask global outcome evidence`() {
+        val ranked =
+            AdaptiveProtocolRanker.scoreCandidates(
+                candidates =
+                    listOf(
+                        candidate("wireguard", ProtocolHint.WIREGUARD),
+                        candidate("trojan", ProtocolHint.TROJAN),
+                    ),
+                preference =
+                    SmartProfilePreference(
+                        profileId = 42L,
+                        protocolMemories =
+                            listOf(
+                                SmartProfileProtocolMemory(
+                                    optionId = "wireguard",
+                                    successCount = 4,
+                                    lastSuccessAt = 1_000L,
+                                    lastLatencyMs = 180L,
+                                ),
+                            ),
+                        networkMemories =
+                            listOf(
+                                SmartProfileNetworkMemory(
+                                    networkFingerprint = "wifi-home",
+                                    networkFingerprintSchema = NETWORK_FINGERPRINT_SCHEMA_CURRENT,
+                                    protocolMemories =
+                                        listOf(
+                                            SmartProfileProtocolMemory(
+                                                optionId = "wireguard",
+                                                lastServerPingMs = 64L,
+                                                lastServerPingAt = 2_000L,
+                                            ),
+                                        ),
+                                ),
+                            ),
+                    ),
+                networkFingerprintKey = "wifi-home",
+                now = 3_000L,
+            )
+
+        val score = ranked.first { it.candidate.optionId == "wireguard" }
+        assertEquals(listOf("wireguard", "trojan"), ranked.map { it.candidate.optionId })
+        assertTrue(score.successRate > 0.80)
+        assertEquals(AdaptiveProtocolScoringConfig.Default.globalMemoryBonus, score.networkMatchBonus)
+    }
+
+    @Test
+    fun `negative failure streak never becomes a ranking bonus`() {
+        val now = 60_000L
+        val ranked =
+            AdaptiveProtocolRanker.scoreCandidates(
+                candidates = listOf(candidate("vless", ProtocolHint.VLESS)),
+                preference =
+                    SmartProfilePreference(
+                        profileId = 43L,
+                        protocolMemories =
+                            listOf(
+                                SmartProfileProtocolMemory(
+                                    optionId = "vless",
+                                    failureStreak = -5,
+                                    lastFailureAt = now - 30_000L,
+                                ),
+                            ),
+                    ),
+                now = now,
+            )
+
+        assertEquals(AdaptiveProtocolScoringConfig.Default.recentFailurePenalty, ranked.single().recentFailurePenalty)
+    }
+
+    @Test
     fun `private dns penalizes dns failing candidate and keeps exploration alive`() {
         val now = 20_000L
         val ranked =

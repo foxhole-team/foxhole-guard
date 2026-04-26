@@ -110,6 +110,11 @@ class SettingsRepositoryTest {
     }
 
     @Test
+    fun `subscription auto refresh defaults off`() {
+        assertFalse(Settings().connection.autoRefreshSubscriptions)
+    }
+
+    @Test
     fun `smart start replay logging defaults off`() {
         assertFalse(ExpertSettings().smartStartReplayLogging)
     }
@@ -341,6 +346,43 @@ class SettingsRepositoryTest {
         assertEquals(2, memory.failureCount)
         assertEquals(4_000L, memory.lastConnectDurationMs)
         assertEquals(recordedAt + (3L * 60L * 1000L * 2L), memory.cooldownUntilAt)
+        assertEquals(240L, update.lastKnownGoodLatencyMs)
+        assertEquals(1_000L, update.lastKnownGoodAt)
+    }
+
+    @Test
+    fun `manual metrics failure can skip ranking memory side effects`() {
+        val previous =
+            SmartProfileProtocolMemory(
+                optionId = "wireguard",
+                lastSuccessAt = 1_000L,
+                lastLatencyMs = 240L,
+                failureStreak = 1,
+                failureCount = 1,
+                lastFailureAt = 2_000L,
+                cooldownUntilAt = 5_000L,
+                lastReasonCode = AutoConnectReasonCode.DNS_FAILURE,
+            )
+
+        val update =
+            recordProbeResultIntoMemory(
+                lastKnownGoodOptionId = "wireguard",
+                lastKnownGoodLatencyMs = 240L,
+                lastKnownGoodAt = 1_000L,
+                protocolMemories = listOf(previous),
+                optionId = "wireguard",
+                latencyMs = null,
+                success = false,
+                reasonCode = AutoConnectReasonCode.CONNECT_ERROR,
+                markAsLastKnownGood = false,
+                recordedAt = 10_000L,
+                connectDurationMs = 8_000L,
+                countTowardOutcomeHistory = false,
+                affectsFailureRankingMemory = false,
+            )
+
+        assertEquals(previous, update.protocolMemories.single())
+        assertEquals("wireguard", update.lastKnownGoodOptionId)
         assertEquals(240L, update.lastKnownGoodLatencyMs)
         assertEquals(1_000L, update.lastKnownGoodAt)
     }

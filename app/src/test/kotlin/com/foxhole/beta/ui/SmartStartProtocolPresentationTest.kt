@@ -129,28 +129,64 @@ class SmartStartProtocolPresentationTest {
         val ruStrings = resourceText("src/main/res/values-ru/strings.xml", "app/src/main/res/values-ru/strings.xml")
 
         assertEquals("VPN server information", stringValue(enStrings, "home_network_connection_info_title"))
+        assertEquals("Current IP address", stringValue(enStrings, "home_network_current_ip_title"))
         assertEquals("Connection status", stringValue(enStrings, "home_network_profile_info_title"))
+        assertEquals("Country:", stringValue(enStrings, "home_network_country_label"))
+        assertEquals("IP:", stringValue(enStrings, "home_network_ip_label"))
+        assertEquals("Provider:", stringValue(enStrings, "home_network_provider_label"))
         assertEquals(
-            "Manage available protocols. Tap a protocol to turn it on/off.",
+            "Smart start protocols",
             stringValue(enStrings, "smart_profile_menu_title"),
         )
         assertEquals(
-            "Periodically refresh Smart Connect to choose a faster VPN tunnel.",
+            "Manage available protocols. Tap a protocol for on/off.\\nPeriodically refresh Smart start to choose a faster VPN tunnel.",
+            stringValue(enStrings, "smart_profile_metrics_refresh_hint"),
+        )
+        assertEquals(
+            "Manage available protocols. Tap a protocol for on/off.\\nPeriodically refresh Smart start to choose a faster VPN tunnel.",
             stringValue(enStrings, "smart_profile_metrics_refresh_compact_hint"),
         )
+        assertEquals("favorite", stringValue(enStrings, "smart_profile_legend_favorite"))
+        assertEquals(
+            "recommended for reconnect",
+            stringValue(enStrings, "smart_profile_legend_reconnect_recommended"),
+        )
         assertEquals("Updated: %1\$s", stringValue(enStrings, "smart_profile_metrics_last_updated"))
+        assertEquals("Disabled", stringValue(enStrings, "smart_start_protocol_status_disabled"))
+        assertEquals(
+            "Profile configuration did not load. Try reopening the profile.",
+            stringValue(enStrings, "profile_config_load_timeout"),
+        )
 
         assertEquals("Информация о сервере VPN", stringValue(ruStrings, "home_network_connection_info_title"))
+        assertEquals("Текущий IP адрес", stringValue(ruStrings, "home_network_current_ip_title"))
         assertEquals("Статус соединения", stringValue(ruStrings, "home_network_profile_info_title"))
+        assertEquals("Country:", stringValue(ruStrings, "home_network_country_label"))
+        assertEquals("IP:", stringValue(ruStrings, "home_network_ip_label"))
+        assertEquals("Provider:", stringValue(ruStrings, "home_network_provider_label"))
         assertEquals(
-            "Управление доступными протоколами. Нажмите на протокол для on/off.",
+            "Протоколы Smart start",
             stringValue(ruStrings, "smart_profile_menu_title"),
         )
         assertEquals(
-            "Периодически обновляйте Смарт коннект для выбора более быстрого туннеля VPN.",
+            "Управление доступными протоколами. Нажмите на протокол для on/off.\\nПериодически обновляйте Смарт старт для выбора более быстрого туннеля VPN.",
+            stringValue(ruStrings, "smart_profile_metrics_refresh_hint"),
+        )
+        assertEquals(
+            "Управление доступными протоколами. Нажмите на протокол для on/off.\\nПериодически обновляйте Смарт старт для выбора более быстрого туннеля VPN.",
             stringValue(ruStrings, "smart_profile_metrics_refresh_compact_hint"),
         )
+        assertEquals("избранное", stringValue(ruStrings, "smart_profile_legend_favorite"))
+        assertEquals(
+            "рекомендованный для переподключения",
+            stringValue(ruStrings, "smart_profile_legend_reconnect_recommended"),
+        )
         assertEquals("Обновлено: %1\$s", stringValue(ruStrings, "smart_profile_metrics_last_updated"))
+        assertEquals("Отключено", stringValue(ruStrings, "smart_start_protocol_status_disabled"))
+        assertEquals(
+            "Конфигурация профиля не загрузилась. Откройте профиль снова.",
+            stringValue(ruStrings, "profile_config_load_timeout"),
+        )
     }
 
     private fun resourceText(vararg candidates: String): String =

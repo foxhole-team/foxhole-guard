@@ -1,4 +1,4 @@
-# Foxhole Smart Config Sample
+# Foxhole smart config sample
 
 This folder contains an anonymized sample Foxhole smart config payload.
 

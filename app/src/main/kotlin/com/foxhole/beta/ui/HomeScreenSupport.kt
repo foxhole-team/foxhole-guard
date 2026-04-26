@@ -85,7 +85,7 @@ internal val HomePrimaryActionHeight = 52.dp
 internal val HomeTriangleIndicatorSize = 15.dp
 internal val HomeDashboardBannerTopPadding = 86.dp
 internal val HomeConnectingStatusSignalOffset = 3.dp
-internal val HomeNetworkContentHeight = 112.dp
+internal val HomeNetworkContentHeight = 62.dp
 
 @Composable
 internal fun HomeCardHeader(
@@ -208,6 +208,17 @@ internal fun HomeNetworkDetailLine(
 @Composable
 internal fun HomeNetworkSubtleDivider() {
     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.18f))
+}
+
+@Composable
+internal fun HomeNetworkVerticalDivider(modifier: Modifier = Modifier) {
+    Box(
+        modifier =
+            modifier
+                .width(1.dp)
+                .height(HomeNetworkContentHeight)
+                .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.14f)),
+    )
 }
 
 @Composable
@@ -574,61 +585,69 @@ internal fun HomeProfileLoadingBlock() {
 }
 
 @Composable
-internal fun HomeNetworkLoadingBlock(modifier: Modifier = Modifier) {
+internal fun HomeNetworkLoadingBlock(
+    title: String,
+    labels: List<String>,
+    modifier: Modifier = Modifier,
+) {
     Column(
         modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(3.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
-        FoxholeSkeletonBlock(
-            modifier =
-                Modifier
-                    .fillMaxWidth(0.32f)
-                    .height(12.dp),
-        )
-        FoxholeSkeletonBlock(
-            modifier =
-                Modifier
-                    .fillMaxWidth(0.52f)
-                    .height(20.dp),
-        )
-        FoxholeSkeletonBlock(
-            modifier =
-                Modifier
-                    .fillMaxWidth(0.36f)
-                    .height(12.dp),
-        )
+        HomeNetworkColumnTitle(title)
+        labels.take(3).forEachIndexed { index, label ->
+            HomeNetworkLoadingLine(label = label)
+            if (index < 2) {
+                HomeNetworkSubtleDivider()
+            }
+        }
     }
 }
 
 @Composable
 internal fun HomeConnectionStatusLoadingBlock(modifier: Modifier = Modifier) {
-    Column(
-        modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(2.dp),
+    HomeNetworkLoadingBlock(
+        title = stringResource(R.string.home_network_profile_info_title),
+        labels =
+            listOf(
+                stringResource(R.string.home_network_vpn_latency_label),
+                stringResource(R.string.home_network_server_ping_label),
+                stringResource(R.string.home_network_status_label),
+            ),
+        modifier = modifier,
+    )
+}
+
+@Composable
+private fun HomeNetworkLoadingLine(label: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        HomeNetworkColumnTitle(stringResource(R.string.home_network_profile_info_title))
-        repeat(3) { index ->
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                FoxholeSkeletonBlock(
-                    modifier =
-                        Modifier
-                            .weight(1f)
-                            .height(11.dp),
-                )
-                FoxholeSkeletonBlock(
-                    modifier =
-                        Modifier
-                            .weight(1f)
-                            .height(11.dp),
-                )
-            }
-            if (index < 2) {
-                HomeNetworkSubtleDivider()
-            }
+        Text(
+            text = label,
+            modifier = Modifier.weight(1f),
+            style =
+                MaterialTheme.typography.labelSmall.copy(
+                    fontSize = 10.sp,
+                    lineHeight = 11.sp,
+                    fontWeight = FontWeight.SemiBold,
+                ),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Box(
+            modifier = Modifier.weight(1f),
+            contentAlignment = Alignment.CenterEnd,
+        ) {
+            FoxholeSkeletonBlock(
+                modifier =
+                    Modifier
+                        .width(68.dp)
+                        .height(11.dp),
+            )
         }
     }
 }

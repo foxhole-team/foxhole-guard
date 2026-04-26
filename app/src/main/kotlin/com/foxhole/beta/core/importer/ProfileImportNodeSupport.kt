@@ -477,16 +477,17 @@ internal fun buildBaseConfig(
                         add(
                             buildJsonObject {
                                 put("tag", "dns-remote")
-                                put("type", "tcp")
+                                put("type", "https")
                                 put("server", "1.1.1.1")
-                                put("server_port", 53)
+                                put("server_port", 443)
+                                put("path", "/dns-query")
                                 put("detour", "proxy")
                             },
                         )
                     },
                 )
                 put("strategy", "prefer_ipv4")
-                put("final", "dns-direct")
+                put("final", "dns-remote")
             },
         )
         put(
@@ -554,6 +555,7 @@ internal fun buildBaseConfig(
                         )
                         add(
                             buildJsonObject {
+                                put("protocol", "dns")
                                 put("port", 53)
                                 put("action", "hijack-dns")
                             },

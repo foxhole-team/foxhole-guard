@@ -41,6 +41,7 @@ interface FoxholeTileDependencies {
 }
 
 interface FoxholeRefreshWorkerDependencies {
+    val settingsRepository: SettingsRepository
     val profileRepository: ProfileRepository
     val diagnosticsLogger: DiagnosticsLogger
 }

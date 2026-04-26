@@ -1,27 +1,33 @@
-Foxhole is a simple Android client for connecting to and managing sing-box profiles. It supports tunnel, split tunnel for apps and sites, proxy, and LAN proxy, profile import from files, the clipboard, QR codes, and HTTPS subscriptions, including compatible v2raytun-style subscriptions. TLS verification is strict by default; configs that require insecure TLS need explicit per-profile consent. No ads, analytics, or telemetry. It supports compatible configurations and its own smart config for deterministic smart start with automatic VPN protocol selection.
+Foxhole is a simple Android client for connecting to and managing sing-box profiles.
+
+It supports Tunnel, Split Tunnel (per-app and per-domain), Proxy, and LAN Proxy, along with profile import from files, clipboard, QR codes, and HTTPS subscriptions.
+
+No ads. No analytics. No telemetry.
 
 Key features:
-- Modes: tunnel, split tunnel, proxy
-- LAN Proxy over Wi-Fi for access from other devices
-- Proxy authentication
-- Site-based routing rules
-- Import from files, clipboard, QR codes, and HTTPS subscriptions
-- Supports Foxhole smart config with protocol selection and smart start that ranks eligible options, tries the recommended protocol first, validates it, and falls back only after failure
-- Local traffic statistics
-- Subscription expiration date display
-- Encrypted local profile storage
-- No ads
-- No analytics
-- No telemetry
+
+* Modes: Tunnel, Split Tunnel, Proxy
+* LAN Proxy over Wi-Fi for access from other devices
+* Proxy authentication
+* Domain-based routing rules
+* Profile import: file, clipboard, QR code, HTTPS subscriptions
+* Support for Foxhole Smart Config and automatic protocol selection (Smart Start)
+* Local traffic statistics
+* Subscription expiration display
+* Encrypted local profile storage
+
+Smart Start automatically selects the most reliable protocol by testing available options and using local history.
+It takes into account connection success rate, latency, and recent failures. All processing is performed on-device.
 
 Permission note:
-Foxhole requests QUERY_ALL_PACKAGES only for Split Tunnel app selection, so the app picker can show installed apps for include/exclude routing. The list stays on the device and is not uploaded. If package visibility is restricted by the platform, already selected package ids are still kept locally and shown by package name.
+Foxhole uses QUERY_ALL_PACKAGES only to allow selecting installed apps for Split Tunnel (include/exclude routing). The app list stays on-device and is not transmitted.
 
 Supported protocols:
-- VLESS
-- Trojan
-- Shadowsocks
-- VMess
-- Hysteria2
-- WireGuard
-- Outline
+
+* VLESS
+* Trojan
+* Shadowsocks
+* VMess
+* Hysteria2
+* WireGuard
+* Outline

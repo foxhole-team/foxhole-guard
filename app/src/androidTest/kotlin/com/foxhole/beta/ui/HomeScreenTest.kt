@@ -194,6 +194,30 @@ class HomeScreenTest {
     }
 
     @Test
+    fun singleProfileEditOpensConfigFormWithoutStuckLoading() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val app = context.applicationContext as FoxholeApplication
+        prepareSingleEditableProfile()
+        val targetProfileId =
+            runBlocking {
+                app.container.profileRepository.profiles
+                    .first()
+                    .first { profile -> profile.name == "Editable Single" }
+                    .id
+            }
+
+        composeRule.onNodeWithTag("home_profiles_action").performClick()
+        composeRule.onNodeWithTag("profiles_profile_edit_action_${targetProfileId}").performClick()
+
+        val serverLabel = context.getString(R.string.profile_editor_server)
+        composeRule.waitUntil(timeoutMillis = 10_000) {
+            composeRule.onAllNodesWithText(serverLabel).fetchSemanticsNodes().isNotEmpty()
+        }
+        composeRule.onNodeWithText(serverLabel).assertIsDisplayed()
+        composeRule.onAllNodesWithText(context.getString(R.string.loading_label)).assertCountEquals(0)
+    }
+
+    @Test
     fun opensUniversalImportMenuFromHomeAction() {
         composeRule.onNodeWithTag("home_import_action").performClick()
         composeRule.onNodeWithTag("home_import_from_clipboard_action").assertIsDisplayed()
@@ -358,6 +382,18 @@ class HomeScreenTest {
             )
             app.container.profileRepository.importProfile(
                 "trojan://secret@8.8.8.8:443?security=tls&type=tcp#Selection%20B",
+            )
+        }
+        composeRule.waitForIdle()
+    }
+
+    private fun prepareSingleEditableProfile() {
+        val app = InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as FoxholeApplication
+        runBlocking {
+            app.container.profileDatabase.clearAllTables()
+            deleteChildren(File(app.filesDir, "profile-secrets"))
+            app.container.profileRepository.importProfile(
+                "vless://11111111-1111-1111-1111-111111111111@203.0.113.10:443?encryption=none&security=none&type=tcp#Editable%20Single",
             )
         }
         composeRule.waitForIdle()

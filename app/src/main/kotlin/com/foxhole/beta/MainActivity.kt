@@ -21,7 +21,9 @@ import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.foxhole.beta.ui.FoxholeApp
 import com.foxhole.beta.ui.FoxholeBannerAction
+import com.foxhole.beta.ui.FoxholeBannerHapticGate
 import com.foxhole.beta.ui.HomeViewModel
+import com.foxhole.beta.ui.handleSnackbarHaptic
 import com.foxhole.beta.ui.showBanner
 import com.foxhole.beta.ui.theme.FoxholeTheme
 import kotlinx.coroutines.launch
@@ -50,6 +52,7 @@ class MainActivity : AppCompatActivity() {
         setContent {
             val themeMode = homeViewModel.themeMode.collectAsStateWithLifecycle()
             val snackbarHostState = remember { SnackbarHostState() }
+            val snackbarHapticGate = remember { FoxholeBannerHapticGate() }
             vpnPermissionResult = homeViewModel::onVpnPermissionResult
 
             LaunchedEffect(Unit) {
@@ -69,6 +72,11 @@ class MainActivity : AppCompatActivity() {
 
             LaunchedEffect(Unit) {
                 homeViewModel.snackbars.collect { banner ->
+                    handleSnackbarHaptic(
+                        event = banner,
+                        context = this@MainActivity,
+                        gate = snackbarHapticGate,
+                    )
                     val result = snackbarHostState.showBanner(banner)
                     if (
                         result == SnackbarResult.ActionPerformed &&
