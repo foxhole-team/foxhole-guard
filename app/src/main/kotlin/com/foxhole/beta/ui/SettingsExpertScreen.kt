@@ -41,6 +41,7 @@ fun ExpertSettingsScreen(
     onAllowPrivateOutboundHostsChanged: (Boolean) -> Unit,
     onBlockScreenshotsChanged: (Boolean) -> Unit,
     onNetworkActivityLoggingChanged: (Boolean) -> Unit,
+    onSmartStartReplayLoggingChanged: (Boolean) -> Unit,
     onDiagnosticsRetentionSelected: (DiagnosticsRetention) -> Unit,
     onAllowHttpConfigImportsChanged: (Boolean) -> Unit,
     onAllowInsecureTlsChanged: (Boolean) -> Unit,
@@ -192,6 +193,21 @@ fun ExpertSettingsScreen(
                 summary = stringResource(R.string.diagnostics_retention_summary),
                 leadingIcon = Icons.Outlined.Info,
                 optionIcon = { Icons.Outlined.Tune },
+            )
+        }
+        item {
+            SettingSwitchRow(
+                title = stringResource(R.string.smart_start_replay_logging_title),
+                checked = state.settings.expert.smartStartReplayLogging,
+                summary = stringResource(R.string.smart_start_replay_logging_summary),
+                onCheckedChange = { enabled ->
+                    if (enabled) {
+                        requireWarning { onSmartStartReplayLoggingChanged(true) }
+                    } else {
+                        onSmartStartReplayLoggingChanged(false)
+                    }
+                },
+                summaryMaxLines = 3,
             )
         }
         item {

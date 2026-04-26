@@ -869,6 +869,8 @@ class HomeViewModel(
 
     fun onNetworkActivityLoggingChanged(value: Boolean) = onNetworkActivityLoggingChangedInternal(value)
 
+    fun onSmartStartReplayLoggingChanged(value: Boolean) = onSmartStartReplayLoggingChangedInternal(value)
+
     fun onDiagnosticsRetentionSelected(value: DiagnosticsRetention) = onDiagnosticsRetentionSelectedInternal(value)
 
     fun onAllowHttpConfigImportsChanged(value: Boolean) = onAllowHttpConfigImportsChangedInternal(value)

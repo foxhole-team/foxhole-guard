@@ -143,6 +143,12 @@ internal fun HomeViewModel.onNetworkActivityLoggingChangedInternal(value: Boolea
     }
 }
 
+internal fun HomeViewModel.onSmartStartReplayLoggingChangedInternal(value: Boolean) {
+    viewModelScope.launch {
+        container.settingsRepository.updateSmartStartReplayLogging(value)
+    }
+}
+
 internal fun HomeViewModel.onDiagnosticsRetentionSelectedInternal(value: DiagnosticsRetention) {
     viewModelScope.launch {
         container.settingsRepository.updateDiagnosticsRetention(value)

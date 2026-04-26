@@ -30,6 +30,7 @@ internal fun SmartProfileProtocolMemory.normalized(): SmartProfileProtocolMemory
         lastServerPingMs = lastServerPingMs?.takeIf { it > 0L },
         lastServerPingAt = lastServerPingAt?.takeIf { it > 0L },
         failureStreak = failureStreak.coerceAtLeast(0),
+        validationFailureCount = validationFailureCount.coerceAtLeast(0),
         successCount = successCount.coerceAtLeast(0),
         failureCount = failureCount.coerceAtLeast(0),
         lastConnectDurationMs = lastConnectDurationMs?.takeIf { it > 0L },
@@ -49,6 +50,7 @@ internal fun SmartProfileNetworkMemory.normalized(): SmartProfileNetworkMemory? 
     val normalizedLastKnownGoodOptionId = lastKnownGoodOptionId?.trim()?.takeIf(String::isNotBlank)
     return copy(
         networkFingerprint = normalizedNetworkFingerprint,
+        networkFingerprintSchema = networkFingerprintSchema.coerceAtLeast(1),
         lastKnownGoodOptionId = normalizedLastKnownGoodOptionId,
         lastKnownGoodLatencyMs = lastKnownGoodLatencyMs?.takeIf { it > 0L },
         lastKnownGoodAt = lastKnownGoodAt?.takeIf { it > 0L },
@@ -109,6 +111,7 @@ internal fun recordProbeResultIntoMemory(
                 lastServerPingAt = previous?.lastServerPingAt,
                 lastReasonCode = reasonCode,
                 failureStreak = 0,
+                validationFailureCount = previous?.validationFailureCount ?: 0,
                 successCount = (previous?.successCount ?: 0) + if (countTowardOutcomeHistory) 1 else 0,
                 failureCount = previous?.failureCount ?: 0,
                 lastConnectDurationMs = connectDurationMs ?: previous?.lastConnectDurationMs,
@@ -126,6 +129,9 @@ internal fun recordProbeResultIntoMemory(
                 lastServerPingAt = previous?.lastServerPingAt,
                 lastReasonCode = reasonCode,
                 failureStreak = nextFailureStreak,
+                validationFailureCount =
+                    (previous?.validationFailureCount ?: 0) +
+                        if (countTowardOutcomeHistory && reasonCode.isTunnelValidationFailure()) 1 else 0,
                 successCount = previous?.successCount ?: 0,
                 failureCount = (previous?.failureCount ?: 0) + if (countTowardOutcomeHistory) 1 else 0,
                 lastConnectDurationMs = connectDurationMs ?: previous?.lastConnectDurationMs,
@@ -154,6 +160,9 @@ internal fun recordProbeResultIntoMemory(
         protocolMemories = existingMemories.values.sortedBy(SmartProfileProtocolMemory::optionId),
     )
 }
+
+internal fun AutoConnectReasonCode?.isTunnelValidationFailure(): Boolean =
+    this == AutoConnectReasonCode.VALIDATION_TIMEOUT || this == AutoConnectReasonCode.DNS_FAILURE
 
 internal fun resolveAdaptiveProtocolCooldownUntil(
     recordedAt: Long,

@@ -5,6 +5,7 @@ import com.foxhole.beta.core.model.AutoConnectReasonCode
 import com.foxhole.beta.core.model.AppLocale
 import com.foxhole.beta.core.model.DiagnosticsRetention
 import com.foxhole.beta.core.model.ExpertSettings
+import com.foxhole.beta.core.model.NETWORK_FINGERPRINT_SCHEMA_CURRENT
 import com.foxhole.beta.core.model.Settings
 import com.foxhole.beta.core.model.SmartProfileNetworkMemory
 import com.foxhole.beta.core.model.SmartProfilePreference
@@ -109,6 +110,11 @@ class SettingsRepositoryTest {
     }
 
     @Test
+    fun `smart start replay logging defaults off`() {
+        assertFalse(ExpertSettings().smartStartReplayLogging)
+    }
+
+    @Test
     fun `hiding expert settings clears unlocked marker and keeps section closed`() {
         val hidden =
             Settings(
@@ -165,6 +171,7 @@ class SettingsRepositoryTest {
                             listOf(
                                 SmartProfileNetworkMemory(
                                     networkFingerprint = "wifi-home",
+                                    networkFingerprintSchema = NETWORK_FINGERPRINT_SCHEMA_CURRENT,
                                     lastKnownGoodOptionId = "wireguard",
                                     protocolMemories =
                                         listOf(
@@ -222,6 +229,7 @@ class SettingsRepositoryTest {
                     listOf(
                         SmartProfileNetworkMemory(
                             networkFingerprint = "wifi-home",
+                            networkFingerprintSchema = NETWORK_FINGERPRINT_SCHEMA_CURRENT,
                             lastKnownGoodOptionId = "trojan",
                         ),
                     ),
@@ -329,6 +337,7 @@ class SettingsRepositoryTest {
 
         val memory = update.protocolMemories.single()
         assertEquals(2, memory.failureStreak)
+        assertEquals(1, memory.validationFailureCount)
         assertEquals(2, memory.failureCount)
         assertEquals(4_000L, memory.lastConnectDurationMs)
         assertEquals(recordedAt + (3L * 60L * 1000L * 2L), memory.cooldownUntilAt)
@@ -359,6 +368,7 @@ class SettingsRepositoryTest {
                     listOf(
                         SmartProfileNetworkMemory(
                             networkFingerprint = "wifi-home",
+                            networkFingerprintSchema = NETWORK_FINGERPRINT_SCHEMA_CURRENT,
                             protocolMemories =
                                 listOf(
                                     SmartProfileProtocolMemory(

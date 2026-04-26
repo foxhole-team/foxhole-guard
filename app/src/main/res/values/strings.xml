@@ -126,6 +126,8 @@
     <string name="diagnostics_retention_days_3">3 days</string>
     <string name="diagnostics_retention_days_7">7 days</string>
     <string name="diagnostics_retention_days_14">14 days</string>
+    <string name="smart_start_replay_logging_title">Smart Start replay logging</string>
+    <string name="smart_start_replay_logging_summary">Write sanitized local Smart Start replay JSONL for debugging. Off by default.</string>
     <string name="allow_http_config_imports_title">Allow HTTP config links</string>
     <string name="allow_http_config_imports_summary">Allow HTTP imports only for trusted legacy or local sources. HTTPS stays the default.</string>
     <string name="allow_insecure_tls_title">Allow Insecure TLS</string>

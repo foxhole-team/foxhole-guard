@@ -75,6 +75,8 @@ data class AdaptiveProtocolScoringConfig(
     val validationTimeoutPenalty: Int = 16,
     val dnsFailurePenalty: Int = 12,
     val privateDnsFailurePenalty: Int = 18,
+    val validationFailureCountPenalty: Int = 3,
+    val validationFailureCountPenaltyMax: Int = 9,
     val handshakeTimeoutPenalty: Int = 10,
     val connectErrorPenalty: Int = 8,
     val latencyEndpointBlockedPenalty: Int = 4,
@@ -297,16 +299,21 @@ object AdaptiveProtocolRanker {
         if (lastFailureAt < lastSuccessAt) {
             return 0
         }
-        return when (memory.lastReasonCode) {
-            AutoConnectReasonCode.VALIDATION_TIMEOUT -> config.validationTimeoutPenalty
-            AutoConnectReasonCode.DNS_FAILURE -> if (privateDnsActive) config.privateDnsFailurePenalty else config.dnsFailurePenalty
-            AutoConnectReasonCode.HANDSHAKE_TIMEOUT -> config.handshakeTimeoutPenalty
-            AutoConnectReasonCode.CONNECT_ERROR -> config.connectErrorPenalty
-            AutoConnectReasonCode.LATENCY_ENDPOINT_BLOCKED -> config.latencyEndpointBlockedPenalty
-            AutoConnectReasonCode.RESTORED_LAST_GOOD,
-            null,
-            -> 0
-        }
+        val reasonPenalty =
+            when (memory.lastReasonCode) {
+                AutoConnectReasonCode.VALIDATION_TIMEOUT -> config.validationTimeoutPenalty
+                AutoConnectReasonCode.DNS_FAILURE -> if (privateDnsActive) config.privateDnsFailurePenalty else config.dnsFailurePenalty
+                AutoConnectReasonCode.HANDSHAKE_TIMEOUT -> config.handshakeTimeoutPenalty
+                AutoConnectReasonCode.CONNECT_ERROR -> config.connectErrorPenalty
+                AutoConnectReasonCode.LATENCY_ENDPOINT_BLOCKED -> config.latencyEndpointBlockedPenalty
+                AutoConnectReasonCode.RESTORED_LAST_GOOD,
+                null,
+                -> 0
+            }
+        val countPenalty =
+            (memory.validationFailureCount.coerceAtLeast(0) * config.validationFailureCountPenalty)
+                .coerceAtMost(config.validationFailureCountPenaltyMax)
+        return reasonPenalty + countPenalty
     }
 
     private fun resolveExplorationBonus(

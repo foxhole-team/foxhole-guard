@@ -3,6 +3,8 @@ package com.foxhole.beta.core.model
 import kotlinx.serialization.Serializable
 
 const val SETTINGS_SCHEMA_VERSION = 10
+const val NETWORK_FINGERPRINT_SCHEMA_CURRENT = 2
+const val NETWORK_FINGERPRINT_SCHEMA_LEGACY = 1
 
 @Serializable
 enum class ProfileSourceType {
@@ -212,6 +214,7 @@ data class ExpertSettings(
     val blockScreenshots: Boolean = false,
     val networkActivityLogging: Boolean = false,
     val diagnosticsRetention: DiagnosticsRetention = DiagnosticsRetention.HOURS_24,
+    val smartStartReplayLogging: Boolean = false,
     val allowHttpConfigImports: Boolean = false,
     val allowInsecureTls: Boolean = false,
     val sniff: Boolean = false,
@@ -251,6 +254,7 @@ data class SmartProfilePreference(
 @Serializable
 data class SmartProfileNetworkMemory(
     val networkFingerprint: String,
+    val networkFingerprintSchema: Int = NETWORK_FINGERPRINT_SCHEMA_LEGACY,
     val lastKnownGoodOptionId: String? = null,
     val lastKnownGoodLatencyMs: Long? = null,
     val lastKnownGoodAt: Long? = null,
@@ -267,6 +271,7 @@ data class SmartProfileProtocolMemory(
     val lastServerPingAt: Long? = null,
     val lastReasonCode: AutoConnectReasonCode? = null,
     val failureStreak: Int = 0,
+    val validationFailureCount: Int = 0,
     val successCount: Int = 0,
     val failureCount: Int = 0,
     val lastConnectDurationMs: Long? = null,

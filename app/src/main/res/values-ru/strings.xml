@@ -126,6 +126,8 @@
     <string name="diagnostics_retention_days_3">3 дня</string>
     <string name="diagnostics_retention_days_7">7 дней</string>
     <string name="diagnostics_retention_days_14">14 дней</string>
+    <string name="smart_start_replay_logging_title">Лог Smart Start replay</string>
+    <string name="smart_start_replay_logging_summary">Пишет локальный очищенный Smart Start replay JSONL для отладки. По умолчанию выключено.</string>
     <string name="allow_http_config_imports_title">Разрешить HTTP-Ссылки Конфигов</string>
     <string name="allow_http_config_imports_summary">Открывает HTTP-импорт только для доверенных legacy или локальных источников. HTTPS остаётся режимом по умолчанию.</string>
     <string name="allow_insecure_tls_title">Разрешить Insecure TLS</string>

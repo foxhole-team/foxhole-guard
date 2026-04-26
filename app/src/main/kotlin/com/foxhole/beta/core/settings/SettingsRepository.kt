@@ -17,6 +17,7 @@ import com.foxhole.beta.core.model.DomainStrategy
 import com.foxhole.beta.core.model.ExpertSettings
 import com.foxhole.beta.core.model.LocalSurfaceSettings
 import com.foxhole.beta.core.model.LocalAuthSettings
+import com.foxhole.beta.core.model.NETWORK_FINGERPRINT_SCHEMA_CURRENT
 import com.foxhole.beta.core.model.PerAppRoutingMode
 import com.foxhole.beta.core.model.ProfileTrafficTotal
 import com.foxhole.beta.core.model.ProtocolHint
@@ -152,6 +153,7 @@ class SettingsRepository(
                         blockScreenshots = current.expert.blockScreenshots,
                         networkActivityLogging = current.expert.networkActivityLogging,
                         diagnosticsRetention = current.expert.diagnosticsRetention,
+                        smartStartReplayLogging = current.expert.smartStartReplayLogging,
                         allowHttpConfigImports = current.expert.allowHttpConfigImports,
                         allowInsecureTls = current.expert.allowInsecureTls,
                     ),
@@ -237,7 +239,12 @@ class SettingsRepository(
             normalizedNetworkFingerprint?.let { fingerprint ->
                 val currentNetworkMemories = existing.networkMemories.associateBy(SmartProfileNetworkMemory::networkFingerprint).toMutableMap()
                 val previousNetworkMemory =
-                    currentNetworkMemories[fingerprint] ?: SmartProfileNetworkMemory(networkFingerprint = fingerprint)
+                    currentNetworkMemories[fingerprint]
+                        ?.takeIf { memory -> memory.networkFingerprintSchema == NETWORK_FINGERPRINT_SCHEMA_CURRENT }
+                        ?: SmartProfileNetworkMemory(
+                            networkFingerprint = fingerprint,
+                            networkFingerprintSchema = NETWORK_FINGERPRINT_SCHEMA_CURRENT,
+                        )
                 val scopedMemoryUpdate =
                     recordProbeResultIntoMemory(
                         lastKnownGoodOptionId = previousNetworkMemory.lastKnownGoodOptionId,
@@ -300,7 +307,12 @@ class SettingsRepository(
             normalizedNetworkFingerprint?.let { fingerprint ->
                 val currentNetworkMemories = existing.networkMemories.associateBy(SmartProfileNetworkMemory::networkFingerprint).toMutableMap()
                 val previousNetworkMemory =
-                    currentNetworkMemories[fingerprint] ?: SmartProfileNetworkMemory(networkFingerprint = fingerprint)
+                    currentNetworkMemories[fingerprint]
+                        ?.takeIf { memory -> memory.networkFingerprintSchema == NETWORK_FINGERPRINT_SCHEMA_CURRENT }
+                        ?: SmartProfileNetworkMemory(
+                            networkFingerprint = fingerprint,
+                            networkFingerprintSchema = NETWORK_FINGERPRINT_SCHEMA_CURRENT,
+                        )
                 currentNetworkMemories[fingerprint] =
                     previousNetworkMemory.copy(
                         protocolMemories = recordInto(previousNetworkMemory.protocolMemories),
@@ -389,6 +401,9 @@ class SettingsRepository(
 
     suspend fun updateNetworkActivityLogging(value: Boolean) =
         update { it.copy(expert = it.expert.copy(networkActivityLogging = value)) }
+
+    suspend fun updateSmartStartReplayLogging(value: Boolean) =
+        update { it.copy(expert = it.expert.copy(smartStartReplayLogging = value)) }
 
     suspend fun updateDiagnosticsRetention(value: DiagnosticsRetention) =
         update { it.copy(expert = it.expert.copy(diagnosticsRetention = value)) }
@@ -829,6 +844,7 @@ class SettingsRepository(
                 blockScreenshots = normalized.blockScreenshots,
                 networkActivityLogging = normalized.networkActivityLogging,
                 diagnosticsRetention = normalized.diagnosticsRetention,
+                smartStartReplayLogging = normalized.smartStartReplayLogging,
                 allowHttpConfigImports = normalized.allowHttpConfigImports,
                 allowInsecureTls = normalized.allowInsecureTls,
             )
@@ -940,7 +956,10 @@ internal fun Settings.smartProfilePreference(profileId: Long): SmartProfilePrefe
 
 internal fun SmartProfilePreference.networkMemory(networkFingerprint: String?): SmartProfileNetworkMemory? {
     val normalizedNetworkFingerprint = networkFingerprint?.trim()?.takeIf(String::isNotBlank) ?: return null
-    return networkMemories.firstOrNull { memory -> memory.networkFingerprint == normalizedNetworkFingerprint }
+    return networkMemories.firstOrNull { memory ->
+        memory.networkFingerprint == normalizedNetworkFingerprint &&
+            memory.networkFingerprintSchema == NETWORK_FINGERPRINT_SCHEMA_CURRENT
+    }
 }
 
 internal fun SmartProfilePreference.preferredLastKnownGoodOptionId(networkFingerprint: String?): String? =

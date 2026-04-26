@@ -1,6 +1,7 @@
 package com.foxhole.beta.core.profile
 
 import com.foxhole.beta.core.model.AutoConnectReasonCode
+import com.foxhole.beta.core.model.NETWORK_FINGERPRINT_SCHEMA_CURRENT
 import com.foxhole.beta.core.model.Profile
 import com.foxhole.beta.core.model.ProfileProtocolOption
 import com.foxhole.beta.core.model.ProfileSourceType
@@ -215,6 +216,7 @@ class MultiProtocolProfileSupportTest {
                     listOf(
                         SmartProfileNetworkMemory(
                             networkFingerprint = "wifi-home",
+                            networkFingerprintSchema = NETWORK_FINGERPRINT_SCHEMA_CURRENT,
                             lastKnownGoodOptionId = "trojan",
                             protocolMemories =
                                 listOf(

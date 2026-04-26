@@ -1,6 +1,8 @@
 package com.foxhole.beta.core.network
 
+import com.foxhole.beta.core.model.NETWORK_FINGERPRINT_SCHEMA_CURRENT
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -35,7 +37,46 @@ class NetworkFingerprintProviderTest {
             )
 
         assertEquals(first, second)
+        assertEquals(NETWORK_FINGERPRINT_SCHEMA_CURRENT, first?.schema)
         assertTrue(first?.key?.matches(Regex("[0-9a-f]{64}")) == true)
+    }
+
+    @Test
+    fun `schema two fingerprint ignores raw dns and interface but changes for gateway`() {
+        val base =
+            buildNetworkFingerprint(
+                NetworkFingerprintSource(
+                    transport = "wifi",
+                    isMetered = false,
+                    isRoaming = false,
+                    interfaceName = "wlan0",
+                    dnsServers = listOf("1.1.1.1"),
+                    routeGateways = listOf("192.168.1.1"),
+                ),
+            )
+        val dnsAndInterfaceChanged =
+            buildNetworkFingerprint(
+                NetworkFingerprintSource(
+                    transport = "wifi",
+                    isMetered = true,
+                    isRoaming = true,
+                    interfaceName = "wlan1",
+                    dnsServers = listOf("9.9.9.9"),
+                    routeGateways = listOf("192.168.1.1"),
+                ),
+            )
+        val gatewayChanged =
+            buildNetworkFingerprint(
+                NetworkFingerprintSource(
+                    transport = "wifi",
+                    isMetered = false,
+                    isRoaming = false,
+                    routeGateways = listOf("192.168.1.254"),
+                ),
+            )
+
+        assertEquals(base?.key, dnsAndInterfaceChanged?.key)
+        assertNotEquals(base?.key, gatewayChanged?.key)
     }
 
     @Test

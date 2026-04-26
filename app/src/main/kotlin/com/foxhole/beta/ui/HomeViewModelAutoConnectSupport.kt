@@ -17,7 +17,7 @@ import com.foxhole.beta.core.profile.AutoConnectProbeResult
 import com.foxhole.beta.core.profile.MultiProtocolProfileSupport
 import com.foxhole.beta.core.profile.classifyAutoConnectProbeFailure
 import com.foxhole.beta.core.smart.AdaptiveProtocolCandidateScore
-import com.foxhole.beta.core.smart.AdaptiveProtocolRanker
+import com.foxhole.beta.core.smart.SmartStartReplayEvent
 import com.foxhole.beta.core.settings.networkMemory
 import com.foxhole.beta.core.settings.smartProfilePreference
 import kotlinx.coroutines.CancellationException
@@ -105,8 +105,7 @@ internal fun HomeViewModel.startAutoConnectInternal(profileId: Long) {
                 )
                 initializeAutoConnectUi(candidates)
                 var previousVpnNetworkHandle = awaitDisconnectedForAutoConnect()
-                val results = mutableListOf<AutoConnectProbeResult>()
-                candidates.forEachIndexed { index, candidate ->
+                candidates.forEach { candidate ->
                     markAutoConnectCandidateTesting(candidate)
                     delay(HomeViewModel.AUTO_CONNECT_PROTOCOL_TRANSITION_SETTLE_MS)
                     val result =
@@ -116,7 +115,6 @@ internal fun HomeViewModel.startAutoConnectInternal(profileId: Long) {
                             networkFingerprint = autoConnectNetworkFingerprint?.key,
                             previousVpnNetworkHandle = previousVpnNetworkHandle,
                         )
-                    results += result
                     recordAutoConnectCandidateOutcome(
                         profileId = profileId,
                         result = result,
@@ -130,105 +128,60 @@ internal fun HomeViewModel.startAutoConnectInternal(profileId: Long) {
                             },
                     )
                     markAutoConnectCandidateFinished(result)
-                    if (index < candidates.lastIndex) {
+                    if (!result.success) {
                         previousVpnNetworkHandle =
                             awaitDisconnectedForAutoConnect(
                                 container.connectionController.currentVpnNetworkHandle(),
                             )
+                        return@forEach
                     }
-                }
-
-                val winner = MultiProtocolProfileSupport.fastestSuccessfulProbe(results)
-                if (winner == null) {
-                    emitError(getApplication<Application>().getString(R.string.auto_connect_failed))
-                    return@launch
-                }
-
-                markAutoConnectWinner(winner)
-                previousVpnNetworkHandle =
-                    awaitDisconnectedForAutoConnect(
-                        container.connectionController.currentVpnNetworkHandle(),
-                    )
-                val finalConnectStartedAt = SystemClock.elapsedRealtime()
-                connectNow(
-                    profileId = profileId,
-                    protocolOptionId = winner.candidate.optionId,
-                    statusMessage = getApplication<Application>().getString(R.string.notification_status_analysis),
-                    previousVpnNetworkHandle = previousVpnNetworkHandle,
-                )
-                val finalSnapshot = awaitAutoConnectConnectionOutcome()
-                if (finalSnapshot?.state != ConnectionState.CONNECTED) {
-                    val reasonCode =
-                        classifyAutoConnectProbeFailure(
-                            snapshot = finalSnapshot,
-                            timedOut = finalSnapshot == null,
-                            vpnNetworkAvailable = finalSnapshot == null && container.connectionController.hasActiveVpnNetwork(),
-                            dnsFailureMessage = getApplication<Application>().getString(R.string.error_dns_probe_failed),
+                    markAutoConnectWinner(result)
+                    val currentProfile = container.profileRepository.getProfile(profileId)
+                    if (currentProfile?.selectedProtocolOptionId != result.candidate.optionId) {
+                        container.profileRepository.selectProfileProtocolOption(profileId, result.candidate.optionId)
+                    }
+                    result.displayLatencyMs?.let { latencyMs ->
+                        cacheProtocolLatency(
+                            profileId = profileId,
+                            optionId = result.candidate.optionId,
+                            latencyMs = latencyMs,
                         )
+                    } ?: markProtocolLatencyUnavailable(
+                        profileId = profileId,
+                        optionId = result.candidate.optionId,
+                    )
+                    val committedAt = System.currentTimeMillis()
                     recordAutoConnectCandidateOutcome(
                         profileId = profileId,
                         result =
-                            AutoConnectProbeResult(
-                                candidate = winner.candidate,
-                                success = false,
-                                latencyMs = (SystemClock.elapsedRealtime() - finalConnectStartedAt).coerceAtLeast(1L),
-                                connectDurationMs = (SystemClock.elapsedRealtime() - finalConnectStartedAt).coerceAtLeast(1L),
-                                failureReason = autoConnectFailureMessage(reasonCode, finalSnapshot?.message),
-                                reasonCode = reasonCode,
+                            result.copy(
+                                validatedAt = committedAt,
+                                trafficObservedAt =
+                                    currentTrafficObservedAt(
+                                        traffic = container.connectionController.traffic.value,
+                                        fallbackAt = committedAt,
+                                    ) ?: result.trafficObservedAt,
                             ),
                         networkFingerprint = autoConnectNetworkFingerprint?.key,
-                        headline = "winner reconnect failed",
+                        headline = "winner committed",
+                        markAsLastKnownGood = true,
+                        countTowardOutcomeHistory = false,
                     )
-                    emitError(
-                        finalSnapshot?.message
-                            ?: autoConnectFailureMessage(reasonCode, finalSnapshot?.message),
+                    emitSuccess(
+                        result.displayLatencyMs?.let { latencyMs ->
+                            getApplication<Application>().getString(
+                                R.string.auto_connect_success,
+                                result.candidate.displayName,
+                                latencyMs,
+                            )
+                        } ?: getApplication<Application>().getString(
+                            R.string.auto_connect_success_unavailable,
+                            result.candidate.displayName,
+                        ),
                     )
                     return@launch
                 }
-                val currentProfile = container.profileRepository.getProfile(profileId)
-                if (currentProfile?.selectedProtocolOptionId != winner.candidate.optionId) {
-                    container.profileRepository.selectProfileProtocolOption(profileId, winner.candidate.optionId)
-                }
-                winner.displayLatencyMs?.let { latencyMs ->
-                    cacheProtocolLatency(
-                        profileId = profileId,
-                        optionId = winner.candidate.optionId,
-                        latencyMs = latencyMs,
-                    )
-                } ?: markProtocolLatencyUnavailable(
-                    profileId = profileId,
-                    optionId = winner.candidate.optionId,
-                )
-                val committedAt = System.currentTimeMillis()
-                recordAutoConnectCandidateOutcome(
-                    profileId = profileId,
-                    result =
-                        winner.copy(
-                            connectDurationMs = (SystemClock.elapsedRealtime() - finalConnectStartedAt).coerceAtLeast(1L),
-                            validatedAt = committedAt,
-                            trafficObservedAt =
-                                currentTrafficObservedAt(
-                                    traffic = container.connectionController.traffic.value,
-                                    fallbackAt = committedAt,
-                                ) ?: winner.trafficObservedAt,
-                        ),
-                    networkFingerprint = autoConnectNetworkFingerprint?.key,
-                    headline = "winner committed",
-                    markAsLastKnownGood = true,
-                    countTowardOutcomeHistory = false,
-                )
-                emitSuccess(
-                    winner.displayLatencyMs?.let { latencyMs ->
-                        getApplication<Application>().getString(
-                            R.string.auto_connect_success,
-                            winner.candidate.displayName,
-                            latencyMs,
-                        )
-                    } ?: getApplication<Application>().getString(
-                        R.string.auto_connect_success_unavailable,
-                        winner.candidate.displayName,
-                    ),
-                )
+                emitError(getApplication<Application>().getString(R.string.auto_connect_failed))
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: Throwable) {
@@ -633,6 +586,21 @@ internal suspend fun HomeViewModel.recordAutoConnectCandidateOutcomeInternal(
         headline,
         *details.toTypedArray(),
     )
+    container.diagnosticsLogger.recordSmartStartReplay(
+        event =
+            SmartStartReplayEvent(
+                timestamp = System.currentTimeMillis(),
+                profileId = profileId,
+                optionId = result.candidate.optionId,
+                protocol = result.candidate.protocolHint.name.lowercase(),
+                outcome = if (result.success) "ok" else "down",
+                rankingLatencyMs = result.rankingLatencyMs,
+                connectDurationMs = result.connectDurationMs,
+                reasonCode = result.reasonCode?.wireCode,
+                networkFingerprintPrefix = networkFingerprint?.take(12),
+            ),
+        enabled = uiState.value.settings.expert.smartStartReplayLogging,
+    )
 }
 
 internal suspend fun HomeViewModel.awaitAutoConnectConnectionOutcomeInternal(): ConnectionSnapshot? =
@@ -800,15 +768,14 @@ internal fun HomeViewModel.scoredAutoConnectCandidatesInternal(
     networkFingerprint: NetworkFingerprint?,
 ): List<AdaptiveProtocolCandidateScore> {
     val excludedOptionIds = excludedAutoConnectOptionIds(profileId)
-    val rankedIncluded =
-        MultiProtocolProfileSupport
-        .scoredProbeCandidates(
-            profile = profile,
-            preference = uiState.value.settings.smartProfilePreference(profileId),
-            networkFingerprint = networkFingerprint?.key,
-            networkContext = networkFingerprint,
-        ).filterNot { scoredCandidate -> scoredCandidate.candidate.optionId in excludedOptionIds }
-    return AdaptiveProtocolRanker.applyControlledExploration(rankedIncluded)
+    return MultiProtocolProfileSupport.scoredProbeCandidates(
+        profile = profile,
+        preference = uiState.value.settings.smartProfilePreference(profileId),
+        networkFingerprint = networkFingerprint?.key,
+        networkContext = networkFingerprint,
+        excludedOptionIds = excludedOptionIds,
+        controlledExploration = true,
+    )
 }
 
 internal fun HomeViewModel.excludedAutoConnectOptionIdsInternal(profileId: Long): Set<String> =
@@ -1036,6 +1003,7 @@ internal fun HomeViewModel.logAdaptiveAutoConnectRanking(
             add("profile_id=$profileId")
             networkFingerprint?.key?.take(12)?.let { fingerprint -> add("network_fp=$fingerprint") }
             networkFingerprint?.let { context ->
+                add("schema=${context.schema}")
                 add("transport=${context.transport}")
                 add("metered=${context.isMetered}")
                 add("roaming=${context.isRoaming}")

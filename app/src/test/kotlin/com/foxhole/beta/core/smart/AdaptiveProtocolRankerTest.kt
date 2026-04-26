@@ -1,6 +1,7 @@
 package com.foxhole.beta.core.smart
 
 import com.foxhole.beta.core.model.AutoConnectReasonCode
+import com.foxhole.beta.core.model.NETWORK_FINGERPRINT_SCHEMA_CURRENT
 import com.foxhole.beta.core.model.SmartProfileNetworkMemory
 import com.foxhole.beta.core.model.SmartProfilePreference
 import com.foxhole.beta.core.model.SmartProfileProtocolMemory
@@ -39,6 +40,7 @@ class AdaptiveProtocolRankerTest {
                             listOf(
                                 SmartProfileNetworkMemory(
                                     networkFingerprint = "wifi-home",
+                                    networkFingerprintSchema = NETWORK_FINGERPRINT_SCHEMA_CURRENT,
                                     lastKnownGoodOptionId = "trojan",
                                     lastKnownGoodAt = 2_000L,
                                     protocolMemories =
@@ -239,6 +241,7 @@ class AdaptiveProtocolRankerTest {
                                 listOf(
                                     SmartProfileNetworkMemory(
                                         networkFingerprint = "wifi-home",
+                                        networkFingerprintSchema = NETWORK_FINGERPRINT_SCHEMA_CURRENT,
                                         lastKnownGoodOptionId = "wireguard",
                                         protocolMemories =
                                             listOf(
@@ -263,6 +266,7 @@ class AdaptiveProtocolRankerTest {
                                 listOf(
                                     SmartProfileNetworkMemory(
                                         networkFingerprint = "cellular",
+                                        networkFingerprintSchema = NETWORK_FINGERPRINT_SCHEMA_CURRENT,
                                         lastKnownGoodOptionId = "trojan",
                                         protocolMemories =
                                             listOf(

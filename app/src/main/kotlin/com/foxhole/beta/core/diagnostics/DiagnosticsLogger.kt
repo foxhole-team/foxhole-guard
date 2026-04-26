@@ -10,6 +10,8 @@ import com.foxhole.beta.BuildConfig
 import com.foxhole.beta.core.model.ConnectionState
 import com.foxhole.beta.core.model.DiagnosticsRetention
 import com.foxhole.beta.core.model.Settings
+import com.foxhole.beta.core.smart.SmartStartReplayEvent
+import com.foxhole.beta.core.smart.toJsonLine
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import java.io.File
@@ -105,6 +107,21 @@ class DiagnosticsLogger(
     fun recordConnection(state: ConnectionState, reason: String? = null) {
         val suffix = reason?.takeIf { it.isNotBlank() }?.let { " reason=$it" }.orEmpty()
         record("connection", "state=${state.name.lowercase(Locale.ROOT)}$suffix")
+    }
+
+    fun recordSmartStartReplay(
+        event: SmartStartReplayEvent,
+        enabled: Boolean,
+    ) {
+        if (!enabled) {
+            return
+        }
+        runCatching {
+            val replayDir = File(context.filesDir, SMART_START_REPLAY_DIR_NAME).apply { mkdirs() }
+            File(replayDir, SMART_START_REPLAY_FILE_NAME).appendText(event.toJsonLine() + "\n")
+        }.onFailure {
+            record("diagnostics", "smart start replay write failed")
+        }
     }
 
     fun snapshotForExport(): String {
@@ -211,6 +228,8 @@ class DiagnosticsLogger(
         private const val EXPORT_TTL_MS = 5 * 60 * 1000L
         private const val EXPORT_DIR_NAME = "diagnostics-export"
         private const val JOURNAL_DIR_NAME = "diagnostics-journal"
+        private const val SMART_START_REPLAY_DIR_NAME = "smart-start-replay"
+        private const val SMART_START_REPLAY_FILE_NAME = "smart-start-replay.jsonl"
         private const val DIAGNOSTIC_CLEANUP_WORK_NAME = "diagnostics-export-cleanup"
     }
 }

@@ -449,6 +449,7 @@ fun FoxholeApp(
                         onAllowPrivateOutboundHostsChanged = viewModel::onAllowPrivateOutboundHostsChanged,
                         onBlockScreenshotsChanged = viewModel::onBlockScreenshotsChanged,
                         onNetworkActivityLoggingChanged = viewModel::onNetworkActivityLoggingChanged,
+                        onSmartStartReplayLoggingChanged = viewModel::onSmartStartReplayLoggingChanged,
                         onDiagnosticsRetentionSelected = viewModel::onDiagnosticsRetentionSelected,
                         onAllowHttpConfigImportsChanged = viewModel::onAllowHttpConfigImportsChanged,
                         onAllowInsecureTlsChanged = viewModel::onAllowInsecureTlsChanged,

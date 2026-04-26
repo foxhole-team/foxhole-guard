@@ -8,6 +8,7 @@ import com.foxhole.beta.core.model.SmartProfilePreference
 import com.foxhole.beta.core.network.NetworkFingerprint
 import com.foxhole.beta.core.smart.AdaptiveProtocolCandidateScore
 import com.foxhole.beta.core.smart.AdaptiveProtocolRanker
+import com.foxhole.beta.core.smart.SmartStartController
 import kotlin.random.Random
 
 data class AutoConnectProbeCandidate(
@@ -15,6 +16,8 @@ data class AutoConnectProbeCandidate(
     val optionId: String,
     val protocolHint: ProtocolHint,
     val displayName: String,
+    val requiresInsecureTls: Boolean = false,
+    val insecureTlsConsentGranted: Boolean = requiresInsecureTls,
 )
 
 data class AutoConnectProbeResult(
@@ -66,19 +69,19 @@ object MultiProtocolProfileSupport {
         networkFingerprint: String? = null,
         networkContext: NetworkFingerprint? = null,
         now: Long = System.currentTimeMillis(),
+        excludedOptionIds: Set<String> = emptySet(),
         controlledExploration: Boolean = false,
         randomDouble: () -> Double = { Random.nextDouble() },
         randomIndex: (Int) -> Int = { bound -> Random.nextInt(bound) },
     ): List<AdaptiveProtocolCandidateScore> {
         val candidates =
-            supportedOptions(profile).map { option ->
-                AutoConnectProbeCandidate(
-                    profileId = profile.id,
-                    optionId = option.id,
-                    protocolHint = option.protocolHint,
-                    displayName = option.displayName.ifBlank { option.protocolHint.name },
-                )
-        }
+            smartStartEligibleProbeCandidates(
+                profile = profile,
+                preference = preference,
+                networkFingerprint = networkFingerprint,
+                excludedOptionIds = excludedOptionIds,
+                now = now,
+            )
         val ranked =
             AdaptiveProtocolRanker.scoreCandidates(
                 candidates = candidates,
@@ -88,7 +91,7 @@ object MultiProtocolProfileSupport {
                 now = now,
             )
         return if (controlledExploration) {
-            AdaptiveProtocolRanker.applyControlledExploration(
+            SmartStartController.rankedAttempts(
                 rankedCandidates = ranked,
                 randomDouble = randomDouble,
                 randomIndex = randomIndex,
@@ -97,6 +100,32 @@ object MultiProtocolProfileSupport {
             ranked
         }
     }
+
+    fun smartStartEligibleProbeCandidates(
+        profile: Profile,
+        preference: SmartProfilePreference? = null,
+        networkFingerprint: String? = null,
+        excludedOptionIds: Set<String> = emptySet(),
+        now: Long = System.currentTimeMillis(),
+    ): List<AutoConnectProbeCandidate> =
+        SmartStartController.eligibleCandidatesForRanking(
+            candidates =
+                supportedOptions(profile).map { option ->
+                    AutoConnectProbeCandidate(
+                        profileId = profile.id,
+                        optionId = option.id,
+                        protocolHint = option.protocolHint,
+                        displayName = option.displayName.ifBlank { option.protocolHint.name },
+                        requiresInsecureTls = option.requiresInsecureTls,
+                        insecureTlsConsentGranted = option.requiresInsecureTls,
+                    )
+                },
+            preference = preference,
+            networkFingerprint = networkFingerprint,
+            excludedOptionIds = excludedOptionIds,
+            subscriptionExpiresAt = profile.subscriptionExpiresAt,
+            now = now,
+        )
 
     fun probeCandidates(
         profile: Profile,
