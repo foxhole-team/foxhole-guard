@@ -980,16 +980,12 @@ class ProfileImportParserTest {
     }
 
     @Test
-    fun `allows insecure tls in share uri when build default enables it`() {
-        val parsed =
+    fun `rejects insecure tls in share uri by default`() {
+        expectIllegalArgument {
             parser.parseUserInput(
                 "vless://11111111-1111-1111-1111-111111111111@example.com:443?security=tls&allowInsecure=1#edge",
             )
-
-        val root = json.parseToJsonElement(parsed.normalizedConfigJson!!).jsonObject
-        val tls = root["outbounds"]!!.jsonArray.first().jsonObject["tls"]!!.jsonObject
-
-        assertEquals("true", tls["insecure"]!!.jsonPrimitive.content)
+        }
     }
 
     @Test

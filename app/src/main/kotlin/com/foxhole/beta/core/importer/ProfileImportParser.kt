@@ -1,6 +1,5 @@
 package com.foxhole.beta.core.importer
 
-import com.foxhole.beta.BuildConfig
 import com.foxhole.beta.core.model.ParsedImport
 import com.foxhole.beta.core.model.ParsedSubscriptionImport
 import com.foxhole.beta.core.network.RemoteHostResolver
@@ -16,7 +15,7 @@ class ProfileImportParser(
         input: String,
         allowPrivateOutboundHosts: Boolean = false,
         allowHttpSubscriptionUrls: Boolean = false,
-        allowInsecureTls: Boolean = BuildConfig.ALLOW_INSECURE_TLS_BY_DEFAULT,
+        allowInsecureTls: Boolean = false,
     ): ParsedImport =
         engine.parseUserInput(
             input = input,
@@ -30,7 +29,7 @@ class ProfileImportParser(
         fallbackName: String,
         allowPrivateOutboundHosts: Boolean = false,
         allowHttpSubscriptionUrls: Boolean = false,
-        allowInsecureTls: Boolean = BuildConfig.ALLOW_INSECURE_TLS_BY_DEFAULT,
+        allowInsecureTls: Boolean = false,
     ): ParsedImport =
         engine.parseSubscriptionContent(
             rawContent = rawContent,
@@ -45,7 +44,7 @@ class ProfileImportParser(
         fallbackName: String,
         allowPrivateOutboundHosts: Boolean = false,
         allowHttpSubscriptionUrls: Boolean = false,
-        allowInsecureTls: Boolean = BuildConfig.ALLOW_INSECURE_TLS_BY_DEFAULT,
+        allowInsecureTls: Boolean = false,
     ): ParsedSubscriptionImport =
         engine.parseSubscriptionProfiles(
             rawContent = rawContent,
@@ -58,7 +57,7 @@ class ProfileImportParser(
     fun sanitizeResolvedConfig(
         raw: String,
         allowPrivateOutboundHosts: Boolean = false,
-        allowInsecureTls: Boolean = BuildConfig.ALLOW_INSECURE_TLS_BY_DEFAULT,
+        allowInsecureTls: Boolean = false,
     ): String =
         engine.sanitizeResolvedConfig(
             raw = raw,

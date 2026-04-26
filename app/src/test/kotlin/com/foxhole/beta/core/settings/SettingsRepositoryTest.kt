@@ -104,8 +104,8 @@ class SettingsRepositoryTest {
     }
 
     @Test
-    fun `expert insecure tls override follows build default`() {
-        assertEquals(BuildConfig.ALLOW_INSECURE_TLS_BY_DEFAULT, ExpertSettings().allowInsecureTls)
+    fun `expert insecure tls override defaults off`() {
+        assertFalse(ExpertSettings().allowInsecureTls)
     }
 
     @Test

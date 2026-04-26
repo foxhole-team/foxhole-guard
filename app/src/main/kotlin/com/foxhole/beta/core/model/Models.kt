@@ -1,7 +1,5 @@
 package com.foxhole.beta.core.model
 
-import com.foxhole.beta.BuildConfig
-
 import kotlinx.serialization.Serializable
 
 const val SETTINGS_SCHEMA_VERSION = 10
@@ -215,7 +213,7 @@ data class ExpertSettings(
     val networkActivityLogging: Boolean = false,
     val diagnosticsRetention: DiagnosticsRetention = DiagnosticsRetention.HOURS_24,
     val allowHttpConfigImports: Boolean = false,
-    val allowInsecureTls: Boolean = BuildConfig.ALLOW_INSECURE_TLS_BY_DEFAULT,
+    val allowInsecureTls: Boolean = false,
     val sniff: Boolean = false,
     val routeOnly: Boolean = false,
     val strictRoute: Boolean = true,

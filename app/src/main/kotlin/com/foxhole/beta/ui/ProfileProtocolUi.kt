@@ -122,7 +122,11 @@ internal fun ProtocolMetadataRow(
         supportedProtocolOptions.firstOrNull { it.id == selectedProtocolOptionId }
             ?: supportedProtocolOptions.firstOrNull(ProfileProtocolOption::isSelected)
     val selectedRequiresInsecureTls =
-        showInsecureTlsBadge && (requiresInsecureTls || selectedOption?.requiresInsecureTls == true)
+        shouldShowInsecureTlsProfileBadge(
+            showInsecureTlsBadge = showInsecureTlsBadge,
+            profileRequiresInsecureTls = requiresInsecureTls,
+            selectedOptionRequiresInsecureTls = selectedOption?.requiresInsecureTls == true,
+        )
     Row(
         modifier = if (expand) modifier.fillMaxWidth() else modifier,
         horizontalArrangement = Arrangement.spacedBy(if (compact) 8.dp else 12.dp),
@@ -174,6 +178,13 @@ internal fun ProtocolMetadataRow(
         }
     }
 }
+
+internal fun shouldShowInsecureTlsProfileBadge(
+    showInsecureTlsBadge: Boolean,
+    profileRequiresInsecureTls: Boolean,
+    selectedOptionRequiresInsecureTls: Boolean,
+): Boolean =
+    showInsecureTlsBadge && (profileRequiresInsecureTls || selectedOptionRequiresInsecureTls)
 
 @Composable
 internal fun InsecureTlsProfileBadge(compact: Boolean = false) {

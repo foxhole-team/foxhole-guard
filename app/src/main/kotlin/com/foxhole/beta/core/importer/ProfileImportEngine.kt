@@ -1,6 +1,5 @@
 package com.foxhole.beta.core.importer
 
-import com.foxhole.beta.BuildConfig
 import com.foxhole.beta.core.model.ParsedImport
 import com.foxhole.beta.core.model.ParsedSubscriptionImport
 import com.foxhole.beta.core.model.ParsedSubscriptionProfile
@@ -36,7 +35,7 @@ fun parseUserInput(
     input: String,
     allowPrivateOutboundHosts: Boolean = false,
     allowHttpSubscriptionUrls: Boolean = false,
-    allowInsecureTls: Boolean = BuildConfig.ALLOW_INSECURE_TLS_BY_DEFAULT,
+    allowInsecureTls: Boolean = false,
 ): ParsedImport {
     val trimmed = normalizeInput(input)
     require(trimmed.isNotBlank()) { "empty input" }
@@ -130,7 +129,7 @@ fun parseSubscriptionContent(
     fallbackName: String,
     allowPrivateOutboundHosts: Boolean = false,
     allowHttpSubscriptionUrls: Boolean = false,
-    allowInsecureTls: Boolean = BuildConfig.ALLOW_INSECURE_TLS_BY_DEFAULT,
+    allowInsecureTls: Boolean = false,
 ): ParsedImport {
     val trimmed = rawContent.trim()
     require(trimmed.isNotBlank()) { "subscription is empty" }
@@ -181,7 +180,7 @@ fun parseSubscriptionProfiles(
     fallbackName: String,
     allowPrivateOutboundHosts: Boolean = false,
     allowHttpSubscriptionUrls: Boolean = false,
-    allowInsecureTls: Boolean = BuildConfig.ALLOW_INSECURE_TLS_BY_DEFAULT,
+    allowInsecureTls: Boolean = false,
 ): ParsedSubscriptionImport {
     val trimmed = normalizeInput(rawContent)
     require(trimmed.isNotBlank()) { "subscription is empty" }
@@ -312,7 +311,7 @@ private fun parseSubscriptionPayloadProfiles(
 fun sanitizeResolvedConfig(
     raw: String,
     allowPrivateOutboundHosts: Boolean = false,
-    allowInsecureTls: Boolean = BuildConfig.ALLOW_INSECURE_TLS_BY_DEFAULT,
+    allowInsecureTls: Boolean = false,
 ): String {
     val objectValue =
         normalizeTlsSettings(

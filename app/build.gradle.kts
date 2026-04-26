@@ -130,6 +130,20 @@ val verifyReleaseContainsBundledLibbox by tasks.registering(VerifyBundledLibboxI
     apkDirectory.set(layout.buildDirectory.dir("outputs/apk/release"))
 }
 
+val verifyReleaseBuildConfigDefaults by tasks.registering {
+    dependsOn("generateReleaseBuildConfig")
+    val releaseBuildConfigFile =
+        layout.buildDirectory.file("generated/source/buildConfig/release/com/foxhole/beta/BuildConfig.java")
+    inputs.file(releaseBuildConfigFile)
+
+    doLast {
+        val content = releaseBuildConfigFile.get().asFile.readText()
+        require("public static final boolean ALLOW_INSECURE_TLS_BY_DEFAULT = false;" in content) {
+            "release BuildConfig must set ALLOW_INSECURE_TLS_BY_DEFAULT=false"
+        }
+    }
+}
+
 tasks.matching { task -> task.name == "assembleRelease" }.configureEach {
     finalizedBy(verifyReleaseContainsBundledLibbox)
 }
@@ -188,7 +202,7 @@ android {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
-            buildConfigField("boolean", "ALLOW_INSECURE_TLS_BY_DEFAULT", "true")
+            buildConfigField("boolean", "ALLOW_INSECURE_TLS_BY_DEFAULT", "false")
             buildConfigField("boolean", "ENABLE_DIAGNOSTIC_LOGCAT", if (enableReleaseProbe) "true" else "false")
             if (releaseSigningReady) {
                 signingConfig = signingConfigs.getByName("release")
