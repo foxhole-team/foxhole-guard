@@ -81,19 +81,20 @@ internal fun SmartProfileAutoConnectMenu(
     if (options.size < 2) {
         return
     }
+    val menuLayout = resolveSmartStartProtocolMenuLayout(showMetricsTable = showMetricsTable)
     var expanded by rememberSaveable(profile.id) { mutableStateOf(false) }
     val minMenuWidth =
         when {
-            showMetricsTable && compact -> 334.dp
-            showMetricsTable -> 356.dp
-            compact -> 272.dp
+            menuLayout.showDetailedMetrics && compact -> 334.dp
+            menuLayout.showDetailedMetrics -> 356.dp
+            compact -> 304.dp
             else -> 304.dp
         }
     val maxMenuWidth =
         when {
-            showMetricsTable && compact -> 348.dp
-            showMetricsTable -> 376.dp
-            compact -> 292.dp
+            menuLayout.showDetailedMetrics && compact -> 348.dp
+            menuLayout.showDetailedMetrics -> 376.dp
+            compact -> 328.dp
             else -> 336.dp
         }
     Box {
@@ -133,70 +134,72 @@ internal fun SmartProfileAutoConnectMenu(
                 modifier = Modifier.padding(if (compact) 0.dp else 2.dp),
                 verticalArrangement = Arrangement.spacedBy(if (compact) 0.dp else 2.dp),
             ) {
-                Column(verticalArrangement = Arrangement.spacedBy(if (compact) 2.dp else 5.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = if (compact) 3.dp else 6.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.Top,
-                    ) {
-                        Icon(
-                            imageVector = Icons.Outlined.Info,
-                            contentDescription = null,
-                            modifier = Modifier.size(if (compact) 14.dp else 16.dp),
-                            tint = FoxholeInfoAccent,
-                        )
-                        Column(
-                            modifier = Modifier.weight(1f),
-                            verticalArrangement = Arrangement.spacedBy(if (compact) 2.dp else 4.dp),
+                if (menuLayout.showHeader) {
+                    Column(verticalArrangement = Arrangement.spacedBy(if (compact) 2.dp else 5.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = if (compact) 3.dp else 6.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.Top,
                         ) {
-                            Text(
-                                text = stringResource(R.string.smart_profile_menu_title),
-                                style =
-                                    if (compact) {
-                                        MaterialTheme.typography.bodySmall
-                                    } else {
-                                        MaterialTheme.typography.labelMedium
-                                    },
-                                fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = if (compact) 3 else 2,
-                                overflow = TextOverflow.Clip,
+                            Icon(
+                                imageVector = Icons.Outlined.Info,
+                                contentDescription = null,
+                                modifier = Modifier.size(if (compact) 14.dp else 16.dp),
+                                tint = FoxholeInfoAccent,
                             )
-                            Text(
-                                text = stringResource(R.string.smart_profile_metrics_refresh_hint),
-                                style =
-                                    MaterialTheme.typography.labelSmall.copy(
-                                        fontSize = if (compact) 10.sp else 11.sp,
-                                        lineHeight = if (compact) 11.sp else 12.sp,
-                                    ),
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
+                            Column(
+                                modifier = Modifier.weight(1f),
+                                verticalArrangement = Arrangement.spacedBy(if (compact) 2.dp else 4.dp),
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.smart_profile_menu_title),
+                                    style =
+                                        if (compact) {
+                                            MaterialTheme.typography.bodySmall
+                                        } else {
+                                            MaterialTheme.typography.labelMedium
+                                        },
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = if (compact) 3 else 2,
+                                    overflow = TextOverflow.Clip,
+                                )
+                                Text(
+                                    text = stringResource(R.string.smart_profile_metrics_refresh_hint),
+                                    style =
+                                        MaterialTheme.typography.labelSmall.copy(
+                                            fontSize = if (compact) 10.sp else 11.sp,
+                                            lineHeight = if (compact) 11.sp else 12.sp,
+                                        ),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
+                            SmartProfileMetricsRefreshStatus(
+                                updatedAt = metricsUpdatedAtByOptionId.values.maxOrNull(),
+                                refreshing = metricsRefreshing,
+                                onRefreshMetrics = onRefreshMetrics,
+                                onCancelRefreshMetrics = onCancelRefreshMetrics,
+                                compact = compact,
                             )
                         }
-                        SmartProfileMetricsRefreshStatus(
-                            updatedAt = metricsUpdatedAtByOptionId.values.maxOrNull(),
-                            refreshing = metricsRefreshing,
-                            onRefreshMetrics = onRefreshMetrics,
-                            onCancelRefreshMetrics = onCancelRefreshMetrics,
-                            compact = compact,
+                        HorizontalDivider(
+                            modifier = Modifier.padding(horizontal = if (compact) 6.dp else 10.dp),
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.34f),
                         )
-                    }
-                    HorizontalDivider(
-                        modifier = Modifier.padding(horizontal = if (compact) 6.dp else 10.dp),
-                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.34f),
-                    )
-                    if (showMetricsTable) {
-                        SmartProfileSelectedProtocolSummary(
-                            options = options,
-                            activeOptionId = activeOptionId,
-                            recommendedOptionId = recommendedOptionId,
-                            latencyByOptionId = latencyByOptionId,
-                            unavailableOptionIds = unavailableOptionIds,
-                            latencyUnavailableOptionIds = latencyUnavailableOptionIds,
-                            compact = compact,
-                        )
-                        SmartProfileProtocolMenuHeader(compact = compact)
+                        if (menuLayout.showDetailedMetrics) {
+                            SmartProfileSelectedProtocolSummary(
+                                options = options,
+                                activeOptionId = activeOptionId,
+                                recommendedOptionId = recommendedOptionId,
+                                latencyByOptionId = latencyByOptionId,
+                                unavailableOptionIds = unavailableOptionIds,
+                                latencyUnavailableOptionIds = latencyUnavailableOptionIds,
+                                compact = compact,
+                            )
+                            SmartProfileProtocolMenuHeader(compact = compact)
+                        }
                     }
                 }
                 options.forEach { option ->
@@ -236,14 +239,14 @@ internal fun SmartProfileAutoConnectMenu(
                                 else -> FoxholePositiveAccent
                             },
                         selectedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.18f),
-                        minHeight = if (showMetricsTable) 32.dp else 42.dp,
+                        minHeight = if (menuLayout.showDetailedMetrics) 32.dp else 42.dp,
                         contentPadding =
                             PaddingValues(
                                 horizontal = SmartProfileMenuHorizontalPadding,
                                 vertical = 0.dp,
                             ),
                     ) {
-                        if (showMetricsTable) {
+                        if (menuLayout.showDetailedMetrics) {
                             SmartProfileProtocolMenuRow(
                                 option = option,
                                 compact = true,
@@ -455,9 +458,14 @@ private fun SmartProfileSelectedProtocolSummary(
             compact = compact,
         )
         SmartProfileStatusPill(
-            latencyMs = latencyMs,
-            down = down,
-            unavailable = unavailable,
+            presentation =
+                resolveSmartStartProtocolPresentation(
+                    included = true,
+                    recommended = activeOption.id == recommendedOptionId,
+                    latencyMs = latencyMs,
+                    latencyDown = down,
+                    latencyUnavailable = unavailable,
+                ),
             compact = compact,
         )
     }
@@ -582,9 +590,14 @@ private fun SmartProfileProtocolSimpleMenuRow(
             modifier = Modifier.weight(1f),
         )
         SmartProfileStatusPill(
-            latencyMs = latencyMs,
-            down = latencyDown,
-            unavailable = latencyUnavailable || latencyMs == null,
+            presentation =
+                resolveSmartStartProtocolPresentation(
+                    included = included,
+                    recommended = recommended,
+                    latencyMs = latencyMs,
+                    latencyDown = latencyDown,
+                    latencyUnavailable = latencyUnavailable,
+                ),
             compact = compact,
         )
         SmartProfileOnToggle(included = included, compact = compact)
@@ -779,34 +792,46 @@ private fun SmartProfileMetricCell(
 @Composable
 private fun SmartProfileStatusPill(
     modifier: Modifier = Modifier,
-    latencyMs: Long?,
-    down: Boolean,
-    unavailable: Boolean,
+    presentation: SmartStartProtocolPresentation,
     compact: Boolean,
 ) {
-    val tone =
-        when {
-            down -> SmartProfileMetricTone.DANGER
-            latencyMs == null || unavailable -> SmartProfileMetricTone.NEUTRAL
-            latencyMs <= 180L -> SmartProfileMetricTone.POSITIVE
-            latencyMs <= 520L -> SmartProfileMetricTone.WARNING
-            else -> SmartProfileMetricTone.DANGER
-        }
-    val text =
-        when {
-            down -> stringResource(R.string.smart_profile_metric_down)
-            latencyMs == null || unavailable -> stringResource(R.string.smart_profile_metric_status_unknown)
-            latencyMs <= 180L -> stringResource(R.string.smart_profile_metric_fast)
-            latencyMs <= 520L -> stringResource(R.string.smart_profile_metric_slow)
-            else -> stringResource(R.string.smart_profile_metric_down)
-        }
     SmartProfileMetricPill(
-        text = text,
-        tone = tone,
+        text = smartStartProtocolPresentationText(presentation),
+        tone = smartStartProtocolPresentationTone(presentation),
         compact = compact,
         modifier = modifier,
     )
 }
+
+@Composable
+private fun smartStartProtocolPresentationText(presentation: SmartStartProtocolPresentation): String =
+    when (presentation.status) {
+        SmartStartProtocolStatus.RECOMMENDED -> stringResource(R.string.smart_start_protocol_status_recommended)
+        SmartStartProtocolStatus.SLOW -> stringResource(R.string.smart_start_protocol_status_slow)
+        SmartStartProtocolStatus.RECENTLY_FAILED -> stringResource(R.string.smart_start_protocol_status_recently_failed)
+        SmartStartProtocolStatus.NO_DATA -> stringResource(R.string.smart_start_protocol_status_no_data)
+        SmartStartProtocolStatus.DISABLED ->
+            stringResource(
+                R.string.smart_start_protocol_status_disabled,
+                stringResource(
+                    when (presentation.disabledReason) {
+                        SmartStartProtocolDisabledReason.MANUAL_OFF,
+                        null,
+                        -> R.string.smart_start_protocol_disabled_reason_manual_off
+                    },
+                ),
+            )
+    }
+
+private fun smartStartProtocolPresentationTone(presentation: SmartStartProtocolPresentation): SmartProfileMetricTone =
+    when (presentation.status) {
+        SmartStartProtocolStatus.RECOMMENDED -> SmartProfileMetricTone.POSITIVE
+        SmartStartProtocolStatus.SLOW -> SmartProfileMetricTone.WARNING
+        SmartStartProtocolStatus.RECENTLY_FAILED -> SmartProfileMetricTone.DANGER
+        SmartStartProtocolStatus.NO_DATA,
+        SmartStartProtocolStatus.DISABLED,
+        -> SmartProfileMetricTone.NEUTRAL
+    }
 
 @Composable
 private fun SmartProfileMetricPill(
