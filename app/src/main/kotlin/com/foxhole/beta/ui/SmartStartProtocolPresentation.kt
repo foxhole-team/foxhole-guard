@@ -48,7 +48,7 @@ internal fun resolveSmartStartProtocolPresentation(
 
 internal fun resolveSmartStartProtocolMenuLayout(showMetricsTable: Boolean): SmartStartProtocolMenuLayout =
     SmartStartProtocolMenuLayout(
-        showHeader = showMetricsTable,
+        showHeader = true,
         showDetailedMetrics = showMetricsTable,
         showCompactStatusRows = !showMetricsTable,
     )

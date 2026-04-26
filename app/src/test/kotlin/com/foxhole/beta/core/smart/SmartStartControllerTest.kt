@@ -28,11 +28,28 @@ class SmartStartControllerTest {
     }
 
     @Test
-    fun `maxAttempts is three even when more candidates exist`() {
+    fun `default attempts include every ranked candidate until success`() {
         val attempted = mutableListOf<String>()
 
         val summary =
             SmartStartController.runUntilFirstSuccess(listOf("one", "two", "three", "four", "five")) { candidate ->
+                attempted += candidate
+                false
+            }
+
+        assertEquals(listOf("one", "two", "three", "four", "five"), attempted)
+        assertNull(summary.winner)
+    }
+
+    @Test
+    fun `explicit maxAttempts still caps helper attempts when requested`() {
+        val attempted = mutableListOf<String>()
+
+        val summary =
+            SmartStartController.runUntilFirstSuccess(
+                candidates = listOf("one", "two", "three", "four", "five"),
+                maxAttempts = 3,
+            ) { candidate ->
                 attempted += candidate
                 false
             }
@@ -62,7 +79,7 @@ class SmartStartControllerTest {
     }
 
     @Test
-    fun `controlled exploration is limited to top three eligible candidates`() {
+    fun `controlled exploration keeps every eligible candidate`() {
         val attempts =
             SmartStartController.rankedAttempts(
                 rankedCandidates =
@@ -77,9 +94,8 @@ class SmartStartControllerTest {
                 randomIndex = { 1 },
             )
 
-        assertEquals(3, attempts.size)
-        assertEquals(listOf("three", "one", "two"), attempts.map { it.candidate.optionId })
-        assertTrue(attempts.none { it.candidate.optionId == "four" })
+        assertEquals(4, attempts.size)
+        assertEquals(listOf("three", "one", "two", "four"), attempts.map { it.candidate.optionId })
     }
 
     @Test
@@ -158,4 +174,3 @@ class SmartStartControllerTest {
             explorationBonus = 0,
         )
 }
-

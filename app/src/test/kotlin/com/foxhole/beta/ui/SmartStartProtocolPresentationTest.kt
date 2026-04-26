@@ -79,10 +79,10 @@ class SmartStartProtocolPresentationTest {
     }
 
     @Test
-    fun `dashboard menu uses compact status rows only`() {
+    fun `dashboard menu keeps header and refresh with compact status rows`() {
         val layout = resolveSmartStartProtocolMenuLayout(showMetricsTable = false)
 
-        assertFalse(layout.showHeader)
+        assertTrue(layout.showHeader)
         assertFalse(layout.showDetailedMetrics)
         assertTrue(layout.showCompactStatusRows)
     }

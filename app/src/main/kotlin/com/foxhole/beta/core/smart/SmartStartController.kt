@@ -7,8 +7,6 @@ import com.foxhole.beta.core.settings.networkMemory
 import kotlin.random.Random
 
 object SmartStartController {
-    const val MAX_ATTEMPTS: Int = 3
-    const val CONTROLLED_EXPLORATION_POOL_SIZE: Int = 3
     private const val HARD_FAILURE_STREAK_THRESHOLD: Int = 3
 
     fun eligibleCandidatesForRanking(
@@ -48,18 +46,17 @@ object SmartStartController {
         randomDouble: () -> Double = { Random.nextDouble() },
         randomIndex: (Int) -> Int = { bound -> Random.nextInt(bound) },
     ): List<AdaptiveProtocolCandidateScore> {
-        val topEligible = rankedCandidates.take(CONTROLLED_EXPLORATION_POOL_SIZE)
         return AdaptiveProtocolRanker.applyControlledExploration(
-            rankedCandidates = topEligible,
+            rankedCandidates = rankedCandidates,
             config = config,
             randomDouble = randomDouble,
             randomIndex = randomIndex,
-        ).take(MAX_ATTEMPTS)
+        )
     }
 
     fun <T> runUntilFirstSuccess(
         candidates: List<T>,
-        maxAttempts: Int = MAX_ATTEMPTS,
+        maxAttempts: Int = Int.MAX_VALUE,
         attempt: (T) -> Boolean,
     ): SmartStartAttemptSummary<T> {
         val attempted = mutableListOf<T>()

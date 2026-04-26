@@ -80,7 +80,7 @@ One subscription can contain one or more profiles. Foxhole converts route groups
 - Tries the recommended protocol first
 - Stops on the first validated success
 - Falls back only after validation failure
-- Caps automatic attempts at 3 candidates
+- Scans all eligible candidates during Smart start and metrics refresh
 - Excludes disabled, expired, cooldown, and insecure-without-consent options
 - Stores success by network hash
 - Analyzes:
