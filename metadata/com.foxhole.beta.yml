@@ -13,10 +13,11 @@ Description: |
   supports Tunnel and Proxy, as well as Split
   Tunnel for apps and sites and LAN Proxy. It supports profile import
   from files, the clipboard, QR codes, and HTTPS subscriptions,
-  including compatible v2raytun-style subscriptions. No ads,
-  analytics, or telemetry. It supports compatible configurations and
-  its own smart config for fast Smart start with automatic VPN
-  protocol selection.
+  including compatible v2raytun-style subscriptions. TLS verification
+  is strict by default; configs that require insecure TLS need explicit
+  per-profile consent. No ads, analytics, or telemetry. It supports
+  compatible configurations and its own smart config for deterministic
+  Smart start with automatic VPN protocol selection.
 
   Key features:
   - Modes: Tunnel, Proxy
@@ -25,7 +26,9 @@ Description: |
   - Proxy authentication
   - Site-based routing rules
   - Import from files, clipboard, QR codes, and HTTPS subscriptions
-  - Supports Foxhole smart config with protocol selection and Smart start that checks available connection options and chooses the best available one
+  - Supports Foxhole smart config with protocol selection and Smart start
+    that ranks eligible options, tries the recommended protocol first,
+    validates it, and falls back only after failure
   - Local traffic statistics
   - Subscription expiration date display
   - Encrypted local profile storage

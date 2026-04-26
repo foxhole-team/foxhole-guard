@@ -22,7 +22,7 @@
 
 Foxhole is a simple Android client for connecting to and managing sing-box profiles. It supports Tunnel and Proxy modes, Split Tunnel for apps and sites, and LAN Proxy.
 
-Supports profile import from files, clipboard, QR codes, and HTTPS subscriptions (including v2raytun-style).
+Supports profile import from files, clipboard, QR codes, and HTTPS subscriptions (including v2raytun-style). TLS verification is strict by default; configs that require insecure TLS need explicit per-profile consent.
 
 >No ads. No analytics. No telemetry.
 
@@ -44,7 +44,7 @@ Supports profile import from files, clipboard, QR codes, and HTTPS subscriptions
 - Proxy authentication
 - Site-based routing rules
 - Import: files, clipboard, QR, HTTPS subscriptions
-- Smart start with auto protocol selection
+- Smart start with deterministic auto protocol selection
 - Local traffic statistics
 - Subscription expiration tracking
 - Encrypted local storage
@@ -76,7 +76,12 @@ One subscription can contain one or more profiles. Foxhole converts route groups
 
 ### Smart start logic
 
-- Checks supported protocols
+- Ranks eligible supported protocols
+- Tries the recommended protocol first
+- Stops on the first validated success
+- Falls back only after validation failure
+- Caps automatic attempts at 3 candidates
+- Excludes disabled, expired, cooldown, and insecure-without-consent options
 - Stores success by network hash
 - Analyzes:
   - success/failure history
@@ -114,4 +119,3 @@ One subscription can contain one or more profiles. Foxhole converts route groups
 
 > Android development is not our primary specialization.
 > Core expertise: backend, security, ML, cryptography.
-
