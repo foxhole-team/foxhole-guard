@@ -1,0 +1,115 @@
+package com.foxhole.beta.vpn
+
+import android.content.Context
+import com.foxhole.beta.core.data.ProfileRepository
+import com.foxhole.beta.core.data.RoutingRepository
+import com.foxhole.beta.core.diagnostics.DiagnosticsLogger
+import com.foxhole.beta.core.model.ConnectionSnapshot
+import com.foxhole.beta.core.model.ConnectionState
+import com.foxhole.beta.core.model.TrafficMode
+import com.foxhole.beta.core.settings.SettingsRepository
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+
+internal class FoxholeConnectionLifecycle(
+    private val context: Context,
+    private val profileRepository: ProfileRepository,
+    private val settingsRepository: SettingsRepository,
+    private val routingRepository: RoutingRepository,
+    private val diagnosticsLogger: DiagnosticsLogger,
+    private val runtimeConfigAssembler: RuntimeConfigAssembler,
+    private val snapshot: StateFlow<ConnectionSnapshot>,
+    private val appliedRuntimeSignature: MutableStateFlow<Int?>,
+) {
+    suspend fun connect(
+        profileId: Long,
+        protocolOptionId: String?,
+        statusMessage: String?,
+        previousVpnNetworkHandle: Long?,
+    ) {
+        val profile = profileRepository.getProfile(profileId) ?: error("profile not found")
+        val settings = settingsRepository.current()
+        if (snapshot.value.state !in ACTIVE_CONNECTION_STATES) {
+            FoxholeConnectionServiceContract.stopAllServices(context)
+        }
+        diagnosticsLogger.record("connection", "connect requested")
+        FoxholeVpnRuntimeBridge.updateIpInfo(null)
+        FoxholeVpnRuntimeBridge.update(
+            ConnectionSnapshot(
+                state = ConnectionState.CONNECTING,
+                trafficMode = settings.traffic.mode,
+                profileId = profile.id,
+                profileName = profile.name,
+                protocolHint = profile.protocolHint,
+                message = statusMessage,
+            ),
+        )
+        FoxholeConnectionServiceContract.startForegroundService(
+            context = context,
+            mode = settings.traffic.mode,
+            action = FoxholeConnectionServiceContract.ACTION_CONNECT,
+            profileId = profileId,
+            protocolOptionId = protocolOptionId,
+            previousVpnNetworkHandle = previousVpnNetworkHandle,
+        )
+    }
+
+    fun disconnect() {
+        clearAppliedRuntime()
+        diagnosticsLogger.record("connection", "disconnect requested")
+        val currentSnapshot = snapshot.value
+        val disconnectMode = disconnectDispatchModeOrNull(currentSnapshot)
+        if (disconnectMode == null) {
+            diagnosticsLogger.record("connection", "disconnect skipped: no active runtime")
+            FoxholeConnectionServiceContract.stopAllServices(context)
+            FoxholeVpnRuntimeBridge.clearTransientState()
+            FoxholeVpnRuntimeBridge.update(
+                ConnectionSnapshot(
+                    trafficMode = settingsRepository.settings.value.traffic.mode,
+                ),
+            )
+            return
+        }
+        FoxholeConnectionServiceContract.startForegroundService(
+            context = context,
+            mode = disconnectMode,
+            action = FoxholeConnectionServiceContract.ACTION_DISCONNECT,
+        )
+    }
+
+    suspend fun currentRuntimeFingerprint(): Int =
+        runtimeConfigAssembler.runtimeFingerprint(
+            settingsRepository.current(),
+            routingRepository.currentPresetForRuntime(),
+        )
+
+    suspend fun markCurrentRuntimeApplied() {
+        appliedRuntimeSignature.value = currentRuntimeFingerprint()
+    }
+
+    fun clearAppliedRuntime() {
+        appliedRuntimeSignature.value = null
+    }
+
+    fun reload(profileId: Long?): Boolean {
+        val targetProfileId = profileId ?: return false
+        if (snapshot.value.state !in ACTIVE_CONNECTION_STATES || snapshot.value.profileId != targetProfileId) {
+            return false
+        }
+        diagnosticsLogger.record("connection", "runtime reload requested")
+        FoxholeConnectionServiceContract.startForegroundService(
+            context = context,
+            mode =
+                FoxholeConnectionServiceContract.serviceMode(
+                    snapshot = snapshot.value,
+                    fallbackMode = settingsRepository.settings.value.traffic.mode,
+                ),
+            action = FoxholeConnectionServiceContract.ACTION_RELOAD,
+            profileId = targetProfileId,
+        )
+        return true
+    }
+}
+
+internal fun disconnectDispatchModeOrNull(snapshot: ConnectionSnapshot): TrafficMode? =
+    snapshot.trafficMode.takeIf { snapshot.state in ACTIVE_CONNECTION_STATES }

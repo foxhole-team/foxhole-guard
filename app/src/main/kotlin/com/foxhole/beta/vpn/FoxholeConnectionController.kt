@@ -4,7 +4,6 @@ import android.content.Context
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
-import android.os.SystemClock
 import androidx.core.content.getSystemService
 import com.foxhole.beta.core.data.ProfileRepository
 import com.foxhole.beta.core.data.RoutingRepository
@@ -13,19 +12,14 @@ import com.foxhole.beta.core.model.ConnectionSnapshot
 import com.foxhole.beta.core.model.ConnectionState
 import com.foxhole.beta.core.model.IpInfo
 import com.foxhole.beta.core.model.Profile
-import com.foxhole.beta.core.model.TrafficMode
 import com.foxhole.beta.core.model.TrafficSnapshot
 import com.foxhole.beta.core.network.IpInfoFetchMode
 import com.foxhole.beta.core.network.IpInfoRepository
 import com.foxhole.beta.core.settings.SettingsRepository
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.withContext
-import java.net.InetAddress
-import java.net.InetSocketAddress
 
 class FoxholeConnectionController(
     private val context: Context,
@@ -42,95 +36,65 @@ class FoxholeConnectionController(
     val traffic: StateFlow<TrafficSnapshot> = FoxholeVpnRuntimeBridge.traffic
     private val appliedRuntimeSignatureMutable = MutableStateFlow<Int?>(null)
     val appliedRuntimeSignature: StateFlow<Int?> = appliedRuntimeSignatureMutable
+    private val lifecycle =
+        FoxholeConnectionLifecycle(
+            context = context,
+            profileRepository = profileRepository,
+            settingsRepository = settingsRepository,
+            routingRepository = routingRepository,
+            diagnosticsLogger = diagnosticsLogger,
+            runtimeConfigAssembler = runtimeConfigAssembler,
+            snapshot = snapshot,
+            appliedRuntimeSignature = appliedRuntimeSignatureMutable,
+        )
+    private val validationGateway =
+        TunnelValidationGateway(
+            context = context,
+            profileRepository = profileRepository,
+            settingsRepository = settingsRepository,
+            ipInfoRepository = ipInfoRepository,
+            diagnosticsLogger = diagnosticsLogger,
+            snapshot = snapshot,
+            currentVpnNetwork = { currentVpnNetwork() },
+            currentUpstreamNetwork = { currentUpstreamNetwork() },
+        )
+    private val telemetryProbe =
+        ConnectionTelemetryProbe(
+            profileRepository = profileRepository,
+            settingsRepository = settingsRepository,
+            ipInfoRepository = ipInfoRepository,
+            snapshot = snapshot,
+            currentVpnNetwork = { currentVpnNetwork() },
+            currentUpstreamNetwork = { currentUpstreamNetwork() },
+        )
 
     suspend fun connect(
         profileId: Long,
         protocolOptionId: String? = null,
         statusMessage: String? = null,
         previousVpnNetworkHandle: Long? = null,
-    ) {
-        val profile = profileRepository.getProfile(profileId) ?: error("profile not found")
-        val settings = settingsRepository.current()
-        if (snapshot.value.state !in ACTIVE_CONNECTION_STATES) {
-            FoxholeConnectionServiceContract.stopAllServices(context)
-        }
-        diagnosticsLogger.record("connection", "connect requested")
-        FoxholeVpnRuntimeBridge.updateIpInfo(null)
-        FoxholeVpnRuntimeBridge.update(
-            ConnectionSnapshot(
-                state = ConnectionState.CONNECTING,
-                trafficMode = settings.traffic.mode,
-                profileId = profile.id,
-                profileName = profile.name,
-                protocolHint = profile.protocolHint,
-                message = statusMessage,
-            ),
-        )
-        FoxholeConnectionServiceContract.startForegroundService(
-            context = context,
-            mode = settings.traffic.mode,
-            action = FoxholeConnectionServiceContract.ACTION_CONNECT,
-            profileId = profileId,
-            protocolOptionId = protocolOptionId,
-            previousVpnNetworkHandle = previousVpnNetworkHandle,
-        )
-    }
+    ) = lifecycle.connect(
+        profileId = profileId,
+        protocolOptionId = protocolOptionId,
+        statusMessage = statusMessage,
+        previousVpnNetworkHandle = previousVpnNetworkHandle,
+    )
 
     fun disconnect() {
-        clearAppliedRuntime()
-        diagnosticsLogger.record("connection", "disconnect requested")
-        val currentSnapshot = snapshot.value
-        val disconnectMode = disconnectDispatchModeOrNull(currentSnapshot)
-        if (disconnectMode == null) {
-            diagnosticsLogger.record("connection", "disconnect skipped: no active runtime")
-            FoxholeConnectionServiceContract.stopAllServices(context)
-            FoxholeVpnRuntimeBridge.clearTransientState()
-            FoxholeVpnRuntimeBridge.update(
-                ConnectionSnapshot(
-                    trafficMode = settingsRepository.settings.value.traffic.mode,
-                ),
-            )
-            return
-        }
-        FoxholeConnectionServiceContract.startForegroundService(
-            context = context,
-            mode = disconnectMode,
-            action = FoxholeConnectionServiceContract.ACTION_DISCONNECT,
-        )
+        lifecycle.disconnect()
     }
 
-    suspend fun currentRuntimeFingerprint(): Int =
-        runtimeConfigAssembler.runtimeFingerprint(
-            settingsRepository.current(),
-            routingRepository.currentPresetForRuntime(),
-        )
+    suspend fun currentRuntimeFingerprint(): Int = lifecycle.currentRuntimeFingerprint()
 
     suspend fun markCurrentRuntimeApplied() {
-        appliedRuntimeSignatureMutable.value = currentRuntimeFingerprint()
+        lifecycle.markCurrentRuntimeApplied()
     }
 
     fun clearAppliedRuntime() {
-        appliedRuntimeSignatureMutable.value = null
+        lifecycle.clearAppliedRuntime()
     }
 
-    fun reload(profileId: Long? = snapshot.value.profileId): Boolean {
-        val targetProfileId = profileId ?: return false
-        if (snapshot.value.state !in ACTIVE_CONNECTION_STATES || snapshot.value.profileId != targetProfileId) {
-            return false
-        }
-        diagnosticsLogger.record("connection", "runtime reload requested")
-        FoxholeConnectionServiceContract.startForegroundService(
-            context = context,
-            mode =
-                FoxholeConnectionServiceContract.serviceMode(
-                    snapshot = snapshot.value,
-                    fallbackMode = settingsRepository.settings.value.traffic.mode,
-                ),
-            action = FoxholeConnectionServiceContract.ACTION_RELOAD,
-            profileId = targetProfileId,
-        )
-        return true
-    }
+    fun reload(profileId: Long? = snapshot.value.profileId): Boolean = lifecycle.reload(profileId)
 
     suspend fun refreshProfile(profileId: Long): Profile = profileRepository.refreshProfile(profileId)
 
@@ -138,166 +102,26 @@ class FoxholeConnectionController(
         profileRepository.setActiveProfile(profileId)
     }
 
-    suspend fun refreshIpInfo(fetchMode: IpInfoFetchMode = IpInfoFetchMode.FULL): IpInfo {
-        val settings = settingsRepository.current()
-        val endpoint = settings.connection.ipInfoEndpoint
-        val trafficMode =
-            snapshot.value.state
-                .takeIf { it in ACTIVE_CONNECTION_STATES }
-                ?.let { snapshot.value.trafficMode }
-                ?: TrafficMode.TUNNEL
-        val proxyAccess = if (trafficMode == TrafficMode.PROXY) settings.preferredAppProxyAccess() else null
-        val tunnelConnected = trafficMode == TrafficMode.TUNNEL && snapshot.value.state in ACTIVE_CONNECTION_STATES
-        val vpnNetwork = if (tunnelConnected) currentVpnNetwork() ?: error("vpn network unavailable") else null
-        val upstreamNetwork = if (tunnelConnected) null else currentUpstreamNetwork()
-        val dnsNetwork =
-            when {
-                trafficMode != TrafficMode.TUNNEL -> null
-                tunnelConnected -> vpnNetwork
-                else -> upstreamNetwork
-            }
-        val requestNetwork =
-            when {
-                trafficMode != TrafficMode.TUNNEL -> null
-                tunnelConnected -> null
-                else -> upstreamNetwork
-            }
-        val remoteDnsServers =
-            snapshot.value.profileId
-                ?.let { profileId ->
-                    runCatching {
-                        VpnDnsServerSelector.remoteDnsServerAddresses(profileRepository.getSession(profileId).configJson)
-                    }.getOrDefault(emptyList())
-                }.orEmpty()
-        val info =
-            when {
-                trafficMode == TrafficMode.TUNNEL && tunnelConnected && vpnNetwork != null ->
-                    fetchTunnelIpInfo(
-                        endpoint = endpoint,
-                        fetchMode = fetchMode,
-                        vpnNetwork = vpnNetwork,
-                    )
-                else ->
-                    fetchDeviceIpInfo(
-                        endpoint = endpoint,
-                        fetchMode = fetchMode,
-                        requestNetwork = requestNetwork,
-                        proxy = proxyAccess,
-                    )
-            }.withDnsServers(
-                localDnsServers = connectivityManager.dnsServerAddresses(dnsNetwork),
-                remoteDnsServers = remoteDnsServers,
-            )
-        return info
-    }
+    suspend fun refreshIpInfo(fetchMode: IpInfoFetchMode = IpInfoFetchMode.FULL): IpInfo =
+        validationGateway.refreshIpInfo(fetchMode)
 
-    suspend fun measureCurrentConnectionLatency(timeoutMs: Long = LATENCY_PROBE_TIMEOUT_MS): Long {
-        val settings = settingsRepository.current()
-        val trafficMode =
-            snapshot.value.state
-                .takeIf { it in ACTIVE_CONNECTION_STATES }
-                ?.let { snapshot.value.trafficMode }
-                ?: error("active connection is required for latency measurement")
-        val proxyAccess = if (trafficMode == TrafficMode.PROXY) settings.preferredAppProxyAccess() else null
-        val tunnelConnected = trafficMode == TrafficMode.TUNNEL && snapshot.value.state in ACTIVE_CONNECTION_STATES
-        val endpoints = latencyProbeEndpoints()
-        val successfulLatencies = mutableListOf<Long>()
-        var lastFailure: Throwable? = null
-        endpoints.forEach { endpoint ->
-            val attempt =
-                runCatching {
-                    when {
-                        trafficMode == TrafficMode.TUNNEL && tunnelConnected -> {
-                            val vpnNetwork = currentVpnNetwork() ?: error("vpn network unavailable")
-                            ipInfoRepository.probeLatency(
-                                endpoint = endpoint,
-                                callTimeoutMs = timeoutMs,
-                                network = boundNetworkForAppOwnedRequest(vpnNetwork),
-                            )
-                        }
-                        else ->
-                            ipInfoRepository.probeLatency(
-                                endpoint = endpoint,
-                                callTimeoutMs = timeoutMs,
-                                proxy = proxyAccess,
-                            )
-                    }
-                }
-            if (attempt.isSuccess) {
-                successfulLatencies += attempt.getOrThrow()
-            } else {
-                lastFailure = attempt.exceptionOrNull()
-            }
-        }
-        return representativeLatencyMs(successfulLatencies)
-            ?: throw (lastFailure ?: error("latency probe failed"))
-    }
+    suspend fun measureCurrentConnectionLatency(timeoutMs: Long = LATENCY_PROBE_TIMEOUT_MS): Long =
+        telemetryProbe.measureCurrentConnectionLatency(timeoutMs)
 
     suspend fun measureCurrentVpnServerPing(
         profileId: Long,
         protocolOptionId: String? = null,
         timeoutMs: Long = SERVER_PING_TIMEOUT_MS,
-    ): Long {
-        snapshot.value.state
-            .takeIf { it in ACTIVE_CONNECTION_STATES }
-            ?: error("active connection is required for server ping measurement")
-        val session = profileRepository.getSession(profileId, protocolOptionId)
-        val target = VpnHealthProbeTargetSelector.select(session.configJson)
-            ?: error("vpn server target unavailable")
-        require(target.transport == VpnHealthProbeTransport.TCP) {
-            "server ping unavailable for ${target.transport.name.lowercase()} transport"
-        }
-        val upstreamNetwork = currentUpstreamNetwork() ?: error("upstream network unavailable")
-        return withContext(Dispatchers.IO) {
-            val address = resolveServerPingAddress(target.host, upstreamNetwork)
-            val startedAt = SystemClock.elapsedRealtime()
-            upstreamNetwork.socketFactory.createSocket().use { socket ->
-                socket.soTimeout = timeoutMs.toInt()
-                socket.connect(
-                    InetSocketAddress(address, target.port),
-                    timeoutMs.toInt(),
-                )
-            }
-            (SystemClock.elapsedRealtime() - startedAt).coerceAtLeast(1L)
-        }
-    }
+    ): Long =
+        telemetryProbe.measureCurrentVpnServerPing(
+            profileId = profileId,
+            protocolOptionId = protocolOptionId,
+            timeoutMs = timeoutMs,
+        )
 
     fun hasActiveVpnNetwork(): Boolean = currentVpnNetwork() != null
 
     fun currentVpnNetworkHandle(): Long? = currentVpnNetwork()?.networkHandle
-
-    private suspend fun fetchDeviceIpInfo(
-        endpoint: String,
-        fetchMode: IpInfoFetchMode,
-        requestNetwork: Network?,
-        proxy: com.foxhole.beta.core.network.HttpProxyAccess?,
-    ): IpInfo {
-        if (proxy != null) {
-            return ipInfoRepository.fetch(
-                endpoint = endpoint,
-                proxy = proxy,
-                mode = fetchMode,
-            )
-        }
-        return ipInfoRepository.fetch(
-            endpoint = endpoint,
-            network = boundNetworkForAppOwnedRequest(requestNetwork),
-            mode = fetchMode,
-        )
-    }
-
-    private suspend fun fetchTunnelIpInfo(
-        endpoint: String,
-        fetchMode: IpInfoFetchMode,
-        vpnNetwork: Network,
-    ): IpInfo {
-        return ipInfoRepository.fetch(
-            endpoint = endpoint,
-            network = boundNetworkForAppOwnedRequest(vpnNetwork),
-            mode = fetchMode,
-        )
-            .also { diagnosticsLogger.record("ip", "dashboard ip refreshed after vpn network detected") }
-    }
 
     private fun currentVpnNetwork(): Network? =
         ConnectivityNetworkRegistry.snapshot(context).firstOrNull { network ->
@@ -315,27 +139,17 @@ class FoxholeConnectionController(
         capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
             capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_RESTRICTED) &&
             !capabilities.hasTransport(NetworkCapabilities.TRANSPORT_VPN)
-
-    private fun resolveServerPingAddress(
-        host: String,
-        network: Network,
-    ): InetAddress =
-        network.getAllByName(host).firstOrNull()
-            ?: InetAddress.getByName(host)
 }
 
-private val ACTIVE_CONNECTION_STATES =
+internal val ACTIVE_CONNECTION_STATES =
     setOf(
         ConnectionState.CONNECTING,
         ConnectionState.CONNECTED,
         ConnectionState.RECONNECTING,
     )
 
-internal fun disconnectDispatchModeOrNull(snapshot: ConnectionSnapshot): TrafficMode? =
-    snapshot.trafficMode.takeIf { snapshot.state in ACTIVE_CONNECTION_STATES }
-
-private const val LATENCY_PROBE_TIMEOUT_MS = 6_000L
-private const val SERVER_PING_TIMEOUT_MS = 3_000L
+internal const val LATENCY_PROBE_TIMEOUT_MS = 6_000L
+internal const val SERVER_PING_TIMEOUT_MS = 3_000L
 private val LATENCY_PROBE_ENDPOINTS = FoxholeVpnService.CONNECTIVITY_PROBE_ENDPOINTS
 
 internal fun latencyProbeEndpoints(): List<String> = LATENCY_PROBE_ENDPOINTS

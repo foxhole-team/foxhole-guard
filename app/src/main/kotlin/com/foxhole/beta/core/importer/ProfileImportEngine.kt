@@ -31,24 +31,91 @@ internal data class NormalizedRoutePort(
     val portRanges: List<String>,
 )
 
+private data class UserInputStrategyContext(
+    val input: String,
+    val allowPrivateOutboundHosts: Boolean,
+    val allowHttpSubscriptionUrls: Boolean,
+    val allowInsecureTls: Boolean,
+)
+
+private interface UserInputImportStrategy {
+    val id: ProfileImportStrategyId
+
+    fun tryParse(context: UserInputStrategyContext): ParsedImport?
+}
+
+private data class SubscriptionContentStrategyContext(
+    val input: String,
+    val fallbackName: String,
+    val allowPrivateOutboundHosts: Boolean,
+    val allowHttpSubscriptionUrls: Boolean,
+    val allowInsecureTls: Boolean,
+)
+
+private interface SubscriptionContentImportStrategy {
+    val id: ProfileSubscriptionContentStrategyId
+
+    fun tryParse(context: SubscriptionContentStrategyContext): ParsedImport?
+}
+
 fun parseUserInput(
     input: String,
     allowPrivateOutboundHosts: Boolean = false,
     allowHttpSubscriptionUrls: Boolean = false,
     allowInsecureTls: Boolean = false,
-): ParsedImport {
+): ParsedImport =
+    parseUserInputWithStrategy(
+        input = input,
+        allowPrivateOutboundHosts = allowPrivateOutboundHosts,
+        allowHttpSubscriptionUrls = allowHttpSubscriptionUrls,
+        allowInsecureTls = allowInsecureTls,
+    ).parsed
+
+internal fun parseUserInputWithStrategy(
+    input: String,
+    allowPrivateOutboundHosts: Boolean = false,
+    allowHttpSubscriptionUrls: Boolean = false,
+    allowInsecureTls: Boolean = false,
+): ProfileImportStrategyResult {
     val trimmed = normalizeInput(input)
     require(trimmed.isNotBlank()) { "empty input" }
+    val context =
+        UserInputStrategyContext(
+            input = trimmed,
+            allowPrivateOutboundHosts = allowPrivateOutboundHosts,
+            allowHttpSubscriptionUrls = allowHttpSubscriptionUrls,
+            allowInsecureTls = allowInsecureTls,
+        )
+    userInputStrategies.forEach { strategy ->
+        strategy.tryParse(context)?.let { parsed ->
+            return ProfileImportStrategyResult(strategyId = strategy.id, parsed = parsed)
+        }
+    }
+    throw IllegalArgumentException("unsupported import format")
+}
 
-    val subscriptionUrlCandidate = extractSubscriptionUrlCandidate(trimmed)
-    if (subscriptionUrlCandidate != null) {
+private val userInputStrategies: List<UserInputImportStrategy> =
+    listOf(
+        SubscriptionUrlStrategy(),
+        SmartConfigStrategy(),
+        WireGuardTextStrategy(),
+        RawXrayJsonStrategy(),
+        RawSingBoxJsonStrategy(),
+        DirectNodeLinesStrategy(),
+    )
+
+private inner class SubscriptionUrlStrategy : UserInputImportStrategy {
+    override val id = ProfileImportStrategyId.SUBSCRIPTION_URL
+
+    override fun tryParse(context: UserInputStrategyContext): ParsedImport? {
+        val candidate = extractSubscriptionUrlCandidate(context.input) ?: return null
         val url =
-            subscriptionUrlCandidate.ensurePublicUrl(
-                allowHttp = allowHttpSubscriptionUrls,
+            candidate.ensurePublicUrl(
+                allowHttp = context.allowHttpSubscriptionUrls,
                 resolveHost = true,
                 resolver = remoteHostResolver,
             )
-        require(url.isHttps || allowHttpSubscriptionUrls) { "only https subscriptions are allowed" }
+        require(url.isHttps || context.allowHttpSubscriptionUrls) { "only https subscriptions are allowed" }
         return ParsedImport(
             sourceType = ProfileSourceType.SUBSCRIPTION_URL,
             protocolHint = ProtocolHint.UNKNOWN,
@@ -57,71 +124,126 @@ fun parseUserInput(
             sourceUrl = url.toString(),
         )
     }
+}
 
-    parseSmartConfigImport(
-        raw = trimmed,
-        fallbackName = null,
-        allowPrivateOutboundHosts = allowPrivateOutboundHosts,
-        allowInsecureTls = allowInsecureTls,
-    )?.let { parsed ->
-        return ParsedImport(
-            sourceType = ProfileSourceType.SHARE_URI,
-            protocolHint = parsed.protocolHint,
-            displayName = parsed.displayName,
-            normalizedConfigJson = parsed.normalizedConfigJson,
-            nodesCount = parsed.nodesCount,
-            subscriptionExpiresAt = parsed.subscriptionExpiresAt,
-            protocolOptions = parsed.protocolOptions,
-            selectedProtocolOptionId = parsed.selectedProtocolOptionId,
-        )
-    }
+private inner class SmartConfigStrategy : UserInputImportStrategy {
+    override val id = ProfileImportStrategyId.SMART_CONFIG
 
-    if (looksLikeWireGuard(trimmed)) {
+    override fun tryParse(context: UserInputStrategyContext): ParsedImport? =
+        parseSmartConfigImport(
+            raw = context.input,
+            fallbackName = null,
+            allowPrivateOutboundHosts = context.allowPrivateOutboundHosts,
+            allowInsecureTls = context.allowInsecureTls,
+        )?.let { parsed ->
+            ParsedImport(
+                sourceType = ProfileSourceType.SHARE_URI,
+                protocolHint = parsed.protocolHint,
+                displayName = parsed.displayName,
+                normalizedConfigJson = parsed.normalizedConfigJson,
+                nodesCount = parsed.nodesCount,
+                subscriptionExpiresAt = parsed.subscriptionExpiresAt,
+                protocolOptions = parsed.protocolOptions,
+                selectedProtocolOptionId = parsed.selectedProtocolOptionId,
+            )
+        }
+}
+
+private inner class WireGuardTextStrategy : UserInputImportStrategy {
+    override val id = ProfileImportStrategyId.WIREGUARD_TEXT
+
+    override fun tryParse(context: UserInputStrategyContext): ParsedImport? {
+        if (!looksLikeWireGuard(context.input)) {
+            return null
+        }
         return ParsedImport(
             sourceType = ProfileSourceType.RAW_WIREGUARD_TEXT,
             protocolHint = ProtocolHint.WIREGUARD,
             displayName = "wireguard",
             normalizedConfigJson =
                 buildConfigFromNodes(
-                    listOf(parseWireGuardConfig(trimmed, "wireguard", allowPrivateOutboundHosts)),
-                    allowPrivateOutboundHosts = allowPrivateOutboundHosts,
+                    listOf(parseWireGuardConfig(context.input, "wireguard", context.allowPrivateOutboundHosts)),
+                    allowPrivateOutboundHosts = context.allowPrivateOutboundHosts,
                 ),
         )
     }
+}
 
-    if (looksLikeJson(trimmed)) {
-        val objectValue = json.parseToJsonElement(trimmed).jsonObject
-        if (looksLikeXrayJson(objectValue)) {
-            val converted = normalizeRawXrayConfig(objectValue, allowPrivateOutboundHosts, allowInsecureTls)
-            return ParsedImport(
-                sourceType = ProfileSourceType.RAW_SINGBOX_JSON,
-                protocolHint = converted.protocolHint,
-                displayName = converted.displayName,
-                normalizedConfigJson = converted.normalizedConfigJson,
-                subscriptionExpiresAt = converted.subscriptionExpiresAt,
-            )
+private inner class RawXrayJsonStrategy : UserInputImportStrategy {
+    override val id = ProfileImportStrategyId.RAW_XRAY_JSON
+
+    override fun tryParse(context: UserInputStrategyContext): ParsedImport? {
+        if (!looksLikeJson(context.input)) {
+            return null
         }
+        val objectValue = json.parseToJsonElement(context.input).jsonObject
+        if (!looksLikeXrayJson(objectValue)) {
+            return null
+        }
+        val converted =
+            normalizeRawXrayConfig(
+                objectValue = objectValue,
+                allowPrivateOutboundHosts = context.allowPrivateOutboundHosts,
+                allowInsecureTls = context.allowInsecureTls,
+            )
+        return ParsedImport(
+            sourceType = ProfileSourceType.RAW_SINGBOX_JSON,
+            protocolHint = converted.protocolHint,
+            displayName = converted.displayName,
+            normalizedConfigJson = converted.normalizedConfigJson,
+            subscriptionExpiresAt = converted.subscriptionExpiresAt,
+        )
+    }
+}
+
+private inner class RawSingBoxJsonStrategy : UserInputImportStrategy {
+    override val id = ProfileImportStrategyId.RAW_SING_BOX_JSON
+
+    override fun tryParse(context: UserInputStrategyContext): ParsedImport? {
+        if (!looksLikeJson(context.input)) {
+            return null
+        }
+        val objectValue = json.parseToJsonElement(context.input).jsonObject
         return ParsedImport(
             sourceType = ProfileSourceType.RAW_SINGBOX_JSON,
             protocolHint = ProtocolHint.SING_BOX,
             displayName = "sing-box",
-            normalizedConfigJson = normalizeRawSingBoxConfig(objectValue, allowPrivateOutboundHosts, allowInsecureTls),
+            normalizedConfigJson =
+                normalizeRawSingBoxConfig(
+                    objectValue = objectValue,
+                    allowPrivateOutboundHosts = context.allowPrivateOutboundHosts,
+                    allowInsecureTls = context.allowInsecureTls,
+                ),
         )
     }
+}
 
-    val directNodes = parseNodeLines(trimmed, allowPrivateOutboundHosts, allowInsecureTls)
-    if (directNodes.isNotEmpty()) {
+private inner class DirectNodeLinesStrategy : UserInputImportStrategy {
+    override val id = ProfileImportStrategyId.DIRECT_NODE_LINES
+
+    override fun tryParse(context: UserInputStrategyContext): ParsedImport? {
+        val directNodes =
+            parseNodeLines(
+                raw = context.input,
+                allowPrivateOutboundHosts = context.allowPrivateOutboundHosts,
+                allowInsecureTls = context.allowInsecureTls,
+            )
+        if (directNodes.isEmpty()) {
+            return null
+        }
         return ParsedImport(
             sourceType = ProfileSourceType.SHARE_URI,
             protocolHint = directNodes.first().protocolHint,
             displayName = directNodes.first().displayName,
-            normalizedConfigJson = buildConfigFromNodes(directNodes, allowPrivateOutboundHosts = allowPrivateOutboundHosts),
+            normalizedConfigJson =
+                buildConfigFromNodes(
+                    directNodes,
+                    allowPrivateOutboundHosts = context.allowPrivateOutboundHosts,
+                ),
             nodesCount = directNodes.size,
             subscriptionExpiresAt = directNodes.mapNotNull(ProxyNode::subscriptionExpiresAt).minOrNull(),
         )
     }
-
-    throw IllegalArgumentException("unsupported import format")
 }
 
 fun parseSubscriptionContent(
@@ -130,49 +252,104 @@ fun parseSubscriptionContent(
     allowPrivateOutboundHosts: Boolean = false,
     allowHttpSubscriptionUrls: Boolean = false,
     allowInsecureTls: Boolean = false,
-): ParsedImport {
+): ParsedImport =
+    parseSubscriptionContentWithStrategy(
+        rawContent = rawContent,
+        fallbackName = fallbackName,
+        allowPrivateOutboundHosts = allowPrivateOutboundHosts,
+        allowHttpSubscriptionUrls = allowHttpSubscriptionUrls,
+        allowInsecureTls = allowInsecureTls,
+    ).parsed
+
+internal fun parseSubscriptionContentWithStrategy(
+    rawContent: String,
+    fallbackName: String,
+    allowPrivateOutboundHosts: Boolean = false,
+    allowHttpSubscriptionUrls: Boolean = false,
+    allowInsecureTls: Boolean = false,
+): ProfileSubscriptionContentStrategyResult {
     val trimmed = rawContent.trim()
     require(trimmed.isNotBlank()) { "subscription is empty" }
-
-    runCatching {
-        parseUserInput(
+    val context =
+        SubscriptionContentStrategyContext(
             input = trimmed,
+            fallbackName = fallbackName,
             allowPrivateOutboundHosts = allowPrivateOutboundHosts,
             allowHttpSubscriptionUrls = allowHttpSubscriptionUrls,
             allowInsecureTls = allowInsecureTls,
         )
-    }.getOrNull()?.let { parsed ->
-        return parsed.copy(
-            sourceType = ProfileSourceType.SUBSCRIPTION_URL,
-            displayName = parsed.displayName.ifBlank { fallbackName },
+    subscriptionContentStrategies.forEach { strategy ->
+        strategy.tryParse(context)?.let { parsed ->
+            return ProfileSubscriptionContentStrategyResult(strategyId = strategy.id, parsed = parsed)
+        }
+    }
+    throw IllegalArgumentException("unsupported subscription payload")
+}
+
+private val subscriptionContentStrategies: List<SubscriptionContentImportStrategy> =
+    listOf(
+        UserInputSubscriptionContentStrategy(),
+        SmartConfigPayloadSubscriptionContentStrategy(),
+        Base64PayloadSubscriptionContentStrategy(),
+        DirectPayloadSubscriptionContentStrategy(),
+    )
+
+private inner class UserInputSubscriptionContentStrategy : SubscriptionContentImportStrategy {
+    override val id = ProfileSubscriptionContentStrategyId.USER_INPUT
+
+    override fun tryParse(context: SubscriptionContentStrategyContext): ParsedImport? =
+        runCatching {
+            parseUserInput(
+                input = context.input,
+                allowPrivateOutboundHosts = context.allowPrivateOutboundHosts,
+                allowHttpSubscriptionUrls = context.allowHttpSubscriptionUrls,
+                allowInsecureTls = context.allowInsecureTls,
+            )
+        }.getOrNull()?.let { parsed ->
+            parsed.copy(
+                sourceType = ProfileSourceType.SUBSCRIPTION_URL,
+                displayName = parsed.displayName.ifBlank { context.fallbackName },
+            )
+        }
+}
+
+private inner class SmartConfigPayloadSubscriptionContentStrategy : SubscriptionContentImportStrategy {
+    override val id = ProfileSubscriptionContentStrategyId.SMART_CONFIG_PAYLOAD
+
+    override fun tryParse(context: SubscriptionContentStrategyContext): ParsedImport? =
+        parseSubscriptionPayloadImport(
+            raw = context.input,
+            fallbackName = context.fallbackName,
+            allowPrivateOutboundHosts = context.allowPrivateOutboundHosts,
+            allowInsecureTls = context.allowInsecureTls,
+            includeNodeLines = false,
+        )
+}
+
+private inner class Base64PayloadSubscriptionContentStrategy : SubscriptionContentImportStrategy {
+    override val id = ProfileSubscriptionContentStrategyId.BASE64_SUBSCRIPTION_PAYLOAD
+
+    override fun tryParse(context: SubscriptionContentStrategyContext): ParsedImport? {
+        val decoded = decodeSubscriptionCandidate(context.input) ?: return null
+        return parseSubscriptionPayloadImport(
+            raw = decoded,
+            fallbackName = context.fallbackName,
+            allowPrivateOutboundHosts = context.allowPrivateOutboundHosts,
+            allowInsecureTls = context.allowInsecureTls,
         )
     }
+}
 
-    parseSubscriptionPayloadImport(
-        raw = trimmed,
-        fallbackName = fallbackName,
-        allowPrivateOutboundHosts = allowPrivateOutboundHosts,
-        allowInsecureTls = allowInsecureTls,
-        includeNodeLines = false,
-    )?.let { return it }
+private inner class DirectPayloadSubscriptionContentStrategy : SubscriptionContentImportStrategy {
+    override val id = ProfileSubscriptionContentStrategyId.DIRECT_SUBSCRIPTION_PAYLOAD
 
-    decodeSubscriptionCandidate(trimmed)?.let { decoded ->
+    override fun tryParse(context: SubscriptionContentStrategyContext): ParsedImport? =
         parseSubscriptionPayloadImport(
-            raw = decoded,
-            fallbackName = fallbackName,
-            allowPrivateOutboundHosts = allowPrivateOutboundHosts,
-            allowInsecureTls = allowInsecureTls,
-        )?.let { return it }
-    }
-
-    parseSubscriptionPayloadImport(
-        raw = trimmed,
-        fallbackName = fallbackName,
-        allowPrivateOutboundHosts = allowPrivateOutboundHosts,
-        allowInsecureTls = allowInsecureTls,
-    )?.let { return it }
-
-    throw IllegalArgumentException("unsupported subscription payload")
+            raw = context.input,
+            fallbackName = context.fallbackName,
+            allowPrivateOutboundHosts = context.allowPrivateOutboundHosts,
+            allowInsecureTls = context.allowInsecureTls,
+        )
 }
 
 fun parseSubscriptionProfiles(
