@@ -347,6 +347,7 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
                 getString(R.string.notification_channel_name),
                 NotificationManager.IMPORTANCE_LOW,
             ).apply {
+                description = getString(R.string.notification_channel_description)
                 setSound(null, null)
                 enableVibration(false)
                 enableLights(false)
@@ -825,21 +826,8 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
 
     private fun notificationExpandedText(snapshot: NotificationSnapshot): String? = notificationHealthText(snapshot)
 
-    private fun notificationHealthText(snapshot: NotificationSnapshot): String? {
-        if (snapshot.state !in NOTIFICATION_HEALTH_VISIBLE_STATES) {
-            return null
-        }
-        val labelRes =
-            when (snapshot.connectivityHealthState) {
-                ConnectivityHealthState.CHECKING -> R.string.notification_health_checking
-                ConnectivityHealthState.ONLINE -> R.string.notification_health_online
-                ConnectivityHealthState.OFFLINE -> R.string.notification_health_offline
-            }
-        return listOfNotNull(
-            StealthNotificationFormatter.subtext(snapshot),
-            getString(labelRes),
-        ).joinToString(separator = " · ")
-    }
+    private fun notificationHealthText(snapshot: NotificationSnapshot): String? =
+        notificationBodyRes(snapshot)?.let(::getString)
 
     private suspend fun persistProfileTraffic(
         session: VpnSession,
@@ -864,7 +852,30 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
             snapshot.state == ConnectionState.CONNECTING &&
                 snapshot.statusMessage == getString(R.string.notification_status_analysis) ->
                 getString(R.string.notification_status_analysis)
+            snapshot.state == ConnectionState.CONNECTING -> getString(R.string.notification_status_connecting)
+            snapshot.state == ConnectionState.RECONNECTING -> getString(R.string.notification_status_reconnecting)
+            snapshot.state == ConnectionState.ERROR -> getString(R.string.notification_status_error)
             else -> getString(R.string.notification_status_disconnected)
+        }
+
+    private fun notificationBodyRes(snapshot: NotificationSnapshot): Int? =
+        when (snapshot.state) {
+            ConnectionState.CONNECTED ->
+                when (snapshot.connectivityHealthState) {
+                    ConnectivityHealthState.CHECKING -> R.string.notification_body_validating
+                    ConnectivityHealthState.ONLINE -> R.string.notification_body_connected
+                    ConnectivityHealthState.OFFLINE -> R.string.notification_body_waiting
+                }
+            ConnectionState.CONNECTING ->
+                if (snapshot.statusMessage == getString(R.string.notification_status_analysis)) {
+                    R.string.notification_body_validating
+                } else {
+                    R.string.notification_body_waiting
+                }
+            ConnectionState.RECONNECTING -> R.string.notification_body_reconnecting
+            ConnectionState.IDLE,
+            ConnectionState.ERROR,
+            -> null
         }
 
     private companion object {

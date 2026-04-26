@@ -1,1 +1,1 @@
-1.0.0-beta1: first public beta Foxhole release
+public beta 1.0: first public beta Foxhole release

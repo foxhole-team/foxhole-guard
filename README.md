@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <strong>1.0.0-beta1</strong><br>
+  <strong>public beta 1.0</strong><br>
   iOS, macOS, and Windows versions — maybe.
 </p>
 
@@ -80,7 +80,8 @@ One subscription can contain one or more profiles. Foxhole converts route groups
 - Tries the recommended protocol first
 - Stops on the first validated success
 - Falls back only after validation failure
-- Scans all eligible candidates during Smart start and metrics refresh
+- Tries up to three candidates during Smart start
+- Can scan all eligible candidates during manual metrics refresh
 - Excludes disabled, expired, cooldown, and insecure-without-consent options
 - Stores success by network hash
 - Analyzes:

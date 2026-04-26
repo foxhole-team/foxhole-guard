@@ -92,6 +92,36 @@ class HomeAutoConnectWaitPolicyTest {
             FoxholeVpnService.VPN_NETWORK_WAIT_TIMEOUT_MS,
             HomeViewModel.AUTO_CONNECT_VALIDATION_GRACE_TIMEOUT_MS,
         )
+        assertEquals(3, HomeViewModel.AUTO_CONNECT_MAX_ATTEMPTS)
+        assertEquals(60_000L, HomeViewModel.AUTO_CONNECT_TOTAL_TIMEOUT_MS)
+    }
+
+    @Test
+    fun `auto connect remaining wall clock budget is bounded`() {
+        assertEquals(
+            60_000L,
+            remainingAutoConnectBudgetMs(
+                startedAtElapsedMs = 100L,
+                nowElapsedMs = 100L,
+                totalTimeoutMs = 60_000L,
+            ),
+        )
+        assertEquals(
+            10_000L,
+            remainingAutoConnectBudgetMs(
+                startedAtElapsedMs = 100L,
+                nowElapsedMs = 50_100L,
+                totalTimeoutMs = 60_000L,
+            ),
+        )
+        assertEquals(
+            0L,
+            remainingAutoConnectBudgetMs(
+                startedAtElapsedMs = 100L,
+                nowElapsedMs = 70_100L,
+                totalTimeoutMs = 60_000L,
+            ),
+        )
     }
 
     @Test

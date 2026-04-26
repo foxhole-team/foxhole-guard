@@ -300,7 +300,6 @@ internal suspend fun HomeViewModel.handleProfileRefreshFailureInternal(
     throwable: Throwable,
 ) {
     val app = getApplication<Application>()
-    val message = throwable.message ?: app.getString(R.string.profile_refresh_failed)
     ProfileRefreshResultNotifier.showFailure(
         context = app,
         profileId = profileId,
@@ -311,7 +310,7 @@ internal suspend fun HomeViewModel.handleProfileRefreshFailureInternal(
         "profile",
         "profile refresh failed: ${throwable.javaClass.simpleName}: ${throwable.message.orEmpty()}",
     )
-    emitError(message)
+    emitError(app.getString(R.string.profile_refresh_failed))
 }
 
 internal suspend fun HomeViewModel.handleProfileImportFailureInternal(

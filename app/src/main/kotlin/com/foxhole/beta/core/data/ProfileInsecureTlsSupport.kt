@@ -56,6 +56,15 @@ internal fun Throwable.isInsecureTlsPolicyFailure(): Boolean =
         .map { error -> error.message.orEmpty().lowercase(Locale.US) }
         .any { message -> message.contains("insecure tls is not allowed") }
 
+internal fun shouldRequireInsecureTlsRefreshConsent(
+    allowInsecureTlsGlobally: Boolean,
+    profileInsecureTlsConsentGranted: Boolean,
+    strictParseFailedForInsecureTls: Boolean,
+): Boolean =
+    !allowInsecureTlsGlobally &&
+        !profileInsecureTlsConsentGranted &&
+        strictParseFailedForInsecureTls
+
 internal fun ParsedImport.requiresInsecureTls(json: Json): Boolean =
     normalizedConfigJson?.requiresInsecureTls(json) == true ||
         protocolOptions.any { option -> option.normalizedConfigJson.requiresInsecureTls(json) }
@@ -82,6 +91,13 @@ internal fun StoredProfileSecret.withInsecureTlsMarkers(
                 markedOptions.any(StoredProfileProtocolOption::requiresInsecureTls),
     )
 }
+
+internal fun StoredProfileSecret.hasInsecureTlsConsent(json: Json): Boolean =
+    requiresInsecureTls ||
+        resolvedConfigJson?.requiresInsecureTls(json) == true ||
+        protocolOptions.any { option ->
+            option.requiresInsecureTls || option.normalizedConfigJson.requiresInsecureTls(json)
+        }
 
 internal fun List<StoredProfileProtocolOption>.withInsecureTlsMarkers(json: Json): List<StoredProfileProtocolOption> =
     map { option ->

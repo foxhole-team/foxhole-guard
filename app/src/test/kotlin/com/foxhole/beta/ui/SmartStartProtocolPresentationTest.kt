@@ -22,12 +22,26 @@ class SmartStartProtocolPresentationTest {
     }
 
     @Test
-    fun `slow status is used for a non recommended candidate with data`() {
+    fun `available status is used for a non recommended candidate with normal data`() {
         val presentation =
             resolveSmartStartProtocolPresentation(
                 included = true,
                 recommended = false,
-                latencyMs = 220L,
+                latencyMs = 420L,
+                latencyDown = false,
+                latencyUnavailable = false,
+            )
+
+        assertEquals(SmartStartProtocolStatus.AVAILABLE, presentation.status)
+    }
+
+    @Test
+    fun `slow status is used only for high latency non recommended candidates`() {
+        val presentation =
+            resolveSmartStartProtocolPresentation(
+                included = true,
+                recommended = false,
+                latencyMs = 900L,
                 latencyDown = false,
                 latencyUnavailable = false,
             )
@@ -79,10 +93,10 @@ class SmartStartProtocolPresentationTest {
     }
 
     @Test
-    fun `dashboard menu keeps header and refresh with compact status rows`() {
+    fun `dashboard menu keeps compact status rows without detailed metrics table`() {
         val layout = resolveSmartStartProtocolMenuLayout(showMetricsTable = false)
 
-        assertTrue(layout.showHeader)
+        assertFalse(layout.showHeader)
         assertFalse(layout.showDetailedMetrics)
         assertTrue(layout.showCompactStatusRows)
     }
@@ -107,6 +121,36 @@ class SmartStartProtocolPresentationTest {
         assertEquals("Рекомендовано", stringValue(ruStrings, "smart_start_protocol_status_recommended"))
         assertFalse(enStrings.contains("Fastest"))
         assertFalse(ruStrings.contains("Fastest"))
+    }
+
+    @Test
+    fun `dashboard and protocol management copy matches current product wording`() {
+        val enStrings = resourceText("src/main/res/values/strings.xml", "app/src/main/res/values/strings.xml")
+        val ruStrings = resourceText("src/main/res/values-ru/strings.xml", "app/src/main/res/values-ru/strings.xml")
+
+        assertEquals("VPN server information", stringValue(enStrings, "home_network_connection_info_title"))
+        assertEquals("Connection status", stringValue(enStrings, "home_network_profile_info_title"))
+        assertEquals(
+            "Manage available protocols. Tap a protocol to turn it on/off.",
+            stringValue(enStrings, "smart_profile_menu_title"),
+        )
+        assertEquals(
+            "Periodically refresh Smart Connect to choose a faster VPN tunnel.",
+            stringValue(enStrings, "smart_profile_metrics_refresh_compact_hint"),
+        )
+        assertEquals("Updated: %1\$s", stringValue(enStrings, "smart_profile_metrics_last_updated"))
+
+        assertEquals("Информация о сервере VPN", stringValue(ruStrings, "home_network_connection_info_title"))
+        assertEquals("Статус соединения", stringValue(ruStrings, "home_network_profile_info_title"))
+        assertEquals(
+            "Управление доступными протоколами. Нажмите на протокол для on/off.",
+            stringValue(ruStrings, "smart_profile_menu_title"),
+        )
+        assertEquals(
+            "Периодически обновляйте Смарт коннект для выбора более быстрого туннеля VPN.",
+            stringValue(ruStrings, "smart_profile_metrics_refresh_compact_hint"),
+        )
+        assertEquals("Обновлено: %1\$s", stringValue(ruStrings, "smart_profile_metrics_last_updated"))
     }
 
     private fun resourceText(vararg candidates: String): String =

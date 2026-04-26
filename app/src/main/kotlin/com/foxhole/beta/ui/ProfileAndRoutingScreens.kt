@@ -401,6 +401,7 @@ fun ProfilesScreen(
                                             metricsUpdatedAtByOptionId = state.smartProfileMetricsUpdatedAt(profile.id),
                                             metricsRefreshing = profile.id in state.smartProfileMetricsRefreshingProfileIds,
                                             recommendedOptionId = state.recommendedProtocolOptionByProfileId[profile.id],
+                                            recommendedOptionIds = state.recommendedProtocolOptionsByProfileId[profile.id].orEmpty(),
                                             onRefreshMetrics = { onRefreshSmartProfileMetrics(profile.id) },
                                             onCancelRefreshMetrics = onCancelSmartProfileMetricsRefresh,
                                             showLatency = rememberedSmartStartLatenciesByProfileId[profile.id]?.isNotEmpty() == true,
@@ -840,6 +841,7 @@ fun ProfileDetailScreen(
                     icon = Icons.Outlined.Refresh,
                     title = stringResource(R.string.refresh),
                     summary = stringResource(R.string.profile_refresh_summary),
+                    summaryMaxLines = 2,
                     onClick = { showRefreshDialog = true },
                 )
             }

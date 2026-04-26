@@ -886,21 +886,8 @@ internal fun FoxholeVpnService.notificationCollapsedTextInternal(snapshot: Notif
 
 internal fun FoxholeVpnService.notificationExpandedTextInternal(snapshot: NotificationSnapshot): String? = notificationHealthText(snapshot)
 
-internal fun FoxholeVpnService.notificationHealthTextInternal(snapshot: NotificationSnapshot): String? {
-    if (snapshot.state !in FoxholeVpnService.NOTIFICATION_HEALTH_VISIBLE_STATES) {
-        return null
-    }
-    val labelRes =
-        when (snapshot.connectivityHealthState) {
-            ConnectivityHealthState.CHECKING -> R.string.notification_health_checking
-            ConnectivityHealthState.ONLINE -> R.string.notification_health_online
-            ConnectivityHealthState.OFFLINE -> R.string.notification_health_offline
-        }
-    return listOfNotNull(
-        StealthNotificationFormatter.subtext(snapshot),
-        getString(labelRes),
-    ).joinToString(separator = " · ")
-}
+internal fun FoxholeVpnService.notificationHealthTextInternal(snapshot: NotificationSnapshot): String? =
+    notificationBodyRes(snapshot)?.let(::getString)
 
 internal suspend fun FoxholeVpnService.persistProfileTrafficInternal(
     session: VpnSession,
@@ -925,7 +912,30 @@ internal fun FoxholeVpnService.notificationStateLabelInternal(snapshot: Notifica
         snapshot.state == ConnectionState.CONNECTING &&
             snapshot.statusMessage == getString(R.string.notification_status_analysis) ->
             getString(R.string.notification_status_analysis)
+        snapshot.state == ConnectionState.CONNECTING -> getString(R.string.notification_status_connecting)
+        snapshot.state == ConnectionState.RECONNECTING -> getString(R.string.notification_status_reconnecting)
+        snapshot.state == ConnectionState.ERROR -> getString(R.string.notification_status_error)
         else -> getString(R.string.notification_status_disconnected)
+    }
+
+private fun FoxholeVpnService.notificationBodyRes(snapshot: NotificationSnapshot): Int? =
+    when (snapshot.state) {
+        ConnectionState.CONNECTED ->
+            when (snapshot.connectivityHealthState) {
+                ConnectivityHealthState.CHECKING -> R.string.notification_body_validating
+                ConnectivityHealthState.ONLINE -> R.string.notification_body_connected
+                ConnectivityHealthState.OFFLINE -> R.string.notification_body_waiting
+            }
+        ConnectionState.CONNECTING ->
+            if (snapshot.statusMessage == getString(R.string.notification_status_analysis)) {
+                R.string.notification_body_validating
+            } else {
+                R.string.notification_body_waiting
+            }
+        ConnectionState.RECONNECTING -> R.string.notification_body_reconnecting
+        ConnectionState.IDLE,
+        ConnectionState.ERROR,
+        -> null
     }
 
 private fun String.isProbeIpLiteral(): Boolean = contains(':') || PROBE_IPV4_REGEX.matches(this)

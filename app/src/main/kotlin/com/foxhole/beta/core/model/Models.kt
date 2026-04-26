@@ -247,6 +247,11 @@ data class SmartProfilePreference(
     val lastKnownGoodOptionId: String? = null,
     val lastKnownGoodLatencyMs: Long? = null,
     val lastKnownGoodAt: Long? = null,
+    val lastFullSmartRefreshAt: Long? = null,
+    val smartStartBaselineReady: Boolean = false,
+    val recommendedProtocolIds: List<String> = emptyList(),
+    val enabledProtocolSetHash: String? = null,
+    val networkFingerprintSchema: Int = NETWORK_FINGERPRINT_SCHEMA_CURRENT,
     val protocolMemories: List<SmartProfileProtocolMemory> = emptyList(),
     val networkMemories: List<SmartProfileNetworkMemory> = emptyList(),
 )

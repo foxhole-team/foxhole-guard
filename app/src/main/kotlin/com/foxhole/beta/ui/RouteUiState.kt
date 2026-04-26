@@ -55,6 +55,7 @@ data class HomeRouteUiState(
     val protocolMetricsUpdatedAtByOptionId: Map<String, Long> = emptyMap(),
     val protocolMetricsRefreshing: Boolean = false,
     val recommendedProtocolOptionId: String? = null,
+    val recommendedProtocolOptionIds: Set<String> = emptySet(),
     val smartStartRememberedLatenciesByOptionId: Map<String, Long> = emptyMap(),
     val autoConnect: AutoConnectUiState = AutoConnectUiState(),
 )
@@ -70,6 +71,7 @@ data class ProfilesRouteUiState(
     val smartProfileMetricsUpdatedAtByProfileId: Map<Long, Map<String, Long>> = emptyMap(),
     val smartProfileMetricsRefreshingProfileIds: Set<Long> = emptySet(),
     val recommendedProtocolOptionByProfileId: Map<Long, String> = emptyMap(),
+    val recommendedProtocolOptionsByProfileId: Map<Long, Set<String>> = emptyMap(),
 )
 
 data class SettingsRouteUiState(
@@ -112,6 +114,7 @@ internal fun HomeUiState.toHomeRouteUiState(
     protocolMetricsUpdatedAtByOptionId: Map<String, Long> = emptyMap(),
     protocolMetricsRefreshing: Boolean = false,
     recommendedProtocolOptionId: String? = null,
+    recommendedProtocolOptionIds: Set<String> = emptySet(),
     smartStartRememberedLatenciesByOptionId: Map<String, Long> = emptyMap(),
 ): HomeRouteUiState =
     HomeRouteUiState(
@@ -140,6 +143,7 @@ internal fun HomeUiState.toHomeRouteUiState(
         protocolMetricsUpdatedAtByOptionId = protocolMetricsUpdatedAtByOptionId,
         protocolMetricsRefreshing = protocolMetricsRefreshing,
         recommendedProtocolOptionId = recommendedProtocolOptionId,
+        recommendedProtocolOptionIds = recommendedProtocolOptionIds,
         smartStartRememberedLatenciesByOptionId = smartStartRememberedLatenciesByOptionId,
         autoConnect = autoConnect,
     )
@@ -151,6 +155,7 @@ internal fun HomeUiState.toProfilesRouteUiState(
     smartProfileMetricsUpdatedAtByProfileId: Map<Long, Map<String, Long>> = emptyMap(),
     smartProfileMetricsRefreshingProfileIds: Set<Long> = emptySet(),
     recommendedProtocolOptionByProfileId: Map<Long, String> = emptyMap(),
+    recommendedProtocolOptionsByProfileId: Map<Long, Set<String>> = emptyMap(),
 ): ProfilesRouteUiState =
     ProfilesRouteUiState(
         profiles = profiles,
@@ -166,6 +171,7 @@ internal fun HomeUiState.toProfilesRouteUiState(
         smartProfileMetricsUpdatedAtByProfileId = smartProfileMetricsUpdatedAtByProfileId,
         smartProfileMetricsRefreshingProfileIds = smartProfileMetricsRefreshingProfileIds,
         recommendedProtocolOptionByProfileId = recommendedProtocolOptionByProfileId,
+        recommendedProtocolOptionsByProfileId = recommendedProtocolOptionsByProfileId,
     )
 
 internal fun HomeUiState.toSettingsRouteUiState(): SettingsRouteUiState =

@@ -109,19 +109,21 @@ object MultiProtocolProfileSupport {
         now: Long = System.currentTimeMillis(),
     ): List<AutoConnectProbeCandidate> =
         SmartStartController.eligibleCandidatesForRanking(
-            candidates =
-                supportedOptions(profile).map { option ->
-                    AutoConnectProbeCandidate(
-                        profileId = profile.id,
-                        optionId = option.id,
-                        protocolHint = option.protocolHint,
-                        displayName = option.displayName.ifBlank { option.protocolHint.name },
-                        requiresInsecureTls = option.requiresInsecureTls,
-                        insecureTlsConsentGranted = option.requiresInsecureTls,
-                    )
-                },
+            candidates = supportedOptions(profile).map { option -> option.toProbeCandidate(profile.id) },
             preference = preference,
             networkFingerprint = networkFingerprint,
+            excludedOptionIds = excludedOptionIds,
+            subscriptionExpiresAt = profile.subscriptionExpiresAt,
+            now = now,
+        )
+
+    fun smartStartFullScanCandidates(
+        profile: Profile,
+        excludedOptionIds: Set<String> = emptySet(),
+        now: Long = System.currentTimeMillis(),
+    ): List<AutoConnectProbeCandidate> =
+        SmartStartController.eligibleCandidatesForFullScan(
+            candidates = supportedOptions(profile).map { option -> option.toProbeCandidate(profile.id) },
             excludedOptionIds = excludedOptionIds,
             subscriptionExpiresAt = profile.subscriptionExpiresAt,
             now = now,
@@ -149,4 +151,14 @@ object MultiProtocolProfileSupport {
                 compareBy<AutoConnectProbeResult> { it.rankingLatencyMs }
                     .thenBy { it.candidate.optionId },
             )
+
+    private fun ProfileProtocolOption.toProbeCandidate(profileId: Long): AutoConnectProbeCandidate =
+        AutoConnectProbeCandidate(
+            profileId = profileId,
+            optionId = id,
+            protocolHint = protocolHint,
+            displayName = displayName.ifBlank { protocolHint.name },
+            requiresInsecureTls = requiresInsecureTls,
+            insecureTlsConsentGranted = requiresInsecureTls,
+        )
 }

@@ -2,10 +2,20 @@ package com.foxhole.beta.ui
 
 internal enum class SmartStartProtocolStatus {
     RECOMMENDED,
+    AVAILABLE,
     SLOW,
     RECENTLY_FAILED,
     NO_DATA,
     DISABLED,
+}
+
+internal enum class LatencyQuality {
+    FAST,
+    NORMAL,
+    SLOW,
+    VERY_SLOW,
+    UNAVAILABLE,
+    FAILED,
 }
 
 internal enum class SmartStartProtocolDisabledReason {
@@ -36,21 +46,40 @@ internal fun resolveSmartStartProtocolPresentation(
                 status = SmartStartProtocolStatus.DISABLED,
                 disabledReason = SmartStartProtocolDisabledReason.MANUAL_OFF,
             )
-        latencyDown || (latencyMs != null && latencyMs > SMART_START_SLOW_LATENCY_LIMIT_MS) ->
+        latencyDown ->
             SmartStartProtocolPresentation(status = SmartStartProtocolStatus.RECENTLY_FAILED)
         recommended ->
             SmartStartProtocolPresentation(status = SmartStartProtocolStatus.RECOMMENDED)
         latencyMs == null || latencyUnavailable ->
             SmartStartProtocolPresentation(status = SmartStartProtocolStatus.NO_DATA)
-        else ->
+        classifyVpnLatency(latencyMs = latencyMs, failed = false, unavailable = false) in
+            setOf(LatencyQuality.SLOW, LatencyQuality.VERY_SLOW) ->
             SmartStartProtocolPresentation(status = SmartStartProtocolStatus.SLOW)
+        else ->
+            SmartStartProtocolPresentation(status = SmartStartProtocolStatus.AVAILABLE)
     }
 
 internal fun resolveSmartStartProtocolMenuLayout(showMetricsTable: Boolean): SmartStartProtocolMenuLayout =
     SmartStartProtocolMenuLayout(
-        showHeader = true,
+        showHeader = showMetricsTable,
         showDetailedMetrics = showMetricsTable,
         showCompactStatusRows = !showMetricsTable,
     )
 
-private const val SMART_START_SLOW_LATENCY_LIMIT_MS = 520L
+internal fun classifyVpnLatency(
+    latencyMs: Long?,
+    failed: Boolean,
+    unavailable: Boolean,
+): LatencyQuality =
+    when {
+        failed -> LatencyQuality.FAILED
+        unavailable || latencyMs == null -> LatencyQuality.UNAVAILABLE
+        latencyMs <= VPN_FAST_MAX_MS -> LatencyQuality.FAST
+        latencyMs <= VPN_NORMAL_MAX_MS -> LatencyQuality.NORMAL
+        latencyMs <= VPN_SLOW_MAX_MS -> LatencyQuality.SLOW
+        else -> LatencyQuality.VERY_SLOW
+    }
+
+private const val VPN_FAST_MAX_MS = 250L
+private const val VPN_NORMAL_MAX_MS = 750L
+private const val VPN_SLOW_MAX_MS = 1_500L

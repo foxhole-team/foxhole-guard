@@ -88,11 +88,7 @@ class ProfileRepository(
 
     private val dao = database.profileDao()
     private val subscriptionHttpClient: OkHttpClient by lazy {
-        httpClient
-            .newBuilder()
-            .followRedirects(true)
-            .followSslRedirects(true)
-            .build()
+        httpClient.withBoundedRemoteFetchTimeouts()
     }
 
     val profiles: Flow<List<Profile>> = dao.observeProfiles().map { list -> list.map { entity -> resolveDomainProfile(entity) } }
@@ -544,6 +540,7 @@ class ProfileRepository(
                     sourceUrl = sourceUrl,
                     safeUrl = safeUrl,
                     lastEtag = entity.lastEtag,
+                    allowHttp = settings.expert.allowHttpConfigImports,
                 )
             }.getOrElse { error ->
                 throw IllegalStateException(describeSubscriptionTransportFailure(sourceUrl, error), error)
@@ -562,25 +559,30 @@ class ProfileRepository(
             "profile",
             "subscription parse started bodyBytes=${response.body.orEmpty().toByteArray(Charsets.UTF_8).size}",
         )
+        val profileInsecureTlsConsentGranted = secret.hasInsecureTlsConsent(json)
         val subscriptionRequiresInsecureTlsConsent =
-            !secret.requiresInsecureTls &&
-                withContext(Dispatchers.IO) {
-                    runCatching {
-                        parser.parseSubscriptionProfiles(
-                            rawContent = response.body.orEmpty(),
-                            fallbackName = entity.name,
-                            allowPrivateOutboundHosts = settings.expert.allowPrivateOutboundHosts,
-                            allowHttpSubscriptionUrls = settings.expert.allowHttpConfigImports,
-                            allowInsecureTls = false,
-                        )
-                    }.exceptionOrNull()
-                        ?.isInsecureTlsPolicyFailure() == true
-                }
+            shouldRequireInsecureTlsRefreshConsent(
+                allowInsecureTlsGlobally = settings.expert.allowInsecureTls,
+                profileInsecureTlsConsentGranted = profileInsecureTlsConsentGranted,
+                strictParseFailedForInsecureTls =
+                    withContext(Dispatchers.IO) {
+                        runCatching {
+                            parser.parseSubscriptionProfiles(
+                                rawContent = response.body.orEmpty(),
+                                fallbackName = entity.name,
+                                allowPrivateOutboundHosts = settings.expert.allowPrivateOutboundHosts,
+                                allowHttpSubscriptionUrls = settings.expert.allowHttpConfigImports,
+                                allowInsecureTls = false,
+                            )
+                        }.exceptionOrNull()
+                            ?.isInsecureTlsPolicyFailure() == true
+                    },
+            )
         if (subscriptionRequiresInsecureTlsConsent) {
             diagnosticsLogger.record("profile", "subscription requires insecure tls consent")
             throw InsecureTlsProfileConsentRequiredException()
         }
-        val effectiveAllowInsecureTls = settings.expert.allowInsecureTls || secret.requiresInsecureTls
+        val effectiveAllowInsecureTls = settings.expert.allowInsecureTls || profileInsecureTlsConsentGranted
         val parsed =
             withContext(Dispatchers.IO) {
                 runCatching {
@@ -668,7 +670,7 @@ class ProfileRepository(
                                     selectedProtocolOptionId = selectedProtocolOptionId,
                                 ).withInsecureTlsMarkers(
                                     json = json,
-                                    forceRequiresInsecureTls = secret.requiresInsecureTls || importedProfile.requiresInsecureTls(json),
+                                    forceRequiresInsecureTls = profileInsecureTlsConsentGranted || importedProfile.requiresInsecureTls(json),
                                 ),
                         ),
                     importedProfile = importedProfile,
@@ -777,13 +779,15 @@ class ProfileRepository(
         sourceUrl: String,
         safeUrl: HttpUrl,
         lastEtag: String?,
+        allowHttp: Boolean,
     ): SubscriptionResponse =
         withContext(Dispatchers.IO) {
-            val request = buildSubscriptionRequest(safeUrl = safeUrl, lastEtag = lastEtag)
             executeSubscriptionRequest(
                 client = subscriptionHttpClient,
-                request = request,
+                safeUrl = safeUrl,
                 sourceUrl = sourceUrl,
+                lastEtag = lastEtag,
+                allowHttp = allowHttp,
             )
         }
 
@@ -801,33 +805,42 @@ class ProfileRepository(
 
     private fun executeSubscriptionRequest(
         client: OkHttpClient,
-        request: Request,
+        safeUrl: HttpUrl,
         sourceUrl: String,
-    ): SubscriptionResponse =
-        client.newCall(request).execute().use { rawResponse ->
-            if (rawResponse.code == 304) {
-                return SubscriptionResponse(notModified = true)
+        lastEtag: String?,
+        allowHttp: Boolean,
+    ): SubscriptionResponse {
+        val response =
+            executeBoundedPublicGet(
+                client = client,
+                initialUrl = safeUrl,
+                allowHttp = allowHttp,
+                maxBytes = MAX_SUBSCRIPTION_BYTES,
+            ) { url ->
+                buildSubscriptionRequest(safeUrl = url, lastEtag = lastEtag)
             }
-            if (!rawResponse.isSuccessful) {
-                val responseBody = rawResponse.body?.string().orEmpty()
-                error(
-                    describeSubscriptionHttpFailure(
-                        code = rawResponse.code,
-                        serverHeader = rawResponse.header("Server"),
-                        responseBody = responseBody,
-                    ),
-                )
-            }
-            SubscriptionResponse(
-                body = rawResponse.body?.string().orEmpty(),
-                etag = rawResponse.header("ETag"),
-                metadataTitle = rawResponse.header("profile-title").decodeSubscriptionMetadataHeader(),
-                subscriptionExpiresAt =
-                    SubscriptionMetadataParser
-                        .expirationFromSubscriptionUserinfo(rawResponse.header("subscription-userinfo"))
-                        ?: SubscriptionMetadataParser.expirationFromSubscriptionUrl(sourceUrl),
+        if (response.code == 304) {
+            return SubscriptionResponse(notModified = true)
+        }
+        if (!response.isSuccessful) {
+            error(
+                describeSubscriptionHttpFailure(
+                    code = response.code,
+                    serverHeader = response.headers["Server"],
+                    responseBody = response.body.orEmpty(),
+                ),
             )
         }
+        return SubscriptionResponse(
+            body = response.body.orEmpty(),
+            etag = response.headers["ETag"],
+            metadataTitle = response.headers["profile-title"].decodeSubscriptionMetadataHeader(),
+            subscriptionExpiresAt =
+                SubscriptionMetadataParser
+                    .expirationFromSubscriptionUserinfo(response.headers["subscription-userinfo"])
+                    ?: SubscriptionMetadataParser.expirationFromSubscriptionUrl(sourceUrl),
+        )
+    }
 
     private suspend fun persistCachedActiveProfile(profile: Profile?) {
         settingsRepository.updateLastActiveProfile(

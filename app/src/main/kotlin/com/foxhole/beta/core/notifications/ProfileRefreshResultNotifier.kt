@@ -49,7 +49,7 @@ internal object ProfileRefreshResultNotifier {
             context = context,
             profileId = profileId,
             title = context.getString(R.string.profile_refresh_failed),
-            body = details?.takeIf(String::isNotBlank) ?: profileName,
+            body = context.getString(R.string.profile_refresh_details_in_diagnostics),
             isError = true,
         )
     }

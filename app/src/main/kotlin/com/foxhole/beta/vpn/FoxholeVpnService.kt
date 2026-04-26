@@ -448,6 +448,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
                 getString(R.string.notification_channel_name),
                 NotificationManager.IMPORTANCE_LOW,
             ).apply {
+                description = getString(R.string.notification_channel_description)
                 setSound(null, null)
                 enableVibration(false)
                 enableLights(false)

@@ -151,6 +151,8 @@ fun HomeScreen(
     var showRefreshProfileDialog by rememberSaveable { mutableStateOf(false) }
     var editProxyUsernameVisible by rememberSaveable { mutableStateOf(false) }
     var editProxyPasswordVisible by rememberSaveable { mutableStateOf(false) }
+    var dismissedSmartStartReminderProfileId by rememberSaveable { mutableStateOf<Long?>(null) }
+    var smartRefreshConfirmationProfileId by rememberSaveable { mutableStateOf<Long?>(null) }
     val modeOption = currentHomeModeOption(state)
     val proxySurface = activeProxySurface(state)
     val lanProxySurface = activeLanProxySurface(state)
@@ -237,6 +239,12 @@ fun HomeScreen(
     val dashboardSelectedLatencyMs = dashboardLatencyPresentation.latencyMs
     val dashboardSelectedLatencyDown = dashboardLatencyPresentation.isDown
     val dashboardSelectedLatencyUnavailable = dashboardLatencyPresentation.isUnavailable
+    val dashboardSelectedOptionId = resolveDashboardLatencyOptionId(state.activeProfile)
+    val dashboardSelectedServerPingMs = dashboardSelectedOptionId?.let(state.protocolServerPingsByOptionId::get)
+    val dashboardSelectedServerPingUnavailable =
+        dashboardSelectedOptionId != null &&
+            dashboardSelectedServerPingMs == null &&
+            dashboardSelectedOptionId in state.protocolServerPingUnavailableOptionIds
     val deviceInternetAvailable by rememberDefaultInternetAvailability()
     var pinnedIpInfo by remember { mutableStateOf(state.ipInfo) }
     var keepPinnedNetworkInfo by remember { mutableStateOf(false) }
@@ -279,6 +287,28 @@ fun HomeScreen(
         )
     val isSmartDashboardProfile =
         state.activeProfile?.let(MultiProtocolProfileSupport::hasMultipleSupportedOptions) == true
+    val activeProfileId = state.activeProfile?.id
+    val showSmartStartRefreshReminder =
+        activeProfileId != null &&
+            dismissedSmartStartReminderProfileId != activeProfileId &&
+            shouldShowSmartStartRefreshReminder(
+                activeProfile = state.activeProfile,
+                settings = state.settings,
+            )
+
+    fun requestSmartProfileMetricsRefresh(profileId: Long) {
+        val refreshMayReconnect =
+            state.connection.state in setOf(
+                ConnectionState.CONNECTING,
+                ConnectionState.CONNECTED,
+                ConnectionState.RECONNECTING,
+            ) && state.connection.profileId == profileId
+        if (refreshMayReconnect) {
+            smartRefreshConfirmationProfileId = profileId
+        } else {
+            onRefreshSmartProfileMetrics(profileId)
+        }
+    }
 
     DisposableEffect(onTrafficUiVisibilityChanged) {
         onTrafficUiVisibilityChanged(true)
@@ -298,7 +328,8 @@ fun HomeScreen(
             modifier =
                 Modifier
                     .fillMaxSize()
-                    .padding(padding),
+                    .padding(padding)
+                    .testTag("home_dashboard_list"),
             contentPadding =
                 PaddingValues(
                     start = ScreenHorizontalPadding,
@@ -405,6 +436,15 @@ fun HomeScreen(
                     }
                 }
             }
+            if (showSmartStartRefreshReminder) {
+                val reminderProfileId = checkNotNull(activeProfileId)
+                item {
+                    SmartStartRefreshReminderCard(
+                        onRefresh = { requestSmartProfileMetricsRefresh(reminderProfileId) },
+                        onLater = { dismissedSmartStartReminderProfileId = reminderProfileId },
+                    )
+                }
+            }
             item {
                 FoxholeCard(
                     onClick = onOpenProfiles,
@@ -434,16 +474,12 @@ fun HomeScreen(
                                     null
                                 },
                             trailing = {
-                                IconButton(
+                                HomeHeaderActionButton(
+                                    icon = Icons.AutoMirrored.Outlined.ArrowForward,
+                                    contentDescription = null,
                                     onClick = onOpenProfiles,
                                     modifier = Modifier.size(30.dp),
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.AutoMirrored.Outlined.ArrowForward,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(17.dp),
-                                    )
-                                }
+                                )
                             },
                         )
                         Column(
@@ -525,8 +561,9 @@ fun HomeScreen(
                                                     metricsUpdatedAtByOptionId = state.protocolMetricsUpdatedAtByOptionId,
                                                     metricsRefreshing = state.protocolMetricsRefreshing,
                                                     recommendedOptionId = state.recommendedProtocolOptionId,
+                                                    recommendedOptionIds = state.recommendedProtocolOptionIds,
                                                     activeOptionId = dashboardProtocolPresentation.selectedProtocolOptionId,
-                                                    onRefreshMetrics = { onRefreshSmartProfileMetrics(state.activeProfile.id) },
+                                                    onRefreshMetrics = { requestSmartProfileMetricsRefresh(state.activeProfile.id) },
                                                     onCancelRefreshMetrics = onCancelSmartProfileMetricsRefresh,
                                                     showLatency = dashboardShowSmartStartLatency,
                                                     compact = true,
@@ -629,22 +666,19 @@ fun HomeScreen(
                 }
             }
             item {
-                FoxholeCard {
+                FoxholeCard(modifier = Modifier.testTag("home_network_card")) {
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         HomeCardHeader(
                             icon = Icons.Outlined.Public,
                             title = stringResource(R.string.home_network_title),
                             trailing = {
-                                IconButton(
+                                HomeHeaderActionButton(
+                                    icon = Icons.Outlined.Refresh,
+                                    contentDescription = stringResource(R.string.refresh_ip_info),
                                     onClick = onRefreshIpInfo,
                                     enabled = !state.autoConnect.running,
                                     modifier = Modifier.size(32.dp).testTag("home_refresh_ip_icon"),
-                                ) {
-                                    Icon(
-                                        Icons.Outlined.Refresh,
-                                        contentDescription = stringResource(R.string.refresh_ip_info),
-                                    )
-                                }
+                                )
                             },
                         )
                         Box(
@@ -652,72 +686,147 @@ fun HomeScreen(
                             contentAlignment = Alignment.TopStart,
                         ) {
                             if (showNetworkLoading) {
-                                HomeNetworkLoadingBlock(modifier = Modifier.testTag("home_network_loading"))
-                            } else if (visibleNetworkIpInfo == null) {
-                                Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
-                                    Text(
-                                        text = stringResource(R.string.home_network_unavailable),
-                                        modifier = Modifier.testTag("home_network_country"),
-                                        style = MaterialTheme.typography.labelSmall,
-                                        fontWeight = FontWeight.SemiBold,
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                    verticalAlignment = Alignment.Top,
+                                ) {
+                                    HomeNetworkLoadingBlock(
+                                        modifier =
+                                            Modifier
+                                                .weight(1f)
+                                                .testTag("home_network_loading"),
                                     )
-                                    Text(
-                                        text = "-",
-                                        modifier = Modifier.testTag("home_network_primary_ip"),
-                                        style = MaterialTheme.typography.titleSmall,
-                                        fontFamily = FontFamily.Monospace,
-                                        fontWeight = FontWeight.SemiBold,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                    )
-                                    Text(
-                                        text = stringResource(R.string.home_network_retry_hint),
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    HomeConnectionStatusLoadingBlock(
+                                        modifier =
+                                            Modifier
+                                                .weight(1f)
+                                                .testTag("home_connection_status_loading"),
                                     )
                                 }
                             } else {
-                                val networkIpInfo = visibleNetworkIpInfo
-                                Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
-                                    Text(
-                                        text = buildCountryLine(networkIpInfo),
-                                        modifier = Modifier.testTag("home_network_country"),
-                                        style = MaterialTheme.typography.labelSmall,
-                                        fontWeight = FontWeight.SemiBold,
-                                    )
-                                    Text(
-                                        text = primaryVisibleIp(networkIpInfo),
-                                        modifier = Modifier.testTag("home_network_primary_ip"),
-                                        style = MaterialTheme.typography.titleSmall,
-                                        fontFamily = FontFamily.Monospace,
-                                        fontWeight = FontWeight.SemiBold,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                    )
-                                    secondaryVisibleIp(networkIpInfo)?.let { secondary ->
-                                        Text(
-                                            text = "IPv6 $secondary",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            fontFamily = FontFamily.Monospace,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis,
-                                        )
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                    verticalAlignment = Alignment.Top,
+                                ) {
+                                    val networkIpInfo = visibleNetworkIpInfo
+                                    Column(
+                                        modifier = Modifier.weight(1f),
+                                        verticalArrangement = Arrangement.spacedBy(2.dp),
+                                    ) {
+                                        HomeNetworkColumnTitle(stringResource(R.string.home_network_connection_info_title))
+                                        if (networkIpInfo == null) {
+                                            Text(
+                                                text = stringResource(R.string.home_network_unavailable),
+                                                modifier = Modifier.testTag("home_network_country"),
+                                                style = MaterialTheme.typography.labelSmall,
+                                                fontWeight = FontWeight.SemiBold,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis,
+                                            )
+                                            Text(
+                                                text = "-",
+                                                modifier = Modifier.testTag("home_network_primary_ip"),
+                                                style =
+                                                    MaterialTheme.typography.labelSmall.copy(
+                                                        fontSize = 10.sp,
+                                                        lineHeight = 11.sp,
+                                                    ),
+                                                fontFamily = FontFamily.Monospace,
+                                                fontWeight = FontWeight.SemiBold,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis,
+                                            )
+                                            Text(
+                                                text = stringResource(R.string.home_network_retry_hint),
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis,
+                                            )
+                                        } else {
+                                            Text(
+                                                text = buildCountryLine(networkIpInfo),
+                                                modifier = Modifier.testTag("home_network_country"),
+                                                style = MaterialTheme.typography.labelSmall,
+                                                fontWeight = FontWeight.SemiBold,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis,
+                                            )
+                                            Text(
+                                                text = primaryVisibleIp(networkIpInfo),
+                                                modifier = Modifier.testTag("home_network_primary_ip"),
+                                                style =
+                                                    MaterialTheme.typography.labelSmall.copy(
+                                                        fontSize = 10.sp,
+                                                        lineHeight = 11.sp,
+                                                    ),
+                                                fontFamily = FontFamily.Monospace,
+                                                fontWeight = FontWeight.SemiBold,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis,
+                                            )
+                                            networkIpInfo.isp?.takeIf { it.isNotBlank() }?.let { provider ->
+                                                Text(
+                                                    text = provider,
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis,
+                                                )
+                                            }
+                                        }
                                     }
-                                    remoteVisibleDnsServers(networkIpInfo).takeIf { it.isNotEmpty() }?.let { dnsServers ->
-                                        Text(
-                                            text = "${stringResource(R.string.network_dns_remote)}: ${dnsServers.joinToString(separator = " • ")}",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis,
+                                    Column(
+                                        modifier = Modifier.weight(1f),
+                                        verticalArrangement = Arrangement.spacedBy(2.dp),
+                                    ) {
+                                        val vpnLatencyText =
+                                            when {
+                                                dashboardSelectedLatencyDown -> stringResource(R.string.latency_pill_down)
+                                                dashboardSelectedLatencyMs != null ->
+                                                    stringResource(R.string.latency_pill_value, dashboardSelectedLatencyMs)
+                                                dashboardSelectedLatencyUnavailable -> stringResource(R.string.latency_pill_unavailable)
+                                                else -> stringResource(R.string.smart_profile_metric_unavailable)
+                                            }
+                                        val serverPingText =
+                                            when {
+                                                dashboardSelectedServerPingMs != null ->
+                                                    stringResource(R.string.latency_pill_value, dashboardSelectedServerPingMs)
+                                                dashboardSelectedServerPingUnavailable -> stringResource(R.string.latency_pill_unavailable)
+                                                else -> stringResource(R.string.smart_profile_metric_unavailable)
+                                            }
+                                        val profileStatusText =
+                                            when {
+                                                dashboardSelectedLatencyDown -> stringResource(R.string.latency_quality_failed)
+                                                dashboardSelectedLatencyMs != null ->
+                                                    latencyQualityLabel(
+                                                        classifyVpnLatency(
+                                                            latencyMs = dashboardSelectedLatencyMs,
+                                                            failed = false,
+                                                            unavailable = false,
+                                                        ),
+                                                    )
+                                                dashboardSelectedLatencyUnavailable -> stringResource(R.string.latency_quality_unavailable)
+                                                else -> stringResource(R.string.smart_start_protocol_status_no_data)
+                                            }
+                                        HomeNetworkColumnTitle(stringResource(R.string.home_network_profile_info_title))
+                                        HomeNetworkDetailLine(
+                                            label = stringResource(R.string.home_network_vpn_latency_label),
+                                            value = vpnLatencyText,
+                                            valueMonospace = dashboardSelectedLatencyMs != null,
                                         )
-                                    }
-                                    networkIpInfo.isp?.takeIf { it.isNotBlank() }?.let { provider ->
-                                        Text(
-                                            text = provider,
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        HomeNetworkSubtleDivider()
+                                        HomeNetworkDetailLine(
+                                            label = stringResource(R.string.home_network_server_ping_label),
+                                            value = serverPingText,
+                                            valueMonospace = dashboardSelectedServerPingMs != null,
+                                        )
+                                        HomeNetworkSubtleDivider()
+                                        HomeNetworkDetailLine(
+                                            label = stringResource(R.string.home_network_status_label),
+                                            value = profileStatusText,
                                         )
                                     }
                                 }
@@ -763,15 +872,12 @@ fun HomeScreen(
                                     fontWeight = FontWeight.SemiBold,
                                     maxLines = 1,
                                 )
-                                IconButton(
+                                HomeHeaderActionButton(
+                                    icon = Icons.Outlined.DeleteSweep,
+                                    contentDescription = stringResource(R.string.reset_usage_tracking),
                                     onClick = onResetUsageTracking,
                                     modifier = Modifier.size(32.dp),
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Outlined.DeleteSweep,
-                                        contentDescription = stringResource(R.string.reset_usage_tracking),
-                                    )
-                                }
+                                )
                             }
                             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
                             Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
@@ -985,6 +1091,21 @@ fun HomeScreen(
             onConfirm = {
                 showRefreshProfileDialog = false
                 onRefreshProfile()
+            },
+        )
+    }
+
+    smartRefreshConfirmationProfileId?.let { profileId ->
+        ConfirmDialog(
+            title = stringResource(R.string.smart_profile_metrics_refresh_confirm_title),
+            body = stringResource(R.string.smart_profile_metrics_refresh_confirm_body),
+            confirmLabel = stringResource(R.string.refresh),
+            icon = Icons.Outlined.Refresh,
+            dismissLabel = stringResource(R.string.cancel),
+            onDismiss = { smartRefreshConfirmationProfileId = null },
+            onConfirm = {
+                smartRefreshConfirmationProfileId = null
+                onRefreshSmartProfileMetrics(profileId)
             },
         )
     }

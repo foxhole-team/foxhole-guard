@@ -47,6 +47,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import java.io.File
+import java.security.MessageDigest
 import java.util.UUID
 
 class SettingsRepository(
@@ -323,6 +324,31 @@ class SettingsRepository(
             existing.copy(
                 protocolMemories = recordInto(existing.protocolMemories),
                 networkMemories = updatedNetworkMemories,
+            ),
+        )
+    }
+
+    suspend fun recordSmartProfileBaseline(
+        profileId: Long,
+        recommendedProtocolIds: List<String>,
+        enabledProtocolSetHash: String,
+        refreshedAt: Long = System.currentTimeMillis(),
+    ) = update { current ->
+        val normalizedRecommendedIds =
+            recommendedProtocolIds
+                .map(String::trim)
+                .filter(String::isNotBlank)
+                .distinct()
+                .take(SMART_START_RECOMMENDED_LIMIT)
+        val normalizedHash = enabledProtocolSetHash.trim().takeIf(String::isNotBlank) ?: return@update current
+        val existing = current.smartProfilePreference(profileId) ?: SmartProfilePreference(profileId = profileId)
+        current.withSmartProfilePreference(
+            existing.copy(
+                lastFullSmartRefreshAt = refreshedAt.takeIf { it > 0L },
+                smartStartBaselineReady = normalizedRecommendedIds.isNotEmpty(),
+                recommendedProtocolIds = normalizedRecommendedIds,
+                enabledProtocolSetHash = normalizedHash,
+                networkFingerprintSchema = NETWORK_FINGERPRINT_SCHEMA_CURRENT,
             ),
         )
     }
@@ -965,7 +991,35 @@ internal fun SmartProfilePreference.networkMemory(networkFingerprint: String?): 
 internal fun SmartProfilePreference.preferredLastKnownGoodOptionId(networkFingerprint: String?): String? =
     networkMemory(networkFingerprint)?.lastKnownGoodOptionId ?: lastKnownGoodOptionId
 
+internal const val SMART_START_RECOMMENDED_LIMIT = 3
 internal const val SMART_START_REMEMBERED_LATENCY_RETENTION_MS = 72L * 60L * 60L * 1000L
+internal const val SMART_START_FULL_REFRESH_STALE_MS = 7L * 24L * 60L * 60L * 1000L
+
+internal fun smartStartEnabledProtocolSetHash(optionIds: Collection<String>): String {
+    val payload =
+        optionIds
+            .map(String::trim)
+            .filter(String::isNotBlank)
+            .distinct()
+            .sorted()
+            .joinToString(separator = "\n")
+    val digest = MessageDigest.getInstance("SHA-256").digest(payload.encodeToByteArray())
+    return digest.joinToString(separator = "") { byte -> "%02x".format(byte) }
+}
+
+internal fun SmartProfilePreference.needsSmartStartColdScan(
+    enabledProtocolSetHash: String,
+    now: Long = System.currentTimeMillis(),
+    includeStaleRefresh: Boolean = false,
+): Boolean =
+    !smartStartBaselineReady ||
+        recommendedProtocolIds.isEmpty() ||
+        this.enabledProtocolSetHash != enabledProtocolSetHash ||
+        networkFingerprintSchema != NETWORK_FINGERPRINT_SCHEMA_CURRENT ||
+        (
+            includeStaleRefresh &&
+                lastFullSmartRefreshAt?.let { refreshedAt -> now - refreshedAt > SMART_START_FULL_REFRESH_STALE_MS } != false
+        )
 
 internal fun Settings.rememberedSmartStartLatencyByProfileId(
     networkFingerprint: String?,
@@ -1121,6 +1175,12 @@ internal fun normalizeSmartProfilePreferences(
                     .distinct()
                     .sorted()
             val normalizedLastKnownGoodOptionId = preference.lastKnownGoodOptionId?.trim()?.takeIf(String::isNotBlank)
+            val normalizedRecommendedProtocolIds =
+                preference.recommendedProtocolIds
+                    .map(String::trim)
+                    .filter(String::isNotBlank)
+                    .distinct()
+                    .take(SMART_START_RECOMMENDED_LIMIT)
             val normalizedProtocolMemories =
                 preference.protocolMemories
                     .mapNotNull(SmartProfileProtocolMemory::normalized)
@@ -1137,12 +1197,20 @@ internal fun normalizeSmartProfilePreferences(
                     lastKnownGoodOptionId = normalizedLastKnownGoodOptionId,
                     lastKnownGoodLatencyMs = preference.lastKnownGoodLatencyMs?.takeIf { it > 0L },
                     lastKnownGoodAt = preference.lastKnownGoodAt?.takeIf { it > 0L },
+                    lastFullSmartRefreshAt = preference.lastFullSmartRefreshAt?.takeIf { it > 0L },
+                    smartStartBaselineReady = preference.smartStartBaselineReady && normalizedRecommendedProtocolIds.isNotEmpty(),
+                    recommendedProtocolIds = normalizedRecommendedProtocolIds,
+                    enabledProtocolSetHash = preference.enabledProtocolSetHash?.trim()?.takeIf(String::isNotBlank),
+                    networkFingerprintSchema = preference.networkFingerprintSchema.coerceAtLeast(1),
                     protocolMemories = normalizedProtocolMemories,
                     networkMemories = normalizedNetworkMemories,
                 )
             normalizedPreference.takeIf {
                 normalizedExcludedOptionIds.isNotEmpty() ||
                     normalizedLastKnownGoodOptionId != null ||
+                    normalizedPreference.lastFullSmartRefreshAt != null ||
+                    normalizedPreference.smartStartBaselineReady ||
+                    normalizedPreference.recommendedProtocolIds.isNotEmpty() ||
                     normalizedProtocolMemories.isNotEmpty() ||
                     normalizedNetworkMemories.isNotEmpty()
             }

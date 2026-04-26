@@ -24,6 +24,9 @@ class RoutingRepository(
     private val presetDao = database.routingPresetDao()
     private val ruleDao = database.routingRuleDao()
     private val catalogDao = database.routingCatalogDao()
+    private val routingCatalogHttpClient: OkHttpClient by lazy {
+        httpClient.withBoundedRemoteFetchTimeouts()
+    }
 
     val presets: Flow<List<RoutingPreset>> =
         presetDao.observePresets().map { list -> list.map { it.preset.toDomain(it.rules.map(RoutingRuleEntity::toDomain)) } }
@@ -198,38 +201,42 @@ class RoutingRepository(
 
     suspend fun refreshCatalog(catalogId: Long): RoutingCatalog {
         val catalog = catalogDao.getById(catalogId) ?: error("catalog not found")
-        val request =
-            Request.Builder()
-                .url(catalog.url.ensureHttpsUrl().requirePublicHttpsUrl(resolveHost = true))
-                .get()
-                .apply {
-                    if (!catalog.etag.isNullOrBlank()) {
-                        header("If-None-Match", catalog.etag)
-                    }
-                }.build()
-
-        httpClient.newCall(request).execute().use { response ->
-            require(response.isSuccessful || response.code == 304) { "catalog refresh failed with http ${response.code}" }
-            val now = System.currentTimeMillis()
-            val cachedManifest =
-                if (response.code == 304) {
-                    catalog.cachedManifestJson
-                } else {
-                    val payload = response.body?.string().orEmpty()
-                    val parsed = parseCatalogManifest(payload)
-                    json.encodeToString(RoutingCatalogManifest.serializer(), parsed)
-                }
-            catalogDao.update(
-                id = catalog.id,
-                name = catalog.name,
-                url = catalog.url,
-                enabled = catalog.enabled,
-                etag = response.header("ETag") ?: catalog.etag,
-                lastSyncAt = now,
-                warningAcceptedAt = catalog.warningAcceptedAt,
-                cachedManifestJson = cachedManifest,
-            )
-        }
+        val safeUrl = catalog.url.ensureHttpsUrl().requirePublicHttpsUrl(resolveHost = true)
+        val response =
+            executeBoundedPublicGet(
+                client = routingCatalogHttpClient,
+                initialUrl = safeUrl,
+                allowHttp = false,
+                maxBytes = MAX_ROUTING_CATALOG_BYTES,
+            ) { url ->
+                Request.Builder()
+                    .url(url)
+                    .get()
+                    .apply {
+                        if (!catalog.etag.isNullOrBlank()) {
+                            header("If-None-Match", catalog.etag)
+                        }
+                    }.build()
+            }
+        require(response.isSuccessful || response.code == 304) { "catalog refresh failed with http ${response.code}" }
+        val now = System.currentTimeMillis()
+        val cachedManifest =
+            if (response.code == 304) {
+                catalog.cachedManifestJson
+            } else {
+                val parsed = parseCatalogManifest(response.body.orEmpty())
+                json.encodeToString(RoutingCatalogManifest.serializer(), parsed)
+            }
+        catalogDao.update(
+            id = catalog.id,
+            name = catalog.name,
+            url = catalog.url,
+            enabled = catalog.enabled,
+            etag = response.headers["ETag"] ?: catalog.etag,
+            lastSyncAt = now,
+            warningAcceptedAt = catalog.warningAcceptedAt,
+            cachedManifestJson = cachedManifest,
+        )
         return getCatalog(catalogId) ?: error("catalog disappeared")
     }
 

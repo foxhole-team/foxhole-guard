@@ -27,6 +27,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.ContentCopy
@@ -37,6 +38,7 @@ import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Speed
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -65,6 +67,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
@@ -82,7 +85,7 @@ internal val HomePrimaryActionHeight = 52.dp
 internal val HomeTriangleIndicatorSize = 15.dp
 internal val HomeDashboardBannerTopPadding = 86.dp
 internal val HomeConnectingStatusSignalOffset = 3.dp
-internal val HomeNetworkContentHeight = 88.dp
+internal val HomeNetworkContentHeight = 112.dp
 
 @Composable
 internal fun HomeCardHeader(
@@ -127,6 +130,100 @@ internal fun HomeCardHeader(
         }
         trailing()
     }
+}
+
+@Composable
+internal fun HomeHeaderActionButton(
+    icon: ImageVector,
+    contentDescription: String?,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    tint: Color = FoxholeInfoAccent,
+) {
+    Surface(
+        modifier =
+            modifier
+                .size(32.dp)
+                .clip(CircleShape)
+                .clickable(enabled = enabled) { onClick() },
+        shape = CircleShape,
+        color = tint.copy(alpha = if (enabled) 0.14f else 0.06f),
+        border = BorderStroke(1.dp, tint.copy(alpha = if (enabled) 0.34f else 0.14f)),
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Icon(
+                imageVector = icon,
+                contentDescription = contentDescription,
+                modifier = Modifier.size(18.dp),
+                tint = tint.copy(alpha = if (enabled) 1f else 0.38f),
+            )
+        }
+    }
+}
+
+@Composable
+internal fun HomeNetworkDetailLine(
+    label: String,
+    value: String,
+    modifier: Modifier = Modifier,
+    valueMonospace: Boolean = false,
+) {
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = label,
+            modifier = Modifier.weight(1f),
+            style =
+                MaterialTheme.typography.labelSmall.copy(
+                    fontSize = 10.sp,
+                    lineHeight = 11.sp,
+                    fontWeight = FontWeight.SemiBold,
+                ),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Text(
+            text = value,
+            modifier = Modifier.weight(1f),
+            style =
+                MaterialTheme.typography.labelSmall.copy(
+                    fontSize = 10.sp,
+                    lineHeight = 11.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    fontFamily = if (valueMonospace) FontFamily.Monospace else FontFamily.Default,
+                ),
+            color = MaterialTheme.colorScheme.onSurface,
+            textAlign = TextAlign.End,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+@Composable
+internal fun HomeNetworkSubtleDivider() {
+    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.18f))
+}
+
+@Composable
+internal fun HomeNetworkColumnTitle(text: String) {
+    Text(
+        text = text,
+        style =
+            MaterialTheme.typography.labelSmall.copy(
+                fontSize = 10.sp,
+                lineHeight = 11.sp,
+                fontWeight = FontWeight.Bold,
+            ),
+        color = MaterialTheme.colorScheme.onSurface,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+    )
 }
 
 @Composable
@@ -504,6 +601,39 @@ internal fun HomeNetworkLoadingBlock(modifier: Modifier = Modifier) {
 }
 
 @Composable
+internal fun HomeConnectionStatusLoadingBlock(modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        HomeNetworkColumnTitle(stringResource(R.string.home_network_profile_info_title))
+        repeat(3) { index ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                FoxholeSkeletonBlock(
+                    modifier =
+                        Modifier
+                            .weight(1f)
+                            .height(11.dp),
+                )
+                FoxholeSkeletonBlock(
+                    modifier =
+                        Modifier
+                            .weight(1f)
+                            .height(11.dp),
+                )
+            }
+            if (index < 2) {
+                HomeNetworkSubtleDivider()
+            }
+        }
+    }
+}
+
+@Composable
 internal fun rememberConnectionDurationText(snapshot: ConnectionSnapshot): String? {
     if (!shouldShowConnectionDuration(snapshot)) {
         return null
@@ -699,6 +829,48 @@ internal fun HomeConnectionActions(
                 text = stringResource(R.string.auto_connect),
                 color = autoConnectColor,
             )
+        }
+    }
+}
+
+@Composable
+internal fun SmartStartRefreshReminderCard(
+    onRefresh: () -> Unit,
+    onLater: () -> Unit,
+) {
+    FoxholeCard(
+        borderColor = FoxholeInfoAccent.copy(alpha = 0.34f),
+        containerColor = FoxholeInfoAccent.copy(alpha = 0.06f),
+        modifier = Modifier.testTag("smart_start_refresh_reminder"),
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text(
+                text = stringResource(R.string.smart_start_refresh_reminder_body),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                OutlinedButton(onClick = onLater) {
+                    Text(stringResource(R.string.later))
+                }
+                OutlinedButton(
+                    onClick = onRefresh,
+                    border = BorderStroke(1.dp, FoxholeInfoAccent.copy(alpha = 0.42f)),
+                    colors =
+                        ButtonDefaults.outlinedButtonColors(
+                            contentColor = FoxholeInfoAccent,
+                            containerColor = FoxholeInfoAccent.copy(alpha = 0.06f),
+                        ),
+                ) {
+                    Icon(Icons.Outlined.Refresh, contentDescription = null)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(stringResource(R.string.refresh))
+                }
+            }
         }
     }
 }

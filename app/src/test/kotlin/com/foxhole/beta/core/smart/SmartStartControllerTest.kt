@@ -28,11 +28,28 @@ class SmartStartControllerTest {
     }
 
     @Test
-    fun `default attempts include every ranked candidate until success`() {
+    fun `default attempts are bounded for auto connect`() {
         val attempted = mutableListOf<String>()
 
         val summary =
             SmartStartController.runUntilFirstSuccess(listOf("one", "two", "three", "four", "five")) { candidate ->
+                attempted += candidate
+                false
+            }
+
+        assertEquals(listOf("one", "two", "three"), attempted)
+        assertNull(summary.winner)
+    }
+
+    @Test
+    fun `manual metrics callers can explicitly scan every candidate`() {
+        val attempted = mutableListOf<String>()
+
+        val summary =
+            SmartStartController.runUntilFirstSuccess(
+                candidates = listOf("one", "two", "three", "four", "five"),
+                maxAttempts = Int.MAX_VALUE,
+            ) { candidate ->
                 attempted += candidate
                 false
             }

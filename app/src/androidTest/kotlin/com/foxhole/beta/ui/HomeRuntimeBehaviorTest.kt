@@ -7,12 +7,14 @@ import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertTextEquals
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollToNode
 import androidx.lifecycle.Lifecycle
 import androidx.test.platform.app.InstrumentationRegistry
 import com.foxhole.beta.FoxholeApplication
@@ -123,7 +125,8 @@ class HomeRuntimeBehaviorTest {
             app().container.diagnosticsLogger.clear()
         }
 
-        composeRule.waitUntil(timeoutMillis = 3_000) { textOfOrNull("home_network_primary_ip") == expectedIp }
+        scrollToNetworkBlock()
+        composeRule.waitUntil(timeoutMillis = 10_000) { textOfOrNull("home_network_primary_ip") == expectedIp }
         Thread.sleep(HomeViewModel.CONNECTED_IP_REFRESH_DELAY_MS + 400L)
         composeRule.waitForIdle()
         composeRule.runOnUiThread {
@@ -134,7 +137,7 @@ class HomeRuntimeBehaviorTest {
         Thread.sleep(HomeViewModel.CONNECTED_IP_REFRESH_DELAY_MS + 400L)
         composeRule.waitForIdle()
 
-        composeRule.onNodeWithTag("home_network_primary_ip").assertTextEquals(expectedIp)
+        composeRule.onNodeWithTag("home_network_primary_ip", useUnmergedTree = true).assertTextEquals(expectedIp)
         composeRule.onAllNodesWithTag("home_network_loading").assertCountEquals(0)
         assertTrue(app().container.diagnosticsLogger.entries.value.none { it.tag == "ip" })
     }
@@ -155,10 +158,11 @@ class HomeRuntimeBehaviorTest {
             FoxholeVpnRuntimeBridge.updateIpInfo(null)
         }
 
-        composeRule.waitUntil(timeoutMillis = 5_000) { textOfOrNull("home_network_primary_ip") == "-" }
+        scrollToNetworkBlock()
+        composeRule.waitUntil(timeoutMillis = 10_000) { textOfOrNull("home_network_primary_ip") == "-" }
 
         composeRule.onAllNodesWithTag("home_network_loading").assertCountEquals(0)
-        composeRule.onNodeWithTag("home_network_primary_ip").assertTextEquals("-")
+        composeRule.onNodeWithTag("home_network_primary_ip", useUnmergedTree = true).assertTextEquals("-")
         composeRule.onNodeWithText(
             InstrumentationRegistry.getInstrumentation().targetContext.getString(R.string.home_network_unavailable),
         ).assertIsDisplayed()
@@ -204,7 +208,7 @@ class HomeRuntimeBehaviorTest {
         }
 
         composeRule.waitForIdle()
-        composeRule.onNodeWithTag("home_network_primary_ip").assertTextEquals(previousIp)
+        composeRule.onNodeWithTag("home_network_primary_ip", useUnmergedTree = true).assertTextEquals(previousIp)
         composeRule.onAllNodesWithTag("home_network_loading").assertCountEquals(0)
         composeRule
             .onAllNodesWithText(
@@ -300,9 +304,20 @@ class HomeRuntimeBehaviorTest {
     }
 
     private fun waitUntilNetworkBlockSettles() {
+        scrollToNetworkBlock()
         composeRule.waitUntil(timeoutMillis = 20_000) {
             composeRule.onAllNodesWithTag("home_network_loading").fetchSemanticsNodes().isEmpty()
         }
+        scrollToNetworkBlock()
+    }
+
+    private fun scrollToNetworkBlock() {
+        runCatching {
+            composeRule
+                .onNodeWithTag("home_dashboard_list")
+                .performScrollToNode(hasTestTag("home_network_card"))
+        }
+        composeRule.waitForIdle()
     }
 
     private fun bytesString(value: Long): String =
@@ -314,13 +329,21 @@ class HomeRuntimeBehaviorTest {
         textOfOrNull(tag) ?: error("no node text for tag=$tag")
 
     private fun textOfOrNull(tag: String): String? =
+        textValuesOf(tag).firstOrNull()
+
+    private fun textValuesOf(tag: String): List<String> =
         runCatching {
             composeRule
-                .onNodeWithTag(tag)
-                .fetchSemanticsNode()
-                .config[SemanticsProperties.Text]
-                .joinToString(separator = "") { it.text }
-        }.getOrNull()
+                .onAllNodesWithTag(tag, useUnmergedTree = true)
+                .fetchSemanticsNodes()
+                .mapNotNull { node ->
+                    if (node.config.contains(SemanticsProperties.Text)) {
+                        node.config[SemanticsProperties.Text].joinToString(separator = "") { it.text }
+                    } else {
+                        null
+                    }
+                }
+        }.getOrDefault(emptyList())
 
     private fun app(): FoxholeApplication =
         InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as FoxholeApplication

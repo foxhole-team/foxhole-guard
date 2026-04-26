@@ -356,7 +356,7 @@ private fun ProtocolMarkOrSelector(
                         )
                     }
                 }
-                protocolOptions.forEach { option ->
+                protocolOptions.forEachIndexed { index, option ->
                     val optionSelected = option.id == selected.id
                     FoxholeDropdownItem(
                         onClick = {
@@ -367,6 +367,12 @@ private fun ProtocolMarkOrSelector(
                         highlightSelected = false,
                         showBorder = false,
                         accentColor = FoxholePositiveAccent,
+                        shape =
+                            foxholeDropdownItemShape(
+                                index = index,
+                                lastIndex = protocolOptions.lastIndex,
+                                hasHeader = dropdownInfoText != null,
+                            ),
                         contentPadding =
                             PaddingValues(
                                 horizontal = 12.dp,
@@ -443,14 +449,14 @@ internal fun ProtocolLatencyPill(
     showLabel: Boolean = false,
 ) {
     val (contentColor, containerColor) =
-        when {
-            isDown -> Color(0xFFC95353) to Color(0xFFC95353).copy(alpha = 0.16f)
-            isUnavailable -> MaterialTheme.colorScheme.onSurfaceVariant to MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.42f)
-            latencyMs == null -> MaterialTheme.colorScheme.onSurfaceVariant to MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.42f)
-            latencyMs <= 180L -> Color(0xFF2F9E6A) to Color(0xFF2F9E6A).copy(alpha = 0.16f)
-            latencyMs <= 320L -> Color(0xFFC6A23D) to Color(0xFFC6A23D).copy(alpha = 0.16f)
-            latencyMs <= 520L -> Color(0xFFE28131) to Color(0xFFE28131).copy(alpha = 0.16f)
-            else -> Color(0xFFC95353) to Color(0xFFC95353).copy(alpha = 0.16f)
+        when (classifyVpnLatency(latencyMs = latencyMs, failed = isDown, unavailable = isUnavailable || latencyMs == null)) {
+            LatencyQuality.FAST -> Color(0xFF2F9E6A) to Color(0xFF2F9E6A).copy(alpha = 0.16f)
+            LatencyQuality.NORMAL -> MaterialTheme.colorScheme.onSurfaceVariant to MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.42f)
+            LatencyQuality.SLOW -> Color(0xFFE28131) to Color(0xFFE28131).copy(alpha = 0.16f)
+            LatencyQuality.VERY_SLOW,
+            LatencyQuality.FAILED,
+            -> Color(0xFFC95353) to Color(0xFFC95353).copy(alpha = 0.16f)
+            LatencyQuality.UNAVAILABLE -> MaterialTheme.colorScheme.onSurfaceVariant to MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.42f)
         }
     val text =
         when {

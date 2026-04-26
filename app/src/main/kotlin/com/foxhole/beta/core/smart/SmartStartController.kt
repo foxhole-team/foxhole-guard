@@ -7,6 +7,7 @@ import com.foxhole.beta.core.settings.networkMemory
 import kotlin.random.Random
 
 object SmartStartController {
+    const val AUTO_CONNECT_MAX_ATTEMPTS: Int = 3
     private const val HARD_FAILURE_STREAK_THRESHOLD: Int = 3
 
     fun eligibleCandidatesForRanking(
@@ -40,6 +41,33 @@ object SmartStartController {
         }
     }
 
+    fun eligibleCandidatesForFullScan(
+        candidates: List<AutoConnectProbeCandidate>,
+        excludedOptionIds: Set<String>,
+        subscriptionExpiresAt: Long?,
+        now: Long = System.currentTimeMillis(),
+    ): List<AutoConnectProbeCandidate> {
+        if (subscriptionExpiresAt != null && subscriptionExpiresAt <= now) {
+            return emptyList()
+        }
+        return candidates.filter { candidate ->
+            candidate.optionId !in excludedOptionIds &&
+                (!candidate.requiresInsecureTls || candidate.insecureTlsConsentGranted)
+        }
+    }
+
+    fun recommendedTopCandidateIds(
+        rankedCandidates: List<AdaptiveProtocolCandidateScore>,
+        limit: Int = AUTO_CONNECT_MAX_ATTEMPTS,
+    ): List<String> =
+        rankedCandidates
+            .asSequence()
+            .map { score -> score.candidate.optionId.trim() }
+            .filter(String::isNotBlank)
+            .distinct()
+            .take(limit.coerceAtLeast(1))
+            .toList()
+
     fun rankedAttempts(
         rankedCandidates: List<AdaptiveProtocolCandidateScore>,
         config: AdaptiveProtocolScoringConfig = AdaptiveProtocolScoringConfig.Default,
@@ -56,9 +84,10 @@ object SmartStartController {
 
     fun <T> runUntilFirstSuccess(
         candidates: List<T>,
-        maxAttempts: Int = Int.MAX_VALUE,
+        maxAttempts: Int = AUTO_CONNECT_MAX_ATTEMPTS,
         attempt: (T) -> Boolean,
     ): SmartStartAttemptSummary<T> {
+        require(maxAttempts > 0) { "maxAttempts must be positive" }
         val attempted = mutableListOf<T>()
         candidates.take(maxAttempts).forEach { candidate ->
             attempted += candidate

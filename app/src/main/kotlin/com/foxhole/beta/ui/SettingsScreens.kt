@@ -50,6 +50,7 @@ import androidx.compose.material.icons.outlined.PhoneAndroid
 import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Shield
+import androidx.compose.material.icons.outlined.Speed
 import androidx.compose.material.icons.outlined.SwapVert
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material.icons.outlined.Wifi
@@ -978,6 +979,15 @@ fun HelpScreen(
     ) {
         item {
             FoxholeCard {
+                HelpSection(
+                    icon = Icons.Outlined.Speed,
+                    title = stringResource(R.string.auto_connect),
+                    body = stringResource(R.string.help_smart_start_body),
+                )
+                HorizontalDivider(
+                    modifier = Modifier.padding(vertical = 6.dp),
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.48f),
+                )
                 HelpSection(
                     icon = Icons.Outlined.Shield,
                     title = stringResource(R.string.traffic_mode_tunnel),

@@ -68,9 +68,11 @@ internal fun SmartProfileAutoConnectMenu(
     metricsUpdatedAtByOptionId: Map<String, Long> = emptyMap(),
     metricsRefreshing: Boolean = false,
     recommendedOptionId: String? = null,
+    recommendedOptionIds: Set<String> = recommendedOptionId?.let(::setOf).orEmpty(),
     activeOptionId: String? = profile.selectedProtocolOptionId ?: MultiProtocolProfileSupport.selectedOption(profile)?.id,
     onRefreshMetrics: (() -> Unit)? = null,
     onCancelRefreshMetrics: (() -> Unit)? = null,
+    refreshWarningRequired: Boolean = false,
     showLatency: Boolean = false,
     compact: Boolean = false,
     enabled: Boolean = true,
@@ -83,6 +85,14 @@ internal fun SmartProfileAutoConnectMenu(
     }
     val menuLayout = resolveSmartStartProtocolMenuLayout(showMetricsTable = showMetricsTable)
     var expanded by rememberSaveable(profile.id) { mutableStateOf(false) }
+    var showRefreshWarning by rememberSaveable(profile.id) { mutableStateOf(false) }
+    val requestRefreshMetrics: () -> Unit = {
+        if (refreshWarningRequired) {
+            showRefreshWarning = true
+        } else {
+            onRefreshMetrics?.invoke()
+        }
+    }
     val minMenuWidth =
         when {
             menuLayout.showDetailedMetrics && compact -> 334.dp
@@ -179,7 +189,7 @@ internal fun SmartProfileAutoConnectMenu(
                             SmartProfileMetricsRefreshStatus(
                                 updatedAt = metricsUpdatedAtByOptionId.values.maxOrNull(),
                                 refreshing = metricsRefreshing,
-                                onRefreshMetrics = onRefreshMetrics,
+                                onRefreshMetrics = onRefreshMetrics?.let { requestRefreshMetrics },
                                 onCancelRefreshMetrics = onCancelRefreshMetrics,
                                 compact = compact,
                             )
@@ -192,7 +202,7 @@ internal fun SmartProfileAutoConnectMenu(
                             SmartProfileSelectedProtocolSummary(
                                 options = options,
                                 activeOptionId = activeOptionId,
-                                recommendedOptionId = recommendedOptionId,
+                                recommendedOptionIds = recommendedOptionIds,
                                 latencyByOptionId = latencyByOptionId,
                                 unavailableOptionIds = unavailableOptionIds,
                                 latencyUnavailableOptionIds = latencyUnavailableOptionIds,
@@ -201,11 +211,65 @@ internal fun SmartProfileAutoConnectMenu(
                             SmartProfileProtocolMenuHeader(compact = compact)
                         }
                     }
+                } else if (onRefreshMetrics != null) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 6.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.Top,
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.Info,
+                            contentDescription = null,
+                            modifier = Modifier.padding(top = 2.dp).size(14.dp),
+                            tint = FoxholeInfoAccent,
+                        )
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(2.dp),
+                        ) {
+                            Text(
+                                text = stringResource(R.string.smart_profile_menu_title),
+                                style =
+                                    MaterialTheme.typography.labelSmall.copy(
+                                        fontSize = 10.sp,
+                                        lineHeight = 11.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                    ),
+                                color = MaterialTheme.colorScheme.onSurface,
+                                maxLines = 4,
+                                overflow = TextOverflow.Clip,
+                            )
+                            Text(
+                                text = stringResource(R.string.smart_profile_metrics_refresh_compact_hint),
+                                style =
+                                    MaterialTheme.typography.labelSmall.copy(
+                                        fontSize = 9.sp,
+                                        lineHeight = 10.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                    ),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 3,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                        SmartProfileMetricsRefreshStatus(
+                            updatedAt = metricsUpdatedAtByOptionId.values.maxOrNull(),
+                            refreshing = metricsRefreshing,
+                            onRefreshMetrics = requestRefreshMetrics,
+                            onCancelRefreshMetrics = onCancelRefreshMetrics,
+                            compact = true,
+                        )
+                    }
+                    HorizontalDivider(
+                        modifier = Modifier.padding(horizontal = 8.dp),
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.24f),
+                    )
                 }
-                options.forEach { option ->
+                val hasMenuHeader = menuLayout.showHeader || onRefreshMetrics != null
+                options.forEachIndexed { index, option ->
                     val included = option.id !in excludedOptionIds
                     val includedCount = options.count { candidate -> candidate.id !in excludedOptionIds }
-                    val recommended = option.id == recommendedOptionId
+                    val recommended = option.id in recommendedOptionIds
                     val active = option.id == activeOptionId
                     val latencyMs = latencyByOptionId[option.id]
                     val latencyDown = option.id in unavailableOptionIds
@@ -231,7 +295,7 @@ internal fun SmartProfileAutoConnectMenu(
                             nextExcluded?.let(onUpdateExcludedOptionIds)
                         },
                         selected = active || recommended,
-                        highlightSelected = active || recommended,
+                        highlightSelected = menuLayout.showDetailedMetrics && (active || recommended),
                         accentColor =
                             when {
                                 recommended -> FoxholePositiveAccent
@@ -239,6 +303,13 @@ internal fun SmartProfileAutoConnectMenu(
                                 else -> FoxholePositiveAccent
                             },
                         selectedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.18f),
+                        shape =
+                            foxholeDropdownItemShape(
+                                index = index,
+                                lastIndex = options.lastIndex,
+                                hasHeader = hasMenuHeader,
+                            ),
+                        showBorder = index != options.lastIndex,
                         minHeight = if (menuLayout.showDetailedMetrics) 32.dp else 42.dp,
                         contentPadding =
                             PaddingValues(
@@ -287,6 +358,20 @@ internal fun SmartProfileAutoConnectMenu(
             }
         }
     }
+    if (showRefreshWarning) {
+        ConfirmDialog(
+            title = stringResource(R.string.smart_profile_metrics_refresh_confirm_title),
+            body = stringResource(R.string.smart_profile_metrics_refresh_confirm_body),
+            confirmLabel = stringResource(R.string.refresh),
+            icon = Icons.Outlined.Refresh,
+            dismissLabel = stringResource(R.string.cancel),
+            onDismiss = { showRefreshWarning = false },
+            onConfirm = {
+                showRefreshWarning = false
+                onRefreshMetrics?.invoke()
+            },
+        )
+    }
 }
 
 @Composable
@@ -298,7 +383,7 @@ private fun SmartProfileMetricsRefreshStatus(
     compact: Boolean,
 ) {
     Column(
-        modifier = Modifier.width(if (compact) 96.dp else 110.dp),
+        modifier = Modifier.width(if (compact) 126.dp else 110.dp),
         horizontalAlignment = Alignment.End,
         verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
@@ -351,7 +436,7 @@ private fun SmartProfileMetricsRefreshStatus(
                             lineHeight = if (compact) 10.sp else 11.sp,
                         ),
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.74f),
-                    maxLines = 1,
+                    maxLines = if (compact) 2 else 1,
                     textAlign = TextAlign.End,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -408,16 +493,22 @@ private fun smartProfileCurrentProtocolAccent(
     down: Boolean,
     unavailable: Boolean,
 ): Color =
-    when {
-        down || unavailable || (latencyMs != null && latencyMs > 520L) -> SmartProfileCurrentDangerAccent
-        else -> SmartProfileCurrentWarningAccent
+    when (classifyVpnLatency(latencyMs = latencyMs, failed = down, unavailable = unavailable || latencyMs == null)) {
+        LatencyQuality.FAST,
+        LatencyQuality.NORMAL,
+        LatencyQuality.SLOW,
+        -> SmartProfileCurrentWarningAccent
+        LatencyQuality.VERY_SLOW,
+        LatencyQuality.FAILED,
+        LatencyQuality.UNAVAILABLE,
+        -> SmartProfileCurrentDangerAccent
     }
 
 @Composable
 private fun SmartProfileSelectedProtocolSummary(
     options: List<ProfileProtocolOption>,
     activeOptionId: String?,
-    recommendedOptionId: String?,
+    recommendedOptionIds: Set<String>,
     latencyByOptionId: Map<String, Long>,
     unavailableOptionIds: Set<String>,
     latencyUnavailableOptionIds: Set<String>,
@@ -425,7 +516,7 @@ private fun SmartProfileSelectedProtocolSummary(
 ) {
     val activeOption =
         options.firstOrNull { option -> option.id == activeOptionId }
-            ?: options.firstOrNull { option -> option.id == recommendedOptionId }
+            ?: options.firstOrNull { option -> option.id in recommendedOptionIds }
             ?: options.firstOrNull()
     if (activeOption == null) {
         return
@@ -461,11 +552,14 @@ private fun SmartProfileSelectedProtocolSummary(
             presentation =
                 resolveSmartStartProtocolPresentation(
                     included = true,
-                    recommended = activeOption.id == recommendedOptionId,
+                    recommended = activeOption.id in recommendedOptionIds,
                     latencyMs = latencyMs,
                     latencyDown = down,
                     latencyUnavailable = unavailable,
                 ),
+            latencyMs = latencyMs,
+            latencyDown = down,
+            latencyUnavailable = unavailable,
             compact = compact,
         )
     }
@@ -598,6 +692,10 @@ private fun SmartProfileProtocolSimpleMenuRow(
                     latencyDown = latencyDown,
                     latencyUnavailable = latencyUnavailable,
                 ),
+            latencyMs = latencyMs,
+            latencyDown = latencyDown,
+            latencyUnavailable = latencyUnavailable,
+            showLatencyDetails = true,
             compact = compact,
         )
         SmartProfileOnToggle(included = included, compact = compact)
@@ -774,12 +872,14 @@ private fun SmartProfileMetricCell(
             else -> stringResource(R.string.smart_profile_metric_unavailable)
         }
     val tone =
-        when {
-            down -> SmartProfileMetricTone.DANGER
-            latencyMs == null -> SmartProfileMetricTone.NEUTRAL
-            latencyMs <= 180L -> SmartProfileMetricTone.POSITIVE
-            latencyMs <= 520L -> SmartProfileMetricTone.WARNING
-            else -> SmartProfileMetricTone.DANGER
+        when (classifyVpnLatency(latencyMs = latencyMs, failed = down, unavailable = unavailable || latencyMs == null)) {
+            LatencyQuality.FAST -> SmartProfileMetricTone.POSITIVE
+            LatencyQuality.NORMAL -> SmartProfileMetricTone.NEUTRAL
+            LatencyQuality.SLOW -> SmartProfileMetricTone.WARNING
+            LatencyQuality.VERY_SLOW,
+            LatencyQuality.FAILED,
+            -> SmartProfileMetricTone.DANGER
+            LatencyQuality.UNAVAILABLE -> SmartProfileMetricTone.NEUTRAL
         }
     SmartProfileMetricPill(
         text = text,
@@ -793,10 +893,24 @@ private fun SmartProfileMetricCell(
 private fun SmartProfileStatusPill(
     modifier: Modifier = Modifier,
     presentation: SmartStartProtocolPresentation,
+    latencyMs: Long? = null,
+    latencyDown: Boolean = false,
+    latencyUnavailable: Boolean = false,
+    showLatencyDetails: Boolean = false,
     compact: Boolean,
 ) {
     SmartProfileMetricPill(
-        text = smartStartProtocolPresentationText(presentation),
+        text =
+            if (showLatencyDetails) {
+                smartStartProtocolCompactText(
+                    presentation = presentation,
+                    latencyMs = latencyMs,
+                    latencyDown = latencyDown,
+                    latencyUnavailable = latencyUnavailable,
+                )
+            } else {
+                smartStartProtocolPresentationText(presentation)
+            },
         tone = smartStartProtocolPresentationTone(presentation),
         compact = compact,
         modifier = modifier,
@@ -804,9 +918,50 @@ private fun SmartProfileStatusPill(
 }
 
 @Composable
+private fun smartStartProtocolCompactText(
+    presentation: SmartStartProtocolPresentation,
+    latencyMs: Long?,
+    latencyDown: Boolean,
+    latencyUnavailable: Boolean,
+): String {
+    val base = smartStartProtocolPresentationText(presentation)
+    if (latencyMs == null || latencyDown || latencyUnavailable) {
+        return base
+    }
+    val quality =
+        latencyQualityLabel(
+            classifyVpnLatency(
+                latencyMs = latencyMs,
+                failed = false,
+                unavailable = false,
+            ),
+        )
+    return when (presentation.status) {
+        SmartStartProtocolStatus.AVAILABLE,
+        SmartStartProtocolStatus.SLOW,
+        -> quality
+        else -> base
+    }
+}
+
+@Composable
+internal fun latencyQualityLabel(quality: LatencyQuality): String =
+    stringResource(
+        when (quality) {
+            LatencyQuality.FAST -> R.string.latency_quality_fast
+            LatencyQuality.NORMAL -> R.string.latency_quality_normal
+            LatencyQuality.SLOW -> R.string.latency_quality_slow
+            LatencyQuality.VERY_SLOW -> R.string.latency_quality_very_slow
+            LatencyQuality.UNAVAILABLE -> R.string.latency_quality_unavailable
+            LatencyQuality.FAILED -> R.string.latency_quality_failed
+        },
+    )
+
+@Composable
 private fun smartStartProtocolPresentationText(presentation: SmartStartProtocolPresentation): String =
     when (presentation.status) {
         SmartStartProtocolStatus.RECOMMENDED -> stringResource(R.string.smart_start_protocol_status_recommended)
+        SmartStartProtocolStatus.AVAILABLE -> stringResource(R.string.smart_start_protocol_status_available)
         SmartStartProtocolStatus.SLOW -> stringResource(R.string.smart_start_protocol_status_slow)
         SmartStartProtocolStatus.RECENTLY_FAILED -> stringResource(R.string.smart_start_protocol_status_recently_failed)
         SmartStartProtocolStatus.NO_DATA -> stringResource(R.string.smart_start_protocol_status_no_data)
@@ -826,6 +981,7 @@ private fun smartStartProtocolPresentationText(presentation: SmartStartProtocolP
 private fun smartStartProtocolPresentationTone(presentation: SmartStartProtocolPresentation): SmartProfileMetricTone =
     when (presentation.status) {
         SmartStartProtocolStatus.RECOMMENDED -> SmartProfileMetricTone.POSITIVE
+        SmartStartProtocolStatus.AVAILABLE -> SmartProfileMetricTone.NEUTRAL
         SmartStartProtocolStatus.SLOW -> SmartProfileMetricTone.WARNING
         SmartStartProtocolStatus.RECENTLY_FAILED -> SmartProfileMetricTone.DANGER
         SmartStartProtocolStatus.NO_DATA,

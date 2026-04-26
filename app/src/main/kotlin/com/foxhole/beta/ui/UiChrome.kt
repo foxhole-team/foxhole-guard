@@ -19,6 +19,7 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -78,6 +79,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
@@ -675,6 +677,7 @@ internal fun FoxholeDropdownItem(
     showBorder: Boolean = true,
     accentColor: Color = FoxholePositiveAccent,
     selectedContainerColor: Color? = null,
+    shape: Shape = RectangleShape,
     minHeight: Dp = 46.dp,
     contentPadding: PaddingValues = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
     leadingContent: (@Composable () -> Unit)? = null,
@@ -686,8 +689,8 @@ internal fun FoxholeDropdownItem(
     val containerColor = if (selectedChrome) selectedContainerColor ?: uiPalette.menuSelectedRowColor else Color.Transparent
     Card(
         onClick = onClick,
-        modifier = modifier.fillMaxWidth(),
-        shape = androidx.compose.ui.graphics.RectangleShape,
+        modifier = modifier.fillMaxWidth().clip(shape),
+        shape = shape,
         colors = CardDefaults.cardColors(containerColor = containerColor),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
         border = null,
@@ -726,6 +729,31 @@ internal fun FoxholeDropdownItem(
                     },
             )
         }
+    }
+}
+
+@Composable
+internal fun foxholeDropdownItemShape(
+    index: Int,
+    lastIndex: Int,
+    hasHeader: Boolean = false,
+): Shape {
+    val radius = 24.dp
+    val roundTop = index == 0 && !hasHeader
+    val roundBottom = index == lastIndex
+    return when {
+        roundTop && roundBottom -> MaterialTheme.shapes.medium
+        roundTop ->
+            RoundedCornerShape(
+                topStart = radius,
+                topEnd = radius,
+            )
+        roundBottom ->
+            RoundedCornerShape(
+                bottomStart = radius,
+                bottomEnd = radius,
+            )
+        else -> RectangleShape
     }
 }
 

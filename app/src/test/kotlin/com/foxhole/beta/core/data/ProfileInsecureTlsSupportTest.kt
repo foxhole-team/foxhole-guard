@@ -84,4 +84,66 @@ class ProfileInsecureTlsSupportTest {
         assertTrue(marked.requiresInsecureTls)
         assertTrue(marked.protocolOptions.single().requiresInsecureTls)
     }
+
+    @Test
+    fun `subscription refresh does not ask for insecure tls consent after global or profile consent`() {
+        assertFalse(
+            shouldRequireInsecureTlsRefreshConsent(
+                allowInsecureTlsGlobally = true,
+                profileInsecureTlsConsentGranted = false,
+                strictParseFailedForInsecureTls = true,
+            ),
+        )
+        assertFalse(
+            shouldRequireInsecureTlsRefreshConsent(
+                allowInsecureTlsGlobally = false,
+                profileInsecureTlsConsentGranted = true,
+                strictParseFailedForInsecureTls = true,
+            ),
+        )
+        assertTrue(
+            shouldRequireInsecureTlsRefreshConsent(
+                allowInsecureTlsGlobally = false,
+                profileInsecureTlsConsentGranted = false,
+                strictParseFailedForInsecureTls = true,
+            ),
+        )
+    }
+
+    @Test
+    fun `legacy stored insecure tls config counts as refresh consent`() {
+        val secret =
+            StoredProfileSecret(
+                requiresInsecureTls = false,
+                protocolOptions =
+                    listOf(
+                        StoredProfileProtocolOption(
+                            id = "legacy-hysteria2",
+                            displayName = "Legacy Hysteria2",
+                            protocolHint = ProtocolHint.HYSTERIA2,
+                            normalizedConfigJson =
+                                """
+                                {
+                                  "outbounds": [
+                                    {
+                                      "type": "hysteria2",
+                                      "tag": "proxy",
+                                      "tls": { "enabled": true, "insecure": true }
+                                    }
+                                  ]
+                                }
+                                """.trimIndent(),
+                        ),
+                    ),
+            )
+
+        assertTrue(secret.hasInsecureTlsConsent(json))
+        assertFalse(
+            shouldRequireInsecureTlsRefreshConsent(
+                allowInsecureTlsGlobally = false,
+                profileInsecureTlsConsentGranted = secret.hasInsecureTlsConsent(json),
+                strictParseFailedForInsecureTls = true,
+            ),
+        )
+    }
 }

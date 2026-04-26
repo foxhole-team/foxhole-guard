@@ -56,6 +56,7 @@ import com.foxhole.beta.core.profile.MultiProtocolProfileSupport
 import com.foxhole.beta.core.profile.PreparedProfileExport
 import com.foxhole.beta.core.profile.ProfileExportRequest
 import com.foxhole.beta.core.profile.classifyAutoConnectProbeFailure
+import com.foxhole.beta.core.smart.SmartStartController
 import com.foxhole.beta.core.settings.rememberedSmartStartLatencyByOptionId
 import com.foxhole.beta.core.settings.rememberedSmartStartLatencyByProfileId
 import com.foxhole.beta.core.settings.rememberedSmartProfileServerPingByOptionId
@@ -380,6 +381,20 @@ class HomeViewModel(
                             .smartProfilePreference(activeProfile.id)
                             ?.rememberedSmartStartLatencyByOptionId(currentNetworkFingerprintKey)
                     }.orEmpty()
+            val activeRecommendedProtocolOptionIds =
+                state.activeProfile
+                    ?.let { activeProfile ->
+                        val baseline =
+                            state.settings
+                                .smartProfilePreference(activeProfile.id)
+                                ?.recommendedProtocolIds
+                                .orEmpty()
+                        val transient =
+                            protocolMetrics.recommendation
+                                ?.takeIf { recommendation -> recommendation.profileId == activeProfile.id }
+                                ?.optionId
+                        (baseline + listOfNotNull(transient)).toSet()
+                    }.orEmpty()
             state.toHomeRouteUiState(
                 autoConnect = autoConnect,
                 selectedProtocolLatencyMs = selectedProtocolLatencyMs,
@@ -393,7 +408,9 @@ class HomeViewModel(
                 recommendedProtocolOptionId =
                     protocolMetrics.recommendation
                         ?.takeIf { recommendation -> recommendation.profileId == state.activeProfile?.id }
-                        ?.optionId,
+                        ?.optionId
+                        ?: activeRecommendedProtocolOptionIds.firstOrNull(),
+                recommendedProtocolOptionIds = activeRecommendedProtocolOptionIds,
                 smartStartRememberedLatenciesByOptionId = smartStartRememberedLatenciesByOptionId,
             )
         }
@@ -460,9 +477,23 @@ class HomeViewModel(
                     smartProfileMetricsUpdatedAtByProfileId = mergedMetricsUpdatedAtByProfileId,
                     smartProfileMetricsRefreshingProfileIds = protocolMetrics.refreshingProfileIds,
                     recommendedProtocolOptionByProfileId =
-                        protocolMetrics.recommendation
-                            ?.let { recommendation -> mapOf(recommendation.profileId to recommendation.optionId) }
-                            .orEmpty(),
+                        state.settings.smartProfilePreferences
+                            .mapNotNull { preference ->
+                                preference.recommendedProtocolIds.firstOrNull()?.let { optionId ->
+                                    preference.profileId to optionId
+                                }
+                            }.toMap() +
+                            protocolMetrics.recommendation
+                                ?.let { recommendation -> mapOf(recommendation.profileId to recommendation.optionId) }
+                                .orEmpty(),
+                    recommendedProtocolOptionsByProfileId =
+                        state.settings.smartProfilePreferences
+                            .associate { preference ->
+                                preference.profileId to preference.recommendedProtocolIds.toSet()
+                            } +
+                            protocolMetrics.recommendation
+                                ?.let { recommendation -> mapOf(recommendation.profileId to setOf(recommendation.optionId)) }
+                                .orEmpty(),
                 )
             }
             .stateIn(
@@ -1101,6 +1132,7 @@ class HomeViewModel(
         internal const val CONNECTED_IP_REFRESH_DELAY_MS = 1_250L
         internal const val MANUAL_IP_REFRESH_MIN_LOADING_MS = 666L
         internal const val CONNECTED_PROTOCOL_LATENCY_REFRESH_DELAY_MS = 900L
+        internal const val CONNECTED_PROTOCOL_LATENCY_REFRESH_INTERVAL_MS = 5L * 60L * 1000L
         internal const val PROFILE_RECONNECT_PROMPT_WINDOW_MS = 10_000L
         internal const val RUNTIME_RELOAD_PENDING_TIMEOUT_MS = 1_500L
         internal const val AUTO_CONNECT_CONNECTION_TIMEOUT_MS =
@@ -1117,6 +1149,8 @@ class HomeViewModel(
         internal const val AUTO_CONNECT_LATENCY_MEASUREMENT_RETRY_DELAY_MS = 300L
         internal const val AUTO_CONNECT_PROTOCOL_TRANSITION_SETTLE_MS = 220L
         internal const val AUTO_CONNECT_RESULT_SETTLE_MS = 850L
+        internal const val AUTO_CONNECT_TOTAL_TIMEOUT_MS = 60_000L
+        internal const val AUTO_CONNECT_MAX_ATTEMPTS = SmartStartController.AUTO_CONNECT_MAX_ATTEMPTS
         internal const val PROTOCOL_METRICS_PROBE_TIMEOUT_MS = 12_000L
         internal const val AUTO_CONNECT_LATENCY_FALLBACK_PENALTY_MS = 750L
         internal val ACTIVE_CONNECTION_STATES =

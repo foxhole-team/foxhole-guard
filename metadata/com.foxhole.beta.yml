@@ -6,9 +6,9 @@ License: GPL-3.0-or-later
 AuthorName: Foxhole
 
 AutoName: Foxhole
-Summary: Foxhole - 1.0.0-beta1 sing-box client
+Summary: Foxhole - public beta 1.0 sing-box client
 Description: |
-  Foxhole is currently released as 1.0.0-beta1 for Android. It is
+  Foxhole is currently released as public beta 1.0 for Android. It is
   a simple client for connecting to and managing sing-box profiles. It
   supports Tunnel and Proxy, as well as Split
   Tunnel for apps and sites and LAN Proxy. It supports profile import
@@ -58,5 +58,5 @@ Builds:
 
 AutoUpdateMode: None
 UpdateCheckMode: None
-CurrentVersion: '1.0.0-beta1'
+CurrentVersion: 'public beta 1.0'
 CurrentVersionCode: 1
