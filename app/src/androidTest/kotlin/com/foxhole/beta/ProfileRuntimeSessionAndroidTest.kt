@@ -24,6 +24,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import org.junit.Assume.assumeTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 
@@ -160,13 +161,16 @@ class ProfileRuntimeSessionAndroidTest {
         }
         runBlocking {
             val app = ApplicationProvider.getApplicationContext<FoxholeApplication>()
-            if (VpnService.prepare(app) != null) {
-                Log.d(TEST_TAG, "manual direct-link live connect skipped: vpn permission missing")
-                return@runBlocking
-            }
+            assumeTrue("manual direct-link live connect requires pre-granted VPN permission", VpnService.prepare(app) == null)
             resetRelevantSettings(app)
+            val requestedLabel = InstrumentationRegistry.getArguments().getString("foxhole.liveDirectLabel")
+            val linkCases =
+                DIRECT_LINK_CASES.filter { linkCase ->
+                    requestedLabel.isNullOrBlank() || linkCase.label == requestedLabel
+                }
+            assumeTrue("manual direct-link live connect has no case for label=$requestedLabel", linkCases.isNotEmpty())
 
-            DIRECT_LINK_CASES.forEach { linkCase ->
+            linkCases.forEach { linkCase ->
                 clearProfiles(app)
                 val imported = app.container.profileRepository.importProfile(linkCase.rawLink)
                 app.container.connectionController.setActiveProfile(imported.id)
@@ -175,7 +179,8 @@ class ProfileRuntimeSessionAndroidTest {
 
                 app.container.connectionController.connect(imported.id)
                 val terminalState: ConnectionState? =
-                    withTimeoutOrNull(35_000) {
+                    withTimeoutOrNull(LIVE_DIRECT_LINK_TERMINAL_TIMEOUT_MS) {
+                        waitForActiveConnectionAttempt(app)
                         waitForTerminalState(app)
                     }
                 delay(2_000)
@@ -193,6 +198,30 @@ class ProfileRuntimeSessionAndroidTest {
                 app.container.connectionController.disconnect()
                 delay(3_000)
             }
+        }
+    }
+
+    @Test
+    fun manualDirectShareHysteriaWarmupThenTcpRuntime() {
+        if (InstrumentationRegistry.getArguments().getString("foxhole.liveDirectWarmup") != "1") {
+            Log.d(TEST_TAG, "manual direct-link warmup live connect skipped")
+            return
+        }
+        runBlocking {
+            val app = ApplicationProvider.getApplicationContext<FoxholeApplication>()
+            assumeTrue("manual direct-link warmup requires pre-granted VPN permission", VpnService.prepare(app) == null)
+            resetRelevantSettings(app)
+            clearProfiles(app)
+
+            val importedVless = app.container.profileRepository.importProfile(DIRECT_VLESS_REALITY_URI, preferredName = "Warmup VLESS")
+            val importedHysteria = app.container.profileRepository.importProfile(DIRECT_HYSTERIA2_URI, preferredName = "Warmup Hysteria2")
+
+            runWarmupProbe(app, label = "vless-before-hysteria", profileId = importedVless.id)
+            runWarmupProbe(app, label = "hysteria2-warmup", profileId = importedHysteria.id)
+            runWarmupProbe(app, label = "vless-after-hysteria", profileId = importedVless.id)
+
+            app.container.connectionController.disconnect()
+            delay(3_000)
         }
     }
 
@@ -448,6 +477,59 @@ class ProfileRuntimeSessionAndroidTest {
         }
     }
 
+    private suspend fun waitForActiveConnectionAttempt(app: FoxholeApplication) {
+        while (true) {
+            val state = app.container.connectionController.snapshot.value.state
+            if (state == ConnectionState.CONNECTING || state == ConnectionState.RECONNECTING || state == ConnectionState.CONNECTED) {
+                return
+            }
+            delay(100)
+        }
+    }
+
+    private suspend fun runWarmupProbe(
+        app: FoxholeApplication,
+        label: String,
+        profileId: Long,
+    ) {
+        app.container.connectionController.disconnect()
+        delay(3_000)
+        baselineRuntimeSettings(app)
+        app.container.connectionController.setActiveProfile(profileId)
+        val startedAt = System.currentTimeMillis()
+        Log.d(TEST_TAG, "liveDirectWarmup start label=$label profileId=$profileId")
+        app.container.connectionController.connect(profileId)
+        val terminalState =
+            withTimeoutOrNull(LIVE_DIRECT_LINK_TERMINAL_TIMEOUT_MS) {
+                waitForActiveConnectionAttempt(app)
+                waitForTerminalState(app)
+            }
+        val ipRefreshResult =
+            if (terminalState == ConnectionState.CONNECTED) {
+                runCatching {
+                    withTimeoutOrNull(20_000) {
+                        app.container.connectionController.refreshIpInfo()
+                    } ?: error("timeout")
+                }.fold(
+                    onSuccess = { "ok" },
+                    onFailure = { "fail:${it.javaClass.simpleName}" },
+                )
+            } else {
+                "skipped"
+            }
+        delay(2_000)
+        val evidence =
+            TunnelValidationEvidenceClassifier.classify(
+                entries = app.container.diagnosticsLogger.entries.value,
+                sinceMs = startedAt,
+            )
+        val snapshot = app.container.connectionController.snapshot.value
+        Log.d(
+            TEST_TAG,
+            "liveDirectWarmup result label=$label terminalState=${terminalState?.name ?: "TIMEOUT"} ipRefresh=$ipRefreshResult message=${snapshot.message.orEmpty().take(160)} fatal=${evidence.fatalRuntimeMessage.orEmpty().take(200)} successTraffic=${evidence.hasSuccessfulTunnelActivity}",
+        )
+    }
+
     private fun clearProfiles(app: FoxholeApplication) {
         app.container.profileDatabase.clearAllTables()
         deleteChildren(File(app.filesDir, "profile-secrets"))
@@ -516,6 +598,7 @@ class ProfileRuntimeSessionAndroidTest {
     companion object {
         private const val TEST_TAG = "FoxholeSessionTest"
         private const val VPN_PERMISSION_REQUEST_CODE = 7301
+        private const val LIVE_DIRECT_LINK_TERMINAL_TIMEOUT_MS = 150_000L
         private data class DirectLinkCase(
             val label: String,
             val rawLink: String,

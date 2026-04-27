@@ -173,6 +173,7 @@ internal suspend fun FoxholeVpnService.validateTunnelConnectivityInternal(
     withContext(Dispatchers.IO) {
         val validationStartedAt = System.currentTimeMillis()
         val activeProtocolHint = activeSession?.protocolHint
+        val validationPolicyContext = tunnelValidationPolicyContextFor(PrivateDnsSettings.current(this@validateTunnelConnectivityInternal))
         val preferIpv4Validation = shouldPreferIpv4TunnelValidation(activeProtocolHint, activeSession?.configJson)
         val validationTimeoutMs =
             FoxholeVpnService.CONNECTIVITY_PROBE_TOTAL_TIMEOUT_MS +
@@ -203,6 +204,33 @@ internal suspend fun FoxholeVpnService.validateTunnelConnectivityInternal(
                         excludedHandle = expectedFreshVpnNetworkHandle,
                     ) ?: error("vpn network unavailable")
                 val requestNetwork = tunnelValidationRequestNetwork(vpnNetwork)
+                if (acceptsTunnelValidationProbe(
+                        TunnelValidationProbeKind.DNS_INDEPENDENT_LITERAL_IP,
+                        validationPolicyContext,
+                    )
+                ) {
+                    val dnsIndependentValidation =
+                        runCatching {
+                            probeDnsIndependentConnectivityFallback(
+                                callTimeoutMs = FoxholeVpnService.CONNECTIVITY_PROBE_CALL_TIMEOUT_MS,
+                                network = requestNetwork,
+                            )
+                        }
+                    if (dnsIndependentValidation.isSuccess) {
+                        container.diagnosticsLogger.record(
+                            "dns",
+                            "dns-independent public reachability probe accepted for strict private dns",
+                        )
+                        scope.launch(Dispatchers.IO) {
+                            refreshValidatedTunnelIpInfoBestEffort(vpnNetwork)
+                        }
+                        return@run vpnNetwork
+                    }
+                    container.diagnosticsLogger.record(
+                        "dns",
+                        "dns-independent public reachability probe failed before dns validation: ${dnsIndependentValidation.exceptionOrNull()?.message.orEmpty()}",
+                    )
+                }
                 val ipRefresh =
                     runCatching {
                         val endpoint = container.settingsRepository.current().connection.ipInfoEndpoint
@@ -272,10 +300,25 @@ internal suspend fun FoxholeVpnService.validateTunnelConnectivityInternal(
                             )
                         }
                     if (dnsIndependentFallback.isSuccess) {
-                        container.diagnosticsLogger.record(
-                            "dns",
-                            "dns-independent public reachability probe passed but is not accepted as tunnel validation",
-                        )
+                        if (acceptsTunnelValidationProbe(
+                                TunnelValidationProbeKind.DNS_INDEPENDENT_LITERAL_IP,
+                                validationPolicyContext,
+                            )
+                        ) {
+                            container.diagnosticsLogger.record(
+                                "dns",
+                                "dns-independent public reachability probe accepted for strict private dns",
+                            )
+                            scope.launch(Dispatchers.IO) {
+                                refreshValidatedTunnelIpInfoBestEffort(vpnNetwork)
+                            }
+                            return@run vpnNetwork
+                        } else {
+                            container.diagnosticsLogger.record(
+                                "dns",
+                                "dns-independent public reachability probe passed but is not accepted as tunnel validation",
+                            )
+                        }
                     } else {
                         container.diagnosticsLogger.record(
                             "dns",

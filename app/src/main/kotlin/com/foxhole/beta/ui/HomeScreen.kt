@@ -578,6 +578,7 @@ fun HomeScreen(
                                                     compact = true,
                                                     actionIconSize = 18.dp,
                                                     showMetricsTable = false,
+                                                    showStatusHeader = true,
                                                 )
                                             }
                                         } else {

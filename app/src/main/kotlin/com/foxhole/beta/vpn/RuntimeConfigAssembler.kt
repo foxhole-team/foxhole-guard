@@ -412,6 +412,9 @@ class RuntimeConfigAssembler(
         sourceRoute: JsonObject,
     ): String? {
         val tags = dnsServerTags(dns)
+        if (isFoxholeManagedRoute(sourceRoute) && DNS_DIRECT_TAG in tags) {
+            return DNS_DIRECT_TAG
+        }
         sourceRoute["default_domain_resolver"]
             ?.jsonPrimitive
             ?.contentOrNull
@@ -655,10 +658,7 @@ class RuntimeConfigAssembler(
                         },
                     )
                     add(
-                        buildJsonObject {
-                            put("tag", DNS_DIRECT_TAG)
-                            put("type", "local")
-                        },
+                        foxholeDirectDnsServer(),
                     )
                     add(
                         foxholeRemoteDnsServer(privateDnsMode),
@@ -667,6 +667,14 @@ class RuntimeConfigAssembler(
             )
             put("strategy", strategy)
             put("final", DNS_REMOTE_TAG)
+        }
+
+    private fun foxholeDirectDnsServer(): JsonObject =
+        buildJsonObject {
+            put("tag", DNS_DIRECT_TAG)
+            put("type", "udp")
+            put("server", FOXHOLE_REMOTE_DNS_SERVER)
+            put("server_port", 53)
         }
 
     private fun foxholeRemoteDnsServer(privateDnsMode: PrivateDnsMode?): JsonObject =
@@ -725,7 +733,8 @@ class RuntimeConfigAssembler(
         val directMatches =
             direct == null ||
                 direct["type"]?.jsonPrimitive?.contentOrNull == "local" ||
-                direct["address"]?.jsonPrimitive?.contentOrNull == "local"
+                direct["address"]?.jsonPrimitive?.contentOrNull == "local" ||
+                isFoxholeBootstrapDnsServer(direct)
         val remoteMatches =
                 (
                     remote["type"]?.jsonPrimitive?.contentOrNull == "tcp" &&
@@ -756,6 +765,12 @@ class RuntimeConfigAssembler(
             remoteMatches &&
             remoteDetourMatches
     }
+
+    private fun isFoxholeBootstrapDnsServer(server: JsonObject): Boolean =
+        server["server"]?.jsonPrimitive?.contentOrNull == FOXHOLE_REMOTE_DNS_SERVER &&
+            server["server_port"]?.jsonPrimitive?.contentOrNull == "53" &&
+            server["type"]?.jsonPrimitive?.contentOrNull in setOf("udp", "tcp") &&
+            !server.containsKey("detour")
 
     private fun isFoxholeManagedRoute(route: JsonObject): Boolean {
         if (!route.keys.all { it in FOXHOLE_ROUTE_KEYS }) {

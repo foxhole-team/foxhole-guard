@@ -53,7 +53,7 @@ class PrivateDnsModeTest {
     fun `tunnel mode supports private dns off and automatic`() {
         assertEquals(true, PrivateDnsMode.OFF.isSupportedForTunnelMode())
         assertEquals(true, PrivateDnsMode.OPPORTUNISTIC.isSupportedForTunnelMode())
-        assertEquals(false, PrivateDnsMode.STRICT.isSupportedForTunnelMode())
+        assertEquals(true, PrivateDnsMode.STRICT.isSupportedForTunnelMode())
         assertEquals(false, PrivateDnsMode.UNKNOWN.isSupportedForTunnelMode())
     }
 }

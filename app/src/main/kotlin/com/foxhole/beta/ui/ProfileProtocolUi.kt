@@ -498,12 +498,7 @@ private fun ProtocolRecommendationStars(
                         null
                     },
                 modifier = Modifier.size(if (compact) 9.dp else 10.dp),
-                tint =
-                    if (index == 1) {
-                        Color(0xFFE0B84A)
-                    } else {
-                        FoxholePositiveAccent
-                    },
+                tint = FoxholePositiveAccent,
             )
         }
     }

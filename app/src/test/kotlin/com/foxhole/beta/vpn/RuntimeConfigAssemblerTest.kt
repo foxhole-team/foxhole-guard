@@ -417,9 +417,9 @@ class RuntimeConfigAssemblerTest {
         assertEquals("local", servers[0].jsonObject["type"]!!.jsonPrimitive.content)
         assertFalse(servers[0].jsonObject.containsKey("detour"))
         assertEquals("dns-direct", servers[1].jsonObject["tag"]!!.jsonPrimitive.content)
-        assertEquals("local", servers[1].jsonObject["type"]!!.jsonPrimitive.content)
-        assertFalse(servers[1].jsonObject.containsKey("server"))
-        assertFalse(servers[1].jsonObject.containsKey("server_port"))
+        assertEquals("udp", servers[1].jsonObject["type"]!!.jsonPrimitive.content)
+        assertEquals("1.1.1.1", servers[1].jsonObject["server"]!!.jsonPrimitive.content)
+        assertEquals("53", servers[1].jsonObject["server_port"]!!.jsonPrimitive.content)
         assertFalse(servers[1].jsonObject.containsKey("detour"))
         assertEquals("dns-remote", servers[2].jsonObject["tag"]!!.jsonPrimitive.content)
         assertEquals("https", servers[2].jsonObject["type"]!!.jsonPrimitive.content)
@@ -454,7 +454,34 @@ class RuntimeConfigAssemblerTest {
     }
 
     @Test
-    fun `route defaults inject hijack dns and local bootstrap resolver`() {
+    fun `foxhole dns keeps direct udp bootstrap resolver when private dns is strict`() {
+        val config =
+            parse(
+                assembler.assemble(
+                    baseConfigWithLegacyFoxholeDns(),
+                    Settings(),
+                    null,
+                    privateDnsMode = PrivateDnsMode.STRICT,
+                ),
+            )
+        val dns = config["dns"]!!.jsonObject
+        val route = config["route"]!!.jsonObject
+        val servers = dns["servers"]!!.jsonArray
+
+        assertEquals("dns-remote", dns["final"]!!.jsonPrimitive.content)
+        assertEquals("dns-direct", route["default_domain_resolver"]!!.jsonPrimitive.content)
+        assertEquals("dns-direct", servers[1].jsonObject["tag"]!!.jsonPrimitive.content)
+        assertEquals("udp", servers[1].jsonObject["type"]!!.jsonPrimitive.content)
+        assertEquals("1.1.1.1", servers[1].jsonObject["server"]!!.jsonPrimitive.content)
+        assertEquals("53", servers[1].jsonObject["server_port"]!!.jsonPrimitive.content)
+        assertFalse(servers[1].jsonObject.containsKey("detour"))
+        assertEquals("dns-remote", servers[2].jsonObject["tag"]!!.jsonPrimitive.content)
+        assertEquals("https", servers[2].jsonObject["type"]!!.jsonPrimitive.content)
+        assertEquals("proxy", servers[2].jsonObject["detour"]!!.jsonPrimitive.content)
+    }
+
+    @Test
+    fun `route defaults inject hijack dns and direct bootstrap resolver`() {
         val config = parse(assembler.assemble(baseConfigWithRules("profile.example"), Settings(), null))
         val route = config["route"]!!.jsonObject
         val rules = route["rules"]!!.jsonArray

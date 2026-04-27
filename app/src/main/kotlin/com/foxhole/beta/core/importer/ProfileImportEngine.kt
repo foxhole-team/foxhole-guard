@@ -689,13 +689,8 @@ internal fun parseSmartConfigSubscriptionImport(
     if (entries.isEmpty()) {
         return null
     }
-    val groupedEntries = linkedMapOf<String, MutableList<SmartConfigEntry>>()
-    entries.forEach { entry ->
-        val routeKey = slugifySmartConfigKey(entry.heading.routeLabel).ifBlank { "default" }
-        groupedEntries.getOrPut(routeKey) { mutableListOf() }.add(entry)
-    }
     val profiles =
-        groupedEntries.values.map { routeEntries ->
+        groupSmartConfigEntriesByProfile(entries).map { routeEntries ->
             buildSmartConfigRouteProfile(
                 entries = routeEntries,
                 fallbackName = fallbackName,
@@ -800,6 +795,7 @@ internal fun parseSmartConfigEntries(
                             metadataLines.firstNotNullOfOrNull(::subscriptionExpirationFromMetadataComment)
                                 ?: parsedNode.subscriptionExpiresAt,
                     ),
+                profileGroupKey = metadataLines.firstNotNullOfOrNull(::profileGroupKeyFromMetadataComment),
             )
     }
     return entries
@@ -820,6 +816,64 @@ internal fun subscriptionExpirationFromMetadataComment(value: String): Long? {
     } else {
         expiresAt * 1000L
     }
+}
+
+internal fun profileGroupKeyFromMetadataComment(value: String): String? =
+    SMART_CONFIG_PROFILE_ID_REGEX
+        .find(value)
+        ?.groupValues
+        ?.getOrNull(1)
+        ?.trim()
+        ?.takeIf(String::isNotBlank)
+
+internal fun groupSmartConfigEntriesByProfile(entries: List<SmartConfigEntry>): List<List<SmartConfigEntry>> {
+    val routeGroups = linkedMapOf<String, MutableList<SmartConfigEntry>>()
+    entries.forEach { entry ->
+        val routeKey = slugifySmartConfigKey(entry.heading.routeLabel).ifBlank { "default" }
+        routeGroups.getOrPut(routeKey) { mutableListOf() }.add(entry)
+    }
+    val profileGroups = linkedMapOf<String, MutableList<SmartConfigEntry>>()
+    routeGroups.forEach { (routeKey, routeEntries) ->
+        val metadataGroupKeys =
+            routeEntries
+                .mapNotNull { entry -> entry.profileGroupKey?.let(::slugifySmartConfigKey)?.takeIf(String::isNotBlank) }
+                .distinct()
+        val splitByProfileKey = metadataGroupKeys.size > 1
+        val splitByDisplayName = !splitByProfileKey && shouldSplitSmartConfigRouteByDisplayName(routeEntries)
+        routeEntries.forEach { entry ->
+            val groupKey =
+                when {
+                    splitByProfileKey ->
+                        entry.profileGroupKey
+                            ?.let(::slugifySmartConfigKey)
+                            ?.takeIf(String::isNotBlank)
+                            ?: routeKey
+                    splitByDisplayName ->
+                        entry.node.displayName
+                            .let(::slugifySmartConfigKey)
+                            .takeIf(String::isNotBlank)
+                            ?: routeKey
+                    else -> routeKey
+                }
+            profileGroups.getOrPut("$routeKey:$groupKey") { mutableListOf() }.add(entry)
+        }
+    }
+    return profileGroups.values.toList()
+}
+
+private fun shouldSplitSmartConfigRouteByDisplayName(entries: List<SmartConfigEntry>): Boolean {
+    val hasDuplicateProtocol =
+        entries
+            .groupingBy { entry -> entry.node.protocolHint }
+            .eachCount()
+            .values
+            .any { count -> count > 1 }
+    if (!hasDuplicateProtocol) {
+        return false
+    }
+    val displayNames = entries.map { entry -> entry.node.displayName.trim() }
+    return displayNames.all(String::isNotBlank) &&
+        displayNames.map { name -> name.lowercase() }.distinct().size > 1
 }
 
 internal fun smartConfigOptionId(

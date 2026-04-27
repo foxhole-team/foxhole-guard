@@ -10,6 +10,13 @@ internal data class TunnelValidationPolicyContext(
     val allowDnsIndependentLiteralIpValidation: Boolean = false,
 )
 
+internal fun tunnelValidationPolicyContextFor(
+    privateDnsMode: PrivateDnsMode?,
+): TunnelValidationPolicyContext =
+    TunnelValidationPolicyContext(
+        allowDnsIndependentLiteralIpValidation = privateDnsMode == PrivateDnsMode.STRICT,
+    )
+
 internal fun interface TunnelValidationProbeRule {
     fun accepts(
         kind: TunnelValidationProbeKind,

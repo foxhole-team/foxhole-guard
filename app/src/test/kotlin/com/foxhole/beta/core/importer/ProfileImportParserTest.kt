@@ -409,6 +409,32 @@ class ProfileImportParserTest {
     }
 
     @Test
+    fun `splits repeated smart config route labels into separate display name profiles`() {
+        val parsed =
+            parser.parseSubscriptionProfiles(
+                """
+                # === vless / direct ===
+                vless://11111111-1111-1111-1111-111111111111@alpha.example.com:443?security=tls&type=tcp#profile_alpha
+                # === trojan / direct ===
+                trojan://alpha-secret@alpha-trojan.example.com:443?security=tls&type=tcp#profile_alpha
+                # === vless / direct ===
+                vless://22222222-2222-2222-2222-222222222222@beta.example.com:443?security=tls&type=tcp#profile_beta
+                # === trojan / direct ===
+                trojan://beta-secret@beta-trojan.example.com:443?security=tls&type=tcp#profile_beta
+                """.trimIndent(),
+                "Foxhole",
+            )
+
+        assertEquals(2, parsed.profiles.size)
+        assertEquals(listOf("profile_alpha", "profile_beta"), parsed.profiles.map { it.displayName })
+        assertEquals(listOf(2, 2), parsed.profiles.map { it.protocolOptions.size })
+        assertEquals(
+            listOf(ProtocolHint.VLESS, ProtocolHint.TROJAN),
+            parsed.profiles.first().protocolOptions.map { it.protocolHint },
+        )
+    }
+
+    @Test
     fun `parses outline and wireguard entries inside smart config content`() {
         val parsed =
             parser.parseSubscriptionProfiles(

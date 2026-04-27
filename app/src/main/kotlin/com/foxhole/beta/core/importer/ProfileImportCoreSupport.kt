@@ -71,6 +71,7 @@ internal fun looksLikeWireGuard(value: String): Boolean =
 companion object {
     internal val SMART_CONFIG_HEADING_REGEX = Regex("""#\s*===\s*(.+?)\s*/\s*(.+?)\s*===""")
     internal val SMART_CONFIG_EXPIRE_REGEX = Regex("""(?:^|[;\s])expire=(\d{10,13})(?:$|[;\s])""")
+    internal val SMART_CONFIG_PROFILE_ID_REGEX = Regex("""(?:^|[;\s])profile_id=([^;\s]+)(?:$|[;\s])""")
     internal val SUBSCRIPTION_URL_REGEX = Regex("""https?://[^\s<>"']+""", RegexOption.IGNORE_CASE)
 }
 
@@ -445,6 +446,7 @@ internal data class SmartConfigHeading(
 internal data class SmartConfigEntry(
     val heading: SmartConfigHeading,
     val node: ProxyNode,
+    val profileGroupKey: String? = null,
 )
 
 internal data class SmartConfigImport(

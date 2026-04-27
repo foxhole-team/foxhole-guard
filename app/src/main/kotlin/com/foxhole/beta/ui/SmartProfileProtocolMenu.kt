@@ -83,6 +83,8 @@ internal fun SmartProfileAutoConnectMenu(
     enabled: Boolean = true,
     actionIconSize: Dp? = null,
     showMetricsTable: Boolean = true,
+    showStatusHeader: Boolean = false,
+    showTransportBadges: Boolean = false,
 ) {
     val options = MultiProtocolProfileSupport.supportedOptions(profile)
     if (options.size < 2) {
@@ -114,6 +116,8 @@ internal fun SmartProfileAutoConnectMenu(
                 recommendedOptionIds = recommendedOptionIds,
                 activeOptionId = activeOptionId,
                 compact = compact,
+                showTransportBadges = showTransportBadges,
+                showStatusHeader = showStatusHeader,
                 maxWidth = (screenWidth - ScreenHorizontalPadding - ScreenHorizontalPadding).coerceAtLeast(SmartProfileMenuCompactMinWidth),
                 showRefreshHeader = menuLayout.showHeader || onRefreshMetrics != null,
             )
@@ -167,6 +171,8 @@ internal fun SmartProfileAutoConnectMenu(
                 onRefreshMetrics = onRefreshMetrics?.let { requestRefreshMetrics },
                 onCancelRefreshMetrics = onCancelRefreshMetrics,
                 compact = compact,
+                showTransportBadges = showTransportBadges,
+                showStatusHeader = showStatusHeader,
             )
         }
     }
@@ -200,6 +206,8 @@ private fun rememberSmartProfileMenuWidth(
     recommendedOptionIds: Set<String>,
     activeOptionId: String?,
     compact: Boolean,
+    showTransportBadges: Boolean,
+    showStatusHeader: Boolean,
     maxWidth: Dp,
     showRefreshHeader: Boolean,
 ): Dp {
@@ -208,12 +216,20 @@ private fun rememberSmartProfileMenuWidth(
     val title = stringResource(R.string.smart_profile_menu_title)
     val favoriteLegend = stringResource(R.string.smart_profile_legend_favorite)
     val recommendedLegend = stringResource(R.string.smart_profile_legend_reconnect_recommended)
+    val protocolLabel = stringResource(R.string.smart_profile_menu_protocol_column)
+    val statusLabel = stringResource(R.string.smart_profile_menu_status_column)
+    val dashboardOnLabel = stringResource(R.string.smart_profile_menu_dashboard_on_column)
     val serverPingLabel = stringResource(R.string.smart_profile_menu_server_ping_column)
     val vpnLatencyLabel = stringResource(R.string.smart_profile_menu_latency_column)
     val activeLabel = stringResource(R.string.smart_profile_menu_active_badge)
-    val recommendedLabel = stringResource(R.string.smart_profile_menu_recommended_badge)
     val unavailableMetric = stringResource(R.string.smart_profile_metric_unavailable)
     val downMetric = stringResource(R.string.latency_pill_down)
+    val neverUpdatedLabel = stringResource(R.string.smart_profile_metrics_never_updated)
+    val updatedSampleLabel =
+        stringResource(
+            R.string.smart_profile_metrics_last_updated,
+            stringResource(R.string.smart_profile_metrics_ago_weeks, 99),
+        )
     val recommendedStatus = stringResource(R.string.smart_start_protocol_status_recommended)
     val availableStatus = stringResource(R.string.smart_start_protocol_status_available)
     val slowStatus = stringResource(R.string.smart_start_protocol_status_slow)
@@ -323,8 +339,11 @@ private fun rememberSmartProfileMenuWidth(
         }
     val headerWidthPx =
         if (showRefreshHeader) {
-            headerTitleWidthPx +
-                with(density) { SmartProfileMenuRefreshColumnWidth.toPx() + 18.dp.toPx() }
+            maxOf(
+                headerTitleWidthPx + with(density) { SmartProfileMenuRefreshButtonWidth.toPx() + 8.dp.toPx() },
+                textWidth(neverUpdatedLabel, metricValueStyle),
+                textWidth(updatedSampleLabel, metricValueStyle),
+            )
         } else {
             0f
         }
@@ -336,6 +355,21 @@ private fun rememberSmartProfileMenuWidth(
         } else {
             0f
         }
+    val statusHeaderWidthPx =
+        if (showStatusHeader && menuLayout.showCompactStatusRows) {
+            textWidth(protocolLabel, metricLabelStyle) +
+                maxOf(
+                    textWidth(statusLabel, metricLabelStyle),
+                    with(density) { SmartProfileStatusColumnWidth.toPx() },
+                ) +
+                maxOf(
+                    textWidth(dashboardOnLabel, metricLabelStyle),
+                    with(density) { SmartProfileOnColumnWidth.toPx() },
+                ) +
+                with(density) { 24.dp.toPx() }
+        } else {
+            0f
+        }
     val rowWidthPx =
         options.maxOfOrNull { option ->
             val included = option.id !in excludedOptionIds
@@ -344,23 +378,29 @@ private fun rememberSmartProfileMenuWidth(
             val latencyUnavailable = option.id in latencyUnavailableOptionIds
             val recommended = option.id in recommendedOptionIds && !latencyDown
             val activeBadgeWidth =
-                if (option.id == activeOptionId) {
+                if (included && option.id == activeOptionId) {
                     textWidth(activeLabel, metricValueStyle) + with(density) { 18.dp.toPx() }
                 } else {
                     0f
                 }
             val recommendedBadgeWidth =
                 if (recommended) {
-                    textWidth(recommendedLabel, metricValueStyle) +
-                        with(density) { if (option.id == recommendedOptionId) 24.dp.toPx() else 14.dp.toPx() }
+                    with(density) { if (option.id == recommendedOptionId) 24.dp.toPx() else 14.dp.toPx() }
                 } else {
                     0f
                 }
-            val topLineWidth =
+            val selectionBadgeWidth =
+                if (menuLayout.showDetailedMetrics) {
+                    textWidth(activeLabel, metricValueStyle) + with(density) { 48.dp.toPx() }
+                } else {
+                    activeBadgeWidth + recommendedBadgeWidth
+                }
+            val transportBadgeWidth = if (showTransportBadges) with(density) { 31.dp.toPx() } else 0f
+            val protocolColumnWidth =
                 textWidth(protocolDisplayLabel(option.protocolHint), protocolStyle) +
-                    activeBadgeWidth +
-                    recommendedBadgeWidth +
-                    with(density) { 58.dp.toPx() }
+                    selectionBadgeWidth +
+                    transportBadgeWidth +
+                    with(density) { 42.dp.toPx() }
             if (menuLayout.showDetailedMetrics) {
                 val serverValue = metricText(
                     latencyMs = serverPingByOptionId[option.id],
@@ -373,24 +413,41 @@ private fun rememberSmartProfileMenuWidth(
                     down = latencyDown,
                     unavailable = latencyUnavailable,
                 )
-                val metricGroupWidth =
+                val serverColumnWidth =
                     maxOf(
-                        textWidth(serverPingLabel, metricLabelStyle) + textWidth(serverValue, metricValueStyle),
-                        textWidth(vpnLatencyLabel, metricLabelStyle) + textWidth(vpnValue, metricValueStyle),
-                    ) + with(density) { 28.dp.toPx() }
-                maxOf(topLineWidth, metricGroupWidth * 2 + with(density) { 8.dp.toPx() })
+                        textWidth(serverPingLabel, metricLabelStyle),
+                        textWidth(serverValue, metricValueStyle),
+                    ) + with(density) { 20.dp.toPx() }
+                val vpnColumnWidth =
+                    maxOf(
+                        textWidth(vpnLatencyLabel, metricLabelStyle),
+                        textWidth(vpnValue, metricValueStyle),
+                    ) + with(density) { 20.dp.toPx() }
+                protocolColumnWidth +
+                    serverColumnWidth +
+                    vpnColumnWidth +
+                    with(density) { (SmartProfileOnColumnWidth + 20.dp).toPx() }
             } else {
-                topLineWidth +
-                    textWidth(statusText(included, recommended, latencyMs, latencyDown, latencyUnavailable), metricValueStyle) +
-                    with(density) { 40.dp.toPx() }
+                val statusValueWidth =
+                    maxOf(
+                        textWidth(
+                            statusText(included, recommended, latencyMs, latencyDown, latencyUnavailable),
+                            metricValueStyle,
+                        ),
+                        with(density) { SmartProfileStatusColumnWidth.toPx() },
+                    )
+                protocolColumnWidth +
+                    statusValueWidth +
+                    with(density) { (SmartProfileOnColumnWidth + 18.dp).toPx() }
             }
         } ?: 0f
     val contentWidthPx =
         maxOf(
             headerWidthPx,
             legendWidthPx,
+            statusHeaderWidthPx,
             rowWidthPx,
-        ) + with(density) { (SmartProfileMenuHorizontalPadding * 2 + 16.dp).toPx() }
+        ) + with(density) { (SmartProfileMenuHorizontalPadding * 2 + 10.dp).toPx() }
     val measuredWidth = with(density) { contentWidthPx.toDp() }
     val minAllowedWidth =
         if (menuLayout.showDetailedMetrics) {
@@ -438,6 +495,8 @@ private fun SmartProfileProtocolMenuContent(
     onRefreshMetrics: (() -> Unit)?,
     onCancelRefreshMetrics: (() -> Unit)?,
     compact: Boolean,
+    showTransportBadges: Boolean,
+    showStatusHeader: Boolean,
 ) {
     Column(
         modifier = Modifier.padding(if (menuLayout.showDetailedMetrics) 2.dp else 0.dp),
@@ -451,7 +510,13 @@ private fun SmartProfileProtocolMenuContent(
             onCancelRefreshMetrics = onCancelRefreshMetrics,
             compact = compact,
         )
-        val hasMenuHeader = menuLayout.showHeader || onRefreshMetrics != null
+        val showCompactStatusHeader = menuLayout.showCompactStatusRows && showStatusHeader
+        val hasMenuHeader = menuLayout.showHeader || onRefreshMetrics != null || showCompactStatusHeader
+        if (menuLayout.showDetailedMetrics) {
+            SmartProfileProtocolTableHeader(compact = true)
+        } else if (showCompactStatusHeader) {
+            SmartProfileProtocolStatusHeader(compact = true)
+        }
         options.forEachIndexed { index, option ->
             val included = option.id !in excludedOptionIds
             val includedCount = options.count { candidate -> candidate.id !in excludedOptionIds }
@@ -498,7 +563,12 @@ private fun SmartProfileProtocolMenuContent(
                         hasHeader = hasMenuHeader,
                     ),
                 showBorder = index != options.lastIndex,
-                minHeight = if (menuLayout.showDetailedMetrics) 56.dp else 42.dp,
+                minHeight =
+                    if (menuLayout.showDetailedMetrics) {
+                        SmartProfileProtocolAdaptiveCompactRowHeight
+                    } else {
+                        SmartProfileProtocolSimpleCompactRowHeight
+                    },
                 contentPadding =
                     PaddingValues(
                         horizontal = SmartProfileMenuHorizontalPadding,
@@ -506,7 +576,7 @@ private fun SmartProfileProtocolMenuContent(
                     ),
             ) {
                 if (menuLayout.showDetailedMetrics) {
-                    SmartProfileProtocolAdaptiveMetricsRow(
+                    SmartProfileProtocolMetricsTableRow(
                         option = option,
                         compact = true,
                         included = included,
@@ -517,11 +587,11 @@ private fun SmartProfileProtocolMenuContent(
                         serverPingUnavailable =
                             option.id in serverPingUnavailableOptionIds &&
                                 option.id !in serverPingByOptionId,
-                        metricsEnabled = included,
                         latencyMs = latencyMs,
                         latencyDown = latencyDown,
                         latencyUnavailable = latencyUnavailable,
-                        latencyEnabled = included,
+                        metricsEnabled = included,
+                        showTransportBadge = showTransportBadges,
                         transportKnown =
                             option.id in metricsUpdatedAtByOptionId ||
                                 option.id in latencyByOptionId ||
@@ -542,6 +612,7 @@ private fun SmartProfileProtocolMenuContent(
                         latencyMs = latencyMs,
                         latencyDown = latencyDown,
                         latencyUnavailable = latencyUnavailable,
+                        showTransportBadge = showTransportBadges,
                     )
                 }
             }
@@ -606,25 +677,33 @@ private fun SmartProfileProtocolMenuTitleRow(
     compact: Boolean,
 ) {
     Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = if (compact) 4.dp else 8.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = if (compact) 4.dp else 7.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.Top,
     ) {
-        Text(
-            text = stringResource(R.string.smart_profile_menu_title),
+        Column(
             modifier = Modifier.weight(1f),
-            style =
-                MaterialTheme.typography.labelSmall.copy(
-                    fontSize = if (compact) 10.5.sp else 12.sp,
-                    lineHeight = if (compact) 11.5.sp else 13.sp,
-                    fontWeight = FontWeight.SemiBold,
-                ),
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-        )
-        SmartProfileMetricsRefreshStatus(
-            updatedAt = metricsUpdatedAtByOptionId.values.maxOrNull(),
+            verticalArrangement = Arrangement.spacedBy(1.dp),
+        ) {
+            Text(
+                text = stringResource(R.string.smart_profile_menu_title),
+                style =
+                    MaterialTheme.typography.labelSmall.copy(
+                        fontSize = if (compact) 10.5.sp else 12.sp,
+                        lineHeight = if (compact) 11.5.sp else 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                    ),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            SmartProfileMetricsRefreshStatus(
+                updatedAt = metricsUpdatedAtByOptionId.values.maxOrNull(),
+                refreshing = metricsRefreshing,
+                compact = compact,
+            )
+        }
+        SmartProfileMetricsRefreshButton(
             refreshing = metricsRefreshing,
             onRefreshMetrics = onRefreshMetrics,
             onCancelRefreshMetrics = onCancelRefreshMetrics,
@@ -697,8 +776,10 @@ private fun SmartProfileMetricsHint(
                 )
             }
         } else {
-            Column(
-                verticalArrangement = Arrangement.spacedBy(2.dp),
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 SmartProfileLegendRow(
                     starCount = 1,
@@ -758,47 +839,12 @@ private fun SmartProfileLegendRow(
 private fun SmartProfileMetricsRefreshStatus(
     updatedAt: Long?,
     refreshing: Boolean,
-    onRefreshMetrics: (() -> Unit)?,
-    onCancelRefreshMetrics: (() -> Unit)?,
     compact: Boolean,
 ) {
-    Column(
-        modifier = Modifier.width(if (compact) 96.dp else 110.dp),
-        horizontalAlignment = Alignment.End,
-        verticalArrangement = Arrangement.spacedBy(2.dp),
+    Box(
+        modifier = Modifier.fillMaxWidth(),
+        contentAlignment = Alignment.CenterStart,
     ) {
-        onRefreshMetrics?.let { refreshMetrics ->
-            IconButton(
-                onClick = {
-                    if (refreshing) {
-                        onCancelRefreshMetrics?.invoke()
-                    } else {
-                        refreshMetrics()
-                    }
-                },
-                enabled = !refreshing || onCancelRefreshMetrics != null,
-                modifier = Modifier.size(if (compact) 26.dp else 30.dp),
-            ) {
-                Icon(
-                    imageVector = if (refreshing) Icons.Outlined.Close else Icons.Outlined.Refresh,
-                    contentDescription =
-                        stringResource(
-                            if (refreshing) {
-                                R.string.smart_profile_metrics_cancel_action
-                            } else {
-                                R.string.smart_profile_metrics_refresh_action
-                            },
-                        ),
-                    modifier = Modifier.size(if (compact) 17.dp else 19.dp),
-                    tint =
-                        if (refreshing) {
-                            MaterialTheme.colorScheme.error
-                        } else {
-                            FoxholeInfoAccent
-                        },
-                )
-            }
-        }
         when {
             refreshing ->
                 FoxholeSkeletonBlock(
@@ -816,12 +862,63 @@ private fun SmartProfileMetricsRefreshStatus(
                             lineHeight = if (compact) 10.sp else 11.sp,
                         ),
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.74f),
-                    maxLines = if (compact) 2 else 1,
-                    textAlign = TextAlign.End,
+                    maxLines = 1,
+                    textAlign = TextAlign.Start,
                     overflow = TextOverflow.Ellipsis,
                 )
-            else -> Spacer(modifier = Modifier.height(if (compact) 10.dp else 11.dp))
+            else ->
+                Text(
+                    text = stringResource(R.string.smart_profile_metrics_never_updated),
+                    style =
+                        MaterialTheme.typography.labelSmall.copy(
+                            fontSize = if (compact) 9.sp else 10.sp,
+                            lineHeight = if (compact) 10.sp else 11.sp,
+                        ),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.74f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
         }
+    }
+}
+
+@Composable
+private fun SmartProfileMetricsRefreshButton(
+    refreshing: Boolean,
+    onRefreshMetrics: (() -> Unit)?,
+    onCancelRefreshMetrics: (() -> Unit)?,
+    compact: Boolean,
+) {
+    val refreshMetrics = onRefreshMetrics ?: return
+    IconButton(
+        onClick = {
+            if (refreshing) {
+                onCancelRefreshMetrics?.invoke()
+            } else {
+                refreshMetrics()
+            }
+        },
+        enabled = !refreshing || onCancelRefreshMetrics != null,
+        modifier = Modifier.size(if (compact) 26.dp else 30.dp),
+    ) {
+        Icon(
+            imageVector = if (refreshing) Icons.Outlined.Close else Icons.Outlined.Refresh,
+            contentDescription =
+                stringResource(
+                    if (refreshing) {
+                        R.string.smart_profile_metrics_cancel_action
+                    } else {
+                        R.string.smart_profile_metrics_refresh_action
+                    },
+                ),
+            modifier = Modifier.size(if (compact) 17.dp else 19.dp),
+            tint =
+                if (refreshing) {
+                    MaterialTheme.colorScheme.error
+                } else {
+                    FoxholeInfoAccent
+                },
+        )
     }
 }
 
@@ -842,7 +939,103 @@ private fun smartProfileCurrentProtocolAccent(
     }
 
 @Composable
-private fun SmartProfileProtocolAdaptiveMetricsRow(
+private fun SmartProfileProtocolTableHeader(compact: Boolean) {
+    Column {
+        Row(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = SmartProfileMenuHorizontalPadding, vertical = if (compact) 5.dp else 6.dp),
+            horizontalArrangement = Arrangement.spacedBy(if (compact) 6.dp else 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            SmartProfileTableHeaderText(
+                text = stringResource(R.string.smart_profile_menu_protocol_column),
+                modifier = Modifier.weight(SmartProfileProtocolColumnWeight),
+                textAlign = TextAlign.Start,
+            )
+            SmartProfileTableHeaderText(
+                text = stringResource(R.string.smart_profile_menu_server_ping_column),
+                modifier = Modifier.weight(SmartProfileMetricColumnWeight),
+                textAlign = TextAlign.Center,
+            )
+            SmartProfileTableHeaderText(
+                text = stringResource(R.string.smart_profile_menu_latency_column),
+                modifier = Modifier.weight(SmartProfileMetricColumnWeight),
+                textAlign = TextAlign.Center,
+            )
+            SmartProfileTableHeaderText(
+                text = stringResource(R.string.smart_profile_menu_on_column),
+                modifier = Modifier.width(SmartProfileOnColumnWidth),
+                textAlign = TextAlign.Center,
+            )
+        }
+        HorizontalDivider(
+            modifier = Modifier.padding(horizontal = SmartProfileMenuHorizontalPadding),
+            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.34f),
+        )
+    }
+}
+
+@Composable
+private fun SmartProfileProtocolStatusHeader(compact: Boolean) {
+    Column {
+        Row(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = SmartProfileMenuHorizontalPadding, vertical = if (compact) 5.dp else 6.dp),
+            horizontalArrangement = Arrangement.spacedBy(if (compact) 6.dp else 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            SmartProfileTableHeaderText(
+                text = stringResource(R.string.smart_profile_menu_protocol_column),
+                modifier = Modifier.weight(1f),
+                textAlign = TextAlign.Start,
+            )
+            SmartProfileTableHeaderText(
+                text = stringResource(R.string.smart_profile_menu_status_column),
+                modifier = Modifier.width(SmartProfileStatusColumnWidth),
+                textAlign = TextAlign.Center,
+            )
+            SmartProfileTableHeaderText(
+                text = stringResource(R.string.smart_profile_menu_dashboard_on_column),
+                modifier = Modifier.width(SmartProfileOnColumnWidth),
+                textAlign = TextAlign.Center,
+            )
+        }
+        HorizontalDivider(
+            modifier = Modifier.padding(horizontal = SmartProfileMenuHorizontalPadding),
+            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.34f),
+        )
+    }
+}
+
+@Composable
+private fun SmartProfileTableHeaderText(
+    text: String,
+    modifier: Modifier,
+    textAlign: TextAlign,
+) {
+    Text(
+        text = text,
+        modifier = modifier,
+        style =
+            MaterialTheme.typography.labelSmall.copy(
+                fontSize = 9.5.sp,
+                lineHeight = 10.sp,
+                fontWeight = FontWeight.SemiBold,
+            ),
+        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.82f),
+        textAlign = textAlign,
+        maxLines = 1,
+        softWrap = false,
+        overflow = TextOverflow.Ellipsis,
+    )
+}
+
+@Composable
+private fun SmartProfileProtocolMetricsTableRow(
     option: ProfileProtocolOption,
     compact: Boolean,
     included: Boolean,
@@ -851,61 +1044,52 @@ private fun SmartProfileProtocolAdaptiveMetricsRow(
     topRecommended: Boolean,
     serverPingMs: Long?,
     serverPingUnavailable: Boolean,
-    metricsEnabled: Boolean,
     latencyMs: Long?,
     latencyDown: Boolean,
     latencyUnavailable: Boolean,
-    latencyEnabled: Boolean,
+    metricsEnabled: Boolean,
+    showTransportBadge: Boolean,
     transportKnown: Boolean,
 ) {
-    Column(
+    Row(
         modifier =
             Modifier
                 .fillMaxWidth()
                 .heightIn(min = if (compact) SmartProfileProtocolAdaptiveCompactRowHeight else SmartProfileProtocolAdaptiveRowHeight)
-                .padding(vertical = if (compact) 5.dp else 6.dp),
-        verticalArrangement = Arrangement.spacedBy(if (compact) 5.dp else 6.dp),
+                .padding(vertical = if (compact) 4.dp else 5.dp),
+        horizontalArrangement = Arrangement.spacedBy(if (compact) 6.dp else 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
+        SmartProfileProtocolCell(
+            option = option,
+            compact = compact,
+            enabled = included,
+            active = active,
+            recommended = recommended,
+            topRecommended = topRecommended,
+            showSelectionBadge = true,
+            showTransportBadge = showTransportBadge,
+            transportKnown = transportKnown,
+            modifier = Modifier.weight(SmartProfileProtocolColumnWeight),
+        )
+        SmartProfileMetricCell(
+            latencyMs = serverPingMs,
+            unavailable = serverPingUnavailable || serverPingMs == null,
+            enabled = metricsEnabled,
+            modifier = Modifier.weight(SmartProfileMetricColumnWeight),
+        )
+        SmartProfileMetricCell(
+            latencyMs = latencyMs,
+            down = latencyDown,
+            unavailable = latencyUnavailable || latencyMs == null,
+            enabled = metricsEnabled,
+            modifier = Modifier.weight(SmartProfileMetricColumnWeight),
+        )
+        Box(
+            modifier = Modifier.width(SmartProfileOnColumnWidth),
+            contentAlignment = Alignment.Center,
         ) {
-            SmartProfileProtocolCell(
-                option = option,
-                compact = compact,
-                enabled = included,
-                active = active,
-                recommended = recommended,
-                topRecommended = topRecommended,
-                showSelectionBadge = true,
-                transportKnown = transportKnown,
-                modifier = Modifier.weight(1f),
-            )
             SmartProfileOnToggle(included = included, compact = compact)
-        }
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            SmartProfileLabeledMetric(
-                label = stringResource(R.string.smart_profile_menu_server_ping_column),
-                latencyMs = serverPingMs,
-                unavailable = serverPingUnavailable || serverPingMs == null,
-                enabled = metricsEnabled,
-                compact = compact,
-                modifier = Modifier.weight(1f),
-            )
-            SmartProfileLabeledMetric(
-                label = stringResource(R.string.smart_profile_menu_latency_column),
-                latencyMs = latencyMs,
-                down = latencyDown,
-                unavailable = latencyUnavailable || latencyMs == null,
-                enabled = latencyEnabled,
-                compact = compact,
-                modifier = Modifier.weight(1f),
-            )
         }
     }
 }
@@ -961,6 +1145,7 @@ private fun SmartProfileProtocolSimpleMenuRow(
     latencyMs: Long?,
     latencyDown: Boolean,
     latencyUnavailable: Boolean,
+    showTransportBadge: Boolean,
 ) {
     Row(
         modifier =
@@ -968,7 +1153,7 @@ private fun SmartProfileProtocolSimpleMenuRow(
                 .fillMaxWidth()
                 .height(if (compact) SmartProfileProtocolSimpleCompactRowHeight else SmartProfileProtocolSimpleRowHeight),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        horizontalArrangement = Arrangement.spacedBy(if (compact) 6.dp else 8.dp),
     ) {
         SmartProfileProtocolCell(
             option = option,
@@ -978,10 +1163,12 @@ private fun SmartProfileProtocolSimpleMenuRow(
             recommended = recommended,
             topRecommended = topRecommended,
             showSelectionBadge = showSelectionBadge,
+            showTransportBadge = showTransportBadge,
             transportKnown = false,
             modifier = Modifier.weight(1f),
         )
         SmartProfileStatusPill(
+            modifier = Modifier.width(SmartProfileStatusColumnWidth),
             presentation =
                 resolveSmartStartProtocolPresentation(
                     included = included,
@@ -996,7 +1183,12 @@ private fun SmartProfileProtocolSimpleMenuRow(
             showLatencyDetails = true,
             compact = compact,
         )
-        SmartProfileOnToggle(included = included, compact = compact)
+        Box(
+            modifier = Modifier.width(SmartProfileOnColumnWidth),
+            contentAlignment = Alignment.Center,
+        ) {
+            SmartProfileOnToggle(included = included, compact = compact)
+        }
     }
 }
 
@@ -1009,6 +1201,7 @@ private fun SmartProfileProtocolCell(
     recommended: Boolean,
     topRecommended: Boolean,
     showSelectionBadge: Boolean,
+    showTransportBadge: Boolean,
     transportKnown: Boolean,
     modifier: Modifier = Modifier,
 ) {
@@ -1038,7 +1231,7 @@ private fun SmartProfileProtocolCell(
                 softWrap = false,
                 overflow = TextOverflow.Ellipsis,
             )
-            if (transportKnown) {
+            if (showTransportBadge || transportKnown) {
                 SmartProfileTransportBadge(
                     transport = protocolTransportBadge(option.protocolHint),
                     modifier = Modifier.offset(y = if (compact) (-3).dp else (-2).dp),
@@ -1128,11 +1321,7 @@ private fun SmartProfileRecommendationStars(
 }
 
 private fun smartProfileRecommendationStarTint(index: Int): Color =
-    if (index == 1) {
-        Color(0xFFE0B84A)
-    } else {
-        FoxholePositiveAccent
-    }
+    FoxholePositiveAccent
 
 @Composable
 private fun SmartProfileOnToggle(
@@ -1463,15 +1652,19 @@ private enum class SmartProfileMetricTone {
 }
 
 private val SmartProfileMenuHorizontalPadding = 8.dp
-private val SmartProfileMenuCompactMinWidth = 216.dp
-private val SmartProfileMenuDetailedMinWidth = 304.dp
-private val SmartProfileMenuMaxWidth = 392.dp
-private val SmartProfileMenuRefreshColumnWidth = 96.dp
-private val SmartProfileProtocolAdaptiveCompactRowHeight = 54.dp
-private val SmartProfileProtocolAdaptiveRowHeight = 60.dp
-private val SmartProfileProtocolSimpleCompactRowHeight = 38.dp
+private val SmartProfileMenuCompactMinWidth = 188.dp
+private val SmartProfileMenuDetailedMinWidth = 292.dp
+private val SmartProfileMenuMaxWidth = 360.dp
+private val SmartProfileMenuRefreshButtonWidth = 30.dp
+private val SmartProfileProtocolAdaptiveCompactRowHeight = 44.dp
+private val SmartProfileProtocolAdaptiveRowHeight = 56.dp
+private val SmartProfileProtocolSimpleCompactRowHeight = 36.dp
 private val SmartProfileProtocolSimpleRowHeight = 42.dp
 private val SmartProfileMetricUnavailableSize = 18.dp
+private val SmartProfileStatusColumnWidth = 88.dp
+private val SmartProfileOnColumnWidth = 24.dp
+private const val SmartProfileProtocolColumnWeight = 1.82f
+private const val SmartProfileMetricColumnWeight = 0.58f
 private val SmartProfileTcpAccent = Color(0xFF3F7DD9)
 private val SmartProfileUdpAccent = Color(0xFFE28131)
 private val SmartProfileCurrentWarningAccent = Color(0xFFE28131)

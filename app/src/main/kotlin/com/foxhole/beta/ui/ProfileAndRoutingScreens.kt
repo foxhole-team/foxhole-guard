@@ -348,7 +348,7 @@ fun ProfilesScreen(
                         Modifier
                             .fillMaxWidth()
                             .foxholeAnimateContentSize(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.Top,
                 ) {
                     if (exportMode) {
@@ -366,7 +366,7 @@ fun ProfilesScreen(
                     }
                     Column(
                         modifier = Modifier.weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                        verticalArrangement = Arrangement.spacedBy(3.dp),
                     ) {
                         InlineSmartProfileTitle(
                             title = profile.name,
@@ -414,6 +414,7 @@ fun ProfilesScreen(
                                             onCancelRefreshMetrics = onCancelSmartProfileMetricsRefresh,
                                             showLatency = rememberedSmartStartLatenciesByProfileId[profile.id]?.isNotEmpty() == true,
                                             compact = true,
+                                            showTransportBadges = true,
                                         )
                                     }
                                 } else {
@@ -786,7 +787,7 @@ fun ProfileDetailScreen(
         }
         item {
             FoxholeCard {
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
                     InlineSmartProfileTitle(
                         title = stringResource(R.string.protocol),
                         isSmartProfile = MultiProtocolProfileSupport.hasMultipleSupportedOptions(profile),
@@ -826,6 +827,7 @@ fun ProfileDetailScreen(
                                         onCancelRefreshMetrics = onCancelSmartProfileMetricsRefresh,
                                         showLatency = rememberedSmartStartLatenciesByOptionId.isNotEmpty(),
                                         compact = true,
+                                        showTransportBadges = true,
                                     )
                                 }
                             } else {

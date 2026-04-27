@@ -2,6 +2,8 @@ package com.foxhole.beta.core.network
 
 import com.foxhole.beta.core.model.IpInfo
 import kotlinx.serialization.json.Json
+import java.net.InetAddress
+import java.net.UnknownHostException
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -265,5 +267,34 @@ class IpInfoRepositoryTest {
         assertEquals("https://example.com/ip", strategy.endpointCandidates.first())
         assertEquals(2_500L, strategy.callTimeoutMs)
         assertFalse(strategy.includeFamilyProbes)
+    }
+
+    @Test
+    fun `address resolver prefers public resolver before bound network dns`() {
+        val publicAddress = InetAddress.getByName("93.184.216.34")
+        var networkLookupCount = 0
+        val selected =
+            publicResolvedAddressesOrNetworkFallback(
+                publicAddresses = Result.success(listOf(publicAddress)),
+                networkFallback = {
+                    networkLookupCount += 1
+                    throw UnknownHostException("vpn dns unavailable")
+                },
+            )
+
+        assertEquals(listOf(publicAddress), selected)
+        assertEquals(0, networkLookupCount)
+    }
+
+    @Test
+    fun `address resolver falls back when public resolver is unavailable`() {
+        val networkAddress = InetAddress.getByName("93.184.216.34")
+        val selected =
+            publicResolvedAddressesOrNetworkFallback(
+                publicAddresses = Result.failure(UnknownHostException("public dns unavailable")),
+                networkFallback = { listOf(networkAddress) },
+            )
+
+        assertEquals(listOf(networkAddress), selected)
     }
 }

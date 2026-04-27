@@ -33,6 +33,22 @@ class TunnelValidationPolicyTest {
     }
 
     @Test
+    fun `strict private dns opts into literal ip validation`() {
+        assertTrue(
+            acceptsTunnelValidationProbe(
+                kind = TunnelValidationProbeKind.DNS_INDEPENDENT_LITERAL_IP,
+                context = tunnelValidationPolicyContextFor(PrivateDnsMode.STRICT),
+            ),
+        )
+        assertFalse(
+            acceptsTunnelValidationProbe(
+                kind = TunnelValidationProbeKind.DNS_INDEPENDENT_LITERAL_IP,
+                context = tunnelValidationPolicyContextFor(PrivateDnsMode.OFF),
+            ),
+        )
+    }
+
+    @Test
     fun `prefers ipv4 validation for ipv4 only wireguard config`() {
         assertTrue(
             shouldPreferIpv4TunnelValidation(

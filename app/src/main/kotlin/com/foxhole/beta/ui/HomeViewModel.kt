@@ -213,8 +213,6 @@ class HomeViewModel(
             profileReconnectPromptUntilMutable,
         ) { connectionStreams, routingStreams, localState, diagnosticEntries, profileReconnectPromptUntil ->
             val localStreams = localState.streams
-            val currentFingerprint =
-                container.runtimeConfigAssembler.runtimeFingerprint(connectionStreams.settings, routingStreams.activePreset)
             val resolvedActiveProfile =
                 HomeActiveProfileResolver.resolve(
                     profiles = connectionStreams.profiles,
@@ -230,12 +228,6 @@ class HomeViewModel(
                 profileReconnectRequiredRaw &&
                     profileReconnectPromptUntil > 0L &&
                     SystemClock.elapsedRealtime() <= profileReconnectPromptUntil
-            val runtimeReconnectRequired =
-                localStreams.appliedRuntimeSignature != null &&
-                    connectionStreams.connection.state in ACTIVE_CONNECTION_STATES &&
-                    localStreams.appliedRuntimeSignature != currentFingerprint &&
-                    !localStreams.runtimeReloadPending &&
-                    !profileReconnectRequiredRaw
             HomeUiState(
                 profiles = connectionStreams.profiles,
                 profilesLoaded = localStreams.profilesLoaded,
@@ -256,7 +248,7 @@ class HomeViewModel(
                 installedApps = localStreams.installedApps,
                 installedAppsLoading = localStreams.installedAppsLoading,
                 installedAppsLoaded = localStreams.installedAppsLoaded,
-                reconnectRequired = runtimeReconnectRequired || profileReconnectRequired,
+                reconnectRequired = profileReconnectRequired,
                 diagnosticEntries = diagnosticEntries,
                 catalogPresetPreviews = localStreams.catalogPresetPreviews,
             )
@@ -985,7 +977,7 @@ class HomeViewModel(
         internal const val MANUAL_IP_REFRESH_MIN_LOADING_MS = 666L
         internal const val CONNECTED_PROTOCOL_LATENCY_REFRESH_DELAY_MS = 900L
         internal const val CONNECTED_PROTOCOL_LATENCY_REFRESH_INTERVAL_MS = 5L * 60L * 1000L
-        internal const val PROFILE_RECONNECT_PROMPT_WINDOW_MS = 10_000L
+        internal const val PROFILE_RECONNECT_PROMPT_WINDOW_MS = 9_000L
         internal const val RUNTIME_RELOAD_PENDING_TIMEOUT_MS = 1_500L
         internal const val AUTO_CONNECT_CONNECTION_TIMEOUT_MS =
             FoxholeVpnService.CONNECTIVITY_PROBE_TOTAL_TIMEOUT_MS +

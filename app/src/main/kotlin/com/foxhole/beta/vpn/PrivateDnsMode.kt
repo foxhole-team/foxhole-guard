@@ -13,7 +13,7 @@ enum class PrivateDnsMode {
 }
 
 internal fun PrivateDnsMode.isSupportedForTunnelMode(): Boolean =
-    this == PrivateDnsMode.OFF || this == PrivateDnsMode.OPPORTUNISTIC
+    this == PrivateDnsMode.OFF || this == PrivateDnsMode.OPPORTUNISTIC || this == PrivateDnsMode.STRICT
 
 internal object PrivateDnsSettings {
     fun current(context: Context): PrivateDnsMode {

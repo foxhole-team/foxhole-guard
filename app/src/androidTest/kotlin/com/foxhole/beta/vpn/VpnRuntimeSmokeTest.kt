@@ -266,6 +266,9 @@ class VpnRuntimeSmokeTest {
         assertTrue("$phase missing VPN network in connectivity dump", connectivity.contains(vpnMarker))
         val vpnSection = connectivity.substringAfter(vpnMarker)
         assertTrue("$phase missing VPN DNS addresses in connectivity dump", vpnSection.contains("DnsAddresses:"))
+        val dnsLine = vpnSection.lineSequence().firstOrNull { it.contains("DnsAddresses:") }.orEmpty()
+        assertTrue("$phase did not advertise public remote DNS to Android. dns=$dnsLine", dnsLine.contains("/1.1.1.1"))
+        assertFalse("$phase leaked local TUN DNS to Android. dns=$dnsLine", dnsLine.contains("/172.19.0.2"))
     }
 
     private fun shell(command: String): String {

@@ -16,6 +16,17 @@ class VpnDnsServerSelectorTest {
     }
 
     @Test
+    fun `advertises only remote dns literals when local tun dns is also available`() {
+        val selected =
+            VpnDnsServerSelector.advertisedDnsServerAddresses(
+                configJson = foxholeConfig(server = "1.1.1.1"),
+                fallbackServerAddress = "172.19.0.2",
+            )
+
+        assertEquals(listOf("1.1.1.1"), selected)
+    }
+
+    @Test
     fun `falls back to legacy remote address host when local tun dns is unavailable`() {
         val selected =
             VpnDnsServerSelector.advertisedDnsServerAddress(

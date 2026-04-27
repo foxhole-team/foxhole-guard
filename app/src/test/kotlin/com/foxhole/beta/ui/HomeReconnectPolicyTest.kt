@@ -11,6 +11,11 @@ import org.junit.Test
 
 class HomeReconnectPolicyTest {
     @Test
+    fun `profile reconnect prompt window is nine seconds`() {
+        assertTrue(HomeViewModel.PROFILE_RECONNECT_PROMPT_WINDOW_MS == 9_000L)
+    }
+
+    @Test
     fun `switching smart profile protocol while connected requires reconnect`() {
         assertTrue(
             isProfileReconnectRequired(

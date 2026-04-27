@@ -327,11 +327,10 @@ class IpInfoRepository(
         network: Network?,
         preference: AddressFamilyPreference,
     ): List<InetAddress> {
+        val publicAddresses = runCatching { client.dns.lookup(hostname) }
         val candidate =
-            if (network != null) {
-                network.getAllByName(hostname).toList()
-            } else {
-                client.dns.lookup(hostname)
+            publicResolvedAddressesOrNetworkFallback(publicAddresses) {
+                network?.getAllByName(hostname)?.toList().orEmpty()
             }
         return prioritize(candidate, preference)
     }
@@ -422,3 +421,11 @@ private fun Map<String, JsonElement>.boolean(key: String): Boolean? = this[key]?
 private fun isIpv4Address(value: String): Boolean = value.contains('.') && !value.contains(':')
 
 private fun isIpv6Address(value: String): Boolean = value.contains(':')
+
+internal fun publicResolvedAddressesOrNetworkFallback(
+    publicAddresses: Result<List<InetAddress>>,
+    networkFallback: () -> List<InetAddress>,
+): List<InetAddress> =
+    publicAddresses.getOrNull()?.takeIf { it.isNotEmpty() }
+        ?: runCatching(networkFallback).getOrNull()?.takeIf { it.isNotEmpty() }
+        ?: publicAddresses.getOrThrow()
