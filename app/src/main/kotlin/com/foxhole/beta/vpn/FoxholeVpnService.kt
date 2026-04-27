@@ -166,21 +166,18 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        ensureNotificationChannel()
-        startForeground(
-            FoxholeConnectionServiceContract.NOTIFICATION_ID,
-            buildNotification(currentNotificationSnapshot()),
-        )
-        handleRuntimeServiceCommand(
+        return handleForegroundRuntimeCommand(
             intent = intent,
             startId = startId,
+            notificationManager = notificationManager,
+            currentNotificationSnapshot = ::currentNotificationSnapshot,
+            buildNotification = ::buildNotification,
             container = container,
             launchCommand = ::launchCommand,
             connect = ::connect,
             disconnect = { commandStartId -> disconnect(commandStartId = commandStartId) },
             reload = ::reload,
         )
-        return START_STICKY
     }
 
     override fun onDestroy() {
@@ -248,17 +245,23 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
             stopService(commandStartId)
             return
         }
-        if (trafficMode == TrafficMode.TUNNEL) {
-            val privateDnsMode = PrivateDnsSettings.current(this)
+        val privateDnsMode =
+            if (trafficMode == TrafficMode.TUNNEL) {
+                PrivateDnsSettings.current(this)
+            } else {
+                null
+            }
+        if (privateDnsMode != null) {
             if (!privateDnsMode.isSupportedForTunnelMode()) {
                 container.diagnosticsLogger.record("dns", "unsupported android private dns mode: $privateDnsMode")
                 fail(getString(R.string.error_private_dns_strict_unsupported))
                 return
             }
+            container.diagnosticsLogger.record("dns", "android private dns mode: $privateDnsMode")
         }
         FoxholeConnectionServiceContract.stopInactiveServices(context = this, activeMode = trafficMode)
         val session =
-            runCatching { container.profileRepository.getSession(profileId, protocolOptionIdOverride) }
+            runCatching { container.profileRepository.getSession(profileId, protocolOptionIdOverride, privateDnsMode) }
                 .getOrElse {
                     fail(it.message ?: getString(R.string.error_profile_invalid), commandStartId)
                     return

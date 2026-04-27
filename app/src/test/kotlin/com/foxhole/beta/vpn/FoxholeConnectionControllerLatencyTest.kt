@@ -1,5 +1,7 @@
 package com.foxhole.beta.vpn
 
+import com.foxhole.beta.core.model.LatencyProbeMethod
+import com.foxhole.beta.core.model.TrafficMode
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -31,5 +33,52 @@ class FoxholeConnectionControllerLatencyTest {
     @Test
     fun `representative latency uses the median and ignores outlier spikes`() {
         assertEquals(122L, representativeLatencyMs(listOf(900L, 122L, 97L)))
+    }
+
+    @Test
+    fun `tunnel latency uses configured probe method`() {
+        assertEquals(
+            LatencyProbeMethod.ICMP,
+            effectiveLatencyProbeMethod(TrafficMode.TUNNEL, LatencyProbeMethod.ICMP),
+        )
+    }
+
+    @Test
+    fun `proxy latency keeps http probe path`() {
+        assertEquals(
+            LatencyProbeMethod.HTTP,
+            effectiveLatencyProbeMethod(TrafficMode.PROXY, LatencyProbeMethod.ICMP),
+        )
+    }
+
+    @Test
+    fun `icmp ping command uses bounded second timeout`() {
+        assertEquals(
+            listOf("/system/bin/ping", "-n", "-c", "1", "-W", "3", "cp.cloudflare.com"),
+            icmpPingCommand(host = "cp.cloudflare.com", timeoutMs = 2_500L),
+        )
+    }
+
+    @Test
+    fun `icmp ping command binds to safe vpn interface when available`() {
+        assertEquals(
+            listOf("/system/bin/ping", "-n", "-c", "1", "-W", "3", "-I", "tun0", "cp.cloudflare.com"),
+            icmpPingCommand(host = "cp.cloudflare.com", timeoutMs = 2_500L, interfaceName = "tun0"),
+        )
+    }
+
+    @Test
+    fun `icmp ping command ignores unsafe interface names`() {
+        assertEquals(
+            listOf("/system/bin/ping", "-n", "-c", "1", "-W", "3", "cp.cloudflare.com"),
+            icmpPingCommand(host = "cp.cloudflare.com", timeoutMs = 2_500L, interfaceName = "tun0;id"),
+        )
+    }
+
+    @Test
+    fun `icmp ping latency parser accepts common android output`() {
+        assertEquals(18L, parseIcmpPingLatencyMs("64 bytes from 1.1.1.1: icmp_seq=1 ttl=56 time=18.4 ms"))
+        assertEquals(1L, parseIcmpPingLatencyMs("64 bytes from 1.1.1.1: icmp_seq=1 ttl=56 time<1 ms"))
+        assertNull(parseIcmpPingLatencyMs("packet loss"))
     }
 }

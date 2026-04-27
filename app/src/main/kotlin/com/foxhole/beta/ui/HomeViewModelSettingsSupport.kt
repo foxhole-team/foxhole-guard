@@ -10,6 +10,7 @@ import com.foxhole.beta.core.model.ClashApiSettings
 import com.foxhole.beta.core.model.DiagnosticsRetention
 import com.foxhole.beta.core.model.DomainStrategy
 import com.foxhole.beta.core.model.LocalAuthSettings
+import com.foxhole.beta.core.model.LatencyProbeMethod
 import com.foxhole.beta.core.model.PerAppRoutingMode
 import com.foxhole.beta.core.model.Profile
 import com.foxhole.beta.core.model.ProxyInboundSettings
@@ -98,6 +99,13 @@ internal fun HomeViewModel.onSubscriptionRefreshIntervalSelectedInternal(value: 
 internal fun HomeViewModel.onIpInfoEndpointChangedInternal(value: String) {
     viewModelScope.launch {
         container.settingsRepository.updateIpInfoEndpoint(value)
+    }
+}
+
+internal fun HomeViewModel.onLatencyProbeMethodSelectedInternal(value: LatencyProbeMethod) {
+    viewModelScope.launch {
+        container.settingsRepository.updateLatencyProbeMethod(value)
+        scheduleActiveProfileLatencyRefresh()
     }
 }
 

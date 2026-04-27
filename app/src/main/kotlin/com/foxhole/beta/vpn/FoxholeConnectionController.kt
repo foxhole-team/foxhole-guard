@@ -66,6 +66,7 @@ class FoxholeConnectionController(
             snapshot = snapshot,
             currentVpnNetwork = { currentVpnNetwork() },
             currentUpstreamNetwork = { currentUpstreamNetwork() },
+            currentVpnInterfaceName = { network -> connectivityManager.getLinkProperties(network)?.interfaceName },
         )
 
     suspend fun connect(

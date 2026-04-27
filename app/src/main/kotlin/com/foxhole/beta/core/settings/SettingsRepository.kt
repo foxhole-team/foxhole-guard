@@ -3,8 +3,6 @@ package com.foxhole.beta.core.settings
 import android.content.Context
 import androidx.core.content.edit
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
-import androidx.datastore.preferences.core.booleanPreferencesKey
-import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStoreFile
 import com.foxhole.beta.BuildConfig
 import com.foxhole.beta.core.model.AutoConnectReasonCode
@@ -15,8 +13,9 @@ import com.foxhole.beta.core.model.ConnectionSettings
 import com.foxhole.beta.core.model.DiagnosticsRetention
 import com.foxhole.beta.core.model.DomainStrategy
 import com.foxhole.beta.core.model.ExpertSettings
-import com.foxhole.beta.core.model.LocalSurfaceSettings
 import com.foxhole.beta.core.model.LocalAuthSettings
+import com.foxhole.beta.core.model.LocalSurfaceSettings
+import com.foxhole.beta.core.model.LatencyProbeMethod
 import com.foxhole.beta.core.model.NETWORK_FINGERPRINT_SCHEMA_CURRENT
 import com.foxhole.beta.core.model.PerAppRoutingMode
 import com.foxhole.beta.core.model.ProfileTrafficTotal
@@ -44,7 +43,6 @@ import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
-import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import java.io.File
@@ -180,6 +178,9 @@ class SettingsRepository(
                     ),
             )
         }
+
+    suspend fun updateLatencyProbeMethod(value: LatencyProbeMethod) =
+        update { it.copy(connection = it.connection.copy(latencyProbeMethod = value)) }
 
     suspend fun updateLastActiveProfile(value: CachedActiveProfile?) =
         update { current ->
@@ -631,14 +632,6 @@ class SettingsRepository(
             )
         }
 
-    private object Keys {
-        val themeMode = stringPreferencesKey("theme_mode")
-        val locale = stringPreferencesKey("locale")
-        val autoReconnect = booleanPreferencesKey("auto_reconnect")
-        val autoStartOnBoot = booleanPreferencesKey("auto_start_on_boot")
-        val ipInfoEndpoint = stringPreferencesKey("ip_info_endpoint")
-    }
-
     private suspend fun ensureInitialized(): Settings {
         initializationResult?.let { return it.getOrThrow() }
         return lock.withLock {
@@ -756,16 +749,16 @@ class SettingsRepository(
         val preferences = legacyStore.data.firstOrNull() ?: return null
         return Settings(
             ui =
-                UiSettings(
-                    themeMode = parseStoredThemeMode(preferences[Keys.themeMode]),
-                    locale = AppLocale.valueOf(preferences[Keys.locale] ?: AppLocale.SYSTEM.name),
+                    UiSettings(
+                    themeMode = parseStoredThemeMode(preferences[LegacySettingsKeys.themeMode]),
+                    locale = AppLocale.valueOf(preferences[LegacySettingsKeys.locale] ?: AppLocale.SYSTEM.name),
                     showExpertSettings = true,
                 ),
             connection =
                 ConnectionSettings(
-                    autoReconnect = preferences[Keys.autoReconnect] ?: true,
-                    autoStartOnBoot = preferences[Keys.autoStartOnBoot] ?: false,
-                    ipInfoEndpoint = normalizeIpInfoEndpoint(preferences[Keys.ipInfoEndpoint].orEmpty()),
+                    autoReconnect = preferences[LegacySettingsKeys.autoReconnect] ?: true,
+                    autoStartOnBoot = preferences[LegacySettingsKeys.autoStartOnBoot] ?: false,
+                    ipInfoEndpoint = normalizeIpInfoEndpoint(preferences[LegacySettingsKeys.ipInfoEndpoint].orEmpty()),
                 ),
         ).normalized()
     }
@@ -942,40 +935,11 @@ class SettingsRepository(
             port = port.coerceIn(MIN_PORT, MAX_PORT),
         )
 
-    @Serializable
-    private data class LegacyFlatSettings(
-        val themeMode: ThemeMode = ThemeMode.SYSTEM,
-        val locale: AppLocale = AppLocale.SYSTEM,
-        val autoReconnect: Boolean = true,
-        val autoStartOnBoot: Boolean = false,
-        val ipInfoEndpoint: String = "",
-    ) {
-        fun toCurrent(): Settings =
-            Settings(
-                ui =
-                    UiSettings(
-                        themeMode = themeMode,
-                        locale = locale,
-                        onboardingCompleted = true,
-                        showExpertSettings = true,
-                    ),
-                connection =
-                    ConnectionSettings(
-                        autoReconnect = autoReconnect,
-                        autoStartOnBoot = autoStartOnBoot,
-                        ipInfoEndpoint = normalizeIpInfoEndpoint(ipInfoEndpoint),
-                    ),
-            )
-    }
-
     companion object {
         private const val MIN_PORT = 1
         private const val MAX_PORT = 65535
         private const val MIN_MTU = 576
         private const val MAX_MTU = 9_000
-        private const val FAST_UI_PREFERENCES_NAME = "foxhole_fast_ui"
-        private const val FAST_THEME_MODE_KEY = "theme_mode"
-        private const val FAST_LOCALE_KEY = "locale"
     }
 }
 

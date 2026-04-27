@@ -97,6 +97,7 @@ import com.foxhole.beta.core.model.ClashApiSettings
 import com.foxhole.beta.core.diagnostics.DiagnosticEntry
 import com.foxhole.beta.core.model.DiagnosticsRetention
 import com.foxhole.beta.core.model.DomainStrategy
+import com.foxhole.beta.core.model.LatencyProbeMethod
 import com.foxhole.beta.core.model.LocalAuthSettings
 import com.foxhole.beta.core.model.ProxyInboundSettings
 import com.foxhole.beta.core.model.RoutingCatalog
@@ -542,6 +543,7 @@ fun TrafficSettingsScreen(
     snackbarHostState: SnackbarHostState,
     onNavigateUp: () -> Unit,
     onTrafficModeSelected: (TrafficMode) -> Unit,
+    onLatencyProbeMethodSelected: (LatencyProbeMethod) -> Unit,
     onTunStackSelected: (TunStack) -> Unit,
     onLocalProxyAuthEnabledChanged: (Boolean) -> Unit,
     onLocalProxyAuthChanged: (LocalAuthSettings) -> Unit,
@@ -556,6 +558,7 @@ fun TrafficSettingsScreen(
     onSubscriptionRefreshIntervalSelected: (SubscriptionRefreshInterval) -> Unit,
 ) {
     var modeMenuExpanded by rememberSaveable { mutableStateOf(false) }
+    var latencyProbeMethodMenuExpanded by rememberSaveable { mutableStateOf(false) }
     var tunStackMenuExpanded by rememberSaveable { mutableStateOf(false) }
     var socksDialog by rememberSaveable { mutableStateOf(false) }
     var httpDialog by rememberSaveable { mutableStateOf(false) }
@@ -570,6 +573,16 @@ fun TrafficSettingsScreen(
         when (value) {
             TrafficMode.TUNNEL -> tunnelModeLabel
             TrafficMode.PROXY -> proxyModeLabel
+        }
+    }
+    val pingHttpLabel = stringResource(R.string.latency_probe_method_http)
+    val pingIcmpLabel = stringResource(R.string.latency_probe_method_icmp)
+    val pingTcpLabel = stringResource(R.string.latency_probe_method_tcp)
+    val latencyProbeMethodLabel: (LatencyProbeMethod) -> String = { value ->
+        when (value) {
+            LatencyProbeMethod.HTTP -> pingHttpLabel
+            LatencyProbeMethod.ICMP -> pingIcmpLabel
+            LatencyProbeMethod.TCP -> pingTcpLabel
         }
     }
 
@@ -596,6 +609,21 @@ fun TrafficSettingsScreen(
                 onSelect = onTrafficModeSelected,
                 leadingIcon = Icons.Outlined.Tune,
                 optionIcon = ::trafficModeIcon,
+            )
+        }
+        item {
+            DropdownSettingRow(
+                title = stringResource(R.string.latency_probe_method_title),
+                value = latencyProbeMethodLabel(state.settings.connection.latencyProbeMethod),
+                expanded = latencyProbeMethodMenuExpanded,
+                onExpandedChange = { latencyProbeMethodMenuExpanded = it },
+                values = LatencyProbeMethod.entries,
+                selected = state.settings.connection.latencyProbeMethod,
+                label = { latencyProbeMethodLabel(it) },
+                onSelect = onLatencyProbeMethodSelected,
+                summary = stringResource(R.string.latency_probe_method_summary),
+                leadingIcon = Icons.Outlined.Speed,
+                optionIcon = ::latencyProbeMethodIcon,
             )
         }
         if (state.settings.traffic.mode == TrafficMode.TUNNEL) {
@@ -961,6 +989,13 @@ private fun trafficModeIcon(value: TrafficMode): ImageVector =
     when (value) {
         TrafficMode.TUNNEL -> Icons.Outlined.Shield
         TrafficMode.PROXY -> Icons.Outlined.SwapVert
+    }
+
+private fun latencyProbeMethodIcon(value: LatencyProbeMethod): ImageVector =
+    when (value) {
+        LatencyProbeMethod.HTTP -> Icons.Outlined.Public
+        LatencyProbeMethod.ICMP -> Icons.Outlined.Speed
+        LatencyProbeMethod.TCP -> Icons.Outlined.SwapVert
     }
 
 private fun tunStackIcon(value: TunStack): ImageVector =

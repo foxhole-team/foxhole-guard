@@ -5,7 +5,7 @@ import android.os.Build
 import android.provider.Settings
 import java.util.Locale
 
-internal enum class PrivateDnsMode {
+enum class PrivateDnsMode {
     OFF,
     OPPORTUNISTIC,
     STRICT,

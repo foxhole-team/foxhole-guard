@@ -29,7 +29,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Dashboard
-import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.WarningAmber
 import androidx.compose.material3.Icon
@@ -340,6 +339,7 @@ fun FoxholeApp(
                         snackbarHostState = snackbarHostState,
                         onNavigateUp = navController::navigateUp,
                         onTrafficModeSelected = viewModel::onTrafficModeSelected,
+                        onLatencyProbeMethodSelected = viewModel::onLatencyProbeMethodSelected,
                         onTunStackSelected = viewModel::onTunStackSelected,
                         onLocalProxyAuthEnabledChanged = viewModel::onLocalProxyAuthEnabledChanged,
                         onLocalProxyAuthChanged = viewModel::onLocalProxyAuthChanged,
@@ -503,8 +503,6 @@ fun FoxholeApp(
             icon = Icons.Outlined.WarningAmber,
             iconTint = FoxholeWarningAccent,
             iconContainerColor = FoxholeWarningAccent.copy(alpha = 0.14f),
-            bodyIcon = Icons.Outlined.Info,
-            bodyIconTint = FoxholeInfoAccent,
             dismissLabel = stringResource(R.string.no_label),
             dismissOnBackPress = false,
             dismissOnClickOutside = false,

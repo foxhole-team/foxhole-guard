@@ -108,23 +108,19 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
         intent: Intent?,
         flags: Int,
         startId: Int,
-    ): Int {
-        ensureNotificationChannel()
-        startForeground(
-            FoxholeConnectionServiceContract.NOTIFICATION_ID,
-            buildNotification(currentNotificationSnapshot()),
-        )
-        handleRuntimeServiceCommand(
+    ): Int =
+        handleForegroundRuntimeCommand(
             intent = intent,
             startId = startId,
+            notificationManager = notificationManager,
+            currentNotificationSnapshot = ::currentNotificationSnapshot,
+            buildNotification = ::buildNotification,
             container = container,
             launchCommand = ::launchCommand,
             connect = ::connect,
             disconnect = { commandStartId -> disconnect(commandStartId = commandStartId) },
             reload = ::reload,
         )
-        return START_STICKY
-    }
 
     override fun onDestroy() {
         super.onDestroy()

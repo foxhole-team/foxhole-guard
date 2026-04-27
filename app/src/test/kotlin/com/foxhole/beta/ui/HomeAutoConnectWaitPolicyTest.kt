@@ -1,6 +1,11 @@
 package com.foxhole.beta.ui
 
 import com.foxhole.beta.core.model.ConnectionState
+import com.foxhole.beta.core.model.LatencyProbeMethod
+import com.foxhole.beta.core.model.ProtocolHint
+import com.foxhole.beta.core.model.SmartProfilePreference
+import com.foxhole.beta.core.profile.AutoConnectProbeCandidate
+import com.foxhole.beta.core.smart.AdaptiveProtocolCandidateScore
 import com.foxhole.beta.vpn.FoxholeVpnService
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -64,6 +69,8 @@ class HomeAutoConnectWaitPolicyTest {
                 validatedConnectDurationMs = 4_200L,
                 rememberedLatencyMs = 210L,
                 penaltyMs = 750L,
+                protocolHint = ProtocolHint.TROJAN,
+                latencyProbeMethod = LatencyProbeMethod.HTTP,
             ),
         )
     }
@@ -76,6 +83,36 @@ class HomeAutoConnectWaitPolicyTest {
                 validatedConnectDurationMs = 1_800L,
                 rememberedLatencyMs = null,
                 penaltyMs = 750L,
+                protocolHint = ProtocolHint.TROJAN,
+                latencyProbeMethod = LatencyProbeMethod.HTTP,
+            ),
+        )
+    }
+
+    @Test
+    fun `udp fallback ranking does not add endpoint penalty`() {
+        assertEquals(
+            180L,
+            resolveAutoConnectFallbackRankingLatency(
+                validatedConnectDurationMs = 180L,
+                rememberedLatencyMs = null,
+                penaltyMs = 750L,
+                protocolHint = ProtocolHint.WIREGUARD,
+                latencyProbeMethod = LatencyProbeMethod.HTTP,
+            ),
+        )
+    }
+
+    @Test
+    fun `icmp fallback ranking does not add endpoint penalty`() {
+        assertEquals(
+            180L,
+            resolveAutoConnectFallbackRankingLatency(
+                validatedConnectDurationMs = 180L,
+                rememberedLatencyMs = null,
+                penaltyMs = 750L,
+                protocolHint = ProtocolHint.TROJAN,
+                latencyProbeMethod = LatencyProbeMethod.ICMP,
             ),
         )
     }
@@ -125,6 +162,38 @@ class HomeAutoConnectWaitPolicyTest {
     }
 
     @Test
+    fun `auto connect continues after candidate timeout while wall clock budget remains`() {
+        assertTrue(
+            shouldContinueAutoConnectAfterProbe(
+                success = false,
+                timedOut = true,
+                remainingBudgetMs = 48_000L,
+            ),
+        )
+        assertFalse(
+            shouldContinueAutoConnectAfterProbe(
+                success = false,
+                timedOut = true,
+                remainingBudgetMs = 0L,
+            ),
+        )
+        assertTrue(
+            shouldContinueAutoConnectAfterProbe(
+                success = false,
+                timedOut = false,
+                remainingBudgetMs = 0L,
+            ),
+        )
+        assertFalse(
+            shouldContinueAutoConnectAfterProbe(
+                success = true,
+                timedOut = false,
+                remainingBudgetMs = 48_000L,
+            ),
+        )
+    }
+
+    @Test
     fun `auto connect latency waits for the settled dashboard refresh window`() {
         assertEquals(
             HomeViewModel.CONNECTED_PROTOCOL_LATENCY_REFRESH_DELAY_MS,
@@ -155,4 +224,64 @@ class HomeAutoConnectWaitPolicyTest {
             ),
         )
     }
+
+    @Test
+    fun `runner selects cold scan when baseline is missing`() {
+        val state =
+            SmartStartAutoConnectRunner.resolveState(
+                fullScanCandidates = listOf(candidate("vless")),
+                enabledProtocolSetHash = "hash",
+                preference = SmartProfilePreference(profileId = 1L),
+                rankedCandidates = listOf(score(candidate("vless"))),
+            )
+
+        assertTrue(state is SmartStartAutoConnectState.ColdScan)
+    }
+
+    @Test
+    fun `runner keeps recommended attempts before fallback candidates`() {
+        val vless = candidate("vless")
+        val trojan = candidate("trojan")
+        val hysteria = candidate("hysteria")
+        val state =
+            SmartStartAutoConnectRunner.resolveState(
+                fullScanCandidates = listOf(vless, trojan, hysteria),
+                enabledProtocolSetHash = "hash",
+                preference =
+                    SmartProfilePreference(
+                        profileId = 1L,
+                        smartStartBaselineReady = true,
+                        recommendedProtocolIds = listOf("trojan"),
+                        enabledProtocolSetHash = "hash",
+                    ),
+                rankedCandidates = listOf(score(vless), score(trojan), score(hysteria)),
+            )
+
+        assertEquals(
+            listOf("trojan", "vless", "hysteria"),
+            state.candidates.map(AutoConnectProbeCandidate::optionId),
+        )
+    }
+
+    private fun candidate(optionId: String): AutoConnectProbeCandidate =
+        AutoConnectProbeCandidate(
+            profileId = 1L,
+            optionId = optionId,
+            protocolHint = ProtocolHint.VLESS,
+            displayName = optionId,
+        )
+
+    private fun score(candidate: AutoConnectProbeCandidate): AdaptiveProtocolCandidateScore =
+        AdaptiveProtocolCandidateScore(
+            candidate = candidate,
+            scoringVersion = 1,
+            score = 0,
+            successRate = 0.0,
+            lastKnownGoodBonus = 0,
+            networkMatchBonus = 0,
+            latencyPenalty = 0,
+            recentFailurePenalty = 0,
+            validationFailurePenalty = 0,
+            explorationBonus = 0,
+        )
 }

@@ -32,6 +32,7 @@ import com.foxhole.beta.core.model.ExpertSettings
 import com.foxhole.beta.core.model.InstalledAppOption
 import com.foxhole.beta.core.model.IpInfo
 import com.foxhole.beta.core.model.LocalAuthSettings
+import com.foxhole.beta.core.model.LatencyProbeMethod
 import com.foxhole.beta.core.model.PerAppRoutingMode
 import com.foxhole.beta.core.model.Profile
 import com.foxhole.beta.core.model.ProfileSourceType
@@ -728,6 +729,8 @@ class HomeViewModel(
     fun onSubscriptionRefreshIntervalSelected(value: SubscriptionRefreshInterval) = onSubscriptionRefreshIntervalSelectedInternal(value)
 
     fun onIpInfoEndpointChanged(value: String) = onIpInfoEndpointChangedInternal(value)
+
+    fun onLatencyProbeMethodSelected(value: LatencyProbeMethod) = onLatencyProbeMethodSelectedInternal(value)
 
     fun onTunStackSelected(value: TunStack) = onTunStackSelectedInternal(value)
 

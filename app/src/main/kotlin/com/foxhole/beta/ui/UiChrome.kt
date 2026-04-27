@@ -3,7 +3,6 @@ package com.foxhole.beta.ui
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
-import android.os.Build
 import android.os.SystemClock
 import android.os.VibrationEffect
 import android.os.Vibrator
@@ -250,29 +249,19 @@ internal fun handleSnackbarHaptic(
 
 private fun vibrateBannerSuccess(context: Context) {
     val vibrator = context.getSystemService<Vibrator>() ?: return
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-        vibrator.vibrate(
-            VibrationEffect.createOneShot(
-                FoxholeBannerHapticPulseMs,
-                VibrationEffect.DEFAULT_AMPLITUDE,
-            ),
-        )
-    } else {
-        @Suppress("DEPRECATION")
-        vibrator.vibrate(FoxholeBannerHapticPulseMs)
-    }
+    vibrator.vibrate(
+        VibrationEffect.createOneShot(
+            FoxholeBannerHapticPulseMs,
+            VibrationEffect.DEFAULT_AMPLITUDE,
+        ),
+    )
 }
 
 private fun vibrateBannerError(context: Context) {
     val vibrator = context.getSystemService<Vibrator>() ?: return
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-        vibrator.vibrate(
-            VibrationEffect.createWaveform(FoxholeBannerErrorWaveformMs, -1),
-        )
-    } else {
-        @Suppress("DEPRECATION")
-        vibrator.vibrate(FoxholeBannerErrorWaveformMs, -1)
-    }
+    vibrator.vibrate(
+        VibrationEffect.createWaveform(FoxholeBannerErrorWaveformMs, -1),
+    )
 }
 
 private const val FoxholeBannerHapticCooldownMs = 1_200L

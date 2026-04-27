@@ -175,12 +175,10 @@ private class ReflectiveLibboxRuntime(
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             builder.setMetered(false)
         }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            runCatching {
-                builder.setUnderlyingNetworks(arrayOf(defaultNetworkMonitor.requireNetwork()))
-            }.onFailure {
-                diagnosticsLogger.record("libbox", "vpn underlying network unavailable before establish")
-            }
+        runCatching {
+            builder.setUnderlyingNetworks(arrayOf(defaultNetworkMonitor.requireNetwork()))
+        }.onFailure {
+            diagnosticsLogger.record("libbox", "vpn underlying network unavailable before establish")
         }
 
         reflection.forEachRoutePrefix(reflection.call(tunOptions, "getInet4Address")) { prefix ->

@@ -6,7 +6,6 @@
     <string name="home_network_title">Network</string>
     <string name="home_traffic_title">Трафик</string>
     <string name="home_session_traffic_title">Current session traffic</string>
-    <string name="home_connection_time_label">Connection time:</string>
     <string name="home_total_traffic_title">Traffic volume over:</string>
     <string name="home_total_traffic_days">%1$d d</string>
     <string name="home_received_label">Received</string>
@@ -54,7 +53,6 @@
     <string name="status_error">Error</string>
     <string name="refresh_ip_info">Refresh network info</string>
     <string name="home_network_unavailable">Network info unavailable</string>
-    <string name="home_network_retry_hint">Refresh to retry.</string>
     <string name="home_network_connection_info_title">VPN server information</string>
     <string name="home_network_current_ip_title">Current IP address</string>
     <string name="home_network_profile_info_title">Connection status</string>
@@ -66,8 +64,6 @@
     <string name="home_network_server_ping_label">Server ping:</string>
     <string name="home_network_connect_time_label">Connection time:</string>
     <string name="home_network_status_label">Status:</string>
-    <string name="home_network_status_validated">validated</string>
-    <string name="network_dns_remote">External DNS</string>
     <string name="theme">Theme</string>
     <string name="theme_mode_system">System colors</string>
     <string name="theme_mode_dark">Dark</string>
@@ -127,7 +123,6 @@
     <string name="ip_info_failed">Failed to refresh network information</string>
     <string name="notification_status_connected">Connected</string>
     <string name="notification_status_connecting">Connecting</string>
-    <string name="notification_status_validating">Validating</string>
     <string name="notification_status_reconnecting">Reconnecting</string>
     <string name="notification_status_disconnected">Disconnected</string>
     <string name="notification_status_error">Connection error</string>
@@ -136,9 +131,6 @@
     <string name="notification_body_validating">Validating tunnel…</string>
     <string name="notification_body_waiting">Waiting for connection</string>
     <string name="notification_body_reconnecting">Connection will be restored automatically</string>
-    <string name="notification_health_online">Tunnel is active</string>
-    <string name="notification_health_offline">Waiting for connection</string>
-    <string name="notification_health_checking">Validating tunnel…</string>
     <string name="unknown_country">Unknown location</string>
     <string name="expert_warning_body">These settings change routing and local control surfaces. Enable them only if you understand the impact.</string>
     <string name="block_screenshots_title">Block screenshots</string>
@@ -174,19 +166,13 @@
     <string name="smart_profile_menu_protocol_column">Protocol</string>
     <string name="smart_profile_menu_server_ping_column">Server ping</string>
     <string name="smart_profile_menu_latency_column">VPN latency</string>
-    <string name="smart_profile_menu_vpn_latency_label">VPN latency</string>
     <string name="smart_profile_menu_on_column">ON</string>
     <string name="smart_profile_menu_active_badge">Current</string>
     <string name="smart_profile_menu_recommended_badge">Recommended</string>
     <string name="smart_profile_metric_unavailable">-</string>
-    <string name="smart_profile_metric_fast">Recommended</string>
-    <string name="smart_profile_metric_slow">Slow</string>
-    <string name="smart_profile_metric_down">Down</string>
-    <string name="smart_profile_metric_status_unknown">No data</string>
     <string name="smart_start_protocol_status_recommended">Recommended</string>
     <string name="smart_start_protocol_status_available">Available</string>
     <string name="smart_start_protocol_status_slow">Slow</string>
-    <string name="smart_start_protocol_status_recently_failed">Recently failed</string>
     <string name="smart_start_protocol_status_no_data">No data</string>
     <string name="smart_start_protocol_status_disabled">Disabled</string>
     <string name="insecure_tls_profile_badge">INSECURE TLS</string>
@@ -262,6 +248,11 @@
     <string name="traffic_mode">Operating mode</string>
     <string name="traffic_mode_tunnel">Tunnel</string>
     <string name="traffic_mode_proxy">Proxy</string>
+    <string name="latency_probe_method_title">Ping</string>
+    <string name="latency_probe_method_summary">Choose how Dashboard and Smart start measure tunnel latency. ICMP uses the VPN interface when the active outbound supports echo; TCP times a 443 connect, HTTP times an HTTPS probe.</string>
+    <string name="latency_probe_method_http">HTTP</string>
+    <string name="latency_probe_method_icmp">ICMP</string>
+    <string name="latency_probe_method_tcp">TCP</string>
     <string name="tun_stack">Tun stack</string>
     <string name="mtu">MTU</string>
     <string name="prefer_ipv6_routes">IPv6</string>

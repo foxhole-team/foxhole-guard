@@ -26,38 +26,6 @@ internal class ProfileImportEngine(
     json: Json,
     remoteHostResolver: RemoteHostResolver? = null,
 ) : ProfileImportXraySupport(json, remoteHostResolver) {
-internal data class NormalizedRoutePort(
-    val ports: List<Int>,
-    val portRanges: List<String>,
-)
-
-private data class UserInputStrategyContext(
-    val input: String,
-    val allowPrivateOutboundHosts: Boolean,
-    val allowHttpSubscriptionUrls: Boolean,
-    val allowInsecureTls: Boolean,
-)
-
-private interface UserInputImportStrategy {
-    val id: ProfileImportStrategyId
-
-    fun tryParse(context: UserInputStrategyContext): ParsedImport?
-}
-
-private data class SubscriptionContentStrategyContext(
-    val input: String,
-    val fallbackName: String,
-    val allowPrivateOutboundHosts: Boolean,
-    val allowHttpSubscriptionUrls: Boolean,
-    val allowInsecureTls: Boolean,
-)
-
-private interface SubscriptionContentImportStrategy {
-    val id: ProfileSubscriptionContentStrategyId
-
-    fun tryParse(context: SubscriptionContentStrategyContext): ParsedImport?
-}
-
 fun parseUserInput(
     input: String,
     allowPrivateOutboundHosts: Boolean = false,

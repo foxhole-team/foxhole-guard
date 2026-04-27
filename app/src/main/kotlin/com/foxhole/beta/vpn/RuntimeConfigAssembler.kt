@@ -46,11 +46,12 @@ class RuntimeConfigAssembler(
         baseConfigJson: String,
         settings: Settings,
         activePreset: RoutingPreset?,
+        privateDnsMode: PrivateDnsMode? = null,
     ): String {
         validate(settings.expert)
         val base = json.parseToJsonElement(baseConfigJson).jsonObject
         return when (settings.traffic.mode) {
-            TrafficMode.TUNNEL -> assembleTunnel(base, settings, activePreset)
+            TrafficMode.TUNNEL -> assembleTunnel(base, settings, activePreset, privateDnsMode)
             TrafficMode.PROXY -> assembleProxy(base, settings, activePreset)
         }
     }
@@ -59,6 +60,7 @@ class RuntimeConfigAssembler(
         base: JsonObject,
         settings: Settings,
         activePreset: RoutingPreset?,
+        privateDnsMode: PrivateDnsMode?,
     ): String {
         val tunInbound = base["inbounds"]?.jsonArray?.firstOrNull { it.jsonObject["type"]?.jsonPrimitive?.content == "tun" }?.jsonObject
             ?: error("base config must define a tun inbound")
@@ -68,7 +70,7 @@ class RuntimeConfigAssembler(
                 add(patchedTun)
                 buildLocalSurfaceInbounds(settings.expert.localSurfaces).forEach(::add)
             }
-        val patchedDns = patchDns(base["dns"]?.jsonObject, settings.traffic)
+        val patchedDns = patchDns(base["dns"]?.jsonObject, settings.traffic, privateDnsMode)
         val patchedRoute = patchRoute(base["route"]?.jsonObject, patchedDns, activePreset, settings.expert)
         val patchedExperimental = patchExperimental(base["experimental"]?.jsonObject, settings.expert.localSurfaces)
 
@@ -150,6 +152,7 @@ class RuntimeConfigAssembler(
     fun runtimeFingerprint(
         settings: Settings,
         activePreset: RoutingPreset?,
+        privateDnsMode: PrivateDnsMode? = null,
     ): Int {
         val settingsFingerprint =
             json.encodeToString(
@@ -164,7 +167,8 @@ class RuntimeConfigAssembler(
                 ?.let { lanProxyAddressProvider.currentWifiIpv4Address() }
                 ?.hashCode()
                 ?: 0
-        return ((settingsFingerprint * 31) + (activePreset?.hashCode() ?: 0)) * 31 + lanFingerprint
+        val dnsFingerprint = privateDnsMode?.hashCode() ?: 0
+        return (((settingsFingerprint * 31) + (activePreset?.hashCode() ?: 0)) * 31 + lanFingerprint) * 31 + dnsFingerprint
     }
 
     fun validate(expert: ExpertSettings) {
@@ -275,6 +279,7 @@ class RuntimeConfigAssembler(
     private fun patchDns(
         existing: JsonObject?,
         traffic: TrafficSettings,
+        privateDnsMode: PrivateDnsMode? = null,
     ): JsonObject {
         val effectiveStrategy =
             when {
@@ -283,7 +288,7 @@ class RuntimeConfigAssembler(
                 else -> traffic.domainStrategy
             }
         if (existing == null || !existing.hasDnsServers() || isFoxholeManagedDns(existing)) {
-            return buildFoxholeDnsConfig(effectiveStrategy.configValue)
+            return buildFoxholeDnsConfig(effectiveStrategy.configValue, privateDnsMode)
         }
         val source = existing
         return buildJsonObject {
@@ -635,7 +640,10 @@ class RuntimeConfigAssembler(
     private fun JsonObject.hasDnsServers(): Boolean =
         this["servers"]?.jsonArray?.isNotEmpty() == true
 
-    private fun buildFoxholeDnsConfig(strategy: String): JsonObject =
+    private fun buildFoxholeDnsConfig(
+        strategy: String,
+        privateDnsMode: PrivateDnsMode?,
+    ): JsonObject =
         buildJsonObject {
             put(
                 "servers",
@@ -649,26 +657,31 @@ class RuntimeConfigAssembler(
                     add(
                         buildJsonObject {
                             put("tag", DNS_DIRECT_TAG)
-                            put("type", "udp")
-                            put("server", FOXHOLE_REMOTE_DNS_SERVER)
-                            put("server_port", 53)
-                            put("detour", "direct")
+                            put("type", "local")
                         },
                     )
                     add(
-                        buildJsonObject {
-                            put("tag", DNS_REMOTE_TAG)
-                            put("type", "https")
-                            put("server", FOXHOLE_REMOTE_DNS_SERVER)
-                            put("server_port", 443)
-                            put("path", "/dns-query")
-                            put("detour", "proxy")
-                        },
+                        foxholeRemoteDnsServer(privateDnsMode),
                     )
                 },
             )
             put("strategy", strategy)
             put("final", DNS_REMOTE_TAG)
+        }
+
+    private fun foxholeRemoteDnsServer(privateDnsMode: PrivateDnsMode?): JsonObject =
+        buildJsonObject {
+            put("tag", DNS_REMOTE_TAG)
+            put("server", FOXHOLE_REMOTE_DNS_SERVER)
+            if (privateDnsMode == PrivateDnsMode.OFF) {
+                put("type", "udp")
+                put("server_port", 53)
+            } else {
+                put("type", "https")
+                put("server_port", 443)
+                put("path", "/dns-query")
+                put("detour", "proxy")
+            }
         }
 
     private fun sniffRule(): JsonObject =
@@ -712,11 +725,7 @@ class RuntimeConfigAssembler(
         val directMatches =
             direct == null ||
                 direct["type"]?.jsonPrimitive?.contentOrNull == "local" ||
-                direct["address"]?.jsonPrimitive?.contentOrNull == "local" ||
-                (
-                    direct["server"]?.jsonPrimitive?.contentOrNull == FOXHOLE_REMOTE_DNS_SERVER &&
-                        direct["server_port"]?.jsonPrimitive?.contentOrNull == "53"
-                )
+                direct["address"]?.jsonPrimitive?.contentOrNull == "local"
         val remoteMatches =
                 (
                     remote["type"]?.jsonPrimitive?.contentOrNull == "tcp" &&
@@ -737,10 +746,15 @@ class RuntimeConfigAssembler(
                 (
                     remote["address"]?.jsonPrimitive?.contentOrNull == FOXHOLE_DOH_ADDRESS
                     )
+        val remoteDetourMatches =
+            when (remote["type"]?.jsonPrimitive?.contentOrNull) {
+                "tcp", "udp" -> !remote.containsKey("detour")
+                else -> remote["detour"]?.jsonPrimitive?.contentOrNull == "proxy"
+            }
         return localMatches &&
             directMatches &&
             remoteMatches &&
-            remote["detour"]?.jsonPrimitive?.contentOrNull == "proxy"
+            remoteDetourMatches
     }
 
     private fun isFoxholeManagedRoute(route: JsonObject): Boolean {

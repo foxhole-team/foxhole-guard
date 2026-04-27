@@ -65,6 +65,13 @@ enum class AutoConnectReasonCode(val wireCode: String) {
 }
 
 @Serializable
+enum class LatencyProbeMethod {
+    HTTP,
+    ICMP,
+    TCP,
+}
+
+@Serializable
 enum class ConnectivityHealthState {
     CHECKING,
     ONLINE,
@@ -82,6 +89,9 @@ enum class TrafficMode {
     TUNNEL,
     PROXY,
 }
+
+internal fun ProtocolHint.isUdpTransport(): Boolean =
+    this == ProtocolHint.HYSTERIA2 || this == ProtocolHint.WIREGUARD
 
 @Serializable
 enum class SubscriptionRefreshInterval(val hours: Long) {
@@ -154,6 +164,7 @@ data class ConnectionSettings(
     val autoRefreshSubscriptions: Boolean = false,
     val subscriptionRefreshInterval: SubscriptionRefreshInterval = SubscriptionRefreshInterval.HOURS_6,
     val ipInfoEndpoint: String = "",
+    val latencyProbeMethod: LatencyProbeMethod = LatencyProbeMethod.ICMP,
     val stealthModeEnabled: Boolean = true,
 )
 

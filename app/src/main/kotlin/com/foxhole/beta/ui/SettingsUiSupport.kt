@@ -845,7 +845,7 @@ internal fun ConfirmDialog(
     icon: ImageVector? = null,
     iconTint: Color? = null,
     iconContainerColor: Color? = null,
-    bodyIcon: ImageVector? = Icons.Outlined.Info,
+    bodyIcon: ImageVector? = null,
     bodyIconTint: Color? = null,
     dismissLabel: String? = null,
     secondaryLabel: String? = null,
@@ -865,7 +865,7 @@ internal fun ConfirmDialog(
         title = {
             FoxholeDialogTitle(
                 title = title,
-                icon = icon ?: Icons.Outlined.Info,
+                icon = icon,
                 iconTint = iconTint,
                 iconContainerColor = iconContainerColor,
             )

@@ -202,6 +202,43 @@ class MultiProtocolProfileSupportTest {
     }
 
     @Test
+    fun `manual metrics can recommend udp when validated connect is fastest`() {
+        val profile =
+            profile(
+                options =
+                    listOf(
+                        option("trojan", ProtocolHint.TROJAN),
+                        option("wireguard", ProtocolHint.WIREGUARD),
+                    ),
+            )
+        val candidates = MultiProtocolProfileSupport.probeCandidates(profile)
+
+        val winner =
+            MultiProtocolProfileSupport.fastestSuccessfulProbe(
+                listOf(
+                    AutoConnectProbeResult(
+                        candidate = candidates.first { it.optionId == "trojan" },
+                        success = true,
+                        latencyMs = 220L,
+                        rankingLatencyMs = 220L,
+                        displayLatencyMs = 220L,
+                        connectDurationMs = 900L,
+                    ),
+                    AutoConnectProbeResult(
+                        candidate = candidates.first { it.optionId == "wireguard" },
+                        success = true,
+                        latencyMs = 140L,
+                        rankingLatencyMs = 140L,
+                        displayLatencyMs = null,
+                        connectDurationMs = 140L,
+                    ),
+                ),
+            )
+
+        assertEquals("wireguard", winner?.candidate?.optionId)
+    }
+
+    @Test
     fun `probe candidates prefer last known good then successful low latency history`() {
         val profile =
             profile(

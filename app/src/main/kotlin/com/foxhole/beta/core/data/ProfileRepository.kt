@@ -19,6 +19,7 @@ import com.foxhole.beta.core.model.VpnSession
 import com.foxhole.beta.core.network.ensurePublicUrl
 import com.foxhole.beta.core.network.requirePublicUrl
 import com.foxhole.beta.core.settings.SettingsRepository
+import com.foxhole.beta.vpn.PrivateDnsMode
 import com.foxhole.beta.vpn.RuntimeConfigAssembler
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -487,6 +488,7 @@ class ProfileRepository(
     suspend fun getSession(
         profileId: Long,
         protocolOptionIdOverride: String? = null,
+        privateDnsMode: PrivateDnsMode? = null,
     ): VpnSession {
         val profile = requireProfile(profileId)
         val secret = secretStore.read(profile.secretRef) ?: error("profile secret is missing")
@@ -498,6 +500,7 @@ class ProfileRepository(
                     baseConfigJson = getResolvedConfig(profileId, protocolOptionIdOverride),
                     settings = settingsRepository.current(),
                     activePreset = routingRepository.currentPresetForRuntime(),
+                    privateDnsMode = privateDnsMode,
                 )
             }.onFailure { error ->
                 diagnosticsLogger.record(

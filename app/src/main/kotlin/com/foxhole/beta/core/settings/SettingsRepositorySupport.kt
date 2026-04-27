@@ -1,7 +1,6 @@
 package com.foxhole.beta.core.settings
 
 import android.content.Context
-import com.foxhole.beta.BuildConfig
 import com.foxhole.beta.core.model.AppLocale
 import com.foxhole.beta.core.model.AutoConnectReasonCode
 import com.foxhole.beta.core.model.Settings
@@ -9,8 +8,6 @@ import com.foxhole.beta.core.model.SmartProfileNetworkMemory
 import com.foxhole.beta.core.model.SmartProfilePreference
 import com.foxhole.beta.core.model.SmartProfileProtocolMemory
 import com.foxhole.beta.core.model.ThemeMode
-import com.foxhole.beta.core.network.ensurePublicHttpsUrl
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 
 internal fun Settings.withSmartProfilePreference(preference: SmartProfilePreference): Settings {
     val updatedPreferences =
@@ -196,12 +193,6 @@ internal fun resolveAdaptiveProtocolCooldownUntil(
     return recordedAt + minOf(baseCooldownMs * multiplier, 30L * 60L * 1000L)
 }
 
-internal fun String.ifLoopbackOrDefault(): String =
-    trim()
-        .lowercase()
-        .takeIf { value -> value in setOf("127.0.0.1", "localhost", "::1") }
-        ?: "127.0.0.1"
-
 internal fun parseStoredThemeMode(value: String?): ThemeMode {
     return parseOptionalStoredThemeMode(value) ?: ThemeMode.DARK
 }
@@ -223,8 +214,8 @@ internal fun parseOptionalStoredAppLocale(value: String?): AppLocale? {
 }
 
 internal fun readFastStoredAppLocale(context: Context): AppLocale {
-    val prefs = context.applicationContext.getSharedPreferences("foxhole_fast_ui", Context.MODE_PRIVATE)
-    return parseOptionalStoredAppLocale(prefs.getString("locale", null)) ?: AppLocale.SYSTEM
+    val prefs = context.applicationContext.getSharedPreferences(FAST_UI_PREFERENCES_NAME, Context.MODE_PRIVATE)
+    return parseOptionalStoredAppLocale(prefs.getString(FAST_LOCALE_KEY, null)) ?: AppLocale.SYSTEM
 }
 
 internal fun sanitizeStoredThemeModePayload(payload: String): String =
@@ -234,15 +225,4 @@ internal fun sanitizeStoredThemeModePayload(payload: String): String =
         "${match.groupValues[1]}$normalizedValue${match.groupValues[3]}"
     }
 
-internal fun normalizeIpInfoEndpoint(value: String): String {
-    val normalized = value.trim().ifBlank { BuildConfig.DEFAULT_IP_INFO_ENDPOINT }
-    val host = normalized.toHttpUrlOrNull()?.host?.lowercase()
-    return if (host == LEGACY_IP_INFO_HOST) {
-        BuildConfig.DEFAULT_IP_INFO_ENDPOINT
-    } else {
-        normalized.ensurePublicHttpsUrl().toString()
-    }
-}
-
-private const val LEGACY_IP_INFO_HOST = "api.ip.sb"
 private val STORED_THEME_MODE_REGEX = Regex("""("themeMode"\s*:\s*")([^"]+)(")""")

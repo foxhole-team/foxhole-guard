@@ -5,6 +5,7 @@ import com.foxhole.beta.core.model.AutoConnectReasonCode
 import com.foxhole.beta.core.model.AppLocale
 import com.foxhole.beta.core.model.DiagnosticsRetention
 import com.foxhole.beta.core.model.ExpertSettings
+import com.foxhole.beta.core.model.LatencyProbeMethod
 import com.foxhole.beta.core.model.NETWORK_FINGERPRINT_SCHEMA_CURRENT
 import com.foxhole.beta.core.model.Settings
 import com.foxhole.beta.core.model.SmartProfileNetworkMemory
@@ -114,6 +115,11 @@ class SettingsRepositoryTest {
     fun `subscription auto refresh defaults off`() {
         assertFalse(Settings().connection.autoRefreshSubscriptions)
         assertEquals(SubscriptionRefreshInterval.HOURS_6, Settings().connection.subscriptionRefreshInterval)
+    }
+
+    @Test
+    fun `latency probe method defaults to icmp`() {
+        assertEquals(LatencyProbeMethod.ICMP, Settings().connection.latencyProbeMethod)
     }
 
     @Test

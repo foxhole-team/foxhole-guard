@@ -406,7 +406,7 @@ class RuntimeConfigAssemblerTest {
     }
 
     @Test
-    fun `foxhole dns defaults are upgraded to split resolver config`() {
+    fun `foxhole dns defaults use proxied doh outside private dns off`() {
         val config = parse(assembler.assemble(baseConfigWithLegacyFoxholeDns(), Settings(), null))
         val dns = config["dns"]!!.jsonObject
         val route = config["route"]!!.jsonObject
@@ -417,10 +417,10 @@ class RuntimeConfigAssemblerTest {
         assertEquals("local", servers[0].jsonObject["type"]!!.jsonPrimitive.content)
         assertFalse(servers[0].jsonObject.containsKey("detour"))
         assertEquals("dns-direct", servers[1].jsonObject["tag"]!!.jsonPrimitive.content)
-        assertEquals("udp", servers[1].jsonObject["type"]!!.jsonPrimitive.content)
-        assertEquals("1.1.1.1", servers[1].jsonObject["server"]!!.jsonPrimitive.content)
-        assertEquals("53", servers[1].jsonObject["server_port"]!!.jsonPrimitive.content)
-        assertEquals("direct", servers[1].jsonObject["detour"]!!.jsonPrimitive.content)
+        assertEquals("local", servers[1].jsonObject["type"]!!.jsonPrimitive.content)
+        assertFalse(servers[1].jsonObject.containsKey("server"))
+        assertFalse(servers[1].jsonObject.containsKey("server_port"))
+        assertFalse(servers[1].jsonObject.containsKey("detour"))
         assertEquals("dns-remote", servers[2].jsonObject["tag"]!!.jsonPrimitive.content)
         assertEquals("https", servers[2].jsonObject["type"]!!.jsonPrimitive.content)
         assertEquals("1.1.1.1", servers[2].jsonObject["server"]!!.jsonPrimitive.content)
@@ -428,6 +428,29 @@ class RuntimeConfigAssemblerTest {
         assertEquals("/dns-query", servers[2].jsonObject["path"]!!.jsonPrimitive.content)
         assertEquals("proxy", servers[2].jsonObject["detour"]!!.jsonPrimitive.content)
         assertEquals("true", route["auto_detect_interface"]!!.jsonPrimitive.content)
+    }
+
+    @Test
+    fun `foxhole dns defaults use direct udp resolver when private dns is off`() {
+        val config =
+            parse(
+                assembler.assemble(
+                    baseConfigWithLegacyFoxholeDns(),
+                    Settings(),
+                    null,
+                    privateDnsMode = PrivateDnsMode.OFF,
+                ),
+            )
+        val dns = config["dns"]!!.jsonObject
+        val servers = dns["servers"]!!.jsonArray
+
+        assertEquals("dns-remote", dns["final"]!!.jsonPrimitive.content)
+        assertEquals("dns-remote", servers[2].jsonObject["tag"]!!.jsonPrimitive.content)
+        assertEquals("udp", servers[2].jsonObject["type"]!!.jsonPrimitive.content)
+        assertEquals("1.1.1.1", servers[2].jsonObject["server"]!!.jsonPrimitive.content)
+        assertEquals("53", servers[2].jsonObject["server_port"]!!.jsonPrimitive.content)
+        assertFalse(servers[2].jsonObject.containsKey("detour"))
+        assertFalse(servers[2].jsonObject.containsKey("path"))
     }
 
     @Test

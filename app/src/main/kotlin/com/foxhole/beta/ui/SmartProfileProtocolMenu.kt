@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -21,7 +22,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Close
-import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Star
@@ -41,7 +41,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -110,13 +109,11 @@ internal fun SmartProfileAutoConnectMenu(
             compact -> 392.dp
             else -> 336.dp
         }
-    val availableMenuWidth =
-        (LocalConfiguration.current.screenWidthDp.dp - ScreenHorizontalPadding - ScreenHorizontalPadding)
-            .coerceAtLeast(0.dp)
-    val menuMaxWidth = maxMenuWidth.coerceAtMost(availableMenuWidth)
-    val menuMinWidth = minMenuWidth.coerceAtMost(menuMaxWidth)
-    val menuWidth = menuMaxWidth.coerceAtLeast(menuMinWidth)
-    Box {
+    BoxWithConstraints {
+        val availableMenuWidth = (maxWidth - ScreenHorizontalPadding - ScreenHorizontalPadding).coerceAtLeast(0.dp)
+        val menuMaxWidth = maxMenuWidth.coerceAtMost(availableMenuWidth)
+        val menuMinWidth = minMenuWidth.coerceAtMost(menuMaxWidth)
+        val menuWidth = menuMaxWidth.coerceAtLeast(menuMinWidth)
         Surface(
             modifier =
                 Modifier
@@ -154,21 +151,15 @@ internal fun SmartProfileAutoConnectMenu(
                 verticalArrangement = Arrangement.spacedBy(if (compact) 0.dp else 2.dp),
             ) {
                 if (menuLayout.showHeader) {
-                    Column(verticalArrangement = Arrangement.spacedBy(if (compact) 2.dp else 5.dp)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(if (compact) 1.dp else 4.dp)) {
                         Row(
-                            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = if (compact) 3.dp else 6.dp),
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = if (compact) 2.dp else 5.dp),
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalAlignment = Alignment.Top,
+                            verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            Icon(
-                                imageVector = Icons.Outlined.Info,
-                                contentDescription = null,
-                                modifier = Modifier.size(if (compact) 14.dp else 16.dp),
-                                tint = FoxholeInfoAccent,
-                            )
                             Column(
                                 modifier = Modifier.weight(1f),
-                                verticalArrangement = Arrangement.spacedBy(if (compact) 2.dp else 4.dp),
+                                verticalArrangement = Arrangement.spacedBy(1.dp),
                             ) {
                                 Text(
                                     text = stringResource(R.string.smart_profile_menu_title),
@@ -199,9 +190,9 @@ internal fun SmartProfileAutoConnectMenu(
                                 Modifier
                                     .fillMaxWidth()
                                     .padding(
-                                        start = if (compact) 30.dp else 32.dp,
+                                        start = 8.dp,
                                         end = 8.dp,
-                                        bottom = if (compact) 4.dp else 6.dp,
+                                        bottom = if (compact) 2.dp else 5.dp,
                                     ),
                         )
                         HorizontalDivider(
@@ -214,16 +205,10 @@ internal fun SmartProfileAutoConnectMenu(
                     }
                 } else if (onRefreshMetrics != null) {
                     Row(
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 6.dp),
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 4.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.Top,
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Icon(
-                            imageVector = Icons.Outlined.Info,
-                            contentDescription = null,
-                            modifier = Modifier.padding(top = 2.dp).size(14.dp),
-                            tint = FoxholeInfoAccent,
-                        )
                         Column(
                             modifier = Modifier.weight(1f),
                             verticalArrangement = Arrangement.spacedBy(2.dp),
@@ -255,7 +240,7 @@ internal fun SmartProfileAutoConnectMenu(
                         modifier =
                             Modifier
                                 .fillMaxWidth()
-                                .padding(start = 32.dp, end = 10.dp, bottom = 6.dp),
+                                .padding(start = 10.dp, end = 10.dp, bottom = 3.dp),
                     )
                     HorizontalDivider(
                         modifier = Modifier.padding(horizontal = 8.dp),
@@ -382,18 +367,25 @@ private fun SmartProfileMetricsHint(
     compact: Boolean,
     modifier: Modifier = Modifier,
 ) {
-    val refreshHint = stringResource(R.string.smart_profile_metrics_refresh_hint)
+    val refreshHint =
+        stringResource(
+            if (compact) {
+                R.string.smart_profile_metrics_refresh_compact_hint
+            } else {
+                R.string.smart_profile_metrics_refresh_hint
+            },
+        )
     val hintLines = refreshHint.split('\n', limit = 2)
     Column(
         modifier = modifier,
-        verticalArrangement = Arrangement.spacedBy(if (compact) 3.dp else 4.dp),
+        verticalArrangement = Arrangement.spacedBy(if (compact) 1.dp else 4.dp),
     ) {
         Text(
             text = hintLines.firstOrNull().orEmpty(),
             style =
                 MaterialTheme.typography.labelSmall.copy(
-                    fontSize = if (compact) 8.8.sp else 10.sp,
-                    lineHeight = if (compact) 10.sp else 12.sp,
+                    fontSize = if (compact) 8.4.sp else 10.sp,
+                    lineHeight = if (compact) 9.sp else 12.sp,
                     fontWeight = FontWeight.Medium,
                 ),
             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -406,18 +398,18 @@ private fun SmartProfileMetricsHint(
                 text = refreshLine,
                 style =
                     MaterialTheme.typography.labelSmall.copy(
-                        fontSize = if (compact) 8.8.sp else 10.sp,
-                        lineHeight = if (compact) 10.sp else 12.sp,
+                        fontSize = if (compact) 8.4.sp else 10.sp,
+                        lineHeight = if (compact) 9.sp else 12.sp,
                         fontWeight = FontWeight.Medium,
                     ),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = if (compact) 2 else 1,
+                maxLines = 1,
                 overflow = TextOverflow.Clip,
             )
         }
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(if (compact) 10.dp else 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(if (compact) 8.dp else 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             SmartProfileLegendRow(
@@ -452,7 +444,7 @@ private fun SmartProfileLegendRow(
                 Icon(
                     imageVector = Icons.Outlined.Star,
                     contentDescription = null,
-                    modifier = Modifier.size(if (compact) 8.dp else 9.dp),
+                    modifier = Modifier.size(if (compact) 7.dp else 9.dp),
                     tint = smartProfileRecommendationStarTint(index),
                 )
             }
@@ -461,8 +453,8 @@ private fun SmartProfileLegendRow(
             text = label,
             style =
                 MaterialTheme.typography.labelSmall.copy(
-                    fontSize = if (compact) 9.sp else 10.sp,
-                    lineHeight = if (compact) 10.sp else 11.sp,
+                    fontSize = if (compact) 8.4.sp else 10.sp,
+                    lineHeight = if (compact) 9.sp else 11.sp,
                     fontWeight = FontWeight.Medium,
                 ),
             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -482,7 +474,7 @@ private fun SmartProfileMetricsRefreshStatus(
     compact: Boolean,
 ) {
     Column(
-        modifier = Modifier.width(if (compact) 126.dp else 110.dp),
+        modifier = Modifier.width(if (compact) 96.dp else 110.dp),
         horizontalAlignment = Alignment.End,
         verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
@@ -1227,9 +1219,9 @@ private val SmartProfileMenuHorizontalPadding = 8.dp
 private val SmartProfileProtocolColumnWidth = 186.dp
 private val SmartProfileOnColumnWidth = 32.dp
 private val SmartProfileMetricColumnWidth = 62.dp
-private val SmartProfileProtocolCompactHeaderHeight = 32.dp
+private val SmartProfileProtocolCompactHeaderHeight = 28.dp
 private val SmartProfileProtocolHeaderHeight = 36.dp
-private val SmartProfileProtocolCompactRowHeight = 34.dp
+private val SmartProfileProtocolCompactRowHeight = 32.dp
 private val SmartProfileProtocolRowHeight = 38.dp
 private val SmartProfileProtocolSimpleCompactRowHeight = 38.dp
 private val SmartProfileProtocolSimpleRowHeight = 42.dp
