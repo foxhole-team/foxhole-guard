@@ -75,6 +75,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -199,6 +202,7 @@ internal fun <T> DropdownSettingRow(
     summary: String? = null,
     leadingIcon: ImageVector? = null,
     optionIcon: ((T) -> ImageVector)? = null,
+    summaryMaxLines: Int = 1,
 ) {
     SettingValueRow(
         title = title,
@@ -206,6 +210,7 @@ internal fun <T> DropdownSettingRow(
         summary = summary,
         leadingIcon = leadingIcon,
         onClick = { onExpandedChange(true) },
+        summaryMaxLines = summaryMaxLines,
         trailingContent = {
             Box {
                 FoxholeValuePill(
@@ -267,7 +272,20 @@ internal fun SettingSwitchRow(
     enabled: Boolean = true,
     summaryMaxLines: Int = 1,
 ) {
+    val switchStateDescription =
+        stringResource(
+            if (checked) {
+                R.string.switch_state_on
+            } else {
+                R.string.switch_state_off
+            },
+        )
     FoxholePreferenceCard(
+        modifier =
+            Modifier.semantics(mergeDescendants = true) {
+                contentDescription = title
+                stateDescription = switchStateDescription
+            },
         title = title,
         summary = summary,
         leadingIcon = leadingIcon,
@@ -283,6 +301,11 @@ internal fun SettingSwitchRow(
                 checked = checked,
                 enabled = enabled,
                 onCheckedChange = if (enabled) onCheckedChange else null,
+                modifier =
+                    Modifier.semantics {
+                        contentDescription = title
+                        stateDescription = switchStateDescription
+                    },
             )
         },
     )

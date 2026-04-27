@@ -162,7 +162,10 @@ internal fun FoxholeScaffold(
                 navigationIcon = {
                     onNavigateUp?.let {
                         IconButton(onClick = it) {
-                            Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = null)
+                            Icon(
+                                Icons.AutoMirrored.Outlined.ArrowBack,
+                                contentDescription = stringResource(R.string.navigate_back),
+                            )
                         }
                     }
                 },

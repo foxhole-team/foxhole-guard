@@ -129,6 +129,7 @@ fun FoxholeApp(
     val scope = rememberCoroutineScope()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentSection = navBackStackEntry?.destination?.appSection()
+    val rootSwipeSection = navBackStackEntry?.destination?.rootSwipeSection()
     var qrScannerVisible by rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
     val insecureTlsImportWarning by viewModel.insecureTlsImportWarning.collectAsStateWithLifecycle()
     val importProfileLauncher =
@@ -160,9 +161,15 @@ fun FoxholeApp(
                     .fillMaxSize()
                     .padding(top = innerPadding.calculateTopPadding())
                     .consumeWindowInsets(innerPadding)
-                    .sectionSwipeNavigation(
-                        currentSection = currentSection,
-                        onSectionSelected = { section -> navController.navigateToSection(section) },
+                    .then(
+                        if (rootSwipeSection != null) {
+                            Modifier.sectionSwipeNavigation(
+                                currentSection = rootSwipeSection,
+                                onSectionSelected = { section -> navController.navigateToSection(section) },
+                            )
+                        } else {
+                            Modifier
+                        },
                     ).testTag("app_section_swipe_surface"),
         ) {
             NavHost(
@@ -720,6 +727,13 @@ private fun NavDestination.appSection(): AppSection =
     when {
         route?.startsWith(AppRoute.SETTINGS) == true -> AppSection.SETTINGS
         else -> AppSection.DASHBOARD
+    }
+
+private fun NavDestination.rootSwipeSection(): AppSection? =
+    when (route) {
+        AppRoute.HOME -> AppSection.DASHBOARD
+        AppRoute.SETTINGS -> AppSection.SETTINGS
+        else -> null
     }
 
 private fun NavHostController.navigateToProfilesRoot() {

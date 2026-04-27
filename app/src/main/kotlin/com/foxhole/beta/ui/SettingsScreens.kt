@@ -622,6 +622,7 @@ fun TrafficSettingsScreen(
                 label = { latencyProbeMethodLabel(it) },
                 onSelect = onLatencyProbeMethodSelected,
                 summary = stringResource(R.string.latency_probe_method_summary),
+                summaryMaxLines = 5,
                 leadingIcon = Icons.Outlined.Speed,
                 optionIcon = ::latencyProbeMethodIcon,
             )
