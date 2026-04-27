@@ -142,14 +142,14 @@ class SmartStartProtocolPresentationTest {
             stringValue(enStrings, "smart_profile_menu_title"),
         )
         assertEquals(
-            "Tap a protocol for on/off.\\nPeriodically refresh Smart start to choose a faster VPN tunnel.",
+            "Tap a protocol to turn it on or off.\\nPeriodically refresh Smart Start to choose a faster VPN tunnel.",
             stringValue(enStrings, "smart_profile_metrics_refresh_hint"),
         )
         assertEquals(
-            "Tap a protocol for on/off.\\nPeriodically refresh Smart start to choose a faster VPN tunnel.",
+            "Tap a protocol to turn it on or off.\\nPeriodically refresh Smart Start to choose a faster VPN tunnel.",
             stringValue(enStrings, "smart_profile_metrics_refresh_compact_hint"),
         )
-        assertEquals("Selected for Smart start", stringValue(enStrings, "smart_profile_legend_favorite"))
+        assertEquals("Selected for Smart Start", stringValue(enStrings, "smart_profile_legend_favorite"))
         assertEquals(
             "Recommended",
             stringValue(enStrings, "smart_profile_legend_reconnect_recommended"),
@@ -175,14 +175,14 @@ class SmartStartProtocolPresentationTest {
             stringValue(ruStrings, "smart_profile_menu_title"),
         )
         assertEquals(
-            "Нажмите на протокол для on/off.\\nПериодически обновляйте Смарт старт для выбора более быстрого туннеля VPN.",
+            "Нажмите на протокол, чтобы включить или отключить его.\\nПериодически обновляйте Smart Start для выбора более быстрого VPN-туннеля.",
             stringValue(ruStrings, "smart_profile_metrics_refresh_hint"),
         )
         assertEquals(
-            "Нажмите на протокол для on/off.\\nПериодически обновляйте Смарт старт для выбора более быстрого туннеля VPN.",
+            "Нажмите на протокол, чтобы включить или отключить его.\\nПериодически обновляйте Smart Start для выбора более быстрого VPN-туннеля.",
             stringValue(ruStrings, "smart_profile_metrics_refresh_compact_hint"),
         )
-        assertEquals("Выбран для смарт старта", stringValue(ruStrings, "smart_profile_legend_favorite"))
+        assertEquals("Выбран для Smart Start", stringValue(ruStrings, "smart_profile_legend_favorite"))
         assertEquals(
             "Рекомендованный",
             stringValue(ruStrings, "smart_profile_legend_reconnect_recommended"),
