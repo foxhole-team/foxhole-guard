@@ -5,6 +5,7 @@ import com.foxhole.beta.core.model.ProfileProtocolOption
 import com.foxhole.beta.core.model.ProfileSourceType
 import com.foxhole.beta.core.model.ProtocolHint
 import java.nio.file.Files
+import org.junit.Assert.assertFalse
 import java.util.zip.ZipFile
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -107,5 +108,38 @@ class ProfileExportDocumentSupportTest {
         assertEquals(listOf("vless", "ss"), choices.map(ProfileExportChoice::selectionKey))
         assertEquals(listOf("VLESS", "Shadowsocks"), choices.map(ProfileExportChoice::displayName))
         assertTrue(choices.all { it.protocolOptionId != null })
+    }
+
+    @Test
+    fun `profile export creation removes stale plaintext cache artifacts`() {
+        val directory = Files.createTempDirectory("foxhole-profile-export-cleanup").toFile()
+        val stale = directory.resolve("old.json").apply { writeText("""{"secret":"old"}""") }
+        stale.setLastModified(1_000L)
+
+        createProfileExportArtifact(
+            targetDir = directory,
+            payloads =
+                listOf(
+                    ProfileExportPayload(
+                        sourceProfileName = "Main",
+                        displayName = "Current",
+                        protocolOptionId = null,
+                        configJson = """{"type":"vless"}""",
+                    ),
+                ),
+            nowProvider = { 1_000L + 6L * 60L * 1000L },
+        )
+
+        assertFalse(stale.exists())
+    }
+
+    @Test
+    fun `startup cleanup removes profile export cache artifacts`() {
+        val directory = Files.createTempDirectory("foxhole-profile-export-startup").toFile()
+        val cached = directory.resolve("cached.json").apply { writeText("""{"secret":"cached"}""") }
+
+        cleanupProfileExportArtifacts(directory)
+
+        assertFalse(cached.exists())
     }
 }

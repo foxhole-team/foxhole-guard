@@ -192,9 +192,16 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
         startNotificationHealthMonitoring()
         val result = runtime.start(session, this)
         if (result.isSuccess) {
-            container.connectionController.markCurrentRuntimeApplied()
-            container.diagnosticsLogger.record("connection", "proxy runtime started")
-            onConnectionStarted(session)
+            container.diagnosticsLogger.record("connection", "proxy runtime started, validation required")
+            val validation = validateProxyConnectivity(session)
+            if (validation.isSuccess) {
+                container.connectionController.markCurrentRuntimeApplied()
+                onConnectionStarted(session)
+            } else {
+                val message = validation.exceptionOrNull()?.message ?: getString(R.string.error_dns_probe_failed)
+                container.diagnosticsLogger.record("connection", "proxy validation failed: $message")
+                fail(getString(R.string.error_dns_probe_failed), commandStartId)
+            }
         } else {
             val error = result.exceptionOrNull()
             fail(error?.let { describeVpnRuntimeFailure(it) } ?: getString(R.string.error_runtime_missing), commandStartId)
@@ -393,6 +400,47 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
         ipv4EnrichmentJob?.cancel()
         ipv4EnrichmentJob = null
     }
+
+    private suspend fun validateProxyConnectivity(session: VpnSession): Result<Unit> =
+        withContext(Dispatchers.IO) {
+            container.diagnosticsLogger.recordStructured(
+                "dns",
+                "Proxy validation started",
+                session.protocolHint.name.lowercase(),
+                "timeout_ms=$PROXY_VALIDATION_TOTAL_TIMEOUT_MS",
+            )
+            TunnelConnectivityProbe.run(
+                attempts = PROXY_VALIDATION_ATTEMPTS,
+                initialDelayMs = PROXY_VALIDATION_INITIAL_DELAY_MS,
+                retryDelayMs = PROXY_VALIDATION_RETRY_DELAY_MS,
+                timeoutMs = PROXY_VALIDATION_TOTAL_TIMEOUT_MS,
+                onFailure = { attemptIndex, error ->
+                    container.diagnosticsLogger.record(
+                        "dns",
+                        "proxy validation attempt ${attemptIndex + 1}/$PROXY_VALIDATION_ATTEMPTS failed: ${error.message.orEmpty()}",
+                    )
+                },
+            ) {
+                val ipRefresh =
+                    runCatching {
+                        refreshProxyIpInfo(callTimeoutMs = PROXY_VALIDATION_CALL_TIMEOUT_MS)
+                    }
+                if (ipRefresh.isSuccess) {
+                    FoxholeVpnRuntimeBridge.updateIpInfo(ipRefresh.getOrThrow())
+                    container.diagnosticsLogger.record("dns", "proxy passed in-process ip refresh")
+                    return@run
+                }
+                container.diagnosticsLogger.record(
+                    "dns",
+                    "proxy-bound ip refresh failed, probing validation endpoints: ${ipRefresh.exceptionOrNull()?.message.orEmpty()}",
+                )
+                val proxyAccess = container.settingsRepository.current().preferredAppProxyAccess() ?: error("proxy surface is unavailable")
+                probeConnectivityEndpointsOverLocalProxy(
+                    proxy = proxyAccess,
+                    callTimeoutMs = PROXY_VALIDATION_CALL_TIMEOUT_MS,
+                )
+            }
+        }
 
     private fun startIpv4EnrichmentIfNeeded(info: IpInfo) {
         if (info.ipv4 != null) {
@@ -749,6 +797,11 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
         private const val GEO_REFRESH_RETRY_DELAY_MS = 2_000L
         private const val GEO_REFRESH_CALL_TIMEOUT_MS = 5_000L
         private const val IPV4_ENRICHMENT_CALL_TIMEOUT_MS = 4_000L
+        private const val PROXY_VALIDATION_ATTEMPTS = 3
+        private const val PROXY_VALIDATION_INITIAL_DELAY_MS = 500L
+        private const val PROXY_VALIDATION_RETRY_DELAY_MS = 1_000L
+        private const val PROXY_VALIDATION_CALL_TIMEOUT_MS = 2_500L
+        private const val PROXY_VALIDATION_TOTAL_TIMEOUT_MS = 8_000L
         private val CONNECTIVITY_PROBE_ENDPOINTS =
             listOf(
                 "https://cp.cloudflare.com/generate_204",

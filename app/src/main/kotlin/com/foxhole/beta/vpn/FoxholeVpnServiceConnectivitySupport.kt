@@ -670,6 +670,7 @@ internal fun FoxholeVpnService.probeSessionTargetInternal(
     val timeout = timeoutMs.toInt()
     when (target.transport) {
         VpnHealthProbeTransport.TCP -> {
+            // Availability probe only: bounded TCP connect to the selected public runtime target, with no secrets sent.
             (network?.socketFactory?.createSocket() ?: Socket()).use {
                 it.soTimeout = timeout
                 it.connect(
@@ -680,6 +681,7 @@ internal fun FoxholeVpnService.probeSessionTargetInternal(
         }
 
         VpnHealthProbeTransport.UDP -> {
+            // Availability probe only: sends a static zero-secret readiness datagram to the selected runtime target.
             DatagramSocket().use { socket ->
                 network?.bindSocket(socket)
                 socket.soTimeout = timeout

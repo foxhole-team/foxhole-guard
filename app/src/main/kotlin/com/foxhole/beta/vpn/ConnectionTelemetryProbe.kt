@@ -98,6 +98,7 @@ internal class ConnectionTelemetryProbe(
             val url = endpoint.toHttpUrlOrNull() ?: error("latency endpoint is not a valid URL")
             val address = resolveServerPingAddress(url.host, network)
             val startedAt = SystemClock.elapsedRealtime()
+            // Availability probe only: opens a bounded TCP connect to a public latency endpoint and sends no secrets.
             (network?.socketFactory?.createSocket() ?: Socket()).use { socket ->
                 socket.soTimeout = timeoutMs.toInt()
                 socket.connect(
@@ -150,6 +151,7 @@ internal class ConnectionTelemetryProbe(
         return withContext(Dispatchers.IO) {
             val address = resolveServerPingAddress(target.host, upstreamNetwork)
             val startedAt = SystemClock.elapsedRealtime()
+            // Availability probe only: opens a bounded TCP connect to the configured server target and sends no payload.
             upstreamNetwork.socketFactory.createSocket().use { socket ->
                 socket.soTimeout = timeoutMs.toInt()
                 socket.connect(

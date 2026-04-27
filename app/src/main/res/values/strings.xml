@@ -114,7 +114,7 @@
     <string name="error_profile_missing">Select or import a profile first</string>
     <string name="error_profile_invalid">Profile config is invalid</string>
     <string name="error_runtime_missing">The sing-box core bridge is not bundled in this source build yet</string>
-    <string name="error_dns_probe_failed">Connectivity validation failed after tunnel start</string>
+    <string name="error_dns_probe_failed">Connectivity validation failed after runtime start</string>
     <string name="error_private_dns_strict_unsupported">Android Private DNS is not supported yet in tunnel mode. Set Private DNS to Off and reconnect</string>
     <string name="vpn_permission_denied">Secure connection permission was denied</string>
     <string name="vpn_permission_revoked">Secure connection permission was revoked</string>

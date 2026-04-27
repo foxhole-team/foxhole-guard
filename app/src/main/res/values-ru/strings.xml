@@ -114,7 +114,7 @@
     <string name="error_profile_missing">Сначала выберите или импортируйте профиль</string>
     <string name="error_profile_invalid">Конфигурация профиля некорректна</string>
     <string name="error_runtime_missing">В этой сборке пока не подключен sing-box core bridge</string>
-    <string name="error_dns_probe_failed">После старта туннеля не прошла проверка связи</string>
+    <string name="error_dns_probe_failed">После старта рантайма не прошла проверка связи</string>
     <string name="error_private_dns_strict_unsupported">Android Private DNS пока не поддерживается в режиме туннеля. Переключите Private DNS на Выключено и подключитесь снова</string>
     <string name="vpn_permission_denied">Разрешение на защищенное подключение отклонено</string>
     <string name="vpn_permission_revoked">Разрешение на защищенное подключение отозвано</string>

@@ -1,8 +1,9 @@
 package com.foxhole.beta.core.diagnostics
 
 import com.foxhole.beta.core.model.DiagnosticsRetention
+import com.foxhole.beta.core.security.AndroidKeystoreFileCipher
+import com.foxhole.beta.core.security.FileCipher
 import java.io.File
-import java.io.FileOutputStream
 import java.util.UUID
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
@@ -13,6 +14,7 @@ internal class DiagnosticsSessionStore(
     private val journalDir: File,
     private val nowProvider: () -> Long = System::currentTimeMillis,
     private val sessionIdProvider: () -> String = { UUID.randomUUID().toString() },
+    private val fileCipher: FileCipher = AndroidKeystoreFileCipher("foxhole.diagnostics.journal"),
 ) {
     private val json =
         Json {
@@ -39,12 +41,13 @@ internal class DiagnosticsSessionStore(
         retention: DiagnosticsRetention,
     ) {
         val target = writableSessionFile(entry.timestamp)
-        writeLineSync(target, json.encodeToString(entry.toPersisted()))
+        val entries = target.readPersistedEntries() + entry
+        writeEntriesSync(target, entries)
         maybeCleanup(entry.timestamp, retention)
     }
 
     fun clear() {
-        sessionFiles().forEach(File::delete)
+        sessionFiles(includeLegacy = true).forEach(File::delete)
         currentSessionFile = null
         lastCleanupAt = 0L
     }
@@ -74,7 +77,7 @@ internal class DiagnosticsSessionStore(
         if (existing != null && existing.isFile && existing.length() < MAX_SESSION_FILE_BYTES) {
             return existing
         }
-        val file = File(journalDir, "session-$now-${sessionIdProvider()}.jsonl")
+        val file = File(journalDir, "session-$now-${sessionIdProvider()}.jsonl.enc")
         currentSessionFile = file
         return file
     }
@@ -88,34 +91,54 @@ internal class DiagnosticsSessionStore(
         }
     }
 
-    private fun sessionFiles(): List<File> =
+    private fun sessionFiles(includeLegacy: Boolean = true): List<File> =
         journalDir
-            .listFiles { file -> file.isFile && file.name.startsWith("session-") && file.name.endsWith(".jsonl") }
+            .listFiles { file ->
+                file.isFile &&
+                    file.name.startsWith("session-") &&
+                    (file.name.endsWith(".jsonl.enc") || (includeLegacy && file.name.endsWith(".jsonl")))
+            }
             ?.sortedWith(compareBy<File> { it.lastModified() }.thenBy { it.name })
             .orEmpty()
 
     private fun File.readPersistedEntries(): List<DiagnosticEntry> =
         runCatching {
-            useLines(Charsets.UTF_8) { lines ->
-                lines.mapNotNull { line ->
+            val text =
+                if (name.endsWith(".jsonl.enc")) {
+                    fileCipher.readBytes(this).toString(Charsets.UTF_8)
+                } else {
+                    readText(Charsets.UTF_8)
+                }
+            text
+                .lineSequence()
+                .mapNotNull { line ->
                     line
                         .takeIf(String::isNotBlank)
                         ?.let { rawLine -> runCatching { json.decodeFromString<PersistedDiagnosticEntry>(rawLine) }.getOrNull() }
                         ?.toDiagnosticEntry()
                 }.toList()
-            }
+                .also { entries ->
+                    if (name.endsWith(".jsonl") && entries.isNotEmpty()) {
+                        runCatching {
+                            val encryptedFile = File(parentFile, "$name.enc")
+                            writeEntriesSync(encryptedFile, entries)
+                            delete()
+                        }
+                    }
+                }
         }.getOrDefault(emptyList())
 
-    private fun writeLineSync(
+    private fun writeEntriesSync(
         file: File,
-        line: String,
+        entries: List<DiagnosticEntry>,
     ) {
-        FileOutputStream(file, true).use { output ->
-            output.write(line.toByteArray(Charsets.UTF_8))
-            output.write('\n'.code)
-            output.flush()
-            output.fd.sync()
-        }
+        val payload =
+            entries
+                .joinToString(separator = "\n", postfix = "\n") { entry ->
+                    json.encodeToString(entry.toPersisted())
+                }
+                .toByteArray(Charsets.UTF_8)
+        fileCipher.writeBytesAtomic(file, payload)
     }
 
     private fun DiagnosticEntry.toPersisted(): PersistedDiagnosticEntry =

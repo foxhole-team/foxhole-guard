@@ -105,6 +105,7 @@ import com.foxhole.beta.core.model.ProfileSourceType
 import com.foxhole.beta.core.model.RoutingRule
 import com.foxhole.beta.core.model.RoutingRuleAction
 import com.foxhole.beta.core.profile.PreparedProfileExport
+import com.foxhole.beta.core.profile.deleteProfileExportArtifact
 import com.foxhole.beta.core.profile.ProfileExportChoice
 import com.foxhole.beta.core.profile.exportableProfileChoices
 import com.foxhole.beta.core.profile.EditableProfileConfig
@@ -117,6 +118,7 @@ import com.foxhole.beta.ui.FoxholeScaffold
 import com.foxhole.beta.ui.FoxholeSearchField
 import com.foxhole.beta.ui.FoxholeValuePill
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
@@ -227,6 +229,7 @@ fun ProfilesScreen(
             pendingProfileExportFileName = null
             pendingProfileExportMimeType = null
             if (uri == null || export == null) {
+                export?.let(::deleteProfileExportArtifact)
                 return@rememberLauncherForActivityResult
             }
             scope.launch {
@@ -240,6 +243,8 @@ fun ProfilesScreen(
                     snackbarHostState.showSnackbar(profileExportSavedMessage)
                 }.onFailure {
                     snackbarHostState.showSnackbar(profileExportSaveFailedMessage)
+                }.also {
+                    deleteProfileExportArtifact(export)
                 }
             }
         }
@@ -566,7 +571,15 @@ fun ProfilesScreen(
                                             onCreateProfileExportShareIntent(export),
                                             shareArchiveTitle,
                                         )
-                                    context.startActivity(chooser)
+                                    runCatching { context.startActivity(chooser) }
+                                        .onFailure {
+                                            deleteProfileExportArtifact(export)
+                                            throw it
+                                        }
+                                    launch {
+                                        delay(PROFILE_EXPORT_SHARE_CLEANUP_DELAY_MS)
+                                        deleteProfileExportArtifact(export)
+                                    }
                                     exportMode = false
                                     exportSelectionState = ProfilesExportSelectionState()
                                 } finally {
@@ -1153,3 +1166,4 @@ private data class ProfileFieldDialogState(
 )
 
 private const val ProfileConfigLoadTimeoutMs = 8_000L
+private const val PROFILE_EXPORT_SHARE_CLEANUP_DELAY_MS = 5L * 60L * 1000L

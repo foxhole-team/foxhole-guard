@@ -9,6 +9,7 @@ import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 
 const val CURRENT_PROFILE_EXPORT_SELECTION_KEY = "__current__"
+const val PROFILE_EXPORT_DIR_NAME = "profile-export"
 
 data class ProfileExportRequest(
     val profileId: Long,
@@ -103,6 +104,16 @@ fun createProfileExportArtifact(
     }
 }
 
+fun cleanupProfileExportArtifacts(targetDir: File) {
+    targetDir.listFiles()
+        ?.filter(File::isFile)
+        ?.forEach(File::delete)
+}
+
+fun deleteProfileExportArtifact(document: PreparedProfileExport) {
+    document.file.delete()
+}
+
 internal fun exportSelectionSummary(
     selectedCount: Int,
     totalCount: Int,
@@ -169,4 +180,4 @@ private fun cleanupStaleProfileExports(
         ?.forEach(File::delete)
 }
 
-private const val PROFILE_EXPORT_TTL_MS = 24L * 60L * 60L * 1000L
+private const val PROFILE_EXPORT_TTL_MS = 5L * 60L * 1000L

@@ -11,8 +11,8 @@ import javax.crypto.spec.GCMParameterSpec
 
 internal class AndroidKeystoreFileCipher(
     private val keyAlias: String,
-) {
-    fun readBytes(file: File): ByteArray {
+) : FileCipher {
+    override fun readBytes(file: File): ByteArray {
         val envelope = AesGcmFileEnvelope.decode(file.readBytes())
         val cipher = Cipher.getInstance(TRANSFORMATION)
         cipher.init(
@@ -23,7 +23,7 @@ internal class AndroidKeystoreFileCipher(
         return cipher.doFinal(envelope.ciphertext)
     }
 
-    fun writeBytesAtomic(
+    override fun writeBytesAtomic(
         file: File,
         plaintext: ByteArray,
     ) {

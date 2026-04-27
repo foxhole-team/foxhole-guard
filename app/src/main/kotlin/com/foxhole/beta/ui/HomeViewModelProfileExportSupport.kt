@@ -4,6 +4,7 @@ import android.app.Application
 import android.content.Intent
 import androidx.core.content.FileProvider
 import com.foxhole.beta.core.profile.PreparedProfileExport
+import com.foxhole.beta.core.profile.PROFILE_EXPORT_DIR_NAME
 import com.foxhole.beta.core.profile.ProfileExportPayload
 import com.foxhole.beta.core.profile.ProfileExportRequest
 import com.foxhole.beta.core.profile.createProfileExportArtifact
@@ -59,5 +60,3 @@ private suspend fun HomeViewModel.resolveProfileExportPayloads(request: ProfileE
         )
     }
 }
-
-private const val PROFILE_EXPORT_DIR_NAME = "profile-export"

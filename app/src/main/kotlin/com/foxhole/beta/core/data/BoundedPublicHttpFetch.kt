@@ -1,6 +1,7 @@
 package com.foxhole.beta.core.data
 
 import com.foxhole.beta.core.network.RemoteHostResolver
+import com.foxhole.beta.core.network.PublicRemoteDns
 import com.foxhole.beta.core.network.requirePublicUrl
 import okhttp3.Headers
 import okhttp3.HttpUrl
@@ -51,7 +52,8 @@ internal fun executeBoundedPublicGet(
             resolveHost = true,
             resolver = resolver,
         )
-        client.newCall(requestFactory(url)).execute().use { response ->
+        val guardedClient = client.withPublicRemoteDns()
+        guardedClient.newCall(requestFactory(url)).execute().use { response ->
             if (response.isRedirect) {
                 val location = response.header("Location") ?: error("redirect without Location")
                 val nextUrl = url.resolve(location) ?: error("invalid redirect Location")
@@ -73,6 +75,11 @@ internal fun executeBoundedPublicGet(
     }
     error("too many redirects")
 }
+
+private fun OkHttpClient.withPublicRemoteDns(): OkHttpClient =
+    newBuilder()
+        .dns(PublicRemoteDns(dns::lookup))
+        .build()
 
 internal fun ResponseBody.readUtf8Capped(maxBytes: Long): String {
     require(maxBytes > 0L) { "maxBytes must be positive" }

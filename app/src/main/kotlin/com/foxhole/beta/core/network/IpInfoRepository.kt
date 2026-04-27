@@ -235,6 +235,9 @@ class IpInfoRepository(
         val effectiveClient =
             if (callTimeoutMs == null && network == null && addressFamilyPreference == AddressFamilyPreference.ANY && proxy == null) {
                 client
+                    .newBuilder()
+                    .dns(PublicRemoteDns(client.dns::lookup))
+                    .build()
             } else {
                 client.newBuilder().apply {
                     callTimeoutMs?.let { timeout -> callTimeout(timeout, TimeUnit.MILLISECONDS) }
@@ -257,9 +260,9 @@ class IpInfoRepository(
                     } else {
                         network?.let { socketFactory(it.socketFactory) }
                     }
-                    if (proxy == null && (network != null || addressFamilyPreference != AddressFamilyPreference.ANY)) {
+                    if (proxy == null) {
                         dns(
-                            Dns { hostname ->
+                            PublicRemoteDns { hostname ->
                                 val addresses = resolveAddresses(hostname, network, addressFamilyPreference)
                                 prioritize(addresses, addressFamilyPreference)
                             },
@@ -328,7 +331,7 @@ class IpInfoRepository(
             if (network != null) {
                 network.getAllByName(hostname).toList()
             } else {
-                InetAddress.getAllByName(hostname).toList()
+                client.dns.lookup(hostname)
             }
         return prioritize(candidate, preference)
     }

@@ -128,6 +128,26 @@ class SettingsRepositoryTest {
     }
 
     @Test
+    fun `reset expert safe defaults disables insecure import exceptions`() {
+        val reset =
+            Settings(
+                expert =
+                    ExpertSettings(
+                        unlockedAt = 1234L,
+                        warningAcknowledgedAt = 5678L,
+                        allowHttpConfigImports = true,
+                        allowInsecureTls = true,
+                    ),
+            ).resetExpertSettingsToSafeDefaults()
+
+        assertFalse(reset.expert.allowHttpConfigImports)
+        assertFalse(reset.expert.allowInsecureTls)
+        assertNull(reset.expert.warningAcknowledgedAt)
+        assertEquals(1234L, reset.expert.unlockedAt)
+        assertTrue(reset.connection.stealthModeEnabled)
+    }
+
+    @Test
     fun `hiding expert settings clears unlocked marker and keeps section closed`() {
         val hidden =
             Settings(

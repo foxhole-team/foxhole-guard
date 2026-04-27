@@ -609,20 +609,7 @@ class SettingsRepository(
         }
 
     suspend fun resetExpertToSafeDefaults() =
-        update { current ->
-            current.copy(
-                connection = current.connection.copy(stealthModeEnabled = true),
-                traffic = TrafficSettings(),
-                expert =
-                    ExpertSettings(
-                        unlockedAt = current.expert.unlockedAt,
-                        warningAcknowledgedAt = null,
-                        blockScreenshots = current.expert.blockScreenshots,
-                        allowHttpConfigImports = current.expert.allowHttpConfigImports,
-                        allowInsecureTls = current.expert.allowInsecureTls,
-                    ),
-            )
-        }
+        update { current -> current.resetExpertSettingsToSafeDefaults() }
 
     suspend fun resetUsageTracking(timestamp: Long = System.currentTimeMillis()) =
         update {
@@ -942,6 +929,18 @@ class SettingsRepository(
         private const val MAX_MTU = 9_000
     }
 }
+
+internal fun Settings.resetExpertSettingsToSafeDefaults(): Settings =
+    copy(
+        connection = connection.copy(stealthModeEnabled = true),
+        traffic = TrafficSettings(),
+        expert =
+            ExpertSettings(
+                unlockedAt = expert.unlockedAt,
+                warningAcknowledgedAt = null,
+                blockScreenshots = expert.blockScreenshots,
+            ),
+    )
 
 internal fun Settings.withExpertSettingsVisibility(visible: Boolean): Settings =
     if (visible) {

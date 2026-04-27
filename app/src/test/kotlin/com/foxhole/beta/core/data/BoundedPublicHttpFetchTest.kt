@@ -2,7 +2,10 @@ package com.foxhole.beta.core.data
 
 import com.foxhole.beta.core.network.ipv4TestAddress
 import com.foxhole.beta.core.network.testRemoteHostResolver
+import java.net.InetAddress
+import java.net.UnknownHostException
 import java.util.concurrent.TimeUnit
+import okhttp3.Dns
 import okhttp3.Interceptor
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaType
@@ -101,6 +104,32 @@ class BoundedPublicHttpFetchTest {
             }
 
         assertTrue(error.message.orEmpty().contains("private or loopback hosts"))
+    }
+
+    @Test
+    fun `blocks dns rebinding when socket dns returns private address after public preflight`() {
+        val client =
+            OkHttpClient
+                .Builder()
+                .dns(Dns { listOf(InetAddress.getByName("127.0.0.1")) })
+                .connectTimeout(100, TimeUnit.MILLISECONDS)
+                .build()
+
+        val error =
+            assertThrows(UnknownHostException::class.java) {
+                executeBoundedPublicGet(
+                    client = client,
+                    initialUrl = "https://rebind.example/sub".toHttpUrl(),
+                    allowHttp = false,
+                    maxBytes = 64,
+                    resolver =
+                        testRemoteHostResolver(
+                            overrides = mapOf("rebind.example" to ipv4TestAddress("93.184.216.34")),
+                        ),
+                ) { url -> Request.Builder().url(url).get().build() }
+            }
+
+        assertTrue(error.message.orEmpty().contains("private, reserved, or loopback hosts"))
     }
 
     @Test

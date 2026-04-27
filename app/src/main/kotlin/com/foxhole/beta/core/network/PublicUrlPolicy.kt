@@ -90,7 +90,7 @@ private fun String.isClearlyLocalHost(): Boolean {
 
 private fun String.isIpLiteral(): Boolean = contains(':') || IPV4_REGEX.matches(this)
 
-private fun InetAddress.isPrivateOrLocalAddress(): Boolean {
+internal fun InetAddress.isPrivateOrLocalAddress(): Boolean {
     if (isAnyLocalAddress || isLoopbackAddress || isLinkLocalAddress || isSiteLocalAddress || isMulticastAddress) {
         return true
     }

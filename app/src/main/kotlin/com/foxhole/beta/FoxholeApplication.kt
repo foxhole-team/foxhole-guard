@@ -13,12 +13,15 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import com.foxhole.beta.core.model.AppLocale
 import com.foxhole.beta.core.model.SubscriptionRefreshInterval
+import com.foxhole.beta.core.profile.PROFILE_EXPORT_DIR_NAME
+import com.foxhole.beta.core.profile.cleanupProfileExportArtifacts
 import com.foxhole.beta.core.settings.readFastStoredAppLocale
 import com.foxhole.beta.vpn.SubscriptionRefreshWorker
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import java.io.File
 import java.util.concurrent.TimeUnit
 
 class FoxholeApplication : Application(), Configuration.Provider {
@@ -43,6 +46,7 @@ class FoxholeApplication : Application(), Configuration.Provider {
     private suspend fun initializeInBackground() {
         val startupDependencies: FoxholeStartupDependencies = appGraph
         startupDependencies.diagnosticsLogger.cleanupExpiredExports()
+        cleanupProfileExportArtifacts(File(cacheDir, PROFILE_EXPORT_DIR_NAME))
         val settings =
             runCatching { startupDependencies.settingsRepository.warmUp() }
                 .onFailure { error ->
