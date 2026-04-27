@@ -71,8 +71,8 @@ class HomeIpLoadingPolicyTest {
     }
 
     @Test
-    fun `shows pending network loading while tunnel is connecting and upstream internet is available`() {
-        assertTrue(
+    fun `keeps current ip surface instead of pending loading while tunnel is connecting`() {
+        assertFalse(
             shouldShowPendingNetworkLoading(
                 visibleIpInfo = null,
                 explicitLoading = false,
@@ -84,8 +84,8 @@ class HomeIpLoadingPolicyTest {
     }
 
     @Test
-    fun `shows pending network loading while smart start is running and upstream internet is available`() {
-        assertTrue(
+    fun `keeps current ip surface instead of pending loading while smart start is running`() {
+        assertFalse(
             shouldShowPendingNetworkLoading(
                 visibleIpInfo = null,
                 explicitLoading = false,

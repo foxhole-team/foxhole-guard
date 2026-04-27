@@ -12,3 +12,6 @@ internal fun <T> boundNetworkForAppOwnedRequest(candidate: T?): T? =
         AppOwnedRequestPath.NORMAL_PROCESS -> null
         AppOwnedRequestPath.EXPLICIT_NETWORK_BINDING -> candidate
     }
+
+internal fun <T> tunnelValidationRequestNetwork(candidate: T?): T? =
+    candidate

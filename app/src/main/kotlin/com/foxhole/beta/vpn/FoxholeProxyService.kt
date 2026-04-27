@@ -1,30 +1,19 @@
 package com.foxhole.beta.vpn
 
-import android.Manifest
 import android.app.Notification
-import android.app.NotificationChannel
 import android.app.NotificationManager
-import android.app.PendingIntent
 import android.app.Service
-import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
-import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
-import android.service.quicksettings.TileService
-import androidx.core.app.NotificationCompat
-import androidx.core.app.NotificationManagerCompat
-import androidx.core.content.ContextCompat
 import androidx.core.content.getSystemService
 import com.foxhole.beta.FoxholeApplication
 import com.foxhole.beta.FoxholeRuntimeDependencies
-import com.foxhole.beta.MainActivity
 import com.foxhole.beta.R
 import com.foxhole.beta.core.model.ConnectionSnapshot
 import com.foxhole.beta.core.model.ConnectionState
@@ -36,9 +25,6 @@ import com.foxhole.beta.core.model.TrafficSnapshot
 import com.foxhole.beta.core.model.VpnSession
 import com.foxhole.beta.core.network.HttpProxyAccess
 import com.foxhole.beta.core.network.mergeIpInfo
-import com.foxhole.beta.core.settings.networkMemory
-import com.foxhole.beta.core.settings.preferredLastKnownGoodOptionId
-import com.foxhole.beta.core.settings.smartProfilePreference
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -128,59 +114,15 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
             FoxholeConnectionServiceContract.NOTIFICATION_ID,
             buildNotification(currentNotificationSnapshot()),
         )
-        when (intent?.action) {
-            FoxholeConnectionServiceContract.ACTION_CONNECT -> {
-                val profileId = intent.getLongExtra(FoxholeConnectionServiceContract.EXTRA_PROFILE_ID, -1L)
-                val protocolOptionId = intent.getStringExtra(FoxholeConnectionServiceContract.EXTRA_PROTOCOL_OPTION_ID)
-                val previousVpnNetworkHandle = intent.previousVpnNetworkHandleOrNull()
-                launchCommand { connect(profileId, startId, protocolOptionId, previousVpnNetworkHandle) }
-            }
-
-            FoxholeConnectionServiceContract.ACTION_DISCONNECT -> {
-                launchCommand { disconnect(commandStartId = startId) }
-            }
-
-            FoxholeConnectionServiceContract.ACTION_RELOAD -> {
-                val profileId = intent.getLongExtra(FoxholeConnectionServiceContract.EXTRA_PROFILE_ID, -1L)
-                launchCommand { reload(profileId) }
-            }
-
-            FoxholeConnectionServiceContract.ACTION_RESTORE -> {
-                launchCommand {
-                    val active = container.profileRepository.getActiveProfile()
-                    if (active != null) {
-                        val smartProfilePreference = container.settingsRepository.current().smartProfilePreference(active.id)
-                        val networkFingerprint = container.networkFingerprintProvider.currentFingerprint()
-                        val scopedLastKnownGoodOptionId = smartProfilePreference?.networkMemory(networkFingerprint?.key)?.lastKnownGoodOptionId
-                        val restoredOptionId =
-                            smartProfilePreference
-                                ?.preferredLastKnownGoodOptionId(networkFingerprint?.key)
-                                ?.takeIf { optionId ->
-                                    optionId !in smartProfilePreference.excludedProtocolOptionIds &&
-                                        active.protocolOptions.any { option -> option.id == optionId }
-                                }
-                        restoredOptionId?.let { optionId ->
-                            val details =
-                                buildList {
-                                    add("profile_id=${active.id}")
-                                    add("option=$optionId")
-                                    add("reason=restored_last_good")
-                                    add("scope=${if (optionId == scopedLastKnownGoodOptionId) "network" else "profile"}")
-                                    networkFingerprint?.key?.take(12)?.let { fingerprint -> add("network_fp=$fingerprint") }
-                                }
-                            container.diagnosticsLogger.recordStructured(
-                                "auto-connect",
-                                "restore candidate",
-                                *details.toTypedArray(),
-                            )
-                        }
-                        connect(active.id, startId, restoredOptionId)
-                    } else {
-                        disconnect(commandStartId = startId)
-                    }
-                }
-            }
-        }
+        handleRuntimeServiceCommand(
+            intent = intent,
+            startId = startId,
+            container = container,
+            launchCommand = ::launchCommand,
+            connect = ::connect,
+            disconnect = { commandStartId -> disconnect(commandStartId = commandStartId) },
+            reload = ::reload,
+        )
         return START_STICKY
     }
 
@@ -340,25 +282,7 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
         }
     }
 
-    private fun ensureNotificationChannel() {
-        notificationManager.createNotificationChannel(
-            NotificationChannel(
-                FoxholeConnectionServiceContract.NOTIFICATION_CHANNEL_ID,
-                getString(R.string.notification_channel_name),
-                NotificationManager.IMPORTANCE_LOW,
-            ).apply {
-                description = getString(R.string.notification_channel_description)
-                setSound(null, null)
-                enableVibration(false)
-                enableLights(false)
-                setShowBadge(false)
-                lockscreenVisibility = Notification.VISIBILITY_SECRET
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    setAllowBubbles(false)
-                }
-            },
-        )
-    }
+    private fun ensureNotificationChannel() = ensureConnectionNotificationChannel(notificationManager)
 
     private fun launchCommand(block: suspend () -> Unit) {
         scope.launch {
@@ -376,73 +300,17 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
         }
     }
 
-    private fun buildNotification(snapshot: NotificationSnapshot): Notification {
-        val openIntent =
-            PendingIntent.getActivity(
-                this,
-                1,
-                Intent(this, MainActivity::class.java),
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-            )
-        val action = notificationActionForState(snapshot.state)
-        val actionIntent =
-            PendingIntent.getService(
-                this,
-                action.requestCode,
-                FoxholeConnectionServiceContract.serviceIntent(this, TrafficMode.PROXY, action.serviceAction),
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-            )
-        val builder =
-            NotificationCompat.Builder(this, FoxholeConnectionServiceContract.NOTIFICATION_CHANNEL_ID)
-                .setSmallIcon(R.drawable.notification_icon)
-                .setVisibility(NotificationCompat.VISIBILITY_SECRET)
-                .setSilent(true)
-                .setOnlyAlertOnce(true)
-                .setCategory(NotificationCompat.CATEGORY_SERVICE)
-                .setPriority(NotificationCompat.PRIORITY_LOW)
-                .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
-                .setContentTitle(notificationStateLabel(snapshot))
-                .setOngoing(action.ongoing)
-                .setContentIntent(openIntent)
-                .addAction(0, getString(action.labelRes), actionIntent)
-        notificationCollapsedText(snapshot).takeIf { it.isNotBlank() }?.let(builder::setContentText)
-        notificationExpandedText(snapshot)?.let { expanded ->
-            builder.setStyle(NotificationCompat.BigTextStyle().bigText(expanded))
-        }
-        if (!snapshot.isRedacted) {
-            builder.setPublicVersion(
-                buildNotification(
-                    snapshot.copy(
-                        profileName = null,
-                        ipAddress = null,
-                        countryCode = null,
-                        countryName = null,
-                        txRate = 0L,
-                        rxRate = 0L,
-                        txTotal = 0L,
-                        rxTotal = 0L,
-                        updatedAt = 0L,
-                        isRedacted = true,
-                    ),
-                ),
-            )
-        }
-        return builder.build()
-    }
+    private fun buildNotification(snapshot: NotificationSnapshot): Notification =
+        buildConnectionNotification(
+            mode = TrafficMode.PROXY,
+            snapshot = snapshot,
+            collapsedText = ::notificationCollapsedText,
+            expandedText = ::notificationExpandedText,
+            stateLabel = ::notificationStateLabel,
+        )
 
     private fun updateNotification() {
-        TileService.requestListeningState(this, ComponentName(this, FoxholeTileService::class.java))
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
-        ) {
-            return
-        }
-        runCatching {
-            NotificationManagerCompat.from(this).notify(
-                FoxholeConnectionServiceContract.NOTIFICATION_ID,
-                buildNotification(currentNotificationSnapshot()),
-            )
-        }
+        updateConnectionNotification { buildNotification(currentNotificationSnapshot()) }
     }
 
     private fun registerDefaultNetworkCallbackIfNeeded() {

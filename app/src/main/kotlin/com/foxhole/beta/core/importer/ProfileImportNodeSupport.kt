@@ -469,9 +469,7 @@ internal fun buildBaseConfig(
                         add(
                             buildJsonObject {
                                 put("tag", "dns-direct")
-                                put("type", "udp")
-                                put("server", "1.1.1.1")
-                                put("server_port", 53)
+                                put("type", "local")
                             },
                         )
                         add(
@@ -555,8 +553,13 @@ internal fun buildBaseConfig(
                         )
                         add(
                             buildJsonObject {
-                                put("protocol", "dns")
                                 put("port", 53)
+                                put("action", "hijack-dns")
+                            },
+                        )
+                        add(
+                            buildJsonObject {
+                                put("protocol", "dns")
                                 put("action", "hijack-dns")
                             },
                         )

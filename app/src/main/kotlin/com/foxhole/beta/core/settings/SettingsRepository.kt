@@ -27,6 +27,7 @@ import com.foxhole.beta.core.model.SETTINGS_SCHEMA_VERSION
 import com.foxhole.beta.core.model.SmartProfileNetworkMemory
 import com.foxhole.beta.core.model.SmartProfilePreference
 import com.foxhole.beta.core.model.SmartProfileProtocolMemory
+import com.foxhole.beta.core.model.SubscriptionRefreshInterval
 import com.foxhole.beta.core.model.ThemeMode
 import com.foxhole.beta.core.model.TrafficMode
 import com.foxhole.beta.core.model.TrafficSettings
@@ -143,6 +144,9 @@ class SettingsRepository(
 
     suspend fun updateAutoRefreshSubscriptions(value: Boolean) =
         update { it.copy(connection = it.connection.copy(autoRefreshSubscriptions = value)) }
+
+    suspend fun updateSubscriptionRefreshInterval(value: SubscriptionRefreshInterval) =
+        update { it.copy(connection = it.connection.copy(subscriptionRefreshInterval = value)) }
 
     suspend fun updateStealthModeEnabled(value: Boolean) =
         update { current ->

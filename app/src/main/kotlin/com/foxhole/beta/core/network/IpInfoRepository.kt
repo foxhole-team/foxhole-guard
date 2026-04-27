@@ -324,11 +324,12 @@ class IpInfoRepository(
         network: Network?,
         preference: AddressFamilyPreference,
     ): List<InetAddress> {
-        val networkResolved =
-            runCatching {
-                network?.getAllByName(hostname)?.toList().orEmpty()
-            }.getOrDefault(emptyList())
-        val candidate = if (networkResolved.isNotEmpty()) networkResolved else InetAddress.getAllByName(hostname).toList()
+        val candidate =
+            if (network != null) {
+                network.getAllByName(hostname).toList()
+            } else {
+                InetAddress.getAllByName(hostname).toList()
+            }
         return prioritize(candidate, preference)
     }
 

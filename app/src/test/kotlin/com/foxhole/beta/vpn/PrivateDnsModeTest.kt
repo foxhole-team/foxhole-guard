@@ -18,6 +18,22 @@ class PrivateDnsModeTest {
     }
 
     @Test
+    fun `parses automatic mode as opportunistic`() {
+        assertEquals(
+            PrivateDnsMode.OPPORTUNISTIC,
+            PrivateDnsSettings.fromValues(modeValue = "automatic", specifierValue = null),
+        )
+    }
+
+    @Test
+    fun `keeps opportunistic mode when android leaves stale specifier value`() {
+        assertEquals(
+            PrivateDnsMode.OPPORTUNISTIC,
+            PrivateDnsSettings.fromValues(modeValue = "opportunistic", specifierValue = "one.one.one.one"),
+        )
+    }
+
+    @Test
     fun `parses strict mode from hostname`() {
         assertEquals(
             PrivateDnsMode.STRICT,
@@ -31,5 +47,13 @@ class PrivateDnsModeTest {
             PrivateDnsMode.UNKNOWN,
             PrivateDnsSettings.fromValues(modeValue = "custom", specifierValue = null),
         )
+    }
+
+    @Test
+    fun `tunnel mode supports private dns off and automatic`() {
+        assertEquals(true, PrivateDnsMode.OFF.isSupportedForTunnelMode())
+        assertEquals(true, PrivateDnsMode.OPPORTUNISTIC.isSupportedForTunnelMode())
+        assertEquals(false, PrivateDnsMode.STRICT.isSupportedForTunnelMode())
+        assertEquals(false, PrivateDnsMode.UNKNOWN.isSupportedForTunnelMode())
     }
 }

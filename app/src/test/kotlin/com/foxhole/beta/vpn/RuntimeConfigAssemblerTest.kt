@@ -21,6 +21,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -54,15 +55,14 @@ class RuntimeConfigAssemblerTest {
                     settings = Settings(),
                     activePreset = preset(RoutingPresetOverrideMode.RESPECT_PROFILE),
                 ),
-            )
+        )
 
         val rules = config["route"]!!.jsonObject["rules"]!!.jsonArray
-        assertEquals(3, rules.size)
-        assertEquals("hijack-dns", rules[0].jsonObject["action"]!!.jsonPrimitive.content)
-        assertEquals("dns", rules[0].jsonObject["protocol"]!!.jsonPrimitive.content)
-        assertEquals("53", rules[0].jsonObject["port"]!!.jsonPrimitive.content)
-        assertEquals("profile.example", rules[1].jsonObject["domain"]!!.jsonArray[0].jsonPrimitive.content)
-        assertEquals("local.example", rules[2].jsonObject["domain"]!!.jsonArray[0].jsonPrimitive.content)
+        assertEquals(4, rules.size)
+        assertPortDnsHijack(rules[0].jsonObject)
+        assertProtocolDnsHijack(rules[1].jsonObject)
+        assertEquals("profile.example", rules[2].jsonObject["domain"]!!.jsonArray[0].jsonPrimitive.content)
+        assertEquals("local.example", rules[3].jsonObject["domain"]!!.jsonArray[0].jsonPrimitive.content)
     }
 
     @Test
@@ -77,11 +77,10 @@ class RuntimeConfigAssemblerTest {
             )
 
         val rules = config["route"]!!.jsonObject["rules"]!!.jsonArray
-        assertEquals(2, rules.size)
-        assertEquals("hijack-dns", rules[0].jsonObject["action"]!!.jsonPrimitive.content)
-        assertEquals("dns", rules[0].jsonObject["protocol"]!!.jsonPrimitive.content)
-        assertEquals("53", rules[0].jsonObject["port"]!!.jsonPrimitive.content)
-        assertEquals("local.example", rules[1].jsonObject["domain"]!!.jsonArray[0].jsonPrimitive.content)
+        assertEquals(3, rules.size)
+        assertPortDnsHijack(rules[0].jsonObject)
+        assertProtocolDnsHijack(rules[1].jsonObject)
+        assertEquals("local.example", rules[2].jsonObject["domain"]!!.jsonArray[0].jsonPrimitive.content)
     }
 
     @Test
@@ -416,15 +415,17 @@ class RuntimeConfigAssemblerTest {
         assertEquals("dns-remote", dns["final"]!!.jsonPrimitive.content)
         assertEquals("dns-local", servers[0].jsonObject["tag"]!!.jsonPrimitive.content)
         assertEquals("local", servers[0].jsonObject["type"]!!.jsonPrimitive.content)
+        assertFalse(servers[0].jsonObject.containsKey("detour"))
         assertEquals("dns-direct", servers[1].jsonObject["tag"]!!.jsonPrimitive.content)
-        assertEquals("udp", servers[1].jsonObject["type"]!!.jsonPrimitive.content)
-        assertEquals("1.1.1.1", servers[1].jsonObject["server"]!!.jsonPrimitive.content)
-        assertEquals("53", servers[1].jsonObject["server_port"]!!.jsonPrimitive.content)
+        assertEquals("local", servers[1].jsonObject["type"]!!.jsonPrimitive.content)
+        assertFalse(servers[1].jsonObject.containsKey("server"))
+        assertFalse(servers[1].jsonObject.containsKey("detour"))
         assertEquals("dns-remote", servers[2].jsonObject["tag"]!!.jsonPrimitive.content)
         assertEquals("https", servers[2].jsonObject["type"]!!.jsonPrimitive.content)
         assertEquals("1.1.1.1", servers[2].jsonObject["server"]!!.jsonPrimitive.content)
         assertEquals("443", servers[2].jsonObject["server_port"]!!.jsonPrimitive.content)
         assertEquals("/dns-query", servers[2].jsonObject["path"]!!.jsonPrimitive.content)
+        assertEquals("proxy", servers[2].jsonObject["detour"]!!.jsonPrimitive.content)
         assertEquals("true", route["auto_detect_interface"]!!.jsonPrimitive.content)
     }
 
@@ -434,12 +435,10 @@ class RuntimeConfigAssemblerTest {
         val route = config["route"]!!.jsonObject
         val rules = route["rules"]!!.jsonArray
 
-        assertEquals("hijack-dns", rules[0].jsonObject["action"]!!.jsonPrimitive.content)
-        assertEquals("dns", rules[0].jsonObject["protocol"]!!.jsonPrimitive.content)
-        assertEquals("53", rules[0].jsonObject["port"]!!.jsonPrimitive.content)
-        assertFalse(rules[0].jsonObject["port"]!!.jsonPrimitive.isString)
+        assertPortDnsHijack(rules[0].jsonObject)
+        assertProtocolDnsHijack(rules[1].jsonObject)
         assertEquals("dns-direct", route["default_domain_resolver"]!!.jsonPrimitive.content)
-        assertFalse(route.containsKey("auto_detect_interface"))
+        assertEquals("true", route["auto_detect_interface"]!!.jsonPrimitive.content)
     }
 
     @Test
@@ -448,7 +447,8 @@ class RuntimeConfigAssemblerTest {
         val route = config["route"]!!.jsonObject
         val rules = route["rules"]!!.jsonArray
 
-        assertEquals("hijack-dns", rules[0].jsonObject["action"]!!.jsonPrimitive.content)
+        assertPortDnsHijack(rules[0].jsonObject)
+        assertProtocolDnsHijack(rules[1].jsonObject)
         assertEquals("proxy", route["final"]!!.jsonPrimitive.content)
         assertEquals("dns-direct", route["default_domain_resolver"]!!.jsonPrimitive.content)
         assertEquals("true", route["auto_detect_interface"]!!.jsonPrimitive.content)
@@ -483,7 +483,7 @@ class RuntimeConfigAssemblerTest {
             )
 
         val config = parse(assembler.assemble(baseConfigWithRules("profile.example"), Settings(), preset))
-        val rule = config["route"]!!.jsonObject["rules"]!!.jsonArray[2].jsonObject
+        val rule = config["route"]!!.jsonObject["rules"]!!.jsonArray[3].jsonObject
 
         assertEquals("53", rule["port"]!!.jsonPrimitive.content)
         assertFalse(rule["port"]!!.jsonPrimitive.isString)
@@ -508,16 +508,20 @@ class RuntimeConfigAssemblerTest {
         assertEquals("true", tunInbound["sniff"]!!.jsonPrimitive.content)
         assertEquals("false", tunInbound["sniff_override_destination"]!!.jsonPrimitive.content)
         assertEquals("sniff", rules[0].jsonObject["action"]!!.jsonPrimitive.content)
-        assertEquals("hijack-dns", rules[1].jsonObject["action"]!!.jsonPrimitive.content)
+        assertPortDnsHijack(rules[1].jsonObject)
+        assertProtocolDnsHijack(rules[2].jsonObject)
     }
 
     @Test
     fun `custom dns servers are preserved`() {
         val config = parse(assembler.assemble(baseConfigWithCustomDns(), Settings(), null))
         val dns = config["dns"]!!.jsonObject
+        val route = config["route"]!!.jsonObject
 
         assertEquals("https://dns.example/dns-query", dns["servers"]!!.jsonArray[0].jsonObject["address"]!!.jsonPrimitive.content)
         assertEquals("prefer_ipv4", dns["strategy"]!!.jsonPrimitive.content)
+        assertEquals("dns-custom", route["default_domain_resolver"]!!.jsonPrimitive.content)
+        assertEquals("true", route["auto_detect_interface"]!!.jsonPrimitive.content)
     }
 
     @Test(expected = IllegalArgumentException::class)
@@ -689,4 +693,17 @@ class RuntimeConfigAssemblerTest {
         }.toString()
 
     private fun parse(raw: String) = json.parseToJsonElement(raw).jsonObject
+
+    private fun assertPortDnsHijack(rule: JsonObject) {
+        assertEquals("hijack-dns", rule["action"]!!.jsonPrimitive.content)
+        assertEquals("53", rule["port"]!!.jsonPrimitive.content)
+        assertFalse(rule["port"]!!.jsonPrimitive.isString)
+        assertFalse(rule.containsKey("protocol"))
+    }
+
+    private fun assertProtocolDnsHijack(rule: JsonObject) {
+        assertEquals("hijack-dns", rule["action"]!!.jsonPrimitive.content)
+        assertEquals("dns", rule["protocol"]!!.jsonPrimitive.content)
+        assertFalse(rule.containsKey("port"))
+    }
 }

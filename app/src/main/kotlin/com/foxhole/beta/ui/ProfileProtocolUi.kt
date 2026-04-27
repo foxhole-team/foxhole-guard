@@ -37,6 +37,7 @@ import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.RemoveCircleOutline
 import androidx.compose.material.icons.outlined.Security
 import androidx.compose.material.icons.outlined.Speed
+import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material.icons.outlined.VpnKey
 import androidx.compose.material3.AlertDialog
@@ -92,9 +93,9 @@ import kotlinx.coroutines.withContext
 import java.text.DateFormat
 
 private val CompactProtocolSelectorMinWidth = 170.dp
-private val CompactProtocolSelectorMaxWidth = 286.dp
+private val CompactProtocolSelectorMaxWidth = 318.dp
 private val RegularProtocolSelectorMinWidth = 206.dp
-private val RegularProtocolSelectorMaxWidth = 332.dp
+private val RegularProtocolSelectorMaxWidth = 354.dp
 
 @Composable
 internal fun ProtocolMetadataRow(
@@ -108,6 +109,8 @@ internal fun ProtocolMetadataRow(
     compact: Boolean = false,
     animateSelection: Boolean = false,
     latencyByOptionId: Map<String, Long> = emptyMap(),
+    recommendedProtocolOptionId: String? = null,
+    recommendedProtocolOptionIds: Set<String> = recommendedProtocolOptionId?.let(::setOf).orEmpty(),
     selectorMenuInfoText: String? = null,
     selectorBorderColor: Color? = null,
     requiresInsecureTls: Boolean = false,
@@ -140,12 +143,14 @@ internal fun ProtocolMetadataRow(
             onProtocolOptionSelected = onProtocolOptionSelected,
             compact = compact,
             animateSelection = animateSelection,
+            recommendedProtocolOptionId = recommendedProtocolOptionId,
+            recommendedProtocolOptionIds = recommendedProtocolOptionIds,
             dropdownInfoText = selectorMenuInfoText,
             selectorBorderColor = selectorBorderColor,
         )
         trailingContent?.invoke(this)
         if (selectedRequiresInsecureTls) {
-            if (reserveTrailingSpace) {
+            if (expand || reserveTrailingSpace) {
                 Spacer(modifier = Modifier.weight(1f))
             }
             InsecureTlsProfileBadge(compact = compact)
@@ -242,6 +247,8 @@ private fun ProtocolMarkOrSelector(
     onProtocolOptionSelected: ((String) -> Unit)?,
     compact: Boolean,
     animateSelection: Boolean,
+    recommendedProtocolOptionId: String?,
+    recommendedProtocolOptionIds: Set<String>,
     dropdownInfoText: String?,
     selectorBorderColor: Color?,
 ) {
@@ -297,12 +304,16 @@ private fun ProtocolMarkOrSelector(
                             ProtocolSelectorLabel(
                                 option = animatedOption,
                                 compact = compact,
+                                recommended = animatedOption.id in recommendedProtocolOptionIds,
+                                topRecommended = animatedOption.id == recommendedProtocolOptionId,
                             )
                         }
                     } else {
                         ProtocolSelectorLabel(
                             option = selected,
                             compact = compact,
+                            recommended = selected.id in recommendedProtocolOptionIds,
+                            topRecommended = selected.id == recommendedProtocolOptionId,
                         )
                     }
                 }
@@ -398,6 +409,8 @@ private fun ProtocolMarkOrSelector(
                             option = option,
                             modifier = Modifier.weight(1f),
                             compact = compact,
+                            recommended = option.id in recommendedProtocolOptionIds,
+                            topRecommended = option.id == recommendedProtocolOptionId,
                         )
                     }
                 }
@@ -411,6 +424,8 @@ internal fun ProtocolSelectorLabel(
     option: ProfileProtocolOption,
     modifier: Modifier = Modifier,
     compact: Boolean = false,
+    recommended: Boolean = false,
+    topRecommended: Boolean = false,
 ) {
     Row(
         modifier = modifier,
@@ -434,6 +449,46 @@ internal fun ProtocolSelectorLabel(
                 maxLines = 1,
                 softWrap = false,
                 overflow = TextOverflow.Ellipsis,
+            )
+        }
+        if (recommended) {
+            ProtocolRecommendationStars(
+                topRecommended = topRecommended,
+                compact = compact,
+                modifier = Modifier.offset(y = if (compact) (-4).dp else (-3).dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun ProtocolRecommendationStars(
+    topRecommended: Boolean,
+    compact: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.spacedBy(1.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        val starCount = if (topRecommended) 2 else 1
+        repeat(starCount) { index ->
+            Icon(
+                imageVector = Icons.Outlined.Star,
+                contentDescription =
+                    if (index == 0) {
+                        stringResource(R.string.smart_profile_menu_recommended_badge)
+                    } else {
+                        null
+                    },
+                modifier = Modifier.size(if (compact) 9.dp else 10.dp),
+                tint =
+                    if (index == 1) {
+                        Color(0xFFE0B84A)
+                    } else {
+                        FoxholePositiveAccent
+                    },
             )
         }
     }
@@ -590,6 +645,7 @@ private fun rememberProtocolSelectorFixedWidth(
     val iconSizePx = with(density) { if (compact) 13.dp.roundToPx() else 18.dp.roundToPx() }
     val markSpacingPx = with(density) { if (compact) 4.dp.roundToPx() else 8.dp.roundToPx() }
     val secondarySpacingPx = with(density) { if (compact) 4.dp.roundToPx() else 8.dp.roundToPx() }
+    val recommendationStarsPx = with(density) { if (compact) 24.dp.roundToPx() else 27.dp.roundToPx() }
     val chevronSizePx = with(density) { if (compact) 17.dp.roundToPx() else 18.dp.roundToPx() }
     val chevronGapPx = with(density) { if (compact) 4.dp.roundToPx() else 6.dp.roundToPx() }
     val leadingPaddingPx = with(density) { if (compact) 10.dp.roundToPx() else 14.dp.roundToPx() }
@@ -610,7 +666,7 @@ private fun rememberProtocolSelectorFixedWidth(
                             style = secondaryStyle,
                         ).size.width
                 } ?: 0
-            iconSizePx + markSpacingPx + primaryWidth + secondaryWidth
+            iconSizePx + markSpacingPx + primaryWidth + secondaryWidth + recommendationStarsPx
         } ?: 0
     val estimatedWidth =
         with(density) {

@@ -15,11 +15,13 @@ import com.foxhole.beta.core.diagnostics.DiagnosticsLogger
 import java.io.File
 import java.lang.reflect.Method
 import java.lang.reflect.Proxy
+import java.net.Inet4Address
 import java.net.Inet6Address
 import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.net.InterfaceAddress
 import java.net.NetworkInterface
+import java.net.UnknownHostException
 import java.security.KeyStore
 import java.util.Locale
 import java.util.concurrent.atomic.AtomicBoolean
@@ -45,6 +47,7 @@ internal class LibboxReflection(
     private val networkInterfaceIteratorClass by lazy { requireClass("io.nekohasekai.libbox.NetworkInterfaceIterator") }
     private val stringIteratorClass by lazy { requireClass("io.nekohasekai.libbox.StringIterator") }
     private val interfaceUpdateListenerClass by lazy { requireClass("io.nekohasekai.libbox.InterfaceUpdateListener") }
+    private val localDnsTransportClass by lazy { classOrNull("io.nekohasekai.libbox.LocalDNSTransport") }
     private val wifiStateClass by lazy { requireClass("io.nekohasekai.libbox.WIFIState") }
     private val routePrefixClass by lazy { requireClass("io.nekohasekai.libbox.RoutePrefix") }
 
@@ -129,11 +132,7 @@ internal class LibboxReflection(
                 "getInterfaces" -> getInterfaces(host.runtimeContext)
                 "includeAllNetworks" -> false
                 "localDNSTransport" -> {
-                    diagnosticsLogger.record("dns", "platform local dns transport disabled; sing-box resolves domains")
-                    if (BuildConfig.DEBUG) {
-                        Log.d(LOG_TAG, "platform localDNSTransport disabled")
-                    }
-                    defaultValue(method)
+                    localDnsTransport(defaultNetworkMonitor)
                 }
                 "openTun" -> openTun(host, args?.firstOrNull() ?: error("tun options missing"))
                 "readWIFIState" -> readWifiState()
@@ -183,6 +182,59 @@ internal class LibboxReflection(
     fun resetNetwork(commandServer: Any) {
         call(commandServer, "resetNetwork")
     }
+
+    private fun localDnsTransport(defaultNetworkMonitor: DefaultNetworkMonitor): Any? {
+        val clazz = localDnsTransportClass ?: return null
+        return Proxy.newProxyInstance(
+            clazz.classLoader,
+            arrayOf(clazz),
+        ) { _, method, args ->
+            when (method.name) {
+                "raw" -> false
+                "lookup" -> {
+                    val ctx = args?.getOrNull(0) ?: return@newProxyInstance Unit
+                    val networkHint = args.getOrNull(1)?.toString().orEmpty()
+                    val domain = args.getOrNull(2)?.toString().orEmpty()
+                    resolveLocalDns(ctx, defaultNetworkMonitor, networkHint, domain)
+                    Unit
+                }
+                "exchange" -> {
+                    args?.getOrNull(0)?.let { ctx -> call(ctx, "errorCode", DNS_RCODE_NOT_IMPLEMENTED) }
+                    Unit
+                }
+                else -> defaultValue(method)
+            }
+        }
+    }
+
+    private fun resolveLocalDns(
+        ctx: Any,
+        defaultNetworkMonitor: DefaultNetworkMonitor,
+        networkHint: String,
+        domain: String,
+    ) {
+        runCatching {
+            val addresses =
+                defaultNetworkMonitor.requireNetwork()
+                    .getAllByName(domain)
+                    .toList()
+                    .filterForDnsNetworkHint(networkHint)
+            if (addresses.isEmpty()) {
+                throw UnknownHostException(domain)
+            }
+            call(ctx, "success", addresses.mapNotNull(InetAddress::getHostAddress).joinToString("\n"))
+        }.onFailure { error ->
+            val rcode = if (error is UnknownHostException) DNS_RCODE_NXDOMAIN else DNS_RCODE_SERVFAIL
+            call(ctx, "errorCode", rcode)
+        }
+    }
+
+    private fun List<InetAddress>.filterForDnsNetworkHint(networkHint: String): List<InetAddress> =
+        when {
+            networkHint.endsWith("4") -> filterIsInstance<Inet4Address>()
+            networkHint.endsWith("6") -> filterIsInstance<Inet6Address>()
+            else -> this
+        }
 
     fun call(target: Any?, name: String, vararg args: Any?): Any? {
         require(target != null) { "reflection target is null for $name" }
@@ -534,6 +586,9 @@ internal class LibboxReflection(
         const val LOG_TAG = "FoxholeLibbox"
         const val NETWORK_ACTIVITY_THROTTLE_MS = 2_000L
         const val LIBBOX_LOG_MAX_LINES = 4_000L
+        const val DNS_RCODE_SERVFAIL = 2
+        const val DNS_RCODE_NXDOMAIN = 3
+        const val DNS_RCODE_NOT_IMPLEMENTED = 4
     }
 }
 

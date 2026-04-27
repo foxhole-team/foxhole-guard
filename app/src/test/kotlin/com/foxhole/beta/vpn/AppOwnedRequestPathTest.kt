@@ -17,4 +17,9 @@ class AppOwnedRequestPathTest {
     fun `app-owned requests do not keep an explicit binding candidate`() {
         assertNull(boundNetworkForAppOwnedRequest("vpn-network"))
     }
+
+    @Test
+    fun `tunnel validation requests stay bound to the vpn network`() {
+        assertEquals("vpn-network", tunnelValidationRequestNetwork("vpn-network"))
+    }
 }

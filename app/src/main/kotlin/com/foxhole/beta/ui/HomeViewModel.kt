@@ -43,6 +43,7 @@ import com.foxhole.beta.core.model.RoutingPresetSource
 import com.foxhole.beta.core.model.RoutingRule
 import com.foxhole.beta.core.model.RoutingRuleAction
 import com.foxhole.beta.core.model.Settings as FoxholeSettings
+import com.foxhole.beta.core.model.SubscriptionRefreshInterval
 import com.foxhole.beta.core.model.ThemeMode
 import com.foxhole.beta.core.model.TrafficMode
 import com.foxhole.beta.core.model.TrafficSnapshot
@@ -57,13 +58,6 @@ import com.foxhole.beta.core.profile.PreparedProfileExport
 import com.foxhole.beta.core.profile.ProfileExportRequest
 import com.foxhole.beta.core.profile.classifyAutoConnectProbeFailure
 import com.foxhole.beta.core.smart.SmartStartController
-import com.foxhole.beta.core.settings.rememberedSmartStartLatencyByOptionId
-import com.foxhole.beta.core.settings.rememberedSmartStartLatencyByProfileId
-import com.foxhole.beta.core.settings.rememberedSmartProfileServerPingByOptionId
-import com.foxhole.beta.core.settings.rememberedSmartProfileServerPingByProfileId
-import com.foxhole.beta.core.settings.rememberedSmartProfileMetricsUpdatedAtByOptionId
-import com.foxhole.beta.core.settings.rememberedSmartProfileMetricsUpdatedAtByProfileId
-import com.foxhole.beta.core.settings.smartProfilePreference
 import com.foxhole.beta.vpn.FoxholeVpnService
 import com.foxhole.beta.vpn.FoxholeVpnRuntimeBridge
 import kotlinx.coroutines.CancellationException
@@ -309,109 +303,13 @@ class HomeViewModel(
             profileOptionLatencyUnavailableMutable,
             protocolMetricsState,
         ) { state, autoConnect, profileOptionLatencies, profileOptionLatencyUnavailable, protocolMetrics ->
-            val currentNetworkFingerprintKey = container.networkFingerprintProvider.currentFingerprint()?.key
-            val activeProfileLatencies =
-                state.activeProfile
-                    ?.let { activeProfile ->
-                        profileOptionLatencies
-                            .filterKeys { key -> key.profileId == activeProfile.id }
-                            .mapKeys { (key, _) -> key.optionId }
-                    }.orEmpty()
-            val activeProfileLatencyUnavailable =
-                state.activeProfile
-                    ?.let { activeProfile ->
-                        profileOptionLatencyUnavailable
-                            .filter { key -> key.profileId == activeProfile.id }
-                            .map(ProfileOptionLatencyKey::optionId)
-                            .toSet()
-                    }.orEmpty()
-            val activeProfileServerPings =
-                state.activeProfile
-                    ?.let { activeProfile ->
-                        val rememberedServerPings =
-                            state.settings
-                                .smartProfilePreference(activeProfile.id)
-                                ?.rememberedSmartProfileServerPingByOptionId(currentNetworkFingerprintKey)
-                                .orEmpty()
-                        val liveServerPings =
-                            protocolMetrics.serverPings
-                            .filterKeys { key -> key.profileId == activeProfile.id }
-                            .mapNotNull { (key, value) -> value.pingMs?.let { key.optionId to it } }
-                            .toMap()
-                        rememberedServerPings + liveServerPings
-                    }.orEmpty()
-            val activeProfileServerPingUnavailable =
-                state.activeProfile
-                    ?.let { activeProfile ->
-                        protocolMetrics.serverPings
-                            .filter { (key, value) -> key.profileId == activeProfile.id && value.unavailable }
-                            .map { (key, _) -> key.optionId }
-                            .filterNot(activeProfileServerPings::containsKey)
-                            .toSet()
-                    }.orEmpty()
-            val activeProfileMetricsUpdatedAt =
-                state.activeProfile
-                    ?.let { activeProfile ->
-                        val rememberedUpdatedAt =
-                            state.settings
-                                .smartProfilePreference(activeProfile.id)
-                                ?.rememberedSmartProfileMetricsUpdatedAtByOptionId(currentNetworkFingerprintKey)
-                                .orEmpty()
-                        val liveUpdatedAt =
-                            protocolMetrics.updatedAt
-                            .filterKeys { key -> key.profileId == activeProfile.id }
-                            .mapKeys { (key, _) -> key.optionId }
-                        (rememberedUpdatedAt.keys + liveUpdatedAt.keys)
-                            .associateWith { optionId ->
-                                listOfNotNull(rememberedUpdatedAt[optionId], liveUpdatedAt[optionId]).maxOrNull() ?: 0L
-                            }.filterValues { updatedAt -> updatedAt > 0L }
-                    }.orEmpty()
-            val selectedLatencyOptionId = resolveDashboardLatencyOptionId(state.activeProfile)
-            val selectedProtocolLatencyMs =
-                selectedLatencyOptionId
-                    ?.let(activeProfileLatencies::get)
-            val selectedProtocolLatencyUnavailable =
-                selectedLatencyOptionId != null &&
-                    selectedProtocolLatencyMs == null &&
-                    selectedLatencyOptionId in activeProfileLatencyUnavailable
-            val smartStartRememberedLatenciesByOptionId =
-                state.activeProfile
-                    ?.let { activeProfile ->
-                        state.settings
-                            .smartProfilePreference(activeProfile.id)
-                            ?.rememberedSmartStartLatencyByOptionId(currentNetworkFingerprintKey)
-                    }.orEmpty()
-            val activeRecommendedProtocolOptionIds =
-                state.activeProfile
-                    ?.let { activeProfile ->
-                        val baseline =
-                            state.settings
-                                .smartProfilePreference(activeProfile.id)
-                                ?.recommendedProtocolIds
-                                .orEmpty()
-                        val transient =
-                            protocolMetrics.recommendation
-                                ?.takeIf { recommendation -> recommendation.profileId == activeProfile.id }
-                                ?.optionId
-                        (baseline + listOfNotNull(transient)).toSet()
-                    }.orEmpty()
-            state.toHomeRouteUiState(
+            buildHomeRouteUiState(
+                state = state,
                 autoConnect = autoConnect,
-                selectedProtocolLatencyMs = selectedProtocolLatencyMs,
-                protocolLatenciesByOptionId = activeProfileLatencies,
-                selectedProtocolLatencyUnavailable = selectedProtocolLatencyUnavailable,
-                protocolLatencyUnavailableOptionIds = activeProfileLatencyUnavailable,
-                protocolServerPingsByOptionId = activeProfileServerPings,
-                protocolServerPingUnavailableOptionIds = activeProfileServerPingUnavailable,
-                protocolMetricsUpdatedAtByOptionId = activeProfileMetricsUpdatedAt,
-                protocolMetricsRefreshing = state.activeProfile?.id in protocolMetrics.refreshingProfileIds,
-                recommendedProtocolOptionId =
-                    protocolMetrics.recommendation
-                        ?.takeIf { recommendation -> recommendation.profileId == state.activeProfile?.id }
-                        ?.optionId
-                        ?: activeRecommendedProtocolOptionIds.firstOrNull(),
-                recommendedProtocolOptionIds = activeRecommendedProtocolOptionIds,
-                smartStartRememberedLatenciesByOptionId = smartStartRememberedLatenciesByOptionId,
+                profileOptionLatencies = profileOptionLatencies,
+                profileOptionLatencyUnavailable = profileOptionLatencyUnavailable,
+                protocolMetrics = protocolMetrics,
+                currentNetworkFingerprintKey = container.networkFingerprintProvider.currentFingerprint()?.key,
             )
         }
             .stateIn(
@@ -425,77 +323,12 @@ class HomeViewModel(
             uiState,
             protocolMetricsState,
         ) { state, protocolMetrics ->
-                val networkFingerprint = container.networkFingerprintProvider.currentFingerprint()?.key
-                val rememberedServerPingsByProfileId =
-                    state.settings.rememberedSmartProfileServerPingByProfileId(
-                        networkFingerprint = networkFingerprint,
-                    )
-                val rememberedMetricsUpdatedAtByProfileId =
-                    state.settings.rememberedSmartProfileMetricsUpdatedAtByProfileId(
-                        networkFingerprint = networkFingerprint,
-                    )
-                val liveServerPingsByProfileId =
-                    protocolMetrics.serverPings
-                        .mapNotNull { (key, value) -> value.pingMs?.let { key.profileId to (key.optionId to it) } }
-                        .groupBy({ it.first }, { it.second })
-                        .mapValues { (_, values) -> values.toMap() }
-                val mergedServerPingsByProfileId =
-                    (rememberedServerPingsByProfileId.keys + liveServerPingsByProfileId.keys)
-                        .associateWith { profileId ->
-                            rememberedServerPingsByProfileId[profileId].orEmpty() +
-                                liveServerPingsByProfileId[profileId].orEmpty()
-                        }
-                val liveMetricsUpdatedAtByProfileId =
-                    protocolMetrics.updatedAt
-                        .map { (key, value) -> key.profileId to (key.optionId to value) }
-                        .groupBy({ it.first }, { it.second })
-                        .mapValues { (_, values) -> values.toMap() }
-                val mergedMetricsUpdatedAtByProfileId =
-                    (rememberedMetricsUpdatedAtByProfileId.keys + liveMetricsUpdatedAtByProfileId.keys)
-                        .associateWith { profileId ->
-                            val rememberedUpdatedAt = rememberedMetricsUpdatedAtByProfileId[profileId].orEmpty()
-                            val liveUpdatedAt = liveMetricsUpdatedAtByProfileId[profileId].orEmpty()
-                            (rememberedUpdatedAt.keys + liveUpdatedAt.keys)
-                                .associateWith { optionId ->
-                                    listOfNotNull(rememberedUpdatedAt[optionId], liveUpdatedAt[optionId]).maxOrNull() ?: 0L
-                                }.filterValues { updatedAt -> updatedAt > 0L }
-                        }
-                state.toProfilesRouteUiState(
-                    smartStartRememberedLatenciesByProfileId =
-                        state.settings.rememberedSmartStartLatencyByProfileId(
-                            networkFingerprint = networkFingerprint,
-                        ),
-                    smartProfileServerPingsByProfileId = mergedServerPingsByProfileId,
-                    smartProfileServerPingUnavailableByProfileId =
-                        protocolMetrics.serverPings
-                            .filter { (_, value) -> value.unavailable }
-                            .keys
-                            .groupBy(ProfileOptionLatencyKey::profileId, ProfileOptionLatencyKey::optionId)
-                            .mapValues { (profileId, values) ->
-                                values.filterNot(mergedServerPingsByProfileId[profileId].orEmpty()::containsKey).toSet()
-                            },
-                    smartProfileMetricsUpdatedAtByProfileId = mergedMetricsUpdatedAtByProfileId,
-                    smartProfileMetricsRefreshingProfileIds = protocolMetrics.refreshingProfileIds,
-                    recommendedProtocolOptionByProfileId =
-                        state.settings.smartProfilePreferences
-                            .mapNotNull { preference ->
-                                preference.recommendedProtocolIds.firstOrNull()?.let { optionId ->
-                                    preference.profileId to optionId
-                                }
-                            }.toMap() +
-                            protocolMetrics.recommendation
-                                ?.let { recommendation -> mapOf(recommendation.profileId to recommendation.optionId) }
-                                .orEmpty(),
-                    recommendedProtocolOptionsByProfileId =
-                        state.settings.smartProfilePreferences
-                            .associate { preference ->
-                                preference.profileId to preference.recommendedProtocolIds.toSet()
-                            } +
-                            protocolMetrics.recommendation
-                                ?.let { recommendation -> mapOf(recommendation.profileId to setOf(recommendation.optionId)) }
-                                .orEmpty(),
-                )
-            }
+            buildProfilesRouteUiState(
+                state = state,
+                protocolMetrics = protocolMetrics,
+                networkFingerprintKey = container.networkFingerprintProvider.currentFingerprint()?.key,
+            )
+        }
             .stateIn(
                 viewModelScope,
                 SharingStarted.WhileSubscribed(5_000),
@@ -891,6 +724,8 @@ class HomeViewModel(
     fun onAutoStartChanged(value: Boolean) = onAutoStartChangedInternal(value)
 
     fun onAutoRefreshSubscriptionsChanged(value: Boolean) = onAutoRefreshSubscriptionsChangedInternal(value)
+
+    fun onSubscriptionRefreshIntervalSelected(value: SubscriptionRefreshInterval) = onSubscriptionRefreshIntervalSelectedInternal(value)
 
     fun onIpInfoEndpointChanged(value: String) = onIpInfoEndpointChangedInternal(value)
 

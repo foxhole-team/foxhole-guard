@@ -10,6 +10,7 @@ import com.foxhole.beta.core.model.Settings
 import com.foxhole.beta.core.model.SmartProfileNetworkMemory
 import com.foxhole.beta.core.model.SmartProfilePreference
 import com.foxhole.beta.core.model.SmartProfileProtocolMemory
+import com.foxhole.beta.core.model.SubscriptionRefreshInterval
 import com.foxhole.beta.core.model.ThemeMode
 import com.foxhole.beta.core.model.UiSettings
 import org.junit.Assert.assertEquals
@@ -112,6 +113,7 @@ class SettingsRepositoryTest {
     @Test
     fun `subscription auto refresh defaults off`() {
         assertFalse(Settings().connection.autoRefreshSubscriptions)
+        assertEquals(SubscriptionRefreshInterval.HOURS_6, Settings().connection.subscriptionRefreshInterval)
     }
 
     @Test

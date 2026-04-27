@@ -41,6 +41,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -97,18 +98,22 @@ internal fun SmartProfileAutoConnectMenu(
     }
     val minMenuWidth =
         when {
-            menuLayout.showDetailedMetrics && compact -> 334.dp
-            menuLayout.showDetailedMetrics -> 356.dp
+            menuLayout.showDetailedMetrics && compact -> 376.dp
+            menuLayout.showDetailedMetrics -> 394.dp
             compact -> 304.dp
             else -> 304.dp
         }
     val maxMenuWidth =
         when {
-            menuLayout.showDetailedMetrics && compact -> 348.dp
-            menuLayout.showDetailedMetrics -> 376.dp
+            menuLayout.showDetailedMetrics && compact -> 392.dp
+            menuLayout.showDetailedMetrics -> 412.dp
             compact -> 328.dp
             else -> 336.dp
         }
+    val availableMenuWidth =
+        (LocalConfiguration.current.screenWidthDp.dp - ScreenHorizontalPadding - ScreenHorizontalPadding)
+            .coerceAtLeast(minMenuWidth)
+    val menuWidth = availableMenuWidth.coerceAtMost(maxMenuWidth.coerceAtLeast(availableMenuWidth))
     Box {
         Surface(
             modifier =
@@ -139,7 +144,7 @@ internal fun SmartProfileAutoConnectMenu(
             modifier =
                 Modifier
                     .testTag("smart_profile_auto_connect_menu")
-                    .widthIn(min = minMenuWidth, max = maxMenuWidth),
+                    .width(menuWidth),
             offset = DpOffset(x = 0.dp, y = if (compact) (-6).dp else 0.dp),
         ) {
             Column(
@@ -176,7 +181,6 @@ internal fun SmartProfileAutoConnectMenu(
                                     maxLines = if (compact) 3 else 2,
                                     overflow = TextOverflow.Clip,
                                 )
-                                SmartProfileMetricsHint(compact = compact)
                             }
                             SmartProfileMetricsRefreshStatus(
                                 updatedAt = metricsUpdatedAtByOptionId.values.maxOrNull(),
@@ -186,6 +190,17 @@ internal fun SmartProfileAutoConnectMenu(
                                 compact = compact,
                             )
                         }
+                        SmartProfileMetricsHint(
+                            compact = compact,
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .padding(
+                                        start = if (compact) 30.dp else 32.dp,
+                                        end = 8.dp,
+                                        bottom = if (compact) 4.dp else 6.dp,
+                                    ),
+                        )
                         HorizontalDivider(
                             modifier = Modifier.padding(horizontal = if (compact) 6.dp else 10.dp),
                             color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.34f),
@@ -222,7 +237,6 @@ internal fun SmartProfileAutoConnectMenu(
                                 maxLines = 4,
                                 overflow = TextOverflow.Clip,
                             )
-                            SmartProfileMetricsHint(compact = true)
                         }
                         SmartProfileMetricsRefreshStatus(
                             updatedAt = metricsUpdatedAtByOptionId.values.maxOrNull(),
@@ -232,6 +246,13 @@ internal fun SmartProfileAutoConnectMenu(
                             compact = true,
                         )
                     }
+                    SmartProfileMetricsHint(
+                        compact = true,
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(start = 32.dp, end = 10.dp, bottom = 6.dp),
+                    )
                     HorizontalDivider(
                         modifier = Modifier.padding(horizontal = 8.dp),
                         color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.24f),
@@ -353,8 +374,12 @@ internal fun SmartProfileAutoConnectMenu(
 }
 
 @Composable
-private fun SmartProfileMetricsHint(compact: Boolean) {
+private fun SmartProfileMetricsHint(
+    compact: Boolean,
+    modifier: Modifier = Modifier,
+) {
     Column(
+        modifier = modifier,
         verticalArrangement = Arrangement.spacedBy(if (compact) 3.dp else 4.dp),
     ) {
         Text(
@@ -396,12 +421,12 @@ private fun SmartProfileLegendRow(
             horizontalArrangement = Arrangement.spacedBy(1.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            repeat(starCount) {
+            repeat(starCount) { index ->
                 Icon(
                     imageVector = Icons.Outlined.Star,
                     contentDescription = null,
                     modifier = Modifier.size(if (compact) 8.dp else 9.dp),
-                    tint = FoxholePositiveAccent,
+                    tint = smartProfileRecommendationStarTint(index),
                 )
             }
         }
@@ -738,9 +763,10 @@ private fun SmartProfileProtocolCell(
             if (showSelectionBadge && enabled && (active || recommended)) {
                 SmartProfileSelectionBadge(
                     active = active,
+                    recommended = recommended,
                     topRecommended = topRecommended,
                     compact = compact,
-                    modifier = Modifier.offset(y = if (compact) (-4).dp else (-3).dp),
+                    modifier = Modifier.offset(y = if (compact) (-3).dp else (-2).dp),
                 )
             }
         }
@@ -750,6 +776,7 @@ private fun SmartProfileProtocolCell(
 @Composable
 private fun SmartProfileSelectionBadge(
     active: Boolean,
+    recommended: Boolean,
     topRecommended: Boolean,
     compact: Boolean,
     modifier: Modifier = Modifier,
@@ -761,47 +788,67 @@ private fun SmartProfileSelectionBadge(
         color = color.copy(alpha = 0.12f),
         border = BorderStroke(1.dp, color.copy(alpha = 0.30f)),
     ) {
-        if (active) {
-            Text(
-                text = stringResource(R.string.smart_profile_menu_active_badge),
-                modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
-                style =
-                    MaterialTheme.typography.labelSmall.copy(
-                        fontSize = if (compact) 7.sp else 8.sp,
-                        lineHeight = if (compact) 8.sp else 9.sp,
-                        fontWeight = FontWeight.SemiBold,
-                    ),
-                color = color,
-                maxLines = 1,
-                softWrap = false,
-                overflow = TextOverflow.Clip,
-            )
-        } else {
-            Row(
-                modifier =
-                    Modifier
-                        .padding(horizontal = 3.dp, vertical = 2.dp),
-                horizontalArrangement = Arrangement.spacedBy(1.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Icon(
-                    imageVector = Icons.Outlined.Star,
-                    contentDescription = stringResource(R.string.smart_profile_menu_recommended_badge),
-                    modifier = Modifier.size(if (compact) 9.dp else 10.dp),
-                    tint = color,
+        Row(
+            modifier =
+                Modifier
+                    .padding(horizontal = if (active) 4.dp else 3.dp, vertical = if (active) 1.dp else 2.dp),
+            horizontalArrangement = Arrangement.spacedBy(if (active && recommended) 3.dp else 1.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (active) {
+                Text(
+                    text = stringResource(R.string.smart_profile_menu_active_badge),
+                    style =
+                        MaterialTheme.typography.labelSmall.copy(
+                            fontSize = if (compact) 7.sp else 8.sp,
+                            lineHeight = if (compact) 8.sp else 9.sp,
+                            fontWeight = FontWeight.SemiBold,
+                        ),
+                    color = color,
+                    maxLines = 1,
+                    softWrap = false,
+                    overflow = TextOverflow.Clip,
                 )
-                if (topRecommended) {
-                    Icon(
-                        imageVector = Icons.Outlined.Star,
-                        contentDescription = null,
-                        modifier = Modifier.size(if (compact) 9.dp else 10.dp),
-                        tint = Color(0xFFE0B84A),
-                    )
-                }
+            }
+            if (recommended) {
+                SmartProfileRecommendationStars(topRecommended = topRecommended, compact = compact)
             }
         }
     }
 }
+
+@Composable
+private fun SmartProfileRecommendationStars(
+    topRecommended: Boolean,
+    compact: Boolean,
+) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(1.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        val starCount = if (topRecommended) 2 else 1
+        repeat(starCount) { index ->
+            Icon(
+                imageVector = Icons.Outlined.Star,
+                contentDescription =
+                    if (index == 0) {
+                        stringResource(R.string.smart_profile_menu_recommended_badge)
+                    } else {
+                        null
+                    },
+                modifier = Modifier.size(if (compact) 9.dp else 10.dp),
+                tint = smartProfileRecommendationStarTint(index),
+            )
+        }
+    }
+}
+
+private fun smartProfileRecommendationStarTint(index: Int): Color =
+    if (index == 1) {
+        Color(0xFFE0B84A)
+    } else {
+        FoxholePositiveAccent
+    }
 
 @Composable
 private fun SmartProfileOnToggle(
@@ -1143,7 +1190,7 @@ private enum class SmartProfileMetricTone {
 }
 
 private val SmartProfileMenuHorizontalPadding = 8.dp
-private val SmartProfileProtocolColumnWidth = 154.dp
+private val SmartProfileProtocolColumnWidth = 186.dp
 private val SmartProfileOnColumnWidth = 32.dp
 private val SmartProfileMetricColumnWidth = 62.dp
 private val SmartProfileProtocolCompactHeaderHeight = 32.dp

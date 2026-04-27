@@ -12,6 +12,9 @@ internal enum class PrivateDnsMode {
     UNKNOWN,
 }
 
+internal fun PrivateDnsMode.isSupportedForTunnelMode(): Boolean =
+    this == PrivateDnsMode.OFF || this == PrivateDnsMode.OPPORTUNISTIC
+
 internal object PrivateDnsSettings {
     fun current(context: Context): PrivateDnsMode {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) {

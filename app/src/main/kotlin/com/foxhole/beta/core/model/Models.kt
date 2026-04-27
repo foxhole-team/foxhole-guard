@@ -84,6 +84,13 @@ enum class TrafficMode {
 }
 
 @Serializable
+enum class SubscriptionRefreshInterval(val hours: Long) {
+    HOURS_6(6),
+    HOURS_12(12),
+    HOURS_24(24),
+}
+
+@Serializable
 enum class DomainStrategy(val configValue: String) {
     AS_IS("as_is"),
     PREFER_IPV4("prefer_ipv4"),
@@ -145,6 +152,7 @@ data class ConnectionSettings(
     val autoReconnect: Boolean = true,
     val autoStartOnBoot: Boolean = false,
     val autoRefreshSubscriptions: Boolean = false,
+    val subscriptionRefreshInterval: SubscriptionRefreshInterval = SubscriptionRefreshInterval.HOURS_6,
     val ipInfoEndpoint: String = "",
     val stealthModeEnabled: Boolean = true,
 )

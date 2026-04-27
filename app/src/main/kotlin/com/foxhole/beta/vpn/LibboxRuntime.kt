@@ -174,6 +174,13 @@ private class ReflectiveLibboxRuntime(
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             builder.setMetered(false)
         }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            runCatching {
+                builder.setUnderlyingNetworks(arrayOf(defaultNetworkMonitor.requireNetwork()))
+            }.onFailure {
+                diagnosticsLogger.record("libbox", "vpn underlying network unavailable before establish")
+            }
+        }
 
         reflection.forEachRoutePrefix(reflection.call(tunOptions, "getInet4Address")) { prefix ->
             builder.addAddress(prefix.address, prefix.prefix)
@@ -187,16 +194,23 @@ private class ReflectiveLibboxRuntime(
                 reflection.call(reflection.call(tunOptions, "getDNSServerAddress"), "getValue")
                     ?.toString()
                     ?.takeIf { it.isNotBlank() }
+            val remoteDnsServers = VpnDnsServerSelector.remoteDnsServerAddresses(currentConfig)
             val advertisedDnsServers =
                 VpnDnsServerSelector.advertisedDnsServerAddresses(
                     configJson = currentConfig,
                     fallbackServerAddress = fallbackDnsServerAddress,
                 )
             currentDnsServerAddress = advertisedDnsServers.firstOrNull()
-            diagnosticsLogger.record(
+            diagnosticsLogger.recordStructured(
                 "dns",
-                "advertising vpn dns servers=${advertisedDnsServers.joinToString()}",
+                "VPN DNS selection",
+                "fallback=${fallbackDnsServerAddress.orEmpty()}",
+                "advertised=${advertisedDnsServers.joinToString()}",
+                "remote=${remoteDnsServers.joinToString()}",
             )
+            if (advertisedDnsServers.isEmpty()) {
+                error("android: vpn dns server unavailable")
+            }
             advertisedDnsServers.forEach(builder::addDnsServer)
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {

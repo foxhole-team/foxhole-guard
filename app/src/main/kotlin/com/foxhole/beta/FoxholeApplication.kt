@@ -12,6 +12,7 @@ import androidx.work.NetworkType
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import com.foxhole.beta.core.model.AppLocale
+import com.foxhole.beta.core.model.SubscriptionRefreshInterval
 import com.foxhole.beta.core.settings.readFastStoredAppLocale
 import com.foxhole.beta.vpn.SubscriptionRefreshWorker
 import kotlinx.coroutines.CoroutineScope
@@ -54,21 +55,30 @@ class FoxholeApplication : Application(), Configuration.Provider {
             startupDependencies.profileRepository.getActiveProfile()
         }
         applyAppLocale(settings.ui.locale)
-        applySubscriptionRefreshSchedule(settings.connection.autoRefreshSubscriptions)
+        applySubscriptionRefreshSchedule(
+            enabled = settings.connection.autoRefreshSubscriptions,
+            interval = settings.connection.subscriptionRefreshInterval,
+        )
     }
 
     override val workManagerConfiguration: Configuration
         get() = Configuration.Builder().build()
 }
 
-internal fun Context.applySubscriptionRefreshSchedule(enabled: Boolean) {
+internal fun Context.applySubscriptionRefreshSchedule(
+    enabled: Boolean,
+    interval: SubscriptionRefreshInterval = SubscriptionRefreshInterval.HOURS_6,
+) {
     val workManager = WorkManager.getInstance(this)
     if (!enabled) {
         workManager.cancelUniqueWork(SubscriptionRefreshWorker.WORK_NAME)
         return
     }
     val work =
-        PeriodicWorkRequestBuilder<SubscriptionRefreshWorker>(6, TimeUnit.HOURS)
+        PeriodicWorkRequestBuilder<SubscriptionRefreshWorker>(
+            subscriptionRefreshIntervalHours(interval),
+            TimeUnit.HOURS,
+        )
             .setConstraints(
                 Constraints.Builder()
                     .setRequiredNetworkType(NetworkType.CONNECTED)
@@ -84,6 +94,8 @@ internal fun Context.applySubscriptionRefreshSchedule(enabled: Boolean) {
         work,
     )
 }
+
+internal fun subscriptionRefreshIntervalHours(interval: SubscriptionRefreshInterval): Long = interval.hours
 
 internal fun applyAppLocale(locale: AppLocale) {
     val locales =

@@ -94,7 +94,7 @@ internal fun shouldShowPendingNetworkLoading(
     if (deviceInternetAvailable == false) {
         return false
     }
-    return autoConnectRunning || connectionState in setOf(ConnectionState.CONNECTING, ConnectionState.RECONNECTING)
+    return false
 }
 
 internal fun shouldShowDashboardNetworkLoading(
@@ -488,14 +488,21 @@ internal fun applyHomeModeSelection(
 
 @Composable
 internal fun buildCountryLine(ipInfo: IpInfo): String {
-    val country = ipInfo.countryName ?: stringResource(R.string.unknown_country)
-    val city =
-        ipInfo.city
-            ?.takeIf { it.isNotBlank() }
-            ?.let { " · $it" }
-            .orEmpty()
-    return "${countryEmoji(ipInfo.countryCode)} $country$city"
+    return formatCountryLine(
+        ipInfo = ipInfo,
+        unknownCountry = stringResource(R.string.unknown_country),
+    )
 }
+
+internal fun formatCountryLine(
+    ipInfo: IpInfo,
+    unknownCountry: String,
+): String {
+    val country = ipInfo.countryName ?: unknownCountry
+    return "${countryEmoji(ipInfo.countryCode)} $country"
+}
+
+internal fun buildCityLine(ipInfo: IpInfo): String = ipInfo.city?.takeIf { it.isNotBlank() } ?: "-"
 
 internal fun primaryVisibleIp(ipInfo: IpInfo): String = ipInfo.ipv4 ?: ipInfo.ip
 

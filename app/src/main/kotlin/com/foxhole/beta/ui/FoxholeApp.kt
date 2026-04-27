@@ -253,6 +253,7 @@ fun FoxholeApp(
                         metricsUpdatedAtByOptionId = state.smartProfileMetricsUpdatedAt(profileId),
                         metricsRefreshing = profileId in state.smartProfileMetricsRefreshingProfileIds,
                         recommendedProtocolOptionId = state.recommendedProtocolOptionByProfileId[profileId],
+                        recommendedProtocolOptionIds = state.recommendedProtocolOptionsByProfileId[profileId].orEmpty(),
                         snackbarHostState = snackbarHostState,
                         onNavigateUp = { navController.navigateToProfilesRoot() },
                         onSetActiveProfile = viewModel::onSelectProfile,
@@ -348,6 +349,7 @@ fun FoxholeApp(
                         onPreferIpv6Changed = viewModel::onPreferIpv6Changed,
                         onDomainStrategySelected = viewModel::onDomainStrategySelected,
                         onAutoRefreshSubscriptionsChanged = viewModel::onAutoRefreshSubscriptionsChanged,
+                        onSubscriptionRefreshIntervalSelected = viewModel::onSubscriptionRefreshIntervalSelected,
                     )
                 }
                 composable(AppRoute.ROUTING) {

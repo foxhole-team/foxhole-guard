@@ -1,14 +1,9 @@
 package com.foxhole.beta.vpn
 
-import android.Manifest
 import android.app.Notification
-import android.app.NotificationChannel
 import android.app.NotificationManager
-import android.app.PendingIntent
-import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
@@ -18,14 +13,9 @@ import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
-import android.service.quicksettings.TileService
-import androidx.core.app.NotificationManagerCompat
-import androidx.core.app.NotificationCompat
-import androidx.core.content.ContextCompat
 import androidx.core.content.getSystemService
 import com.foxhole.beta.FoxholeApplication
 import com.foxhole.beta.FoxholeRuntimeDependencies
-import com.foxhole.beta.MainActivity
 import com.foxhole.beta.R
 import com.foxhole.beta.core.model.AutoConnectReasonCode
 import com.foxhole.beta.core.model.ConnectionSnapshot
@@ -37,9 +27,6 @@ import com.foxhole.beta.core.model.TrafficMode
 import com.foxhole.beta.core.model.TrafficSnapshot
 import com.foxhole.beta.core.model.VpnSession
 import com.foxhole.beta.core.network.mergeIpInfo
-import com.foxhole.beta.core.settings.networkMemory
-import com.foxhole.beta.core.settings.preferredLastKnownGoodOptionId
-import com.foxhole.beta.core.settings.smartProfilePreference
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -69,6 +56,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         NetworkRequest.Builder()
             .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
             .addCapability(NetworkCapabilities.NET_CAPABILITY_NOT_RESTRICTED)
+            .addCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN)
             .build()
     }
     internal val container: FoxholeRuntimeDependencies by lazy { (applicationContext as FoxholeApplication).appGraph }
@@ -93,6 +81,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
     internal var consecutiveNotificationHealthFailures = 0
     internal var defaultNetworkAvailable = true
     internal var lastDefaultNetworkSummary: String? = null
+    internal val upstreamNetworkHandles = mutableSetOf<Long>()
     internal val commandMutex = Mutex()
 
     internal val networkCallback =
@@ -105,6 +94,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
                     message = "upstream available",
                     capabilities = connectivityManager.getNetworkCapabilities(network),
                 )
+                upstreamNetworkHandles += network.networkHandle
                 runtime.onDefaultNetworkAvailable()
                 val snapshot = FoxholeVpnRuntimeBridge.snapshot.value
                 if (snapshot.state == ConnectionState.RECONNECTING) {
@@ -121,7 +111,8 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
             }
 
             override fun onLost(network: Network) {
-                if (!isUpstreamNetwork(network)) {
+                val wasAcceptedUpstream = upstreamNetworkHandles.remove(network.networkHandle)
+                if (!wasAcceptedUpstream && !isUpstreamNetwork(network)) {
                     return
                 }
                 recordNetworkEvent(
@@ -180,59 +171,15 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
             FoxholeConnectionServiceContract.NOTIFICATION_ID,
             buildNotification(currentNotificationSnapshot()),
         )
-        when (intent?.action) {
-            FoxholeConnectionServiceContract.ACTION_CONNECT -> {
-                val profileId = intent.getLongExtra(FoxholeConnectionServiceContract.EXTRA_PROFILE_ID, -1L)
-                val protocolOptionId = intent.getStringExtra(FoxholeConnectionServiceContract.EXTRA_PROTOCOL_OPTION_ID)
-                val previousVpnNetworkHandle = intent.previousVpnNetworkHandleOrNull()
-                launchCommand { connect(profileId, startId, protocolOptionId, previousVpnNetworkHandle) }
-            }
-
-            FoxholeConnectionServiceContract.ACTION_DISCONNECT -> {
-                launchCommand { disconnect(commandStartId = startId) }
-            }
-
-            FoxholeConnectionServiceContract.ACTION_RELOAD -> {
-                val profileId = intent.getLongExtra(FoxholeConnectionServiceContract.EXTRA_PROFILE_ID, -1L)
-                launchCommand { reload(profileId) }
-            }
-
-            FoxholeConnectionServiceContract.ACTION_RESTORE -> {
-                launchCommand {
-                    val active = container.profileRepository.getActiveProfile()
-                    if (active != null) {
-                        val smartProfilePreference = container.settingsRepository.current().smartProfilePreference(active.id)
-                        val networkFingerprint = container.networkFingerprintProvider.currentFingerprint()
-                        val scopedLastKnownGoodOptionId = smartProfilePreference?.networkMemory(networkFingerprint?.key)?.lastKnownGoodOptionId
-                        val restoredOptionId =
-                            smartProfilePreference
-                                ?.preferredLastKnownGoodOptionId(networkFingerprint?.key)
-                                ?.takeIf { optionId ->
-                                    optionId !in smartProfilePreference.excludedProtocolOptionIds &&
-                                        active.protocolOptions.any { option -> option.id == optionId }
-                                }
-                        restoredOptionId?.let { optionId ->
-                            val details =
-                                buildList {
-                                    add("profile_id=${active.id}")
-                                    add("option=$optionId")
-                                    add("reason=restored_last_good")
-                                    add("scope=${if (optionId == scopedLastKnownGoodOptionId) "network" else "profile"}")
-                                    networkFingerprint?.key?.take(12)?.let { fingerprint -> add("network_fp=$fingerprint") }
-                                }
-                            container.diagnosticsLogger.recordStructured(
-                                "auto-connect",
-                                "restore candidate",
-                                *details.toTypedArray(),
-                            )
-                        }
-                        connect(active.id, startId, restoredOptionId)
-                    } else {
-                        disconnect(commandStartId = startId)
-                    }
-                }
-            }
-        }
+        handleRuntimeServiceCommand(
+            intent = intent,
+            startId = startId,
+            container = container,
+            launchCommand = ::launchCommand,
+            connect = ::connect,
+            disconnect = { commandStartId -> disconnect(commandStartId = commandStartId) },
+            reload = ::reload,
+        )
         return START_STICKY
     }
 
@@ -303,7 +250,8 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         }
         if (trafficMode == TrafficMode.TUNNEL) {
             val privateDnsMode = PrivateDnsSettings.current(this)
-            if (privateDnsMode == PrivateDnsMode.STRICT) {
+            if (!privateDnsMode.isSupportedForTunnelMode()) {
+                container.diagnosticsLogger.record("dns", "unsupported android private dns mode: $privateDnsMode")
                 fail(getString(R.string.error_private_dns_strict_unsupported))
                 return
             }
@@ -445,25 +393,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         }
     }
 
-    internal fun ensureNotificationChannel() {
-        notificationManager.createNotificationChannel(
-            NotificationChannel(
-                FoxholeConnectionServiceContract.NOTIFICATION_CHANNEL_ID,
-                getString(R.string.notification_channel_name),
-                NotificationManager.IMPORTANCE_LOW,
-            ).apply {
-                description = getString(R.string.notification_channel_description)
-                setSound(null, null)
-                enableVibration(false)
-                enableLights(false)
-                setShowBadge(false)
-                lockscreenVisibility = Notification.VISIBILITY_SECRET
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    setAllowBubbles(false)
-                }
-            },
-        )
-    }
+    internal fun ensureNotificationChannel() = ensureConnectionNotificationChannel(notificationManager)
 
     internal fun launchCommand(block: suspend () -> Unit) {
         scope.launch {
@@ -481,73 +411,17 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         }
     }
 
-    internal fun buildNotification(snapshot: NotificationSnapshot): Notification {
-        val openIntent =
-            PendingIntent.getActivity(
-                this,
-                1,
-                Intent(this, MainActivity::class.java),
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-            )
-        val action = notificationActionForState(snapshot.state)
-        val actionIntent =
-            PendingIntent.getService(
-                this,
-                action.requestCode,
-                FoxholeConnectionServiceContract.serviceIntent(this, TrafficMode.TUNNEL, action.serviceAction),
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-            )
-        val builder =
-            NotificationCompat.Builder(this, FoxholeConnectionServiceContract.NOTIFICATION_CHANNEL_ID)
-                .setSmallIcon(R.drawable.notification_icon)
-                .setVisibility(NotificationCompat.VISIBILITY_SECRET)
-                .setSilent(true)
-                .setOnlyAlertOnce(true)
-                .setCategory(NotificationCompat.CATEGORY_SERVICE)
-                .setPriority(NotificationCompat.PRIORITY_LOW)
-                .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
-                .setContentTitle(notificationStateLabel(snapshot))
-                .setOngoing(action.ongoing)
-                .setContentIntent(openIntent)
-                .addAction(0, getString(action.labelRes), actionIntent)
-        notificationCollapsedText(snapshot).takeIf { it.isNotBlank() }?.let(builder::setContentText)
-        notificationExpandedText(snapshot)?.let { expanded ->
-            builder.setStyle(NotificationCompat.BigTextStyle().bigText(expanded))
-        }
-        if (!snapshot.isRedacted) {
-            builder.setPublicVersion(
-                buildNotification(
-                    snapshot.copy(
-                        profileName = null,
-                        ipAddress = null,
-                        countryCode = null,
-                        countryName = null,
-                        txRate = 0L,
-                        rxRate = 0L,
-                        txTotal = 0L,
-                        rxTotal = 0L,
-                        updatedAt = 0L,
-                        isRedacted = true,
-                    ),
-                ),
-            )
-        }
-        return builder.build()
-    }
+    internal fun buildNotification(snapshot: NotificationSnapshot): Notification =
+        buildConnectionNotification(
+            mode = TrafficMode.TUNNEL,
+            snapshot = snapshot,
+            collapsedText = ::notificationCollapsedText,
+            expandedText = ::notificationExpandedText,
+            stateLabel = ::notificationStateLabel,
+        )
 
     internal fun updateNotification() {
-        TileService.requestListeningState(this, ComponentName(this, FoxholeTileService::class.java))
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
-        ) {
-            return
-        }
-        runCatching {
-            NotificationManagerCompat.from(this).notify(
-                FoxholeConnectionServiceContract.NOTIFICATION_ID,
-                buildNotification(currentNotificationSnapshot()),
-            )
-        }
+        updateConnectionNotification { buildNotification(currentNotificationSnapshot()) }
     }
 
     internal fun registerNetworkCallbackIfNeeded() {
@@ -555,6 +429,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
             runCatching { connectivityManager.unregisterNetworkCallback(networkCallback) }
             networkCallbackRegistered = false
         }
+        upstreamNetworkHandles.clear()
         val registration =
             runCatching {
                 when {
@@ -626,11 +501,12 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
                     delay(GEO_REFRESH_INITIAL_DELAY_MS)
                 }
                 repeat(GEO_REFRESH_ATTEMPTS) { attempt ->
+                    val requestNetwork = if (attempt == 0) boundNetworkForAppOwnedRequest(initialNetwork) else null
                     val success =
                         runCatching {
                             refreshConnectionIpInfo(
                                 callTimeoutMs = GEO_REFRESH_CALL_TIMEOUT_MS,
-                                network = if (attempt == 0) initialNetwork else null,
+                                network = requestNetwork,
                             )
                         }
                             .onSuccess {
@@ -639,7 +515,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
                                 launch(Dispatchers.Main.immediate) { updateNotification() }
                                 startIpv4EnrichmentIfNeeded(
                                     info = it,
-                                    network = if (attempt == 0) initialNetwork else null,
+                                    network = requestNetwork,
                                 )
                             }
                             .onFailure { error ->

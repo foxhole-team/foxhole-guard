@@ -16,6 +16,7 @@ import com.foxhole.beta.core.model.ProxyInboundSettings
 import com.foxhole.beta.core.model.RoutingPresetOverrideMode
 import com.foxhole.beta.core.model.RoutingPresetSource
 import com.foxhole.beta.core.model.RoutingRuleAction
+import com.foxhole.beta.core.model.SubscriptionRefreshInterval
 import com.foxhole.beta.core.model.ThemeMode
 import com.foxhole.beta.core.model.TrafficMode
 import com.foxhole.beta.core.model.TunStack
@@ -76,7 +77,21 @@ internal fun HomeViewModel.onAutoStartChangedInternal(value: Boolean) {
 internal fun HomeViewModel.onAutoRefreshSubscriptionsChangedInternal(value: Boolean) {
     viewModelScope.launch {
         container.settingsRepository.updateAutoRefreshSubscriptions(value)
-        getApplication<Application>().applySubscriptionRefreshSchedule(value)
+        getApplication<Application>().applySubscriptionRefreshSchedule(
+            enabled = value,
+            interval = container.settingsRepository.current().connection.subscriptionRefreshInterval,
+        )
+    }
+}
+
+internal fun HomeViewModel.onSubscriptionRefreshIntervalSelectedInternal(value: SubscriptionRefreshInterval) {
+    viewModelScope.launch {
+        container.settingsRepository.updateSubscriptionRefreshInterval(value)
+        val enabled = container.settingsRepository.current().connection.autoRefreshSubscriptions
+        getApplication<Application>().applySubscriptionRefreshSchedule(
+            enabled = enabled,
+            interval = value,
+        )
     }
 }
 

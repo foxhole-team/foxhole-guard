@@ -132,23 +132,26 @@ class SmartStartProtocolPresentationTest {
         assertEquals("Current IP address", stringValue(enStrings, "home_network_current_ip_title"))
         assertEquals("Connection status", stringValue(enStrings, "home_network_profile_info_title"))
         assertEquals("Country:", stringValue(enStrings, "home_network_country_label"))
+        assertEquals("City:", stringValue(enStrings, "home_network_city_label"))
         assertEquals("IP:", stringValue(enStrings, "home_network_ip_label"))
         assertEquals("Provider:", stringValue(enStrings, "home_network_provider_label"))
+        assertEquals("Connection time:", stringValue(enStrings, "home_network_connect_time_label"))
+        assertEquals("Traffic volume over:", stringValue(enStrings, "home_total_traffic_title"))
         assertEquals(
-            "Smart start protocols",
+            "Manage available protocols",
             stringValue(enStrings, "smart_profile_menu_title"),
         )
         assertEquals(
-            "Manage available protocols. Tap a protocol for on/off.\\nPeriodically refresh Smart start to choose a faster VPN tunnel.",
+            "Tap a protocol for on/off.\\nPeriodically refresh Smart start to choose a faster VPN tunnel.",
             stringValue(enStrings, "smart_profile_metrics_refresh_hint"),
         )
         assertEquals(
-            "Manage available protocols. Tap a protocol for on/off.\\nPeriodically refresh Smart start to choose a faster VPN tunnel.",
+            "Tap a protocol for on/off.\\nPeriodically refresh Smart start to choose a faster VPN tunnel.",
             stringValue(enStrings, "smart_profile_metrics_refresh_compact_hint"),
         )
-        assertEquals("favorite", stringValue(enStrings, "smart_profile_legend_favorite"))
+        assertEquals("Selected for Smart start", stringValue(enStrings, "smart_profile_legend_favorite"))
         assertEquals(
-            "recommended for reconnect",
+            "Recommended",
             stringValue(enStrings, "smart_profile_legend_reconnect_recommended"),
         )
         assertEquals("Updated: %1\$s", stringValue(enStrings, "smart_profile_metrics_last_updated"))
@@ -162,23 +165,26 @@ class SmartStartProtocolPresentationTest {
         assertEquals("Текущий IP адрес", stringValue(ruStrings, "home_network_current_ip_title"))
         assertEquals("Статус соединения", stringValue(ruStrings, "home_network_profile_info_title"))
         assertEquals("Country:", stringValue(ruStrings, "home_network_country_label"))
+        assertEquals("City:", stringValue(ruStrings, "home_network_city_label"))
         assertEquals("IP:", stringValue(ruStrings, "home_network_ip_label"))
         assertEquals("Provider:", stringValue(ruStrings, "home_network_provider_label"))
+        assertEquals("Connection time:", stringValue(ruStrings, "home_network_connect_time_label"))
+        assertEquals("Объем трафика за:", stringValue(ruStrings, "home_total_traffic_title"))
         assertEquals(
-            "Протоколы Smart start",
+            "Управление доступными протоколами",
             stringValue(ruStrings, "smart_profile_menu_title"),
         )
         assertEquals(
-            "Управление доступными протоколами. Нажмите на протокол для on/off.\\nПериодически обновляйте Смарт старт для выбора более быстрого туннеля VPN.",
+            "Нажмите на протокол для on/off.\\nПериодически обновляйте Смарт старт для выбора более быстрого туннеля VPN.",
             stringValue(ruStrings, "smart_profile_metrics_refresh_hint"),
         )
         assertEquals(
-            "Управление доступными протоколами. Нажмите на протокол для on/off.\\nПериодически обновляйте Смарт старт для выбора более быстрого туннеля VPN.",
+            "Нажмите на протокол для on/off.\\nПериодически обновляйте Смарт старт для выбора более быстрого туннеля VPN.",
             stringValue(ruStrings, "smart_profile_metrics_refresh_compact_hint"),
         )
-        assertEquals("избранное", stringValue(ruStrings, "smart_profile_legend_favorite"))
+        assertEquals("Выбран для смарт старта", stringValue(ruStrings, "smart_profile_legend_favorite"))
         assertEquals(
-            "рекомендованный для переподключения",
+            "Рекомендованный",
             stringValue(ruStrings, "smart_profile_legend_reconnect_recommended"),
         )
         assertEquals("Обновлено: %1\$s", stringValue(ruStrings, "smart_profile_metrics_last_updated"))

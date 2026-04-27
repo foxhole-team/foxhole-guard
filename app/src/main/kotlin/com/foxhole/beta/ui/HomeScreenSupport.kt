@@ -48,8 +48,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -61,7 +61,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.ui.platform.LocalLocale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
@@ -78,14 +77,16 @@ import com.foxhole.beta.core.model.ConnectionSnapshot
 import com.foxhole.beta.core.model.ConnectionState
 import com.foxhole.beta.core.model.LocalAuthSettings
 import com.foxhole.beta.core.profile.MultiProtocolProfileSupport
+import androidx.core.os.ConfigurationCompat
 import java.util.Locale
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 
 internal val HomePrimaryActionHeight = 52.dp
 internal val HomeTriangleIndicatorSize = 15.dp
 internal val HomeDashboardBannerTopPadding = 86.dp
 internal val HomeConnectingStatusSignalOffset = 3.dp
-internal val HomeNetworkContentHeight = 62.dp
+internal val HomeNetworkContentHeight = 82.dp
 
 @Composable
 internal fun HomeCardHeader(
@@ -595,9 +596,9 @@ internal fun HomeNetworkLoadingBlock(
         verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
         HomeNetworkColumnTitle(title)
-        labels.take(3).forEachIndexed { index, label ->
+        labels.forEachIndexed { index, label ->
             HomeNetworkLoadingLine(label = label)
-            if (index < 2) {
+            if (index < labels.lastIndex) {
                 HomeNetworkSubtleDivider()
             }
         }
@@ -612,6 +613,7 @@ internal fun HomeConnectionStatusLoadingBlock(modifier: Modifier = Modifier) {
             listOf(
                 stringResource(R.string.home_network_vpn_latency_label),
                 stringResource(R.string.home_network_server_ping_label),
+                stringResource(R.string.home_network_connect_time_label),
                 stringResource(R.string.home_network_status_label),
             ),
         modifier = modifier,
@@ -657,20 +659,20 @@ internal fun rememberConnectionDurationText(snapshot: ConnectionSnapshot): Strin
     if (!shouldShowConnectionDuration(snapshot)) {
         return null
     }
-    val locale = LocalLocale.current.platformLocale
-    val now by
-        produceState(
-            initialValue = System.currentTimeMillis(),
-            key1 = snapshot.lastChangeAt,
-            key2 = snapshot.state,
-        ) {
-            value = System.currentTimeMillis()
-            while (true) {
-                val elapsedMs = (value - snapshot.lastChangeAt).coerceAtLeast(0L)
-                delay(connectionDurationTickDelayMillis(elapsedMs))
-                value = System.currentTimeMillis()
-            }
+    val configuration = LocalConfiguration.current
+    val locale =
+        remember(configuration) {
+            ConfigurationCompat.getLocales(configuration)[0] ?: Locale.getDefault()
         }
+    var now by remember(snapshot.lastChangeAt, snapshot.state) { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(snapshot.lastChangeAt, snapshot.state) {
+        now = System.currentTimeMillis()
+        while (isActive) {
+            val elapsedMs = (now - snapshot.lastChangeAt).coerceAtLeast(0L)
+            delay(connectionDurationTickDelayMillis(elapsedMs))
+            now = System.currentTimeMillis()
+        }
+    }
     return formatConnectionDuration(
         elapsedMs = (now - snapshot.lastChangeAt).coerceAtLeast(0L),
         locale = locale,
@@ -903,7 +905,7 @@ internal fun HomeAutoConnectStatusLine(
     val option =
         state.options.firstOrNull { it.optionId == state.currentOptionId }
             ?: state.options.firstOrNull()
-            ?: return
+    val protocolLabel = option?.let { protocolHintChipLabel(it.protocolHint) } ?: stringResource(R.string.auto_connect)
     val tone = FoxholeInfoAccent
     Row(
         modifier =
@@ -918,7 +920,7 @@ internal fun HomeAutoConnectStatusLine(
             modifier = Modifier,
         )
         HomeAnalysisStatusText(
-            protocolLabel = protocolHintChipLabel(option.protocolHint),
+            protocolLabel = protocolLabel,
             tint = tone,
             textStyle = textStyle,
             modifier = Modifier.weight(1f, fill = false),

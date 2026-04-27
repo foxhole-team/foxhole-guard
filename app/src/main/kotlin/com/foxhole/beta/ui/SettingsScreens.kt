@@ -105,6 +105,7 @@ import com.foxhole.beta.core.model.RoutingPresetOverrideMode
 import com.foxhole.beta.core.model.RoutingPresetSource
 import com.foxhole.beta.core.model.RoutingRule
 import com.foxhole.beta.core.model.RoutingRuleAction
+import com.foxhole.beta.core.model.SubscriptionRefreshInterval
 import com.foxhole.beta.core.model.ThemeMode
 import com.foxhole.beta.core.model.TrafficMode
 import com.foxhole.beta.core.model.TunStack
@@ -552,6 +553,7 @@ fun TrafficSettingsScreen(
     onPreferIpv6Changed: (Boolean) -> Unit,
     onDomainStrategySelected: (DomainStrategy) -> Unit,
     onAutoRefreshSubscriptionsChanged: (Boolean) -> Unit,
+    onSubscriptionRefreshIntervalSelected: (SubscriptionRefreshInterval) -> Unit,
 ) {
     var modeMenuExpanded by rememberSaveable { mutableStateOf(false) }
     var tunStackMenuExpanded by rememberSaveable { mutableStateOf(false) }
@@ -560,6 +562,7 @@ fun TrafficSettingsScreen(
     var mixedDialog by rememberSaveable { mutableStateOf(false) }
     var mtuDialog by rememberSaveable { mutableStateOf(false) }
     var domainMenuExpanded by rememberSaveable { mutableStateOf(false) }
+    var subscriptionRefreshIntervalMenuExpanded by rememberSaveable { mutableStateOf(false) }
     val wifiLanAddress by rememberWifiLanAddress()
     val tunnelModeLabel = stringResource(R.string.traffic_mode_tunnel)
     val proxyModeLabel = stringResource(R.string.traffic_mode_proxy)
@@ -707,6 +710,21 @@ fun TrafficSettingsScreen(
                 leadingIcon = Icons.Outlined.Refresh,
                 summary = stringResource(R.string.auto_refresh_subscriptions_summary),
                 onCheckedChange = onAutoRefreshSubscriptionsChanged,
+                summaryMaxLines = 3,
+            )
+        }
+        item {
+            DropdownSettingRow(
+                title = stringResource(R.string.auto_refresh_subscriptions_interval_title),
+                value = subscriptionRefreshIntervalLabel(state.settings.connection.subscriptionRefreshInterval),
+                expanded = subscriptionRefreshIntervalMenuExpanded,
+                onExpandedChange = { subscriptionRefreshIntervalMenuExpanded = it },
+                values = SubscriptionRefreshInterval.entries,
+                selected = state.settings.connection.subscriptionRefreshInterval,
+                label = { subscriptionRefreshIntervalLabel(it) },
+                onSelect = onSubscriptionRefreshIntervalSelected,
+                leadingIcon = Icons.Outlined.Refresh,
+                optionIcon = { Icons.Outlined.Refresh },
             )
         }
     }
@@ -961,6 +979,16 @@ private fun domainStrategyIcon(value: DomainStrategy): ImageVector =
         DomainStrategy.IPV6_ONLY,
         -> Icons.Outlined.AccountTree
     }
+
+@Composable
+private fun subscriptionRefreshIntervalLabel(value: SubscriptionRefreshInterval): String =
+    stringResource(
+        when (value) {
+            SubscriptionRefreshInterval.HOURS_6 -> R.string.auto_refresh_subscriptions_interval_6h
+            SubscriptionRefreshInterval.HOURS_12 -> R.string.auto_refresh_subscriptions_interval_12h
+            SubscriptionRefreshInterval.HOURS_24 -> R.string.auto_refresh_subscriptions_interval_24h
+        },
+    )
 
 private fun themeModeIcon(value: ThemeMode): ImageVector =
     when (value) {

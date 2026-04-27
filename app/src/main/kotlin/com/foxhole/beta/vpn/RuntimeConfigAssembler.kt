@@ -69,7 +69,7 @@ class RuntimeConfigAssembler(
                 buildLocalSurfaceInbounds(settings.expert.localSurfaces).forEach(::add)
             }
         val patchedDns = patchDns(base["dns"]?.jsonObject, settings.traffic)
-        val patchedRoute = patchRoute(base["route"]?.jsonObject, activePreset, settings.expert)
+        val patchedRoute = patchRoute(base["route"]?.jsonObject, patchedDns, activePreset, settings.expert)
         val patchedExperimental = patchExperimental(base["experimental"]?.jsonObject, settings.expert.localSurfaces)
 
         return json.encodeToString(
@@ -115,7 +115,7 @@ class RuntimeConfigAssembler(
                 buildLocalSurfaceInbounds(localSurfaces).forEach(::add)
             }
         val patchedDns = patchDns(base["dns"]?.jsonObject, settings.traffic)
-        val patchedRoute = patchProxyRoute(base["route"]?.jsonObject, activePreset)
+        val patchedRoute = patchProxyRoute(base["route"]?.jsonObject, patchedDns, activePreset)
         val patchedExperimental = patchExperimental(base["experimental"]?.jsonObject, localSurfaces)
 
         return json.encodeToString(
@@ -282,7 +282,7 @@ class RuntimeConfigAssembler(
                     com.foxhole.beta.core.model.DomainStrategy.PREFER_IPV6
                 else -> traffic.domainStrategy
             }
-        if (existing == null || isFoxholeManagedDns(existing)) {
+        if (existing == null || !existing.hasDnsServers() || isFoxholeManagedDns(existing)) {
             return buildFoxholeDnsConfig(effectiveStrategy.configValue)
         }
         val source = existing
@@ -302,6 +302,7 @@ class RuntimeConfigAssembler(
 
     private fun patchRoute(
         existing: JsonObject?,
+        dns: JsonObject,
         activePreset: RoutingPreset?,
         expert: ExpertSettings,
     ): JsonObject {
@@ -324,7 +325,7 @@ class RuntimeConfigAssembler(
                 if (expert.sniff) {
                     add(sniffRule())
                 }
-                add(hijackDnsRule())
+                hijackDnsRules().forEach(::add)
                 if (expert.bypassLan) {
                     add(bypassLanRule())
                 }
@@ -348,15 +349,14 @@ class RuntimeConfigAssembler(
             }
             put("rules", combinedRules)
             source["final"]?.let { put("final", it) } ?: put("final", "proxy")
-            source["default_domain_resolver"]?.let { put("default_domain_resolver", it) } ?: put("default_domain_resolver", DNS_DIRECT_TAG)
-            if (!preserveSource) {
-                put("auto_detect_interface", true)
-            }
+            resolverForRoute(dns, source)?.let { put("default_domain_resolver", it) }
+            source["auto_detect_interface"]?.let { put("auto_detect_interface", it) } ?: put("auto_detect_interface", true)
         }
     }
 
     private fun patchProxyRoute(
         existing: JsonObject?,
+        dns: JsonObject,
         activePreset: RoutingPreset?,
     ): JsonObject {
         val source = existing ?: buildJsonObject {}
@@ -395,12 +395,35 @@ class RuntimeConfigAssembler(
             }
             put("rules", combinedRules)
             source["final"]?.let { put("final", it) } ?: put("final", "proxy")
-            source["default_domain_resolver"]?.let { put("default_domain_resolver", it) } ?: put("default_domain_resolver", DNS_DIRECT_TAG)
+            resolverForRoute(dns, source)?.let { put("default_domain_resolver", it) }
             if (!preserveSource) {
                 put("auto_detect_interface", true)
             }
         }
     }
+
+    private fun resolverForRoute(
+        dns: JsonObject,
+        sourceRoute: JsonObject,
+    ): String? {
+        val tags = dnsServerTags(dns)
+        sourceRoute["default_domain_resolver"]
+            ?.jsonPrimitive
+            ?.contentOrNull
+            ?.takeIf { it in tags }
+            ?.let { return it }
+        return when {
+            DNS_DIRECT_TAG in tags -> DNS_DIRECT_TAG
+            tags.isNotEmpty() -> tags.first()
+            else -> null
+        }
+    }
+
+    private fun dnsServerTags(dns: JsonObject): List<String> =
+        dns["servers"]
+            ?.jsonArray
+            ?.mapNotNull { server -> server.jsonObject["tag"]?.jsonPrimitive?.contentOrNull }
+            .orEmpty()
 
     private fun buildLocalSurfaceInbounds(localSurfaces: LocalSurfaceSettings): List<JsonObject> =
         buildList {
@@ -609,6 +632,9 @@ class RuntimeConfigAssembler(
     private fun hasEnabledProxySurface(localSurfaces: LocalSurfaceSettings): Boolean =
         localSurfaces.socks.enabled || localSurfaces.http.enabled || localSurfaces.mixed.enabled
 
+    private fun JsonObject.hasDnsServers(): Boolean =
+        this["servers"]?.jsonArray?.isNotEmpty() == true
+
     private fun buildFoxholeDnsConfig(strategy: String): JsonObject =
         buildJsonObject {
             put(
@@ -623,9 +649,7 @@ class RuntimeConfigAssembler(
                     add(
                         buildJsonObject {
                             put("tag", DNS_DIRECT_TAG)
-                            put("type", "udp")
-                            put("server", FOXHOLE_REMOTE_DNS_SERVER)
-                            put("server_port", 53)
+                            put("type", "local")
                         },
                     )
                     add(
@@ -649,12 +673,17 @@ class RuntimeConfigAssembler(
             put("action", "sniff")
         }
 
-    private fun hijackDnsRule(): JsonObject =
-        buildJsonObject {
-            put("protocol", "dns")
-            put("port", 53)
-            put("action", "hijack-dns")
-        }
+    private fun hijackDnsRules(): List<JsonObject> =
+        listOf(
+            buildJsonObject {
+                put("port", 53)
+                put("action", "hijack-dns")
+            },
+            buildJsonObject {
+                put("protocol", "dns")
+                put("action", "hijack-dns")
+            },
+        )
 
     private fun bypassLanRule(): JsonObject =
         buildJsonObject {
@@ -676,6 +705,15 @@ class RuntimeConfigAssembler(
         val localMatches =
             (local["type"]?.jsonPrimitive?.contentOrNull == "local") ||
                 (local["address"]?.jsonPrimitive?.contentOrNull == "local")
+        val direct = byTag[DNS_DIRECT_TAG]
+        val directMatches =
+            direct == null ||
+                direct["type"]?.jsonPrimitive?.contentOrNull == "local" ||
+                direct["address"]?.jsonPrimitive?.contentOrNull == "local" ||
+                (
+                    direct["server"]?.jsonPrimitive?.contentOrNull == FOXHOLE_REMOTE_DNS_SERVER &&
+                        direct["server_port"]?.jsonPrimitive?.contentOrNull == "53"
+                )
         val remoteMatches =
                 (
                     remote["type"]?.jsonPrimitive?.contentOrNull == "tcp" &&
@@ -697,6 +735,7 @@ class RuntimeConfigAssembler(
                     remote["address"]?.jsonPrimitive?.contentOrNull == FOXHOLE_DOH_ADDRESS
                     )
         return localMatches &&
+            directMatches &&
             remoteMatches &&
             remote["detour"]?.jsonPrimitive?.contentOrNull == "proxy"
     }

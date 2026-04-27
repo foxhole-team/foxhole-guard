@@ -5,7 +5,7 @@ import org.junit.Test
 
 class VpnDnsServerSelectorTest {
     @Test
-    fun `advertises local tun dns server to Android before remote resolver`() {
+    fun `advertises local tun dns server to Android before public config dns`() {
         val selected =
             VpnDnsServerSelector.advertisedDnsServerAddress(
                 configJson = foxholeConfig(server = "1.1.1.1"),
@@ -33,6 +33,37 @@ class VpnDnsServerSelectorTest {
             )
 
         assertEquals("1.1.1.1", selected)
+    }
+
+    @Test
+    fun `keeps local tun dns server before remote dns url`() {
+        val selected =
+            VpnDnsServerSelector.advertisedDnsServerAddress(
+                configJson = foxholeConfig(server = "https://1.1.1.1/dns-query"),
+                fallbackServerAddress = "172.19.0.2",
+            )
+
+        assertEquals("172.19.0.2", selected)
+    }
+
+    @Test
+    fun `extracts remote dns ip literal from non http endpoint url when local tun dns is unavailable`() {
+        val selected =
+            VpnDnsServerSelector.advertisedDnsServerAddress(
+                configJson =
+                    """
+                    {
+                      "dns": {
+                        "servers": [
+                          { "tag": "dns-remote", "address": "tls://[2606:4700:4700::1111]:853" }
+                        ]
+                      }
+                    }
+                    """.trimIndent(),
+                fallbackServerAddress = "",
+            )
+
+        assertEquals("2606:4700:4700::1111", selected)
     }
 
     @Test
@@ -66,6 +97,17 @@ class VpnDnsServerSelectorTest {
             )
 
         assertEquals(listOf("172.19.0.2"), selected)
+    }
+
+    @Test
+    fun `returns empty dns server list when neither tun fallback nor remote ip literal exists`() {
+        val selected =
+            VpnDnsServerSelector.advertisedDnsServerAddresses(
+                configJson = foxholeConfig(server = "cloudflare-dns.com"),
+                fallbackServerAddress = null,
+            )
+
+        assertEquals(emptyList<String>(), selected)
     }
 
     private fun foxholeConfig(server: String): String =

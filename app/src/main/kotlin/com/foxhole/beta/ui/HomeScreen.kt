@@ -285,13 +285,7 @@ fun HomeScreen(
             autoConnectRunning = state.autoConnect.running,
             deviceInternetAvailable = deviceInternetAvailable,
         )
-    val showNetworkConnectionStatus =
-        state.connection.state in setOf(
-            ConnectionState.CONNECTING,
-            ConnectionState.CONNECTED,
-            ConnectionState.RECONNECTING,
-        )
-    val showResolvedNetworkConnectionStatus = state.connection.state == ConnectionState.CONNECTED
+    val showNetworkConnectionStatus = state.connection.state == ConnectionState.CONNECTED
     val networkInfoTitleRes =
         if (showNetworkConnectionStatus) {
             R.string.home_network_connection_info_title
@@ -557,6 +551,8 @@ fun HomeScreen(
                                     compact = true,
                                     animateSelection = true,
                                     latencyByOptionId = dashboardProtocolLatencies,
+                                    recommendedProtocolOptionId = state.recommendedProtocolOptionId,
+                                    recommendedProtocolOptionIds = state.recommendedProtocolOptionIds,
                                     selectorBorderColor = dashboardSelectorBorderColor,
                                     showInsecureTlsBadge = false,
                                     leadingContent =
@@ -709,6 +705,7 @@ fun HomeScreen(
                                         labels =
                                             listOf(
                                                 stringResource(R.string.home_network_country_label),
+                                                stringResource(R.string.home_network_city_label),
                                                 stringResource(R.string.home_network_ip_label),
                                                 stringResource(R.string.home_network_provider_label),
                                             ),
@@ -741,6 +738,7 @@ fun HomeScreen(
                                             stringResource(R.string.home_network_unavailable)
                                         }
                                     val ipText = if (networkIpInfo != null) primaryVisibleIp(networkIpInfo) else "-"
+                                    val cityText = networkIpInfo?.let(::buildCityLine) ?: "-"
                                     val providerText = networkIpInfo?.isp?.takeIf { it.isNotBlank() } ?: "-"
                                     Column(
                                         modifier = Modifier.weight(1f),
@@ -751,6 +749,12 @@ fun HomeScreen(
                                             label = stringResource(R.string.home_network_country_label),
                                             value = countryText,
                                             modifier = Modifier.testTag("home_network_country"),
+                                        )
+                                        HomeNetworkSubtleDivider()
+                                        HomeNetworkDetailLine(
+                                            label = stringResource(R.string.home_network_city_label),
+                                            value = cityText,
+                                            modifier = Modifier.testTag("home_network_city"),
                                         )
                                         HomeNetworkSubtleDivider()
                                         HomeNetworkDetailLine(
@@ -765,7 +769,7 @@ fun HomeScreen(
                                             value = providerText,
                                         )
                                     }
-                                    if (showResolvedNetworkConnectionStatus) {
+                                    if (showNetworkConnectionStatus) {
                                         HomeNetworkVerticalDivider()
                                         Column(
                                             modifier = Modifier.weight(1f),
@@ -818,6 +822,13 @@ fun HomeScreen(
                                             )
                                             HomeNetworkSubtleDivider()
                                             HomeNetworkDetailLine(
+                                                label = stringResource(R.string.home_network_connect_time_label),
+                                                value = connectionDurationText ?: "-",
+                                                valueMonospace = connectionDurationText != null,
+                                                modifier = Modifier.testTag("home_connection_duration"),
+                                            )
+                                            HomeNetworkSubtleDivider()
+                                            HomeNetworkDetailLine(
                                                 label = stringResource(R.string.home_network_status_label),
                                                 value = profileStatusText,
                                             )
@@ -834,47 +845,49 @@ fun HomeScreen(
                 val totalBytes = totals.sumOf { it.rxTotalBytes + it.txTotalBytes }
                 val totalDays =
                     ((System.currentTimeMillis() - state.settings.usageTrackingStartedAt).coerceAtLeast(0L) / 86_400_000L) + 1L
+                val totalTrafficText =
+                    buildAnnotatedString {
+                        append(stringResource(R.string.home_total_traffic_title))
+                        append(" ")
+                        withStyle(SpanStyle(color = MaterialTheme.colorScheme.onSurfaceVariant)) {
+                            append(stringResource(R.string.home_total_traffic_days, totalDays))
+                        }
+                        append(" ")
+                        append(formatBytes(context, totalBytes))
+                    }
                 FoxholeCard {
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         HomeCardHeader(
                             icon = Icons.Outlined.SwapVert,
                             title = stringResource(R.string.home_traffic_title),
-                        )
-                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
+                            titleContent = {
                                 Text(
-                                    text =
-                                        buildAnnotatedString {
-                                            append(stringResource(R.string.home_total_traffic_title))
-                                            append(" ")
-                                            withStyle(SpanStyle(color = MaterialTheme.colorScheme.onSurfaceVariant)) {
-                                                append(stringResource(R.string.home_total_traffic_days, totalDays))
-                                            }
-                                        },
+                                    text = stringResource(R.string.home_traffic_title),
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.SemiBold,
+                                    maxLines = 1,
+                                )
+                                Text(
+                                    text = totalTrafficText,
                                     modifier = Modifier.weight(1f),
                                     style = MaterialTheme.typography.labelSmall,
                                     fontWeight = FontWeight.SemiBold,
+                                    textAlign = TextAlign.End,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
                                 )
-                                Text(
-                                    text = formatBytes(context, totalBytes),
-                                    style = MaterialTheme.typography.titleSmall,
-                                    fontWeight = FontWeight.SemiBold,
-                                    maxLines = 1,
-                                )
-                                Spacer(modifier = Modifier.width(10.dp))
+                            },
+                            trailing = {
                                 HomeHeaderActionButton(
                                     icon = Icons.Outlined.DeleteSweep,
                                     contentDescription = stringResource(R.string.reset_usage_tracking),
                                     onClick = onResetUsageTracking,
-                                    modifier = Modifier.size(32.dp),
+                                    modifier = Modifier.size(32.dp).testTag("home_reset_usage_button"),
                                 )
-                            }
-                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
+                            },
+                        )
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
                                 val hasIncomingTraffic = state.traffic.rxBytesPerSec > 0L
                                 val hasOutgoingTraffic = state.traffic.txBytesPerSec > 0L
@@ -901,26 +914,6 @@ fun HomeScreen(
                                         style = MaterialTheme.typography.labelMedium,
                                         fontWeight = FontWeight.SemiBold,
                                     )
-                                    connectionDurationText?.let { duration ->
-                                        Text(
-                                            text =
-                                                buildAnnotatedString {
-                                                    withStyle(
-                                                        SpanStyle(color = MaterialTheme.colorScheme.onSurfaceVariant),
-                                                    ) {
-                                                        append(stringResource(R.string.home_connection_time_label))
-                                                        append(" ")
-                                                    }
-                                                    append(duration)
-                                                },
-                                            modifier = Modifier.testTag("home_connection_duration"),
-                                            style = MaterialTheme.typography.labelSmall,
-                                            fontFamily = FontFamily.Monospace,
-                                            fontWeight = FontWeight.SemiBold,
-                                            textAlign = TextAlign.End,
-                                            maxLines = 1,
-                                        )
-                                    }
                                 }
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),

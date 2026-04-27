@@ -396,7 +396,12 @@ internal fun convertXrayDns(dns: JsonObject?): JsonObject? {
                     put("type", "local")
                 },
             )
-            add(primaryServer.asSingboxServer(tag = "dns-direct", detour = null))
+            add(
+                buildJsonObject {
+                    put("tag", "dns-direct")
+                    put("type", "local")
+                },
+            )
             add(primaryServer.asSingboxServer(tag = "dns-remote", detour = "proxy"))
         }
         put("strategy", "prefer_ipv4")
