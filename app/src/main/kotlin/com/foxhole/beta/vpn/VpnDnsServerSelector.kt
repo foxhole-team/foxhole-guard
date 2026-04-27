@@ -29,13 +29,13 @@ internal object VpnDnsServerSelector {
         configJson: String?,
         fallbackServerAddress: String?,
     ): List<String> {
-        val localTunDns = fallbackServerAddress?.takeIf { it.isNotBlank() }
-        if (localTunDns != null) {
-            return listOf(localTunDns)
-        }
         val remoteDnsServers = remoteDnsServerAddresses(configJson).filter { it.isNotBlank() }.distinct()
         if (remoteDnsServers.isNotEmpty()) {
             return remoteDnsServers
+        }
+        val localTunDns = fallbackServerAddress?.takeIf { it.isNotBlank() }
+        if (localTunDns != null) {
+            return listOf(localTunDns)
         }
         return emptyList()
     }

@@ -5,14 +5,14 @@ import org.junit.Test
 
 class VpnDnsServerSelectorTest {
     @Test
-    fun `advertises local tun dns server to Android before public config dns`() {
+    fun `advertises public config dns to Android before local tun dns`() {
         val selected =
             VpnDnsServerSelector.advertisedDnsServerAddress(
                 configJson = foxholeConfig(server = "1.1.1.1"),
                 fallbackServerAddress = "172.19.0.2",
             )
 
-        assertEquals("172.19.0.2", selected)
+        assertEquals("1.1.1.1", selected)
     }
 
     @Test
@@ -36,14 +36,14 @@ class VpnDnsServerSelectorTest {
     }
 
     @Test
-    fun `keeps local tun dns server before remote dns url`() {
+    fun `keeps remote dns url before local tun dns server`() {
         val selected =
             VpnDnsServerSelector.advertisedDnsServerAddress(
                 configJson = foxholeConfig(server = "https://1.1.1.1/dns-query"),
                 fallbackServerAddress = "172.19.0.2",
             )
 
-        assertEquals("172.19.0.2", selected)
+        assertEquals("1.1.1.1", selected)
     }
 
     @Test
