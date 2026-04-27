@@ -58,11 +58,13 @@ object SmartStartController {
     fun recommendedTopCandidateIds(
         rankedCandidates: List<AdaptiveProtocolCandidateScore>,
         limit: Int = AUTO_CONNECT_MAX_ATTEMPTS,
+        excludeOptionIds: Set<String> = emptySet(),
     ): List<String> =
         rankedCandidates
             .asSequence()
             .map { score -> score.candidate.optionId.trim() }
             .filter(String::isNotBlank)
+            .filterNot(excludeOptionIds::contains)
             .distinct()
             .take(limit.coerceAtLeast(1))
             .toList()

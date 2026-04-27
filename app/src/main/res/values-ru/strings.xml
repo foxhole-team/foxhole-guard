@@ -110,7 +110,7 @@
     <string name="profile_import_https_only">Поддерживаются только публичные HTTPS-ссылки подписки</string>
     <string name="profile_import_subscription_invalid">Эта ссылка подписки недействительна или сервер вернул неподдерживаемый ответ</string>
     <string name="profile_import_insecure_tls_required">Эта конфигурация требует подтверждения Insecure TLS</string>
-    <string name="insecure_tls_import_warning_title">WARNING! Insecure TLS</string>
+    <string name="insecure_tls_import_warning_title">Warning</string>
     <string name="insecure_tls_import_warning_body">Эта VPN-конфигурация отключает проверку TLS. Принимайте только если доверяете именно этой конфигурации. Решение сохраняется только для этого профиля.</string>
     <string name="profile_config_saved">Конфигурация профиля сохранена</string>
     <string name="profile_config_saved_reconnecting">Конфигурация сохранена. Идет переподключение.</string>

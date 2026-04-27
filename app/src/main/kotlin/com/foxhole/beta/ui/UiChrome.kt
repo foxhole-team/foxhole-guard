@@ -127,6 +127,7 @@ internal object FoxholeMotionTokens {
 
 internal val FoxholePositiveAccent = Color(0xFF2F9E6A)
 internal val FoxholeInfoAccent = Color(0xFF6288AE)
+internal val FoxholeWarningAccent = Color(0xFFE0B84A)
 private val FoxholeErrorAccent = Color(0xFFC63C3C)
 
 internal fun Modifier.foxholeAnimateContentSize(): Modifier =
@@ -555,6 +556,8 @@ internal fun FoxholeSaveAction(
 internal fun FoxholeDialogTitle(
     title: String,
     icon: ImageVector? = null,
+    iconTint: Color? = null,
+    iconContainerColor: Color? = null,
 ) {
     val uiPalette = LocalFoxholeUiPalette.current
     if (icon == null) {
@@ -567,7 +570,7 @@ internal fun FoxholeDialogTitle(
     ) {
         Surface(
             shape = MaterialTheme.shapes.medium,
-            color = uiPalette.leadingIconContainerColor,
+            color = iconContainerColor ?: uiPalette.leadingIconContainerColor,
         ) {
             Icon(
                 imageVector = icon,
@@ -576,7 +579,7 @@ internal fun FoxholeDialogTitle(
                     Modifier
                         .padding(8.dp)
                         .size(18.dp),
-                tint = MaterialTheme.colorScheme.primary,
+                tint = iconTint ?: MaterialTheme.colorScheme.primary,
             )
         }
         Text(text = title)

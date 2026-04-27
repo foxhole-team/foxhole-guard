@@ -53,4 +53,37 @@ class DiagnosticsSessionStoreTest {
 
         assertEquals(listOf("kept"), entries.map(DiagnosticEntry::message))
     }
+
+    @Test
+    fun `smart start replay entries use diagnostics retention cleanup`() {
+        val directory = Files.createTempDirectory("foxhole-smart-start-replay-retention").toFile()
+        val store =
+            DiagnosticsSessionStore(
+                journalDir = directory,
+                sessionIdProvider = { "replay" },
+            )
+        store.append(
+            DiagnosticEntry(
+                timestamp = 1_000L,
+                tag = "smart-start-replay",
+                message = """{"profileId":1,"optionId":"old"}""",
+            ),
+            DiagnosticsRetention.HOURS_6,
+        )
+        directory.listFiles().orEmpty().forEach { file -> file.setLastModified(1_000L) }
+
+        val now = 8L * 60L * 60L * 1000L
+        store.append(
+            DiagnosticEntry(
+                timestamp = now,
+                tag = "smart-start-replay",
+                message = """{"profileId":2,"optionId":"current"}""",
+            ),
+            DiagnosticsRetention.HOURS_6,
+        )
+
+        val entries = store.loadRecentEntries(now = now, retention = DiagnosticsRetention.HOURS_6)
+
+        assertEquals(listOf("""{"profileId":2,"optionId":"current"}"""), entries.map(DiagnosticEntry::message))
+    }
 }

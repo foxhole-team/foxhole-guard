@@ -16,6 +16,7 @@ import android.os.ParcelFileDescriptor
 import android.util.Log
 import androidx.annotation.RequiresApi
 import androidx.core.content.getSystemService
+import com.foxhole.beta.BuildConfig
 import com.foxhole.beta.core.diagnostics.DiagnosticsLogger
 import com.foxhole.beta.core.model.VpnSession
 import java.net.InetAddress
@@ -102,7 +103,7 @@ private class ReflectiveLibboxRuntime(
         } catch (error: Throwable) {
             val normalized = unwrapVpnRuntimeFailure(error)
             diagnosticsLogger.record("runtime", "start failed: ${describeVpnRuntimeFailure(normalized)}")
-            Log.e("FoxholeLibbox", "libbox start failed", normalized)
+            logRuntimeFailure("libbox start failed", normalized)
             Result.failure(normalized)
         }
 
@@ -122,7 +123,7 @@ private class ReflectiveLibboxRuntime(
         } catch (error: Throwable) {
             val normalized = unwrapVpnRuntimeFailure(error)
             diagnosticsLogger.record("runtime", "reload failed: ${describeVpnRuntimeFailure(normalized)}")
-            Log.e("FoxholeLibbox", "libbox reload failed", normalized)
+            logRuntimeFailure("libbox reload failed", normalized)
             Result.failure(normalized)
         }
 
@@ -473,4 +474,15 @@ internal fun isNonVpnNetwork(
     return capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
         capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_RESTRICTED) &&
         !capabilities.hasTransport(NetworkCapabilities.TRANSPORT_VPN)
+}
+
+private fun logRuntimeFailure(
+    message: String,
+    error: Throwable,
+) {
+    if (BuildConfig.DEBUG || BuildConfig.ENABLE_DIAGNOSTIC_LOGCAT) {
+        Log.e("FoxholeLibbox", message, error)
+    } else {
+        Log.e("FoxholeLibbox", "$message error=${error.javaClass.simpleName}")
+    }
 }

@@ -23,6 +23,7 @@ concurrency:
 
 jobs:
   verify:
+    name: build/unit/security verified
     runs-on: ubuntu-24.04
     timeout-minutes: 50
     steps:
@@ -164,6 +165,7 @@ jobs:
             build/reports
 
   connected-tests:
+    name: emulator UI/regression connected tests (not VPN proof)
     if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule' || (github.event_name == 'push' && github.ref == 'refs/heads/dev')
     runs-on: ubuntu-24.04
     timeout-minutes: 70
@@ -283,6 +285,46 @@ jobs:
           emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           script: bash scripts/run-connected-android-tests.sh
 
+      - name: validate connected test xml
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import pathlib
+          import sys
+          import xml.etree.ElementTree as ET
+
+          roots = [
+              pathlib.Path("build/connected-test-specs"),
+              pathlib.Path("app/build/outputs/androidTest-results"),
+          ]
+          xml_paths = []
+          for root in roots:
+              if root.exists():
+                  xml_paths.extend(root.rglob("TEST-*.xml"))
+          if not xml_paths:
+              sys.exit("No connected-test JUnit XML files were generated")
+
+          all_skipped = []
+          for path in sorted(set(xml_paths)):
+              try:
+                  root = ET.parse(path).getroot()
+              except ET.ParseError as error:
+                  sys.exit(f"Could not parse {path}: {error}")
+              suites = [root] if root.tag == "testsuite" else root.findall(".//testsuite")
+              for suite in suites:
+                  tests = int(float(suite.attrib.get("tests", "0") or 0))
+                  skipped = int(float(suite.attrib.get("skipped", "0") or 0))
+                  if tests > 0 and skipped == tests:
+                      all_skipped.append(f"{path}: {suite.attrib.get('name', 'unknown')} tests={tests} skipped={skipped}")
+          if all_skipped:
+              print("Connected test XML contains suites that were discovered but not executed:")
+              for item in all_skipped:
+                  print(f"- {item}")
+              sys.exit(1)
+          PY
+
       - name: upload connected test reports
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
@@ -292,3 +334,4 @@ jobs:
             app/build/reports/androidTests
             app/build/outputs/androidTest-results
             app/build/outputs/connected_android_test_additional_output
+            build/connected-test-specs

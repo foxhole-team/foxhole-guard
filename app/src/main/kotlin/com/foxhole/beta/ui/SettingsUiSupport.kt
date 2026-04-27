@@ -843,6 +843,10 @@ internal fun ConfirmDialog(
     body: String,
     confirmLabel: String,
     icon: ImageVector? = null,
+    iconTint: Color? = null,
+    iconContainerColor: Color? = null,
+    bodyIcon: ImageVector? = Icons.Outlined.Info,
+    bodyIconTint: Color? = null,
     dismissLabel: String? = null,
     secondaryLabel: String? = null,
     onSecondary: (() -> Unit)? = null,
@@ -858,8 +862,21 @@ internal fun ConfirmDialog(
                 dismissOnBackPress = dismissOnBackPress,
                 dismissOnClickOutside = dismissOnClickOutside,
             ),
-        title = { FoxholeDialogTitle(title = title, icon = icon) },
-        text = { Text(body) },
+        title = {
+            FoxholeDialogTitle(
+                title = title,
+                icon = icon ?: Icons.Outlined.Info,
+                iconTint = iconTint,
+                iconContainerColor = iconContainerColor,
+            )
+        },
+        text = {
+            FoxholeDialogBody(
+                body = body,
+                icon = bodyIcon,
+                iconTint = bodyIconTint,
+            )
+        },
         confirmButton = {
             TextButton(
                 onClick = onConfirm,
@@ -877,6 +894,44 @@ internal fun ConfirmDialog(
             }
         },
     )
+}
+
+@Composable
+private fun FoxholeDialogBody(
+    body: String,
+    icon: ImageVector?,
+    iconTint: Color?,
+) {
+    val resolvedIconTint = iconTint ?: FoxholeInfoAccent
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.Top,
+    ) {
+        icon?.let { imageVector ->
+            Surface(
+                shape = CircleShape,
+                color = resolvedIconTint.copy(alpha = 0.12f),
+                border = BorderStroke(1.dp, resolvedIconTint.copy(alpha = 0.24f)),
+            ) {
+                Icon(
+                    imageVector = imageVector,
+                    contentDescription = null,
+                    tint = resolvedIconTint,
+                    modifier =
+                        Modifier
+                            .padding(6.dp)
+                            .size(16.dp),
+                )
+            }
+        }
+        Text(
+            text = body,
+            modifier = Modifier.weight(1f),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
 }
 
 internal fun tunStackLabel(value: TunStack): String = value.configValue.replaceFirstChar(Char::uppercaseChar)

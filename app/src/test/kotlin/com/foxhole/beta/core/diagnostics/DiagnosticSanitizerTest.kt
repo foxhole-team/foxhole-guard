@@ -42,17 +42,63 @@ class DiagnosticSanitizerTest {
     fun `redacts uid and package metadata`() {
         val sanitized =
             DiagnosticSanitizer.sanitize(
-                "uid=10345 package=com.bank.app user_id=2001 application=com.social.client city=moscow",
+                "uid=10345 package=com.bank.app packages=com.wallet,com.mail package_names=com.one|com.two user_id=2001 application=com.social.client apps=com.chat city=moscow",
             )
 
         assertFalse(sanitized.contains("10345"))
         assertFalse(sanitized.contains("com.bank.app"))
+        assertFalse(sanitized.contains("com.wallet"))
+        assertFalse(sanitized.contains("com.one"))
         assertFalse(sanitized.contains("2001"))
         assertFalse(sanitized.contains("com.social.client"))
+        assertFalse(sanitized.contains("com.chat"))
         assertFalse(sanitized.contains("moscow"))
         assertTrue(sanitized.contains("uid=[redacted]"))
         assertTrue(sanitized.contains("package=[redacted]"))
+        assertTrue(sanitized.contains("packages=[redacted]"))
+        assertTrue(sanitized.contains("package_names=[redacted]"))
         assertTrue(sanitized.contains("application=[redacted]"))
+        assertTrue(sanitized.contains("apps=[redacted]"))
+    }
+
+    @Test
+    fun `redacts app connection endpoint fields`() {
+        val sanitized =
+            DiagnosticSanitizer.sanitize(
+                "App connection: app=Chrome profileId=42 optionId=vless-main local=10.0.0.2:51234 remote=1.1.1.1:443 sourceHost=phone.lan destinationHost=cloudflare-dns.com",
+            )
+
+        assertFalse(sanitized.contains("Chrome"))
+        assertFalse(sanitized.contains("42"))
+        assertFalse(sanitized.contains("vless-main"))
+        assertFalse(sanitized.contains("10.0.0.2"))
+        assertFalse(sanitized.contains("1.1.1.1"))
+        assertFalse(sanitized.contains("phone.lan"))
+        assertFalse(sanitized.contains("cloudflare-dns.com"))
+        assertTrue(sanitized.contains("app=[redacted]"))
+        assertTrue(sanitized.contains("profileId=[redacted]"))
+        assertTrue(sanitized.contains("optionId=[redacted]"))
+        assertTrue(sanitized.contains("local=[redacted]"))
+        assertTrue(sanitized.contains("remote=[redacted]"))
+        assertTrue(sanitized.contains("sourceHost=[redacted]"))
+        assertTrue(sanitized.contains("destinationHost=[redacted]"))
+    }
+
+    @Test
+    fun `redacts json shaped profile and endpoint fields`() {
+        val sanitized =
+            DiagnosticSanitizer.sanitize(
+                """{"profileId":42,"optionId":"vless-main","remote":"1.1.1.1:443","app":"Chrome"}""",
+            )
+
+        assertFalse(sanitized.contains("42"))
+        assertFalse(sanitized.contains("vless-main"))
+        assertFalse(sanitized.contains("1.1.1.1"))
+        assertFalse(sanitized.contains("Chrome"))
+        assertTrue(sanitized.contains("\"profileId\":\"[redacted]\""))
+        assertTrue(sanitized.contains("\"optionId\":\"[redacted]\""))
+        assertTrue(sanitized.contains("\"remote\":\"[redacted]\""))
+        assertTrue(sanitized.contains("\"app\":\"[redacted]\""))
     }
 
     @Test

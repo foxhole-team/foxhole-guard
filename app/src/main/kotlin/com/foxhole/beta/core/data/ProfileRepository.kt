@@ -2,6 +2,7 @@ package com.foxhole.beta.core.data
 
 import android.util.Log
 import androidx.room.withTransaction
+import com.foxhole.beta.BuildConfig
 import com.foxhole.beta.core.diagnostics.DiagnosticsLogger
 import com.foxhole.beta.core.importer.ProfileImportParser
 import com.foxhole.beta.core.importer.SubscriptionMetadataParser
@@ -408,13 +409,14 @@ class ProfileRepository(
         profileId: Long,
         protocolOptionIdOverride: String? = null,
     ): String {
-        val profile = requireProfile(profileId)
+        var profile = requireProfile(profileId)
         var secret = secretStore.read(profile.secretRef) ?: error("profile secret is missing")
         val settings = settingsRepository.current()
         var selectedOption = secret.selectedStoredProtocolOption(protocolOptionIdOverride)
         val baseConfig =
             selectedOption?.normalizedConfigJson ?: secret.resolvedConfigJson ?: if (profile.sourceType == ProfileSourceType.SUBSCRIPTION_URL) {
                 refreshProfile(profileId)
+                profile = requireProfile(profileId)
                 secret = secretStore.read(profile.secretRef) ?: error("profile secret is missing after refresh")
                 selectedOption = secret.selectedStoredProtocolOption(protocolOptionIdOverride)
                 selectedOption?.normalizedConfigJson ?: secret.resolvedConfigJson
@@ -489,6 +491,7 @@ class ProfileRepository(
         val profile = requireProfile(profileId)
         val secret = secretStore.read(profile.secretRef) ?: error("profile secret is missing")
         val selectedOption = secret.selectedStoredProtocolOption(protocolOptionIdOverride)
+        val correlationId = newRuntimeCorrelationId()
         val assembled =
             runCatching {
                 runtimeConfigAssembler.assemble(
@@ -499,19 +502,21 @@ class ProfileRepository(
             }.onFailure { error ->
                 diagnosticsLogger.record(
                     "profile",
-                    "session build failed: ${error.javaClass.simpleName}: ${error.message.orEmpty()}",
+                    "session build failed sessionId=$correlationId error=${error.javaClass.simpleName}: ${error.message.orEmpty()}",
                 )
-                Log.e(
-                    LOG_TAG,
-                    "session build failed profileId=$profileId optionId=${protocolOptionIdOverride.orEmpty()}",
-                    error,
-                )
+                val logMessage = "session build failed sessionId=$correlationId error=${error.javaClass.simpleName}"
+                if (BuildConfig.DEBUG || BuildConfig.ENABLE_DIAGNOSTIC_LOGCAT) {
+                    Log.e(LOG_TAG, logMessage, error)
+                } else {
+                    Log.e(LOG_TAG, logMessage)
+                }
             }.getOrThrow()
         return VpnSession(
             profileId = profile.id,
             profileName = profile.name,
             protocolHint = selectedOption?.protocolHint ?: profile.protocolHint,
             configJson = assembled,
+            correlationId = correlationId,
         )
     }
 
@@ -972,6 +977,9 @@ class ProfileRepository(
         return protocolOptions.firstOrNull { it.id == resolvedOptionId }
             ?: protocolOptions.firstOrNull()
     }
+
+    private fun newRuntimeCorrelationId(): String =
+        "s-" + UUID.randomUUID().toString().replace("-", "").take(12)
 
     private fun StoredProfileSecret.profileProtocolOptions(): List<ProfileProtocolOption> =
         protocolOptions.map { option ->

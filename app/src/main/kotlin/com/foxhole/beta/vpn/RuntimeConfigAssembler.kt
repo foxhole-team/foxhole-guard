@@ -649,7 +649,10 @@ class RuntimeConfigAssembler(
                     add(
                         buildJsonObject {
                             put("tag", DNS_DIRECT_TAG)
-                            put("type", "local")
+                            put("type", "udp")
+                            put("server", FOXHOLE_REMOTE_DNS_SERVER)
+                            put("server_port", 53)
+                            put("detour", "direct")
                         },
                     )
                     add(

@@ -428,6 +428,7 @@ private suspend fun HomeViewModel.recomputeRecommendedProtocolIds(
     profileId: Long,
     candidates: List<AutoConnectProbeCandidate>,
     networkFingerprint: NetworkFingerprint?,
+    excludeOptionIds: Set<String> = emptySet(),
 ): List<String> {
     val preference = container.settingsRepository.current().smartProfilePreference(profileId)
     val ranked =
@@ -442,7 +443,10 @@ private suspend fun HomeViewModel.recomputeRecommendedProtocolIds(
         rankedCandidates = ranked,
         networkFingerprint = networkFingerprint,
     )
-    return SmartStartController.recommendedTopCandidateIds(ranked)
+    return SmartStartController.recommendedTopCandidateIds(
+        rankedCandidates = ranked,
+        excludeOptionIds = excludeOptionIds,
+    )
 }
 
 private fun HomeViewModel.updateRecommendedProtocolUi(
@@ -555,6 +559,12 @@ internal fun HomeViewModel.refreshSmartProfileMetricsInternal(profileId: Long) {
                         profileId = profileId,
                         candidates = candidates,
                         networkFingerprint = networkFingerprint,
+                        excludeOptionIds =
+                            results
+                                .asSequence()
+                                .filterNot(AutoConnectProbeResult::success)
+                                .map { result -> result.candidate.optionId }
+                                .toSet(),
                     )
                 if (recommendedIds.isNotEmpty()) {
                     container.settingsRepository.recordSmartProfileBaseline(

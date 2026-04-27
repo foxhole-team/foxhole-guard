@@ -110,7 +110,7 @@
     <string name="profile_import_https_only">Only public HTTPS subscription links are supported</string>
     <string name="profile_import_subscription_invalid">This subscription link is invalid or returned an unsupported response</string>
     <string name="profile_import_insecure_tls_required">This configuration requires Insecure TLS consent</string>
-    <string name="insecure_tls_import_warning_title">WARNING! Insecure TLS</string>
+    <string name="insecure_tls_import_warning_title">Warning</string>
     <string name="insecure_tls_import_warning_body">This VPN configuration disables TLS verification. Accept only if you trust this exact configuration. The decision is stored for this profile only.</string>
     <string name="profile_config_saved">Profile config saved</string>
     <string name="profile_config_saved_reconnecting">Configuration saved. Reconnecting now.</string>

@@ -116,6 +116,22 @@ class SmartStartControllerTest {
     }
 
     @Test
+    fun `manual refresh recommendations can exclude candidates that failed in the current scan`() {
+        val recommendedIds =
+            SmartStartController.recommendedTopCandidateIds(
+                rankedCandidates =
+                    listOf(
+                        score("stale-top", 100),
+                        score("healthy", 90),
+                        score("backup", 80),
+                    ),
+                excludeOptionIds = setOf("stale-top"),
+            )
+
+        assertEquals(listOf("healthy", "backup"), recommendedIds)
+    }
+
+    @Test
     fun `schema one scoped memory is ignored for schema two smart start ranking`() {
         val eligible =
             SmartStartController.eligibleCandidatesForRanking(

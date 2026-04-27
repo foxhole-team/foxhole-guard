@@ -479,4 +479,5 @@ data class VpnSession(
     val profileName: String,
     val protocolHint: ProtocolHint,
     val configJson: String,
+    val correlationId: String,
 )

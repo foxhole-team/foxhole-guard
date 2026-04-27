@@ -177,6 +177,7 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
         container.diagnosticsLogger.recordStructured(
             "connection",
             "session started",
+            "sessionId=${session.correlationId}",
             "mode=${trafficMode.name.lowercase()}",
         )
         FoxholeVpnRuntimeBridge.updateIpInfo(null)

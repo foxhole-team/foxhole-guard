@@ -117,8 +117,18 @@ class DiagnosticsLogger(
             return
         }
         runCatching {
-            val replayDir = File(context.filesDir, SMART_START_REPLAY_DIR_NAME).apply { mkdirs() }
-            File(replayDir, SMART_START_REPLAY_FILE_NAME).appendText(event.toJsonLine() + "\n")
+            val now = nowProvider()
+            val retention = currentRetention()
+            val entry =
+                DiagnosticEntry(
+                    timestamp = now,
+                    tag = SMART_START_REPLAY_TAG,
+                    message = event.toJsonLine(),
+                )
+            sessionStore.append(entry, retention)
+            entriesMutable.value =
+                (prune(entriesMutable.value, now, retention) + entry)
+                    .takeLast(retention.maxEntries)
         }.onFailure {
             record("diagnostics", "smart start replay write failed")
         }
@@ -154,8 +164,11 @@ class DiagnosticsLogger(
     }
 
     fun cleanupExpiredExports() {
-        sessionStore.cleanup(nowProvider(), currentRetention())
-        val cutoff = nowProvider() - EXPORT_TTL_MS
+        val now = nowProvider()
+        val retention = currentRetention()
+        sessionStore.cleanup(now, retention)
+        cleanupLegacySmartStartReplay(now, retention)
+        val cutoff = now - EXPORT_TTL_MS
         val exportDir = File(context.cacheDir, EXPORT_DIR_NAME)
         if (!exportDir.exists()) {
             return
@@ -163,6 +176,19 @@ class DiagnosticsLogger(
         exportDir.listFiles()
             ?.filter { it.isFile && it.lastModified() < cutoff }
             ?.forEach(File::delete)
+    }
+
+    private fun cleanupLegacySmartStartReplay(
+        now: Long,
+        retention: DiagnosticsRetention,
+    ) {
+        val cutoff = now - retention.retentionHours * 60L * 60L * 1000L
+        val replayDir = File(context.filesDir, LEGACY_SMART_START_REPLAY_DIR_NAME)
+        replayDir
+            .listFiles()
+            ?.filter { file -> file.isFile && file.lastModified() < cutoff }
+            ?.forEach(File::delete)
+        replayDir.takeIf { dir -> dir.isDirectory && dir.listFiles().orEmpty().isEmpty() }?.delete()
     }
 
     private fun prune(entries: List<DiagnosticEntry>, now: Long): List<DiagnosticEntry> {
@@ -228,8 +254,8 @@ class DiagnosticsLogger(
         private const val EXPORT_TTL_MS = 5 * 60 * 1000L
         private const val EXPORT_DIR_NAME = "diagnostics-export"
         private const val JOURNAL_DIR_NAME = "diagnostics-journal"
-        private const val SMART_START_REPLAY_DIR_NAME = "smart-start-replay"
-        private const val SMART_START_REPLAY_FILE_NAME = "smart-start-replay.jsonl"
+        private const val SMART_START_REPLAY_TAG = "smart-start-replay"
+        private const val LEGACY_SMART_START_REPLAY_DIR_NAME = "smart-start-replay"
         private const val DIAGNOSTIC_CLEANUP_WORK_NAME = "diagnostics-export-cleanup"
     }
 }

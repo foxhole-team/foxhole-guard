@@ -591,10 +591,20 @@ fun ProfilesScreen(
     }
 
     deleteProfileId?.let { profileId ->
+        val profileName = state.profile(profileId)?.name.orEmpty()
+        val deleteSummary = stringResource(R.string.delete_profile_summary)
         ConfirmDialog(
             title = stringResource(R.string.delete_profile_title),
-            body = state.profile(profileId)?.name.orEmpty(),
+            body =
+                if (profileName.isBlank()) {
+                    deleteSummary
+                } else {
+                    "$deleteSummary\n\n$profileName"
+                },
             confirmLabel = stringResource(R.string.yes_label),
+            icon = Icons.Outlined.Delete,
+            iconTint = MaterialTheme.colorScheme.error,
+            iconContainerColor = MaterialTheme.colorScheme.error.copy(alpha = 0.12f),
             dismissLabel = stringResource(R.string.no_label),
             onDismiss = { deleteProfileId = null },
             onConfirm = {
@@ -883,6 +893,9 @@ fun ProfileDetailScreen(
             title = stringResource(R.string.delete_profile_title),
             body = stringResource(R.string.delete_profile_summary),
             confirmLabel = stringResource(R.string.delete_label),
+            icon = Icons.Outlined.Delete,
+            iconTint = MaterialTheme.colorScheme.error,
+            iconContainerColor = MaterialTheme.colorScheme.error.copy(alpha = 0.12f),
             onDismiss = { showDeleteDialog = false },
             onConfirm = {
                 showDeleteDialog = false

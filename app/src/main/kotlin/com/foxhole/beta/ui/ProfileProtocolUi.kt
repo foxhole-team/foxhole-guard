@@ -73,6 +73,7 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
@@ -150,10 +151,17 @@ internal fun ProtocolMetadataRow(
         )
         trailingContent?.invoke(this)
         if (selectedRequiresInsecureTls) {
-            if (expand || reserveTrailingSpace) {
-                Spacer(modifier = Modifier.weight(1f))
+            Box(
+                modifier =
+                    if (expand || reserveTrailingSpace) {
+                        Modifier.weight(1f, fill = true)
+                    } else {
+                        Modifier
+                    },
+                contentAlignment = Alignment.CenterEnd,
+            ) {
+                InsecureTlsProfileBadge(compact = compact)
             }
-            InsecureTlsProfileBadge(compact = compact)
         }
         if (expiryPlacement == SubscriptionExpiryPlacement.DASHBOARD) {
             if (reserveTrailingSpace && !selectedRequiresInsecureTls) {
@@ -192,9 +200,13 @@ internal fun shouldShowInsecureTlsProfileBadge(
     showInsecureTlsBadge && (profileRequiresInsecureTls || selectedOptionRequiresInsecureTls)
 
 @Composable
-internal fun InsecureTlsProfileBadge(compact: Boolean = false) {
+internal fun InsecureTlsProfileBadge(
+    modifier: Modifier = Modifier,
+    compact: Boolean = false,
+) {
     val badgeColor = Color(0xFFE55353)
     Surface(
+        modifier = modifier.widthIn(min = if (compact) 78.dp else 92.dp),
         shape = MaterialTheme.shapes.small,
         color = Color.Transparent,
         border = BorderStroke(1.dp, badgeColor.copy(alpha = 0.72f)),
@@ -204,12 +216,14 @@ internal fun InsecureTlsProfileBadge(compact: Boolean = false) {
             modifier = Modifier.padding(horizontal = if (compact) 6.dp else 8.dp, vertical = if (compact) 2.dp else 3.dp),
             style =
                 MaterialTheme.typography.labelSmall.copy(
-                    fontSize = if (compact) 9.sp else 10.sp,
-                    lineHeight = if (compact) 10.sp else 11.sp,
+                    fontSize = if (compact) 8.5.sp else 10.sp,
+                    lineHeight = if (compact) 9.sp else 11.sp,
                     fontWeight = FontWeight.SemiBold,
                 ),
             color = badgeColor,
+            textAlign = TextAlign.Center,
             maxLines = 1,
+            softWrap = false,
             overflow = TextOverflow.Clip,
         )
     }
@@ -375,8 +389,9 @@ private fun ProtocolMarkOrSelector(
                             onProtocolOptionSelected(option.id)
                         },
                         selected = optionSelected,
-                        highlightSelected = false,
-                        showBorder = false,
+                        highlightSelected = true,
+                        selectedContainerColor = FoxholePositiveAccent.copy(alpha = 0.10f),
+                        showBorder = index != protocolOptions.lastIndex,
                         accentColor = FoxholePositiveAccent,
                         shape =
                             foxholeDropdownItemShape(
