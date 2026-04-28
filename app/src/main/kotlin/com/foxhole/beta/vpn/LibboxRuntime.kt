@@ -17,6 +17,7 @@ import android.util.Log
 import androidx.annotation.RequiresApi
 import androidx.core.content.getSystemService
 import com.foxhole.beta.BuildConfig
+import com.foxhole.beta.core.diagnostics.DiagnosticSanitizer
 import com.foxhole.beta.core.diagnostics.DiagnosticsLogger
 import com.foxhole.beta.core.model.VpnSession
 import java.net.InetAddress
@@ -478,9 +479,9 @@ private fun logRuntimeFailure(
     message: String,
     error: Throwable,
 ) {
-    if (BuildConfig.DEBUG || BuildConfig.ENABLE_DIAGNOSTIC_LOGCAT) {
+    if (BuildConfig.DEBUG) {
         Log.e("FoxholeLibbox", message, error)
     } else {
-        Log.e("FoxholeLibbox", "$message error=${error.javaClass.simpleName}")
+        Log.e("FoxholeLibbox", DiagnosticSanitizer.sanitizeForExport("$message error=${error.javaClass.simpleName}"))
     }
 }

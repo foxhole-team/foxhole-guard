@@ -1,6 +1,7 @@
 package com.foxhole.beta.core.diagnostics
 
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -141,5 +142,54 @@ class DiagnosticSanitizerTest {
 
         assertFalse(sanitized.contains("x-sec-net.nl"))
         assertTrue(sanitized.contains("[host]"))
+    }
+
+    @Test
+    fun `persistence sanitizer redacts alternate separators and query strings`() {
+        val sanitized =
+            DiagnosticSanitizer.sanitizeForPersistence(
+                "token: abc123 server=>edge.example.com password = hunter2 callback=https://example.com/path?token=abc&server=edge.example.com",
+            )
+
+        assertFalse(sanitized.contains("abc123"))
+        assertFalse(sanitized.contains("hunter2"))
+        assertFalse(sanitized.contains("edge.example.com"))
+        assertFalse(sanitized.contains("example.com/path"))
+        assertTrue(sanitized.contains("token: [redacted]"))
+        assertTrue(sanitized.contains("server=>[redacted]"))
+        assertTrue(sanitized.contains("password = [redacted]"))
+        assertTrue(sanitized.contains("https://[redacted]"))
+    }
+
+    @Test
+    fun `export sanitizer redacts escaped nested json fields`() {
+        val sanitized =
+            DiagnosticSanitizer.sanitizeForExport(
+                """payload="{\"server\":\"edge.example.com\",\"password\":\"hunter2\",\"profileId\":42,\"packages\":\"com.bank.app\"}" note=kept""",
+            )
+
+        assertFalse(sanitized.contains("edge.example.com"))
+        assertFalse(sanitized.contains("hunter2"))
+        assertFalse(sanitized.contains("com.bank.app"))
+        assertFalse(sanitized.contains("42"))
+        assertTrue(sanitized.contains("""\"server\":\"[redacted]\"""))
+        assertTrue(sanitized.contains("""\"password\":\"[redacted]\"""))
+        assertTrue(sanitized.contains("""\"profileId\":\"[redacted]\"""))
+        assertTrue(sanitized.contains("""\"packages\":\"[redacted]\"""))
+        assertTrue(sanitized.contains("note=kept"))
+    }
+
+    @Test
+    fun `sanitizer is idempotent across persistence and export boundaries`() {
+        val first =
+            DiagnosticSanitizer.sanitizeForPersistence(
+                "profile_id=42 package=com.bank.app remote=1.1.1.1:443 url=https://secret.example/path",
+            )
+        val second = DiagnosticSanitizer.sanitizeForExport(first)
+
+        assertEquals(first, second)
+        assertFalse(second.contains("com.bank.app"))
+        assertFalse(second.contains("1.1.1.1"))
+        assertFalse(second.contains("secret.example"))
     }
 }

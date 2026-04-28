@@ -16,3 +16,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "foxhole"
 include(":app")
+include(":macrobenchmark")

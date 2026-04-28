@@ -46,7 +46,7 @@ internal fun formatDiagnosticsExport(
         } else {
             entries.forEachIndexed { index, entry ->
                 val timestamp = formatter.format(Instant.ofEpochMilli(entry.timestamp))
-                append("$timestamp [${entry.tag}] ${DiagnosticSanitizer.sanitize(entry.message)}")
+                append("$timestamp [${entry.tag}] ${DiagnosticSanitizer.sanitizeForExport(entry.message)}")
                 if (index != entries.lastIndex) {
                     appendLine()
                 }

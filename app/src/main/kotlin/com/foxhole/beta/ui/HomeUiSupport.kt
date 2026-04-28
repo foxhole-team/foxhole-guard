@@ -34,6 +34,7 @@ import com.foxhole.beta.core.model.ProtocolHint
 import com.foxhole.beta.core.model.ProxyInboundSettings
 import com.foxhole.beta.core.model.Settings as FoxholeSettings
 import com.foxhole.beta.core.model.TrafficMode
+import com.foxhole.beta.core.model.isUdpTransport
 import com.foxhole.beta.core.profile.MultiProtocolProfileSupport
 import com.foxhole.beta.core.settings.SMART_START_FULL_REFRESH_STALE_MS
 import com.foxhole.beta.core.settings.smartProfilePreference
@@ -54,6 +55,46 @@ internal data class HomeDashboardLatencyPresentation(
     val latencyMs: Long? = null,
     val isDown: Boolean = false,
     val isUnavailable: Boolean = false,
+)
+
+internal data class HomeDashboardProtocolModel(
+    val presentation: HomeDashboardProtocolPresentation,
+    val latencyPresentation: HomeDashboardLatencyPresentation,
+    val latenciesByOptionId: Map<String, Long>,
+    val downOptionIds: Set<String>,
+    val latencyUnavailableOptionIds: Set<String>,
+    val showSmartStartLatency: Boolean,
+    val selectedServerPingMs: Long?,
+    val selectedServerPingUnavailable: Boolean,
+    val connectionDetailsReady: Boolean,
+)
+
+internal data class HomeDashboardProfileModel(
+    val activeProfileId: Long?,
+    val isSmartDashboardProfile: Boolean,
+    val showSmartStartRefreshReminder: Boolean,
+)
+
+internal data class HomeDashboardNetworkModel(
+    val visibleIpInfo: IpInfo?,
+    val showLoading: Boolean,
+    val showConnectionStatus: Boolean,
+    val titleRes: Int,
+)
+
+internal data class HomeDashboardProxyModel(
+    val modeOption: HomeModeOption,
+    val proxySurface: HomeProxySurface?,
+    val lanProxySurface: HomeProxySurface?,
+    val dashboardProxySurface: HomeProxySurface?,
+    val lanProxyActive: Boolean,
+)
+
+internal data class HomeDashboardTrafficModel(
+    val totalBytes: Long,
+    val totalDays: Long,
+    val hasIncomingTraffic: Boolean,
+    val hasOutgoingTraffic: Boolean,
 )
 
 internal enum class HomePrimaryAction {
@@ -153,6 +194,146 @@ internal fun shouldAwaitAutoConnectValidationGrace(
     connectionState: ConnectionState,
     vpnNetworkAvailable: Boolean,
 ): Boolean = connectionState == ConnectionState.CONNECTING && vpnNetworkAvailable
+
+internal fun resolveHomeDashboardProxyModel(
+    state: HomeRouteUiState,
+    wifiLanAddress: String?,
+): HomeDashboardProxyModel {
+    val proxySurface = activeProxySurface(state)
+    val lanProxySurface = activeLanProxySurface(state)
+    return HomeDashboardProxyModel(
+        modeOption = currentHomeModeOption(state),
+        proxySurface = proxySurface,
+        lanProxySurface = lanProxySurface,
+        dashboardProxySurface = proxySurface ?: lanProxySurface,
+        lanProxyActive = wifiLanAddress != null && lanProxySurface != null,
+    )
+}
+
+internal fun resolveHomeDashboardProtocolModel(state: HomeRouteUiState): HomeDashboardProtocolModel {
+    val latenciesByOptionId =
+        state.smartStartRememberedLatenciesByOptionId +
+            state.protocolLatenciesByOptionId +
+            state.autoConnect.options
+                .mapNotNull { option ->
+                    option.latencyMs
+                        ?.takeIf {
+                            option.status == AutoConnectProbeStatus.SUCCESS ||
+                                option.status == AutoConnectProbeStatus.WINNER
+                        }?.let { latencyMs -> option.optionId to latencyMs }
+                }.toMap()
+    val downOptionIds =
+        state.protocolDownOptionIds +
+            state.autoConnect.options
+                .filter { option -> option.status == AutoConnectProbeStatus.FAILED }
+                .map(AutoConnectProbeOptionUiState::optionId)
+                .toSet()
+    val latencyUnavailableOptionIds =
+        state.protocolLatencyUnavailableOptionIds +
+            state.autoConnect.options
+                .filter { option ->
+                    option.status in setOf(AutoConnectProbeStatus.SUCCESS, AutoConnectProbeStatus.WINNER) &&
+                        option.latencyUnavailable
+                }.map(AutoConnectProbeOptionUiState::optionId)
+                .toSet()
+    val latencyPresentation = resolveDashboardLatencyPresentation(state)
+    val protocolPresentation =
+        resolveHomeDashboardProtocolPresentation(
+            activeProfile = state.activeProfile,
+            autoConnect = state.autoConnect,
+            pinSelectionToProfile = state.protocolMetricsRefreshing,
+        )
+    val selectedServerPingOptionId = resolveDashboardLatencyOptionId(state.activeProfile)
+    val selectedServerPingMs = selectedServerPingOptionId?.let(state.protocolServerPingsByOptionId::get)
+    val selectedServerPingUnavailable =
+        selectedServerPingOptionId != null &&
+            selectedServerPingMs == null &&
+            selectedServerPingOptionId in state.protocolServerPingUnavailableOptionIds
+    return HomeDashboardProtocolModel(
+        presentation = protocolPresentation,
+        latencyPresentation = latencyPresentation,
+        latenciesByOptionId = latenciesByOptionId,
+        downOptionIds = downOptionIds,
+        latencyUnavailableOptionIds = latencyUnavailableOptionIds,
+        showSmartStartLatency =
+            latenciesByOptionId.isNotEmpty() ||
+                downOptionIds.isNotEmpty() ||
+                latencyUnavailableOptionIds.isNotEmpty(),
+        selectedServerPingMs = selectedServerPingMs,
+        selectedServerPingUnavailable = selectedServerPingUnavailable,
+        connectionDetailsReady =
+            shouldRenderDashboardConnectionDetails(
+                connectionState = state.connection.state,
+                activeProfile = state.activeProfile,
+                selectedLatencyMs = latencyPresentation.latencyMs,
+                selectedLatencyDown = latencyPresentation.isDown,
+                selectedLatencyUnavailable = latencyPresentation.isUnavailable,
+                selectedServerPingMs = selectedServerPingMs,
+                selectedServerPingUnavailable = selectedServerPingUnavailable,
+                selectedServerPingUnsupported = protocolPresentation.protocolHint.isUdpTransport(),
+            ),
+    )
+}
+
+internal fun resolveHomeDashboardProfileModel(
+    state: HomeRouteUiState,
+    dismissedSmartStartReminderProfileId: Long?,
+): HomeDashboardProfileModel {
+    val activeProfileId = state.activeProfile?.id
+    return HomeDashboardProfileModel(
+        activeProfileId = activeProfileId,
+        isSmartDashboardProfile = state.activeProfile?.let(MultiProtocolProfileSupport::hasMultipleSupportedOptions) == true,
+        showSmartStartRefreshReminder =
+            activeProfileId != null &&
+                dismissedSmartStartReminderProfileId != activeProfileId &&
+                shouldShowSmartStartRefreshReminder(
+                    activeProfile = state.activeProfile,
+                    settings = state.settings,
+                ),
+    )
+}
+
+internal fun resolveHomeDashboardNetworkModel(
+    state: HomeRouteUiState,
+    visibleIpInfo: IpInfo?,
+    deviceInternetAvailable: Boolean?,
+    connectionDetailsReady: Boolean,
+): HomeDashboardNetworkModel {
+    val showConnectionStatus = state.connection.state == ConnectionState.CONNECTED
+    return HomeDashboardNetworkModel(
+        visibleIpInfo = visibleIpInfo,
+        showLoading =
+            shouldShowDashboardNetworkLoading(
+                visibleIpInfo = visibleIpInfo,
+                explicitLoading = state.ipInfoLoading,
+                connectionState = state.connection.state,
+                autoConnectRunning = state.autoConnect.running,
+                deviceInternetAvailable = deviceInternetAvailable,
+            ) || !connectionDetailsReady,
+        showConnectionStatus = showConnectionStatus,
+        titleRes =
+            if (showConnectionStatus) {
+                R.string.home_network_connection_info_title
+            } else {
+                R.string.home_network_current_ip_title
+            },
+    )
+}
+
+internal fun resolveHomeDashboardTrafficModel(
+    state: HomeRouteUiState,
+    now: Long,
+): HomeDashboardTrafficModel {
+    val totals = visibleProfileTrafficTotals(state)
+    val totalBytes = totals.sumOf { total -> total.rxTotalBytes + total.txTotalBytes }
+    val totalDays = ((now - state.settings.usageTrackingStartedAt).coerceAtLeast(0L) / 86_400_000L) + 1L
+    return HomeDashboardTrafficModel(
+        totalBytes = totalBytes,
+        totalDays = totalDays,
+        hasIncomingTraffic = state.traffic.rxBytesPerSec > 0L,
+        hasOutgoingTraffic = state.traffic.txBytesPerSec > 0L,
+    )
+}
 
 @Composable
 internal fun rememberDefaultInternetAvailability(): State<Boolean?> {

@@ -59,13 +59,15 @@ class DiagnosticsLogger(
         val current = prune(entriesMutable.value, now, retention)
         val normalizedMessage = DiagnosticSanitizer.normalizeForStorage(message)
         val entry = DiagnosticEntry(now, tag.lowercase(Locale.ROOT), normalizedMessage)
+        val persistedEntry =
+            entry.copy(message = DiagnosticSanitizer.sanitizeForPersistence(normalizedMessage))
         val next =
             (current + entry)
                 .takeLast(retention.maxEntries)
         entriesMutable.value = next
-        runCatching { sessionStore.append(entry, retention) }
+        runCatching { sessionStore.append(persistedEntry, retention) }
         if (BuildConfig.ENABLE_DIAGNOSTIC_LOGCAT) {
-            Log.d(LOG_TAG, "[${tag.lowercase(Locale.ROOT)}] ${DiagnosticSanitizer.sanitize(normalizedMessage)}")
+            Log.d(LOG_TAG, "[${tag.lowercase(Locale.ROOT)}] ${DiagnosticSanitizer.sanitizeForExport(normalizedMessage)}")
         }
     }
 
@@ -125,7 +127,9 @@ class DiagnosticsLogger(
                     tag = SMART_START_REPLAY_TAG,
                     message = event.toJsonLine(),
                 )
-            sessionStore.append(entry, retention)
+            val persistedEntry =
+                entry.copy(message = DiagnosticSanitizer.sanitizeForPersistence(entry.message))
+            sessionStore.append(persistedEntry, retention)
             entriesMutable.value =
                 (prune(entriesMutable.value, now, retention) + entry)
                     .takeLast(retention.maxEntries)

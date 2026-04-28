@@ -3,6 +3,7 @@ package com.foxhole.beta.core.data
 import android.util.Log
 import androidx.room.withTransaction
 import com.foxhole.beta.BuildConfig
+import com.foxhole.beta.core.diagnostics.DiagnosticSanitizer
 import com.foxhole.beta.core.diagnostics.DiagnosticsLogger
 import com.foxhole.beta.core.importer.ProfileImportParser
 import com.foxhole.beta.core.importer.SubscriptionMetadataParser
@@ -520,10 +521,10 @@ class ProfileRepository(
                     "session build failed sessionId=$correlationId error=${error.javaClass.simpleName}: ${error.message.orEmpty()}",
                 )
                 val logMessage = "session build failed sessionId=$correlationId error=${error.javaClass.simpleName}"
-                if (BuildConfig.DEBUG || BuildConfig.ENABLE_DIAGNOSTIC_LOGCAT) {
+                if (BuildConfig.DEBUG) {
                     Log.e(LOG_TAG, logMessage, error)
                 } else {
-                    Log.e(LOG_TAG, logMessage)
+                    Log.e(LOG_TAG, DiagnosticSanitizer.sanitizeForExport(logMessage))
                 }
             }.getOrThrow()
         return VpnSession(

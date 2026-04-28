@@ -6,7 +6,7 @@ readonly TEST_METHOD_TIMEOUT_SECONDS="${FOXHOLE_ANDROID_TEST_METHOD_TIMEOUT_SECO
 readonly TARGET_PACKAGE="${FOXHOLE_ANDROID_TEST_TARGET_PACKAGE:-com.foxhole.beta.debug}"
 readonly SPEC_ARTIFACT_ROOT="${FOXHOLE_CONNECTED_TEST_ARTIFACT_ROOT:-build/connected-test-specs}"
 readonly SUMMARY_FILE="$SPEC_ARTIFACT_ROOT/summary.tsv"
-readonly REQUIRED_TEST_SPECS=(
+readonly DEFAULT_REQUIRED_TEST_SPECS=(
   "com.foxhole.beta.ProfileRuntimeSessionAndroidTest#freshExactImportPreservesUserServerPort"
   "com.foxhole.beta.ProfileRuntimeSessionAndroidTest#freshDirectShareImportsPreserveProvidedRuntimeFields"
   "com.foxhole.beta.ui.HomeRuntimeBehaviorTest"
@@ -30,6 +30,7 @@ readonly REQUIRED_TEST_SPECS=(
   "com.foxhole.beta.ui.HomeScreenTest#routingAppsScreenOpensPickerFromAddExceptionButton"
   "com.foxhole.beta.ui.HomeScreenTest#routingAppsPickerFiltersInstalledPackages"
   "com.foxhole.beta.ui.HomeScreenTest#routingSitesScreenOpensAddExceptionDialog"
+  "com.foxhole.beta.ui.LiveLogsDialogTest"
   "com.foxhole.beta.vpn.ProxyRuntimeSmokeTest"
 )
 readonly OPTIONAL_TEST_SPECS=(
@@ -41,6 +42,17 @@ readonly OPTIONAL_TEST_SPECS=(
   "com.foxhole.beta.ProfileRuntimeSessionAndroidTest#liveOptionProbeMatrixLogsVpnBoundIpResults"
   "com.foxhole.beta.vpn.VpnRuntimeSmokeTest"
 )
+
+required_test_specs() {
+  if [[ -n "${FOXHOLE_REQUIRED_CONNECTED_TEST_SPECS:-}" ]]; then
+    printf '%s\n' "$FOXHOLE_REQUIRED_CONNECTED_TEST_SPECS" |
+      tr ',' '\n' |
+      sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//' |
+      awk 'NF > 0'
+    return
+  fi
+  printf '%s\n' "${DEFAULT_REQUIRED_TEST_SPECS[@]}"
+}
 
 dump_diagnostics() {
   local test_spec="$1"
@@ -202,6 +214,15 @@ adb wait-for-device
 rm -rf "$SPEC_ARTIFACT_ROOT"
 mkdir -p "$SPEC_ARTIFACT_ROOT"
 printf 'spec\trequirement\tgradle_status\ttests\tfailures\terrors\tskipped\tartifact_dir\n' > "$SUMMARY_FILE"
+
+REQUIRED_TEST_SPECS=()
+while IFS= read -r test_spec; do
+  REQUIRED_TEST_SPECS+=("$test_spec")
+done < <(required_test_specs)
+if [[ "${#REQUIRED_TEST_SPECS[@]}" -eq 0 ]]; then
+  echo "No required connected test specs were selected" >&2
+  exit 1
+fi
 
 for test_spec in "${REQUIRED_TEST_SPECS[@]}"; do
   run_test_spec "$test_spec" "1"

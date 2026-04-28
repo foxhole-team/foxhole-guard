@@ -7,6 +7,15 @@ on:
       - dev
       - "codex/**"
   pull_request:
+    paths:
+      - ".github/**"
+      - "app/**"
+      - "gradle/**"
+      - "scripts/**"
+      - "build.gradle.kts"
+      - "settings.gradle.kts"
+      - "gradle.properties"
+      - "macrobenchmark/**"
   workflow_dispatch:
   schedule:
     - cron: "17 3 * * *"
@@ -30,64 +39,23 @@ jobs:
       - name: checkout
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8
 
-      - name: setup java
-        uses: actions/setup-java@dded0888837ed1f317902acf8a20df0ad188d165
-        with:
-          distribution: temurin
-          java-version: "17"
-          cache: gradle
-
-      - name: setup go
-        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c
-        with:
-          go-version: '1.24.7'
-          cache: false
-
-      - name: setup gradle
-        uses: gradle/actions/setup-gradle@4d9f0ba0025fe599b4ebab900eb7f3a1d93ef4c2
-
-      - name: install android sdk components for libbox
-        shell: bash
-        run: |
-          set -euo pipefail
-          ANDROID_SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}"
-          if [[ ! -d "$ANDROID_SDK_ROOT" ]]; then
-            echo "Android SDK root not found: $ANDROID_SDK_ROOT" >&2
-            exit 1
-          fi
-          SDKMANAGER="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
-          if [[ ! -x "$SDKMANAGER" ]]; then
-            SDKMANAGER="$(find "$ANDROID_SDK_ROOT/cmdline-tools" -path '*/bin/sdkmanager' | sort | tail -n 1)"
-          fi
-          if [[ -z "${SDKMANAGER:-}" || ! -x "$SDKMANAGER" ]]; then
-            echo "sdkmanager not found under $ANDROID_SDK_ROOT/cmdline-tools" >&2
-            exit 1
-          fi
-          {
-            echo "ANDROID_HOME=$ANDROID_SDK_ROOT"
-            echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
-            echo "ANDROID_NDK_HOME=$ANDROID_SDK_ROOT/ndk/28.0.13004108"
-          } >> "$GITHUB_ENV"
-          {
-            dirname "$SDKMANAGER"
-            echo "$ANDROID_SDK_ROOT/platform-tools"
-          } >> "$GITHUB_PATH"
-          set +o pipefail
-          yes | "$SDKMANAGER" --licenses >/dev/null
-          set -o pipefail
-          "$SDKMANAGER" --channel=3 "platform-tools" "platforms;android-37.0" "build-tools;37.0.0" "ndk;28.0.13004108"
+      - name: setup android libbox build
+        uses: ./.github/actions/setup-android-libbox
 
       - name: verify wrapper
         run: ./gradlew --no-daemon --console=plain --version
 
-      - name: lint and unit tests
-        run: ./gradlew --no-daemon --console=plain --stacktrace lintDebug lintRelease testDebugUnitTest
+      - name: static analysis, lint, unit tests, and coverage
+        run: ./gradlew --no-daemon --console=plain --stacktrace detekt lintDebug lintRelease testDebugUnitTest jacocoDebugUnitTestReport jacocoDebugUnitTestCoverageVerification
 
-      - name: build connected test artifacts
-        run: ./gradlew --no-daemon --console=plain --stacktrace assembleDebug assembleDebugAndroidTest
+      - name: build connected and benchmark test artifacts
+        run: ./gradlew --no-daemon --console=plain --stacktrace assembleDebug assembleDebugAndroidTest :macrobenchmark:assembleAndroidTest
 
       - name: build release
         run: ./gradlew --no-daemon --console=plain --stacktrace -Pfoxhole.splitApks=true assembleRelease
+
+      - name: generate sbom
+        run: ./gradlew --no-daemon --console=plain --stacktrace cyclonedxBom
 
       - name: secret scan
         run: |
@@ -162,63 +130,21 @@ jobs:
           path: |
             app/build/reports
             app/build/test-results
+            macrobenchmark/build/reports
+            macrobenchmark/build/outputs
             build/reports
 
   connected-tests:
     name: emulator UI/regression connected tests (not VPN proof)
-    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule' || (github.event_name == 'push' && github.ref == 'refs/heads/dev')
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch' || github.event_name == 'schedule' || (github.event_name == 'push' && github.ref == 'refs/heads/dev')
     runs-on: ubuntu-24.04
     timeout-minutes: 70
     steps:
       - name: checkout
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8
 
-      - name: setup java
-        uses: actions/setup-java@dded0888837ed1f317902acf8a20df0ad188d165
-        with:
-          distribution: temurin
-          java-version: "17"
-          cache: gradle
-
-      - name: setup go
-        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c
-        with:
-          go-version: '1.24.7'
-          cache: false
-
-      - name: setup gradle
-        uses: gradle/actions/setup-gradle@4d9f0ba0025fe599b4ebab900eb7f3a1d93ef4c2
-
-      - name: install android sdk components for libbox
-        shell: bash
-        run: |
-          set -euo pipefail
-          ANDROID_SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}"
-          if [[ ! -d "$ANDROID_SDK_ROOT" ]]; then
-            echo "Android SDK root not found: $ANDROID_SDK_ROOT" >&2
-            exit 1
-          fi
-          SDKMANAGER="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
-          if [[ ! -x "$SDKMANAGER" ]]; then
-            SDKMANAGER="$(find "$ANDROID_SDK_ROOT/cmdline-tools" -path '*/bin/sdkmanager' | sort | tail -n 1)"
-          fi
-          if [[ -z "${SDKMANAGER:-}" || ! -x "$SDKMANAGER" ]]; then
-            echo "sdkmanager not found under $ANDROID_SDK_ROOT/cmdline-tools" >&2
-            exit 1
-          fi
-          {
-            echo "ANDROID_HOME=$ANDROID_SDK_ROOT"
-            echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
-            echo "ANDROID_NDK_HOME=$ANDROID_SDK_ROOT/ndk/28.0.13004108"
-          } >> "$GITHUB_ENV"
-          {
-            dirname "$SDKMANAGER"
-            echo "$ANDROID_SDK_ROOT/platform-tools"
-          } >> "$GITHUB_PATH"
-          set +o pipefail
-          yes | "$SDKMANAGER" --licenses >/dev/null
-          set -o pipefail
-          "$SDKMANAGER" --channel=3 "platform-tools" "platforms;android-37.0" "build-tools;37.0.0" "ndk;28.0.13004108"
+      - name: setup android libbox build
+        uses: ./.github/actions/setup-android-libbox
 
       - name: prebuild connected test artifacts
         run: ./gradlew --no-daemon --console=plain --stacktrace assembleDebug assembleDebugAndroidTest
@@ -274,6 +200,8 @@ jobs:
 
       - name: run emulator tests
         uses: ReactiveCircus/android-emulator-runner@e89f39f1abbbd05b1113a29cf4db69e7540cae5a
+        env:
+          FOXHOLE_REQUIRED_CONNECTED_TEST_SPECS: ${{ github.event_name == 'pull_request' && 'com.foxhole.beta.ui.HomeScreenTest#opensSettingsFromBottomNavigation,com.foxhole.beta.ui.HomeScreenTest#opensProfilesFromHomeAction,com.foxhole.beta.ui.LiveLogsDialogTest' || '' }}
         with:
           api-level: 35
           arch: x86_64
@@ -283,7 +211,14 @@ jobs:
           force-avd-creation: false
           disable-animations: true
           emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
-          script: bash scripts/run-connected-android-tests.sh
+          script: |
+            bash scripts/run-connected-android-tests.sh
+            if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+              ./gradlew --no-daemon --console=plain --stacktrace :macrobenchmark:connectedCheck \
+                -Pandroid.testInstrumentationRunnerArguments.class=com.foxhole.beta.macrobenchmark.HomeMacrobenchmark#startup
+            elif [[ "${{ github.event_name }}" == "schedule" || "${{ github.ref }}" == "refs/heads/dev" ]]; then
+              ./gradlew --no-daemon --console=plain --stacktrace :macrobenchmark:connectedCheck
+            fi
 
       - name: validate connected test xml
         if: always()
@@ -334,4 +269,6 @@ jobs:
             app/build/reports/androidTests
             app/build/outputs/androidTest-results
             app/build/outputs/connected_android_test_additional_output
+            macrobenchmark/build/reports
+            macrobenchmark/build/outputs
             build/connected-test-specs

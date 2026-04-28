@@ -33,7 +33,7 @@ class DiagnosticsSessionStoreTest {
         val entries = secondStore.loadRecentEntries(now = 2_000L, retention = DiagnosticsRetention.HOURS_24)
 
         assertEquals(1, entries.size)
-        assertEquals("remote=203.0.113.10 url=https://example.test/sub", entries.single().message)
+        assertEquals("remote=[redacted] url=https://[redacted]", entries.single().message)
         val persisted = directory.listFiles().orEmpty().single()
         assertTrue(persisted.name.endsWith(".jsonl.enc"))
         assertFalse(persisted.readText().contains("203.0.113.10"))
@@ -56,7 +56,7 @@ class DiagnosticsSessionStoreTest {
 
         val entries = store.loadRecentEntries(now = 2_000L, retention = DiagnosticsRetention.HOURS_24)
 
-        assertEquals(listOf("remote=203.0.113.10"), entries.map(DiagnosticEntry::message))
+        assertEquals(listOf("remote=[redacted]"), entries.map(DiagnosticEntry::message))
         assertFalse(legacyFile.exists())
         assertTrue(directory.listFiles().orEmpty().single().name.endsWith(".jsonl.enc"))
         assertFalse(directory.listFiles().orEmpty().single().readText().contains("203.0.113.10"))
@@ -117,7 +117,10 @@ class DiagnosticsSessionStoreTest {
 
         val entries = store.loadRecentEntries(now = now, retention = DiagnosticsRetention.HOURS_6)
 
-        assertEquals(listOf("""{"profileId":2,"optionId":"current"}"""), entries.map(DiagnosticEntry::message))
+        assertEquals(
+            listOf("""{"profileId":"[redacted]","optionId":"[redacted]"}"""),
+            entries.map(DiagnosticEntry::message),
+        )
     }
 
     private object ReversingTestFileCipher : FileCipher {

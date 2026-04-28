@@ -1,3 +1,7 @@
+import org.cyclonedx.gradle.CyclonedxAggregateTask
+import org.cyclonedx.gradle.CyclonedxDirectTask
+import org.cyclonedx.model.Component
+
 buildscript {
     repositories {
         mavenCentral()
@@ -29,6 +33,11 @@ buildscript {
     }
 }
 
+plugins {
+    id("io.gitlab.arturbosch.detekt") version "1.23.8" apply false
+    id("org.cyclonedx.bom") version "3.2.4"
+}
+
 val hardenedToolDependencyVersions =
     mapOf(
         "org.apache.commons:commons-lang3" to "3.18.0",
@@ -53,4 +62,25 @@ allprojects {
             }
         }
     }
+    tasks.withType<CyclonedxDirectTask>().configureEach {
+        projectType.set(Component.Type.APPLICATION)
+        includeConfigs.set(listOf("releaseRuntimeClasspath"))
+        skipConfigs.set(listOf(".*[Tt]est.*", ".*[Bb]enchmark.*", ".*[Ll]int.*", ".*[Kk]sp.*"))
+        includeBuildEnvironment.set(false)
+        includeMetadataResolution.set(false)
+    }
+}
+
+subprojects {
+    if (name == "macrobenchmark") {
+        tasks.withType<CyclonedxDirectTask>().configureEach {
+            enabled = false
+        }
+    }
+}
+
+tasks.withType<CyclonedxAggregateTask>().configureEach {
+    projectType.set(Component.Type.APPLICATION)
+    componentName.set("foxhole-android")
+    includeBuildSystem.set(true)
 }

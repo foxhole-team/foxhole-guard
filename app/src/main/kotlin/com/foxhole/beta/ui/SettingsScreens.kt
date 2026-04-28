@@ -1223,17 +1223,34 @@ fun DiagnosticsScreen(
         }
 
     fun exportArchive(share: Boolean) {
-        val archive = onCreateDiagnosticsArchive()
-        if (share) {
-            context.startActivity(
-                Intent.createChooser(
-                    onShareDiagnosticsArchive(archive),
-                    exportDiagnosticsTitle,
-                ),
-            )
-        } else {
-            pendingArchiveFile = archive
-            archiveSaver.launch(archive.name)
+        coroutineScope.launch {
+            runCatching {
+                withContext(Dispatchers.IO) { onCreateDiagnosticsArchive() }
+            }.onSuccess { archive ->
+                if (share) {
+                    runCatching {
+                        context.startActivity(
+                            Intent.createChooser(
+                                onShareDiagnosticsArchive(archive),
+                                exportDiagnosticsTitle,
+                            ),
+                        )
+                    }.onFailure {
+                        snackbarHostState.showBanner(
+                            it.message ?: diagnosticsArchiveSaveFailed,
+                            FoxholeBannerTone.ERROR,
+                        )
+                    }
+                } else {
+                    pendingArchiveFile = archive
+                    archiveSaver.launch(archive.name)
+                }
+            }.onFailure {
+                snackbarHostState.showBanner(
+                    it.message ?: diagnosticsArchiveSaveFailed,
+                    FoxholeBannerTone.ERROR,
+                )
+            }
         }
     }
 
@@ -1253,28 +1270,36 @@ fun DiagnosticsScreen(
             }
             return
         }
-        val archive = onCreateDiagnosticsArchive()
-        val shareIntent =
-            createTelegramDiagnosticsShareIntent(
-                packageName = telegramPackage,
-                baseIntent = onShareDiagnosticsArchive(archive),
-                context = context,
-                handle = supportBotHandle,
-            )
-        runCatching { context.startActivity(shareIntent) }
-            .onFailure {
-                val opened = openSupportBot(context, supportBotHandle)
-                coroutineScope.launch {
-                    snackbarHostState.showBanner(
-                        if (opened) {
-                            supportBotBrowserFallback
-                        } else {
-                            supportBotOpenFailed
-                        },
-                        if (opened) FoxholeBannerTone.INFO else FoxholeBannerTone.ERROR,
+        coroutineScope.launch {
+            runCatching {
+                withContext(Dispatchers.IO) { onCreateDiagnosticsArchive() }
+            }.onSuccess { archive ->
+                val shareIntent =
+                    createTelegramDiagnosticsShareIntent(
+                        packageName = telegramPackage,
+                        baseIntent = onShareDiagnosticsArchive(archive),
+                        context = context,
+                        handle = supportBotHandle,
                     )
-                }
+                runCatching { context.startActivity(shareIntent) }
+                    .onFailure {
+                        val opened = openSupportBot(context, supportBotHandle)
+                        snackbarHostState.showBanner(
+                            if (opened) {
+                                supportBotBrowserFallback
+                            } else {
+                                supportBotOpenFailed
+                            },
+                            if (opened) FoxholeBannerTone.INFO else FoxholeBannerTone.ERROR,
+                        )
+                    }
+            }.onFailure {
+                snackbarHostState.showBanner(
+                    it.message ?: diagnosticsArchiveSaveFailed,
+                    FoxholeBannerTone.ERROR,
+                )
             }
+        }
     }
 
     SettingsScaffold(

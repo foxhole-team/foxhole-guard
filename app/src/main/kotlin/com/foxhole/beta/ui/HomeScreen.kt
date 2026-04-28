@@ -112,15 +112,12 @@ import com.foxhole.beta.core.model.ProfileProtocolOption
 import com.foxhole.beta.core.model.ProfileSourceType
 import com.foxhole.beta.core.model.TrafficMode
 import com.foxhole.beta.core.model.LocalSurfaceSettings
-import com.foxhole.beta.core.model.isUdpTransport
-import com.foxhole.beta.core.profile.MultiProtocolProfileSupport
 import com.foxhole.beta.ui.FoxholeCard
 import com.foxhole.beta.ui.BottomDockOverlayPadding
 import com.foxhole.beta.ui.FoxholeScaffold
 import com.foxhole.beta.ui.ScreenHorizontalPadding
 import com.foxhole.beta.ui.ScreenSectionSpacing
 import com.foxhole.beta.ui.ScreenVerticalPadding
-import com.foxhole.beta.ui.visibleProfileTrafficTotals
 import kotlinx.coroutines.delay
 
 @Composable
@@ -154,12 +151,18 @@ fun HomeScreen(
     var editProxyPasswordVisible by rememberSaveable { mutableStateOf(false) }
     var dismissedSmartStartReminderProfileId by rememberSaveable { mutableStateOf<Long?>(null) }
     var smartRefreshConfirmationProfileId by rememberSaveable { mutableStateOf<Long?>(null) }
-    val modeOption = currentHomeModeOption(state)
-    val proxySurface = activeProxySurface(state)
-    val lanProxySurface = activeLanProxySurface(state)
-    val dashboardProxySurface = proxySurface ?: lanProxySurface
     val wifiLanAddress by rememberWifiLanAddress()
-    val lanProxyActive = wifiLanAddress != null && lanProxySurface != null
+    val proxyModel =
+        remember(state, wifiLanAddress) {
+            resolveHomeDashboardProxyModel(
+                state = state,
+                wifiLanAddress = wifiLanAddress,
+            )
+        }
+    val modeOption = proxyModel.modeOption
+    val lanProxySurface = proxyModel.lanProxySurface
+    val dashboardProxySurface = proxyModel.dashboardProxySurface
+    val lanProxyActive = proxyModel.lanProxyActive
     val darkTheme = MaterialTheme.colorScheme.background.luminance() < 0.3f
     val proxyAuth = state.settings.expert.localSurfaces.auth
     val statusTone =
@@ -180,93 +183,20 @@ fun HomeScreen(
         } else {
             MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.42f)
         }
-    val dashboardProtocolLatencies =
-        remember(
-            state.smartStartRememberedLatenciesByOptionId,
-            state.protocolLatenciesByOptionId,
-            state.autoConnect.options,
-        ) {
-            state.smartStartRememberedLatenciesByOptionId +
-                state.protocolLatenciesByOptionId +
-                state.autoConnect.options
-                    .mapNotNull { option ->
-                        option.latencyMs?.takeIf {
-                            option.status == AutoConnectProbeStatus.SUCCESS || option.status == AutoConnectProbeStatus.WINNER
-                        }?.let { latencyMs ->
-                            option.optionId to latencyMs
-                        }
-                    }
-                    .toMap()
-        }
-    val dashboardDownProtocolIds =
-        remember(state.protocolDownOptionIds, state.autoConnect.options) {
-            state.protocolDownOptionIds +
-                state.autoConnect.options
-                    .filter { option -> option.status == AutoConnectProbeStatus.FAILED }
-                    .map { option -> option.optionId }
-                    .toSet()
-        }
     val connectionDurationText = rememberConnectionDurationText(state.connection)
-    val dashboardUnavailableProtocolIds =
-        remember(state.protocolLatencyUnavailableOptionIds, state.autoConnect.options) {
-            state.protocolLatencyUnavailableOptionIds +
-                state.autoConnect.options
-                    .filter { option ->
-                        option.status in setOf(AutoConnectProbeStatus.SUCCESS, AutoConnectProbeStatus.WINNER) &&
-                            option.latencyUnavailable
-                    }.map(AutoConnectProbeOptionUiState::optionId)
-                    .toSet()
-        }
-    val dashboardShowSmartStartLatency =
-        remember(
-            dashboardProtocolLatencies,
-            dashboardDownProtocolIds,
-            dashboardUnavailableProtocolIds,
-        ) {
-            dashboardProtocolLatencies.isNotEmpty() ||
-                dashboardDownProtocolIds.isNotEmpty() ||
-                dashboardUnavailableProtocolIds.isNotEmpty()
-        }
-    val dashboardLatencyPresentation =
-        remember(
-            state.autoConnect.running,
-            state.autoConnect.currentOptionId,
-            state.autoConnect.options,
-            state.selectedProtocolLatencyMs,
-            state.selectedProtocolLatencyUnavailable,
-            state.connection.state,
-            state.protocolMetricsRefreshing,
-        ) {
-            resolveDashboardLatencyPresentation(state)
-        }
+    val dashboardProtocolModel = remember(state) { resolveHomeDashboardProtocolModel(state) }
+    val dashboardProtocolLatencies = dashboardProtocolModel.latenciesByOptionId
+    val dashboardDownProtocolIds = dashboardProtocolModel.downOptionIds
+    val dashboardUnavailableProtocolIds = dashboardProtocolModel.latencyUnavailableOptionIds
+    val dashboardShowSmartStartLatency = dashboardProtocolModel.showSmartStartLatency
+    val dashboardLatencyPresentation = dashboardProtocolModel.latencyPresentation
     val dashboardSelectedLatencyMs = dashboardLatencyPresentation.latencyMs
     val dashboardSelectedLatencyDown = dashboardLatencyPresentation.isDown
     val dashboardSelectedLatencyUnavailable = dashboardLatencyPresentation.isUnavailable
-    val dashboardProtocolPresentation =
-        remember(state.activeProfile, state.autoConnect, state.protocolMetricsRefreshing) {
-            resolveHomeDashboardProtocolPresentation(
-                activeProfile = state.activeProfile,
-                autoConnect = state.autoConnect,
-                pinSelectionToProfile = state.protocolMetricsRefreshing,
-            )
-        }
-    val dashboardSelectedOptionId = resolveDashboardLatencyOptionId(state.activeProfile)
-    val dashboardSelectedServerPingMs = dashboardSelectedOptionId?.let(state.protocolServerPingsByOptionId::get)
-    val dashboardSelectedServerPingUnavailable =
-        dashboardSelectedOptionId != null &&
-            dashboardSelectedServerPingMs == null &&
-            dashboardSelectedOptionId in state.protocolServerPingUnavailableOptionIds
-    val dashboardConnectionDetailsReady =
-        shouldRenderDashboardConnectionDetails(
-            connectionState = state.connection.state,
-            activeProfile = state.activeProfile,
-            selectedLatencyMs = dashboardSelectedLatencyMs,
-            selectedLatencyDown = dashboardSelectedLatencyDown,
-            selectedLatencyUnavailable = dashboardSelectedLatencyUnavailable,
-            selectedServerPingMs = dashboardSelectedServerPingMs,
-            selectedServerPingUnavailable = dashboardSelectedServerPingUnavailable,
-            selectedServerPingUnsupported = dashboardProtocolPresentation.protocolHint.isUdpTransport(),
-        )
+    val dashboardProtocolPresentation = dashboardProtocolModel.presentation
+    val dashboardSelectedServerPingMs = dashboardProtocolModel.selectedServerPingMs
+    val dashboardSelectedServerPingUnavailable = dashboardProtocolModel.selectedServerPingUnavailable
+    val dashboardConnectionDetailsReady = dashboardProtocolModel.connectionDetailsReady
     val deviceInternetAvailable by rememberDefaultInternetAvailability()
     var pinnedIpInfo by remember { mutableStateOf(state.ipInfo) }
     var keepPinnedNetworkInfo by remember { mutableStateOf(false) }
@@ -298,32 +228,30 @@ fun HomeScreen(
             }
         }
     }
-    val visibleNetworkIpInfo = if (keepPinnedNetworkInfo) pinnedIpInfo else state.ipInfo
-    val showNetworkLoading =
-        shouldShowDashboardNetworkLoading(
-            visibleIpInfo = visibleNetworkIpInfo,
-            explicitLoading = state.ipInfoLoading,
-            connectionState = state.connection.state,
-            autoConnectRunning = state.autoConnect.running,
-            deviceInternetAvailable = deviceInternetAvailable,
-        ) || !dashboardConnectionDetailsReady
-    val showNetworkConnectionStatus = state.connection.state == ConnectionState.CONNECTED
-    val networkInfoTitleRes =
-        if (showNetworkConnectionStatus) {
-            R.string.home_network_connection_info_title
-        } else {
-            R.string.home_network_current_ip_title
-        }
-    val isSmartDashboardProfile =
-        state.activeProfile?.let(MultiProtocolProfileSupport::hasMultipleSupportedOptions) == true
-    val activeProfileId = state.activeProfile?.id
-    val showSmartStartRefreshReminder =
-        activeProfileId != null &&
-            dismissedSmartStartReminderProfileId != activeProfileId &&
-            shouldShowSmartStartRefreshReminder(
-                activeProfile = state.activeProfile,
-                settings = state.settings,
+    val selectedVisibleNetworkIpInfo = if (keepPinnedNetworkInfo) pinnedIpInfo else state.ipInfo
+    val networkModel =
+        remember(state, selectedVisibleNetworkIpInfo, deviceInternetAvailable, dashboardConnectionDetailsReady) {
+            resolveHomeDashboardNetworkModel(
+                state = state,
+                visibleIpInfo = selectedVisibleNetworkIpInfo,
+                deviceInternetAvailable = deviceInternetAvailable,
+                connectionDetailsReady = dashboardConnectionDetailsReady,
             )
+        }
+    val visibleNetworkIpInfo = networkModel.visibleIpInfo
+    val showNetworkLoading = networkModel.showLoading
+    val showNetworkConnectionStatus = networkModel.showConnectionStatus
+    val networkInfoTitleRes = networkModel.titleRes
+    val profileModel =
+        remember(state, dismissedSmartStartReminderProfileId) {
+            resolveHomeDashboardProfileModel(
+                state = state,
+                dismissedSmartStartReminderProfileId = dismissedSmartStartReminderProfileId,
+            )
+        }
+    val isSmartDashboardProfile = profileModel.isSmartDashboardProfile
+    val activeProfileId = profileModel.activeProfileId
+    val showSmartStartRefreshReminder = profileModel.showSmartStartRefreshReminder
 
     fun requestSmartProfileMetricsRefresh(profileId: Long) {
         val refreshMayReconnect =
@@ -532,7 +460,7 @@ fun HomeScreen(
                             } else {
                                 InlineSmartProfileTitle(
                                     title = dashboardProfileTitle(state.activeProfile.name),
-                                    isSmartProfile = MultiProtocolProfileSupport.hasMultipleSupportedOptions(state.activeProfile),
+                                    isSmartProfile = isSmartDashboardProfile,
                                     showSmartBadge = false,
                                     trailing = {
                                         when {
@@ -572,7 +500,7 @@ fun HomeScreen(
                                     selectorBorderColor = dashboardSelectorBorderColor,
                                     showInsecureTlsBadge = false,
                                     leadingContent =
-                                        if (MultiProtocolProfileSupport.hasMultipleSupportedOptions(state.activeProfile)) {
+                                        if (isSmartDashboardProfile) {
                                             {
                                                 SmartProfileAutoConnectMenu(
                                                     profile = state.activeProfile,
@@ -865,19 +793,16 @@ fun HomeScreen(
                 }
             }
             item {
-                val totals = visibleProfileTrafficTotals(state)
-                val totalBytes = totals.sumOf { it.rxTotalBytes + it.txTotalBytes }
-                val totalDays =
-                    ((System.currentTimeMillis() - state.settings.usageTrackingStartedAt).coerceAtLeast(0L) / 86_400_000L) + 1L
+                val trafficModel = resolveHomeDashboardTrafficModel(state, System.currentTimeMillis())
                 val totalTrafficText =
                     buildAnnotatedString {
                         append(stringResource(R.string.home_total_traffic_title))
                         append(" ")
                         withStyle(SpanStyle(color = MaterialTheme.colorScheme.onSurfaceVariant)) {
-                            append(stringResource(R.string.home_total_traffic_days, totalDays))
+                            append(stringResource(R.string.home_total_traffic_days, trafficModel.totalDays))
                         }
                         append(" ")
-                        append(formatBytes(context, totalBytes))
+                        append(formatBytes(context, trafficModel.totalBytes))
                     }
                 FoxholeCard {
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -913,16 +838,14 @@ fun HomeScreen(
                         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
                         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                                val hasIncomingTraffic = state.traffic.rxBytesPerSec > 0L
-                                val hasOutgoingTraffic = state.traffic.txBytesPerSec > 0L
                                 val incomingTrafficTint =
-                                    if (hasIncomingTraffic) {
+                                    if (trafficModel.hasIncomingTraffic) {
                                         FoxholePositiveAccent
                                     } else {
                                         MaterialTheme.colorScheme.onSurfaceVariant
                                     }
                                 val outgoingTrafficTint =
-                                    if (hasOutgoingTraffic) {
+                                    if (trafficModel.hasOutgoingTraffic) {
                                         FoxholeInfoAccent
                                     } else {
                                         MaterialTheme.colorScheme.onSurfaceVariant

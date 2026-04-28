@@ -2,6 +2,8 @@ import org.gradle.api.DefaultTask
 import org.gradle.api.file.DirectoryProperty
 import org.gradle.api.tasks.InputDirectory
 import org.gradle.api.tasks.TaskAction
+import org.gradle.testing.jacoco.tasks.JacocoCoverageVerification
+import org.gradle.testing.jacoco.tasks.JacocoReport
 import java.util.Properties
 import java.util.zip.ZipFile
 
@@ -54,6 +56,8 @@ plugins {
     id("com.google.devtools.ksp") version "2.3.7"
     id("org.jetbrains.kotlin.plugin.compose") version "2.3.21"
     id("org.jetbrains.kotlin.plugin.serialization") version "2.3.21"
+    id("io.gitlab.arturbosch.detekt")
+    jacoco
 }
 
 val enableAbiSplitApks = providers.gradleProperty("foxhole.splitApks").map(String::toBoolean).orElse(false).get()
@@ -275,6 +279,82 @@ composeCompiler {
     includeComposeMappingFile.set(false)
 }
 
+detekt {
+    buildUponDefaultConfig = true
+    allRules = false
+    config.setFrom(rootProject.files("config/detekt/detekt.yml"))
+    baseline = rootProject.file("config/detekt/baseline.xml")
+}
+
+jacoco {
+    toolVersion = "0.8.14"
+}
+
+val jacocoExcludes =
+    listOf(
+        "**/R.class",
+        "**/R$*.class",
+        "**/BuildConfig.*",
+        "**/Manifest*.*",
+        "**/*Test*.*",
+        "**/*Preview*.*",
+        "**/*ComposableSingletons*.*",
+        "**/*\$serializer.*",
+        "**/*_Impl*.*",
+        "**/*Dao_Impl*.*",
+        "**/*Database_Impl*.*",
+    )
+
+val jacocoDebugClassDirectories =
+    files(
+        fileTree(layout.buildDirectory.dir("tmp/kotlin-classes/debug")) {
+            exclude(jacocoExcludes)
+        },
+        fileTree(layout.buildDirectory.dir("intermediates/javac/debug/classes")) {
+            exclude(jacocoExcludes)
+        },
+    )
+
+tasks.register<JacocoReport>("jacocoDebugUnitTestReport") {
+    dependsOn("testDebugUnitTest")
+    reports {
+        xml.required.set(true)
+        html.required.set(true)
+        csv.required.set(false)
+    }
+    classDirectories.setFrom(jacocoDebugClassDirectories)
+    sourceDirectories.setFrom(files("src/main/kotlin", "src/main/java"))
+    executionData.setFrom(
+        fileTree(layout.buildDirectory) {
+            include(
+                "jacoco/testDebugUnitTest.exec",
+                "outputs/unit_test_code_coverage/debugUnitTest/testDebugUnitTest.exec",
+            )
+        },
+    )
+}
+
+tasks.register<JacocoCoverageVerification>("jacocoDebugUnitTestCoverageVerification") {
+    dependsOn("jacocoDebugUnitTestReport")
+    classDirectories.setFrom(jacocoDebugClassDirectories)
+    sourceDirectories.setFrom(files("src/main/kotlin", "src/main/java"))
+    executionData.setFrom(
+        fileTree(layout.buildDirectory) {
+            include(
+                "jacoco/testDebugUnitTest.exec",
+                "outputs/unit_test_code_coverage/debugUnitTest/testDebugUnitTest.exec",
+            )
+        },
+    )
+    violationRules {
+        rule {
+            limit {
+                minimum = "0.01".toBigDecimal()
+            }
+        }
+    }
+}
+
 dependencies {
     implementation(files(bundledLibbox))
 
@@ -329,4 +409,6 @@ dependencies {
 
     debugImplementation(libs.compose.ui.tooling)
     debugImplementation(libs.compose.ui.test.manifest)
+
+    detektPlugins("io.gitlab.arturbosch.detekt:detekt-formatting:1.23.8")
 }

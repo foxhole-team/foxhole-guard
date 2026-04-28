@@ -19,6 +19,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -55,6 +56,7 @@ internal fun LiveLogsDialog(
     val visibleEntries = remember(entries) { entries.asReversed().take(LIVE_LOGS_VISIBLE_ENTRY_LIMIT) }
 
     AlertDialog(
+        modifier = Modifier.testTag(LIVE_LOGS_DIALOG_TAG),
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.logs_title)) },
         text = {
@@ -63,6 +65,7 @@ internal fun LiveLogsDialog(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 Text(
+                    modifier = Modifier.testTag(LIVE_LOGS_RETENTION_SUMMARY_TAG),
                     text =
                         pluralStringResource(
                             R.plurals.logs_dialog_summary,
@@ -76,6 +79,7 @@ internal fun LiveLogsDialog(
                 )
                 if (networkActivityLoggingEnabled) {
                     Surface(
+                        modifier = Modifier.testTag(LIVE_LOGS_NETWORK_NOTICE_TAG),
                         shape = MaterialTheme.shapes.medium,
                         color = FoxholePositiveAccent.copy(alpha = 0.12f),
                         border = BorderStroke(1.dp, FoxholePositiveAccent.copy(alpha = 0.24f)),
@@ -93,6 +97,7 @@ internal fun LiveLogsDialog(
                 }
                 if (visibleEntries.isEmpty()) {
                     Surface(
+                        modifier = Modifier.testTag(LIVE_LOGS_EMPTY_STATE_TAG),
                         shape = MaterialTheme.shapes.medium,
                         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.42f),
                     ) {
@@ -120,7 +125,9 @@ internal fun LiveLogsDialog(
                             modifier =
                                 Modifier
                                     .fillMaxWidth()
-                                    .heightIn(min = 220.dp, max = 520.dp),
+                                    .heightIn(min = 220.dp, max = 520.dp)
+                                    .testTag(LIVE_LOGS_LIST_TAG),
+                            userScrollEnabled = true,
                         ) {
                             itemsIndexed(visibleEntries) { index, entry ->
                                 PlainLiveLogEntry(
@@ -141,16 +148,25 @@ internal fun LiveLogsDialog(
         },
         confirmButton = {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = onSaveArchive) {
+                OutlinedButton(
+                    modifier = Modifier.testTag(LIVE_LOGS_SAVE_ACTION_TAG),
+                    onClick = onSaveArchive,
+                ) {
                     Text(stringResource(R.string.save_archive))
                 }
-                Button(onClick = onShareArchive) {
+                Button(
+                    modifier = Modifier.testTag(LIVE_LOGS_SHARE_ACTION_TAG),
+                    onClick = onShareArchive,
+                ) {
                     Text(stringResource(R.string.share_archive))
                 }
             }
         },
         dismissButton = {
-            OutlinedButton(onClick = onDismiss) {
+            OutlinedButton(
+                modifier = Modifier.testTag(LIVE_LOGS_CLOSE_ACTION_TAG),
+                onClick = onDismiss,
+            ) {
                 Text(stringResource(R.string.close))
             }
         },
@@ -284,4 +300,12 @@ private fun humanizeDiagnosticDetail(detail: String): String {
     return "${humanizeDiagnosticKey(key)}: $value"
 }
 
+internal const val LIVE_LOGS_DIALOG_TAG = "live_logs_dialog"
+internal const val LIVE_LOGS_RETENTION_SUMMARY_TAG = "live_logs_retention_summary"
+internal const val LIVE_LOGS_NETWORK_NOTICE_TAG = "live_logs_network_notice"
+internal const val LIVE_LOGS_EMPTY_STATE_TAG = "live_logs_empty_state"
+internal const val LIVE_LOGS_LIST_TAG = "live_logs_list"
+internal const val LIVE_LOGS_SAVE_ACTION_TAG = "live_logs_save_action"
+internal const val LIVE_LOGS_SHARE_ACTION_TAG = "live_logs_share_action"
+internal const val LIVE_LOGS_CLOSE_ACTION_TAG = "live_logs_close_action"
 private const val LIVE_LOGS_VISIBLE_ENTRY_LIMIT = 600

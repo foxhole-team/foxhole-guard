@@ -1,0 +1,52 @@
+name: setup android libbox build
+description: Install Java, Go, Gradle, and Android SDK/NDK components used by Foxhole Android CI.
+
+runs:
+  using: composite
+  steps:
+    - name: setup java
+      uses: actions/setup-java@dded0888837ed1f317902acf8a20df0ad188d165
+      with:
+        distribution: temurin
+        java-version: "17"
+        cache: gradle
+
+    - name: setup go
+      uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c
+      with:
+        go-version: "1.24.7"
+        cache: false
+
+    - name: setup gradle
+      uses: gradle/actions/setup-gradle@4d9f0ba0025fe599b4ebab900eb7f3a1d93ef4c2
+
+    - name: install android sdk components for libbox
+      shell: bash
+      run: |
+        set -euo pipefail
+        ANDROID_SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}"
+        if [[ ! -d "$ANDROID_SDK_ROOT" ]]; then
+          echo "Android SDK root not found: $ANDROID_SDK_ROOT" >&2
+          exit 1
+        fi
+        SDKMANAGER="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
+        if [[ ! -x "$SDKMANAGER" ]]; then
+          SDKMANAGER="$(find "$ANDROID_SDK_ROOT/cmdline-tools" -path '*/bin/sdkmanager' | sort | tail -n 1)"
+        fi
+        if [[ -z "${SDKMANAGER:-}" || ! -x "$SDKMANAGER" ]]; then
+          echo "sdkmanager not found under $ANDROID_SDK_ROOT/cmdline-tools" >&2
+          exit 1
+        fi
+        {
+          echo "ANDROID_HOME=$ANDROID_SDK_ROOT"
+          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
+          echo "ANDROID_NDK_HOME=$ANDROID_SDK_ROOT/ndk/28.0.13004108"
+        } >> "$GITHUB_ENV"
+        {
+          dirname "$SDKMANAGER"
+          echo "$ANDROID_SDK_ROOT/platform-tools"
+        } >> "$GITHUB_PATH"
+        set +o pipefail
+        yes | "$SDKMANAGER" --licenses >/dev/null
+        set -o pipefail
+        "$SDKMANAGER" --channel=3 "platform-tools" "platforms;android-37.0" "build-tools;37.0.0" "ndk;28.0.13004108"

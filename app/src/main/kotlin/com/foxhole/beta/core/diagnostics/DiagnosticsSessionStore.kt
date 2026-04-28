@@ -145,7 +145,11 @@ internal class DiagnosticsSessionStore(
         PersistedDiagnosticEntry(timestamp = timestamp, tag = tag, message = message)
 
     private fun PersistedDiagnosticEntry.toDiagnosticEntry(): DiagnosticEntry =
-        DiagnosticEntry(timestamp = timestamp, tag = tag, message = message)
+        DiagnosticEntry(
+            timestamp = timestamp,
+            tag = tag,
+            message = DiagnosticSanitizer.sanitizeForPersistence(message),
+        )
 
     @Serializable
     private data class PersistedDiagnosticEntry(
