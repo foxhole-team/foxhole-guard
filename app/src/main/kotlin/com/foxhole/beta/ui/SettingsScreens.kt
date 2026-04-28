@@ -611,22 +611,6 @@ fun TrafficSettingsScreen(
                 optionIcon = ::trafficModeIcon,
             )
         }
-        item {
-            DropdownSettingRow(
-                title = stringResource(R.string.latency_probe_method_title),
-                value = latencyProbeMethodLabel(state.settings.connection.latencyProbeMethod),
-                expanded = latencyProbeMethodMenuExpanded,
-                onExpandedChange = { latencyProbeMethodMenuExpanded = it },
-                values = LatencyProbeMethod.entries,
-                selected = state.settings.connection.latencyProbeMethod,
-                label = { latencyProbeMethodLabel(it) },
-                onSelect = onLatencyProbeMethodSelected,
-                summary = stringResource(R.string.latency_probe_method_summary),
-                summaryMaxLines = 5,
-                leadingIcon = Icons.Outlined.Speed,
-                optionIcon = ::latencyProbeMethodIcon,
-            )
-        }
         if (state.settings.traffic.mode == TrafficMode.TUNNEL) {
             item {
                 DropdownSettingRow(
@@ -754,6 +738,22 @@ fun TrafficSettingsScreen(
                 onSelect = onSubscriptionRefreshIntervalSelected,
                 leadingIcon = Icons.Outlined.Refresh,
                 optionIcon = { Icons.Outlined.Refresh },
+            )
+        }
+        item {
+            DropdownSettingRow(
+                title = stringResource(R.string.latency_probe_method_title),
+                value = latencyProbeMethodLabel(state.settings.connection.latencyProbeMethod),
+                expanded = latencyProbeMethodMenuExpanded,
+                onExpandedChange = { latencyProbeMethodMenuExpanded = it },
+                values = LatencyProbeMethod.entries,
+                selected = state.settings.connection.latencyProbeMethod,
+                label = { latencyProbeMethodLabel(it) },
+                onSelect = onLatencyProbeMethodSelected,
+                summary = stringResource(R.string.latency_probe_method_summary),
+                summaryMaxLines = 5,
+                leadingIcon = Icons.Outlined.Speed,
+                optionIcon = ::latencyProbeMethodIcon,
             )
         }
     }

@@ -128,6 +128,7 @@ internal val FoxholePositiveAccent = Color(0xFF2F9E6A)
 internal val FoxholeInfoAccent = Color(0xFF6288AE)
 internal val FoxholeWarningAccent = Color(0xFFE0B84A)
 private val FoxholeErrorAccent = Color(0xFFC63C3C)
+private const val FoxholeTopBarContainerAlpha = 0.90f
 
 internal fun Modifier.foxholeAnimateContentSize(): Modifier =
     animateContentSize(
@@ -148,6 +149,7 @@ internal fun FoxholeScaffold(
     bannerTopPadding: Dp = ScreenVerticalPadding,
     content: @Composable (PaddingValues) -> Unit,
 ) {
+    val topBarContainerColor = MaterialTheme.colorScheme.background.copy(alpha = FoxholeTopBarContainerAlpha)
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
@@ -172,7 +174,8 @@ internal fun FoxholeScaffold(
                 actions = actions,
                 colors =
                     TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.background,
+                        containerColor = topBarContainerColor,
+                        scrolledContainerColor = topBarContainerColor,
                         titleContentColor = MaterialTheme.colorScheme.onBackground,
                         navigationIconContentColor = MaterialTheme.colorScheme.onBackground,
                         actionIconContentColor = MaterialTheme.colorScheme.onBackground,

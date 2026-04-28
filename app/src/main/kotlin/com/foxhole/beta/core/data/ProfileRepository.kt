@@ -465,11 +465,17 @@ class ProfileRepository(
     suspend fun updateResolvedConfig(
         profileId: Long,
         editedJson: String,
+        protocolOptionIdOverride: String? = null,
     ) {
         val entity = dao.getById(profileId) ?: error("profile not found")
         val secret = secretStore.read(entity.secretRef) ?: error("profile secret is missing")
         val settings = settingsRepository.current()
-        val effectiveAllowInsecureTls = settings.expert.allowInsecureTls || secret.requiresInsecureTls
+        val selectedOption = secret.selectedStoredProtocolOption(protocolOptionIdOverride)
+        val effectiveAllowInsecureTls =
+            settings.expert.allowInsecureTls ||
+                secret.requiresInsecureTls ||
+                selectedOption?.requiresInsecureTls == true ||
+                selectedOption?.normalizedConfigJson?.requiresInsecureTls(json) == true
         val sanitized =
             withContext(Dispatchers.IO) {
                 parser.sanitizeResolvedConfig(
@@ -480,7 +486,13 @@ class ProfileRepository(
             }
         secretStore.write(
             secretRef = entity.secretRef,
-            value = secret.copy(resolvedConfigJson = sanitized).withInsecureTlsMarkers(json),
+            value =
+                secret
+                    .withUpdatedResolvedConfigJson(
+                        sanitized = sanitized,
+                        protocolOptionIdOverride = protocolOptionIdOverride,
+                    )
+                    .withInsecureTlsMarkers(json),
         )
         diagnosticsLogger.record("profile", "resolved config updated")
     }
@@ -1015,4 +1027,37 @@ class ProfileRepository(
     private companion object {
         private const val LOG_TAG = "FoxholeProfileRepo"
     }
+}
+
+internal fun StoredProfileSecret.withUpdatedResolvedConfigJson(
+    sanitized: String,
+    protocolOptionIdOverride: String? = null,
+): StoredProfileSecret {
+    if (protocolOptions.isEmpty()) {
+        return copy(resolvedConfigJson = sanitized)
+    }
+    val targetOption =
+        protocolOptionIdOverride
+            ?.takeIf(String::isNotBlank)
+            ?.let { overrideId -> protocolOptions.firstOrNull { option -> option.id == overrideId } }
+            ?: selectedProtocolOptionId
+                ?.takeIf(String::isNotBlank)
+                ?.let { selectedId -> protocolOptions.firstOrNull { option -> option.id == selectedId } }
+            ?: protocolOptions.firstOrNull()
+            ?: return copy(resolvedConfigJson = sanitized)
+    val shouldMirrorTopLevel =
+        selectedProtocolOptionId == targetOption.id ||
+            (selectedProtocolOptionId == null && protocolOptions.firstOrNull()?.id == targetOption.id) ||
+            resolvedConfigJson == targetOption.normalizedConfigJson
+    return copy(
+        resolvedConfigJson = if (shouldMirrorTopLevel) sanitized else resolvedConfigJson,
+        protocolOptions =
+            protocolOptions.map { option ->
+                if (option.id == targetOption.id) {
+                    option.copy(normalizedConfigJson = sanitized)
+                } else {
+                    option
+                }
+            },
+    )
 }

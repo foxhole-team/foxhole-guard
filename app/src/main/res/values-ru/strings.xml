@@ -169,8 +169,8 @@
     <string name="smart_profile_menu_protocol_column">Протокол</string>
     <string name="smart_profile_menu_status_column">Статус</string>
     <string name="smart_profile_menu_dashboard_on_column">ON</string>
-    <string name="smart_profile_menu_server_ping_column">Пинг сервера</string>
-    <string name="smart_profile_menu_latency_column">VPN задержка</string>
+    <string name="smart_profile_menu_server_ping_column">Server ping</string>
+    <string name="smart_profile_menu_latency_column">Latency %1$s</string>
     <string name="smart_profile_menu_on_column">Вкл</string>
     <string name="smart_profile_menu_active_badge">current</string>
     <string name="smart_profile_menu_recommended_badge">Рекомендовано</string>
@@ -186,8 +186,8 @@
     <string name="smart_profile_metrics_refreshing">Обновление</string>
     <string name="smart_profile_metrics_refresh_hint">Нажмите на протокол, чтобы включить или отключить его.\nПериодически обновляйте для улучшения коннекта.</string>
     <string name="smart_profile_metrics_refresh_compact_hint">Нажмите на протокол, чтобы включить или отключить его.\nПериодически обновляйте для улучшения коннекта.</string>
-    <string name="smart_profile_legend_favorite">1 звезда - Избранный профиль</string>
-    <string name="smart_profile_legend_reconnect_recommended">2 звезды - Рекомендованный профиль</string>
+    <string name="smart_profile_legend_favorite">Избранный профиль</string>
+    <string name="smart_profile_legend_reconnect_recommended">Рекомендованный профиль</string>
     <string name="smart_profile_metrics_refresh_confirm_title">Обновить проверки протоколов?</string>
     <string name="smart_profile_metrics_refresh_confirm_body">Обновление может временно переподключать VPN для проверки протоколов. Предыдущее подключение будет восстановлено после обновления.</string>
     <string name="smart_profile_metrics_last_updated">Обновлено: %1$s</string>

@@ -149,7 +149,7 @@ class SmartStartProtocolPresentationTest {
         assertEquals("Status", stringValue(enStrings, "smart_profile_menu_status_column"))
         assertEquals("ON", stringValue(enStrings, "smart_profile_menu_dashboard_on_column"))
         assertEquals("Server ping", stringValue(enStrings, "smart_profile_menu_server_ping_column"))
-        assertEquals("VPN latency", stringValue(enStrings, "smart_profile_menu_latency_column"))
+        assertEquals("Latency %1\$s", stringValue(enStrings, "smart_profile_menu_latency_column"))
         assertEquals("ON", stringValue(enStrings, "smart_profile_menu_on_column"))
         assertEquals(
             "Tap a protocol to turn it on or off.\\nRefresh periodically to improve connection quality.",
@@ -159,9 +159,9 @@ class SmartStartProtocolPresentationTest {
             "Tap a protocol to turn it on or off.\\nRefresh periodically to improve connection quality.",
             stringValue(enStrings, "smart_profile_metrics_refresh_compact_hint"),
         )
-        assertEquals("1 star - Favorite profile", stringValue(enStrings, "smart_profile_legend_favorite"))
+        assertEquals("Favorite profile", stringValue(enStrings, "smart_profile_legend_favorite"))
         assertEquals(
-            "2 stars - Recommended profile",
+            "Recommended profile",
             stringValue(enStrings, "smart_profile_legend_reconnect_recommended"),
         )
         assertEquals("Refreshing", stringValue(enStrings, "smart_profile_metrics_refreshing"))
@@ -187,8 +187,8 @@ class SmartStartProtocolPresentationTest {
         assertEquals("Протокол", stringValue(ruStrings, "smart_profile_menu_protocol_column"))
         assertEquals("Статус", stringValue(ruStrings, "smart_profile_menu_status_column"))
         assertEquals("ON", stringValue(ruStrings, "smart_profile_menu_dashboard_on_column"))
-        assertEquals("Пинг сервера", stringValue(ruStrings, "smart_profile_menu_server_ping_column"))
-        assertEquals("VPN задержка", stringValue(ruStrings, "smart_profile_menu_latency_column"))
+        assertEquals("Server ping", stringValue(ruStrings, "smart_profile_menu_server_ping_column"))
+        assertEquals("Latency %1\$s", stringValue(ruStrings, "smart_profile_menu_latency_column"))
         assertEquals("Вкл", stringValue(ruStrings, "smart_profile_menu_on_column"))
         assertEquals(
             "Нажмите на протокол, чтобы включить или отключить его.\\nПериодически обновляйте для улучшения коннекта.",
@@ -198,9 +198,9 @@ class SmartStartProtocolPresentationTest {
             "Нажмите на протокол, чтобы включить или отключить его.\\nПериодически обновляйте для улучшения коннекта.",
             stringValue(ruStrings, "smart_profile_metrics_refresh_compact_hint"),
         )
-        assertEquals("1 звезда - Избранный профиль", stringValue(ruStrings, "smart_profile_legend_favorite"))
+        assertEquals("Избранный профиль", stringValue(ruStrings, "smart_profile_legend_favorite"))
         assertEquals(
-            "2 звезды - Рекомендованный профиль",
+            "Рекомендованный профиль",
             stringValue(ruStrings, "smart_profile_legend_reconnect_recommended"),
         )
         assertEquals("Обновление", stringValue(ruStrings, "smart_profile_metrics_refreshing"))

@@ -65,6 +65,7 @@ data class ProfilesRouteUiState(
     val profiles: List<Profile> = emptyList(),
     val profilesLoaded: Boolean = false,
     val activeProfileId: Long? = null,
+    val settings: FoxholeSettings = FoxholeSettings(),
     val smartProfileExcludedOptionIdsByProfileId: Map<Long, Set<String>> = emptyMap(),
     val smartStartRememberedLatenciesByProfileId: Map<Long, Map<String, Long>> = emptyMap(),
     val smartProfileDownOptionIdsByProfileId: Map<Long, Set<String>> = emptyMap(),
@@ -166,6 +167,7 @@ internal fun HomeUiState.toProfilesRouteUiState(
         profiles = profiles,
         profilesLoaded = profilesLoaded,
         activeProfileId = activeProfile?.id,
+        settings = settings,
         smartProfileExcludedOptionIdsByProfileId =
             settings.smartProfilePreferences.associate { preference ->
                 preference.profileId to preference.excludedProtocolOptionIds.toSet()

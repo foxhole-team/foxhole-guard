@@ -1,5 +1,7 @@
 package com.foxhole.beta.core.data
 
+import com.foxhole.beta.core.model.ProtocolHint
+import com.foxhole.beta.core.model.StoredProfileProtocolOption
 import com.foxhole.beta.core.model.StoredProfileSecret
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -93,8 +95,68 @@ class ProfileSecretMutationSupportTest {
         assertEquals(listOf("old-b"), cleanupFailures)
     }
 
+    @Test
+    fun `updates only requested smart protocol config when editing non-selected option`() {
+        val secret =
+            StoredProfileSecret(
+                resolvedConfigJson = "vless-config",
+                selectedProtocolOptionId = "vless",
+                protocolOptions =
+                    listOf(
+                        storedOption("vless", ProtocolHint.VLESS, "vless-config"),
+                        storedOption("trojan", ProtocolHint.TROJAN, "trojan-config"),
+                    ),
+            )
+
+        val updated =
+            secret.withUpdatedResolvedConfigJson(
+                sanitized = "edited-trojan-config",
+                protocolOptionIdOverride = "trojan",
+            )
+
+        assertEquals("vless-config", updated.resolvedConfigJson)
+        assertEquals("vless-config", updated.protocolOptions.first { it.id == "vless" }.normalizedConfigJson)
+        assertEquals("edited-trojan-config", updated.protocolOptions.first { it.id == "trojan" }.normalizedConfigJson)
+    }
+
+    @Test
+    fun `mirrors edited smart protocol config to top level when editing selected option`() {
+        val secret =
+            StoredProfileSecret(
+                resolvedConfigJson = "vless-config",
+                selectedProtocolOptionId = "vless",
+                protocolOptions =
+                    listOf(
+                        storedOption("vless", ProtocolHint.VLESS, "vless-config"),
+                        storedOption("trojan", ProtocolHint.TROJAN, "trojan-config"),
+                    ),
+            )
+
+        val updated =
+            secret.withUpdatedResolvedConfigJson(
+                sanitized = "edited-vless-config",
+                protocolOptionIdOverride = "vless",
+            )
+
+        assertEquals("edited-vless-config", updated.resolvedConfigJson)
+        assertEquals("edited-vless-config", updated.protocolOptions.first { it.id == "vless" }.normalizedConfigJson)
+        assertEquals("trojan-config", updated.protocolOptions.first { it.id == "trojan" }.normalizedConfigJson)
+    }
+
     private fun sampleSecret(rawInput: String): StoredProfileSecret =
         StoredProfileSecret(rawInput = rawInput)
+
+    private fun storedOption(
+        id: String,
+        protocolHint: ProtocolHint,
+        normalizedConfigJson: String,
+    ): StoredProfileProtocolOption =
+        StoredProfileProtocolOption(
+            id = id,
+            displayName = protocolHint.name,
+            protocolHint = protocolHint,
+            normalizedConfigJson = normalizedConfigJson,
+        )
 
     private class FakeProfileSecretStore(
         private val failWriteRef: String? = null,

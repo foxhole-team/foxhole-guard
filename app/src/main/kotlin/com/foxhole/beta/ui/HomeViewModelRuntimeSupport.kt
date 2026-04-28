@@ -116,15 +116,19 @@ internal fun HomeViewModel.refreshIpInfoInternalInternal(
         }
 }
 
-internal suspend fun HomeViewModel.getResolvedConfigInternal(profileId: Long): String = container.profileRepository.getResolvedConfig(profileId)
+internal suspend fun HomeViewModel.getResolvedConfigInternal(
+    profileId: Long,
+    protocolOptionIdOverride: String? = null,
+): String = container.profileRepository.getResolvedConfig(profileId, protocolOptionIdOverride)
 
 internal suspend fun HomeViewModel.updateResolvedConfigInternal(
     profileId: Long,
     editedJson: String,
     reconnectAfterSave: Boolean = false,
+    protocolOptionIdOverride: String? = null,
 ): Boolean =
     runCatching {
-        container.profileRepository.updateResolvedConfig(profileId, editedJson)
+        container.profileRepository.updateResolvedConfig(profileId, editedJson, protocolOptionIdOverride)
     }.onSuccess {
         val reconnected = reconnectProfileIfRequested(profileId, reconnectAfterSave)
         val message =

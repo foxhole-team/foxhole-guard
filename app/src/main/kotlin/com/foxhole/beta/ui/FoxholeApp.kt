@@ -263,6 +263,7 @@ fun FoxholeApp(
                         metricsRefreshing = profileId in state.smartProfileMetricsRefreshingProfileIds,
                         recommendedProtocolOptionId = state.recommendedProtocolOptionByProfileId[profileId],
                         recommendedProtocolOptionIds = state.recommendedProtocolOptionsByProfileId[profileId].orEmpty(),
+                        latencyProbeMethod = state.settings.connection.latencyProbeMethod,
                         snackbarHostState = snackbarHostState,
                         onNavigateUp = { navController.navigateToProfilesRoot() },
                         onSetActiveProfile = viewModel::onSelectProfile,
@@ -290,7 +291,7 @@ fun FoxholeApp(
                         snackbarHostState = snackbarHostState,
                         onNavigateUp = navController::navigateUp,
                         onEditConfig = { navController.navigate(AppRoute.profileEditConfig(profileId)) },
-                        onLoadConfig = viewModel::getResolvedConfig,
+                        onLoadConfig = { id -> viewModel.getResolvedConfig(id) },
                     )
                 }
                 composable(
@@ -309,12 +310,12 @@ fun FoxholeApp(
                                     ConnectionState.CONNECTING,
                                     ConnectionState.CONNECTED,
                                     ConnectionState.RECONNECTING,
-                                ),
+                        ),
                         snackbarHostState = snackbarHostState,
                         onNavigateUp = navController::navigateUp,
-                        onLoadConfig = viewModel::getResolvedConfig,
-                        onSaveConfig = { id, config, reconnectAfterSave ->
-                            if (viewModel.updateResolvedConfig(id, config, reconnectAfterSave)) {
+                        onLoadConfig = { id, optionId -> viewModel.getResolvedConfig(id, optionId) },
+                        onSaveConfig = { id, optionId, config, reconnectAfterSave ->
+                            if (viewModel.updateResolvedConfig(id, config, reconnectAfterSave, optionId)) {
                                 navController.navigateUp()
                             }
                         },

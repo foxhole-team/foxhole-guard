@@ -11,12 +11,12 @@ Key features:
 * Proxy authentication
 * Domain-based routing rules
 * Profile import: file, clipboard, QR code, HTTPS subscriptions
-* Support for Foxhole Smart Config and automatic protocol selection (Smart Start)
+* Support for Foxhole Smart Config and automatic protocol selection (Smart start)
 * Local traffic statistics
 * Subscription expiration display
 * Encrypted local profile storage
 
-Smart Start automatically selects the most reliable protocol by testing available options and using local history.
+Smart start automatically selects the most reliable protocol by testing available options and using local history.
 It takes into account connection success rate, latency, and recent failures. All processing is performed on-device.
 
 Permission note:

@@ -129,7 +129,7 @@ The following options are automatically excluded:
 The process is fast and lightweight.
 > No telemetry is transmitted - all decisions are made locally on the device.
 The app does not send connection data, traffic information, configurations, or usage statistics to external servers.
-Protocol selection, stability evaluation, and Smart Start logic are performed entirely on-device without any external services.
+Protocol selection, stability evaluation, and Smart start logic are performed entirely on-device without any external services.
 
 
 ## Verifying release signatures

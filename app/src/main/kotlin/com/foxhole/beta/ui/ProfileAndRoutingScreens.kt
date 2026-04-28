@@ -97,6 +97,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
 import com.foxhole.beta.R
 import com.foxhole.beta.core.model.InstalledAppOption
+import com.foxhole.beta.core.model.LatencyProbeMethod
 import com.foxhole.beta.core.model.PerAppRoutingMode
 import com.foxhole.beta.core.model.Profile
 import com.foxhole.beta.core.model.ProfileProtocolOption
@@ -416,6 +417,7 @@ fun ProfilesScreen(
                                             showLatency = rememberedSmartStartLatenciesByProfileId[profile.id]?.isNotEmpty() == true,
                                             compact = true,
                                             showTransportBadges = true,
+                                            latencyProbeMethod = state.settings.connection.latencyProbeMethod,
                                         )
                                     }
                                 } else {
@@ -729,6 +731,7 @@ fun ProfileDetailScreen(
     metricsRefreshing: Boolean,
     recommendedProtocolOptionId: String?,
     recommendedProtocolOptionIds: Set<String>,
+    latencyProbeMethod: LatencyProbeMethod,
     snackbarHostState: SnackbarHostState,
     onNavigateUp: () -> Unit,
     onSetActiveProfile: (Long) -> Unit,
@@ -831,6 +834,7 @@ fun ProfileDetailScreen(
                                         showLatency = rememberedSmartStartLatenciesByOptionId.isNotEmpty(),
                                         compact = true,
                                         showTransportBadges = true,
+                                        latencyProbeMethod = latencyProbeMethod,
                                     )
                                 }
                             } else {
@@ -1044,8 +1048,8 @@ fun ProfileConfigEditScreen(
     canReconnectNow: Boolean,
     snackbarHostState: SnackbarHostState,
     onNavigateUp: () -> Unit,
-    onLoadConfig: suspend (Long) -> String,
-    onSaveConfig: suspend (Long, String, Boolean) -> Unit,
+    onLoadConfig: suspend (Long, String?) -> String,
+    onSaveConfig: suspend (Long, String?, String, Boolean) -> Unit,
 ) {
     val codec = remember { ProfileConfigFormCodec() }
     val scope = rememberCoroutineScope()
@@ -1053,26 +1057,42 @@ fun ProfileConfigEditScreen(
     var sourceConfig by remember(profile?.id) { mutableStateOf<String?>(null) }
     var draft by remember(profile?.id) { mutableStateOf<EditableProfileConfig?>(null) }
     var loadError by remember(profile?.id) { mutableStateOf<String?>(null) }
+    var editorProtocolOptionId by rememberSaveable(profile?.id) { mutableStateOf<String?>(null) }
     var saving by rememberSaveable { mutableStateOf(false) }
     var showSaveDialog by rememberSaveable { mutableStateOf(false) }
     var fieldDialog by remember { mutableStateOf<ProfileFieldDialogState?>(null) }
 
-    LaunchedEffect(profile?.id) {
+    fun loadEditorConfig(
+        currentProfile: Profile,
+        protocolOptionId: String?,
+    ) {
         sourceConfig = null
         draft = null
         loadError = null
-        val currentProfile = profile ?: return@LaunchedEffect
-        runCatching {
-            withTimeoutOrNull(ProfileConfigLoadTimeoutMs) {
-                onLoadConfig(currentProfile.id)
-            } ?: error(loadTimeoutMessage)
-        }
-            .onSuccess {
-                sourceConfig = it
-                draft = codec.decode(it)
-            }.onFailure {
-                loadError = it.message ?: "failed to load config"
+        editorProtocolOptionId = protocolOptionId
+        scope.launch {
+            runCatching {
+                val loadedConfig =
+                    withTimeoutOrNull(ProfileConfigLoadTimeoutMs) {
+                        onLoadConfig(currentProfile.id, protocolOptionId)
+                    } ?: error(loadTimeoutMessage)
+                loadedConfig to codec.decode(loadedConfig)
             }
+                .onSuccess { (loadedConfig, loadedDraft) ->
+                    sourceConfig = loadedConfig
+                    draft = loadedDraft
+                }.onFailure {
+                    loadError = it.message ?: "failed to load config"
+                }
+        }
+    }
+
+    LaunchedEffect(profile?.id) {
+        val currentProfile = profile ?: return@LaunchedEffect
+        loadEditorConfig(
+            currentProfile = currentProfile,
+            protocolOptionId = MultiProtocolProfileSupport.selectedOption(currentProfile)?.id,
+        )
     }
 
     SettingsScaffold(
@@ -1107,6 +1127,8 @@ fun ProfileConfigEditScreen(
                             profile = profile,
                             draft = draft ?: return@item,
                             editable = true,
+                            selectedProtocolOptionId = editorProtocolOptionId,
+                            onProtocolOptionSelected = { optionId -> loadEditorConfig(profile, optionId) },
                             onDraftChanged = { draft = it },
                             onEditRequested = { title, value, singleLine, onConfirm ->
                                 fieldDialog =
@@ -1147,7 +1169,7 @@ fun ProfileConfigEditScreen(
                 saving = true
                 try {
                     val updatedConfig = codec.encode(currentSourceConfig, currentDraft)
-                    onSaveConfig(currentProfile.id, updatedConfig, reconnectAfterSave)
+                    onSaveConfig(currentProfile.id, editorProtocolOptionId, updatedConfig, reconnectAfterSave)
                 } finally {
                     saving = false
                 }

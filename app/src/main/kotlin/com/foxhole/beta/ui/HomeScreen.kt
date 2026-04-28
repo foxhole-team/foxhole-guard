@@ -595,6 +595,7 @@ fun HomeScreen(
                                                     actionIconSize = 18.dp,
                                                     showMetricsTable = false,
                                                     showStatusHeader = true,
+                                                    latencyProbeMethod = state.settings.connection.latencyProbeMethod,
                                                 )
                                             }
                                         } else {

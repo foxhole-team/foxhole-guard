@@ -876,7 +876,10 @@ class HomeViewModel(
         minimumLoadingDurationMs = minimumLoadingDurationMs,
     )
 
-    suspend fun getResolvedConfig(profileId: Long): String = getResolvedConfigInternal(profileId)
+    suspend fun getResolvedConfig(
+        profileId: Long,
+        protocolOptionIdOverride: String? = null,
+    ): String = getResolvedConfigInternal(profileId, protocolOptionIdOverride)
 
     suspend fun createProfileExport(
         profileId: Long,
@@ -893,7 +896,8 @@ class HomeViewModel(
         profileId: Long,
         editedJson: String,
         reconnectAfterSave: Boolean = false,
-    ): Boolean = updateResolvedConfigInternal(profileId, editedJson, reconnectAfterSave)
+        protocolOptionIdOverride: String? = null,
+    ): Boolean = updateResolvedConfigInternal(profileId, editedJson, reconnectAfterSave, protocolOptionIdOverride)
 
     fun saveSiteRule(
         ruleId: Long?,

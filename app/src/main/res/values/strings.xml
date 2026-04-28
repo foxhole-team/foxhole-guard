@@ -170,7 +170,7 @@
     <string name="smart_profile_menu_status_column">Status</string>
     <string name="smart_profile_menu_dashboard_on_column">ON</string>
     <string name="smart_profile_menu_server_ping_column">Server ping</string>
-    <string name="smart_profile_menu_latency_column">VPN latency</string>
+    <string name="smart_profile_menu_latency_column">Latency %1$s</string>
     <string name="smart_profile_menu_on_column">ON</string>
     <string name="smart_profile_menu_active_badge">current</string>
     <string name="smart_profile_menu_recommended_badge">Recommended</string>
@@ -186,8 +186,8 @@
     <string name="smart_profile_metrics_refreshing">Refreshing</string>
     <string name="smart_profile_metrics_refresh_hint">Tap a protocol to turn it on or off.\nRefresh periodically to improve connection quality.</string>
     <string name="smart_profile_metrics_refresh_compact_hint">Tap a protocol to turn it on or off.\nRefresh periodically to improve connection quality.</string>
-    <string name="smart_profile_legend_favorite">1 star - Favorite profile</string>
-    <string name="smart_profile_legend_reconnect_recommended">2 stars - Recommended profile</string>
+    <string name="smart_profile_legend_favorite">Favorite profile</string>
+    <string name="smart_profile_legend_reconnect_recommended">Recommended profile</string>
     <string name="smart_profile_metrics_refresh_confirm_title">Refresh protocol checks?</string>
     <string name="smart_profile_metrics_refresh_confirm_body">Refresh may temporarily reconnect VPN to test protocols. Your previous connection will be restored after refresh.</string>
     <string name="smart_profile_metrics_last_updated">Updated: %1$s</string>

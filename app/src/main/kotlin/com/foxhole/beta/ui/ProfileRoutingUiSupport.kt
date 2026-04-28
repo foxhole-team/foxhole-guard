@@ -195,19 +195,42 @@ internal fun ProfileConfigForm(
     profile: Profile,
     draft: EditableProfileConfig,
     editable: Boolean,
+    selectedProtocolOptionId: String? = null,
+    onProtocolOptionSelected: ((String) -> Unit)? = null,
     onDraftChanged: (EditableProfileConfig) -> Unit,
     onEditRequested: (title: String, value: String, singleLine: Boolean, onConfirm: (String) -> Unit) -> Unit,
 ) {
+    var protocolMenuExpanded by rememberSaveable(profile.id) { mutableStateOf(false) }
+    val supportedProtocolOptions = MultiProtocolProfileSupport.supportedOptions(profile)
+    val selectedProtocolOption =
+        supportedProtocolOptions.firstOrNull { option -> option.id == selectedProtocolOptionId }
+            ?: supportedProtocolOptions.firstOrNull { option -> option.protocolHint.name.equals(draft.type, ignoreCase = true) }
+            ?: supportedProtocolOptions.firstOrNull()
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         InfoBlock(
             title = stringResource(R.string.information_title),
             body = profileEditorInfoBody(profile, draft),
         )
         ProfileEditorSection(title = stringResource(R.string.profile_editor_connection_section)) {
-            ProfileEditorReadOnlyRow(
-                title = stringResource(R.string.protocol),
-                value = profileProtocolLabel(draft.type),
-            )
+            if (editable && onProtocolOptionSelected != null && supportedProtocolOptions.size > 1 && selectedProtocolOption != null) {
+                DropdownSettingRow(
+                    title = stringResource(R.string.protocol),
+                    value = profileEditorProtocolOptionLabel(selectedProtocolOption),
+                    expanded = protocolMenuExpanded,
+                    onExpandedChange = { protocolMenuExpanded = it },
+                    values = supportedProtocolOptions,
+                    selected = selectedProtocolOption,
+                    label = { option -> profileEditorProtocolOptionLabel(option) },
+                    onSelect = { option -> onProtocolOptionSelected(option.id) },
+                    leadingIcon = profileEditorProtocolIcon(selectedProtocolOption.protocolHint),
+                    optionIcon = { option -> profileEditorProtocolIcon(option.protocolHint) },
+                )
+            } else {
+                ProfileEditorReadOnlyRow(
+                    title = stringResource(R.string.protocol),
+                    value = profileProtocolLabel(draft.type),
+                )
+            }
             ProfileEditorTextRow(
                 title = stringResource(R.string.profile_editor_server),
                 value = draft.server,
@@ -517,6 +540,23 @@ internal fun profileProtocolLabel(type: String): String =
         "hysteria2" -> "Hysteria2"
         "wireguard" -> "WireGuard"
         else -> type
+    }
+
+@Composable
+private fun profileEditorProtocolOptionLabel(option: ProfileProtocolOption): String =
+    option.displayName.ifBlank { profileProtocolLabel(option.protocolHint.name.lowercase()) }
+
+private fun profileEditorProtocolIcon(protocol: ProtocolHint): ImageVector =
+    when (protocol) {
+        ProtocolHint.VLESS -> Icons.Outlined.Security
+        ProtocolHint.TROJAN -> Icons.Outlined.Bolt
+        ProtocolHint.SHADOWSOCKS -> Icons.Outlined.Cloud
+        ProtocolHint.WIREGUARD -> Icons.Outlined.VpnKey
+        ProtocolHint.HYSTERIA2 -> Icons.Outlined.Speed
+        ProtocolHint.VMESS -> Icons.Outlined.Hub
+        ProtocolHint.OUTLINE -> Icons.Outlined.VpnKey
+        ProtocolHint.SING_BOX -> Icons.Outlined.Tune
+        ProtocolHint.UNKNOWN -> Icons.AutoMirrored.Outlined.HelpOutline
     }
 
 @Composable
