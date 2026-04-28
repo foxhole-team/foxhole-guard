@@ -672,24 +672,20 @@ class RuntimeConfigAssembler(
     private fun foxholeDirectDnsServer(): JsonObject =
         buildJsonObject {
             put("tag", DNS_DIRECT_TAG)
-            put("type", "udp")
+            put("type", "https")
             put("server", FOXHOLE_REMOTE_DNS_SERVER)
-            put("server_port", 53)
+            put("server_port", 443)
+            put("path", "/dns-query")
         }
 
-    private fun foxholeRemoteDnsServer(privateDnsMode: PrivateDnsMode?): JsonObject =
+    private fun foxholeRemoteDnsServer(_privateDnsMode: PrivateDnsMode?): JsonObject =
         buildJsonObject {
             put("tag", DNS_REMOTE_TAG)
             put("server", FOXHOLE_REMOTE_DNS_SERVER)
-            if (privateDnsMode == PrivateDnsMode.OFF) {
-                put("type", "udp")
-                put("server_port", 53)
-            } else {
-                put("type", "https")
-                put("server_port", 443)
-                put("path", "/dns-query")
-                put("detour", "proxy")
-            }
+            put("type", "https")
+            put("server_port", 443)
+            put("path", "/dns-query")
+            put("detour", "proxy")
         }
 
     private fun sniffRule(): JsonObject =
@@ -766,11 +762,25 @@ class RuntimeConfigAssembler(
             remoteDetourMatches
     }
 
-    private fun isFoxholeBootstrapDnsServer(server: JsonObject): Boolean =
-        server["server"]?.jsonPrimitive?.contentOrNull == FOXHOLE_REMOTE_DNS_SERVER &&
-            server["server_port"]?.jsonPrimitive?.contentOrNull == "53" &&
-            server["type"]?.jsonPrimitive?.contentOrNull in setOf("udp", "tcp") &&
-            !server.containsKey("detour")
+    private fun isFoxholeBootstrapDnsServer(server: JsonObject): Boolean {
+        if (server.containsKey("detour")) {
+            return false
+        }
+        val type = server["type"]?.jsonPrimitive?.contentOrNull
+        val address = server["address"]?.jsonPrimitive?.contentOrNull
+        if (address == FOXHOLE_DOH_ADDRESS) {
+            return true
+        }
+        if (server["server"]?.jsonPrimitive?.contentOrNull != FOXHOLE_REMOTE_DNS_SERVER) {
+            return false
+        }
+        val port = server["server_port"]?.jsonPrimitive?.contentOrNull
+        return when (type) {
+            "udp", "tcp" -> port == "53"
+            "https" -> port == "443" && server["path"]?.jsonPrimitive?.contentOrNull == "/dns-query"
+            else -> false
+        }
+    }
 
     private fun isFoxholeManagedRoute(route: JsonObject): Boolean {
         if (!route.keys.all { it in FOXHOLE_ROUTE_KEYS }) {

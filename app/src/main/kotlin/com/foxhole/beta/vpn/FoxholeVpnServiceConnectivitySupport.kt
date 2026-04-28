@@ -29,6 +29,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -172,9 +173,10 @@ internal suspend fun FoxholeVpnService.validateTunnelConnectivityInternal(
 ): Result<Network> =
     withContext(Dispatchers.IO) {
         val validationStartedAt = System.currentTimeMillis()
-        val activeProtocolHint = activeSession?.protocolHint
+        val currentSession = activeSession
+        val activeProtocolHint = currentSession?.protocolHint
         val validationPolicyContext = tunnelValidationPolicyContextFor(PrivateDnsSettings.current(this@validateTunnelConnectivityInternal))
-        val preferIpv4Validation = shouldPreferIpv4TunnelValidation(activeProtocolHint, activeSession?.configJson)
+        val preferIpv4Validation = shouldPreferIpv4TunnelValidation(activeProtocolHint, currentSession?.configJson)
         val validationTimeoutMs =
             FoxholeVpnService.CONNECTIVITY_PROBE_TOTAL_TIMEOUT_MS +
                 maxTunnelValidationGraceTimeoutMs(activeProtocolHint)
@@ -184,6 +186,12 @@ internal suspend fun FoxholeVpnService.validateTunnelConnectivityInternal(
             activeProtocolHint?.name?.lowercase(),
             if (preferIpv4Validation) "address_family=ipv4" else null,
             "timeout_ms=$validationTimeoutMs",
+        )
+        container.diagnosticsLogger.recordStructured(
+            "runtime",
+            "Runtime validation started",
+            *runtimeValidationDiagnosticFields(currentSession),
+            "validation_result=pending",
         )
         val result =
             TunnelConnectivityProbe.run(
@@ -234,7 +242,7 @@ internal suspend fun FoxholeVpnService.validateTunnelConnectivityInternal(
                 val ipRefresh =
                     runCatching {
                         val endpoint = container.settingsRepository.current().connection.ipInfoEndpoint
-                        val remoteDnsServers = VpnDnsServerSelector.remoteDnsServerAddresses(activeSession?.configJson)
+                        val remoteDnsServers = VpnDnsServerSelector.remoteDnsServerAddresses(currentSession?.configJson)
                         val info =
                             if (preferIpv4Validation) {
                                 container.ipInfoRepository.fetchIpv4(
@@ -256,7 +264,7 @@ internal suspend fun FoxholeVpnService.validateTunnelConnectivityInternal(
                         )
                     }.recoverCatching { primaryError ->
                         val endpoint = container.settingsRepository.current().connection.ipInfoEndpoint
-                        val remoteDnsServers = VpnDnsServerSelector.remoteDnsServerAddresses(activeSession?.configJson)
+                        val remoteDnsServers = VpnDnsServerSelector.remoteDnsServerAddresses(currentSession?.configJson)
                         val ipv4Info =
                             container.ipInfoRepository.fetchIpv4(
                                 endpoint = endpoint,
@@ -367,9 +375,24 @@ internal suspend fun FoxholeVpnService.validateTunnelConnectivityInternal(
                 vpnNetwork
             }
         if (result.isSuccess) {
+            container.diagnosticsLogger.recordStructured(
+                "runtime",
+                "Runtime validation result",
+                *runtimeValidationDiagnosticFields(currentSession),
+                "validation_result=success",
+            )
             container.diagnosticsLogger.record("dns", "vpn network passed ip validation")
             return@withContext result
         }
+        val validationFailure = result.exceptionOrNull()
+        container.diagnosticsLogger.recordStructured(
+            "runtime",
+            "Runtime validation result",
+            *runtimeValidationDiagnosticFields(currentSession),
+            "validation_result=failure",
+            "failure_class=${validationFailure?.javaClass?.simpleName ?: "unknown"}",
+            "endpoint_refusal=${validationFailure.isEndpointConnectRefusal()}",
+        )
         Result.failure(IllegalStateException(getString(R.string.error_dns_probe_failed)))
     }
 
@@ -587,6 +610,75 @@ private val tunnelValidationJson =
         explicitNulls = false
     }
 
+internal fun redactedRuntimeDnsShape(configJson: String?): String =
+    runCatching {
+        if (configJson.isNullOrBlank()) {
+            "unavailable"
+        } else {
+            val servers = tunnelValidationJson.parseToJsonElement(configJson).jsonObject["dns"]?.jsonObject?.get("servers")?.jsonArray
+            if (servers.isNullOrEmpty()) {
+                "missing"
+            } else {
+                servers
+                    .map { server -> server.jsonObject.redactedDnsServerShape() }
+                    .joinToString(separator = "|")
+            }
+        }
+    }.getOrDefault("unparseable")
+
+private fun JsonObject.redactedDnsServerShape(): String {
+    val tag =
+        when (this["tag"]?.jsonPrimitive?.contentOrNull) {
+            "dns-local" -> "dns-local"
+            "dns-direct" -> "dns-direct"
+            "dns-remote" -> "dns-remote"
+            null -> "untagged"
+            else -> "custom"
+        }
+    val type =
+        when (this["type"]?.jsonPrimitive?.contentOrNull ?: this["address"]?.jsonPrimitive?.contentOrNull) {
+            "local" -> "local"
+            "udp" -> "udp"
+            "tcp" -> "tcp"
+            "https" -> "https"
+            null -> "default"
+            else -> "custom"
+        }
+    val port = this["server_port"]?.jsonPrimitive?.contentOrNull?.takeIf { value -> value.all(Char::isDigit) } ?: "default"
+    val detour =
+        when (this["detour"]?.jsonPrimitive?.contentOrNull) {
+            "proxy" -> "proxy"
+            "direct" -> "direct"
+            null -> "no_detour"
+            else -> "custom_detour"
+        }
+    return "$tag:$type:$port:$detour"
+}
+
+private fun runtimeValidationDiagnosticFields(session: VpnSession?): Array<String?> =
+    arrayOf(
+        session?.protocolHint?.name?.lowercase()?.let { "protocol_hint=$it" },
+        "dns_shape=${redactedRuntimeDnsShape(session?.configJson)}",
+        VpnHealthProbeTargetSelector
+            .select(session?.configJson)
+            ?.transport
+            ?.name
+            ?.lowercase()
+            ?.let { "probe_transport=$it" }
+            ?: "probe_transport=unavailable",
+    )
+
+private fun Throwable?.isEndpointConnectRefusal(): Boolean {
+    var cursor = this
+    while (cursor != null) {
+        if (cursor.message?.contains("Connection refused", ignoreCase = true) == true) {
+            return true
+        }
+        cursor = cursor.cause
+    }
+    return false
+}
+
 internal suspend fun FoxholeVpnService.connectivityProbeEndpointsInternal(): List<String> {
     val preferredEndpoint = container.settingsRepository.current().connection.ipInfoEndpoint.trim()
     return buildList {
@@ -608,6 +700,12 @@ internal suspend fun FoxholeVpnService.runNotificationConnectivityProbeInternal(
                         val vpnNetwork = runCatching { currentVpnNetwork() }.getOrNull() ?: return@withContext false
                         val target = VpnHealthProbeTargetSelector.select(session.configJson)
                         if (target != null) {
+                            container.diagnosticsLogger.recordStructured(
+                                "health",
+                                "Notification probe target selected",
+                                "protocol_hint=${session.protocolHint.name.lowercase()}",
+                                "probe_transport=${target.transport.name.lowercase()}",
+                            )
                             val requestNetwork = boundNetworkForAppOwnedRequest(vpnNetwork)
                             probeSessionTarget(
                                 target = target,
@@ -636,7 +734,7 @@ internal suspend fun FoxholeVpnService.runNotificationConnectivityProbeInternal(
             .onFailure { error ->
                 container.diagnosticsLogger.record(
                     "health",
-                    "notification probe failed: ${error.message.orEmpty()}",
+                    "notification probe failed: ${error.message.orEmpty()} endpoint_refusal=${error.isEndpointConnectRefusal()}",
                 )
             }.isSuccess
     }

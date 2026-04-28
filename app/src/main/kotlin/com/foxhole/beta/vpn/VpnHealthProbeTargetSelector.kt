@@ -63,7 +63,7 @@ internal object VpnHealthProbeTargetSelector {
     }
 
     private fun resolveDirectTarget(outbound: JsonObject): VpnHealthProbeTarget? {
-        val type = outbound["type"]?.jsonPrimitive?.contentOrNull.orEmpty()
+        val type = outbound["type"]?.jsonPrimitive?.contentOrNull.orEmpty().lowercase()
         if (type in LOCAL_OR_SELECTOR_TYPES) {
             return null
         }
@@ -99,16 +99,47 @@ internal object VpnHealthProbeTargetSelector {
         return VpnHealthProbeTarget(
             host = host,
             port = port,
-            transport =
-                if (type in UDP_TRANSPORT_TYPES) {
-                    VpnHealthProbeTransport.UDP
-                } else {
-                    VpnHealthProbeTransport.TCP
-                },
+            transport = resolveProbeTransport(type, outbound),
         )
     }
 
-    private val UDP_TRANSPORT_TYPES = setOf("hysteria", "hysteria2", "wireguard")
+    private fun resolveProbeTransport(
+        type: String,
+        outbound: JsonObject,
+    ): VpnHealthProbeTransport {
+        if (type == "wireguard") {
+            return VpnHealthProbeTransport.UDP
+        }
+        val explicitNetworks = outbound.explicitNetworks()
+        if ("tcp" in explicitNetworks) {
+            return VpnHealthProbeTransport.TCP
+        }
+        if ("udp" in explicitNetworks) {
+            return VpnHealthProbeTransport.UDP
+        }
+        return if (type in UDP_DEFAULT_TRANSPORT_TYPES) {
+            VpnHealthProbeTransport.UDP
+        } else {
+            VpnHealthProbeTransport.TCP
+        }
+    }
+
+    private fun JsonObject.explicitNetworks(): Set<String> {
+        val network = this["network"] ?: return emptySet()
+        val rawValues =
+            runCatching {
+                network.jsonArray.mapNotNull { it.jsonPrimitive.contentOrNull }
+            }.getOrElse {
+                runCatching { listOfNotNull(network.jsonPrimitive.contentOrNull) }.getOrDefault(emptyList())
+            }
+        return rawValues
+            .flatMap { value -> value.split(',') }
+            .map { value -> value.trim().lowercase() }
+            .filter(String::isNotBlank)
+            .toSet()
+    }
+
+    private val UDP_DEFAULT_TRANSPORT_TYPES = setOf("hysteria", "hysteria2")
     private val SELECTOR_TYPES = setOf("selector", "urltest")
     private val LOCAL_OR_SELECTOR_TYPES = SELECTOR_TYPES + setOf("direct", "block", "dns")
     private const val PREFERRED_PROXY_TAG = "proxy"

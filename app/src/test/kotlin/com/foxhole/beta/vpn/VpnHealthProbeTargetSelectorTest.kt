@@ -116,6 +116,62 @@ class VpnHealthProbeTargetSelectorTest {
     }
 
     @Test
+    fun `marks hysteria2 as udp by default`() {
+        val target =
+            VpnHealthProbeTargetSelector.select(
+                """
+                {
+                  "outbounds": [
+                    { "type": "hysteria2", "tag": "hy2", "server": "hy2.example.com", "server_port": 8443 },
+                    { "type": "selector", "tag": "proxy", "outbounds": ["hy2"] }
+                  ]
+                }
+                """.trimIndent(),
+            )
+
+        requireNotNull(target)
+        assertEquals("hy2.example.com", target.host)
+        assertEquals(8443, target.port)
+        assertEquals(VpnHealthProbeTransport.UDP, target.transport)
+    }
+
+    @Test
+    fun `uses explicit tcp network for hysteria2 probe transport`() {
+        val target =
+            VpnHealthProbeTargetSelector.select(
+                """
+                {
+                  "outbounds": [
+                    { "type": "hysteria2", "tag": "hy2", "server": "hy2.example.com", "server_port": 8443, "network": "tcp" },
+                    { "type": "selector", "tag": "proxy", "outbounds": ["hy2"] }
+                  ]
+                }
+                """.trimIndent(),
+            )
+
+        requireNotNull(target)
+        assertEquals(VpnHealthProbeTransport.TCP, target.transport)
+    }
+
+    @Test
+    fun `uses explicit udp network for non udp default outbounds`() {
+        val target =
+            VpnHealthProbeTargetSelector.select(
+                """
+                {
+                  "outbounds": [
+                    { "type": "vless", "tag": "edge", "server": "edge.example.com", "server_port": 443, "network": "udp" },
+                    { "type": "selector", "tag": "proxy", "outbounds": ["edge"] }
+                  ]
+                }
+                """.trimIndent(),
+            )
+
+        requireNotNull(target)
+        assertEquals(VpnHealthProbeTransport.UDP, target.transport)
+    }
+
+    @Test
     fun `returns null when config has no remote outbound target`() {
         val target =
             VpnHealthProbeTargetSelector.select(

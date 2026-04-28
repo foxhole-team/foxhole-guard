@@ -406,7 +406,7 @@ class RuntimeConfigAssemblerTest {
     }
 
     @Test
-    fun `foxhole dns defaults use proxied doh outside private dns off`() {
+    fun `foxhole dns defaults use direct doh bootstrap and proxied doh final resolver`() {
         val config = parse(assembler.assemble(baseConfigWithLegacyFoxholeDns(), Settings(), null))
         val dns = config["dns"]!!.jsonObject
         val route = config["route"]!!.jsonObject
@@ -417,9 +417,10 @@ class RuntimeConfigAssemblerTest {
         assertEquals("local", servers[0].jsonObject["type"]!!.jsonPrimitive.content)
         assertFalse(servers[0].jsonObject.containsKey("detour"))
         assertEquals("dns-direct", servers[1].jsonObject["tag"]!!.jsonPrimitive.content)
-        assertEquals("udp", servers[1].jsonObject["type"]!!.jsonPrimitive.content)
+        assertEquals("https", servers[1].jsonObject["type"]!!.jsonPrimitive.content)
         assertEquals("1.1.1.1", servers[1].jsonObject["server"]!!.jsonPrimitive.content)
-        assertEquals("53", servers[1].jsonObject["server_port"]!!.jsonPrimitive.content)
+        assertEquals("443", servers[1].jsonObject["server_port"]!!.jsonPrimitive.content)
+        assertEquals("/dns-query", servers[1].jsonObject["path"]!!.jsonPrimitive.content)
         assertFalse(servers[1].jsonObject.containsKey("detour"))
         assertEquals("dns-remote", servers[2].jsonObject["tag"]!!.jsonPrimitive.content)
         assertEquals("https", servers[2].jsonObject["type"]!!.jsonPrimitive.content)
@@ -431,7 +432,7 @@ class RuntimeConfigAssemblerTest {
     }
 
     @Test
-    fun `foxhole dns defaults use direct udp resolver when private dns is off`() {
+    fun `foxhole dns keeps proxied doh final resolver when private dns is off`() {
         val config =
             parse(
                 assembler.assemble(
@@ -446,15 +447,15 @@ class RuntimeConfigAssemblerTest {
 
         assertEquals("dns-remote", dns["final"]!!.jsonPrimitive.content)
         assertEquals("dns-remote", servers[2].jsonObject["tag"]!!.jsonPrimitive.content)
-        assertEquals("udp", servers[2].jsonObject["type"]!!.jsonPrimitive.content)
+        assertEquals("https", servers[2].jsonObject["type"]!!.jsonPrimitive.content)
         assertEquals("1.1.1.1", servers[2].jsonObject["server"]!!.jsonPrimitive.content)
-        assertEquals("53", servers[2].jsonObject["server_port"]!!.jsonPrimitive.content)
-        assertFalse(servers[2].jsonObject.containsKey("detour"))
-        assertFalse(servers[2].jsonObject.containsKey("path"))
+        assertEquals("443", servers[2].jsonObject["server_port"]!!.jsonPrimitive.content)
+        assertEquals("/dns-query", servers[2].jsonObject["path"]!!.jsonPrimitive.content)
+        assertEquals("proxy", servers[2].jsonObject["detour"]!!.jsonPrimitive.content)
     }
 
     @Test
-    fun `foxhole dns keeps direct udp bootstrap resolver when private dns is strict`() {
+    fun `foxhole dns keeps direct doh bootstrap resolver when private dns is strict`() {
         val config =
             parse(
                 assembler.assemble(
@@ -471,12 +472,27 @@ class RuntimeConfigAssemblerTest {
         assertEquals("dns-remote", dns["final"]!!.jsonPrimitive.content)
         assertEquals("dns-direct", route["default_domain_resolver"]!!.jsonPrimitive.content)
         assertEquals("dns-direct", servers[1].jsonObject["tag"]!!.jsonPrimitive.content)
-        assertEquals("udp", servers[1].jsonObject["type"]!!.jsonPrimitive.content)
+        assertEquals("https", servers[1].jsonObject["type"]!!.jsonPrimitive.content)
         assertEquals("1.1.1.1", servers[1].jsonObject["server"]!!.jsonPrimitive.content)
-        assertEquals("53", servers[1].jsonObject["server_port"]!!.jsonPrimitive.content)
+        assertEquals("443", servers[1].jsonObject["server_port"]!!.jsonPrimitive.content)
+        assertEquals("/dns-query", servers[1].jsonObject["path"]!!.jsonPrimitive.content)
         assertFalse(servers[1].jsonObject.containsKey("detour"))
         assertEquals("dns-remote", servers[2].jsonObject["tag"]!!.jsonPrimitive.content)
         assertEquals("https", servers[2].jsonObject["type"]!!.jsonPrimitive.content)
+        assertEquals("proxy", servers[2].jsonObject["detour"]!!.jsonPrimitive.content)
+    }
+
+    @Test
+    fun `legacy udp bootstrap dns is rewritten to direct doh bootstrap`() {
+        val config = parse(assembler.assemble(baseConfigWithLegacyUdpBootstrapDns(), Settings(), null))
+        val servers = config["dns"]!!.jsonObject["servers"]!!.jsonArray
+
+        assertEquals("dns-direct", servers[1].jsonObject["tag"]!!.jsonPrimitive.content)
+        assertEquals("https", servers[1].jsonObject["type"]!!.jsonPrimitive.content)
+        assertEquals("443", servers[1].jsonObject["server_port"]!!.jsonPrimitive.content)
+        assertEquals("/dns-query", servers[1].jsonObject["path"]!!.jsonPrimitive.content)
+        assertFalse(servers[1].jsonObject.containsKey("detour"))
+        assertEquals("dns-remote", servers[2].jsonObject["tag"]!!.jsonPrimitive.content)
         assertEquals("proxy", servers[2].jsonObject["detour"]!!.jsonPrimitive.content)
     }
 
@@ -689,6 +705,49 @@ class RuntimeConfigAssemblerTest {
                 },
             )
             put("route", buildJsonObject { put("final", "proxy"); put("default_domain_resolver", "dns-remote") })
+        }.toString()
+
+    private fun baseConfigWithLegacyUdpBootstrapDns(): String =
+        buildJsonObject {
+            put("inbounds", parse(baseConfigWithRules("profile.example"))["inbounds"]!!)
+            put("outbounds", parse(baseConfigWithRules("profile.example"))["outbounds"]!!)
+            put(
+                "dns",
+                buildJsonObject {
+                    put(
+                        "servers",
+                        buildJsonArray {
+                            add(
+                                buildJsonObject {
+                                    put("tag", "dns-local")
+                                    put("type", "local")
+                                },
+                            )
+                            add(
+                                buildJsonObject {
+                                    put("tag", "dns-direct")
+                                    put("type", "udp")
+                                    put("server", "1.1.1.1")
+                                    put("server_port", 53)
+                                },
+                            )
+                            add(
+                                buildJsonObject {
+                                    put("tag", "dns-remote")
+                                    put("type", "https")
+                                    put("server", "1.1.1.1")
+                                    put("server_port", 443)
+                                    put("path", "/dns-query")
+                                    put("detour", "proxy")
+                                },
+                            )
+                        },
+                    )
+                    put("strategy", "prefer_ipv4")
+                    put("final", "dns-remote")
+                },
+            )
+            put("route", buildJsonObject { put("final", "proxy"); put("default_domain_resolver", "dns-direct") })
         }.toString()
 
     private fun baseConfigWithCustomDns(): String =

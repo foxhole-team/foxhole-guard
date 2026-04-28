@@ -645,7 +645,8 @@ internal fun buildTls(
 }
 
 internal fun buildTransport(query: Map<String, String>): JsonObject? {
-    return when (query["type"].orEmpty()) {
+    val transportType = query["type"].orEmpty().trim().lowercase()
+    return when (transportType) {
         "", "tcp" -> null
         "ws" -> buildJsonObject {
             put("type", "ws")
@@ -675,7 +676,7 @@ internal fun buildTransport(query: Map<String, String>): JsonObject? {
                 )
             }
         }
-        else -> null
+        else -> error("unsupported transport type: $transportType")
     }
 }
 }

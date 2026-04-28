@@ -118,8 +118,8 @@ class SettingsRepositoryTest {
     }
 
     @Test
-    fun `latency probe method defaults to icmp`() {
-        assertEquals(LatencyProbeMethod.ICMP, Settings().connection.latencyProbeMethod)
+    fun `latency probe method defaults to http`() {
+        assertEquals(LatencyProbeMethod.HTTP, Settings().connection.latencyProbeMethod)
     }
 
     @Test

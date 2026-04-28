@@ -251,16 +251,22 @@ class ProfileRuntimeSessionAndroidTest {
             resetRelevantSettings(app)
             clearProfiles(app)
 
-            val imported = app.container.profileRepository.importProfile(subscriptionUrl, preferredName = "Live Smart")
+            val imported =
+                app.container.profileRepository.importProfile(
+                    rawInput = subscriptionUrl,
+                    preferredName = "Live Smart",
+                    allowInsecureTlsForProfile =
+                        InstrumentationRegistry
+                            .getArguments()
+                            .getString("foxhole.allowInsecureTlsForLiveSubscription") == "1",
+                )
             app.container.connectionController.setActiveProfile(imported.id)
             val profiles = app.container.profileRepository.profiles.first()
             val targetProtocolSummary = targetProtocols.joinToString { it.name.lowercase() }
             val profileProtocolSummary =
                 profiles.joinToString { profile ->
-                    profile.protocolOptions
-                        .map { it.protocolHint.name.lowercase() }
-                        .distinct()
-                        .joinToString("|")
+                    val protocolHints = profile.runtimeProbeTargets().map { it.protocolHint }.distinct()
+                    protocolHints.joinToString("|") { it.name.lowercase() }
                 }
             Log.d(
                 TEST_TAG,
@@ -268,21 +274,22 @@ class ProfileRuntimeSessionAndroidTest {
             )
 
             profiles.forEach { profile ->
-                profile.protocolOptions
+                profile
+                    .runtimeProbeTargets()
                     .filter { it.protocolHint in targetProtocols }
-                    .forEach { option ->
-                        app.container.connectionController.disconnect()
-                        delay(3_000)
+                    .forEach { target ->
+                        disconnectAndWaitForIdle(app)
                         baselineRuntimeSettings(app)
                         app.container.connectionController.setActiveProfile(profile.id)
                         val startedAt = System.currentTimeMillis()
                         Log.d(
                             TEST_TAG,
-                            "liveSmartStart profileId=${profile.id} protocol=${option.protocolHint.name.lowercase()} optionId=${option.id}",
+                            "liveSmartStart profileId=${profile.id} protocol=${target.protocolHint.name.lowercase()} optionId=${target.optionId.orEmpty()}",
                         )
-                        app.container.connectionController.connect(profile.id, protocolOptionId = option.id)
+                        app.container.connectionController.connect(profile.id, protocolOptionId = target.optionId)
                         val terminalState =
-                            withTimeoutOrNull(liveSmartTerminalTimeoutMs(option.protocolHint)) {
+                            withTimeoutOrNull(liveSmartTerminalTimeoutMs(target.protocolHint)) {
+                                waitForActiveConnectionAttempt(app)
                                 waitForTerminalState(app)
                             }
                         delay(2_000)
@@ -310,12 +317,15 @@ class ProfileRuntimeSessionAndroidTest {
                         val fatalMessage = evidence.fatalRuntimeMessage.orEmpty().take(200)
                         Log.d(
                             TEST_TAG,
-                            "liveSmart result profileId=${profile.id} protocol=${option.protocolHint.name.lowercase()} terminalState=$terminalStateLabel ipRefresh=$ipRefreshResult message=$snapshotMessage fatal=$fatalMessage successTraffic=${evidence.hasSuccessfulTunnelActivity}",
+                            "liveSmart result profileId=${profile.id} protocol=${target.protocolHint.name.lowercase()} terminalState=$terminalStateLabel ipRefresh=$ipRefreshResult message=$snapshotMessage fatal=$fatalMessage successTraffic=${evidence.hasSuccessfulTunnelActivity}",
                         )
+                        if (requireLiveSmartSuccess()) {
+                            assertEquals(ConnectionState.CONNECTED.name, terminalStateLabel)
+                            assertEquals("ok", ipRefreshResult)
+                        }
                     }
             }
-            app.container.connectionController.disconnect()
-            delay(3_000)
+            disconnectAndWaitForIdle(app)
         }
     }
 
@@ -420,6 +430,7 @@ class ProfileRuntimeSessionAndroidTest {
 
     private suspend fun resetRelevantSettings(app: FoxholeApplication) {
         with(app.container.settingsRepository) {
+            updateAutoReconnect(false)
             updateTrafficMode(TrafficMode.TUNNEL)
             updatePerAppRoutingMode(PerAppRoutingMode.FULL_TUNNEL)
             updateSelectedPackages(emptyList())
@@ -433,6 +444,7 @@ class ProfileRuntimeSessionAndroidTest {
 
     private suspend fun baselineRuntimeSettings(app: FoxholeApplication) {
         with(app.container.settingsRepository) {
+            updateAutoReconnect(false)
             updateTrafficMode(TrafficMode.TUNNEL)
             updateTunStack(TunStack.SYSTEM)
             updatePerAppRoutingMode(PerAppRoutingMode.FULL_TUNNEL)
@@ -485,6 +497,20 @@ class ProfileRuntimeSessionAndroidTest {
             }
             delay(100)
         }
+    }
+
+    private suspend fun disconnectAndWaitForIdle(app: FoxholeApplication) {
+        app.container.connectionController.disconnect()
+        withTimeoutOrNull(20_000) {
+            while (true) {
+                val state = app.container.connectionController.snapshot.value.state
+                if (state == ConnectionState.IDLE || state == ConnectionState.ERROR) {
+                    return@withTimeoutOrNull
+                }
+                delay(250)
+            }
+        }
+        delay(2_000)
     }
 
     private suspend fun runWarmupProbe(
@@ -560,10 +586,25 @@ class ProfileRuntimeSessionAndroidTest {
         return requested.ifEmpty { setOf(ProtocolHint.TROJAN, ProtocolHint.WIREGUARD) }
     }
 
+    private fun requireLiveSmartSuccess(): Boolean =
+        InstrumentationRegistry.getArguments().getString("foxhole.requireLiveSmartSuccess") == "1"
+
+    private data class RuntimeProbeTarget(
+        val protocolHint: ProtocolHint,
+        val optionId: String?,
+    )
+
+    private fun com.foxhole.beta.core.model.Profile.runtimeProbeTargets(): List<RuntimeProbeTarget> =
+        protocolOptions
+            .map { option -> RuntimeProbeTarget(protocolHint = option.protocolHint, optionId = option.id) }
+            .ifEmpty { listOf(RuntimeProbeTarget(protocolHint = protocolHint, optionId = null)) }
+
     private fun liveSmartTerminalTimeoutMs(protocolHint: ProtocolHint): Long =
         when (protocolHint) {
-            ProtocolHint.WIREGUARD -> 90_000L
-            else -> 45_000L
+            ProtocolHint.WIREGUARD,
+            ProtocolHint.HYSTERIA2,
+            -> 120_000L
+            else -> 90_000L
         }
 
     private suspend fun ensureVpnPermission(app: FoxholeApplication): Boolean {

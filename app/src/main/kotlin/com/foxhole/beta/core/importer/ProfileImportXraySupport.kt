@@ -379,7 +379,7 @@ internal fun buildXrayTransport(streamSettings: JsonObject?): JsonObject? {
                 httpUpgradeSettings?.get("host")?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() }?.let { put("host", it) }
             }
         }
-        else -> null
+        else -> error("unsupported xray transport type: $network")
     }
 }
 

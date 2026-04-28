@@ -164,7 +164,7 @@ data class ConnectionSettings(
     val autoRefreshSubscriptions: Boolean = false,
     val subscriptionRefreshInterval: SubscriptionRefreshInterval = SubscriptionRefreshInterval.HOURS_6,
     val ipInfoEndpoint: String = "",
-    val latencyProbeMethod: LatencyProbeMethod = LatencyProbeMethod.ICMP,
+    val latencyProbeMethod: LatencyProbeMethod = LatencyProbeMethod.HTTP,
     val stealthModeEnabled: Boolean = true,
 )
 

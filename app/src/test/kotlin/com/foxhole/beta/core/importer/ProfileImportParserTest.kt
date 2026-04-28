@@ -199,6 +199,19 @@ class ProfileImportParserTest {
     }
 
     @Test
+    fun `rejects unsupported share uri transport instead of silently dropping to tcp`() {
+        val error =
+            runCatching {
+                parser.parseUserInput(
+                    "vless://11111111-1111-1111-1111-111111111111@example.com:443?security=tls&type=quic&sni=edge.example.com#quic",
+                )
+            }.exceptionOrNull()
+
+        assertNotNull(error)
+        assertTrue(error!!.message.orEmpty().contains("unsupported transport type: quic"))
+    }
+
+    @Test
     fun `parses vless reality uri`() {
         val parsed =
             parser.parseUserInput(
@@ -252,6 +265,46 @@ class ProfileImportParserTest {
             "WG2E71GvJTVvpUigKJ7UgC0-XyarAVTkvPQMbH8h2iM",
             tls["reality"]!!.jsonObject["public_key"]!!.jsonPrimitive.content,
         )
+    }
+
+    @Test
+    fun `rejects unsupported xray transport instead of silently dropping to tcp`() {
+        val error =
+            runCatching {
+                parser.parseUserInput(
+                    """
+                    {
+                      "outbounds": [
+                        {
+                          "protocol": "vless",
+                          "settings": {
+                            "vnext": [
+                              {
+                                "address": "37.139.40.59",
+                                "port": 43000,
+                                "users": [
+                                  {
+                                    "id": "11111111-1111-1111-1111-111111111111",
+                                    "encryption": "none"
+                                  }
+                                ]
+                              }
+                            ]
+                          },
+                          "streamSettings": {
+                            "network": "kcp",
+                            "security": "none"
+                          },
+                          "tag": "proxy"
+                        }
+                      ]
+                    }
+                    """.trimIndent(),
+                )
+            }.exceptionOrNull()
+
+        assertNotNull(error)
+        assertTrue(error!!.message.orEmpty().contains("unsupported xray transport type: kcp"))
     }
 
     @Test
@@ -435,6 +488,31 @@ class ProfileImportParserTest {
     }
 
     @Test
+    fun `splits single route smart config into separate protocol profiles`() {
+        val parsed =
+            parser.parseSubscriptionProfiles(
+                """
+                # === vless / direct ===
+                vless://11111111-1111-1111-1111-111111111111@direct.example.com:8443?encryption=none&security=none&type=tcp#Foxhole%20vpn%20direct
+
+                # === shadowsocks-2022 / direct ===
+                ss://2022-blake3-aes-128-gcm:direct-password@ss-direct.example.com:8446#Foxhole%20vpn%20direct
+
+                # === outline / direct ===
+                ${buildOutlineAccessKey(host = "outline-direct.example.com", port = 8448, name = "Foxhole vpn direct")}
+                """.trimIndent(),
+                "Foxhole",
+            )
+
+        assertEquals(3, parsed.profiles.size)
+        assertEquals(
+            listOf(ProtocolHint.VLESS, ProtocolHint.SHADOWSOCKS, ProtocolHint.OUTLINE),
+            parsed.profiles.map { it.protocolHint },
+        )
+        assertEquals(listOf(1, 1, 1), parsed.profiles.map { it.protocolOptions.size })
+    }
+
+    @Test
     fun `parses outline and wireguard entries inside smart config content`() {
         val parsed =
             parser.parseSubscriptionProfiles(
@@ -515,6 +593,25 @@ class ProfileImportParserTest {
 
         assertEquals(ProtocolHint.OUTLINE, parsed.protocolHint)
         assertEquals("shadowsocks", outbounds.first().jsonObject["type"]!!.jsonPrimitive.content)
+    }
+
+    @Test
+    fun `splits direct shadowsocks and outline subscription payload into separate profiles`() {
+        val parsed =
+            parser.parseSubscriptionProfiles(
+                """
+                ss://aes-256-gcm:pass@ss.example.com:8388#plain-ss
+                ${buildOutlineAccessKey(host = "outline.example.com", port = 8443, name = "outline-node")}
+                """.trimIndent(),
+                "Foxhole",
+            )
+
+        assertEquals(2, parsed.profiles.size)
+        assertEquals(
+            listOf(ProtocolHint.SHADOWSOCKS, ProtocolHint.OUTLINE),
+            parsed.profiles.map { it.protocolHint },
+        )
+        assertEquals(listOf("plain-ss", "outline-node"), parsed.profiles.map { it.displayName })
     }
 
     @Test
