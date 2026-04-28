@@ -495,6 +495,8 @@ fun HomeScreen(
                                     compact = true,
                                     animateSelection = true,
                                     latencyByOptionId = dashboardProtocolLatencies,
+                                    downProtocolOptionIds = dashboardDownProtocolIds,
+                                    latencyUnavailableOptionIds = dashboardUnavailableProtocolIds,
                                     recommendedProtocolOptionId = state.recommendedProtocolOptionId,
                                     recommendedProtocolOptionIds = state.recommendedProtocolOptionIds,
                                     selectorBorderColor = dashboardSelectorBorderColor,

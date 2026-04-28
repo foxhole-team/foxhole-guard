@@ -28,6 +28,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.ContentCopy
@@ -54,10 +55,12 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.testTag
@@ -773,12 +776,44 @@ internal fun HomeConnectionActions(
             else -> Icons.Outlined.PowerSettingsNew
         }
     val primaryButtonInteractionSource = remember(primaryAction) { MutableInteractionSource() }
+    val primaryButtonShape = RoundedCornerShape(28.dp)
+    val reconnectExpiresAtElapsedMs =
+        state.profileReconnectPromptUntilElapsedMs.takeIf {
+            primaryAction == HomePrimaryAction.RECONNECT && it > 0L
+        }
+    val reconnectProgress =
+        rememberDeadlineProgress(
+            expiresAtElapsedMs = reconnectExpiresAtElapsedMs,
+            totalDurationMs = HomeViewModel.PROFILE_RECONNECT_PROMPT_WINDOW_MS,
+        )
+    val reconnectCountdownModifier =
+        if (reconnectExpiresAtElapsedMs != null) {
+            Modifier
+                .clip(primaryButtonShape)
+                .drawBehind {
+                    drawRect(
+                        color = Color.White.copy(alpha = 0.14f),
+                        size =
+                            Size(
+                                width = size.width * reconnectProgress.coerceIn(0f, 1f),
+                                height = size.height,
+                            ),
+                    )
+                }
+        } else {
+            Modifier
+        }
     if (!hasMultipleProtocols) {
         OutlinedButton(
             onClick = onToggleConnection,
             enabled = activeProfile != null,
-            modifier = Modifier.fillMaxWidth().testTag("home_connect_button"),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .testTag("home_connect_button")
+                    .then(reconnectCountdownModifier),
             interactionSource = primaryButtonInteractionSource,
+            shape = primaryButtonShape,
             border = primaryButtonBorder,
             colors = primaryButtonColors,
         ) {
@@ -807,8 +842,10 @@ internal fun HomeConnectionActions(
                 Modifier
                     .weight(1f)
                     .height(HomePrimaryActionHeight)
-                    .testTag("home_connect_button"),
+                    .testTag("home_connect_button")
+                    .then(reconnectCountdownModifier),
             interactionSource = primaryButtonInteractionSource,
+            shape = primaryButtonShape,
             border = primaryButtonBorder,
             colors = primaryButtonColors,
         ) {

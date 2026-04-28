@@ -390,9 +390,12 @@ fun ProfilesScreen(
                             selectedProtocolOptionId = profile.selectedProtocolOptionId,
                             onProtocolOptionSelected = { optionId -> onSelectProtocolOption(profile.id, optionId) },
                             compact = true,
+                            latencyByOptionId = rememberedSmartStartLatenciesByProfileId[profile.id].orEmpty(),
+                            downProtocolOptionIds = state.smartProfileDownOptionIdsByProfileId[profile.id].orEmpty(),
                             recommendedProtocolOptionId = state.recommendedProtocolOptionByProfileId[profile.id],
                             recommendedProtocolOptionIds = state.recommendedProtocolOptionsByProfileId[profile.id].orEmpty(),
                             requiresInsecureTls = profile.requiresInsecureTls,
+                            showInsecureTlsBadge = false,
                             reserveTrailingSpace = false,
                             expand = true,
                             leadingContent =
@@ -453,41 +456,55 @@ fun ProfilesScreen(
                             )
                         }
                     } else {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        Column(
+                            horizontalAlignment = Alignment.End,
+                            verticalArrangement = Arrangement.spacedBy(6.dp),
                         ) {
-                            if (showInlineRefreshAction) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            ) {
+                                if (showInlineRefreshAction) {
+                                    IconButton(
+                                        onClick = { refreshProfileId = profile.id },
+                                        modifier =
+                                            Modifier
+                                                .size(34.dp)
+                                                .testTag("profiles_profile_refresh_action_${profile.id}"),
+                                    ) {
+                                        Icon(Icons.Outlined.Refresh, contentDescription = stringResource(R.string.refresh))
+                                    }
+                                }
                                 IconButton(
-                                    onClick = { refreshProfileId = profile.id },
+                                    onClick = { onEditProfile(profile.id) },
                                     modifier =
                                         Modifier
                                             .size(34.dp)
-                                            .testTag("profiles_profile_refresh_action_${profile.id}"),
+                                            .testTag("profiles_profile_edit_action_${profile.id}"),
                                 ) {
-                                    Icon(Icons.Outlined.Refresh, contentDescription = stringResource(R.string.refresh))
+                                    Icon(Icons.Outlined.Edit, contentDescription = stringResource(R.string.edit_label))
+                                }
+                                IconButton(
+                                    onClick = { deleteProfileId = profile.id },
+                                    modifier =
+                                        Modifier
+                                            .size(34.dp)
+                                            .testTag("profiles_profile_delete_action_${profile.id}"),
+                                ) {
+                                    Icon(
+                                        Icons.Outlined.Delete,
+                                        contentDescription = stringResource(R.string.delete_label),
+                                        tint = MaterialTheme.colorScheme.error,
+                                    )
                                 }
                             }
-                            IconButton(
-                                onClick = { onEditProfile(profile.id) },
-                                modifier =
-                                    Modifier
-                                        .size(34.dp)
-                                        .testTag("profiles_profile_edit_action_${profile.id}"),
-                            ) {
-                                Icon(Icons.Outlined.Edit, contentDescription = stringResource(R.string.edit_label))
-                            }
-                            IconButton(
-                                onClick = { deleteProfileId = profile.id },
-                                modifier =
-                                    Modifier
-                                        .size(34.dp)
-                                        .testTag("profiles_profile_delete_action_${profile.id}"),
-                            ) {
-                                Icon(
-                                    Icons.Outlined.Delete,
-                                    contentDescription = stringResource(R.string.delete_label),
-                                    tint = MaterialTheme.colorScheme.error,
+                            if (selectedProtocolRequiresInsecureTls(profile)) {
+                                InsecureTlsProfileBadge(
+                                    compact = true,
+                                    modifier =
+                                        Modifier
+                                            .widthIn(min = 92.dp)
+                                            .testTag("profiles_profile_insecure_tls_badge_${profile.id}"),
                                 )
                             }
                         }
@@ -808,6 +825,8 @@ fun ProfileDetailScreen(
                         selectedProtocolOptionId = profile.selectedProtocolOptionId,
                         onProtocolOptionSelected = { optionId -> onSelectProtocolOption(profile.id, optionId) },
                         compact = true,
+                        latencyByOptionId = rememberedSmartStartLatenciesByOptionId,
+                        downProtocolOptionIds = downOptionIds,
                         recommendedProtocolOptionId = recommendedProtocolOptionId,
                         recommendedProtocolOptionIds = recommendedProtocolOptionIds,
                         requiresInsecureTls = profile.requiresInsecureTls,

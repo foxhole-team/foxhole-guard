@@ -34,6 +34,7 @@ data class HomeUiState(
     val installedAppsLoading: Boolean = false,
     val installedAppsLoaded: Boolean = false,
     val reconnectRequired: Boolean = false,
+    val profileReconnectPromptUntilElapsedMs: Long = 0L,
     val diagnosticEntries: List<DiagnosticEntry> = emptyList(),
     val catalogPresetPreviews: Map<Long, List<RoutingRepository.RoutingCatalogPresetPreview>> = emptyMap(),
     val appVersion: String = displayAppVersion(BuildConfig.VERSION_NAME),
@@ -121,6 +122,8 @@ internal data class PendingConnectRequest(
 
 data class InsecureTlsImportWarningState(
     val rawInput: String,
+    val protocolLabels: List<String> = emptyList(),
+    val canExcludeAndApply: Boolean = false,
 )
 
 internal data class ProfileOptionLatencyKey(

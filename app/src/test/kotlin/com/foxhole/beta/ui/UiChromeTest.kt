@@ -42,6 +42,29 @@ class UiChromeTest {
         }
 
     @Test
+    fun `timed banner carries explicit countdown deadline`() =
+        runBlocking {
+            val hostState = SnackbarHostState()
+            val expiresAtElapsedMs = 12_345L
+            val job = launch {
+                hostState.showBanner(
+                    message = "Recommended protocol VLESS. Connect?",
+                    tone = FoxholeBannerTone.INFO,
+                    actionLabel = "Connect",
+                    durationMillis = 8_000L,
+                    expiresAtElapsedMs = expiresAtElapsedMs,
+                )
+            }
+            yield()
+            val visuals = hostState.currentSnackbarData?.visuals as FoxholeBannerVisuals
+            assertEquals(SnackbarDuration.Indefinite, visuals.duration)
+            assertEquals(8_000L, visuals.durationMillis)
+            assertEquals(expiresAtElapsedMs, visuals.expiresAtElapsedMs)
+            hostState.currentSnackbarData?.dismiss()
+            job.join()
+        }
+
+    @Test
     fun `diagnostic message parts split structured network details`() {
         assertEquals(
             DiagnosticMessageParts(

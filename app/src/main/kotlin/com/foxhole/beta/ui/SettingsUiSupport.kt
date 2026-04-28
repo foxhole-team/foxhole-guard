@@ -764,6 +764,8 @@ internal fun <T> EnumChoiceDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
+        modifier = Modifier.foxholeDialogChrome(),
+        shape = FoxholeDialogShape,
         title = { FoxholeDialogTitle(title = title, icon = icon) },
         text = {
             Column(
@@ -802,6 +804,8 @@ internal fun IntValueDialog(
     var value by rememberSaveable { mutableStateOf(initialValue.toString()) }
     AlertDialog(
         onDismissRequest = onDismiss,
+        modifier = Modifier.foxholeDialogChrome(),
+        shape = FoxholeDialogShape,
         title = { FoxholeDialogTitle(title = title, icon = icon) },
         text = {
             OutlinedTextField(
@@ -837,6 +841,8 @@ internal fun TextValueDialog(
     var value by rememberSaveable { mutableStateOf(initialValue) }
     AlertDialog(
         onDismissRequest = onDismiss,
+        modifier = Modifier.foxholeDialogChrome(),
+        shape = FoxholeDialogShape,
         title = { FoxholeDialogTitle(title = title, icon = icon) },
         text = {
             OutlinedTextField(
@@ -880,6 +886,8 @@ internal fun ConfirmDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
+        modifier = Modifier.foxholeDialogChrome(),
+        shape = FoxholeDialogShape,
         properties =
             DialogProperties(
                 dismissOnBackPress = dismissOnBackPress,

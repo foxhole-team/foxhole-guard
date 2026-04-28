@@ -250,6 +250,12 @@ class HomeViewModel(
                 installedAppsLoading = localStreams.installedAppsLoading,
                 installedAppsLoaded = localStreams.installedAppsLoaded,
                 reconnectRequired = profileReconnectRequired,
+                profileReconnectPromptUntilElapsedMs =
+                    if (profileReconnectRequired) {
+                        profileReconnectPromptUntil
+                    } else {
+                        0L
+                    },
                 diagnosticEntries = diagnosticEntries,
                 catalogPresetPreviews = localStreams.catalogPresetPreviews,
             )
@@ -911,7 +917,9 @@ class HomeViewModel(
 
     internal fun importRaw(value: String) = importRawInternal(value)
 
-    fun confirmInsecureTlsImport() = confirmInsecureTlsImportInternal()
+    fun confirmInsecureTlsImport() = confirmInsecureTlsImportInternal(excludeInsecureTlsOptions = false)
+
+    fun excludeInsecureTlsAndImport() = confirmInsecureTlsImportInternal(excludeInsecureTlsOptions = true)
 
     fun dismissInsecureTlsImportWarning() = dismissInsecureTlsImportWarningInternal()
 

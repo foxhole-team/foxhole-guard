@@ -606,6 +606,7 @@ internal fun HomeViewModel.refreshSmartProfileMetricsInternal(profileId: Long) {
                         }.firstOrNull()
                         ?: MultiProtocolProfileSupport.fastestSuccessfulProbe(results)
                 if (winner != null && winner.candidate.optionId != selectedOptionId) {
+                    val recommendationDurationMs = 8_000L
                     recommendedProtocolMutable.value =
                         ProtocolRecommendationState(
                             profileId = profileId,
@@ -622,7 +623,8 @@ internal fun HomeViewModel.refreshSmartProfileMetricsInternal(profileId: Long) {
                             tone = FoxholeBannerTone.INFO,
                             actionLabel = getApplication<Application>().getString(R.string.connect),
                             action = FoxholeBannerAction.ACCEPT_PROTOCOL_RECOMMENDATION,
-                            durationMillis = 8_000L,
+                            durationMillis = recommendationDurationMs,
+                            expiresAtElapsedMs = SystemClock.elapsedRealtime() + recommendationDurationMs,
                         ),
                     )
                 } else {

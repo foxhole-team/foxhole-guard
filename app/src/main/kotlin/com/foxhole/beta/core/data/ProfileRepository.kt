@@ -102,28 +102,60 @@ class ProfileRepository(
         }
 
     suspend fun rawInputRequiresInsecureTls(rawInput: String): Boolean {
+        return rawInputInsecureTlsWarning(rawInput) != null
+    }
+
+    suspend fun rawInputInsecureTlsWarning(rawInput: String): InsecureTlsImportWarning? {
         val settings = settingsRepository.current()
-        return rawImportRequiresInsecureTls(
+        val requiresConsent = rawImportRequiresInsecureTls(
             parser = parser,
             rawInput = rawInput,
             allowPrivateOutboundHosts = settings.expert.allowPrivateOutboundHosts,
             allowHttpSubscriptionUrls = settings.expert.allowHttpConfigImports,
         )
+        if (!requiresConsent) {
+            return null
+        }
+        return withContext(Dispatchers.IO) {
+            val parsed =
+                parser.parseUserInput(
+                    input = rawInput,
+                    allowPrivateOutboundHosts = settings.expert.allowPrivateOutboundHosts,
+                    allowHttpSubscriptionUrls = settings.expert.allowHttpConfigImports,
+                    allowInsecureTls = true,
+                )
+            val localParsedProfiles =
+                if (parsed.sourceType == ProfileSourceType.SUBSCRIPTION_URL) {
+                    null
+                } else {
+                    runCatching {
+                        parser.parseSubscriptionProfiles(
+                            rawContent = rawInput,
+                            fallbackName = parsed.displayName,
+                            allowPrivateOutboundHosts = settings.expert.allowPrivateOutboundHosts,
+                            allowHttpSubscriptionUrls = settings.expert.allowHttpConfigImports,
+                            allowInsecureTls = true,
+                        )
+                    }.getOrNull()
+                }
+            localParsedProfiles?.insecureTlsImportWarning(json) ?: parsed.insecureTlsImportWarning(json)
+        }
     }
 
     suspend fun importProfile(
         rawInput: String,
         preferredName: String? = null,
         allowInsecureTlsForProfile: Boolean = false,
+        excludeInsecureTlsOptions: Boolean = false,
     ): Profile {
         val settings = settingsRepository.current()
-        val effectiveAllowInsecureTls = settings.expert.allowInsecureTls || allowInsecureTlsForProfile
+        val effectiveAllowInsecureTls = settings.expert.allowInsecureTls || allowInsecureTlsForProfile || excludeInsecureTlsOptions
         val resolvedPreferredName = preferredName?.trim().takeUnless { it.isNullOrBlank() }
         diagnosticsLogger.record(
             "profile",
             "import parse started bytes=${rawInput.toByteArray(Charsets.UTF_8).size}",
         )
-        val parsed =
+        val parsedRaw =
             withContext(Dispatchers.IO) {
                 runCatching {
                     parser.parseUserInput(
@@ -144,6 +176,12 @@ class ProfileRepository(
                     "import parse failed: ${error.javaClass.simpleName}: ${error.message.orEmpty()}",
                 )
             }.getOrThrow()
+        val parsed =
+            if (excludeInsecureTlsOptions) {
+                parsedRaw.withoutInsecureTlsOptions(json)
+            } else {
+                parsedRaw
+            }
         val importPlan =
             resolveImportProfilePlan(
                 parsed = parsed,
@@ -151,7 +189,7 @@ class ProfileRepository(
                     if (parsed.sourceType == ProfileSourceType.SUBSCRIPTION_URL) {
                         null
                     } else {
-                        withContext(Dispatchers.IO) {
+                        val parsedProfiles = withContext(Dispatchers.IO) {
                             runCatching {
                                 parser.parseSubscriptionProfiles(
                                     rawContent = rawInput,
@@ -172,6 +210,11 @@ class ProfileRepository(
                                 "local config group parse failed: ${error.javaClass.simpleName}: ${error.message.orEmpty()}",
                             )
                         }.getOrNull()
+                        if (excludeInsecureTlsOptions) {
+                            parsedProfiles?.withoutInsecureTlsOptions(json)
+                        } else {
+                            parsedProfiles
+                        }
                     },
             )
         if (importPlan is ImportProfilePlan.Multi) {
@@ -230,7 +273,7 @@ class ProfileRepository(
         }
         diagnosticsLogger.record("profile", "profile imported")
         if (parsed.sourceType == ProfileSourceType.SUBSCRIPTION_URL) {
-            return runCatching { refreshProfile(id) }
+            return runCatching { refreshProfile(id, excludeInsecureTlsOptions = excludeInsecureTlsOptions) }
                 .onFailure { error ->
                     runCatching { deleteProfile(id) }
                     diagnosticsLogger.record(
@@ -536,7 +579,10 @@ class ProfileRepository(
         )
     }
 
-    suspend fun refreshProfile(profileId: Long): Profile {
+    suspend fun refreshProfile(
+        profileId: Long,
+        excludeInsecureTlsOptions: Boolean = false,
+    ): Profile {
         val entity = dao.getById(profileId) ?: error("profile not found")
         require(entity.sourceType == ProfileSourceType.SUBSCRIPTION_URL.name) { "profile is not refreshable" }
         val secret = secretStore.read(entity.secretRef) ?: error("profile secret is missing")
@@ -581,30 +627,43 @@ class ProfileRepository(
             "subscription parse started bodyBytes=${response.body.orEmpty().toByteArray(Charsets.UTF_8).size}",
         )
         val profileInsecureTlsConsentGranted = secret.hasInsecureTlsConsent(json)
+        val strictParseFailedForInsecureTls =
+            withContext(Dispatchers.IO) {
+                runCatching {
+                    parser.parseSubscriptionProfiles(
+                        rawContent = response.body.orEmpty(),
+                        fallbackName = entity.name,
+                        allowPrivateOutboundHosts = settings.expert.allowPrivateOutboundHosts,
+                        allowHttpSubscriptionUrls = settings.expert.allowHttpConfigImports,
+                        allowInsecureTls = false,
+                    )
+                }.exceptionOrNull()
+                    ?.isInsecureTlsPolicyFailure() == true
+            }
         val subscriptionRequiresInsecureTlsConsent =
             shouldRequireInsecureTlsRefreshConsent(
                 allowInsecureTlsGlobally = settings.expert.allowInsecureTls,
                 profileInsecureTlsConsentGranted = profileInsecureTlsConsentGranted,
-                strictParseFailedForInsecureTls =
-                    withContext(Dispatchers.IO) {
-                        runCatching {
-                            parser.parseSubscriptionProfiles(
-                                rawContent = response.body.orEmpty(),
-                                fallbackName = entity.name,
-                                allowPrivateOutboundHosts = settings.expert.allowPrivateOutboundHosts,
-                                allowHttpSubscriptionUrls = settings.expert.allowHttpConfigImports,
-                                allowInsecureTls = false,
-                            )
-                        }.exceptionOrNull()
-                            ?.isInsecureTlsPolicyFailure() == true
-                    },
+                strictParseFailedForInsecureTls = strictParseFailedForInsecureTls,
             )
-        if (subscriptionRequiresInsecureTlsConsent) {
+        if (subscriptionRequiresInsecureTlsConsent && !excludeInsecureTlsOptions) {
+            val warning =
+                withContext(Dispatchers.IO) {
+                    runCatching {
+                        parser.parseSubscriptionProfiles(
+                            rawContent = response.body.orEmpty(),
+                            fallbackName = entity.name,
+                            allowPrivateOutboundHosts = settings.expert.allowPrivateOutboundHosts,
+                            allowHttpSubscriptionUrls = settings.expert.allowHttpConfigImports,
+                            allowInsecureTls = true,
+                        ).insecureTlsImportWarning(json)
+                    }.getOrNull()
+                }
             diagnosticsLogger.record("profile", "subscription requires insecure tls consent")
-            throw InsecureTlsProfileConsentRequiredException()
+            throw InsecureTlsProfileConsentRequiredException(warning = warning)
         }
-        val effectiveAllowInsecureTls = settings.expert.allowInsecureTls || profileInsecureTlsConsentGranted
-        val parsed =
+        val effectiveAllowInsecureTls = settings.expert.allowInsecureTls || profileInsecureTlsConsentGranted || excludeInsecureTlsOptions
+        val parsedRaw =
             withContext(Dispatchers.IO) {
                 runCatching {
                     parser.parseSubscriptionProfiles(
@@ -626,6 +685,12 @@ class ProfileRepository(
                     "subscription parse failed: ${error.javaClass.simpleName}: ${error.message.orEmpty()}",
                 )
             }.getOrThrow()
+        val parsed =
+            if (excludeInsecureTlsOptions) {
+                parsedRaw.withoutInsecureTlsOptions(json)
+            } else {
+                parsedRaw
+            }
         val subscriptionGroup = loadSubscriptionGroup(sourceUrl)
         val refreshPlan =
             planSubscriptionRefresh(

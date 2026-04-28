@@ -1,6 +1,10 @@
 package com.foxhole.beta.core.data
 
 import com.foxhole.beta.core.model.ProtocolHint
+import com.foxhole.beta.core.model.ParsedImport
+import com.foxhole.beta.core.model.ParsedSubscriptionImport
+import com.foxhole.beta.core.model.ParsedSubscriptionProfile
+import com.foxhole.beta.core.model.ProfileSourceType
 import com.foxhole.beta.core.model.StoredProfileProtocolOption
 import com.foxhole.beta.core.model.StoredProfileSecret
 import kotlinx.serialization.json.Json
@@ -146,4 +150,104 @@ class ProfileInsecureTlsSupportTest {
             ),
         )
     }
+
+    @Test
+    fun `warning describes insecure smart protocol and allows excluding it when secure options remain`() {
+        val parsed =
+            ParsedImport(
+                sourceType = ProfileSourceType.RAW_SINGBOX_JSON,
+                protocolHint = ProtocolHint.VLESS,
+                displayName = "Smart",
+                normalizedConfigJson = secureConfig(ProtocolHint.VLESS),
+                protocolOptions =
+                    listOf(
+                        option("vless", ProtocolHint.VLESS, secureConfig(ProtocolHint.VLESS)),
+                        option("trojan", ProtocolHint.TROJAN, insecureConfig(ProtocolHint.TROJAN)),
+                    ),
+                selectedProtocolOptionId = "trojan",
+            )
+
+        val warning = requireNotNull(parsed.insecureTlsImportWarning(json))
+        val filtered = parsed.withoutInsecureTlsOptions(json)
+
+        assertTrue(warning.canExcludeAndApply)
+        assertTrue(warning.issues.any { issue -> issue.protocolLabel == "TROJAN" })
+        assertFalse(filtered.requiresInsecureTls(json))
+        assertTrue(filtered.protocolOptions.single().id == "vless")
+        assertTrue(filtered.selectedProtocolOptionId == "vless")
+    }
+
+    @Test
+    fun `exclude insecure tls drops fully insecure subscription profiles`() {
+        val parsed =
+            ParsedSubscriptionImport(
+                displayName = "Smart",
+                profiles =
+                    listOf(
+                        ParsedSubscriptionProfile(
+                            displayName = "Secure",
+                            protocolHint = ProtocolHint.VLESS,
+                            normalizedConfigJson = secureConfig(ProtocolHint.VLESS),
+                            protocolOptions =
+                                listOf(
+                                    option("vless", ProtocolHint.VLESS, secureConfig(ProtocolHint.VLESS)),
+                                ),
+                            selectedProtocolOptionId = "vless",
+                        ),
+                        ParsedSubscriptionProfile(
+                            displayName = "Unsafe",
+                            protocolHint = ProtocolHint.HYSTERIA2,
+                            normalizedConfigJson = insecureConfig(ProtocolHint.HYSTERIA2),
+                            protocolOptions =
+                                listOf(
+                                    option("hysteria2", ProtocolHint.HYSTERIA2, insecureConfig(ProtocolHint.HYSTERIA2)),
+                                ),
+                            selectedProtocolOptionId = "hysteria2",
+                        ),
+                    ),
+            )
+
+        val filtered = parsed.withoutInsecureTlsOptions(json)
+
+        assertTrue(filtered.profiles.single().displayName == "Secure")
+        assertFalse(filtered.requiresInsecureTls(json))
+    }
+
+    private fun option(
+        id: String,
+        protocolHint: ProtocolHint,
+        normalizedConfigJson: String,
+    ): StoredProfileProtocolOption =
+        StoredProfileProtocolOption(
+            id = id,
+            displayName = protocolHint.name,
+            protocolHint = protocolHint,
+            normalizedConfigJson = normalizedConfigJson,
+        )
+
+    private fun secureConfig(protocolHint: ProtocolHint): String =
+        """
+        {
+          "outbounds": [
+            {
+              "type": "${protocolHint.name.lowercase()}",
+              "tag": "proxy",
+              "tls": { "enabled": true }
+            }
+          ]
+        }
+        """.trimIndent()
+
+    private fun insecureConfig(protocolHint: ProtocolHint): String =
+        """
+        {
+          "outbounds": [
+            {
+              "type": "${protocolHint.name.lowercase()}",
+              "tag": "proxy",
+              "tls": { "enabled": true, "insecure": true }
+            }
+          ]
+        }
+        """.trimIndent()
 }

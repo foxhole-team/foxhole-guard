@@ -10,11 +10,12 @@ import android.os.SystemClock
 import androidx.lifecycle.viewModelScope
 import androidx.core.content.FileProvider
 import com.foxhole.beta.R
+import com.foxhole.beta.core.data.InsecureTlsImportWarning
+import com.foxhole.beta.core.data.InsecureTlsProfileConsentRequiredException
 import com.foxhole.beta.core.model.ConnectionState
 import com.foxhole.beta.core.model.InstalledAppOption
 import com.foxhole.beta.core.model.RoutingPresetSource
 import com.foxhole.beta.core.model.RoutingRuleAction
-import com.foxhole.beta.core.data.InsecureTlsProfileConsentRequiredException
 import com.foxhole.beta.core.notifications.ProfileRefreshResultNotifier
 import com.foxhole.beta.core.network.IpInfoFetchMode
 import com.foxhole.beta.vpn.FoxholeVpnRuntimeBridge
@@ -206,21 +207,27 @@ internal fun HomeViewModel.exportDiagnosticsInternal(file: File = createDiagnost
 
 internal fun HomeViewModel.importRawInternal(value: String) {
     viewModelScope.launch {
-        if (container.profileRepository.rawInputRequiresInsecureTls(value)) {
-            insecureTlsImportWarningMutable.value = InsecureTlsImportWarningState(rawInput = value)
+        val warning = container.profileRepository.rawInputInsecureTlsWarning(value)
+        if (warning != null) {
+            insecureTlsImportWarningMutable.value = warning.toUiState(rawInput = value)
             return@launch
         }
-        importRawWithInsecureTlsDecision(value, allowInsecureTlsForProfile = false)
+        importRawWithInsecureTlsDecision(
+            value = value,
+            allowInsecureTlsForProfile = false,
+            excludeInsecureTlsOptions = false,
+        )
     }
 }
 
-internal fun HomeViewModel.confirmInsecureTlsImportInternal() {
+internal fun HomeViewModel.confirmInsecureTlsImportInternal(excludeInsecureTlsOptions: Boolean = false) {
     val pending = insecureTlsImportWarningMutable.value ?: return
     insecureTlsImportWarningMutable.value = null
     viewModelScope.launch {
         importRawWithInsecureTlsDecision(
             value = pending.rawInput,
-            allowInsecureTlsForProfile = true,
+            allowInsecureTlsForProfile = !excludeInsecureTlsOptions,
+            excludeInsecureTlsOptions = excludeInsecureTlsOptions,
         )
     }
 }
@@ -232,11 +239,13 @@ internal fun HomeViewModel.dismissInsecureTlsImportWarningInternal() {
 private suspend fun HomeViewModel.importRawWithInsecureTlsDecision(
     value: String,
     allowInsecureTlsForProfile: Boolean,
+    excludeInsecureTlsOptions: Boolean,
 ) {
     runCatching {
         container.profileRepository.importProfile(
             rawInput = value,
             allowInsecureTlsForProfile = allowInsecureTlsForProfile,
+            excludeInsecureTlsOptions = excludeInsecureTlsOptions,
         )
     }.onSuccess { imported ->
         container.connectionController.setActiveProfile(imported.id)
@@ -244,12 +253,21 @@ private suspend fun HomeViewModel.importRawWithInsecureTlsDecision(
         emitSuccess(getApplication<Application>().getString(R.string.profile_imported))
     }.onFailure { error ->
         if (error is InsecureTlsProfileConsentRequiredException) {
-            insecureTlsImportWarningMutable.value = InsecureTlsImportWarningState(rawInput = value)
+            val warning = error.warning ?: container.profileRepository.rawInputInsecureTlsWarning(value)
+            insecureTlsImportWarningMutable.value =
+                warning?.toUiState(rawInput = value) ?: InsecureTlsImportWarningState(rawInput = value)
         } else {
             handleProfileImportFailure(value, error)
         }
     }
 }
+
+private fun InsecureTlsImportWarning.toUiState(rawInput: String): InsecureTlsImportWarningState =
+    InsecureTlsImportWarningState(
+        rawInput = rawInput,
+        protocolLabels = issues.map { issue -> issue.protocolLabel },
+        canExcludeAndApply = canExcludeAndApply,
+    )
 
 internal fun HomeViewModel.profileImportFailureMessageInternal(
     rawInput: String,

@@ -23,6 +23,7 @@ class InsecureTlsBadgePresentationTest {
                 showInsecureTlsBadge = true,
                 profileRequiresInsecureTls = true,
                 selectedOptionRequiresInsecureTls = false,
+                hasMultipleProtocolOptions = false,
             ),
         )
         assertTrue(
@@ -30,6 +31,19 @@ class InsecureTlsBadgePresentationTest {
                 showInsecureTlsBadge = true,
                 profileRequiresInsecureTls = false,
                 selectedOptionRequiresInsecureTls = true,
+                hasMultipleProtocolOptions = true,
+            ),
+        )
+    }
+
+    @Test
+    fun `smart profile badge follows the selected protocol marker instead of the aggregate profile flag`() {
+        assertFalse(
+            shouldShowInsecureTlsProfileBadge(
+                showInsecureTlsBadge = true,
+                profileRequiresInsecureTls = true,
+                selectedOptionRequiresInsecureTls = false,
+                hasMultipleProtocolOptions = true,
             ),
         )
     }

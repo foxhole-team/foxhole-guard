@@ -504,15 +504,33 @@ fun FoxholeApp(
         )
     }
 
-    insecureTlsImportWarning?.let {
+    insecureTlsImportWarning?.let { warning ->
+        val protocolLabels = warning.protocolLabels.ifEmpty { listOf("VPN") }
+        val issueLineValues = mutableListOf<String>()
+        for (protocolLabel in protocolLabels) {
+            issueLineValues += stringResource(R.string.insecure_tls_import_issue, protocolLabel)
+        }
+        val issueLines = issueLineValues.joinToString(separator = "\n")
         ConfirmDialog(
             title = stringResource(R.string.insecure_tls_import_warning_title),
-            body = stringResource(R.string.insecure_tls_import_warning_body),
-            confirmLabel = stringResource(R.string.yes_label),
+            body = stringResource(R.string.insecure_tls_import_warning_body) + "\n\n" + issueLines,
+            confirmLabel = stringResource(R.string.insecure_tls_import_apply),
             icon = Icons.Outlined.WarningAmber,
             iconTint = FoxholeWarningAccent,
             iconContainerColor = FoxholeWarningAccent.copy(alpha = 0.14f),
-            dismissLabel = stringResource(R.string.no_label),
+            dismissLabel = stringResource(R.string.insecure_tls_import_cancel),
+            secondaryLabel =
+                if (warning.canExcludeAndApply) {
+                    stringResource(R.string.insecure_tls_import_exclude_and_apply)
+                } else {
+                    null
+                },
+            onSecondary =
+                if (warning.canExcludeAndApply) {
+                    viewModel::excludeInsecureTlsAndImport
+                } else {
+                    null
+                },
             dismissOnBackPress = false,
             dismissOnClickOutside = false,
             onDismiss = viewModel::dismissInsecureTlsImportWarning,

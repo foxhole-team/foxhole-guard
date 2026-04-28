@@ -93,8 +93,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.text.DateFormat
 
-private val CompactProtocolSelectorMinWidth = 170.dp
-private val CompactProtocolSelectorMaxWidth = 318.dp
+private val CompactProtocolSelectorMinWidth = 196.dp
+private val CompactProtocolSelectorMaxWidth = 340.dp
 private val RegularProtocolSelectorMinWidth = 206.dp
 private val RegularProtocolSelectorMaxWidth = 354.dp
 
@@ -110,6 +110,8 @@ internal fun ProtocolMetadataRow(
     compact: Boolean = false,
     animateSelection: Boolean = false,
     latencyByOptionId: Map<String, Long> = emptyMap(),
+    downProtocolOptionIds: Set<String> = emptySet(),
+    latencyUnavailableOptionIds: Set<String> = emptySet(),
     recommendedProtocolOptionId: String? = null,
     recommendedProtocolOptionIds: Set<String> = recommendedProtocolOptionId?.let(::setOf).orEmpty(),
     selectorMenuInfoText: String? = null,
@@ -130,7 +132,18 @@ internal fun ProtocolMetadataRow(
             showInsecureTlsBadge = showInsecureTlsBadge,
             profileRequiresInsecureTls = requiresInsecureTls,
             selectedOptionRequiresInsecureTls = selectedOption?.requiresInsecureTls == true,
+            hasMultipleProtocolOptions = supportedProtocolOptions.size > 1,
         )
+    val selectedLatencyOptionId =
+        selectedOption?.id
+            ?: selectedProtocolOptionId
+            ?: protocolLatencyOptionId(protocol)
+    val selectedLatencyMs = selectedLatencyOptionId?.let(latencyByOptionId::get)
+    val selectedLatencyDown = selectedLatencyOptionId in downProtocolOptionIds
+    val selectedLatencyUnavailable =
+        selectedLatencyOptionId != null &&
+            selectedLatencyMs == null &&
+            selectedLatencyOptionId in latencyUnavailableOptionIds
     Row(
         modifier = if (expand) modifier.fillMaxWidth() else modifier,
         horizontalArrangement = Arrangement.spacedBy(if (compact) 8.dp else 12.dp),
@@ -146,6 +159,12 @@ internal fun ProtocolMetadataRow(
             animateSelection = animateSelection,
             recommendedProtocolOptionId = recommendedProtocolOptionId,
             recommendedProtocolOptionIds = recommendedProtocolOptionIds,
+            latencyByOptionId = latencyByOptionId,
+            downProtocolOptionIds = downProtocolOptionIds,
+            latencyUnavailableOptionIds = latencyUnavailableOptionIds,
+            selectedLatencyMs = selectedLatencyMs,
+            selectedLatencyDown = selectedLatencyDown,
+            selectedLatencyUnavailable = selectedLatencyUnavailable,
             dropdownInfoText = selectorMenuInfoText,
             selectorBorderColor = selectorBorderColor,
         )
@@ -201,8 +220,21 @@ internal fun shouldShowInsecureTlsProfileBadge(
     showInsecureTlsBadge: Boolean,
     profileRequiresInsecureTls: Boolean,
     selectedOptionRequiresInsecureTls: Boolean,
+    hasMultipleProtocolOptions: Boolean = false,
 ): Boolean =
-    showInsecureTlsBadge && (profileRequiresInsecureTls || selectedOptionRequiresInsecureTls)
+    showInsecureTlsBadge && (selectedOptionRequiresInsecureTls || (profileRequiresInsecureTls && !hasMultipleProtocolOptions))
+
+internal fun selectedProtocolRequiresInsecureTls(profile: Profile): Boolean {
+    val supportedProtocolOptions = MultiProtocolProfileSupport.supportedOptions(profile.protocolOptions)
+    if (supportedProtocolOptions.size > 1) {
+        val selectedOption =
+            supportedProtocolOptions.firstOrNull { option -> option.id == profile.selectedProtocolOptionId }
+                ?: supportedProtocolOptions.firstOrNull(ProfileProtocolOption::isSelected)
+                ?: supportedProtocolOptions.firstOrNull()
+        return selectedOption?.requiresInsecureTls == true
+    }
+    return profile.requiresInsecureTls || supportedProtocolOptions.firstOrNull()?.requiresInsecureTls == true
+}
 
 @Composable
 internal fun InsecureTlsProfileBadge(
@@ -268,11 +300,26 @@ private fun ProtocolMarkOrSelector(
     animateSelection: Boolean,
     recommendedProtocolOptionId: String?,
     recommendedProtocolOptionIds: Set<String>,
+    latencyByOptionId: Map<String, Long>,
+    downProtocolOptionIds: Set<String>,
+    latencyUnavailableOptionIds: Set<String>,
+    selectedLatencyMs: Long?,
+    selectedLatencyDown: Boolean,
+    selectedLatencyUnavailable: Boolean,
     dropdownInfoText: String?,
     selectorBorderColor: Color?,
 ) {
     if (protocolOptions.size < 2 || onProtocolOptionSelected == null) {
-        ProtocolMark(protocol = protocol, compact = compact)
+        ProtocolMark(
+            protocol = protocol,
+            compact = compact,
+            tintOverride =
+                protocolLatencyIconTint(
+                    latencyMs = selectedLatencyMs,
+                    down = selectedLatencyDown,
+                    unavailable = selectedLatencyUnavailable,
+                ),
+        )
         return
     }
 
@@ -325,6 +372,11 @@ private fun ProtocolMarkOrSelector(
                                 compact = compact,
                                 recommended = animatedOption.id in recommendedProtocolOptionIds,
                                 topRecommended = animatedOption.id == recommendedProtocolOptionId,
+                                latencyMs = latencyByOptionId[animatedOption.id],
+                                latencyDown = animatedOption.id in downProtocolOptionIds,
+                                latencyUnavailable =
+                                    animatedOption.id !in latencyByOptionId &&
+                                        animatedOption.id in latencyUnavailableOptionIds,
                             )
                         }
                     } else {
@@ -333,6 +385,11 @@ private fun ProtocolMarkOrSelector(
                             compact = compact,
                             recommended = selected.id in recommendedProtocolOptionIds,
                             topRecommended = selected.id == recommendedProtocolOptionId,
+                            latencyMs = latencyByOptionId[selected.id],
+                            latencyDown = selected.id in downProtocolOptionIds,
+                            latencyUnavailable =
+                                selected.id !in latencyByOptionId &&
+                                    selected.id in latencyUnavailableOptionIds,
                         )
                     }
                 }
@@ -431,6 +488,11 @@ private fun ProtocolMarkOrSelector(
                             compact = compact,
                             recommended = option.id in recommendedProtocolOptionIds,
                             topRecommended = option.id == recommendedProtocolOptionId,
+                            latencyMs = latencyByOptionId[option.id],
+                            latencyDown = option.id in downProtocolOptionIds,
+                            latencyUnavailable =
+                                option.id !in latencyByOptionId &&
+                                    option.id in latencyUnavailableOptionIds,
                         )
                     }
                 }
@@ -446,13 +508,25 @@ internal fun ProtocolSelectorLabel(
     compact: Boolean = false,
     recommended: Boolean = false,
     topRecommended: Boolean = false,
+    latencyMs: Long? = null,
+    latencyDown: Boolean = false,
+    latencyUnavailable: Boolean = false,
 ) {
     Row(
         modifier = modifier,
         horizontalArrangement = Arrangement.spacedBy(if (compact) 4.dp else 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        ProtocolMark(protocol = option.protocolHint, compact = compact)
+        ProtocolMark(
+            protocol = option.protocolHint,
+            compact = compact,
+            tintOverride =
+                protocolLatencyIconTint(
+                    latencyMs = latencyMs,
+                    down = latencyDown,
+                    unavailable = latencyUnavailable,
+                ),
+        )
         protocolSelectorSecondaryLabel(option)?.let { secondaryLabel ->
             Text(
                 text = secondaryLabel,
@@ -474,6 +548,12 @@ internal fun ProtocolSelectorLabel(
         if (recommended) {
             ProtocolRecommendationStars(
                 topRecommended = topRecommended,
+                compact = compact,
+                modifier = Modifier.offset(y = if (compact) (-4).dp else (-3).dp),
+            )
+        }
+        if (option.requiresInsecureTls) {
+            ProtocolUnsafeStar(
                 compact = compact,
                 modifier = Modifier.offset(y = if (compact) (-4).dp else (-3).dp),
             )
@@ -503,15 +583,23 @@ private fun ProtocolRecommendationStars(
                         null
                     },
                 modifier = Modifier.size(if (compact) 9.dp else 10.dp),
-                tint =
-                    if (index == 0) {
-                        FoxholePositiveAccent
-                    } else {
-                        FoxholeWarningAccent
-                    },
+                tint = FoxholePositiveAccent,
             )
         }
     }
+}
+
+@Composable
+private fun ProtocolUnsafeStar(
+    compact: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    Icon(
+        imageVector = Icons.Outlined.Star,
+        contentDescription = stringResource(R.string.smart_profile_legend_unsafe),
+        modifier = modifier.size(if (compact) 9.dp else 10.dp),
+        tint = FoxholeUnsafeAccent,
+    )
 }
 
 @Composable
@@ -584,6 +672,21 @@ internal fun ProtocolLatencyPill(
         )
     }
 }
+
+@Composable
+internal fun protocolLatencyIconTint(
+    latencyMs: Long?,
+    down: Boolean = false,
+    unavailable: Boolean = false,
+): Color =
+    when (classifyVpnLatency(latencyMs = latencyMs, failed = down, unavailable = unavailable || latencyMs == null)) {
+        LatencyQuality.FAST -> FoxholePositiveAccent
+        LatencyQuality.NORMAL -> MaterialTheme.colorScheme.onSurfaceVariant
+        LatencyQuality.SLOW -> Color(0xFFE0B84A)
+        LatencyQuality.VERY_SLOW -> Color(0xFFE28131)
+        LatencyQuality.FAILED -> Color(0xFFC95353)
+        LatencyQuality.UNAVAILABLE -> MaterialTheme.colorScheme.onSurfaceVariant
+    }
 
 @Composable
 private fun SubscriptionExpiryText(
@@ -666,6 +769,7 @@ private fun rememberProtocolSelectorFixedWidth(
     val markSpacingPx = with(density) { if (compact) 4.dp.roundToPx() else 8.dp.roundToPx() }
     val secondarySpacingPx = with(density) { if (compact) 4.dp.roundToPx() else 8.dp.roundToPx() }
     val recommendationStarsPx = with(density) { if (compact) 24.dp.roundToPx() else 27.dp.roundToPx() }
+    val unsafeStarPx = with(density) { if (compact) 13.dp.roundToPx() else 15.dp.roundToPx() }
     val chevronSizePx = with(density) { if (compact) 17.dp.roundToPx() else 18.dp.roundToPx() }
     val chevronGapPx = with(density) { if (compact) 4.dp.roundToPx() else 6.dp.roundToPx() }
     val leadingPaddingPx = with(density) { if (compact) 10.dp.roundToPx() else 14.dp.roundToPx() }
@@ -686,7 +790,12 @@ private fun rememberProtocolSelectorFixedWidth(
                             style = secondaryStyle,
                         ).size.width
                 } ?: 0
-            iconSizePx + markSpacingPx + primaryWidth + secondaryWidth + recommendationStarsPx
+            iconSizePx +
+                markSpacingPx +
+                primaryWidth +
+                secondaryWidth +
+                recommendationStarsPx +
+                (if (option.requiresInsecureTls) unsafeStarPx else 0)
         } ?: 0
     val estimatedWidth =
         with(density) {
@@ -723,6 +832,12 @@ internal fun protocolDisplayLabel(protocol: ProtocolHint): String =
         ProtocolHint.SING_BOX -> "SING-BOX"
         ProtocolHint.UNKNOWN -> "UNKNOWN"
     }
+
+internal fun protocolLatencyOptionId(protocol: ProtocolHint): String? =
+    protocol
+        .takeIf { hint -> hint !in setOf(ProtocolHint.UNKNOWN, ProtocolHint.SING_BOX) }
+        ?.name
+        ?.lowercase()
 
 @Composable
 internal fun SelectedAppRow(

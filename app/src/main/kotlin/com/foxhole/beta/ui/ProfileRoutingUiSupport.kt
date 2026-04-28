@@ -668,8 +668,9 @@ internal fun ProtocolMark(
     protocol: ProtocolHint,
     modifier: Modifier = Modifier,
     compact: Boolean = false,
+    tintOverride: Color? = null,
 ) {
-    val (_, tint, label) = protocolMarkVisuals(protocol)
+    val (_, _, label) = protocolMarkVisuals(protocol)
     val labelColor =
         if (protocol == ProtocolHint.UNKNOWN) {
             MaterialTheme.colorScheme.onSurfaceVariant
@@ -681,7 +682,7 @@ internal fun ProtocolMark(
         horizontalArrangement = Arrangement.spacedBy(if (compact) 4.dp else 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        ProtocolMarkIcon(protocol = protocol, compact = compact)
+        ProtocolMarkIcon(protocol = protocol, compact = compact, tintOverride = tintOverride)
         Text(
             text = label,
             style =
@@ -709,11 +710,12 @@ internal fun ProtocolMarkIcon(
     compact: Boolean = false,
     tintOverride: Color? = null,
 ) {
-    val (icon, tint, label) = protocolMarkVisuals(protocol)
+    val (icon, _, label) = protocolMarkVisuals(protocol)
+    val defaultTint = MaterialTheme.colorScheme.onSurfaceVariant
     Icon(
         imageVector = icon,
         contentDescription = label,
-        tint = tintOverride ?: tint,
+        tint = tintOverride ?: defaultTint,
         modifier = modifier.size(if (compact) 13.dp else 18.dp),
     )
 }

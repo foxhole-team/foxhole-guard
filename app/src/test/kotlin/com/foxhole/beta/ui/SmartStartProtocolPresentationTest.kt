@@ -1,5 +1,6 @@
 package com.foxhole.beta.ui
 
+import com.foxhole.beta.core.model.ProtocolHint
 import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -100,6 +101,15 @@ class SmartStartProtocolPresentationTest {
     }
 
     @Test
+    fun `single profile protocol latency keys match dashboard metric keys`() {
+        assertEquals("vless", protocolLatencyOptionId(ProtocolHint.VLESS))
+        assertEquals("shadowsocks", protocolLatencyOptionId(ProtocolHint.SHADOWSOCKS))
+        assertEquals("hysteria2", protocolLatencyOptionId(ProtocolHint.HYSTERIA2))
+        assertEquals(null, protocolLatencyOptionId(ProtocolHint.UNKNOWN))
+        assertEquals(null, protocolLatencyOptionId(ProtocolHint.SING_BOX))
+    }
+
+    @Test
     fun `dashboard menu keeps compact status rows without detailed metrics table`() {
         val layout = resolveSmartStartProtocolMenuLayout(showMetricsTable = false)
 
@@ -142,7 +152,7 @@ class SmartStartProtocolPresentationTest {
         assertEquals("City:", stringValue(enStrings, "home_network_city_label"))
         assertEquals("IP:", stringValue(enStrings, "home_network_ip_label"))
         assertEquals("Provider:", stringValue(enStrings, "home_network_provider_label"))
-        assertEquals("Connection time:", stringValue(enStrings, "home_network_connect_time_label"))
+        assertEquals("Connected:", stringValue(enStrings, "home_network_connect_time_label"))
         assertEquals("Traffic volume over:", stringValue(enStrings, "home_total_traffic_title"))
         assertEquals("Manage available VPN protocols", stringValue(enStrings, "smart_profile_menu_title"))
         assertEquals("Protocol", stringValue(enStrings, "smart_profile_menu_protocol_column"))
@@ -159,13 +169,16 @@ class SmartStartProtocolPresentationTest {
             "Tap a protocol to turn it on or off.\\nRefresh periodically to improve connection quality.",
             stringValue(enStrings, "smart_profile_metrics_refresh_compact_hint"),
         )
-        assertEquals("Favorite profile", stringValue(enStrings, "smart_profile_legend_favorite"))
+        assertEquals("Current", stringValue(enStrings, "smart_profile_legend_current"))
+        assertEquals("Favorite", stringValue(enStrings, "smart_profile_legend_favorite"))
         assertEquals(
-            "Recommended profile",
+            "Recommended",
             stringValue(enStrings, "smart_profile_legend_reconnect_recommended"),
         )
+        assertEquals("Unsafe", stringValue(enStrings, "smart_profile_legend_unsafe"))
+        assertEquals("Legend", stringValue(enStrings, "smart_profile_legend_title"))
         assertEquals("Refreshing", stringValue(enStrings, "smart_profile_metrics_refreshing"))
-        assertEquals("current", stringValue(enStrings, "smart_profile_menu_active_badge"))
+        assertEquals("Current", stringValue(enStrings, "smart_profile_menu_active_badge"))
         assertEquals("Updated: %1\$s", stringValue(enStrings, "smart_profile_metrics_last_updated"))
         assertEquals("Never updated", stringValue(enStrings, "smart_profile_metrics_never_updated"))
         assertEquals("Disabled", stringValue(enStrings, "smart_start_protocol_status_disabled"))
@@ -177,11 +190,11 @@ class SmartStartProtocolPresentationTest {
         assertEquals("Информация о сервере VPN", stringValue(ruStrings, "home_network_connection_info_title"))
         assertEquals("Текущий IP адрес", stringValue(ruStrings, "home_network_current_ip_title"))
         assertEquals("Статус соединения", stringValue(ruStrings, "home_network_profile_info_title"))
-        assertEquals("Country:", stringValue(ruStrings, "home_network_country_label"))
-        assertEquals("City:", stringValue(ruStrings, "home_network_city_label"))
+        assertEquals("Страна:", stringValue(ruStrings, "home_network_country_label"))
+        assertEquals("Город:", stringValue(ruStrings, "home_network_city_label"))
         assertEquals("IP:", stringValue(ruStrings, "home_network_ip_label"))
-        assertEquals("Provider:", stringValue(ruStrings, "home_network_provider_label"))
-        assertEquals("Connection time:", stringValue(ruStrings, "home_network_connect_time_label"))
+        assertEquals("Провайдер:", stringValue(ruStrings, "home_network_provider_label"))
+        assertEquals("Подключено:", stringValue(ruStrings, "home_network_connect_time_label"))
         assertEquals("Объем трафика за:", stringValue(ruStrings, "home_total_traffic_title"))
         assertEquals("Управление доступными протоколами VPN", stringValue(ruStrings, "smart_profile_menu_title"))
         assertEquals("Протокол", stringValue(ruStrings, "smart_profile_menu_protocol_column"))
@@ -198,13 +211,16 @@ class SmartStartProtocolPresentationTest {
             "Нажмите на протокол, чтобы включить или отключить его.\\nПериодически обновляйте для улучшения коннекта.",
             stringValue(ruStrings, "smart_profile_metrics_refresh_compact_hint"),
         )
-        assertEquals("Избранный профиль", stringValue(ruStrings, "smart_profile_legend_favorite"))
+        assertEquals("Текущий", stringValue(ruStrings, "smart_profile_legend_current"))
+        assertEquals("Избранный", stringValue(ruStrings, "smart_profile_legend_favorite"))
         assertEquals(
-            "Рекомендованный профиль",
+            "Рекомендованный",
             stringValue(ruStrings, "smart_profile_legend_reconnect_recommended"),
         )
+        assertEquals("Не безопасно", stringValue(ruStrings, "smart_profile_legend_unsafe"))
+        assertEquals("Легенда", stringValue(ruStrings, "smart_profile_legend_title"))
         assertEquals("Обновление", stringValue(ruStrings, "smart_profile_metrics_refreshing"))
-        assertEquals("current", stringValue(ruStrings, "smart_profile_menu_active_badge"))
+        assertEquals("Текущий", stringValue(ruStrings, "smart_profile_menu_active_badge"))
         assertEquals("Обновлено: %1\$s", stringValue(ruStrings, "smart_profile_metrics_last_updated"))
         assertEquals("Никогда не обновлялся", stringValue(ruStrings, "smart_profile_metrics_never_updated"))
         assertEquals("Отключено", stringValue(ruStrings, "smart_start_protocol_status_disabled"))

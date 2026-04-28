@@ -8,8 +8,10 @@ import android.os.VibrationEffect
 import android.os.Vibrator
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.FastOutLinearInEasing
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -77,10 +79,13 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -95,7 +100,6 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.getSystemService
 import com.foxhole.beta.R
 import com.foxhole.beta.ui.theme.LocalFoxholeUiPalette
-import kotlinx.coroutines.delay
 
 internal val ScreenHorizontalPadding = 16.dp
 internal val ScreenVerticalPadding = 10.dp
@@ -107,6 +111,9 @@ internal val HomeTopStatusInnerSurfaceMinHeight = 74.dp
 internal val HomeTopStatusInnerHorizontalPadding = 10.dp
 internal val HomeTopStatusInnerVerticalPadding = 10.dp
 internal val FoxholeTopBarBannerPadding = 86.dp
+
+internal val FoxholeDialogShape = RoundedCornerShape(24.dp)
+internal val FoxholeDropdownShape = RoundedCornerShape(18.dp)
 
 private val FoxholeBannerShellInset = 8.dp
 
@@ -127,6 +134,7 @@ internal object FoxholeMotionTokens {
 internal val FoxholePositiveAccent = Color(0xFF2F9E6A)
 internal val FoxholeInfoAccent = Color(0xFF6288AE)
 internal val FoxholeWarningAccent = Color(0xFFE0B84A)
+internal val FoxholeUnsafeAccent = Color(0xFFE28131)
 private val FoxholeErrorAccent = Color(0xFFC63C3C)
 private const val FoxholeTopBarContainerAlpha = 0.90f
 
@@ -232,6 +240,7 @@ internal data class FoxholeBannerEvent(
     val actionLabel: String? = null,
     val action: FoxholeBannerAction? = null,
     val durationMillis: Long? = null,
+    val expiresAtElapsedMs: Long? = null,
 )
 
 internal enum class FoxholeBannerAction {
@@ -279,6 +288,7 @@ internal data class FoxholeBannerVisuals(
     val tone: FoxholeBannerTone,
     override val actionLabel: String? = null,
     val durationMillis: Long? = null,
+    val expiresAtElapsedMs: Long? = null,
     override val withDismissAction: Boolean = false,
     override val duration: SnackbarDuration =
         if (durationMillis != null) {
@@ -298,6 +308,7 @@ internal suspend fun SnackbarHostState.showBanner(
     tone: FoxholeBannerTone,
     actionLabel: String? = null,
     durationMillis: Long? = null,
+    expiresAtElapsedMs: Long? = null,
 ): SnackbarResult =
     showSnackbar(
         visuals =
@@ -306,6 +317,7 @@ internal suspend fun SnackbarHostState.showBanner(
                 tone = tone,
                 actionLabel = actionLabel,
                 durationMillis = durationMillis,
+                expiresAtElapsedMs = expiresAtElapsedMs,
             ),
     )
 
@@ -315,7 +327,41 @@ internal suspend fun SnackbarHostState.showBanner(event: FoxholeBannerEvent): Sn
         tone = event.tone,
         actionLabel = event.actionLabel,
         durationMillis = event.durationMillis,
+        expiresAtElapsedMs = event.expiresAtElapsedMs,
     )
+
+@Composable
+internal fun rememberDeadlineProgress(
+    expiresAtElapsedMs: Long?,
+    totalDurationMs: Long,
+    onExpired: () -> Unit = {},
+): Float {
+    val progress = remember { Animatable(0f) }
+    val latestOnExpired = rememberUpdatedState(onExpired)
+    LaunchedEffect(expiresAtElapsedMs, totalDurationMs) {
+        if (expiresAtElapsedMs == null) {
+            progress.snapTo(0f)
+            return@LaunchedEffect
+        }
+        val remainingMs = (expiresAtElapsedMs - SystemClock.elapsedRealtime()).coerceAtLeast(0L)
+        val startProgress =
+            (remainingMs.toFloat() / totalDurationMs.coerceAtLeast(1L).toFloat())
+                .coerceIn(0f, 1f)
+        progress.snapTo(startProgress)
+        if (remainingMs > 0L) {
+            progress.animateTo(
+                targetValue = 0f,
+                animationSpec =
+                    tween(
+                        durationMillis = remainingMs.coerceAtMost(Int.MAX_VALUE.toLong()).toInt(),
+                        easing = LinearEasing,
+                    ),
+            )
+        }
+        latestOnExpired.value()
+    }
+    return progress.value
+}
 
 @Composable
 private fun FoxholeBannerHost(
@@ -390,12 +436,18 @@ private fun FoxholeBanner(
             FoxholeBannerTone.ERROR -> Icons.Outlined.ErrorOutline
             FoxholeBannerTone.SUCCESS -> Icons.Outlined.CheckCircle
         }
-    LaunchedEffect(data, visuals?.durationMillis) {
-        visuals?.durationMillis?.let { durationMillis ->
-            delay(durationMillis)
-            data.dismiss()
+    val expiresAtElapsedMs =
+        remember(data, visuals?.expiresAtElapsedMs, visuals?.durationMillis) {
+            visuals?.expiresAtElapsedMs ?: visuals?.durationMillis?.let { durationMillis ->
+                SystemClock.elapsedRealtime() + durationMillis
+            }
         }
-    }
+    val countdownProgress =
+        rememberDeadlineProgress(
+            expiresAtElapsedMs = expiresAtElapsedMs,
+            totalDurationMs = visuals?.durationMillis ?: 1L,
+            onExpired = data::dismiss,
+        )
 
     Surface(
         modifier =
@@ -420,48 +472,63 @@ private fun FoxholeBanner(
             shadowElevation = 0.dp,
             border = BorderStroke(1.dp, Color.White.copy(alpha = 0.12f)),
         ) {
-            Row(
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 14.dp, vertical = 12.dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    tint = contentColor,
-                )
-                Text(
-                    text = visuals?.message ?: data.visuals.message,
-                    modifier = Modifier.weight(1f),
-                    color = contentColor,
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Medium,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                visuals?.actionLabel?.let { label ->
+            Box(modifier = Modifier.fillMaxWidth()) {
+                Row(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 14.dp, vertical = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        tint = contentColor,
+                    )
+                    Text(
+                        text = visuals?.message ?: data.visuals.message,
+                        modifier = Modifier.weight(1f),
+                        color = contentColor,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    visuals?.actionLabel?.let { label ->
+                        IconButton(
+                            onClick = data::performAction,
+                            modifier = Modifier.size(28.dp),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.Check,
+                                contentDescription = label,
+                                tint = contentColor,
+                            )
+                        }
+                    }
                     IconButton(
-                        onClick = data::performAction,
+                        onClick = data::dismiss,
                         modifier = Modifier.size(28.dp),
                     ) {
                         Icon(
-                            imageVector = Icons.Outlined.Check,
-                            contentDescription = label,
+                            imageVector = Icons.Outlined.Close,
+                            contentDescription = stringResource(R.string.close),
                             tint = contentColor,
                         )
                     }
                 }
-                IconButton(
-                    onClick = data::dismiss,
-                    modifier = Modifier.size(28.dp),
-                ) {
-                    Icon(
-                        imageVector = Icons.Outlined.Close,
-                        contentDescription = stringResource(R.string.close),
-                        tint = contentColor,
+                if (expiresAtElapsedMs != null) {
+                    Box(
+                        modifier =
+                            Modifier
+                                .align(Alignment.BottomStart)
+                                .fillMaxWidth(countdownProgress.coerceIn(0f, 1f))
+                                .height(3.dp)
+                                .background(
+                                    color = contentColor.copy(alpha = 0.72f),
+                                    shape = RoundedCornerShape(999.dp),
+                                ),
                     )
                 }
             }
@@ -598,6 +665,10 @@ internal fun FoxholeDialogConfirmButton(
 }
 
 @Composable
+internal fun Modifier.foxholeDialogChrome(): Modifier =
+    this.shadow(elevation = 18.dp, shape = FoxholeDialogShape, clip = false)
+
+@Composable
 internal fun FoxholeCard(
     modifier: Modifier = Modifier,
     onClick: (() -> Unit)? = null,
@@ -720,16 +791,16 @@ internal fun FoxholeDropdownMenu(
     DropdownMenu(
         expanded = expanded,
         onDismissRequest = onDismissRequest,
-        modifier = modifier.widthIn(min = 236.dp, max = 392.dp),
+        modifier = modifier.widthIn(min = 188.dp, max = 392.dp),
         offset = offset,
-        shape = MaterialTheme.shapes.medium,
+        shape = FoxholeDropdownShape,
         containerColor = uiPalette.menuContainerColor,
         tonalElevation = 0.dp,
-        shadowElevation = 0.dp,
+        shadowElevation = 12.dp,
         border = BorderStroke(1.dp, uiPalette.menuBorderColor),
     ) {
         Column(
-            modifier = Modifier.clip(MaterialTheme.shapes.medium),
+            modifier = Modifier.clip(FoxholeDropdownShape),
             verticalArrangement = Arrangement.spacedBy(0.dp),
             content = content,
         )
@@ -754,7 +825,12 @@ internal fun FoxholeDropdownItem(
 ) {
     val uiPalette = LocalFoxholeUiPalette.current
     val selectedChrome = selected && highlightSelected
-    val containerColor = if (selectedChrome) selectedContainerColor ?: uiPalette.menuSelectedRowColor else Color.Transparent
+    val containerColor =
+        if (selectedChrome) {
+            selectedContainerColor ?: uiPalette.menuSelectedRowColor
+        } else {
+            Color.Transparent
+        }
     Card(
         onClick = onClick,
         modifier = modifier.fillMaxWidth().clip(shape),
@@ -805,10 +881,11 @@ internal fun foxholeDropdownItemShape(
     index: Int,
     lastIndex: Int,
     hasHeader: Boolean = false,
+    hasFooter: Boolean = false,
 ): Shape {
     val radius = 24.dp
     val roundTop = index == 0 && !hasHeader
-    val roundBottom = index == lastIndex
+    val roundBottom = index == lastIndex && !hasFooter
     return when {
         roundTop && roundBottom -> MaterialTheme.shapes.medium
         roundTop ->

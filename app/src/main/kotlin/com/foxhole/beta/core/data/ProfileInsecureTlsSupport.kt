@@ -4,6 +4,7 @@ import com.foxhole.beta.core.importer.ProfileImportParser
 import com.foxhole.beta.core.model.ParsedImport
 import com.foxhole.beta.core.model.ParsedSubscriptionImport
 import com.foxhole.beta.core.model.ParsedSubscriptionProfile
+import com.foxhole.beta.core.model.ProtocolHint
 import com.foxhole.beta.core.model.StoredProfileProtocolOption
 import com.foxhole.beta.core.model.StoredProfileSecret
 import kotlinx.coroutines.Dispatchers
@@ -17,7 +18,18 @@ import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.jsonPrimitive
 import java.util.Locale
 
-class InsecureTlsProfileConsentRequiredException : IllegalStateException(
+data class InsecureTlsImportIssue(
+    val protocolLabel: String,
+)
+
+data class InsecureTlsImportWarning(
+    val issues: List<InsecureTlsImportIssue>,
+    val canExcludeAndApply: Boolean,
+)
+
+class InsecureTlsProfileConsentRequiredException(
+    val warning: InsecureTlsImportWarning? = null,
+) : IllegalStateException(
     "insecure tls is not allowed without profile consent",
 )
 
@@ -76,6 +88,97 @@ internal fun ParsedSubscriptionProfile.requiresInsecureTls(json: Json): Boolean 
     normalizedConfigJson.requiresInsecureTls(json) ||
         protocolOptions.any { option -> option.normalizedConfigJson.requiresInsecureTls(json) }
 
+internal fun ParsedImport.insecureTlsImportWarning(json: Json): InsecureTlsImportWarning? {
+    val issues = protocolOptions.insecureTlsImportIssues(json)
+        .ifEmpty {
+            if (normalizedConfigJson?.requiresInsecureTls(json) == true) {
+                listOf(InsecureTlsImportIssue(protocolHint.importWarningLabel()))
+            } else {
+                emptyList()
+            }
+        }
+    if (issues.isEmpty()) {
+        return null
+    }
+    val secureOptionCount = protocolOptions.count { option -> !option.resolvedRequiresInsecureTls(json) }
+    return InsecureTlsImportWarning(
+        issues = issues,
+        canExcludeAndApply = protocolOptions.size > 1 && secureOptionCount > 0,
+    )
+}
+
+internal fun ParsedSubscriptionImport.insecureTlsImportWarning(json: Json): InsecureTlsImportWarning? {
+    val issues =
+        profiles
+            .flatMap { profile ->
+                profile.protocolOptions.insecureTlsImportIssues(json)
+                    .ifEmpty {
+                        if (profile.normalizedConfigJson.requiresInsecureTls(json)) {
+                            listOf(InsecureTlsImportIssue(profile.protocolHint.importWarningLabel()))
+                        } else {
+                            emptyList()
+                        }
+                    }
+            }
+            .distinctBy(InsecureTlsImportIssue::protocolLabel)
+    if (issues.isEmpty()) {
+        return null
+    }
+    val canExclude =
+        profiles.any { profile ->
+            profile.protocolOptions.size > 1 &&
+                profile.protocolOptions.any { option -> option.resolvedRequiresInsecureTls(json) } &&
+                profile.protocolOptions.any { option -> !option.resolvedRequiresInsecureTls(json) }
+        }
+    return InsecureTlsImportWarning(
+        issues = issues,
+        canExcludeAndApply = canExclude,
+    )
+}
+
+internal fun ParsedImport.withoutInsecureTlsOptions(json: Json): ParsedImport {
+    if (protocolOptions.isEmpty()) {
+        require(normalizedConfigJson?.requiresInsecureTls(json) != true) { "no secure protocols remain after excluding insecure tls" }
+        return this
+    }
+    val secureOptions = protocolOptions.filterNot { option -> option.resolvedRequiresInsecureTls(json) }
+    require(secureOptions.isNotEmpty()) { "no secure protocols remain after excluding insecure tls" }
+    val selectedOption =
+        secureOptions.firstOrNull { option -> option.id == selectedProtocolOptionId }
+            ?: secureOptions.first()
+    return copy(
+        protocolHint = selectedOption.protocolHint,
+        normalizedConfigJson = selectedOption.normalizedConfigJson,
+        protocolOptions = secureOptions,
+        selectedProtocolOptionId = selectedOption.id,
+    )
+}
+
+internal fun ParsedSubscriptionImport.withoutInsecureTlsOptions(json: Json): ParsedSubscriptionImport {
+    val secureProfiles = profiles.mapNotNull { profile -> profile.withoutInsecureTlsOptionsOrNull(json) }
+    require(secureProfiles.isNotEmpty()) { "no secure protocols remain after excluding insecure tls" }
+    return copy(profiles = secureProfiles)
+}
+
+private fun ParsedSubscriptionProfile.withoutInsecureTlsOptionsOrNull(json: Json): ParsedSubscriptionProfile? {
+    if (protocolOptions.isEmpty()) {
+        return takeUnless { normalizedConfigJson.requiresInsecureTls(json) }
+    }
+    val secureOptions = protocolOptions.filterNot { option -> option.resolvedRequiresInsecureTls(json) }
+    if (secureOptions.isEmpty()) {
+        return null
+    }
+    val selectedOption =
+        secureOptions.firstOrNull { option -> option.id == selectedProtocolOptionId }
+            ?: secureOptions.first()
+    return copy(
+        protocolHint = selectedOption.protocolHint,
+        normalizedConfigJson = selectedOption.normalizedConfigJson,
+        protocolOptions = secureOptions,
+        selectedProtocolOptionId = selectedOption.id,
+    )
+}
+
 internal fun StoredProfileSecret.withInsecureTlsMarkers(
     json: Json,
     forceRequiresInsecureTls: Boolean = false,
@@ -104,6 +207,27 @@ internal fun List<StoredProfileProtocolOption>.withInsecureTlsMarkers(json: Json
         option.copy(
             requiresInsecureTls = option.requiresInsecureTls || option.normalizedConfigJson.requiresInsecureTls(json),
         )
+    }
+
+private fun List<StoredProfileProtocolOption>.insecureTlsImportIssues(json: Json): List<InsecureTlsImportIssue> =
+    filter { option -> option.resolvedRequiresInsecureTls(json) }
+        .map { option -> InsecureTlsImportIssue(option.protocolHint.importWarningLabel()) }
+        .distinctBy(InsecureTlsImportIssue::protocolLabel)
+
+private fun StoredProfileProtocolOption.resolvedRequiresInsecureTls(json: Json): Boolean =
+    requiresInsecureTls || normalizedConfigJson.requiresInsecureTls(json)
+
+private fun ProtocolHint.importWarningLabel(): String =
+    when (this) {
+        ProtocolHint.VLESS -> "VLESS"
+        ProtocolHint.TROJAN -> "TROJAN"
+        ProtocolHint.SHADOWSOCKS -> "SHADOWSOCKS"
+        ProtocolHint.WIREGUARD -> "WIREGUARD"
+        ProtocolHint.HYSTERIA2 -> "HYSTERIA2"
+        ProtocolHint.VMESS -> "VMESS"
+        ProtocolHint.OUTLINE -> "OUTLINE"
+        ProtocolHint.SING_BOX -> "SING-BOX"
+        ProtocolHint.UNKNOWN -> "UNKNOWN"
     }
 
 internal fun String.requiresInsecureTls(json: Json): Boolean =

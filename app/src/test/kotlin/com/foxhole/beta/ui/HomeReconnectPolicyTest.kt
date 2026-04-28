@@ -16,6 +16,18 @@ class HomeReconnectPolicyTest {
     }
 
     @Test
+    fun `home route carries reconnect prompt deadline`() {
+        val routeState =
+            HomeUiState(
+                reconnectRequired = true,
+                profileReconnectPromptUntilElapsedMs = 42_000L,
+            ).toHomeRouteUiState()
+
+        assertTrue(routeState.reconnectRequired)
+        assertTrue(routeState.profileReconnectPromptUntilElapsedMs == 42_000L)
+    }
+
+    @Test
     fun `switching smart profile protocol while connected requires reconnect`() {
         assertTrue(
             isProfileReconnectRequired(
