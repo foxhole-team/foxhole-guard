@@ -256,6 +256,7 @@ fun FoxholeApp(
                         activeProfileId = state.activeProfileId,
                         excludedAutoConnectOptionIds = state.smartProfileExcludedOptionIdsByProfileId[profileId].orEmpty(),
                         rememberedSmartStartLatenciesByOptionId = state.smartStartRememberedLatency(profileId),
+                        downOptionIds = state.smartProfileDownOptionIds(profileId),
                         serverPingByOptionId = state.smartProfileServerPings(profileId),
                         serverPingUnavailableOptionIds = state.smartProfileServerPingUnavailable(profileId),
                         metricsUpdatedAtByOptionId = state.smartProfileMetricsUpdatedAt(profileId),

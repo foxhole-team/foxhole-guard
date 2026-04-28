@@ -274,6 +274,7 @@ internal fun activeLanProxySurface(state: HomeRouteUiState): HomeProxySurface? {
 internal fun resolveHomeDashboardProtocolPresentation(
     activeProfile: Profile?,
     autoConnect: AutoConnectUiState,
+    pinSelectionToProfile: Boolean = false,
 ): HomeDashboardProtocolPresentation {
     if (activeProfile == null) {
         return HomeDashboardProtocolPresentation(
@@ -283,13 +284,13 @@ internal fun resolveHomeDashboardProtocolPresentation(
         )
     }
     val selectedProtocolOptionId =
-        if (autoConnect.running) {
+        if (autoConnect.running && !pinSelectionToProfile) {
             autoConnect.currentOptionId ?: activeProfile.selectedProtocolOptionId
         } else {
             activeProfile.selectedProtocolOptionId
         }
     val protocolOptions =
-        if (autoConnect.running && autoConnect.options.isNotEmpty()) {
+        if (autoConnect.running && !pinSelectionToProfile && autoConnect.options.isNotEmpty()) {
             autoConnect.options.map { option ->
                 ProfileProtocolOption(
                     id = option.optionId,
@@ -313,8 +314,26 @@ internal fun resolveHomeDashboardProtocolPresentation(
     )
 }
 
+internal fun shouldRenderDashboardConnectionDetails(
+    connectionState: ConnectionState,
+    activeProfile: Profile?,
+    selectedLatencyMs: Long?,
+    selectedLatencyDown: Boolean,
+    selectedLatencyUnavailable: Boolean,
+    selectedServerPingMs: Long?,
+    selectedServerPingUnavailable: Boolean,
+    selectedServerPingUnsupported: Boolean,
+): Boolean {
+    if (connectionState != ConnectionState.CONNECTED || activeProfile == null) {
+        return true
+    }
+    val latencyReady = selectedLatencyMs != null || selectedLatencyDown || selectedLatencyUnavailable
+    val serverPingReady = selectedServerPingMs != null || selectedServerPingUnavailable || selectedServerPingUnsupported
+    return latencyReady && serverPingReady
+}
+
 internal fun resolveDashboardLatencyPresentation(state: HomeRouteUiState): HomeDashboardLatencyPresentation {
-    if (state.autoConnect.running) {
+    if (state.autoConnect.running && !state.protocolMetricsRefreshing) {
         val currentOption =
             state.autoConnect.options.firstOrNull { option ->
                 option.optionId == state.autoConnect.currentOptionId

@@ -91,6 +91,7 @@ class HomeViewModel(
     internal val installedAppsLoadedMutable = MutableStateFlow(false)
     internal val ipInfoLoadingMutable = MutableStateFlow(false)
     internal val profileOptionLatenciesMutable = MutableStateFlow<Map<ProfileOptionLatencyKey, Long>>(emptyMap())
+    internal val profileOptionDownMutable = MutableStateFlow<Set<ProfileOptionLatencyKey>>(emptySet())
     internal val profileOptionLatencyUnavailableMutable = MutableStateFlow<Set<ProfileOptionLatencyKey>>(emptySet())
     internal val profileOptionServerPingsMutable = MutableStateFlow<Map<ProfileOptionLatencyKey, ProfileOptionServerPingState>>(emptyMap())
     internal val profileOptionMetricsUpdatedAtMutable = MutableStateFlow<Map<ProfileOptionLatencyKey, Long>>(emptyMap())
@@ -277,12 +278,14 @@ class HomeViewModel(
         combine(
             profileOptionServerPingsMutable,
             profileOptionMetricsUpdatedAtMutable,
+            profileOptionDownMutable,
             protocolMetricsRefreshingProfileIdsMutable,
             recommendedProtocolMutable,
-        ) { serverPings, updatedAt, refreshingProfileIds, recommendation ->
+        ) { serverPings, updatedAt, downOptionIds, refreshingProfileIds, recommendation ->
             ProtocolMetricsUiState(
                 serverPings = serverPings,
                 updatedAt = updatedAt,
+                downOptionIds = downOptionIds,
                 refreshingProfileIds = refreshingProfileIds,
                 recommendation = recommendation,
             )
@@ -684,6 +687,11 @@ class HomeViewModel(
         profileId: Long,
         optionId: String,
     ) = markProtocolLatencyUnavailableInternal(profileId, optionId)
+
+    internal fun markProtocolDown(
+        profileId: Long,
+        optionId: String,
+    ) = markProtocolDownInternal(profileId, optionId)
 
     internal fun clearProtocolLatencyState(
         profileId: Long? = null,

@@ -154,13 +154,18 @@ internal fun ProtocolMetadataRow(
             Box(
                 modifier =
                     if (expand || reserveTrailingSpace) {
-                        Modifier.weight(1f, fill = true)
+                        Modifier
+                            .weight(1f, fill = true)
+                            .fillMaxWidth()
                     } else {
                         Modifier
                     },
                 contentAlignment = Alignment.CenterEnd,
             ) {
-                InsecureTlsProfileBadge(compact = compact)
+                InsecureTlsProfileBadge(
+                    modifier = Modifier.align(Alignment.CenterEnd),
+                    compact = compact,
+                )
             }
         }
         if (expiryPlacement == SubscriptionExpiryPlacement.DASHBOARD) {
@@ -498,7 +503,12 @@ private fun ProtocolRecommendationStars(
                         null
                     },
                 modifier = Modifier.size(if (compact) 9.dp else 10.dp),
-                tint = FoxholePositiveAccent,
+                tint =
+                    if (index == 0) {
+                        FoxholePositiveAccent
+                    } else {
+                        FoxholeWarningAccent
+                    },
             )
         }
     }
@@ -530,7 +540,7 @@ internal fun ProtocolLatencyPill(
                     when {
                         isDown -> stringResource(R.string.latency_pill_down)
                         isUnavailable -> stringResource(R.string.latency_pill_unavailable)
-                        latencyMs != null -> stringResource(R.string.latency_pill_value, latencyMs)
+                        latencyMs != null -> stringResource(R.string.latency_pill_value, boundedDisplayLatencyMs(latencyMs))
                         else -> stringResource(R.string.latency_pill_unavailable)
                     }
                 buildAnnotatedString {
@@ -547,7 +557,7 @@ internal fun ProtocolLatencyPill(
             }
             isDown -> AnnotatedString(stringResource(R.string.latency_pill_down))
             isUnavailable -> AnnotatedString(stringResource(R.string.latency_pill_unavailable))
-            latencyMs != null -> AnnotatedString(stringResource(R.string.latency_pill_value, latencyMs))
+            latencyMs != null -> AnnotatedString(stringResource(R.string.latency_pill_value, boundedDisplayLatencyMs(latencyMs)))
             else -> AnnotatedString(stringResource(R.string.latency_pill_unavailable))
         }
     Surface(

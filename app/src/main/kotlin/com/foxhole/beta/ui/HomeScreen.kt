@@ -112,6 +112,7 @@ import com.foxhole.beta.core.model.ProfileProtocolOption
 import com.foxhole.beta.core.model.ProfileSourceType
 import com.foxhole.beta.core.model.TrafficMode
 import com.foxhole.beta.core.model.LocalSurfaceSettings
+import com.foxhole.beta.core.model.isUdpTransport
 import com.foxhole.beta.core.profile.MultiProtocolProfileSupport
 import com.foxhole.beta.ui.FoxholeCard
 import com.foxhole.beta.ui.BottomDockOverlayPadding
@@ -198,11 +199,12 @@ fun HomeScreen(
                     .toMap()
         }
     val dashboardDownProtocolIds =
-        remember(state.autoConnect.options) {
-            state.autoConnect.options
-                .filter { option -> option.status == AutoConnectProbeStatus.FAILED }
-                .map { option -> option.optionId }
-                .toSet()
+        remember(state.protocolDownOptionIds, state.autoConnect.options) {
+            state.protocolDownOptionIds +
+                state.autoConnect.options
+                    .filter { option -> option.status == AutoConnectProbeStatus.FAILED }
+                    .map { option -> option.optionId }
+                    .toSet()
         }
     val connectionDurationText = rememberConnectionDurationText(state.connection)
     val dashboardUnavailableProtocolIds =
@@ -233,18 +235,38 @@ fun HomeScreen(
             state.selectedProtocolLatencyMs,
             state.selectedProtocolLatencyUnavailable,
             state.connection.state,
+            state.protocolMetricsRefreshing,
         ) {
             resolveDashboardLatencyPresentation(state)
         }
     val dashboardSelectedLatencyMs = dashboardLatencyPresentation.latencyMs
     val dashboardSelectedLatencyDown = dashboardLatencyPresentation.isDown
     val dashboardSelectedLatencyUnavailable = dashboardLatencyPresentation.isUnavailable
+    val dashboardProtocolPresentation =
+        remember(state.activeProfile, state.autoConnect, state.protocolMetricsRefreshing) {
+            resolveHomeDashboardProtocolPresentation(
+                activeProfile = state.activeProfile,
+                autoConnect = state.autoConnect,
+                pinSelectionToProfile = state.protocolMetricsRefreshing,
+            )
+        }
     val dashboardSelectedOptionId = resolveDashboardLatencyOptionId(state.activeProfile)
     val dashboardSelectedServerPingMs = dashboardSelectedOptionId?.let(state.protocolServerPingsByOptionId::get)
     val dashboardSelectedServerPingUnavailable =
         dashboardSelectedOptionId != null &&
             dashboardSelectedServerPingMs == null &&
             dashboardSelectedOptionId in state.protocolServerPingUnavailableOptionIds
+    val dashboardConnectionDetailsReady =
+        shouldRenderDashboardConnectionDetails(
+            connectionState = state.connection.state,
+            activeProfile = state.activeProfile,
+            selectedLatencyMs = dashboardSelectedLatencyMs,
+            selectedLatencyDown = dashboardSelectedLatencyDown,
+            selectedLatencyUnavailable = dashboardSelectedLatencyUnavailable,
+            selectedServerPingMs = dashboardSelectedServerPingMs,
+            selectedServerPingUnavailable = dashboardSelectedServerPingUnavailable,
+            selectedServerPingUnsupported = dashboardProtocolPresentation.protocolHint.isUdpTransport(),
+        )
     val deviceInternetAvailable by rememberDefaultInternetAvailability()
     var pinnedIpInfo by remember { mutableStateOf(state.ipInfo) }
     var keepPinnedNetworkInfo by remember { mutableStateOf(false) }
@@ -284,7 +306,7 @@ fun HomeScreen(
             connectionState = state.connection.state,
             autoConnectRunning = state.autoConnect.running,
             deviceInternetAvailable = deviceInternetAvailable,
-        )
+        ) || !dashboardConnectionDetailsReady
     val showNetworkConnectionStatus = state.connection.state == ConnectionState.CONNECTED
     val networkInfoTitleRes =
         if (showNetworkConnectionStatus) {
@@ -514,6 +536,7 @@ fun HomeScreen(
                                     showSmartBadge = false,
                                     trailing = {
                                         when {
+                                            !dashboardConnectionDetailsReady -> Unit
                                             dashboardSelectedLatencyMs != null ->
                                                 ProtocolLatencyPill(
                                                     latencyMs = dashboardSelectedLatencyMs,
@@ -535,13 +558,6 @@ fun HomeScreen(
                                         }
                                     },
                                 )
-                                val dashboardProtocolPresentation =
-                                    remember(state.activeProfile, state.autoConnect) {
-                                        resolveHomeDashboardProtocolPresentation(
-                                            activeProfile = state.activeProfile,
-                                            autoConnect = state.autoConnect,
-                                        )
-                                    }
                                 ProtocolMetadataRow(
                                     protocol = dashboardProtocolPresentation.protocolHint,
                                     subscriptionExpiresAt = state.activeProfile.subscriptionExpiresAt,
@@ -782,7 +798,10 @@ fun HomeScreen(
                                                     !connectionMetricsAvailable -> stringResource(R.string.smart_start_protocol_status_no_data)
                                                     dashboardSelectedLatencyDown -> stringResource(R.string.latency_pill_down)
                                                     dashboardSelectedLatencyMs != null ->
-                                                        stringResource(R.string.latency_pill_value, dashboardSelectedLatencyMs)
+                                                        stringResource(
+                                                            R.string.latency_pill_value,
+                                                            boundedDisplayLatencyMs(dashboardSelectedLatencyMs),
+                                                        )
                                                     dashboardSelectedLatencyUnavailable -> stringResource(R.string.latency_pill_unavailable)
                                                     else -> stringResource(R.string.smart_profile_metric_unavailable)
                                                 }
@@ -790,7 +809,10 @@ fun HomeScreen(
                                                 when {
                                                     !connectionMetricsAvailable -> stringResource(R.string.smart_start_protocol_status_no_data)
                                                     dashboardSelectedServerPingMs != null ->
-                                                        stringResource(R.string.latency_pill_value, dashboardSelectedServerPingMs)
+                                                        stringResource(
+                                                            R.string.latency_pill_value,
+                                                            boundedDisplayLatencyMs(dashboardSelectedServerPingMs),
+                                                        )
                                                     dashboardSelectedServerPingUnavailable -> stringResource(R.string.latency_pill_unavailable)
                                                     else -> stringResource(R.string.smart_profile_metric_unavailable)
                                                 }

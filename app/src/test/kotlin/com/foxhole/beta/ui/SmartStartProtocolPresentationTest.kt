@@ -93,6 +93,13 @@ class SmartStartProtocolPresentationTest {
     }
 
     @Test
+    fun `ui latency display is capped at three digits`() {
+        assertEquals(1L, boundedDisplayLatencyMs(0L))
+        assertEquals(430L, boundedDisplayLatencyMs(430L))
+        assertEquals(999L, boundedDisplayLatencyMs(2_181L))
+    }
+
+    @Test
     fun `dashboard menu keeps compact status rows without detailed metrics table`() {
         val layout = resolveSmartStartProtocolMenuLayout(showMetricsTable = false)
 
@@ -137,10 +144,7 @@ class SmartStartProtocolPresentationTest {
         assertEquals("Provider:", stringValue(enStrings, "home_network_provider_label"))
         assertEquals("Connection time:", stringValue(enStrings, "home_network_connect_time_label"))
         assertEquals("Traffic volume over:", stringValue(enStrings, "home_total_traffic_title"))
-        assertEquals(
-            "Manage available protocols",
-            stringValue(enStrings, "smart_profile_menu_title"),
-        )
+        assertEquals("Manage available VPN protocols", stringValue(enStrings, "smart_profile_menu_title"))
         assertEquals("Protocol", stringValue(enStrings, "smart_profile_menu_protocol_column"))
         assertEquals("Status", stringValue(enStrings, "smart_profile_menu_status_column"))
         assertEquals("ON", stringValue(enStrings, "smart_profile_menu_dashboard_on_column"))
@@ -155,11 +159,12 @@ class SmartStartProtocolPresentationTest {
             "Tap a protocol to turn it on or off.\\nRefresh periodically to improve connection quality.",
             stringValue(enStrings, "smart_profile_metrics_refresh_compact_hint"),
         )
-        assertEquals("1 star", stringValue(enStrings, "smart_profile_legend_favorite"))
+        assertEquals("1 star - Favorite profile", stringValue(enStrings, "smart_profile_legend_favorite"))
         assertEquals(
-            "2 stars",
+            "2 stars - Recommended profile",
             stringValue(enStrings, "smart_profile_legend_reconnect_recommended"),
         )
+        assertEquals("Refreshing", stringValue(enStrings, "smart_profile_metrics_refreshing"))
         assertEquals("current", stringValue(enStrings, "smart_profile_menu_active_badge"))
         assertEquals("Updated: %1\$s", stringValue(enStrings, "smart_profile_metrics_last_updated"))
         assertEquals("Never updated", stringValue(enStrings, "smart_profile_metrics_never_updated"))
@@ -178,10 +183,7 @@ class SmartStartProtocolPresentationTest {
         assertEquals("Provider:", stringValue(ruStrings, "home_network_provider_label"))
         assertEquals("Connection time:", stringValue(ruStrings, "home_network_connect_time_label"))
         assertEquals("Объем трафика за:", stringValue(ruStrings, "home_total_traffic_title"))
-        assertEquals(
-            "Управление доступными протоколами",
-            stringValue(ruStrings, "smart_profile_menu_title"),
-        )
+        assertEquals("Управление доступными протоколами VPN", stringValue(ruStrings, "smart_profile_menu_title"))
         assertEquals("Протокол", stringValue(ruStrings, "smart_profile_menu_protocol_column"))
         assertEquals("Статус", stringValue(ruStrings, "smart_profile_menu_status_column"))
         assertEquals("ON", stringValue(ruStrings, "smart_profile_menu_dashboard_on_column"))
@@ -196,11 +198,12 @@ class SmartStartProtocolPresentationTest {
             "Нажмите на протокол, чтобы включить или отключить его.\\nПериодически обновляйте для улучшения коннекта.",
             stringValue(ruStrings, "smart_profile_metrics_refresh_compact_hint"),
         )
-        assertEquals("1 звезда", stringValue(ruStrings, "smart_profile_legend_favorite"))
+        assertEquals("1 звезда - Избранный профиль", stringValue(ruStrings, "smart_profile_legend_favorite"))
         assertEquals(
-            "2 звезды",
+            "2 звезды - Рекомендованный профиль",
             stringValue(ruStrings, "smart_profile_legend_reconnect_recommended"),
         )
+        assertEquals("Обновление", stringValue(ruStrings, "smart_profile_metrics_refreshing"))
         assertEquals("current", stringValue(ruStrings, "smart_profile_menu_active_badge"))
         assertEquals("Обновлено: %1\$s", stringValue(ruStrings, "smart_profile_metrics_last_updated"))
         assertEquals("Никогда не обновлялся", stringValue(ruStrings, "smart_profile_metrics_never_updated"))

@@ -404,6 +404,7 @@ fun ProfilesScreen(
                                                 onUpdateAutoConnectExcludedOptions(profile.id, excludedIds)
                                             },
                                             latencyByOptionId = rememberedSmartStartLatenciesByProfileId[profile.id].orEmpty(),
+                                            unavailableOptionIds = state.smartProfileDownOptionIdsByProfileId[profile.id].orEmpty(),
                                             serverPingByOptionId = state.smartProfileServerPings(profile.id),
                                             serverPingUnavailableOptionIds = state.smartProfileServerPingUnavailable(profile.id),
                                             metricsUpdatedAtByOptionId = state.smartProfileMetricsUpdatedAt(profile.id),
@@ -721,6 +722,7 @@ fun ProfileDetailScreen(
     activeProfileId: Long?,
     excludedAutoConnectOptionIds: Set<String>,
     rememberedSmartStartLatenciesByOptionId: Map<String, Long>,
+    downOptionIds: Set<String>,
     serverPingByOptionId: Map<String, Long>,
     serverPingUnavailableOptionIds: Set<String>,
     metricsUpdatedAtByOptionId: Map<String, Long>,
@@ -818,6 +820,7 @@ fun ProfileDetailScreen(
                                             onUpdateAutoConnectExcludedOptions(profile.id, excludedIds)
                                         },
                                         latencyByOptionId = rememberedSmartStartLatenciesByOptionId,
+                                        unavailableOptionIds = downOptionIds,
                                         serverPingByOptionId = serverPingByOptionId,
                                         serverPingUnavailableOptionIds = serverPingUnavailableOptionIds,
                                         metricsUpdatedAtByOptionId = metricsUpdatedAtByOptionId,

@@ -40,7 +40,6 @@ import androidx.compose.material.icons.outlined.Speed
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
@@ -1103,24 +1102,20 @@ internal fun ProxyCredentialRow(
             )
         }
         onEdit?.let { edit ->
-            IconButton(
+            HomeHeaderActionButton(
+                icon = Icons.Outlined.Edit,
+                contentDescription = editContentDescription,
                 onClick = edit,
                 modifier = Modifier.size(32.dp),
-            ) {
-                Icon(
-                    imageVector = Icons.Outlined.Edit,
-                    contentDescription = editContentDescription,
-                )
-            }
-        }
-        IconButton(
-            onClick = onCopy,
-            modifier = Modifier.size(32.dp),
-        ) {
-            Icon(
-                imageVector = Icons.Outlined.ContentCopy,
-                contentDescription = stringResource(R.string.copy_to_clipboard),
+                tint = FoxholeInfoAccent,
             )
         }
+        HomeHeaderActionButton(
+            icon = Icons.Outlined.ContentCopy,
+            contentDescription = stringResource(R.string.copy_to_clipboard),
+            onClick = onCopy,
+            modifier = Modifier.size(32.dp),
+            tint = FoxholeInfoAccent,
+        )
     }
 }

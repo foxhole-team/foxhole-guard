@@ -54,6 +54,43 @@ class HomeDashboardProtocolPresentationTest {
     }
 
     @Test
+    fun `manual metrics refresh keeps dashboard selector pinned to saved protocol`() {
+        val activeProfile =
+            profile(
+                selectedProtocolOptionId = "outline",
+                protocolOptions =
+                    listOf(
+                        option("outline", ProtocolHint.OUTLINE),
+                        option("trojan", ProtocolHint.TROJAN),
+                    ),
+            )
+
+        val resolved =
+            resolveHomeDashboardProtocolPresentation(
+                activeProfile = activeProfile,
+                autoConnect =
+                    AutoConnectUiState(
+                        running = true,
+                        currentOptionId = "trojan",
+                        options =
+                            listOf(
+                                AutoConnectProbeOptionUiState(
+                                    optionId = "trojan",
+                                    displayName = "TROJAN",
+                                    protocolHint = ProtocolHint.TROJAN,
+                                ),
+                            ),
+                    ),
+                pinSelectionToProfile = true,
+            )
+
+        assertEquals("outline", resolved.selectedProtocolOptionId)
+        assertEquals(ProtocolHint.OUTLINE, resolved.protocolHint)
+        assertEquals(listOf("outline", "trojan"), resolved.protocolOptions.map(ProfileProtocolOption::id))
+        assertTrue(resolved.protocolOptions.first { option -> option.id == "outline" }.isSelected)
+    }
+
+    @Test
     fun `idle dashboard keeps persisted protocol selection`() {
         val activeProfile =
             profile(
@@ -178,6 +215,34 @@ class HomeDashboardProtocolPresentationTest {
     }
 
     @Test
+    fun `manual metrics refresh does not move dashboard latency to current probe`() {
+        val state =
+            HomeRouteUiState(
+                connection = ConnectionSnapshot(state = ConnectionState.CONNECTED),
+                selectedProtocolLatencyMs = 222L,
+                protocolMetricsRefreshing = true,
+                autoConnect =
+                    AutoConnectUiState(
+                        running = true,
+                        currentOptionId = "trojan",
+                        options =
+                            listOf(
+                                AutoConnectProbeOptionUiState(
+                                    optionId = "trojan",
+                                    displayName = "TROJAN",
+                                    protocolHint = ProtocolHint.TROJAN,
+                                    status = AutoConnectProbeStatus.FAILED,
+                                    latencyMs = 30_000L,
+                                ),
+                            ),
+                    ),
+            )
+
+        assertEquals(222L, resolveDashboardSelectedLatencyMs(state))
+        assertFalse(resolveDashboardSelectedLatencyDown(state))
+    }
+
+    @Test
     fun `dashboard auto connect latency keeps successful probe value`() {
         val state =
             HomeRouteUiState(
@@ -240,6 +305,38 @@ class HomeDashboardProtocolPresentationTest {
         assertNull(resolveDashboardSelectedLatencyMs(state))
         assertFalse(resolveDashboardSelectedLatencyDown(state))
         assertTrue(resolveDashboardSelectedLatencyUnavailable(state))
+    }
+
+    @Test
+    fun `connected dashboard waits for latency before rendering final network text`() {
+        assertFalse(
+            shouldRenderDashboardConnectionDetails(
+                connectionState = ConnectionState.CONNECTED,
+                activeProfile = profile(selectedProtocolOptionId = "outline", protocolOptions = listOf(option("outline", ProtocolHint.OUTLINE))),
+                selectedLatencyMs = null,
+                selectedLatencyDown = false,
+                selectedLatencyUnavailable = false,
+                selectedServerPingMs = 87L,
+                selectedServerPingUnavailable = false,
+                selectedServerPingUnsupported = false,
+            ),
+        )
+    }
+
+    @Test
+    fun `connected dashboard renders when latency and server ping states are complete`() {
+        assertTrue(
+            shouldRenderDashboardConnectionDetails(
+                connectionState = ConnectionState.CONNECTED,
+                activeProfile = profile(selectedProtocolOptionId = "outline", protocolOptions = listOf(option("outline", ProtocolHint.OUTLINE))),
+                selectedLatencyMs = 430L,
+                selectedLatencyDown = false,
+                selectedLatencyUnavailable = false,
+                selectedServerPingMs = null,
+                selectedServerPingUnavailable = false,
+                selectedServerPingUnsupported = true,
+            ),
+        )
     }
 
     private fun profile(

@@ -80,6 +80,9 @@ internal fun classifyVpnLatency(
         else -> LatencyQuality.VERY_SLOW
     }
 
+internal fun boundedDisplayLatencyMs(latencyMs: Long): Long = latencyMs.coerceIn(1L, MAX_UI_LATENCY_MS)
+
 private const val VPN_FAST_MAX_MS = 250L
 private const val VPN_NORMAL_MAX_MS = 750L
 private const val VPN_SLOW_MAX_MS = 1_500L
+private const val MAX_UI_LATENCY_MS = 999L

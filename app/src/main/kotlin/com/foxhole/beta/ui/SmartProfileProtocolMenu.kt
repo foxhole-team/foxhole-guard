@@ -281,7 +281,7 @@ private fun rememberSmartProfileMenuWidth(
     ): String =
         when {
             down -> downMetric
-            latencyMs != null -> "$latencyMs ms"
+            latencyMs != null -> "${boundedDisplayLatencyMs(latencyMs)} ms"
             unavailable -> unavailableMetric
             else -> unavailableMetric
         }
@@ -660,6 +660,13 @@ private fun SmartProfileProtocolMenuHeaderContent(
                 onCancelRefreshMetrics = onCancelRefreshMetrics,
                 compact = true,
             )
+            SmartProfileLegendLine(
+                compact = true,
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(start = 8.dp, end = 8.dp, bottom = 4.dp),
+            )
             HorizontalDivider(
                 modifier = Modifier.padding(horizontal = 8.dp),
                 color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.24f),
@@ -692,8 +699,8 @@ private fun SmartProfileProtocolMenuTitleRow(
                         fontSize = if (compact) 10.5.sp else 12.sp,
                         lineHeight = if (compact) 11.5.sp else 13.sp,
                         fontWeight = FontWeight.SemiBold,
-                    ),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                ),
+                color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -758,41 +765,32 @@ private fun SmartProfileMetricsHint(
                 overflow = TextOverflow.Clip,
             )
         }
-        if (compact) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                SmartProfileLegendRow(
-                    starCount = 1,
-                    label = stringResource(R.string.smart_profile_legend_favorite),
-                    compact = true,
-                )
-                SmartProfileLegendRow(
-                    starCount = 2,
-                    label = stringResource(R.string.smart_profile_legend_reconnect_recommended),
-                    compact = true,
-                )
-            }
-        } else {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                SmartProfileLegendRow(
-                    starCount = 1,
-                    label = stringResource(R.string.smart_profile_legend_favorite),
-                    compact = false,
-                )
-                SmartProfileLegendRow(
-                    starCount = 2,
-                    label = stringResource(R.string.smart_profile_legend_reconnect_recommended),
-                    compact = false,
-                )
-            }
-        }
+        SmartProfileLegendLine(compact = compact, modifier = Modifier.fillMaxWidth())
+    }
+}
+
+@Composable
+private fun SmartProfileLegendLine(
+    compact: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.spacedBy(if (compact) 8.dp else 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        SmartProfileLegendRow(
+            starCount = 1,
+            label = stringResource(R.string.smart_profile_legend_favorite),
+            compact = compact,
+            modifier = Modifier.weight(1f),
+        )
+        SmartProfileLegendRow(
+            starCount = 2,
+            label = stringResource(R.string.smart_profile_legend_reconnect_recommended),
+            compact = compact,
+            modifier = Modifier.weight(1f),
+        )
     }
 }
 
@@ -801,8 +799,10 @@ private fun SmartProfileLegendRow(
     starCount: Int,
     label: String,
     compact: Boolean,
+    modifier: Modifier = Modifier,
 ) {
     Row(
+        modifier = modifier,
         horizontalArrangement = Arrangement.spacedBy(if (compact) 4.dp else 5.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -821,6 +821,7 @@ private fun SmartProfileLegendRow(
         }
         Text(
             text = label,
+            modifier = Modifier.weight(1f, fill = false),
             style =
                 MaterialTheme.typography.labelSmall.copy(
                     fontSize = if (compact) 8.4.sp else 10.sp,
@@ -847,11 +848,8 @@ private fun SmartProfileMetricsRefreshStatus(
     ) {
         when {
             refreshing ->
-                FoxholeSkeletonBlock(
-                    modifier =
-                        Modifier
-                            .width(if (compact) 74.dp else 88.dp)
-                            .height(if (compact) 10.dp else 11.dp),
+                SmartProfileRefreshingIndicator(
+                    compact = compact,
                 )
             updatedAt != null ->
                 Text(
@@ -878,6 +876,40 @@ private fun SmartProfileMetricsRefreshStatus(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
+        }
+    }
+}
+
+@Composable
+private fun SmartProfileRefreshingIndicator(compact: Boolean) {
+    val color = FoxholeInfoAccent
+    Surface(
+        shape = MaterialTheme.shapes.small,
+        color = color.copy(alpha = 0.10f),
+        border = BorderStroke(1.dp, color.copy(alpha = 0.24f)),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = if (compact) 5.dp else 6.dp, vertical = if (compact) 2.dp else 3.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            HomeJellyTriangleLoader(
+                color = color,
+                indicatorSize = if (compact) 9.dp else 10.dp,
+            )
+            Text(
+                text = stringResource(R.string.smart_profile_metrics_refreshing),
+                style =
+                    MaterialTheme.typography.labelSmall.copy(
+                        fontSize = if (compact) 8.5.sp else 9.5.sp,
+                        lineHeight = if (compact) 9.sp else 10.sp,
+                        fontWeight = FontWeight.SemiBold,
+                    ),
+                color = color,
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Clip,
+            )
         }
     }
 }
@@ -1321,7 +1353,11 @@ private fun SmartProfileRecommendationStars(
 }
 
 private fun smartProfileRecommendationStarTint(index: Int): Color =
-    FoxholePositiveAccent
+    if (index == 0) {
+        FoxholePositiveAccent
+    } else {
+        FoxholeWarningAccent
+    }
 
 @Composable
 private fun SmartProfileOnToggle(
@@ -1398,7 +1434,7 @@ private fun SmartProfileMetricCell(
     val text =
         when {
             down -> stringResource(R.string.latency_pill_down)
-            latencyMs != null -> stringResource(R.string.latency_pill_value, latencyMs)
+            latencyMs != null -> stringResource(R.string.latency_pill_value, boundedDisplayLatencyMs(latencyMs))
             unavailable -> stringResource(R.string.smart_profile_metric_unavailable)
             else -> stringResource(R.string.smart_profile_metric_unavailable)
         }

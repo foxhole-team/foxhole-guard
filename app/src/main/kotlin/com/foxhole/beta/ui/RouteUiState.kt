@@ -49,6 +49,7 @@ data class HomeRouteUiState(
     val selectedProtocolLatencyMs: Long? = null,
     val selectedProtocolLatencyUnavailable: Boolean = false,
     val protocolLatenciesByOptionId: Map<String, Long> = emptyMap(),
+    val protocolDownOptionIds: Set<String> = emptySet(),
     val protocolLatencyUnavailableOptionIds: Set<String> = emptySet(),
     val protocolServerPingsByOptionId: Map<String, Long> = emptyMap(),
     val protocolServerPingUnavailableOptionIds: Set<String> = emptySet(),
@@ -66,6 +67,7 @@ data class ProfilesRouteUiState(
     val activeProfileId: Long? = null,
     val smartProfileExcludedOptionIdsByProfileId: Map<Long, Set<String>> = emptyMap(),
     val smartStartRememberedLatenciesByProfileId: Map<Long, Map<String, Long>> = emptyMap(),
+    val smartProfileDownOptionIdsByProfileId: Map<Long, Set<String>> = emptyMap(),
     val smartProfileServerPingsByProfileId: Map<Long, Map<String, Long>> = emptyMap(),
     val smartProfileServerPingUnavailableByProfileId: Map<Long, Set<String>> = emptyMap(),
     val smartProfileMetricsUpdatedAtByProfileId: Map<Long, Map<String, Long>> = emptyMap(),
@@ -107,6 +109,7 @@ internal fun HomeUiState.toHomeRouteUiState(
     autoConnect: AutoConnectUiState = AutoConnectUiState(),
     selectedProtocolLatencyMs: Long? = null,
     protocolLatenciesByOptionId: Map<String, Long> = emptyMap(),
+    protocolDownOptionIds: Set<String> = emptySet(),
     selectedProtocolLatencyUnavailable: Boolean = false,
     protocolLatencyUnavailableOptionIds: Set<String> = emptySet(),
     protocolServerPingsByOptionId: Map<String, Long> = emptyMap(),
@@ -137,6 +140,7 @@ internal fun HomeUiState.toHomeRouteUiState(
         selectedProtocolLatencyMs = selectedProtocolLatencyMs,
         selectedProtocolLatencyUnavailable = selectedProtocolLatencyUnavailable,
         protocolLatenciesByOptionId = protocolLatenciesByOptionId,
+        protocolDownOptionIds = protocolDownOptionIds,
         protocolLatencyUnavailableOptionIds = protocolLatencyUnavailableOptionIds,
         protocolServerPingsByOptionId = protocolServerPingsByOptionId,
         protocolServerPingUnavailableOptionIds = protocolServerPingUnavailableOptionIds,
@@ -150,6 +154,7 @@ internal fun HomeUiState.toHomeRouteUiState(
 
 internal fun HomeUiState.toProfilesRouteUiState(
     smartStartRememberedLatenciesByProfileId: Map<Long, Map<String, Long>> = emptyMap(),
+    smartProfileDownOptionIdsByProfileId: Map<Long, Set<String>> = emptyMap(),
     smartProfileServerPingsByProfileId: Map<Long, Map<String, Long>> = emptyMap(),
     smartProfileServerPingUnavailableByProfileId: Map<Long, Set<String>> = emptyMap(),
     smartProfileMetricsUpdatedAtByProfileId: Map<Long, Map<String, Long>> = emptyMap(),
@@ -166,6 +171,7 @@ internal fun HomeUiState.toProfilesRouteUiState(
                 preference.profileId to preference.excludedProtocolOptionIds.toSet()
             },
         smartStartRememberedLatenciesByProfileId = smartStartRememberedLatenciesByProfileId,
+        smartProfileDownOptionIdsByProfileId = smartProfileDownOptionIdsByProfileId,
         smartProfileServerPingsByProfileId = smartProfileServerPingsByProfileId,
         smartProfileServerPingUnavailableByProfileId = smartProfileServerPingUnavailableByProfileId,
         smartProfileMetricsUpdatedAtByProfileId = smartProfileMetricsUpdatedAtByProfileId,
@@ -211,6 +217,9 @@ internal fun ProfilesRouteUiState.profile(profileId: Long): Profile? = profiles.
 
 internal fun ProfilesRouteUiState.smartStartRememberedLatency(profileId: Long): Map<String, Long> =
     smartStartRememberedLatenciesByProfileId[profileId].orEmpty()
+
+internal fun ProfilesRouteUiState.smartProfileDownOptionIds(profileId: Long): Set<String> =
+    smartProfileDownOptionIdsByProfileId[profileId].orEmpty()
 
 internal fun ProfilesRouteUiState.smartProfileServerPings(profileId: Long): Map<String, Long> =
     smartProfileServerPingsByProfileId[profileId].orEmpty()

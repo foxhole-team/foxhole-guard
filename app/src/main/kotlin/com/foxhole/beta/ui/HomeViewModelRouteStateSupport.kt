@@ -31,6 +31,14 @@ internal fun buildHomeRouteUiState(
                     .map(ProfileOptionLatencyKey::optionId)
                     .toSet()
             }.orEmpty()
+    val activeProfileDownOptionIds =
+        state.activeProfile
+            ?.let { activeProfile ->
+                protocolMetrics.downOptionIds
+                    .filter { key -> key.profileId == activeProfile.id }
+                    .map(ProfileOptionLatencyKey::optionId)
+                    .toSet()
+            }.orEmpty()
     val activeProfileServerPings =
         state.activeProfile
             ?.let { activeProfile ->
@@ -103,6 +111,7 @@ internal fun buildHomeRouteUiState(
         autoConnect = autoConnect,
         selectedProtocolLatencyMs = selectedProtocolLatencyMs,
         protocolLatenciesByOptionId = activeProfileLatencies,
+        protocolDownOptionIds = activeProfileDownOptionIds,
         selectedProtocolLatencyUnavailable = selectedProtocolLatencyUnavailable,
         protocolLatencyUnavailableOptionIds = activeProfileLatencyUnavailable,
         protocolServerPingsByOptionId = activeProfileServerPings,
@@ -158,11 +167,16 @@ internal fun buildProfilesRouteUiState(
                         listOfNotNull(rememberedUpdatedAt[optionId], liveUpdatedAt[optionId]).maxOrNull() ?: 0L
                     }.filterValues { updatedAt -> updatedAt > 0L }
             }
+    val downOptionIdsByProfileId =
+        protocolMetrics.downOptionIds
+            .groupBy(ProfileOptionLatencyKey::profileId, ProfileOptionLatencyKey::optionId)
+            .mapValues { (_, values) -> values.toSet() }
     return state.toProfilesRouteUiState(
         smartStartRememberedLatenciesByProfileId =
             state.settings.rememberedSmartStartLatencyByProfileId(
                 networkFingerprint = networkFingerprintKey,
             ),
+        smartProfileDownOptionIdsByProfileId = downOptionIdsByProfileId,
         smartProfileServerPingsByProfileId = mergedServerPingsByProfileId,
         smartProfileServerPingUnavailableByProfileId =
             protocolMetrics.serverPings

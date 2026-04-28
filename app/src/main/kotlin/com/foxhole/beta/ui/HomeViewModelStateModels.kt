@@ -142,6 +142,7 @@ internal data class ProtocolRecommendationState(
 internal data class ProtocolMetricsUiState(
     val serverPings: Map<ProfileOptionLatencyKey, ProfileOptionServerPingState> = emptyMap(),
     val updatedAt: Map<ProfileOptionLatencyKey, Long> = emptyMap(),
+    val downOptionIds: Set<ProfileOptionLatencyKey> = emptySet(),
     val refreshingProfileIds: Set<Long> = emptySet(),
     val recommendation: ProtocolRecommendationState? = null,
 )

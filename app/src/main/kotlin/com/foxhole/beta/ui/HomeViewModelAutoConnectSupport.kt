@@ -419,7 +419,7 @@ private suspend fun HomeViewModel.commitAutoConnectWinner(
             getApplication<Application>().getString(
                 R.string.auto_connect_success,
                 result.candidate.displayName,
-                latencyMs,
+                boundedDisplayLatencyMs(latencyMs),
             )
         } ?: getApplication<Application>().getString(
             R.string.auto_connect_success_unavailable,
@@ -554,6 +554,16 @@ internal fun HomeViewModel.refreshSmartProfileMetricsInternal(profileId: Long) {
                         countTowardOutcomeHistory = false,
                         affectsFailureRankingMemory = false,
                     )
+                    if (result.success) {
+                        if (result.displayLatencyMs == null) {
+                            markProtocolLatencyUnavailable(
+                                profileId = profileId,
+                                optionId = result.candidate.optionId,
+                            )
+                        }
+                    } else {
+                        markProtocolDown(profileId = profileId, optionId = result.candidate.optionId)
+                    }
                     markAutoConnectCandidateFinished(result)
                     if (index < candidates.lastIndex) {
                         previousVpnNetworkHandle =
@@ -1188,6 +1198,8 @@ internal fun HomeViewModel.cacheProtocolLatencyInternal(
     latencyMs: Long,
 ) {
     val key = ProfileOptionLatencyKey(profileId, optionId)
+    profileOptionDownMutable.value =
+        profileOptionDownMutable.value - key
     profileOptionLatenciesMutable.value =
         profileOptionLatenciesMutable.value + (key to latencyMs.coerceAtLeast(1L))
     profileOptionLatencyUnavailableMutable.value =
@@ -1200,10 +1212,26 @@ internal fun HomeViewModel.markProtocolLatencyUnavailableInternal(
     optionId: String,
 ) {
     val key = ProfileOptionLatencyKey(profileId, optionId)
+    profileOptionDownMutable.value =
+        profileOptionDownMutable.value - key
     profileOptionLatenciesMutable.value =
         profileOptionLatenciesMutable.value - key
     profileOptionLatencyUnavailableMutable.value =
         profileOptionLatencyUnavailableMutable.value + key
+    markProtocolMetricsUpdated(profileId, optionId)
+}
+
+internal fun HomeViewModel.markProtocolDownInternal(
+    profileId: Long,
+    optionId: String,
+) {
+    val key = ProfileOptionLatencyKey(profileId, optionId)
+    profileOptionLatenciesMutable.value =
+        profileOptionLatenciesMutable.value - key
+    profileOptionLatencyUnavailableMutable.value =
+        profileOptionLatencyUnavailableMutable.value - key
+    profileOptionDownMutable.value =
+        profileOptionDownMutable.value + key
     markProtocolMetricsUpdated(profileId, optionId)
 }
 
@@ -1258,6 +1286,12 @@ internal fun HomeViewModel.clearProtocolLatencyStateInternal(
             emptySet()
         } else {
             profileOptionLatencyUnavailableMutable.value.filterNot(::matches).toSet()
+        }
+    profileOptionDownMutable.value =
+        if (profileId == null && optionId == null) {
+            emptySet()
+        } else {
+            profileOptionDownMutable.value.filterNot(::matches).toSet()
         }
     profileOptionServerPingsMutable.value =
         if (profileId == null && optionId == null) {
