@@ -188,7 +188,9 @@ class HomeScreenTest {
         composeRule.onNodeWithTag("profiles_profile_edit_action_${targetProfileId}").assertIsDisplayed()
         composeRule.onNodeWithTag("profiles_profile_delete_action_${targetProfileId}").performClick()
         composeRule.onNodeWithText(context.getString(R.string.delete_profile_title)).assertIsDisplayed()
-        composeRule.onAllNodesWithText("Selection B").assertCountEquals(2)
+        composeRule
+            .onNodeWithText("${context.getString(R.string.delete_profile_summary)}\n\nSelection B")
+            .assertIsDisplayed()
         composeRule.onNodeWithText(context.getString(R.string.yes_label)).assertIsDisplayed()
         composeRule.onNodeWithText(context.getString(R.string.no_label)).assertIsDisplayed()
     }

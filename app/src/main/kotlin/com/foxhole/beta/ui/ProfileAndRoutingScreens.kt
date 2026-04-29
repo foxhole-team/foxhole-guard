@@ -8,9 +8,9 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.FlowRow
@@ -25,25 +25,28 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.HelpOutline
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Apps
 import androidx.compose.material.icons.outlined.ArrowOutward
 import androidx.compose.material.icons.outlined.Block
+import androidx.compose.material.icons.outlined.Bolt
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.Cloud
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.ExpandLess
 import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.FileDownload
+import androidx.compose.material.icons.outlined.Hub
 import androidx.compose.material.icons.outlined.Info
-import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.RadioButtonUnchecked
+import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.RemoveCircleOutline
 import androidx.compose.material.icons.outlined.Save
 import androidx.compose.material.icons.outlined.Security
@@ -51,9 +54,6 @@ import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Speed
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material.icons.outlined.VpnKey
-import androidx.compose.material.icons.outlined.Bolt
-import androidx.compose.material.icons.outlined.Cloud
-import androidx.compose.material.icons.outlined.Hub
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
@@ -62,9 +62,9 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -89,7 +89,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
@@ -101,17 +100,17 @@ import com.foxhole.beta.core.model.LatencyProbeMethod
 import com.foxhole.beta.core.model.PerAppRoutingMode
 import com.foxhole.beta.core.model.Profile
 import com.foxhole.beta.core.model.ProfileProtocolOption
-import com.foxhole.beta.core.model.ProtocolHint
 import com.foxhole.beta.core.model.ProfileSourceType
+import com.foxhole.beta.core.model.ProtocolHint
 import com.foxhole.beta.core.model.RoutingRule
 import com.foxhole.beta.core.model.RoutingRuleAction
-import com.foxhole.beta.core.profile.PreparedProfileExport
-import com.foxhole.beta.core.profile.deleteProfileExportArtifact
-import com.foxhole.beta.core.profile.ProfileExportChoice
-import com.foxhole.beta.core.profile.exportableProfileChoices
 import com.foxhole.beta.core.profile.EditableProfileConfig
-import com.foxhole.beta.core.profile.ProfileConfigFormCodec
 import com.foxhole.beta.core.profile.MultiProtocolProfileSupport
+import com.foxhole.beta.core.profile.PreparedProfileExport
+import com.foxhole.beta.core.profile.ProfileConfigFormCodec
+import com.foxhole.beta.core.profile.ProfileExportChoice
+import com.foxhole.beta.core.profile.deleteProfileExportArtifact
+import com.foxhole.beta.core.profile.exportableProfileChoices
 import com.foxhole.beta.ui.FoxholeCard
 import com.foxhole.beta.ui.FoxholeChoiceCard
 import com.foxhole.beta.ui.FoxholePreferenceCard
@@ -394,6 +393,7 @@ fun ProfilesScreen(
                             downProtocolOptionIds = state.smartProfileDownOptionIdsByProfileId[profile.id].orEmpty(),
                             recommendedProtocolOptionId = state.recommendedProtocolOptionByProfileId[profile.id],
                             recommendedProtocolOptionIds = state.recommendedProtocolOptionsByProfileId[profile.id].orEmpty(),
+                            favoriteProtocolOptionId = state.favoriteProtocolOptionByProfileId[profile.id],
                             requiresInsecureTls = profile.requiresInsecureTls,
                             showInsecureTlsBadge = false,
                             reserveTrailingSpace = false,
@@ -415,6 +415,7 @@ fun ProfilesScreen(
                                             metricsRefreshing = profile.id in state.smartProfileMetricsRefreshingProfileIds,
                                             recommendedOptionId = state.recommendedProtocolOptionByProfileId[profile.id],
                                             recommendedOptionIds = state.recommendedProtocolOptionsByProfileId[profile.id].orEmpty(),
+                                            favoriteOptionId = state.favoriteProtocolOptionByProfileId[profile.id],
                                             onRefreshMetrics = { onRefreshSmartProfileMetrics(profile.id) },
                                             onCancelRefreshMetrics = onCancelSmartProfileMetricsRefresh,
                                             showLatency = rememberedSmartStartLatenciesByProfileId[profile.id]?.isNotEmpty() == true,
@@ -456,55 +457,41 @@ fun ProfilesScreen(
                             )
                         }
                     } else {
-                        Column(
-                            horizontalAlignment = Alignment.End,
-                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
                         ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                            ) {
-                                if (showInlineRefreshAction) {
-                                    IconButton(
-                                        onClick = { refreshProfileId = profile.id },
-                                        modifier =
-                                            Modifier
-                                                .size(34.dp)
-                                                .testTag("profiles_profile_refresh_action_${profile.id}"),
-                                    ) {
-                                        Icon(Icons.Outlined.Refresh, contentDescription = stringResource(R.string.refresh))
-                                    }
-                                }
+                            if (showInlineRefreshAction) {
                                 IconButton(
-                                    onClick = { onEditProfile(profile.id) },
+                                    onClick = { refreshProfileId = profile.id },
                                     modifier =
                                         Modifier
                                             .size(34.dp)
-                                            .testTag("profiles_profile_edit_action_${profile.id}"),
+                                            .testTag("profiles_profile_refresh_action_${profile.id}"),
                                 ) {
-                                    Icon(Icons.Outlined.Edit, contentDescription = stringResource(R.string.edit_label))
-                                }
-                                IconButton(
-                                    onClick = { deleteProfileId = profile.id },
-                                    modifier =
-                                        Modifier
-                                            .size(34.dp)
-                                            .testTag("profiles_profile_delete_action_${profile.id}"),
-                                ) {
-                                    Icon(
-                                        Icons.Outlined.Delete,
-                                        contentDescription = stringResource(R.string.delete_label),
-                                        tint = MaterialTheme.colorScheme.error,
-                                    )
+                                    Icon(Icons.Outlined.Refresh, contentDescription = stringResource(R.string.refresh))
                                 }
                             }
-                            if (selectedProtocolRequiresInsecureTls(profile)) {
-                                InsecureTlsProfileBadge(
-                                    compact = true,
-                                    modifier =
-                                        Modifier
-                                            .widthIn(min = 92.dp)
-                                            .testTag("profiles_profile_insecure_tls_badge_${profile.id}"),
+                            IconButton(
+                                onClick = { onEditProfile(profile.id) },
+                                modifier =
+                                    Modifier
+                                        .size(34.dp)
+                                        .testTag("profiles_profile_edit_action_${profile.id}"),
+                            ) {
+                                Icon(Icons.Outlined.Edit, contentDescription = stringResource(R.string.edit_label))
+                            }
+                            IconButton(
+                                onClick = { deleteProfileId = profile.id },
+                                modifier =
+                                    Modifier
+                                        .size(34.dp)
+                                        .testTag("profiles_profile_delete_action_${profile.id}"),
+                            ) {
+                                Icon(
+                                    Icons.Outlined.Delete,
+                                    contentDescription = stringResource(R.string.delete_label),
+                                    tint = MaterialTheme.colorScheme.error,
                                 )
                             }
                         }
@@ -748,6 +735,7 @@ fun ProfileDetailScreen(
     metricsRefreshing: Boolean,
     recommendedProtocolOptionId: String?,
     recommendedProtocolOptionIds: Set<String>,
+    favoriteProtocolOptionId: String?,
     latencyProbeMethod: LatencyProbeMethod,
     snackbarHostState: SnackbarHostState,
     onNavigateUp: () -> Unit,
@@ -829,6 +817,7 @@ fun ProfileDetailScreen(
                         downProtocolOptionIds = downOptionIds,
                         recommendedProtocolOptionId = recommendedProtocolOptionId,
                         recommendedProtocolOptionIds = recommendedProtocolOptionIds,
+                        favoriteProtocolOptionId = favoriteProtocolOptionId,
                         requiresInsecureTls = profile.requiresInsecureTls,
                         reserveTrailingSpace = false,
                         expand = true,
@@ -848,6 +837,8 @@ fun ProfileDetailScreen(
                                         metricsUpdatedAtByOptionId = metricsUpdatedAtByOptionId,
                                         metricsRefreshing = metricsRefreshing,
                                         recommendedOptionId = recommendedProtocolOptionId,
+                                        recommendedOptionIds = recommendedProtocolOptionIds,
+                                        favoriteOptionId = favoriteProtocolOptionId,
                                         onRefreshMetrics = { onRefreshSmartProfileMetrics(profile.id) },
                                         onCancelRefreshMetrics = onCancelSmartProfileMetricsRefresh,
                                         showLatency = rememberedSmartStartLatenciesByOptionId.isNotEmpty(),

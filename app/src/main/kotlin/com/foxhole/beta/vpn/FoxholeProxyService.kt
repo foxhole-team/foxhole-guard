@@ -28,10 +28,12 @@ import com.foxhole.beta.core.network.mergeIpInfo
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -65,6 +67,7 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
     private var defaultNetworkAvailable = true
     private var lastDefaultNetworkSummary: String? = null
     private val commandMutex = Mutex()
+    private var commandJob: Job? = null
 
     private val defaultNetworkCallback =
         object : ConnectivityManager.NetworkCallback() {
@@ -117,6 +120,7 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
             buildNotification = ::buildNotification,
             container = container,
             launchCommand = ::launchCommand,
+            launchPriorityCommand = ::launchPriorityCommand,
             connect = ::connect,
             disconnect = { commandStartId -> disconnect(commandStartId = commandStartId) },
             reload = ::reload,
@@ -169,6 +173,7 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
                     fail(it.message ?: getString(R.string.error_profile_invalid), commandStartId)
                     return
                 }
+        currentCoroutineContext().ensureActive()
         activeSession = session
         container.diagnosticsLogger.recordStructured(
             "connection",
@@ -191,6 +196,13 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
         registerDefaultNetworkCallbackIfNeeded()
         startNotificationHealthMonitoring()
         val result = runtime.start(session, this)
+        if (!currentCoroutineContext().isActive) {
+            withContext(NonCancellable) {
+                container.diagnosticsLogger.record("connection", "runtime start cancelled after native return")
+                disconnect(commandStartId = commandStartId)
+            }
+            return
+        }
         if (result.isSuccess) {
             container.diagnosticsLogger.record("connection", "proxy runtime started, validation required")
             val validation = validateProxyConnectivity(session)
@@ -289,10 +301,18 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
     private fun ensureNotificationChannel() = ensureConnectionNotificationChannel(notificationManager)
 
     private fun launchCommand(block: suspend () -> Unit) {
-        scope.launch {
+        commandJob = scope.launch(Dispatchers.Default) {
             commandMutex.withLock {
                 block()
             }
+        }
+    }
+
+    private fun launchPriorityCommand(block: suspend () -> Unit) {
+        commandJob?.cancel()
+        commandJob = null
+        scope.launch(Dispatchers.Default) {
+            block()
         }
     }
 

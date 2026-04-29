@@ -20,6 +20,7 @@ internal class FoxholeConnectionLifecycle(
     private val runtimeConfigAssembler: RuntimeConfigAssembler,
     private val snapshot: StateFlow<ConnectionSnapshot>,
     private val appliedRuntimeSignature: MutableStateFlow<Int?>,
+    private val hasActiveVpnNetwork: () -> Boolean,
 ) {
     suspend fun connect(
         profileId: Long,
@@ -58,8 +59,12 @@ internal class FoxholeConnectionLifecycle(
         clearAppliedRuntime()
         diagnosticsLogger.record("connection", "disconnect requested")
         val currentSnapshot = snapshot.value
-        val disconnectMode = disconnectDispatchModeOrNull(currentSnapshot)
-        if (disconnectMode == null) {
+        val disconnectModes =
+            disconnectDispatchModes(
+                snapshot = currentSnapshot,
+                activeVpnNetworkAvailable = hasActiveVpnNetwork(),
+            )
+        if (disconnectModes.isEmpty()) {
             diagnosticsLogger.record("connection", "disconnect skipped: no active runtime")
             FoxholeConnectionServiceContract.stopAllServices(context)
             FoxholeVpnRuntimeBridge.clearTransientState()
@@ -70,11 +75,13 @@ internal class FoxholeConnectionLifecycle(
             )
             return
         }
-        FoxholeConnectionServiceContract.startForegroundService(
-            context = context,
-            mode = disconnectMode,
-            action = FoxholeConnectionServiceContract.ACTION_DISCONNECT,
-        )
+        disconnectModes.forEach { disconnectMode ->
+            FoxholeConnectionServiceContract.startForegroundService(
+                context = context,
+                mode = disconnectMode,
+                action = FoxholeConnectionServiceContract.ACTION_DISCONNECT,
+            )
+        }
     }
 
     suspend fun currentRuntimeFingerprint(): Int =
@@ -114,3 +121,10 @@ internal class FoxholeConnectionLifecycle(
 
 internal fun disconnectDispatchModeOrNull(snapshot: ConnectionSnapshot): TrafficMode? =
     snapshot.trafficMode.takeIf { snapshot.state in ACTIVE_CONNECTION_STATES }
+
+internal fun disconnectDispatchModes(
+    snapshot: ConnectionSnapshot,
+    activeVpnNetworkAvailable: Boolean,
+): List<TrafficMode> =
+    disconnectDispatchModeOrNull(snapshot)?.let(::listOf)
+        ?: if (activeVpnNetworkAvailable) listOf(TrafficMode.TUNNEL) else emptyList()

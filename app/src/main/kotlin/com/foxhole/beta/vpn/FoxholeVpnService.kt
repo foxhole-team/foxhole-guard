@@ -30,10 +30,12 @@ import com.foxhole.beta.core.network.mergeIpInfo
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -83,6 +85,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
     internal var lastDefaultNetworkSummary: String? = null
     internal val upstreamNetworkHandles = mutableSetOf<Long>()
     internal val commandMutex = Mutex()
+    internal var commandJob: Job? = null
 
     internal val networkCallback =
         object : ConnectivityManager.NetworkCallback() {
@@ -174,6 +177,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
             buildNotification = ::buildNotification,
             container = container,
             launchCommand = ::launchCommand,
+            launchPriorityCommand = ::launchPriorityCommand,
             connect = ::connect,
             disconnect = { commandStartId -> disconnect(commandStartId = commandStartId) },
             reload = ::reload,
@@ -200,7 +204,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
     }
 
     override fun onRevoke() {
-        launchCommand {
+        launchPriorityCommand {
             disconnect(message = getString(R.string.vpn_permission_revoked))
         }
     }
@@ -266,6 +270,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
                     fail(it.message ?: getString(R.string.error_profile_invalid), commandStartId)
                     return
                 }
+        currentCoroutineContext().ensureActive()
         activeSession = session
         container.diagnosticsLogger.recordStructured(
             "connection",
@@ -291,6 +296,13 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         registerDefaultNetworkCallbackIfNeeded()
         startNotificationHealthMonitoring()
         val result = runtime.start(session, this)
+        if (!currentCoroutineContext().isActive) {
+            withContext(NonCancellable) {
+                container.diagnosticsLogger.record("connection", "runtime start cancelled after native return")
+                disconnect(commandStartId = commandStartId)
+            }
+            return
+        }
         if (result.isSuccess) {
             container.connectionController.markCurrentRuntimeApplied()
             when (trafficMode) {
@@ -400,10 +412,18 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
     internal fun ensureNotificationChannel() = ensureConnectionNotificationChannel(notificationManager)
 
     internal fun launchCommand(block: suspend () -> Unit) {
-        scope.launch {
+        commandJob = scope.launch(Dispatchers.Default) {
             commandMutex.withLock {
                 block()
             }
+        }
+    }
+
+    internal fun launchPriorityCommand(block: suspend () -> Unit) {
+        commandJob?.cancel()
+        commandJob = null
+        scope.launch(Dispatchers.Default) {
+            block()
         }
     }
 

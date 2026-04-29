@@ -30,7 +30,7 @@ data class InsecureTlsImportWarning(
 class InsecureTlsProfileConsentRequiredException(
     val warning: InsecureTlsImportWarning? = null,
 ) : IllegalStateException(
-    "insecure tls is not allowed without profile consent",
+    "INSECURE TLS is not allowed without profile consent",
 )
 
 internal suspend fun rawImportRequiresInsecureTls(
@@ -138,11 +138,13 @@ internal fun ParsedSubscriptionImport.insecureTlsImportWarning(json: Json): Inse
 
 internal fun ParsedImport.withoutInsecureTlsOptions(json: Json): ParsedImport {
     if (protocolOptions.isEmpty()) {
-        require(normalizedConfigJson?.requiresInsecureTls(json) != true) { "no secure protocols remain after excluding insecure tls" }
+        require(normalizedConfigJson?.requiresInsecureTls(json) != true) {
+            "no secure protocols remain after excluding INSECURE TLS"
+        }
         return this
     }
     val secureOptions = protocolOptions.filterNot { option -> option.resolvedRequiresInsecureTls(json) }
-    require(secureOptions.isNotEmpty()) { "no secure protocols remain after excluding insecure tls" }
+    require(secureOptions.isNotEmpty()) { "no secure protocols remain after excluding INSECURE TLS" }
     val selectedOption =
         secureOptions.firstOrNull { option -> option.id == selectedProtocolOptionId }
             ?: secureOptions.first()
@@ -156,28 +158,29 @@ internal fun ParsedImport.withoutInsecureTlsOptions(json: Json): ParsedImport {
 
 internal fun ParsedSubscriptionImport.withoutInsecureTlsOptions(json: Json): ParsedSubscriptionImport {
     val secureProfiles = profiles.mapNotNull { profile -> profile.withoutInsecureTlsOptionsOrNull(json) }
-    require(secureProfiles.isNotEmpty()) { "no secure protocols remain after excluding insecure tls" }
+    require(secureProfiles.isNotEmpty()) { "no secure protocols remain after excluding INSECURE TLS" }
     return copy(profiles = secureProfiles)
 }
 
-private fun ParsedSubscriptionProfile.withoutInsecureTlsOptionsOrNull(json: Json): ParsedSubscriptionProfile? {
+private fun ParsedSubscriptionProfile.withoutInsecureTlsOptionsOrNull(json: Json): ParsedSubscriptionProfile? =
     if (protocolOptions.isEmpty()) {
-        return takeUnless { normalizedConfigJson.requiresInsecureTls(json) }
+        takeUnless { normalizedConfigJson.requiresInsecureTls(json) }
+    } else {
+        protocolOptions
+            .filterNot { option -> option.resolvedRequiresInsecureTls(json) }
+            .takeIf { secureOptions -> secureOptions.isNotEmpty() }
+            ?.let { secureOptions ->
+                val selectedOption =
+                    secureOptions.firstOrNull { option -> option.id == selectedProtocolOptionId }
+                        ?: secureOptions.first()
+                copy(
+                    protocolHint = selectedOption.protocolHint,
+                    normalizedConfigJson = selectedOption.normalizedConfigJson,
+                    protocolOptions = secureOptions,
+                    selectedProtocolOptionId = selectedOption.id,
+                )
+            }
     }
-    val secureOptions = protocolOptions.filterNot { option -> option.resolvedRequiresInsecureTls(json) }
-    if (secureOptions.isEmpty()) {
-        return null
-    }
-    val selectedOption =
-        secureOptions.firstOrNull { option -> option.id == selectedProtocolOptionId }
-            ?: secureOptions.first()
-    return copy(
-        protocolHint = selectedOption.protocolHint,
-        normalizedConfigJson = selectedOption.normalizedConfigJson,
-        protocolOptions = secureOptions,
-        selectedProtocolOptionId = selectedOption.id,
-    )
-}
 
 internal fun StoredProfileSecret.withInsecureTlsMarkers(
     json: Json,

@@ -1,5 +1,6 @@
 package com.foxhole.beta.core.importer
 
+import com.foxhole.beta.core.data.requiresInsecureTls
 import com.foxhole.beta.core.model.ProfileSourceType
 import com.foxhole.beta.core.model.ProtocolHint
 import com.foxhole.beta.core.network.ipv4TestAddress
@@ -488,7 +489,7 @@ class ProfileImportParserTest {
     }
 
     @Test
-    fun `splits single route smart config into separate protocol profiles`() {
+    fun `keeps single route smart config as one profile with protocol options`() {
         val parsed =
             parser.parseSubscriptionProfiles(
                 """
@@ -504,12 +505,40 @@ class ProfileImportParserTest {
                 "Foxhole",
             )
 
-        assertEquals(3, parsed.profiles.size)
+        assertEquals(1, parsed.profiles.size)
         assertEquals(
             listOf(ProtocolHint.VLESS, ProtocolHint.SHADOWSOCKS, ProtocolHint.OUTLINE),
-            parsed.profiles.map { it.protocolHint },
+            parsed.profiles.single().protocolOptions.map { it.protocolHint },
         )
-        assertEquals(listOf(1, 1, 1), parsed.profiles.map { it.protocolOptions.size })
+        assertEquals(3, parsed.profiles.single().protocolOptions.size)
+    }
+
+    @Test
+    fun `marks only insecure smart config protocol option`() {
+        val parsed =
+            parser.parseSubscriptionProfiles(
+                """
+                # === vless / direct ===
+                vless://11111111-1111-1111-1111-111111111111@direct.example.com:8443?encryption=none&security=none&type=tcp#Foxhole%20vpn%20direct
+
+                # === hysteria2 / direct ===
+                hysteria2://secret-direct@hy2-direct.example.com:8447?insecure=1#Foxhole%20vpn%20direct
+                """.trimIndent(),
+                "Foxhole",
+                allowInsecureTls = true,
+            )
+
+        val directProfile = parsed.profiles.single()
+
+        assertEquals(2, directProfile.protocolOptions.size)
+        assertEquals(
+            listOf(ProtocolHint.VLESS, ProtocolHint.HYSTERIA2),
+            directProfile.protocolOptions.map { it.protocolHint },
+        )
+        assertEquals(
+            listOf(false, true),
+            directProfile.protocolOptions.map { option -> option.normalizedConfigJson.requiresInsecureTls(json) },
+        )
     }
 
     @Test

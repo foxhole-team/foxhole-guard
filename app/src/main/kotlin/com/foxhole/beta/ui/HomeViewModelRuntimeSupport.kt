@@ -7,8 +7,8 @@ import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.SystemClock
-import androidx.lifecycle.viewModelScope
 import androidx.core.content.FileProvider
+import androidx.lifecycle.viewModelScope
 import com.foxhole.beta.R
 import com.foxhole.beta.core.data.InsecureTlsImportWarning
 import com.foxhole.beta.core.data.InsecureTlsProfileConsentRequiredException
@@ -16,15 +16,15 @@ import com.foxhole.beta.core.model.ConnectionState
 import com.foxhole.beta.core.model.InstalledAppOption
 import com.foxhole.beta.core.model.RoutingPresetSource
 import com.foxhole.beta.core.model.RoutingRuleAction
-import com.foxhole.beta.core.notifications.ProfileRefreshResultNotifier
 import com.foxhole.beta.core.network.IpInfoFetchMode
+import com.foxhole.beta.core.notifications.ProfileRefreshResultNotifier
 import com.foxhole.beta.vpn.FoxholeVpnRuntimeBridge
-import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
 
 internal fun HomeViewModel.importPresetTextInternal(
     raw: String,

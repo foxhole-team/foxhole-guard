@@ -307,6 +307,12 @@ val jacocoExcludes =
 
 val jacocoDebugClassDirectories =
     files(
+        fileTree(layout.buildDirectory.dir("intermediates/built_in_kotlinc/debug/compileDebugKotlin/classes")) {
+            exclude(jacocoExcludes)
+        },
+        fileTree(layout.buildDirectory.dir("intermediates/javac/debug/compileDebugJavaWithJavac/classes")) {
+            exclude(jacocoExcludes)
+        },
         fileTree(layout.buildDirectory.dir("tmp/kotlin-classes/debug")) {
             exclude(jacocoExcludes)
         },
@@ -332,6 +338,12 @@ tasks.register<JacocoReport>("jacocoDebugUnitTestReport") {
             )
         },
     )
+    doLast {
+        val xmlReport = reports.xml.outputLocation.get().asFile
+        require(xmlReport.readText().contains("<counter ")) {
+            "Jacoco debug unit test report did not include coverage counters: ${xmlReport.absolutePath}"
+        }
+    }
 }
 
 tasks.register<JacocoCoverageVerification>("jacocoDebugUnitTestCoverageVerification") {

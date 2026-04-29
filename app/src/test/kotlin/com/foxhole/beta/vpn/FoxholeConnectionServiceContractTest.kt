@@ -65,4 +65,31 @@ class FoxholeConnectionServiceContractTest {
             ),
         )
     }
+
+    @Test
+    fun `stale idle snapshot still dispatches tunnel disconnect when system vpn is active`() {
+        assertEquals(
+            listOf(TrafficMode.TUNNEL),
+            disconnectDispatchModes(
+                snapshot =
+                    ConnectionSnapshot(
+                        state = ConnectionState.IDLE,
+                        trafficMode = TrafficMode.PROXY,
+                    ),
+                activeVpnNetworkAvailable = true,
+            ),
+        )
+
+        assertEquals(
+            emptyList<TrafficMode>(),
+            disconnectDispatchModes(
+                snapshot =
+                    ConnectionSnapshot(
+                        state = ConnectionState.IDLE,
+                        trafficMode = TrafficMode.TUNNEL,
+                    ),
+                activeVpnNetworkAvailable = false,
+            ),
+        )
+    }
 }

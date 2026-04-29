@@ -499,8 +499,9 @@ fun HomeScreen(
                                     latencyUnavailableOptionIds = dashboardUnavailableProtocolIds,
                                     recommendedProtocolOptionId = state.recommendedProtocolOptionId,
                                     recommendedProtocolOptionIds = state.recommendedProtocolOptionIds,
+                                    favoriteProtocolOptionId = state.favoriteProtocolOptionId,
                                     selectorBorderColor = dashboardSelectorBorderColor,
-                                    showInsecureTlsBadge = false,
+                                    showInsecureTlsBadge = true,
                                     leadingContent =
                                         if (isSmartDashboardProfile) {
                                             {
@@ -517,6 +518,7 @@ fun HomeScreen(
                                                     metricsRefreshing = state.protocolMetricsRefreshing,
                                                     recommendedOptionId = state.recommendedProtocolOptionId,
                                                     recommendedOptionIds = state.recommendedProtocolOptionIds,
+                                                    favoriteOptionId = state.favoriteProtocolOptionId,
                                                     activeOptionId = dashboardProtocolPresentation.selectedProtocolOptionId,
                                                     onRefreshMetrics = { requestSmartProfileMetricsRefresh(state.activeProfile.id) },
                                                     onCancelRefreshMetrics = onCancelSmartProfileMetricsRefresh,

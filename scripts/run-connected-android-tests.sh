@@ -170,17 +170,23 @@ run_test_spec() {
   adb shell pm clear "$TARGET_PACKAGE" >/dev/null 2>&1 || true
   clear_gradle_connected_outputs
 
-  local extra_args=()
+  local live_vpn_smoke_arg=""
   if [[ "$test_spec" == com.foxhole.beta.vpn.VpnRuntimeSmokeTest* && "${FOXHOLE_LIVE_VPN_SMOKE:-0}" == "1" ]]; then
     adb shell cmd appops set "$TARGET_PACKAGE" ACTIVATE_VPN allow >/dev/null 2>&1 || true
-    extra_args=(-Pandroid.testInstrumentationRunnerArguments.foxhole.liveVpnSmoke=1)
+    live_vpn_smoke_arg="-Pandroid.testInstrumentationRunnerArguments.foxhole.liveVpnSmoke=1"
   fi
 
   set +e
-  run_with_timeout "$test_timeout" \
-    ./gradlew connectedDebugAndroidTest --info \
-      -Pandroid.testInstrumentationRunnerArguments.class="$test_spec" \
-      "${extra_args[@]}"
+  if [[ -n "$live_vpn_smoke_arg" ]]; then
+    run_with_timeout "$test_timeout" \
+      ./gradlew :app:connectedDebugAndroidTest --info \
+        -Pandroid.testInstrumentationRunnerArguments.class="$test_spec" \
+        "$live_vpn_smoke_arg"
+  else
+    run_with_timeout "$test_timeout" \
+      ./gradlew :app:connectedDebugAndroidTest --info \
+        -Pandroid.testInstrumentationRunnerArguments.class="$test_spec"
+  fi
   local status=$?
   set -e
 

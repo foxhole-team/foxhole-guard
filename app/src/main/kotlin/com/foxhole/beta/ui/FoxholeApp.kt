@@ -119,6 +119,7 @@ private enum class AppSection(
     ),
 }
 
+@Suppress("LongMethod", "CyclomaticComplexMethod")
 @Composable
 fun FoxholeApp(
     viewModel: HomeViewModel,
@@ -263,6 +264,7 @@ fun FoxholeApp(
                         metricsRefreshing = profileId in state.smartProfileMetricsRefreshingProfileIds,
                         recommendedProtocolOptionId = state.recommendedProtocolOptionByProfileId[profileId],
                         recommendedProtocolOptionIds = state.recommendedProtocolOptionsByProfileId[profileId].orEmpty(),
+                        favoriteProtocolOptionId = state.favoriteProtocolOptionByProfileId[profileId],
                         latencyProbeMethod = state.settings.connection.latencyProbeMethod,
                         snackbarHostState = snackbarHostState,
                         onNavigateUp = { navController.navigateToProfilesRoot() },

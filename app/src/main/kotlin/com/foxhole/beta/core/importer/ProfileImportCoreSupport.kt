@@ -268,7 +268,7 @@ internal fun normalizeTlsSettingsElement(
                     when (key) {
                         "allowInsecure", "insecure" -> {
                             val normalizedValue = flexibleBooleanOrNull(value)
-                            require(allowInsecureTls || normalizedValue != true) { "insecure tls is not allowed" }
+                            require(allowInsecureTls || normalizedValue != true) { "INSECURE TLS is not allowed" }
                             insecureTls = normalizedValue ?: insecureTls
                         }
                         else -> put(key, normalizeTlsSettingsElement(value, allowInsecureTls))

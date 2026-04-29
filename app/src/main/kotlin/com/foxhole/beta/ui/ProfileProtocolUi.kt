@@ -98,6 +98,7 @@ private val CompactProtocolSelectorMaxWidth = 340.dp
 private val RegularProtocolSelectorMinWidth = 206.dp
 private val RegularProtocolSelectorMaxWidth = 354.dp
 
+@Suppress("LongParameterList", "CyclomaticComplexMethod")
 @Composable
 internal fun ProtocolMetadataRow(
     protocol: ProtocolHint,
@@ -114,6 +115,7 @@ internal fun ProtocolMetadataRow(
     latencyUnavailableOptionIds: Set<String> = emptySet(),
     recommendedProtocolOptionId: String? = null,
     recommendedProtocolOptionIds: Set<String> = recommendedProtocolOptionId?.let(::setOf).orEmpty(),
+    favoriteProtocolOptionId: String? = null,
     selectorMenuInfoText: String? = null,
     selectorBorderColor: Color? = null,
     requiresInsecureTls: Boolean = false,
@@ -159,6 +161,7 @@ internal fun ProtocolMetadataRow(
             animateSelection = animateSelection,
             recommendedProtocolOptionId = recommendedProtocolOptionId,
             recommendedProtocolOptionIds = recommendedProtocolOptionIds,
+            favoriteProtocolOptionId = favoriteProtocolOptionId,
             latencyByOptionId = latencyByOptionId,
             downProtocolOptionIds = downProtocolOptionIds,
             latencyUnavailableOptionIds = latencyUnavailableOptionIds,
@@ -222,7 +225,12 @@ internal fun shouldShowInsecureTlsProfileBadge(
     selectedOptionRequiresInsecureTls: Boolean,
     hasMultipleProtocolOptions: Boolean = false,
 ): Boolean =
-    showInsecureTlsBadge && (selectedOptionRequiresInsecureTls || (profileRequiresInsecureTls && !hasMultipleProtocolOptions))
+    showInsecureTlsBadge &&
+        if (hasMultipleProtocolOptions) {
+            selectedOptionRequiresInsecureTls
+        } else {
+            selectedOptionRequiresInsecureTls || profileRequiresInsecureTls
+        }
 
 internal fun selectedProtocolRequiresInsecureTls(profile: Profile): Boolean {
     val supportedProtocolOptions = MultiProtocolProfileSupport.supportedOptions(profile.protocolOptions)
@@ -290,6 +298,7 @@ internal fun rememberProfileDetailSourceValue(profile: Profile): String {
     }
 }
 
+@Suppress("LongParameterList", "LongMethod", "CyclomaticComplexMethod")
 @Composable
 private fun ProtocolMarkOrSelector(
     protocol: ProtocolHint,
@@ -300,6 +309,7 @@ private fun ProtocolMarkOrSelector(
     animateSelection: Boolean,
     recommendedProtocolOptionId: String?,
     recommendedProtocolOptionIds: Set<String>,
+    favoriteProtocolOptionId: String?,
     latencyByOptionId: Map<String, Long>,
     downProtocolOptionIds: Set<String>,
     latencyUnavailableOptionIds: Set<String>,
@@ -372,6 +382,7 @@ private fun ProtocolMarkOrSelector(
                                 compact = compact,
                                 recommended = animatedOption.id in recommendedProtocolOptionIds,
                                 topRecommended = animatedOption.id == recommendedProtocolOptionId,
+                                favorite = animatedOption.id == favoriteProtocolOptionId,
                                 latencyMs = latencyByOptionId[animatedOption.id],
                                 latencyDown = animatedOption.id in downProtocolOptionIds,
                                 latencyUnavailable =
@@ -385,6 +396,7 @@ private fun ProtocolMarkOrSelector(
                             compact = compact,
                             recommended = selected.id in recommendedProtocolOptionIds,
                             topRecommended = selected.id == recommendedProtocolOptionId,
+                            favorite = selected.id == favoriteProtocolOptionId,
                             latencyMs = latencyByOptionId[selected.id],
                             latencyDown = selected.id in downProtocolOptionIds,
                             latencyUnavailable =
@@ -488,6 +500,7 @@ private fun ProtocolMarkOrSelector(
                             compact = compact,
                             recommended = option.id in recommendedProtocolOptionIds,
                             topRecommended = option.id == recommendedProtocolOptionId,
+                            favorite = option.id == favoriteProtocolOptionId,
                             latencyMs = latencyByOptionId[option.id],
                             latencyDown = option.id in downProtocolOptionIds,
                             latencyUnavailable =
@@ -508,6 +521,7 @@ internal fun ProtocolSelectorLabel(
     compact: Boolean = false,
     recommended: Boolean = false,
     topRecommended: Boolean = false,
+    favorite: Boolean = false,
     latencyMs: Long? = null,
     latencyDown: Boolean = false,
     latencyUnavailable: Boolean = false,
@@ -545,40 +559,89 @@ internal fun ProtocolSelectorLabel(
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        if (recommended) {
-            ProtocolRecommendationStars(
+        if (favorite || recommended) {
+            SmartProfileConditionStars(
+                favorite = favorite,
+                recommended = recommended,
                 topRecommended = topRecommended,
                 compact = compact,
                 modifier = Modifier.offset(y = if (compact) (-4).dp else (-3).dp),
             )
         }
         if (option.requiresInsecureTls) {
-            ProtocolUnsafeStar(
+            InsecureTlsSuperscriptBadge(
                 compact = compact,
-                modifier = Modifier.offset(y = if (compact) (-4).dp else (-3).dp),
+                modifier = Modifier.offset(y = if (compact) (-5).dp else (-4).dp),
             )
         }
     }
 }
 
 @Composable
-private fun ProtocolRecommendationStars(
+private fun InsecureTlsSuperscriptBadge(
+    compact: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    val badgeColor = Color(0xFFE55353)
+    Surface(
+        modifier = modifier,
+        shape = MaterialTheme.shapes.small,
+        color = Color.Transparent,
+        border = BorderStroke(1.dp, badgeColor.copy(alpha = 0.70f)),
+    ) {
+        Text(
+            text = stringResource(R.string.insecure_tls_profile_badge),
+            modifier = Modifier.padding(horizontal = if (compact) 3.dp else 4.dp, vertical = 1.dp),
+            style =
+                MaterialTheme.typography.labelSmall.copy(
+                    fontSize = if (compact) 5.8.sp else 6.8.sp,
+                    lineHeight = if (compact) 6.2.sp else 7.2.sp,
+                    fontWeight = FontWeight.Bold,
+                ),
+            color = badgeColor,
+            maxLines = 1,
+            softWrap = false,
+            overflow = TextOverflow.Clip,
+        )
+    }
+}
+
+@Composable
+internal fun SmartProfileConditionStars(
+    favorite: Boolean = false,
+    recommended: Boolean = false,
     topRecommended: Boolean,
     compact: Boolean,
     modifier: Modifier = Modifier,
 ) {
+    val starCount =
+        smartProfileConditionStarCount(
+            favorite = favorite,
+            recommended = recommended,
+            topRecommended = topRecommended,
+        )
+    if (starCount <= 0) {
+        return
+    }
     Row(
         modifier = modifier,
         horizontalArrangement = Arrangement.spacedBy(1.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        val starCount = if (topRecommended) 2 else 1
         repeat(starCount) { index ->
             Icon(
                 imageVector = Icons.Outlined.Star,
                 contentDescription =
                     if (index == 0) {
-                        stringResource(R.string.smart_profile_menu_recommended_badge)
+                        stringResource(
+                            if (starCount == 2) {
+                                R.string.smart_profile_legend_reconnect_recommended
+                            } else if (favorite) {
+                                R.string.smart_profile_legend_favorite
+                            } else {
+                                R.string.smart_profile_menu_recommended_badge
+                            },
+                        )
                     } else {
                         null
                     },
@@ -589,18 +652,17 @@ private fun ProtocolRecommendationStars(
     }
 }
 
-@Composable
-private fun ProtocolUnsafeStar(
-    compact: Boolean,
-    modifier: Modifier = Modifier,
-) {
-    Icon(
-        imageVector = Icons.Outlined.Star,
-        contentDescription = stringResource(R.string.smart_profile_legend_unsafe),
-        modifier = modifier.size(if (compact) 9.dp else 10.dp),
-        tint = FoxholeUnsafeAccent,
-    )
-}
+internal fun smartProfileConditionStarCount(
+    favorite: Boolean,
+    recommended: Boolean,
+    topRecommended: Boolean,
+): Int =
+    when {
+        favorite && recommended -> 2
+        recommended && topRecommended -> 2
+        favorite || recommended -> 1
+        else -> 0
+    }
 
 @Composable
 internal fun ProtocolLatencyPill(
@@ -765,11 +827,22 @@ private fun rememberProtocolSelectorFixedWidth(
         } else {
             MaterialTheme.typography.labelMedium
         }
+    val insecureTlsBadge = stringResource(R.string.insecure_tls_profile_badge)
+    val insecureTlsBadgeStyle =
+        MaterialTheme.typography.labelSmall.copy(
+            fontSize = if (compact) 5.8.sp else 6.8.sp,
+            lineHeight = if (compact) 6.2.sp else 7.2.sp,
+            fontWeight = FontWeight.Bold,
+        )
     val iconSizePx = with(density) { if (compact) 13.dp.roundToPx() else 18.dp.roundToPx() }
     val markSpacingPx = with(density) { if (compact) 4.dp.roundToPx() else 8.dp.roundToPx() }
     val secondarySpacingPx = with(density) { if (compact) 4.dp.roundToPx() else 8.dp.roundToPx() }
     val recommendationStarsPx = with(density) { if (compact) 24.dp.roundToPx() else 27.dp.roundToPx() }
-    val unsafeStarPx = with(density) { if (compact) 13.dp.roundToPx() else 15.dp.roundToPx() }
+    val insecureTlsBadgePx =
+        textMeasurer.measure(
+            text = AnnotatedString(insecureTlsBadge),
+            style = insecureTlsBadgeStyle,
+        ).size.width + with(density) { if (compact) 10.dp.roundToPx() else 12.dp.roundToPx() }
     val chevronSizePx = with(density) { if (compact) 17.dp.roundToPx() else 18.dp.roundToPx() }
     val chevronGapPx = with(density) { if (compact) 4.dp.roundToPx() else 6.dp.roundToPx() }
     val leadingPaddingPx = with(density) { if (compact) 10.dp.roundToPx() else 14.dp.roundToPx() }
@@ -795,7 +868,7 @@ private fun rememberProtocolSelectorFixedWidth(
                 primaryWidth +
                 secondaryWidth +
                 recommendationStarsPx +
-                (if (option.requiresInsecureTls) unsafeStarPx else 0)
+                if (option.requiresInsecureTls) insecureTlsBadgePx else 0
         } ?: 0
     val estimatedWidth =
         with(density) {

@@ -46,6 +46,25 @@ class ProfileImportPlanTest {
     }
 
     @Test
+    fun `local single route smart config keeps single smart profile import plan`() {
+        val rawInput =
+            """
+            # === vless / direct ===
+            vless://11111111-1111-1111-1111-111111111111@direct.example.com:443?security=tls&type=tcp#Foxhole direct
+            # === trojan / direct ===
+            trojan://secret@trojan.example.com:443?security=tls&type=tcp#Foxhole direct
+            """.trimIndent()
+        val parsed = parser.parseUserInput(rawInput)
+        val localProfiles = parser.parseSubscriptionProfiles(rawInput, "Foxhole")
+
+        val plan = resolveImportProfilePlan(parsed, localProfiles)
+
+        assertTrue(plan is ImportProfilePlan.Single)
+        val single = plan as ImportProfilePlan.Single
+        assertEquals(2, single.parsed.protocolOptions.size)
+    }
+
+    @Test
     fun `single share uri keeps single import plan`() {
         val rawInput = "vless://11111111-1111-1111-1111-111111111111@example.com:443?security=tls&type=tcp#edge"
         val parsed =

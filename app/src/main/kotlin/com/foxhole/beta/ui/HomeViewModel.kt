@@ -98,6 +98,7 @@ class HomeViewModel(
     internal val protocolMetricsRefreshingProfileIdsMutable = MutableStateFlow<Set<Long>>(emptySet())
     internal val recommendedProtocolMutable = MutableStateFlow<ProtocolRecommendationState?>(null)
     internal val runtimeReloadPendingMutable = MutableStateFlow(false)
+    internal val reconnectInProgressMutable = MutableStateFlow(false)
     internal val profileReconnectPromptUntilMutable = MutableStateFlow(0L)
     internal val insecureTlsImportWarningMutable = MutableStateFlow<InsecureTlsImportWarningState?>(null)
     internal val catalogPresetPreviewsMutable = MutableStateFlow<Map<Long, List<RoutingRepository.RoutingCatalogPresetPreview>>>(emptyMap())
@@ -204,6 +205,16 @@ class HomeViewModel(
                 startupActiveProfile = trailingState.startupActiveProfile,
             )
         }
+    private val reconnectState =
+        combine(
+            reconnectInProgressMutable,
+            profileReconnectPromptUntilMutable,
+        ) { reconnectInProgress, profileReconnectPromptUntil ->
+            HomeReconnectStreams(
+                inProgress = reconnectInProgress,
+                promptUntilElapsedMs = profileReconnectPromptUntil,
+            )
+        }
 
     val uiState: StateFlow<HomeUiState> =
         combine(
@@ -211,8 +222,8 @@ class HomeViewModel(
             routingStreams,
             localState,
             container.diagnosticsLogger.entries,
-            profileReconnectPromptUntilMutable,
-        ) { connectionStreams, routingStreams, localState, diagnosticEntries, profileReconnectPromptUntil ->
+            reconnectState,
+        ) { connectionStreams, routingStreams, localState, diagnosticEntries, reconnectState ->
             val localStreams = localState.streams
             val resolvedActiveProfile =
                 HomeActiveProfileResolver.resolve(
@@ -227,8 +238,8 @@ class HomeViewModel(
                 )
             val profileReconnectRequired =
                 profileReconnectRequiredRaw &&
-                    profileReconnectPromptUntil > 0L &&
-                    SystemClock.elapsedRealtime() <= profileReconnectPromptUntil
+                    reconnectState.promptUntilElapsedMs > 0L &&
+                    SystemClock.elapsedRealtime() <= reconnectState.promptUntilElapsedMs
             HomeUiState(
                 profiles = connectionStreams.profiles,
                 profilesLoaded = localStreams.profilesLoaded,
@@ -250,9 +261,10 @@ class HomeViewModel(
                 installedAppsLoading = localStreams.installedAppsLoading,
                 installedAppsLoaded = localStreams.installedAppsLoaded,
                 reconnectRequired = profileReconnectRequired,
+                reconnectInProgress = reconnectState.inProgress,
                 profileReconnectPromptUntilElapsedMs =
                     if (profileReconnectRequired) {
-                        profileReconnectPromptUntil
+                        reconnectState.promptUntilElapsedMs
                     } else {
                         0L
                     },
@@ -383,6 +395,7 @@ class HomeViewModel(
     internal var runtimeReloadPendingJob: Job? = null
     internal var profileReconnectPromptJob: Job? = null
     internal var autoConnectJob: Job? = null
+    internal var reconnectJob: Job? = null
     internal var protocolMetricsRefreshJob: Job? = null
     internal var protocolMetricsRestoreOnCancel: Boolean = true
 
@@ -443,6 +456,12 @@ class HomeViewModel(
     }
 
     fun onAppForegrounded() {
+        viewModelScope.launch {
+            val reconciledActiveVpn = container.connectionController.reconcileActiveVpnNetworkIfNeeded()
+            if (reconciledActiveVpn) {
+                scheduleConnectedIpRefresh()
+            }
+        }
         val runtimeState = container.connectionController.snapshot.value.state
         if (!shouldAutoRefreshIpOnForeground(runtimeState) || ipInfoLoadingMutable.value) {
             return
@@ -485,6 +504,13 @@ class HomeViewModel(
         }
         cancelAutoConnect(clearUiOnly = true)
         val state = uiState.value
+        if (state.reconnectInProgress) {
+            reconnectJob?.cancel()
+            reconnectJob = null
+            reconnectInProgressMutable.value = false
+            container.connectionController.disconnect()
+            return
+        }
         val activeProfile = state.activeProfile
         if (activeProfile == null) {
             snackbars.tryEmit(errorBanner(R.string.error_profile_missing))

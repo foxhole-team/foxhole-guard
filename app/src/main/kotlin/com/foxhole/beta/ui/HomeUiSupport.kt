@@ -190,6 +190,9 @@ internal fun shouldShowSmartStartRefreshReminder(
     return now - refreshedAt > SMART_START_FULL_REFRESH_STALE_MS
 }
 
+internal fun shouldShowAutoConnectAction(activeProfile: Profile?): Boolean =
+    MultiProtocolProfileSupport.hasSupportedAutoConnectOption(activeProfile)
+
 internal fun shouldAwaitAutoConnectValidationGrace(
     connectionState: ConnectionState,
     vpnNetworkAvailable: Boolean,
@@ -240,10 +243,11 @@ internal fun resolveHomeDashboardProtocolModel(state: HomeRouteUiState): HomeDas
     val protocolPresentation =
         resolveHomeDashboardProtocolPresentation(
             activeProfile = state.activeProfile,
+            connection = state.connection,
             autoConnect = state.autoConnect,
             pinSelectionToProfile = state.protocolMetricsRefreshing,
         )
-    val selectedServerPingOptionId = resolveDashboardLatencyOptionId(state.activeProfile)
+    val selectedServerPingOptionId = resolveDashboardLatencyOptionId(state.activeProfile, state.connection)
     val selectedServerPingMs = selectedServerPingOptionId?.let(state.protocolServerPingsByOptionId::get)
     val selectedServerPingUnavailable =
         selectedServerPingOptionId != null &&
@@ -396,8 +400,30 @@ internal fun resolveDashboardSelectedOptionId(activeProfile: Profile?): String? 
         ?.let(MultiProtocolProfileSupport::selectedOption)
         ?.id
 
-internal fun resolveDashboardLatencyOptionId(activeProfile: Profile?): String? =
-    resolveDashboardSelectedOptionId(activeProfile)
+internal fun resolveDashboardSelectedOptionId(
+    activeProfile: Profile?,
+    connection: ConnectionSnapshot,
+): String? {
+    val connectedProtocol =
+        connection.protocolHint
+            ?.takeIf { connection.profileId == activeProfile?.id }
+            ?.takeIf { connection.state in setOf(ConnectionState.CONNECTED, ConnectionState.CONNECTING, ConnectionState.RECONNECTING) }
+    return connectedProtocol
+        ?.let { protocol ->
+            activeProfile
+                ?.protocolOptions
+                ?.firstOrNull { option -> option.protocolHint == protocol }
+                ?.id
+        }
+        ?: resolveDashboardSelectedOptionId(activeProfile)
+}
+
+internal fun resolveDashboardLatencyOptionId(
+    activeProfile: Profile?,
+    connection: ConnectionSnapshot? = null,
+): String? =
+    connection?.let { resolveDashboardSelectedOptionId(activeProfile, it) }
+        ?: resolveDashboardSelectedOptionId(activeProfile)
         ?: activeProfile
             ?.protocolHint
             ?.takeIf { hint -> hint !in setOf(ProtocolHint.UNKNOWN, ProtocolHint.SING_BOX) }
@@ -454,6 +480,7 @@ internal fun activeLanProxySurface(state: HomeRouteUiState): HomeProxySurface? {
 
 internal fun resolveHomeDashboardProtocolPresentation(
     activeProfile: Profile?,
+    connection: ConnectionSnapshot = ConnectionSnapshot(),
     autoConnect: AutoConnectUiState,
     pinSelectionToProfile: Boolean = false,
 ): HomeDashboardProtocolPresentation {
@@ -465,10 +492,10 @@ internal fun resolveHomeDashboardProtocolPresentation(
         )
     }
     val selectedProtocolOptionId =
-        if (autoConnect.running && !pinSelectionToProfile) {
-            autoConnect.currentOptionId ?: activeProfile.selectedProtocolOptionId
-        } else {
-            activeProfile.selectedProtocolOptionId
+        when {
+            autoConnect.running && !pinSelectionToProfile ->
+                autoConnect.currentOptionId ?: activeProfile.selectedProtocolOptionId
+            else -> resolveDashboardSelectedOptionId(activeProfile, connection)
         }
     val protocolOptions =
         if (autoConnect.running && !pinSelectionToProfile && autoConnect.options.isNotEmpty()) {

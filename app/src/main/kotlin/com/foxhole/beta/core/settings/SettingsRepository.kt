@@ -355,7 +355,7 @@ class SettingsRepository(
         val existing = current.smartProfilePreference(profileId) ?: SmartProfilePreference(profileId = profileId)
         current.withSmartProfilePreference(
             existing.copy(
-                lastFullSmartRefreshAt = refreshedAt.takeIf { it > 0L },
+                lastFullSmartRefreshAt = refreshedAt.takeIf { it > 0L } ?: existing.lastFullSmartRefreshAt,
                 smartStartBaselineReady = normalizedRecommendedIds.isNotEmpty(),
                 recommendedProtocolIds = normalizedRecommendedIds,
                 enabledProtocolSetHash = normalizedHash,

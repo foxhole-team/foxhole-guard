@@ -34,6 +34,7 @@ data class HomeUiState(
     val installedAppsLoading: Boolean = false,
     val installedAppsLoaded: Boolean = false,
     val reconnectRequired: Boolean = false,
+    val reconnectInProgress: Boolean = false,
     val profileReconnectPromptUntilElapsedMs: Long = 0L,
     val diagnosticEntries: List<DiagnosticEntry> = emptyList(),
     val catalogPresetPreviews: Map<Long, List<RoutingRepository.RoutingCatalogPresetPreview>> = emptyMap(),
@@ -107,6 +108,11 @@ internal data class HomeTrailingLocalState(
     val catalogPresetPreviews: Map<Long, List<RoutingRepository.RoutingCatalogPresetPreview>>,
     val startupActiveProfile: Profile?,
     val appliedRuntimeSignature: Int?,
+)
+
+internal data class HomeReconnectStreams(
+    val inProgress: Boolean,
+    val promptUntilElapsedMs: Long,
 )
 
 internal enum class PendingConnectAction {

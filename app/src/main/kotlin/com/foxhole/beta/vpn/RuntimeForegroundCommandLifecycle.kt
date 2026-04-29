@@ -15,6 +15,7 @@ internal fun Service.handleForegroundRuntimeCommand(
     buildNotification: (NotificationSnapshot) -> Notification,
     container: FoxholeRuntimeDependencies,
     launchCommand: (suspend () -> Unit) -> Unit,
+    launchPriorityCommand: (suspend () -> Unit) -> Unit,
     connect: suspend (
         profileId: Long,
         commandStartId: Int,
@@ -34,6 +35,7 @@ internal fun Service.handleForegroundRuntimeCommand(
         startId = startId,
         container = container,
         launchCommand = launchCommand,
+        launchPriorityCommand = launchPriorityCommand,
         connect = connect,
         disconnect = disconnect,
         reload = reload,

@@ -1,11 +1,13 @@
 package com.foxhole.beta.ui
 
-import com.foxhole.beta.core.settings.rememberedSmartProfileMetricsUpdatedAtByOptionId
-import com.foxhole.beta.core.settings.rememberedSmartProfileMetricsUpdatedAtByProfileId
+import com.foxhole.beta.core.model.Profile
+import com.foxhole.beta.core.model.ProfileProtocolOption
+import com.foxhole.beta.core.model.Settings
 import com.foxhole.beta.core.settings.rememberedSmartProfileServerPingByOptionId
 import com.foxhole.beta.core.settings.rememberedSmartProfileServerPingByProfileId
 import com.foxhole.beta.core.settings.rememberedSmartStartLatencyByOptionId
 import com.foxhole.beta.core.settings.rememberedSmartStartLatencyByProfileId
+import com.foxhole.beta.core.settings.preferredLastKnownGoodOptionId
 import com.foxhole.beta.core.settings.smartProfilePreference
 
 internal fun buildHomeRouteUiState(
@@ -66,21 +68,12 @@ internal fun buildHomeRouteUiState(
     val activeProfileMetricsUpdatedAt =
         state.activeProfile
             ?.let { activeProfile ->
-                val rememberedUpdatedAt =
-                    state.settings
-                        .smartProfilePreference(activeProfile.id)
-                        ?.rememberedSmartProfileMetricsUpdatedAtByOptionId(currentNetworkFingerprintKey)
-                        .orEmpty()
-                val liveUpdatedAt =
-                    protocolMetrics.updatedAt
-                        .filterKeys { key -> key.profileId == activeProfile.id }
-                        .mapKeys { (key, _) -> key.optionId }
-                (rememberedUpdatedAt.keys + liveUpdatedAt.keys)
-                    .associateWith { optionId ->
-                        listOfNotNull(rememberedUpdatedAt[optionId], liveUpdatedAt[optionId]).maxOrNull() ?: 0L
-                    }.filterValues { updatedAt -> updatedAt > 0L }
+                fullSmartRefreshUpdatedAtByOptionId(
+                    profile = activeProfile,
+                    settings = state.settings,
+                )
             }.orEmpty()
-    val selectedLatencyOptionId = resolveDashboardLatencyOptionId(state.activeProfile)
+    val selectedLatencyOptionId = resolveDashboardLatencyOptionId(state.activeProfile, state.connection)
     val selectedProtocolLatencyMs = selectedLatencyOptionId?.let(activeProfileLatencies::get)
     val selectedProtocolLatencyUnavailable =
         selectedLatencyOptionId != null &&
@@ -107,6 +100,13 @@ internal fun buildHomeRouteUiState(
                         ?.optionId
                 (baseline + listOfNotNull(transient)).toSet()
             }.orEmpty()
+    val activeFavoriteProtocolOptionId =
+        state.activeProfile
+            ?.let { activeProfile ->
+                state.settings
+                    .smartProfilePreference(activeProfile.id)
+                    ?.preferredLastKnownGoodOptionId(currentNetworkFingerprintKey)
+            }
     return state.toHomeRouteUiState(
         autoConnect = autoConnect,
         selectedProtocolLatencyMs = selectedProtocolLatencyMs,
@@ -124,6 +124,7 @@ internal fun buildHomeRouteUiState(
                 ?.optionId
                 ?: activeRecommendedProtocolOptionIds.firstOrNull(),
         recommendedProtocolOptionIds = activeRecommendedProtocolOptionIds,
+        favoriteProtocolOptionId = activeFavoriteProtocolOptionId,
         smartStartRememberedLatenciesByOptionId = smartStartRememberedLatenciesByOptionId,
     )
 }
@@ -137,10 +138,6 @@ internal fun buildProfilesRouteUiState(
         state.settings.rememberedSmartProfileServerPingByProfileId(
             networkFingerprint = networkFingerprintKey,
         )
-    val rememberedMetricsUpdatedAtByProfileId =
-        state.settings.rememberedSmartProfileMetricsUpdatedAtByProfileId(
-            networkFingerprint = networkFingerprintKey,
-        )
     val liveServerPingsByProfileId =
         protocolMetrics.serverPings
             .mapNotNull { (key, value) -> value.pingMs?.let { key.profileId to (key.optionId to it) } }
@@ -152,21 +149,15 @@ internal fun buildProfilesRouteUiState(
                 rememberedServerPingsByProfileId[profileId].orEmpty() +
                     liveServerPingsByProfileId[profileId].orEmpty()
             }
-    val liveMetricsUpdatedAtByProfileId =
-        protocolMetrics.updatedAt
-            .map { (key, value) -> key.profileId to (key.optionId to value) }
-            .groupBy({ it.first }, { it.second })
-            .mapValues { (_, values) -> values.toMap() }
-    val mergedMetricsUpdatedAtByProfileId =
-        (rememberedMetricsUpdatedAtByProfileId.keys + liveMetricsUpdatedAtByProfileId.keys)
-            .associateWith { profileId ->
-                val rememberedUpdatedAt = rememberedMetricsUpdatedAtByProfileId[profileId].orEmpty()
-                val liveUpdatedAt = liveMetricsUpdatedAtByProfileId[profileId].orEmpty()
-                (rememberedUpdatedAt.keys + liveUpdatedAt.keys)
-                    .associateWith { optionId ->
-                        listOfNotNull(rememberedUpdatedAt[optionId], liveUpdatedAt[optionId]).maxOrNull() ?: 0L
-                    }.filterValues { updatedAt -> updatedAt > 0L }
-            }
+    val fullRefreshUpdatedAtByProfileId =
+        state.profiles
+            .mapNotNull { profile ->
+                fullSmartRefreshUpdatedAtByOptionId(
+                    profile = profile,
+                    settings = state.settings,
+                ).takeIf(Map<String, Long>::isNotEmpty)
+                    ?.let { updatedAtByOptionId -> profile.id to updatedAtByOptionId }
+            }.toMap()
     val downOptionIdsByProfileId =
         protocolMetrics.downOptionIds
             .groupBy(ProfileOptionLatencyKey::profileId, ProfileOptionLatencyKey::optionId)
@@ -186,7 +177,7 @@ internal fun buildProfilesRouteUiState(
                 .mapValues { (profileId, values) ->
                     values.filterNot(mergedServerPingsByProfileId[profileId].orEmpty()::containsKey).toSet()
                 },
-        smartProfileMetricsUpdatedAtByProfileId = mergedMetricsUpdatedAtByProfileId,
+        smartProfileMetricsUpdatedAtByProfileId = fullRefreshUpdatedAtByProfileId,
         smartProfileMetricsRefreshingProfileIds = protocolMetrics.refreshingProfileIds,
         recommendedProtocolOptionByProfileId =
             state.settings.smartProfilePreferences
@@ -206,5 +197,29 @@ internal fun buildProfilesRouteUiState(
                 protocolMetrics.recommendation
                     ?.let { recommendation -> mapOf(recommendation.profileId to setOf(recommendation.optionId)) }
                     .orEmpty(),
+        favoriteProtocolOptionByProfileId =
+            state.settings.smartProfilePreferences
+                .mapNotNull { preference ->
+                    preference.preferredLastKnownGoodOptionId(networkFingerprintKey)?.let { optionId ->
+                        preference.profileId to optionId
+                    }
+                }.toMap(),
     )
+}
+
+private fun fullSmartRefreshUpdatedAtByOptionId(
+    profile: Profile,
+    settings: Settings,
+): Map<String, Long> {
+    val refreshedAt =
+        settings
+            .smartProfilePreference(profile.id)
+            ?.lastFullSmartRefreshAt
+            ?.takeIf { updatedAt -> updatedAt > 0L }
+            ?: return emptyMap()
+    return profile.protocolOptions
+        .map(ProfileProtocolOption::id)
+        .filter(String::isNotBlank)
+        .distinct()
+        .associateWith { refreshedAt }
 }

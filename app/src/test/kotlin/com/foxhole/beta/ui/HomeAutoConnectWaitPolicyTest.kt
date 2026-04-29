@@ -134,6 +134,22 @@ class HomeAutoConnectWaitPolicyTest {
     }
 
     @Test
+    fun `candidate probe timeout covers service validation instead of metrics refresh`() {
+        assertEquals(
+            HomeViewModel.AUTO_CONNECT_CONNECTION_TIMEOUT_MS,
+            autoConnectCandidateProbeTimeoutMs(),
+        )
+        assertTrue(autoConnectCandidateProbeTimeoutMs() > HomeViewModel.PROTOCOL_METRICS_PROBE_TIMEOUT_MS)
+        assertTrue(autoConnectCandidateProbeTimeoutMs() < HomeViewModel.AUTO_CONNECT_TOTAL_TIMEOUT_MS)
+    }
+
+    @Test
+    fun `auto connect permits a single supported candidate`() {
+        assertFalse(canStartAutoConnect(emptyList()))
+        assertTrue(canStartAutoConnect(listOf(candidate("vless"))))
+    }
+
+    @Test
     fun `auto connect remaining wall clock budget is bounded`() {
         assertEquals(
             60_000L,
@@ -236,6 +252,29 @@ class HomeAutoConnectWaitPolicyTest {
             )
 
         assertTrue(state is SmartStartAutoConnectState.ColdScan)
+        assertEquals(listOf("vless"), state.candidates.map(AutoConnectProbeCandidate::optionId))
+    }
+
+    @Test
+    fun `runner bounds cold scan attempts`() {
+        val state =
+            SmartStartAutoConnectRunner.resolveState(
+                fullScanCandidates =
+                    listOf(
+                        candidate("vless"),
+                        candidate("trojan"),
+                        candidate("hysteria"),
+                        candidate("wireguard"),
+                    ),
+                enabledProtocolSetHash = "hash",
+                preference = SmartProfilePreference(profileId = 1L),
+                rankedCandidates = emptyList(),
+            )
+
+        assertEquals(
+            listOf("vless", "trojan", "hysteria"),
+            state.candidates.map(AutoConnectProbeCandidate::optionId),
+        )
     }
 
     @Test

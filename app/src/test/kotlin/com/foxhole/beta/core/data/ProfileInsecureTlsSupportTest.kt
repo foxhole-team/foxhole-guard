@@ -1,10 +1,10 @@
 package com.foxhole.beta.core.data
 
-import com.foxhole.beta.core.model.ProtocolHint
 import com.foxhole.beta.core.model.ParsedImport
 import com.foxhole.beta.core.model.ParsedSubscriptionImport
 import com.foxhole.beta.core.model.ParsedSubscriptionProfile
 import com.foxhole.beta.core.model.ProfileSourceType
+import com.foxhole.beta.core.model.ProtocolHint
 import com.foxhole.beta.core.model.StoredProfileProtocolOption
 import com.foxhole.beta.core.model.StoredProfileSecret
 import kotlinx.serialization.json.Json

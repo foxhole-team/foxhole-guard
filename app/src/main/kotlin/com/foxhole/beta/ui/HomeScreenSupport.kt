@@ -55,8 +55,9 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
@@ -74,15 +75,14 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.os.ConfigurationCompat
 import com.foxhole.beta.R
 import com.foxhole.beta.core.model.ConnectionSnapshot
 import com.foxhole.beta.core.model.ConnectionState
 import com.foxhole.beta.core.model.LocalAuthSettings
-import com.foxhole.beta.core.profile.MultiProtocolProfileSupport
-import androidx.core.os.ConfigurationCompat
-import java.util.Locale
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
+import java.util.Locale
 
 internal val HomePrimaryActionHeight = 52.dp
 internal val HomeTriangleIndicatorSize = 15.dp
@@ -173,7 +173,7 @@ internal fun HomeNetworkDetailLine(
     valueMonospace: Boolean = false,
 ) {
     Row(
-        modifier = modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -192,7 +192,7 @@ internal fun HomeNetworkDetailLine(
         )
         Text(
             text = value,
-            modifier = Modifier.weight(1f),
+            modifier = modifier.weight(1f),
             style =
                 MaterialTheme.typography.labelSmall.copy(
                     fontSize = 10.sp,
@@ -735,6 +735,7 @@ internal fun dashboardProfileTitle(title: String): String =
         "${title.take(23)}.."
     }
 
+@Suppress("LongMethod")
 @Composable
 internal fun HomeConnectionActions(
     state: HomeRouteUiState,
@@ -742,7 +743,7 @@ internal fun HomeConnectionActions(
     onAutoConnect: () -> Unit,
 ) {
     val activeProfile = state.activeProfile
-    val hasMultipleProtocols = MultiProtocolProfileSupport.hasMultipleSupportedOptions(activeProfile)
+    val showAutoConnectAction = shouldShowAutoConnectAction(activeProfile)
     val autoConnectRunning = state.autoConnect.running
     val autoConnectEnabled =
         activeProfile != null &&
@@ -754,7 +755,12 @@ internal fun HomeConnectionActions(
         } else {
             FoxholeInfoAccent.copy(alpha = 0.46f)
         }
-    val primaryAction = if (autoConnectRunning) HomePrimaryAction.STOP else homePrimaryAction(state)
+    val primaryAction =
+        if (autoConnectRunning || state.reconnectInProgress) {
+            HomePrimaryAction.STOP
+        } else {
+            homePrimaryAction(state)
+        }
     val primaryButtonColor =
         when (primaryAction) {
             HomePrimaryAction.START,
@@ -791,25 +797,27 @@ internal fun HomeConnectionActions(
             Modifier
                 .clip(primaryButtonShape)
                 .drawBehind {
-                    drawRect(
+                    drawRoundRect(
                         color = Color.White.copy(alpha = 0.14f),
                         size =
                             Size(
                                 width = size.width * reconnectProgress.coerceIn(0f, 1f),
                                 height = size.height,
                             ),
+                        cornerRadius = CornerRadius(size.height / 2f, size.height / 2f),
                     )
                 }
         } else {
             Modifier
         }
-    if (!hasMultipleProtocols) {
-        OutlinedButton(
+    if (!showAutoConnectAction) {
+        ClippedOutlinedButton(
             onClick = onToggleConnection,
             enabled = activeProfile != null,
             modifier =
                 Modifier
                     .fillMaxWidth()
+                    .height(HomePrimaryActionHeight)
                     .testTag("home_connect_button")
                     .then(reconnectCountdownModifier),
             interactionSource = primaryButtonInteractionSource,
@@ -820,7 +828,7 @@ internal fun HomeConnectionActions(
             Icon(primaryIcon, contentDescription = null)
             Spacer(modifier = Modifier.width(12.dp))
             Text(
-                if (autoConnectRunning) {
+                if (autoConnectRunning || state.reconnectInProgress) {
                     stringResource(R.string.disconnect)
                 } else {
                     homeConnectionLabel(state.connection.state, state.reconnectRequired)
@@ -835,7 +843,7 @@ internal fun HomeConnectionActions(
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        OutlinedButton(
+        ClippedOutlinedButton(
             onClick = onToggleConnection,
             enabled = activeProfile != null,
             modifier =
@@ -852,7 +860,7 @@ internal fun HomeConnectionActions(
             Icon(primaryIcon, contentDescription = null)
             Spacer(modifier = Modifier.width(8.dp))
             Text(
-                if (autoConnectRunning) {
+                if (autoConnectRunning || state.reconnectInProgress) {
                     stringResource(R.string.disconnect)
                 } else {
                     homeConnectionLabel(state.connection.state, state.reconnectRequired)
@@ -888,6 +896,29 @@ internal fun HomeConnectionActions(
             )
         }
     }
+}
+
+@Composable
+private fun ClippedOutlinedButton(
+    onClick: () -> Unit,
+    enabled: Boolean,
+    modifier: Modifier,
+    interactionSource: MutableInteractionSource,
+    shape: RoundedCornerShape,
+    border: BorderStroke,
+    colors: androidx.compose.material3.ButtonColors,
+    content: @Composable RowScope.() -> Unit,
+) {
+    OutlinedButton(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = modifier.clip(shape),
+        interactionSource = interactionSource,
+        shape = shape,
+        border = border,
+        colors = colors,
+        content = content,
+    )
 }
 
 @Composable

@@ -11,6 +11,7 @@ internal fun handleRuntimeServiceCommand(
     startId: Int,
     container: FoxholeRuntimeDependencies,
     launchCommand: (suspend () -> Unit) -> Unit,
+    launchPriorityCommand: (suspend () -> Unit) -> Unit,
     connect: suspend (
         profileId: Long,
         commandStartId: Int,
@@ -31,7 +32,7 @@ internal fun handleRuntimeServiceCommand(
         }
 
         FoxholeConnectionServiceContract.ACTION_DISCONNECT -> {
-            launchCommand { disconnect(startId) }
+            launchPriorityCommand { disconnect(startId) }
         }
 
         FoxholeConnectionServiceContract.ACTION_RELOAD -> {
@@ -51,6 +52,9 @@ internal fun handleRuntimeServiceCommand(
         }
     }
 }
+
+internal fun isPriorityRuntimeServiceCommand(action: String?): Boolean =
+    action == FoxholeConnectionServiceContract.ACTION_DISCONNECT
 
 private suspend fun restoreLastActiveConnection(
     container: FoxholeRuntimeDependencies,

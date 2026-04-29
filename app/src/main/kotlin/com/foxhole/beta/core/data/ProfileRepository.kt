@@ -142,6 +142,7 @@ class ProfileRepository(
         }
     }
 
+    @Suppress("LongMethod", "CyclomaticComplexMethod", "ReturnCount")
     suspend fun importProfile(
         rawInput: String,
         preferredName: String? = null,
@@ -329,7 +330,8 @@ class ProfileRepository(
                                     selectedProtocolOptionId = selectedProtocolOptionId,
                                 ).withInsecureTlsMarkers(
                                     json = json,
-                                    forceRequiresInsecureTls = forceRequiresInsecureTls || importedProfile.requiresInsecureTls(json),
+                                    forceRequiresInsecureTls =
+                                        forceRequiresInsecureTls && importedProfile.requiresInsecureTls(json),
                                 ),
                         ),
                 )
@@ -579,6 +581,7 @@ class ProfileRepository(
         )
     }
 
+    @Suppress("LongMethod", "CyclomaticComplexMethod")
     suspend fun refreshProfile(
         profileId: Long,
         excludeInsecureTlsOptions: Boolean = false,
@@ -659,7 +662,7 @@ class ProfileRepository(
                         ).insecureTlsImportWarning(json)
                     }.getOrNull()
                 }
-            diagnosticsLogger.record("profile", "subscription requires insecure tls consent")
+            diagnosticsLogger.record("profile", "subscription requires INSECURE TLS consent")
             throw InsecureTlsProfileConsentRequiredException(warning = warning)
         }
         val effectiveAllowInsecureTls = settings.expert.allowInsecureTls || profileInsecureTlsConsentGranted || excludeInsecureTlsOptions
@@ -756,7 +759,7 @@ class ProfileRepository(
                                     selectedProtocolOptionId = selectedProtocolOptionId,
                                 ).withInsecureTlsMarkers(
                                     json = json,
-                                    forceRequiresInsecureTls = profileInsecureTlsConsentGranted || importedProfile.requiresInsecureTls(json),
+                                    forceRequiresInsecureTls = importedProfile.requiresInsecureTls(json),
                                 ),
                         ),
                     importedProfile = importedProfile,

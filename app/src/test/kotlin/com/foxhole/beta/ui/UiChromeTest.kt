@@ -10,7 +10,7 @@ import kotlinx.coroutines.yield
 
 class UiChromeTest {
     @Test
-    fun `show banner keeps success tone and short duration`() =
+    fun `show banner gives success tone a countdown duration`() =
         runBlocking {
             val hostState = SnackbarHostState()
             val job = launch {
@@ -20,13 +20,14 @@ class UiChromeTest {
             val visuals = hostState.currentSnackbarData?.visuals as FoxholeBannerVisuals
             assertEquals("Profile imported", visuals.message)
             assertEquals(FoxholeBannerTone.SUCCESS, visuals.tone)
-            assertEquals(SnackbarDuration.Short, visuals.duration)
+            assertEquals(SnackbarDuration.Indefinite, visuals.duration)
+            assertEquals(FoxholeBannerShortDurationMs, visuals.durationMillis)
             hostState.currentSnackbarData?.dismiss()
             job.join()
         }
 
     @Test
-    fun `show banner keeps error tone and long duration`() =
+    fun `show banner gives error tone a longer countdown duration`() =
         runBlocking {
             val hostState = SnackbarHostState()
             val job = launch {
@@ -36,7 +37,8 @@ class UiChromeTest {
             val visuals = hostState.currentSnackbarData?.visuals as FoxholeBannerVisuals
             assertEquals("Profile refresh failed", visuals.message)
             assertEquals(FoxholeBannerTone.ERROR, visuals.tone)
-            assertEquals(SnackbarDuration.Long, visuals.duration)
+            assertEquals(SnackbarDuration.Indefinite, visuals.duration)
+            assertEquals(FoxholeBannerLongDurationMs, visuals.durationMillis)
             hostState.currentSnackbarData?.dismiss()
             job.join()
         }

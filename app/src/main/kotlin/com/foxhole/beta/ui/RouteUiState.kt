@@ -46,6 +46,7 @@ data class HomeRouteUiState(
     val ipInfoLoading: Boolean = false,
     val traffic: TrafficSnapshot = TrafficSnapshot(),
     val reconnectRequired: Boolean = false,
+    val reconnectInProgress: Boolean = false,
     val profileReconnectPromptUntilElapsedMs: Long = 0L,
     val selectedProtocolLatencyMs: Long? = null,
     val selectedProtocolLatencyUnavailable: Boolean = false,
@@ -58,6 +59,7 @@ data class HomeRouteUiState(
     val protocolMetricsRefreshing: Boolean = false,
     val recommendedProtocolOptionId: String? = null,
     val recommendedProtocolOptionIds: Set<String> = emptySet(),
+    val favoriteProtocolOptionId: String? = null,
     val smartStartRememberedLatenciesByOptionId: Map<String, Long> = emptyMap(),
     val autoConnect: AutoConnectUiState = AutoConnectUiState(),
 )
@@ -76,6 +78,7 @@ data class ProfilesRouteUiState(
     val smartProfileMetricsRefreshingProfileIds: Set<Long> = emptySet(),
     val recommendedProtocolOptionByProfileId: Map<Long, String> = emptyMap(),
     val recommendedProtocolOptionsByProfileId: Map<Long, Set<String>> = emptyMap(),
+    val favoriteProtocolOptionByProfileId: Map<Long, String> = emptyMap(),
 )
 
 data class SettingsRouteUiState(
@@ -120,6 +123,7 @@ internal fun HomeUiState.toHomeRouteUiState(
     protocolMetricsRefreshing: Boolean = false,
     recommendedProtocolOptionId: String? = null,
     recommendedProtocolOptionIds: Set<String> = emptySet(),
+    favoriteProtocolOptionId: String? = null,
     smartStartRememberedLatenciesByOptionId: Map<String, Long> = emptyMap(),
 ): HomeRouteUiState =
     HomeRouteUiState(
@@ -139,6 +143,7 @@ internal fun HomeUiState.toHomeRouteUiState(
         ipInfoLoading = ipInfoLoading,
         traffic = traffic,
         reconnectRequired = reconnectRequired,
+        reconnectInProgress = reconnectInProgress,
         profileReconnectPromptUntilElapsedMs = profileReconnectPromptUntilElapsedMs,
         selectedProtocolLatencyMs = selectedProtocolLatencyMs,
         selectedProtocolLatencyUnavailable = selectedProtocolLatencyUnavailable,
@@ -151,6 +156,7 @@ internal fun HomeUiState.toHomeRouteUiState(
         protocolMetricsRefreshing = protocolMetricsRefreshing,
         recommendedProtocolOptionId = recommendedProtocolOptionId,
         recommendedProtocolOptionIds = recommendedProtocolOptionIds,
+        favoriteProtocolOptionId = favoriteProtocolOptionId,
         smartStartRememberedLatenciesByOptionId = smartStartRememberedLatenciesByOptionId,
         autoConnect = autoConnect,
     )
@@ -164,6 +170,7 @@ internal fun HomeUiState.toProfilesRouteUiState(
     smartProfileMetricsRefreshingProfileIds: Set<Long> = emptySet(),
     recommendedProtocolOptionByProfileId: Map<Long, String> = emptyMap(),
     recommendedProtocolOptionsByProfileId: Map<Long, Set<String>> = emptyMap(),
+    favoriteProtocolOptionByProfileId: Map<Long, String> = emptyMap(),
 ): ProfilesRouteUiState =
     ProfilesRouteUiState(
         profiles = profiles,
@@ -182,6 +189,7 @@ internal fun HomeUiState.toProfilesRouteUiState(
         smartProfileMetricsRefreshingProfileIds = smartProfileMetricsRefreshingProfileIds,
         recommendedProtocolOptionByProfileId = recommendedProtocolOptionByProfileId,
         recommendedProtocolOptionsByProfileId = recommendedProtocolOptionsByProfileId,
+        favoriteProtocolOptionByProfileId = favoriteProtocolOptionByProfileId,
     )
 
 internal fun HomeUiState.toSettingsRouteUiState(): SettingsRouteUiState =

@@ -840,7 +840,6 @@ internal fun groupSmartConfigEntriesByProfile(entries: List<SmartConfigEntry>): 
                 .distinct()
         val splitByProfileKey = metadataGroupKeys.size > 1
         val splitByDisplayName = !splitByProfileKey && shouldSplitSmartConfigRouteByDisplayName(routeEntries)
-        val splitByEntry = !splitByProfileKey && !splitByDisplayName && routeGroups.size == 1 && routeEntries.size > 1
         routeEntries.forEach { entry ->
             val groupKey =
                 when {
@@ -854,8 +853,6 @@ internal fun groupSmartConfigEntriesByProfile(entries: List<SmartConfigEntry>): 
                             .let(::slugifySmartConfigKey)
                             .takeIf(String::isNotBlank)
                             ?: routeKey
-                    splitByEntry ->
-                        "${entry.node.protocolHint.name.lowercase()}_${slugifySmartConfigKey(entry.heading.protocolLabel)}"
                     else -> routeKey
                 }
             profileGroups.getOrPut("$routeKey:$groupKey") { mutableListOf() }.add(entry)

@@ -300,7 +300,7 @@ internal fun buildXrayTls(
                 realitySettings?.get("allowInsecure"),
                 realitySettings?.get("insecure"),
             ).firstNotNullOfOrNull(::flexibleBooleanOrNull) ?: false
-        require(allowInsecureTls || !insecureTls) { "insecure tls is not allowed" }
+        require(allowInsecureTls || !insecureTls) { "INSECURE TLS is not allowed" }
         if (insecureTls) {
             put("insecure", true)
         }

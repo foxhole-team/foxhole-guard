@@ -13,6 +13,7 @@ import com.foxhole.beta.core.model.ConnectionState
 import com.foxhole.beta.core.model.IpInfo
 import com.foxhole.beta.core.model.Profile
 import com.foxhole.beta.core.model.TrafficSnapshot
+import com.foxhole.beta.core.model.TrafficMode
 import com.foxhole.beta.core.network.IpInfoFetchMode
 import com.foxhole.beta.core.network.IpInfoRepository
 import com.foxhole.beta.core.settings.SettingsRepository
@@ -46,6 +47,7 @@ class FoxholeConnectionController(
             runtimeConfigAssembler = runtimeConfigAssembler,
             snapshot = snapshot,
             appliedRuntimeSignature = appliedRuntimeSignatureMutable,
+            hasActiveVpnNetwork = { hasActiveVpnNetwork() },
         )
     private val validationGateway =
         TunnelValidationGateway(
@@ -123,6 +125,28 @@ class FoxholeConnectionController(
     fun hasActiveVpnNetwork(): Boolean = currentVpnNetwork() != null
 
     fun currentVpnNetworkHandle(): Long? = currentVpnNetwork()?.networkHandle
+
+    suspend fun reconcileActiveVpnNetworkIfNeeded(): Boolean {
+        val currentSnapshot = snapshot.value
+        if (currentSnapshot.state in ACTIVE_CONNECTION_STATES || !hasActiveVpnNetwork()) {
+            return false
+        }
+        val activeProfile = profileRepository.getActiveProfile()
+        diagnosticsLogger.record(
+            "connection",
+            "active vpn network found with idle snapshot; restored connected state",
+        )
+        FoxholeVpnRuntimeBridge.update(
+            ConnectionSnapshot(
+                state = ConnectionState.CONNECTED,
+                trafficMode = TrafficMode.TUNNEL,
+                profileId = activeProfile?.id,
+                profileName = activeProfile?.name,
+                protocolHint = activeProfile?.protocolHint,
+            ),
+        )
+        return true
+    }
 
     private fun currentVpnNetwork(): Network? =
         ConnectivityNetworkRegistry.snapshot(context).firstOrNull { network ->

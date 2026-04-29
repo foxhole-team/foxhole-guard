@@ -294,7 +294,7 @@ internal fun parseHysteria2Uri(
                 put("enabled", true)
                 put("server_name", query["sni"]?.takeIf { it.isNotBlank() } ?: host)
                 val insecureTls = query["insecure"]?.toFlexibleBoolean() ?: false
-                require(allowInsecureTls || !insecureTls) { "insecure tls is not allowed" }
+                require(allowInsecureTls || !insecureTls) { "INSECURE TLS is not allowed" }
                 if (insecureTls) {
                     put("insecure", true)
                 }
@@ -620,7 +620,7 @@ internal fun buildTls(
             listOfNotNull(query["allowInsecure"], query["insecure"]).firstNotNullOfOrNull { value ->
                 value.toFlexibleBoolean()
             } ?: false
-        require(allowInsecureTls || !insecureTls) { "insecure tls is not allowed" }
+        require(allowInsecureTls || !insecureTls) { "INSECURE TLS is not allowed" }
         if (insecureTls) {
             put("insecure", true)
         }

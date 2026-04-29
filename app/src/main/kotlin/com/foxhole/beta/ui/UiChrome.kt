@@ -9,8 +9,8 @@ import android.os.Vibrator
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.FastOutLinearInEasing
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
@@ -24,7 +24,6 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -42,6 +41,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Check
@@ -88,12 +88,12 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
@@ -134,7 +134,6 @@ internal object FoxholeMotionTokens {
 internal val FoxholePositiveAccent = Color(0xFF2F9E6A)
 internal val FoxholeInfoAccent = Color(0xFF6288AE)
 internal val FoxholeWarningAccent = Color(0xFFE0B84A)
-internal val FoxholeUnsafeAccent = Color(0xFFE28131)
 private val FoxholeErrorAccent = Color(0xFFC63C3C)
 private const val FoxholeTopBarContainerAlpha = 0.90f
 
@@ -281,7 +280,17 @@ private fun vibrateBannerError(context: Context) {
 
 private const val FoxholeBannerHapticCooldownMs = 1_200L
 private const val FoxholeBannerHapticPulseMs = 25L
+internal const val FoxholeBannerShortDurationMs = 4_000L
+internal const val FoxholeBannerLongDurationMs = 6_000L
 private val FoxholeBannerErrorWaveformMs = longArrayOf(0L, 25L, 60L, 25L)
+
+internal fun defaultBannerDurationMillis(tone: FoxholeBannerTone): Long =
+    when (tone) {
+        FoxholeBannerTone.ERROR -> FoxholeBannerLongDurationMs
+        FoxholeBannerTone.INFO,
+        FoxholeBannerTone.SUCCESS,
+        -> FoxholeBannerShortDurationMs
+    }
 
 internal data class FoxholeBannerVisuals(
     override val message: String,
@@ -316,7 +325,7 @@ internal suspend fun SnackbarHostState.showBanner(
                 message = message,
                 tone = tone,
                 actionLabel = actionLabel,
-                durationMillis = durationMillis,
+                durationMillis = durationMillis ?: defaultBannerDurationMillis(tone),
                 expiresAtElapsedMs = expiresAtElapsedMs,
             ),
     )
@@ -438,14 +447,14 @@ private fun FoxholeBanner(
         }
     val expiresAtElapsedMs =
         remember(data, visuals?.expiresAtElapsedMs, visuals?.durationMillis) {
-            visuals?.expiresAtElapsedMs ?: visuals?.durationMillis?.let { durationMillis ->
-                SystemClock.elapsedRealtime() + durationMillis
-            }
+            val durationMillis = visuals?.durationMillis ?: defaultBannerDurationMillis(tone)
+            visuals?.expiresAtElapsedMs ?: (SystemClock.elapsedRealtime() + durationMillis)
         }
+    val countdownDurationMillis = visuals?.durationMillis ?: defaultBannerDurationMillis(tone)
     val countdownProgress =
         rememberDeadlineProgress(
             expiresAtElapsedMs = expiresAtElapsedMs,
-            totalDurationMs = visuals?.durationMillis ?: 1L,
+            totalDurationMs = countdownDurationMillis,
             onExpired = data::dismiss,
         )
 
@@ -518,19 +527,17 @@ private fun FoxholeBanner(
                         )
                     }
                 }
-                if (expiresAtElapsedMs != null) {
-                    Box(
-                        modifier =
-                            Modifier
-                                .align(Alignment.BottomStart)
-                                .fillMaxWidth(countdownProgress.coerceIn(0f, 1f))
-                                .height(3.dp)
-                                .background(
-                                    color = contentColor.copy(alpha = 0.72f),
-                                    shape = RoundedCornerShape(999.dp),
-                                ),
-                    )
-                }
+                Box(
+                    modifier =
+                        Modifier
+                            .align(Alignment.BottomStart)
+                            .fillMaxWidth(countdownProgress.coerceIn(0f, 1f))
+                            .height(3.dp)
+                            .background(
+                                color = contentColor.copy(alpha = 0.72f),
+                                shape = RoundedCornerShape(999.dp),
+                            ),
+                )
             }
         }
     }

@@ -67,6 +67,29 @@ class MultiProtocolProfileSupportTest {
     }
 
     @Test
+    fun `smart start can probe ordinary single protocol profile`() {
+        val profile =
+            Profile(
+                id = 1,
+                name = "Foxhole vpn direct",
+                sourceType = ProfileSourceType.SUBSCRIPTION_URL,
+                secretRef = "secret",
+                protocolHint = ProtocolHint.VLESS,
+                lastUpdatedAt = null,
+                lastEtag = null,
+                protocolOptions = emptyList(),
+                selectedProtocolOptionId = null,
+                isActive = true,
+            )
+
+        val candidates = MultiProtocolProfileSupport.smartStartFullScanCandidates(profile)
+
+        assertTrue(MultiProtocolProfileSupport.hasSupportedAutoConnectOption(profile))
+        assertEquals(listOf("vless"), candidates.map(AutoConnectProbeCandidate::optionId))
+        assertEquals(listOf(ProtocolHint.VLESS), candidates.map(AutoConnectProbeCandidate::protocolHint))
+    }
+
+    @Test
     fun `smart start does not treat insecure option marker as consent`() {
         val eligible =
             MultiProtocolProfileSupport.smartStartEligibleProbeCandidates(

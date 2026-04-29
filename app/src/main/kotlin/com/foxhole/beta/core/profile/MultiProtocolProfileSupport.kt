@@ -63,6 +63,9 @@ object MultiProtocolProfileSupport {
     fun hasMultipleSupportedOptions(profile: Profile?): Boolean =
         profile?.let { supportedOptions(it).size >= 2 } == true
 
+    fun hasSupportedAutoConnectOption(profile: Profile?): Boolean =
+        profile?.let(::autoConnectOptions).orEmpty().isNotEmpty()
+
     fun scoredProbeCandidates(
         profile: Profile,
         preference: SmartProfilePreference? = null,
@@ -114,7 +117,7 @@ object MultiProtocolProfileSupport {
         val insecureTlsConsentGranted = profile.requiresInsecureTls || allowInsecureTlsGlobally
         return SmartStartController.eligibleCandidatesForRanking(
             candidates =
-                supportedOptions(profile).map { option ->
+                autoConnectOptions(profile).map { option ->
                     option.toProbeCandidate(
                         profileId = profile.id,
                         insecureTlsConsentGranted = insecureTlsConsentGranted,
@@ -137,7 +140,7 @@ object MultiProtocolProfileSupport {
         val insecureTlsConsentGranted = profile.requiresInsecureTls || allowInsecureTlsGlobally
         return SmartStartController.eligibleCandidatesForFullScan(
             candidates =
-                supportedOptions(profile).map { option ->
+                autoConnectOptions(profile).map { option ->
                     option.toProbeCandidate(
                         profileId = profile.id,
                         insecureTlsConsentGranted = insecureTlsConsentGranted,
@@ -173,6 +176,26 @@ object MultiProtocolProfileSupport {
                 compareBy<AutoConnectProbeResult> { it.rankingLatencyMs }
                     .thenBy { it.candidate.optionId },
             )
+
+    private fun autoConnectOptions(profile: Profile): List<ProfileProtocolOption> {
+        val explicitOptions = supportedOptions(profile)
+        if (explicitOptions.isNotEmpty()) {
+            return explicitOptions
+        }
+        if (profile.protocolHint in unsupportedProtocolHints) {
+            return emptyList()
+        }
+        val id = profile.protocolHint.name.lowercase()
+        return listOf(
+            ProfileProtocolOption(
+                id = id,
+                displayName = profile.protocolHint.name,
+                protocolHint = profile.protocolHint,
+                requiresInsecureTls = profile.requiresInsecureTls,
+                isSelected = true,
+            ),
+        )
+    }
 
     private fun ProfileProtocolOption.toProbeCandidate(
         profileId: Long,

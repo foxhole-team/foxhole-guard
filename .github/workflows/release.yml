@@ -130,7 +130,7 @@ jobs:
             "$apksigner" verify --print-certs "$apk_path" | tee "$current_cert_report"
             cat "$current_cert_report" >> "$cert_report"
             actual_cert_sha256="$(
-              awk -F': ' '/Signer #1 certificate SHA-256 digest/ { print $2; exit }' "$current_cert_report" |
+              awk -F': ' '/certificate SHA-256 digest/ { print $NF; exit }' "$current_cert_report" |
                 tr -d ':' |
                 tr '[:upper:]' '[:lower:]'
             )"

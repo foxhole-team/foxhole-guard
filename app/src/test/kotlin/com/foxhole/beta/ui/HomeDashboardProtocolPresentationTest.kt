@@ -115,6 +115,38 @@ class HomeDashboardProtocolPresentationTest {
     }
 
     @Test
+    fun `connected dashboard keeps protocol presentation pinned to running connection`() {
+        val activeProfile =
+            profile(
+                selectedProtocolOptionId = "trojan",
+                protocolOptions =
+                    listOf(
+                        option("outline", ProtocolHint.OUTLINE),
+                        option("trojan", ProtocolHint.TROJAN),
+                    ),
+            )
+        val connection =
+            ConnectionSnapshot(
+                state = ConnectionState.CONNECTED,
+                profileId = activeProfile.id,
+                protocolHint = ProtocolHint.OUTLINE,
+            )
+
+        val resolved =
+            resolveHomeDashboardProtocolPresentation(
+                activeProfile = activeProfile,
+                connection = connection,
+                autoConnect = AutoConnectUiState(),
+            )
+
+        assertEquals("outline", resolved.selectedProtocolOptionId)
+        assertEquals("outline", resolveDashboardLatencyOptionId(activeProfile, connection))
+        assertEquals(ProtocolHint.OUTLINE, resolved.protocolHint)
+        assertTrue(resolved.protocolOptions.first { option -> option.id == "outline" }.isSelected)
+        assertFalse(resolved.protocolOptions.first { option -> option.id == "trojan" }.isSelected)
+    }
+
+    @Test
     fun `dashboard selected option falls back to the only supported protocol when selection is not persisted`() {
         val activeProfile =
             profile(
@@ -126,6 +158,32 @@ class HomeDashboardProtocolPresentationTest {
             )
 
         assertEquals("outline", resolveDashboardSelectedOptionId(activeProfile))
+    }
+
+    @Test
+    fun `dashboard exposes Smart start action for one supported protocol`() {
+        val activeProfile =
+            profile(
+                selectedProtocolOptionId = "vless",
+                protocolHint = ProtocolHint.VLESS,
+                protocolOptions = emptyList(),
+            )
+
+        assertTrue(shouldShowAutoConnectAction(activeProfile))
+    }
+
+    @Test
+    fun `dashboard exposes Smart start action for one explicit protocol option`() {
+        val activeProfile =
+            profile(
+                selectedProtocolOptionId = "vless",
+                protocolOptions =
+                    listOf(
+                        option("vless", ProtocolHint.VLESS),
+                    ),
+            )
+
+        assertTrue(shouldShowAutoConnectAction(activeProfile))
     }
 
     @Test
