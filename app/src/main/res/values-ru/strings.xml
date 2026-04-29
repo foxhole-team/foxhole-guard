@@ -186,13 +186,13 @@
     <string name="insecure_tls_profile_badge">INSECURE TLS</string>
     <string name="smart_profile_metrics_refresh_action">Обновить данные протоколов</string>
     <string name="smart_profile_metrics_cancel_action">Остановить обновление данных протоколов</string>
-    <string name="smart_profile_metrics_refreshing">Обновление</string>
+    <string name="smart_profile_metrics_refreshing">Анализ</string>
     <string name="smart_profile_metrics_refresh_hint">Нажмите на протокол, чтобы включить или отключить его.\nПериодически обновляйте для улучшения коннекта.</string>
     <string name="smart_profile_metrics_refresh_compact_hint">Нажмите на протокол, чтобы включить или отключить его.\nПериодически обновляйте для улучшения коннекта.</string>
     <string name="smart_profile_legend_favorite">Быстрый</string>
     <string name="smart_profile_legend_reconnect_recommended">Лучший</string>
     <string name="smart_profile_legend_title">Легенда</string>
-    <string name="smart_profile_metrics_refresh_confirm_title">Обновить проверки протоколов?</string>
+    <string name="smart_profile_metrics_refresh_confirm_title">Выполнить анализ доступных протоколов?</string>
     <string name="smart_profile_metrics_refresh_confirm_body">Обновление проверит доступные подключения. Пока идет анализ, интернет на устройстве может не работать. После окончания Foxhole восстановит последнее подключение.</string>
     <string name="smart_profile_metrics_last_updated">Обновлено: %1$s</string>
     <string name="smart_profile_metrics_never_updated">Никогда не обновлялся</string>
@@ -222,7 +222,7 @@
     <string name="traffic_rules">Маршрутизация</string>
     <string name="app_settings">Настройки приложения</string>
     <string name="expert_settings">Экспертные настройки</string>
-    <string name="expert_unlock_confirm_title">Открыть экспертные настройки?</string>
+    <string name="expert_unlock_confirm_title">Включить экспертные настройки?</string>
     <string name="expert_unlock_confirm_body">Этот раздел меняет маршрутизацию и локальные интерфейсы. Открывайте его только если понимаете последствия.</string>
     <string name="diagnostics_and_usage">Диагностика</string>
     <string name="help_title">Помощь</string>
@@ -512,7 +512,7 @@
     <string name="open_support_bot">Открыть Telegram Канал</string>
     <string name="support_channel_open_failed">Не удалось открыть Telegram Канал.</string>
     <string name="open_repository_failed">Нет браузера, чтобы открыть репозиторий.</string>
-    <string name="show_advanced_settings_title">Открыть экспертные настройки</string>
+    <string name="show_advanced_settings_title">Включить экспертные настройки</string>
     <string name="show_advanced_settings_summary">Если выключить этот пункт, раздел откроется 5 нажатиями по карточке версии.</string>
     <string name="help_smart_start_body">Smart start быстро подключается, пробуя только лучших локальных кандидатов для текущей сети. Обновление проверяет все подходящие протоколы, чтобы обновить задержку, статус и рекомендации. Все данные Smart start остаются на устройстве.</string>
     <string name="help_tunnel_body">Направляет весь трафик устройства через активный профиль.</string>

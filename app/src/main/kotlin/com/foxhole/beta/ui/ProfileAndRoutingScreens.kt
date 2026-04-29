@@ -667,7 +667,7 @@ private fun ProfileExportSelector(
         ) {
             val (icon, tint) =
                 when (selectionState) {
-                    SmartProfileExportSelectionState.ALL -> Icons.Outlined.CheckCircle to FoxholePositiveAccent
+                    SmartProfileExportSelectionState.ALL -> Icons.Outlined.CheckCircle to MaterialTheme.colorScheme.primary
                     SmartProfileExportSelectionState.PARTIAL -> Icons.Outlined.RemoveCircleOutline to FoxholeInfoAccent
                     SmartProfileExportSelectionState.NONE -> Icons.Outlined.RadioButtonUnchecked to MaterialTheme.colorScheme.onSurfaceVariant
                 }

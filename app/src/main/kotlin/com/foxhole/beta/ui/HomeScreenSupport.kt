@@ -142,7 +142,7 @@ internal fun HomeHeaderActionButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
-    tint: Color = FoxholeInfoAccent,
+    tint: Color = MaterialTheme.colorScheme.primary,
 ) {
     Surface(
         modifier =
@@ -246,7 +246,7 @@ internal fun HomeModeDropdown(
     onSelect: (HomeModeOption) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val selectorTint = FoxholeInfoAccent
+    val selectorTint = MaterialTheme.colorScheme.primary
     var expanded by rememberSaveable(selected) { mutableStateOf(false) }
     Box(modifier = modifier) {
         Surface(
@@ -309,7 +309,7 @@ internal fun HomeModeDropdown(
                             }
                         },
                         selected = selectedOption,
-                        accentColor = FoxholeInfoAccent,
+                        accentColor = MaterialTheme.colorScheme.primary,
                         contentPadding = PaddingValues(horizontal = 10.dp, vertical = 9.dp),
                         leadingContent = {
                             Icon(
@@ -318,7 +318,7 @@ internal fun HomeModeDropdown(
                                 modifier = Modifier.size(16.dp),
                                 tint =
                                     if (selectedOption) {
-                                        FoxholeInfoAccent
+                                        MaterialTheme.colorScheme.primary
                                     } else {
                                         MaterialTheme.colorScheme.onSurfaceVariant
                                     },
@@ -330,7 +330,7 @@ internal fun HomeModeDropdown(
                                     imageVector = Icons.Outlined.CheckCircle,
                                     contentDescription = null,
                                     modifier = Modifier.size(17.dp),
-                                    tint = FoxholeInfoAccent,
+                                    tint = MaterialTheme.colorScheme.primary,
                                 )
                             }
                         },
@@ -765,7 +765,7 @@ internal fun HomeConnectionActions(
         when (primaryAction) {
             HomePrimaryAction.START,
             HomePrimaryAction.RECONNECT,
-            -> FoxholePositiveAccent
+            -> MaterialTheme.colorScheme.primary
             HomePrimaryAction.STOP -> Color(0xFFC95353)
         }
     val primaryButtonColors =
@@ -1175,7 +1175,7 @@ internal fun ProxyCredentialRow(
                 contentDescription = editContentDescription,
                 onClick = edit,
                 modifier = Modifier.size(32.dp),
-                tint = FoxholeInfoAccent,
+                tint = MaterialTheme.colorScheme.primary,
             )
         }
         HomeHeaderActionButton(
@@ -1183,7 +1183,7 @@ internal fun ProxyCredentialRow(
             contentDescription = stringResource(R.string.copy_to_clipboard),
             onClick = onCopy,
             modifier = Modifier.size(32.dp),
-            tint = FoxholeInfoAccent,
+            tint = MaterialTheme.colorScheme.primary,
         )
     }
 }

@@ -93,10 +93,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.text.DateFormat
 
-private val CompactProtocolSelectorMinWidth = 196.dp
-private val CompactProtocolSelectorMaxWidth = 340.dp
-private val RegularProtocolSelectorMinWidth = 206.dp
-private val RegularProtocolSelectorMaxWidth = 354.dp
+private val CompactProtocolSelectorMinWidth = 154.dp
+private val CompactProtocolSelectorMaxWidth = 300.dp
+private val RegularProtocolSelectorMinWidth = 166.dp
+private val RegularProtocolSelectorMaxWidth = 320.dp
 
 @Suppress("LongParameterList", "CyclomaticComplexMethod")
 @Composable
@@ -342,6 +342,9 @@ private fun ProtocolMarkOrSelector(
         rememberProtocolSelectorFixedWidth(
             protocolOptions = protocolOptions,
             compact = compact,
+            recommendedProtocolOptionId = recommendedProtocolOptionId,
+            recommendedProtocolOptionIds = recommendedProtocolOptionIds,
+            favoriteProtocolOptionId = favoriteProtocolOptionId,
         )
     Box {
         Surface(
@@ -464,9 +467,9 @@ private fun ProtocolMarkOrSelector(
                         },
                         selected = optionSelected,
                         highlightSelected = true,
-                        selectedContainerColor = FoxholePositiveAccent.copy(alpha = 0.10f),
+                        selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.10f),
                         showBorder = index != protocolOptions.lastIndex,
-                        accentColor = FoxholePositiveAccent,
+                        accentColor = MaterialTheme.colorScheme.primary,
                         shape =
                             foxholeDropdownItemShape(
                                 index = index,
@@ -487,7 +490,7 @@ private fun ProtocolMarkOrSelector(
                                     Icon(
                                         imageVector = Icons.Outlined.CheckCircle,
                                         contentDescription = null,
-                                        tint = FoxholePositiveAccent,
+                                        tint = MaterialTheme.colorScheme.primary,
                                         modifier = Modifier.size(18.dp),
                                     )
                                 }
@@ -611,7 +614,7 @@ internal fun SmartProfileConditionStars(
                         null
                     },
                 modifier = Modifier.size(if (compact) 9.dp else 10.dp),
-                tint = FoxholePositiveAccent,
+                tint = MaterialTheme.colorScheme.primary,
             )
         }
     }
@@ -707,7 +710,7 @@ internal fun protocolLatencyIconTint(
     unavailable: Boolean = false,
 ): Color =
     when (classifyVpnLatency(latencyMs = latencyMs, failed = down, unavailable = unavailable || latencyMs == null)) {
-        LatencyQuality.FAST -> FoxholePositiveAccent
+        LatencyQuality.FAST -> MaterialTheme.colorScheme.primary
         LatencyQuality.NORMAL -> MaterialTheme.colorScheme.onSurfaceVariant
         LatencyQuality.SLOW -> Color(0xFFE0B84A)
         LatencyQuality.VERY_SLOW -> Color(0xFFE28131)
@@ -767,9 +770,13 @@ internal fun rememberSubscriptionExpiryLabel(expiresAt: Long): String {
 }
 
 @Composable
+@Suppress("CyclomaticComplexMethod")
 private fun rememberProtocolSelectorFixedWidth(
     protocolOptions: List<ProfileProtocolOption>,
     compact: Boolean,
+    recommendedProtocolOptionId: String?,
+    recommendedProtocolOptionIds: Set<String>,
+    favoriteProtocolOptionId: String?,
 ): androidx.compose.ui.unit.Dp {
     val density = LocalDensity.current
     val textMeasurer = rememberTextMeasurer()
@@ -792,39 +799,83 @@ private fun rememberProtocolSelectorFixedWidth(
         } else {
             MaterialTheme.typography.labelMedium
         }
+    val legendStyle =
+        MaterialTheme.typography.labelSmall.copy(
+            fontSize = if (compact) 8.4.sp else 10.sp,
+            lineHeight = if (compact) 9.sp else 11.sp,
+            fontWeight = FontWeight.Medium,
+        )
+    val favoriteLegend = stringResource(R.string.smart_profile_legend_favorite)
+    val recommendedLegend = stringResource(R.string.smart_profile_legend_reconnect_recommended)
     val iconSizePx = with(density) { if (compact) 13.dp.roundToPx() else 18.dp.roundToPx() }
     val markSpacingPx = with(density) { if (compact) 4.dp.roundToPx() else 8.dp.roundToPx() }
     val secondarySpacingPx = with(density) { if (compact) 4.dp.roundToPx() else 8.dp.roundToPx() }
-    val recommendationStarsPx = with(density) { if (compact) 24.dp.roundToPx() else 27.dp.roundToPx() }
+    val starIconPx = with(density) { if (compact) 9.dp.roundToPx() else 10.dp.roundToPx() }
+    val starGapPx = with(density) { 1.dp.roundToPx() }
     val chevronSizePx = with(density) { if (compact) 17.dp.roundToPx() else 18.dp.roundToPx() }
     val chevronGapPx = with(density) { if (compact) 4.dp.roundToPx() else 6.dp.roundToPx() }
     val leadingPaddingPx = with(density) { if (compact) 10.dp.roundToPx() else 14.dp.roundToPx() }
     val trailingPaddingPx = with(density) { if (compact) 8.dp.roundToPx() else 10.dp.roundToPx() }
     val compactWidthSlackPx = with(density) { if (compact) 8.dp.roundToPx() else 0 }
+    val dropdownHorizontalPaddingPx = with(density) { 24.dp.roundToPx() }
+    val dropdownTrailingGapPx = with(density) { 10.dp.roundToPx() }
+    val dropdownCheckWidthPx = with(density) { 20.dp.roundToPx() }
+    fun textWidth(text: String, style: TextStyle): Int =
+        textMeasurer.measure(
+            text = AnnotatedString(text),
+            style = style,
+        ).size.width
+    fun conditionStarsWidthPx(option: ProfileProtocolOption): Int {
+        val starCount =
+            smartProfileConditionStarCount(
+                favorite = option.id == favoriteProtocolOptionId,
+                recommended = option.id in recommendedProtocolOptionIds,
+                topRecommended = option.id == recommendedProtocolOptionId,
+            )
+        return if (starCount <= 0) {
+            0
+        } else {
+            starCount * starIconPx + (starCount - 1) * starGapPx
+        }
+    }
     val widestContentPx =
         protocolOptions.maxOfOrNull { option ->
             val primaryWidth =
-                textMeasurer.measure(
-                    text = AnnotatedString(protocolDisplayLabel(option.protocolHint)),
+                textWidth(
+                    text = protocolDisplayLabel(option.protocolHint),
                     style = primaryStyle,
-                ).size.width
+                )
             val secondaryWidth =
                 protocolSelectorSecondaryLabel(option)?.let { secondary ->
                     secondarySpacingPx +
-                        textMeasurer.measure(
-                            text = AnnotatedString(secondary),
+                        textWidth(
+                            text = secondary,
                             style = secondaryStyle,
-                        ).size.width
+                        )
                 } ?: 0
             iconSizePx +
                 markSpacingPx +
                 primaryWidth +
                 secondaryWidth +
-                recommendationStarsPx
+                conditionStarsWidthPx(option)
         } ?: 0
+    val openerWidthPx = leadingPaddingPx + widestContentPx + chevronGapPx + chevronSizePx + trailingPaddingPx + compactWidthSlackPx
+    val dropdownRowWidthPx = dropdownHorizontalPaddingPx + widestContentPx + dropdownTrailingGapPx + dropdownCheckWidthPx
+    val hasLegendBasis = protocolOptions.any { option -> option.id == favoriteProtocolOptionId || option.id in recommendedProtocolOptionIds }
+    val legendWidthPx =
+        if (hasLegendBasis) {
+            textWidth(favoriteLegend, legendStyle) +
+                textWidth(recommendedLegend, legendStyle) +
+                with(density) { if (compact) 48.dp.toPx() else 56.dp.toPx() }
+        } else {
+            0f
+        }
     val estimatedWidth =
         with(density) {
-            (leadingPaddingPx + widestContentPx + chevronGapPx + chevronSizePx + trailingPaddingPx + compactWidthSlackPx).toDp()
+            protocolSelectorWidthBasisPx(
+                protocolLabelWidthPx = maxOf(openerWidthPx, dropdownRowWidthPx).toFloat(),
+                legendWidthPx = legendWidthPx,
+            ).toDp()
         }
     return if (compact) {
         estimatedWidth.coerceIn(CompactProtocolSelectorMinWidth, CompactProtocolSelectorMaxWidth)
@@ -832,6 +883,11 @@ private fun rememberProtocolSelectorFixedWidth(
         estimatedWidth.coerceIn(RegularProtocolSelectorMinWidth, RegularProtocolSelectorMaxWidth)
     }
 }
+
+internal fun protocolSelectorWidthBasisPx(
+    protocolLabelWidthPx: Float,
+    legendWidthPx: Float,
+): Float = maxOf(protocolLabelWidthPx, legendWidthPx)
 
 private fun protocolSelectorSecondaryLabel(option: ProfileProtocolOption): String? {
     val displayName = option.displayName.ifBlank { return null }

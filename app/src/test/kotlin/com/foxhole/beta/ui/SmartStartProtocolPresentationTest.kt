@@ -164,6 +164,18 @@ class SmartStartProtocolPresentationTest {
     }
 
     @Test
+    fun `smart profile menu width uses protocol legend and hint bases`() {
+        assertEquals(320f, smartProfileMenuWidthBasisPx(protocolAndLegendWidthPx = 320f, hintWidthPx = 240f))
+        assertEquals(340f, smartProfileMenuWidthBasisPx(protocolAndLegendWidthPx = 260f, hintWidthPx = 340f))
+    }
+
+    @Test
+    fun `manual protocol selector width uses row and legend bases`() {
+        assertEquals(260f, protocolSelectorWidthBasisPx(protocolLabelWidthPx = 260f, legendWidthPx = 180f))
+        assertEquals(220f, protocolSelectorWidthBasisPx(protocolLabelWidthPx = 190f, legendWidthPx = 220f))
+    }
+
+    @Test
     fun `english and russian copy keeps recommended status wording`() {
         val enStrings = resourceText("src/main/res/values/strings.xml", "app/src/main/res/values/strings.xml")
         val ruStrings = resourceText("src/main/res/values-ru/strings.xml", "app/src/main/res/values-ru/strings.xml")
@@ -215,7 +227,7 @@ class SmartStartProtocolPresentationTest {
         )
         assertFalse(enStrings.contains("name=\"smart_profile_legend_unsafe\""))
         assertEquals("Legend", stringValue(enStrings, "smart_profile_legend_title"))
-        assertEquals("Refreshing", stringValue(enStrings, "smart_profile_metrics_refreshing"))
+        assertEquals("Analysis", stringValue(enStrings, "smart_profile_metrics_refreshing"))
         assertFalse(enStrings.contains("name=\"smart_profile_menu_active_badge\""))
         assertEquals("Updated: %1\$s", stringValue(enStrings, "smart_profile_metrics_last_updated"))
         assertEquals("Never updated", stringValue(enStrings, "smart_profile_metrics_never_updated"))
@@ -224,6 +236,12 @@ class SmartStartProtocolPresentationTest {
             "Profile configuration did not load. Try reopening the profile.",
             stringValue(enStrings, "profile_config_load_timeout"),
         )
+        assertEquals(
+            "Run analysis of available protocols?",
+            stringValue(enStrings, "smart_profile_metrics_refresh_confirm_title"),
+        )
+        assertEquals("Enable expert settings?", stringValue(enStrings, "expert_unlock_confirm_title"))
+        assertEquals("Enable expert settings", stringValue(enStrings, "show_advanced_settings_title"))
 
         assertEquals("Информация о сервере VPN", stringValue(ruStrings, "home_network_connection_info_title"))
         assertEquals("Текущий IP адрес", stringValue(ruStrings, "home_network_current_ip_title"))
@@ -264,7 +282,7 @@ class SmartStartProtocolPresentationTest {
         )
         assertFalse(ruStrings.contains("name=\"smart_profile_legend_unsafe\""))
         assertEquals("Легенда", stringValue(ruStrings, "smart_profile_legend_title"))
-        assertEquals("Обновление", stringValue(ruStrings, "smart_profile_metrics_refreshing"))
+        assertEquals("Анализ", stringValue(ruStrings, "smart_profile_metrics_refreshing"))
         assertFalse(ruStrings.contains("name=\"smart_profile_menu_active_badge\""))
         assertEquals("Обновлено: %1\$s", stringValue(ruStrings, "smart_profile_metrics_last_updated"))
         assertEquals("Никогда не обновлялся", stringValue(ruStrings, "smart_profile_metrics_never_updated"))
@@ -273,6 +291,12 @@ class SmartStartProtocolPresentationTest {
             "Конфигурация профиля не загрузилась. Откройте профиль снова.",
             stringValue(ruStrings, "profile_config_load_timeout"),
         )
+        assertEquals(
+            "Выполнить анализ доступных протоколов?",
+            stringValue(ruStrings, "smart_profile_metrics_refresh_confirm_title"),
+        )
+        assertEquals("Включить экспертные настройки?", stringValue(ruStrings, "expert_unlock_confirm_title"))
+        assertEquals("Включить экспертные настройки", stringValue(ruStrings, "show_advanced_settings_title"))
     }
 
     private fun resourceText(vararg candidates: String): String =

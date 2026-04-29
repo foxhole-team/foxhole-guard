@@ -1,13 +1,7 @@
 package com.foxhole.beta.ui
 
 import android.text.format.Formatter
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
-import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.StartOffset
@@ -17,9 +11,17 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.keyframes
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -37,13 +39,13 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowForward
 import androidx.compose.material.icons.outlined.AccountTree
 import androidx.compose.material.icons.outlined.Apps
 import androidx.compose.material.icons.outlined.ArrowDownward
 import androidx.compose.material.icons.outlined.ArrowUpward
-import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.ContentPaste
 import androidx.compose.material.icons.outlined.DeleteSweep
@@ -74,7 +76,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -93,27 +94,25 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.text.withStyle
-import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.shape.CircleShape
 import com.foxhole.beta.R
 import com.foxhole.beta.core.model.ConnectionState
 import com.foxhole.beta.core.model.IpInfo
 import com.foxhole.beta.core.model.LocalAuthSettings
+import com.foxhole.beta.core.model.LocalSurfaceSettings
 import com.foxhole.beta.core.model.PerAppRoutingMode
-import com.foxhole.beta.core.model.ProtocolHint
-import com.foxhole.beta.core.model.ProxyInboundSettings
 import com.foxhole.beta.core.model.Profile
 import com.foxhole.beta.core.model.ProfileProtocolOption
 import com.foxhole.beta.core.model.ProfileSourceType
+import com.foxhole.beta.core.model.ProtocolHint
+import com.foxhole.beta.core.model.ProxyInboundSettings
 import com.foxhole.beta.core.model.TrafficMode
-import com.foxhole.beta.core.model.LocalSurfaceSettings
-import com.foxhole.beta.ui.FoxholeCard
 import com.foxhole.beta.ui.BottomDockOverlayPadding
+import com.foxhole.beta.ui.FoxholeCard
 import com.foxhole.beta.ui.FoxholeScaffold
 import com.foxhole.beta.ui.ScreenHorizontalPadding
 import com.foxhole.beta.ui.ScreenSectionSpacing
@@ -165,9 +164,10 @@ fun HomeScreen(
     val lanProxyActive = proxyModel.lanProxyActive
     val darkTheme = MaterialTheme.colorScheme.background.luminance() < 0.3f
     val proxyAuth = state.settings.expert.localSurfaces.auth
+    val autoTone = MaterialTheme.colorScheme.primary
     val statusTone =
         if (state.autoConnect.running) {
-            FoxholeInfoAccent
+            autoTone
         } else {
             homeStatusTone(state.connection.state)
         }
@@ -426,6 +426,7 @@ fun HomeScreen(
                                     contentDescription = null,
                                     onClick = onOpenProfiles,
                                     modifier = Modifier.size(30.dp),
+                                    tint = autoTone,
                                 )
                             },
                         )
@@ -619,7 +620,11 @@ fun HomeScreen(
                                     .testTag("home_refresh_action"),
                             border = BorderStroke(1.dp, dashboardSecondaryActionBorderColor),
                         ) {
-                            Icon(Icons.Outlined.Refresh, contentDescription = null)
+                            Icon(
+                                Icons.Outlined.Refresh,
+                                contentDescription = null,
+                                tint = autoTone,
+                            )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(stringResource(R.string.refresh))
                         }
@@ -639,6 +644,7 @@ fun HomeScreen(
                                     onClick = onRefreshIpInfo,
                                     enabled = !state.autoConnect.running,
                                     modifier = Modifier.size(32.dp).testTag("home_refresh_ip_icon"),
+                                    tint = autoTone,
                                 )
                             },
                         )
@@ -838,6 +844,7 @@ fun HomeScreen(
                                     contentDescription = stringResource(R.string.reset_usage_tracking),
                                     onClick = onResetUsageTracking,
                                     modifier = Modifier.size(32.dp).testTag("home_reset_usage_button"),
+                                    tint = autoTone,
                                 )
                             },
                         )

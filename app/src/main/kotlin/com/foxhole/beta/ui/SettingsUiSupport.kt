@@ -245,7 +245,7 @@ internal fun <T> DropdownSettingRow(
                                     Icon(
                                         imageVector = Icons.Outlined.CheckCircle,
                                         contentDescription = null,
-                                        tint = FoxholePositiveAccent,
+                                        tint = MaterialTheme.colorScheme.primary,
                                     )
                                 }
                             },
