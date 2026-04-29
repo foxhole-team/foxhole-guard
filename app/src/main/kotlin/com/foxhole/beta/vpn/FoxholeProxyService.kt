@@ -441,24 +441,12 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
                     )
                 },
             ) {
-                val ipRefresh =
-                    runCatching {
-                        refreshProxyIpInfo(callTimeoutMs = PROXY_VALIDATION_CALL_TIMEOUT_MS)
-                    }
-                if (ipRefresh.isSuccess) {
-                    FoxholeVpnRuntimeBridge.updateIpInfo(ipRefresh.getOrThrow())
-                    container.diagnosticsLogger.record("dns", "proxy passed in-process ip refresh")
-                    return@run
-                }
-                container.diagnosticsLogger.record(
-                    "dns",
-                    "proxy-bound ip refresh failed, probing validation endpoints: ${ipRefresh.exceptionOrNull()?.message.orEmpty()}",
-                )
                 val proxyAccess = container.settingsRepository.current().preferredAppProxyAccess() ?: error("proxy surface is unavailable")
                 probeConnectivityEndpointsOverLocalProxy(
                     proxy = proxyAccess,
                     callTimeoutMs = PROXY_VALIDATION_CALL_TIMEOUT_MS,
                 )
+                container.diagnosticsLogger.record("dns", "proxy passed local proxy connectivity validation")
             }
         }
 
@@ -613,14 +601,10 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
 
     private suspend fun connectivityProbeEndpoints(): List<String> {
         val preferredEndpoint = container.settingsRepository.current().connection.ipInfoEndpoint.trim()
-        return buildList {
-            preferredEndpoint.takeIf { it.isNotBlank() }?.let(::add)
-            CONNECTIVITY_PROBE_ENDPOINTS.forEach { endpoint ->
-                if (endpoint != preferredEndpoint) {
-                    add(endpoint)
-                }
-            }
-        }
+        return proxyConnectivityProbeEndpoints(
+            preferredEndpoint = preferredEndpoint,
+            fallbackEndpoints = CONNECTIVITY_PROBE_ENDPOINTS,
+        )
     }
 
     private fun refreshDefaultNetworkAvailability() {
@@ -820,8 +804,8 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
         private const val PROXY_VALIDATION_ATTEMPTS = 3
         private const val PROXY_VALIDATION_INITIAL_DELAY_MS = 500L
         private const val PROXY_VALIDATION_RETRY_DELAY_MS = 1_000L
-        private const val PROXY_VALIDATION_CALL_TIMEOUT_MS = 2_500L
-        private const val PROXY_VALIDATION_TOTAL_TIMEOUT_MS = 8_000L
+        private const val PROXY_VALIDATION_CALL_TIMEOUT_MS = 5_000L
+        private const val PROXY_VALIDATION_TOTAL_TIMEOUT_MS = 18_000L
         private val CONNECTIVITY_PROBE_ENDPOINTS =
             listOf(
                 "https://cp.cloudflare.com/generate_204",
@@ -840,5 +824,18 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
             )
         private const val NOTIFICATION_HEALTH_PROBE_TIMEOUT_MS = 1_000L
         private const val NOTIFICATION_HEALTH_FAILURE_THRESHOLD = 3
+    }
+}
+
+internal fun proxyConnectivityProbeEndpoints(
+    preferredEndpoint: String,
+    fallbackEndpoints: List<String>,
+): List<String> {
+    val preferred = preferredEndpoint.trim()
+    return buildList {
+        fallbackEndpoints.forEach(::add)
+        if (preferred.isNotBlank() && fallbackEndpoints.none { it.equals(preferred, ignoreCase = true) }) {
+            add(preferred)
+        }
     }
 }

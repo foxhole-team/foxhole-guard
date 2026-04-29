@@ -11,6 +11,8 @@ import com.foxhole.beta.core.smart.AdaptiveProtocolRanker
 import com.foxhole.beta.core.smart.SmartStartController
 import kotlin.random.Random
 
+private val unsupportedProtocolHints = setOf(ProtocolHint.UNKNOWN, ProtocolHint.SING_BOX)
+
 data class AutoConnectProbeCandidate(
     val profileId: Long,
     val optionId: String,
@@ -43,8 +45,6 @@ data class AutoConnectProbeResult(
 }
 
 object MultiProtocolProfileSupport {
-    private val unsupportedProtocolHints = setOf(ProtocolHint.UNKNOWN, ProtocolHint.SING_BOX)
-
     fun supportedOptions(profile: Profile): List<ProfileProtocolOption> =
         supportedOptions(profile.protocolOptions)
 
@@ -62,9 +62,6 @@ object MultiProtocolProfileSupport {
 
     fun hasMultipleSupportedOptions(profile: Profile?): Boolean =
         profile?.let { supportedOptions(it).size >= 2 } == true
-
-    fun hasSupportedAutoConnectOption(profile: Profile?): Boolean =
-        profile?.let(::autoConnectOptions).orEmpty().isNotEmpty()
 
     fun scoredProbeCandidates(
         profile: Profile,
@@ -176,37 +173,35 @@ object MultiProtocolProfileSupport {
                 compareBy<AutoConnectProbeResult> { it.rankingLatencyMs }
                     .thenBy { it.candidate.optionId },
             )
-
-    private fun autoConnectOptions(profile: Profile): List<ProfileProtocolOption> {
-        val explicitOptions = supportedOptions(profile)
-        if (explicitOptions.isNotEmpty()) {
-            return explicitOptions
-        }
-        if (profile.protocolHint in unsupportedProtocolHints) {
-            return emptyList()
-        }
-        val id = profile.protocolHint.name.lowercase()
-        return listOf(
-            ProfileProtocolOption(
-                id = id,
-                displayName = profile.protocolHint.name,
-                protocolHint = profile.protocolHint,
-                requiresInsecureTls = profile.requiresInsecureTls,
-                isSelected = true,
-            ),
-        )
-    }
-
-    private fun ProfileProtocolOption.toProbeCandidate(
-        profileId: Long,
-        insecureTlsConsentGranted: Boolean,
-    ): AutoConnectProbeCandidate =
-        AutoConnectProbeCandidate(
-            profileId = profileId,
-            optionId = id,
-            protocolHint = protocolHint,
-            displayName = displayName.ifBlank { protocolHint.name },
-            requiresInsecureTls = requiresInsecureTls,
-            insecureTlsConsentGranted = insecureTlsConsentGranted,
-        )
 }
+
+private fun autoConnectOptions(profile: Profile): List<ProfileProtocolOption> {
+    val explicitOptions = MultiProtocolProfileSupport.supportedOptions(profile)
+    return when {
+        explicitOptions.isNotEmpty() -> explicitOptions
+        profile.protocolHint in unsupportedProtocolHints -> emptyList()
+        else ->
+            listOf(
+                ProfileProtocolOption(
+                    id = profile.protocolHint.name.lowercase(),
+                    displayName = profile.protocolHint.name,
+                    protocolHint = profile.protocolHint,
+                    requiresInsecureTls = profile.requiresInsecureTls,
+                    isSelected = true,
+                ),
+            )
+    }
+}
+
+private fun ProfileProtocolOption.toProbeCandidate(
+    profileId: Long,
+    insecureTlsConsentGranted: Boolean,
+): AutoConnectProbeCandidate =
+    AutoConnectProbeCandidate(
+        profileId = profileId,
+        optionId = id,
+        protocolHint = protocolHint,
+        displayName = displayName.ifBlank { protocolHint.name },
+        requiresInsecureTls = requiresInsecureTls,
+        insecureTlsConsentGranted = insecureTlsConsentGranted,
+    )

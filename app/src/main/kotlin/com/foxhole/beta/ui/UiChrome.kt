@@ -280,16 +280,16 @@ private fun vibrateBannerError(context: Context) {
 
 private const val FoxholeBannerHapticCooldownMs = 1_200L
 private const val FoxholeBannerHapticPulseMs = 25L
-internal const val FoxholeBannerShortDurationMs = 4_000L
-internal const val FoxholeBannerLongDurationMs = 6_000L
+internal const val FOXHOLE_BANNER_SHORT_DURATION_MS = 4_000L
+internal const val FOXHOLE_BANNER_LONG_DURATION_MS = 6_000L
 private val FoxholeBannerErrorWaveformMs = longArrayOf(0L, 25L, 60L, 25L)
 
 internal fun defaultBannerDurationMillis(tone: FoxholeBannerTone): Long =
     when (tone) {
-        FoxholeBannerTone.ERROR -> FoxholeBannerLongDurationMs
+        FoxholeBannerTone.ERROR -> FOXHOLE_BANNER_LONG_DURATION_MS
         FoxholeBannerTone.INFO,
         FoxholeBannerTone.SUCCESS,
-        -> FoxholeBannerShortDurationMs
+        -> FOXHOLE_BANNER_SHORT_DURATION_MS
     }
 
 internal data class FoxholeBannerVisuals(

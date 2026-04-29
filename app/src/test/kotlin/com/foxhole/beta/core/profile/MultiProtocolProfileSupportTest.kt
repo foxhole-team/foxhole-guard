@@ -84,7 +84,6 @@ class MultiProtocolProfileSupportTest {
 
         val candidates = MultiProtocolProfileSupport.smartStartFullScanCandidates(profile)
 
-        assertTrue(MultiProtocolProfileSupport.hasSupportedAutoConnectOption(profile))
         assertEquals(listOf("vless"), candidates.map(AutoConnectProbeCandidate::optionId))
         assertEquals(listOf(ProtocolHint.VLESS), candidates.map(AutoConnectProbeCandidate::protocolHint))
     }

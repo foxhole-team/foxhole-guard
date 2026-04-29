@@ -71,11 +71,10 @@ class FoxholeConnectionServiceContractTest {
         assertEquals(
             listOf(TrafficMode.TUNNEL),
             disconnectDispatchModes(
-                snapshot =
-                    ConnectionSnapshot(
-                        state = ConnectionState.IDLE,
-                        trafficMode = TrafficMode.PROXY,
-                    ),
+                snapshot = ConnectionSnapshot(
+                    state = ConnectionState.IDLE,
+                    trafficMode = TrafficMode.PROXY,
+                ),
                 activeVpnNetworkAvailable = true,
             ),
         )
@@ -83,11 +82,10 @@ class FoxholeConnectionServiceContractTest {
         assertEquals(
             emptyList<TrafficMode>(),
             disconnectDispatchModes(
-                snapshot =
-                    ConnectionSnapshot(
-                        state = ConnectionState.IDLE,
-                        trafficMode = TrafficMode.TUNNEL,
-                    ),
+                snapshot = ConnectionSnapshot(
+                    state = ConnectionState.IDLE,
+                    trafficMode = TrafficMode.TUNNEL,
+                ),
                 activeVpnNetworkAvailable = false,
             ),
         )

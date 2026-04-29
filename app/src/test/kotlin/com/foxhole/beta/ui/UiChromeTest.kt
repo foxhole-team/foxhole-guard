@@ -21,7 +21,7 @@ class UiChromeTest {
             assertEquals("Profile imported", visuals.message)
             assertEquals(FoxholeBannerTone.SUCCESS, visuals.tone)
             assertEquals(SnackbarDuration.Indefinite, visuals.duration)
-            assertEquals(FoxholeBannerShortDurationMs, visuals.durationMillis)
+            assertEquals(FOXHOLE_BANNER_SHORT_DURATION_MS, visuals.durationMillis)
             hostState.currentSnackbarData?.dismiss()
             job.join()
         }
@@ -38,7 +38,7 @@ class UiChromeTest {
             assertEquals("Profile refresh failed", visuals.message)
             assertEquals(FoxholeBannerTone.ERROR, visuals.tone)
             assertEquals(SnackbarDuration.Indefinite, visuals.duration)
-            assertEquals(FoxholeBannerLongDurationMs, visuals.durationMillis)
+            assertEquals(FOXHOLE_BANNER_LONG_DURATION_MS, visuals.durationMillis)
             hostState.currentSnackbarData?.dismiss()
             job.join()
         }

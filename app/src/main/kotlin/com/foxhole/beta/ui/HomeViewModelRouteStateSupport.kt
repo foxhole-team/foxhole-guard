@@ -3,11 +3,11 @@ package com.foxhole.beta.ui
 import com.foxhole.beta.core.model.Profile
 import com.foxhole.beta.core.model.ProfileProtocolOption
 import com.foxhole.beta.core.model.Settings
+import com.foxhole.beta.core.settings.preferredLastKnownGoodOptionId
 import com.foxhole.beta.core.settings.rememberedSmartProfileServerPingByOptionId
 import com.foxhole.beta.core.settings.rememberedSmartProfileServerPingByProfileId
 import com.foxhole.beta.core.settings.rememberedSmartStartLatencyByOptionId
 import com.foxhole.beta.core.settings.rememberedSmartStartLatencyByProfileId
-import com.foxhole.beta.core.settings.preferredLastKnownGoodOptionId
 import com.foxhole.beta.core.settings.smartProfilePreference
 
 internal fun buildHomeRouteUiState(

@@ -191,7 +191,11 @@ internal fun shouldShowSmartStartRefreshReminder(
 }
 
 internal fun shouldShowAutoConnectAction(activeProfile: Profile?): Boolean =
-    MultiProtocolProfileSupport.hasSupportedAutoConnectOption(activeProfile)
+    activeProfile
+        ?.let { profile ->
+            MultiProtocolProfileSupport.supportedOptions(profile).isNotEmpty() ||
+                profile.protocolHint !in setOf(ProtocolHint.UNKNOWN, ProtocolHint.SING_BOX)
+        } == true
 
 internal fun shouldAwaitAutoConnectValidationGrace(
     connectionState: ConnectionState,
@@ -407,7 +411,13 @@ internal fun resolveDashboardSelectedOptionId(
     val connectedProtocol =
         connection.protocolHint
             ?.takeIf { connection.profileId == activeProfile?.id }
-            ?.takeIf { connection.state in setOf(ConnectionState.CONNECTED, ConnectionState.CONNECTING, ConnectionState.RECONNECTING) }
+            ?.takeIf {
+                connection.state in setOf(
+                    ConnectionState.CONNECTED,
+                    ConnectionState.CONNECTING,
+                    ConnectionState.RECONNECTING,
+                )
+            }
     return connectedProtocol
         ?.let { protocol ->
             activeProfile

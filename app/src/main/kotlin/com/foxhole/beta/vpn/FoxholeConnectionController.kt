@@ -12,8 +12,8 @@ import com.foxhole.beta.core.model.ConnectionSnapshot
 import com.foxhole.beta.core.model.ConnectionState
 import com.foxhole.beta.core.model.IpInfo
 import com.foxhole.beta.core.model.Profile
-import com.foxhole.beta.core.model.TrafficSnapshot
 import com.foxhole.beta.core.model.TrafficMode
+import com.foxhole.beta.core.model.TrafficSnapshot
 import com.foxhole.beta.core.network.IpInfoFetchMode
 import com.foxhole.beta.core.network.IpInfoRepository
 import com.foxhole.beta.core.settings.SettingsRepository

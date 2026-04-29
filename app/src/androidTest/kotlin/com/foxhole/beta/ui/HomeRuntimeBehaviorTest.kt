@@ -15,7 +15,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToNode
-import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.ViewModelProvider
 import androidx.test.platform.app.InstrumentationRegistry
 import com.foxhole.beta.FoxholeApplication
 import com.foxhole.beta.MainActivity
@@ -132,8 +132,12 @@ class HomeRuntimeBehaviorTest {
         composeRule.runOnUiThread {
             app().container.diagnosticsLogger.clear()
         }
-        composeRule.activityRule.scenario.moveToState(Lifecycle.State.STARTED)
-        composeRule.activityRule.scenario.moveToState(Lifecycle.State.RESUMED)
+        composeRule.runOnUiThread {
+            ViewModelProvider(
+                composeRule.activity,
+                HomeViewModel.factory(app()),
+            )[HomeViewModel::class.java].onAppForegrounded()
+        }
         Thread.sleep(HomeViewModel.CONNECTED_IP_REFRESH_DELAY_MS + 400L)
         composeRule.waitForIdle()
 

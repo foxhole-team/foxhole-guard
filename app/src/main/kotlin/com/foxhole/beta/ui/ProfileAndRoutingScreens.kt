@@ -723,6 +723,7 @@ private fun ProfileExportChoiceRow(
 }
 
 @Composable
+@Suppress("LongMethod", "LongParameterList")
 fun ProfileDetailScreen(
     profile: Profile?,
     activeProfileId: Long?,

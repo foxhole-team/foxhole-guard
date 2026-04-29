@@ -274,6 +274,7 @@ class HomeScreenTest {
     fun versionCardDoesNothingWhenExpertSettingsAreAlreadyVisible() {
         setExpertSettingsVisible(visible = true)
         composeRule.onNodeWithTag("bottom_nav_settings").performClick()
+        composeRule.onNodeWithTag("settings_screen").performScrollToNode(hasTestTag("settings_expert_action"))
         composeRule.onNodeWithTag("settings_expert_action").assertIsDisplayed()
         composeRule.onNodeWithTag("settings_screen").performScrollToNode(hasTestTag("settings_footer_version_card"))
         repeat(5) {

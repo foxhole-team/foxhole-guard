@@ -735,7 +735,7 @@ internal fun dashboardProfileTitle(title: String): String =
         "${title.take(23)}.."
     }
 
-@Suppress("LongMethod")
+@Suppress("CyclomaticComplexMethod", "LongMethod")
 @Composable
 internal fun HomeConnectionActions(
     state: HomeRouteUiState,

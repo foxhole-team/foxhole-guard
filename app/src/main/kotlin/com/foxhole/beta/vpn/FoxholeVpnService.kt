@@ -19,8 +19,8 @@ import com.foxhole.beta.FoxholeRuntimeDependencies
 import com.foxhole.beta.R
 import com.foxhole.beta.core.model.AutoConnectReasonCode
 import com.foxhole.beta.core.model.ConnectionSnapshot
-import com.foxhole.beta.core.model.ConnectivityHealthState
 import com.foxhole.beta.core.model.ConnectionState
+import com.foxhole.beta.core.model.ConnectivityHealthState
 import com.foxhole.beta.core.model.IpInfo
 import com.foxhole.beta.core.model.NotificationSnapshot
 import com.foxhole.beta.core.model.TrafficMode

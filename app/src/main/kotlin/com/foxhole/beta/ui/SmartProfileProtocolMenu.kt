@@ -61,6 +61,7 @@ import com.foxhole.beta.core.profile.MultiProtocolProfileSupport
 import kotlin.math.max
 
 @Composable
+@Suppress("LongParameterList")
 internal fun SmartProfileAutoConnectMenu(
     profile: Profile,
     excludedOptionIds: Set<String>,
@@ -117,7 +118,6 @@ internal fun SmartProfileAutoConnectMenu(
                 recommendedOptionId = recommendedOptionId,
                 recommendedOptionIds = recommendedOptionIds,
                 favoriteOptionId = favoriteOptionId,
-                activeOptionId = activeOptionId,
                 compact = compact,
                 showTransportBadges = showTransportBadges,
                 showStatusHeader = showStatusHeader,
@@ -199,6 +199,7 @@ internal fun SmartProfileAutoConnectMenu(
 }
 
 @Composable
+@Suppress("CyclomaticComplexMethod", "LongMethod", "LongParameterList")
 private fun rememberSmartProfileMenuWidth(
     options: List<ProfileProtocolOption>,
     menuLayout: SmartStartProtocolMenuLayout,
@@ -211,7 +212,6 @@ private fun rememberSmartProfileMenuWidth(
     recommendedOptionId: String?,
     recommendedOptionIds: Set<String>,
     favoriteOptionId: String?,
-    activeOptionId: String?,
     compact: Boolean,
     showTransportBadges: Boolean,
     showStatusHeader: Boolean,
@@ -516,6 +516,7 @@ private fun SmartStartProtocolStatus.label(
     }
 
 @Composable
+@Suppress("CyclomaticComplexMethod", "LongMethod", "LongParameterList")
 private fun SmartProfileProtocolMenuContent(
     options: List<ProfileProtocolOption>,
     menuLayout: SmartStartProtocolMenuLayout,
@@ -624,7 +625,6 @@ private fun SmartProfileProtocolMenuContent(
                         option = option,
                         compact = true,
                         included = included,
-                        active = active,
                         recommended = recommended,
                         topRecommended = topRecommended,
                         favorite = favorite,
@@ -650,7 +650,6 @@ private fun SmartProfileProtocolMenuContent(
                         option = option,
                         compact = true,
                         included = included,
-                        active = active,
                         recommended = recommended,
                         topRecommended = topRecommended,
                         favorite = favorite,
@@ -1276,7 +1275,6 @@ private fun SmartProfileProtocolMetricsTableRow(
     option: ProfileProtocolOption,
     compact: Boolean,
     included: Boolean,
-    active: Boolean,
     recommended: Boolean,
     topRecommended: Boolean,
     favorite: Boolean,
@@ -1302,7 +1300,6 @@ private fun SmartProfileProtocolMetricsTableRow(
             option = option,
             compact = compact,
             enabled = included,
-            active = active,
             recommended = recommended,
             topRecommended = topRecommended,
             favorite = favorite,
@@ -1380,7 +1377,6 @@ private fun SmartProfileProtocolSimpleMenuRow(
     option: ProfileProtocolOption,
     compact: Boolean,
     included: Boolean,
-    active: Boolean,
     recommended: Boolean,
     topRecommended: Boolean,
     favorite: Boolean,
@@ -1402,7 +1398,6 @@ private fun SmartProfileProtocolSimpleMenuRow(
             option = option,
             compact = compact,
             enabled = included,
-            active = active,
             recommended = recommended,
             topRecommended = topRecommended,
             favorite = favorite,
@@ -1452,7 +1447,6 @@ private fun SmartProfileProtocolCell(
     option: ProfileProtocolOption,
     compact: Boolean,
     enabled: Boolean,
-    active: Boolean,
     recommended: Boolean,
     topRecommended: Boolean,
     favorite: Boolean,

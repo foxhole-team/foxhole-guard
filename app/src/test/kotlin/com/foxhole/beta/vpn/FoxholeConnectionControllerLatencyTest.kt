@@ -16,6 +16,28 @@ class FoxholeConnectionControllerLatencyTest {
     }
 
     @Test
+    fun `proxy validation probes lightweight endpoints before ip info endpoint`() {
+        assertEquals(
+            FoxholeVpnService.CONNECTIVITY_PROBE_ENDPOINTS + "https://ipwho.is/",
+            proxyConnectivityProbeEndpoints(
+                preferredEndpoint = "https://ipwho.is/",
+                fallbackEndpoints = FoxholeVpnService.CONNECTIVITY_PROBE_ENDPOINTS,
+            ),
+        )
+    }
+
+    @Test
+    fun `proxy validation does not duplicate preferred lightweight endpoint`() {
+        assertEquals(
+            FoxholeVpnService.CONNECTIVITY_PROBE_ENDPOINTS,
+            proxyConnectivityProbeEndpoints(
+                preferredEndpoint = "https://cp.cloudflare.com/generate_204",
+                fallbackEndpoints = FoxholeVpnService.CONNECTIVITY_PROBE_ENDPOINTS,
+            ),
+        )
+    }
+
+    @Test
     fun `representative latency is null when there are no successful probes`() {
         assertNull(representativeLatencyMs(emptyList()))
     }

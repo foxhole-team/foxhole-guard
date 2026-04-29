@@ -674,19 +674,29 @@ private suspend fun HomeViewModel.probeAutoConnectCandidateForMetricsRefresh(
                 previousVpnNetworkHandle = previousVpnNetworkHandle,
             )
         }
-    if (result != null) {
-        return result
-    }
-    connectedAutoConnectFallbackResult(
-        profileId = profileId,
-        candidate = candidate,
-        networkFingerprint = networkFingerprint,
-        startedAtElapsedMs = startedAt,
-        timeoutMs = timeoutMs,
-    )?.let { fallback ->
-        return fallback
-    }
-    val elapsedMs = (SystemClock.elapsedRealtime() - startedAt).coerceAtLeast(1L)
+    return result
+        ?: connectedAutoConnectFallbackResult(
+            profileId = profileId,
+            candidate = candidate,
+            networkFingerprint = networkFingerprint,
+            startedAtElapsedMs = startedAt,
+            timeoutMs = timeoutMs,
+        )
+        ?: protocolMetricsProbeTimeoutResult(
+            profileId = profileId,
+            candidate = candidate,
+            startedAtElapsedMs = startedAt,
+            timeoutMs = timeoutMs,
+        )
+}
+
+private fun HomeViewModel.protocolMetricsProbeTimeoutResult(
+    profileId: Long,
+    candidate: AutoConnectProbeCandidate,
+    startedAtElapsedMs: Long,
+    timeoutMs: Long,
+): AutoConnectProbeResult {
+    val elapsedMs = (SystemClock.elapsedRealtime() - startedAtElapsedMs).coerceAtLeast(1L)
     runCatching { container.connectionController.disconnect() }
     val reasonCode =
         classifyAutoConnectProbeFailure(
