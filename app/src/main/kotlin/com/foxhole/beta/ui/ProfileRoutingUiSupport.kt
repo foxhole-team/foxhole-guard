@@ -740,6 +740,7 @@ internal fun SmartProfileBadge(
     modifier: Modifier = Modifier,
     compact: Boolean = false,
 ) {
+    val tone = foxholeSystemAwareAccentColor()
     Surface(
         modifier =
             if (compact) {
@@ -748,8 +749,8 @@ internal fun SmartProfileBadge(
                 modifier
             },
         shape = if (compact) MaterialTheme.shapes.small else MaterialTheme.shapes.medium,
-        color = FoxholePositiveAccent.copy(alpha = if (compact) 0.12f else 0.14f),
-        border = BorderStroke(1.dp, FoxholePositiveAccent.copy(alpha = if (compact) 0.34f else 0.26f)),
+        color = tone.copy(alpha = if (compact) 0.12f else 0.14f),
+        border = BorderStroke(1.dp, tone.copy(alpha = if (compact) 0.34f else 0.26f)),
     ) {
         Text(
             text = stringResource(R.string.smart_profile_tag),
@@ -764,7 +765,7 @@ internal fun SmartProfileBadge(
                     MaterialTheme.typography.labelMedium
                 },
             fontWeight = FontWeight.SemiBold,
-            color = FoxholePositiveAccent,
+            color = tone,
         )
     }
 }

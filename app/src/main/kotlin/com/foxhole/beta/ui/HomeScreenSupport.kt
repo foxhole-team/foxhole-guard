@@ -749,11 +749,12 @@ internal fun HomeConnectionActions(
         activeProfile != null &&
             !autoConnectRunning &&
             state.connection.state !in setOf(ConnectionState.CONNECTING, ConnectionState.RECONNECTING)
+    val smartStartAccent = foxholeSystemAwareAccentColor(fallback = FoxholeInfoAccent)
     val autoConnectColor =
         if (autoConnectEnabled) {
-            FoxholeInfoAccent
+            smartStartAccent
         } else {
-            FoxholeInfoAccent.copy(alpha = 0.46f)
+            smartStartAccent.copy(alpha = 0.46f)
         }
     val primaryAction =
         if (autoConnectRunning || state.reconnectInProgress) {

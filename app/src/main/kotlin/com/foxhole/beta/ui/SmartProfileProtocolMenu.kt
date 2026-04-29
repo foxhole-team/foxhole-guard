@@ -136,7 +136,11 @@ internal fun SmartProfileAutoConnectMenu(
                     .testTag("smart_profile_auto_connect_menu_action"),
             shape = CircleShape,
             color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.58f),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)),
+            border =
+                BorderStroke(
+                    1.dp,
+                    foxholeSystemAwareAccentColor(fallback = FoxholeInfoAccent).copy(alpha = 0.18f),
+                ),
         ) {
             Box(
                 modifier = Modifier.fillMaxSize(),
@@ -146,7 +150,7 @@ internal fun SmartProfileAutoConnectMenu(
                     imageVector = Icons.Outlined.Settings,
                     contentDescription = stringResource(R.string.smart_profile_menu_title),
                     modifier = Modifier.size(actionIconSize ?: if (compact) 16.dp else 20.dp),
-                    tint = MaterialTheme.colorScheme.primary,
+                    tint = foxholeSystemAwareAccentColor(fallback = FoxholeInfoAccent),
                 )
             }
         }
@@ -619,6 +623,7 @@ private fun SmartProfileProtocolMenuContent(
             val favorite = option.id == favoriteOptionId
             val includedSelection = included && active
             val refreshingSelection = metricsRefreshing && option.id == refreshingOptionId
+            val selectionTone = foxholeSystemAwareAccentColor(fallback = FoxholeInfoAccent)
             val activeAccent =
                 smartProfileCurrentProtocolAccent(
                     latencyMs = latencyMs,
@@ -643,14 +648,14 @@ private fun SmartProfileProtocolMenuContent(
                 highlightSelected = includedSelection || refreshingSelection,
                 accentColor =
                     when {
-                        refreshingSelection -> FoxholeInfoAccent
+                        refreshingSelection -> selectionTone
                         included && recommended -> FoxholePositiveAccent
                         included && active -> activeAccent
                         else -> FoxholePositiveAccent
                     },
                 selectedContainerColor =
                     if (refreshingSelection) {
-                        FoxholeInfoAccent.copy(alpha = 0.12f)
+                        selectionTone.copy(alpha = 0.12f)
                     } else {
                         MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.18f)
                     },
@@ -858,6 +863,7 @@ private fun SmartProfileProtocolMenuFooterContent(
                 alpha = if (menuLayout.showDetailedMetrics) 0.34f else 0.24f,
             ),
     )
+    val legendInfoTone = foxholeSystemAwareAccentColor(fallback = FoxholeInfoAccent)
     Column(
         modifier =
             Modifier
@@ -873,7 +879,7 @@ private fun SmartProfileProtocolMenuFooterContent(
                 imageVector = Icons.Outlined.Info,
                 contentDescription = null,
                 modifier = Modifier.size(if (menuLayout.showDetailedMetrics) 12.dp else 10.dp),
-                tint = FoxholeInfoAccent,
+                tint = legendInfoTone,
             )
             Text(
                 text = stringResource(R.string.smart_profile_legend_title),
@@ -883,7 +889,7 @@ private fun SmartProfileProtocolMenuFooterContent(
                         lineHeight = if (menuLayout.showDetailedMetrics) 11.sp else 9.5.sp,
                         fontWeight = FontWeight.SemiBold,
                     ),
-                color = FoxholeInfoAccent,
+                color = legendInfoTone,
                 maxLines = 1,
                 softWrap = false,
                 overflow = TextOverflow.Clip,
@@ -901,6 +907,7 @@ private fun SmartProfileMetricsHint(
     compact: Boolean,
     modifier: Modifier = Modifier,
 ) {
+    val infoTone = foxholeSystemAwareAccentColor(fallback = FoxholeInfoAccent)
     val refreshHint =
         stringResource(
             if (compact) {
@@ -919,7 +926,7 @@ private fun SmartProfileMetricsHint(
             imageVector = Icons.Outlined.Info,
             contentDescription = null,
             modifier = Modifier.size(if (compact) 10.dp else SmartProfileHintIconSize),
-            tint = FoxholeInfoAccent,
+            tint = infoTone,
         )
         Column(
             modifier = Modifier.weight(1f, fill = false),
@@ -933,7 +940,7 @@ private fun SmartProfileMetricsHint(
                         lineHeight = if (compact) 9.sp else 12.sp,
                         fontWeight = FontWeight.Medium,
                     ),
-                color = FoxholeInfoAccent,
+                color = infoTone,
                 maxLines = if (compact) 1 else 2,
                 softWrap = !compact,
                 overflow = TextOverflow.Clip,
@@ -947,7 +954,7 @@ private fun SmartProfileMetricsHint(
                             lineHeight = if (compact) 9.sp else 12.sp,
                             fontWeight = FontWeight.Medium,
                         ),
-                    color = FoxholeInfoAccent,
+                    color = infoTone,
                     maxLines = if (compact) 1 else 2,
                     softWrap = !compact,
                     overflow = TextOverflow.Clip,
@@ -962,6 +969,7 @@ private fun SmartProfileLegendLine(
     compact: Boolean,
     modifier: Modifier = Modifier,
 ) {
+    val starColor = foxholeSystemAwareAccentColor()
     Row(
         modifier = modifier,
         horizontalArrangement = Arrangement.spacedBy(0.dp),
@@ -969,14 +977,14 @@ private fun SmartProfileLegendLine(
     ) {
         SmartProfileLegendRow(
             starCount = 1,
-            starColor = FoxholePositiveAccent,
+            starColor = starColor,
             label = stringResource(R.string.smart_profile_legend_favorite),
             compact = compact,
         )
         SmartProfileLegendSeparator(compact = compact)
         SmartProfileLegendRow(
             starCount = 2,
-            starColor = FoxholePositiveAccent,
+            starColor = starColor,
             label = stringResource(R.string.smart_profile_legend_reconnect_recommended),
             compact = compact,
         )
@@ -1096,7 +1104,7 @@ private fun SmartProfileRefreshingIndicator(
     protocolLabel: String,
     compact: Boolean,
 ) {
-    val color = FoxholeInfoAccent
+    val color = foxholeSystemAwareAccentColor(fallback = FoxholeInfoAccent)
     Surface(
         shape = MaterialTheme.shapes.small,
         color = color.copy(alpha = 0.10f),
@@ -1218,7 +1226,7 @@ private fun smartProfileRefreshButtonTone(updatedAt: Long?): Color {
     val ageMs = updatedAt?.let { (System.currentTimeMillis() - it).coerceAtLeast(0L) }
     return when {
         ageMs == null -> SmartProfileRefreshDangerAccent
-        ageMs < SmartProfileRefreshYellowAfterMs -> MaterialTheme.colorScheme.primary
+        ageMs < SmartProfileRefreshYellowAfterMs -> foxholeSystemAwareAccentColor()
         ageMs < SmartProfileRefreshOrangeAfterMs -> FoxholeWarningAccent
         ageMs < SmartProfileRefreshRedAfterMs -> SmartProfileRefreshOrangeAccent
         else -> SmartProfileRefreshDangerAccent
@@ -1615,7 +1623,7 @@ private fun SmartProfileOnToggle(
     included: Boolean,
     compact: Boolean,
 ) {
-    val tone = MaterialTheme.colorScheme.primary
+    val tone = foxholeSystemAwareAccentColor()
     if (included) {
         Surface(
             modifier = Modifier.size(if (compact) 17.dp else 18.dp),
@@ -1652,7 +1660,7 @@ private fun SmartProfileTransportBadge(
         when (transport) {
             SmartProfileTransport.TCP,
             SmartProfileTransport.UDP,
-            -> FoxholeInfoAccent
+            -> foxholeSystemAwareAccentColor(fallback = FoxholeInfoAccent)
         }
     Surface(
         modifier = modifier,

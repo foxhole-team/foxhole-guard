@@ -123,6 +123,11 @@ internal val LocalFoxholeUiPalette =
         )
     }
 
+internal val LocalFoxholeThemeMode =
+    staticCompositionLocalOf {
+        ThemeMode.DARK
+    }
+
 private fun defaultFoxholeUiPalette(
     colorScheme: androidx.compose.material3.ColorScheme,
     useDarkPalette: Boolean,
@@ -211,6 +216,7 @@ fun FoxholeTheme(
     CompositionLocalProvider(
         LocalTextSelectionColors provides selectionColors,
         LocalFoxholeUiPalette provides uiPalette,
+        LocalFoxholeThemeMode provides themeMode,
     ) {
         MaterialTheme(
             colorScheme = colorScheme,

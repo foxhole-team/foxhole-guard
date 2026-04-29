@@ -299,6 +299,7 @@ fun ProfilesScreen(
             val isSmartProfile = MultiProtocolProfileSupport.hasMultipleSupportedOptions(profile)
             val showInlineRefreshAction =
                 isSmartProfile && profile.sourceType == ProfileSourceType.SUBSCRIPTION_URL
+            val showInsecureTlsActionBadge = selectedProtocolRequiresInsecureTls(profile)
             val exportChoices = exportChoicesByProfileId[profile.id].orEmpty()
             val exportSelectedKeys = exportSelectionState.selectedKeys(profile.id)
             val exportSelectionMode =
@@ -395,7 +396,7 @@ fun ProfilesScreen(
                             recommendedProtocolOptionIds = state.recommendedProtocolOptionsByProfileId[profile.id].orEmpty(),
                             favoriteProtocolOptionId = state.favoriteProtocolOptionByProfileId[profile.id],
                             requiresInsecureTls = profile.requiresInsecureTls,
-                            showInsecureTlsBadge = true,
+                            showInsecureTlsBadge = false,
                             reserveTrailingSpace = false,
                             expand = true,
                             leadingContent =
@@ -459,42 +460,53 @@ fun ProfilesScreen(
                             )
                         }
                     } else {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        Column(
+                            horizontalAlignment = Alignment.End,
+                            verticalArrangement = Arrangement.spacedBy(4.dp),
                         ) {
-                            if (showInlineRefreshAction) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            ) {
+                                if (showInlineRefreshAction) {
+                                    IconButton(
+                                        onClick = { refreshProfileId = profile.id },
+                                        modifier =
+                                            Modifier
+                                                .size(34.dp)
+                                                .testTag("profiles_profile_refresh_action_${profile.id}"),
+                                    ) {
+                                        Icon(
+                                            Icons.Outlined.Refresh,
+                                            contentDescription = stringResource(R.string.refresh),
+                                        )
+                                    }
+                                }
                                 IconButton(
-                                    onClick = { refreshProfileId = profile.id },
+                                    onClick = { onEditProfile(profile.id) },
                                     modifier =
                                         Modifier
                                             .size(34.dp)
-                                            .testTag("profiles_profile_refresh_action_${profile.id}"),
+                                            .testTag("profiles_profile_edit_action_${profile.id}"),
                                 ) {
-                                    Icon(Icons.Outlined.Refresh, contentDescription = stringResource(R.string.refresh))
+                                    Icon(Icons.Outlined.Edit, contentDescription = stringResource(R.string.edit_label))
+                                }
+                                IconButton(
+                                    onClick = { deleteProfileId = profile.id },
+                                    modifier =
+                                        Modifier
+                                            .size(34.dp)
+                                            .testTag("profiles_profile_delete_action_${profile.id}"),
+                                ) {
+                                    Icon(
+                                        Icons.Outlined.Delete,
+                                        contentDescription = stringResource(R.string.delete_label),
+                                        tint = MaterialTheme.colorScheme.error,
+                                    )
                                 }
                             }
-                            IconButton(
-                                onClick = { onEditProfile(profile.id) },
-                                modifier =
-                                    Modifier
-                                        .size(34.dp)
-                                        .testTag("profiles_profile_edit_action_${profile.id}"),
-                            ) {
-                                Icon(Icons.Outlined.Edit, contentDescription = stringResource(R.string.edit_label))
-                            }
-                            IconButton(
-                                onClick = { deleteProfileId = profile.id },
-                                modifier =
-                                    Modifier
-                                        .size(34.dp)
-                                        .testTag("profiles_profile_delete_action_${profile.id}"),
-                            ) {
-                                Icon(
-                                    Icons.Outlined.Delete,
-                                    contentDescription = stringResource(R.string.delete_label),
-                                    tint = MaterialTheme.colorScheme.error,
-                                )
+                            if (showInsecureTlsActionBadge) {
+                                InsecureTlsProfileBadge(compact = true)
                             }
                         }
                     }

@@ -427,6 +427,7 @@ private fun ProtocolMarkOrSelector(
                 verticalArrangement = Arrangement.spacedBy(0.dp),
             ) {
                 dropdownInfoText?.let { infoText ->
+                    val infoTone = foxholeSystemAwareAccentColor(fallback = FoxholeInfoAccent)
                     Column(verticalArrangement = Arrangement.spacedBy(if (compact) 4.dp else 6.dp)) {
                         Row(
                             modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = if (compact) 4.dp else 6.dp),
@@ -437,7 +438,7 @@ private fun ProtocolMarkOrSelector(
                                 imageVector = Icons.Outlined.Info,
                                 contentDescription = null,
                                 modifier = Modifier.size(if (compact) 14.dp else 16.dp),
-                                tint = FoxholeInfoAccent,
+                                tint = infoTone,
                             )
                             Text(
                                 text = infoText,
@@ -449,7 +450,7 @@ private fun ProtocolMarkOrSelector(
                                         MaterialTheme.typography.labelMedium
                                     },
                                 fontWeight = FontWeight.Medium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                color = infoTone,
                             )
                         }
                         HorizontalDivider(
@@ -460,6 +461,7 @@ private fun ProtocolMarkOrSelector(
                 }
                 protocolOptions.forEachIndexed { index, option ->
                     val optionSelected = option.id == selected.id
+                    val selectionTone = foxholeSystemAwareAccentColor()
                     FoxholeDropdownItem(
                         onClick = {
                             expanded = false
@@ -467,9 +469,9 @@ private fun ProtocolMarkOrSelector(
                         },
                         selected = optionSelected,
                         highlightSelected = true,
-                        selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.10f),
+                        selectedContainerColor = selectionTone.copy(alpha = 0.10f),
                         showBorder = index != protocolOptions.lastIndex,
-                        accentColor = MaterialTheme.colorScheme.primary,
+                        accentColor = selectionTone,
                         shape =
                             foxholeDropdownItemShape(
                                 index = index,
@@ -490,7 +492,7 @@ private fun ProtocolMarkOrSelector(
                                     Icon(
                                         imageVector = Icons.Outlined.CheckCircle,
                                         contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.primary,
+                                        tint = selectionTone,
                                         modifier = Modifier.size(18.dp),
                                     )
                                 }
@@ -614,7 +616,7 @@ internal fun SmartProfileConditionStars(
                         null
                     },
                 modifier = Modifier.size(if (compact) 9.dp else 10.dp),
-                tint = MaterialTheme.colorScheme.primary,
+                tint = foxholeSystemAwareAccentColor(),
             )
         }
     }

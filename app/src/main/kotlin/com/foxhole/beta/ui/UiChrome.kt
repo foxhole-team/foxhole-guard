@@ -98,6 +98,8 @@ import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.core.content.getSystemService
 import com.foxhole.beta.R
+import com.foxhole.beta.core.model.ThemeMode
+import com.foxhole.beta.ui.theme.LocalFoxholeThemeMode
 import com.foxhole.beta.ui.theme.LocalFoxholeUiPalette
 
 internal val ScreenHorizontalPadding = 16.dp
@@ -135,6 +137,14 @@ internal val FoxholeInfoAccent = Color(0xFF6288AE)
 internal val FoxholeWarningAccent = Color(0xFFE0B84A)
 private val FoxholeErrorAccent = Color(0xFFC63C3C)
 private const val FoxholeTopBarContainerAlpha = 0.90f
+
+@Composable
+internal fun foxholeSystemAwareAccentColor(fallback: Color = FoxholePositiveAccent): Color =
+    if (LocalFoxholeThemeMode.current == ThemeMode.SYSTEM) {
+        MaterialTheme.colorScheme.primary
+    } else {
+        fallback
+    }
 
 internal fun Modifier.foxholeAnimateContentSize(): Modifier =
     animateContentSize(
