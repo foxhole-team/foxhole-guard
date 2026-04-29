@@ -755,6 +755,7 @@ private fun SmartProfileProtocolMenuHeaderContent(
                 )
                 SmartProfileMetricsHint(
                     compact = false,
+                    showIcon = false,
                     modifier =
                         Modifier
                             .fillMaxWidth()
@@ -872,15 +873,24 @@ private fun SmartProfileProtocolMenuFooterContent(
         verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
         Row(
-            horizontalArrangement = Arrangement.spacedBy(SmartProfileHintIconGap),
+            horizontalArrangement =
+                Arrangement.spacedBy(
+                    if (menuLayout.showDetailedMetrics) {
+                        0.dp
+                    } else {
+                        SmartProfileHintIconGap
+                    },
+                ),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Icon(
-                imageVector = Icons.Outlined.Info,
-                contentDescription = null,
-                modifier = Modifier.size(if (menuLayout.showDetailedMetrics) 12.dp else 10.dp),
-                tint = legendInfoTone,
-            )
+            if (!menuLayout.showDetailedMetrics) {
+                Icon(
+                    imageVector = Icons.Outlined.Info,
+                    contentDescription = null,
+                    modifier = Modifier.size(10.dp),
+                    tint = legendInfoTone,
+                )
+            }
             Text(
                 text = stringResource(R.string.smart_profile_legend_title),
                 style =
@@ -905,6 +915,7 @@ private fun SmartProfileProtocolMenuFooterContent(
 @Composable
 private fun SmartProfileMetricsHint(
     compact: Boolean,
+    showIcon: Boolean = true,
     modifier: Modifier = Modifier,
 ) {
     val infoTone = foxholeSystemAwareAccentColor(fallback = FoxholeInfoAccent)
@@ -919,15 +930,17 @@ private fun SmartProfileMetricsHint(
     val hintLines = refreshHint.split('\n', limit = 2)
     Row(
         modifier = modifier,
-        horizontalArrangement = Arrangement.spacedBy(SmartProfileHintIconGap),
+        horizontalArrangement = Arrangement.spacedBy(if (showIcon) SmartProfileHintIconGap else 0.dp),
         verticalAlignment = Alignment.Top,
     ) {
-        Icon(
-            imageVector = Icons.Outlined.Info,
-            contentDescription = null,
-            modifier = Modifier.size(if (compact) 10.dp else SmartProfileHintIconSize),
-            tint = infoTone,
-        )
+        if (showIcon) {
+            Icon(
+                imageVector = Icons.Outlined.Info,
+                contentDescription = null,
+                modifier = Modifier.size(if (compact) 10.dp else SmartProfileHintIconSize),
+                tint = infoTone,
+            )
+        }
         Column(
             modifier = Modifier.weight(1f, fill = false),
             verticalArrangement = Arrangement.spacedBy(if (compact) 1.dp else 2.dp),
@@ -1645,7 +1658,7 @@ private fun SmartProfileOnToggle(
             modifier = Modifier.size(if (compact) 14.dp else 15.dp),
             shape = CircleShape,
             color = Color.Transparent,
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.48f)),
+            border = BorderStroke(1.dp, tone.copy(alpha = 0.42f)),
             content = {},
         )
     }
@@ -1660,7 +1673,7 @@ private fun SmartProfileTransportBadge(
         when (transport) {
             SmartProfileTransport.TCP,
             SmartProfileTransport.UDP,
-            -> foxholeSystemAwareAccentColor(fallback = FoxholeInfoAccent)
+            -> foxholeTransportBadgeColor()
         }
     Surface(
         modifier = modifier,

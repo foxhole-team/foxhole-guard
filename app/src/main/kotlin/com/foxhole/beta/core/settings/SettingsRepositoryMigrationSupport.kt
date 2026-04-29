@@ -9,7 +9,7 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 internal data class LegacyFlatSettings(
-    val themeMode: ThemeMode = ThemeMode.SYSTEM,
+    val themeMode: ThemeMode = ThemeMode.DARK,
     val locale: AppLocale = AppLocale.SYSTEM,
     val autoReconnect: Boolean = true,
     val autoStartOnBoot: Boolean = false,

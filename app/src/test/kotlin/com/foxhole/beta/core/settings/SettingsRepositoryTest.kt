@@ -102,7 +102,8 @@ class SettingsRepositoryTest {
     }
 
     @Test
-    fun `expert settings stay hidden by default`() {
+    fun `ui defaults to dark theme and hidden expert settings`() {
+        assertEquals(ThemeMode.DARK, Settings().ui.themeMode)
         assertFalse(Settings().ui.showExpertSettings)
     }
 

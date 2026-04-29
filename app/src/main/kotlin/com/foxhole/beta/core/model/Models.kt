@@ -150,7 +150,7 @@ enum class RoutingRuleAction(val outboundTag: String) {
 
 @Serializable
 data class UiSettings(
-    val themeMode: ThemeMode = ThemeMode.SYSTEM,
+    val themeMode: ThemeMode = ThemeMode.DARK,
     val locale: AppLocale = AppLocale.SYSTEM,
     val onboardingCompleted: Boolean = true,
     val showExpertSettings: Boolean = false,

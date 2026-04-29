@@ -300,6 +300,7 @@ fun ProfilesScreen(
             val showInlineRefreshAction =
                 isSmartProfile && profile.sourceType == ProfileSourceType.SUBSCRIPTION_URL
             val showInsecureTlsActionBadge = selectedProtocolRequiresInsecureTls(profile)
+            val profileSelectionColor = foxholeSystemProfileSelectionColor()
             val exportChoices = exportChoicesByProfileId[profile.id].orEmpty()
             val exportSelectedKeys = exportSelectionState.selectedKeys(profile.id)
             val exportSelectionMode =
@@ -331,7 +332,7 @@ fun ProfilesScreen(
                     if (exportCardSelected) {
                         FoxholeInfoAccent.copy(alpha = 0.08f)
                     } else if (isSelected) {
-                        FoxholePositiveAccent.copy(alpha = 0.05f)
+                        profileSelectionColor.copy(alpha = 0.05f)
                     } else {
                         Color.Unspecified
                     },
@@ -339,7 +340,7 @@ fun ProfilesScreen(
                     if (exportCardSelected) {
                         FoxholeInfoAccent.copy(alpha = 0.42f)
                     } else if (isSelected) {
-                        FoxholePositiveAccent.copy(alpha = 0.42f)
+                        profileSelectionColor.copy(alpha = 0.42f)
                     } else {
                         Color.Unspecified
                     },
@@ -506,7 +507,10 @@ fun ProfilesScreen(
                                 }
                             }
                             if (showInsecureTlsActionBadge) {
-                                InsecureTlsProfileBadge(compact = true)
+                                InsecureTlsProfileBadge(
+                                    modifier = Modifier.padding(top = 8.dp),
+                                    compact = true,
+                                )
                             }
                         }
                     }

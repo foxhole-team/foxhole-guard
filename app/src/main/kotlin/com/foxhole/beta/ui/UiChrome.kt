@@ -139,11 +139,29 @@ private val FoxholeErrorAccent = Color(0xFFC63C3C)
 private const val FoxholeTopBarContainerAlpha = 0.90f
 
 @Composable
-internal fun foxholeSystemAwareAccentColor(fallback: Color = FoxholePositiveAccent): Color =
-    if (LocalFoxholeThemeMode.current == ThemeMode.SYSTEM) {
-        MaterialTheme.colorScheme.primary
-    } else {
-        fallback
+internal fun foxholeSystemAwareAccentColor(
+    fallback: Color = FoxholePositiveAccent,
+    darkFallback: Color = FoxholeInfoAccent,
+): Color =
+    when (LocalFoxholeThemeMode.current) {
+        ThemeMode.SYSTEM -> MaterialTheme.colorScheme.primary
+        ThemeMode.DARK -> darkFallback
+        ThemeMode.LIGHT -> fallback
+    }
+
+@Composable
+internal fun foxholeSystemProfileSelectionColor(): Color =
+    foxholeSystemAwareAccentColor(
+        fallback = FoxholePositiveAccent,
+        darkFallback = FoxholeInfoAccent,
+    )
+
+@Composable
+internal fun foxholeTransportBadgeColor(): Color =
+    when (LocalFoxholeThemeMode.current) {
+        ThemeMode.SYSTEM -> MaterialTheme.colorScheme.primary
+        ThemeMode.DARK -> MaterialTheme.colorScheme.onSurfaceVariant
+        ThemeMode.LIGHT -> FoxholeInfoAccent
     }
 
 internal fun Modifier.foxholeAnimateContentSize(): Modifier =

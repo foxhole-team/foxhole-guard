@@ -183,6 +183,7 @@ fun HomeScreen(
         } else {
             MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.42f)
         }
+    val dashboardSecondaryActionIconSize = 21.dp
     val connectionDurationText = rememberConnectionDurationText(state.connection)
     val dashboardProtocolModel = remember(state) { resolveHomeDashboardProtocolModel(state) }
     val dashboardProtocolLatencies = dashboardProtocolModel.latenciesByOptionId
@@ -555,7 +556,11 @@ fun HomeScreen(
                                         .testTag("home_import_action"),
                                 border = BorderStroke(1.dp, dashboardSecondaryActionBorderColor),
                             ) {
-                                Icon(Icons.Outlined.ContentPaste, contentDescription = null)
+                                Icon(
+                                    Icons.Outlined.ContentPaste,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(dashboardSecondaryActionIconSize),
+                                )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(stringResource(R.string.import_label))
                             }
@@ -623,7 +628,7 @@ fun HomeScreen(
                             Icon(
                                 Icons.Outlined.Refresh,
                                 contentDescription = null,
-                                tint = autoTone,
+                                modifier = Modifier.size(dashboardSecondaryActionIconSize),
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(stringResource(R.string.refresh))

@@ -785,7 +785,7 @@ class SettingsRepository(
         return defaults.copy(
             ui =
                 defaults.ui.copy(
-                    themeMode = readFastThemeMode() ?: ThemeMode.SYSTEM,
+                    themeMode = readFastThemeMode() ?: ThemeMode.DARK,
                     locale = readFastLocale() ?: AppLocale.SYSTEM,
                 ),
         )
@@ -803,7 +803,7 @@ class SettingsRepository(
                 schemaVersion = SETTINGS_SCHEMA_VERSION,
                 ui =
                     ui.copy(
-                        themeMode = if (resetDefaults) ThemeMode.SYSTEM else ui.themeMode,
+                        themeMode = if (resetDefaults) ThemeMode.DARK else ui.themeMode,
                         onboardingCompleted = true,
                         showExpertSettings = ui.showExpertSettings && expert.unlockedAt != null,
                         supportBotHandleOverride = storedSupportBotHandleOverride(ui.supportBotHandleOverride),
