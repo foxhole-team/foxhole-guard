@@ -73,6 +73,7 @@ internal fun SmartProfileAutoConnectMenu(
     serverPingUnavailableOptionIds: Set<String> = emptySet(),
     metricsUpdatedAtByOptionId: Map<String, Long> = emptyMap(),
     metricsRefreshing: Boolean = false,
+    refreshingOptionId: String? = null,
     recommendedOptionId: String? = null,
     recommendedOptionIds: Set<String> = recommendedOptionId?.let(::setOf).orEmpty(),
     favoriteOptionId: String? = null,
@@ -169,6 +170,7 @@ internal fun SmartProfileAutoConnectMenu(
                 serverPingUnavailableOptionIds = serverPingUnavailableOptionIds,
                 metricsUpdatedAtByOptionId = metricsUpdatedAtByOptionId,
                 metricsRefreshing = metricsRefreshing,
+                refreshingOptionId = refreshingOptionId,
                 recommendedOptionId = recommendedOptionId,
                 recommendedOptionIds = recommendedOptionIds,
                 favoriteOptionId = favoriteOptionId,
@@ -529,6 +531,7 @@ private fun SmartProfileProtocolMenuContent(
     serverPingUnavailableOptionIds: Set<String>,
     metricsUpdatedAtByOptionId: Map<String, Long>,
     metricsRefreshing: Boolean,
+    refreshingOptionId: String?,
     recommendedOptionId: String?,
     recommendedOptionIds: Set<String>,
     favoriteOptionId: String?,
@@ -571,6 +574,7 @@ private fun SmartProfileProtocolMenuContent(
             val topRecommended = recommended && option.id == recommendedOptionId
             val favorite = option.id == favoriteOptionId
             val includedSelection = included && active
+            val refreshingSelection = metricsRefreshing && option.id == refreshingOptionId
             val activeAccent =
                 smartProfileCurrentProtocolAccent(
                     latencyMs = latencyMs,
@@ -591,15 +595,21 @@ private fun SmartProfileProtocolMenuContent(
                         }
                     nextExcluded?.let(onUpdateExcludedOptionIds)
                 },
-                selected = includedSelection,
-                highlightSelected = includedSelection,
+                selected = includedSelection || refreshingSelection,
+                highlightSelected = includedSelection || refreshingSelection,
                 accentColor =
                     when {
+                        refreshingSelection -> FoxholeInfoAccent
                         included && recommended -> FoxholePositiveAccent
                         included && active -> activeAccent
                         else -> FoxholePositiveAccent
                     },
-                selectedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.18f),
+                selectedContainerColor =
+                    if (refreshingSelection) {
+                        FoxholeInfoAccent.copy(alpha = 0.12f)
+                    } else {
+                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.18f)
+                    },
                 shape =
                     foxholeDropdownItemShape(
                         index = index,
@@ -734,7 +744,7 @@ private fun SmartProfileProtocolMenuTitleRow(
                     start = 8.dp,
                     top = if (compact) 5.dp else 6.dp,
                     end = 8.dp,
-                    bottom = if (compact) 3.dp else 5.dp,
+                    bottom = if (compact) 5.dp else 6.dp,
                 ),
         horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalAlignment = Alignment.Top,

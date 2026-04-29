@@ -568,41 +568,6 @@ internal fun ProtocolSelectorLabel(
                 modifier = Modifier.offset(y = if (compact) (-4).dp else (-3).dp),
             )
         }
-        if (option.requiresInsecureTls) {
-            InsecureTlsSuperscriptBadge(
-                compact = compact,
-                modifier = Modifier.offset(y = if (compact) (-5).dp else (-4).dp),
-            )
-        }
-    }
-}
-
-@Composable
-private fun InsecureTlsSuperscriptBadge(
-    compact: Boolean,
-    modifier: Modifier = Modifier,
-) {
-    val badgeColor = Color(0xFFE55353)
-    Surface(
-        modifier = modifier,
-        shape = MaterialTheme.shapes.small,
-        color = Color.Transparent,
-        border = BorderStroke(1.dp, badgeColor.copy(alpha = 0.70f)),
-    ) {
-        Text(
-            text = stringResource(R.string.insecure_tls_profile_badge),
-            modifier = Modifier.padding(horizontal = if (compact) 3.dp else 4.dp, vertical = 1.dp),
-            style =
-                MaterialTheme.typography.labelSmall.copy(
-                    fontSize = if (compact) 5.8.sp else 6.8.sp,
-                    lineHeight = if (compact) 6.2.sp else 7.2.sp,
-                    fontWeight = FontWeight.Bold,
-                ),
-            color = badgeColor,
-            maxLines = 1,
-            softWrap = false,
-            overflow = TextOverflow.Clip,
-        )
     }
 }
 
@@ -827,22 +792,10 @@ private fun rememberProtocolSelectorFixedWidth(
         } else {
             MaterialTheme.typography.labelMedium
         }
-    val insecureTlsBadge = stringResource(R.string.insecure_tls_profile_badge)
-    val insecureTlsBadgeStyle =
-        MaterialTheme.typography.labelSmall.copy(
-            fontSize = if (compact) 5.8.sp else 6.8.sp,
-            lineHeight = if (compact) 6.2.sp else 7.2.sp,
-            fontWeight = FontWeight.Bold,
-        )
     val iconSizePx = with(density) { if (compact) 13.dp.roundToPx() else 18.dp.roundToPx() }
     val markSpacingPx = with(density) { if (compact) 4.dp.roundToPx() else 8.dp.roundToPx() }
     val secondarySpacingPx = with(density) { if (compact) 4.dp.roundToPx() else 8.dp.roundToPx() }
     val recommendationStarsPx = with(density) { if (compact) 24.dp.roundToPx() else 27.dp.roundToPx() }
-    val insecureTlsBadgePx =
-        textMeasurer.measure(
-            text = AnnotatedString(insecureTlsBadge),
-            style = insecureTlsBadgeStyle,
-        ).size.width + with(density) { if (compact) 10.dp.roundToPx() else 12.dp.roundToPx() }
     val chevronSizePx = with(density) { if (compact) 17.dp.roundToPx() else 18.dp.roundToPx() }
     val chevronGapPx = with(density) { if (compact) 4.dp.roundToPx() else 6.dp.roundToPx() }
     val leadingPaddingPx = with(density) { if (compact) 10.dp.roundToPx() else 14.dp.roundToPx() }
@@ -867,8 +820,7 @@ private fun rememberProtocolSelectorFixedWidth(
                 markSpacingPx +
                 primaryWidth +
                 secondaryWidth +
-                recommendationStarsPx +
-                if (option.requiresInsecureTls) insecureTlsBadgePx else 0
+                recommendationStarsPx
         } ?: 0
     val estimatedWidth =
         with(density) {

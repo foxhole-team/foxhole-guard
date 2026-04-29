@@ -131,6 +131,7 @@ internal fun buildHomeRouteUiState(
 
 internal fun buildProfilesRouteUiState(
     state: HomeUiState,
+    autoConnect: AutoConnectUiState,
     protocolMetrics: ProtocolMetricsUiState,
     networkFingerprintKey: String?,
 ): ProfilesRouteUiState {
@@ -179,6 +180,13 @@ internal fun buildProfilesRouteUiState(
                 },
         smartProfileMetricsUpdatedAtByProfileId = fullRefreshUpdatedAtByProfileId,
         smartProfileMetricsRefreshingProfileIds = protocolMetrics.refreshingProfileIds,
+        smartProfileMetricsRefreshingOptionIdByProfileId =
+            autoConnect.currentOptionId
+                ?.takeIf { autoConnect.running }
+                ?.let { refreshingOptionId ->
+                    protocolMetrics.refreshingProfileIds.associateWith { refreshingOptionId }
+                }
+                ?: emptyMap(),
         recommendedProtocolOptionByProfileId =
             state.settings.smartProfilePreferences
                 .mapNotNull { preference ->

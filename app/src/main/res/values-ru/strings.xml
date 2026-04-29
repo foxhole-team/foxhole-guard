@@ -8,8 +8,8 @@
     <string name="home_status_analysis">Анализ</string>
     <string name="home_network_title">Сеть</string>
     <string name="home_traffic_title">Трафик</string>
-    <string name="home_session_traffic_title">Трафик текущей сессии</string>
-    <string name="home_total_traffic_title">Объем трафика за:</string>
+    <string name="home_session_traffic_title">Текущая сессия</string>
+    <string name="home_total_traffic_title">Объем за:</string>
     <string name="home_total_traffic_days">%1$d дн.</string>
     <string name="home_received_label">Получено</string>
     <string name="home_sent_label">Передано</string>
@@ -193,7 +193,7 @@
     <string name="smart_profile_legend_reconnect_recommended">Лучший</string>
     <string name="smart_profile_legend_title">Легенда</string>
     <string name="smart_profile_metrics_refresh_confirm_title">Обновить проверки протоколов?</string>
-    <string name="smart_profile_metrics_refresh_confirm_body">Обновление может временно переподключать VPN для проверки протоколов. Предыдущее подключение будет восстановлено после обновления.</string>
+    <string name="smart_profile_metrics_refresh_confirm_body">Обновление проверит доступные подключения. Пока идет анализ, интернет на устройстве может не работать. После окончания Foxhole восстановит последнее подключение.</string>
     <string name="smart_profile_metrics_last_updated">Обновлено: %1$s</string>
     <string name="smart_profile_metrics_never_updated">Никогда не обновлялся</string>
     <string name="smart_profile_metrics_ago_minutes">%1$d мин назад</string>
@@ -418,8 +418,11 @@
     <string name="profile_export_share_text">Экспорт профиля FoxHole во вложении.</string>
     <string name="import_label">Импорт</string>
     <string name="import_from_clipboard">Импорт из буфера обмена</string>
+    <string name="import_from_clipboard_summary">Импортируйте ссылки/конфиги VPN</string>
     <string name="import_from_file">Импорт из файла</string>
+    <string name="import_from_file_summary">Выберите конфигурацию на устройстве</string>
     <string name="scan_qr_code">Сканировать QR-код</string>
+    <string name="scan_qr_code_summary">Отсканируйте QR-код для добавления конфигурации VPN</string>
     <string name="host">Host</string>
     <string name="name">Имя</string>
     <string name="none_label">Нет</string>

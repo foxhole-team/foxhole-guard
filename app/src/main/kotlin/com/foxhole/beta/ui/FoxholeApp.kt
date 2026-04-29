@@ -262,6 +262,7 @@ fun FoxholeApp(
                         serverPingUnavailableOptionIds = state.smartProfileServerPingUnavailable(profileId),
                         metricsUpdatedAtByOptionId = state.smartProfileMetricsUpdatedAt(profileId),
                         metricsRefreshing = profileId in state.smartProfileMetricsRefreshingProfileIds,
+                        refreshingOptionId = state.smartProfileMetricsRefreshingOptionIdByProfileId[profileId],
                         recommendedProtocolOptionId = state.recommendedProtocolOptionByProfileId[profileId],
                         recommendedProtocolOptionIds = state.recommendedProtocolOptionsByProfileId[profileId].orEmpty(),
                         favoriteProtocolOptionId = state.favoriteProtocolOptionByProfileId[profileId],

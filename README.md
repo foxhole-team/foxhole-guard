@@ -147,6 +147,34 @@ Protocol selection, stability evaluation, and Smart start logic are performed en
   ae609bb369398071cc5ac53c9ac10f20f43c4d01
   ```
 
+## To Do
+
+> Current implementation uses sing-box as the main runtime backend for protocol handling.
+In the long term, Foxhole will move toward a more controlled runtime architecture.
+Planned work:
+* Rewrite most VPN protocol logic in Rust
+* Reduce dependency on sing-box
+* Keep sing-box as a fallback backend for unsupported or legacy configurations
+* First implement native support for selected protocols:
+  * Shadowsocks
+  * VLESS
+  * Hysteria2
+  * selected TCP-based transports
+Improve runtime stability for both TCP and UDP protocols
+Improve protocol validation, fallback logic, and connection state handling
+
+> A separate development direction is the research and implementation of a custom transport protocol based on TCP / HTTP-like traffic.
+
+The goal is to improve connection stability in restricted networks where simple censorship systems block or degrade known VPN protocols.
+Planned work:
+* Design a custom TCP / HTTP-based transport layer
+* Make protocol behavior closer to regular application traffic
+* Add adaptive transport behavior for unstable or filtered networks
+* Use local ML / heuristic logic to evaluate network conditions
+* Dynamically select the transport mode based on network signals
+* Perform all classification and decision-making locally on the device
+* Build reproducible tests against simulated censorship and poor network conditions.
+
 ## Disclaimer
 
 > Android application development is not our primary focus.

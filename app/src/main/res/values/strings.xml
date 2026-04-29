@@ -8,8 +8,8 @@
     <string name="home_status_analysis">Analysis</string>
     <string name="home_network_title">Network</string>
     <string name="home_traffic_title">Traffic</string>
-    <string name="home_session_traffic_title">Current session traffic</string>
-    <string name="home_total_traffic_title">Traffic volume over:</string>
+    <string name="home_session_traffic_title">Current session</string>
+    <string name="home_total_traffic_title">Volume over:</string>
     <string name="home_total_traffic_days">%1$d d</string>
     <string name="home_received_label">Received</string>
     <string name="home_sent_label">Sent</string>
@@ -193,7 +193,7 @@
     <string name="smart_profile_legend_reconnect_recommended">Best</string>
     <string name="smart_profile_legend_title">Legend</string>
     <string name="smart_profile_metrics_refresh_confirm_title">Refresh protocol checks?</string>
-    <string name="smart_profile_metrics_refresh_confirm_body">Refresh may temporarily reconnect VPN to test protocols. Your previous connection will be restored after refresh.</string>
+    <string name="smart_profile_metrics_refresh_confirm_body">Refresh checks available connections. Internet on this device may not work while analysis is running. Foxhole will restore the last connection after it finishes.</string>
     <string name="smart_profile_metrics_last_updated">Updated: %1$s</string>
     <string name="smart_profile_metrics_never_updated">Never updated</string>
     <string name="smart_profile_metrics_ago_minutes">%1$dm ago</string>
@@ -406,8 +406,11 @@
     <string name="profile_export_share_text">FoxHole profile export attached.</string>
     <string name="import_label">Import</string>
     <string name="import_from_clipboard">Import from clipboard</string>
+    <string name="import_from_clipboard_summary">Import VPN links/configs</string>
     <string name="import_from_file">Import from file</string>
+    <string name="import_from_file_summary">Choose a configuration on this device</string>
     <string name="scan_qr_code">Scan QR code</string>
+    <string name="scan_qr_code_summary">Scan a QR code to add a VPN configuration</string>
     <string name="host">Host</string>
     <string name="name">Name</string>
     <string name="none_label">None</string>

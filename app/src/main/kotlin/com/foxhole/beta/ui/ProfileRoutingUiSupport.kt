@@ -548,12 +548,12 @@ private fun profileEditorProtocolOptionLabel(option: ProfileProtocolOption): Str
 
 private fun profileEditorProtocolIcon(protocol: ProtocolHint): ImageVector =
     when (protocol) {
-        ProtocolHint.VLESS -> Icons.Outlined.Security
-        ProtocolHint.TROJAN -> Icons.Outlined.Bolt
-        ProtocolHint.SHADOWSOCKS -> Icons.Outlined.Cloud
+        ProtocolHint.VLESS,
+        ProtocolHint.TROJAN,
+        ProtocolHint.SHADOWSOCKS,
         ProtocolHint.WIREGUARD -> Icons.Outlined.VpnKey
-        ProtocolHint.HYSTERIA2 -> Icons.Outlined.Speed
-        ProtocolHint.VMESS -> Icons.Outlined.Hub
+        ProtocolHint.HYSTERIA2,
+        ProtocolHint.VMESS,
         ProtocolHint.OUTLINE -> Icons.Outlined.VpnKey
         ProtocolHint.SING_BOX -> Icons.Outlined.Tune
         ProtocolHint.UNKNOWN -> Icons.AutoMirrored.Outlined.HelpOutline
@@ -723,12 +723,12 @@ internal fun ProtocolMarkIcon(
 @Composable
 internal fun protocolMarkVisuals(protocol: ProtocolHint): Triple<ImageVector, Color, String> =
     when (protocol) {
-        ProtocolHint.VLESS -> Triple(Icons.Outlined.Security, Color(0xFF2FB060), "VLESS")
-        ProtocolHint.TROJAN -> Triple(Icons.Outlined.Bolt, Color(0xFFEA8C2C), "TROJAN")
-        ProtocolHint.SHADOWSOCKS -> Triple(Icons.Outlined.Cloud, Color(0xFF4A90E2), "SHADOWSOCKS")
+        ProtocolHint.VLESS -> Triple(Icons.Outlined.VpnKey, Color(0xFF2FB060), "VLESS")
+        ProtocolHint.TROJAN -> Triple(Icons.Outlined.VpnKey, Color(0xFFEA8C2C), "TROJAN")
+        ProtocolHint.SHADOWSOCKS -> Triple(Icons.Outlined.VpnKey, Color(0xFF4A90E2), "SHADOWSOCKS")
         ProtocolHint.WIREGUARD -> Triple(Icons.Outlined.VpnKey, Color(0xFF5B8E55), "WIREGUARD")
-        ProtocolHint.HYSTERIA2 -> Triple(Icons.Outlined.Speed, Color(0xFFE05A47), "HYSTERIA2")
-        ProtocolHint.VMESS -> Triple(Icons.Outlined.Hub, Color(0xFF6A7AF7), "VMESS")
+        ProtocolHint.HYSTERIA2 -> Triple(Icons.Outlined.VpnKey, Color(0xFFE05A47), "HYSTERIA2")
+        ProtocolHint.VMESS -> Triple(Icons.Outlined.VpnKey, Color(0xFF6A7AF7), "VMESS")
         ProtocolHint.OUTLINE -> Triple(Icons.Outlined.VpnKey, Color(0xFF00A7A0), "OUTLINE")
         ProtocolHint.SING_BOX -> Triple(Icons.Outlined.Tune, Color(0xFFB3A26D), "SING-BOX")
         ProtocolHint.UNKNOWN ->

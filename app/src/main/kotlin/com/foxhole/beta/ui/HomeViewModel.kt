@@ -335,10 +335,12 @@ class HomeViewModel(
     val profilesRouteState: StateFlow<ProfilesRouteUiState> =
         combine(
             uiState,
+            autoConnectUiStateMutable,
             protocolMetricsState,
-        ) { state, protocolMetrics ->
+        ) { state, autoConnect, protocolMetrics ->
             buildProfilesRouteUiState(
                 state = state,
+                autoConnect = autoConnect,
                 protocolMetrics = protocolMetrics,
                 networkFingerprintKey = container.networkFingerprintProvider.currentFingerprint()?.key,
             )

@@ -254,17 +254,7 @@ fun HomeScreen(
     val showSmartStartRefreshReminder = profileModel.showSmartStartRefreshReminder
 
     fun requestSmartProfileMetricsRefresh(profileId: Long) {
-        val refreshMayReconnect =
-            state.connection.state in setOf(
-                ConnectionState.CONNECTING,
-                ConnectionState.CONNECTED,
-                ConnectionState.RECONNECTING,
-            ) && state.connection.profileId == profileId
-        if (refreshMayReconnect) {
-            smartRefreshConfirmationProfileId = profileId
-        } else {
-            onRefreshSmartProfileMetrics(profileId)
-        }
+        smartRefreshConfirmationProfileId = profileId
     }
 
     DisposableEffect(onTrafficUiVisibilityChanged) {
@@ -501,7 +491,7 @@ fun HomeScreen(
                                     recommendedProtocolOptionIds = state.recommendedProtocolOptionIds,
                                     favoriteProtocolOptionId = state.favoriteProtocolOptionId,
                                     selectorBorderColor = dashboardSelectorBorderColor,
-                                    showInsecureTlsBadge = true,
+                                    showInsecureTlsBadge = false,
                                     leadingContent =
                                         if (isSmartDashboardProfile) {
                                             {
@@ -516,6 +506,9 @@ fun HomeScreen(
                                                     serverPingUnavailableOptionIds = state.protocolServerPingUnavailableOptionIds,
                                                     metricsUpdatedAtByOptionId = state.protocolMetricsUpdatedAtByOptionId,
                                                     metricsRefreshing = state.protocolMetricsRefreshing,
+                                                    refreshingOptionId =
+                                                        state.autoConnect.currentOptionId
+                                                            .takeIf { state.protocolMetricsRefreshing },
                                                     recommendedOptionId = state.recommendedProtocolOptionId,
                                                     recommendedOptionIds = state.recommendedProtocolOptionIds,
                                                     favoriteOptionId = state.favoriteProtocolOptionId,
@@ -579,7 +572,10 @@ fun HomeScreen(
                                         onImportFromClipboard()
                                     },
                                 ) {
-                                    Text(stringResource(R.string.import_from_clipboard))
+                                    ImportDropdownItemText(
+                                        title = stringResource(R.string.import_from_clipboard),
+                                        summary = stringResource(R.string.import_from_clipboard_summary),
+                                    )
                                 }
                                 FoxholeDropdownItem(
                                     modifier = Modifier.testTag("home_import_from_file_action"),
@@ -591,7 +587,10 @@ fun HomeScreen(
                                         onImportFromFile()
                                     },
                                 ) {
-                                    Text(stringResource(R.string.import_from_file))
+                                    ImportDropdownItemText(
+                                        title = stringResource(R.string.import_from_file),
+                                        summary = stringResource(R.string.import_from_file_summary),
+                                    )
                                 }
                                 FoxholeDropdownItem(
                                     modifier = Modifier.testTag("home_import_from_qr_action"),
@@ -603,7 +602,10 @@ fun HomeScreen(
                                         onImportFromQr()
                                     },
                                 ) {
-                                    Text(stringResource(R.string.scan_qr_code))
+                                    ImportDropdownItemText(
+                                        title = stringResource(R.string.scan_qr_code),
+                                        summary = stringResource(R.string.scan_qr_code_summary),
+                                    )
                                 }
                             }
                         }
@@ -1046,6 +1048,30 @@ fun HomeScreen(
                 smartRefreshConfirmationProfileId = null
                 onRefreshSmartProfileMetrics(profileId)
             },
+        )
+    }
+}
+
+@Composable
+private fun ImportDropdownItemText(
+    title: String,
+    summary: String,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Text(
+            text = summary,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
         )
     }
 }

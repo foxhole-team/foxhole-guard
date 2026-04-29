@@ -397,6 +397,41 @@ class HomeDashboardProtocolPresentationTest {
         )
     }
 
+    @Test
+    fun `profiles route exposes currently refreshed smart protocol for menu highlight`() {
+        val state =
+            HomeUiState(
+                profiles =
+                    listOf(
+                        profile(
+                            selectedProtocolOptionId = "outline",
+                            protocolOptions =
+                                listOf(
+                                    option("outline", ProtocolHint.OUTLINE),
+                                    option("trojan", ProtocolHint.TROJAN),
+                                ),
+                        ),
+                    ),
+            )
+
+        val resolved =
+            buildProfilesRouteUiState(
+                state = state,
+                autoConnect =
+                    AutoConnectUiState(
+                        running = true,
+                        currentOptionId = "trojan",
+                    ),
+                protocolMetrics =
+                    ProtocolMetricsUiState(
+                        refreshingProfileIds = setOf(1L),
+                    ),
+                networkFingerprintKey = null,
+            )
+
+        assertEquals(mapOf(1L to "trojan"), resolved.smartProfileMetricsRefreshingOptionIdByProfileId)
+    }
+
     private fun profile(
         selectedProtocolOptionId: String?,
         protocolHint: ProtocolHint = ProtocolHint.OUTLINE,

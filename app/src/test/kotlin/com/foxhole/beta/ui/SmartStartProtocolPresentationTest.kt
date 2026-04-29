@@ -187,7 +187,11 @@ class SmartStartProtocolPresentationTest {
         assertEquals("IP:", stringValue(enStrings, "home_network_ip_label"))
         assertEquals("Provider:", stringValue(enStrings, "home_network_provider_label"))
         assertEquals("Connected:", stringValue(enStrings, "home_network_connect_time_label"))
-        assertEquals("Traffic volume over:", stringValue(enStrings, "home_total_traffic_title"))
+        assertEquals("Current session", stringValue(enStrings, "home_session_traffic_title"))
+        assertEquals("Volume over:", stringValue(enStrings, "home_total_traffic_title"))
+        assertEquals("Import VPN links/configs", stringValue(enStrings, "import_from_clipboard_summary"))
+        assertEquals("Choose a configuration on this device", stringValue(enStrings, "import_from_file_summary"))
+        assertEquals("Scan a QR code to add a VPN configuration", stringValue(enStrings, "scan_qr_code_summary"))
         assertEquals("Manage VPN protocols", stringValue(enStrings, "smart_profile_menu_title"))
         assertEquals("Protocol", stringValue(enStrings, "smart_profile_menu_protocol_column"))
         assertEquals("Status", stringValue(enStrings, "smart_profile_menu_status_column"))
@@ -229,7 +233,14 @@ class SmartStartProtocolPresentationTest {
         assertEquals("IP:", stringValue(ruStrings, "home_network_ip_label"))
         assertEquals("Провайдер:", stringValue(ruStrings, "home_network_provider_label"))
         assertEquals("Подключено:", stringValue(ruStrings, "home_network_connect_time_label"))
-        assertEquals("Объем трафика за:", stringValue(ruStrings, "home_total_traffic_title"))
+        assertEquals("Текущая сессия", stringValue(ruStrings, "home_session_traffic_title"))
+        assertEquals("Объем за:", stringValue(ruStrings, "home_total_traffic_title"))
+        assertEquals("Импортируйте ссылки/конфиги VPN", stringValue(ruStrings, "import_from_clipboard_summary"))
+        assertEquals("Выберите конфигурацию на устройстве", stringValue(ruStrings, "import_from_file_summary"))
+        assertEquals(
+            "Отсканируйте QR-код для добавления конфигурации VPN",
+            stringValue(ruStrings, "scan_qr_code_summary"),
+        )
         assertEquals("Управление протоколами VPN", stringValue(ruStrings, "smart_profile_menu_title"))
         assertEquals("Протокол", stringValue(ruStrings, "smart_profile_menu_protocol_column"))
         assertEquals("Статус", stringValue(ruStrings, "smart_profile_menu_status_column"))
