@@ -245,16 +245,15 @@ class HomeScreenTest {
 
     @Test
     fun hiddenExpertSettingsCanBeRestoredFromVersionCard() {
-        val context = InstrumentationRegistry.getInstrumentation().targetContext
         setExpertSettingsVisible(visible = false)
         composeRule.onNodeWithTag("bottom_nav_settings").performClick()
         waitForSettingsHomeExpertActionHidden()
         tapFooterVersionCardUntilUnlockDialog()
         composeRule.onNodeWithTag("confirm_dialog_confirm_button").performClick()
-        composeRule.onNodeWithTag("settings_expert_action").assertIsDisplayed()
+        assertSettingsHomeExpertActionDisplayed()
 
         composeRule.onNodeWithTag("settings_expert_action").performClick()
-        composeRule.onNodeWithText(context.getString(R.string.show_advanced_settings_title)).performClick()
+        clickShowAdvancedSettingsSwitch()
 
         composeRule.activityRule.scenario.onActivity { activity ->
             activity.onBackPressedDispatcher.onBackPressed()
@@ -263,7 +262,7 @@ class HomeScreenTest {
         composeRule.onAllNodesWithTag("settings_expert_action").assertCountEquals(0)
         tapFooterVersionCardUntilUnlockDialog()
         composeRule.onNodeWithTag("confirm_dialog_confirm_button").performClick()
-        composeRule.onNodeWithTag("settings_expert_action").assertIsDisplayed()
+        assertSettingsHomeExpertActionDisplayed()
     }
 
     @Test
@@ -355,6 +354,21 @@ class HomeScreenTest {
             composeRule.onAllNodesWithTag("settings_screen").fetchSemanticsNodes().isNotEmpty() &&
                 composeRule.onAllNodesWithTag("settings_expert_action").fetchSemanticsNodes().isNotEmpty()
         }
+    }
+
+    private fun assertSettingsHomeExpertActionDisplayed() {
+        waitForSettingsHomeExpertActionVisible()
+        composeRule.onNodeWithTag("settings_screen").performScrollToNode(hasTestTag("settings_expert_action"))
+        composeRule.onNodeWithTag("settings_expert_action").assertIsDisplayed()
+    }
+
+    private fun clickShowAdvancedSettingsSwitch() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val title = context.getString(R.string.show_advanced_settings_title)
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            composeRule.onAllNodesWithText(title).fetchSemanticsNodes().isNotEmpty()
+        }
+        composeRule.onNodeWithText(title).assertIsDisplayed().performClick()
     }
 
     private fun setBlockScreenshots(enabled: Boolean) {
