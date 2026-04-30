@@ -179,7 +179,7 @@ class ProfileInsecureTlsSupportTest {
     }
 
     @Test
-    fun `warning lists every smart profile protocol using insecure tls`() {
+    fun `warning lists risky smart profile protocols using insecure tls`() {
         val parsed =
             ParsedImport(
                 sourceType = ProfileSourceType.RAW_SINGBOX_JSON,
@@ -202,7 +202,7 @@ class ProfileInsecureTlsSupportTest {
         val warning = requireNotNull(parsed.insecureTlsImportWarning(json))
 
         assertEquals(
-            listOf("VLESS", "TROJAN", "VMESS", "HYSTERIA2", "SHADOWSOCKS", "OUTLINE", "WIREGUARD"),
+            listOf("VLESS", "TROJAN", "HYSTERIA2"),
             warning.issues.map(InsecureTlsImportIssue::protocolLabel),
         )
     }

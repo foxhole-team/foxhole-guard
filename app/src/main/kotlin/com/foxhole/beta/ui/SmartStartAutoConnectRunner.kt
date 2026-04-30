@@ -28,7 +28,7 @@ internal object SmartStartAutoConnectRunner {
     ): SmartStartAutoConnectState {
         if (preference?.needsSmartStartColdScan(enabledProtocolSetHash) != false) {
             return SmartStartAutoConnectState.ColdScan(
-                candidates = fullScanCandidates.take(HomeViewModel.AUTO_CONNECT_MAX_ATTEMPTS),
+                candidates = fullScanCandidates,
                 enabledProtocolSetHash = enabledProtocolSetHash,
             )
         }

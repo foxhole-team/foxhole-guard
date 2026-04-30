@@ -181,9 +181,11 @@ internal fun buildProfilesRouteUiState(
                 refreshingProfileIds.associateWith { refreshingOptionId }
             }.orEmpty()
     val refreshingOptionIdByProfileId =
-        (autoConnectRefreshingOptionIdByProfileId +
-            dashboardRefreshingOptionIdByProfileId +
-            protocolMetrics.refreshingOptionIdByProfileId.filterKeys(refreshingProfileIds::contains))
+        (
+            autoConnectRefreshingOptionIdByProfileId +
+                dashboardRefreshingOptionIdByProfileId +
+                protocolMetrics.refreshingOptionIdByProfileId.filterKeys(refreshingProfileIds::contains)
+        )
             .filterKeys(refreshingProfileIds::contains)
     return state.toProfilesRouteUiState(
         smartStartRememberedLatenciesByProfileId =

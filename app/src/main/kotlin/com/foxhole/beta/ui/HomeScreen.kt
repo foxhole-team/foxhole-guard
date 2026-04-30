@@ -158,6 +158,8 @@ fun HomeScreen(
     var smartRefreshConfirmationProfileId by rememberSaveable { mutableStateOf<Long?>(null) }
     var smartStartFirstAnalysisProfileId by rememberSaveable { mutableStateOf<Long?>(null) }
     var acceptedSmartStartFirstAnalysisProfileId by rememberSaveable { mutableStateOf<Long?>(null) }
+    var firstAnalysisProtocolMenuProfileId by rememberSaveable { mutableStateOf<Long?>(null) }
+    var firstAnalysisProtocolMenuStarted by rememberSaveable { mutableStateOf(false) }
     var lanProxyDisableConfirmationVisible by rememberSaveable { mutableStateOf(false) }
     val wifiLanAddress by rememberWifiLanAddress()
     val proxyModel =
@@ -275,6 +277,36 @@ fun HomeScreen(
     val isSmartDashboardProfile = profileModel.isSmartDashboardProfile
     val activeProfileId = profileModel.activeProfileId
     val showSmartStartRefreshReminder = profileModel.showSmartStartRefreshReminder
+    val firstAnalysisProtocolMenuActive = firstAnalysisProtocolMenuProfileId == activeProfileId
+    val firstAnalysisProtocolMenuBusy = state.autoConnect.running || state.protocolMetricsRefreshing
+    val firstAnalysisProtocolMenuForceExpanded =
+        firstAnalysisProtocolMenuActive &&
+            (!firstAnalysisProtocolMenuStarted || firstAnalysisProtocolMenuBusy)
+
+    LaunchedEffect(
+        activeProfileId,
+        state.autoConnect.running,
+        state.protocolMetricsRefreshing,
+        firstAnalysisProtocolMenuProfileId,
+        firstAnalysisProtocolMenuStarted,
+    ) {
+        if (firstAnalysisProtocolMenuProfileId != null && activeProfileId != firstAnalysisProtocolMenuProfileId) {
+            firstAnalysisProtocolMenuProfileId = null
+            firstAnalysisProtocolMenuStarted = false
+            return@LaunchedEffect
+        }
+        if (firstAnalysisProtocolMenuActive && firstAnalysisProtocolMenuBusy) {
+            firstAnalysisProtocolMenuStarted = true
+        }
+        val firstAnalysisProtocolMenuFinished =
+            firstAnalysisProtocolMenuActive &&
+                firstAnalysisProtocolMenuStarted &&
+                !firstAnalysisProtocolMenuBusy
+        if (firstAnalysisProtocolMenuFinished) {
+            firstAnalysisProtocolMenuProfileId = null
+            firstAnalysisProtocolMenuStarted = false
+        }
+    }
 
     fun requestSmartProfileMetricsRefresh(profileId: Long) {
         smartRefreshConfirmationProfileId = profileId
@@ -567,6 +599,7 @@ fun HomeScreen(
                                                     showMetricsTable = false,
                                                     showStatusHeader = true,
                                                     latencyProbeMethod = state.settings.connection.latencyProbeMethod,
+                                                    forceExpanded = firstAnalysisProtocolMenuForceExpanded,
                                                 )
                                             }
                                         } else {
@@ -1122,7 +1155,9 @@ fun HomeScreen(
             onConfirm = {
                 smartStartFirstAnalysisProfileId = null
                 acceptedSmartStartFirstAnalysisProfileId = profileId
-                onRefreshSmartProfileMetrics(profileId)
+                firstAnalysisProtocolMenuProfileId = profileId
+                firstAnalysisProtocolMenuStarted = false
+                startAutoConnectAfterLocalDialogs()
             },
         )
     }

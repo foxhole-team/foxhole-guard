@@ -213,12 +213,19 @@ internal fun List<StoredProfileProtocolOption>.withInsecureTlsMarkers(json: Json
     }
 
 private fun List<StoredProfileProtocolOption>.insecureTlsImportIssues(json: Json): List<InsecureTlsImportIssue> =
-    filter { option -> option.resolvedRequiresInsecureTls(json) }
+    filter { option -> option.protocolHint.hasInsecureTlsImportRisk() && option.resolvedRequiresInsecureTls(json) }
         .map { option -> InsecureTlsImportIssue(option.protocolHint.importWarningLabel()) }
         .distinctBy(InsecureTlsImportIssue::protocolLabel)
 
 private fun StoredProfileProtocolOption.resolvedRequiresInsecureTls(json: Json): Boolean =
     requiresInsecureTls || normalizedConfigJson.requiresInsecureTls(json)
+
+private fun ProtocolHint.hasInsecureTlsImportRisk(): Boolean =
+    this in setOf(
+        ProtocolHint.VLESS,
+        ProtocolHint.TROJAN,
+        ProtocolHint.HYSTERIA2,
+    )
 
 private fun ProtocolHint.importWarningLabel(): String =
     when (this) {

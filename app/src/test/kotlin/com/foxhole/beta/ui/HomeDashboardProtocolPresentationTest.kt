@@ -15,6 +15,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
+@Suppress("LargeClass")
 class HomeDashboardProtocolPresentationTest {
     @Test
     fun `auto connect uses live candidate list so dashboard selector matches analysis status`() {

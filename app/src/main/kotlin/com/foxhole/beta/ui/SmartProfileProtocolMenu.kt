@@ -31,6 +31,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -90,13 +92,14 @@ internal fun SmartProfileAutoConnectMenu(
     showStatusHeader: Boolean = false,
     showTransportBadges: Boolean = false,
     latencyProbeMethod: LatencyProbeMethod = LatencyProbeMethod.HTTP,
+    forceExpanded: Boolean = false,
 ) {
     val options = MultiProtocolProfileSupport.supportedOptions(profile)
     if (options.size < 2) {
         return
     }
     val menuLayout = resolveSmartStartProtocolMenuLayout(showMetricsTable = showMetricsTable)
-    var expanded by rememberSaveable(profile.id) { mutableStateOf(false) }
+    var expanded by rememberForcedProtocolMenuExpanded(profile.id, forceExpanded)
     var showRefreshWarning by rememberSaveable(profile.id) { mutableStateOf(false) }
     val requestRefreshMetrics: () -> Unit = {
         if (refreshWarningRequired) {
@@ -157,7 +160,11 @@ internal fun SmartProfileAutoConnectMenu(
         }
         FoxholeDropdownMenu(
             expanded = expanded,
-            onDismissRequest = { expanded = false },
+            onDismissRequest = {
+                if (!forceExpanded) {
+                    expanded = false
+                }
+            },
             modifier =
                 Modifier
                     .testTag("smart_profile_auto_connect_menu")
@@ -204,6 +211,18 @@ internal fun SmartProfileAutoConnectMenu(
             },
         )
     }
+}
+
+@Composable
+private fun rememberForcedProtocolMenuExpanded(
+    profileId: Long,
+    forceExpanded: Boolean,
+): MutableState<Boolean> {
+    val expandedState = rememberSaveable(profileId) { mutableStateOf(false) }
+    LaunchedEffect(forceExpanded) {
+        expandedState.value = forceExpanded
+    }
+    return expandedState
 }
 
 @Composable

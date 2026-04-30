@@ -87,8 +87,8 @@ class TunnelConnectivityProbeTest {
             val result =
                 TunnelConnectivityProbe.run(
                     attempts = 3,
-                    retryDelayMs = 50,
-                    timeoutMs = 30,
+                    retryDelayMs = 1_000,
+                    timeoutMs = 250,
                 ) {
                     attempts += 1
                     error("boom-$attempts")

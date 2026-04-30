@@ -269,7 +269,7 @@ internal fun resolveHomeDashboardProtocolModel(state: HomeRouteUiState): HomeDas
             activeProfile = state.activeProfile,
             connection = state.connection,
             autoConnect = state.autoConnect,
-            pinSelectionToProfile = state.protocolMetricsRefreshing,
+            pinSelectionToProfile = state.protocolMetricsRefreshing || state.reconnectRequired,
         )
     val selectedServerPingOptionId = resolveDashboardLatencyOptionId(state.activeProfile, state.connection)
     val selectedServerPingMs = selectedServerPingOptionId?.let(state.protocolServerPingsByOptionId::get)
@@ -436,9 +436,6 @@ internal fun resolveDashboardSelectedOptionId(
         activeProfile
             ?.selectedProtocolOptionId
             ?.takeIf { optionId -> activeProfile.protocolOptions.any { option -> option.id == optionId } }
-    if (selectedProfileOptionId != null) {
-        return selectedProfileOptionId
-    }
     val connectedOptionId =
         connection.protocolOptionId
             ?.takeIf { connection.profileId == activeProfile?.id }
@@ -451,9 +448,6 @@ internal fun resolveDashboardSelectedOptionId(
             }?.takeIf { optionId ->
                 activeProfile?.protocolOptions?.any { option -> option.id == optionId } == true
             }
-    if (connectedOptionId != null) {
-        return connectedOptionId
-    }
     val connectedProtocol =
         connection.protocolHint
             ?.takeIf { connection.profileId == activeProfile?.id }
@@ -464,13 +458,17 @@ internal fun resolveDashboardSelectedOptionId(
                     ConnectionState.RECONNECTING,
                 )
             }
-    return connectedProtocol
-        ?.let { protocol ->
-            activeProfile
-                ?.protocolOptions
-                ?.firstOrNull { option -> option.protocolHint == protocol }
-                ?.id
-        }
+    val connectedProtocolOptionId =
+        connectedProtocol
+            ?.let { protocol ->
+                activeProfile
+                    ?.protocolOptions
+                    ?.firstOrNull { option -> option.protocolHint == protocol }
+                    ?.id
+            }
+    return connectedOptionId
+        ?: connectedProtocolOptionId
+        ?: selectedProfileOptionId
         ?: resolveDashboardSelectedOptionId(activeProfile)
 }
 
@@ -556,6 +554,7 @@ internal fun resolveHomeDashboardProtocolPresentation(
     }
     val selectedProtocolOptionId =
         when {
+            pinSelectionToProfile -> resolveDashboardSelectedOptionId(activeProfile)
             autoConnect.running && !pinSelectionToProfile ->
                 autoConnect.currentOptionId ?: activeProfile.selectedProtocolOptionId
             else -> resolveDashboardSelectedOptionId(activeProfile, connection)

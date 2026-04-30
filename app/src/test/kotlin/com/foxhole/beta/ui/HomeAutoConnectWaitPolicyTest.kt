@@ -256,7 +256,7 @@ class HomeAutoConnectWaitPolicyTest {
     }
 
     @Test
-    fun `runner bounds cold scan attempts`() {
+    fun `runner keeps every cold scan candidate for first analysis`() {
         val state =
             SmartStartAutoConnectRunner.resolveState(
                 fullScanCandidates =
@@ -272,7 +272,7 @@ class HomeAutoConnectWaitPolicyTest {
             )
 
         assertEquals(
-            listOf("vless", "trojan", "hysteria"),
+            listOf("vless", "trojan", "hysteria", "wireguard"),
             state.candidates.map(AutoConnectProbeCandidate::optionId),
         )
     }
