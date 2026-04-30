@@ -554,6 +554,7 @@ fun FoxholeApp(
                 } else {
                     null
                 },
+            prominentActions = true,
             dismissOnBackPress = false,
             dismissOnClickOutside = false,
             onDismiss = viewModel::dismissInsecureTlsImportWarning,

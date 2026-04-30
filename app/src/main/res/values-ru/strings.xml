@@ -40,7 +40,7 @@
     <string name="use_profile_summary">Сделать этот профиль активным для следующего подключения.</string>
     <string name="profile_refresh_summary">Обновить конфигурацию из подписки.</string>
     <string name="profile_refresh_confirm_title">Обновить конфигурацию?</string>
-    <string name="profile_refresh_confirm_body">Получить актуальную конфигурацию из источника подписки. Если этот профиль сейчас подключен, Foxhole автоматически переподключится и применит обновление.</string>
+    <string name="profile_refresh_confirm_body">Получить актуальную конфигурацию VPN от вашего провайдера VPN. Foxhole автоматически переподключится с новой конфигурацией.</string>
     <string name="view_profile_config">Профиль</string>
     <string name="view_profile_config_summary">Открыть сохраненные настройки профиля.</string>
     <string name="edit_profile_config">Редактор профиля</string>
@@ -184,7 +184,7 @@
     <string name="smart_start_clear_data_confirm_body">Foxhole удалит локальные замеры и рекомендации Смарт старт на этом устройстве.</string>
     <string name="smart_start_data_cleared">Данные Смарт старт очищены.</string>
     <string name="smart_start_reconnect_confirm_title">Переподключить протокол VPN?</string>
-    <string name="smart_start_reconnect_confirm_body">Foxhole выполнит Smart start и переподключит VPN с выбранным протоколом.</string>
+    <string name="smart_start_reconnect_confirm_body">Foxhole переподключит VPN соединение с лучшим протоколом.</string>
     <string name="auto_connect_requires_supported_profile">Требуется профиль с поддерживаемым протоколом.</string>
     <string name="auto_connect_probe_timeout">Тест протокола превысил время ожидания.</string>
     <string name="auto_connect_ip_unavailable">Подключение установлено, но IP-проверка не завершилась вовремя.</string>

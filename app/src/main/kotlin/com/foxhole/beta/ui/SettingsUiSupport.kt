@@ -925,6 +925,7 @@ internal fun ConfirmDialog(
     dismissLabel: String? = null,
     secondaryLabel: String? = null,
     onSecondary: (() -> Unit)? = null,
+    prominentActions: Boolean = false,
     dismissOnBackPress: Boolean = true,
     dismissOnClickOutside: Boolean = true,
     onDismiss: () -> Unit,
@@ -955,19 +956,52 @@ internal fun ConfirmDialog(
             )
         },
         confirmButton = {
-            TextButton(
-                onClick = onConfirm,
-                modifier = Modifier.testTag("confirm_dialog_confirm_button"),
-            ) {
-                Text(confirmLabel)
+            if (prominentActions) {
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    dismissLabel?.let { label ->
+                        OutlinedButton(
+                            onClick = onDismiss,
+                            modifier = Modifier.testTag("confirm_dialog_dismiss_button"),
+                        ) {
+                            Text(label)
+                        }
+                    }
+                    if (secondaryLabel != null && onSecondary != null) {
+                        OutlinedButton(
+                            onClick = onSecondary,
+                            modifier = Modifier.testTag("confirm_dialog_secondary_button"),
+                        ) {
+                            Text(secondaryLabel)
+                        }
+                    }
+                    Button(
+                        onClick = onConfirm,
+                        modifier = Modifier.testTag("confirm_dialog_confirm_button"),
+                    ) {
+                        Text(confirmLabel)
+                    }
+                }
+            } else {
+                TextButton(
+                    onClick = onConfirm,
+                    modifier = Modifier.testTag("confirm_dialog_confirm_button"),
+                ) {
+                    Text(confirmLabel)
+                }
             }
         },
         dismissButton = {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (secondaryLabel != null && onSecondary != null) {
-                    TextButton(onClick = onSecondary) { Text(secondaryLabel) }
+            if (!prominentActions) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (secondaryLabel != null && onSecondary != null) {
+                        TextButton(onClick = onSecondary) { Text(secondaryLabel) }
+                    }
+                    TextButton(onClick = onDismiss) { Text(dismissLabel ?: stringResource(R.string.cancel)) }
                 }
-                TextButton(onClick = onDismiss) { Text(dismissLabel ?: stringResource(R.string.cancel)) }
             }
         },
     )

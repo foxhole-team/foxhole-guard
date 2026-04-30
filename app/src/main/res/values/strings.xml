@@ -40,7 +40,7 @@
     <string name="use_profile_summary">Make this profile active for the next connection.</string>
     <string name="profile_refresh_summary">Update configuration from the subscription.</string>
     <string name="profile_refresh_confirm_title">Update configuration?</string>
-    <string name="profile_refresh_confirm_body">Fetch the latest configuration from the subscription source. If this profile is connected, Foxhole will reconnect automatically to apply the update.</string>
+    <string name="profile_refresh_confirm_body">Fetch the latest VPN configuration from your VPN provider. Foxhole will automatically reconnect with the new configuration.</string>
     <string name="view_profile_config">Profile details</string>
     <string name="view_profile_config_summary">Open the saved settings for this profile.</string>
     <string name="edit_profile_config">Edit profile</string>
@@ -184,7 +184,7 @@
     <string name="smart_start_clear_data_confirm_body">Foxhole will remove local Smart start measurements and recommendations from this device.</string>
     <string name="smart_start_data_cleared">Smart start data cleared.</string>
     <string name="smart_start_reconnect_confirm_title">Reconnect VPN protocol?</string>
-    <string name="smart_start_reconnect_confirm_body">Foxhole will run Smart start and reconnect the VPN with the selected protocol.</string>
+    <string name="smart_start_reconnect_confirm_body">Foxhole will reconnect the VPN connection with the best protocol.</string>
     <string name="auto_connect_requires_supported_profile">A profile with a supported protocol is required.</string>
     <string name="auto_connect_probe_timeout">Connection timed out during protocol test.</string>
     <string name="auto_connect_ip_unavailable">Connection was established, but IP validation did not finish in time.</string>
