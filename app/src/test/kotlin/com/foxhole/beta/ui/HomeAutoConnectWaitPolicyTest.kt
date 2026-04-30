@@ -134,12 +134,12 @@ class HomeAutoConnectWaitPolicyTest {
     }
 
     @Test
-    fun `candidate probe timeout covers service validation instead of metrics refresh`() {
-        assertEquals(
-            HomeViewModel.AUTO_CONNECT_CONNECTION_TIMEOUT_MS,
-            autoConnectCandidateProbeTimeoutMs(),
-        )
-        assertTrue(autoConnectCandidateProbeTimeoutMs() > HomeViewModel.PROTOCOL_METRICS_PROBE_TIMEOUT_MS)
+    fun `candidate probe timeout uses smart start setting defaults`() {
+        assertEquals(15_000L, autoConnectCandidateProbeTimeoutMs())
+        assertEquals(20_000L, protocolMetricsCandidateProbeTimeoutMs())
+        assertEquals(10_000L, autoConnectCandidateProbeTimeoutMs(timeoutSeconds = 3))
+        assertEquals(60_000L, protocolMetricsCandidateProbeTimeoutMs(timeoutSeconds = 99))
+        assertTrue(protocolMetricsCandidateProbeTimeoutMs() > autoConnectCandidateProbeTimeoutMs())
         assertTrue(autoConnectCandidateProbeTimeoutMs() < HomeViewModel.AUTO_CONNECT_TOTAL_TIMEOUT_MS)
     }
 

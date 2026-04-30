@@ -10,6 +10,7 @@ import com.foxhole.beta.core.model.ProtocolHint
 import com.foxhole.beta.core.model.RoutingCatalog
 import com.foxhole.beta.core.model.RoutingPreset
 import com.foxhole.beta.core.model.TrafficSnapshot
+import com.foxhole.beta.core.profile.MultiProtocolProfileSupport
 import com.foxhole.beta.core.model.Settings as FoxholeSettings
 
 enum class AutoConnectProbeStatus {
@@ -88,6 +89,7 @@ data class SettingsRouteUiState(
     val settings: FoxholeSettings = FoxholeSettings(),
     val appVersion: String = "",
     val reconnectRequired: Boolean = false,
+    val hasSmartProfile: Boolean = false,
 )
 
 data class RoutingRouteUiState(
@@ -204,6 +206,7 @@ internal fun HomeUiState.toSettingsRouteUiState(): SettingsRouteUiState =
         settings = settings,
         appVersion = appVersion,
         reconnectRequired = reconnectRequired,
+        hasSmartProfile = profiles.any(MultiProtocolProfileSupport::hasMultipleSupportedOptions),
     )
 
 internal fun HomeUiState.toRoutingRouteUiState(): RoutingRouteUiState =

@@ -17,6 +17,12 @@ internal fun Settings.withSmartProfilePreference(preference: SmartProfilePrefere
     return copy(smartProfilePreferences = updatedPreferences)
 }
 
+internal fun SmartProfilePreference.clearedSmartStartRuntimeData(): SmartProfilePreference =
+    SmartProfilePreference(
+        profileId = profileId,
+        excludedProtocolOptionIds = excludedProtocolOptionIds,
+    )
+
 internal fun SmartProfileProtocolMemory.normalized(): SmartProfileProtocolMemory? {
     val normalizedOptionId = optionId.trim().takeIf(String::isNotBlank) ?: return null
     return copy(

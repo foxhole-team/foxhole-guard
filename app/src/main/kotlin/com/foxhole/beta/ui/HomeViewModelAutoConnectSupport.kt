@@ -10,6 +10,11 @@ import com.foxhole.beta.core.model.ConnectionState
 import com.foxhole.beta.core.model.LatencyProbeMethod
 import com.foxhole.beta.core.model.Profile
 import com.foxhole.beta.core.model.ProtocolHint
+import com.foxhole.beta.core.model.SMART_START_PROTOCOL_TIMEOUT_DEFAULT_SECONDS
+import com.foxhole.beta.core.model.SMART_START_PROTOCOL_TIMEOUT_MIN_SECONDS
+import com.foxhole.beta.core.model.SMART_START_REFRESH_TIMEOUT_DEFAULT_SECONDS
+import com.foxhole.beta.core.model.SMART_START_REFRESH_TIMEOUT_MIN_SECONDS
+import com.foxhole.beta.core.model.SMART_START_TIMEOUT_MAX_SECONDS
 import com.foxhole.beta.core.model.TrafficSnapshot
 import com.foxhole.beta.core.model.TrafficMode
 import com.foxhole.beta.core.model.isUdpTransport
@@ -315,7 +320,9 @@ private suspend fun HomeViewModel.probeSmartStartCandidateWithinBudget(
     val probeStartedAt = SystemClock.elapsedRealtime()
     val probeBudgetMs =
         minOf(
-            autoConnectCandidateProbeTimeoutMs(),
+            autoConnectCandidateProbeTimeoutMs(
+                timeoutSeconds = uiState.value.settings.connection.smartStartProtocolSelectionTimeoutSeconds,
+            ),
             remainingAutoConnectBudgetMs(
                 startedAtElapsedMs = autoConnectStartedAt,
                 nowElapsedMs = probeStartedAt,
@@ -427,6 +434,7 @@ private fun HomeViewModel.fullScanAutoConnectCandidates(
         profile = profile,
         allowInsecureTlsGlobally = uiState.value.settings.expert.allowInsecureTls,
         excludedOptionIds = excludedAutoConnectOptionIds(profileId),
+        transportPriority = uiState.value.settings.connection.smartStartTransportPriority,
     )
 
 private fun HomeViewModel.rankedScoresForCandidates(
@@ -684,7 +692,10 @@ private suspend fun HomeViewModel.probeAutoConnectCandidateForMetricsRefresh(
     previousVpnNetworkHandle: Long?,
 ): AutoConnectProbeResult {
     val startedAt = SystemClock.elapsedRealtime()
-    val timeoutMs = protocolMetricsCandidateProbeTimeoutMs()
+    val timeoutMs =
+        protocolMetricsCandidateProbeTimeoutMs(
+            timeoutSeconds = uiState.value.settings.connection.smartStartRefreshSelectionTimeoutSeconds,
+        )
     val result =
         withTimeoutOrNull(timeoutMs) {
             probeAutoConnectCandidate(
@@ -1255,6 +1266,7 @@ internal fun HomeViewModel.scoredAutoConnectCandidatesInternal(
         networkContext = networkFingerprint,
         allowInsecureTlsGlobally = uiState.value.settings.expert.allowInsecureTls,
         excludedOptionIds = excludedOptionIds,
+        transportPriority = uiState.value.settings.connection.smartStartTransportPriority,
         controlledExploration = true,
     )
 }
@@ -1540,9 +1552,29 @@ internal fun shouldContinueAutoConnectAfterProbe(
     return remainingBudgetMs > 0L
 }
 
-internal fun autoConnectCandidateProbeTimeoutMs(): Long = HomeViewModel.AUTO_CONNECT_CONNECTION_TIMEOUT_MS
+internal fun autoConnectCandidateProbeTimeoutMs(
+    timeoutSeconds: Int = SMART_START_PROTOCOL_TIMEOUT_DEFAULT_SECONDS,
+): Long =
+    smartStartTimeoutMs(
+        timeoutSeconds = timeoutSeconds,
+        minSeconds = SMART_START_PROTOCOL_TIMEOUT_MIN_SECONDS,
+    )
 
-internal fun protocolMetricsCandidateProbeTimeoutMs(): Long = autoConnectCandidateProbeTimeoutMs()
+internal fun protocolMetricsCandidateProbeTimeoutMs(
+    timeoutSeconds: Int = SMART_START_REFRESH_TIMEOUT_DEFAULT_SECONDS,
+): Long =
+    smartStartTimeoutMs(
+        timeoutSeconds = timeoutSeconds,
+        minSeconds = SMART_START_REFRESH_TIMEOUT_MIN_SECONDS,
+    )
+
+private fun smartStartTimeoutMs(
+    timeoutSeconds: Int,
+    minSeconds: Int,
+): Long =
+    timeoutSeconds
+        .coerceIn(minSeconds, SMART_START_TIMEOUT_MAX_SECONDS)
+        .toLong() * 1000L
 
 internal fun canStartAutoConnect(candidates: List<AutoConnectProbeCandidate>): Boolean = candidates.isNotEmpty()
 

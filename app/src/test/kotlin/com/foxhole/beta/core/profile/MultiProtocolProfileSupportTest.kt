@@ -9,6 +9,7 @@ import com.foxhole.beta.core.model.ProtocolHint
 import com.foxhole.beta.core.model.SmartProfileNetworkMemory
 import com.foxhole.beta.core.model.SmartProfilePreference
 import com.foxhole.beta.core.model.SmartProfileProtocolMemory
+import com.foxhole.beta.core.model.SmartStartTransportPriority
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -136,6 +137,37 @@ class MultiProtocolProfileSupportTest {
             MultiProtocolProfileSupport
                 .smartStartEligibleProbeCandidates(globalConsentProfile, allowInsecureTlsGlobally = true)
                 .map(AutoConnectProbeCandidate::optionId),
+        )
+    }
+
+    @Test
+    fun `transport priority reorders smart start candidates without dropping fallbacks`() {
+        val profile =
+            profile(
+                options =
+                    listOf(
+                        option("trojan", ProtocolHint.TROJAN),
+                        option("wireguard", ProtocolHint.WIREGUARD),
+                        option("vless", ProtocolHint.VLESS),
+                        option("hysteria2", ProtocolHint.HYSTERIA2),
+                    ),
+            )
+
+        assertEquals(
+            listOf("wireguard", "hysteria2", "trojan", "vless"),
+            MultiProtocolProfileSupport
+                .smartStartEligibleProbeCandidates(
+                    profile = profile,
+                    transportPriority = SmartStartTransportPriority.UDP,
+                ).map(AutoConnectProbeCandidate::optionId),
+        )
+        assertEquals(
+            listOf("trojan", "vless", "wireguard", "hysteria2"),
+            MultiProtocolProfileSupport
+                .smartStartEligibleProbeCandidates(
+                    profile = profile,
+                    transportPriority = SmartStartTransportPriority.TCP,
+                ).map(AutoConnectProbeCandidate::optionId),
         )
     }
 

@@ -8,9 +8,13 @@ import com.foxhole.beta.core.model.ExpertSettings
 import com.foxhole.beta.core.model.LatencyProbeMethod
 import com.foxhole.beta.core.model.NETWORK_FINGERPRINT_SCHEMA_CURRENT
 import com.foxhole.beta.core.model.Settings
+import com.foxhole.beta.core.model.SMART_START_PROTOCOL_TIMEOUT_DEFAULT_SECONDS
+import com.foxhole.beta.core.model.SMART_START_REFRESH_TIMEOUT_DEFAULT_SECONDS
+import com.foxhole.beta.core.model.SMART_START_TIMEOUT_MAX_SECONDS
 import com.foxhole.beta.core.model.SmartProfileNetworkMemory
 import com.foxhole.beta.core.model.SmartProfilePreference
 import com.foxhole.beta.core.model.SmartProfileProtocolMemory
+import com.foxhole.beta.core.model.SmartStartTransportPriority
 import com.foxhole.beta.core.model.SubscriptionRefreshInterval
 import com.foxhole.beta.core.model.ThemeMode
 import com.foxhole.beta.core.model.UiSettings
@@ -133,6 +137,23 @@ class SettingsRepositoryTest {
     @Test
     fun `latency probe method defaults to http`() {
         assertEquals(LatencyProbeMethod.HTTP, Settings().connection.latencyProbeMethod)
+    }
+
+    @Test
+    fun `smart start connection settings use requested defaults`() {
+        val connection = Settings().connection
+
+        assertEquals(SMART_START_PROTOCOL_TIMEOUT_DEFAULT_SECONDS, connection.smartStartProtocolSelectionTimeoutSeconds)
+        assertEquals(SMART_START_REFRESH_TIMEOUT_DEFAULT_SECONDS, connection.smartStartRefreshSelectionTimeoutSeconds)
+        assertEquals(SmartStartTransportPriority.ALL, connection.smartStartTransportPriority)
+    }
+
+    @Test
+    fun `smart start timeout normalization clamps and snaps to five second steps`() {
+        assertEquals(10, normalizeSmartStartTimeoutSeconds(value = 3, minSeconds = 10))
+        assertEquals(15, normalizeSmartStartTimeoutSeconds(value = 17, minSeconds = 15))
+        assertEquals(55, normalizeSmartStartTimeoutSeconds(value = 59, minSeconds = 10))
+        assertEquals(SMART_START_TIMEOUT_MAX_SECONDS, normalizeSmartStartTimeoutSeconds(value = 99, minSeconds = 15))
     }
 
     @Test
@@ -263,6 +284,48 @@ class SettingsRepositoryTest {
         assertEquals(1, normalized.size)
         assertEquals("wireguard", normalized.first().protocolMemories.single().optionId)
         assertEquals(0, normalized.first().protocolMemories.single().failureStreak)
+    }
+
+    @Test
+    fun `clearing smart start runtime data keeps manual protocol exclusions`() {
+        val cleared =
+            SmartProfilePreference(
+                profileId = 9L,
+                excludedProtocolOptionIds = listOf("wireguard"),
+                lastKnownGoodOptionId = "wireguard",
+                lastKnownGoodLatencyMs = 120L,
+                lastKnownGoodAt = 1_000L,
+                lastFullSmartRefreshAt = 2_000L,
+                smartStartBaselineReady = true,
+                recommendedProtocolIds = listOf("wireguard"),
+                protocolMemories =
+                    listOf(
+                        SmartProfileProtocolMemory(
+                            optionId = "wireguard",
+                            lastSuccessAt = 1_000L,
+                            lastLatencyMs = 120L,
+                        ),
+                    ),
+                networkMemories =
+                    listOf(
+                        SmartProfileNetworkMemory(
+                            networkFingerprint = "wifi-home",
+                            networkFingerprintSchema = NETWORK_FINGERPRINT_SCHEMA_CURRENT,
+                            lastKnownGoodOptionId = "wireguard",
+                        ),
+                    ),
+            ).clearedSmartStartRuntimeData()
+
+        assertEquals(9L, cleared.profileId)
+        assertEquals(listOf("wireguard"), cleared.excludedProtocolOptionIds)
+        assertNull(cleared.lastKnownGoodOptionId)
+        assertNull(cleared.lastKnownGoodLatencyMs)
+        assertNull(cleared.lastKnownGoodAt)
+        assertNull(cleared.lastFullSmartRefreshAt)
+        assertFalse(cleared.smartStartBaselineReady)
+        assertTrue(cleared.recommendedProtocolIds.isEmpty())
+        assertTrue(cleared.protocolMemories.isEmpty())
+        assertTrue(cleared.networkMemories.isEmpty())
     }
 
     @Test

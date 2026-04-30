@@ -591,24 +591,31 @@ internal fun TrafficStatBlock(
 
 @Composable
 internal fun HomeProfileLoadingBlock() {
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        HomeProfileLoadingLine(width = 156.dp, height = 18.dp)
+        HomeProfileLoadingLine(width = 206.dp, height = 12.dp)
+        HomeProfileLoadingLine(width = 126.dp, height = 12.dp)
+    }
+}
+
+@Composable
+private fun HomeProfileLoadingLine(
+    width: Dp,
+    height: Dp,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.End,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
         FoxholeSkeletonBlock(
             modifier =
                 Modifier
-                    .fillMaxWidth(0.5f)
-                    .height(20.dp),
-        )
-        FoxholeSkeletonBlock(
-            modifier =
-                Modifier
-                    .fillMaxWidth(0.7f)
-                    .height(14.dp),
-        )
-        FoxholeSkeletonBlock(
-            modifier =
-                Modifier
-                    .fillMaxWidth(0.32f)
-                    .height(24.dp),
+                    .width(width)
+                    .height(height),
         )
     }
 }

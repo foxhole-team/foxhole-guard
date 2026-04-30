@@ -93,6 +93,20 @@ enum class TrafficMode {
 internal fun ProtocolHint.isUdpTransport(): Boolean =
     this == ProtocolHint.HYSTERIA2 || this == ProtocolHint.WIREGUARD
 
+const val SMART_START_PROTOCOL_TIMEOUT_MIN_SECONDS = 10
+const val SMART_START_PROTOCOL_TIMEOUT_DEFAULT_SECONDS = 15
+const val SMART_START_REFRESH_TIMEOUT_MIN_SECONDS = 15
+const val SMART_START_REFRESH_TIMEOUT_DEFAULT_SECONDS = 20
+const val SMART_START_TIMEOUT_MAX_SECONDS = 60
+const val SMART_START_TIMEOUT_STEP_SECONDS = 5
+
+@Serializable
+enum class SmartStartTransportPriority {
+    ALL,
+    UDP,
+    TCP,
+}
+
 @Serializable
 enum class SubscriptionRefreshInterval(val hours: Long) {
     HOURS_6(6),
@@ -165,6 +179,9 @@ data class ConnectionSettings(
     val subscriptionRefreshInterval: SubscriptionRefreshInterval = SubscriptionRefreshInterval.HOURS_6,
     val ipInfoEndpoint: String = "",
     val latencyProbeMethod: LatencyProbeMethod = LatencyProbeMethod.HTTP,
+    val smartStartProtocolSelectionTimeoutSeconds: Int = SMART_START_PROTOCOL_TIMEOUT_DEFAULT_SECONDS,
+    val smartStartRefreshSelectionTimeoutSeconds: Int = SMART_START_REFRESH_TIMEOUT_DEFAULT_SECONDS,
+    val smartStartTransportPriority: SmartStartTransportPriority = SmartStartTransportPriority.ALL,
     val stealthModeEnabled: Boolean = true,
 )
 

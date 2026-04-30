@@ -32,13 +32,16 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.ArrowForward
+import androidx.compose.material.icons.automirrored.outlined.AltRoute
 import androidx.compose.material.icons.automirrored.outlined.HelpOutline
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.AccountTree
 import androidx.compose.material.icons.outlined.Apps
 import androidx.compose.material.icons.outlined.BrightnessAuto
+import androidx.compose.material.icons.outlined.BugReport
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.DarkMode
+import androidx.compose.material.icons.outlined.DataUsage
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.FileDownload
@@ -46,13 +49,18 @@ import androidx.compose.material.icons.outlined.FileUpload
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.LightMode
+import androidx.compose.material.icons.outlined.NetworkCheck
 import androidx.compose.material.icons.outlined.PhoneAndroid
 import androidx.compose.material.icons.outlined.Public
+import androidx.compose.material.icons.outlined.QueryStats
 import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.outlined.RocketLaunch
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material.icons.outlined.Speed
 import androidx.compose.material.icons.outlined.SwapVert
 import androidx.compose.material.icons.outlined.Tune
+import androidx.compose.material.icons.outlined.VpnKey
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -104,6 +112,11 @@ import com.foxhole.beta.core.model.RoutingPresetOverrideMode
 import com.foxhole.beta.core.model.RoutingPresetSource
 import com.foxhole.beta.core.model.RoutingRule
 import com.foxhole.beta.core.model.RoutingRuleAction
+import com.foxhole.beta.core.model.SMART_START_PROTOCOL_TIMEOUT_MIN_SECONDS
+import com.foxhole.beta.core.model.SMART_START_REFRESH_TIMEOUT_MIN_SECONDS
+import com.foxhole.beta.core.model.SMART_START_TIMEOUT_MAX_SECONDS
+import com.foxhole.beta.core.model.SMART_START_TIMEOUT_STEP_SECONDS
+import com.foxhole.beta.core.model.SmartStartTransportPriority
 import com.foxhole.beta.core.model.SubscriptionRefreshInterval
 import com.foxhole.beta.core.model.ThemeMode
 import com.foxhole.beta.core.model.TrafficMode
@@ -132,6 +145,7 @@ fun SettingsHomeScreen(
     onOpenRouting: () -> Unit,
     onOpenRoutingApps: () -> Unit,
     onOpenRoutingSites: () -> Unit,
+    onOpenSmartStart: () -> Unit,
     onOpenApplication: () -> Unit,
     onOpenHelp: () -> Unit,
     onOpenAbout: () -> Unit,
@@ -154,6 +168,18 @@ fun SettingsHomeScreen(
         snackbarHostState = snackbarHostState,
         onNavigateUp = onNavigateUp,
     ) {
+        if (state.hasSmartProfile) {
+            item {
+                SettingsNavigationRow(
+                    modifier = Modifier.testTag("settings_smart_start_action"),
+                    icon = Icons.Outlined.Speed,
+                    title = stringResource(R.string.smart_start_settings_title),
+                    summary = stringResource(R.string.smart_start_settings_summary),
+                    summaryMaxLines = 3,
+                    onClick = onOpenSmartStart,
+                )
+            }
+        }
         item {
             SettingsNavigationRow(
                 icon = Icons.Outlined.Tune,
@@ -293,6 +319,145 @@ fun SettingsHomeScreen(
         )
     }
 }
+
+@Composable
+fun SmartStartSettingsScreen(
+    state: SettingsRouteUiState,
+    snackbarHostState: SnackbarHostState,
+    onNavigateUp: () -> Unit,
+    onSmartStartProtocolSelectionTimeoutChanged: (Int) -> Unit,
+    onSmartStartRefreshSelectionTimeoutChanged: (Int) -> Unit,
+    onSmartStartTransportPrioritySelected: (SmartStartTransportPriority) -> Unit,
+    onClearSmartStartData: () -> Unit,
+) {
+    var clearSmartStartDialogVisible by rememberSaveable { mutableStateOf(false) }
+    var protocolTimeoutExpanded by rememberSaveable { mutableStateOf(false) }
+    var refreshTimeoutExpanded by rememberSaveable { mutableStateOf(false) }
+    var transportPriorityExpanded by rememberSaveable { mutableStateOf(false) }
+
+    SettingsScaffold(
+        title = stringResource(R.string.smart_start_settings_title),
+        snackbarHostState = snackbarHostState,
+        onNavigateUp = onNavigateUp,
+    ) {
+        item {
+            InfoBlock(
+                title = stringResource(R.string.smart_start_settings_title),
+                body = stringResource(R.string.smart_start_settings_summary),
+            )
+        }
+        if (state.hasSmartProfile) {
+            item {
+                DropdownSettingRow(
+                    title = stringResource(R.string.smart_start_protocol_timeout_title),
+                    value = smartStartTimeoutLabel(state.settings.connection.smartStartProtocolSelectionTimeoutSeconds),
+                    expanded = protocolTimeoutExpanded,
+                    onExpandedChange = { protocolTimeoutExpanded = it },
+                    values = smartStartTimeoutOptions(SMART_START_PROTOCOL_TIMEOUT_MIN_SECONDS),
+                    selected = state.settings.connection.smartStartProtocolSelectionTimeoutSeconds,
+                    label = { smartStartTimeoutLabel(it) },
+                    onSelect = onSmartStartProtocolSelectionTimeoutChanged,
+                    summary = stringResource(R.string.smart_start_protocol_timeout_summary),
+                    leadingIcon = Icons.Outlined.Speed,
+                    optionIcon = { Icons.Outlined.Speed },
+                    summaryMaxLines = 3,
+                )
+            }
+            item {
+                DropdownSettingRow(
+                    title = stringResource(R.string.smart_start_refresh_timeout_title),
+                    value = smartStartTimeoutLabel(state.settings.connection.smartStartRefreshSelectionTimeoutSeconds),
+                    expanded = refreshTimeoutExpanded,
+                    onExpandedChange = { refreshTimeoutExpanded = it },
+                    values = smartStartTimeoutOptions(SMART_START_REFRESH_TIMEOUT_MIN_SECONDS),
+                    selected = state.settings.connection.smartStartRefreshSelectionTimeoutSeconds,
+                    label = { smartStartTimeoutLabel(it) },
+                    onSelect = onSmartStartRefreshSelectionTimeoutChanged,
+                    summary = stringResource(R.string.smart_start_refresh_timeout_summary),
+                    leadingIcon = Icons.Outlined.Refresh,
+                    optionIcon = { Icons.Outlined.Refresh },
+                    summaryMaxLines = 3,
+                )
+            }
+            item {
+                DropdownSettingRow(
+                    title = stringResource(R.string.smart_start_transport_priority_title),
+                    value = smartStartTransportPriorityLabel(state.settings.connection.smartStartTransportPriority),
+                    expanded = transportPriorityExpanded,
+                    onExpandedChange = { transportPriorityExpanded = it },
+                    values = SmartStartTransportPriority.entries,
+                    selected = state.settings.connection.smartStartTransportPriority,
+                    label = { smartStartTransportPriorityLabel(it) },
+                    onSelect = onSmartStartTransportPrioritySelected,
+                    summary = stringResource(R.string.smart_start_transport_priority_summary),
+                    leadingIcon = Icons.Outlined.SwapVert,
+                    optionIcon = ::smartStartTransportPriorityIcon,
+                    summaryMaxLines = 3,
+                )
+            }
+            item {
+                SettingValueRow(
+                    title = stringResource(R.string.smart_start_clear_data_title),
+                    value = "",
+                    summary = stringResource(R.string.smart_start_clear_data_summary),
+                    leadingIcon = Icons.Outlined.Delete,
+                    onClick = { clearSmartStartDialogVisible = true },
+                    summaryMaxLines = 3,
+                    trailingContent = {
+                        Icon(
+                            imageVector = Icons.Outlined.Delete,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.error,
+                        )
+                    },
+                )
+            }
+        }
+    }
+
+    if (clearSmartStartDialogVisible) {
+        ConfirmDialog(
+            title = stringResource(R.string.smart_start_clear_data_confirm_title),
+            body = stringResource(R.string.smart_start_clear_data_confirm_body),
+            confirmLabel = stringResource(R.string.yes_label),
+            icon = Icons.Outlined.Delete,
+            iconTint = MaterialTheme.colorScheme.error,
+            iconContainerColor = MaterialTheme.colorScheme.error.copy(alpha = 0.12f),
+            dismissLabel = stringResource(R.string.no_label),
+            onDismiss = { clearSmartStartDialogVisible = false },
+            onConfirm = {
+                clearSmartStartDialogVisible = false
+                onClearSmartStartData()
+            },
+        )
+    }
+}
+
+private fun smartStartTimeoutOptions(minSeconds: Int): List<Int> =
+    generateSequence(minSeconds) { value -> value + SMART_START_TIMEOUT_STEP_SECONDS }
+        .takeWhile { value -> value <= SMART_START_TIMEOUT_MAX_SECONDS }
+        .toList()
+
+@Composable
+private fun smartStartTimeoutLabel(seconds: Int): String =
+    stringResource(R.string.smart_start_timeout_seconds_value, seconds)
+
+@Composable
+private fun smartStartTransportPriorityLabel(value: SmartStartTransportPriority): String =
+    stringResource(
+        when (value) {
+            SmartStartTransportPriority.ALL -> R.string.smart_start_transport_priority_all
+            SmartStartTransportPriority.UDP -> R.string.smart_start_transport_priority_udp
+            SmartStartTransportPriority.TCP -> R.string.smart_start_transport_priority_tcp
+        },
+    )
+
+private fun smartStartTransportPriorityIcon(value: SmartStartTransportPriority): ImageVector =
+    when (value) {
+        SmartStartTransportPriority.ALL -> Icons.Outlined.SwapVert
+        SmartStartTransportPriority.UDP -> Icons.Outlined.Speed
+        SmartStartTransportPriority.TCP -> Icons.Outlined.Public
+    }
 
 private fun openFoxholeRepository(context: Context): Boolean {
     val intent =
@@ -1047,12 +1212,12 @@ fun HelpScreen(
     val topics =
         listOf(
             HelpTopic(
-                icon = Icons.Outlined.Speed,
+                icon = Icons.Outlined.RocketLaunch,
                 title = stringResource(R.string.help_quick_start_title),
                 body = stringResource(R.string.help_quick_start_body),
             ),
             HelpTopic(
-                icon = Icons.Outlined.AccountTree,
+                icon = Icons.Outlined.VpnKey,
                 title = stringResource(R.string.help_profiles_subscriptions_title),
                 body = stringResource(R.string.help_profiles_subscriptions_body),
             ),
@@ -1062,7 +1227,7 @@ fun HelpScreen(
                 body = stringResource(R.string.help_smart_start_full_body),
             ),
             HelpTopic(
-                icon = Icons.Outlined.Info,
+                icon = Icons.Outlined.QueryStats,
                 title = stringResource(R.string.help_protocol_statuses_title),
                 body = stringResource(R.string.help_protocol_statuses_body),
             ),
@@ -1072,32 +1237,32 @@ fun HelpScreen(
                 body = stringResource(R.string.help_connection_modes_body),
             ),
             HelpTopic(
-                icon = Icons.Outlined.AccountTree,
+                icon = Icons.AutoMirrored.Outlined.AltRoute,
                 title = stringResource(R.string.traffic_rules),
                 body = stringResource(R.string.help_routing_full_body),
             ),
             HelpTopic(
-                icon = Icons.Outlined.Public,
+                icon = Icons.Outlined.NetworkCheck,
                 title = stringResource(R.string.help_dashboard_network_title),
                 body = stringResource(R.string.help_dashboard_network_body),
             ),
             HelpTopic(
-                icon = Icons.Outlined.SwapVert,
+                icon = Icons.Outlined.DataUsage,
                 title = stringResource(R.string.help_traffic_usage_title),
                 body = stringResource(R.string.help_traffic_usage_body),
             ),
             HelpTopic(
-                icon = Icons.Outlined.Info,
+                icon = Icons.Outlined.BugReport,
                 title = stringResource(R.string.help_diagnostics_support_title),
                 body = stringResource(R.string.help_diagnostics_support_body),
             ),
             HelpTopic(
-                icon = Icons.Outlined.PhoneAndroid,
+                icon = Icons.Outlined.Settings,
                 title = stringResource(R.string.app_settings),
                 body = stringResource(R.string.help_application_settings_body),
             ),
             HelpTopic(
-                icon = Icons.Outlined.Shield,
+                icon = Icons.Outlined.Tune,
                 title = stringResource(R.string.expert_settings),
                 body = stringResource(R.string.help_expert_full_body),
             ),

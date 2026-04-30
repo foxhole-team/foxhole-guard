@@ -43,6 +43,7 @@ import com.foxhole.beta.core.model.RoutingPresetOverrideMode
 import com.foxhole.beta.core.model.RoutingPresetSource
 import com.foxhole.beta.core.model.RoutingRule
 import com.foxhole.beta.core.model.RoutingRuleAction
+import com.foxhole.beta.core.model.SmartStartTransportPriority
 import com.foxhole.beta.core.model.Settings as FoxholeSettings
 import com.foxhole.beta.core.model.SubscriptionRefreshInterval
 import com.foxhole.beta.core.model.ThemeMode
@@ -413,6 +414,8 @@ class HomeViewModel(
     internal var reconnectJob: Job? = null
     internal var protocolMetricsRefreshJob: Job? = null
     internal var protocolMetricsRestoreOnCancel: Boolean = true
+    internal var dashboardVisible: Boolean = false
+    internal var reconnectPromptPendingUntilDashboard: Boolean = false
 
     init {
         viewModelScope.launch {
@@ -617,6 +620,13 @@ class HomeViewModel(
     }
 
     private fun markProfileReconnectPromptWindow() {
+        if (!dashboardVisible) {
+            reconnectPromptPendingUntilDashboard = true
+            profileReconnectPromptJob?.cancel()
+            profileReconnectPromptJob = null
+            profileReconnectPromptUntilMutable.value = 0L
+            return
+        }
         profileReconnectPromptJob?.cancel()
         profileReconnectPromptUntilMutable.value =
             SystemClock.elapsedRealtime() + PROFILE_RECONNECT_PROMPT_WINDOW_MS
@@ -626,6 +636,14 @@ class HomeViewModel(
                 profileReconnectPromptUntilMutable.value = 0L
                 profileReconnectPromptJob = null
             }
+    }
+
+    private fun startPendingProfileReconnectPromptIfNeeded() {
+        if (!reconnectPromptPendingUntilDashboard) {
+            return
+        }
+        reconnectPromptPendingUntilDashboard = false
+        markProfileReconnectPromptWindow()
     }
 
     fun onSmartProfileAutoConnectExcludedOptionsChanged(
@@ -778,6 +796,15 @@ class HomeViewModel(
     fun onIpInfoEndpointChanged(value: String) = onIpInfoEndpointChangedInternal(value)
 
     fun onLatencyProbeMethodSelected(value: LatencyProbeMethod) = onLatencyProbeMethodSelectedInternal(value)
+
+    fun onSmartStartProtocolSelectionTimeoutChanged(value: Int) = onSmartStartProtocolSelectionTimeoutChangedInternal(value)
+
+    fun onSmartStartRefreshSelectionTimeoutChanged(value: Int) = onSmartStartRefreshSelectionTimeoutChangedInternal(value)
+
+    fun onSmartStartTransportPrioritySelected(value: SmartStartTransportPriority) =
+        onSmartStartTransportPrioritySelectedInternal(value)
+
+    fun clearSmartStartData() = clearSmartStartDataInternal()
 
     fun onTunStackSelected(value: TunStack) = onTunStackSelectedInternal(value)
 
@@ -1024,7 +1051,13 @@ class HomeViewModel(
 
     fun ensureInstalledAppsLoaded() = ensureInstalledAppsLoadedInternal()
 
-    fun onTrafficUiVisibilityChanged(visible: Boolean) = onTrafficUiVisibilityChangedInternal(visible)
+    fun onTrafficUiVisibilityChanged(visible: Boolean) {
+        dashboardVisible = visible
+        onTrafficUiVisibilityChangedInternal(visible)
+        if (visible) {
+            startPendingProfileReconnectPromptIfNeeded()
+        }
+    }
 
     internal fun ClipData.firstTextItem(): String? =
         if (itemCount > 0) {
@@ -1038,7 +1071,7 @@ class HomeViewModel(
         internal const val MANUAL_IP_REFRESH_MIN_LOADING_MS = 666L
         internal const val CONNECTED_PROTOCOL_LATENCY_REFRESH_DELAY_MS = 900L
         internal const val CONNECTED_PROTOCOL_LATENCY_REFRESH_INTERVAL_MS = 5L * 60L * 1000L
-        internal const val PROFILE_RECONNECT_PROMPT_WINDOW_MS = 9_000L
+        internal const val PROFILE_RECONNECT_PROMPT_WINDOW_MS = 13_000L
         internal const val RUNTIME_RELOAD_PENDING_TIMEOUT_MS = 1_500L
         internal const val AUTO_CONNECT_CONNECTION_TIMEOUT_MS =
             FoxholeVpnService.CONNECTIVITY_PROBE_TOTAL_TIMEOUT_MS +

@@ -17,6 +17,7 @@ import com.foxhole.beta.core.model.ProxyInboundSettings
 import com.foxhole.beta.core.model.RoutingPresetOverrideMode
 import com.foxhole.beta.core.model.RoutingPresetSource
 import com.foxhole.beta.core.model.RoutingRuleAction
+import com.foxhole.beta.core.model.SmartStartTransportPriority
 import com.foxhole.beta.core.model.SubscriptionRefreshInterval
 import com.foxhole.beta.core.model.ThemeMode
 import com.foxhole.beta.core.model.TrafficMode
@@ -106,6 +107,37 @@ internal fun HomeViewModel.onLatencyProbeMethodSelectedInternal(value: LatencyPr
     viewModelScope.launch {
         container.settingsRepository.updateLatencyProbeMethod(value)
         scheduleActiveProfileLatencyRefresh()
+    }
+}
+
+internal fun HomeViewModel.onSmartStartProtocolSelectionTimeoutChangedInternal(value: Int) {
+    viewModelScope.launch {
+        container.settingsRepository.updateSmartStartProtocolSelectionTimeoutSeconds(value)
+    }
+}
+
+internal fun HomeViewModel.onSmartStartRefreshSelectionTimeoutChangedInternal(value: Int) {
+    viewModelScope.launch {
+        container.settingsRepository.updateSmartStartRefreshSelectionTimeoutSeconds(value)
+    }
+}
+
+internal fun HomeViewModel.onSmartStartTransportPrioritySelectedInternal(value: SmartStartTransportPriority) {
+    viewModelScope.launch {
+        container.settingsRepository.updateSmartStartTransportPriority(value)
+    }
+}
+
+internal fun HomeViewModel.clearSmartStartDataInternal() {
+    viewModelScope.launch {
+        cancelAutoConnect(clearUiOnly = true)
+        cancelSmartProfileMetricsRefreshInternal(restoreConnection = true)
+        clearProtocolLatencyState()
+        recommendedProtocolMutable.value = null
+        protocolMetricsRefreshingProfileIdsMutable.value = emptySet()
+        protocolMetricsRefreshingOptionIdByProfileIdMutable.value = emptyMap()
+        container.settingsRepository.clearSmartStartData()
+        emitSuccess(getApplication<Application>().getString(R.string.smart_start_data_cleared))
     }
 }
 

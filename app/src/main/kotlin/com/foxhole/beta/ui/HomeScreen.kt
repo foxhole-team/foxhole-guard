@@ -51,6 +51,7 @@ import androidx.compose.material.icons.outlined.ContentPaste
 import androidx.compose.material.icons.outlined.DeleteSweep
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.ExpandMore
+import androidx.compose.material.icons.outlined.FileUpload
 import androidx.compose.material.icons.outlined.PowerSettingsNew
 import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.QrCodeScanner
@@ -454,7 +455,7 @@ fun HomeScreen(
                                     fontWeight = FontWeight.SemiBold,
                                 )
                                 Text(
-                                    text = stringResource(R.string.manage_profiles_summary),
+                                    text = stringResource(R.string.no_profiles_import_hint),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
@@ -567,7 +568,7 @@ fun HomeScreen(
                                 border = BorderStroke(1.dp, dashboardSecondaryActionBorderColor),
                             ) {
                                 Icon(
-                                    Icons.Outlined.ContentPaste,
+                                    Icons.Outlined.FileUpload,
                                     contentDescription = null,
                                     modifier = Modifier.size(dashboardSecondaryActionIconSize),
                                 )

@@ -5,6 +5,8 @@ import com.foxhole.beta.core.model.Profile
 import com.foxhole.beta.core.model.ProfileProtocolOption
 import com.foxhole.beta.core.model.ProtocolHint
 import com.foxhole.beta.core.model.SmartProfilePreference
+import com.foxhole.beta.core.model.SmartStartTransportPriority
+import com.foxhole.beta.core.model.isUdpTransport
 import com.foxhole.beta.core.network.NetworkFingerprint
 import com.foxhole.beta.core.smart.AdaptiveProtocolCandidateScore
 import com.foxhole.beta.core.smart.AdaptiveProtocolRanker
@@ -71,6 +73,7 @@ object MultiProtocolProfileSupport {
         allowInsecureTlsGlobally: Boolean = false,
         now: Long = System.currentTimeMillis(),
         excludedOptionIds: Set<String> = emptySet(),
+        transportPriority: SmartStartTransportPriority = SmartStartTransportPriority.ALL,
         controlledExploration: Boolean = false,
         randomDouble: () -> Double = { Random.nextDouble() },
         randomIndex: (Int) -> Int = { bound -> Random.nextInt(bound) },
@@ -91,8 +94,8 @@ object MultiProtocolProfileSupport {
                 networkFingerprintKey = networkFingerprint,
                 networkContext = networkContext,
                 now = now,
-            )
-        return if (controlledExploration) {
+            ).withTransportPriority(transportPriority) { score -> score.candidate.protocolHint }
+        val attempts = if (controlledExploration) {
             SmartStartController.rankedAttempts(
                 rankedCandidates = ranked,
                 randomDouble = randomDouble,
@@ -101,6 +104,7 @@ object MultiProtocolProfileSupport {
         } else {
             ranked
         }
+        return attempts.withTransportPriority(transportPriority) { score -> score.candidate.protocolHint }
     }
 
     fun smartStartEligibleProbeCandidates(
@@ -109,6 +113,7 @@ object MultiProtocolProfileSupport {
         networkFingerprint: String? = null,
         allowInsecureTlsGlobally: Boolean = false,
         excludedOptionIds: Set<String> = emptySet(),
+        transportPriority: SmartStartTransportPriority = SmartStartTransportPriority.ALL,
         now: Long = System.currentTimeMillis(),
     ): List<AutoConnectProbeCandidate> {
         val insecureTlsConsentGranted = profile.requiresInsecureTls || allowInsecureTlsGlobally
@@ -125,13 +130,14 @@ object MultiProtocolProfileSupport {
             excludedOptionIds = excludedOptionIds,
             subscriptionExpiresAt = profile.subscriptionExpiresAt,
             now = now,
-        )
+        ).withTransportPriority(transportPriority) { candidate -> candidate.protocolHint }
     }
 
     fun smartStartFullScanCandidates(
         profile: Profile,
         allowInsecureTlsGlobally: Boolean = false,
         excludedOptionIds: Set<String> = emptySet(),
+        transportPriority: SmartStartTransportPriority = SmartStartTransportPriority.ALL,
         now: Long = System.currentTimeMillis(),
     ): List<AutoConnectProbeCandidate> {
         val insecureTlsConsentGranted = profile.requiresInsecureTls || allowInsecureTlsGlobally
@@ -146,7 +152,7 @@ object MultiProtocolProfileSupport {
             excludedOptionIds = excludedOptionIds,
             subscriptionExpiresAt = profile.subscriptionExpiresAt,
             now = now,
-        )
+        ).withTransportPriority(transportPriority) { candidate -> candidate.protocolHint }
     }
 
     fun probeCandidates(
@@ -173,6 +179,32 @@ object MultiProtocolProfileSupport {
                 compareBy<AutoConnectProbeResult> { it.rankingLatencyMs }
                     .thenBy { it.candidate.optionId },
             )
+}
+
+internal fun <T> List<T>.withTransportPriority(
+    priority: SmartStartTransportPriority,
+    protocolHint: (T) -> ProtocolHint,
+): List<T> =
+    when (priority) {
+        SmartStartTransportPriority.ALL -> this
+        SmartStartTransportPriority.UDP -> sortedByTransportMatch { item -> protocolHint(item).isUdpTransport() }
+        SmartStartTransportPriority.TCP -> sortedByTransportMatch { item -> !protocolHint(item).isUdpTransport() }
+    }
+
+private fun <T> List<T>.sortedByTransportMatch(matches: (T) -> Boolean): List<T> {
+    if (size < 2) {
+        return this
+    }
+    val matching = mutableListOf<T>()
+    val fallback = mutableListOf<T>()
+    forEach { item ->
+        if (matches(item)) {
+            matching += item
+        } else {
+            fallback += item
+        }
+    }
+    return matching + fallback
 }
 
 private fun autoConnectOptions(profile: Profile): List<ProfileProtocolOption> {

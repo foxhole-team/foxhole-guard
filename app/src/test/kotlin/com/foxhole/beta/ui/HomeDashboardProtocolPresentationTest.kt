@@ -161,7 +161,7 @@ class HomeDashboardProtocolPresentationTest {
     }
 
     @Test
-    fun `dashboard exposes Smart start action for one supported protocol`() {
+    fun `dashboard hides Smart start action for one supported protocol`() {
         val activeProfile =
             profile(
                 selectedProtocolOptionId = "vless",
@@ -169,17 +169,32 @@ class HomeDashboardProtocolPresentationTest {
                 protocolOptions = emptyList(),
             )
 
-        assertTrue(shouldShowAutoConnectAction(activeProfile))
+        assertFalse(shouldShowAutoConnectAction(activeProfile))
     }
 
     @Test
-    fun `dashboard exposes Smart start action for one explicit protocol option`() {
+    fun `dashboard hides Smart start action for one explicit protocol option`() {
         val activeProfile =
             profile(
                 selectedProtocolOptionId = "vless",
                 protocolOptions =
                     listOf(
                         option("vless", ProtocolHint.VLESS),
+                    ),
+            )
+
+        assertFalse(shouldShowAutoConnectAction(activeProfile))
+    }
+
+    @Test
+    fun `dashboard exposes Smart start action for smart profile`() {
+        val activeProfile =
+            profile(
+                selectedProtocolOptionId = "vless",
+                protocolOptions =
+                    listOf(
+                        option("vless", ProtocolHint.VLESS),
+                        option("wireguard", ProtocolHint.WIREGUARD),
                     ),
             )
 

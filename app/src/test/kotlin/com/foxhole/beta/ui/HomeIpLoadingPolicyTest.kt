@@ -79,6 +79,7 @@ class HomeIpLoadingPolicyTest {
                 connectionState = ConnectionState.CONNECTING,
                 autoConnectRunning = false,
                 deviceInternetAvailable = true,
+                appLoaded = false,
             ),
         )
     }
@@ -92,6 +93,7 @@ class HomeIpLoadingPolicyTest {
                 connectionState = ConnectionState.IDLE,
                 autoConnectRunning = true,
                 deviceInternetAvailable = true,
+                appLoaded = false,
             ),
         )
     }
@@ -105,6 +107,7 @@ class HomeIpLoadingPolicyTest {
                 connectionState = ConnectionState.CONNECTING,
                 autoConnectRunning = true,
                 deviceInternetAvailable = false,
+                appLoaded = false,
             ),
         )
     }
@@ -126,6 +129,35 @@ class HomeIpLoadingPolicyTest {
                 connectionState = ConnectionState.CONNECTING,
                 autoConnectRunning = true,
                 deviceInternetAvailable = true,
+                appLoaded = false,
+            ),
+        )
+    }
+
+    @Test
+    fun `shows pending network loading while app is still loading and ip is empty`() {
+        assertTrue(
+            shouldShowPendingNetworkLoading(
+                visibleIpInfo = null,
+                explicitLoading = false,
+                connectionState = ConnectionState.IDLE,
+                autoConnectRunning = false,
+                deviceInternetAvailable = true,
+                appLoaded = false,
+            ),
+        )
+    }
+
+    @Test
+    fun `does not keep pending network loading after app loaded without ip`() {
+        assertFalse(
+            shouldShowPendingNetworkLoading(
+                visibleIpInfo = null,
+                explicitLoading = false,
+                connectionState = ConnectionState.IDLE,
+                autoConnectRunning = false,
+                deviceInternetAvailable = true,
+                appLoaded = true,
             ),
         )
     }
@@ -147,6 +179,7 @@ class HomeIpLoadingPolicyTest {
                 connectionState = ConnectionState.CONNECTED,
                 autoConnectRunning = false,
                 deviceInternetAvailable = true,
+                appLoaded = true,
             ),
         )
     }

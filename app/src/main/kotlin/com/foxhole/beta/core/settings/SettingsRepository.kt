@@ -23,9 +23,12 @@ import com.foxhole.beta.core.model.ProtocolHint
 import com.foxhole.beta.core.model.ProxyInboundSettings
 import com.foxhole.beta.core.model.Settings
 import com.foxhole.beta.core.model.SETTINGS_SCHEMA_VERSION
+import com.foxhole.beta.core.model.SMART_START_PROTOCOL_TIMEOUT_MIN_SECONDS
+import com.foxhole.beta.core.model.SMART_START_REFRESH_TIMEOUT_MIN_SECONDS
 import com.foxhole.beta.core.model.SmartProfileNetworkMemory
 import com.foxhole.beta.core.model.SmartProfilePreference
 import com.foxhole.beta.core.model.SmartProfileProtocolMemory
+import com.foxhole.beta.core.model.SmartStartTransportPriority
 import com.foxhole.beta.core.model.SubscriptionRefreshInterval
 import com.foxhole.beta.core.model.ThemeMode
 import com.foxhole.beta.core.model.TrafficMode
@@ -182,6 +185,37 @@ class SettingsRepository(
     suspend fun updateLatencyProbeMethod(value: LatencyProbeMethod) =
         update { it.copy(connection = it.connection.copy(latencyProbeMethod = value)) }
 
+    suspend fun updateSmartStartProtocolSelectionTimeoutSeconds(value: Int) =
+        update {
+            it.copy(
+                connection =
+                    it.connection.copy(
+                        smartStartProtocolSelectionTimeoutSeconds =
+                            normalizeSmartStartTimeoutSeconds(
+                                value = value,
+                                minSeconds = SMART_START_PROTOCOL_TIMEOUT_MIN_SECONDS,
+                            ),
+                    ),
+            )
+        }
+
+    suspend fun updateSmartStartRefreshSelectionTimeoutSeconds(value: Int) =
+        update {
+            it.copy(
+                connection =
+                    it.connection.copy(
+                        smartStartRefreshSelectionTimeoutSeconds =
+                            normalizeSmartStartTimeoutSeconds(
+                                value = value,
+                                minSeconds = SMART_START_REFRESH_TIMEOUT_MIN_SECONDS,
+                            ),
+                    ),
+            )
+        }
+
+    suspend fun updateSmartStartTransportPriority(value: SmartStartTransportPriority) =
+        update { it.copy(connection = it.connection.copy(smartStartTransportPriority = value)) }
+
     suspend fun updateLastActiveProfile(value: CachedActiveProfile?) =
         update { current ->
             if (current.lastActiveProfile == value) {
@@ -206,8 +240,16 @@ class SettingsRepository(
             existing.copy(
                 excludedProtocolOptionIds = normalizedIds,
             ),
-        )
-    }
+            )
+        }
+
+    suspend fun clearSmartStartData() =
+        update { current ->
+            current.copy(
+                smartProfilePreferences =
+                    current.smartProfilePreferences.map(SmartProfilePreference::clearedSmartStartRuntimeData),
+            )
+        }
 
     suspend fun recordSmartProfileProbeResult(
         profileId: Long,
@@ -811,6 +853,16 @@ class SettingsRepository(
                 connection =
                     connection.copy(
                         ipInfoEndpoint = normalizeIpInfoEndpoint(connection.ipInfoEndpoint),
+                        smartStartProtocolSelectionTimeoutSeconds =
+                            normalizeSmartStartTimeoutSeconds(
+                                value = connection.smartStartProtocolSelectionTimeoutSeconds,
+                                minSeconds = SMART_START_PROTOCOL_TIMEOUT_MIN_SECONDS,
+                            ),
+                        smartStartRefreshSelectionTimeoutSeconds =
+                            normalizeSmartStartTimeoutSeconds(
+                                value = connection.smartStartRefreshSelectionTimeoutSeconds,
+                                minSeconds = SMART_START_REFRESH_TIMEOUT_MIN_SECONDS,
+                            ),
                     ),
                 traffic =
                     if (connection.stealthModeEnabled) {

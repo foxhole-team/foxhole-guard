@@ -125,6 +125,7 @@ internal fun shouldShowPendingNetworkLoading(
     connectionState: ConnectionState,
     autoConnectRunning: Boolean,
     deviceInternetAvailable: Boolean?,
+    appLoaded: Boolean,
 ): Boolean {
     if (visibleIpInfo != null) {
         return false
@@ -135,7 +136,10 @@ internal fun shouldShowPendingNetworkLoading(
     if (deviceInternetAvailable == false) {
         return false
     }
-    return false
+    if (autoConnectRunning || connectionState in setOf(ConnectionState.CONNECTING, ConnectionState.RECONNECTING)) {
+        return false
+    }
+    return !appLoaded
 }
 
 internal fun shouldShowDashboardNetworkLoading(
@@ -144,6 +148,7 @@ internal fun shouldShowDashboardNetworkLoading(
     connectionState: ConnectionState,
     autoConnectRunning: Boolean,
     deviceInternetAvailable: Boolean?,
+    appLoaded: Boolean,
 ): Boolean =
     shouldShowIpInfoLoading(
         currentIpInfo = visibleIpInfo,
@@ -156,6 +161,7 @@ internal fun shouldShowDashboardNetworkLoading(
             connectionState = connectionState,
             autoConnectRunning = autoConnectRunning,
             deviceInternetAvailable = deviceInternetAvailable,
+            appLoaded = appLoaded,
         )
 
 internal fun isProfileReconnectRequired(
@@ -196,11 +202,7 @@ internal fun shouldShowSmartStartRefreshReminder(
 }
 
 internal fun shouldShowAutoConnectAction(activeProfile: Profile?): Boolean =
-    activeProfile
-        ?.let { profile ->
-            MultiProtocolProfileSupport.supportedOptions(profile).isNotEmpty() ||
-                profile.protocolHint !in setOf(ProtocolHint.UNKNOWN, ProtocolHint.SING_BOX)
-        } == true
+    activeProfile?.let(MultiProtocolProfileSupport::hasMultipleSupportedOptions) == true
 
 internal fun shouldAwaitAutoConnectValidationGrace(
     connectionState: ConnectionState,
@@ -322,6 +324,7 @@ internal fun resolveHomeDashboardNetworkModel(
                 connectionState = state.connection.state,
                 autoConnectRunning = state.autoConnect.running,
                 deviceInternetAvailable = deviceInternetAvailable,
+                appLoaded = state.profilesLoaded,
             ) || !connectionDetailsReady,
         showConnectionStatus = showConnectionStatus,
         titleRes =

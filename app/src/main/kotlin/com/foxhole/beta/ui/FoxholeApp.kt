@@ -86,6 +86,7 @@ private object AppRoute {
     const val ROUTING_APPS = "settings/routing/apps"
     const val ROUTING_APPS_PICKER = "settings/routing/apps/picker"
     const val ROUTING_SITES = "settings/routing/sites"
+    const val SMART_START = "settings/smart-start"
     const val APPLICATION = "settings/application"
     const val HELP = "settings/help"
     const val ABOUT = "settings/about"
@@ -335,6 +336,7 @@ fun FoxholeApp(
                         onOpenRouting = { navController.navigate(AppRoute.ROUTING) },
                         onOpenRoutingApps = { navController.navigate(AppRoute.ROUTING_APPS) },
                         onOpenRoutingSites = { navController.navigate(AppRoute.ROUTING_SITES) },
+                        onOpenSmartStart = { navController.navigate(AppRoute.SMART_START) },
                         onOpenApplication = { navController.navigate(AppRoute.APPLICATION) },
                         onOpenHelp = { navController.navigate(AppRoute.HELP) },
                         onOpenAbout = { navController.navigate(AppRoute.ABOUT) },
@@ -342,6 +344,18 @@ fun FoxholeApp(
                         onOpenDiagnostics = { navController.navigate(AppRoute.DIAGNOSTICS) },
                         onShowExpertSettingsChanged = viewModel::onShowExpertSettingsChanged,
                         onUnlockExpertSettings = viewModel::unlockExpertSettings,
+                    )
+                }
+                composable(AppRoute.SMART_START) {
+                    val state by viewModel.settingsRouteState.collectAsStateWithLifecycle()
+                    SmartStartSettingsScreen(
+                        state = state,
+                        snackbarHostState = snackbarHostState,
+                        onNavigateUp = navController::navigateUp,
+                        onSmartStartProtocolSelectionTimeoutChanged = viewModel::onSmartStartProtocolSelectionTimeoutChanged,
+                        onSmartStartRefreshSelectionTimeoutChanged = viewModel::onSmartStartRefreshSelectionTimeoutChanged,
+                        onSmartStartTransportPrioritySelected = viewModel::onSmartStartTransportPrioritySelected,
+                        onClearSmartStartData = viewModel::clearSmartStartData,
                     )
                 }
                 composable(AppRoute.TRAFFIC) {
@@ -658,8 +672,18 @@ private fun RowScope.FoxholeBottomBarItem(
             tween(
                 durationMillis = FoxholeMotionTokens.NavigationIndicatorDurationMs,
                 easing = FoxholeMotionTokens.NavigationIndicatorEasing,
-            ),
+        ),
         label = "bottom_bar_alpha_${section.name.lowercase()}",
+    )
+    val iconBaseColor = foxholeSystemAwareAccentColor(fallback = contentColor, darkFallback = FoxholeInfoAccent)
+    val iconColor by animateColorAsState(
+        targetValue = if (selected) iconBaseColor else iconBaseColor.copy(alpha = 0.72f),
+        animationSpec =
+            tween(
+                durationMillis = FoxholeMotionTokens.NavigationIndicatorDurationMs,
+                easing = FoxholeMotionTokens.NavigationIndicatorEasing,
+            ),
+        label = "bottom_bar_icon_color_${section.name.lowercase()}",
     )
     val iconScale by animateFloatAsState(
         targetValue = if (selected) 1f else 0.92f,
@@ -693,7 +717,7 @@ private fun RowScope.FoxholeBottomBarItem(
             Icon(
                 imageVector = section.icon,
                 contentDescription = null,
-                tint = contentColor,
+                tint = iconColor,
                 modifier =
                     Modifier.graphicsLayer(
                         scaleX = iconScale,
