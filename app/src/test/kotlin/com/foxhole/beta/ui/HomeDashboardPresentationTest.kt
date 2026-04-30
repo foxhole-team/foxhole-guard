@@ -71,6 +71,42 @@ class HomeDashboardPresentationTest {
     }
 
     @Test
+    fun `protocol model shows latency loading during reconnect before metrics refresh starts`() {
+        val model =
+            resolveHomeDashboardProtocolModel(
+                HomeRouteUiState(
+                    activeProfile = smartProfile(),
+                    connection = ConnectionSnapshot(state = ConnectionState.IDLE),
+                    reconnectInProgress = true,
+                ),
+            )
+
+        assertTrue(model.connectionMetricsLoading)
+    }
+
+    @Test
+    fun `protocol model shows newly selected option before reconnect is applied`() {
+        val model =
+            resolveHomeDashboardProtocolModel(
+                HomeRouteUiState(
+                    activeProfile = smartProfile().copy(selectedProtocolOptionId = "trojan"),
+                    connection =
+                        ConnectionSnapshot(
+                            state = ConnectionState.CONNECTED,
+                            profileId = 1L,
+                            protocolHint = ProtocolHint.VLESS,
+                            protocolOptionId = "vless",
+                        ),
+                    reconnectRequired = true,
+                ),
+            )
+
+        assertEquals("trojan", model.presentation.selectedProtocolOptionId)
+        assertEquals(ProtocolHint.TROJAN, model.presentation.protocolHint)
+        assertTrue(model.presentation.protocolOptions.first { option -> option.id == "trojan" }.isSelected)
+    }
+
+    @Test
     fun `network model keeps current connected surface when metrics are missing without active refresh`() {
         val ipInfo =
             IpInfo(
@@ -123,19 +159,28 @@ class HomeDashboardPresentationTest {
     }
 
     @Test
-    fun `network model keeps vpn server status surface during reconnect loading`() {
+    fun `network model shows loading during reconnect even with previous ip info`() {
+        val ipInfo =
+            IpInfo(
+                ip = "203.0.113.10",
+                countryCode = "NL",
+                countryName = "Netherlands",
+                city = "Amsterdam",
+                isp = "Example",
+                fetchedAt = 1_000L,
+            )
         val model =
             resolveHomeDashboardNetworkModel(
                 state =
                     HomeRouteUiState(
                         connection = ConnectionSnapshot(state = ConnectionState.IDLE),
                         reconnectInProgress = true,
-                        dashboardConnectionMetricsLoading = true,
                     ),
-                visibleIpInfo = null,
+                visibleIpInfo = ipInfo,
                 deviceInternetAvailable = true,
             )
 
+        assertEquals(ipInfo, model.visibleIpInfo)
         assertEquals(R.string.home_network_connection_info_title, model.titleRes)
         assertTrue(model.showConnectionStatus)
         assertTrue(model.showLoading)

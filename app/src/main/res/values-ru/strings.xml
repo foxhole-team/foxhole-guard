@@ -190,8 +190,6 @@
     <string name="smart_start_first_analysis_title">Анализ протоколов VPN</string>
     <string name="smart_start_first_analysis_body">Первый анализ доступных протоколов VPN будет выполнен по всем протоколам VPN в конфигурации. После определения трех лучших протоколов VPN подключение будет выполняться только по ним. Периодически обновляйте все доступные протоколы VPN в настройках Смарт старт для улучшения качества соединения.</string>
     <string name="smart_start_first_analysis_continue">Продолжить</string>
-    <string name="smart_start_reconnect_confirm_title">Переподключить протокол VPN?</string>
-    <string name="smart_start_reconnect_confirm_body">Foxhole переподключит VPN соединение с лучшим протоколом.</string>
     <string name="auto_connect_requires_supported_profile">Требуется профиль с поддерживаемым протоколом.</string>
     <string name="auto_connect_probe_timeout">Тест протокола превысил время ожидания.</string>
     <string name="auto_connect_ip_unavailable">Подключение установлено, но IP-проверка не завершилась вовремя.</string>

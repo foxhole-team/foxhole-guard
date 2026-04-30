@@ -279,7 +279,6 @@ class SmartStartProtocolPresentationTest {
             stringValue(enStrings, "smart_start_first_analysis_body"),
         )
         assertEquals("Continue", stringValue(enStrings, "smart_start_first_analysis_continue"))
-        assertEquals("Reconnect VPN protocol?", stringValue(enStrings, "smart_start_reconnect_confirm_title"))
         assertEquals("Turn off LAN Proxy?", stringValue(enStrings, "lan_proxy_disable_confirm_title"))
         assertEquals("Quick start", stringValue(enStrings, "help_quick_start_title"))
         assertEquals("Connection modes", stringValue(enStrings, "help_connection_modes_title"))
@@ -346,7 +345,6 @@ class SmartStartProtocolPresentationTest {
             stringValue(ruStrings, "smart_start_first_analysis_body"),
         )
         assertEquals("Продолжить", stringValue(ruStrings, "smart_start_first_analysis_continue"))
-        assertEquals("Переподключить протокол VPN?", stringValue(ruStrings, "smart_start_reconnect_confirm_title"))
         assertEquals("Выключить LAN Proxy?", stringValue(ruStrings, "lan_proxy_disable_confirm_title"))
         assertEquals("Быстрый старт", stringValue(ruStrings, "help_quick_start_title"))
         assertEquals("Режимы подключения", stringValue(ruStrings, "help_connection_modes_title"))

@@ -277,6 +277,7 @@ internal fun resolveHomeDashboardProtocolModel(state: HomeRouteUiState): HomeDas
         selectedServerPingOptionId != null &&
             selectedServerPingMs == null &&
             selectedServerPingOptionId in state.protocolServerPingUnavailableOptionIds
+    val connectionMetricsLoading = state.dashboardConnectionMetricsLoading || state.reconnectInProgress
     return HomeDashboardProtocolModel(
         presentation = protocolPresentation,
         latencyPresentation = latencyPresentation,
@@ -300,7 +301,7 @@ internal fun resolveHomeDashboardProtocolModel(state: HomeRouteUiState): HomeDas
                 selectedServerPingUnavailable = selectedServerPingUnavailable,
                 selectedServerPingUnsupported = protocolPresentation.protocolHint.isUdpTransport(),
             ),
-        connectionMetricsLoading = state.dashboardConnectionMetricsLoading,
+        connectionMetricsLoading = connectionMetricsLoading,
     )
 }
 
@@ -331,14 +332,16 @@ internal fun resolveHomeDashboardNetworkModel(
     return HomeDashboardNetworkModel(
         visibleIpInfo = visibleIpInfo,
         showLoading =
-            shouldShowDashboardNetworkLoading(
-                visibleIpInfo = visibleIpInfo,
-                explicitLoading = state.ipInfoLoading,
-                connectionState = state.connection.state,
-                autoConnectRunning = state.autoConnect.running,
-                deviceInternetAvailable = deviceInternetAvailable,
-                appLoaded = state.profilesLoaded,
-            ) || state.dashboardConnectionMetricsLoading,
+            state.reconnectInProgress ||
+                shouldShowDashboardNetworkLoading(
+                    visibleIpInfo = visibleIpInfo,
+                    explicitLoading = state.ipInfoLoading,
+                    connectionState = state.connection.state,
+                    autoConnectRunning = state.autoConnect.running,
+                    deviceInternetAvailable = deviceInternetAvailable,
+                    appLoaded = state.profilesLoaded,
+                ) ||
+                state.dashboardConnectionMetricsLoading,
         showConnectionStatus = showConnectionStatus,
         titleRes =
             if (showConnectionStatus) {
@@ -429,6 +432,13 @@ internal fun resolveDashboardSelectedOptionId(
     activeProfile: Profile?,
     connection: ConnectionSnapshot,
 ): String? {
+    val selectedProfileOptionId =
+        activeProfile
+            ?.selectedProtocolOptionId
+            ?.takeIf { optionId -> activeProfile.protocolOptions.any { option -> option.id == optionId } }
+    if (selectedProfileOptionId != null) {
+        return selectedProfileOptionId
+    }
     val connectedOptionId =
         connection.protocolOptionId
             ?.takeIf { connection.profileId == activeProfile?.id }

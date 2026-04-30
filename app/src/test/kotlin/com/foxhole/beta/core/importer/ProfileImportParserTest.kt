@@ -544,12 +544,35 @@ class ProfileImportParserTest {
     }
 
     @Test
-    fun `marks only insecure smart config protocol option`() {
+    fun `marks every insecure smart config protocol option that supports insecure tls`() {
+        val vmessJson =
+            """
+            {
+              "v": "2",
+              "ps": "Foxhole vpn direct",
+              "add": "vmess-direct.example.com",
+              "port": "8445",
+              "id": "11111111-1111-1111-1111-111111111111",
+              "aid": "0",
+              "net": "tcp",
+              "tls": "tls",
+              "allowInsecure": true
+            }
+            """.trimIndent()
+        val vmessUri =
+            "vmess://" +
+                java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(vmessJson.toByteArray())
         val parsed =
             parser.parseSubscriptionProfiles(
                 """
                 # === vless / direct ===
-                vless://11111111-1111-1111-1111-111111111111@direct.example.com:8443?encryption=none&security=none&type=tcp#Foxhole%20vpn%20direct
+                vless://11111111-1111-1111-1111-111111111111@direct.example.com:8443?encryption=none&security=tls&type=tcp&allowInsecure=1#Foxhole%20vpn%20direct
+
+                # === trojan / direct ===
+                trojan://secret-direct@trojan-direct.example.com:8444?security=tls&type=tcp&allowInsecure=1#Foxhole%20vpn%20direct
+
+                # === vmess / direct ===
+                $vmessUri
 
                 # === hysteria2 / direct ===
                 hysteria2://secret-direct@hy2-direct.example.com:8447?insecure=1#Foxhole%20vpn%20direct
@@ -560,13 +583,13 @@ class ProfileImportParserTest {
 
         val directProfile = parsed.profiles.single()
 
-        assertEquals(2, directProfile.protocolOptions.size)
+        assertEquals(4, directProfile.protocolOptions.size)
         assertEquals(
-            listOf(ProtocolHint.VLESS, ProtocolHint.HYSTERIA2),
+            listOf(ProtocolHint.VLESS, ProtocolHint.TROJAN, ProtocolHint.VMESS, ProtocolHint.HYSTERIA2),
             directProfile.protocolOptions.map { it.protocolHint },
         )
         assertEquals(
-            listOf(false, true),
+            listOf(true, true, true, true),
             directProfile.protocolOptions.map { option -> option.normalizedConfigJson.requiresInsecureTls(json) },
         )
     }

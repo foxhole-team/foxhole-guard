@@ -8,6 +8,7 @@ import com.foxhole.beta.core.model.ProtocolHint
 import com.foxhole.beta.core.model.StoredProfileProtocolOption
 import com.foxhole.beta.core.model.StoredProfileSecret
 import kotlinx.serialization.json.Json
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -175,6 +176,35 @@ class ProfileInsecureTlsSupportTest {
         assertFalse(filtered.requiresInsecureTls(json))
         assertTrue(filtered.protocolOptions.single().id == "vless")
         assertTrue(filtered.selectedProtocolOptionId == "vless")
+    }
+
+    @Test
+    fun `warning lists every smart profile protocol using insecure tls`() {
+        val parsed =
+            ParsedImport(
+                sourceType = ProfileSourceType.RAW_SINGBOX_JSON,
+                protocolHint = ProtocolHint.VLESS,
+                displayName = "Smart",
+                normalizedConfigJson = secureConfig(ProtocolHint.VLESS),
+                protocolOptions =
+                    listOf(
+                        option("vless", ProtocolHint.VLESS, insecureConfig(ProtocolHint.VLESS)),
+                        option("trojan", ProtocolHint.TROJAN, insecureConfig(ProtocolHint.TROJAN)),
+                        option("vmess", ProtocolHint.VMESS, insecureConfig(ProtocolHint.VMESS)),
+                        option("hysteria2", ProtocolHint.HYSTERIA2, insecureConfig(ProtocolHint.HYSTERIA2)),
+                        option("shadowsocks", ProtocolHint.SHADOWSOCKS, insecureConfig(ProtocolHint.SHADOWSOCKS)),
+                        option("outline", ProtocolHint.OUTLINE, insecureConfig(ProtocolHint.OUTLINE)),
+                        option("wireguard", ProtocolHint.WIREGUARD, insecureConfig(ProtocolHint.WIREGUARD)),
+                    ),
+                selectedProtocolOptionId = "vless",
+            )
+
+        val warning = requireNotNull(parsed.insecureTlsImportWarning(json))
+
+        assertEquals(
+            listOf("VLESS", "TROJAN", "VMESS", "HYSTERIA2", "SHADOWSOCKS", "OUTLINE", "WIREGUARD"),
+            warning.issues.map(InsecureTlsImportIssue::protocolLabel),
+        )
     }
 
     @Test

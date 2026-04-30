@@ -188,8 +188,6 @@
     <string name="smart_start_first_analysis_title">VPN protocol analysis</string>
     <string name="smart_start_first_analysis_body">The first VPN protocol analysis will check every available VPN protocol in this configuration. After Foxhole finds the three best VPN protocols, future connections will use only those. Periodically refresh all available VPN protocols in Smart start settings to improve connection quality.</string>
     <string name="smart_start_first_analysis_continue">Continue</string>
-    <string name="smart_start_reconnect_confirm_title">Reconnect VPN protocol?</string>
-    <string name="smart_start_reconnect_confirm_body">Foxhole will reconnect the VPN connection with the best protocol.</string>
     <string name="auto_connect_requires_supported_profile">A profile with a supported protocol is required.</string>
     <string name="auto_connect_probe_timeout">Connection timed out during protocol test.</string>
     <string name="auto_connect_ip_unavailable">Connection was established, but IP validation did not finish in time.</string>

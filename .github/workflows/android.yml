@@ -217,12 +217,7 @@ jobs:
           emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           script: |
             bash scripts/run-connected-android-tests.sh
-            if [[ "${{ github.event_name }}" == "pull_request" ]]; then
-              ./gradlew --no-daemon --console=plain --stacktrace :macrobenchmark:connectedCheck \
-                -Pandroid.testInstrumentationRunnerArguments.class=com.foxhole.beta.macrobenchmark.HomeMacrobenchmark#startup
-            elif [[ "${{ github.event_name }}" == "schedule" || "${{ github.ref }}" == "refs/heads/dev" ]]; then
-              ./gradlew --no-daemon --console=plain --stacktrace :macrobenchmark:connectedCheck
-            fi
+            bash scripts/run-ci-macrobenchmark.sh "${{ github.event_name }}" "${{ github.ref }}"
 
       - name: validate connected test xml
         if: always()
