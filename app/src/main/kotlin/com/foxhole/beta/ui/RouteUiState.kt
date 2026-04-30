@@ -32,6 +32,7 @@ data class AutoConnectProbeOptionUiState(
 data class AutoConnectUiState(
     val running: Boolean = false,
     val currentOptionId: String? = null,
+    val currentProtocolHint: ProtocolHint? = null,
     val currentDisplayName: String? = null,
     val options: List<AutoConnectProbeOptionUiState> = emptyList(),
 )
@@ -57,6 +58,7 @@ data class HomeRouteUiState(
     val protocolServerPingUnavailableOptionIds: Set<String> = emptySet(),
     val protocolMetricsUpdatedAtByOptionId: Map<String, Long> = emptyMap(),
     val protocolMetricsRefreshing: Boolean = false,
+    val protocolMetricsRefreshingOptionId: String? = null,
     val recommendedProtocolOptionId: String? = null,
     val recommendedProtocolOptionIds: Set<String> = emptySet(),
     val favoriteProtocolOptionId: String? = null,
@@ -122,6 +124,7 @@ internal fun HomeUiState.toHomeRouteUiState(
     protocolServerPingUnavailableOptionIds: Set<String> = emptySet(),
     protocolMetricsUpdatedAtByOptionId: Map<String, Long> = emptyMap(),
     protocolMetricsRefreshing: Boolean = false,
+    protocolMetricsRefreshingOptionId: String? = null,
     recommendedProtocolOptionId: String? = null,
     recommendedProtocolOptionIds: Set<String> = emptySet(),
     favoriteProtocolOptionId: String? = null,
@@ -155,6 +158,7 @@ internal fun HomeUiState.toHomeRouteUiState(
         protocolServerPingUnavailableOptionIds = protocolServerPingUnavailableOptionIds,
         protocolMetricsUpdatedAtByOptionId = protocolMetricsUpdatedAtByOptionId,
         protocolMetricsRefreshing = protocolMetricsRefreshing,
+        protocolMetricsRefreshingOptionId = protocolMetricsRefreshingOptionId,
         recommendedProtocolOptionId = recommendedProtocolOptionId,
         recommendedProtocolOptionIds = recommendedProtocolOptionIds,
         favoriteProtocolOptionId = favoriteProtocolOptionId,

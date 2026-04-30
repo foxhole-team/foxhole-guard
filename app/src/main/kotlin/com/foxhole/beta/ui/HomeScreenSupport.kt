@@ -970,10 +970,7 @@ internal fun HomeAutoConnectStatusLine(
     modifier: Modifier = Modifier,
     textStyle: TextStyle = MaterialTheme.typography.titleMedium,
 ) {
-    val option =
-        state.options.firstOrNull { it.optionId == state.currentOptionId }
-            ?: state.options.firstOrNull()
-    val protocolLabel = option?.let { protocolHintChipLabel(it.protocolHint) } ?: stringResource(R.string.auto_connect)
+    val protocolLabel = autoConnectAnalysisProtocolLabel(state) ?: stringResource(R.string.auto_connect)
     val tone = FoxholeInfoAccent
     Row(
         modifier =
@@ -994,6 +991,15 @@ internal fun HomeAutoConnectStatusLine(
             modifier = Modifier.weight(1f, fill = false),
         )
     }
+}
+
+internal fun autoConnectAnalysisProtocolLabel(state: AutoConnectUiState): String? {
+    val option =
+        state.options.firstOrNull { it.optionId == state.currentOptionId }
+            ?: state.options.firstOrNull()
+    return state.currentProtocolHint
+        ?.let(::protocolHintChipLabel)
+        ?: option?.let { protocolHintChipLabel(it.protocolHint) }
 }
 
 @Composable

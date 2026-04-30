@@ -153,5 +153,11 @@ internal data class ProtocolMetricsUiState(
     val updatedAt: Map<ProfileOptionLatencyKey, Long> = emptyMap(),
     val downOptionIds: Set<ProfileOptionLatencyKey> = emptySet(),
     val refreshingProfileIds: Set<Long> = emptySet(),
+    val refreshingOptionIdByProfileId: Map<Long, String> = emptyMap(),
     val recommendation: ProtocolRecommendationState? = null,
+)
+
+internal data class ProtocolMetricsRefreshingUiState(
+    val profileIds: Set<Long> = emptySet(),
+    val optionIdByProfileId: Map<Long, String> = emptyMap(),
 )

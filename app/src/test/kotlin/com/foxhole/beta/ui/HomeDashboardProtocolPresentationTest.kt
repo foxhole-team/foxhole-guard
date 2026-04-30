@@ -417,19 +417,70 @@ class HomeDashboardProtocolPresentationTest {
         val resolved =
             buildProfilesRouteUiState(
                 state = state,
-                autoConnect =
-                    AutoConnectUiState(
-                        running = true,
-                        currentOptionId = "trojan",
-                    ),
+                autoConnect = AutoConnectUiState(),
                 protocolMetrics =
                     ProtocolMetricsUiState(
                         refreshingProfileIds = setOf(1L),
+                        refreshingOptionIdByProfileId = mapOf(1L to "trojan"),
                     ),
                 networkFingerprintKey = null,
             )
 
         assertEquals(mapOf(1L to "trojan"), resolved.smartProfileMetricsRefreshingOptionIdByProfileId)
+    }
+
+    @Test
+    fun `home route exposes currently refreshed smart protocol for dashboard menu`() {
+        val state =
+            HomeUiState(
+                activeProfile =
+                    profile(
+                        selectedProtocolOptionId = "outline",
+                        protocolOptions =
+                            listOf(
+                                option("outline", ProtocolHint.OUTLINE),
+                                option("wireguard", ProtocolHint.WIREGUARD),
+                            ),
+                    ),
+            )
+
+        val resolved =
+            buildHomeRouteUiState(
+                state = state,
+                autoConnect = AutoConnectUiState(),
+                profileOptionLatencies = emptyMap(),
+                profileOptionLatencyUnavailable = emptySet(),
+                protocolMetrics =
+                    ProtocolMetricsUiState(
+                        refreshingProfileIds = setOf(1L),
+                        refreshingOptionIdByProfileId = mapOf(1L to "wireguard"),
+                    ),
+                currentNetworkFingerprintKey = null,
+            )
+
+        assertTrue(resolved.protocolMetricsRefreshing)
+        assertEquals("wireguard", resolved.protocolMetricsRefreshingOptionId)
+    }
+
+    @Test
+    fun `analysis status label can render current protocol without falling back to Smart start`() {
+        listOf(
+            ProtocolHint.OUTLINE to "OUTLINE",
+            ProtocolHint.WIREGUARD to "WIREGUARD",
+            ProtocolHint.SHADOWSOCKS to "SHADOWSOCKS",
+        ).forEach { (protocol, expectedLabel) ->
+            val label =
+                autoConnectAnalysisProtocolLabel(
+                    AutoConnectUiState(
+                        running = true,
+                        currentOptionId = protocol.name.lowercase(),
+                        currentProtocolHint = protocol,
+                        options = emptyList(),
+                    ),
+                )
+
+            assertEquals(expectedLabel, label)
+        }
     }
 
     private fun profile(

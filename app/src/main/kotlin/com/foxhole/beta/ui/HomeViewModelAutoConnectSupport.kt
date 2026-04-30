@@ -508,12 +508,17 @@ internal fun HomeViewModel.refreshSmartProfileMetricsInternal(profileId: Long) {
                 val enabledProtocolSetHash = smartStartEnabledProtocolSetHash(candidates.map(AutoConnectProbeCandidate::optionId))
                 selectedOptionId = resolveDashboardLatencyOptionId(profile)
                 recommendedProtocolMutable.value = null
+                protocolMetricsRefreshingOptionIdByProfileIdMutable.value =
+                    protocolMetricsRefreshingOptionIdByProfileIdMutable.value +
+                    (profileId to candidates.first().optionId)
                 protocolMetricsRefreshingProfileIdsMutable.value =
                     protocolMetricsRefreshingProfileIdsMutable.value + profileId
                 initializeAutoConnectUi(candidates)
                 var previousVpnNetworkHandle = awaitDisconnectedForAutoConnect()
                 val results = mutableListOf<AutoConnectProbeResult>()
                 candidates.forEachIndexed { index, candidate ->
+                    protocolMetricsRefreshingOptionIdByProfileIdMutable.value =
+                        protocolMetricsRefreshingOptionIdByProfileIdMutable.value + (profileId to candidate.optionId)
                     markAutoConnectCandidateTesting(candidate)
                     delay(HomeViewModel.AUTO_CONNECT_PROTOCOL_TRANSITION_SETTLE_MS)
                     val result =
@@ -643,6 +648,8 @@ internal fun HomeViewModel.refreshSmartProfileMetricsInternal(profileId: Long) {
                     }
                     protocolMetricsRefreshingProfileIdsMutable.value =
                         protocolMetricsRefreshingProfileIdsMutable.value - profileId
+                    protocolMetricsRefreshingOptionIdByProfileIdMutable.value =
+                        protocolMetricsRefreshingOptionIdByProfileIdMutable.value - profileId
                     protocolMetricsRefreshJob = null
                     protocolMetricsRestoreOnCancel = true
                     delay(HomeViewModel.AUTO_CONNECT_RESULT_SETTLE_MS)
@@ -1122,6 +1129,7 @@ internal fun HomeViewModel.initializeAutoConnectUiInternal(candidates: List<Auto
         AutoConnectUiState(
             running = true,
             currentOptionId = candidates.firstOrNull()?.optionId,
+            currentProtocolHint = candidates.firstOrNull()?.protocolHint,
             currentDisplayName = candidates.firstOrNull()?.displayName,
             options =
                 candidates.map { candidate ->
@@ -1139,6 +1147,7 @@ internal fun HomeViewModel.markAutoConnectCandidateTestingInternal(candidate: Au
         autoConnectUiStateMutable.value.copy(
             running = true,
             currentOptionId = candidate.optionId,
+            currentProtocolHint = candidate.protocolHint,
             currentDisplayName = candidate.displayName,
             options =
                 autoConnectUiStateMutable.value.options.map { option ->
@@ -1183,6 +1192,7 @@ internal fun HomeViewModel.markAutoConnectWinnerInternal(result: AutoConnectProb
         autoConnectUiStateMutable.value.copy(
             running = true,
             currentOptionId = result.candidate.optionId,
+            currentProtocolHint = result.candidate.protocolHint,
             currentDisplayName = result.candidate.displayName,
             options =
                 autoConnectUiStateMutable.value.options.map { option ->

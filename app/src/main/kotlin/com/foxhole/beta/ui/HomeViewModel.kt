@@ -96,6 +96,7 @@ class HomeViewModel(
     internal val profileOptionServerPingsMutable = MutableStateFlow<Map<ProfileOptionLatencyKey, ProfileOptionServerPingState>>(emptyMap())
     internal val profileOptionMetricsUpdatedAtMutable = MutableStateFlow<Map<ProfileOptionLatencyKey, Long>>(emptyMap())
     internal val protocolMetricsRefreshingProfileIdsMutable = MutableStateFlow<Set<Long>>(emptySet())
+    internal val protocolMetricsRefreshingOptionIdByProfileIdMutable = MutableStateFlow<Map<Long, String>>(emptyMap())
     internal val recommendedProtocolMutable = MutableStateFlow<ProtocolRecommendationState?>(null)
     internal val runtimeReloadPendingMutable = MutableStateFlow(false)
     internal val reconnectInProgressMutable = MutableStateFlow(false)
@@ -292,19 +293,31 @@ class HomeViewModel(
 
     internal val autoConnectUiStateMutable = MutableStateFlow(AutoConnectUiState())
 
+    private val protocolMetricsRefreshingState =
+        combine(
+            protocolMetricsRefreshingProfileIdsMutable,
+            protocolMetricsRefreshingOptionIdByProfileIdMutable,
+        ) { profileIds, optionIds ->
+            ProtocolMetricsRefreshingUiState(
+                profileIds = profileIds,
+                optionIdByProfileId = optionIds,
+            )
+        }
+
     private val protocolMetricsState =
         combine(
             profileOptionServerPingsMutable,
             profileOptionMetricsUpdatedAtMutable,
             profileOptionDownMutable,
-            protocolMetricsRefreshingProfileIdsMutable,
+            protocolMetricsRefreshingState,
             recommendedProtocolMutable,
-        ) { serverPings, updatedAt, downOptionIds, refreshingProfileIds, recommendation ->
+        ) { serverPings, updatedAt, downOptionIds, refreshingState, recommendation ->
             ProtocolMetricsUiState(
                 serverPings = serverPings,
                 updatedAt = updatedAt,
                 downOptionIds = downOptionIds,
-                refreshingProfileIds = refreshingProfileIds,
+                refreshingProfileIds = refreshingState.profileIds,
+                refreshingOptionIdByProfileId = refreshingState.optionIdByProfileId,
                 recommendation = recommendation,
             )
         }

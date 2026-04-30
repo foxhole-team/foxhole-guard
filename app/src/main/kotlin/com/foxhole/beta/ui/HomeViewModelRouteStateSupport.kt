@@ -118,6 +118,8 @@ internal fun buildHomeRouteUiState(
         protocolServerPingUnavailableOptionIds = activeProfileServerPingUnavailable,
         protocolMetricsUpdatedAtByOptionId = activeProfileMetricsUpdatedAt,
         protocolMetricsRefreshing = state.activeProfile?.id in protocolMetrics.refreshingProfileIds,
+        protocolMetricsRefreshingOptionId =
+            state.activeProfile?.id?.let(protocolMetrics.refreshingOptionIdByProfileId::get),
         recommendedProtocolOptionId =
             protocolMetrics.recommendation
                 ?.takeIf { recommendation -> recommendation.profileId == state.activeProfile?.id }
@@ -181,7 +183,10 @@ internal fun buildProfilesRouteUiState(
         smartProfileMetricsUpdatedAtByProfileId = fullRefreshUpdatedAtByProfileId,
         smartProfileMetricsRefreshingProfileIds = protocolMetrics.refreshingProfileIds,
         smartProfileMetricsRefreshingOptionIdByProfileId =
-            autoConnect.currentOptionId
+            protocolMetrics.refreshingOptionIdByProfileId
+                .filterKeys(protocolMetrics.refreshingProfileIds::contains)
+                .takeIf(Map<Long, String>::isNotEmpty)
+                ?: autoConnect.currentOptionId
                 ?.takeIf { autoConnect.running }
                 ?.let { refreshingOptionId ->
                     protocolMetrics.refreshingProfileIds.associateWith { refreshingOptionId }

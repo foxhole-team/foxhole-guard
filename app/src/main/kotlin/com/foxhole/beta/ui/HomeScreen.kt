@@ -509,8 +509,9 @@ fun HomeScreen(
                                                     metricsUpdatedAtByOptionId = state.protocolMetricsUpdatedAtByOptionId,
                                                     metricsRefreshing = state.protocolMetricsRefreshing,
                                                     refreshingOptionId =
-                                                        state.autoConnect.currentOptionId
-                                                            .takeIf { state.protocolMetricsRefreshing },
+                                                        state.protocolMetricsRefreshingOptionId
+                                                            ?: state.autoConnect.currentOptionId
+                                                                .takeIf { state.protocolMetricsRefreshing },
                                                     recommendedOptionId = state.recommendedProtocolOptionId,
                                                     recommendedOptionIds = state.recommendedProtocolOptionIds,
                                                     favoriteOptionId = state.favoriteProtocolOptionId,
