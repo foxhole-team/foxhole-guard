@@ -52,6 +52,7 @@ import androidx.compose.material.icons.outlined.DeleteSweep
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.FileUpload
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.PowerSettingsNew
 import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.QrCodeScanner
@@ -155,7 +156,8 @@ fun HomeScreen(
     var editProxyPasswordVisible by rememberSaveable { mutableStateOf(false) }
     var dismissedSmartStartReminderProfileId by rememberSaveable { mutableStateOf<Long?>(null) }
     var smartRefreshConfirmationProfileId by rememberSaveable { mutableStateOf<Long?>(null) }
-    var smartStartReconnectConfirmationVisible by rememberSaveable { mutableStateOf(false) }
+    var smartStartFirstAnalysisProfileId by rememberSaveable { mutableStateOf<Long?>(null) }
+    var acceptedSmartStartFirstAnalysisProfileId by rememberSaveable { mutableStateOf<Long?>(null) }
     var lanProxyDisableConfirmationVisible by rememberSaveable { mutableStateOf(false) }
     val wifiLanAddress by rememberWifiLanAddress()
     val proxyModel =
@@ -278,12 +280,21 @@ fun HomeScreen(
         smartRefreshConfirmationProfileId = profileId
     }
 
+    fun startAutoConnectAfterLocalDialogs() {
+        onAutoConnect()
+    }
+
     fun requestAutoConnect() {
-        if (state.settings.traffic.mode == TrafficMode.TUNNEL && state.connection.state == ConnectionState.CONNECTED) {
-            smartStartReconnectConfirmationVisible = true
-        } else {
-            onAutoConnect()
+        val profileId = activeProfileId
+        if (
+            profileId != null &&
+            acceptedSmartStartFirstAnalysisProfileId != profileId &&
+            shouldShowSmartStartFirstAnalysisInfo(state)
+        ) {
+            smartStartFirstAnalysisProfileId = profileId
+            return
         }
+        startAutoConnectAfterLocalDialogs()
     }
 
     DisposableEffect(onTrafficUiVisibilityChanged) {
@@ -1092,17 +1103,19 @@ fun HomeScreen(
         )
     }
 
-    if (smartStartReconnectConfirmationVisible) {
+    smartStartFirstAnalysisProfileId?.let { profileId ->
         ConfirmDialog(
-            title = stringResource(R.string.smart_start_reconnect_confirm_title),
-            body = stringResource(R.string.smart_start_reconnect_confirm_body),
-            confirmLabel = stringResource(R.string.yes_label),
-            icon = Icons.Outlined.Refresh,
-            dismissLabel = stringResource(R.string.no_label),
-            onDismiss = { smartStartReconnectConfirmationVisible = false },
+            title = stringResource(R.string.smart_start_first_analysis_title),
+            body = stringResource(R.string.smart_start_first_analysis_body),
+            confirmLabel = stringResource(R.string.smart_start_first_analysis_continue),
+            bodyIcon = Icons.Outlined.Info,
+            bodyIconTint = FoxholeInfoAccent,
+            dismissLabel = stringResource(R.string.cancel),
+            onDismiss = { smartStartFirstAnalysisProfileId = null },
             onConfirm = {
-                smartStartReconnectConfirmationVisible = false
-                onAutoConnect()
+                smartStartFirstAnalysisProfileId = null
+                acceptedSmartStartFirstAnalysisProfileId = profileId
+                onRefreshSmartProfileMetrics(profileId)
             },
         )
     }

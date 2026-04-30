@@ -2,8 +2,8 @@ package com.foxhole.beta.ui
 
 import android.app.StatusBarManager
 import android.content.ActivityNotFoundException
-import android.content.ComponentName
 import android.content.ClipboardManager
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -30,12 +30,12 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.AltRoute
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.ArrowForward
-import androidx.compose.material.icons.automirrored.outlined.AltRoute
 import androidx.compose.material.icons.automirrored.outlined.HelpOutline
-import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.AccountTree
+import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Apps
 import androidx.compose.material.icons.outlined.BrightnessAuto
 import androidx.compose.material.icons.outlined.BugReport
@@ -52,8 +52,8 @@ import androidx.compose.material.icons.outlined.PhoneAndroid
 import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.QueryStats
 import androidx.compose.material.icons.outlined.Refresh
-import androidx.compose.material.icons.outlined.Router
 import androidx.compose.material.icons.outlined.RocketLaunch
+import androidx.compose.material.icons.outlined.Router
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material.icons.outlined.Speed
@@ -90,6 +90,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -98,9 +99,9 @@ import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import com.foxhole.beta.R
 import com.foxhole.beta.core.data.RoutingRepository
+import com.foxhole.beta.core.diagnostics.DiagnosticEntry
 import com.foxhole.beta.core.model.AppLocale
 import com.foxhole.beta.core.model.ClashApiSettings
-import com.foxhole.beta.core.diagnostics.DiagnosticEntry
 import com.foxhole.beta.core.model.DiagnosticsRetention
 import com.foxhole.beta.core.model.DomainStrategy
 import com.foxhole.beta.core.model.LatencyProbeMethod
@@ -130,11 +131,11 @@ import com.foxhole.beta.ui.FoxholePreferenceCard
 import com.foxhole.beta.ui.FoxholeValuePill
 import com.foxhole.beta.ui.UsageTotalsCard
 import com.foxhole.beta.vpn.FoxholeTileService
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.util.Date
 import java.io.File
+import java.util.Date
 
 @Composable
 fun SettingsHomeScreen(
@@ -161,7 +162,6 @@ fun SettingsHomeScreen(
     var unlockDialogVisible by rememberSaveable { mutableStateOf(false) }
     var versionTapCount by rememberSaveable { mutableIntStateOf(0) }
     val expertVisible = state.settings.ui.showExpertSettings
-    val expertUnlocked = state.settings.expert.unlockedAt != null
 
     SettingsScaffold(
         title = stringResource(R.string.settings),
@@ -245,7 +245,10 @@ fun SettingsHomeScreen(
                 onRepositoryClick = {
                     if (!openFoxholeRepository(context)) {
                         scope.launch {
-                            snackbarHostState.showSnackbar(repositoryOpenFailed)
+                            snackbarHostState.showBanner(
+                                repositoryOpenFailed,
+                                FoxholeBannerTone.ERROR,
+                            )
                         }
                     }
                 },
@@ -263,7 +266,7 @@ fun SettingsHomeScreen(
                     if (unlockDialogVisible) {
                         return@SettingsFooterVersionText
                     }
-                    if (expertVisible || expertUnlocked) {
+                    if (expertVisible) {
                         versionTapCount = 0
                         return@SettingsFooterVersionText
                     }
@@ -506,7 +509,7 @@ private fun smartStartTimeoutOptions(minSeconds: Int): List<Int> =
 
 @Composable
 private fun smartStartTimeoutLabel(seconds: Int): String =
-    stringResource(R.string.smart_start_timeout_seconds_value, seconds)
+    pluralStringResource(R.plurals.smart_start_timeout_seconds_value, seconds, seconds)
 
 @Composable
 private fun smartStartTransportPriorityLabel(value: SmartStartTransportPriority): String =

@@ -33,6 +33,12 @@ internal data class SmartStartProtocolMenuLayout(
     val showCompactStatusRows: Boolean,
 )
 
+internal data class SmartStartProtocolLegendFooterLayout(
+    val topPaddingDp: Int,
+    val bottomPaddingDp: Int,
+    val centered: Boolean,
+)
+
 internal fun resolveSmartStartProtocolPresentation(
     included: Boolean,
     latencyMs: Long?,
@@ -63,6 +69,13 @@ internal fun resolveSmartStartProtocolMenuLayout(showMetricsTable: Boolean): Sma
         showHeader = showMetricsTable,
         showDetailedMetrics = showMetricsTable,
         showCompactStatusRows = !showMetricsTable,
+    )
+
+internal fun resolveSmartStartProtocolLegendFooterLayout(menuLayout: SmartStartProtocolMenuLayout): SmartStartProtocolLegendFooterLayout =
+    SmartStartProtocolLegendFooterLayout(
+        topPaddingDp = if (menuLayout.showDetailedMetrics) 5 else 4,
+        bottomPaddingDp = 1,
+        centered = false,
     )
 
 internal fun classifyVpnLatency(

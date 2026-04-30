@@ -26,7 +26,6 @@
     <string name="no_profiles">Сохраненные профили VPN не обнаружены</string>
     <string name="no_profiles_import_hint">Для добавления профиля используйте кнопку Импорт</string>
     <string name="profiles_empty_message">Сохраненные профили VPN не обнаружены. Воспользуйтесь кнопкой Импорт в дашборде для импорта конфигураций VPN.</string>
-    <string name="manage_profiles_summary">Откройте список профилей, чтобы просмотреть, переключить, обновить или удалить импортированные профили.</string>
     <string name="profile_list_title">Профили</string>
     <string name="profile_source">Источник</string>
     <string name="profile_status">Статус</string>
@@ -172,7 +171,12 @@
     <string name="smart_start_protocol_timeout_summary">Сколько Foxhole ждёт ответ от одного протокола при запуске VPN.</string>
     <string name="smart_start_refresh_timeout_title">Таймаут анализа</string>
     <string name="smart_start_refresh_timeout_summary">Сколько Foxhole ждёт каждый протокол VPN во время полного анализа.</string>
-    <string name="smart_start_timeout_seconds_value">%1$d сек</string>
+    <plurals name="smart_start_timeout_seconds_value">
+        <item quantity="one">%1$d сек</item>
+        <item quantity="few">%1$d сек</item>
+        <item quantity="many">%1$d сек</item>
+        <item quantity="other">%1$d сек</item>
+    </plurals>
     <string name="smart_start_transport_priority_title">Приоритет транспорта</string>
     <string name="smart_start_transport_priority_summary">Предпочтительный порядок кандидатов Смарт старт.</string>
     <string name="smart_start_transport_priority_all">Все</string>
@@ -183,6 +187,9 @@
     <string name="smart_start_clear_data_confirm_title">Очистить данные?</string>
     <string name="smart_start_clear_data_confirm_body">Foxhole удалит локальные замеры и рекомендации Смарт старт на этом устройстве.</string>
     <string name="smart_start_data_cleared">Данные Смарт старт очищены.</string>
+    <string name="smart_start_first_analysis_title">Анализ протоколов VPN</string>
+    <string name="smart_start_first_analysis_body">Первый анализ доступных протоколов VPN будет выполнен по всем протоколам VPN в конфигурации. После определения трех лучших протоколов VPN подключение будет выполняться только по ним. Периодически обновляйте все доступные протоколы VPN в настройках Смарт старт для улучшения качества соединения.</string>
+    <string name="smart_start_first_analysis_continue">Продолжить</string>
     <string name="smart_start_reconnect_confirm_title">Переподключить протокол VPN?</string>
     <string name="smart_start_reconnect_confirm_body">Foxhole переподключит VPN соединение с лучшим протоколом.</string>
     <string name="auto_connect_requires_supported_profile">Требуется профиль с поддерживаемым протоколом.</string>
@@ -208,7 +215,6 @@
     <string name="insecure_tls_profile_badge">INSECURE TLS</string>
     <string name="smart_profile_metrics_refresh_action">Обновить данные протоколов</string>
     <string name="smart_profile_metrics_cancel_action">Остановить обновление данных протоколов</string>
-    <string name="smart_profile_metrics_refreshing">Анализ</string>
     <string name="smart_profile_metrics_refresh_hint">Нажмите на протокол для включения/отключения\nПериодически обновляйте для улучшения коннекта</string>
     <string name="smart_profile_metrics_refresh_compact_hint">Нажмите на протокол для включения/отключения\nПериодически обновляйте для улучшения коннекта</string>
     <string name="smart_profile_legend_favorite">Быстрый</string>
@@ -544,8 +550,8 @@
     <string name="help_smart_start_full_body">Смарт старт выбирает рабочий протокол VPN для текущей сети.\n\nОн пробует лучшие доступные протоколы, проверяет подключение и фиксирует первый подтвержденный результат. Полное обновление отдельно проверяет все доступные протоколы и обновляет задержку, статус и рекомендации.\n\nДанные Смарт старт остаются на устройстве: сохраненные задержки, статусы, рекомендации и история подключений не отправляются наружу.\n\nНастройки Смарт старт появляются в приложении автоматически после обнаружения smart-профиля. В настройках можно изменить таймауты подключения, выбрать приоритет транспорта UDP / TCP / Все или очистить локальные данные Смарт старт.\n\nЛегенда в меню протоколов:\n\n★ Быстрый - самый быстрый успешный вариант по сохраненным замерам.\n\n★★ Лучший - протокол, который Foxhole рекомендует для подключения по последним проверкам.</string>
     <string name="help_protocol_statuses_title">Статусы протоколов</string>
     <string name="help_protocol_fast_summary">До 250 мс. Лучший вариант для повседневного подключения.</string>
-    <string name="help_protocol_normal_summary">251-750 мс. Подключение рабочее, но может быть не самым быстрым.</string>
-    <string name="help_protocol_slow_summary">751-1500 мс. Протокол работает, но качество соединения хуже.</string>
+    <string name="help_protocol_normal_summary">251&#8211;750 мс. Подключение рабочее, но может быть не самым быстрым.</string>
+    <string name="help_protocol_slow_summary">751&#8211;1500 мс. Протокол работает, но качество соединения хуже.</string>
     <string name="help_protocol_very_slow_summary">Выше 1500 мс. Используйте только если другие варианты недоступны.</string>
     <string name="help_protocol_down_summary">Последняя проверка протокола не прошла.</string>
     <string name="help_protocol_unavailable_summary">Foxhole не получил корректный замер задержки или ping.</string>
@@ -563,15 +569,6 @@
     <string name="help_diagnostics_support_body">Диагностика показывает логи подключения, статистику трафика и экспорт очищенного архива.\n\nОчищенный архив не содержит IP-адреса и конфигурации. Он нужен для разбора ошибок подключения, импорта, подписок и Смарт старт.\n\nЕсли проблема повторяется, откройте Диагностика, создайте очищенный архив без IP-адресов и конфигураций и отправьте его в Telegram-бот поддержки.\n\nЕсли Telegram не установлен, Foxhole откроет ссылку в браузере.</string>
     <string name="help_application_settings_body">Здесь находятся тема, язык, автопереподключение, автозапуск, защита скриншотов и плитка быстрых настроек Android.\n\nЭти параметры меняют поведение приложения, но не конфигурацию профиля.</string>
     <string name="help_expert_full_body">Экспертные настройки меняют маршрутизацию, DNS, локальные интерфейсы, импортные ограничения и диагностику.\n\nОткрывайте их только если понимаете последствия или действуете по инструкции поддержки.\n\nЧтобы открыть раздел, нажмите карточку версии сборки 5 раз.</string>
-    <string name="help_smart_start_body">Smart start быстро подключается, пробуя только лучших локальных кандидатов для текущей сети. Обновление проверяет все подходящие протоколы, чтобы обновить задержку, статус и рекомендации. Все данные Smart start остаются на устройстве.</string>
-    <string name="help_tunnel_body">Направляет весь трафик устройства через активный профиль.</string>
-    <string name="help_split_tunnel_body">Позволяет выбранным приложениям использовать VPN туннель или обходить его, в зависимости от выбраного режима.</string>
-    <string name="help_proxy_body">Запускает локальные HTTP, SOCKS5 или Mixed точки для приложений.</string>
-    <string name="help_lan_proxy_body">Открывает LAN Proxy по Wi‑Fi, чтобы другие устройства в локальной сети могли использовать прокси через Ваш телефон. Включайте его, только когда телефон находится в доверенной Wi‑Fi-сети.</string>
-    <string name="help_profiles_body">Хранит серверы подключения. Здесь их можно импортировать, переключать, обновлять и редактировать.</string>
-    <string name="help_routing_body">Добавляет локальные правила для приложений и сайтов поверх активного профиля.</string>
-    <string name="help_logs_body">Показывает лог подключения, статистику трафика и обезличенный экспорт диагностики.</string>
-    <string name="help_expert_body">Откройте настройки и нажмите по карточке версии сборки 5 раз, чтобы открыть этот раздел.</string>
     <string name="site_action_proxy">Прокси</string>
     <string name="site_action_direct">Напрямую</string>
     <string name="site_action_block">Блокировать</string>

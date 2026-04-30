@@ -1,11 +1,14 @@
 package com.foxhole.beta.ui
 
+import com.foxhole.beta.core.model.ConnectionSnapshot
+import com.foxhole.beta.core.model.ConnectionState
 import com.foxhole.beta.core.model.Profile
 import com.foxhole.beta.core.model.ProfileProtocolOption
 import com.foxhole.beta.core.model.ProfileSourceType
 import com.foxhole.beta.core.model.ProtocolHint
-import com.foxhole.beta.core.model.ConnectionSnapshot
-import com.foxhole.beta.core.model.ConnectionState
+import com.foxhole.beta.core.model.Settings
+import com.foxhole.beta.core.model.SmartProfilePreference
+import com.foxhole.beta.core.settings.smartStartEnabledProtocolSetHash
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -51,6 +54,62 @@ class HomeDashboardProtocolPresentationTest {
         assertEquals(ProtocolHint.TROJAN, resolved.protocolHint)
         assertEquals(listOf("trojan", "outline"), resolved.protocolOptions.map(ProfileProtocolOption::id))
         assertTrue(resolved.protocolOptions.first { option -> option.id == "trojan" }.isSelected)
+    }
+
+    @Test
+    fun `smart start first analysis info is shown when no baseline exists`() {
+        val activeProfile =
+            profile(
+                selectedProtocolOptionId = "outline",
+                protocolOptions =
+                    listOf(
+                        option("outline", ProtocolHint.OUTLINE),
+                        option("trojan", ProtocolHint.TROJAN),
+                    ),
+            )
+
+        assertTrue(
+            shouldShowSmartStartFirstAnalysisInfo(
+                HomeRouteUiState(
+                    activeProfile = activeProfile,
+                    settings = Settings(),
+                ),
+            ),
+        )
+    }
+
+    @Test
+    fun `smart start first analysis info is skipped after baseline exists`() {
+        val activeProfile =
+            profile(
+                selectedProtocolOptionId = "outline",
+                protocolOptions =
+                    listOf(
+                        option("outline", ProtocolHint.OUTLINE),
+                        option("trojan", ProtocolHint.TROJAN),
+                    ),
+            )
+        val enabledProtocolSetHash = smartStartEnabledProtocolSetHash(listOf("outline", "trojan"))
+
+        assertFalse(
+            shouldShowSmartStartFirstAnalysisInfo(
+                HomeRouteUiState(
+                    activeProfile = activeProfile,
+                    settings =
+                        Settings(
+                            smartProfilePreferences =
+                                listOf(
+                                    SmartProfilePreference(
+                                        profileId = activeProfile.id,
+                                        smartStartBaselineReady = true,
+                                        recommendedProtocolIds = listOf("outline", "trojan"),
+                                        enabledProtocolSetHash = enabledProtocolSetHash,
+                                    ),
+                                ),
+                        ),
+                ),
+            ),
+        )
     }
 
     @Test

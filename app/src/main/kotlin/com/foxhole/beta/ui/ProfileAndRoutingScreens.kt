@@ -240,9 +240,15 @@ fun ProfilesScreen(
                         } ?: error("failed to open export target")
                     }
                 }.onSuccess {
-                    snackbarHostState.showSnackbar(profileExportSavedMessage)
+                    snackbarHostState.showBanner(
+                        profileExportSavedMessage,
+                        FoxholeBannerTone.SUCCESS,
+                    )
                 }.onFailure {
-                    snackbarHostState.showSnackbar(profileExportSaveFailedMessage)
+                    snackbarHostState.showBanner(
+                        profileExportSaveFailedMessage,
+                        FoxholeBannerTone.ERROR,
+                    )
                 }.also {
                     deleteProfileExportArtifact(export)
                 }

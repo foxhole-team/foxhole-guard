@@ -26,7 +26,6 @@
     <string name="no_profiles">Saved VPN profiles not found</string>
     <string name="no_profiles_import_hint">Use Import to add a profile</string>
     <string name="profiles_empty_message">Saved VPN profiles not found. Use the Import button on the dashboard to import VPN configurations.</string>
-    <string name="manage_profiles_summary">Open the profile list to review, switch, refresh, or delete imported profiles.</string>
     <string name="profile_list_title">Profiles</string>
     <string name="profile_source">Source</string>
     <string name="profile_status">Status</string>
@@ -172,7 +171,10 @@
     <string name="smart_start_protocol_timeout_summary">How long Foxhole waits for one protocol to respond when starting the VPN.</string>
     <string name="smart_start_refresh_timeout_title">Analysis timeout</string>
     <string name="smart_start_refresh_timeout_summary">How long Foxhole waits for each VPN protocol during full analysis.</string>
-    <string name="smart_start_timeout_seconds_value">%1$d sec</string>
+    <plurals name="smart_start_timeout_seconds_value">
+        <item quantity="one">%1$d sec</item>
+        <item quantity="other">%1$d sec</item>
+    </plurals>
     <string name="smart_start_transport_priority_title">Transport priority</string>
     <string name="smart_start_transport_priority_summary">Preferred transport order for Smart start candidates.</string>
     <string name="smart_start_transport_priority_all">All</string>
@@ -183,6 +185,9 @@
     <string name="smart_start_clear_data_confirm_title">Clear Smart start data?</string>
     <string name="smart_start_clear_data_confirm_body">Foxhole will remove local Smart start measurements and recommendations from this device.</string>
     <string name="smart_start_data_cleared">Smart start data cleared.</string>
+    <string name="smart_start_first_analysis_title">VPN protocol analysis</string>
+    <string name="smart_start_first_analysis_body">The first VPN protocol analysis will check every available VPN protocol in this configuration. After Foxhole finds the three best VPN protocols, future connections will use only those. Periodically refresh all available VPN protocols in Smart start settings to improve connection quality.</string>
+    <string name="smart_start_first_analysis_continue">Continue</string>
     <string name="smart_start_reconnect_confirm_title">Reconnect VPN protocol?</string>
     <string name="smart_start_reconnect_confirm_body">Foxhole will reconnect the VPN connection with the best protocol.</string>
     <string name="auto_connect_requires_supported_profile">A profile with a supported protocol is required.</string>
@@ -208,7 +213,6 @@
     <string name="insecure_tls_profile_badge">INSECURE TLS</string>
     <string name="smart_profile_metrics_refresh_action">Refresh protocol metrics</string>
     <string name="smart_profile_metrics_cancel_action">Stop protocol metrics refresh</string>
-    <string name="smart_profile_metrics_refreshing">Analysis</string>
     <string name="smart_profile_metrics_refresh_hint">Tap a protocol to turn it on/off\nRefresh periodically to improve connection quality</string>
     <string name="smart_profile_metrics_refresh_compact_hint">Tap a protocol to turn it on/off\nRefresh periodically to improve connection quality</string>
     <string name="smart_profile_legend_favorite">Fast</string>
@@ -530,8 +534,8 @@
     <string name="help_smart_start_full_body">Smart start chooses a working VPN protocol for the current network.\n\nIt tries the best available protocols, validates the connection, and keeps the first confirmed result. Full refresh checks every available protocol separately and updates latency, status, and recommendations.\n\nSmart start data stays on the device: saved latency, statuses, recommendations, and connection history are not sent out.\n\nSmart start settings appear automatically after Foxhole detects a smart profile. In settings, you can change connection timeouts, choose the UDP / TCP / All transport priority, or clear local Smart start data.\n\nProtocol menu legend:\n\n★ Fast - the fastest successful option from saved measurements.\n\n★★ Best - the protocol Foxhole recommends for connection based on the latest checks.</string>
     <string name="help_protocol_statuses_title">Protocol statuses</string>
     <string name="help_protocol_fast_summary">Up to 250 ms. The best everyday connection option.</string>
-    <string name="help_protocol_normal_summary">251-750 ms. The connection works, but may not be the fastest.</string>
-    <string name="help_protocol_slow_summary">751-1500 ms. The protocol works, but connection quality is lower.</string>
+    <string name="help_protocol_normal_summary">251&#8211;750 ms. The connection works, but may not be the fastest.</string>
+    <string name="help_protocol_slow_summary">751&#8211;1500 ms. The protocol works, but connection quality is lower.</string>
     <string name="help_protocol_very_slow_summary">Above 1500 ms. Use only when other options are unavailable.</string>
     <string name="help_protocol_down_summary">The latest protocol check failed.</string>
     <string name="help_protocol_unavailable_summary">Foxhole could not get a valid latency or ping measurement.</string>
@@ -549,15 +553,6 @@
     <string name="help_diagnostics_support_body">Diagnostics shows connection logs, traffic statistics, and sanitized archive export.\n\nThe sanitized archive does not contain IP addresses or configurations. It is used to debug connection, import, subscription, and Smart start issues.\n\nIf the problem repeats, open Diagnostics, create a sanitized archive without IP addresses or configurations, and send it to the Telegram support bot.\n\nIf Telegram is not installed, Foxhole opens the link in a browser.</string>
     <string name="help_application_settings_body">This section contains theme, language, auto reconnect, auto start, screenshot protection, and the Android Quick Settings tile.\n\nThese settings change app behavior, but not the profile configuration.</string>
     <string name="help_expert_full_body">Expert settings change routing, DNS, local interfaces, import restrictions, and diagnostics.\n\nOpen them only if you understand the consequences or are following support instructions.\n\nTo open the section, tap the build version card 5 times.</string>
-    <string name="help_smart_start_body">Smart start connects quickly by trying only the best local candidates for the current network. Refresh checks all eligible protocols to update latency, status, and recommendations. All Smart start data stays on the device.</string>
-    <string name="help_tunnel_body">Routes the whole device through the active profile.</string>
-    <string name="help_split_tunnel_body">Lets selected apps use the VPN tunnel or bypass it, depending on the selected mode.</string>
-    <string name="help_proxy_body">Starts local HTTP, SOCKS5, or Mixed endpoints for apps.</string>
-    <string name="help_lan_proxy_body">Opens LAN Proxy over Wi-Fi so other devices on the local network can use the proxy through your phone. Enable it only when the phone is on a trusted Wi-Fi network.</string>
-    <string name="help_profiles_body">Stores connection servers. You can import, switch, refresh, and edit them here.</string>
-    <string name="help_routing_body">Adds local app and site rules on top of the active profile.</string>
-    <string name="help_logs_body">Shows the connection log, traffic statistics, and anonymized diagnostics export.</string>
-    <string name="help_expert_body">Open Settings and tap the build version card 5 times to open this section.</string>
     <string name="site_action_proxy">Proxy</string>
     <string name="site_action_direct">Direct</string>
     <string name="site_action_block">Block</string>

@@ -40,8 +40,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
@@ -106,7 +106,8 @@ internal fun SmartProfileAutoConnectMenu(
         }
     }
     Box {
-        val screenWidth = LocalConfiguration.current.screenWidthDp.dp
+        val density = LocalDensity.current
+        val screenWidth = with(density) { LocalWindowInfo.current.containerSize.width.toDp() }
         val menuWidth =
             rememberSmartProfileMenuWidth(
                 options = options,
@@ -855,6 +856,7 @@ private fun SmartProfileProtocolMenuFooterContent(
     if (!menuLayout.showDetailedMetrics && !menuLayout.showCompactStatusRows) {
         return
     }
+    val footerLayout = resolveSmartStartProtocolLegendFooterLayout(menuLayout)
     HorizontalDivider(
         modifier = Modifier.padding(horizontal = if (menuLayout.showDetailedMetrics) 10.dp else 8.dp),
         color =
@@ -866,8 +868,14 @@ private fun SmartProfileProtocolMenuFooterContent(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .padding(horizontal = if (menuLayout.showDetailedMetrics) 10.dp else 8.dp, vertical = 6.dp),
-        verticalArrangement = Arrangement.spacedBy(2.dp),
+                .padding(
+                    start = if (menuLayout.showDetailedMetrics) 10.dp else 8.dp,
+                    top = footerLayout.topPaddingDp.dp,
+                    end = if (menuLayout.showDetailedMetrics) 10.dp else 8.dp,
+                    bottom = footerLayout.bottomPaddingDp.dp,
+                ),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.Start,
     ) {
         SmartProfileLegendLine(
             compact = !menuLayout.showDetailedMetrics,
@@ -879,8 +887,8 @@ private fun SmartProfileProtocolMenuFooterContent(
 @Composable
 private fun SmartProfileMetricsHint(
     compact: Boolean,
-    showIcon: Boolean = true,
     modifier: Modifier = Modifier,
+    showIcon: Boolean = true,
 ) {
     val infoTone = foxholeSystemAwareAccentColor(fallback = FoxholeInfoAccent)
     val refreshHint =
@@ -1397,45 +1405,6 @@ private fun SmartProfileProtocolMetricsTableRow(
         ) {
             SmartProfileOnToggle(included = included, compact = compact)
         }
-    }
-}
-
-@Composable
-private fun SmartProfileLabeledMetric(
-    label: String,
-    latencyMs: Long?,
-    down: Boolean = false,
-    unavailable: Boolean = false,
-    enabled: Boolean,
-    compact: Boolean,
-    modifier: Modifier = Modifier,
-) {
-    Row(
-        modifier = modifier,
-        horizontalArrangement = Arrangement.spacedBy(5.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            text = label,
-            modifier = Modifier.weight(1f),
-            style =
-                MaterialTheme.typography.labelSmall.copy(
-                    fontSize = if (compact) 8.6.sp else 9.sp,
-                    lineHeight = if (compact) 9.sp else 10.sp,
-                    fontWeight = FontWeight.Medium,
-                ),
-            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = if (enabled) 0.78f else 0.48f),
-            maxLines = 1,
-            softWrap = false,
-            overflow = TextOverflow.Ellipsis,
-        )
-        SmartProfileMetricCell(
-            latencyMs = latencyMs,
-            down = down,
-            unavailable = unavailable,
-            enabled = enabled,
-            modifier = Modifier.widthIn(min = 62.dp, max = 88.dp),
-        )
     }
 }
 

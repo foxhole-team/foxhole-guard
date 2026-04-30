@@ -175,6 +175,25 @@ class SmartStartProtocolPresentationTest {
     }
 
     @Test
+    fun `smart profile legend footer stays left aligned without bottom gutter`() {
+        val compact =
+            resolveSmartStartProtocolLegendFooterLayout(
+                resolveSmartStartProtocolMenuLayout(showMetricsTable = false),
+            )
+        val detailed =
+            resolveSmartStartProtocolLegendFooterLayout(
+                resolveSmartStartProtocolMenuLayout(showMetricsTable = true),
+            )
+
+        assertFalse(compact.centered)
+        assertFalse(detailed.centered)
+        assertEquals(1, compact.bottomPaddingDp)
+        assertEquals(1, detailed.bottomPaddingDp)
+        assertEquals(4, compact.topPaddingDp)
+        assertEquals(5, detailed.topPaddingDp)
+    }
+
+    @Test
     fun `smart profile menu width uses protocol legend and hint bases`() {
         assertEquals(320f, smartProfileMenuWidthBasisPx(protocolAndLegendWidthPx = 320f, hintWidthPx = 240f))
         assertEquals(340f, smartProfileMenuWidthBasisPx(protocolAndLegendWidthPx = 260f, hintWidthPx = 340f))
@@ -223,11 +242,11 @@ class SmartStartProtocolPresentationTest {
         assertEquals("Latency %1\$s", stringValue(enStrings, "smart_profile_menu_latency_column"))
         assertEquals("ON", stringValue(enStrings, "smart_profile_menu_on_column"))
         assertEquals(
-            "Tap a protocol to turn it on or off.\\nRefresh periodically to improve connection quality.",
+            "Tap a protocol to turn it on/off\\nRefresh periodically to improve connection quality",
             stringValue(enStrings, "smart_profile_metrics_refresh_hint"),
         )
         assertEquals(
-            "Tap a protocol to turn it on or off.\\nRefresh periodically to improve connection quality.",
+            "Tap a protocol to turn it on/off\\nRefresh periodically to improve connection quality",
             stringValue(enStrings, "smart_profile_metrics_refresh_compact_hint"),
         )
         assertFalse(enStrings.contains("name=\"smart_profile_legend_current\""))
@@ -237,8 +256,8 @@ class SmartStartProtocolPresentationTest {
             stringValue(enStrings, "smart_profile_legend_reconnect_recommended"),
         )
         assertFalse(enStrings.contains("name=\"smart_profile_legend_unsafe\""))
-        assertEquals("Legend", stringValue(enStrings, "smart_profile_legend_title"))
-        assertEquals("Analysis", stringValue(enStrings, "smart_profile_metrics_refreshing"))
+        assertFalse(enStrings.contains("name=\"smart_profile_legend_title\""))
+        assertFalse(enStrings.contains("name=\"smart_profile_metrics_refreshing\""))
         assertFalse(enStrings.contains("name=\"smart_profile_menu_active_badge\""))
         assertEquals("Updated: %1\$s", stringValue(enStrings, "smart_profile_metrics_last_updated"))
         assertEquals("Never updated", stringValue(enStrings, "smart_profile_metrics_never_updated"))
@@ -254,6 +273,12 @@ class SmartStartProtocolPresentationTest {
         assertEquals("Enable expert settings?", stringValue(enStrings, "expert_unlock_confirm_title"))
         assertEquals("Enable expert settings", stringValue(enStrings, "show_advanced_settings_title"))
         assertEquals("BETA", stringValue(enStrings, "beta_badge"))
+        assertEquals("VPN protocol analysis", stringValue(enStrings, "smart_start_first_analysis_title"))
+        assertEquals(
+            "The first VPN protocol analysis will check every available VPN protocol in this configuration. After Foxhole finds the three best VPN protocols, future connections will use only those. Periodically refresh all available VPN protocols in Smart start settings to improve connection quality.",
+            stringValue(enStrings, "smart_start_first_analysis_body"),
+        )
+        assertEquals("Continue", stringValue(enStrings, "smart_start_first_analysis_continue"))
         assertEquals("Reconnect VPN protocol?", stringValue(enStrings, "smart_start_reconnect_confirm_title"))
         assertEquals("Turn off LAN Proxy?", stringValue(enStrings, "lan_proxy_disable_confirm_title"))
         assertEquals("Quick start", stringValue(enStrings, "help_quick_start_title"))
@@ -284,11 +309,11 @@ class SmartStartProtocolPresentationTest {
         assertEquals("Latency %1\$s", stringValue(ruStrings, "smart_profile_menu_latency_column"))
         assertEquals("Вкл", stringValue(ruStrings, "smart_profile_menu_on_column"))
         assertEquals(
-            "Нажмите на протокол, чтобы включить или отключить его.\\nПериодически обновляйте для улучшения коннекта.",
+            "Нажмите на протокол для включения/отключения\\nПериодически обновляйте для улучшения коннекта",
             stringValue(ruStrings, "smart_profile_metrics_refresh_hint"),
         )
         assertEquals(
-            "Нажмите на протокол, чтобы включить или отключить его.\\nПериодически обновляйте для улучшения коннекта.",
+            "Нажмите на протокол для включения/отключения\\nПериодически обновляйте для улучшения коннекта",
             stringValue(ruStrings, "smart_profile_metrics_refresh_compact_hint"),
         )
         assertFalse(ruStrings.contains("name=\"smart_profile_legend_current\""))
@@ -298,8 +323,8 @@ class SmartStartProtocolPresentationTest {
             stringValue(ruStrings, "smart_profile_legend_reconnect_recommended"),
         )
         assertFalse(ruStrings.contains("name=\"smart_profile_legend_unsafe\""))
-        assertEquals("Легенда", stringValue(ruStrings, "smart_profile_legend_title"))
-        assertEquals("Анализ", stringValue(ruStrings, "smart_profile_metrics_refreshing"))
+        assertFalse(ruStrings.contains("name=\"smart_profile_legend_title\""))
+        assertFalse(ruStrings.contains("name=\"smart_profile_metrics_refreshing\""))
         assertFalse(ruStrings.contains("name=\"smart_profile_menu_active_badge\""))
         assertEquals("Обновлено: %1\$s", stringValue(ruStrings, "smart_profile_metrics_last_updated"))
         assertEquals("Никогда не обновлялся", stringValue(ruStrings, "smart_profile_metrics_never_updated"))
@@ -315,6 +340,12 @@ class SmartStartProtocolPresentationTest {
         assertEquals("Включить экспертные настройки?", stringValue(ruStrings, "expert_unlock_confirm_title"))
         assertEquals("Включить экспертные настройки", stringValue(ruStrings, "show_advanced_settings_title"))
         assertEquals("BETA", stringValue(ruStrings, "beta_badge"))
+        assertEquals("Анализ протоколов VPN", stringValue(ruStrings, "smart_start_first_analysis_title"))
+        assertEquals(
+            "Первый анализ доступных протоколов VPN будет выполнен по всем протоколам VPN в конфигурации. После определения трех лучших протоколов VPN подключение будет выполняться только по ним. Периодически обновляйте все доступные протоколы VPN в настройках Смарт старт для улучшения качества соединения.",
+            stringValue(ruStrings, "smart_start_first_analysis_body"),
+        )
+        assertEquals("Продолжить", stringValue(ruStrings, "smart_start_first_analysis_continue"))
         assertEquals("Переподключить протокол VPN?", stringValue(ruStrings, "smart_start_reconnect_confirm_title"))
         assertEquals("Выключить LAN Proxy?", stringValue(ruStrings, "lan_proxy_disable_confirm_title"))
         assertEquals("Быстрый старт", stringValue(ruStrings, "help_quick_start_title"))

@@ -67,6 +67,30 @@ class UiChromeTest {
         }
 
     @Test
+    fun `banner deadline keeps a short requested deadline visible long enough`() {
+        assertEquals(
+            13_000L,
+            resolvedBannerExpiresAtElapsedMs(
+                nowElapsedMs = 10_000L,
+                durationMillis = FOXHOLE_BANNER_SHORT_DURATION_MS,
+                requestedExpiresAtElapsedMs = 10_500L,
+            ),
+        )
+    }
+
+    @Test
+    fun `banner deadline preserves a later requested deadline`() {
+        assertEquals(
+            18_000L,
+            resolvedBannerExpiresAtElapsedMs(
+                nowElapsedMs = 10_000L,
+                durationMillis = FOXHOLE_BANNER_SHORT_DURATION_MS,
+                requestedExpiresAtElapsedMs = 18_000L,
+            ),
+        )
+    }
+
+    @Test
     fun `diagnostic message parts split structured network details`() {
         assertEquals(
             DiagnosticMessageParts(

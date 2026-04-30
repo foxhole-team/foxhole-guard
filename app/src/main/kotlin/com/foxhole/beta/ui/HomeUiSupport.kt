@@ -6,7 +6,6 @@ import android.net.LinkProperties
 import android.net.Network
 import android.net.NetworkCapabilities
 import android.text.format.Formatter
-import androidx.core.content.getSystemService
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Apps
 import androidx.compose.material.icons.outlined.ArrowDownward
@@ -22,6 +21,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.core.content.getSystemService
 import com.foxhole.beta.R
 import com.foxhole.beta.core.model.ConnectionSnapshot
 import com.foxhole.beta.core.model.ConnectionState
@@ -32,12 +32,14 @@ import com.foxhole.beta.core.model.Profile
 import com.foxhole.beta.core.model.ProfileProtocolOption
 import com.foxhole.beta.core.model.ProtocolHint
 import com.foxhole.beta.core.model.ProxyInboundSettings
-import com.foxhole.beta.core.model.Settings as FoxholeSettings
 import com.foxhole.beta.core.model.TrafficMode
 import com.foxhole.beta.core.model.isUdpTransport
 import com.foxhole.beta.core.profile.MultiProtocolProfileSupport
 import com.foxhole.beta.core.settings.SMART_START_FULL_REFRESH_STALE_MS
+import com.foxhole.beta.core.settings.needsSmartStartColdScan
 import com.foxhole.beta.core.settings.smartProfilePreference
+import com.foxhole.beta.core.settings.smartStartEnabledProtocolSetHash
+import com.foxhole.beta.core.model.Settings as FoxholeSettings
 
 internal data class HomeProxySurface(
     val label: String,
@@ -203,6 +205,23 @@ internal fun shouldShowSmartStartRefreshReminder(
 
 internal fun shouldShowAutoConnectAction(activeProfile: Profile?): Boolean =
     activeProfile?.let(MultiProtocolProfileSupport::hasMultipleSupportedOptions) == true
+
+internal fun shouldShowSmartStartFirstAnalysisInfo(state: HomeRouteUiState): Boolean {
+    val profile = state.activeProfile?.takeIf(MultiProtocolProfileSupport::hasMultipleSupportedOptions)
+    return profile?.let { smartProfile ->
+        val candidates =
+            MultiProtocolProfileSupport.smartStartFullScanCandidates(
+                profile = smartProfile,
+                allowInsecureTlsGlobally = state.settings.expert.allowInsecureTls,
+                excludedOptionIds = state.activeProfileExcludedOptionIds,
+                transportPriority = state.settings.connection.smartStartTransportPriority,
+            )
+        val enabledProtocolSetHash =
+            smartStartEnabledProtocolSetHash(candidates.map { candidate -> candidate.optionId })
+        candidates.isNotEmpty() &&
+            state.settings.smartProfilePreference(smartProfile.id)?.needsSmartStartColdScan(enabledProtocolSetHash) != false
+    } == true
+}
 
 internal fun shouldAwaitAutoConnectValidationGrace(
     connectionState: ConnectionState,

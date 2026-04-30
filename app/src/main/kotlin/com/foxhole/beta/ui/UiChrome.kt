@@ -335,8 +335,9 @@ private fun vibrateBannerError(context: Context) {
 
 private const val FoxholeBannerHapticCooldownMs = 1_200L
 private const val FoxholeBannerHapticPulseMs = 25L
-internal const val FOXHOLE_BANNER_SHORT_DURATION_MS = 4_000L
-internal const val FOXHOLE_BANNER_LONG_DURATION_MS = 6_000L
+internal const val FOXHOLE_BANNER_SHORT_DURATION_MS = 6_000L
+internal const val FOXHOLE_BANNER_LONG_DURATION_MS = 9_000L
+internal const val FOXHOLE_BANNER_MIN_VISIBLE_DURATION_MS = 3_000L
 private val FoxholeBannerErrorWaveformMs = longArrayOf(0L, 25L, 60L, 25L)
 
 internal fun defaultBannerDurationMillis(tone: FoxholeBannerTone): Long =
@@ -346,6 +347,17 @@ internal fun defaultBannerDurationMillis(tone: FoxholeBannerTone): Long =
         FoxholeBannerTone.SUCCESS,
         -> FOXHOLE_BANNER_SHORT_DURATION_MS
     }
+
+internal fun resolvedBannerExpiresAtElapsedMs(
+    nowElapsedMs: Long,
+    durationMillis: Long,
+    requestedExpiresAtElapsedMs: Long?,
+): Long {
+    val defaultExpiresAt = nowElapsedMs + durationMillis
+    val requestedExpiresAt = requestedExpiresAtElapsedMs ?: return defaultExpiresAt
+    val minimumExpiresAt = nowElapsedMs + minOf(durationMillis, FOXHOLE_BANNER_MIN_VISIBLE_DURATION_MS)
+    return requestedExpiresAt.coerceAtLeast(minimumExpiresAt)
+}
 
 internal data class FoxholeBannerVisuals(
     override val message: String,
@@ -503,7 +515,11 @@ private fun FoxholeBanner(
     val expiresAtElapsedMs =
         remember(data, visuals?.expiresAtElapsedMs, visuals?.durationMillis) {
             val durationMillis = visuals?.durationMillis ?: defaultBannerDurationMillis(tone)
-            visuals?.expiresAtElapsedMs ?: (SystemClock.elapsedRealtime() + durationMillis)
+            resolvedBannerExpiresAtElapsedMs(
+                nowElapsedMs = SystemClock.elapsedRealtime(),
+                durationMillis = durationMillis,
+                requestedExpiresAtElapsedMs = visuals?.expiresAtElapsedMs,
+            )
         }
     val countdownDurationMillis = visuals?.durationMillis ?: defaultBannerDurationMillis(tone)
     val countdownProgress =
