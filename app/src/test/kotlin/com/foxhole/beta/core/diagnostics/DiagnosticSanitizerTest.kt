@@ -106,11 +106,11 @@ class DiagnosticSanitizerTest {
     fun `keeps runtime diagnostic fields while redacting accidental sensitive values`() {
         val sanitized =
             DiagnosticSanitizer.sanitize(
-                "Runtime validation result: protocol_hint=vless dns_shape=dns-direct:https:443:no_detour|dns-remote:https:443:proxy probe_transport=tcp validation_result=failure endpoint_refusal=true profile_id=42 option_id=vless-main server=1.1.1.1 host=edge.example.com",
+                "Runtime validation result: protocol_hint=vless dns_shape=dns-direct:platform:default:no_detour|dns-remote:https:443:proxy probe_transport=tcp validation_result=failure endpoint_refusal=true profile_id=42 option_id=vless-main server=1.1.1.1 host=edge.example.com",
             )
 
         assertTrue(sanitized.contains("protocol_hint=vless"))
-        assertTrue(sanitized.contains("dns_shape=dns-direct:https:443:no_detour|dns-remote:https:443:proxy"))
+        assertTrue(sanitized.contains("dns_shape=dns-direct:platform:default:no_detour|dns-remote:https:443:proxy"))
         assertTrue(sanitized.contains("probe_transport=tcp"))
         assertTrue(sanitized.contains("validation_result=failure"))
         assertTrue(sanitized.contains("endpoint_refusal=true"))

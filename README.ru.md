@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <strong>public beta 1.0</strong><br>
+  <strong>Версия сборки 1.0.0-beta1</strong><br>
   Версии для iOS, macOS и Windows - maybe.
 </p>
 

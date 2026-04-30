@@ -478,6 +478,7 @@ private fun ProtocolMarkOrSelector(
                         accentColor = selectionTone,
                         shape =
                             RectangleShape,
+                        minHeight = if (compact) 34.dp else 42.dp,
                         contentPadding =
                             PaddingValues(
                                 horizontal = 12.dp,

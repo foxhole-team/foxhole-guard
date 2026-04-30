@@ -38,19 +38,9 @@ data class HomeUiState(
     val profileReconnectPromptUntilElapsedMs: Long = 0L,
     val diagnosticEntries: List<DiagnosticEntry> = emptyList(),
     val catalogPresetPreviews: Map<Long, List<RoutingRepository.RoutingCatalogPresetPreview>> = emptyMap(),
-    val appVersion: String = displayAppVersion(BuildConfig.VERSION_NAME),
+    val appVersion: String = BuildConfig.VERSION_NAME,
     val coreVersion: String = BuildConfig.LIBBOX_SOURCE_VERSION,
 )
-
-internal fun displayAppVersion(versionName: String): String =
-    when (versionName) {
-        TECHNICAL_PUBLIC_BETA_VERSION -> PUBLIC_BETA_VERSION_LABEL
-        "$TECHNICAL_PUBLIC_BETA_VERSION-Debug" -> "$PUBLIC_BETA_VERSION_LABEL Debug"
-        else -> versionName
-    }
-
-private const val TECHNICAL_PUBLIC_BETA_VERSION = "1.0.0-beta1"
-internal const val PUBLIC_BETA_VERSION_LABEL = "public beta 1.0"
 
 internal data class HomeConnectionStreams(
     val profiles: List<Profile>,

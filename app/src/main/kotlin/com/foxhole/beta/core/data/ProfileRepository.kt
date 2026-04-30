@@ -519,39 +519,49 @@ class ProfileRepository(
                 null
             }
         val resolvedConfig = baseConfig ?: error("profile has no resolved config")
+        val legacyRawConfigRepair =
+            parser.normalizeLegacyRawResolvedConfig(
+                raw = resolvedConfig,
+                settings = settings,
+                allowInsecureTls =
+                    settings.expert.allowInsecureTls ||
+                        secret.requiresInsecureTls ||
+                        selectedOption?.requiresInsecureTls == true,
+            )
+        val runtimeConfig = legacyRawConfigRepair ?: resolvedConfig
+        require(runtimeConfig.trimStart().startsWith("{")) { "stored profile config is not valid JSON" }
         val effectiveAllowInsecureTls =
             settings.expert.allowInsecureTls ||
                 secret.requiresInsecureTls ||
                 selectedOption?.requiresInsecureTls == true ||
                 selectedOption?.normalizedConfigJson?.requiresInsecureTls(json) == true ||
-                resolvedConfig.requiresInsecureTls(json)
+                runtimeConfig.requiresInsecureTls(json)
         val sanitized =
             withContext(Dispatchers.IO) {
                 parser.sanitizeResolvedConfig(
-                    raw = resolvedConfig,
+                    raw = runtimeConfig,
                     allowPrivateOutboundHosts = settings.expert.allowPrivateOutboundHosts,
                     allowInsecureTls = effectiveAllowInsecureTls,
                 )
             }
-        if (sanitized != resolvedConfig && protocolOptionIdOverride == null) {
+        if (legacyRawConfigRepair != null || sanitized != resolvedConfig) {
             val nextSecret =
-                selectedOption?.let { option ->
-                    secret.copy(
-                        protocolOptions =
-                            secret.protocolOptions.map { storedOption ->
-                                if (storedOption.id == option.id) {
-                                    storedOption.copy(normalizedConfigJson = sanitized)
-                                } else {
-                                    storedOption
-                                }
-                            },
-                    )
-                } ?: secret.copy(resolvedConfigJson = sanitized)
+                secret.withUpdatedResolvedConfigJson(
+                    sanitized = sanitized,
+                    protocolOptionIdOverride = protocolOptionIdOverride,
+                )
             secretStore.write(
                 secretRef = profile.secretRef,
                 value = nextSecret.withInsecureTlsMarkers(json),
             )
-            diagnosticsLogger.record("profile", "resolved config normalized")
+            diagnosticsLogger.record(
+                "profile",
+                if (legacyRawConfigRepair != null) {
+                    "legacy raw resolved config repaired"
+                } else {
+                    "resolved config normalized"
+                },
+            )
         }
         return sanitized
     }
@@ -1214,4 +1224,23 @@ internal fun StoredProfileSecret.withUpdatedResolvedConfigJson(
                 }
             },
     )
+}
+
+internal fun ProfileImportParser.normalizeLegacyRawResolvedConfig(
+    raw: String,
+    settings: Settings,
+    allowInsecureTls: Boolean,
+): String? {
+    val trimmed = raw.trim()
+    if (trimmed.isBlank() || trimmed.startsWith("{")) {
+        return null
+    }
+    return runCatching {
+        parseUserInput(
+            input = trimmed,
+            allowPrivateOutboundHosts = settings.expert.allowPrivateOutboundHosts,
+            allowHttpSubscriptionUrls = settings.expert.allowHttpConfigImports,
+            allowInsecureTls = allowInsecureTls,
+        ).normalizedConfigJson
+    }.getOrNull()?.takeIf(String::isNotBlank)
 }

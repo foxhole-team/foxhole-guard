@@ -41,7 +41,6 @@ import androidx.compose.material.icons.outlined.BrightnessAuto
 import androidx.compose.material.icons.outlined.BugReport
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.DarkMode
-import androidx.compose.material.icons.outlined.DataUsage
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.FileDownload
@@ -49,11 +48,11 @@ import androidx.compose.material.icons.outlined.FileUpload
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.LightMode
-import androidx.compose.material.icons.outlined.NetworkCheck
 import androidx.compose.material.icons.outlined.PhoneAndroid
 import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.QueryStats
 import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.outlined.Router
 import androidx.compose.material.icons.outlined.RocketLaunch
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Shield
@@ -64,6 +63,7 @@ import androidx.compose.material.icons.outlined.VpnKey
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -91,12 +91,12 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import com.foxhole.beta.R
-import com.foxhole.beta.BuildConfig
 import com.foxhole.beta.core.data.RoutingRepository
 import com.foxhole.beta.core.model.AppLocale
 import com.foxhole.beta.core.model.ClashApiSettings
@@ -189,29 +189,10 @@ fun SettingsHomeScreen(
             )
         }
         item {
-            SettingsNavigationRow(
-                icon = Icons.Outlined.AccountTree,
-                title = stringResource(R.string.traffic_rules),
-                summary = stringResource(R.string.settings_home_routing_summary),
-                onClick = onOpenRouting,
-            )
-        }
-        item {
-            SettingsNavigationRow(
-                modifier = Modifier.testTag("settings_routing_apps_action"),
-                icon = Icons.Outlined.Apps,
-                title = stringResource(R.string.routing_apps_title),
-                summary = stringResource(R.string.settings_home_apps_summary),
-                onClick = onOpenRoutingApps,
-            )
-        }
-        item {
-            SettingsNavigationRow(
-                modifier = Modifier.testTag("settings_routing_sites_action"),
-                icon = Icons.Outlined.Public,
-                title = stringResource(R.string.routing_sites_title),
-                summary = stringResource(R.string.settings_home_sites_summary),
-                onClick = onOpenRoutingSites,
+            SettingsRoutingNavigationGroup(
+                onOpenRouting = onOpenRouting,
+                onOpenRoutingApps = onOpenRoutingApps,
+                onOpenRoutingSites = onOpenRoutingSites,
             )
         }
         item {
@@ -230,15 +211,21 @@ fun SettingsHomeScreen(
                 onClick = onOpenHelp,
             )
         }
-        if (BuildConfig.DEBUG) {
-            item {
-                SettingsNavigationRow(
-                    icon = Icons.Outlined.Info,
-                    title = stringResource(R.string.about_app_title),
-                    summary = stringResource(R.string.settings_home_about_summary),
-                    onClick = onOpenAbout,
-                )
-            }
+        item {
+            SettingsNavigationRow(
+                icon = Icons.Outlined.Info,
+                title = stringResource(R.string.diagnostics_and_usage),
+                summary = stringResource(R.string.settings_home_diagnostics_summary),
+                onClick = onOpenDiagnostics,
+            )
+        }
+        item {
+            SettingsNavigationRow(
+                icon = Icons.Outlined.Info,
+                title = stringResource(R.string.about_app_title),
+                summary = stringResource(R.string.settings_home_about_summary),
+                onClick = onOpenAbout,
+            )
         }
         if (expertVisible) {
             item {
@@ -250,14 +237,6 @@ fun SettingsHomeScreen(
                     onClick = onOpenExpert,
                 )
             }
-        }
-        item {
-            SettingsNavigationRow(
-                icon = Icons.Outlined.Info,
-                title = stringResource(R.string.diagnostics_and_usage),
-                summary = stringResource(R.string.settings_home_diagnostics_summary),
-                onClick = onOpenDiagnostics,
-            )
         }
         item {
             SettingsFooterVersionText(
@@ -321,6 +300,99 @@ fun SettingsHomeScreen(
 }
 
 @Composable
+private fun SettingsRoutingNavigationGroup(
+    onOpenRouting: () -> Unit,
+    onOpenRoutingApps: () -> Unit,
+    onOpenRoutingSites: () -> Unit,
+) {
+    FoxholeCard {
+        SettingsGroupedNavigationRow(
+            icon = Icons.Outlined.AccountTree,
+            title = stringResource(R.string.traffic_rules),
+            summary = stringResource(R.string.settings_home_routing_summary),
+            onClick = onOpenRouting,
+        )
+        SettingsGroupDivider()
+        SettingsGroupedNavigationRow(
+            modifier = Modifier.testTag("settings_routing_apps_action"),
+            icon = Icons.Outlined.Apps,
+            title = stringResource(R.string.routing_apps_title),
+            summary = stringResource(R.string.settings_home_apps_summary),
+            onClick = onOpenRoutingApps,
+        )
+        SettingsGroupDivider()
+        SettingsGroupedNavigationRow(
+            modifier = Modifier.testTag("settings_routing_sites_action"),
+            icon = Icons.Outlined.Public,
+            title = stringResource(R.string.routing_sites_title),
+            summary = stringResource(R.string.settings_home_sites_summary),
+            onClick = onOpenRoutingSites,
+        )
+    }
+}
+
+@Composable
+private fun SettingsGroupedNavigationRow(
+    modifier: Modifier = Modifier,
+    icon: ImageVector,
+    title: String,
+    summary: String,
+    summaryMaxLines: Int = 1,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .clip(MaterialTheme.shapes.medium)
+                .clickable(onClick = onClick)
+                .heightIn(min = 52.dp)
+                .padding(vertical = 6.dp),
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Surface(
+            shape = MaterialTheme.shapes.medium,
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.62f),
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                modifier = Modifier.padding(7.dp).size(18.dp),
+                tint = MaterialTheme.colorScheme.primary,
+            )
+        }
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Text(
+                text = summary.trimEnd().removeSuffix("."),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = summaryMaxLines,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        Icon(
+            imageVector = Icons.AutoMirrored.Outlined.ArrowForward,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+@Composable
+private fun SettingsGroupDivider() {
+    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.30f))
+}
+
+@Composable
 fun SmartStartSettingsScreen(
     state: SettingsRouteUiState,
     snackbarHostState: SnackbarHostState,
@@ -340,12 +412,6 @@ fun SmartStartSettingsScreen(
         snackbarHostState = snackbarHostState,
         onNavigateUp = onNavigateUp,
     ) {
-        item {
-            InfoBlock(
-                title = stringResource(R.string.smart_start_settings_title),
-                body = stringResource(R.string.smart_start_settings_summary),
-            )
-        }
         if (state.hasSmartProfile) {
             item {
                 DropdownSettingRow(
@@ -473,7 +539,7 @@ private fun openFoxholeRepository(context: Context): Boolean {
     }
 }
 
-private const val FOXHOLE_REPOSITORY_URL = "https://github.com/foxhole-app/foxhole"
+private const val FOXHOLE_REPOSITORY_URL = "https://github.com/foxhole-repo/foxhole-app"
 private val TELEGRAM_PACKAGE_CANDIDATES =
     listOf(
         "org.telegram.messenger",
@@ -516,7 +582,7 @@ private fun installedTelegramPackage(packageManager: PackageManager): String? =
         }.isSuccess
     }
 
-private const val FOXHOLE_TELEGRAM_CHANNEL = "foxhole_app"
+private const val FOXHOLE_TELEGRAM_CHANNEL = "foxhole_repo"
 
 private fun supportBotBrowserUri(handle: String): Uri = "https://t.me/${supportBotUsername(handle)}".toUri()
 
@@ -719,6 +785,7 @@ fun TrafficSettingsScreen(
     onDomainStrategySelected: (DomainStrategy) -> Unit,
     onAutoRefreshSubscriptionsChanged: (Boolean) -> Unit,
     onSubscriptionRefreshIntervalSelected: (SubscriptionRefreshInterval) -> Unit,
+    onIpInfoEndpointChanged: (String) -> Unit,
 ) {
     var modeMenuExpanded by rememberSaveable { mutableStateOf(false) }
     var latencyProbeMethodMenuExpanded by rememberSaveable { mutableStateOf(false) }
@@ -729,6 +796,7 @@ fun TrafficSettingsScreen(
     var mtuDialog by rememberSaveable { mutableStateOf(false) }
     var domainMenuExpanded by rememberSaveable { mutableStateOf(false) }
     var subscriptionRefreshIntervalMenuExpanded by rememberSaveable { mutableStateOf(false) }
+    var endpointDialog by rememberSaveable { mutableStateOf(false) }
     val wifiLanAddress by rememberWifiLanAddress()
     val tunnelModeLabel = stringResource(R.string.traffic_mode_tunnel)
     val proxyModeLabel = stringResource(R.string.traffic_mode_proxy)
@@ -758,6 +826,24 @@ fun TrafficSettingsScreen(
             InfoBlock(
                 title = stringResource(R.string.information_title),
                 body = trafficInfoBody(state),
+            )
+        }
+        item {
+            SettingSwitchRow(
+                title = stringResource(R.string.proxy_lan_access_title),
+                checked = state.settings.expert.localSurfaces.allowLanAccess,
+                leadingIcon = Icons.Outlined.Public,
+                onCheckedChange = { enabled ->
+                    if (!enabled || wifiLanAddress != null) {
+                        onLocalProxyLanAccessChanged(enabled)
+                    }
+                },
+                summary =
+                    proxyLanAccessSummary(
+                        allowLanAccess = state.settings.expert.localSurfaces.allowLanAccess,
+                        wifiLanAddress = wifiLanAddress,
+                    ),
+                enabled = wifiLanAddress != null || state.settings.expert.localSurfaces.allowLanAccess,
             )
         }
         item {
@@ -797,24 +883,6 @@ fun TrafficSettingsScreen(
                     onClick = { mtuDialog = true },
                 )
             }
-        }
-        item {
-            SettingSwitchRow(
-                title = stringResource(R.string.proxy_lan_access_title),
-                checked = state.settings.expert.localSurfaces.allowLanAccess,
-                leadingIcon = Icons.Outlined.Public,
-                onCheckedChange = { enabled ->
-                    if (!enabled || wifiLanAddress != null) {
-                        onLocalProxyLanAccessChanged(enabled)
-                    }
-                },
-                summary =
-                    proxyLanAccessSummary(
-                        allowLanAccess = state.settings.expert.localSurfaces.allowLanAccess,
-                        wifiLanAddress = wifiLanAddress,
-                    ),
-                enabled = wifiLanAddress != null || state.settings.expert.localSurfaces.allowLanAccess,
-            )
         }
         if (state.settings.traffic.mode == TrafficMode.PROXY) {
             item {
@@ -919,6 +987,14 @@ fun TrafficSettingsScreen(
                 optionIcon = ::latencyProbeMethodIcon,
             )
         }
+        item {
+            SettingValueRow(
+                title = stringResource(R.string.ip_info_endpoint),
+                value = state.settings.connection.ipInfoEndpoint,
+                leadingIcon = Icons.Outlined.Public,
+                onClick = { endpointDialog = true },
+            )
+        }
     }
 
     if (mtuDialog) {
@@ -966,6 +1042,17 @@ fun TrafficSettingsScreen(
             onConfirm = onMixedSurfaceChanged,
         )
     }
+
+    if (endpointDialog) {
+        TextValueDialog(
+            title = stringResource(R.string.ip_info_endpoint),
+            icon = Icons.Outlined.Public,
+            initialValue = state.settings.connection.ipInfoEndpoint,
+            singleLine = true,
+            onDismiss = { endpointDialog = false },
+            onConfirm = onIpInfoEndpointChanged,
+        )
+    }
 }
 
 @Composable
@@ -978,7 +1065,6 @@ fun ApplicationSettingsScreen(
     onAutoReconnectChanged: (Boolean) -> Unit,
     onAutoStartChanged: (Boolean) -> Unit,
     onBlockScreenshotsChanged: (Boolean) -> Unit,
-    onIpInfoEndpointChanged: (String) -> Unit,
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
@@ -1009,7 +1095,6 @@ fun ApplicationSettingsScreen(
     }
     var themeMenuExpanded by rememberSaveable { mutableStateOf(false) }
     var localeMenuExpanded by rememberSaveable { mutableStateOf(false) }
-    var endpointDialog by rememberSaveable { mutableStateOf(false) }
 
     SettingsScaffold(
         title = stringResource(R.string.app_settings),
@@ -1071,14 +1156,6 @@ fun ApplicationSettingsScreen(
             )
         }
         item {
-            SettingValueRow(
-                title = stringResource(R.string.ip_info_endpoint),
-                value = state.settings.connection.ipInfoEndpoint,
-                leadingIcon = Icons.Outlined.Public,
-                onClick = { endpointDialog = true },
-            )
-        }
-        item {
             SettingsNavigationRow(
                 icon = Icons.Outlined.PhoneAndroid,
                 title = stringResource(R.string.quick_settings_tile),
@@ -1135,17 +1212,6 @@ fun ApplicationSettingsScreen(
                 },
             )
         }
-    }
-
-    if (endpointDialog) {
-        TextValueDialog(
-            title = stringResource(R.string.ip_info_endpoint),
-            icon = Icons.Outlined.Public,
-            initialValue = state.settings.connection.ipInfoEndpoint,
-            singleLine = true,
-            onDismiss = { endpointDialog = false },
-            onConfirm = onIpInfoEndpointChanged,
-        )
     }
 }
 
@@ -1230,26 +1296,18 @@ fun HelpScreen(
                 icon = Icons.Outlined.QueryStats,
                 title = stringResource(R.string.help_protocol_statuses_title),
                 body = stringResource(R.string.help_protocol_statuses_body),
+                content = HelpTopicContent.PROTOCOL_STATUSES,
             ),
             HelpTopic(
                 icon = Icons.Outlined.Shield,
                 title = stringResource(R.string.help_connection_modes_title),
                 body = stringResource(R.string.help_connection_modes_body),
+                content = HelpTopicContent.CONNECTION_MODES,
             ),
             HelpTopic(
                 icon = Icons.AutoMirrored.Outlined.AltRoute,
                 title = stringResource(R.string.traffic_rules),
                 body = stringResource(R.string.help_routing_full_body),
-            ),
-            HelpTopic(
-                icon = Icons.Outlined.NetworkCheck,
-                title = stringResource(R.string.help_dashboard_network_title),
-                body = stringResource(R.string.help_dashboard_network_body),
-            ),
-            HelpTopic(
-                icon = Icons.Outlined.DataUsage,
-                title = stringResource(R.string.help_traffic_usage_title),
-                body = stringResource(R.string.help_traffic_usage_body),
             ),
             HelpTopic(
                 icon = Icons.Outlined.BugReport,
@@ -1277,11 +1335,28 @@ fun HelpScreen(
             key = HelpTopic::title,
         ) { topic ->
             FoxholeCard {
-                HelpSection(
-                    icon = topic.icon,
-                    title = topic.title,
-                    body = topic.body,
-                )
+                when (topic.content) {
+                    HelpTopicContent.TEXT ->
+                        HelpSection(
+                            icon = topic.icon,
+                            title = topic.title,
+                            body = topic.body,
+                        )
+                    HelpTopicContent.PROTOCOL_STATUSES ->
+                        HelpSectionContent(
+                            icon = topic.icon,
+                            title = topic.title,
+                        ) {
+                            HelpProtocolStatusesContent()
+                        }
+                    HelpTopicContent.CONNECTION_MODES ->
+                        HelpSectionContent(
+                            icon = topic.icon,
+                            title = topic.title,
+                        ) {
+                            HelpConnectionModesContent()
+                        }
+                }
             }
         }
     }
@@ -1291,7 +1366,161 @@ private data class HelpTopic(
     val icon: ImageVector,
     val title: String,
     val body: String,
+    val content: HelpTopicContent = HelpTopicContent.TEXT,
 )
+
+private enum class HelpTopicContent {
+    TEXT,
+    PROTOCOL_STATUSES,
+    CONNECTION_MODES,
+}
+
+@Composable
+private fun HelpProtocolStatusesContent() {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        helpProtocolStatusItems().forEach { item ->
+            HelpProtocolStatusRow(item)
+        }
+    }
+}
+
+@Composable
+private fun HelpProtocolStatusRow(item: HelpProtocolStatusItem) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        SmartProfileMetricPill(
+            text = stringResource(item.labelRes),
+            tone = item.tone,
+            compact = false,
+        )
+        Text(
+            text = stringResource(item.summaryRes),
+            modifier = Modifier.weight(1f),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+private fun helpProtocolStatusItems(): List<HelpProtocolStatusItem> =
+    listOf(
+        HelpProtocolStatusItem(
+            labelRes = R.string.latency_quality_fast,
+            summaryRes = R.string.help_protocol_fast_summary,
+            tone = SmartProfileMetricTone.POSITIVE,
+        ),
+        HelpProtocolStatusItem(
+            labelRes = R.string.latency_quality_normal,
+            summaryRes = R.string.help_protocol_normal_summary,
+            tone = SmartProfileMetricTone.NEUTRAL,
+        ),
+        HelpProtocolStatusItem(
+            labelRes = R.string.latency_quality_slow,
+            summaryRes = R.string.help_protocol_slow_summary,
+            tone = SmartProfileMetricTone.WARNING,
+        ),
+        HelpProtocolStatusItem(
+            labelRes = R.string.latency_quality_very_slow,
+            summaryRes = R.string.help_protocol_very_slow_summary,
+            tone = SmartProfileMetricTone.VERY_SLOW,
+        ),
+        HelpProtocolStatusItem(
+            labelRes = R.string.latency_pill_down,
+            summaryRes = R.string.help_protocol_down_summary,
+            tone = SmartProfileMetricTone.DANGER,
+        ),
+        HelpProtocolStatusItem(
+            labelRes = R.string.latency_pill_unavailable,
+            summaryRes = R.string.help_protocol_unavailable_summary,
+            tone = SmartProfileMetricTone.NEUTRAL,
+        ),
+        HelpProtocolStatusItem(
+            labelRes = R.string.smart_start_protocol_status_no_data,
+            summaryRes = R.string.help_protocol_no_data_summary,
+            tone = SmartProfileMetricTone.NEUTRAL,
+        ),
+        HelpProtocolStatusItem(
+            labelRes = R.string.smart_start_protocol_status_disabled,
+            summaryRes = R.string.help_protocol_disabled_summary,
+            tone = SmartProfileMetricTone.NEUTRAL,
+        ),
+    )
+
+private data class HelpProtocolStatusItem(
+    val labelRes: Int,
+    val summaryRes: Int,
+    val tone: SmartProfileMetricTone,
+)
+
+@Composable
+private fun HelpConnectionModesContent() {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        HelpConnectionModeRow(
+            icon = Icons.Outlined.VpnKey,
+            title = stringResource(R.string.traffic_mode_tunnel),
+            body = stringResource(R.string.help_connection_tunnel_body),
+        )
+        HelpConnectionModeRow(
+            icon = Icons.Outlined.Apps,
+            title = stringResource(R.string.home_mode_split_tunnel),
+            body = stringResource(R.string.help_connection_split_tunnel_body),
+        )
+        HelpConnectionModeRow(
+            icon = Icons.Outlined.Public,
+            title = stringResource(R.string.traffic_mode_proxy),
+            body = stringResource(R.string.help_connection_proxy_body),
+        )
+        HelpConnectionModeRow(
+            icon = Icons.Outlined.Router,
+            title = stringResource(R.string.proxy_lan_access_title),
+            body = stringResource(R.string.help_connection_lan_proxy_body),
+        )
+    }
+}
+
+@Composable
+private fun HelpConnectionModeRow(
+    icon: ImageVector,
+    title: String,
+    body: String,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.Top,
+    ) {
+        Surface(
+            shape = MaterialTheme.shapes.medium,
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.62f),
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                modifier = Modifier.padding(8.dp).size(17.dp),
+                tint = MaterialTheme.colorScheme.primary,
+            )
+        }
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                text = body,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
 
 @Composable
 fun AboutScreen(

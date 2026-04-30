@@ -406,7 +406,7 @@ class RuntimeConfigAssemblerTest {
     }
 
     @Test
-    fun `foxhole dns defaults use direct doh bootstrap and proxied doh final resolver`() {
+    fun `foxhole dns defaults use local bootstrap and proxied doh final resolver`() {
         val config = parse(assembler.assemble(baseConfigWithLegacyFoxholeDns(), Settings(), null))
         val dns = config["dns"]!!.jsonObject
         val route = config["route"]!!.jsonObject
@@ -417,10 +417,10 @@ class RuntimeConfigAssemblerTest {
         assertEquals("local", servers[0].jsonObject["type"]!!.jsonPrimitive.content)
         assertFalse(servers[0].jsonObject.containsKey("detour"))
         assertEquals("dns-direct", servers[1].jsonObject["tag"]!!.jsonPrimitive.content)
-        assertEquals("https", servers[1].jsonObject["type"]!!.jsonPrimitive.content)
-        assertEquals("1.1.1.1", servers[1].jsonObject["server"]!!.jsonPrimitive.content)
-        assertEquals("443", servers[1].jsonObject["server_port"]!!.jsonPrimitive.content)
-        assertEquals("/dns-query", servers[1].jsonObject["path"]!!.jsonPrimitive.content)
+        assertEquals("local", servers[1].jsonObject["type"]!!.jsonPrimitive.content)
+        assertFalse(servers[1].jsonObject.containsKey("server"))
+        assertFalse(servers[1].jsonObject.containsKey("server_port"))
+        assertFalse(servers[1].jsonObject.containsKey("path"))
         assertFalse(servers[1].jsonObject.containsKey("detour"))
         assertEquals("dns-remote", servers[2].jsonObject["tag"]!!.jsonPrimitive.content)
         assertEquals("https", servers[2].jsonObject["type"]!!.jsonPrimitive.content)
@@ -455,7 +455,7 @@ class RuntimeConfigAssemblerTest {
     }
 
     @Test
-    fun `foxhole dns keeps direct doh bootstrap resolver when private dns is strict`() {
+    fun `foxhole dns keeps local bootstrap resolver when private dns is strict`() {
         val config =
             parse(
                 assembler.assemble(
@@ -472,10 +472,10 @@ class RuntimeConfigAssemblerTest {
         assertEquals("dns-remote", dns["final"]!!.jsonPrimitive.content)
         assertEquals("dns-direct", route["default_domain_resolver"]!!.jsonPrimitive.content)
         assertEquals("dns-direct", servers[1].jsonObject["tag"]!!.jsonPrimitive.content)
-        assertEquals("https", servers[1].jsonObject["type"]!!.jsonPrimitive.content)
-        assertEquals("1.1.1.1", servers[1].jsonObject["server"]!!.jsonPrimitive.content)
-        assertEquals("443", servers[1].jsonObject["server_port"]!!.jsonPrimitive.content)
-        assertEquals("/dns-query", servers[1].jsonObject["path"]!!.jsonPrimitive.content)
+        assertEquals("local", servers[1].jsonObject["type"]!!.jsonPrimitive.content)
+        assertFalse(servers[1].jsonObject.containsKey("server"))
+        assertFalse(servers[1].jsonObject.containsKey("server_port"))
+        assertFalse(servers[1].jsonObject.containsKey("path"))
         assertFalse(servers[1].jsonObject.containsKey("detour"))
         assertEquals("dns-remote", servers[2].jsonObject["tag"]!!.jsonPrimitive.content)
         assertEquals("https", servers[2].jsonObject["type"]!!.jsonPrimitive.content)
@@ -483,14 +483,15 @@ class RuntimeConfigAssemblerTest {
     }
 
     @Test
-    fun `legacy udp bootstrap dns is rewritten to direct doh bootstrap`() {
+    fun `legacy udp bootstrap dns is rewritten to local bootstrap`() {
         val config = parse(assembler.assemble(baseConfigWithLegacyUdpBootstrapDns(), Settings(), null))
         val servers = config["dns"]!!.jsonObject["servers"]!!.jsonArray
 
         assertEquals("dns-direct", servers[1].jsonObject["tag"]!!.jsonPrimitive.content)
-        assertEquals("https", servers[1].jsonObject["type"]!!.jsonPrimitive.content)
-        assertEquals("443", servers[1].jsonObject["server_port"]!!.jsonPrimitive.content)
-        assertEquals("/dns-query", servers[1].jsonObject["path"]!!.jsonPrimitive.content)
+        assertEquals("local", servers[1].jsonObject["type"]!!.jsonPrimitive.content)
+        assertFalse(servers[1].jsonObject.containsKey("server"))
+        assertFalse(servers[1].jsonObject.containsKey("server_port"))
+        assertFalse(servers[1].jsonObject.containsKey("path"))
         assertFalse(servers[1].jsonObject.containsKey("detour"))
         assertEquals("dns-remote", servers[2].jsonObject["tag"]!!.jsonPrimitive.content)
         assertEquals("proxy", servers[2].jsonObject["detour"]!!.jsonPrimitive.content)

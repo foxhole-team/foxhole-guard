@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <strong>public beta 1.0</strong><br>
+  <strong>Build version 1.0.0-beta1</strong><br>
   iOS, macOS, and Windows versions - maybe.
 </p>
 

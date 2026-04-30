@@ -85,14 +85,17 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
@@ -189,6 +192,18 @@ fun HomeScreen(
             MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.42f)
         }
     val dashboardSecondaryActionIconSize = 21.dp
+    val importFromClipboardTitle = stringResource(R.string.import_from_clipboard)
+    val importFromFileTitle = stringResource(R.string.import_from_file)
+    val importFromQrTitle = stringResource(R.string.scan_qr_code)
+    val importDropdownMenuWidth =
+        rememberImportDropdownMenuWidth(
+            titles =
+                listOf(
+                    importFromClipboardTitle,
+                    importFromFileTitle,
+                    importFromQrTitle,
+                ),
+        )
     val connectionDurationText = rememberConnectionDurationText(state.connection)
     val dashboardProtocolModel = remember(state) { resolveHomeDashboardProtocolModel(state) }
     val dashboardProtocolLatencies = dashboardProtocolModel.latenciesByOptionId
@@ -578,6 +593,7 @@ fun HomeScreen(
                             FoxholeDropdownMenu(
                                 expanded = importMenuExpanded,
                                 onDismissRequest = { importMenuExpanded = false },
+                                modifier = Modifier.width(importDropdownMenuWidth),
                             ) {
                                 FoxholeDropdownItem(
                                     modifier = Modifier.testTag("home_import_from_clipboard_action"),
@@ -590,7 +606,7 @@ fun HomeScreen(
                                     },
                                 ) {
                                     ImportDropdownItemText(
-                                        title = stringResource(R.string.import_from_clipboard),
+                                        title = importFromClipboardTitle,
                                         summary = stringResource(R.string.import_from_clipboard_summary),
                                     )
                                 }
@@ -605,7 +621,7 @@ fun HomeScreen(
                                     },
                                 ) {
                                     ImportDropdownItemText(
-                                        title = stringResource(R.string.import_from_file),
+                                        title = importFromFileTitle,
                                         summary = stringResource(R.string.import_from_file_summary),
                                     )
                                 }
@@ -620,7 +636,7 @@ fun HomeScreen(
                                     },
                                 ) {
                                     ImportDropdownItemText(
-                                        title = stringResource(R.string.scan_qr_code),
+                                        title = importFromQrTitle,
                                         summary = stringResource(R.string.scan_qr_code_summary),
                                     )
                                 }
@@ -1108,6 +1124,26 @@ fun HomeScreen(
 }
 
 @Composable
+private fun rememberImportDropdownMenuWidth(titles: List<String>): Dp {
+    val density = LocalDensity.current
+    val textMeasurer = rememberTextMeasurer()
+    val titleStyle = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold)
+    val titleWidth =
+        remember(titles, titleStyle, density, textMeasurer) {
+            val maxTitleWidthPx =
+                titles.maxOf { title ->
+                    textMeasurer.measure(
+                        text = AnnotatedString(title),
+                        style = titleStyle,
+                        maxLines = 1,
+                    ).size.width
+                }
+            with(density) { maxTitleWidthPx.toDp() }
+        }
+    return (titleWidth + ImportMenuWidthChrome).coerceIn(ImportMenuMinWidth, ImportMenuMaxWidth)
+}
+
+@Composable
 private fun ImportDropdownItemText(
     title: String,
     summary: String,
@@ -1130,3 +1166,7 @@ private fun ImportDropdownItemText(
         )
     }
 }
+
+private val ImportMenuWidthChrome = 62.dp
+private val ImportMenuMinWidth = 188.dp
+private val ImportMenuMaxWidth = 392.dp

@@ -39,7 +39,6 @@ fun ExpertSettingsScreen(
     onStrictRouteChanged: (Boolean) -> Unit,
     onBypassLanChanged: (Boolean) -> Unit,
     onAllowPrivateOutboundHostsChanged: (Boolean) -> Unit,
-    onBlockScreenshotsChanged: (Boolean) -> Unit,
     onNetworkActivityLoggingChanged: (Boolean) -> Unit,
     onSmartStartReplayLoggingChanged: (Boolean) -> Unit,
     onDiagnosticsRetentionSelected: (DiagnosticsRetention) -> Unit,
@@ -159,15 +158,6 @@ fun ExpertSettingsScreen(
                         onAllowPrivateOutboundHostsChanged(false)
                     }
                 },
-                summaryMaxLines = 3,
-            )
-        }
-        item {
-            SettingSwitchRow(
-                title = stringResource(R.string.block_screenshots_title),
-                checked = state.settings.expert.blockScreenshots,
-                summary = stringResource(R.string.block_screenshots_summary),
-                onCheckedChange = onBlockScreenshotsChanged,
                 summaryMaxLines = 3,
             )
         }

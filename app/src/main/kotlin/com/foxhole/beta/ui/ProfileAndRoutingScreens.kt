@@ -288,10 +288,7 @@ fun ProfilesScreen(
             }
         } else if (state.profiles.isEmpty()) {
             item {
-                WarningBlock(
-                    title = stringResource(R.string.no_profiles),
-                    body = stringResource(R.string.manage_profiles_summary),
-                )
+                ProfilesEmptyInfoBlock()
             }
         }
         items(visibleProfiles, key = Profile::id) { profile ->
@@ -661,6 +658,36 @@ fun ProfilesScreen(
                 refreshProfileId = null
             },
         )
+    }
+}
+
+@Composable
+private fun ProfilesEmptyInfoBlock() {
+    Surface(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .testTag("profiles_empty_state"),
+        shape = MaterialTheme.shapes.large,
+        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector = Icons.Outlined.Info,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(18.dp),
+            )
+            Text(
+                text = stringResource(R.string.profiles_empty_message),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
     }
 }
 

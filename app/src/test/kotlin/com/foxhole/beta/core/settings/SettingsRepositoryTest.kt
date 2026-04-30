@@ -86,6 +86,7 @@ class SettingsRepositoryTest {
         assertNull(storedSupportBotHandleOverride(null))
         assertNull(storedSupportBotHandleOverride("broken"))
         assertNull(storedSupportBotHandleOverride(BuildConfig.DEFAULT_SUPPORT_BOT_HANDLE))
+        assertNull(storedSupportBotHandleOverride("@foxhole_app_support_bot"))
         assertEquals("@custom_support_bot", storedSupportBotHandleOverride("@custom_support_bot"))
     }
 

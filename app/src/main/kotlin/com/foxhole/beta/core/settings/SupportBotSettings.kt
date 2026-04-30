@@ -11,9 +11,15 @@ internal fun normalizeSupportBotHandle(raw: String?): String? {
 
 internal fun storedSupportBotHandleOverride(raw: String?): String? =
     normalizeSupportBotHandle(raw)
+        ?.takeUnless { it in LEGACY_SUPPORT_BOT_HANDLES }
         ?.takeUnless { it.equals(BuildConfig.DEFAULT_SUPPORT_BOT_HANDLE, ignoreCase = true) }
 
 internal fun effectiveSupportBotHandle(override: String?): String =
     normalizeSupportBotHandle(override) ?: BuildConfig.DEFAULT_SUPPORT_BOT_HANDLE
 
 internal fun supportBotUsername(handle: String): String = handle.removePrefix("@")
+
+private val LEGACY_SUPPORT_BOT_HANDLES =
+    setOf(
+        "@foxhole_app_support_bot",
+    )

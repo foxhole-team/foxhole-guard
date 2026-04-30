@@ -672,10 +672,7 @@ class RuntimeConfigAssembler(
     private fun foxholeDirectDnsServer(): JsonObject =
         buildJsonObject {
             put("tag", DNS_DIRECT_TAG)
-            put("type", "https")
-            put("server", FOXHOLE_REMOTE_DNS_SERVER)
-            put("server_port", 443)
-            put("path", "/dns-query")
+            put("type", "local")
         }
 
     private fun foxholeRemoteDnsServer(_privateDnsMode: PrivateDnsMode?): JsonObject =

@@ -1,5 +1,6 @@
 package com.foxhole.beta.ui
 
+import com.foxhole.beta.BuildConfig
 import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -8,14 +9,15 @@ import org.junit.Test
 
 class PublicVersionCopyTest {
     @Test
-    fun `visible app version uses public beta label while keeping technical debug suffix readable`() {
-        assertEquals(PUBLIC_BETA_VERSION_LABEL, displayAppVersion("1.0.0-beta1"))
-        assertEquals("$PUBLIC_BETA_VERSION_LABEL Debug", displayAppVersion("1.0.0-beta1-Debug"))
-        assertEquals("1.0.1", displayAppVersion("1.0.1"))
+    fun `visible app version uses build version from generated config`() {
+        val state = HomeUiState()
+
+        assertEquals(BuildConfig.VERSION_NAME, state.appVersion)
     }
 
     @Test
-    fun `public surfaces keep public beta copy instead of technical version copy`() {
+    fun `public surfaces use build version copy`() {
+        val releaseVersionName = BuildConfig.VERSION_NAME.removeSuffix("-Debug")
         val publicSurfaceFiles =
             listOf(
                 "README.md",
@@ -28,10 +30,8 @@ class PublicVersionCopyTest {
         publicSurfaceFiles.forEach { path ->
             val content = projectFile(path).readText()
 
-            assertTrue("$path should mention public beta 1.0", content.contains(PUBLIC_BETA_VERSION_LABEL))
-            if (!path.endsWith("com.foxhole.beta.yml")) {
-                assertFalse("$path should not expose the technical version label", content.contains("1.0.0-beta1"))
-            }
+            assertTrue("$path should mention $releaseVersionName", content.contains(releaseVersionName))
+            assertFalse("$path should not mention public beta 1.0", content.contains("public beta 1.0"))
         }
     }
 

@@ -862,7 +862,6 @@ private fun SmartProfileProtocolMenuFooterContent(
                 alpha = if (menuLayout.showDetailedMetrics) 0.34f else 0.24f,
             ),
     )
-    val legendInfoTone = foxholeSystemAwareAccentColor(fallback = FoxholeInfoAccent)
     Column(
         modifier =
             Modifier
@@ -870,39 +869,6 @@ private fun SmartProfileProtocolMenuFooterContent(
                 .padding(horizontal = if (menuLayout.showDetailedMetrics) 10.dp else 8.dp, vertical = 6.dp),
         verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
-        Row(
-            horizontalArrangement =
-                Arrangement.spacedBy(
-                    if (menuLayout.showDetailedMetrics) {
-                        0.dp
-                    } else {
-                        SmartProfileHintIconGap
-                    },
-                ),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            if (!menuLayout.showDetailedMetrics) {
-                Icon(
-                    imageVector = Icons.Outlined.Info,
-                    contentDescription = null,
-                    modifier = Modifier.size(10.dp),
-                    tint = legendInfoTone,
-                )
-            }
-            Text(
-                text = stringResource(R.string.smart_profile_legend_title),
-                style =
-                    MaterialTheme.typography.labelSmall.copy(
-                        fontSize = if (menuLayout.showDetailedMetrics) 10.sp else 8.8.sp,
-                        lineHeight = if (menuLayout.showDetailedMetrics) 11.sp else 9.5.sp,
-                        fontWeight = FontWeight.SemiBold,
-                    ),
-                color = legendInfoTone,
-                maxLines = 1,
-                softWrap = false,
-                overflow = TextOverflow.Clip,
-            )
-        }
         SmartProfileLegendLine(
             compact = !menuLayout.showDetailedMetrics,
             modifier = Modifier.fillMaxWidth(),
@@ -1846,7 +1812,7 @@ private fun smartStartProtocolPresentationTone(presentation: SmartStartProtocolP
     }
 
 @Composable
-private fun SmartProfileMetricPill(
+internal fun SmartProfileMetricPill(
     text: String,
     tone: SmartProfileMetricTone,
     modifier: Modifier = Modifier,
@@ -1937,7 +1903,7 @@ private enum class SmartProfileTransport {
     UDP,
 }
 
-private enum class SmartProfileMetricTone {
+internal enum class SmartProfileMetricTone {
     POSITIVE,
     WARNING,
     VERY_SLOW,

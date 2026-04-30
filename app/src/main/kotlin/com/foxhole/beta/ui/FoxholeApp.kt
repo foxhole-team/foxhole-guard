@@ -132,6 +132,7 @@ fun FoxholeApp(
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentSection = navBackStackEntry?.destination?.appSection()
     val rootSwipeSection = navBackStackEntry?.destination?.rootSwipeSection()
+    val settingsBackSwipeEnabled = navBackStackEntry?.destination?.settingsBackSwipeEnabled() == true
     var qrScannerVisible by rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
     val insecureTlsImportWarning by viewModel.insecureTlsImportWarning.collectAsStateWithLifecycle()
     val importProfileLauncher =
@@ -164,15 +165,20 @@ fun FoxholeApp(
                     .padding(top = innerPadding.calculateTopPadding())
                     .consumeWindowInsets(innerPadding)
                     .then(
-                        if (rootSwipeSection != null) {
-                            Modifier.sectionSwipeNavigation(
-                                currentSection = rootSwipeSection,
-                                onSectionSelected = { section -> navController.navigateToSection(section) },
-                            )
-                        } else {
-                            Modifier
+                        when {
+                            rootSwipeSection != null ->
+                                Modifier.sectionSwipeNavigation(
+                                    currentSection = rootSwipeSection,
+                                    onSectionSelected = { section -> navController.navigateToSection(section) },
+                                )
+                            settingsBackSwipeEnabled ->
+                                Modifier.settingsBackSwipeNavigation(
+                                    onNavigateBack = navController::navigateUp,
+                                )
+                            else -> Modifier
                         },
-                    ).testTag("app_section_swipe_surface"),
+                    )
+                    .testTag("app_section_swipe_surface"),
         ) {
             NavHost(
                 navController = navController,
@@ -379,6 +385,7 @@ fun FoxholeApp(
                         onDomainStrategySelected = viewModel::onDomainStrategySelected,
                         onAutoRefreshSubscriptionsChanged = viewModel::onAutoRefreshSubscriptionsChanged,
                         onSubscriptionRefreshIntervalSelected = viewModel::onSubscriptionRefreshIntervalSelected,
+                        onIpInfoEndpointChanged = viewModel::onIpInfoEndpointChanged,
                     )
                 }
                 composable(AppRoute.ROUTING) {
@@ -449,7 +456,6 @@ fun FoxholeApp(
                         onAutoReconnectChanged = viewModel::onAutoReconnectChanged,
                         onAutoStartChanged = viewModel::onAutoStartChanged,
                         onBlockScreenshotsChanged = viewModel::onBlockScreenshotsChanged,
-                        onIpInfoEndpointChanged = viewModel::onIpInfoEndpointChanged,
                     )
                 }
                 composable(AppRoute.HELP) {
@@ -479,7 +485,6 @@ fun FoxholeApp(
                         onStrictRouteChanged = viewModel::onStrictRouteChanged,
                         onBypassLanChanged = viewModel::onBypassLanChanged,
                         onAllowPrivateOutboundHostsChanged = viewModel::onAllowPrivateOutboundHostsChanged,
-                        onBlockScreenshotsChanged = viewModel::onBlockScreenshotsChanged,
                         onNetworkActivityLoggingChanged = viewModel::onNetworkActivityLoggingChanged,
                         onSmartStartReplayLoggingChanged = viewModel::onSmartStartReplayLoggingChanged,
                         onDiagnosticsRetentionSelected = viewModel::onDiagnosticsRetentionSelected,
@@ -771,6 +776,41 @@ private fun Modifier.sectionSwipeNavigation(
         )
     }
 
+private fun Modifier.settingsBackSwipeNavigation(
+    onNavigateBack: () -> Unit,
+): Modifier =
+    pointerInput(Unit) {
+        var dragDistance = 0f
+        var consumed = false
+        val switchThreshold = size.width * DETAIL_BACK_SWIPE_THRESHOLD_FRACTION
+        detectHorizontalDragGestures(
+            onDragStart = {
+                dragDistance = 0f
+                consumed = false
+            },
+            onHorizontalDrag = { change, dragAmount ->
+                if (consumed) {
+                    return@detectHorizontalDragGestures
+                }
+                dragDistance += dragAmount
+                if (abs(dragDistance) < switchThreshold) {
+                    return@detectHorizontalDragGestures
+                }
+                change.consume()
+                consumed = true
+                onNavigateBack()
+            },
+            onDragEnd = {
+                dragDistance = 0f
+                consumed = false
+            },
+            onDragCancel = {
+                dragDistance = 0f
+                consumed = false
+            },
+        )
+    }
+
 private fun NavDestination.appSection(): AppSection =
     when {
         route?.startsWith(AppRoute.SETTINGS) == true -> AppSection.SETTINGS
@@ -783,6 +823,11 @@ private fun NavDestination.rootSwipeSection(): AppSection? =
         AppRoute.SETTINGS -> AppSection.SETTINGS
         else -> null
     }
+
+private fun NavDestination.settingsBackSwipeEnabled(): Boolean {
+    val currentRoute = route ?: return false
+    return currentRoute.startsWith("${AppRoute.SETTINGS}/")
+}
 
 private fun NavHostController.navigateToProfilesRoot() {
     val currentRoute = currentDestination?.route
@@ -823,3 +868,4 @@ private fun NavHostController.navigateToSection(section: AppSection) {
 }
 
 private const val SECTION_SWIPE_THRESHOLD_FRACTION = 0.22f
+private const val DETAIL_BACK_SWIPE_THRESHOLD_FRACTION = 0.18f

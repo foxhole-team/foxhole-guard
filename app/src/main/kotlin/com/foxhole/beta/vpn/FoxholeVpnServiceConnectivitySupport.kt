@@ -657,7 +657,7 @@ private fun JsonObject.redactedDnsServerShape(): String {
         }
     val type =
         when (this["type"]?.jsonPrimitive?.contentOrNull ?: this["address"]?.jsonPrimitive?.contentOrNull) {
-            "local" -> "local"
+            "local" -> "platform"
             "udp" -> "udp"
             "tcp" -> "tcp"
             "https" -> "https"

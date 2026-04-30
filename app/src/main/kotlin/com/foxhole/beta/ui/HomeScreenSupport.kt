@@ -608,7 +608,7 @@ private fun HomeProfileLoadingLine(
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.End,
+        horizontalArrangement = Arrangement.Start,
         verticalAlignment = Alignment.CenterVertically,
     ) {
         FoxholeSkeletonBlock(

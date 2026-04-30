@@ -362,7 +362,7 @@ internal suspend fun HomeViewModel.reconnectProfileIfRequestedInternal(
         connectNow(profileId)
         true
     }.onFailure {
-        emitError(it.message ?: getApplication<Application>().getString(R.string.error_runtime_missing))
+        emitError(runtimeConnectionFailureMessage(it))
     }.getOrDefault(false)
 }
 
@@ -404,7 +404,20 @@ internal suspend fun HomeViewModel.maybeReloadActiveRuntimeInternal(): Boolean {
 internal fun HomeViewModel.connectInternal(profileId: Long) {
     viewModelScope.launch {
         runCatching { connectNow(profileId) }
-            .onFailure { emitError(it.message ?: getApplication<Application>().getString(R.string.error_runtime_missing)) }
+            .onFailure { emitError(runtimeConnectionFailureMessage(it)) }
+    }
+}
+
+private fun HomeViewModel.runtimeConnectionFailureMessage(error: Throwable): String {
+    val app = getApplication<Application>()
+    val message = error.message.orEmpty()
+    return when {
+        message.contains("Unexpected JSON token", ignoreCase = true) ||
+            message.contains("stored profile config is not valid JSON", ignoreCase = true) ||
+            message.contains("profile has no resolved config", ignoreCase = true) ->
+            app.getString(R.string.profile_config_invalid_reimport)
+
+        else -> error.message ?: app.getString(R.string.error_runtime_missing)
     }
 }
 

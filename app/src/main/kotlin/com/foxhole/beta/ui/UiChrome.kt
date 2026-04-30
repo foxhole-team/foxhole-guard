@@ -96,6 +96,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.content.getSystemService
 import com.foxhole.beta.R
 import com.foxhole.beta.core.model.ThemeMode
@@ -202,15 +203,19 @@ internal fun FoxholeScaffold(
                         titleBadge?.let { badge ->
                             val badgeTone = foxholeSystemAwareAccentColor(fallback = MaterialTheme.colorScheme.primary)
                             Surface(
-                                modifier = Modifier.padding(top = 1.dp),
+                                modifier = Modifier.padding(top = 2.dp),
                                 shape = MaterialTheme.shapes.small,
                                 color = badgeTone.copy(alpha = 0.12f),
                                 border = BorderStroke(1.dp, badgeTone.copy(alpha = 0.30f)),
                             ) {
                                 Text(
                                     text = badge,
-                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
-                                    style = MaterialTheme.typography.labelSmall,
+                                    modifier = Modifier.padding(horizontal = 3.dp, vertical = 0.dp),
+                                    style =
+                                        MaterialTheme.typography.labelSmall.copy(
+                                            fontSize = 8.5.sp,
+                                            lineHeight = 9.sp,
+                                        ),
                                     fontWeight = FontWeight.Black,
                                     color = badgeTone,
                                 )

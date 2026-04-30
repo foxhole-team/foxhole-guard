@@ -15,6 +15,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -636,6 +637,24 @@ internal fun HelpSection(
     title: String,
     body: String,
 ) {
+    HelpSectionContent(
+        icon = icon,
+        title = title,
+    ) {
+        Text(
+            text = body,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+@Composable
+internal fun HelpSectionContent(
+    icon: ImageVector,
+    title: String,
+    content: @Composable ColumnScope.() -> Unit,
+) {
     var expanded by rememberSaveable(title) { mutableStateOf(false) }
     val chevronRotation by animateFloatAsState(
         targetValue = if (expanded) 180f else 0f,
@@ -683,11 +702,10 @@ internal fun HelpSection(
             )
         }
         AnimatedVisibility(visible = expanded) {
-            Text(
-                text = body,
-                modifier = Modifier.padding(start = 46.dp, end = 4.dp, bottom = 2.dp),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            Column(
+                modifier = Modifier.padding(start = 0.dp, end = 4.dp, bottom = 2.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+                content = content,
             )
         }
     }
