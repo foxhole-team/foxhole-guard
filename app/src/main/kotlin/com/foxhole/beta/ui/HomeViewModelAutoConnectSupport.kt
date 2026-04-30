@@ -89,10 +89,23 @@ internal fun HomeViewModel.reconnectInternal(profileId: Long) {
                 awaitDisconnectedForAutoConnect()
             }
             connectNow(profileId)
+            awaitReconnectConnectionOutcome()
         } finally {
             reconnectInProgressMutable.value = false
             reconnectJob = null
         }
+    }
+}
+
+private suspend fun HomeViewModel.awaitReconnectConnectionOutcome() {
+    val outcome =
+        withTimeoutOrNull(HomeViewModel.AUTO_CONNECT_CONNECTION_TIMEOUT_MS) {
+            container.connectionController.snapshot.first { snapshot ->
+                snapshot.state in HomeViewModel.TERMINAL_CONNECTION_STATES
+            }
+        }
+    if (outcome == null) {
+        container.diagnosticsLogger.record("connection", "manual reconnect status wait timed out")
     }
 }
 

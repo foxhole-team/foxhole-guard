@@ -61,6 +61,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
@@ -185,7 +186,10 @@ internal fun ProtocolMetadataRow(
                 contentAlignment = Alignment.CenterEnd,
             ) {
                 InsecureTlsProfileBadge(
-                    modifier = Modifier.align(Alignment.CenterEnd),
+                    modifier =
+                        Modifier
+                            .align(Alignment.CenterEnd)
+                            .offset(y = if (compact) 2.dp else 3.dp),
                     compact = compact,
                 )
             }
@@ -473,31 +477,12 @@ private fun ProtocolMarkOrSelector(
                         showBorder = index != protocolOptions.lastIndex,
                         accentColor = selectionTone,
                         shape =
-                            foxholeDropdownItemShape(
-                                index = index,
-                                lastIndex = protocolOptions.lastIndex,
-                                hasHeader = dropdownInfoText != null,
-                            ),
+                            RectangleShape,
                         contentPadding =
                             PaddingValues(
                                 horizontal = 12.dp,
                                 vertical = 0.dp,
                             ),
-                        trailingContent = {
-                            Box(
-                                modifier = Modifier.size(20.dp),
-                                contentAlignment = Alignment.CenterEnd,
-                            ) {
-                                if (optionSelected) {
-                                    Icon(
-                                        imageVector = Icons.Outlined.CheckCircle,
-                                        contentDescription = null,
-                                        tint = selectionTone,
-                                        modifier = Modifier.size(18.dp),
-                                    )
-                                }
-                            }
-                        },
                     ) {
                         ProtocolSelectorLabel(
                             option = option,
@@ -820,8 +805,8 @@ private fun rememberProtocolSelectorFixedWidth(
     val trailingPaddingPx = with(density) { if (compact) 8.dp.roundToPx() else 10.dp.roundToPx() }
     val compactWidthSlackPx = with(density) { if (compact) 8.dp.roundToPx() else 0 }
     val dropdownHorizontalPaddingPx = with(density) { 24.dp.roundToPx() }
-    val dropdownTrailingGapPx = with(density) { 10.dp.roundToPx() }
-    val dropdownCheckWidthPx = with(density) { 20.dp.roundToPx() }
+    val dropdownTrailingGapPx = 0
+    val dropdownCheckWidthPx = 0
     fun textWidth(text: String, style: TextStyle): Int =
         textMeasurer.measure(
             text = AnnotatedString(text),

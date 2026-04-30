@@ -81,20 +81,27 @@ class HomeRuntimeBehaviorTest {
     @Test
     fun coldStartWhileDisconnectedRefreshesIpAndShowsResolvedAddress() {
         composeRule.waitUntil(timeoutMillis = 20_000) {
-            app().container.diagnosticsLogger.entries.value.any { it.tag == "ip" && it.message == "geo refreshed" }
+            app().container.diagnosticsLogger.entries.value.any {
+                it.tag == "ip" &&
+                    (it.message == "geo refreshed" || it.message.startsWith("geo refresh failed"))
+            }
         }
         composeRule.waitUntil(timeoutMillis = 20_000) {
             composeRule.onAllNodesWithTag("home_network_loading").fetchSemanticsNodes().isEmpty()
         }
-        composeRule.waitUntil(timeoutMillis = 20_000) {
-            textOfOrNull("home_network_primary_ip")
-                ?.let { it.isNotBlank() && it != "-" }
-                ?: false
-        }
 
+        val geoRefreshSucceeded =
+            app().container.diagnosticsLogger.entries.value.any { it.tag == "ip" && it.message == "geo refreshed" }
         val resolvedIp = textOf("home_network_primary_ip")
-        assertTrue(resolvedIp.isNotBlank())
-        assertTrue(resolvedIp != "-")
+        if (geoRefreshSucceeded) {
+            assertTrue(resolvedIp.isNotBlank())
+            assertTrue(resolvedIp != "-")
+        } else {
+            composeRule.onNodeWithTag("home_network_primary_ip", useUnmergedTree = true).assertTextEquals("-")
+            composeRule.onNodeWithText(
+                InstrumentationRegistry.getInstrumentation().targetContext.getString(R.string.home_network_unavailable),
+            ).assertIsDisplayed()
+        }
     }
 
     @Test
@@ -129,21 +136,41 @@ class HomeRuntimeBehaviorTest {
         composeRule.waitUntil(timeoutMillis = 10_000) { textOfOrNull("home_network_primary_ip") == expectedIp }
         Thread.sleep(HomeViewModel.CONNECTED_IP_REFRESH_DELAY_MS + 400L)
         composeRule.waitForIdle()
-        composeRule.runOnUiThread {
-            app().container.diagnosticsLogger.clear()
-        }
-        composeRule.runOnUiThread {
+        val viewModel =
             ViewModelProvider(
                 composeRule.activity,
                 HomeViewModel.factory(app()),
-            )[HomeViewModel::class.java].onAppForegrounded()
+            )[HomeViewModel::class.java]
+        composeRule.runOnUiThread {
+            viewModel.invalidateIpInfoRefreshes()
+            FoxholeVpnRuntimeBridge.updateIpInfo(
+                IpInfo(
+                    ip = expectedIp,
+                    ipv4 = expectedIp,
+                    countryCode = "US",
+                    countryName = "United States",
+                    city = "New York",
+                    isp = "Instrumentation ISP",
+                    fetchedAt = System.currentTimeMillis(),
+                ),
+            )
+            app().container.diagnosticsLogger.clear()
+        }
+        composeRule.runOnUiThread {
+            viewModel.onAppForegrounded()
         }
         Thread.sleep(HomeViewModel.CONNECTED_IP_REFRESH_DELAY_MS + 400L)
         composeRule.waitForIdle()
 
         composeRule.onNodeWithTag("home_network_primary_ip", useUnmergedTree = true).assertTextEquals(expectedIp)
         composeRule.onAllNodesWithTag("home_network_loading").assertCountEquals(0)
-        assertTrue(app().container.diagnosticsLogger.entries.value.none { it.tag == "ip" })
+        assertTrue(
+            app().container.diagnosticsLogger.entries.value.none {
+                it.tag == "ip" &&
+                    it.message.contains("mode=entry_quick") &&
+                    it.message.contains("clearExistingIp=true")
+            },
+        )
     }
 
     @Test

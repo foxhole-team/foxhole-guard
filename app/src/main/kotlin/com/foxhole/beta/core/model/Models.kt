@@ -400,6 +400,7 @@ data class ConnectionSnapshot(
     val profileId: Long? = null,
     val profileName: String? = null,
     val protocolHint: ProtocolHint? = null,
+    val protocolOptionId: String? = null,
     val message: String? = null,
     val reasonCode: AutoConnectReasonCode? = null,
     val lastChangeAt: Long = System.currentTimeMillis(),
@@ -489,6 +490,7 @@ data class VpnSession(
     val profileId: Long,
     val profileName: String,
     val protocolHint: ProtocolHint,
+    val protocolOptionId: String? = null,
     val configJson: String,
     val correlationId: String,
 )

@@ -53,11 +53,9 @@ import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material.icons.outlined.Speed
 import androidx.compose.material.icons.outlined.SwapVert
 import androidx.compose.material.icons.outlined.Tune
-import androidx.compose.material.icons.outlined.Wifi
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -1046,94 +1044,89 @@ fun HelpScreen(
     snackbarHostState: SnackbarHostState,
     onNavigateUp: () -> Unit,
 ) {
+    val topics =
+        listOf(
+            HelpTopic(
+                icon = Icons.Outlined.Speed,
+                title = stringResource(R.string.help_quick_start_title),
+                body = stringResource(R.string.help_quick_start_body),
+            ),
+            HelpTopic(
+                icon = Icons.Outlined.AccountTree,
+                title = stringResource(R.string.help_profiles_subscriptions_title),
+                body = stringResource(R.string.help_profiles_subscriptions_body),
+            ),
+            HelpTopic(
+                icon = Icons.Outlined.Speed,
+                title = stringResource(R.string.auto_connect),
+                body = stringResource(R.string.help_smart_start_full_body),
+            ),
+            HelpTopic(
+                icon = Icons.Outlined.Info,
+                title = stringResource(R.string.help_protocol_statuses_title),
+                body = stringResource(R.string.help_protocol_statuses_body),
+            ),
+            HelpTopic(
+                icon = Icons.Outlined.Shield,
+                title = stringResource(R.string.help_connection_modes_title),
+                body = stringResource(R.string.help_connection_modes_body),
+            ),
+            HelpTopic(
+                icon = Icons.Outlined.AccountTree,
+                title = stringResource(R.string.traffic_rules),
+                body = stringResource(R.string.help_routing_full_body),
+            ),
+            HelpTopic(
+                icon = Icons.Outlined.Public,
+                title = stringResource(R.string.help_dashboard_network_title),
+                body = stringResource(R.string.help_dashboard_network_body),
+            ),
+            HelpTopic(
+                icon = Icons.Outlined.SwapVert,
+                title = stringResource(R.string.help_traffic_usage_title),
+                body = stringResource(R.string.help_traffic_usage_body),
+            ),
+            HelpTopic(
+                icon = Icons.Outlined.Info,
+                title = stringResource(R.string.help_diagnostics_support_title),
+                body = stringResource(R.string.help_diagnostics_support_body),
+            ),
+            HelpTopic(
+                icon = Icons.Outlined.PhoneAndroid,
+                title = stringResource(R.string.app_settings),
+                body = stringResource(R.string.help_application_settings_body),
+            ),
+            HelpTopic(
+                icon = Icons.Outlined.Shield,
+                title = stringResource(R.string.expert_settings),
+                body = stringResource(R.string.help_expert_full_body),
+            ),
+        )
     SettingsScaffold(
         title = stringResource(R.string.help_title),
         snackbarHostState = snackbarHostState,
         onNavigateUp = onNavigateUp,
     ) {
-        item {
+        items(
+            items = topics,
+            key = HelpTopic::title,
+        ) { topic ->
             FoxholeCard {
                 HelpSection(
-                    icon = Icons.Outlined.Speed,
-                    title = stringResource(R.string.auto_connect),
-                    body = stringResource(R.string.help_smart_start_body),
-                )
-                HorizontalDivider(
-                    modifier = Modifier.padding(vertical = 6.dp),
-                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.48f),
-                )
-                HelpSection(
-                    icon = Icons.Outlined.Shield,
-                    title = stringResource(R.string.traffic_mode_tunnel),
-                    body = stringResource(R.string.help_tunnel_body),
-                )
-                HorizontalDivider(
-                    modifier = Modifier.padding(vertical = 6.dp),
-                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.48f),
-                )
-                HelpSection(
-                    icon = Icons.Outlined.Apps,
-                    title = stringResource(R.string.home_mode_split_tunnel),
-                    body = stringResource(R.string.help_split_tunnel_body),
-                )
-                HorizontalDivider(
-                    modifier = Modifier.padding(vertical = 6.dp),
-                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.48f),
-                )
-                HelpSection(
-                    icon = Icons.Outlined.Public,
-                    title = stringResource(R.string.traffic_mode_proxy),
-                    body = stringResource(R.string.help_proxy_body),
-                )
-                HorizontalDivider(
-                    modifier = Modifier.padding(vertical = 6.dp),
-                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.48f),
-                )
-                HelpSection(
-                    icon = Icons.Outlined.Wifi,
-                    title = stringResource(R.string.proxy_lan_access_title),
-                    body = stringResource(R.string.help_lan_proxy_body),
-                )
-                HorizontalDivider(
-                    modifier = Modifier.padding(vertical = 6.dp),
-                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.48f),
-                )
-                HelpSection(
-                    icon = Icons.Outlined.PhoneAndroid,
-                    title = stringResource(R.string.profile),
-                    body = stringResource(R.string.help_profiles_body),
-                )
-                HorizontalDivider(
-                    modifier = Modifier.padding(vertical = 6.dp),
-                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.48f),
-                )
-                HelpSection(
-                    icon = Icons.Outlined.AccountTree,
-                    title = stringResource(R.string.traffic_rules),
-                    body = stringResource(R.string.help_routing_body),
-                )
-                HorizontalDivider(
-                    modifier = Modifier.padding(vertical = 6.dp),
-                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.48f),
-                )
-                HelpSection(
-                    icon = Icons.Outlined.Info,
-                    title = stringResource(R.string.diagnostics_and_usage),
-                    body = stringResource(R.string.help_logs_body),
-                )
-            }
-        }
-        item {
-            FoxholeCard {
-                HelpSection(
-                    icon = Icons.Outlined.Shield,
-                    title = stringResource(R.string.expert_settings),
-                    body = stringResource(R.string.help_expert_body),
+                    icon = topic.icon,
+                    title = topic.title,
+                    body = topic.body,
                 )
             }
         }
     }
 }
+
+private data class HelpTopic(
+    val icon: ImageVector,
+    val title: String,
+    val body: String,
+)
 
 @Composable
 fun AboutScreen(

@@ -1012,6 +1012,7 @@ internal fun FoxholeVpnService.onConnectionStartedInternal(
             profileId = session.profileId,
             profileName = session.profileName,
             protocolHint = session.protocolHint,
+            protocolOptionId = session.protocolOptionId,
         ),
     )
     updateNotification()

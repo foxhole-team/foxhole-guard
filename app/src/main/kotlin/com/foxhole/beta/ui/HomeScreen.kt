@@ -140,6 +140,7 @@ fun HomeScreen(
     onResetUsageTracking: () -> Unit,
     onTrafficUiVisibilityChanged: (Boolean) -> Unit,
     onLocalProxyAuthChanged: (LocalAuthSettings) -> Unit,
+    onLocalProxyLanAccessChanged: (Boolean) -> Unit,
 ) {
     val context = LocalContext.current
     val usernameLabel = stringResource(R.string.username)
@@ -150,6 +151,8 @@ fun HomeScreen(
     var editProxyPasswordVisible by rememberSaveable { mutableStateOf(false) }
     var dismissedSmartStartReminderProfileId by rememberSaveable { mutableStateOf<Long?>(null) }
     var smartRefreshConfirmationProfileId by rememberSaveable { mutableStateOf<Long?>(null) }
+    var smartStartReconnectConfirmationVisible by rememberSaveable { mutableStateOf(false) }
+    var lanProxyDisableConfirmationVisible by rememberSaveable { mutableStateOf(false) }
     val wifiLanAddress by rememberWifiLanAddress()
     val proxyModel =
         remember(state, wifiLanAddress) {
@@ -165,8 +168,9 @@ fun HomeScreen(
     val darkTheme = MaterialTheme.colorScheme.background.luminance() < 0.3f
     val proxyAuth = state.settings.expert.localSurfaces.auth
     val autoTone = MaterialTheme.colorScheme.primary
+    val topStatusState = homeTopStatusState(state)
     val statusTone =
-        if (state.autoConnect.running) {
+        if (state.autoConnect.running || state.reconnectInProgress) {
             autoTone
         } else {
             homeStatusTone(state.connection.state)
@@ -258,6 +262,14 @@ fun HomeScreen(
         smartRefreshConfirmationProfileId = profileId
     }
 
+    fun requestAutoConnect() {
+        if (state.settings.traffic.mode == TrafficMode.TUNNEL && state.connection.state == ConnectionState.CONNECTED) {
+            smartStartReconnectConfirmationVisible = true
+        } else {
+            onAutoConnect()
+        }
+    }
+
     DisposableEffect(onTrafficUiVisibilityChanged) {
         onTrafficUiVisibilityChanged(true)
         onDispose { onTrafficUiVisibilityChanged(false) }
@@ -269,6 +281,7 @@ fun HomeScreen(
 
     FoxholeScaffold(
         title = stringResource(R.string.app_name),
+        titleBadge = stringResource(R.string.beta_badge),
         snackbarHostState = snackbarHostState,
         bannerTopPadding = HomeDashboardBannerTopPadding,
     ) { padding ->
@@ -291,7 +304,7 @@ fun HomeScreen(
                 FoxholeCard {
                     Surface(
                         shape = MaterialTheme.shapes.large,
-                        color = statusTone.copy(alpha = 0.10f),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.30f),
                     ) {
                         Row(
                             modifier =
@@ -312,7 +325,7 @@ fun HomeScreen(
                                 Surface(
                                     modifier = Modifier.size(36.dp),
                                     shape = MaterialTheme.shapes.large,
-                                    color = statusTone.copy(alpha = 0.14f),
+                                    color = statusTone.copy(alpha = 0.13f),
                                 ) {
                                     Spacer(modifier = Modifier.fillMaxSize())
                                 }
@@ -334,12 +347,6 @@ fun HomeScreen(
                                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {
-                                    val statusVisualState =
-                                        if (state.autoConnect.running) {
-                                            ConnectionState.CONNECTING
-                                        } else {
-                                            state.connection.state
-                                        }
                                     Row(
                                         modifier = Modifier.weight(1f),
                                         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -353,8 +360,8 @@ fun HomeScreen(
                                             )
                                         } else {
                                             HomeStatusBadge(
-                                                state = statusVisualState,
-                                                label = homeStatusLabel(state.connection.state),
+                                                state = topStatusState,
+                                                label = homeStatusLabel(topStatusState),
                                                 textStyle = MaterialTheme.typography.titleMedium,
                                                 accentColor = statusTone,
                                             )
@@ -375,7 +382,9 @@ fun HomeScreen(
                                             },
                                         )
                                         if (lanProxyActive) {
-                                            HomeLanProxyChip()
+                                            HomeLanProxyChip(
+                                                onClick = { lanProxyDisableConfirmationVisible = true },
+                                            )
                                         }
                                     }
                                 }
@@ -540,7 +549,7 @@ fun HomeScreen(
                     HomeConnectionActions(
                         state = state,
                         onToggleConnection = onToggleConnection,
-                        onAutoConnect = onAutoConnect,
+                        onAutoConnect = ::requestAutoConnect,
                     )
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -904,6 +913,7 @@ fun HomeScreen(
                                         secondary = formatRate(context, state.traffic.txBytesPerSec),
                                         valueTag = "home_traffic_tx_value",
                                         secondaryTag = "home_traffic_tx_rate",
+                                        horizontalAlignment = Alignment.CenterHorizontally,
                                     )
                                     TrafficStatBlock(
                                         modifier = Modifier.weight(1f),
@@ -926,6 +936,7 @@ fun HomeScreen(
                                         secondary = formatRate(context, state.traffic.rxBytesPerSec + state.traffic.txBytesPerSec),
                                         valueTag = "home_traffic_total_value",
                                         secondaryTag = "home_traffic_total_rate",
+                                        horizontalAlignment = Alignment.End,
                                     )
                                 }
                             }
@@ -1060,6 +1071,36 @@ fun HomeScreen(
             onConfirm = {
                 smartRefreshConfirmationProfileId = null
                 onRefreshSmartProfileMetrics(profileId)
+            },
+        )
+    }
+
+    if (smartStartReconnectConfirmationVisible) {
+        ConfirmDialog(
+            title = stringResource(R.string.smart_start_reconnect_confirm_title),
+            body = stringResource(R.string.smart_start_reconnect_confirm_body),
+            confirmLabel = stringResource(R.string.yes_label),
+            icon = Icons.Outlined.Refresh,
+            dismissLabel = stringResource(R.string.no_label),
+            onDismiss = { smartStartReconnectConfirmationVisible = false },
+            onConfirm = {
+                smartStartReconnectConfirmationVisible = false
+                onAutoConnect()
+            },
+        )
+    }
+
+    if (lanProxyDisableConfirmationVisible) {
+        ConfirmDialog(
+            title = stringResource(R.string.lan_proxy_disable_confirm_title),
+            body = stringResource(R.string.lan_proxy_disable_confirm_body),
+            confirmLabel = stringResource(R.string.yes_label),
+            icon = Icons.Outlined.Public,
+            dismissLabel = stringResource(R.string.no_label),
+            onDismiss = { lanProxyDisableConfirmationVisible = false },
+            onConfirm = {
+                lanProxyDisableConfirmationVisible = false
+                onLocalProxyLanAccessChanged(false)
             },
         )
     }

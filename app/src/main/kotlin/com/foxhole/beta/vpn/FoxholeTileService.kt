@@ -60,6 +60,7 @@ class FoxholeTileService : TileService() {
                     profileId = FoxholeVpnRuntimeBridge.snapshot.value.profileId,
                     profileName = FoxholeVpnRuntimeBridge.snapshot.value.profileName,
                     protocolHint = FoxholeVpnRuntimeBridge.snapshot.value.protocolHint,
+                    protocolOptionId = FoxholeVpnRuntimeBridge.snapshot.value.protocolOptionId,
                 ),
             )
         } else {

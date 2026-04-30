@@ -831,7 +831,6 @@ private fun SmartProfileProtocolMenuTitleRow(
                 )
                 if (showRefreshButton) {
                     SmartProfileMetricsRefreshButton(
-                        updatedAt = updatedAt,
                         refreshing = metricsRefreshing,
                         onRefreshMetrics = onRefreshMetrics,
                         onCancelRefreshMetrics = onCancelRefreshMetrics,
@@ -1151,7 +1150,6 @@ private fun SmartProfileRefreshingIndicator(
 
 @Composable
 private fun SmartProfileMetricsRefreshButton(
-    updatedAt: Long?,
     refreshing: Boolean,
     onRefreshMetrics: (() -> Unit)?,
     onCancelRefreshMetrics: (() -> Unit)?,
@@ -1159,15 +1157,16 @@ private fun SmartProfileMetricsRefreshButton(
 ) {
     val refreshMetrics = onRefreshMetrics ?: return
     val enabled = !refreshing || onCancelRefreshMetrics != null
-    val tone =
-        if (refreshing) {
-            MaterialTheme.colorScheme.error
-        } else {
-            smartProfileRefreshButtonTone(updatedAt)
-        }
+    val tone = foxholeSystemAwareAccentColor(fallback = MaterialTheme.colorScheme.primary)
     val label = stringResource(if (refreshing) R.string.disconnect else R.string.refresh)
     val buttonWidth =
-        if (compact) {
+        if (refreshing) {
+            if (compact) {
+                SmartProfileMenuCompactStopButtonWidth
+            } else {
+                SmartProfileMenuStopButtonWidth
+            }
+        } else if (compact) {
             SmartProfileMenuCompactRefreshButtonWidth
         } else {
             SmartProfileMenuRefreshButtonWidth
@@ -1199,8 +1198,8 @@ private fun SmartProfileMetricsRefreshButton(
             modifier =
                 Modifier
                     .fillMaxSize()
-                    .padding(horizontal = if (compact) 9.dp else 11.dp),
-            horizontalArrangement = Arrangement.spacedBy(if (compact) 5.dp else 6.dp, Alignment.CenterHorizontally),
+                    .padding(horizontal = if (compact) 6.dp else 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(if (compact) 4.dp else 5.dp, Alignment.CenterHorizontally),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Icon(
@@ -1213,7 +1212,7 @@ private fun SmartProfileMetricsRefreshButton(
                             R.string.smart_profile_metrics_refresh_action
                         },
                     ),
-                modifier = Modifier.size(if (compact) 14.dp else 16.dp),
+                modifier = Modifier.size(if (compact) 13.dp else 15.dp),
                 tint = tone.copy(alpha = if (enabled) 1f else 0.38f),
             )
             Text(
@@ -1230,18 +1229,6 @@ private fun SmartProfileMetricsRefreshButton(
                 overflow = TextOverflow.Ellipsis,
             )
         }
-    }
-}
-
-@Composable
-private fun smartProfileRefreshButtonTone(updatedAt: Long?): Color {
-    val ageMs = updatedAt?.let { (System.currentTimeMillis() - it).coerceAtLeast(0L) }
-    return when {
-        ageMs == null -> SmartProfileRefreshDangerAccent
-        ageMs < SmartProfileRefreshYellowAfterMs -> foxholeSystemAwareAccentColor()
-        ageMs < SmartProfileRefreshOrangeAfterMs -> FoxholeWarningAccent
-        ageMs < SmartProfileRefreshRedAfterMs -> SmartProfileRefreshOrangeAccent
-        else -> SmartProfileRefreshDangerAccent
     }
 }
 
@@ -1706,8 +1693,8 @@ private fun SmartProfileMetricCell(
     val text =
         when {
             down -> stringResource(R.string.latency_pill_down)
-            latencyMs != null -> stringResource(R.string.latency_pill_value, boundedDisplayLatencyMs(latencyMs))
             unavailable -> stringResource(R.string.smart_profile_metric_unavailable)
+            latencyMs != null -> stringResource(R.string.latency_pill_value, boundedDisplayLatencyMs(latencyMs))
             else -> stringResource(R.string.smart_profile_metric_unavailable)
         }
     val tone =
@@ -1959,12 +1946,14 @@ private enum class SmartProfileMetricTone {
 }
 
 private val SmartProfileMenuHorizontalPadding = 8.dp
-private val SmartProfileMenuCompactMinWidth = 300.dp
-private val SmartProfileMenuCompactMaxWidth = 360.dp
+private val SmartProfileMenuCompactMinWidth = 238.dp
+private val SmartProfileMenuCompactMaxWidth = 340.dp
 private val SmartProfileMenuDetailedMinWidth = 268.dp
 private val SmartProfileMenuMaxWidth = 388.dp
-private val SmartProfileMenuRefreshButtonWidth = 108.dp
-private val SmartProfileMenuCompactRefreshButtonWidth = 96.dp
+private val SmartProfileMenuRefreshButtonWidth = 96.dp
+private val SmartProfileMenuCompactRefreshButtonWidth = 88.dp
+private val SmartProfileMenuStopButtonWidth = 78.dp
+private val SmartProfileMenuCompactStopButtonWidth = 68.dp
 private val SmartProfileMenuRefreshButtonHeight = 34.dp
 private val SmartProfileMenuCompactRefreshButtonHeight = 30.dp
 private val SmartProfileHintIconSize = 12.dp
@@ -1981,11 +1970,6 @@ private val SmartProfileCompactStatusColumnWidth = 78.dp
 private val SmartProfileOnColumnWidth = 24.dp
 private val SmartProfileCurrentWarningAccent = Color(0xFFE28131)
 private val SmartProfileCurrentDangerAccent = Color(0xFFC95353)
-private val SmartProfileRefreshOrangeAccent = Color(0xFFE28131)
-private val SmartProfileRefreshDangerAccent = Color(0xFFC95353)
-private const val SmartProfileRefreshYellowAfterMs = 3L * 24L * 60L * 60L * 1000L
-private const val SmartProfileRefreshOrangeAfterMs = 5L * 24L * 60L * 60L * 1000L
-private const val SmartProfileRefreshRedAfterMs = 7L * 24L * 60L * 60L * 1000L
 
 @Composable
 private fun formatSmartMetricsUpdatedAgo(updatedAt: Long): String {

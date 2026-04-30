@@ -624,6 +624,7 @@ class ProfileRepository(
             profileId = profile.id,
             profileName = profile.name,
             protocolHint = selectedOption?.protocolHint ?: profile.protocolHint,
+            protocolOptionId = selectedOption?.id,
             configJson = assembled,
             correlationId = correlationId,
         )

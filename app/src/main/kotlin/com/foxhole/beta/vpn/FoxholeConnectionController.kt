@@ -143,6 +143,7 @@ class FoxholeConnectionController(
                 profileId = activeProfile?.id,
                 profileName = activeProfile?.name,
                 protocolHint = activeProfile?.protocolHint,
+                protocolOptionId = activeProfile?.selectedProtocolOptionId,
             ),
         )
         return true

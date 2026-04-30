@@ -209,7 +209,7 @@ class SmartStartProtocolPresentationTest {
         assertEquals("City:", stringValue(enStrings, "home_network_city_label"))
         assertEquals("IP:", stringValue(enStrings, "home_network_ip_label"))
         assertEquals("Provider:", stringValue(enStrings, "home_network_provider_label"))
-        assertEquals("Connected:", stringValue(enStrings, "home_network_connect_time_label"))
+        assertEquals("Time:", stringValue(enStrings, "home_network_connect_time_label"))
         assertEquals("Current session", stringValue(enStrings, "home_session_traffic_title"))
         assertEquals("Volume over:", stringValue(enStrings, "home_total_traffic_title"))
         assertEquals("Import VPN links/configs", stringValue(enStrings, "import_from_clipboard_summary"))
@@ -253,6 +253,12 @@ class SmartStartProtocolPresentationTest {
         )
         assertEquals("Enable expert settings?", stringValue(enStrings, "expert_unlock_confirm_title"))
         assertEquals("Enable expert settings", stringValue(enStrings, "show_advanced_settings_title"))
+        assertEquals("BETA", stringValue(enStrings, "beta_badge"))
+        assertEquals("Reconnect VPN protocol?", stringValue(enStrings, "smart_start_reconnect_confirm_title"))
+        assertEquals("Turn off LAN Proxy?", stringValue(enStrings, "lan_proxy_disable_confirm_title"))
+        assertEquals("Quick start", stringValue(enStrings, "help_quick_start_title"))
+        assertEquals("Connection modes", stringValue(enStrings, "help_connection_modes_title"))
+        assertEquals("Diagnostics and support", stringValue(enStrings, "help_diagnostics_support_title"))
 
         assertEquals("Информация о сервере VPN", stringValue(ruStrings, "home_network_connection_info_title"))
         assertEquals("Текущий IP адрес", stringValue(ruStrings, "home_network_current_ip_title"))
@@ -261,7 +267,7 @@ class SmartStartProtocolPresentationTest {
         assertEquals("Город:", stringValue(ruStrings, "home_network_city_label"))
         assertEquals("IP:", stringValue(ruStrings, "home_network_ip_label"))
         assertEquals("Провайдер:", stringValue(ruStrings, "home_network_provider_label"))
-        assertEquals("Подключено:", stringValue(ruStrings, "home_network_connect_time_label"))
+        assertEquals("Время:", stringValue(ruStrings, "home_network_connect_time_label"))
         assertEquals("Текущая сессия", stringValue(ruStrings, "home_session_traffic_title"))
         assertEquals("Объем за:", stringValue(ruStrings, "home_total_traffic_title"))
         assertEquals("Импортируйте ссылки/конфиги VPN", stringValue(ruStrings, "import_from_clipboard_summary"))
@@ -308,6 +314,12 @@ class SmartStartProtocolPresentationTest {
         )
         assertEquals("Включить экспертные настройки?", stringValue(ruStrings, "expert_unlock_confirm_title"))
         assertEquals("Включить экспертные настройки", stringValue(ruStrings, "show_advanced_settings_title"))
+        assertEquals("BETA", stringValue(ruStrings, "beta_badge"))
+        assertEquals("Переподключить протокол VPN?", stringValue(ruStrings, "smart_start_reconnect_confirm_title"))
+        assertEquals("Выключить LAN Proxy?", stringValue(ruStrings, "lan_proxy_disable_confirm_title"))
+        assertEquals("Быстрый старт", stringValue(ruStrings, "help_quick_start_title"))
+        assertEquals("Режимы подключения", stringValue(ruStrings, "help_connection_modes_title"))
+        assertEquals("Диагностика и поддержка", stringValue(ruStrings, "help_diagnostics_support_title"))
     }
 
     private fun resourceText(vararg candidates: String): String =

@@ -286,6 +286,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
                 profileId = session.profileId,
                 profileName = session.profileName,
                 protocolHint = session.protocolHint,
+                protocolOptionId = session.protocolOptionId,
                 message = FoxholeVpnRuntimeBridge.snapshot.value.message,
             ),
         )

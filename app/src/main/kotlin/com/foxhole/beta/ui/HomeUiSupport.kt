@@ -170,6 +170,11 @@ internal fun isProfileReconnectRequired(
     if (profileId != connectedProfileId) {
         return true
     }
+    val selectedOptionId = activeProfile.selectedProtocolOptionId?.takeIf(String::isNotBlank)
+    val connectedOptionId = connection.protocolOptionId?.takeIf(String::isNotBlank)
+    if ((selectedOptionId != null || connectedOptionId != null) && selectedOptionId != connectedOptionId) {
+        return true
+    }
     val connectedProtocol = connection.protocolHint ?: return false
     return activeProfile.protocolHint != connectedProtocol
 }
@@ -408,6 +413,21 @@ internal fun resolveDashboardSelectedOptionId(
     activeProfile: Profile?,
     connection: ConnectionSnapshot,
 ): String? {
+    val connectedOptionId =
+        connection.protocolOptionId
+            ?.takeIf { connection.profileId == activeProfile?.id }
+            ?.takeIf {
+                connection.state in setOf(
+                    ConnectionState.CONNECTED,
+                    ConnectionState.CONNECTING,
+                    ConnectionState.RECONNECTING,
+                )
+            }?.takeIf { optionId ->
+                activeProfile?.protocolOptions?.any { option -> option.id == optionId } == true
+            }
+    if (connectedOptionId != null) {
+        return connectedOptionId
+    }
     val connectedProtocol =
         connection.protocolHint
             ?.takeIf { connection.profileId == activeProfile?.id }
@@ -427,6 +447,13 @@ internal fun resolveDashboardSelectedOptionId(
         }
         ?: resolveDashboardSelectedOptionId(activeProfile)
 }
+
+internal fun homeTopStatusState(state: HomeRouteUiState): ConnectionState =
+    when {
+        state.reconnectInProgress -> ConnectionState.RECONNECTING
+        state.autoConnect.running -> ConnectionState.CONNECTING
+        else -> state.connection.state
+    }
 
 internal fun resolveDashboardLatencyOptionId(
     activeProfile: Profile?,
@@ -584,11 +611,14 @@ internal fun resolveDashboardLatencyPresentation(state: HomeRouteUiState): HomeD
         return HomeDashboardLatencyPresentation()
     }
     return if (state.connection.state in setOf(ConnectionState.CONNECTED, ConnectionState.CONNECTING, ConnectionState.RECONNECTING)) {
+        val selectedOptionId = resolveDashboardLatencyOptionId(state.activeProfile, state.connection)
         when {
-            state.selectedProtocolLatencyMs != null ->
-                HomeDashboardLatencyPresentation(latencyMs = state.selectedProtocolLatencyMs)
+            selectedOptionId != null && selectedOptionId in state.protocolDownOptionIds ->
+                HomeDashboardLatencyPresentation(isDown = true)
             state.selectedProtocolLatencyUnavailable ->
                 HomeDashboardLatencyPresentation(isUnavailable = true)
+            state.selectedProtocolLatencyMs != null ->
+                HomeDashboardLatencyPresentation(latencyMs = state.selectedProtocolLatencyMs)
             else -> HomeDashboardLatencyPresentation()
         }
     } else {

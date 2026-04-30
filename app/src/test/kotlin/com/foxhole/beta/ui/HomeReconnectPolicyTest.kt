@@ -3,8 +3,10 @@ package com.foxhole.beta.ui
 import com.foxhole.beta.core.model.ConnectionSnapshot
 import com.foxhole.beta.core.model.ConnectionState
 import com.foxhole.beta.core.model.Profile
+import com.foxhole.beta.core.model.ProfileProtocolOption
 import com.foxhole.beta.core.model.ProfileSourceType
 import com.foxhole.beta.core.model.ProtocolHint
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -72,9 +74,72 @@ class HomeReconnectPolicyTest {
         )
     }
 
+    @Test
+    fun `switching selected option with same protocol requires reconnect`() {
+        assertTrue(
+            isProfileReconnectRequired(
+                activeProfile =
+                    profile(
+                        id = 7L,
+                        protocolHint = ProtocolHint.VLESS,
+                        selectedProtocolOptionId = "vless-b",
+                        protocolOptions =
+                            listOf(
+                                option("vless-a", ProtocolHint.VLESS),
+                                option("vless-b", ProtocolHint.VLESS),
+                            ),
+                    ),
+                connection =
+                    ConnectionSnapshot(
+                        state = ConnectionState.CONNECTED,
+                        profileId = 7L,
+                        protocolHint = ProtocolHint.VLESS,
+                        protocolOptionId = "vless-a",
+                    ),
+            ),
+        )
+    }
+
+    @Test
+    fun `matching selected option keeps reconnect cleared`() {
+        assertFalse(
+            isProfileReconnectRequired(
+                activeProfile =
+                    profile(
+                        id = 7L,
+                        protocolHint = ProtocolHint.VLESS,
+                        selectedProtocolOptionId = "vless-a",
+                        protocolOptions = listOf(option("vless-a", ProtocolHint.VLESS)),
+                    ),
+                connection =
+                    ConnectionSnapshot(
+                        state = ConnectionState.CONNECTED,
+                        profileId = 7L,
+                        protocolHint = ProtocolHint.VLESS,
+                        protocolOptionId = "vless-a",
+                    ),
+            ),
+        )
+    }
+
+    @Test
+    fun `reconnect in progress owns top dashboard status`() {
+        assertEquals(
+            ConnectionState.RECONNECTING,
+            homeTopStatusState(
+                HomeRouteUiState(
+                    connection = ConnectionSnapshot(state = ConnectionState.IDLE),
+                    reconnectInProgress = true,
+                ),
+            ),
+        )
+    }
+
     private fun profile(
         id: Long,
         protocolHint: ProtocolHint,
+        selectedProtocolOptionId: String? = null,
+        protocolOptions: List<ProfileProtocolOption> = emptyList(),
     ) = Profile(
         id = id,
         name = "Foxhole",
@@ -84,6 +149,17 @@ class HomeReconnectPolicyTest {
         lastUpdatedAt = null,
         lastEtag = null,
         subscriptionExpiresAt = null,
+        protocolOptions = protocolOptions,
+        selectedProtocolOptionId = selectedProtocolOptionId,
         isActive = true,
+    )
+
+    private fun option(
+        id: String,
+        protocolHint: ProtocolHint,
+    ) = ProfileProtocolOption(
+        id = id,
+        displayName = id,
+        protocolHint = protocolHint,
     )
 }

@@ -483,6 +483,87 @@ class HomeDashboardProtocolPresentationTest {
         }
     }
 
+    @Test
+    fun `connected protocol option id drives dashboard selected option`() {
+        val activeProfile =
+            profile(
+                selectedProtocolOptionId = "vless-b",
+                protocolHint = ProtocolHint.VLESS,
+                protocolOptions =
+                    listOf(
+                        option("vless-a", ProtocolHint.VLESS),
+                        option("vless-b", ProtocolHint.VLESS),
+                    ),
+            )
+
+        val selectedOptionId =
+            resolveDashboardSelectedOptionId(
+                activeProfile = activeProfile,
+                connection =
+                    ConnectionSnapshot(
+                        state = ConnectionState.CONNECTED,
+                        profileId = 1L,
+                        protocolHint = ProtocolHint.VLESS,
+                        protocolOptionId = "vless-a",
+                    ),
+            )
+
+        assertEquals("vless-a", selectedOptionId)
+    }
+
+    @Test
+    fun `dashboard latency unavailable wins over stale remembered latency`() {
+        val resolved =
+            resolveDashboardLatencyPresentation(
+                HomeRouteUiState(
+                    activeProfile =
+                        profile(
+                            selectedProtocolOptionId = "outline",
+                            protocolOptions = listOf(option("outline", ProtocolHint.OUTLINE)),
+                        ),
+                    connection =
+                        ConnectionSnapshot(
+                            state = ConnectionState.CONNECTED,
+                            profileId = 1L,
+                            protocolHint = ProtocolHint.OUTLINE,
+                        ),
+                    selectedProtocolLatencyMs = 426L,
+                    selectedProtocolLatencyUnavailable = true,
+                ),
+            )
+
+        assertNull(resolved.latencyMs)
+        assertTrue(resolved.isUnavailable)
+        assertFalse(resolved.isDown)
+    }
+
+    @Test
+    fun `dashboard down status wins over stale remembered latency`() {
+        val resolved =
+            resolveDashboardLatencyPresentation(
+                HomeRouteUiState(
+                    activeProfile =
+                        profile(
+                            selectedProtocolOptionId = "outline",
+                            protocolOptions = listOf(option("outline", ProtocolHint.OUTLINE)),
+                        ),
+                    connection =
+                        ConnectionSnapshot(
+                            state = ConnectionState.CONNECTED,
+                            profileId = 1L,
+                            protocolHint = ProtocolHint.OUTLINE,
+                        ),
+                    selectedProtocolLatencyMs = 426L,
+                    selectedProtocolLatencyUnavailable = true,
+                    protocolDownOptionIds = setOf("outline"),
+                ),
+            )
+
+        assertNull(resolved.latencyMs)
+        assertTrue(resolved.isDown)
+        assertFalse(resolved.isUnavailable)
+    }
+
     private fun profile(
         selectedProtocolOptionId: String?,
         protocolHint: ProtocolHint = ProtocolHint.OUTLINE,

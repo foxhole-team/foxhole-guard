@@ -782,7 +782,7 @@ class ProfileRuntimeSessionAndroidTest {
                       "allowInsecure": false,
                       "fingerprint": "chrome",
                       "publicKey": "IiUOQtR3zqUg32FfqorRXwUVSz9e1CSPFsJnafcFVmE",
-                      "serverName": "api-maps.yandex.ru",
+                      "serverName": "37.139.40.59",
                       "shortId": "736acf61",
                       "show": false,
                       "spiderX": "/"

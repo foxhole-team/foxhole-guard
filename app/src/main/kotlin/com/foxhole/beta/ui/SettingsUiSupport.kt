@@ -1,5 +1,7 @@
 package com.foxhole.beta.ui
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
 import android.content.Context
 import android.net.ConnectivityManager
 import android.net.LinkProperties
@@ -35,6 +37,7 @@ import androidx.compose.material.icons.outlined.AccountTree
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.FileDownload
 import androidx.compose.material.icons.outlined.FileUpload
 import androidx.compose.material.icons.outlined.Info
@@ -70,6 +73,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -632,32 +636,56 @@ internal fun HelpSection(
     title: String,
     body: String,
 ) {
-    Row(
-        horizontalArrangement = Arrangement.spacedBy(14.dp),
-        verticalAlignment = Alignment.Top,
+    var expanded by rememberSaveable(title) { mutableStateOf(false) }
+    val chevronRotation by animateFloatAsState(
+        targetValue = if (expanded) 180f else 0f,
+        label = "help_section_chevron",
+    )
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Surface(
-            shape = MaterialTheme.shapes.medium,
-            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.62f),
+        Row(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .clip(MaterialTheme.shapes.medium)
+                    .clickable { expanded = !expanded }
+                    .padding(vertical = 2.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                modifier = Modifier.padding(9.dp).size(18.dp),
-                tint = MaterialTheme.colorScheme.primary,
-            )
-        }
-        Column(
-            modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
+            Surface(
+                shape = MaterialTheme.shapes.medium,
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.62f),
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    modifier = Modifier.padding(9.dp).size(18.dp),
+                    tint = MaterialTheme.colorScheme.primary,
+                )
+            }
             Text(
                 text = title,
+                modifier = Modifier.weight(1f),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
             )
+            Icon(
+                imageVector = Icons.Outlined.ExpandMore,
+                contentDescription = null,
+                modifier =
+                    Modifier
+                        .size(22.dp)
+                        .graphicsLayer { rotationZ = chevronRotation },
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        AnimatedVisibility(visible = expanded) {
             Text(
                 text = body,
+                modifier = Modifier.padding(start = 46.dp, end = 4.dp, bottom = 2.dp),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

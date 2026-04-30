@@ -189,6 +189,7 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
                 profileId = session.profileId,
                 profileName = session.profileName,
                 protocolHint = session.protocolHint,
+                protocolOptionId = session.protocolOptionId,
                 message = FoxholeVpnRuntimeBridge.snapshot.value.message,
             ),
         )
@@ -711,6 +712,7 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
                 profileId = session.profileId,
                 profileName = session.profileName,
                 protocolHint = session.protocolHint,
+                protocolOptionId = session.protocolOptionId,
             ),
         )
         updateNotification()

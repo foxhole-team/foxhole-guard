@@ -179,6 +179,7 @@ internal fun FoxholeScaffold(
     title: String,
     snackbarHostState: SnackbarHostState,
     onNavigateUp: (() -> Unit)? = null,
+    titleBadge: String? = null,
     actions: @Composable RowScope.() -> Unit = {},
     bannerTopPadding: Dp = ScreenVerticalPadding,
     content: @Composable (PaddingValues) -> Unit,
@@ -189,11 +190,33 @@ internal fun FoxholeScaffold(
         topBar = {
             TopAppBar(
                 title = {
-                    Text(
-                        text = title,
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.SemiBold,
-                    )
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(5.dp),
+                        verticalAlignment = Alignment.Top,
+                    ) {
+                        Text(
+                            text = title,
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        titleBadge?.let { badge ->
+                            val badgeTone = foxholeSystemAwareAccentColor(fallback = MaterialTheme.colorScheme.primary)
+                            Surface(
+                                modifier = Modifier.padding(top = 1.dp),
+                                shape = MaterialTheme.shapes.small,
+                                color = badgeTone.copy(alpha = 0.12f),
+                                border = BorderStroke(1.dp, badgeTone.copy(alpha = 0.30f)),
+                            ) {
+                                Text(
+                                    text = badge,
+                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Black,
+                                    color = badgeTone,
+                                )
+                            }
+                        }
+                    }
                 },
                 navigationIcon = {
                     onNavigateUp?.let {

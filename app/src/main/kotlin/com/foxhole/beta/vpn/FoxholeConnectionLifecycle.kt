@@ -6,6 +6,7 @@ import com.foxhole.beta.core.data.RoutingRepository
 import com.foxhole.beta.core.diagnostics.DiagnosticsLogger
 import com.foxhole.beta.core.model.ConnectionSnapshot
 import com.foxhole.beta.core.model.ConnectionState
+import com.foxhole.beta.core.model.Profile
 import com.foxhole.beta.core.model.TrafficMode
 import com.foxhole.beta.core.settings.SettingsRepository
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -30,6 +31,7 @@ internal class FoxholeConnectionLifecycle(
     ) {
         val profile = profileRepository.getProfile(profileId) ?: error("profile not found")
         val settings = settingsRepository.current()
+        val runtimeProtocolOption = profile.runtimeProtocolOption(protocolOptionId)
         if (snapshot.value.state !in ACTIVE_CONNECTION_STATES) {
             FoxholeConnectionServiceContract.stopAllServices(context)
         }
@@ -41,7 +43,8 @@ internal class FoxholeConnectionLifecycle(
                 trafficMode = settings.traffic.mode,
                 profileId = profile.id,
                 profileName = profile.name,
-                protocolHint = profile.protocolHint,
+                protocolHint = runtimeProtocolOption?.protocolHint ?: profile.protocolHint,
+                protocolOptionId = runtimeProtocolOption?.id,
                 message = statusMessage,
             ),
         )
@@ -118,6 +121,15 @@ internal class FoxholeConnectionLifecycle(
         return true
     }
 }
+
+private fun Profile.runtimeProtocolOption(protocolOptionId: String?) =
+    protocolOptionId
+        ?.takeIf(String::isNotBlank)
+        ?.let { requestedId -> protocolOptions.firstOrNull { option -> option.id == requestedId } }
+        ?: selectedProtocolOptionId
+            ?.takeIf(String::isNotBlank)
+            ?.let { selectedId -> protocolOptions.firstOrNull { option -> option.id == selectedId } }
+        ?: protocolOptions.firstOrNull()
 
 internal fun disconnectDispatchModeOrNull(snapshot: ConnectionSnapshot): TrafficMode? =
     snapshot.trafficMode.takeIf { snapshot.state in ACTIVE_CONNECTION_STATES }

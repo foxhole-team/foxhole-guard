@@ -57,7 +57,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
@@ -352,11 +351,16 @@ internal fun HomeModeDropdown(
 }
 
 @Composable
-internal fun HomeLanProxyChip() {
-    val color = Color(0xFFE38B2C)
+internal fun HomeLanProxyChip(onClick: () -> Unit) {
+    val color = foxholeSystemAwareAccentColor(fallback = MaterialTheme.colorScheme.primary)
     Surface(
+        modifier =
+            Modifier
+                .clip(MaterialTheme.shapes.small)
+                .clickable { onClick() },
         shape = MaterialTheme.shapes.small,
         color = color.copy(alpha = 0.14f),
+        border = BorderStroke(1.dp, color.copy(alpha = 0.30f)),
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
@@ -508,7 +512,20 @@ internal fun TrafficStatBlock(
     secondary: String,
     valueTag: String? = null,
     secondaryTag: String? = null,
+    horizontalAlignment: Alignment.Horizontal = Alignment.Start,
 ) {
+    val textAlign =
+        when (horizontalAlignment) {
+            Alignment.CenterHorizontally -> TextAlign.Center
+            Alignment.End -> TextAlign.End
+            else -> TextAlign.Start
+        }
+    val rowArrangement =
+        when (horizontalAlignment) {
+            Alignment.CenterHorizontally -> Arrangement.spacedBy(headerSpacing, Alignment.CenterHorizontally)
+            Alignment.End -> Arrangement.spacedBy(headerSpacing, Alignment.End)
+            else -> Arrangement.spacedBy(headerSpacing, Alignment.Start)
+        }
     Box(
         modifier =
             modifier
@@ -518,9 +535,11 @@ internal fun TrafficStatBlock(
         Column(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(2.dp),
+            horizontalAlignment = horizontalAlignment,
         ) {
             Row(
-                horizontalArrangement = Arrangement.spacedBy(headerSpacing),
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = rowArrangement,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 if (leadingContent != null) {
@@ -541,21 +560,28 @@ internal fun TrafficStatBlock(
                     text = label,
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = textAlign,
                 )
             }
             Text(
                 text = value,
-                modifier = valueTag?.let(Modifier::testTag) ?: Modifier,
+                modifier =
+                    (valueTag?.let(Modifier::testTag) ?: Modifier)
+                        .fillMaxWidth(),
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.SemiBold,
+                textAlign = textAlign,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
                 text = secondary,
-                modifier = secondaryTag?.let(Modifier::testTag) ?: Modifier,
+                modifier =
+                    (secondaryTag?.let(Modifier::testTag) ?: Modifier)
+                        .fillMaxWidth(),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = textAlign,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -767,7 +793,7 @@ internal fun HomeConnectionActions(
             HomePrimaryAction.START,
             HomePrimaryAction.RECONNECT,
             -> MaterialTheme.colorScheme.primary
-            HomePrimaryAction.STOP -> Color(0xFFC95353)
+            HomePrimaryAction.STOP -> foxholeSystemAwareAccentColor(fallback = MaterialTheme.colorScheme.primary)
         }
     val primaryButtonColors =
         ButtonDefaults.outlinedButtonColors(
@@ -798,14 +824,13 @@ internal fun HomeConnectionActions(
             Modifier
                 .clip(primaryButtonShape)
                 .drawBehind {
-                    drawRoundRect(
+                    drawRect(
                         color = Color.White.copy(alpha = 0.14f),
                         size =
                             Size(
                                 width = size.width * reconnectProgress.coerceIn(0f, 1f),
                                 height = size.height,
                             ),
-                        cornerRadius = CornerRadius(size.height / 2f, size.height / 2f),
                     )
                 }
         } else {

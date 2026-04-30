@@ -217,6 +217,7 @@ fun FoxholeApp(
                         onResetUsageTracking = viewModel::resetUsageTracking,
                         onTrafficUiVisibilityChanged = viewModel::onTrafficUiVisibilityChanged,
                         onLocalProxyAuthChanged = viewModel::onLocalProxyAuthChanged,
+                        onLocalProxyLanAccessChanged = viewModel::onLocalProxyLanAccessChanged,
                     )
                 }
                 composable(AppRoute.PROFILES) {
