@@ -150,4 +150,129 @@ jobs:
       - name: setup android libbox build
         uses: ./.github/actions/setup-android-libbox
 
-      - nameˆÁÉ•‰Õ¥±½¹¹•Ñ•Ñ•ÍÐ…ÉÑ¥™…ÑÌ(€€€€€€€ÉÕ¸è€¸½É…‘±•Ü€´µ¹¼µ‘…•µ½¸€´µ½¹Í½±”õÁ±…¥¸€´µÍÑ…­ÑÉ…”…ÍÍ•µ‰±••‰Õœ…ÍÍ•µ‰±••‰Õ¹‘É½¥‘Q•ÍÐ((€€€€€€´¹…µ”èÉ•±…¥´‘¥Í¬™½È•µÕ±…Ñ½È(€€€€€€€Í¡•±°è‰…Í (€€€€€€€ÉÕ¸èð(€€€€€€€€€Í•Ð€µ•Õ¼Á¥Á•™…¥°(€€€€€€€€€•¡¼€‰¥Í¬‰•™½É”±•…¹ÕÀèˆ(€€€€€€€€€‘˜€µ (€€€€€€€€€‘Ô€µÍ p(€€€€€€€€€€€€ˆ‘í9I=%}9-}!=5èµôˆp(€€€€€€€€€€€€ˆ‘!=5½¼½Á­œ½µ½ˆp(€€€€€€€€€€€€ˆ‘!=5½¼½Á­œ½ÍÕµ‘ˆˆp(€€€€€€€€€€€€ˆ‘!=5¼¹…¡”½¼µ‰Õ¥±ˆp(€€€€€€€€€€€€ˆ‘%Q!U	}]=I-MA½Ñ¡¥É‘}Á…ÉÑä½Í¥¹œµ‰½àˆ€Èø½‘•Ø½¹Õ±°ñðÑÉÕ”(€€€€€€€€€ÍÕ‘¼É´€µÉ˜p(€€€€€€€€€€€€ˆ‘í9I=%}9-}!=5èµôˆp(€€€€€€€€€€€€ˆ‘!=5½¼½Á­œ½µ½ˆp(€€€€€€€€€€€€ˆ‘!=5½¼½Á­œ½ÍÕµ‘ˆˆp(€€€€€€€€€€€€ˆ‘!=5¼¹…¡”½¼µ‰Õ¥±ˆp(€€€€€€€€€€€€ˆ‘%Q!U	}]=I-MA½Ñ¡¥É‘}Á…ÉÑä½Í¥¹œµ‰½àˆ(€€€€€€€€€•¡¼€‰¥Í¬…™Ñ•È±•…¹ÕÀèˆ(€€€€€€€€€‘˜€µ ((€€€€€€´¹…µ”è•¹…‰±”­Ù´(€€€€€€€ÉÕ¸èð(€€€€€€€€€•¡¼€-I90ôô‰­Ù´ˆ°I=U@ô‰­Ù´ˆ°5=ôˆÀØØØˆ°=AQ%=9L¬ô‰ÍÑ…Ñ¥}¹½‘”õ­Ù´ˆœðÍÕ‘¼Ñ•”€½•ÑŒ½Õ‘•Ø½ÉÕ±•Ì¹¼ääµ­Ù´Ñ…±°¹ÉÕ±•Ì(€€€€€€€€€ÍÕ‘¼Õ‘•Ù…‘´½¹ÑÉ½°€´µÉ•±½…µÉÕ±•Ì(€€€€€€€€€ÍÕ‘¼Õ‘•Ù…‘´ÑÉ¥•È€´µ¹…µ”µµ…Ñ õ­Ù´((€€€€€€´¹…µ”èÁÉ•É•…Ñ”•µÕ±…Ñ½È…Ù(€€€€€€€Í¡•±°è‰…Í (€€€€€€€ÉÕ¸èð(€€€€€€€€€Í•Ð€µ•Õ¼Á¥Á•™…¥°(€€€€€€€€€9I=%}M-}I==Pôˆ‘í9I=%}M-}I==Pè´‘í9I=%}!=5è´½ÕÍÈ½±½…°½±¥ˆ½…¹‘É½¥½Í‘­õôˆ(€€€€€€€€€M-59Hôˆ‘9I=%}M-}I==P½µ‘±¥¹”µÑ½½±Ì½±…Ñ•ÍÐ½‰¥¸½Í‘­µ…¹…•Èˆ(€€€€€€€€€Y59Hôˆ‘9I=%}M-}I==P½µ‘±¥¹”µÑ½½±Ì½±…Ñ•ÍÐ½‰¥¸½…Ù‘µ…¹…•Èˆ(€€€€€€€€€¥˜ml€„€µà€ˆ‘M-59Hˆñð€„€µà€ˆ‘Y59HˆutìÑ¡•¸(€€€€€€€€€€€•¡¼€‰¹‘É½¥½µµ…¹µ±¥¹”Ñ½½±Ì…É”µ¥ÍÍ¥¹œÕ¹‘•È€‘9I=%}M-}I==Pˆ€ø˜È(€€€€€€€€€€€•á¥Ð€Ä(€€€€€€€€€™¤(€€€€€€€€€•áÁ½ÉÐ9I=%}Y}!=5ôˆ‘!=5¼¹…¹‘É½¥½…Ùˆ(€€€€€€€€€•¡¼€‰9I=%}Y}!=5ô‘9I=%}Y}!=5ˆ€øø€ˆ‘%Q!U	}9Xˆ(€€€€€€€€€µ­‘¥È€µÀ€ˆ‘9I=%}Y}!=5ˆ(€€€€€€€€€Í•Ð€­¼Á¥Á•™…¥°(€€€€€€€€€å•Ìð€ˆ‘M-59Hˆ€´µ±¥•¹Í•Ì€ø½‘•Ø½¹Õ±°(€€€€€€€€€Í•Ð€µ¼Á¥Á•™…¥°(€€€€€€€€€€ˆ‘M-59Hˆ€´µ¡…¹¹•°ôÀ€´µ¥¹ÍÑ…±°€‰•µÕ±…Ñ½Èˆ€‰Á±…Ñ™½É´µÑ½½±Ìˆ€‰Á±…Ñ™½ÉµÌí…¹‘É½¥´ÌÔˆ€‰ÍåÍÑ•´µ¥µ…•Ìí…¹‘É½¥´ÌÔí‘•™…Õ±ÐíààÙ|ØÐˆ(€€€€€€€€€•¡¼¹¼ð€ˆ‘Y59HˆÉ•…Ñ”…Ù€´µ™½É”€µ¸™½á¡½±”µ¤€´µ…‰¤€‰‘•™…Õ±Ð½ààÙ|ØÐˆ€´µÁ…­…”€‰ÍåÍÑ•´µ¥µ…•Ìí…¹‘É½¥´ÌÔí‘•™…Õ±ÐíààÙ|ØÐˆ€´µ‘•Ù¥”€‰Á¥á•±|Üˆ(€€€€€€€€€Ñ•ÍÐ€µ˜€ˆ‘9I=%}Y}!=5½™½á¡½±”µ¤¹…Ù½½¹™¥œ¹¥¹¤ˆ(€€€€€€€€€•¡¼€‰¡Ü¹ÁÔ¹¹½É”ôÈˆ€øø€ˆ‘9I=%}Y}!=5½™½á¡½±”µ¤¹…Ù½½¹™¥œ¹¥¹¤ˆ((€€€€€€´¹…µ”èÉÕ¸•µÕ±…Ñ½ÈÑ•ÍÑÌ(€€€€€€€ÕÍ•ÌèI•…Ñ¥Ù•¥ÉÕÌ½…¹‘É½¥µ•µÕ±…Ñ½ÈµÉÕ¹¹•É”àå˜Ìå˜Å…‰‰‰ÀÕˆÄÄÄÍ„Èå˜Ñ‘ˆØå”ÜÔÐÁ…”Õ„(€€€€€€€•¹Øè(€€€€€€€€€=a!=1}IEU%I}=99Q}QMQ}MALè€‘íì¥Ñ¡Õˆ¹•Ù•¹Ñ}¹…µ”€ôô€ÁÕ±±}É•ÅÕ•ÍÐœ€˜˜€½´¹™½á¡½±”¹‰•Ñ„¹Õ¤¹!½µ•MÉ••¹Q•ÍÐ½Á•¹ÍM•ÑÑ¥¹ÍÉ½µ	½ÑÑ½µ9…Ù¥…Ñ¥½¸±½´¹™½á¡½±”¹‰•Ñ„¹Õ¤¹!½µ•MÉ••¹Q•ÍÐ½Á•¹ÍAÉ½™¥±•ÍÉ½µ!½µ•Ñ¥½¸±½´¹™½á¡½±”¹‰•Ñ„¹Õ¤¹1¥Ù•1½Í¥…±½Q•ÍÐœñð€œœõô(€€€€€€€Ý¥Ñ è(€€€€€€€€€…Á¤µ±•Ù•°è€ÌÔ(€€€€€€€€€…É èààÙ|ØÐ(€€€€€€€€€ÁÉ½™¥±”èÁ¥á•±|Ü(€€€€€€€€€‘¥Í¬µÍ¥é”è€ÈÀÐá4(€€€€€€€€€…Ùµ¹…µ”è™½á¡½±”µ¤(€€€€€€€€€™½É”µ…ÙµÉ•…Ñ¥½¸è™…±Í”(€€€€€€€€€‘¥Í…‰±”µ…¹¥µ…Ñ¥½¹ÌèÑÉÕ”(€€€€€€€€€•µÕ±…Ñ½Èµ½ÁÑ¥½¹Ìè€µ¹¼µÍ¹…ÁÍ¡½ÐµÍ…Ù”€µ¹¼µÝ¥¹‘½Ü€µÁÔÍÝ¥™ÑÍ¡…‘•É}¥¹‘¥É•Ð€µ¹½…Õ‘¥¼€µ¹¼µ‰½½Ðµ…¹¥´€µ…µ•É„µ‰…¬¹½¹”(€€€€€€€€€ÍÉ¥ÁÐèð(€€€€€€€€€€€‰…Í ÍÉ¥ÁÑÌ½ÉÕ¸µ½¹¹•Ñ•µ…¹‘É½¥µÑ•ÍÑÌ¹Í (€€€€€€€€€€€¥˜ml€ˆ‘íì¥Ñ¡Õˆ¹•Ù•¹Ñ}¹…µ”õôˆ€ôô€‰ÁÕ±±}É•ÅÕ•ÍÐˆutìÑ¡•¸(€€€€€€€€€€€€€€¸½É…‘±•Ü€´µ¹¼µ‘…•µ½¸€´µ½¹Í½±”õÁ±…¥¸€´µÍÑ…­ÑÉ…”€éµ…É½‰•¹¡µ…É¬é½¹¹•Ñ•‘¡•¬p(€€€€€€€€€€€€€€€€µA…¹‘É½¥¹Ñ•ÍÑ%¹ÍÑÉÕµ•¹Ñ…Ñ¥½¹IÕ¹¹•ÉÉÕµ•¹ÑÌ¹±…ÍÌõ½´¹™½á¡½±”¹‰•Ñ„¹µ…É½‰•¹¡µ…É¬¹!½µ•5…É½‰•¹¡µ…É¬ÍÑ…ÉÑÕÀ(€€€€€€€€€€€•±¥˜ml€ˆ‘íì¥Ñ¡Õˆ¹•Ù•¹Ñ}¹…µ”õôˆ€ôô€‰Í¡•‘Õ±”ˆñð€ˆ‘íì¥Ñ¡Õˆ¹É•˜õôˆ€ôô€‰É•™Ì½¡•…‘Ì½‘•ØˆutìÑ¡•¸(€€€€€€€€€€€€€€¸½É…‘±•Ü€´µ¹¼µ‘…•µ½¸€´µ½¹Í½±”õÁ±…¥¸€´µÍÑ…­ÑÉ…”€éµ…É½‰•¹¡µ…É¬é½¹¹•Ñ•‘¡•¬(€€€€€€€€€€€™¤((€€€€€€´¹…µ”èÙ…±¥‘…Ñ”½¹¹•Ñ•Ñ•ÍÐáµ°(€€€€€€€¥˜è…±Ý…åÌ ¤(€€€€€€€Í¡•±°è‰…Í (€€€€€€€ÉÕ¸èð(€€€€€€€€€Í•Ð€µ•Õ¼Á¥Á•™…¥°(€€€€€€€€€ÁåÑ¡½¸Ì€´€ððAdœ(€€€€€€€€€¥µÁ½ÉÐÁ…Ñ¡±¥ˆ(€€€€€€€€€¥µÁ½ÉÐÍåÌ(€€€€€€€€€¥µÁ½ÉÐáµ°¹•ÑÉ•”¹±•µ•¹ÑQÉ•”…ÌP((€€€€€€€€€É½½ÑÌ€ôl(€€€€€€€€€€€€€Á…Ñ¡±¥ˆ¹A…Ñ  ‰‰Õ¥±½½¹¹•Ñ•µÑ•ÍÐµÍÁ•Ìˆ¤°(€€€€€€€€€€€€€Á…Ñ¡±¥ˆ¹A…Ñ  ‰…ÁÀ½‰Õ¥±½½ÕÑÁÕÑÌ½…¹‘É½¥‘Q•ÍÐµÉ•ÍÕ±ÑÌˆ¤°(€€€€€€€€€t(€€€€€€€€€áµ±}Á…Ñ¡Ì€ômt(€€€€€€€€€™½ÈÉ½½Ð¥¸É½½ÑÌè(€€€€€€€€€€€€€¥˜É½½Ð¹•á¥ÍÑÌ ¤è(€€€€€€€€€€€€€€€€€áµ±}Á…Ñ¡Ì¹•áÑ•¹¡É½½Ð¹É±½ˆ ‰QMP´¨¹áµ°ˆ¤¤(€€€€€€€€€¥˜¹½Ðáµ±}Á…Ñ¡Ìè(€€€€€€€€€€€€€ÍåÌ¹•á¥Ð ‰9¼½¹¹•Ñ•µÑ•ÍÐ)U¹¥Ða50™¥±•ÌÝ•É”•¹•É…Ñ•ˆ¤((€€€€€€€€€…±±}Í­¥ÁÁ•€ômt(€€€€€€€€€™½ÈÁ…Ñ ¥¸Í½ÉÑ•¡Í•Ð¡áµ±}Á…Ñ¡Ì¤¤è(€€€€€€€€€€€€€ÑÉäè(€€€€€€€€€€€€€€€€€É½½Ð€ôP¹Á…ÉÍ”¡Á…Ñ ¤¹•ÑÉ½½Ð ¤(€€€€€€€€€€€€€•á•ÁÐP¹A…ÉÍ•ÉÉ½È…Ì•ÉÉ½Èè(€€€€€€€€€€€€€€€€€ÍåÌ¹•á¥Ð¡˜‰½Õ±¹½ÐÁ…ÉÍ”íÁ…Ñ¡ôèí•ÉÉ½Éôˆ¤(€€€€€€€€€€€€€ÍÕ¥Ñ•Ì€ômÉ½½Ñt¥˜É½½Ð¹Ñ…œ€ôô€‰Ñ•ÍÑÍÕ¥Ñ”ˆ•±Í”É½½Ð¹™¥¹‘…±° ˆ¸¼½Ñ•ÍÑÍÕ¥Ñ”ˆ¤(€€€€€€€€€€€€€™½ÈÍÕ¥Ñ”¥¸ÍÕ¥Ñ•Ìè(€€€€€€€€€€€€€€€€€Ñ•ÍÑÌ€ô¥¹Ð¡™±½…Ð¡ÍÕ¥Ñ”¹…ÑÑÉ¥ˆ¹•Ð ‰Ñ•ÍÑÌˆ°€ˆÀˆ¤½È€À¤¤(€€€€€€€€€€€€€€€€€Í­¥ÁÁ•€ô¥¹Ð¡™±½…Ð¡ÍÕ¥Ñ”¹…ÑÑÉ¥ˆ¹•Ð ‰Í­¥ÁÁ•ˆ°€ˆÀˆ¤½È€À¤¤(€€€€€€€€€€€€€€€€€¥˜Ñ•ÍÑÌ€ø€À…¹Í­¥ÁÁ•€ôôÑ•ÍÑÌè(€€€€€€€€€€€€€€€€€€€€€…±±}Í­¥ÁÁ•¹…ÁÁ•¹¡˜‰íÁ…Ñ¡ôèíÍÕ¥Ñ”¹…ÑÑÉ¥ˆ¹•Ð ¹…µ”œ°€Õ¹­¹½Ý¸œ¥ôÑ•ÍÑÌõíÑ•ÍÑÍôÍ­¥ÁÁ•õíÍ­¥ÁÁ•‘ôˆ¤(€€€€€€€€€¥˜…±±}Í­¥ÁÁ•è(€€€€€€€€€€€€€ÁÉ¥¹Ð ‰½¹¹•Ñ•Ñ•ÍÐa50½¹Ñ…¥¹ÌÍÕ¥Ñ•ÌÑ¡…ÐÝ•É”‘¥Í½Ù•É•‰ÕÐ¹½Ð•á•ÕÑ•èˆ¤(€€€€€€€€€€€€€™½È¥Ñ•´¥¸…±±}Í­¥ÁÁ•è(€€€€€€€€€€€€€€€€€ÁÉ¥¹Ð¡˜ˆ´í¥Ñ•µôˆ¤(€€€€€€€€€€€€€ÍåÌ¹•á¥Ð Ä¤(€€€€€€€€€Ad((€€€€€€´¹…µ”èÕÁ±½…½¹¹•Ñ•Ñ•ÍÐÉ•Á½ÉÑÌ(€€€€€€€¥˜è…±Ý…åÌ ¤(€€€€€€€ÕÍ•Ìè…Ñ¥½¹Ì½ÕÁ±½…µ…ÉÑ¥™…Ñ ÀÐÍ™ˆÐÙÅ„äÍŒÜÝ……”ØÔÙ”ÝŒÅŒØÑ„àÜÕÅ™ŒÙ„Á„(€€€€€€€Ý¥Ñ è(€€€€€€€€€¹…µ”è½¹¹•Ñ•µ…¹‘É½¥µÑ•ÍÐµÉ•Á½ÉÑÌ(€€€€€€€€€Á…Ñ èð(€€€€€€€€€€€…ÁÀ½‰Õ¥±½É•Á½ÉÑÌ½…¹‘É½¥‘Q•ÍÑÌ(€€€€€€€€€€€…ÁÀ½‰Õ¥±½½ÕÑÁÕÑÌ½…¹‘É½¥‘Q•ÍÐµÉ•ÍÕ±ÑÌ(€€€€€€€€€€€…ÁÀ½‰Õ¥±½½ÕÑÁÕÑÌ½½¹¹•Ñ•‘}…¹‘É½¥‘}Ñ•ÍÑ}…‘‘¥Ñ¥½¹…±}½ÕÑÁÕÐ(€€€€€€€€€€€µ…É½‰•¹¡µ…É¬½‰Õ¥±½É•Á½ÉÑÌ(€€€€€€€€€€€µ…É½‰•¹¡µ…É¬½‰Õ¥±½½ÕÑÁÕÑÌ(€€€€€€€€€€€‰Õ¥±½½¹¹•Ñ•µÑ•ÍÐµÍÁ•Ì(
+      - name: prebuild connected test artifacts
+        run: ./gradlew --no-daemon --console=plain --stacktrace assembleDebug assembleDebugAndroidTest
+
+      - name: reclaim disk for emulator
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Disk before cleanup:"
+          df -h
+          du -sh \
+            "${ANDROID_NDK_HOME:-}" \
+            "$HOME/go/pkg/mod" \
+            "$HOME/go/pkg/sumdb" \
+            "$HOME/.cache/go-build" \
+            "$GITHUB_WORKSPACE/third_party/sing-box" 2>/dev/null || true
+          sudo rm -rf \
+            "${ANDROID_NDK_HOME:-}" \
+            "$HOME/go/pkg/mod" \
+            "$HOME/go/pkg/sumdb" \
+            "$HOME/.cache/go-build" \
+            "$GITHUB_WORKSPACE/third_party/sing-box"
+          echo "Disk after cleanup:"
+          df -h
+
+      - name: enable kvm
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: precreate emulator avd
+        shell: bash
+        run: |
+          set -euo pipefail
+          ANDROID_SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}"
+          SDKMANAGER="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
+          AVDMANAGER="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/avdmanager"
+          if [[ ! -x "$SDKMANAGER" || ! -x "$AVDMANAGER" ]]; then
+            echo "Android command-line tools are missing under $ANDROID_SDK_ROOT" >&2
+            exit 1
+          fi
+          export ANDROID_AVD_HOME="$HOME/.android/avd"
+          echo "ANDROID_AVD_HOME=$ANDROID_AVD_HOME" >> "$GITHUB_ENV"
+          mkdir -p "$ANDROID_AVD_HOME"
+          set +o pipefail
+          yes | "$SDKMANAGER" --licenses >/dev/null
+          set -o pipefail
+          "$SDKMANAGER" --channel=0 --install "emulator" "platform-tools" "platforms;android-35" "system-images;android-35;default;x86_64"
+          echo no | "$AVDMANAGER" create avd --force -n foxhole-ci --abi "default/x86_64" --package "system-images;android-35;default;x86_64" --device "pixel_7"
+          test -f "$ANDROID_AVD_HOME/foxhole-ci.avd/config.ini"
+          echo "hw.cpu.ncore=2" >> "$ANDROID_AVD_HOME/foxhole-ci.avd/config.ini"
+
+      - name: run emulator tests
+        uses: ReactiveCircus/android-emulator-runner@e89f39f1abbbd05b1113a29cf4db69e7540cae5a
+        env:
+          FOXHOLE_REQUIRED_CONNECTED_TEST_SPECS: ${{ github.event_name == 'pull_request' && 'com.foxhole.beta.ui.HomeScreenTest#opensSettingsFromBottomNavigation,com.foxhole.beta.ui.HomeScreenTest#opensProfilesFromHomeAction,com.foxhole.beta.ui.LiveLogsDialogTest' || '' }}
+        with:
+          api-level: 35
+          arch: x86_64
+          profile: pixel_7
+          disk-size: 2048M
+          avd-name: foxhole-ci
+          force-avd-creation: false
+          disable-animations: true
+          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: |
+            bash scripts/run-connected-android-tests.sh
+            if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+              ./gradlew --no-daemon --console=plain --stacktrace :macrobenchmark:connectedCheck \
+                -Pandroid.testInstrumentationRunnerArguments.class=com.foxhole.beta.macrobenchmark.HomeMacrobenchmark#startup
+            elif [[ "${{ github.event_name }}" == "schedule" || "${{ github.ref }}" == "refs/heads/dev" ]]; then
+              ./gradlew --no-daemon --console=plain --stacktrace :macrobenchmark:connectedCheck
+            fi
+
+      - name: validate connected test xml
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import pathlib
+          import sys
+          import xml.etree.ElementTree as ET
+
+          roots = [
+              pathlib.Path("build/connected-test-specs"),
+              pathlib.Path("app/build/outputs/androidTest-results"),
+          ]
+          xml_paths = []
+          for root in roots:
+              if root.exists():
+                  xml_paths.extend(root.rglob("TEST-*.xml"))
+          if not xml_paths:
+              sys.exit("No connected-test JUnit XML files were generated")
+
+          all_skipped = []
+          for path in sorted(set(xml_paths)):
+              try:
+                  root = ET.parse(path).getroot()
+              except ET.ParseError as error:
+                  sys.exit(f"Could not parse {path}: {error}")
+              suites = [root] if root.tag == "testsuite" else root.findall(".//testsuite")
+              for suite in suites:
+                  tests = int(float(suite.attrib.get("tests", "0") or 0))
+                  skipped = int(float(suite.attrib.get("skipped", "0") or 0))
+                  if tests > 0 and skipped == tests:
+                      all_skipped.append(f"{path}: {suite.attrib.get('name', 'unknown')} tests={tests} skipped={skipped}")
+          if all_skipped:
+              print("Connected test XML contains suites that were discovered but not executed:")
+              for item in all_skipped:
+                  print(f"- {item}")
+              sys.exit(1)
+          PY
+
+      - name: upload connected test reports
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: connected-android-test-reports
+          path: |
+            app/build/reports/androidTests
+            app/build/outputs/androidTest-results
+            app/build/outputs/connected_android_test_additional_output
+            macrobenchmark/build/reports
+            macrobenchmark/build/outputs
+            build/connected-test-specs
