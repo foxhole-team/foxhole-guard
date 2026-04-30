@@ -26,6 +26,7 @@ data class HomeUiState(
     val connection: ConnectionSnapshot = ConnectionSnapshot(),
     val ipInfo: IpInfo? = null,
     val ipInfoLoading: Boolean = false,
+    val dashboardConnectionMetricsLoading: Boolean = false,
     val traffic: TrafficSnapshot = TrafficSnapshot(),
     val presets: List<RoutingPreset> = emptyList(),
     val activePreset: RoutingPreset? = null,
@@ -75,6 +76,7 @@ internal data class HomeLocalStreams(
     val installedAppsLoading: Boolean,
     val installedAppsLoaded: Boolean,
     val ipInfoLoading: Boolean,
+    val dashboardConnectionMetricsLoading: Boolean,
     val runtimeReloadPending: Boolean,
     val catalogPresetPreviews: Map<Long, List<RoutingRepository.RoutingCatalogPresetPreview>>,
     val appliedRuntimeSignature: Int?,
@@ -98,6 +100,7 @@ internal data class HomeTrailingLocalState(
     val catalogPresetPreviews: Map<Long, List<RoutingRepository.RoutingCatalogPresetPreview>>,
     val startupActiveProfile: Profile?,
     val appliedRuntimeSignature: Int?,
+    val dashboardConnectionMetricsLoading: Boolean,
 )
 
 internal data class HomeReconnectStreams(

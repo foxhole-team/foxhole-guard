@@ -319,6 +319,7 @@ internal suspend fun FoxholeVpnService.validateTunnelConnectivityInternal(
                                 network = requestNetwork,
                             )
                         }
+                    val evidence = inspectValidatedTunnelEvidence(validationStartedAt)
                     if (dnsIndependentFallback.isSuccess) {
                         if (acceptsTunnelValidationProbe(
                                 TunnelValidationProbeKind.DNS_INDEPENDENT_LITERAL_IP,
@@ -328,6 +329,20 @@ internal suspend fun FoxholeVpnService.validateTunnelConnectivityInternal(
                             container.diagnosticsLogger.record(
                                 "dns",
                                 "dns-independent public reachability probe accepted for strict private dns",
+                            )
+                            scope.launch(Dispatchers.IO) {
+                                refreshValidatedTunnelIpInfoBestEffort(vpnNetwork)
+                            }
+                            return@run vpnNetwork
+                        } else if (acceptsValidatedVpnLiteralIpEndpointProbe(
+                                androidValidated = androidValidated,
+                                evidence = evidence,
+                                context = validationPolicyContext,
+                            )
+                        ) {
+                            container.diagnosticsLogger.record(
+                                "dns",
+                                "vpn-bound literal public endpoint accepted after android validation",
                             )
                             scope.launch(Dispatchers.IO) {
                                 refreshValidatedTunnelIpInfoBestEffort(vpnNetwork)
@@ -345,7 +360,6 @@ internal suspend fun FoxholeVpnService.validateTunnelConnectivityInternal(
                             "dns-independent public reachability probe failed: ${dnsIndependentFallback.exceptionOrNull()?.message.orEmpty()}",
                         )
                     }
-                    val evidence = inspectValidatedTunnelEvidence(validationStartedAt)
                     val gracePolicy = selectTunnelValidationGracePolicy(activeProtocolHint, evidence)
                     if (gracePolicy != null) {
                         container.diagnosticsLogger.recordStructured(

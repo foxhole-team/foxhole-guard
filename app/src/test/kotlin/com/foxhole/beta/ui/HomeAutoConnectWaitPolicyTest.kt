@@ -212,7 +212,7 @@ class HomeAutoConnectWaitPolicyTest {
     @Test
     fun `auto connect latency waits for the settled dashboard refresh window`() {
         assertEquals(
-            HomeViewModel.CONNECTED_PROTOCOL_LATENCY_REFRESH_DELAY_MS,
+            HomeViewModel.CONNECTED_LATENCY_FIRST_DELAY_MS,
             HomeViewModel.AUTO_CONNECT_LATENCY_MEASUREMENT_SETTLE_MS,
         )
     }

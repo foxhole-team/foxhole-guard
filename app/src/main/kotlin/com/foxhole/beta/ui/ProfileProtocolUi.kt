@@ -2,10 +2,10 @@ package com.foxhole.beta.ui
 
 import android.graphics.Bitmap
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -70,8 +71,8 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
@@ -689,6 +690,27 @@ internal fun ProtocolLatencyPill(
             maxLines = 1,
         )
     }
+}
+
+@Composable
+internal fun ProtocolLatencyLoadingPill(
+    modifier: Modifier = Modifier,
+    compact: Boolean = false,
+    showLabel: Boolean = false,
+) {
+    FoxholeSkeletonBlock(
+        modifier =
+            modifier
+                .width(
+                    when {
+                        showLabel && compact -> 78.dp
+                        showLabel -> 96.dp
+                        compact -> 44.dp
+                        else -> 58.dp
+                    },
+                )
+                .height(if (compact) 16.dp else 24.dp),
+    )
 }
 
 @Composable

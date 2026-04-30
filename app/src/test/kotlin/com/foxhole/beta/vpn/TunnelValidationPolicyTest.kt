@@ -10,6 +10,7 @@ class TunnelValidationPolicyTest {
     fun `accepts only vpn-bound dns-capable probes as tunnel validation`() {
         assertTrue(acceptsTunnelValidationProbe(TunnelValidationProbeKind.VPN_IP_REFRESH))
         assertTrue(acceptsTunnelValidationProbe(TunnelValidationProbeKind.VPN_VALIDATION_ENDPOINT))
+        assertTrue(acceptsTunnelValidationProbe(TunnelValidationProbeKind.VALIDATED_VPN_LITERAL_IP_ENDPOINT))
         assertFalse(acceptsTunnelValidationProbe(TunnelValidationProbeKind.DNS_INDEPENDENT_LITERAL_IP))
     }
 
@@ -44,6 +45,38 @@ class TunnelValidationPolicyTest {
             acceptsTunnelValidationProbe(
                 kind = TunnelValidationProbeKind.DNS_INDEPENDENT_LITERAL_IP,
                 context = tunnelValidationPolicyContextFor(PrivateDnsMode.OFF),
+            ),
+        )
+    }
+
+    @Test
+    fun `validated vpn literal ip endpoint requires android validation and healthy tunnel evidence`() {
+        assertTrue(
+            acceptsValidatedVpnLiteralIpEndpointProbe(
+                androidValidated = true,
+                evidence = TunnelValidationEvidence(hasSuccessfulTunnelActivity = true),
+            ),
+        )
+        assertFalse(
+            acceptsValidatedVpnLiteralIpEndpointProbe(
+                androidValidated = false,
+                evidence = TunnelValidationEvidence(hasSuccessfulTunnelActivity = true),
+            ),
+        )
+        assertFalse(
+            acceptsValidatedVpnLiteralIpEndpointProbe(
+                androidValidated = true,
+                evidence = TunnelValidationEvidence(hasSuccessfulTunnelActivity = false),
+            ),
+        )
+        assertFalse(
+            acceptsValidatedVpnLiteralIpEndpointProbe(
+                androidValidated = true,
+                evidence =
+                    TunnelValidationEvidence(
+                        hasSuccessfulTunnelActivity = true,
+                        fatalRuntimeMessage = "authentication failed",
+                    ),
             ),
         )
     }

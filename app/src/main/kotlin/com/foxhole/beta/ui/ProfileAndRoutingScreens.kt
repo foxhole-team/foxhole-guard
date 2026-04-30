@@ -425,7 +425,9 @@ fun ProfilesScreen(
                                             onRefreshMetrics = { onRefreshSmartProfileMetrics(profile.id) },
                                             onCancelRefreshMetrics = onCancelSmartProfileMetricsRefresh,
                                             refreshWarningRequired = true,
-                                            showLatency = rememberedSmartStartLatenciesByProfileId[profile.id]?.isNotEmpty() == true,
+                                            showLatency =
+                                                profile.id in state.smartProfileMetricsRefreshingProfileIds ||
+                                                    rememberedSmartStartLatenciesByProfileId[profile.id]?.isNotEmpty() == true,
                                             compact = true,
                                             showTransportBadges = true,
                                             latencyProbeMethod = state.settings.connection.latencyProbeMethod,
@@ -896,7 +898,7 @@ fun ProfileDetailScreen(
                                         onRefreshMetrics = { onRefreshSmartProfileMetrics(profile.id) },
                                         onCancelRefreshMetrics = onCancelSmartProfileMetricsRefresh,
                                         refreshWarningRequired = true,
-                                        showLatency = rememberedSmartStartLatenciesByOptionId.isNotEmpty(),
+                                        showLatency = metricsRefreshing || rememberedSmartStartLatenciesByOptionId.isNotEmpty(),
                                         compact = true,
                                         showTransportBadges = true,
                                         latencyProbeMethod = latencyProbeMethod,

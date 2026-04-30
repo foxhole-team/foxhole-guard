@@ -69,6 +69,7 @@ internal data class HomeDashboardProtocolModel(
     val selectedServerPingMs: Long?,
     val selectedServerPingUnavailable: Boolean,
     val connectionDetailsReady: Boolean,
+    val connectionMetricsLoading: Boolean,
 )
 
 internal data class HomeDashboardProfileModel(
@@ -299,6 +300,7 @@ internal fun resolveHomeDashboardProtocolModel(state: HomeRouteUiState): HomeDas
                 selectedServerPingUnavailable = selectedServerPingUnavailable,
                 selectedServerPingUnsupported = protocolPresentation.protocolHint.isUdpTransport(),
             ),
+        connectionMetricsLoading = state.dashboardConnectionMetricsLoading,
     )
 }
 
@@ -324,9 +326,8 @@ internal fun resolveHomeDashboardNetworkModel(
     state: HomeRouteUiState,
     visibleIpInfo: IpInfo?,
     deviceInternetAvailable: Boolean?,
-    connectionDetailsReady: Boolean,
 ): HomeDashboardNetworkModel {
-    val showConnectionStatus = state.connection.state == ConnectionState.CONNECTED
+    val showConnectionStatus = state.connection.state == ConnectionState.CONNECTED || state.reconnectInProgress
     return HomeDashboardNetworkModel(
         visibleIpInfo = visibleIpInfo,
         showLoading =
@@ -337,7 +338,7 @@ internal fun resolveHomeDashboardNetworkModel(
                 autoConnectRunning = state.autoConnect.running,
                 deviceInternetAvailable = deviceInternetAvailable,
                 appLoaded = state.profilesLoaded,
-            ) || !connectionDetailsReady,
+            ) || state.dashboardConnectionMetricsLoading,
         showConnectionStatus = showConnectionStatus,
         titleRes =
             if (showConnectionStatus) {

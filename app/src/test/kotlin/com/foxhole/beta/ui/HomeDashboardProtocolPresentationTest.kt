@@ -504,6 +504,37 @@ class HomeDashboardProtocolPresentationTest {
     }
 
     @Test
+    fun `profiles route mirrors dashboard reconnect latency refresh for active profile`() {
+        val activeProfile =
+            profile(
+                selectedProtocolOptionId = "wireguard",
+                protocolOptions =
+                    listOf(
+                        option("trojan", ProtocolHint.TROJAN),
+                        option("wireguard", ProtocolHint.WIREGUARD),
+                    ),
+            )
+        val state =
+            HomeUiState(
+                profiles = listOf(activeProfile),
+                activeProfile = activeProfile,
+                connection = ConnectionSnapshot(state = ConnectionState.RECONNECTING),
+                dashboardConnectionMetricsLoading = true,
+            )
+
+        val resolved =
+            buildProfilesRouteUiState(
+                state = state,
+                autoConnect = AutoConnectUiState(),
+                protocolMetrics = ProtocolMetricsUiState(),
+                networkFingerprintKey = null,
+            )
+
+        assertEquals(setOf(1L), resolved.smartProfileMetricsRefreshingProfileIds)
+        assertEquals(mapOf(1L to "wireguard"), resolved.smartProfileMetricsRefreshingOptionIdByProfileId)
+    }
+
+    @Test
     fun `home route exposes currently refreshed smart protocol for dashboard menu`() {
         val state =
             HomeUiState(

@@ -321,7 +321,8 @@ class ProfileRuntimeSessionAndroidTest {
                         )
                         if (requireLiveSmartSuccess()) {
                             assertEquals(ConnectionState.CONNECTED.name, terminalStateLabel)
-                            assertEquals("ok", ipRefreshResult)
+                            assertTrue(evidence.hasSuccessfulTunnelActivity)
+                            assertTrue(fatalMessage.isEmpty())
                         }
                     }
             }

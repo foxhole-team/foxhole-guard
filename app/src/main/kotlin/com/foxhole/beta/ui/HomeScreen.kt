@@ -220,6 +220,7 @@ fun HomeScreen(
     val dashboardSelectedServerPingMs = dashboardProtocolModel.selectedServerPingMs
     val dashboardSelectedServerPingUnavailable = dashboardProtocolModel.selectedServerPingUnavailable
     val dashboardConnectionDetailsReady = dashboardProtocolModel.connectionDetailsReady
+    val dashboardConnectionMetricsLoading = dashboardProtocolModel.connectionMetricsLoading
     val deviceInternetAvailable by rememberDefaultInternetAvailability()
     var pinnedIpInfo by remember { mutableStateOf(state.ipInfo) }
     var keepPinnedNetworkInfo by remember { mutableStateOf(false) }
@@ -253,12 +254,11 @@ fun HomeScreen(
     }
     val selectedVisibleNetworkIpInfo = if (keepPinnedNetworkInfo) pinnedIpInfo else state.ipInfo
     val networkModel =
-        remember(state, selectedVisibleNetworkIpInfo, deviceInternetAvailable, dashboardConnectionDetailsReady) {
+        remember(state, selectedVisibleNetworkIpInfo, deviceInternetAvailable) {
             resolveHomeDashboardNetworkModel(
                 state = state,
                 visibleIpInfo = selectedVisibleNetworkIpInfo,
                 deviceInternetAvailable = deviceInternetAvailable,
-                connectionDetailsReady = dashboardConnectionDetailsReady,
             )
         }
     val visibleNetworkIpInfo = networkModel.visibleIpInfo
@@ -494,6 +494,11 @@ fun HomeScreen(
                                     showSmartBadge = false,
                                     trailing = {
                                         when {
+                                            dashboardConnectionMetricsLoading ->
+                                                ProtocolLatencyLoadingPill(
+                                                    compact = true,
+                                                    showLabel = true,
+                                                )
                                             !dashboardConnectionDetailsReady -> Unit
                                             dashboardSelectedLatencyMs != null ->
                                                 ProtocolLatencyPill(

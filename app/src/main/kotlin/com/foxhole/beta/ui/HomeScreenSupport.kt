@@ -89,6 +89,9 @@ internal val HomeDashboardBannerTopPadding = 86.dp
 internal val HomeConnectingStatusSignalOffset = 3.dp
 internal val HomeNetworkContentHeight = 82.dp
 internal val HomeDashboardProfileContentHeight = 62.dp
+private val HomeNetworkValueLoadingWidth = 68.dp
+private val HomeNetworkMetricValueLoadingWidth = 54.dp
+private val HomeNetworkMetricValueLoadingHeight = 12.dp
 internal const val HOME_PROFILE_LOADING_TAG = "home_profile_loading"
 
 @Composable
@@ -633,6 +636,7 @@ internal fun HomeNetworkLoadingBlock(
     title: String,
     labels: List<String>,
     modifier: Modifier = Modifier,
+    valueWidth: Dp = HomeNetworkValueLoadingWidth,
 ) {
     Column(
         modifier = modifier.fillMaxWidth(),
@@ -640,7 +644,7 @@ internal fun HomeNetworkLoadingBlock(
     ) {
         HomeNetworkColumnTitle(title)
         labels.forEachIndexed { index, label ->
-            HomeNetworkLoadingLine(label = label)
+            HomeNetworkLoadingLine(label = label, valueWidth = valueWidth)
             if (index < labels.lastIndex) {
                 HomeNetworkSubtleDivider()
             }
@@ -660,11 +664,15 @@ internal fun HomeConnectionStatusLoadingBlock(modifier: Modifier = Modifier) {
                 stringResource(R.string.home_network_status_label),
             ),
         modifier = modifier,
+        valueWidth = HomeNetworkMetricValueLoadingWidth,
     )
 }
 
 @Composable
-private fun HomeNetworkLoadingLine(label: String) {
+private fun HomeNetworkLoadingLine(
+    label: String,
+    valueWidth: Dp,
+) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -690,8 +698,8 @@ private fun HomeNetworkLoadingLine(label: String) {
             FoxholeSkeletonBlock(
                 modifier =
                     Modifier
-                        .width(68.dp)
-                        .height(11.dp),
+                        .width(valueWidth)
+                        .height(HomeNetworkMetricValueLoadingHeight),
             )
         }
     }

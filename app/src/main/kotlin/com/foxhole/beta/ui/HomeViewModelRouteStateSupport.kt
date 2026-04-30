@@ -165,6 +165,26 @@ internal fun buildProfilesRouteUiState(
         protocolMetrics.downOptionIds
             .groupBy(ProfileOptionLatencyKey::profileId, ProfileOptionLatencyKey::optionId)
             .mapValues { (_, values) -> values.toSet() }
+    val dashboardRefreshingProfileId = state.activeProfile?.id?.takeIf { state.dashboardConnectionMetricsLoading }
+    val dashboardRefreshingOptionIdByProfileId =
+        dashboardRefreshingProfileId
+            ?.let { profileId ->
+                resolveDashboardLatencyOptionId(state.activeProfile, state.connection)?.let { optionId ->
+                    mapOf(profileId to optionId)
+                }
+            }.orEmpty()
+    val refreshingProfileIds = protocolMetrics.refreshingProfileIds + listOfNotNull(dashboardRefreshingProfileId)
+    val autoConnectRefreshingOptionIdByProfileId =
+        autoConnect.currentOptionId
+            ?.takeIf { autoConnect.running }
+            ?.let { refreshingOptionId ->
+                refreshingProfileIds.associateWith { refreshingOptionId }
+            }.orEmpty()
+    val refreshingOptionIdByProfileId =
+        (autoConnectRefreshingOptionIdByProfileId +
+            dashboardRefreshingOptionIdByProfileId +
+            protocolMetrics.refreshingOptionIdByProfileId.filterKeys(refreshingProfileIds::contains))
+            .filterKeys(refreshingProfileIds::contains)
     return state.toProfilesRouteUiState(
         smartStartRememberedLatenciesByProfileId =
             state.settings.rememberedSmartStartLatencyByProfileId(
@@ -181,17 +201,8 @@ internal fun buildProfilesRouteUiState(
                     values.filterNot(mergedServerPingsByProfileId[profileId].orEmpty()::containsKey).toSet()
                 },
         smartProfileMetricsUpdatedAtByProfileId = fullRefreshUpdatedAtByProfileId,
-        smartProfileMetricsRefreshingProfileIds = protocolMetrics.refreshingProfileIds,
-        smartProfileMetricsRefreshingOptionIdByProfileId =
-            protocolMetrics.refreshingOptionIdByProfileId
-                .filterKeys(protocolMetrics.refreshingProfileIds::contains)
-                .takeIf(Map<Long, String>::isNotEmpty)
-                ?: autoConnect.currentOptionId
-                ?.takeIf { autoConnect.running }
-                ?.let { refreshingOptionId ->
-                    protocolMetrics.refreshingProfileIds.associateWith { refreshingOptionId }
-                }
-                ?: emptyMap(),
+        smartProfileMetricsRefreshingProfileIds = refreshingProfileIds,
+        smartProfileMetricsRefreshingOptionIdByProfileId = refreshingOptionIdByProfileId,
         recommendedProtocolOptionByProfileId =
             state.settings.smartProfilePreferences
                 .mapNotNull { preference ->

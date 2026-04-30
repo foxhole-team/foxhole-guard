@@ -695,6 +695,7 @@ private fun SmartProfileProtocolMenuContent(
                         latencyDown = latencyDown,
                         latencyUnavailable = latencyUnavailable,
                         metricsEnabled = included,
+                        metricsRefreshing = refreshingSelection,
                         showTransportBadge = showTransportBadges,
                         transportKnown =
                             option.id in metricsUpdatedAtByOptionId ||
@@ -1359,6 +1360,7 @@ private fun SmartProfileProtocolMetricsTableRow(
     latencyDown: Boolean,
     latencyUnavailable: Boolean,
     metricsEnabled: Boolean,
+    metricsRefreshing: Boolean,
     showTransportBadge: Boolean,
     transportKnown: Boolean,
 ) {
@@ -1386,19 +1388,30 @@ private fun SmartProfileProtocolMetricsTableRow(
             latencyUnavailable = latencyUnavailable,
             modifier = Modifier.weight(1f),
         )
-        SmartProfileMetricCell(
-            latencyMs = serverPingMs,
-            unavailable = serverPingUnavailable || serverPingMs == null,
-            enabled = metricsEnabled,
-            modifier = Modifier.width(SmartProfileMetricColumnWidth),
-        )
-        SmartProfileMetricCell(
-            latencyMs = latencyMs,
-            down = latencyDown,
-            unavailable = latencyUnavailable || latencyMs == null,
-            enabled = metricsEnabled,
-            modifier = Modifier.width(SmartProfileMetricColumnWidth),
-        )
+        if (metricsRefreshing) {
+            SmartProfileMetricLoadingCell(
+                enabled = metricsEnabled,
+                modifier = Modifier.width(SmartProfileMetricColumnWidth),
+            )
+            SmartProfileMetricLoadingCell(
+                enabled = metricsEnabled,
+                modifier = Modifier.width(SmartProfileMetricColumnWidth),
+            )
+        } else {
+            SmartProfileMetricCell(
+                latencyMs = serverPingMs,
+                unavailable = serverPingUnavailable || serverPingMs == null,
+                enabled = metricsEnabled,
+                modifier = Modifier.width(SmartProfileMetricColumnWidth),
+            )
+            SmartProfileMetricCell(
+                latencyMs = latencyMs,
+                down = latencyDown,
+                unavailable = latencyUnavailable || latencyMs == null,
+                enabled = metricsEnabled,
+                modifier = Modifier.width(SmartProfileMetricColumnWidth),
+            )
+        }
         Box(
             modifier = Modifier.width(SmartProfileOnColumnWidth),
             contentAlignment = Alignment.Center,
@@ -1613,6 +1626,24 @@ private fun SmartProfileTransportBadge(
             color = color,
             maxLines = 1,
             softWrap = false,
+        )
+    }
+}
+
+@Composable
+private fun SmartProfileMetricLoadingCell(
+    modifier: Modifier = Modifier,
+    enabled: Boolean,
+) {
+    Box(
+        modifier = modifier.graphicsLayer(alpha = if (enabled) 1f else 0.58f),
+        contentAlignment = Alignment.Center,
+    ) {
+        FoxholeSkeletonBlock(
+            modifier =
+                Modifier
+                    .width(34.dp)
+                    .height(14.dp),
         )
     }
 }

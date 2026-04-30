@@ -91,6 +91,7 @@ class HomeViewModel(
     internal val installedAppsLoadingMutable = MutableStateFlow(false)
     internal val installedAppsLoadedMutable = MutableStateFlow(false)
     internal val ipInfoLoadingMutable = MutableStateFlow(false)
+    internal val dashboardConnectionMetricsLoadingMutable = MutableStateFlow(false)
     internal val profileOptionLatenciesMutable = MutableStateFlow<Map<ProfileOptionLatencyKey, Long>>(emptyMap())
     internal val profileOptionDownMutable = MutableStateFlow<Set<ProfileOptionLatencyKey>>(emptySet())
     internal val profileOptionLatencyUnavailableMutable = MutableStateFlow<Set<ProfileOptionLatencyKey>>(emptySet())
@@ -183,12 +184,14 @@ class HomeViewModel(
                 catalogPresetPreviewsMutable,
                 startupActiveProfileMutable,
                 container.connectionController.appliedRuntimeSignature,
-            ) { runtimeReloadPending, catalogPresetPreviews, startupActiveProfile, appliedRuntimeSignature ->
+                dashboardConnectionMetricsLoadingMutable,
+            ) { runtimeReloadPending, catalogPresetPreviews, startupActiveProfile, appliedRuntimeSignature, dashboardConnectionMetricsLoading ->
                 HomeTrailingLocalState(
                     runtimeReloadPending = runtimeReloadPending,
                     catalogPresetPreviews = catalogPresetPreviews,
                     startupActiveProfile = startupActiveProfile,
                     appliedRuntimeSignature = appliedRuntimeSignature,
+                    dashboardConnectionMetricsLoading = dashboardConnectionMetricsLoading,
                 )
             },
         ) { installedAppsStreams, trailingState ->
@@ -200,6 +203,7 @@ class HomeViewModel(
                         installedAppsLoading = installedAppsStreams.installedAppsLoading,
                         installedAppsLoaded = installedAppsStreams.installedAppsLoaded,
                         ipInfoLoading = installedAppsStreams.ipInfoLoading,
+                        dashboardConnectionMetricsLoading = trailingState.dashboardConnectionMetricsLoading,
                         runtimeReloadPending = trailingState.runtimeReloadPending,
                         catalogPresetPreviews = trailingState.catalogPresetPreviews,
                         appliedRuntimeSignature = trailingState.appliedRuntimeSignature,
@@ -255,6 +259,7 @@ class HomeViewModel(
                         explicitLoading = localStreams.ipInfoLoading,
                         connectionState = connectionStreams.connection.state,
                     ),
+                dashboardConnectionMetricsLoading = localStreams.dashboardConnectionMetricsLoading,
                 traffic = connectionStreams.traffic,
                 presets = routingStreams.presets,
                 activePreset = routingStreams.activePreset,
@@ -452,6 +457,7 @@ class HomeViewModel(
                     clearRuntimeReloadPending()
                     clearProfileLatencyRefresh()
                     clearProtocolLatencyState()
+                    dashboardConnectionMetricsLoadingMutable.value = false
                 }
                 if (shouldRefreshConnectedIp) {
                     scheduleConnectedIpRefresh()
@@ -611,7 +617,7 @@ class HomeViewModel(
                 }
                 if (uiState.value.activeProfile?.id == profileId && uiState.value.connection.state in ACTIVE_CONNECTION_STATES) {
                     markRuntimeReloadPending()
-                    scheduleActiveProfileLatencyRefresh()
+                    clearProfileLatencyRefresh()
                 }
             }.onFailure {
                 emitError(it.message ?: getApplication<Application>().getString(R.string.profile_update_failed))
@@ -1069,8 +1075,10 @@ class HomeViewModel(
     companion object {
         internal const val CONNECTED_IP_REFRESH_DELAY_MS = 1_250L
         internal const val MANUAL_IP_REFRESH_MIN_LOADING_MS = 666L
-        internal const val CONNECTED_PROTOCOL_LATENCY_REFRESH_DELAY_MS = 900L
-        internal const val CONNECTED_PROTOCOL_LATENCY_REFRESH_INTERVAL_MS = 5L * 60L * 1000L
+        internal const val CONNECTED_LATENCY_FIRST_DELAY_MS = 2_000L
+        internal const val CONNECTED_LATENCY_REFRESH_INTERVAL_MS = 5L * 60L * 1000L
+        internal const val CONNECTED_LATENCY_TIMEOUT_MS = 4_000L
+        internal const val CONNECTED_SERVER_PING_TIMEOUT_MS = 2_500L
         internal const val PROFILE_RECONNECT_PROMPT_WINDOW_MS = 13_000L
         internal const val RUNTIME_RELOAD_PENDING_TIMEOUT_MS = 1_500L
         internal const val AUTO_CONNECT_CONNECTION_TIMEOUT_MS =
@@ -1082,7 +1090,7 @@ class HomeViewModel(
             FoxholeVpnService.VPN_NETWORK_WAIT_TIMEOUT_MS +
                 FoxholeVpnService.CONNECTIVITY_PROBE_NETWORK_WAIT_TIMEOUT_MS
         internal const val AUTO_CONNECT_DISCONNECT_POLL_DELAY_MS = FoxholeVpnService.VPN_NETWORK_WAIT_POLL_DELAY_MS
-        internal const val AUTO_CONNECT_LATENCY_MEASUREMENT_SETTLE_MS = CONNECTED_PROTOCOL_LATENCY_REFRESH_DELAY_MS
+        internal const val AUTO_CONNECT_LATENCY_MEASUREMENT_SETTLE_MS = CONNECTED_LATENCY_FIRST_DELAY_MS
         internal const val AUTO_CONNECT_LATENCY_MEASUREMENT_RETRY_THRESHOLD_MS = 1_000L
         internal const val AUTO_CONNECT_LATENCY_MEASUREMENT_RETRY_DELAY_MS = 300L
         internal const val AUTO_CONNECT_PROTOCOL_TRANSITION_SETTLE_MS = 220L

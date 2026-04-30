@@ -355,6 +355,7 @@ internal suspend fun HomeViewModel.reconnectProfileIfRequestedInternal(
     }
 
     return runCatching {
+        dashboardConnectionMetricsLoadingMutable.value = true
         container.connectionController.disconnect()
         container.connectionController.snapshot.first { snapshot ->
             snapshot.state == ConnectionState.IDLE || snapshot.state == ConnectionState.ERROR
@@ -362,6 +363,7 @@ internal suspend fun HomeViewModel.reconnectProfileIfRequestedInternal(
         connectNow(profileId)
         true
     }.onFailure {
+        dashboardConnectionMetricsLoadingMutable.value = false
         emitError(runtimeConnectionFailureMessage(it))
     }.getOrDefault(false)
 }
@@ -402,9 +404,13 @@ internal suspend fun HomeViewModel.maybeReloadActiveRuntimeInternal(): Boolean {
 }
 
 internal fun HomeViewModel.connectInternal(profileId: Long) {
+    dashboardConnectionMetricsLoadingMutable.value = true
     viewModelScope.launch {
         runCatching { connectNow(profileId) }
-            .onFailure { emitError(runtimeConnectionFailureMessage(it)) }
+            .onFailure {
+                dashboardConnectionMetricsLoadingMutable.value = false
+                emitError(runtimeConnectionFailureMessage(it))
+            }
     }
 }
 

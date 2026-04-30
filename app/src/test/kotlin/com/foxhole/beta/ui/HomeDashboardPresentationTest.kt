@@ -67,10 +67,11 @@ class HomeDashboardPresentationTest {
         assertTrue(model.showSmartStartLatency)
         assertEquals(88L, model.selectedServerPingMs)
         assertTrue(model.connectionDetailsReady)
+        assertFalse(model.connectionMetricsLoading)
     }
 
     @Test
-    fun `network model keeps connected title and waits for connection detail readiness`() {
+    fun `network model keeps current connected surface when metrics are missing without active refresh`() {
         val ipInfo =
             IpInfo(
                 ip = "203.0.113.10",
@@ -85,10 +86,56 @@ class HomeDashboardPresentationTest {
                 state = HomeRouteUiState(connection = ConnectionSnapshot(state = ConnectionState.CONNECTED)),
                 visibleIpInfo = ipInfo,
                 deviceInternetAvailable = true,
-                connectionDetailsReady = false,
             )
 
         assertEquals(ipInfo, model.visibleIpInfo)
+        assertEquals(R.string.home_network_connection_info_title, model.titleRes)
+        assertTrue(model.showConnectionStatus)
+        assertFalse(model.showLoading)
+    }
+
+    @Test
+    fun `network model shows loading while dashboard connection metrics refresh is active`() {
+        val ipInfo =
+            IpInfo(
+                ip = "203.0.113.10",
+                countryCode = "NL",
+                countryName = "Netherlands",
+                city = "Amsterdam",
+                isp = "Example",
+                fetchedAt = 1_000L,
+            )
+        val model =
+            resolveHomeDashboardNetworkModel(
+                state =
+                    HomeRouteUiState(
+                        connection = ConnectionSnapshot(state = ConnectionState.CONNECTED),
+                        dashboardConnectionMetricsLoading = true,
+                    ),
+                visibleIpInfo = ipInfo,
+                deviceInternetAvailable = true,
+            )
+
+        assertEquals(ipInfo, model.visibleIpInfo)
+        assertEquals(R.string.home_network_connection_info_title, model.titleRes)
+        assertTrue(model.showConnectionStatus)
+        assertTrue(model.showLoading)
+    }
+
+    @Test
+    fun `network model keeps vpn server status surface during reconnect loading`() {
+        val model =
+            resolveHomeDashboardNetworkModel(
+                state =
+                    HomeRouteUiState(
+                        connection = ConnectionSnapshot(state = ConnectionState.IDLE),
+                        reconnectInProgress = true,
+                        dashboardConnectionMetricsLoading = true,
+                    ),
+                visibleIpInfo = null,
+                deviceInternetAvailable = true,
+            )
+
         assertEquals(R.string.home_network_connection_info_title, model.titleRes)
         assertTrue(model.showConnectionStatus)
         assertTrue(model.showLoading)

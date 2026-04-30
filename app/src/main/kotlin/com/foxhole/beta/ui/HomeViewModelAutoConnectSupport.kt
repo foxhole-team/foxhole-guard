@@ -89,6 +89,7 @@ internal fun HomeViewModel.reconnectInternal(profileId: Long) {
     reconnectJob?.cancel()
     reconnectJob = viewModelScope.launch {
         reconnectInProgressMutable.value = true
+        dashboardConnectionMetricsLoadingMutable.value = true
         try {
             if (container.connectionController.snapshot.value.state in HomeViewModel.ACTIVE_CONNECTION_STATES) {
                 container.connectionController.disconnect()
@@ -1409,38 +1410,30 @@ internal fun HomeViewModel.scheduleActiveProfileLatencyRefreshInternal() {
             .firstOrNull { option -> option.id == selectedOptionId }
             ?.protocolHint
     profileLatencyRefreshJob?.cancel()
+    dashboardConnectionMetricsLoadingMutable.value = true
     clearProtocolLatencyState(
         profileId = activeProfile.id,
         optionId = selectedOptionId,
     )
     profileLatencyRefreshJob =
         viewModelScope.launch {
+            var waitingForInitialSample = true
             try {
-                var nextDelayMs = HomeViewModel.CONNECTED_PROTOCOL_LATENCY_REFRESH_DELAY_MS
+                var nextDelayMs = HomeViewModel.CONNECTED_LATENCY_FIRST_DELAY_MS
                 while (true) {
                     delay(nextDelayMs)
-                    nextDelayMs = HomeViewModel.CONNECTED_PROTOCOL_LATENCY_REFRESH_INTERVAL_MS
-                    if (container.connectionController.snapshot.value.state != ConnectionState.CONNECTED || autoConnectUiStateMutable.value.running) {
-                        return@launch
-                    }
-                    val currentProfile = uiState.value.activeProfile ?: return@launch
-                    if (currentProfile.id != activeProfile.id) {
-                        return@launch
-                    }
-                    val currentOptionId =
-                        resolveDashboardLatencyOptionId(
-                            activeProfile = currentProfile,
-                            connection = container.connectionController.snapshot.value,
+                    nextDelayMs = HomeViewModel.CONNECTED_LATENCY_REFRESH_INTERVAL_MS
+                    val refreshTarget =
+                        activeDashboardLatencyTarget(
+                            activeProfileId = activeProfile.id,
+                            selectedOptionId = selectedOptionId,
+                            fallbackProtocolHint = selectedProtocolHint,
                         ) ?: return@launch
-                    if (currentOptionId != selectedOptionId) {
-                        return@launch
+                    runCatching {
+                        withTimeoutOrNull(HomeViewModel.CONNECTED_LATENCY_TIMEOUT_MS) {
+                            container.connectionController.measureCurrentConnectionLatency()
+                        } ?: error("dashboard latency timed out")
                     }
-                    val currentProtocolHint =
-                        currentProfile.protocolOptions
-                            .firstOrNull { option -> option.id == currentOptionId }
-                            ?.protocolHint
-                            ?: selectedProtocolHint
-                    runCatching { container.connectionController.measureCurrentConnectionLatency() }
                         .onSuccess { latencyMs ->
                             cacheProtocolLatency(
                                 profileId = activeProfile.id,
@@ -1453,16 +1446,19 @@ internal fun HomeViewModel.scheduleActiveProfileLatencyRefreshInternal() {
                                 optionId = selectedOptionId,
                             )
                             container.diagnosticsLogger.record("latency", "dashboard latency unavailable: ${error.message.orEmpty()}")
-                        }
-                    if (!shouldMeasureProtocolServerPing(currentProtocolHint)) {
+                    }
+                    if (!shouldMeasureProtocolServerPing(refreshTarget.protocolHint)) {
                         container.diagnosticsLogger.record("latency", "dashboard server ping skipped: unsupported for udp transport")
+                        waitingForInitialSample = clearDashboardMetricsLoadingAfterInitialSample(waitingForInitialSample)
                         continue
                     }
                     runCatching {
-                        container.connectionController.measureCurrentVpnServerPing(
-                            profileId = activeProfile.id,
-                            protocolOptionId = selectedOptionId,
-                        )
+                        withTimeoutOrNull(HomeViewModel.CONNECTED_SERVER_PING_TIMEOUT_MS) {
+                            container.connectionController.measureCurrentVpnServerPing(
+                                profileId = refreshTarget.profile.id,
+                                protocolOptionId = refreshTarget.optionId,
+                            )
+                        } ?: error("dashboard server ping timed out")
                     }.onSuccess { pingMs ->
                         cacheProtocolServerPingInternal(
                             profileId = activeProfile.id,
@@ -1482,8 +1478,10 @@ internal fun HomeViewModel.scheduleActiveProfileLatencyRefreshInternal() {
                         )
                         container.diagnosticsLogger.record("latency", "dashboard server ping unavailable: ${error.message.orEmpty()}")
                     }
+                    waitingForInitialSample = clearDashboardMetricsLoadingAfterInitialSample(waitingForInitialSample)
                 }
             } finally {
+                clearDashboardMetricsLoadingAfterInitialSample(waitingForInitialSample)
                 profileLatencyRefreshJob = null
             }
         }
@@ -1492,10 +1490,55 @@ internal fun HomeViewModel.scheduleActiveProfileLatencyRefreshInternal() {
 internal fun HomeViewModel.clearProfileLatencyRefreshInternal() {
     profileLatencyRefreshJob?.cancel()
     profileLatencyRefreshJob = null
+    dashboardConnectionMetricsLoadingMutable.value = false
 }
 
 private fun shouldMeasureProtocolServerPing(protocolHint: ProtocolHint?): Boolean =
     protocolHint?.isUdpTransport() != true
+
+private data class ActiveDashboardLatencyTarget(
+    val profile: Profile,
+    val optionId: String,
+    val protocolHint: ProtocolHint?,
+)
+
+private fun HomeViewModel.activeDashboardLatencyTarget(
+    activeProfileId: Long,
+    selectedOptionId: String,
+    fallbackProtocolHint: ProtocolHint?,
+): ActiveDashboardLatencyTarget? {
+    val snapshot = container.connectionController.snapshot.value
+    val currentProfile = uiState.value.activeProfile
+    val currentOptionId =
+        currentProfile?.let { profile ->
+            resolveDashboardLatencyOptionId(
+                activeProfile = profile,
+                connection = snapshot,
+            )
+        }
+    val targetProfile = currentProfile?.takeIf { profile -> profile.id == activeProfileId }
+    val connectionReady = snapshot.state == ConnectionState.CONNECTED && !autoConnectUiStateMutable.value.running
+    return if (connectionReady && targetProfile != null && currentOptionId == selectedOptionId) {
+        ActiveDashboardLatencyTarget(
+            profile = targetProfile,
+            optionId = selectedOptionId,
+            protocolHint =
+                targetProfile.protocolOptions
+                    .firstOrNull { option -> option.id == selectedOptionId }
+                    ?.protocolHint
+                    ?: fallbackProtocolHint,
+        )
+    } else {
+        null
+    }
+}
+
+private fun HomeViewModel.clearDashboardMetricsLoadingAfterInitialSample(waitingForInitialSample: Boolean): Boolean {
+    if (waitingForInitialSample) {
+        dashboardConnectionMetricsLoadingMutable.value = false
+    }
+    return false
+}
 
 internal fun HomeViewModel.rememberedAutoConnectLatency(
     profileId: Long,

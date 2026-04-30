@@ -3,6 +3,7 @@ package com.foxhole.beta.vpn
 internal enum class TunnelValidationProbeKind {
     VPN_IP_REFRESH,
     VPN_VALIDATION_ENDPOINT,
+    VALIDATED_VPN_LITERAL_IP_ENDPOINT,
     DNS_INDEPENDENT_LITERAL_IP,
 }
 
@@ -47,6 +48,7 @@ internal class TunnelValidationPolicy(
                     when (kind) {
                         TunnelValidationProbeKind.VPN_IP_REFRESH,
                         TunnelValidationProbeKind.VPN_VALIDATION_ENDPOINT,
+                        TunnelValidationProbeKind.VALIDATED_VPN_LITERAL_IP_ENDPOINT,
                         -> true
                         TunnelValidationProbeKind.DNS_INDEPENDENT_LITERAL_IP -> null
                     }
@@ -59,3 +61,16 @@ internal fun acceptsTunnelValidationProbe(
     kind: TunnelValidationProbeKind,
     context: TunnelValidationPolicyContext = TunnelValidationPolicyContext(),
 ): Boolean = TunnelValidationPolicy().accepts(kind, context)
+
+internal fun acceptsValidatedVpnLiteralIpEndpointProbe(
+    androidValidated: Boolean,
+    evidence: TunnelValidationEvidence?,
+    context: TunnelValidationPolicyContext = TunnelValidationPolicyContext(),
+): Boolean =
+    androidValidated &&
+        evidence?.hasSuccessfulTunnelActivity == true &&
+        evidence.fatalRuntimeMessage == null &&
+        acceptsTunnelValidationProbe(
+            kind = TunnelValidationProbeKind.VALIDATED_VPN_LITERAL_IP_ENDPOINT,
+            context = context,
+        )
