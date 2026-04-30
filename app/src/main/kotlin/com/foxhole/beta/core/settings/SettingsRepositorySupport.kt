@@ -200,7 +200,7 @@ internal fun resolveAdaptiveProtocolCooldownUntil(
 }
 
 internal fun parseStoredThemeMode(value: String?): ThemeMode {
-    return parseOptionalStoredThemeMode(value) ?: ThemeMode.DARK
+    return parseOptionalStoredThemeMode(value) ?: ThemeMode.SYSTEM
 }
 
 internal fun parseOptionalStoredThemeMode(value: String?): ThemeMode? {
@@ -227,7 +227,7 @@ internal fun readFastStoredAppLocale(context: Context): AppLocale {
 internal fun sanitizeStoredThemeModePayload(payload: String): String =
     STORED_THEME_MODE_REGEX.replace(payload) { match ->
         val storedValue = match.groupValues[2]
-        val normalizedValue = parseOptionalStoredThemeMode(storedValue)?.name ?: ThemeMode.DARK.name
+        val normalizedValue = parseOptionalStoredThemeMode(storedValue)?.name ?: ThemeMode.SYSTEM.name
         "${match.groupValues[1]}$normalizedValue${match.groupValues[3]}"
     }
 

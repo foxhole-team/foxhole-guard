@@ -61,8 +61,8 @@ class SettingsRepositoryTest {
     }
 
     @Test
-    fun `stored theme parser falls back to dark for unsupported values`() {
-        assertEquals(ThemeMode.DARK, parseStoredThemeMode("BROKEN_THEME"))
+    fun `stored theme parser falls back to system for unsupported values`() {
+        assertEquals(ThemeMode.SYSTEM, parseStoredThemeMode("BROKEN_THEME"))
     }
 
     @Test
@@ -100,7 +100,7 @@ class SettingsRepositoryTest {
     @Test
     fun `sanitizes unsupported theme mode in stored payload`() {
         assertEquals(
-            """{"ui":{"themeMode":"DARK"}}""",
+            """{"ui":{"themeMode":"SYSTEM"}}""",
             sanitizeStoredThemeModePayload("""{"ui":{"themeMode":"BROKEN_THEME"}}"""),
         )
     }
@@ -119,8 +119,8 @@ class SettingsRepositoryTest {
     }
 
     @Test
-    fun `ui defaults to dark theme and hidden expert settings`() {
-        assertEquals(ThemeMode.DARK, Settings().ui.themeMode)
+    fun `ui defaults to system theme and hidden expert settings`() {
+        assertEquals(ThemeMode.SYSTEM, Settings().ui.themeMode)
         assertFalse(Settings().ui.showExpertSettings)
     }
 

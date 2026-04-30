@@ -35,11 +35,11 @@ class SettingsStorageSupportTest {
                 settingsFile = settingsFile,
                 readPayload = { """{"ui":{"themeMode":"BROKEN_THEME"}}""" },
                 decodePayload = { payload ->
-                    assertEquals("""{"ui":{"themeMode":"DARK"}}""", payload)
+                    assertEquals("""{"ui":{"themeMode":"SYSTEM"}}""", payload)
                     Settings()
                 },
                 sanitizePayload = { payload ->
-                    payload.replace("BROKEN_THEME", "DARK")
+                    payload.replace("BROKEN_THEME", "SYSTEM")
                 },
                 rewriteSanitized = {
                     rewritten = true
