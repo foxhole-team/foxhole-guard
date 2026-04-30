@@ -88,6 +88,8 @@ internal val HomeTriangleIndicatorSize = 15.dp
 internal val HomeDashboardBannerTopPadding = 86.dp
 internal val HomeConnectingStatusSignalOffset = 3.dp
 internal val HomeNetworkContentHeight = 82.dp
+internal val HomeDashboardProfileContentHeight = 62.dp
+internal const val HOME_PROFILE_LOADING_TAG = "home_profile_loading"
 
 @Composable
 internal fun HomeCardHeader(
@@ -592,11 +594,17 @@ internal fun TrafficStatBlock(
 @Composable
 internal fun HomeProfileLoadingBlock() {
     Column(
-        modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .height(HomeDashboardProfileContentHeight)
+                .testTag(HOME_PROFILE_LOADING_TAG),
+        verticalArrangement = Arrangement.Center,
     ) {
         HomeProfileLoadingLine(width = 156.dp, height = 18.dp)
+        Spacer(modifier = Modifier.height(4.dp))
         HomeProfileLoadingLine(width = 206.dp, height = 12.dp)
+        Spacer(modifier = Modifier.height(4.dp))
         HomeProfileLoadingLine(width = 126.dp, height = 12.dp)
     }
 }

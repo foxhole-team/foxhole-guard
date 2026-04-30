@@ -1,5 +1,6 @@
 package com.foxhole.beta.macrobenchmark
 
+import androidx.benchmark.macro.BaselineProfileMode
 import androidx.benchmark.macro.CompilationMode
 import androidx.benchmark.macro.FrameTimingMetric
 import androidx.benchmark.macro.StartupMode
@@ -24,7 +25,7 @@ class HomeMacrobenchmark {
         benchmarkRule.measureRepeated(
             packageName = PACKAGE_NAME,
             metrics = listOf(StartupTimingMetric()),
-            compilationMode = CompilationMode.Partial(),
+            compilationMode = BENCHMARK_COMPILATION_MODE,
             iterations = SHORT_ITERATIONS,
             startupMode = StartupMode.COLD,
         ) {
@@ -37,7 +38,7 @@ class HomeMacrobenchmark {
         benchmarkRule.measureRepeated(
             packageName = PACKAGE_NAME,
             metrics = listOf(FrameTimingMetric()),
-            compilationMode = CompilationMode.Partial(),
+            compilationMode = BENCHMARK_COMPILATION_MODE,
             iterations = SHORT_ITERATIONS,
             startupMode = StartupMode.WARM,
             setupBlock = {
@@ -45,10 +46,15 @@ class HomeMacrobenchmark {
                 startActivityAndWait()
             },
         ) {
-            val list = device.wait(Until.findObject(By.res(PACKAGE_NAME, "home_dashboard_list")), WAIT_TIMEOUT_MS)
-            list?.fling(Direction.DOWN)
+            val list =
+                device.wait(
+                    Until.findObject(By.pkg(PACKAGE_NAME).scrollable(true)),
+                    WAIT_TIMEOUT_MS,
+                )
+                    ?: error("Home dashboard scroll container was not found for $PACKAGE_NAME")
+            list.fling(Direction.DOWN)
             device.waitForIdle()
-            list?.fling(Direction.UP)
+            list.fling(Direction.UP)
             device.waitForIdle()
         }
 
@@ -56,8 +62,13 @@ class HomeMacrobenchmark {
         get() = UiDevice.getInstance(androidx.test.platform.app.InstrumentationRegistry.getInstrumentation())
 
     private companion object {
-        private const val PACKAGE_NAME = "com.foxhole.beta.debug"
+        private const val PACKAGE_NAME = "com.foxhole.beta"
         private const val SHORT_ITERATIONS = 3
         private const val WAIT_TIMEOUT_MS = 5_000L
+        private val BENCHMARK_COMPILATION_MODE =
+            CompilationMode.Partial(
+                baselineProfileMode = BaselineProfileMode.Disable,
+                warmupIterations = 1,
+            )
     }
 }

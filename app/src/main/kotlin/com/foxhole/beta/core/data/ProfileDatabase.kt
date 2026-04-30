@@ -1,6 +1,7 @@
 package com.foxhole.beta.core.data
 
 import android.content.Context
+import android.database.sqlite.SQLiteDatabase
 import androidx.room.Dao
 import androidx.room.Database
 import androidx.room.Embedded
@@ -17,6 +18,7 @@ import androidx.room.RoomDatabase
 import androidx.room.TypeConverter
 import androidx.room.TypeConverters
 import androidx.room.migration.Migration
+import androidx.sqlite.db.SimpleSQLiteQuery
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.foxhole.beta.core.model.Profile
 import com.foxhole.beta.core.model.ProfileSourceType
@@ -443,6 +445,17 @@ abstract class ProfileDatabase : RoomDatabase() {
         private const val SECURE_DB_NAME = "foxhole.secure.db"
         private val sqlCipherLoaded = AtomicBoolean(false)
 
+        private data class LegacyProfileRow(
+            val id: Long,
+            val name: String,
+            val sourceType: String,
+            val secretRef: String,
+            val protocolHint: String,
+            val lastUpdatedAt: Long?,
+            val lastEtag: String?,
+            val isActive: Boolean,
+        )
+
         private val MIGRATION_1_2 =
             object : Migration(1, 2) {
                 override fun migrate(db: SupportSQLiteDatabase) {
@@ -499,16 +512,22 @@ abstract class ProfileDatabase : RoomDatabase() {
                 }
             }
 
-        fun create(context: Context): ProfileDatabase =
-            Room.databaseBuilder(
-                context,
-                ProfileDatabase::class.java,
-                SECURE_DB_NAME,
-            ).openHelperFactory(
-                SupportOpenHelperFactory(DatabasePassphraseStore(context).readOrCreate()),
-            ).addMigrations(
-                MIGRATION_1_2,
-            ).fallbackToDestructiveMigration(false).build()
+        fun create(context: Context): ProfileDatabase {
+            val appContext = context.applicationContext
+            val passphrase = DatabasePassphraseStore(appContext).readOrCreate()
+            val database =
+                Room.databaseBuilder(
+                    appContext,
+                    ProfileDatabase::class.java,
+                    SECURE_DB_NAME,
+                ).openHelperFactory(
+                    SupportOpenHelperFactory(passphrase),
+                ).addMigrations(
+                    MIGRATION_1_2,
+                ).fallbackToDestructiveMigration(false).build()
+            migrateLegacyPlaintextDatabase(appContext, database)
+            return database
+        }
 
         private fun ensureSqlCipherLoaded() {
             if (sqlCipherLoaded.get()) {
@@ -522,23 +541,105 @@ abstract class ProfileDatabase : RoomDatabase() {
             }
         }
 
-        private fun clearLegacyPlaintextDatabase(context: Context) {
+        private fun migrateLegacyPlaintextDatabase(
+            context: Context,
+            secureDatabase: ProfileDatabase,
+        ) {
             val legacy = context.getDatabasePath(LEGACY_DB_NAME)
             if (!legacy.exists()) {
                 return
             }
-            val secure = context.getDatabasePath(SECURE_DB_NAME)
-            if (secure.exists()) {
-                legacy.delete()
-                File("${legacy.absolutePath}-wal").delete()
-                File("${legacy.absolutePath}-shm").delete()
-                File("${legacy.absolutePath}-journal").delete()
-                return
+            val legacyRows = readLegacyProfileRows(legacy)
+            val targetDatabase = secureDatabase.openHelper.writableDatabase
+            targetDatabase.beginTransaction()
+            try {
+                legacyRows.forEach { row -> targetDatabase.insertLegacyProfile(row) }
+                targetDatabase.setTransactionSuccessful()
+            } finally {
+                targetDatabase.endTransaction()
             }
-            legacy.delete()
-            File("${legacy.absolutePath}-wal").delete()
-            File("${legacy.absolutePath}-shm").delete()
-            File("${legacy.absolutePath}-journal").delete()
+            val missingLegacyIds =
+                legacyRows
+                    .map(LegacyProfileRow::id)
+                    .filterNot { id -> targetDatabase.profileExists(id) }
+            check(missingLegacyIds.isEmpty()) {
+                "legacy plaintext profile migration was not verified for ids=${missingLegacyIds.joinToString()}"
+            }
+            deleteLegacyPlaintextDatabase(legacy)
+        }
+
+        private fun readLegacyProfileRows(legacyDatabase: File): List<LegacyProfileRow> {
+            val database =
+                SQLiteDatabase.openDatabase(
+                    legacyDatabase.absolutePath,
+                    null,
+                    SQLiteDatabase.OPEN_READONLY,
+                )
+            database.use { db ->
+                db.rawQuery(
+                    """
+                    select id, name, sourceType, secretRef, protocolHint, lastUpdatedAt, lastEtag, isActive
+                    from profiles
+                    order by id asc
+                    """.trimIndent(),
+                    emptyArray(),
+                ).use { cursor ->
+                    val rows = mutableListOf<LegacyProfileRow>()
+                    while (cursor.moveToNext()) {
+                        rows +=
+                            LegacyProfileRow(
+                                id = cursor.getLong(0),
+                                name = cursor.getString(1),
+                                sourceType = cursor.getString(2),
+                                secretRef = cursor.getString(3),
+                                protocolHint = cursor.getString(4),
+                                lastUpdatedAt = if (cursor.isNull(5)) null else cursor.getLong(5),
+                                lastEtag = if (cursor.isNull(6)) null else cursor.getString(6),
+                                isActive = cursor.getLong(7) != 0L,
+                            )
+                    }
+                    return rows
+                }
+            }
+        }
+
+        private fun SupportSQLiteDatabase.insertLegacyProfile(row: LegacyProfileRow) {
+            execSQL(
+                """
+                insert or ignore into profiles
+                    (id, name, sourceType, secretRef, protocolHint, lastUpdatedAt, lastEtag, isActive)
+                values (?, ?, ?, ?, ?, ?, ?, ?)
+                """.trimIndent(),
+                arrayOf<Any?>(
+                    row.id,
+                    row.name,
+                    row.sourceType,
+                    row.secretRef,
+                    row.protocolHint,
+                    row.lastUpdatedAt,
+                    row.lastEtag,
+                    if (row.isActive) 1 else 0,
+                ),
+            )
+        }
+
+        private fun SupportSQLiteDatabase.profileExists(id: Long): Boolean =
+            query(SimpleSQLiteQuery("select count(*) from profiles where id = ?", arrayOf(id))).use { cursor ->
+                cursor.moveToFirst() && cursor.getLong(0) > 0L
+            }
+
+        private fun deleteLegacyPlaintextDatabase(legacy: File) {
+            val files =
+                listOf(
+                    legacy,
+                    File("${legacy.absolutePath}-wal"),
+                    File("${legacy.absolutePath}-shm"),
+                    File("${legacy.absolutePath}-journal"),
+                )
+            val failedDeletes = files.filter { file -> file.exists() && !file.delete() }
+            check(failedDeletes.isEmpty()) {
+                "legacy plaintext database migrated but could not be removed: ${failedDeletes.joinToString { it.name }}"
+            }
         }
 
         private class DatabasePassphraseStore(
@@ -550,7 +651,6 @@ abstract class ProfileDatabase : RoomDatabase() {
 
             fun readOrCreate(): ByteArray {
                 ensureSqlCipherLoaded()
-                clearLegacyPlaintextDatabase(appContext)
                 passphraseFile.parentFile?.mkdirs()
                 if (passphraseFile.exists()) {
                     return fileCipher.readBytesMigratingLegacy(appContext, passphraseFile)

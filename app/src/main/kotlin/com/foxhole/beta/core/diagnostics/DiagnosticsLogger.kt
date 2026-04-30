@@ -66,6 +66,16 @@ class DiagnosticsLogger(
                 .takeLast(retention.maxEntries)
         entriesMutable.value = next
         runCatching { sessionStore.append(persistedEntry, retention) }
+            .onFailure { error ->
+                val failureEntry =
+                    DiagnosticEntry(
+                        timestamp = now,
+                        tag = "diagnostics",
+                        message = "diagnostics journal write failed error=${error.javaClass.simpleName}",
+                    )
+                entriesMutable.value = (next + failureEntry).takeLast(retention.maxEntries)
+                Log.w(LOG_TAG, failureEntry.message)
+            }
         if (BuildConfig.ENABLE_DIAGNOSTIC_LOGCAT) {
             Log.d(LOG_TAG, "[${tag.lowercase(Locale.ROOT)}] ${DiagnosticSanitizer.sanitizeForExport(normalizedMessage)}")
         }

@@ -5,6 +5,8 @@ import android.os.SystemClock
 import com.foxhole.beta.core.data.ProfileRepository
 import com.foxhole.beta.core.model.ConnectionSnapshot
 import com.foxhole.beta.core.model.LatencyProbeMethod
+import com.foxhole.beta.core.model.RuntimeFailureCode
+import com.foxhole.beta.core.model.RuntimeFailureException
 import com.foxhole.beta.core.model.TrafficMode
 import com.foxhole.beta.core.network.IpInfoRepository
 import com.foxhole.beta.core.settings.SettingsRepository
@@ -29,11 +31,7 @@ internal class ConnectionTelemetryProbe(
 ) {
     suspend fun measureCurrentConnectionLatency(timeoutMs: Long): Long {
         val settings = settingsRepository.current()
-        val trafficMode =
-            snapshot.value.state
-                .takeIf { it in ACTIVE_CONNECTION_STATES }
-                ?.let { snapshot.value.trafficMode }
-                ?: error("active connection is required for latency measurement")
+        val trafficMode = activeTrafficModeForLatency()
         val proxyAccess = if (trafficMode == TrafficMode.PROXY) settings.preferredAppProxyAccess() else null
         val tunnelConnected = trafficMode == TrafficMode.TUNNEL && snapshot.value.state in ACTIVE_CONNECTION_STATES
         val method = effectiveLatencyProbeMethod(trafficMode, settings.connection.latencyProbeMethod)
@@ -44,7 +42,7 @@ internal class ConnectionTelemetryProbe(
                 runCatching {
                     when {
                         trafficMode == TrafficMode.TUNNEL && tunnelConnected -> {
-                            val vpnNetwork = currentVpnNetwork() ?: error("vpn network unavailable")
+                            val vpnNetwork = requireVpnNetworkForLatency()
                             measureTunnelLatency(
                                 endpoint = endpoint,
                                 timeoutMs = timeoutMs,
@@ -68,9 +66,32 @@ internal class ConnectionTelemetryProbe(
                 lastFailure = attempt.exceptionOrNull()
             }
         }
-        return representativeLatencyMs(successfulLatencies)
-            ?: throw (lastFailure ?: error("latency probe failed"))
+        return representativeLatencyMs(successfulLatencies) ?: throw latencyProbeFailure(lastFailure)
     }
+
+    private fun activeTrafficModeForLatency(): TrafficMode =
+        snapshot.value.state
+            .takeIf { it in ACTIVE_CONNECTION_STATES }
+            ?.let { snapshot.value.trafficMode }
+            ?: throw RuntimeFailureException(
+                RuntimeFailureCode.ACTIVE_CONNECTION_REQUIRED,
+                "active connection is required for latency measurement",
+            )
+
+    private fun requireVpnNetworkForLatency(): Network =
+        currentVpnNetwork()
+            ?: throw RuntimeFailureException(
+                RuntimeFailureCode.VPN_NETWORK_MISSING,
+                "vpn network unavailable",
+            )
+
+    private fun latencyProbeFailure(lastFailure: Throwable?): RuntimeFailureException =
+        (lastFailure as? RuntimeFailureException)
+            ?: RuntimeFailureException(
+                RuntimeFailureCode.LATENCY_PROBE_FAILED,
+                "latency probe failed",
+                lastFailure,
+            )
 
     private suspend fun measureTunnelLatency(
         endpoint: String,

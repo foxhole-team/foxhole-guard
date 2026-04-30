@@ -16,7 +16,6 @@ repo/
 .tmp/
 tmp/
 srclibs/
-/third_party/sing-box/
 *.keystore
 *.jks
 *.log

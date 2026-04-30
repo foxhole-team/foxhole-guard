@@ -31,7 +31,10 @@ internal class DiagnosticsSessionStore(
         cleanup(now, retention)
         val cutoff = now - retention.retentionHours * 60L * 60L * 1000L
         return sessionFiles()
-            .flatMap { file -> file.readPersistedEntries() }
+            .flatMap { file ->
+                runCatching { file.readPersistedEntries() }
+                    .getOrElse { error -> listOf(journalReadFailureEntry(now, file, error)) }
+            }
             .filter { entry -> entry.timestamp >= cutoff }
             .takeLast(retention.maxEntries)
     }
@@ -41,8 +44,26 @@ internal class DiagnosticsSessionStore(
         retention: DiagnosticsRetention,
     ) {
         val target = writableSessionFile(entry.timestamp)
-        val entries = target.readPersistedEntries() + entry
-        writeEntriesSync(target, entries)
+        val existingEntries =
+            if (target.exists()) {
+                runCatching { target.readPersistedEntries() }
+                    .getOrElse { error ->
+                        currentSessionFile = null
+                        val replacement = writableSessionFile(entry.timestamp)
+                        writeEntriesSync(
+                            replacement,
+                            listOf(
+                                journalReadFailureEntry(entry.timestamp, target, error),
+                                entry,
+                            ),
+                        )
+                        maybeCleanup(entry.timestamp, retention)
+                        return
+                    }
+            } else {
+                emptyList()
+            }
+        writeEntriesSync(target, existingEntries + entry)
         maybeCleanup(entry.timestamp, retention)
     }
 
@@ -102,31 +123,42 @@ internal class DiagnosticsSessionStore(
             .orEmpty()
 
     private fun File.readPersistedEntries(): List<DiagnosticEntry> =
-        runCatching {
-            val text =
-                if (name.endsWith(".jsonl.enc")) {
-                    fileCipher.readBytes(this).toString(Charsets.UTF_8)
-                } else {
-                    readText(Charsets.UTF_8)
+        readPersistedEntriesUnsafe()
+
+    private fun File.readPersistedEntriesUnsafe(): List<DiagnosticEntry> {
+        val text =
+            if (name.endsWith(".jsonl.enc")) {
+                fileCipher.readBytes(this).toString(Charsets.UTF_8)
+            } else {
+                readText(Charsets.UTF_8)
+            }
+        return text
+            .lineSequence()
+            .mapNotNull { line ->
+                line
+                    .takeIf(String::isNotBlank)
+                    ?.let { rawLine -> runCatching { json.decodeFromString<PersistedDiagnosticEntry>(rawLine) }.getOrNull() }
+                    ?.toDiagnosticEntry()
+            }.toList()
+            .also { entries ->
+                if (name.endsWith(".jsonl") && entries.isNotEmpty()) {
+                    val encryptedFile = File(parentFile, "$name.enc")
+                    writeEntriesSync(encryptedFile, entries)
+                    delete()
                 }
-            text
-                .lineSequence()
-                .mapNotNull { line ->
-                    line
-                        .takeIf(String::isNotBlank)
-                        ?.let { rawLine -> runCatching { json.decodeFromString<PersistedDiagnosticEntry>(rawLine) }.getOrNull() }
-                        ?.toDiagnosticEntry()
-                }.toList()
-                .also { entries ->
-                    if (name.endsWith(".jsonl") && entries.isNotEmpty()) {
-                        runCatching {
-                            val encryptedFile = File(parentFile, "$name.enc")
-                            writeEntriesSync(encryptedFile, entries)
-                            delete()
-                        }
-                    }
-                }
-        }.getOrDefault(emptyList())
+            }
+    }
+
+    private fun journalReadFailureEntry(
+        now: Long,
+        file: File,
+        error: Throwable,
+    ): DiagnosticEntry =
+        DiagnosticEntry(
+            timestamp = now,
+            tag = DIAGNOSTICS_TAG,
+            message = "diagnostics journal read failed file=${file.name} error=${error.javaClass.simpleName}",
+        )
 
     private fun writeEntriesSync(
         file: File,
@@ -159,6 +191,7 @@ internal class DiagnosticsSessionStore(
     )
 
     private companion object {
+        private const val DIAGNOSTICS_TAG = "diagnostics"
         private const val MAX_SESSION_FILES = 16
         private const val MAX_SESSION_FILE_BYTES = 768L * 1024L
         private const val CLEANUP_INTERVAL_MS = 60L * 1000L

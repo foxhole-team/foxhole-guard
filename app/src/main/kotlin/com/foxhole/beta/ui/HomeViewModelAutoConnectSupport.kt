@@ -15,21 +15,22 @@ import com.foxhole.beta.core.model.SMART_START_PROTOCOL_TIMEOUT_MIN_SECONDS
 import com.foxhole.beta.core.model.SMART_START_REFRESH_TIMEOUT_DEFAULT_SECONDS
 import com.foxhole.beta.core.model.SMART_START_REFRESH_TIMEOUT_MIN_SECONDS
 import com.foxhole.beta.core.model.SMART_START_TIMEOUT_MAX_SECONDS
-import com.foxhole.beta.core.model.TrafficSnapshot
 import com.foxhole.beta.core.model.TrafficMode
+import com.foxhole.beta.core.model.TrafficSnapshot
 import com.foxhole.beta.core.model.isUdpTransport
+import com.foxhole.beta.core.model.runtimeFailureCode
 import com.foxhole.beta.core.network.NetworkFingerprint
 import com.foxhole.beta.core.profile.AutoConnectProbeCandidate
 import com.foxhole.beta.core.profile.AutoConnectProbeResult
 import com.foxhole.beta.core.profile.MultiProtocolProfileSupport
 import com.foxhole.beta.core.profile.classifyAutoConnectProbeFailure
+import com.foxhole.beta.core.settings.networkMemory
+import com.foxhole.beta.core.settings.smartProfilePreference
+import com.foxhole.beta.core.settings.smartStartEnabledProtocolSetHash
 import com.foxhole.beta.core.smart.AdaptiveProtocolCandidateScore
 import com.foxhole.beta.core.smart.AdaptiveProtocolRanker
 import com.foxhole.beta.core.smart.SmartStartController
 import com.foxhole.beta.core.smart.SmartStartReplayEvent
-import com.foxhole.beta.core.settings.networkMemory
-import com.foxhole.beta.core.settings.smartProfilePreference
-import com.foxhole.beta.core.settings.smartStartEnabledProtocolSetHash
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
@@ -165,7 +166,10 @@ internal fun HomeViewModel.startAutoConnectInternal(profileId: Long) {
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: Throwable) {
-                container.diagnosticsLogger.record("auto-connect", "smart start failed: ${error.message.orEmpty()}")
+                container.diagnosticsLogger.record(
+                    "auto-connect",
+                    "smart start failed code=${error.runtimeFailureCode().name.lowercase()} message=${error.message.orEmpty()}",
+                )
                 emitError(getApplication<Application>().getString(R.string.auto_connect_failed))
             } finally {
                 autoConnectJob = null

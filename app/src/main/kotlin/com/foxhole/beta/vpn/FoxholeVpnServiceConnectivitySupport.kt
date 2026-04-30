@@ -6,21 +6,18 @@ import androidx.core.content.getSystemService
 import com.foxhole.beta.R
 import com.foxhole.beta.core.model.AutoConnectReasonCode
 import com.foxhole.beta.core.model.ConnectionSnapshot
-import com.foxhole.beta.core.model.ConnectivityHealthState
 import com.foxhole.beta.core.model.ConnectionState
+import com.foxhole.beta.core.model.ConnectivityHealthState
 import com.foxhole.beta.core.model.IpInfo
 import com.foxhole.beta.core.model.NotificationSnapshot
 import com.foxhole.beta.core.model.ProtocolHint
+import com.foxhole.beta.core.model.RuntimeFailureCode
+import com.foxhole.beta.core.model.RuntimeFailureException
 import com.foxhole.beta.core.model.TrafficMode
 import com.foxhole.beta.core.model.TrafficSnapshot
 import com.foxhole.beta.core.model.VpnSession
 import com.foxhole.beta.core.network.IpInfoFetchMode
 import com.foxhole.beta.core.network.mergeIpInfo
-import java.net.DatagramPacket
-import java.net.DatagramSocket
-import java.net.InetAddress
-import java.net.InetSocketAddress
-import java.net.Socket
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
@@ -34,6 +31,11 @@ import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import java.net.DatagramPacket
+import java.net.DatagramSocket
+import java.net.InetAddress
+import java.net.InetSocketAddress
+import java.net.Socket
 
 internal suspend fun FoxholeVpnService.refreshVpnIpInfoInternal(
     callTimeoutMs: Long,
@@ -47,7 +49,7 @@ internal suspend fun FoxholeVpnService.refreshVpnIpInfoInternal(
                 FoxholeVpnService.VPN_NETWORK_WAIT_TIMEOUT_MS,
                 excludedHandle = expectedFreshVpnNetworkHandle,
             )
-            ?: error("vpn network unavailable")
+            ?: throw RuntimeFailureException(RuntimeFailureCode.VPN_NETWORK_MISSING, "vpn network unavailable")
     val requestNetwork = network ?: tunnelValidationRequestNetwork(vpnNetwork)
     val resolverNetwork = currentUpstreamNetworkOrNull()
     val remoteDnsServers = VpnDnsServerSelector.remoteDnsServerAddresses(activeSession?.configJson)
@@ -58,7 +60,7 @@ internal suspend fun FoxholeVpnService.refreshVpnIpInfoInternal(
                 callTimeoutMs = callTimeoutMs,
                 network = requestNetwork,
                 resolverNetwork = resolverNetwork,
-            ) ?: error("vpn ipv4 refresh failed")
+            ) ?: throw RuntimeFailureException(RuntimeFailureCode.DNS_FAILURE, "vpn ipv4 refresh failed")
         } else {
             container.ipInfoRepository.fetch(
                 endpoint = endpoint,

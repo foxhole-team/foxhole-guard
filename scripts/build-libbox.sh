@@ -47,15 +47,15 @@ if [[ -z "${ANDROID_NDK_HOME:-}" ]] && [[ -f "/opt/homebrew/share/android-ndk/so
   export ANDROID_NDK_HOME="/opt/homebrew/share/android-ndk"
 fi
 
-if [[ ! -d "$singbox_dir/.git" ]]; then
+if ! git -C "$singbox_dir" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
   log "cloning sing-box into $singbox_dir"
   mkdir -p "$(dirname "$singbox_dir")"
   git clone --filter=blob:none --no-checkout "$singbox_repo" "$singbox_dir"
-fi
 
-log "fetching sing-box commit $singbox_commit ($singbox_ref)"
-git -C "$singbox_dir" fetch --depth 1 origin "$singbox_commit"
-git -C "$singbox_dir" checkout --detach "$singbox_commit"
+  log "fetching sing-box commit $singbox_commit ($singbox_ref)"
+  git -C "$singbox_dir" fetch --depth 1 origin "$singbox_commit"
+  git -C "$singbox_dir" checkout --detach "$singbox_commit"
+fi
 
 if [[ "$(git -C "$singbox_dir" rev-parse HEAD)" != "$singbox_commit" ]]; then
   echo "expected sing-box commit $singbox_commit from $singbox_ref" >&2

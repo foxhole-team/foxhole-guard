@@ -17,6 +17,7 @@ import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeLeft
 import androidx.compose.ui.test.swipeRight
+import androidx.compose.ui.test.swipeUp
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.work.WorkManager
 import com.foxhole.beta.R
@@ -247,10 +248,8 @@ class HomeScreenTest {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         setExpertSettingsVisible(visible = false)
         composeRule.onNodeWithTag("bottom_nav_settings").performClick()
-        composeRule.onNodeWithTag("settings_screen").performScrollToNode(hasTestTag("settings_footer_version_card"))
-        repeat(5) {
-            composeRule.onNodeWithTag("settings_footer_version_card").performClick()
-        }
+        waitForSettingsHomeExpertActionHidden()
+        tapFooterVersionCardUntilUnlockDialog()
         composeRule.onNodeWithTag("confirm_dialog_confirm_button").performClick()
         composeRule.onNodeWithTag("settings_expert_action").assertIsDisplayed()
 
@@ -262,10 +261,7 @@ class HomeScreenTest {
         }
 
         composeRule.onAllNodesWithTag("settings_expert_action").assertCountEquals(0)
-        composeRule.onNodeWithTag("settings_screen").performScrollToNode(hasTestTag("settings_footer_version_card"))
-        repeat(5) {
-            composeRule.onNodeWithTag("settings_footer_version_card").performClick()
-        }
+        tapFooterVersionCardUntilUnlockDialog()
         composeRule.onNodeWithTag("confirm_dialog_confirm_button").performClick()
         composeRule.onNodeWithTag("settings_expert_action").assertIsDisplayed()
     }
@@ -274,6 +270,7 @@ class HomeScreenTest {
     fun versionCardDoesNothingWhenExpertSettingsAreAlreadyVisible() {
         setExpertSettingsVisible(visible = true)
         composeRule.onNodeWithTag("bottom_nav_settings").performClick()
+        waitForSettingsHomeExpertActionVisible()
         composeRule.onNodeWithTag("settings_screen").performScrollToNode(hasTestTag("settings_expert_action"))
         composeRule.onNodeWithTag("settings_expert_action").assertIsDisplayed()
         composeRule.onNodeWithTag("settings_screen").performScrollToNode(hasTestTag("settings_footer_version_card"))
@@ -331,6 +328,33 @@ class HomeScreenTest {
             }
         }
         composeRule.waitForIdle()
+    }
+
+    private fun tapFooterVersionCardUntilUnlockDialog() {
+        composeRule.onNodeWithTag("settings_screen").performScrollToNode(hasTestTag("settings_footer_version_card"))
+        composeRule.onNodeWithTag("settings_screen").performTouchInput { swipeUp() }
+        composeRule.waitForIdle()
+        repeat(5) {
+            composeRule.onNodeWithTag("settings_footer_version_card").performClick()
+            composeRule.waitForIdle()
+        }
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            composeRule.onAllNodesWithTag("confirm_dialog_confirm_button").fetchSemanticsNodes().isNotEmpty()
+        }
+    }
+
+    private fun waitForSettingsHomeExpertActionHidden() {
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            composeRule.onAllNodesWithTag("settings_screen").fetchSemanticsNodes().isNotEmpty() &&
+                composeRule.onAllNodesWithTag("settings_expert_action").fetchSemanticsNodes().isEmpty()
+        }
+    }
+
+    private fun waitForSettingsHomeExpertActionVisible() {
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            composeRule.onAllNodesWithTag("settings_screen").fetchSemanticsNodes().isNotEmpty() &&
+                composeRule.onAllNodesWithTag("settings_expert_action").fetchSemanticsNodes().isNotEmpty()
+        }
     }
 
     private fun setBlockScreenshots(enabled: Boolean) {

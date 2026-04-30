@@ -63,6 +63,49 @@ class DiagnosticsSessionStoreTest {
     }
 
     @Test
+    fun `encrypted journal read failure is surfaced as diagnostics entry`() {
+        val directory = Files.createTempDirectory("foxhole-diagnostics-corrupt").toFile()
+        File(directory, "session-1000-corrupt.jsonl.enc").writeText("not decryptable", Charsets.UTF_8)
+        val store =
+            DiagnosticsSessionStore(
+                journalDir = directory,
+                sessionIdProvider = { "reader" },
+                fileCipher = FailingReadTestFileCipher,
+            )
+
+        val entries = store.loadRecentEntries(now = 2_000L, retention = DiagnosticsRetention.HOURS_24)
+
+        assertEquals(1, entries.size)
+        assertEquals("diagnostics", entries.single().tag)
+        assertTrue(entries.single().message.contains("diagnostics journal read failed"))
+    }
+
+    @Test
+    fun `append rotates away from unreadable current journal and keeps failure signal`() {
+        val directory = Files.createTempDirectory("foxhole-diagnostics-append-corrupt").toFile()
+        val corruptFile = File(directory, "session-1000-current.jsonl.enc")
+        corruptFile.writeText("not decryptable", Charsets.UTF_8)
+        val store =
+            DiagnosticsSessionStore(
+                journalDir = directory,
+                sessionIdProvider = { "rotated" },
+                fileCipher = FailingFirstReadTestFileCipher(corruptFile),
+            )
+
+        store.append(
+            DiagnosticEntry(timestamp = 2_000L, tag = "network", message = "kept"),
+            DiagnosticsRetention.HOURS_24,
+        )
+        val entries = store.loadRecentEntries(now = 3_000L, retention = DiagnosticsRetention.HOURS_24)
+
+        assertTrue(
+            entries.any { entry -> entry.tag == "diagnostics" && entry.message.contains("diagnostics journal read failed") },
+        )
+        assertTrue(entries.any { entry -> entry.tag == "network" && entry.message == "kept" })
+        assertTrue(directory.listFiles().orEmpty().count { file -> file.name.endsWith(".jsonl.enc") } >= 2)
+    }
+
+    @Test
     fun `retention removes expired session files and keeps recent entries`() {
         val directory = Files.createTempDirectory("foxhole-diagnostics-retention").toFile()
         val store =
@@ -132,6 +175,37 @@ class DiagnosticsSessionStoreTest {
         ) {
             file.parentFile?.mkdirs()
             file.writeBytes(plaintext.reversedArray())
+        }
+    }
+
+    private object FailingReadTestFileCipher : FileCipher {
+        override fun readBytes(file: File): ByteArray = error("cannot decrypt ${file.name}")
+
+        override fun writeBytesAtomic(
+            file: File,
+            plaintext: ByteArray,
+        ) {
+            file.parentFile?.mkdirs()
+            file.writeBytes(plaintext)
+        }
+    }
+
+    private class FailingFirstReadTestFileCipher(
+        private val failingFile: File,
+    ) : FileCipher {
+        override fun readBytes(file: File): ByteArray {
+            if (file == failingFile) {
+                error("cannot decrypt ${file.name}")
+            }
+            return file.readBytes()
+        }
+
+        override fun writeBytesAtomic(
+            file: File,
+            plaintext: ByteArray,
+        ) {
+            file.parentFile?.mkdirs()
+            file.writeBytes(plaintext)
         }
     }
 }

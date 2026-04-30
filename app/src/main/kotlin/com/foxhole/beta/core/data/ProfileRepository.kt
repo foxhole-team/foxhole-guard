@@ -504,20 +504,12 @@ class ProfileRepository(
         profileId: Long,
         protocolOptionIdOverride: String? = null,
     ): String {
-        var profile = requireProfile(profileId)
-        var secret = secretStore.read(profile.secretRef) ?: error("profile secret is missing")
+        val profile = requireProfile(profileId)
+        val secret = secretStore.read(profile.secretRef) ?: error("profile secret is missing")
         val settings = settingsRepository.current()
-        var selectedOption = secret.selectedStoredProtocolOption(protocolOptionIdOverride)
+        val selectedOption = secret.selectedStoredProtocolOption(protocolOptionIdOverride)
         val baseConfig =
-            selectedOption?.normalizedConfigJson ?: secret.resolvedConfigJson ?: if (profile.sourceType == ProfileSourceType.SUBSCRIPTION_URL) {
-                refreshProfile(profileId)
-                profile = requireProfile(profileId)
-                secret = secretStore.read(profile.secretRef) ?: error("profile secret is missing after refresh")
-                selectedOption = secret.selectedStoredProtocolOption(protocolOptionIdOverride)
-                selectedOption?.normalizedConfigJson ?: secret.resolvedConfigJson
-            } else {
-                null
-            }
+            selectedOption?.normalizedConfigJson ?: secret.resolvedConfigJson
         val resolvedConfig = baseConfig ?: error("profile has no resolved config")
         val legacyRawConfigRepair =
             parser.normalizeLegacyRawResolvedConfig(
@@ -545,21 +537,12 @@ class ProfileRepository(
                 )
             }
         if (legacyRawConfigRepair != null || sanitized != resolvedConfig) {
-            val nextSecret =
-                secret.withUpdatedResolvedConfigJson(
-                    sanitized = sanitized,
-                    protocolOptionIdOverride = protocolOptionIdOverride,
-                )
-            secretStore.write(
-                secretRef = profile.secretRef,
-                value = nextSecret.withInsecureTlsMarkers(json),
-            )
             diagnosticsLogger.record(
                 "profile",
                 if (legacyRawConfigRepair != null) {
-                    "legacy raw resolved config repaired"
+                    "legacy raw resolved config normalized for runtime"
                 } else {
-                    "resolved config normalized"
+                    "resolved config sanitized for runtime"
                 },
             )
         }

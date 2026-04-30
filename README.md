@@ -11,8 +11,8 @@
   <a href="https://f-droid.org/">
     <img src="media/fdroid.png" alt="F-Droid" height="68">
   </a>
+<br><strong>Pending publication on F-Droid</strong>
 </p>
-
 <p align="center">
   <strong>Build version 1.0.0-beta1</strong><br>
   iOS, macOS, and Windows versions - maybe.
@@ -163,22 +163,15 @@ Planned work:
 Improve runtime stability for both TCP and UDP protocols
 Improve protocol validation, fallback logic, and connection state handling
 
-> A separate development direction is the research and implementation of a custom transport protocol based on TCP / HTTP-like traffic.
-
-The goal is to improve connection stability in restricted networks where simple censorship systems block or degrade known VPN protocols.
-Planned work:
-* Design a custom TCP / HTTP-based transport layer
-* Make protocol behavior closer to regular application traffic
-* Add adaptive transport behavior for unstable or filtered networks
-* Use local ML / heuristic logic to evaluate network conditions
-* Dynamically select the transport mode based on network signals
-* Perform all classification and decision-making locally on the device
-* Build reproducible tests against simulated censorship and poor network conditions.
-
 ## Disclaimer
 
 > Android application development is not our primary focus.
 > Our core focus is in backend systems, security, machine learning, and cryptography.
+
+## Licenses
+
+- Foxhole: GPL-3.0-or-later
+- sing-box/libbox: GPL-3.0-or-later
 
 ## Donate
 

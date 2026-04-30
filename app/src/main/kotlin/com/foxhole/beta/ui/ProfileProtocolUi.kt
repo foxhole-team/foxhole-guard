@@ -564,11 +564,11 @@ internal fun ProtocolSelectorLabel(
 
 @Composable
 internal fun SmartProfileConditionStars(
-    favorite: Boolean = false,
-    recommended: Boolean = false,
     topRecommended: Boolean,
     compact: Boolean,
     modifier: Modifier = Modifier,
+    favorite: Boolean = false,
+    recommended: Boolean = false,
 ) {
     val starCount =
         smartProfileConditionStarCount(

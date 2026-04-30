@@ -128,21 +128,14 @@ internal fun shouldShowPendingNetworkLoading(
     autoConnectRunning: Boolean,
     deviceInternetAvailable: Boolean?,
     appLoaded: Boolean,
-): Boolean {
-    if (visibleIpInfo != null) {
-        return false
+): Boolean =
+    when {
+        visibleIpInfo != null -> false
+        explicitLoading -> true
+        deviceInternetAvailable == false -> false
+        autoConnectRunning || connectionState in setOf(ConnectionState.CONNECTING, ConnectionState.RECONNECTING) -> false
+        else -> !appLoaded
     }
-    if (explicitLoading) {
-        return true
-    }
-    if (deviceInternetAvailable == false) {
-        return false
-    }
-    if (autoConnectRunning || connectionState in setOf(ConnectionState.CONNECTING, ConnectionState.RECONNECTING)) {
-        return false
-    }
-    return !appLoaded
-}
 
 internal fun shouldShowDashboardNetworkLoading(
     visibleIpInfo: IpInfo?,

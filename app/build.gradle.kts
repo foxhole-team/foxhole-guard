@@ -347,7 +347,7 @@ tasks.register<JacocoReport>("jacocoDebugUnitTestReport") {
 }
 
 tasks.register<JacocoCoverageVerification>("jacocoDebugUnitTestCoverageVerification") {
-    dependsOn("jacocoDebugUnitTestReport")
+    dependsOn("jacocoDebugUnitTestReport", "verifyRequiredBehaviorTests")
     classDirectories.setFrom(jacocoDebugClassDirectories)
     sourceDirectories.setFrom(files("src/main/kotlin", "src/main/java"))
     executionData.setFrom(
@@ -363,6 +363,47 @@ tasks.register<JacocoCoverageVerification>("jacocoDebugUnitTestCoverageVerificat
             limit {
                 minimum = "0.01".toBigDecimal()
             }
+        }
+    }
+}
+
+tasks.register("verifyRequiredBehaviorTests") {
+    dependsOn("testDebugUnitTest")
+    doLast {
+        val requiredSuites =
+            listOf(
+                "com.foxhole.beta.core.data.BoundedPublicHttpFetchTest",
+                "com.foxhole.beta.core.data.ProfileInsecureTlsSupportTest",
+                "com.foxhole.beta.core.data.ProfileSecretMutationSupportTest",
+                "com.foxhole.beta.core.data.SubscriptionCertificateTrustTest",
+                "com.foxhole.beta.core.diagnostics.DiagnosticsSessionStoreTest",
+                "com.foxhole.beta.core.settings.SettingsRepositoryTest",
+                "com.foxhole.beta.core.smart.SmartStartControllerTest",
+                "com.foxhole.beta.vpn.AppOwnedRequestPathTest",
+                "com.foxhole.beta.vpn.FoxholeConnectionControllerLatencyTest",
+                "com.foxhole.beta.vpn.RuntimeConfigAssemblerTest",
+                "com.foxhole.beta.vpn.TunnelValidationPolicyTest",
+                "com.foxhole.beta.vpn.VpnDnsServerSelectorTest",
+                "com.foxhole.beta.vpn.VpnRuntimeErrorsTest",
+            )
+        val resultFiles =
+            fileTree(layout.buildDirectory.dir("test-results/testDebugUnitTest")) {
+                include("TEST-*.xml")
+            }.files.associateBy { file -> file.name.removePrefix("TEST-").removeSuffix(".xml") }
+        val missing = requiredSuites.filterNot(resultFiles::containsKey)
+        require(missing.isEmpty()) {
+            "Required behavior test suites did not run: ${missing.joinToString()}"
+        }
+        val invalid =
+            requiredSuites.mapNotNull { suite ->
+                val xml = requireNotNull(resultFiles[suite]).readText()
+                val tests = requireNotNull("tests=\"(\\d+)\"".toRegex().find(xml)) { "Missing tests counter for $suite" }.groupValues[1].toInt()
+                val failures = requireNotNull("failures=\"(\\d+)\"".toRegex().find(xml)) { "Missing failures counter for $suite" }.groupValues[1].toInt()
+                val errors = requireNotNull("errors=\"(\\d+)\"".toRegex().find(xml)) { "Missing errors counter for $suite" }.groupValues[1].toInt()
+                suite.takeIf { tests == 0 || failures != 0 || errors != 0 }
+            }
+        require(invalid.isEmpty()) {
+            "Required behavior test suites failed or reported zero tests: ${invalid.joinToString()}"
         }
     }
 }
@@ -422,5 +463,5 @@ dependencies {
     debugImplementation(libs.compose.ui.tooling)
     debugImplementation(libs.compose.ui.test.manifest)
 
-    detektPlugins("io.gitlab.arturbosch.detekt:detekt-formatting:1.23.8")
+    detektPlugins(libs.detekt.formatting)
 }

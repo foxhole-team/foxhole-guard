@@ -3,6 +3,10 @@ package com.foxhole.beta.core.security
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import java.io.File
+import java.io.FileOutputStream
+import java.nio.file.AtomicMoveNotSupportedException
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 import java.security.KeyStore
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
@@ -27,23 +31,24 @@ internal class AndroidKeystoreFileCipher(
         file: File,
         plaintext: ByteArray,
     ) {
-        val tempFile = File(file.parentFile, "${file.name}.tmp")
-        writeBytes(tempFile, plaintext)
-        if (file.exists()) {
-            file.delete()
-        }
-        if (!tempFile.renameTo(file)) {
-            tempFile.copyTo(file, overwrite = true)
-            tempFile.delete()
+        val parent = file.parentFile?.apply { mkdirs() } ?: error("target file must have a parent directory")
+        val tempFile = File.createTempFile("${file.name}.", ".tmp", parent)
+        try {
+            writeBytes(tempFile, plaintext)
+            moveReplacingTarget(tempFile, file)
+            syncDirectoryBestEffort(parent)
+        } finally {
+            if (tempFile.exists()) {
+                tempFile.delete()
+            }
         }
     }
 
-    fun writeBytes(
+    private fun writeBytes(
         file: File,
         plaintext: ByteArray,
     ) {
         file.parentFile?.mkdirs()
-        file.delete()
         val cipher = Cipher.getInstance(TRANSFORMATION)
         cipher.init(Cipher.ENCRYPT_MODE, secretKey())
         val payload =
@@ -51,8 +56,35 @@ internal class AndroidKeystoreFileCipher(
                 iv = cipher.iv,
                 ciphertext = cipher.doFinal(plaintext),
             )
-        file.outputStream().use { stream ->
+        FileOutputStream(file).use { stream ->
             stream.write(payload)
+            stream.fd.sync()
+        }
+    }
+
+    private fun moveReplacingTarget(
+        source: File,
+        target: File,
+    ) {
+        try {
+            Files.move(
+                source.toPath(),
+                target.toPath(),
+                StandardCopyOption.ATOMIC_MOVE,
+                StandardCopyOption.REPLACE_EXISTING,
+            )
+        } catch (_: AtomicMoveNotSupportedException) {
+            Files.move(
+                source.toPath(),
+                target.toPath(),
+                StandardCopyOption.REPLACE_EXISTING,
+            )
+        }
+    }
+
+    private fun syncDirectoryBestEffort(directory: File) {
+        runCatching {
+            FileOutputStream(directory, true).use { stream -> stream.fd.sync() }
         }
     }
 

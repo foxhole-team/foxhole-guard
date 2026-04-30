@@ -469,7 +469,9 @@ fun HomeScreen(
                         )
                         Column(
                             modifier =
-                                Modifier.fillMaxWidth(),
+                                Modifier
+                                    .fillMaxWidth()
+                                    .heightIn(min = HomeDashboardProfileContentHeight),
                             verticalArrangement = Arrangement.spacedBy(3.dp),
                         ) {
                             if (state.activeProfile == null && !state.profilesLoaded) {
