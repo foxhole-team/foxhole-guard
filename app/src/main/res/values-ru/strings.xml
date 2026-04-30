@@ -178,7 +178,6 @@
     <string name="smart_profile_menu_on_column">Вкл</string>
     <string name="smart_profile_menu_recommended_badge">Рекомендовано</string>
     <string name="smart_profile_metric_unavailable">-</string>
-    <string name="smart_start_protocol_status_recommended">Рекомендовано</string>
     <string name="smart_start_protocol_status_available">Доступен</string>
     <string name="smart_start_protocol_status_slow">Медленно</string>
     <string name="smart_start_protocol_status_no_data">Нет данных</string>

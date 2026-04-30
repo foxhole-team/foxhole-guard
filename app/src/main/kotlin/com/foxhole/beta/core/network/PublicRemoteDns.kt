@@ -1,6 +1,7 @@
 package com.foxhole.beta.core.network
 
 import okhttp3.Dns
+import java.net.Inet4Address
 import java.net.InetAddress
 import java.net.UnknownHostException
 
@@ -24,6 +25,12 @@ internal class PublicRemoteDns(
         if (publicAddresses.isEmpty()) {
             throw UnknownHostException("private, reserved, or loopback hosts are not allowed: $hostname")
         }
-        return publicAddresses
+        return publicAddresses.preferIpv4()
     }
 }
+
+internal fun List<InetAddress>.preferIpv4(): List<InetAddress> =
+    sortedWith(
+        compareBy<InetAddress> { it !is Inet4Address }
+            .thenBy { it.hostAddress.orEmpty() },
+    )

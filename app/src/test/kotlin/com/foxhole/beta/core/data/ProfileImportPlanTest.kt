@@ -35,7 +35,7 @@ class ProfileImportPlanTest {
     }
 
     @Test
-    fun `subscription url stays single profile until refresh fetches payload`() {
+    fun `subscription url parse remains a single unresolved candidate`() {
         val parsed = parser.parseUserInput("https://x-sec-net.nl/c96c6edd9d566c260bb2aa16e930825b")
 
         val plan = resolveImportProfilePlan(parsed, localParsedProfiles = null)

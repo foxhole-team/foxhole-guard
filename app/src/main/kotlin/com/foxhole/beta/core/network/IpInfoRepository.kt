@@ -1,6 +1,7 @@
 package com.foxhole.beta.core.network
 
 import android.net.Network
+import android.util.Log
 import com.foxhole.beta.BuildConfig
 import com.foxhole.beta.core.model.IpInfo
 import kotlinx.coroutines.Dispatchers
@@ -11,8 +12,9 @@ import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import okhttp3.Dns
 import okhttp3.Credentials
+import okhttp3.Dns
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.net.Inet4Address
@@ -44,6 +46,7 @@ class IpInfoRepository(
         callTimeoutMs: Long? = null,
         network: Network? = null,
         proxy: HttpProxyAccess? = null,
+        resolverNetwork: Network? = null,
     ): IpInfo? =
         withContext(Dispatchers.IO) {
             fetchFamily(
@@ -52,6 +55,7 @@ class IpInfoRepository(
                 network = network,
                 addressFamilyPreference = AddressFamilyPreference.IPV4,
                 proxy = proxy,
+                resolverNetwork = resolverNetwork,
             )
         }
 
@@ -60,9 +64,10 @@ class IpInfoRepository(
         callTimeoutMs: Long? = null,
         network: Network? = null,
         proxy: HttpProxyAccess? = null,
+        resolverNetwork: Network? = null,
     ) {
         withContext(Dispatchers.IO) {
-            execute(endpoint, callTimeoutMs, network, proxy = proxy).use { response ->
+            execute(endpoint, callTimeoutMs, network, proxy = proxy, resolverNetwork = resolverNetwork).use { response ->
                 require(response.isSuccessful) { "connectivity probe failed: ${response.code}" }
             }
         }
@@ -73,6 +78,7 @@ class IpInfoRepository(
         callTimeoutMs: Long? = null,
         network: Network? = null,
         proxy: HttpProxyAccess? = null,
+        resolverNetwork: Network? = null,
     ) {
         withContext(Dispatchers.IO) {
             execute(
@@ -81,6 +87,7 @@ class IpInfoRepository(
                 network = network,
                 addressFamilyPreference = AddressFamilyPreference.IPV4,
                 proxy = proxy,
+                resolverNetwork = resolverNetwork,
             ).use { response ->
                 require(response.isSuccessful) { "connectivity probe failed: ${response.code}" }
             }
@@ -92,10 +99,11 @@ class IpInfoRepository(
         callTimeoutMs: Long? = null,
         network: Network? = null,
         proxy: HttpProxyAccess? = null,
+        resolverNetwork: Network? = null,
     ): Long =
         withContext(Dispatchers.IO) {
             measureTimeMillis {
-                execute(endpoint, callTimeoutMs, network, proxy = proxy).use { response ->
+                execute(endpoint, callTimeoutMs, network, proxy = proxy, resolverNetwork = resolverNetwork).use { response ->
                     require(response.isSuccessful) { "connectivity probe failed: ${response.code}" }
                 }
             }.coerceAtLeast(1L)
@@ -106,16 +114,20 @@ class IpInfoRepository(
         callTimeoutMs: Long? = null,
         network: Network? = null,
         proxy: HttpProxyAccess? = null,
+        resolverNetwork: Network? = null,
         mode: IpInfoFetchMode = IpInfoFetchMode.FULL,
     ): IpInfo =
         withContext(Dispatchers.IO) {
             val strategy = resolveFetchStrategy(endpoint, callTimeoutMs, mode)
             var lastFailure: Throwable? = null
             strategy.endpointCandidates.forEach { candidate ->
+                diagnosticLog(
+                    "fetch candidate host=${candidate.ipInfoHostLabel()} mode=${mode.name.lowercase()} bound=${network != null} proxy=${proxy != null}",
+                )
                 val result =
                     runCatching {
                         if (strategy.includeFamilyProbes) {
-                            fetchSingleWithFamilyFallbacks(candidate, strategy.callTimeoutMs, network, proxy)
+                            fetchSingleWithFamilyFallbacks(candidate, strategy.callTimeoutMs, network, proxy, resolverNetwork)
                         } else {
                             fetchSingle(
                                 endpoint = candidate,
@@ -123,13 +135,18 @@ class IpInfoRepository(
                                 network = network,
                                 addressFamilyPreference = AddressFamilyPreference.ANY,
                                 proxy = proxy,
+                                resolverNetwork = resolverNetwork,
                             )
                         }
                     }
                 if (result.isSuccess) {
+                    diagnosticLog("fetch candidate succeeded host=${candidate.ipInfoHostLabel()}")
                     return@withContext result.getOrThrow()
                 }
                 lastFailure = result.exceptionOrNull()
+                diagnosticLog(
+                    "fetch candidate failed host=${candidate.ipInfoHostLabel()} error=${lastFailure?.javaClass?.simpleName.orEmpty()}: ${lastFailure?.message.orEmpty()}",
+                )
             }
             throw lastFailure ?: IllegalStateException("ip info request failed")
         }
@@ -139,15 +156,16 @@ class IpInfoRepository(
         callTimeoutMs: Long?,
         network: Network?,
         proxy: HttpProxyAccess?,
+        resolverNetwork: Network? = null,
     ): IpInfo {
-        val primary = fetchSingle(endpoint, callTimeoutMs, network, AddressFamilyPreference.ANY, proxy)
+        val primary = fetchSingle(endpoint, callTimeoutMs, network, AddressFamilyPreference.ANY, proxy, resolverNetwork)
         val familyCallTimeoutMs = callTimeoutMs?.coerceAtMost(FAMILY_PROBE_CALL_TIMEOUT_MS) ?: FAMILY_PROBE_CALL_TIMEOUT_MS
         val ipv4 =
             if (primary.ipv4 != null) {
                 Result.success(primary)
             } else {
                 runCatching {
-                    fetchFamily(endpoint, familyCallTimeoutMs, network, AddressFamilyPreference.IPV4, proxy)
+                    fetchFamily(endpoint, familyCallTimeoutMs, network, AddressFamilyPreference.IPV4, proxy, resolverNetwork)
                 }
             }
         val ipv6 =
@@ -155,7 +173,7 @@ class IpInfoRepository(
                 Result.success(primary)
             } else {
                 runCatching {
-                    fetchFamily(endpoint, familyCallTimeoutMs, network, AddressFamilyPreference.IPV6, proxy)
+                    fetchFamily(endpoint, familyCallTimeoutMs, network, AddressFamilyPreference.IPV6, proxy, resolverNetwork)
                 }
             }
         return mergeBestEffortIpInfo(primary = primary, ipv4 = ipv4, ipv6 = ipv6)
@@ -193,8 +211,9 @@ class IpInfoRepository(
         network: Network?,
         addressFamilyPreference: AddressFamilyPreference,
         proxy: HttpProxyAccess?,
+        resolverNetwork: Network? = null,
     ): IpInfo =
-        execute(endpoint, callTimeoutMs, network, addressFamilyPreference, proxy).use { response ->
+        execute(endpoint, callTimeoutMs, network, addressFamilyPreference, proxy, resolverNetwork).use { response ->
             require(response.isSuccessful) { "ip info request failed: ${response.code}" }
             parseIpInfoResponse(response.body?.string().orEmpty(), json)
         }
@@ -205,9 +224,10 @@ class IpInfoRepository(
         network: Network?,
         addressFamilyPreference: AddressFamilyPreference,
         proxy: HttpProxyAccess?,
+        resolverNetwork: Network? = null,
     ): IpInfo? =
         familyEndpoints(endpoint, addressFamilyPreference).firstNotNullOfOrNull { candidate ->
-            runCatching { fetchSingle(candidate, callTimeoutMs, network, addressFamilyPreference, proxy) }
+            runCatching { fetchSingle(candidate, callTimeoutMs, network, addressFamilyPreference, proxy, resolverNetwork) }
                 .getOrNull()
                 ?.takeIf { info ->
                     when (addressFamilyPreference) {
@@ -224,12 +244,13 @@ class IpInfoRepository(
         network: Network?,
         addressFamilyPreference: AddressFamilyPreference = AddressFamilyPreference.ANY,
         proxy: HttpProxyAccess? = null,
+        resolverNetwork: Network? = null,
     ) = run {
         val url =
             endpoint
                 .ensurePublicHttpsUrl()
                 .requirePublicHttpsUrl(resolveHost = true) { hostname ->
-                    resolveAddresses(hostname, network, AddressFamilyPreference.ANY)
+                    resolveAddresses(hostname, network, AddressFamilyPreference.ANY, resolverNetwork)
                 }
         val request = Request.Builder().url(url).get().build()
         val effectiveClient =
@@ -263,7 +284,7 @@ class IpInfoRepository(
                     if (proxy == null) {
                         dns(
                             PublicRemoteDns { hostname ->
-                                val addresses = resolveAddresses(hostname, network, addressFamilyPreference)
+                                val addresses = resolveAddresses(hostname, network, addressFamilyPreference, resolverNetwork)
                                 prioritize(addresses, addressFamilyPreference)
                             },
                         )
@@ -274,7 +295,7 @@ class IpInfoRepository(
     }
 
     private fun effectiveEndpoints(endpoint: String): List<String> {
-        val primary = endpoint.trim().ifBlank { BuildConfig.DEFAULT_IP_INFO_ENDPOINT }
+        val primary = primaryEndpoint(endpoint)
         return buildList {
             add(primary)
             FALLBACK_ENDPOINTS.forEach { candidate ->
@@ -295,7 +316,7 @@ class IpInfoRepository(
         endpoint: String,
         addressFamilyPreference: AddressFamilyPreference,
     ): List<String> {
-        val primary = endpoint.trim().ifBlank { BuildConfig.DEFAULT_IP_INFO_ENDPOINT }
+        val primary = primaryEndpoint(endpoint)
         val familyFallbacks =
             when (addressFamilyPreference) {
                 AddressFamilyPreference.ANY -> emptyList()
@@ -326,13 +347,20 @@ class IpInfoRepository(
         hostname: String,
         network: Network?,
         preference: AddressFamilyPreference,
+        resolverNetwork: Network? = null,
     ): List<InetAddress> {
-        val publicAddresses = runCatching { client.dns.lookup(hostname) }
+        val publicAddresses =
+            runCatching {
+                resolverNetwork
+                    ?.getAllByName(hostname)
+                    ?.toList()
+                    ?: client.dns.lookup(hostname)
+            }
         val candidate =
             publicResolvedAddressesOrNetworkFallback(publicAddresses) {
                 network?.getAllByName(hostname)?.toList().orEmpty()
             }
-        return prioritize(candidate, preference)
+        return prioritize(candidate.preferIpv4(), preference)
     }
 
     private enum class AddressFamilyPreference {
@@ -341,13 +369,17 @@ class IpInfoRepository(
         IPV6,
     }
 
+    private fun primaryEndpoint(endpoint: String): String = endpoint.trim().ifBlank { BuildConfig.DEFAULT_IP_INFO_ENDPOINT }
+
     private companion object {
         const val ENTRY_QUICK_CALL_TIMEOUT_MS = 2_500L
         const val FAMILY_PROBE_CALL_TIMEOUT_MS = 1_500L
         val FALLBACK_ENDPOINTS =
             listOf(
                 BuildConfig.DEFAULT_IP_INFO_ENDPOINT,
+                "https://ipinfo.io/json",
                 "https://ifconfig.co/json",
+                "https://api64.ipify.org?format=json",
                 "https://api.ipify.org?format=json",
             )
         val IPV4_FALLBACK_ENDPOINTS =
@@ -361,6 +393,14 @@ class IpInfoRepository(
     }
 }
 
+private fun diagnosticLog(message: String) {
+    if (BuildConfig.ENABLE_DIAGNOSTIC_LOGCAT) {
+        Log.d("FoxholeDiag", "[ip] $message")
+    }
+}
+
+private fun String.ipInfoHostLabel(): String = toHttpUrlOrNull()?.host ?: "invalid"
+
 internal fun parseIpInfoResponse(
     body: String,
     json: Json,
@@ -371,17 +411,28 @@ internal fun parseIpInfoResponse(
     }
     val ip = objectValue.string("ip")?.takeIf(String::isNotBlank) ?: error("ip info response missing ip")
     val connection = objectValue["connection"]?.jsonObject
+    val country = objectValue.string("country")
+    val countryCode =
+        objectValue.string("country_code")
+            ?: objectValue.string("country_iso")
+            ?: objectValue.string("cc")
+            ?: country?.takeIf { it.length == ISO_COUNTRY_CODE_LENGTH }
+    val countryName =
+        objectValue.string("country_name")
+            ?: objectValue.string("countryName")
+            ?: country?.takeUnless { it.length == ISO_COUNTRY_CODE_LENGTH }
     return IpInfo(
         ip = ip,
         ipv4 = ip.takeIf(::isIpv4Address),
         ipv6 = ip.takeIf(::isIpv6Address),
-        countryCode = objectValue.string("country_code") ?: objectValue.string("country_iso"),
-        countryName = objectValue.string("country"),
+        countryCode = countryCode,
+        countryName = countryName,
         city = objectValue.string("city"),
         isp =
             objectValue.string("isp")
                 ?: objectValue.string("organization")
                 ?: objectValue.string("asn_org")
+                ?: objectValue.string("org")
                 ?: connection?.string("isp")
                 ?: connection?.string("org"),
         fetchedAt = System.currentTimeMillis(),
@@ -421,6 +472,8 @@ private fun Map<String, JsonElement>.boolean(key: String): Boolean? = this[key]?
 private fun isIpv4Address(value: String): Boolean = value.contains('.') && !value.contains(':')
 
 private fun isIpv6Address(value: String): Boolean = value.contains(':')
+
+private const val ISO_COUNTRY_CODE_LENGTH = 2
 
 internal fun publicResolvedAddressesOrNetworkFallback(
     publicAddresses: Result<List<InetAddress>>,

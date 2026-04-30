@@ -1,10 +1,10 @@
 package com.foxhole.beta.ui
 
 internal enum class SmartStartProtocolStatus {
-    RECOMMENDED,
     AVAILABLE,
     SLOW,
     RECENTLY_FAILED,
+    UNAVAILABLE,
     NO_DATA,
     DISABLED,
 }
@@ -35,7 +35,6 @@ internal data class SmartStartProtocolMenuLayout(
 
 internal fun resolveSmartStartProtocolPresentation(
     included: Boolean,
-    recommended: Boolean,
     latencyMs: Long?,
     latencyDown: Boolean,
     latencyUnavailable: Boolean,
@@ -48,9 +47,9 @@ internal fun resolveSmartStartProtocolPresentation(
             )
         latencyDown ->
             SmartStartProtocolPresentation(status = SmartStartProtocolStatus.RECENTLY_FAILED)
-        recommended ->
-            SmartStartProtocolPresentation(status = SmartStartProtocolStatus.RECOMMENDED)
-        latencyMs == null || latencyUnavailable ->
+        latencyUnavailable ->
+            SmartStartProtocolPresentation(status = SmartStartProtocolStatus.UNAVAILABLE)
+        latencyMs == null ->
             SmartStartProtocolPresentation(status = SmartStartProtocolStatus.NO_DATA)
         classifyVpnLatency(latencyMs = latencyMs, failed = false, unavailable = false) in
             setOf(LatencyQuality.SLOW, LatencyQuality.VERY_SLOW) ->

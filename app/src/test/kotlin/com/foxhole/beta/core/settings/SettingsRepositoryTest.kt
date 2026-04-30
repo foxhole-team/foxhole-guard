@@ -35,6 +35,18 @@ class SettingsRepositoryTest {
     }
 
     @Test
+    fun `migrates legacy api ipify endpoint to current default`() {
+        assertEquals(
+            BuildConfig.DEFAULT_IP_INFO_ENDPOINT,
+            normalizeIpInfoEndpoint("https://api.ipify.org?format=json"),
+        )
+        assertEquals(
+            BuildConfig.DEFAULT_IP_INFO_ENDPOINT,
+            normalizeIpInfoEndpoint("https://api.ipify.org/?format=json"),
+        )
+    }
+
+    @Test
     fun `keeps custom non legacy endpoint`() {
         assertEquals("https://ifconfig.co/json", normalizeIpInfoEndpoint(" https://ifconfig.co/json "))
     }

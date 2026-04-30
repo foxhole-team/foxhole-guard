@@ -48,7 +48,8 @@ internal class ConnectionTelemetryProbe(
                             measureTunnelLatency(
                                 endpoint = endpoint,
                                 timeoutMs = timeoutMs,
-                                network = boundNetworkForAppOwnedRequest(vpnNetwork),
+                                network = tunnelValidationRequestNetwork(vpnNetwork),
+                                resolverNetwork = currentUpstreamNetwork(),
                                 interfaceName = currentVpnInterfaceName(vpnNetwork),
                                 method = method,
                             )
@@ -75,6 +76,7 @@ internal class ConnectionTelemetryProbe(
         endpoint: String,
         timeoutMs: Long,
         network: Network?,
+        resolverNetwork: Network?,
         interfaceName: String?,
         method: LatencyProbeMethod,
     ): Long =
@@ -84,19 +86,21 @@ internal class ConnectionTelemetryProbe(
                     endpoint = endpoint,
                     callTimeoutMs = timeoutMs,
                     network = network,
+                    resolverNetwork = resolverNetwork,
                 )
             LatencyProbeMethod.ICMP -> measureIcmpLatency(endpoint, timeoutMs, interfaceName)
-            LatencyProbeMethod.TCP -> measureTcpConnectLatency(endpoint, timeoutMs, network)
+            LatencyProbeMethod.TCP -> measureTcpConnectLatency(endpoint, timeoutMs, network, resolverNetwork)
         }
 
     private suspend fun measureTcpConnectLatency(
         endpoint: String,
         timeoutMs: Long,
         network: Network?,
+        resolverNetwork: Network?,
     ): Long =
         withContext(Dispatchers.IO) {
             val url = endpoint.toHttpUrlOrNull() ?: error("latency endpoint is not a valid URL")
-            val address = resolveServerPingAddress(url.host, network)
+            val address = resolveServerPingAddress(url.host, resolverNetwork ?: network)
             val startedAt = SystemClock.elapsedRealtime()
             // Availability probe only: opens a bounded TCP connect to a public latency endpoint and sends no secrets.
             (network?.socketFactory?.createSocket() ?: Socket()).use { socket ->

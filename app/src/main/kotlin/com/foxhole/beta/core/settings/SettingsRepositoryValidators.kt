@@ -13,11 +13,11 @@ internal fun String.ifLoopbackOrDefault(): String =
 internal fun normalizeIpInfoEndpoint(value: String): String {
     val normalized = value.trim().ifBlank { BuildConfig.DEFAULT_IP_INFO_ENDPOINT }
     val host = normalized.toHttpUrlOrNull()?.host?.lowercase()
-    return if (host == LEGACY_IP_INFO_HOST) {
+    return if (host in LEGACY_IP_INFO_HOSTS) {
         BuildConfig.DEFAULT_IP_INFO_ENDPOINT
     } else {
         normalized.ensurePublicHttpsUrl().toString()
     }
 }
 
-private const val LEGACY_IP_INFO_HOST = "api.ip.sb"
+private val LEGACY_IP_INFO_HOSTS = setOf("api.ip.sb", "api.ipify.org")

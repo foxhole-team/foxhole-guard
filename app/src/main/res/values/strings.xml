@@ -178,11 +178,10 @@
     <string name="smart_profile_menu_on_column">ON</string>
     <string name="smart_profile_menu_recommended_badge">Recommended</string>
     <string name="smart_profile_metric_unavailable">-</string>
-    <string name="smart_start_protocol_status_recommended">Recommended</string>
     <string name="smart_start_protocol_status_available">Available</string>
     <string name="smart_start_protocol_status_slow">Slow</string>
     <string name="smart_start_protocol_status_no_data">No data</string>
-    <string name="smart_start_protocol_status_disabled">Disabled</string>
+    <string name="smart_start_protocol_status_disabled">Off</string>
     <string name="insecure_tls_profile_badge">INSECURE TLS</string>
     <string name="smart_profile_metrics_refresh_action">Refresh protocol metrics</string>
     <string name="smart_profile_metrics_cancel_action">Stop protocol metrics refresh</string>

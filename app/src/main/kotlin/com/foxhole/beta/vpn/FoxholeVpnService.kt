@@ -525,7 +525,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
                     delay(GEO_REFRESH_INITIAL_DELAY_MS)
                 }
                 repeat(GEO_REFRESH_ATTEMPTS) { attempt ->
-                    val requestNetwork = if (attempt == 0) boundNetworkForAppOwnedRequest(initialNetwork) else null
+                    val requestNetwork = tunnelValidationRequestNetwork(initialNetwork ?: currentVpnNetworkOrNull())
                     val success =
                         runCatching {
                             refreshConnectionIpInfo(
@@ -613,7 +613,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
                         delay(RuntimeUpdatePolicy.notificationHealthProbeIntervalMs(notificationConnectivityHealthState))
                         continue
                     }
-                    val probeSucceeded = runNotificationConnectivityProbe(session)
+                    val probeSucceeded = runNotificationConnectivityProbe()
                     if (probeSucceeded) {
                         updateNotificationConnectivityHealth(
                             state = ConnectivityHealthState.ONLINE,
@@ -694,13 +694,14 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
     internal suspend fun probeConnectivityEndpoints(
         callTimeoutMs: Long = CONNECTIVITY_PROBE_CALL_TIMEOUT_MS,
         network: Network? = null,
+        resolverNetwork: Network? = null,
         preferIpv4: Boolean = false,
-    ) = probeConnectivityEndpointsInternal(callTimeoutMs, network, preferIpv4)
+    ) = probeConnectivityEndpointsInternal(callTimeoutMs, network, resolverNetwork, preferIpv4)
 
     internal suspend fun connectivityProbeEndpoints(): List<String> = connectivityProbeEndpointsInternal()
 
-    internal suspend fun runNotificationConnectivityProbe(session: VpnSession): Boolean =
-        runNotificationConnectivityProbeInternal(session)
+    internal suspend fun runNotificationConnectivityProbe(): Boolean =
+        runNotificationConnectivityProbeInternal()
 
     internal suspend fun probeConnectivityEndpointsOverLocalProxy(
         proxy: com.foxhole.beta.core.network.HttpProxyAccess,
@@ -752,6 +753,9 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
 
     internal fun currentVpnNetworkOrNull(excludedHandle: Long? = null): Network? =
         currentVpnNetworkOrNullInternal(excludedHandle)
+
+    internal fun currentUpstreamNetworkOrNull(): Network? =
+        currentUpstreamNetworkOrNullInternal()
 
     internal fun isVpnNetworkValidated(network: Network): Boolean = isVpnNetworkValidatedInternal(network)
 

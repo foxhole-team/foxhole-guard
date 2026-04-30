@@ -83,20 +83,32 @@ internal class TunnelValidationGateway(
         fetchMode: IpInfoFetchMode,
         requestNetwork: Network?,
         proxy: HttpProxyAccess?,
-    ): IpInfo {
+    ): IpInfo =
         if (proxy != null) {
-            return ipInfoRepository.fetch(
+            ipInfoRepository.fetch(
                 endpoint = endpoint,
                 proxy = proxy,
                 mode = fetchMode,
             )
+        } else {
+            runCatching {
+                ipInfoRepository.fetch(
+                    endpoint = endpoint,
+                    mode = fetchMode,
+                )
+            }.getOrElse { error ->
+                val upstreamNetwork = requestNetwork ?: throw error
+                diagnosticsLogger.record(
+                    "ip",
+                    "device ip refresh failed on default path, retrying explicit upstream network",
+                )
+                ipInfoRepository.fetch(
+                    endpoint = endpoint,
+                    network = upstreamNetwork,
+                    mode = fetchMode,
+                )
+            }
         }
-        return ipInfoRepository.fetch(
-            endpoint = endpoint,
-            network = boundNetworkForAppOwnedRequest(requestNetwork),
-            mode = fetchMode,
-        )
-    }
 
     private suspend fun fetchTunnelIpInfo(
         endpoint: String,
@@ -105,7 +117,8 @@ internal class TunnelValidationGateway(
     ): IpInfo =
         ipInfoRepository.fetch(
             endpoint = endpoint,
-            network = boundNetworkForAppOwnedRequest(vpnNetwork),
+            network = tunnelValidationRequestNetwork(vpnNetwork),
+            resolverNetwork = currentUpstreamNetwork(),
             mode = fetchMode,
         ).also { diagnosticsLogger.record("ip", "dashboard ip refreshed after vpn network detected") }
 }

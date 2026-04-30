@@ -14,8 +14,9 @@ import com.foxhole.beta.core.model.ParsedSubscriptionProfile
 import com.foxhole.beta.core.model.Profile
 import com.foxhole.beta.core.model.ProfileProtocolOption
 import com.foxhole.beta.core.model.ProfileSourceType
-import com.foxhole.beta.core.model.StoredProfileSecret
+import com.foxhole.beta.core.model.Settings
 import com.foxhole.beta.core.model.StoredProfileProtocolOption
+import com.foxhole.beta.core.model.StoredProfileSecret
 import com.foxhole.beta.core.model.VpnSession
 import com.foxhole.beta.core.network.ensurePublicUrl
 import com.foxhole.beta.core.network.requirePublicUrl
@@ -183,13 +184,19 @@ class ProfileRepository(
             } else {
                 parsedRaw
             }
+        if (parsed.sourceType == ProfileSourceType.SUBSCRIPTION_URL) {
+            return importSubscriptionUrl(
+                parsed = parsed,
+                resolvedPreferredName = resolvedPreferredName,
+                allowInsecureTlsForProfile = allowInsecureTlsForProfile,
+                excludeInsecureTlsOptions = excludeInsecureTlsOptions,
+            )
+        }
         val importPlan =
             resolveImportProfilePlan(
                 parsed = parsed,
                 localParsedProfiles =
-                    if (parsed.sourceType == ProfileSourceType.SUBSCRIPTION_URL) {
-                        null
-                    } else {
+                    run {
                         val parsedProfiles = withContext(Dispatchers.IO) {
                             runCatching {
                                 parser.parseSubscriptionProfiles(
@@ -235,7 +242,7 @@ class ProfileRepository(
                 sourceType = parsed.sourceType.name,
                 secretRef = secretRef,
                 protocolHint = parsed.protocolHint.name,
-                lastUpdatedAt = if (parsed.sourceType == ProfileSourceType.SUBSCRIPTION_URL) null else now,
+                lastUpdatedAt = now,
                 lastEtag = null,
                 isActive = count == 0,
             )
@@ -273,17 +280,58 @@ class ProfileRepository(
             persistCachedActiveProfile(saved)
         }
         diagnosticsLogger.record("profile", "profile imported")
-        if (parsed.sourceType == ProfileSourceType.SUBSCRIPTION_URL) {
-            return runCatching { refreshProfile(id, excludeInsecureTlsOptions = excludeInsecureTlsOptions) }
-                .onFailure { error ->
-                    runCatching { deleteProfile(id) }
-                    diagnosticsLogger.record(
-                        "profile",
-                        "initial refresh failed: ${error.message ?: error.javaClass.simpleName}",
-                    )
-                }.getOrThrow()
-        }
         return saved
+    }
+
+    private suspend fun importSubscriptionUrl(
+        parsed: ParsedImport,
+        resolvedPreferredName: String?,
+        allowInsecureTlsForProfile: Boolean,
+        excludeInsecureTlsOptions: Boolean,
+    ): Profile {
+        val sourceUrl = parsed.sourceUrl ?: error("subscription url is missing")
+        val settings = settingsRepository.current()
+        diagnosticsLogger.record("profile", "subscription import started")
+        val safeUrl =
+            withContext(Dispatchers.IO) {
+                sourceUrl
+                    .ensurePublicUrl(allowHttp = settings.expert.allowHttpConfigImports)
+                    .requirePublicUrl(
+                        allowHttp = settings.expert.allowHttpConfigImports,
+                        resolveHost = true,
+                    )
+            }
+        val response =
+            runCatching {
+                fetchSubscriptionResponse(
+                    sourceUrl = sourceUrl,
+                    safeUrl = safeUrl,
+                    lastEtag = null,
+                    allowHttp = settings.expert.allowHttpConfigImports,
+                )
+            }.getOrElse { error ->
+                throw IllegalStateException(describeSubscriptionTransportFailure(sourceUrl, error), error)
+            }
+        diagnosticsLogger.record(
+            "profile",
+            "subscription transport finished notModified=${response.notModified} bodyBytes=${response.body.orEmpty().toByteArray(Charsets.UTF_8).size} etagPresent=${!response.etag.isNullOrBlank()} metadataTitlePresent=${!response.metadataTitle.isNullOrBlank()} expirationPresent=${response.subscriptionExpiresAt != null}",
+        )
+        require(!response.notModified) { "subscription did not return a config payload" }
+        val parsedSubscription =
+            parseFetchedSubscriptionProfiles(
+                rawBody = response.body.orEmpty(),
+                fallbackName = resolvedPreferredName ?: parsed.displayName,
+                settings = settings,
+                profileInsecureTlsConsentGranted = allowInsecureTlsForProfile,
+                excludeInsecureTlsOptions = excludeInsecureTlsOptions,
+            )
+        return applyFetchedSubscriptionProfiles(
+            sourceUrl = sourceUrl,
+            parsed = parsedSubscription,
+            response = response,
+            targetProfileId = null,
+            activateFirstIfNoProfiles = dao.count() == 0,
+        )
     }
 
     private suspend fun importLocalProfileGroup(
@@ -625,17 +673,41 @@ class ProfileRepository(
             return resolveDomainProfile(entity)
         }
 
+        val profileInsecureTlsConsentGranted = secret.hasInsecureTlsConsent(json)
+        val parsed =
+            parseFetchedSubscriptionProfiles(
+                rawBody = response.body.orEmpty(),
+                fallbackName = entity.name,
+                settings = settings,
+                profileInsecureTlsConsentGranted = profileInsecureTlsConsentGranted,
+                excludeInsecureTlsOptions = excludeInsecureTlsOptions,
+            )
+        return applyFetchedSubscriptionProfiles(
+            sourceUrl = sourceUrl,
+            parsed = parsed,
+            response = response,
+            targetProfileId = profileId,
+            activateFirstIfNoProfiles = false,
+        )
+    }
+
+    private suspend fun parseFetchedSubscriptionProfiles(
+        rawBody: String,
+        fallbackName: String,
+        settings: Settings,
+        profileInsecureTlsConsentGranted: Boolean,
+        excludeInsecureTlsOptions: Boolean,
+    ): ParsedSubscriptionImport {
         diagnosticsLogger.record(
             "profile",
-            "subscription parse started bodyBytes=${response.body.orEmpty().toByteArray(Charsets.UTF_8).size}",
+            "subscription parse started bodyBytes=${rawBody.toByteArray(Charsets.UTF_8).size}",
         )
-        val profileInsecureTlsConsentGranted = secret.hasInsecureTlsConsent(json)
         val strictParseFailedForInsecureTls =
             withContext(Dispatchers.IO) {
                 runCatching {
                     parser.parseSubscriptionProfiles(
-                        rawContent = response.body.orEmpty(),
-                        fallbackName = entity.name,
+                        rawContent = rawBody,
+                        fallbackName = fallbackName,
                         allowPrivateOutboundHosts = settings.expert.allowPrivateOutboundHosts,
                         allowHttpSubscriptionUrls = settings.expert.allowHttpConfigImports,
                         allowInsecureTls = false,
@@ -654,8 +726,8 @@ class ProfileRepository(
                 withContext(Dispatchers.IO) {
                     runCatching {
                         parser.parseSubscriptionProfiles(
-                            rawContent = response.body.orEmpty(),
-                            fallbackName = entity.name,
+                            rawContent = rawBody,
+                            fallbackName = fallbackName,
                             allowPrivateOutboundHosts = settings.expert.allowPrivateOutboundHosts,
                             allowHttpSubscriptionUrls = settings.expert.allowHttpConfigImports,
                             allowInsecureTls = true,
@@ -670,8 +742,8 @@ class ProfileRepository(
             withContext(Dispatchers.IO) {
                 runCatching {
                     parser.parseSubscriptionProfiles(
-                        rawContent = response.body.orEmpty(),
-                        fallbackName = entity.name,
+                        rawContent = rawBody,
+                        fallbackName = fallbackName,
                         allowPrivateOutboundHosts = settings.expert.allowPrivateOutboundHosts,
                         allowHttpSubscriptionUrls = settings.expert.allowHttpConfigImports,
                         allowInsecureTls = effectiveAllowInsecureTls,
@@ -688,12 +760,21 @@ class ProfileRepository(
                     "subscription parse failed: ${error.javaClass.simpleName}: ${error.message.orEmpty()}",
                 )
             }.getOrThrow()
-        val parsed =
-            if (excludeInsecureTlsOptions) {
-                parsedRaw.withoutInsecureTlsOptions(json)
-            } else {
-                parsedRaw
-            }
+        return if (excludeInsecureTlsOptions) {
+            parsedRaw.withoutInsecureTlsOptions(json)
+        } else {
+            parsedRaw
+        }
+    }
+
+    @Suppress("LongMethod", "CyclomaticComplexMethod")
+    private suspend fun applyFetchedSubscriptionProfiles(
+        sourceUrl: String,
+        parsed: ParsedSubscriptionImport,
+        response: SubscriptionResponse,
+        targetProfileId: Long?,
+        activateFirstIfNoProfiles: Boolean,
+    ): Profile {
         val subscriptionGroup = loadSubscriptionGroup(sourceUrl)
         val refreshPlan =
             planSubscriptionRefresh(
@@ -702,7 +783,7 @@ class ProfileRepository(
                         ExistingSubscriptionProfile(
                             id = member.entity.id,
                             name = member.entity.name,
-            protocolHint = member.entity.toDomain().protocolHint,
+                            protocolHint = member.entity.toDomain().protocolHint,
                         )
                     },
                 importedProfiles =
@@ -837,7 +918,9 @@ class ProfileRepository(
                     }
                     val groupHadActive = subscriptionGroup.any { it.entity.isActive }
                     val preservedActive = committedProfiles.any(AppliedSubscriptionProfile::wasActive)
-                    if (groupHadActive && !preservedActive && committedProfiles.isNotEmpty()) {
+                    val shouldPromoteFirstProfile =
+                        (groupHadActive && !preservedActive) || activateFirstIfNoProfiles
+                    if (shouldPromoteFirstProfile && committedProfiles.isNotEmpty()) {
                         replacementActiveId = committedProfiles.first().id
                         dao.clearActive()
                         dao.setActive(replacementActiveId!!)
@@ -857,10 +940,11 @@ class ProfileRepository(
         diagnosticsLogger.record("profile", "subscription refreshed: ${parsed.nodesCount} profiles")
 
         val refreshedProfileId =
-            appliedProfiles.firstOrNull { it.previousProfileId == profileId }?.id
+            targetProfileId?.let { requestedId -> appliedProfiles.firstOrNull { it.previousProfileId == requestedId }?.id }
                 ?: committedRefresh.replacementActiveId
                 ?: appliedProfiles.firstOrNull()?.id
-                ?: profileId
+                ?: targetProfileId
+                ?: error("subscription did not produce profiles")
         return requireProfile(refreshedProfileId)
     }
 

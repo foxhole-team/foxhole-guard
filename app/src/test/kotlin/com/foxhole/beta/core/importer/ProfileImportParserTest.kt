@@ -99,6 +99,36 @@ class ProfileImportParserTest {
     }
 
     @Test
+    fun `rejects html subscription response without vpn configs`() {
+        val error =
+            runCatching {
+                parser.parseSubscriptionProfiles(
+                    rawContent = "<html><body>not a vpn profile</body></html>",
+                    fallbackName = "remote",
+                )
+            }.exceptionOrNull()
+
+        assertNotNull(error)
+        assertTrue(error is IllegalArgumentException)
+        assertTrue(error!!.message.orEmpty().contains("unsupported subscription"))
+    }
+
+    @Test
+    fun `rejects bare subscription url as fetched config payload`() {
+        val error =
+            runCatching {
+                parser.parseSubscriptionProfiles(
+                    rawContent = "https://example.org/not-a-config",
+                    fallbackName = "remote",
+                )
+            }.exceptionOrNull()
+
+        assertNotNull(error)
+        assertTrue(error is IllegalArgumentException)
+        assertTrue(error!!.message.orEmpty().contains("unsupported subscription"))
+    }
+
+    @Test
     fun `rejects private subscription url`() {
         expectIllegalArgument {
             parser.parseUserInput("https://127.0.0.1/subscription")

@@ -9,25 +9,27 @@ import java.io.File
 
 class SmartStartProtocolPresentationTest {
     @Test
-    fun `recommended status wins for the recommended healthy candidate`() {
+    fun `recommended candidate keeps measured status instead of replacing status text`() {
         val presentation =
             resolveSmartStartProtocolPresentation(
                 included = true,
-                recommended = true,
                 latencyMs = 80L,
                 latencyDown = false,
                 latencyUnavailable = false,
             )
 
-        assertEquals(SmartStartProtocolStatus.RECOMMENDED, presentation.status)
+        assertEquals(SmartStartProtocolStatus.AVAILABLE, presentation.status)
+        assertEquals(
+            LatencyQuality.FAST,
+            classifyVpnLatency(latencyMs = 80L, failed = false, unavailable = false),
+        )
     }
 
     @Test
-    fun `available status is used for a non recommended candidate with normal data`() {
+    fun `available status is used for a candidate with normal data`() {
         val presentation =
             resolveSmartStartProtocolPresentation(
                 included = true,
-                recommended = false,
                 latencyMs = 420L,
                 latencyDown = false,
                 latencyUnavailable = false,
@@ -37,11 +39,10 @@ class SmartStartProtocolPresentationTest {
     }
 
     @Test
-    fun `slow status is used only for high latency non recommended candidates`() {
+    fun `slow status is used for high latency candidates`() {
         val presentation =
             resolveSmartStartProtocolPresentation(
                 included = true,
-                recommended = false,
                 latencyMs = 900L,
                 latencyDown = false,
                 latencyUnavailable = false,
@@ -55,7 +56,6 @@ class SmartStartProtocolPresentationTest {
         val presentation =
             resolveSmartStartProtocolPresentation(
                 included = true,
-                recommended = true,
                 latencyMs = null,
                 latencyDown = true,
                 latencyUnavailable = false,
@@ -69,21 +69,32 @@ class SmartStartProtocolPresentationTest {
         val presentation =
             resolveSmartStartProtocolPresentation(
                 included = true,
-                recommended = false,
                 latencyMs = null,
                 latencyDown = false,
-                latencyUnavailable = true,
+                latencyUnavailable = false,
             )
 
         assertEquals(SmartStartProtocolStatus.NO_DATA, presentation.status)
     }
 
     @Test
-    fun `disabled status wins over recommendation and failure state`() {
+    fun `unavailable status is used when analysis ran but latency was unavailable`() {
+        val presentation =
+            resolveSmartStartProtocolPresentation(
+                included = true,
+                latencyMs = null,
+                latencyDown = false,
+                latencyUnavailable = true,
+            )
+
+        assertEquals(SmartStartProtocolStatus.UNAVAILABLE, presentation.status)
+    }
+
+    @Test
+    fun `disabled status wins over stale recommendation and failure state`() {
         val presentation =
             resolveSmartStartProtocolPresentation(
                 included = false,
-                recommended = true,
                 latencyMs = null,
                 latencyDown = true,
                 latencyUnavailable = true,
@@ -176,14 +187,14 @@ class SmartStartProtocolPresentationTest {
     }
 
     @Test
-    fun `english and russian copy keeps recommended status wording`() {
+    fun `english and russian copy keeps recommended wording as badge only`() {
         val enStrings = resourceText("src/main/res/values/strings.xml", "app/src/main/res/values/strings.xml")
         val ruStrings = resourceText("src/main/res/values-ru/strings.xml", "app/src/main/res/values-ru/strings.xml")
 
         assertEquals("Recommended", stringValue(enStrings, "smart_profile_menu_recommended_badge"))
-        assertEquals("Recommended", stringValue(enStrings, "smart_start_protocol_status_recommended"))
         assertEquals("Рекомендовано", stringValue(ruStrings, "smart_profile_menu_recommended_badge"))
-        assertEquals("Рекомендовано", stringValue(ruStrings, "smart_start_protocol_status_recommended"))
+        assertFalse(enStrings.contains("name=\"smart_start_protocol_status_recommended\""))
+        assertFalse(ruStrings.contains("name=\"smart_start_protocol_status_recommended\""))
     }
 
     @Test
@@ -231,7 +242,7 @@ class SmartStartProtocolPresentationTest {
         assertFalse(enStrings.contains("name=\"smart_profile_menu_active_badge\""))
         assertEquals("Updated: %1\$s", stringValue(enStrings, "smart_profile_metrics_last_updated"))
         assertEquals("Never updated", stringValue(enStrings, "smart_profile_metrics_never_updated"))
-        assertEquals("Disabled", stringValue(enStrings, "smart_start_protocol_status_disabled"))
+        assertEquals("Off", stringValue(enStrings, "smart_start_protocol_status_disabled"))
         assertEquals(
             "Profile configuration did not load. Try reopening the profile.",
             stringValue(enStrings, "profile_config_load_timeout"),

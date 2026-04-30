@@ -253,11 +253,11 @@ private fun rememberSmartProfileMenuWidth(
             R.string.smart_profile_metrics_last_updated,
             stringResource(R.string.smart_profile_metrics_ago_weeks, 99),
         )
-    val recommendedStatus = stringResource(R.string.smart_start_protocol_status_recommended)
     val availableStatus = stringResource(R.string.smart_start_protocol_status_available)
     val slowStatus = stringResource(R.string.smart_start_protocol_status_slow)
     val noDataStatus = stringResource(R.string.smart_start_protocol_status_no_data)
     val disabledStatus = stringResource(R.string.smart_start_protocol_status_disabled)
+    val unavailableStatus = stringResource(R.string.latency_pill_unavailable)
     val fastLabel = stringResource(R.string.latency_quality_fast)
     val normalLabel = stringResource(R.string.latency_quality_normal)
     val slowLabel = stringResource(R.string.latency_quality_slow)
@@ -323,7 +323,6 @@ private fun rememberSmartProfileMenuWidth(
         }
     fun statusText(
         included: Boolean,
-        recommended: Boolean,
         latencyMs: Long?,
         latencyDown: Boolean,
         latencyUnavailable: Boolean,
@@ -331,12 +330,12 @@ private fun rememberSmartProfileMenuWidth(
         val presentation =
             resolveSmartStartProtocolPresentation(
                 included = included,
-                recommended = recommended,
                 latencyMs = latencyMs,
                 latencyDown = latencyDown,
                 latencyUnavailable = latencyUnavailable,
             )
         return when {
+            presentation.status == SmartStartProtocolStatus.DISABLED -> disabledStatus
             latencyDown -> downMetric
             latencyMs != null && !latencyUnavailable ->
                 when (classifyVpnLatency(latencyMs = latencyMs, failed = false, unavailable = false)) {
@@ -347,20 +346,20 @@ private fun rememberSmartProfileMenuWidth(
                     LatencyQuality.UNAVAILABLE,
                     LatencyQuality.FAILED,
                     -> presentation.status.label(
-                        recommended = recommendedStatus,
                         available = availableStatus,
                         slow = slowStatus,
                         failed = downMetric,
+                        unavailable = unavailableStatus,
                         noData = noDataStatus,
                         disabled = disabledStatus,
                     )
                 }
             else ->
                 presentation.status.label(
-                    recommended = recommendedStatus,
                     available = availableStatus,
                     slow = slowStatus,
                     failed = downMetric,
+                    unavailable = unavailableStatus,
                     noData = noDataStatus,
                     disabled = disabledStatus,
                 )
@@ -493,7 +492,7 @@ private fun rememberSmartProfileMenuWidth(
                 val statusValueWidth =
                     maxOf(
                         textWidth(
-                            statusText(included, recommended, latencyMs, latencyDown, latencyUnavailable),
+                            statusText(included, latencyMs, latencyDown, latencyUnavailable),
                             metricValueStyle,
                         ),
                         with(density) { SmartProfileCompactStatusColumnWidth.toPx() },
@@ -547,18 +546,18 @@ internal fun smartProfileMenuWidthBasisPx(
 ): Float = maxOf(protocolAndLegendWidthPx, hintWidthPx)
 
 private fun SmartStartProtocolStatus.label(
-    recommended: String,
     available: String,
     slow: String,
     failed: String,
+    unavailable: String,
     noData: String,
     disabled: String,
 ): String =
     when (this) {
-        SmartStartProtocolStatus.RECOMMENDED -> recommended
         SmartStartProtocolStatus.AVAILABLE -> available
         SmartStartProtocolStatus.SLOW -> slow
         SmartStartProtocolStatus.RECENTLY_FAILED -> failed
+        SmartStartProtocolStatus.UNAVAILABLE -> unavailable
         SmartStartProtocolStatus.NO_DATA -> noData
         SmartStartProtocolStatus.DISABLED -> disabled
     }
@@ -1536,7 +1535,6 @@ private fun SmartProfileProtocolSimpleMenuRow(
             presentation =
                 resolveSmartStartProtocolPresentation(
                     included = included,
-                    recommended = recommended,
                     latencyMs = latencyMs,
                     latencyDown = latencyDown,
                     latencyUnavailable = latencyUnavailable,
@@ -1794,7 +1792,6 @@ private fun smartStartProtocolCompactText(
     return when (presentation.status) {
         SmartStartProtocolStatus.AVAILABLE,
         SmartStartProtocolStatus.SLOW,
-        SmartStartProtocolStatus.RECOMMENDED,
         -> quality
         else -> base
     }
@@ -1842,20 +1839,20 @@ internal fun latencyQualityLabel(quality: LatencyQuality): String =
 @Composable
 private fun smartStartProtocolPresentationText(presentation: SmartStartProtocolPresentation): String =
     when (presentation.status) {
-        SmartStartProtocolStatus.RECOMMENDED -> stringResource(R.string.smart_start_protocol_status_recommended)
         SmartStartProtocolStatus.AVAILABLE -> stringResource(R.string.smart_start_protocol_status_available)
         SmartStartProtocolStatus.SLOW -> stringResource(R.string.smart_start_protocol_status_slow)
         SmartStartProtocolStatus.RECENTLY_FAILED -> stringResource(R.string.latency_pill_down)
+        SmartStartProtocolStatus.UNAVAILABLE -> stringResource(R.string.latency_pill_unavailable)
         SmartStartProtocolStatus.NO_DATA -> stringResource(R.string.smart_start_protocol_status_no_data)
         SmartStartProtocolStatus.DISABLED -> stringResource(R.string.smart_start_protocol_status_disabled)
     }
 
 private fun smartStartProtocolPresentationTone(presentation: SmartStartProtocolPresentation): SmartProfileMetricTone =
     when (presentation.status) {
-        SmartStartProtocolStatus.RECOMMENDED -> SmartProfileMetricTone.POSITIVE
         SmartStartProtocolStatus.AVAILABLE -> SmartProfileMetricTone.NEUTRAL
         SmartStartProtocolStatus.SLOW -> SmartProfileMetricTone.WARNING
         SmartStartProtocolStatus.RECENTLY_FAILED -> SmartProfileMetricTone.DANGER
+        SmartStartProtocolStatus.UNAVAILABLE,
         SmartStartProtocolStatus.NO_DATA,
         SmartStartProtocolStatus.DISABLED,
         -> SmartProfileMetricTone.NEUTRAL

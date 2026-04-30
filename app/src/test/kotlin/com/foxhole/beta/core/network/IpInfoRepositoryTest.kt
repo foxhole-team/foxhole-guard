@@ -95,6 +95,31 @@ class IpInfoRepositoryTest {
         assertNull(parsed.isp)
     }
 
+    @Test
+    fun `parses ipinfo schema`() {
+        val parsed =
+            parseIpInfoResponse(
+                body =
+                    """
+                    {
+                      "ip": "84.17.54.10",
+                      "city": "Amsterdam",
+                      "country": "NL",
+                      "org": "AS60068 Datacamp Limited"
+                    }
+                    """.trimIndent(),
+                json = json,
+            )
+
+        assertEquals("84.17.54.10", parsed.ip)
+        assertEquals("84.17.54.10", parsed.ipv4)
+        assertNull(parsed.ipv6)
+        assertEquals("NL", parsed.countryCode)
+        assertNull(parsed.countryName)
+        assertEquals("Amsterdam", parsed.city)
+        assertEquals("AS60068 Datacamp Limited", parsed.isp)
+    }
+
     @Test(expected = IllegalArgumentException::class)
     fun `rejects unsuccessful schema responses`() {
         parseIpInfoResponse(
@@ -208,6 +233,7 @@ class IpInfoRepositoryTest {
 
         assertTrue(candidates.isNotEmpty())
         assertEquals("https://ipwho.is/", candidates.first())
+        assertEquals("https://ipinfo.io/json", candidates[1])
         assertTrue(candidates.size > 1)
     }
 
@@ -296,5 +322,15 @@ class IpInfoRepositoryTest {
             )
 
         assertEquals(listOf(networkAddress), selected)
+    }
+
+    @Test
+    fun `public dns ordering prefers ipv4 before ipv6`() {
+        val ipv6Address = InetAddress.getByName("2606:2800:220:1:248:1893:25c8:1946")
+        val ipv4Address = InetAddress.getByName("93.184.216.34")
+
+        val ordered = listOf(ipv6Address, ipv4Address).preferIpv4()
+
+        assertEquals(listOf(ipv4Address, ipv6Address), ordered)
     }
 }
