@@ -62,6 +62,10 @@ if [[ "$(git -C "$singbox_dir" rev-parse HEAD)" != "$singbox_commit" ]]; then
   exit 1
 fi
 
+log "syncing sing-box submodules"
+git -C "$singbox_dir" submodule sync --recursive
+git -C "$singbox_dir" submodule update --init --recursive --depth 1
+
 (
   cd "$singbox_dir"
   log "running make lib_install"
