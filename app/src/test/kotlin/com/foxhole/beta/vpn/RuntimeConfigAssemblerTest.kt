@@ -95,7 +95,7 @@ class RuntimeConfigAssemblerTest {
     }
 
     @Test
-    fun `tcp capable outbounds get mobile keepalive and network fallback`() {
+    fun `tcp capable outbounds get mobile keepalive without network strategy override`() {
         val config =
             parse(
                 assembler.assemble(
@@ -142,9 +142,9 @@ class RuntimeConfigAssemblerTest {
         val hysteria2 = outbounds[2]
         assertEquals("outbounds=$outbounds", "30s", vless["tcp_keep_alive"]?.jsonPrimitive?.content)
         assertEquals("15s", vless["tcp_keep_alive_interval"]?.jsonPrimitive?.content)
-        assertEquals("fallback", vless["network_strategy"]?.jsonPrimitive?.content)
+        assertFalse(vless.containsKey("network_strategy"))
         assertEquals("30s", trojan["tcp_keep_alive"]!!.jsonPrimitive.content)
-        assertEquals("fallback", trojan["network_strategy"]!!.jsonPrimitive.content)
+        assertFalse(trojan.containsKey("network_strategy"))
         assertFalse(hysteria2.containsKey("tcp_keep_alive"))
         assertFalse(hysteria2.containsKey("network_strategy"))
     }

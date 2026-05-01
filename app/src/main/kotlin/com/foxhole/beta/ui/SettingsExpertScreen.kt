@@ -6,9 +6,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
@@ -26,7 +29,9 @@ import com.foxhole.beta.core.model.ClashApiSettings
 import com.foxhole.beta.core.model.DiagnosticsRetention
 import com.foxhole.beta.core.model.LocalAuthSettings
 import com.foxhole.beta.core.model.ProxyInboundSettings
+import com.foxhole.beta.core.settings.hasCustomExperimentalSettings
 
+@Suppress("CyclomaticComplexMethod", "LongMethod", "LongParameterList")
 @Composable
 fun ExpertSettingsScreen(
     state: SettingsRouteUiState,
@@ -52,6 +57,7 @@ fun ExpertSettingsScreen(
     onMixedSurfaceChanged: (ProxyInboundSettings) -> Unit,
     onClashApiChanged: (ClashApiSettings) -> Unit,
     onResetToSafeDefaults: () -> Unit,
+    onResetExperimentalSettings: () -> Unit,
 ) {
     var socksDialog by rememberSaveable { mutableStateOf(false) }
     var httpDialog by rememberSaveable { mutableStateOf(false) }
@@ -76,6 +82,30 @@ fun ExpertSettingsScreen(
         snackbarHostState = snackbarHostState,
         onNavigateUp = onNavigateUp,
     ) {
+        if (state.settings.hasCustomExperimentalSettings()) {
+            item {
+                FoxholeCard {
+                    Text(
+                        text = stringResource(R.string.reset_experimental_settings_summary),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End,
+                    ) {
+                        OutlinedButton(onClick = onResetExperimentalSettings) {
+                            Icon(
+                                imageVector = Icons.Outlined.Refresh,
+                                contentDescription = null,
+                                modifier = Modifier.padding(end = 8.dp),
+                            )
+                            Text(stringResource(R.string.reset_settings))
+                        }
+                    }
+                }
+            }
+        }
         item {
             InfoBlock(
                 title = stringResource(R.string.information_title),

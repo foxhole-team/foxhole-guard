@@ -203,6 +203,7 @@ private fun DiagnosticsScreenContent(
                 icon = Icons.Outlined.Info,
                 title = stringResource(R.string.logs_title),
                 summary = stringResource(R.string.logs_summary),
+                summaryMaxLines = 2,
                 onClick = onOpenLogs,
             )
         }

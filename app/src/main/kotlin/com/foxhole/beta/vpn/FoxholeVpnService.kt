@@ -280,6 +280,12 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
             "sessionId=${session.correlationId}",
             "mode=${trafficMode.name.lowercase()}",
         )
+        val tcpReadinessTarget = tcpRuntimeReadinessTarget(session)
+        prepareTcpRuntimeReadiness(tcpReadinessTarget)
+            .onFailure {
+                fail(getString(R.string.error_tcp_runtime_readiness_failed), commandStartId)
+                return
+            }
         FoxholeVpnRuntimeBridge.updateIpInfo(null)
         FoxholeVpnRuntimeBridge.update(
             ConnectionSnapshot(
@@ -309,6 +315,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         }
         if (result.isSuccess) {
             container.connectionController.markCurrentRuntimeApplied()
+            requestTcpRuntimeNetworkReset(tcpReadinessTarget)
             when (trafficMode) {
                 TrafficMode.TUNNEL -> {
                     container.diagnosticsLogger.record("connection", "runtime started, tunnel validation required")

@@ -329,6 +329,20 @@ internal fun HomeViewModel.resetExpertToSafeDefaultsInternal() {
     }
 }
 
+internal fun HomeViewModel.resetExperimentalSettingsToDefaultsInternal() {
+    viewModelScope.launch {
+        container.settingsRepository.resetExperimentalSettingsToDefaults()
+        maybeReloadActiveRuntime()
+    }
+}
+
+internal fun HomeViewModel.resetApplicationSettingsToDefaultsInternal() {
+    viewModelScope.launch {
+        container.settingsRepository.resetApplicationSettingsToDefaults()
+        maybeReloadActiveRuntime()
+    }
+}
+
 internal fun HomeViewModel.resetUsageTrackingInternal() {
     viewModelScope.launch {
         container.settingsRepository.resetUsageTracking()

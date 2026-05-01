@@ -871,6 +871,7 @@ fun TrafficSettingsScreen(
     }
 }
 
+@Suppress("CyclomaticComplexMethod", "LongMethod")
 @Composable
 fun ApplicationSettingsScreen(
     state: SettingsRouteUiState,
@@ -881,6 +882,7 @@ fun ApplicationSettingsScreen(
     onAutoReconnectChanged: (Boolean) -> Unit,
     onAutoStartChanged: (Boolean) -> Unit,
     onBlockScreenshotsChanged: (Boolean) -> Unit,
+    onResetApplicationSettings: () -> Unit,
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
@@ -911,6 +913,7 @@ fun ApplicationSettingsScreen(
     }
     var themeMenuExpanded by rememberSaveable { mutableStateOf(false) }
     var localeMenuExpanded by rememberSaveable { mutableStateOf(false) }
+    var resetApplicationDialogVisible by rememberSaveable { mutableStateOf(false) }
 
     SettingsScaffold(
         title = stringResource(R.string.app_settings),
@@ -1028,6 +1031,38 @@ fun ApplicationSettingsScreen(
                 },
             )
         }
+        item {
+            SettingValueRow(
+                title = stringResource(R.string.reset_application_settings_title),
+                value = "",
+                summary = stringResource(R.string.reset_application_settings_summary),
+                leadingIcon = Icons.Outlined.Refresh,
+                onClick = { resetApplicationDialogVisible = true },
+                summaryMaxLines = 3,
+                trailingContent = {
+                    Icon(
+                        imageVector = Icons.Outlined.Refresh,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                    )
+                },
+            )
+        }
+    }
+
+    if (resetApplicationDialogVisible) {
+        ConfirmDialog(
+            title = stringResource(R.string.attention_title),
+            body = stringResource(R.string.reset_application_settings_confirm_body),
+            confirmLabel = stringResource(R.string.reset_application_settings_confirm_action),
+            icon = Icons.Outlined.Refresh,
+            dismissLabel = stringResource(R.string.no_label),
+            onDismiss = { resetApplicationDialogVisible = false },
+            onConfirm = {
+                resetApplicationDialogVisible = false
+                onResetApplicationSettings()
+            },
+        )
     }
 }
 

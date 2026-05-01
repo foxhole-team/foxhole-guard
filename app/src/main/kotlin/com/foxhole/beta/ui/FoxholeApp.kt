@@ -456,6 +456,7 @@ fun FoxholeApp(
                         onAutoReconnectChanged = viewModel::onAutoReconnectChanged,
                         onAutoStartChanged = viewModel::onAutoStartChanged,
                         onBlockScreenshotsChanged = viewModel::onBlockScreenshotsChanged,
+                        onResetApplicationSettings = viewModel::resetApplicationSettingsToDefaults,
                     )
                 }
                 composable(AppRoute.HELP) {
@@ -498,6 +499,7 @@ fun FoxholeApp(
                         onMixedSurfaceChanged = viewModel::onMixedSurfaceChanged,
                         onClashApiChanged = viewModel::onClashApiChanged,
                         onResetToSafeDefaults = viewModel::resetExpertToSafeDefaults,
+                        onResetExperimentalSettings = viewModel::resetExperimentalSettingsToDefaults,
                     )
                 }
                 composable(AppRoute.DIAGNOSTICS) {

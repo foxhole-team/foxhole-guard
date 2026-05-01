@@ -872,6 +872,10 @@ class HomeViewModel(
 
     fun resetExpertToSafeDefaults() = resetExpertToSafeDefaultsInternal()
 
+    fun resetExperimentalSettingsToDefaults() = resetExperimentalSettingsToDefaultsInternal()
+
+    fun resetApplicationSettingsToDefaults() = resetApplicationSettingsToDefaultsInternal()
+
     fun resetUsageTracking() = resetUsageTrackingInternal()
 
     fun createPreset(name: String) = createPresetInternal(name)

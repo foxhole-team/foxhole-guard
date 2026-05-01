@@ -653,6 +653,12 @@ class SettingsRepository(
     suspend fun resetExpertToSafeDefaults() =
         update { current -> current.resetExpertSettingsToSafeDefaults() }
 
+    suspend fun resetExperimentalSettingsToDefaults() =
+        update { current -> current.resetExperimentalSettingsToDefaults() }
+
+    suspend fun resetApplicationSettingsToDefaults() =
+        update { current -> current.resetApplicationSettingsToDefaults() }
+
     suspend fun resetUsageTracking(timestamp: Long = System.currentTimeMillis()) =
         update {
             it.copy(
@@ -992,6 +998,44 @@ internal fun Settings.resetExpertSettingsToSafeDefaults(): Settings =
                 warningAcknowledgedAt = null,
                 blockScreenshots = expert.blockScreenshots,
             ),
+    )
+
+internal fun Settings.resetExperimentalSettingsToDefaults(): Settings =
+    copy(
+        expert =
+            ExpertSettings(
+                unlockedAt = expert.unlockedAt,
+                warningAcknowledgedAt = null,
+                blockScreenshots = expert.blockScreenshots,
+            ),
+    )
+
+internal fun Settings.hasCustomExperimentalSettings(): Boolean =
+    expert.experimentalSettingsComparable() != ExpertSettings().experimentalSettingsComparable()
+
+private fun ExpertSettings.experimentalSettingsComparable(): ExpertSettings =
+    copy(
+        unlockedAt = null,
+        warningAcknowledgedAt = null,
+        blockScreenshots = false,
+        localSurfaces =
+            localSurfaces.copy(
+                clashApi = localSurfaces.clashApi.copy(secret = ""),
+                auth =
+                    localSurfaces.auth.copy(
+                        username = "",
+                        password = "",
+                        apiSecret = "",
+                    ),
+            ),
+    )
+
+internal fun Settings.resetApplicationSettingsToDefaults(): Settings =
+    copy(
+        ui = UiSettings(),
+        connection = ConnectionSettings(ipInfoEndpoint = BuildConfig.DEFAULT_IP_INFO_ENDPOINT),
+        traffic = TrafficSettings(),
+        expert = ExpertSettings(),
     )
 
 internal fun Settings.withExpertSettingsVisibility(visible: Boolean): Settings =

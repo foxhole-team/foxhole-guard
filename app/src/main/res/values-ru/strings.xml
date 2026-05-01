@@ -124,6 +124,7 @@
     <string name="error_profile_missing">Сначала выберите или импортируйте профиль</string>
     <string name="error_profile_invalid">Конфигурация профиля некорректна</string>
     <string name="error_runtime_missing">В этой сборке пока не подключен sing-box core bridge</string>
+    <string name="error_tcp_runtime_readiness_failed">TCP-цель VPN недоступна в текущей сети. Попробуйте еще раз или выберите другой протокол.</string>
     <string name="error_dns_probe_failed">После старта рантайма не прошла проверка связи</string>
     <string name="error_private_dns_strict_unsupported">Android Private DNS пока не поддерживается в режиме туннеля. Переключите Private DNS на Выключено и подключитесь снова</string>
     <string name="vpn_permission_denied">Разрешение на защищенное подключение отклонено</string>
@@ -182,9 +183,9 @@
     <string name="smart_start_transport_priority_all">Все</string>
     <string name="smart_start_transport_priority_udp">UDP</string>
     <string name="smart_start_transport_priority_tcp">TCP</string>
-    <string name="smart_start_clear_data_title">Сбросить данные Смарт старт</string>
+    <string name="smart_start_clear_data_title">Сбросить данные</string>
     <string name="smart_start_clear_data_summary">Удаляет локальные замеры, статусы, рекомендации и историю подключений.</string>
-    <string name="smart_start_clear_data_confirm_title">Очистить данные?</string>
+    <string name="smart_start_clear_data_confirm_title">Сбросить данные?</string>
     <string name="smart_start_clear_data_confirm_body">Foxhole удалит локальные замеры и рекомендации Смарт старт на этом устройстве.</string>
     <string name="smart_start_data_cleared">Данные Смарт старт очищены.</string>
     <string name="smart_start_first_analysis_title">Анализ протоколов VPN</string>
@@ -257,7 +258,7 @@
     <string name="diagnostics_usage_empty">Общая статистика появится после первой успешной сессии.</string>
     <string name="diagnostics_usage_breakdown">RX %1$s • TX %2$s</string>
     <string name="clear_usage_title">Очистить использование</string>
-    <string name="logs_title">Логи приложения</string>
+    <string name="logs_title">Открыть лог приложения</string>
     <string name="logs_summary">Открыть лог подключения и очищенный архив для экспорта.</string>
     <plurals name="logs_dialog_summary">
         <item quantity="one">Логи приложения, сначала новые. Показана последняя %1$d из %2$d запись, сохраненная за %3$s. Архив экспортирует весь сохраненный лог.</item>
@@ -281,7 +282,7 @@
     <string name="support_bot_share_text">Отправьте этот архив в %1$s.\n\nЕсли нужный чат не открыт автоматически, откройте %2$s.</string>
     <string name="send_log_to_bot">Отправить лог файл</string>
     <string name="write_to_support">Написать в поддержку</string>
-    <string name="support_bot_current">Текущий бот тех. поддержки Foxhole: %1$s</string>
+    <string name="support_bot_current">Текущий бот тех. поддержки Foxhole:\n%1$s</string>
     <string name="send_log_to_bot_confirm_body">Архив содержит только технические логи для отладки и поддержки. Foxhole не экспортирует Ваши IP-адреса и конфигурации. В архив добавляются версия приложения, версия core, Android/API, CPU ABI, тема, язык и runtime-режимы без деанона пользователя.</string>
     <string name="diagnostics_sanitizer_title">Санитайзер</string>
     <string name="diagnostics_sanitizer_body">Очистить лог файл перед сохранением от IP-адресов и прочих чувствительных данных?</string>
@@ -417,6 +418,13 @@
     <string name="copy_to_clipboard">Скопировать</string>
     <string name="secret">Secret</string>
     <string name="reset_to_safe_defaults">Сбросить к безопасным настройкам</string>
+    <string name="reset_settings">Сброс настроек</string>
+    <string name="reset_experimental_settings_summary">Вернуть дефолтные настройки Foxhole.</string>
+    <string name="attention_title">Внимание</string>
+    <string name="reset_application_settings_title">Сбросить настройки приложения</string>
+    <string name="reset_application_settings_summary">Вернуть дефолтный режим Foxhole без удаления профилей VPN.</string>
+    <string name="reset_application_settings_confirm_body">Это действие вернет приложение Foxhole в дефолтный режим без удаления профилей VPN.\n\nВернуть дефолтные настройки Foxhole?</string>
+    <string name="reset_application_settings_confirm_action">Вернуть настройки Foxhole</string>
     <string name="app_version">Версия сборки</string>
     <string name="core_version">Версия ядра</string>
     <string name="action_label">Действие</string>

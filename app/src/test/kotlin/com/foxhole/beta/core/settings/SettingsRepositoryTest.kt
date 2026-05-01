@@ -3,6 +3,7 @@ package com.foxhole.beta.core.settings
 import com.foxhole.beta.BuildConfig
 import com.foxhole.beta.core.model.AppLocale
 import com.foxhole.beta.core.model.AutoConnectReasonCode
+import com.foxhole.beta.core.model.ConnectionSettings
 import com.foxhole.beta.core.model.DiagnosticsRetention
 import com.foxhole.beta.core.model.ExpertSettings
 import com.foxhole.beta.core.model.LatencyProbeMethod
@@ -180,6 +181,76 @@ class SettingsRepositoryTest {
         assertNull(reset.expert.warningAcknowledgedAt)
         assertEquals(1234L, reset.expert.unlockedAt)
         assertTrue(reset.connection.stealthModeEnabled)
+    }
+
+    @Test
+    fun `experimental reset only clears experimental settings`() {
+        val original =
+            Settings(
+                ui = UiSettings(themeMode = ThemeMode.DARK, locale = AppLocale.RU, showExpertSettings = true),
+                connection = ConnectionSettings(autoReconnect = false),
+                expert =
+                    ExpertSettings(
+                        unlockedAt = 1234L,
+                        warningAcknowledgedAt = 5678L,
+                        blockScreenshots = true,
+                        networkActivityLogging = true,
+                        diagnosticsRetention = DiagnosticsRetention.DAYS_7,
+                        smartStartReplayLogging = true,
+                        allowHttpConfigImports = true,
+                        allowInsecureTls = true,
+                        sniff = true,
+                        bypassLan = true,
+                    ),
+            )
+
+        assertTrue(original.hasCustomExperimentalSettings())
+        val reset = original.resetExperimentalSettingsToDefaults()
+
+        assertEquals(original.ui, reset.ui)
+        assertEquals(original.connection, reset.connection)
+        assertEquals(1234L, reset.expert.unlockedAt)
+        assertTrue(reset.expert.blockScreenshots)
+        assertFalse(reset.expert.networkActivityLogging)
+        assertFalse(reset.expert.allowHttpConfigImports)
+        assertFalse(reset.expert.allowInsecureTls)
+        assertFalse(reset.expert.sniff)
+        assertFalse(reset.expert.bypassLan)
+        assertFalse(reset.hasCustomExperimentalSettings())
+    }
+
+    @Test
+    fun `application reset restores settings defaults without deleting profile-scoped data`() {
+        val smartPreference =
+            SmartProfilePreference(
+                profileId = 42L,
+                lastKnownGoodOptionId = "tcp",
+                protocolMemories = listOf(SmartProfileProtocolMemory(optionId = "tcp", lastSuccessAt = 1_000L)),
+            )
+        val original =
+            Settings(
+                ui = UiSettings(themeMode = ThemeMode.DARK, locale = AppLocale.RU, showExpertSettings = true),
+                connection =
+                    ConnectionSettings(
+                        autoReconnect = false,
+                        autoStartOnBoot = true,
+                        ipInfoEndpoint = "https://ifconfig.co/json",
+                    ),
+                expert =
+                    ExpertSettings(
+                        unlockedAt = 1234L,
+                        blockScreenshots = true,
+                        networkActivityLogging = true,
+                    ),
+                smartProfilePreferences = listOf(smartPreference),
+            )
+
+        val reset = original.resetApplicationSettingsToDefaults()
+
+        assertEquals(UiSettings(), reset.ui)
+        assertEquals(ConnectionSettings(ipInfoEndpoint = BuildConfig.DEFAULT_IP_INFO_ENDPOINT), reset.connection)
+        assertEquals(ExpertSettings(), reset.expert)
+        assertEquals(listOf(smartPreference), reset.smartProfilePreferences)
     }
 
     @Test

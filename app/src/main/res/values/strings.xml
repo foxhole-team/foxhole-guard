@@ -124,6 +124,7 @@
     <string name="error_profile_missing">Select or import a profile first</string>
     <string name="error_profile_invalid">Profile config is invalid</string>
     <string name="error_runtime_missing">The sing-box core bridge is not bundled in this source build yet</string>
+    <string name="error_tcp_runtime_readiness_failed">TCP VPN target is unavailable on the current network. Try again or choose another protocol.</string>
     <string name="error_dns_probe_failed">Connectivity validation failed after runtime start</string>
     <string name="error_private_dns_strict_unsupported">Android Private DNS is not supported yet in tunnel mode. Set Private DNS to Off and reconnect</string>
     <string name="vpn_permission_denied">Secure connection permission was denied</string>
@@ -180,9 +181,9 @@
     <string name="smart_start_transport_priority_all">All</string>
     <string name="smart_start_transport_priority_udp">UDP</string>
     <string name="smart_start_transport_priority_tcp">TCP</string>
-    <string name="smart_start_clear_data_title">Reset Smart start data</string>
+    <string name="smart_start_clear_data_title">Reset data</string>
     <string name="smart_start_clear_data_summary">Deletes local measurements, statuses, recommendations, and connection history.</string>
-    <string name="smart_start_clear_data_confirm_title">Clear Smart start data?</string>
+    <string name="smart_start_clear_data_confirm_title">Reset data?</string>
     <string name="smart_start_clear_data_confirm_body">Foxhole will remove local Smart start measurements and recommendations from this device.</string>
     <string name="smart_start_data_cleared">Smart start data cleared.</string>
     <string name="smart_start_first_analysis_title">VPN protocol analysis</string>
@@ -255,7 +256,7 @@
     <string name="diagnostics_usage_empty">Cumulative usage appears after the first successful session.</string>
     <string name="diagnostics_usage_breakdown">RX %1$s • TX %2$s</string>
     <string name="clear_usage_title">Clear usage</string>
-    <string name="logs_title">App logs</string>
+    <string name="logs_title">Open app log</string>
     <string name="logs_summary">Open the connection log and sanitized archive for export.</string>
     <plurals name="logs_dialog_summary">
         <item quantity="one">App logs, newest first. Showing the latest %1$d of %2$d entry kept for %3$s. The archive exports the full retained log.</item>
@@ -277,7 +278,7 @@
     <string name="support_bot_share_text">Send this archive to %1$s.\n\nIf the correct chat is not opened automatically, use %2$s.</string>
     <string name="send_log_to_bot">Send log file</string>
     <string name="write_to_support">Write to support</string>
-    <string name="support_bot_current">Current Foxhole support bot: %1$s</string>
+    <string name="support_bot_current">Current Foxhole support bot:\n%1$s</string>
     <string name="send_log_to_bot_confirm_body">This archive contains technical logs only for debugging and support. Foxhole does not export your IP addresses or configurations. The archive includes app/core version, Android/API, CPU ABI, theme, language, and runtime modes without deanonymizing the user.</string>
     <string name="diagnostics_sanitizer_title">Sanitizer</string>
     <string name="diagnostics_sanitizer_body">Remove IP addresses and other sensitive data from the log file before saving?</string>
@@ -407,6 +408,13 @@
     <string name="copy_to_clipboard">Copy</string>
     <string name="secret">Secret</string>
     <string name="reset_to_safe_defaults">Reset to safe defaults</string>
+    <string name="reset_settings">Reset settings</string>
+    <string name="reset_experimental_settings_summary">Return Foxhole default settings.</string>
+    <string name="attention_title">Warning</string>
+    <string name="reset_application_settings_title">Reset app settings</string>
+    <string name="reset_application_settings_summary">Return Foxhole defaults without deleting VPN profiles.</string>
+    <string name="reset_application_settings_confirm_body">This action will return Foxhole to the default mode without deleting VPN profiles.\n\nReturn Foxhole default settings?</string>
+    <string name="reset_application_settings_confirm_action">Reset Foxhole settings</string>
     <string name="app_version">Build version</string>
     <string name="core_version">Core version</string>
     <string name="action_label">Action</string>

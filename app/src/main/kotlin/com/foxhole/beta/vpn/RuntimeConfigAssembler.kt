@@ -318,9 +318,6 @@ class RuntimeConfigAssembler(
                     put("tcp_keep_alive_interval", MOBILE_TCP_KEEP_ALIVE_INTERVAL)
                 }
             }
-            if (outbound.canUseNetworkStrategy()) {
-                put("network_strategy", MOBILE_TCP_NETWORK_STRATEGY)
-            }
         }
     }
 
@@ -337,18 +334,6 @@ class RuntimeConfigAssembler(
         return type in TCP_RELIABILITY_OUTBOUND_TYPES &&
             !containsKey("detour") &&
             transportType in TCP_RELIABILITY_TRANSPORT_TYPES
-    }
-
-    private fun JsonObject.canUseNetworkStrategy(): Boolean {
-        if (containsKey("network_strategy")) {
-            return false
-        }
-        val hasBindOverride =
-            containsKey("bind_interface") ||
-                containsKey("inet4_bind_address") ||
-                containsKey("inet6_bind_address")
-        val tcpFastOpen = this["tcp_fast_open"]?.jsonPrimitive?.contentOrNull == "true"
-        return !hasBindOverride && !tcpFastOpen
     }
 
     private fun patchDns(
@@ -912,7 +897,6 @@ class RuntimeConfigAssembler(
         const val FOXHOLE_DOH_ADDRESS = "https://1.1.1.1/dns-query"
         const val MOBILE_TCP_KEEP_ALIVE = "30s"
         const val MOBILE_TCP_KEEP_ALIVE_INTERVAL = "15s"
-        const val MOBILE_TCP_NETWORK_STRATEGY = "fallback"
         val TCP_RELIABILITY_OUTBOUND_TYPES = setOf("vless", "trojan", "vmess", "shadowsocks", "http", "socks")
         val TCP_RELIABILITY_TRANSPORT_TYPES = setOf("tcp", "ws", "grpc", "http", "httpupgrade")
         val PORT_RANGE_REGEX = Regex("""\d{1,5}-\d{1,5}""")
