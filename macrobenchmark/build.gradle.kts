@@ -2,6 +2,8 @@ plugins {
     id("com.android.test")
 }
 
+val targetPackageName = providers.gradleProperty("macrobenchmark.targetPackage").orElse("com.foxhole.beta.debug")
+
 android {
     namespace = "com.foxhole.beta.macrobenchmark"
     compileSdk = 37
@@ -11,6 +13,11 @@ android {
         targetSdk = 37
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         testInstrumentationRunnerArguments["androidx.benchmark.suppressErrors"] = "EMULATOR,DEBUGGABLE"
+        buildConfigField("String", "TARGET_PACKAGE_NAME", "\"$targetPackageName\"")
+    }
+
+    buildFeatures {
+        buildConfig = true
     }
 
     targetProjectPath = ":app"

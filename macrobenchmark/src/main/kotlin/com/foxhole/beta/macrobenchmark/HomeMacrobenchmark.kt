@@ -62,7 +62,7 @@ class HomeMacrobenchmark {
         get() = UiDevice.getInstance(androidx.test.platform.app.InstrumentationRegistry.getInstrumentation())
 
     private companion object {
-        private const val PACKAGE_NAME = "com.foxhole.beta"
+        private const val PACKAGE_NAME = BuildConfig.TARGET_PACKAGE_NAME
         private const val SHORT_ITERATIONS = 3
         private const val WAIT_TIMEOUT_MS = 5_000L
         private val BENCHMARK_COMPILATION_MODE =
