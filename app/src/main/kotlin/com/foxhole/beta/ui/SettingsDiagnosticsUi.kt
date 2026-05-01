@@ -10,10 +10,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -148,27 +146,24 @@ internal fun LiveLogsDialog(
         },
         confirmButton = {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(
+                FoxholeDialogSecondaryButton(
+                    label = stringResource(R.string.save_archive),
                     modifier = Modifier.testTag(LIVE_LOGS_SAVE_ACTION_TAG),
                     onClick = onSaveArchive,
-                ) {
-                    Text(stringResource(R.string.save_archive))
-                }
-                Button(
+                )
+                FoxholeDialogConfirmButton(
                     modifier = Modifier.testTag(LIVE_LOGS_SHARE_ACTION_TAG),
                     onClick = onShareArchive,
-                ) {
-                    Text(stringResource(R.string.share_archive))
-                }
+                    label = stringResource(R.string.share_archive),
+                )
             }
         },
         dismissButton = {
-            OutlinedButton(
+            FoxholeDialogDismissButton(
                 modifier = Modifier.testTag(LIVE_LOGS_CLOSE_ACTION_TAG),
                 onClick = onDismiss,
-            ) {
-                Text(stringResource(R.string.close))
-            }
+                label = stringResource(R.string.close),
+            )
         },
     )
 }

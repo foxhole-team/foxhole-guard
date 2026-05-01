@@ -42,7 +42,6 @@ fun ExpertSettingsScreen(
     onSniffChanged: (Boolean) -> Unit,
     onRouteOnlyChanged: (Boolean) -> Unit,
     onStrictRouteChanged: (Boolean) -> Unit,
-    onBypassLanChanged: (Boolean) -> Unit,
     onAllowPrivateOutboundHostsChanged: (Boolean) -> Unit,
     onNetworkActivityLoggingChanged: (Boolean) -> Unit,
     onSmartStartReplayLoggingChanged: (Boolean) -> Unit,
@@ -158,21 +157,6 @@ fun ExpertSettingsScreen(
                 checked = state.settings.expert.strictRoute,
                 summary = stringResource(R.string.strict_route_summary),
                 onCheckedChange = onStrictRouteChanged,
-                summaryMaxLines = 3,
-            )
-        }
-        item {
-            SettingSwitchRow(
-                title = stringResource(R.string.bypass_lan),
-                checked = state.settings.expert.bypassLan,
-                summary = stringResource(R.string.bypass_lan_summary),
-                onCheckedChange = { enabled ->
-                    if (enabled) {
-                        requireWarning { onBypassLanChanged(true) }
-                    } else {
-                        onBypassLanChanged(false)
-                    }
-                },
                 summaryMaxLines = 3,
             )
         }

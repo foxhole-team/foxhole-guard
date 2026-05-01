@@ -49,7 +49,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -1158,9 +1157,7 @@ internal fun SiteRuleDialog(
             )
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text(stringResource(R.string.cancel))
-            }
+            FoxholeDialogDismissButton(onClick = onDismiss)
         },
     )
 
@@ -1222,9 +1219,10 @@ internal fun <T> ChoiceDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = onDismiss) {
-                Text(stringResource(R.string.close))
-            }
+            FoxholeDialogDismissButton(
+                onClick = onDismiss,
+                label = stringResource(R.string.close),
+            )
         },
     )
 }

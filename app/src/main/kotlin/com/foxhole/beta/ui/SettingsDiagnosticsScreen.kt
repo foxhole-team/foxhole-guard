@@ -30,7 +30,6 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -258,8 +257,9 @@ private fun DiagnosticsScreenDialogs(
         ConfirmDialog(
             title = stringResource(R.string.diagnostics_sanitizer_title),
             body = stringResource(R.string.diagnostics_sanitizer_body),
-            confirmLabel = stringResource(R.string.yes_label),
-            secondaryLabel = stringResource(R.string.no_label),
+            confirmLabel = stringResource(R.string.save),
+            dismissLabel = stringResource(R.string.cancel),
+            secondaryLabel = stringResource(R.string.save_without_sanitizing),
             onSecondary = {
                 actions.onDismissSanitizer()
                 actions.onConfirmSaveArchive(false)
@@ -610,17 +610,13 @@ private fun SupportBotHandleDialog(
             }
         },
         confirmButton = {
-            TextButton(
+            FoxholeDialogConfirmButton(
                 onClick = { normalized?.let(onConfirm) },
                 enabled = normalized != null,
-            ) {
-                Text(stringResource(R.string.save))
-            }
+            )
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text(stringResource(R.string.cancel))
-            }
+            FoxholeDialogDismissButton(onClick = onDismiss)
         },
     )
 }

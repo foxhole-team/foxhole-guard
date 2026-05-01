@@ -89,6 +89,7 @@ private val FixedSelectionColors =
     )
 
 internal data class FoxholeUiPalette(
+    val chromeContainerAlpha: Float,
     val menuContainerColor: Color,
     val menuBorderColor: Color,
     val menuDividerColor: Color,
@@ -106,18 +107,20 @@ internal data class FoxholeUiPalette(
 
 internal val LocalFoxholeUiPalette =
     staticCompositionLocalOf {
+        val chromeContainerAlpha = foxholeChromeContainerAlpha(transparencyEnabled = true)
         FoxholeUiPalette(
-            menuContainerColor = FoxholeDarkBackground.copy(alpha = 0.98f),
+            chromeContainerAlpha = chromeContainerAlpha,
+            menuContainerColor = FoxholeDarkBackground.copy(alpha = chromeContainerAlpha),
             menuBorderColor = FoxholeDarkOutline.copy(alpha = 0.34f),
             menuDividerColor = FoxholeDarkOutline.copy(alpha = 0.20f),
             menuSelectedRowColor = FoxholeReadAccent.copy(alpha = 0.12f),
-            cardContainerColor = FoxholeDarkSurface,
+            cardContainerColor = FoxholeDarkSurface.copy(alpha = chromeContainerAlpha),
             cardBorderColor = FoxholeDarkSurfaceStrong,
-            leadingIconContainerColor = FoxholeDarkSurfaceMuted,
-            valuePillContainerColor = FoxholeDarkPrimaryContainer,
+            leadingIconContainerColor = FoxholeDarkSurfaceMuted.copy(alpha = chromeContainerAlpha),
+            valuePillContainerColor = FoxholeDarkPrimaryContainer.copy(alpha = chromeContainerAlpha),
             valuePillBorderColor = Color.Transparent,
             valuePillContentColor = FoxholeDarkPrimary,
-            bottomBarContainerColor = FoxholeDarkSurface.copy(alpha = 0.78f),
+            bottomBarContainerColor = FoxholeDarkSurface.copy(alpha = chromeContainerAlpha),
             bottomBarBorderColor = FoxholeDarkSurfaceStrong.copy(alpha = 0.46f),
             bottomBarIndicatorColor = Color.White.copy(alpha = 0.10f),
         )
@@ -128,49 +131,47 @@ internal val LocalFoxholeThemeMode =
         ThemeMode.DARK
     }
 
+internal fun foxholeChromeContainerAlpha(transparencyEnabled: Boolean): Float =
+    if (transparencyEnabled) 0.88f else 1f
+
 private fun defaultFoxholeUiPalette(
     colorScheme: androidx.compose.material3.ColorScheme,
     useDarkPalette: Boolean,
+    transparencyEnabled: Boolean,
 ): FoxholeUiPalette =
-    FoxholeUiPalette(
-        menuContainerColor =
-            if (useDarkPalette) {
-                colorScheme.background.copy(alpha = 0.98f)
-            } else {
-                FoxholeLightSurface.copy(alpha = 0.95f)
-            },
-        menuBorderColor = colorScheme.outlineVariant.copy(alpha = if (useDarkPalette) 0.34f else 0.38f),
-        menuDividerColor = colorScheme.outlineVariant.copy(alpha = if (useDarkPalette) 0.18f else 0.28f),
-        menuSelectedRowColor =
-            if (useDarkPalette) {
-                colorScheme.primary.copy(alpha = 0.14f)
-            } else {
-                colorScheme.primaryContainer.copy(alpha = 0.62f)
-            },
-        cardContainerColor = colorScheme.surface,
-        cardBorderColor = colorScheme.outlineVariant.copy(alpha = 0.72f),
-        leadingIconContainerColor = colorScheme.surfaceVariant.copy(alpha = 0.62f),
-        valuePillContainerColor = colorScheme.primaryContainer.copy(alpha = 0.95f),
-        valuePillBorderColor = Color.Transparent,
-        valuePillContentColor = colorScheme.primary,
-        bottomBarContainerColor =
-            if (useDarkPalette) {
-                colorScheme.surface.copy(alpha = 0.80f)
-            } else {
-                colorScheme.surface.copy(alpha = 0.86f)
-            },
-        bottomBarBorderColor = colorScheme.outlineVariant.copy(alpha = if (useDarkPalette) 0.46f else 0.48f),
-        bottomBarIndicatorColor =
-            if (useDarkPalette) {
-                Color.White.copy(alpha = 0.10f)
-            } else {
-                Color.Black.copy(alpha = 0.06f)
-            },
-    )
+    foxholeChromeContainerAlpha(transparencyEnabled).let { chromeContainerAlpha ->
+        FoxholeUiPalette(
+            chromeContainerAlpha = chromeContainerAlpha,
+            menuContainerColor = colorScheme.surface.copy(alpha = chromeContainerAlpha),
+            menuBorderColor = colorScheme.outlineVariant.copy(alpha = if (useDarkPalette) 0.34f else 0.38f),
+            menuDividerColor = colorScheme.outlineVariant.copy(alpha = if (useDarkPalette) 0.18f else 0.28f),
+            menuSelectedRowColor =
+                if (useDarkPalette) {
+                    colorScheme.primary.copy(alpha = 0.14f)
+                } else {
+                    colorScheme.primaryContainer.copy(alpha = 0.62f)
+                },
+            cardContainerColor = colorScheme.surface.copy(alpha = chromeContainerAlpha),
+            cardBorderColor = colorScheme.outlineVariant.copy(alpha = 0.72f),
+            leadingIconContainerColor = colorScheme.surfaceVariant.copy(alpha = chromeContainerAlpha),
+            valuePillContainerColor = colorScheme.primaryContainer.copy(alpha = chromeContainerAlpha),
+            valuePillBorderColor = Color.Transparent,
+            valuePillContentColor = colorScheme.primary,
+            bottomBarContainerColor = colorScheme.surface.copy(alpha = chromeContainerAlpha),
+            bottomBarBorderColor = colorScheme.outlineVariant.copy(alpha = if (useDarkPalette) 0.46f else 0.48f),
+            bottomBarIndicatorColor =
+                if (useDarkPalette) {
+                    Color.White.copy(alpha = 0.10f)
+                } else {
+                    Color.Black.copy(alpha = 0.06f)
+                },
+        )
+    }
 
 @Composable
 fun FoxholeTheme(
     themeMode: ThemeMode,
+    transparencyEnabled: Boolean = true,
     content: @Composable () -> Unit,
 ) {
     val context = LocalContext.current
@@ -210,8 +211,12 @@ fun FoxholeTheme(
             }
         }
     val uiPalette =
-        remember(themeMode, colorScheme, useDarkPalette) {
-            defaultFoxholeUiPalette(colorScheme = colorScheme, useDarkPalette = useDarkPalette)
+        remember(themeMode, colorScheme, useDarkPalette, transparencyEnabled) {
+            defaultFoxholeUiPalette(
+                colorScheme = colorScheme,
+                useDarkPalette = useDarkPalette,
+                transparencyEnabled = transparencyEnabled,
+            )
         }
     CompositionLocalProvider(
         LocalTextSelectionColors provides selectionColors,

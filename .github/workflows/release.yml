@@ -73,6 +73,12 @@ jobs:
             echo "FOXHOLE_RELEASE_STORE_TYPE=${FOXHOLE_RELEASE_STORE_TYPE:-PKCS12}"
           } >> "$GITHUB_ENV"
 
+      - name: release quality gates
+        run: ./gradlew --no-daemon --console=plain --stacktrace detekt lintVitalRelease testDebugUnitTest
+
+      - name: mandatory dependency vulnerability scan
+        run: scripts/run-osv-source-scan.sh
+
       - name: build release
         run: ./gradlew --no-daemon --console=plain --stacktrace -Pfoxhole.splitApks=true validateSigningRelease assembleRelease
 

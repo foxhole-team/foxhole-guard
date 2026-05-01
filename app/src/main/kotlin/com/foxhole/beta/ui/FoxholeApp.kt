@@ -371,6 +371,7 @@ fun FoxholeApp(
                         state = state,
                         snackbarHostState = snackbarHostState,
                         onNavigateUp = navController::navigateUp,
+                        onAcknowledgeUnsafeWarning = viewModel::acknowledgeUnsafeWarning,
                         onTrafficModeSelected = viewModel::onTrafficModeSelected,
                         onLatencyProbeMethodSelected = viewModel::onLatencyProbeMethodSelected,
                         onTunStackSelected = viewModel::onTunStackSelected,
@@ -383,6 +384,7 @@ fun FoxholeApp(
                         onMtuChanged = viewModel::onMtuChanged,
                         onPreferIpv6Changed = viewModel::onPreferIpv6Changed,
                         onDomainStrategySelected = viewModel::onDomainStrategySelected,
+                        onBypassLanChanged = viewModel::onBypassLanChanged,
                         onAutoRefreshSubscriptionsChanged = viewModel::onAutoRefreshSubscriptionsChanged,
                         onSubscriptionRefreshIntervalSelected = viewModel::onSubscriptionRefreshIntervalSelected,
                         onIpInfoEndpointChanged = viewModel::onIpInfoEndpointChanged,
@@ -453,6 +455,7 @@ fun FoxholeApp(
                         onNavigateUp = navController::navigateUp,
                         onThemeSelected = viewModel::onThemeSelected,
                         onLocaleSelected = viewModel::onLocaleSelected,
+                        onTransparencyChanged = viewModel::onTransparencyChanged,
                         onAutoReconnectChanged = viewModel::onAutoReconnectChanged,
                         onAutoStartChanged = viewModel::onAutoStartChanged,
                         onBlockScreenshotsChanged = viewModel::onBlockScreenshotsChanged,
@@ -484,7 +487,6 @@ fun FoxholeApp(
                         onSniffChanged = viewModel::onSniffChanged,
                         onRouteOnlyChanged = viewModel::onRouteOnlyChanged,
                         onStrictRouteChanged = viewModel::onStrictRouteChanged,
-                        onBypassLanChanged = viewModel::onBypassLanChanged,
                         onAllowPrivateOutboundHostsChanged = viewModel::onAllowPrivateOutboundHostsChanged,
                         onNetworkActivityLoggingChanged = viewModel::onNetworkActivityLoggingChanged,
                         onSmartStartReplayLoggingChanged = viewModel::onSmartStartReplayLoggingChanged,
@@ -601,7 +603,7 @@ private fun FoxholeBottomBar(
                 containerColor = uiPalette.bottomBarContainerColor,
                 borderColor = uiPalette.bottomBarBorderColor,
                 blurRadius = 18.dp,
-                backgroundAlpha = 0.78f,
+                backgroundAlpha = 1f,
             ) {
                 BoxWithConstraints(
                     modifier =

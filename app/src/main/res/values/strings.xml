@@ -73,6 +73,8 @@
     <string name="theme_mode_system">System colors</string>
     <string name="theme_mode_dark">Dark</string>
     <string name="theme_mode_light">Light</string>
+    <string name="transparency">Transparency</string>
+    <string name="transparency_summary">Use translucent panels for app chrome without changing the selected colors.</string>
     <string name="language">Language</string>
     <string name="language_system">System</string>
     <string name="language_english">English</string>
@@ -283,6 +285,7 @@
     <string name="diagnostics_sanitizer_title">Sanitizer</string>
     <string name="diagnostics_sanitizer_body">Remove IP addresses and other sensitive data from the log file before saving?</string>
     <string name="save_archive">Save archive</string>
+    <string name="save_without_sanitizing">Save without sanitizing</string>
     <string name="share_archive">Share</string>
     <string name="diagnostics_archive_saved">Archive saved.</string>
     <string name="diagnostics_archive_save_failed">Failed to save archive.</string>
@@ -423,6 +426,8 @@
     <string name="active_label">Active</string>
     <string name="delete_label">Delete</string>
     <string name="disable_label">Disable</string>
+    <string name="enable_label">Enable</string>
+    <string name="clear_data_action">Clear data</string>
     <string name="disabled_label">Disabled</string>
     <string name="edit_label">Edit</string>
     <string name="enabled_label">Enabled</string>
@@ -484,7 +489,7 @@
     <string name="settings_home_routing_summary">Rules, presets, and catalogs</string>
     <string name="settings_home_apps_summary">Rules for apps.</string>
     <string name="settings_home_sites_summary">Rules for sites</string>
-    <string name="settings_home_application_summary">Theme, language, startup, and protection</string>
+    <string name="settings_home_application_summary">Theme, transparency, language, startup, and protection</string>
     <string name="settings_home_help_summary">Help section</string>
     <string name="settings_home_about_summary">Build version, core, and licenses.</string>
     <string name="profile_editor_connection_section">Connection</string>

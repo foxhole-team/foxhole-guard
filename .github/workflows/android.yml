@@ -47,8 +47,8 @@ jobs:
       - name: verify wrapper
         run: ./gradlew --no-daemon --console=plain --version
 
-      - name: static analysis, lint, unit tests, and coverage
-        run: ./gradlew --no-daemon --console=plain --stacktrace detekt lintDebug lintRelease testDebugUnitTest jacocoDebugUnitTestReport jacocoDebugUnitTestCoverageVerification
+      - name: static analysis, release lint gate, unit tests, and coverage
+        run: ./gradlew --no-daemon --console=plain --stacktrace detekt lintDebug lintRelease lintVitalRelease testDebugUnitTest jacocoDebugUnitTestReport jacocoDebugUnitTestCoverageVerification
 
       - name: build connected and benchmark test artifacts
         run: ./gradlew --no-daemon --console=plain --stacktrace assembleDebug assembleDebugAndroidTest :macrobenchmark:assembleAndroidTest
@@ -64,65 +64,8 @@ jobs:
           go install github.com/zricethezav/gitleaks/v8@v8.24.2
           "$(go env GOPATH)/bin/gitleaks" dir . -c .gitleaks.toml --redact --no-banner
 
-      - name: dependency vulnerability scan
-        run: |
-          mkdir -p build/reports/security
-          OSV_VERSION="v2.3.5"
-          OSV_ASSET="osv-scanner_linux_amd64"
-          curl -fsSL -o "$RUNNER_TEMP/$OSV_ASSET" "https://github.com/google/osv-scanner/releases/download/$OSV_VERSION/$OSV_ASSET"
-          curl -fsSL -o "$RUNNER_TEMP/osv-scanner_SHA256SUMS" "https://github.com/google/osv-scanner/releases/download/$OSV_VERSION/osv-scanner_SHA256SUMS"
-          (
-            cd "$RUNNER_TEMP"
-            grep "  $OSV_ASSET\$" osv-scanner_SHA256SUMS | sha256sum -c -
-          )
-          chmod +x "$RUNNER_TEMP/$OSV_ASSET"
-          set +e
-          "$RUNNER_TEMP/$OSV_ASSET" scan source -r . \
-            --experimental-exclude app/build \
-            --experimental-exclude build \
-            --experimental-exclude output \
-            --experimental-exclude artifacts \
-            --experimental-exclude .tmp \
-            --experimental-exclude third_party/sing-box \
-            --format json \
-            --output-file build/reports/security/osv-source.json
-          scanner_status=$?
-          echo "osv-scanner exit code: $scanner_status"
-          set -e
-          python3 - <<'PY'
-          import json
-          import pathlib
-          import sys
-
-          report_path = pathlib.Path("build/reports/security/osv-source.json")
-          if not report_path.exists():
-              sys.exit("OSV report was not generated")
-          data = json.loads(report_path.read_text())
-          runtime_findings = []
-          build_metadata_findings = []
-          for result in data.get("results", []):
-              source_path = result.get("source", {}).get("path", "")
-              for package in result.get("packages", []):
-                  vulnerabilities = package.get("vulnerabilities", [])
-                  if not vulnerabilities:
-                      continue
-                  package_name = package.get("package", {}).get("name", "unknown")
-                  ids = ",".join(vulnerability.get("id", "unknown") for vulnerability in vulnerabilities)
-                  finding = f"{source_path}: {package_name} [{ids}]"
-                  if source_path.endswith("gradle/verification-metadata.xml"):
-                      build_metadata_findings.append(finding)
-                  else:
-                      runtime_findings.append(finding)
-          if build_metadata_findings:
-              print("Known build-tool metadata OSV findings:")
-              for finding in build_metadata_findings:
-                  print(f"- {finding}")
-          if runtime_findings:
-              print("Runtime/source dependency OSV findings:")
-              for finding in runtime_findings:
-                  print(f"- {finding}")
-              sys.exit(1)
-          PY
+      - name: mandatory dependency vulnerability scan
+        run: scripts/run-osv-source-scan.sh
 
       - name: upload reports
         if: always()

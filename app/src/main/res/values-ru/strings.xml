@@ -73,6 +73,8 @@
     <string name="theme_mode_system">Системные цвета</string>
     <string name="theme_mode_dark">Тёмная</string>
     <string name="theme_mode_light">Светлая</string>
+    <string name="transparency">Прозрачность</string>
+    <string name="transparency_summary">Использовать прозрачные панели интерфейса без смены выбранных цветов.</string>
     <string name="language">Язык</string>
     <string name="language_system">Системный</string>
     <string name="language_english">English</string>
@@ -287,6 +289,7 @@
     <string name="diagnostics_sanitizer_title">Санитайзер</string>
     <string name="diagnostics_sanitizer_body">Очистить лог файл перед сохранением от IP-адресов и прочих чувствительных данных?</string>
     <string name="save_archive">Сохранить архив</string>
+    <string name="save_without_sanitizing">Сохранить без очистки</string>
     <string name="share_archive">Поделиться</string>
     <string name="diagnostics_archive_saved">Архив сохранен.</string>
     <string name="diagnostics_archive_save_failed">Не удалось сохранить архив.</string>
@@ -433,6 +436,8 @@
     <string name="active_label">Активен</string>
     <string name="delete_label">Удалить</string>
     <string name="disable_label">Отключить</string>
+    <string name="enable_label">Включить</string>
+    <string name="clear_data_action">Очистить данные</string>
     <string name="disabled_label">Отключено</string>
     <string name="edit_label">Редактировать</string>
     <string name="enabled_label">Включено</string>
@@ -498,7 +503,7 @@
     <string name="settings_home_routing_summary">Правила, пресеты и каталоги</string>
     <string name="settings_home_apps_summary">Правила для приложений.</string>
     <string name="settings_home_sites_summary">Правила для сайтов</string>
-    <string name="settings_home_application_summary">Тема, язык, запуск и защита</string>
+    <string name="settings_home_application_summary">Тема, прозрачность, язык, запуск и защита</string>
     <string name="settings_home_help_summary">Раздел помощи</string>
     <string name="settings_home_about_summary">Версия сборки, ядро и лицензии.</string>
     <string name="profile_editor_connection_section">Подключение</string>

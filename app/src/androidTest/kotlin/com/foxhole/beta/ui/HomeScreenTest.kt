@@ -192,8 +192,8 @@ class HomeScreenTest {
         composeRule
             .onNodeWithText("${context.getString(R.string.delete_profile_summary)}\n\nSelection B")
             .assertIsDisplayed()
-        composeRule.onNodeWithText(context.getString(R.string.yes_label)).assertIsDisplayed()
-        composeRule.onNodeWithText(context.getString(R.string.no_label)).assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.delete_label)).assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.cancel)).assertIsDisplayed()
     }
 
     @Test

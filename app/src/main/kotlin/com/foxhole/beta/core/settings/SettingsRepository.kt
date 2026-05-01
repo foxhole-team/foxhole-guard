@@ -121,6 +121,9 @@ class SettingsRepository(
         update { it.copy(ui = it.ui.copy(locale = value)) }
     }
 
+    suspend fun updateTransparencyEnabled(value: Boolean) =
+        update { it.copy(ui = it.ui.copy(transparencyEnabled = value)) }
+
     suspend fun updateSupportBotHandleOverride(value: String?) =
         update {
             it.copy(
@@ -852,6 +855,7 @@ class SettingsRepository(
                 ui =
                     ui.copy(
                         themeMode = if (resetDefaults) ThemeMode.SYSTEM else ui.themeMode,
+                        transparencyEnabled = ui.transparencyEnabled,
                         onboardingCompleted = true,
                         showExpertSettings = ui.showExpertSettings && expert.unlockedAt != null,
                         supportBotHandleOverride = storedSupportBotHandleOverride(ui.supportBotHandleOverride),

@@ -55,7 +55,6 @@ import androidx.compose.material.icons.outlined.Speed
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material.icons.outlined.VpnKey
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -64,7 +63,6 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -566,7 +564,7 @@ fun ProfilesScreen(
             },
             confirmButton = {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    TextButton(
+                    FoxholeDialogConfirmButton(
                         onClick = {
                             val exportRequests = selectedExportRequests
                             scope.launch {
@@ -586,10 +584,10 @@ fun ProfilesScreen(
                             }
                         },
                         enabled = selectedExportRequests.isNotEmpty() && !exportInFlight,
-                    ) {
-                        Text(stringResource(R.string.profile_export_save_to_disk))
-                    }
-                    TextButton(
+                        label = stringResource(R.string.profile_export_save_to_disk),
+                    )
+                    FoxholeDialogSecondaryButton(
+                        label = stringResource(R.string.share_archive),
                         onClick = {
                             val exportRequests = selectedExportRequests
                             scope.launch {
@@ -619,15 +617,11 @@ fun ProfilesScreen(
                             }
                         },
                         enabled = selectedExportRequests.isNotEmpty() && !exportInFlight,
-                    ) {
-                        Text(stringResource(R.string.share_archive))
-                    }
-                    TextButton(
+                    )
+                    FoxholeDialogDismissButton(
                         onClick = { exportDestinationDialogVisible = false },
                         enabled = !exportInFlight,
-                    ) {
-                        Text(stringResource(R.string.cancel))
-                    }
+                    )
                 }
             },
             dismissButton = {},
@@ -645,11 +639,11 @@ fun ProfilesScreen(
                 } else {
                     "$deleteSummary\n\n$profileName"
                 },
-            confirmLabel = stringResource(R.string.yes_label),
+            confirmLabel = stringResource(R.string.delete_label),
             icon = Icons.Outlined.Delete,
             iconTint = MaterialTheme.colorScheme.error,
             iconContainerColor = MaterialTheme.colorScheme.error.copy(alpha = 0.12f),
-            dismissLabel = stringResource(R.string.no_label),
+            dismissLabel = stringResource(R.string.cancel),
             onDismiss = { deleteProfileId = null },
             onConfirm = {
                 onDeleteProfile(profileId)

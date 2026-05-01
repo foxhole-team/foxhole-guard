@@ -166,6 +166,7 @@ enum class RoutingRuleAction(val outboundTag: String) {
 data class UiSettings(
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
     val locale: AppLocale = AppLocale.SYSTEM,
+    val transparencyEnabled: Boolean = true,
     val onboardingCompleted: Boolean = true,
     val showExpertSettings: Boolean = false,
     val supportBotHandleOverride: String? = null,

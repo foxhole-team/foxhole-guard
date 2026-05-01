@@ -1166,9 +1166,9 @@ fun HomeScreen(
         ConfirmDialog(
             title = stringResource(R.string.lan_proxy_disable_confirm_title),
             body = stringResource(R.string.lan_proxy_disable_confirm_body),
-            confirmLabel = stringResource(R.string.yes_label),
+            confirmLabel = stringResource(R.string.disable_label),
             icon = Icons.Outlined.Public,
-            dismissLabel = stringResource(R.string.no_label),
+            dismissLabel = stringResource(R.string.cancel),
             onDismiss = { lanProxyDisableConfirmationVisible = false },
             onConfirm = {
                 lanProxyDisableConfirmationVisible = false

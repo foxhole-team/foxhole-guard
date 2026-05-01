@@ -286,6 +286,15 @@ class HomeViewModel(
 
     val themeMode: StateFlow<ThemeMode> = container.settingsRepository.themeMode
 
+    val transparencyEnabled: StateFlow<Boolean> =
+        uiState
+            .map { it.settings.ui.transparencyEnabled }
+            .stateIn(
+                viewModelScope,
+                SharingStarted.WhileSubscribed(5_000),
+                initialSettings.ui.transparencyEnabled,
+            )
+
     val secureScreenEnabled: StateFlow<Boolean> =
         uiState
             .map { it.settings.expert.blockScreenshots }
@@ -788,6 +797,8 @@ class HomeViewModel(
     fun onThemeSelected(value: ThemeMode) = onThemeSelectedInternal(value)
 
     fun onLocaleSelected(value: AppLocale) = onLocaleSelectedInternal(value)
+
+    fun onTransparencyChanged(value: Boolean) = onTransparencyChangedInternal(value)
 
     fun onSupportBotHandleChanged(value: String?) = onSupportBotHandleChangedInternal(value)
 

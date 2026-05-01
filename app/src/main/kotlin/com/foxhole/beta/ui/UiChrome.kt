@@ -53,6 +53,7 @@ import androidx.compose.material.icons.outlined.KeyboardArrowDown
 import androidx.compose.material.icons.outlined.KeyboardArrowUp
 import androidx.compose.material.icons.outlined.Save
 import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
@@ -61,6 +62,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarData
@@ -137,7 +139,6 @@ internal val FoxholePositiveAccent = Color(0xFF2F9E6A)
 internal val FoxholeInfoAccent = Color(0xFF6288AE)
 internal val FoxholeWarningAccent = Color(0xFFE0B84A)
 private val FoxholeErrorAccent = Color(0xFFC63C3C)
-private const val FoxholeTopBarContainerAlpha = 0.90f
 
 @Composable
 internal fun foxholeSystemAwareAccentColor(
@@ -185,7 +186,8 @@ internal fun FoxholeScaffold(
     bannerTopPadding: Dp = ScreenVerticalPadding,
     content: @Composable (PaddingValues) -> Unit,
 ) {
-    val topBarContainerColor = MaterialTheme.colorScheme.background.copy(alpha = FoxholeTopBarContainerAlpha)
+    val uiPalette = LocalFoxholeUiPalette.current
+    val topBarContainerColor = MaterialTheme.colorScheme.background.copy(alpha = uiPalette.chromeContainerAlpha)
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
@@ -729,14 +731,51 @@ internal fun FoxholeDialogTitle(
 @Composable
 internal fun FoxholeDialogConfirmButton(
     onClick: () -> Unit,
+    modifier: Modifier = Modifier,
     enabled: Boolean = true,
     label: String? = null,
 ) {
-    TextButton(
+    Button(
         onClick = onClick,
         enabled = enabled,
+        modifier = modifier,
+        shape = MaterialTheme.shapes.medium,
     ) {
         Text(label ?: stringResource(R.string.save))
+    }
+}
+
+@Composable
+internal fun FoxholeDialogDismissButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    label: String? = null,
+) {
+    OutlinedButton(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = modifier,
+        shape = MaterialTheme.shapes.medium,
+    ) {
+        Text(label ?: stringResource(R.string.cancel))
+    }
+}
+
+@Composable
+internal fun FoxholeDialogSecondaryButton(
+    label: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+) {
+    OutlinedButton(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = modifier,
+        shape = MaterialTheme.shapes.medium,
+    ) {
+        Text(label)
     }
 }
 

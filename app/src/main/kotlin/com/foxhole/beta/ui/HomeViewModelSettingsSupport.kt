@@ -58,6 +58,12 @@ internal fun HomeViewModel.onLocaleSelectedInternal(value: AppLocale) {
     }
 }
 
+internal fun HomeViewModel.onTransparencyChangedInternal(value: Boolean) {
+    viewModelScope.launch {
+        container.settingsRepository.updateTransparencyEnabled(value)
+    }
+}
+
 internal fun HomeViewModel.onSupportBotHandleChangedInternal(value: String?) {
     viewModelScope.launch {
         container.settingsRepository.updateSupportBotHandleOverride(value)

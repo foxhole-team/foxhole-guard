@@ -7,18 +7,19 @@ import android.os.Build
 import android.os.Bundle
 import android.view.WindowManager
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.core.content.ContextCompat
-import androidx.activity.viewModels
 import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.foxhole.beta.ui.FoxholeApp
 import com.foxhole.beta.ui.FoxholeBannerAction
 import com.foxhole.beta.ui.FoxholeBannerHapticGate
@@ -43,6 +44,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
         applySecureScreenPolicy(homeViewModel.secureScreenEnabled.value)
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
@@ -51,6 +53,7 @@ class MainActivity : AppCompatActivity() {
         }
         setContent {
             val themeMode = homeViewModel.themeMode.collectAsStateWithLifecycle()
+            val transparencyEnabled = homeViewModel.transparencyEnabled.collectAsStateWithLifecycle()
             val snackbarHostState = remember { SnackbarHostState() }
             val snackbarHapticGate = remember { FoxholeBannerHapticGate() }
             vpnPermissionResult = homeViewModel::onVpnPermissionResult
@@ -87,7 +90,10 @@ class MainActivity : AppCompatActivity() {
                 }
             }
 
-            FoxholeTheme(themeMode = themeMode.value) {
+            FoxholeTheme(
+                themeMode = themeMode.value,
+                transparencyEnabled = transparencyEnabled.value,
+            ) {
                 FoxholeApp(
                     viewModel = homeViewModel,
                     snackbarHostState = snackbarHostState,

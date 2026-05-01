@@ -60,7 +60,6 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.State
@@ -832,9 +831,7 @@ internal fun <T> EnumChoiceDialog(
         },
         confirmButton = {},
         dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text(stringResource(R.string.cancel))
-            }
+            FoxholeDialogDismissButton(onClick = onDismiss)
         },
     )
 }
@@ -870,7 +867,7 @@ internal fun IntValueDialog(
             )
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
+            FoxholeDialogDismissButton(onClick = onDismiss)
         },
     )
 }
@@ -907,7 +904,7 @@ internal fun TextValueDialog(
             )
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
+            FoxholeDialogDismissButton(onClick = onDismiss)
         },
     )
 }
@@ -963,44 +960,46 @@ internal fun ConfirmDialog(
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     dismissLabel?.let { label ->
-                        OutlinedButton(
+                        FoxholeDialogDismissButton(
                             onClick = onDismiss,
                             modifier = Modifier.testTag("confirm_dialog_dismiss_button"),
-                        ) {
-                            Text(label)
-                        }
+                            label = label,
+                        )
                     }
                     if (secondaryLabel != null && onSecondary != null) {
-                        OutlinedButton(
+                        FoxholeDialogSecondaryButton(
+                            label = secondaryLabel,
                             onClick = onSecondary,
                             modifier = Modifier.testTag("confirm_dialog_secondary_button"),
-                        ) {
-                            Text(secondaryLabel)
-                        }
+                        )
                     }
-                    Button(
+                    FoxholeDialogConfirmButton(
                         onClick = onConfirm,
                         modifier = Modifier.testTag("confirm_dialog_confirm_button"),
-                    ) {
-                        Text(confirmLabel)
-                    }
+                        label = confirmLabel,
+                    )
                 }
             } else {
-                TextButton(
+                FoxholeDialogConfirmButton(
                     onClick = onConfirm,
                     modifier = Modifier.testTag("confirm_dialog_confirm_button"),
-                ) {
-                    Text(confirmLabel)
-                }
+                    label = confirmLabel,
+                )
             }
         },
         dismissButton = {
             if (!prominentActions) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     if (secondaryLabel != null && onSecondary != null) {
-                        TextButton(onClick = onSecondary) { Text(secondaryLabel) }
+                        FoxholeDialogSecondaryButton(
+                            label = secondaryLabel,
+                            onClick = onSecondary,
+                        )
                     }
-                    TextButton(onClick = onDismiss) { Text(dismissLabel ?: stringResource(R.string.cancel)) }
+                    FoxholeDialogDismissButton(
+                        onClick = onDismiss,
+                        label = dismissLabel,
+                    )
                 }
             }
         },

@@ -64,7 +64,6 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -270,9 +269,9 @@ fun SettingsHomeScreen(
         ConfirmDialog(
             title = stringResource(R.string.expert_unlock_confirm_title),
             body = stringResource(R.string.expert_unlock_confirm_body),
-            confirmLabel = stringResource(R.string.yes_label),
+            confirmLabel = stringResource(R.string.enable_label),
             icon = Icons.Outlined.Shield,
-            dismissLabel = stringResource(R.string.no_label),
+            dismissLabel = stringResource(R.string.cancel),
             dismissOnBackPress = false,
             dismissOnClickOutside = false,
             onDismiss = {
@@ -474,11 +473,11 @@ fun SmartStartSettingsScreen(
         ConfirmDialog(
             title = stringResource(R.string.smart_start_clear_data_confirm_title),
             body = stringResource(R.string.smart_start_clear_data_confirm_body),
-            confirmLabel = stringResource(R.string.yes_label),
+            confirmLabel = stringResource(R.string.clear_data_action),
             icon = Icons.Outlined.Delete,
             iconTint = MaterialTheme.colorScheme.error,
             iconContainerColor = MaterialTheme.colorScheme.error.copy(alpha = 0.12f),
-            dismissLabel = stringResource(R.string.no_label),
+            dismissLabel = stringResource(R.string.cancel),
             onDismiss = { clearSmartStartDialogVisible = false },
             onConfirm = {
                 clearSmartStartDialogVisible = false
@@ -581,12 +580,14 @@ private fun openTelegramChannel(context: Context): Boolean {
     }
 }
 
+@Suppress("CyclomaticComplexMethod", "LongMethod", "LongParameterList")
 @Composable
 fun TrafficSettingsScreen(
     title: String,
     state: SettingsRouteUiState,
     snackbarHostState: SnackbarHostState,
     onNavigateUp: () -> Unit,
+    onAcknowledgeUnsafeWarning: () -> Unit,
     onTrafficModeSelected: (TrafficMode) -> Unit,
     onLatencyProbeMethodSelected: (LatencyProbeMethod) -> Unit,
     onTunStackSelected: (TunStack) -> Unit,
@@ -599,6 +600,7 @@ fun TrafficSettingsScreen(
     onMtuChanged: (Int) -> Unit,
     onPreferIpv6Changed: (Boolean) -> Unit,
     onDomainStrategySelected: (DomainStrategy) -> Unit,
+    onBypassLanChanged: (Boolean) -> Unit,
     onAutoRefreshSubscriptionsChanged: (Boolean) -> Unit,
     onSubscriptionRefreshIntervalSelected: (SubscriptionRefreshInterval) -> Unit,
     onIpInfoEndpointChanged: (String) -> Unit,
@@ -613,6 +615,8 @@ fun TrafficSettingsScreen(
     var domainMenuExpanded by rememberSaveable { mutableStateOf(false) }
     var subscriptionRefreshIntervalMenuExpanded by rememberSaveable { mutableStateOf(false) }
     var endpointDialog by rememberSaveable { mutableStateOf(false) }
+    var showWarning by rememberSaveable { mutableStateOf(false) }
+    var pendingUnsafeAction by remember { mutableStateOf<(() -> Unit)?>(null) }
     val wifiLanAddress by rememberWifiLanAddress()
     val tunnelModeLabel = stringResource(R.string.traffic_mode_tunnel)
     val proxyModeLabel = stringResource(R.string.traffic_mode_proxy)
@@ -630,6 +634,14 @@ fun TrafficSettingsScreen(
             LatencyProbeMethod.HTTP -> pingHttpLabel
             LatencyProbeMethod.ICMP -> pingIcmpLabel
             LatencyProbeMethod.TCP -> pingTcpLabel
+        }
+    }
+    fun requireWarning(action: () -> Unit) {
+        if (state.settings.expert.warningAcknowledgedAt != null) {
+            action()
+        } else {
+            pendingUnsafeAction = action
+            showWarning = true
         }
     }
 
@@ -765,6 +777,22 @@ fun TrafficSettingsScreen(
         }
         item {
             SettingSwitchRow(
+                title = stringResource(R.string.bypass_lan),
+                checked = state.settings.expert.bypassLan,
+                summary = stringResource(R.string.bypass_lan_summary),
+                leadingIcon = Icons.Outlined.Router,
+                onCheckedChange = { enabled ->
+                    if (enabled) {
+                        requireWarning { onBypassLanChanged(true) }
+                    } else {
+                        onBypassLanChanged(false)
+                    }
+                },
+                summaryMaxLines = 3,
+            )
+        }
+        item {
+            SettingSwitchRow(
                 title = stringResource(R.string.auto_refresh_subscriptions_title),
                 checked = state.settings.connection.autoRefreshSubscriptions,
                 leadingIcon = Icons.Outlined.Refresh,
@@ -869,6 +897,26 @@ fun TrafficSettingsScreen(
             onConfirm = onIpInfoEndpointChanged,
         )
     }
+
+    if (showWarning) {
+        ConfirmDialog(
+            title = stringResource(R.string.expert_warning_title),
+            body = stringResource(R.string.expert_warning_body),
+            confirmLabel = stringResource(R.string.i_understand),
+            icon = Icons.Outlined.Shield,
+            dismissLabel = stringResource(R.string.cancel),
+            onDismiss = {
+                showWarning = false
+                pendingUnsafeAction = null
+            },
+            onConfirm = {
+                onAcknowledgeUnsafeWarning()
+                pendingUnsafeAction?.invoke()
+                showWarning = false
+                pendingUnsafeAction = null
+            },
+        )
+    }
 }
 
 @Suppress("CyclomaticComplexMethod", "LongMethod")
@@ -879,6 +927,7 @@ fun ApplicationSettingsScreen(
     onNavigateUp: () -> Unit,
     onThemeSelected: (ThemeMode) -> Unit,
     onLocaleSelected: (AppLocale) -> Unit,
+    onTransparencyChanged: (Boolean) -> Unit,
     onAutoReconnectChanged: (Boolean) -> Unit,
     onAutoStartChanged: (Boolean) -> Unit,
     onBlockScreenshotsChanged: (Boolean) -> Unit,
@@ -932,6 +981,16 @@ fun ApplicationSettingsScreen(
                 onSelect = onThemeSelected,
                 leadingIcon = Icons.Outlined.Tune,
                 optionIcon = ::themeModeIcon,
+            )
+        }
+        item {
+            SettingSwitchRow(
+                title = stringResource(R.string.transparency),
+                checked = state.settings.ui.transparencyEnabled,
+                summary = stringResource(R.string.transparency_summary),
+                leadingIcon = Icons.Outlined.BrightnessAuto,
+                onCheckedChange = onTransparencyChanged,
+                summaryMaxLines = 2,
             )
         }
         item {
@@ -1056,7 +1115,7 @@ fun ApplicationSettingsScreen(
             body = stringResource(R.string.reset_application_settings_confirm_body),
             confirmLabel = stringResource(R.string.reset_application_settings_confirm_action),
             icon = Icons.Outlined.Refresh,
-            dismissLabel = stringResource(R.string.no_label),
+            dismissLabel = stringResource(R.string.cancel),
             onDismiss = { resetApplicationDialogVisible = false },
             onConfirm = {
                 resetApplicationDialogVisible = false

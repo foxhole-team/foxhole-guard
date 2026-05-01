@@ -16,7 +16,6 @@ import androidx.compose.material.icons.outlined.FileDownload
 import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -25,7 +24,6 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -158,7 +156,7 @@ internal fun ProxySurfaceDialog(
             )
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
+            FoxholeDialogDismissButton(onClick = onDismiss)
         },
     )
 }
@@ -215,7 +213,7 @@ internal fun ClashApiDialog(
             )
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
+            FoxholeDialogDismissButton(onClick = onDismiss)
         },
     )
 }
@@ -253,7 +251,7 @@ internal fun PresetDialog(
             FoxholeDialogConfirmButton(onClick = { onConfirm(name, overrideMode, enabled) })
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
+            FoxholeDialogDismissButton(onClick = onDismiss)
         },
     )
 
@@ -337,7 +335,7 @@ internal fun RuleEditorDialog(
             )
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
+            FoxholeDialogDismissButton(onClick = onDismiss)
         },
     )
 
@@ -374,7 +372,7 @@ internal fun CatalogDialog(
             FoxholeDialogConfirmButton(onClick = { onConfirm(name, url) })
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
+            FoxholeDialogDismissButton(onClick = onDismiss)
         },
     )
 }
@@ -420,7 +418,10 @@ internal fun CatalogPreviewDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(R.string.close)) }
+            FoxholeDialogDismissButton(
+                onClick = onDismiss,
+                label = stringResource(R.string.close),
+            )
         },
     )
 }

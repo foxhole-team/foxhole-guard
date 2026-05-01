@@ -4,6 +4,13 @@ pluginManagement {
         maven("https://maven.google.com")
         gradlePluginPortal()
     }
+    resolutionStrategy {
+        eachPlugin {
+            if (requested.id.id == "io.gitlab.arturbosch.detekt") {
+                useModule("io.gitlab.arturbosch.detekt:detekt-gradle-plugin:${requested.version}")
+            }
+        }
+    }
 }
 
 dependencyResolutionManagement {
