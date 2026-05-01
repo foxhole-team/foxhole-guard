@@ -2,7 +2,7 @@ plugins {
     id("com.android.test")
 }
 
-val targetPackageName = providers.gradleProperty("macrobenchmark.targetPackage").orElse("com.foxhole.beta.debug")
+val targetPackageName = providers.gradleProperty("macrobenchmark.targetPackage").orElse("com.foxhole.beta.debug").get()
 
 android {
     namespace = "com.foxhole.beta.macrobenchmark"
