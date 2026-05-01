@@ -189,9 +189,11 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         stopTrafficUpdates()
         stopGeoRefresh()
         stopNotificationHealthMonitoring()
+        cancelScheduledAutoReconnect(resetAttempts = true)
         validationJob?.cancel()
         validationJob = null
         runCatching { kotlinx.coroutines.runBlocking { runtime.stop() } }
+        releaseRuntimeWakeLock()
         scope.cancel()
         if (networkCallbackRegistered) {
             runCatching { connectivityManager.unregisterNetworkCallback(networkCallback) }
@@ -295,6 +297,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
             registerNetworkCallbackIfNeeded()
         }
         registerDefaultNetworkCallbackIfNeeded()
+        acquireRuntimeWakeLock()
         startNotificationHealthMonitoring()
         val result = runtime.start(session, this)
         if (!currentCoroutineContext().isActive) {
@@ -345,6 +348,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         stopTrafficUpdates()
         stopGeoRefresh()
         stopNotificationHealthMonitoring()
+        cancelScheduledAutoReconnect(resetAttempts = true)
         validationJob?.cancel()
         validationJob = null
         container.diagnosticsLogger.recordStructured(
@@ -355,6 +359,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
             message?.takeIf(String::isNotBlank)?.let { "reason=$it" },
         )
         runtime.stop()
+        releaseRuntimeWakeLock()
         activeSession = null
         container.connectionController.clearAppliedRuntime()
         FoxholeVpnRuntimeBridge.updateTraffic(trafficSampler.reset())
@@ -587,57 +592,6 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
                 container.diagnosticsLogger.record("ip", "ipv4 enriched")
                 launch(Dispatchers.Main.immediate) { updateNotification() }
             }
-    }
-
-    internal fun startNotificationHealthMonitoring() {
-        stopNotificationHealthMonitoring()
-        updateNotificationConnectivityHealth(
-            state = ConnectivityHealthState.CHECKING,
-            resetFailures = true,
-            force = true,
-        )
-        notificationHealthJob =
-            scope.launch(Dispatchers.IO) {
-                while (isActive) {
-                    val session = activeSession
-                    val connectionState = FoxholeVpnRuntimeBridge.snapshot.value.state
-                    if (session == null || connectionState !in NOTIFICATION_HEALTH_PROBE_STATES) {
-                        updateNotificationConnectivityHealth(
-                            state = ConnectivityHealthState.CHECKING,
-                            resetFailures = true,
-                        )
-                        delay(RuntimeUpdatePolicy.notificationHealthProbeIntervalMs(notificationConnectivityHealthState))
-                        continue
-                    }
-                    if (!defaultNetworkAvailable) {
-                        markNotificationConnectivityOffline()
-                        delay(RuntimeUpdatePolicy.notificationHealthProbeIntervalMs(notificationConnectivityHealthState))
-                        continue
-                    }
-                    val probeSucceeded = runNotificationConnectivityProbe()
-                    if (probeSucceeded) {
-                        updateNotificationConnectivityHealth(
-                            state = ConnectivityHealthState.ONLINE,
-                            resetFailures = true,
-                        )
-                    } else {
-                        consecutiveNotificationHealthFailures += 1
-                        if (consecutiveNotificationHealthFailures >= NOTIFICATION_HEALTH_FAILURE_THRESHOLD) {
-                            markNotificationConnectivityOffline()
-                        } else if (notificationConnectivityHealthState != ConnectivityHealthState.ONLINE) {
-                            updateNotificationConnectivityHealth(ConnectivityHealthState.CHECKING)
-                        }
-                    }
-                    delay(RuntimeUpdatePolicy.notificationHealthProbeIntervalMs(notificationConnectivityHealthState))
-                }
-            }
-    }
-
-    internal fun stopNotificationHealthMonitoring() {
-        notificationHealthJob?.cancel()
-        notificationHealthJob = null
-        consecutiveNotificationHealthFailures = 0
-        notificationConnectivityHealthState = ConnectivityHealthState.CHECKING
     }
 
     internal suspend fun refreshVpnIpInfo(

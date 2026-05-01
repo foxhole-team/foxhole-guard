@@ -93,13 +93,13 @@
     <string name="quick_settings_tile_not_added">Quick Settings tile was not added.</string>
     <string name="quick_settings_tile_unavailable">Open Quick Settings edit mode and add the Foxhole tile manually.</string>
     <string name="export_diagnostics">Export logs</string>
-    <string name="export_diagnostics_summary">Creates a log archive without IPs or configs.</string>
+    <string name="export_diagnostics_summary">Saves the log file to device storage.</string>
     <string name="export_diagnostics_share_subject">Foxhole logs</string>
     <string name="export_diagnostics_share_text">Sanitized Foxhole archive for debugging and support.</string>
     <string name="clipboard_empty">Clipboard is empty</string>
     <string name="profile_not_refreshable">This profile cannot be refreshed</string>
     <string name="profile_refreshed">Profile updated</string>
-    <string name="profile_refreshed_reconnecting">Profile updated. Reconnecting</string>
+    <string name="profile_refreshed_reconnecting">Profile updated. Connecting</string>
     <string name="profile_refresh_failed">Could not update profile</string>
     <string name="profile_refresh_details_in_diagnostics">Details are available in diagnostics</string>
     <string name="settings_secure_storage_failed">Settings could not be loaded. Reset app data.</string>
@@ -266,15 +266,21 @@
     <string name="support_bot_open_failed">Failed to open the Telegram bot.</string>
     <string name="support_bot_saved">Support Telegram bot address updated.</string>
     <string name="support_bot_browser_fallback">Telegram is not installed.</string>
-    <string name="support_bot_diagnostics_summary">Send a sanitized archive to our Telegram bot for diagnostics.</string>
+    <string name="support_bot_title">Support</string>
+    <string name="support_bot_diagnostics_summary">If needed, you can send us a Foxhole core log for debugging. The archive does not contain your IP addresses or configurations.</string>
+    <string name="support_bot_diagnostics_instructions">Before the first upload, press Start in the bot, then choose Send log file and select Foxhole support as the recipient.</string>
     <string name="support_bot_settings_button">Bot settings</string>
     <string name="support_bot_settings_dialog_title">Support Telegram bot settings</string>
     <string name="support_bot_settings_summary">Enter a new support Telegram bot address if the old one is no longer available and we announced it in our channel.</string>
     <string name="support_bot_handle_label">Bot Address</string>
     <string name="support_bot_invalid_handle">Only Telegram handles in the @name_bot format are accepted.</string>
     <string name="support_bot_share_text">Send this archive to %1$s.\n\nIf the correct chat is not opened automatically, use %2$s.</string>
-    <string name="send_log_to_bot">Send Log</string>
+    <string name="send_log_to_bot">Send log file</string>
+    <string name="write_to_support">Write to support</string>
+    <string name="support_bot_current">Current Foxhole support bot: %1$s</string>
     <string name="send_log_to_bot_confirm_body">This archive contains technical logs only for debugging and support. Foxhole does not export your IP addresses or configurations. The archive includes app/core version, Android/API, CPU ABI, theme, language, and runtime modes without deanonymizing the user.</string>
+    <string name="diagnostics_sanitizer_title">Sanitizer</string>
+    <string name="diagnostics_sanitizer_body">Remove IP addresses and other sensitive data from the log file before saving?</string>
     <string name="save_archive">Save archive</string>
     <string name="share_archive">Share</string>
     <string name="diagnostics_archive_saved">Archive saved.</string>
@@ -465,7 +471,7 @@
     <string name="proxy_mode_firefox_hint">With local proxy auth enabled, Firefox works through the FoxyProxy extension.</string>
     <string name="routing_info_body">App and site rules work on top of the current profile.</string>
     <string name="routing_apps_info_body">Choose how selected apps use Tunnel.</string>
-    <string name="diagnostics_info_body">Statistics stay on this device.</string>
+    <string name="diagnostics_info_body">Logs and traffic statistics stay on this device unless you explicitly save or share a log file.</string>
     <string name="settings_home_network_summary">Connection modes</string>
     <string name="settings_home_routing_summary">Rules, presets, and catalogs</string>
     <string name="settings_home_apps_summary">Rules for apps.</string>
@@ -511,7 +517,7 @@
     <string name="profile_editor_path">Path</string>
     <string name="profile_editor_service_name">Service name</string>
     <string name="settings_home_advanced_summary">DNS, local interfaces, and overrides.</string>
-    <string name="settings_home_diagnostics_summary">Logs, export, and statistics.</string>
+    <string name="settings_home_diagnostics_summary">Logs, statistics, and support.</string>
     <string name="home_proxy_title">Proxy</string>
     <string name="home_lan_proxy_title">LAN Proxy</string>
     <string name="home_lan_proxy_tag">LAN Proxy</string>
@@ -554,6 +560,4 @@
     <string name="site_action_proxy">Proxy</string>
     <string name="site_action_direct">Direct</string>
     <string name="site_action_block">Block</string>
-    <string name="profile_refresh_notification_channel_name">Profile updates</string>
-    <string name="profile_refresh_notification_channel_description">Connection profile refresh results.</string>
 </resources>

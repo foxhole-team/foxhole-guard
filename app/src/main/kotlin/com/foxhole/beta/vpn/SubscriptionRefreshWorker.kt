@@ -6,7 +6,6 @@ import androidx.work.WorkerParameters
 import com.foxhole.beta.FoxholeApplication
 import com.foxhole.beta.FoxholeRefreshWorkerDependencies
 import com.foxhole.beta.core.model.ProfileSourceType
-import com.foxhole.beta.core.notifications.ProfileRefreshResultNotifier
 import kotlinx.coroutines.flow.first
 
 class SubscriptionRefreshWorker(
@@ -32,22 +31,11 @@ class SubscriptionRefreshWorker(
                             "worker",
                             "scheduled refresh succeeded for ${refreshedProfile.name}",
                         )
-                        ProfileRefreshResultNotifier.showSuccess(
-                            context = applicationContext,
-                            profileId = refreshedProfile.id,
-                            profileName = refreshedProfile.name,
-                        )
                     }
                     .onFailure { error ->
                         if (isRetryableScheduledRefreshFailure(error)) {
                             retryableFailures += 1
                         }
-                        ProfileRefreshResultNotifier.showFailure(
-                            context = applicationContext,
-                            profileId = profile.id,
-                            profileName = profile.name,
-                            details = error.message,
-                        )
                         dependencies.diagnosticsLogger.record(
                             "worker",
                             "scheduled refresh failed for ${profile.name}: ${error.message ?: error.javaClass.simpleName}",

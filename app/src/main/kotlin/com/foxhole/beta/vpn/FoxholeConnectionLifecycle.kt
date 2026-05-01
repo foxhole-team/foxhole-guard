@@ -9,6 +9,7 @@ import com.foxhole.beta.core.model.ConnectionState
 import com.foxhole.beta.core.model.Profile
 import com.foxhole.beta.core.model.TrafficMode
 import com.foxhole.beta.core.settings.SettingsRepository
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 
@@ -33,6 +34,7 @@ internal class FoxholeConnectionLifecycle(
         val settings = settingsRepository.current()
         val runtimeProtocolOption = profile.runtimeProtocolOption(protocolOptionId)
         if (snapshot.value.state !in ACTIVE_CONNECTION_STATES) {
+            disconnectStaleVpnBeforeConnectIfNeeded()
             FoxholeConnectionServiceContract.stopAllServices(context)
         }
         diagnosticsLogger.record("connection", "connect requested")
@@ -56,6 +58,25 @@ internal class FoxholeConnectionLifecycle(
             protocolOptionId = protocolOptionId,
             previousVpnNetworkHandle = previousVpnNetworkHandle,
         )
+    }
+
+    private suspend fun disconnectStaleVpnBeforeConnectIfNeeded() {
+        if (!hasActiveVpnNetwork()) {
+            return
+        }
+        diagnosticsLogger.record("connection", "stale vpn network found before connect; disconnecting")
+        FoxholeConnectionServiceContract.startForegroundService(
+            context = context,
+            mode = TrafficMode.TUNNEL,
+            action = FoxholeConnectionServiceContract.ACTION_DISCONNECT,
+        )
+        val deadline = System.currentTimeMillis() + STALE_VPN_DISCONNECT_TIMEOUT_MS
+        while (hasActiveVpnNetwork() && System.currentTimeMillis() < deadline) {
+            delay(STALE_VPN_DISCONNECT_POLL_MS)
+        }
+        if (hasActiveVpnNetwork()) {
+            diagnosticsLogger.record("connection", "stale vpn network still active before connect")
+        }
     }
 
     fun disconnect() {
@@ -121,6 +142,9 @@ internal class FoxholeConnectionLifecycle(
         return true
     }
 }
+
+private const val STALE_VPN_DISCONNECT_TIMEOUT_MS = 10_000L
+private const val STALE_VPN_DISCONNECT_POLL_MS = 250L
 
 private fun Profile.runtimeProtocolOption(protocolOptionId: String?) =
     protocolOptionId

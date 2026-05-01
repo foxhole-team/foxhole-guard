@@ -148,24 +148,32 @@ class DiagnosticsLogger(
         }
     }
 
-    fun snapshotForExport(): String {
+    fun snapshotForExport(sanitize: Boolean = true): String {
         val now = nowProvider()
         val retention = currentRetention()
-        val snapshot = prune(sessionStore.loadRecentEntries(now, retention), now, retention)
-        entriesMutable.value = snapshot
+        val snapshot =
+            if (sanitize) {
+                prune(sessionStore.loadRecentEntries(now, retention), now, retention)
+            } else {
+                prune(entriesMutable.value, now, retention)
+            }
+        if (sanitize) {
+            entriesMutable.value = snapshot
+        }
         return formatDiagnosticsExport(
             metadata = diagnosticsExportMetadata(retention),
             entries = snapshot,
             formatter = formatter,
+            sanitizeMessages = sanitize,
         )
     }
 
-    fun createExportFile(): File {
+    fun createExportFile(sanitize: Boolean = true): File {
         cleanupExpiredExports()
         val targetDir = File(context.cacheDir, EXPORT_DIR_NAME).apply { mkdirs() }
         val targetFile = File(targetDir, "foxhole-diagnostics-${UUID.randomUUID()}.log.gz")
         GZIPOutputStream(targetFile.outputStream().buffered()).bufferedWriter(Charsets.UTF_8).use { writer ->
-            writer.write(snapshotForExport())
+            writer.write(snapshotForExport(sanitize = sanitize))
         }
         scheduleCleanup()
         return targetFile

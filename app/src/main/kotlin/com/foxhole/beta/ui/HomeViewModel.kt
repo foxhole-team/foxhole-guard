@@ -985,7 +985,7 @@ class HomeViewModel(
         action: RoutingRuleAction,
     ) = saveSiteRuleInternal(ruleId, domains, action)
 
-    fun createDiagnosticsArchive(): File = createDiagnosticsArchiveInternal()
+    fun createDiagnosticsArchive(sanitize: Boolean = true): File = createDiagnosticsArchiveInternal(sanitize = sanitize)
 
     fun exportDiagnostics(file: File = createDiagnosticsArchive()): Intent = exportDiagnosticsInternal(file)
 

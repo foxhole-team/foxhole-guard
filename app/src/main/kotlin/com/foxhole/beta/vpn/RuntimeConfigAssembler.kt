@@ -70,14 +70,19 @@ class RuntimeConfigAssembler(
                 add(patchedTun)
                 buildLocalSurfaceInbounds(settings.expert.localSurfaces).forEach(::add)
             }
-        val patchedDns = patchDns(base["dns"]?.jsonObject, settings.traffic, privateDnsMode)
-        val patchedRoute = patchRoute(base["route"]?.jsonObject, patchedDns, activePreset, settings.expert)
-        val patchedExperimental = patchExperimental(base["experimental"]?.jsonObject, settings.expert.localSurfaces)
+        val runtimeBase = base.withTcpReliabilityOutbounds()
+        val patchedDns = patchDns(runtimeBase["dns"]?.jsonObject, settings.traffic, privateDnsMode)
+        val patchedRoute = patchRoute(runtimeBase["route"]?.jsonObject, patchedDns, activePreset, settings.expert)
+        val patchedExperimental =
+            patchExperimental(
+                runtimeBase["experimental"]?.jsonObject,
+                settings.expert.localSurfaces,
+            )
 
         return json.encodeToString(
             JsonObject.serializer(),
             buildJsonObject {
-                base.forEach { (key, value) ->
+                runtimeBase.forEach { (key, value) ->
                     when (key) {
                         "inbounds" -> put(key, inbounds)
                         "dns" -> put(key, patchedDns)
@@ -90,13 +95,13 @@ class RuntimeConfigAssembler(
                         else -> put(key, value)
                     }
                 }
-                if (!base.containsKey("log")) {
+                if (!runtimeBase.containsKey("log")) {
                     putJsonObject("log") {
                         put("level", FOXHOLE_RUNTIME_LOG_LEVEL)
                         put("timestamp", true)
                     }
                 }
-                if (!base.containsKey("experimental") && patchedExperimental.isNotEmpty()) {
+                if (!runtimeBase.containsKey("experimental") && patchedExperimental.isNotEmpty()) {
                     put("experimental", patchedExperimental)
                 }
             },
@@ -116,14 +121,15 @@ class RuntimeConfigAssembler(
             buildJsonArray {
                 buildLocalSurfaceInbounds(localSurfaces).forEach(::add)
             }
-        val patchedDns = patchDns(base["dns"]?.jsonObject, settings.traffic)
-        val patchedRoute = patchProxyRoute(base["route"]?.jsonObject, patchedDns, activePreset)
-        val patchedExperimental = patchExperimental(base["experimental"]?.jsonObject, localSurfaces)
+        val runtimeBase = base.withTcpReliabilityOutbounds()
+        val patchedDns = patchDns(runtimeBase["dns"]?.jsonObject, settings.traffic)
+        val patchedRoute = patchProxyRoute(runtimeBase["route"]?.jsonObject, patchedDns, activePreset)
+        val patchedExperimental = patchExperimental(runtimeBase["experimental"]?.jsonObject, localSurfaces)
 
         return json.encodeToString(
             JsonObject.serializer(),
             buildJsonObject {
-                base.forEach { (key, value) ->
+                runtimeBase.forEach { (key, value) ->
                     when (key) {
                         "inbounds" -> put(key, inbounds)
                         "dns" -> put(key, patchedDns)
@@ -136,13 +142,13 @@ class RuntimeConfigAssembler(
                         else -> put(key, value)
                     }
                 }
-                if (!base.containsKey("log")) {
+                if (!runtimeBase.containsKey("log")) {
                     putJsonObject("log") {
                         put("level", FOXHOLE_RUNTIME_LOG_LEVEL)
                         put("timestamp", true)
                     }
                 }
-                if (!base.containsKey("experimental") && patchedExperimental.isNotEmpty()) {
+                if (!runtimeBase.containsKey("experimental") && patchedExperimental.isNotEmpty()) {
                     put("experimental", patchedExperimental)
                 }
             },
@@ -275,6 +281,75 @@ class RuntimeConfigAssembler(
                     }
             }
         }
+
+    private fun JsonObject.withTcpReliabilityOutbounds(): JsonObject {
+        val patchedOutbounds = patchTcpReliabilityOutbounds(this["outbounds"]?.jsonArray) ?: return this
+        return buildJsonObject {
+            this@withTcpReliabilityOutbounds.forEach { (key, value) ->
+                if (key == "outbounds") {
+                    put(key, patchedOutbounds)
+                } else {
+                    put(key, value)
+                }
+            }
+        }
+    }
+
+    private fun patchTcpReliabilityOutbounds(outbounds: JsonArray?): JsonArray? =
+        outbounds?.let { source ->
+            buildJsonArray {
+                source.forEach { outbound ->
+                    add(patchTcpReliabilityOutbound(outbound.jsonObject))
+                }
+            }
+        }
+
+    private fun patchTcpReliabilityOutbound(outbound: JsonObject): JsonObject {
+        if (!outbound.requiresTcpReliabilityPatch()) {
+            return outbound
+        }
+        return buildJsonObject {
+            outbound.forEach { (key, value) -> put(key, value) }
+            if (outbound["disable_tcp_keep_alive"]?.jsonPrimitive?.contentOrNull != "true") {
+                if (!outbound.containsKey("tcp_keep_alive")) {
+                    put("tcp_keep_alive", MOBILE_TCP_KEEP_ALIVE)
+                }
+                if (!outbound.containsKey("tcp_keep_alive_interval")) {
+                    put("tcp_keep_alive_interval", MOBILE_TCP_KEEP_ALIVE_INTERVAL)
+                }
+            }
+            if (outbound.canUseNetworkStrategy()) {
+                put("network_strategy", MOBILE_TCP_NETWORK_STRATEGY)
+            }
+        }
+    }
+
+    private fun JsonObject.requiresTcpReliabilityPatch(): Boolean {
+        val type = this["type"]?.jsonPrimitive?.contentOrNull?.lowercase()
+        val transportType =
+            this["transport"]
+                ?.jsonObject
+                ?.get("type")
+                ?.jsonPrimitive
+                ?.contentOrNull
+                ?.lowercase()
+                ?: "tcp"
+        return type in TCP_RELIABILITY_OUTBOUND_TYPES &&
+            !containsKey("detour") &&
+            transportType in TCP_RELIABILITY_TRANSPORT_TYPES
+    }
+
+    private fun JsonObject.canUseNetworkStrategy(): Boolean {
+        if (containsKey("network_strategy")) {
+            return false
+        }
+        val hasBindOverride =
+            containsKey("bind_interface") ||
+                containsKey("inet4_bind_address") ||
+                containsKey("inet6_bind_address")
+        val tcpFastOpen = this["tcp_fast_open"]?.jsonPrimitive?.contentOrNull == "true"
+        return !hasBindOverride && !tcpFastOpen
+    }
 
     private fun patchDns(
         existing: JsonObject?,
@@ -835,6 +910,11 @@ class RuntimeConfigAssembler(
         const val DNS_REMOTE_TAG = "dns-remote"
         const val FOXHOLE_REMOTE_DNS_SERVER = "1.1.1.1"
         const val FOXHOLE_DOH_ADDRESS = "https://1.1.1.1/dns-query"
+        const val MOBILE_TCP_KEEP_ALIVE = "30s"
+        const val MOBILE_TCP_KEEP_ALIVE_INTERVAL = "15s"
+        const val MOBILE_TCP_NETWORK_STRATEGY = "fallback"
+        val TCP_RELIABILITY_OUTBOUND_TYPES = setOf("vless", "trojan", "vmess", "shadowsocks", "http", "socks")
+        val TCP_RELIABILITY_TRANSPORT_TYPES = setOf("tcp", "ws", "grpc", "http", "httpupgrade")
         val PORT_RANGE_REGEX = Regex("""\d{1,5}-\d{1,5}""")
     }
 }

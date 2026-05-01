@@ -18,10 +18,11 @@ import com.foxhole.beta.core.model.RoutingRuleAction
 import com.foxhole.beta.core.model.Settings
 import com.foxhole.beta.core.model.TrafficMode
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -91,6 +92,106 @@ class RuntimeConfigAssemblerTest {
         assertEquals(FOXHOLE_RUNTIME_LOG_LEVEL, config["log"]!!.jsonObject["level"]!!.jsonPrimitive.content)
         assertFalse(config["inbounds"]!!.jsonArray[0].jsonObject.containsKey("sniff"))
         assertFalse(config.containsKey("experimental"))
+    }
+
+    @Test
+    fun `tcp capable outbounds get mobile keepalive and network fallback`() {
+        val config =
+            parse(
+                assembler.assemble(
+                    baseConfigJson =
+                        baseConfigWithOutbounds(
+                            buildJsonArray {
+                                add(
+                                    buildJsonObject {
+                                        put("type", "vless")
+                                        put("tag", "proxy")
+                                        put("server", "edge.example")
+                                        put("server_port", 443)
+                                        put("uuid", "11111111-1111-1111-1111-111111111111")
+                                    },
+                                )
+                                add(
+                                    buildJsonObject {
+                                        put("type", "trojan")
+                                        put("tag", "trojan-ws")
+                                        put("server", "edge.example")
+                                        put("server_port", 443)
+                                        put("password", "secret")
+                                        put("transport", buildJsonObject { put("type", "ws") })
+                                    },
+                                )
+                                add(
+                                    buildJsonObject {
+                                        put("type", "hysteria2")
+                                        put("tag", "hy2")
+                                        put("server", "edge.example")
+                                        put("server_port", 443)
+                                    },
+                                )
+                            },
+                        ),
+                    settings = Settings(),
+                    activePreset = null,
+                ),
+            )
+
+        val outbounds = config["outbounds"]!!.jsonArray.map { it.jsonObject }
+        val vless = outbounds[0]
+        val trojan = outbounds[1]
+        val hysteria2 = outbounds[2]
+        assertEquals("outbounds=$outbounds", "30s", vless["tcp_keep_alive"]?.jsonPrimitive?.content)
+        assertEquals("15s", vless["tcp_keep_alive_interval"]?.jsonPrimitive?.content)
+        assertEquals("fallback", vless["network_strategy"]?.jsonPrimitive?.content)
+        assertEquals("30s", trojan["tcp_keep_alive"]!!.jsonPrimitive.content)
+        assertEquals("fallback", trojan["network_strategy"]!!.jsonPrimitive.content)
+        assertFalse(hysteria2.containsKey("tcp_keep_alive"))
+        assertFalse(hysteria2.containsKey("network_strategy"))
+    }
+
+    @Test
+    fun `tcp reliability patch respects explicit dial fields`() {
+        val config =
+            parse(
+                assembler.assemble(
+                    baseConfigJson =
+                        baseConfigWithOutbounds(
+                            buildJsonArray {
+                                add(
+                                    buildJsonObject {
+                                        put("type", "vless")
+                                        put("tag", "proxy")
+                                        put("server", "edge.example")
+                                        put("server_port", 443)
+                                        put("uuid", "11111111-1111-1111-1111-111111111111")
+                                        put("tcp_keep_alive", "2m")
+                                        put("tcp_keep_alive_interval", "30s")
+                                        put("network_strategy", "default")
+                                    },
+                                )
+                                add(
+                                    buildJsonObject {
+                                        put("type", "trojan")
+                                        put("tag", "direct-detour")
+                                        put("server", "edge.example")
+                                        put("server_port", 443)
+                                        put("password", "secret")
+                                        put("detour", "direct")
+                                    },
+                                )
+                            },
+                        ),
+                    settings = Settings(),
+                    activePreset = null,
+                ),
+            )
+
+        val outbounds = config["outbounds"]!!.jsonArray.map { it.jsonObject }
+        assertEquals("2m", outbounds[0]["tcp_keep_alive"]!!.jsonPrimitive.content)
+        assertEquals("30s", outbounds[0]["tcp_keep_alive_interval"]!!.jsonPrimitive.content)
+        assertEquals("default", outbounds[0]["network_strategy"]!!.jsonPrimitive.content)
+        assertFalse(outbounds[1].containsKey("tcp_keep_alive"))
+        assertFalse(outbounds[1].containsKey("network_strategy"))
     }
 
     @Test
@@ -675,6 +776,15 @@ class RuntimeConfigAssemblerTest {
                 })
                 put("final", "proxy")
             })
+        }.toString()
+
+    private fun baseConfigWithOutbounds(outbounds: JsonArray): String =
+        buildJsonObject {
+            val base = parse(baseConfigWithRules("profile.example"))
+            put("inbounds", base["inbounds"]!!)
+            put("outbounds", outbounds)
+            put("dns", base["dns"]!!)
+            put("route", base["route"]!!)
         }.toString()
 
     private fun baseConfigWithLegacyFoxholeDns(): String =

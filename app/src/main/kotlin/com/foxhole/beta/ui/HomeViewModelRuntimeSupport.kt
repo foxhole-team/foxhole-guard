@@ -17,7 +17,6 @@ import com.foxhole.beta.core.model.InstalledAppOption
 import com.foxhole.beta.core.model.RoutingPresetSource
 import com.foxhole.beta.core.model.RoutingRuleAction
 import com.foxhole.beta.core.network.IpInfoFetchMode
-import com.foxhole.beta.core.notifications.ProfileRefreshResultNotifier
 import com.foxhole.beta.vpn.FoxholeVpnRuntimeBridge
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -187,7 +186,8 @@ internal fun HomeViewModel.saveSiteRuleInternal(
     }
 }
 
-internal fun HomeViewModel.createDiagnosticsArchiveInternal(): File = container.diagnosticsLogger.createExportFile()
+internal fun HomeViewModel.createDiagnosticsArchiveInternal(sanitize: Boolean = true): File =
+    container.diagnosticsLogger.createExportFile(sanitize = sanitize)
 
 internal fun HomeViewModel.exportDiagnosticsInternal(file: File = createDiagnosticsArchive()): Intent {
     val uri =
@@ -304,15 +304,9 @@ internal suspend fun HomeViewModel.refreshProfileAndMaybeReconnectInternal(profi
         } else {
             app.getString(R.string.profile_refreshed)
         }
-    ProfileRefreshResultNotifier.showSuccess(
-        context = app,
-        profileId = profileId,
-        profileName = refreshedProfile.name,
-        reconnecting = reconnected,
-    )
     container.diagnosticsLogger.record(
         "profile",
-        "profile refresh notification emitted reconnecting=$reconnected",
+        "profile refresh in-app notification emitted profileId=$profileId name=${refreshedProfile.name} reconnecting=$reconnected",
     )
     emitSuccess(message)
 }
@@ -322,15 +316,9 @@ internal suspend fun HomeViewModel.handleProfileRefreshFailureInternal(
     throwable: Throwable,
 ) {
     val app = getApplication<Application>()
-    ProfileRefreshResultNotifier.showFailure(
-        context = app,
-        profileId = profileId,
-        profileName = uiState.value.profiles.firstOrNull { profile -> profile.id == profileId }?.name,
-        details = throwable.message,
-    )
     container.diagnosticsLogger.record(
         "profile",
-        "profile refresh failed: ${throwable.javaClass.simpleName}: ${throwable.message.orEmpty()}",
+        "profile refresh failed profileId=$profileId: ${throwable.javaClass.simpleName}: ${throwable.message.orEmpty()}",
     )
     emitError(app.getString(R.string.profile_refresh_failed))
 }

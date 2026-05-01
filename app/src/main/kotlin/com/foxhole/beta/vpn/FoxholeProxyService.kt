@@ -54,6 +54,13 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
             isNetworkActivityLoggingEnabled = { container.settingsRepository.settings.value.expert.networkActivityLogging },
         )
     }
+    private val runtimeWakeLock by lazy {
+        RuntimeWakeLock(
+            context = applicationContext,
+            diagnosticsLogger = container.diagnosticsLogger,
+            tag = "Foxhole:ProxyRuntime",
+        )
+    }
     private val trafficSampler = TrafficStatsSampler()
     private var activeSession: VpnSession? = null
     private var trafficJob: Job? = null
@@ -68,6 +75,8 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
     private var lastDefaultNetworkSummary: String? = null
     private val commandMutex = Mutex()
     private var commandJob: Job? = null
+    private var autoReconnectJob: Job? = null
+    private var autoReconnectAttempts = 0
 
     private val defaultNetworkCallback =
         object : ConnectivityManager.NetworkCallback() {
@@ -131,7 +140,9 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
         stopTrafficUpdates()
         stopGeoRefresh()
         stopNotificationHealthMonitoring()
+        cancelScheduledAutoReconnect(resetAttempts = true)
         runCatching { kotlinx.coroutines.runBlocking { runtime.stop() } }
+        runtimeWakeLock.release()
         scope.cancel()
         if (defaultNetworkCallbackRegistered) {
             runCatching { connectivityManager.unregisterNetworkCallback(defaultNetworkCallback) }
@@ -195,6 +206,7 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
         )
         updateNotification()
         registerDefaultNetworkCallbackIfNeeded()
+        runtimeWakeLock.acquire()
         startNotificationHealthMonitoring()
         val result = runtime.start(session, this)
         if (!currentCoroutineContext().isActive) {
@@ -238,6 +250,7 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
         stopTrafficUpdates()
         stopGeoRefresh()
         stopNotificationHealthMonitoring()
+        cancelScheduledAutoReconnect(resetAttempts = true)
         container.diagnosticsLogger.recordStructured(
             "connection",
             "session ended",
@@ -246,6 +259,7 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
             message?.takeIf(String::isNotBlank)?.let { "reason=$it" },
         )
         runtime.stop()
+        runtimeWakeLock.release()
         activeSession = null
         container.connectionController.clearAppliedRuntime()
         FoxholeVpnRuntimeBridge.updateTraffic(trafficSampler.reset())
@@ -315,6 +329,118 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
         scope.launch(Dispatchers.Default) {
             block()
         }
+    }
+
+    private fun scheduleAutoReconnect(reason: String) {
+        val session = activeSession
+        if (autoReconnectJob?.isActive == true || session == null || !defaultNetworkAvailable) {
+            return
+        }
+        val nextAttempt = autoReconnectAttempts + 1
+        val autoReconnectEnabled = container.settingsRepository.settings.value.connection.autoReconnect
+        if (RuntimeAutoReconnectPolicy.shouldSchedule(autoReconnectEnabled, nextAttempt)) {
+            scheduleAutoReconnectAttempt(session, reason, nextAttempt)
+        } else if (autoReconnectEnabled && autoReconnectAttempts == RuntimeAutoReconnectPolicy.MAX_ATTEMPTS) {
+            autoReconnectAttempts += 1
+            container.diagnosticsLogger.record(
+                "connection",
+                "proxy auto reconnect exhausted reason=$reason attempts=${RuntimeAutoReconnectPolicy.MAX_ATTEMPTS}",
+            )
+        }
+    }
+
+    private fun scheduleAutoReconnectAttempt(
+        session: VpnSession,
+        reason: String,
+        nextAttempt: Int,
+    ) {
+        autoReconnectAttempts = nextAttempt
+        val delayMs = RuntimeAutoReconnectPolicy.backoffDelayMs(nextAttempt)
+        container.diagnosticsLogger.recordStructured(
+            "connection",
+            "proxy auto reconnect scheduled",
+            "reason=$reason",
+            "attempt=$nextAttempt",
+            "delay_ms=$delayMs",
+            "sessionId=${session.correlationId}",
+        )
+        autoReconnectJob =
+            scope.launch(Dispatchers.Default) {
+                delay(delayMs)
+                launchCommand {
+                    val current = activeSession
+                    if (current?.correlationId == session.correlationId) {
+                        reconnectIfStillEnabled(session, reason, nextAttempt)
+                    }
+                }
+            }
+    }
+
+    private suspend fun reconnectIfStillEnabled(
+        session: VpnSession,
+        reason: String,
+        attempt: Int,
+    ) {
+        if (!container.settingsRepository.current().connection.autoReconnect) {
+            container.diagnosticsLogger.record("connection", "proxy auto reconnect skipped because setting is disabled")
+            return
+        }
+        reconnectActiveRuntime(session, reason, attempt)
+    }
+
+    private fun resetAutoReconnectState() {
+        cancelScheduledAutoReconnect(resetAttempts = true)
+    }
+
+    private fun cancelScheduledAutoReconnect(resetAttempts: Boolean) {
+        autoReconnectJob?.cancel()
+        autoReconnectJob = null
+        if (resetAttempts) {
+            autoReconnectAttempts = 0
+        }
+    }
+
+    private suspend fun reconnectActiveRuntime(
+        session: VpnSession,
+        reason: String,
+        attempt: Int,
+    ) {
+        stopActiveRuntimeForReconnect(session = session, reason = reason, attempt = attempt)
+        connect(
+            profileId = session.profileId,
+            commandStartId = 0,
+            protocolOptionIdOverride = session.protocolOptionId,
+            previousVpnNetworkHandle = null,
+        )
+    }
+
+    private suspend fun stopActiveRuntimeForReconnect(
+        session: VpnSession,
+        reason: String,
+        attempt: Int,
+    ) {
+        persistProfileTraffic(session, trafficSampler.sample())
+        stopTrafficUpdates()
+        stopGeoRefresh()
+        stopNotificationHealthMonitoring()
+        container.diagnosticsLogger.recordStructured(
+            "connection",
+            "proxy runtime restarting",
+            "reason=$reason",
+            "attempt=$attempt",
+            "sessionId=${session.correlationId}",
+        )
+        runtime.stop()
+        activeSession = null
+        container.connectionController.clearAppliedRuntime()
+        FoxholeVpnRuntimeBridge.updateTraffic(trafficSampler.reset())
+        FoxholeVpnRuntimeBridge.update(
+            FoxholeVpnRuntimeBridge.snapshot.value.copy(
+                state = ConnectionState.RECONNECTING,
+                message = getString(R.string.status_reconnecting),
+            ),
+        )
+        updateNotification()
     }
 
     private fun stopService(commandStartId: Int?) {
@@ -536,6 +662,7 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
                         consecutiveNotificationHealthFailures += 1
                         if (consecutiveNotificationHealthFailures >= NOTIFICATION_HEALTH_FAILURE_THRESHOLD) {
                             markNotificationConnectivityOffline()
+                            scheduleAutoReconnect(reason = "notification_health_failed")
                         } else if (notificationConnectivityHealthState != ConnectivityHealthState.ONLINE) {
                             updateNotificationConnectivityHealth(ConnectivityHealthState.CHECKING)
                         }
@@ -649,6 +776,9 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
         if (resetFailures) {
             consecutiveNotificationHealthFailures = 0
         }
+        if (state == ConnectivityHealthState.ONLINE && resetFailures) {
+            resetAutoReconnectState()
+        }
         if (!force && notificationConnectivityHealthState == state) {
             return
         }
@@ -701,6 +831,7 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
     }
 
     private fun onConnectionStarted(session: VpnSession) {
+        resetAutoReconnectState()
         if (trafficJob == null) {
             trafficSampler.start()
             startTrafficUpdates()

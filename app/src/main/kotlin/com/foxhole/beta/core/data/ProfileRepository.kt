@@ -85,6 +85,18 @@ class ProfileRepository(
         val previousSelectedProtocolOptionId: String?,
     )
 
+    private data class LoadedResolvedConfig(
+        val secret: StoredProfileSecret,
+        val settings: Settings,
+        val selectedOption: StoredProfileProtocolOption?,
+        val resolvedConfig: String,
+    )
+
+    private data class RepairedResolvedConfig(
+        val runtimeConfig: String,
+        val legacyRawConfigRepaired: Boolean,
+    )
+
     private data class CommittedSubscriptionRefresh(
         val appliedProfiles: List<AppliedSubscriptionProfile>,
         val replacementActiveId: Long?,
@@ -504,42 +516,26 @@ class ProfileRepository(
         profileId: Long,
         protocolOptionIdOverride: String? = null,
     ): String {
-        val profile = requireProfile(profileId)
-        val secret = secretStore.read(profile.secretRef) ?: error("profile secret is missing")
-        val settings = settingsRepository.current()
-        val selectedOption = secret.selectedStoredProtocolOption(protocolOptionIdOverride)
-        val baseConfig =
-            selectedOption?.normalizedConfigJson ?: secret.resolvedConfigJson
-        val resolvedConfig = baseConfig ?: error("profile has no resolved config")
-        val legacyRawConfigRepair =
-            parser.normalizeLegacyRawResolvedConfig(
-                raw = resolvedConfig,
-                settings = settings,
-                allowInsecureTls =
-                    settings.expert.allowInsecureTls ||
-                        secret.requiresInsecureTls ||
-                        selectedOption?.requiresInsecureTls == true,
-            )
-        val runtimeConfig = legacyRawConfigRepair ?: resolvedConfig
-        require(runtimeConfig.trimStart().startsWith("{")) { "stored profile config is not valid JSON" }
+        val loaded = loadResolvedConfig(profileId, protocolOptionIdOverride)
+        val repaired = repairResolvedConfigIfNeeded(loaded)
         val effectiveAllowInsecureTls =
-            settings.expert.allowInsecureTls ||
-                secret.requiresInsecureTls ||
-                selectedOption?.requiresInsecureTls == true ||
-                selectedOption?.normalizedConfigJson?.requiresInsecureTls(json) == true ||
-                runtimeConfig.requiresInsecureTls(json)
+            loaded.settings.expert.allowInsecureTls ||
+                loaded.secret.requiresInsecureTls ||
+                loaded.selectedOption?.requiresInsecureTls == true ||
+                loaded.selectedOption?.normalizedConfigJson?.requiresInsecureTls(json) == true ||
+                repaired.runtimeConfig.requiresInsecureTls(json)
         val sanitized =
             withContext(Dispatchers.IO) {
                 parser.sanitizeResolvedConfig(
-                    raw = runtimeConfig,
-                    allowPrivateOutboundHosts = settings.expert.allowPrivateOutboundHosts,
+                    raw = repaired.runtimeConfig,
+                    allowPrivateOutboundHosts = loaded.settings.expert.allowPrivateOutboundHosts,
                     allowInsecureTls = effectiveAllowInsecureTls,
                 )
             }
-        if (legacyRawConfigRepair != null || sanitized != resolvedConfig) {
+        if (repaired.legacyRawConfigRepaired || sanitized != loaded.resolvedConfig) {
             diagnosticsLogger.record(
                 "profile",
-                if (legacyRawConfigRepair != null) {
+                if (repaired.legacyRawConfigRepaired) {
                     "legacy raw resolved config normalized for runtime"
                 } else {
                     "resolved config sanitized for runtime"
@@ -547,6 +543,54 @@ class ProfileRepository(
             )
         }
         return sanitized
+    }
+
+    private suspend fun loadResolvedConfig(
+        profileId: Long,
+        protocolOptionIdOverride: String?,
+    ): LoadedResolvedConfig {
+        val profile = requireProfile(profileId)
+        val secret = secretStore.read(profile.secretRef) ?: error("profile secret is missing")
+        val settings = settingsRepository.current()
+        val selectedOption = secret.selectedStoredProtocolOption(protocolOptionIdOverride)
+        val resolvedConfig =
+            selectedOption?.normalizedConfigJson
+                ?: secret.resolvedConfigJson
+                ?: refreshSubscriptionIfMissing(profile)
+        return LoadedResolvedConfig(
+            secret = secret,
+            settings = settings,
+            selectedOption = selectedOption,
+            resolvedConfig = resolvedConfig,
+        )
+    }
+
+    private fun repairResolvedConfigIfNeeded(loaded: LoadedResolvedConfig): RepairedResolvedConfig {
+        val repaired =
+            parser.normalizeLegacyRawResolvedConfig(
+                raw = loaded.resolvedConfig,
+                settings = loaded.settings,
+                allowInsecureTls =
+                    loaded.settings.expert.allowInsecureTls ||
+                        loaded.secret.requiresInsecureTls ||
+                        loaded.selectedOption?.requiresInsecureTls == true,
+            )
+        val runtimeConfig = repaired ?: loaded.resolvedConfig
+        require(runtimeConfig.trimStart().startsWith("{")) { "stored profile config is not valid JSON" }
+        return RepairedResolvedConfig(
+            runtimeConfig = runtimeConfig,
+            legacyRawConfigRepaired = repaired != null,
+        )
+    }
+
+    private fun refreshSubscriptionIfMissing(profile: Profile): String {
+        val suffix =
+            if (profile.sourceType == ProfileSourceType.SUBSCRIPTION_URL) {
+                "; refresh the subscription before loading runtime config"
+            } else {
+                ""
+            }
+        error("profile has no resolved config$suffix")
     }
 
     suspend fun updateResolvedConfig(

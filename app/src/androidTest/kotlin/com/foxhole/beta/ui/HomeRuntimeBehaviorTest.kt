@@ -1,7 +1,5 @@
 package com.foxhole.beta.ui
 
-import android.app.Notification
-import android.app.NotificationManager
 import android.text.format.Formatter
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.assertCountEquals
@@ -25,15 +23,18 @@ import com.foxhole.beta.core.model.ConnectionState
 import com.foxhole.beta.core.model.IpInfo
 import com.foxhole.beta.core.model.TrafficMode
 import com.foxhole.beta.core.model.TrafficSnapshot
-import com.foxhole.beta.core.notifications.ProfileRefreshResultNotifier
+import com.foxhole.beta.vpn.FoxholeConnectionServiceContract
 import com.foxhole.beta.vpn.FoxholeVpnRuntimeBridge
+import java.io.FileInputStream
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -49,6 +50,20 @@ class HomeRuntimeBehaviorTest {
             object : Statement() {
                 override fun evaluate() {
                     val app = app()
+                    grantNotificationsPermission(app.packageName)
+                    runBlocking {
+                        if (hasActiveFoxholeVpnNetwork(app.packageName)) {
+                            FoxholeVpnRuntimeBridge.update(
+                                ConnectionSnapshot(
+                                    state = ConnectionState.CONNECTED,
+                                    trafficMode = TrafficMode.TUNNEL,
+                                ),
+                            )
+                        }
+                        app.container.connectionController.disconnect()
+                        waitForRuntimeShutdown(app.packageName)
+                    }
+                    FoxholeConnectionServiceContract.stopAllServices(app)
                     FoxholeVpnRuntimeBridge.clearTransientState()
                     FoxholeVpnRuntimeBridge.update(ConnectionSnapshot())
                     app.container.diagnosticsLogger.clear()
@@ -61,11 +76,7 @@ class HomeRuntimeBehaviorTest {
         TestRule { base, _ ->
             object : Statement() {
                 override fun evaluate() {
-                    val instrumentation = InstrumentationRegistry.getInstrumentation()
-                    val packageName = instrumentation.targetContext.packageName
-                    instrumentation.uiAutomation.executeShellCommand(
-                        "pm grant $packageName android.permission.POST_NOTIFICATIONS",
-                    ).close()
+                    grantNotificationsPermission(InstrumentationRegistry.getInstrumentation().targetContext.packageName)
                     base.evaluate()
                 }
             }
@@ -300,40 +311,6 @@ class HomeRuntimeBehaviorTest {
         }
     }
 
-    @Test
-    fun profileRefreshNotifierPostsSuccessNotificationOnDevice() {
-        val app = app()
-        val notificationManager = app.getSystemService(NotificationManager::class.java)
-        notificationManager.cancelAll()
-
-        composeRule.runOnUiThread {
-            ProfileRefreshResultNotifier.showSuccess(
-                context = app,
-                profileId = 77L,
-                profileName = "Pixel Fixture",
-                reconnecting = false,
-            )
-        }
-
-        composeRule.waitUntil(timeoutMillis = 5_000) {
-            notificationManager.activeNotifications.any { statusBarNotification ->
-                statusBarNotification.id == 2_177 &&
-                    statusBarNotification.notification.extras.getString(Notification.EXTRA_TITLE) ==
-                    app.getString(R.string.profile_refreshed)
-            }
-        }
-
-        val notification =
-            notificationManager.activeNotifications.first { statusBarNotification ->
-                statusBarNotification.id == 2_177
-            }.notification
-        assertTrue(
-            notification.extras.getString(Notification.EXTRA_TITLE) == app.getString(R.string.profile_refreshed),
-        )
-        assertTrue(notification.extras.getString(Notification.EXTRA_TEXT) == "Pixel Fixture")
-        notificationManager.cancelAll()
-    }
-
     private fun waitUntilNetworkBlockSettles() {
         scrollToNetworkBlock()
         composeRule.waitUntil(timeoutMillis = 20_000) {
@@ -375,6 +352,38 @@ class HomeRuntimeBehaviorTest {
                     }
                 }
         }.getOrDefault(emptyList())
+
+    private fun grantNotificationsPermission(packageName: String) {
+        shell("pm grant $packageName android.permission.POST_NOTIFICATIONS")
+    }
+
+    private fun hasActiveFoxholeVpnNetwork(packageName: String): Boolean =
+        shell("dumpsys connectivity").contains("VPN CONNECTED extra: VPN:$packageName")
+
+    private suspend fun waitForRuntimeShutdown(packageName: String) {
+        val deadline = System.currentTimeMillis() + 10_000L
+        while (System.currentTimeMillis() < deadline) {
+            val connectivity = shell("dumpsys connectivity")
+            val services = shell("dumpsys activity services $packageName")
+            if (
+                !connectivity.contains("VPN CONNECTED extra: VPN:$packageName") &&
+                !services.contains("FoxholeVpnService") &&
+                !services.contains("FoxholeProxyService")
+            ) {
+                return
+            }
+            delay(250)
+        }
+    }
+
+    private fun shell(command: String): String {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        instrumentation.uiAutomation.executeShellCommand(command).use { descriptor ->
+            FileInputStream(descriptor.fileDescriptor).bufferedReader().use { reader ->
+                return reader.readText()
+            }
+        }
+    }
 
     private fun app(): FoxholeApplication =
         InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as FoxholeApplication

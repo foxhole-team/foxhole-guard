@@ -24,6 +24,7 @@ internal fun formatDiagnosticsExport(
     metadata: DiagnosticsExportMetadata,
     entries: List<DiagnosticEntry>,
     formatter: DateTimeFormatter,
+    sanitizeMessages: Boolean = true,
 ): String =
     buildString {
         appendLine("Foxhole Diagnostics Export")
@@ -46,7 +47,13 @@ internal fun formatDiagnosticsExport(
         } else {
             entries.forEachIndexed { index, entry ->
                 val timestamp = formatter.format(Instant.ofEpochMilli(entry.timestamp))
-                append("$timestamp [${entry.tag}] ${DiagnosticSanitizer.sanitizeForExport(entry.message)}")
+                val message =
+                    if (sanitizeMessages) {
+                        DiagnosticSanitizer.sanitizeForExport(entry.message)
+                    } else {
+                        entry.message
+                    }
+                append("$timestamp [${entry.tag}] $message")
                 if (index != entries.lastIndex) {
                     appendLine()
                 }

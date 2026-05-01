@@ -55,6 +55,41 @@ class DiagnosticsExportFormatterTest {
     }
 
     @Test
+    fun `raw local export keeps retained messages when sanitizer is disabled`() {
+        val payload =
+            formatDiagnosticsExport(
+                metadata =
+                    DiagnosticsExportMetadata(
+                        generatedAt = 1_700_000_000_000L,
+                        appVersion = "1.0.0-beta1",
+                        versionCode = 1,
+                        coreVersion = "1.13.6",
+                        androidRelease = "16",
+                        sdkInt = 36,
+                        supportedAbis = listOf("arm64-v8a"),
+                        themeMode = "dark",
+                        locale = "ru",
+                        trafficMode = "tunnel",
+                        tunStack = "system",
+                        diagnosticsRetention = DiagnosticsRetention.HOURS_24,
+                        networkActivityLoggingEnabled = true,
+                    ),
+                entries =
+                    listOf(
+                        DiagnosticEntry(
+                            timestamp = 1_700_000_000_500L,
+                            tag = "profile",
+                            message = "server=example.com ip=79.120.30.76 token=secret",
+                        ),
+                    ),
+                formatter = formatter,
+                sanitizeMessages = false,
+            )
+
+        assertTrue(payload.contains("[profile] server=example.com ip=79.120.30.76 token=secret"))
+    }
+
+    @Test
     fun `export shows explicit message when no entries are retained`() {
         val payload =
             formatDiagnosticsExport(

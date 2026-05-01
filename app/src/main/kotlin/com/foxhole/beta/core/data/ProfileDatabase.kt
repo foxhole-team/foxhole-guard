@@ -1,6 +1,7 @@
 package com.foxhole.beta.core.data
 
 import android.content.Context
+import android.database.Cursor
 import android.database.sqlite.SQLiteDatabase
 import androidx.room.Dao
 import androidx.room.Database
@@ -558,12 +559,11 @@ abstract class ProfileDatabase : RoomDatabase() {
             } finally {
                 targetDatabase.endTransaction()
             }
-            val missingLegacyIds =
+            val unverifiedLegacyRows =
                 legacyRows
-                    .map(LegacyProfileRow::id)
-                    .filterNot { id -> targetDatabase.profileExists(id) }
-            check(missingLegacyIds.isEmpty()) {
-                "legacy plaintext profile migration was not verified for ids=${missingLegacyIds.joinToString()}"
+                    .filterNot { row -> targetDatabase.legacyProfileRow(row.id) == row }
+            check(unverifiedLegacyRows.isEmpty()) {
+                "legacy plaintext profile migration was not verified for ids=${unverifiedLegacyRows.joinToString { it.id.toString() }}"
             }
             deleteLegacyPlaintextDatabase(legacy)
         }
@@ -586,17 +586,7 @@ abstract class ProfileDatabase : RoomDatabase() {
                 ).use { cursor ->
                     val rows = mutableListOf<LegacyProfileRow>()
                     while (cursor.moveToNext()) {
-                        rows +=
-                            LegacyProfileRow(
-                                id = cursor.getLong(0),
-                                name = cursor.getString(1),
-                                sourceType = cursor.getString(2),
-                                secretRef = cursor.getString(3),
-                                protocolHint = cursor.getString(4),
-                                lastUpdatedAt = if (cursor.isNull(5)) null else cursor.getLong(5),
-                                lastEtag = if (cursor.isNull(6)) null else cursor.getString(6),
-                                isActive = cursor.getLong(7) != 0L,
-                            )
+                        rows += cursor.currentLegacyProfileRow()
                     }
                     return rows
                 }
@@ -623,10 +613,36 @@ abstract class ProfileDatabase : RoomDatabase() {
             )
         }
 
-        private fun SupportSQLiteDatabase.profileExists(id: Long): Boolean =
-            query(SimpleSQLiteQuery("select count(*) from profiles where id = ?", arrayOf(id))).use { cursor ->
-                cursor.moveToFirst() && cursor.getLong(0) > 0L
+        private fun SupportSQLiteDatabase.legacyProfileRow(id: Long): LegacyProfileRow? =
+            query(
+                SimpleSQLiteQuery(
+                    """
+                    select id, name, sourceType, secretRef, protocolHint, lastUpdatedAt, lastEtag, isActive
+                    from profiles
+                    where id = ?
+                    limit 1
+                    """.trimIndent(),
+                    arrayOf(id),
+                ),
+            ).use { cursor ->
+                if (cursor.moveToFirst()) {
+                    cursor.currentLegacyProfileRow()
+                } else {
+                    null
+                }
             }
+
+        private fun Cursor.currentLegacyProfileRow(): LegacyProfileRow =
+            LegacyProfileRow(
+                id = getLong(0),
+                name = getString(1),
+                sourceType = getString(2),
+                secretRef = getString(3),
+                protocolHint = getString(4),
+                lastUpdatedAt = if (isNull(5)) null else getLong(5),
+                lastEtag = if (isNull(6)) null else getString(6),
+                isActive = getLong(7) != 0L,
+            )
 
         private fun deleteLegacyPlaintextDatabase(legacy: File) {
             val files =

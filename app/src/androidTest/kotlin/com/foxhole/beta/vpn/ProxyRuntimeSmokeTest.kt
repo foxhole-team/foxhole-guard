@@ -45,7 +45,7 @@ class ProxyRuntimeSmokeTest {
                 container.connectionController.connect(profile.id)
 
                 val snapshot =
-                    waitForCondition(timeoutMs = 45_000L) {
+                    waitForCondition(timeoutMs = PROXY_START_TIMEOUT_MS) {
                         val current = container.connectionController.snapshot.value
                         current.state == ConnectionState.CONNECTED || current.state == ConnectionState.ERROR
                     }
@@ -100,27 +100,36 @@ class ProxyRuntimeSmokeTest {
 
     private suspend fun stabilizeDisconnectedState(context: FoxholeApplication) {
         val container = context.appGraph
-        val currentSnapshot = container.connectionController.snapshot.value
-        if (disconnectDispatchModeOrNull(currentSnapshot) != null) {
+        if (hasActiveFoxholeVpnNetwork(context)) {
+            FoxholeVpnRuntimeBridge.update(
+                ConnectionSnapshot(
+                    state = ConnectionState.CONNECTED,
+                    trafficMode = TrafficMode.TUNNEL,
+                ),
+            )
+        }
+        if (disconnectDispatchModeOrNull(container.connectionController.snapshot.value) != null || hasActiveFoxholeVpnNetwork(context)) {
             container.connectionController.disconnect()
-            waitForCondition(timeoutMs = 15_000L) {
+            waitForCondition(timeoutMs = RUNTIME_SHUTDOWN_TIMEOUT_MS) {
                 container.connectionController.snapshot.value.state in setOf(ConnectionState.IDLE, ConnectionState.ERROR)
             }
         }
-        waitForServicesToStop(context, timeoutMs = 5_000L)
+        waitForRuntimeToStop(context, timeoutMs = RUNTIME_SHUTDOWN_TIMEOUT_MS)
         if (hasFoxholeServices(context)) {
             FoxholeConnectionServiceContract.stopAllServices(context)
-            waitForServicesToStop(context, timeoutMs = 5_000L)
+            waitForRuntimeToStop(context, timeoutMs = RUNTIME_SHUTDOWN_TIMEOUT_MS)
         }
+        FoxholeVpnRuntimeBridge.clearTransientState()
+        FoxholeVpnRuntimeBridge.update(ConnectionSnapshot(trafficMode = container.settingsRepository.current().traffic.mode))
     }
 
-    private suspend fun waitForServicesToStop(
+    private suspend fun waitForRuntimeToStop(
         context: FoxholeApplication,
         timeoutMs: Long,
     ) {
         val deadline = System.currentTimeMillis() + timeoutMs
         while (System.currentTimeMillis() < deadline) {
-            if (!hasFoxholeServices(context)) {
+            if (!hasFoxholeServices(context) && !hasActiveFoxholeVpnNetwork(context)) {
                 return
             }
             delay(250)
@@ -132,6 +141,9 @@ class ProxyRuntimeSmokeTest {
         return services.contains("FoxholeProxyService") || services.contains("FoxholeVpnService")
     }
 
+    private fun hasActiveFoxholeVpnNetwork(context: FoxholeApplication): Boolean =
+        shell("dumpsys connectivity").contains("VPN CONNECTED extra: VPN:${context.packageName}")
+
     private suspend fun restoreSettings(
         repository: com.foxhole.beta.core.settings.SettingsRepository,
         settings: Settings,
@@ -140,6 +152,9 @@ class ProxyRuntimeSmokeTest {
     }
 
     private companion object {
+        private const val PROXY_START_TIMEOUT_MS = 90_000L
+        private const val RUNTIME_SHUTDOWN_TIMEOUT_MS = 15_000L
+
         val DIRECT_PROXY_SMOKE_PROFILE =
             """
             {

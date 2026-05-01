@@ -93,13 +93,13 @@
     <string name="quick_settings_tile_not_added">Плитка быстрых настроек не была добавлена.</string>
     <string name="quick_settings_tile_unavailable">Откройте редактирование быстрых настроек и добавьте плитку Foxhole вручную.</string>
     <string name="export_diagnostics">Экспорт логов</string>
-    <string name="export_diagnostics_summary">Создаёт архив логов без IP и конфигов.</string>
+    <string name="export_diagnostics_summary">Сохранение лог файла в память устройства.</string>
     <string name="export_diagnostics_share_subject">Логи Foxhole</string>
     <string name="export_diagnostics_share_text">Очищенный архив Foxhole для отладки и поддержки.</string>
     <string name="clipboard_empty">Буфер обмена пуст</string>
     <string name="profile_not_refreshable">Этот профиль нельзя обновить</string>
     <string name="profile_refreshed">Профиль обновлён</string>
-    <string name="profile_refreshed_reconnecting">Профиль обновлён. Выполняется переподключение</string>
+    <string name="profile_refreshed_reconnecting">Профиль обновлен. Выполняется подключение</string>
     <string name="profile_refresh_failed">Не удалось обновить профиль</string>
     <string name="profile_refresh_details_in_diagnostics">Подробности доступны в диагностике</string>
     <string name="settings_secure_storage_failed">Не удалось загрузить настройки. Сбросьте данные приложения.</string>
@@ -270,15 +270,21 @@
     <string name="support_bot_open_failed">Не удалось открыть Telegram бота.</string>
     <string name="support_bot_saved">Адрес Telegram бота поддержки обновлен.</string>
     <string name="support_bot_browser_fallback">Telegram не найден.</string>
-    <string name="support_bot_diagnostics_summary">Отправьте очищенный архив нашему тг боту для диагностики</string>
+    <string name="support_bot_title">Поддержка</string>
+    <string name="support_bot_diagnostics_summary">Вы можете при необходимости отправить нам лог работы ядра Foxhole для отладки. Внимание, архив не содержит Ваших IP-адресов и конфигураций.</string>
+    <string name="support_bot_diagnostics_instructions">Перед первой отправкой нажмите кнопку Старт в боте, после этого выберите Отправить лог файл и укажите получателем бота Foxhole support.</string>
     <string name="support_bot_settings_button">Настройки бота</string>
     <string name="support_bot_settings_dialog_title">Настройка бота поддержки</string>
     <string name="support_bot_settings_summary">Введите новый адрес бота поддержки, если старый стал не доступен и мы написали об этом в своем канале.</string>
     <string name="support_bot_handle_label">Адрес бота</string>
     <string name="support_bot_invalid_handle">Разрешён только Telegram handle формата @name_bot.</string>
     <string name="support_bot_share_text">Отправьте этот архив в %1$s.\n\nЕсли нужный чат не открыт автоматически, откройте %2$s.</string>
-    <string name="send_log_to_bot">Отправить лог</string>
+    <string name="send_log_to_bot">Отправить лог файл</string>
+    <string name="write_to_support">Написать в поддержку</string>
+    <string name="support_bot_current">Текущий бот тех. поддержки Foxhole: %1$s</string>
     <string name="send_log_to_bot_confirm_body">Архив содержит только технические логи для отладки и поддержки. Foxhole не экспортирует Ваши IP-адреса и конфигурации. В архив добавляются версия приложения, версия core, Android/API, CPU ABI, тема, язык и runtime-режимы без деанона пользователя.</string>
+    <string name="diagnostics_sanitizer_title">Санитайзер</string>
+    <string name="diagnostics_sanitizer_body">Очистить лог файл перед сохранением от IP-адресов и прочих чувствительных данных?</string>
     <string name="save_archive">Сохранить архив</string>
     <string name="share_archive">Поделиться</string>
     <string name="diagnostics_archive_saved">Архив сохранен.</string>
@@ -479,7 +485,7 @@
     <string name="proxy_mode_firefox_hint">С включенной аутентификацией локального прокси работает Firefox через расширение FoxyProxy.</string>
     <string name="routing_info_body">Правила для приложений и сайтов работают поверх текущего профиля.</string>
     <string name="routing_apps_info_body">Выберите, как выбранные приложения используют туннель.</string>
-    <string name="diagnostics_info_body">Статистика остается на этом устройстве.</string>
+    <string name="diagnostics_info_body">Логи и статистика трафика остаются на устройстве, если Вы явно не сохраняете или не отправляете лог файл.</string>
     <string name="settings_home_network_summary">Режимы подключения</string>
     <string name="settings_home_routing_summary">Правила, пресеты и каталоги</string>
     <string name="settings_home_apps_summary">Правила для приложений.</string>
@@ -527,7 +533,7 @@
     <string name="profile_editor_path">Путь</string>
     <string name="profile_editor_service_name">Имя сервиса</string>
     <string name="settings_home_advanced_summary">DNS, локальные интерфейсы и переопределения.</string>
-    <string name="settings_home_diagnostics_summary">Логи, экспорт и статистика.</string>
+    <string name="settings_home_diagnostics_summary">Логи, статистика и поддержка.</string>
     <string name="home_proxy_title">Прокси</string>
     <string name="home_lan_proxy_title">LAN Proxy</string>
     <string name="home_lan_proxy_tag">LAN Proxy</string>
@@ -570,6 +576,4 @@
     <string name="site_action_proxy">Прокси</string>
     <string name="site_action_direct">Напрямую</string>
     <string name="site_action_block">Блокировать</string>
-    <string name="profile_refresh_notification_channel_name">Обновления профилей</string>
-    <string name="profile_refresh_notification_channel_description">Результаты обновления профилей подключения.</string>
 </resources>

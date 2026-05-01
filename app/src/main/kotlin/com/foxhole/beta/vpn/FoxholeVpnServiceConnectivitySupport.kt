@@ -169,6 +169,8 @@ internal fun FoxholeVpnService.scheduleValidationInternal(
                         message = message,
                         reasonCode = AutoConnectReasonCode.DNS_FAILURE,
                     )
+                } else {
+                    scheduleAutoReconnect(reason = "post_network_validation_failed")
                 }
             }
         }
@@ -916,6 +918,9 @@ internal fun FoxholeVpnService.updateNotificationConnectivityHealthInternal(
     if (resetFailures) {
         consecutiveNotificationHealthFailures = 0
     }
+    if (state == ConnectivityHealthState.ONLINE && resetFailures) {
+        resetAutoReconnectState()
+    }
     if (!force && notificationConnectivityHealthState == state) {
         return
     }
@@ -1017,6 +1022,7 @@ internal fun FoxholeVpnService.onConnectionStartedInternal(
     session: VpnSession,
     trafficMode: TrafficMode,
 ) {
+    resetAutoReconnectState()
     if (trafficJob == null) {
         trafficSampler.start()
         startTrafficUpdates()

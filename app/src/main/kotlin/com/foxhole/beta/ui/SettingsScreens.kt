@@ -11,16 +11,12 @@ import android.graphics.drawable.Icon
 import android.net.Uri
 import android.os.Build
 import android.text.format.DateFormat
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -44,7 +40,6 @@ import androidx.compose.material.icons.outlined.DarkMode
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.FileDownload
-import androidx.compose.material.icons.outlined.FileUpload
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.LightMode
@@ -61,13 +56,10 @@ import androidx.compose.material.icons.outlined.SwapVert
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material.icons.outlined.VpnKey
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
@@ -85,11 +77,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -122,19 +112,15 @@ import com.foxhole.beta.core.model.SubscriptionRefreshInterval
 import com.foxhole.beta.core.model.ThemeMode
 import com.foxhole.beta.core.model.TrafficMode
 import com.foxhole.beta.core.model.TunStack
-import com.foxhole.beta.core.settings.effectiveSupportBotHandle
-import com.foxhole.beta.core.settings.supportBotUsername
 import com.foxhole.beta.ui.FoxholeCard
 import com.foxhole.beta.ui.FoxholeChoiceCard
 import com.foxhole.beta.ui.FoxholeLazyScaffold
 import com.foxhole.beta.ui.FoxholePreferenceCard
-import com.foxhole.beta.ui.FoxholeValuePill
 import com.foxhole.beta.ui.UsageTotalsCard
 import com.foxhole.beta.vpn.FoxholeTileService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.io.File
 import java.util.Date
 
 @Composable
@@ -550,30 +536,7 @@ private val TELEGRAM_PACKAGE_CANDIDATES =
         "org.thunderdog.challegram",
     )
 
-@Composable
-private fun SupportBotIcon(
-    modifier: Modifier = Modifier,
-) {
-    Surface(
-        modifier = modifier.size(38.dp),
-        shape = MaterialTheme.shapes.medium,
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
-    ) {
-        Box(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                painter = painterResource(R.drawable.ic_telegram_mark),
-                contentDescription = null,
-                tint = Color.Unspecified,
-                modifier = Modifier.size(18.dp),
-            )
-        }
-    }
-}
-
-private fun installedTelegramPackage(packageManager: PackageManager): String? =
+internal fun installedTelegramPackage(packageManager: PackageManager): String? =
     TELEGRAM_PACKAGE_CANDIDATES.firstOrNull { packageName ->
         runCatching {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -587,40 +550,9 @@ private fun installedTelegramPackage(packageManager: PackageManager): String? =
 
 private const val FOXHOLE_TELEGRAM_CHANNEL = "foxhole_repo"
 
-private fun supportBotBrowserUri(handle: String): Uri = "https://t.me/${supportBotUsername(handle)}".toUri()
-
-private fun supportBotTelegramUri(handle: String): Uri = "tg://resolve?domain=${supportBotUsername(handle)}".toUri()
-
 private fun supportChannelBrowserUri(): Uri = "https://t.me/$FOXHOLE_TELEGRAM_CHANNEL".toUri()
 
 private fun supportChannelTelegramUri(): Uri = "tg://resolve?domain=$FOXHOLE_TELEGRAM_CHANNEL".toUri()
-
-private fun openSupportBot(context: Context, handle: String): Boolean {
-    val browserIntent =
-        Intent(Intent.ACTION_VIEW, supportBotBrowserUri(handle))
-            .addCategory(Intent.CATEGORY_BROWSABLE)
-    val telegramPackage = installedTelegramPackage(context.packageManager)
-    if (telegramPackage != null) {
-        val telegramIntent =
-            Intent(Intent.ACTION_VIEW, supportBotTelegramUri(handle))
-                .setPackage(telegramPackage)
-                .addCategory(Intent.CATEGORY_BROWSABLE)
-        try {
-            context.startActivity(telegramIntent)
-            return true
-        } catch (_: ActivityNotFoundException) {
-        } catch (_: SecurityException) {
-        }
-    }
-    return try {
-        context.startActivity(browserIntent)
-        true
-    } catch (_: ActivityNotFoundException) {
-        false
-    } catch (_: SecurityException) {
-        false
-    }
-}
 
 private fun openTelegramChannel(context: Context): Boolean {
     val browserIntent =
@@ -647,125 +579,6 @@ private fun openTelegramChannel(context: Context): Boolean {
     } catch (_: SecurityException) {
         false
     }
-}
-
-private fun createTelegramDiagnosticsShareIntent(
-    packageName: String,
-    baseIntent: Intent,
-    context: Context,
-    handle: String,
-): Intent =
-    Intent(baseIntent).apply {
-        `package` = packageName
-        putExtra(
-            Intent.EXTRA_TEXT,
-            context.getString(
-                R.string.support_bot_share_text,
-                handle,
-                supportBotBrowserUri(handle).toString(),
-            ),
-        )
-    }
-
-@Composable
-private fun SupportBotDiagnosticsCard(
-    handle: String,
-    onSendLog: () -> Unit,
-    onConfigureBot: () -> Unit,
-) {
-    FoxholeCard(
-        modifier = Modifier.testTag("diagnostics_support_bot_card"),
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            SupportBotIcon()
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(3.dp),
-            ) {
-                Text(
-                    text = stringResource(R.string.send_log_to_bot),
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold,
-                )
-                Text(
-                    text = stringResource(R.string.support_bot_diagnostics_summary),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            FoxholeValuePill(value = handle)
-        }
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            Button(
-                modifier = Modifier.weight(1f),
-                onClick = onSendLog,
-            ) {
-                Text(stringResource(R.string.send_log_to_bot))
-            }
-            OutlinedButton(
-                modifier = Modifier.weight(1f),
-                onClick = onConfigureBot,
-            ) {
-                Text(stringResource(R.string.support_bot_settings_button))
-            }
-        }
-    }
-}
-
-@Composable
-private fun SupportBotHandleDialog(
-    currentHandle: String,
-    onDismiss: () -> Unit,
-    onConfirm: (String) -> Unit,
-) {
-    var value by rememberSaveable(currentHandle) { mutableStateOf(currentHandle) }
-    val normalized = com.foxhole.beta.core.settings.normalizeSupportBotHandle(value)
-    val showError = value.isNotBlank() && normalized == null
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.support_bot_settings_dialog_title)) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text(stringResource(R.string.support_bot_settings_summary))
-                OutlinedTextField(
-                    value = value,
-                    onValueChange = { value = it.trim() },
-                    label = { Text(stringResource(R.string.support_bot_handle_label)) },
-                    singleLine = true,
-                    isError = showError,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                if (showError) {
-                    Text(
-                        text = stringResource(R.string.support_bot_invalid_handle),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error,
-                    )
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(
-                onClick = { normalized?.let(onConfirm) },
-                enabled = normalized != null,
-            ) {
-                Text(stringResource(R.string.save))
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text(stringResource(R.string.cancel))
-            }
-        },
-    )
 }
 
 @Composable
@@ -1558,221 +1371,5 @@ fun AboutScreen(
                 onClick = null,
             )
         }
-    }
-}
-
-@Composable
-fun DiagnosticsScreen(
-    state: DiagnosticsRouteUiState,
-    snackbarHostState: SnackbarHostState,
-    onNavigateUp: () -> Unit,
-    onCreateDiagnosticsArchive: () -> File,
-    onShareDiagnosticsArchive: (File) -> Intent,
-    onSupportBotHandleChanged: (String?) -> Unit,
-    onClearUsage: () -> Unit,
-) {
-    val context = LocalContext.current
-    val coroutineScope = rememberCoroutineScope()
-    val supportBotHandle = effectiveSupportBotHandle(state.settings.ui.supportBotHandleOverride)
-    val supportBotOpenFailed = stringResource(R.string.support_bot_open_failed)
-    val supportBotBrowserFallback = stringResource(R.string.support_bot_browser_fallback)
-    val supportBotSaved = stringResource(R.string.support_bot_saved)
-    val diagnosticsArchiveSaved = stringResource(R.string.diagnostics_archive_saved)
-    val diagnosticsArchiveSaveFailed = stringResource(R.string.diagnostics_archive_save_failed)
-    val exportDiagnosticsTitle = stringResource(R.string.export_diagnostics)
-    var liveLogsVisible by rememberSaveable { mutableStateOf(false) }
-    var sendLogToBotVisible by rememberSaveable { mutableStateOf(false) }
-    var supportBotSettingsVisible by rememberSaveable { mutableStateOf(false) }
-    var pendingArchiveFile by remember { mutableStateOf<File?>(null) }
-    val archiveSaver =
-        rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/gzip")) { uri ->
-            val archive = pendingArchiveFile
-            pendingArchiveFile = null
-            if (uri == null || archive == null) {
-                return@rememberLauncherForActivityResult
-            }
-            coroutineScope.launch {
-                runCatching {
-                    withContext(Dispatchers.IO) {
-                        context.contentResolver.openOutputStream(uri)?.use { output ->
-                            archive.inputStream().use { input -> input.copyTo(output) }
-                        } ?: error("openOutputStream returned null")
-                        }
-                }.onSuccess {
-                    snackbarHostState.showBanner(
-                        diagnosticsArchiveSaved,
-                        FoxholeBannerTone.SUCCESS,
-                    )
-                }.onFailure {
-                    snackbarHostState.showBanner(
-                        it.message ?: diagnosticsArchiveSaveFailed,
-                        FoxholeBannerTone.ERROR,
-                    )
-                }
-            }
-        }
-
-    fun exportArchive(share: Boolean) {
-        coroutineScope.launch {
-            runCatching {
-                withContext(Dispatchers.IO) { onCreateDiagnosticsArchive() }
-            }.onSuccess { archive ->
-                if (share) {
-                    runCatching {
-                        context.startActivity(
-                            Intent.createChooser(
-                                onShareDiagnosticsArchive(archive),
-                                exportDiagnosticsTitle,
-                            ),
-                        )
-                    }.onFailure {
-                        snackbarHostState.showBanner(
-                            it.message ?: diagnosticsArchiveSaveFailed,
-                            FoxholeBannerTone.ERROR,
-                        )
-                    }
-                } else {
-                    pendingArchiveFile = archive
-                    archiveSaver.launch(archive.name)
-                }
-            }.onFailure {
-                snackbarHostState.showBanner(
-                    it.message ?: diagnosticsArchiveSaveFailed,
-                    FoxholeBannerTone.ERROR,
-                )
-            }
-        }
-    }
-
-    fun sendArchiveToSupportBot() {
-        val telegramPackage = installedTelegramPackage(context.packageManager)
-        if (telegramPackage == null) {
-            val opened = openSupportBot(context, supportBotHandle)
-            coroutineScope.launch {
-                snackbarHostState.showBanner(
-                    if (opened) {
-                        supportBotBrowserFallback
-                    } else {
-                        supportBotOpenFailed
-                    },
-                    if (opened) FoxholeBannerTone.INFO else FoxholeBannerTone.ERROR,
-                )
-            }
-            return
-        }
-        coroutineScope.launch {
-            runCatching {
-                withContext(Dispatchers.IO) { onCreateDiagnosticsArchive() }
-            }.onSuccess { archive ->
-                val shareIntent =
-                    createTelegramDiagnosticsShareIntent(
-                        packageName = telegramPackage,
-                        baseIntent = onShareDiagnosticsArchive(archive),
-                        context = context,
-                        handle = supportBotHandle,
-                    )
-                runCatching { context.startActivity(shareIntent) }
-                    .onFailure {
-                        val opened = openSupportBot(context, supportBotHandle)
-                        snackbarHostState.showBanner(
-                            if (opened) {
-                                supportBotBrowserFallback
-                            } else {
-                                supportBotOpenFailed
-                            },
-                            if (opened) FoxholeBannerTone.INFO else FoxholeBannerTone.ERROR,
-                        )
-                    }
-            }.onFailure {
-                snackbarHostState.showBanner(
-                    it.message ?: diagnosticsArchiveSaveFailed,
-                    FoxholeBannerTone.ERROR,
-                )
-            }
-        }
-    }
-
-    SettingsScaffold(
-        title = stringResource(R.string.diagnostics_and_usage),
-        snackbarHostState = snackbarHostState,
-        onNavigateUp = onNavigateUp,
-    ) {
-        item {
-            InfoBlock(
-                title = stringResource(R.string.information_title),
-                body = stringResource(R.string.diagnostics_info_body),
-            )
-        }
-        item {
-            SettingsNavigationRow(
-                icon = Icons.Outlined.FileUpload,
-                title = stringResource(R.string.export_diagnostics),
-                summary = stringResource(R.string.export_diagnostics_summary),
-                onClick = { exportArchive(share = true) },
-            )
-        }
-        item {
-            SettingsNavigationRow(
-                icon = Icons.Outlined.Info,
-                title = stringResource(R.string.logs_title),
-                summary = stringResource(R.string.logs_summary),
-                onClick = { liveLogsVisible = true },
-            )
-        }
-        item {
-            SupportBotDiagnosticsCard(
-                handle = supportBotHandle,
-                onSendLog = { sendLogToBotVisible = true },
-                onConfigureBot = { supportBotSettingsVisible = true },
-            )
-        }
-        item {
-            UsageTotalsCard(
-                state = state,
-                onClear = onClearUsage,
-            )
-        }
-    }
-
-    if (liveLogsVisible) {
-        LiveLogsDialog(
-            entries = state.diagnosticEntries,
-            networkActivityLoggingEnabled = state.settings.expert.networkActivityLogging,
-            retention = state.settings.expert.diagnosticsRetention,
-            onDismiss = { liveLogsVisible = false },
-            onShareArchive = { exportArchive(share = true) },
-            onSaveArchive = { exportArchive(share = false) },
-        )
-    }
-
-    if (sendLogToBotVisible) {
-        ConfirmDialog(
-            title = stringResource(R.string.send_log_to_bot),
-            body = stringResource(R.string.send_log_to_bot_confirm_body),
-            confirmLabel = stringResource(R.string.send_log_to_bot),
-            icon = Icons.Outlined.FileUpload,
-            onDismiss = { sendLogToBotVisible = false },
-            onConfirm = {
-                sendLogToBotVisible = false
-                sendArchiveToSupportBot()
-            },
-        )
-    }
-
-    if (supportBotSettingsVisible) {
-        SupportBotHandleDialog(
-            currentHandle = supportBotHandle,
-            onDismiss = { supportBotSettingsVisible = false },
-            onConfirm = { handle ->
-                supportBotSettingsVisible = false
-                onSupportBotHandleChanged(handle)
-                coroutineScope.launch {
-                    snackbarHostState.showBanner(
-                        supportBotSaved,
-                        FoxholeBannerTone.SUCCESS,
-                    )
-                }
-            },
-        )
     }
 }
