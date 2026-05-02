@@ -56,7 +56,6 @@ import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -95,19 +94,28 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpOffset
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntRect
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupPositionProvider
+import androidx.compose.ui.window.PopupProperties
 import androidx.core.content.getSystemService
 import com.foxhole.beta.R
 import com.foxhole.beta.core.model.ThemeMode
 import com.foxhole.beta.ui.theme.LocalFoxholeThemeMode
 import com.foxhole.beta.ui.theme.LocalFoxholeUiPalette
+import kotlin.math.max
 
 internal val ScreenHorizontalPadding = 16.dp
 internal val ScreenVerticalPadding = 10.dp
@@ -793,6 +801,7 @@ internal fun FoxholeCard(
     val colors =
         CardDefaults.cardColors(
             containerColor = resolvedContainerColor,
+            contentColor = MaterialTheme.colorScheme.onSurface,
         )
     val elevation =
         CardDefaults.cardElevation(
@@ -881,27 +890,69 @@ internal fun FoxholeDropdownMenu(
     offset: DpOffset = DpOffset.Zero,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    val menuOffset = DpOffset(x = offset.x, y = offset.y + FoxholeDropdownTriggerGap)
-    DropdownMenu(
-        expanded = expanded,
+    if (!expanded) {
+        return
+    }
+    val density = LocalDensity.current
+    val menuOffset =
+        with(density) {
+            IntOffset(
+                x = offset.x.roundToPx(),
+                y = (offset.y + FoxholeDropdownTriggerGap).roundToPx(),
+            )
+        }
+    Popup(
+        popupPositionProvider = remember(menuOffset) { FoxholeDropdownPositionProvider(menuOffset) },
         onDismissRequest = onDismissRequest,
-        modifier = modifier.widthIn(max = 392.dp),
-        offset = menuOffset,
-        shape = FoxholeDropdownShape,
-        containerColor = MenuDefaults.containerColor,
-        tonalElevation = MenuDefaults.TonalElevation,
-        shadowElevation = MenuDefaults.ShadowElevation,
+        properties = PopupProperties(focusable = true),
     ) {
-        Column(
-            verticalArrangement = Arrangement.spacedBy(0.dp),
-            content = content,
-        )
+        Surface(
+            modifier = modifier.widthIn(max = 392.dp),
+            shape = FoxholeDropdownShape,
+            color = MenuDefaults.containerColor,
+            tonalElevation = MenuDefaults.TonalElevation,
+            shadowElevation = MenuDefaults.ShadowElevation,
+        ) {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(0.dp),
+                content = content,
+            )
+        }
     }
 }
 
 private val FoxholeDropdownShape = RoundedCornerShape(18.dp)
 private val FoxholeDropdownTriggerGap = 8.dp
 private val FoxholeDropdownInternalVerticalPadding = 8.dp
+
+private class FoxholeDropdownPositionProvider(
+    private val offset: IntOffset,
+) : PopupPositionProvider {
+    override fun calculatePosition(
+        anchorBounds: IntRect,
+        windowSize: IntSize,
+        layoutDirection: LayoutDirection,
+        popupContentSize: IntSize,
+    ): IntOffset {
+        val requestedX =
+            when (layoutDirection) {
+                LayoutDirection.Ltr -> anchorBounds.right - popupContentSize.width + offset.x
+                LayoutDirection.Rtl -> anchorBounds.left - offset.x
+            }
+        val maxX = max(0, windowSize.width - popupContentSize.width)
+        val x = requestedX.coerceIn(0, maxX)
+        val belowY = anchorBounds.bottom + offset.y
+        val aboveY = anchorBounds.top - popupContentSize.height - offset.y
+        val requestedY =
+            if (belowY + popupContentSize.height <= windowSize.height || aboveY < 0) {
+                belowY
+            } else {
+                aboveY
+            }
+        val maxY = max(0, windowSize.height - popupContentSize.height)
+        return IntOffset(x = x, y = requestedY.coerceIn(0, maxY))
+    }
+}
 
 @Composable
 internal fun FoxholeDropdownItem(
@@ -1009,7 +1060,7 @@ internal fun FoxholePreferenceCard(
     containerColor: Color = Color.Unspecified,
     borderColor: Color = Color.Unspecified,
     leadingIconContainerColor: Color = Color.Unspecified,
-    leadingIconTint: Color = MaterialTheme.colorScheme.primary,
+    leadingIconTint: Color = MaterialTheme.colorScheme.onSurfaceVariant,
     summaryMaxLines: Int = 1,
 ) {
     val uiPalette = LocalFoxholeUiPalette.current

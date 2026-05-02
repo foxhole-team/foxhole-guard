@@ -112,194 +112,194 @@ fun ExpertSettingsScreen(
             )
         }
         item {
-            SettingSwitchRow(
-                title = stringResource(R.string.show_advanced_settings_title),
-                checked = state.settings.ui.showExpertSettings,
-                summary = stringResource(R.string.show_advanced_settings_summary),
-                leadingIcon = Icons.Outlined.Shield,
-                onCheckedChange = onShowExpertSettingsChanged,
-                summaryMaxLines = 3,
-            )
-        }
-        item {
-            SettingSwitchRow(
-                title = stringResource(R.string.sniff_traffic),
-                checked = state.settings.expert.sniff,
-                summary = stringResource(R.string.sniff_traffic_summary),
-                onCheckedChange = { enabled ->
-                    if (enabled) {
-                        requireWarning { onSniffChanged(true) }
-                    } else {
-                        onSniffChanged(false)
-                    }
-                },
-                summaryMaxLines = 3,
-            )
-        }
-        item {
-            SettingSwitchRow(
-                title = stringResource(R.string.route_only),
-                checked = state.settings.expert.routeOnly,
-                summary = stringResource(R.string.route_only_summary),
-                onCheckedChange = { enabled ->
-                    if (enabled) {
-                        requireWarning { onRouteOnlyChanged(true) }
-                    } else {
-                        onRouteOnlyChanged(false)
-                    }
-                },
-                summaryMaxLines = 3,
-            )
-        }
-        item {
-            SettingSwitchRow(
-                title = stringResource(R.string.strict_route),
-                checked = state.settings.expert.strictRoute,
-                summary = stringResource(R.string.strict_route_summary),
-                onCheckedChange = onStrictRouteChanged,
-                summaryMaxLines = 3,
-            )
-        }
-        item {
-            SettingSwitchRow(
-                title = stringResource(R.string.allow_private_outbound_hosts),
-                checked = state.settings.expert.allowPrivateOutboundHosts,
-                summary = stringResource(R.string.allow_private_outbound_hosts_summary),
-                onCheckedChange = { enabled ->
-                    if (enabled) {
-                        requireWarning { onAllowPrivateOutboundHostsChanged(true) }
-                    } else {
-                        onAllowPrivateOutboundHostsChanged(false)
-                    }
-                },
-                summaryMaxLines = 3,
-            )
-        }
-        item {
-            SettingSwitchRow(
-                title = stringResource(R.string.network_activity_logging_title),
-                checked = state.settings.expert.networkActivityLogging,
-                summary = stringResource(R.string.network_activity_logging_summary),
-                onCheckedChange = onNetworkActivityLoggingChanged,
-                summaryMaxLines = 4,
-            )
-        }
-        item {
-            DropdownSettingRow(
-                title = stringResource(R.string.diagnostics_retention_title),
-                value = diagnosticsRetentionLabel(state.settings.expert.diagnosticsRetention),
-                expanded = diagnosticsRetentionMenuExpanded,
-                onExpandedChange = { diagnosticsRetentionMenuExpanded = it },
-                values = DiagnosticsRetention.entries,
-                selected = state.settings.expert.diagnosticsRetention,
-                label = { diagnosticsRetentionLabel(it) },
-                onSelect = onDiagnosticsRetentionSelected,
-                summary = stringResource(R.string.diagnostics_retention_summary),
-                leadingIcon = Icons.Outlined.Info,
-                optionIcon = { Icons.Outlined.Tune },
-            )
-        }
-        item {
-            SettingSwitchRow(
-                title = stringResource(R.string.smart_start_replay_logging_title),
-                checked = state.settings.expert.smartStartReplayLogging,
-                summary = stringResource(R.string.smart_start_replay_logging_summary),
-                onCheckedChange = { enabled ->
-                    if (enabled) {
-                        requireWarning { onSmartStartReplayLoggingChanged(true) }
-                    } else {
-                        onSmartStartReplayLoggingChanged(false)
-                    }
-                },
-                summaryMaxLines = 3,
-            )
-        }
-        item {
-            SettingSwitchRow(
-                title = stringResource(R.string.allow_http_config_imports_title),
-                checked = state.settings.expert.allowHttpConfigImports,
-                summary = stringResource(R.string.allow_http_config_imports_summary),
-                onCheckedChange = { enabled ->
-                    if (enabled) {
-                        requireWarning { onAllowHttpConfigImportsChanged(true) }
-                    } else {
-                        onAllowHttpConfigImportsChanged(false)
-                    }
-                },
-                summaryMaxLines = 3,
-            )
-        }
-        item {
-            SettingSwitchRow(
-                title = stringResource(R.string.allow_insecure_tls_title),
-                checked = state.settings.expert.allowInsecureTls,
-                summary = stringResource(R.string.allow_insecure_tls_summary),
-                onCheckedChange = { enabled ->
-                    if (enabled) {
-                        requireWarning { onAllowInsecureTlsChanged(true) }
-                    } else {
-                        onAllowInsecureTlsChanged(false)
-                    }
-                },
-                summaryMaxLines = 3,
-            )
-        }
-        item {
-            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-        }
-        item {
-            SettingSwitchRow(
-                title = stringResource(R.string.proxy_auth_title),
-                checked = state.settings.expert.localSurfaces.auth.enabled,
-                summary = stringResource(R.string.proxy_auth_summary),
-                onCheckedChange = { enabled ->
-                    if (enabled) {
-                        requireWarning { onLocalProxyAuthEnabledChanged(true) }
-                    } else {
-                        onLocalProxyAuthEnabledChanged(false)
-                    }
-                },
-            )
-        }
-        item {
-            LocalProxyAuthEditor(
-                auth = state.settings.expert.localSurfaces.auth,
-                onAuthChanged = { value ->
-                    if (value.username.isNotBlank() && value.password.isNotBlank()) {
-                        requireWarning { onLocalProxyAuthChanged(value) }
-                    } else {
-                        onLocalProxyAuthChanged(value)
-                    }
-                },
-            )
-        }
-        item {
-            SettingValueRow(
-                title = stringResource(R.string.socks_inbound),
-                value = surfaceSummary(state.settings.expert.localSurfaces.socks, state.settings.expert.localSurfaces.auth.enabled),
-                onClick = { socksDialog = true },
-            )
-        }
-        item {
-            SettingValueRow(
-                title = stringResource(R.string.http_inbound),
-                value = surfaceSummary(state.settings.expert.localSurfaces.http, state.settings.expert.localSurfaces.auth.enabled),
-                onClick = { httpDialog = true },
-            )
-        }
-        item {
-            SettingValueRow(
-                title = stringResource(R.string.mixed_inbound),
-                value = surfaceSummary(state.settings.expert.localSurfaces.mixed, state.settings.expert.localSurfaces.auth.enabled),
-                onClick = { mixedDialog = true },
-            )
-        }
-        item {
-            SettingValueRow(
-                title = stringResource(R.string.clash_api),
-                value = clashSummary(state.settings.expert.localSurfaces.clashApi),
-                onClick = { clashDialog = true },
-            )
+            SettingsControlGroup {
+                SettingSwitchRow(
+                    title = stringResource(R.string.show_advanced_settings_title),
+                    checked = state.settings.ui.showExpertSettings,
+                    summary = stringResource(R.string.show_advanced_settings_summary),
+                    leadingIcon = Icons.Outlined.Shield,
+                    onCheckedChange = onShowExpertSettingsChanged,
+                    summaryMaxLines = 3,
+                    grouped = true,
+                )
+                SettingsControlGroupDivider()
+                SettingSwitchRow(
+                    title = stringResource(R.string.sniff_traffic),
+                    checked = state.settings.expert.sniff,
+                    summary = stringResource(R.string.sniff_traffic_summary),
+                    onCheckedChange = { enabled ->
+                        if (enabled) {
+                            requireWarning { onSniffChanged(true) }
+                        } else {
+                            onSniffChanged(false)
+                        }
+                    },
+                    summaryMaxLines = 3,
+                    grouped = true,
+                )
+                SettingsControlGroupDivider()
+                SettingSwitchRow(
+                    title = stringResource(R.string.route_only),
+                    checked = state.settings.expert.routeOnly,
+                    summary = stringResource(R.string.route_only_summary),
+                    onCheckedChange = { enabled ->
+                        if (enabled) {
+                            requireWarning { onRouteOnlyChanged(true) }
+                        } else {
+                            onRouteOnlyChanged(false)
+                        }
+                    },
+                    summaryMaxLines = 3,
+                    grouped = true,
+                )
+                SettingsControlGroupDivider()
+                SettingSwitchRow(
+                    title = stringResource(R.string.strict_route),
+                    checked = state.settings.expert.strictRoute,
+                    summary = stringResource(R.string.strict_route_summary),
+                    onCheckedChange = onStrictRouteChanged,
+                    summaryMaxLines = 3,
+                    grouped = true,
+                )
+                SettingsControlGroupDivider()
+                SettingSwitchRow(
+                    title = stringResource(R.string.allow_private_outbound_hosts),
+                    checked = state.settings.expert.allowPrivateOutboundHosts,
+                    summary = stringResource(R.string.allow_private_outbound_hosts_summary),
+                    onCheckedChange = { enabled ->
+                        if (enabled) {
+                            requireWarning { onAllowPrivateOutboundHostsChanged(true) }
+                        } else {
+                            onAllowPrivateOutboundHostsChanged(false)
+                        }
+                    },
+                    summaryMaxLines = 3,
+                    grouped = true,
+                )
+                SettingsControlGroupDivider()
+                SettingSwitchRow(
+                    title = stringResource(R.string.network_activity_logging_title),
+                    checked = state.settings.expert.networkActivityLogging,
+                    summary = stringResource(R.string.network_activity_logging_summary),
+                    onCheckedChange = onNetworkActivityLoggingChanged,
+                    summaryMaxLines = 4,
+                    grouped = true,
+                )
+                SettingsControlGroupDivider()
+                DropdownSettingRow(
+                    title = stringResource(R.string.diagnostics_retention_title),
+                    value = diagnosticsRetentionLabel(state.settings.expert.diagnosticsRetention),
+                    expanded = diagnosticsRetentionMenuExpanded,
+                    onExpandedChange = { diagnosticsRetentionMenuExpanded = it },
+                    values = DiagnosticsRetention.entries,
+                    selected = state.settings.expert.diagnosticsRetention,
+                    label = { diagnosticsRetentionLabel(it) },
+                    onSelect = onDiagnosticsRetentionSelected,
+                    summary = stringResource(R.string.diagnostics_retention_summary),
+                    leadingIcon = Icons.Outlined.Info,
+                    optionIcon = { Icons.Outlined.Tune },
+                    grouped = true,
+                )
+                SettingsControlGroupDivider()
+                SettingSwitchRow(
+                    title = stringResource(R.string.smart_start_replay_logging_title),
+                    checked = state.settings.expert.smartStartReplayLogging,
+                    summary = stringResource(R.string.smart_start_replay_logging_summary),
+                    onCheckedChange = { enabled ->
+                        if (enabled) {
+                            requireWarning { onSmartStartReplayLoggingChanged(true) }
+                        } else {
+                            onSmartStartReplayLoggingChanged(false)
+                        }
+                    },
+                    summaryMaxLines = 3,
+                    grouped = true,
+                )
+                SettingsControlGroupDivider()
+                SettingSwitchRow(
+                    title = stringResource(R.string.allow_http_config_imports_title),
+                    checked = state.settings.expert.allowHttpConfigImports,
+                    summary = stringResource(R.string.allow_http_config_imports_summary),
+                    onCheckedChange = { enabled ->
+                        if (enabled) {
+                            requireWarning { onAllowHttpConfigImportsChanged(true) }
+                        } else {
+                            onAllowHttpConfigImportsChanged(false)
+                        }
+                    },
+                    summaryMaxLines = 3,
+                    grouped = true,
+                )
+                SettingsControlGroupDivider()
+                SettingSwitchRow(
+                    title = stringResource(R.string.allow_insecure_tls_title),
+                    checked = state.settings.expert.allowInsecureTls,
+                    summary = stringResource(R.string.allow_insecure_tls_summary),
+                    onCheckedChange = { enabled ->
+                        if (enabled) {
+                            requireWarning { onAllowInsecureTlsChanged(true) }
+                        } else {
+                            onAllowInsecureTlsChanged(false)
+                        }
+                    },
+                    summaryMaxLines = 3,
+                    grouped = true,
+                )
+                SettingsControlGroupDivider()
+                SettingSwitchRow(
+                    title = stringResource(R.string.proxy_auth_title),
+                    checked = state.settings.expert.localSurfaces.auth.enabled,
+                    summary = stringResource(R.string.proxy_auth_summary),
+                    onCheckedChange = { enabled ->
+                        if (enabled) {
+                            requireWarning { onLocalProxyAuthEnabledChanged(true) }
+                        } else {
+                            onLocalProxyAuthEnabledChanged(false)
+                        }
+                    },
+                    grouped = true,
+                )
+                SettingsControlGroupDivider()
+                LocalProxyAuthEditor(
+                    auth = state.settings.expert.localSurfaces.auth,
+                    onAuthChanged = { value ->
+                        if (value.username.isNotBlank() && value.password.isNotBlank()) {
+                            requireWarning { onLocalProxyAuthChanged(value) }
+                        } else {
+                            onLocalProxyAuthChanged(value)
+                        }
+                    },
+                    grouped = true,
+                )
+                SettingsControlGroupDivider()
+                SettingValueRow(
+                    title = stringResource(R.string.socks_inbound),
+                    value = surfaceSummary(state.settings.expert.localSurfaces.socks, state.settings.expert.localSurfaces.auth.enabled),
+                    onClick = { socksDialog = true },
+                    grouped = true,
+                )
+                SettingsControlGroupDivider()
+                SettingValueRow(
+                    title = stringResource(R.string.http_inbound),
+                    value = surfaceSummary(state.settings.expert.localSurfaces.http, state.settings.expert.localSurfaces.auth.enabled),
+                    onClick = { httpDialog = true },
+                    grouped = true,
+                )
+                SettingsControlGroupDivider()
+                SettingValueRow(
+                    title = stringResource(R.string.mixed_inbound),
+                    value = surfaceSummary(state.settings.expert.localSurfaces.mixed, state.settings.expert.localSurfaces.auth.enabled),
+                    onClick = { mixedDialog = true },
+                    grouped = true,
+                )
+                SettingsControlGroupDivider()
+                SettingValueRow(
+                    title = stringResource(R.string.clash_api),
+                    value = clashSummary(state.settings.expert.localSurfaces.clashApi),
+                    onClick = { clashDialog = true },
+                    grouped = true,
+                )
+            }
         }
         item {
             Row(

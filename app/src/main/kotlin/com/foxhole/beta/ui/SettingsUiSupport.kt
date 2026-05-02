@@ -26,6 +26,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -85,6 +86,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
@@ -104,6 +106,7 @@ import com.foxhole.beta.core.model.RoutingRule
 import com.foxhole.beta.core.model.RoutingRuleAction
 import com.foxhole.beta.core.model.TrafficMode
 import com.foxhole.beta.core.model.TunStack
+import com.foxhole.beta.ui.theme.LocalFoxholeUiPalette
 import com.foxhole.beta.vpn.AndroidLanProxyAddressProvider
 import java.io.File
 import java.text.SimpleDateFormat
@@ -136,13 +139,40 @@ internal fun SettingsNavigationRow(
     title: String,
     summary: String? = null,
     showAlertDot: Boolean = false,
-    containerColor: Color = MaterialTheme.colorScheme.surface,
-    borderColor: Color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.72f),
-    leadingIconContainerColor: Color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.62f),
-    leadingIconTint: Color = MaterialTheme.colorScheme.primary,
+    containerColor: Color = Color.Unspecified,
+    borderColor: Color = Color.Unspecified,
+    leadingIconContainerColor: Color = Color.Unspecified,
+    leadingIconTint: Color = MaterialTheme.colorScheme.onSurfaceVariant,
     summaryMaxLines: Int = 1,
+    grouped: Boolean = false,
     onClick: () -> Unit,
 ) {
+    val trailingContent: @Composable RowScope.() -> Unit = {
+        if (showAlertDot) {
+            Box(
+                modifier =
+                    Modifier
+                        .padding(end = 8.dp)
+                        .size(8.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.error),
+            )
+        }
+    }
+    if (grouped) {
+        SettingsControlRow(
+            modifier = modifier,
+            title = title,
+            summary = summary?.trimMenuSummary(),
+            leadingIcon = icon,
+            leadingIconContainerColor = leadingIconContainerColor,
+            leadingIconTint = leadingIconTint,
+            summaryMaxLines = summaryMaxLines,
+            onClick = onClick,
+            trailingContent = trailingContent,
+        )
+        return
+    }
     FoxholePreferenceCard(
         modifier = modifier,
         title = title,
@@ -154,18 +184,7 @@ internal fun SettingsNavigationRow(
         leadingIconContainerColor = leadingIconContainerColor,
         leadingIconTint = leadingIconTint,
         summaryMaxLines = summaryMaxLines,
-        trailingContent = {
-            if (showAlertDot) {
-                Box(
-                    modifier =
-                        Modifier
-                            .padding(end = 8.dp)
-                            .size(8.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.error),
-                )
-            }
-        },
+        trailingContent = trailingContent,
     )
 }
 
@@ -180,7 +199,21 @@ internal fun SettingValueRow(
     onClick: (() -> Unit)?,
     trailingContent: (@Composable RowScope.() -> Unit)? = null,
     summaryMaxLines: Int = 1,
+    grouped: Boolean = false,
 ) {
+    if (grouped) {
+        SettingsControlRow(
+            title = title,
+            summary = summary,
+            leadingIcon = leadingIcon,
+            onClick = onClick,
+            summaryMaxLines = summaryMaxLines,
+            trailingContent = {
+                trailingContent?.invoke(this) ?: FoxholeValuePill(value = value)
+            },
+        )
+        return
+    }
     FoxholePreferenceCard(
         title = title,
         summary = summary,
@@ -207,12 +240,14 @@ internal fun <T> DropdownSettingRow(
     leadingIcon: ImageVector? = null,
     optionIcon: ((T) -> ImageVector)? = null,
     summaryMaxLines: Int = 1,
+    grouped: Boolean = false,
 ) {
     val optionLabels = values.map { option -> label(option) }
     val menuWidth =
         rememberDropdownMenuWidth(
             labels = optionLabels,
             textStyle = MaterialTheme.typography.bodyMedium,
+            hasIcons = optionIcon != null,
         )
     SettingValueRow(
         title = title,
@@ -228,6 +263,7 @@ internal fun <T> DropdownSettingRow(
             ) {
                 FoxholeValuePill(
                     value = value,
+                    modifier = Modifier.fillMaxWidth(),
                     expanded = expanded,
                     onClick = { onExpandedChange(!expanded) },
                 )
@@ -258,12 +294,16 @@ internal fun <T> DropdownSettingRow(
                             Text(
                                 text = optionLabels[index],
                                 style = MaterialTheme.typography.bodyMedium,
+                                maxLines = 1,
+                                softWrap = false,
+                                overflow = TextOverflow.Ellipsis,
                             )
                         }
                     }
                 }
             }
         },
+        grouped = grouped,
     )
 }
 
@@ -271,6 +311,7 @@ internal fun <T> DropdownSettingRow(
 private fun rememberDropdownMenuWidth(
     labels: List<String>,
     textStyle: TextStyle,
+    hasIcons: Boolean,
 ): Dp {
     val textMeasurer = rememberTextMeasurer()
     val density = LocalDensity.current
@@ -281,9 +322,9 @@ private fun rememberDropdownMenuWidth(
             } ?: 0
         }
     return with(density) {
-        (maxTextWidthPx.toDp() + 52.dp)
-            .coerceAtLeast(104.dp)
-            .coerceAtMost(220.dp)
+        (maxTextWidthPx.toDp() + if (hasIcons) 88.dp else 56.dp)
+            .coerceAtLeast(if (hasIcons) 148.dp else 112.dp)
+            .coerceAtMost(260.dp)
     }
 }
 
@@ -296,6 +337,7 @@ internal fun SettingSwitchRow(
     leadingIcon: ImageVector? = null,
     enabled: Boolean = true,
     summaryMaxLines: Int = 1,
+    grouped: Boolean = false,
 ) {
     val switchStateDescription =
         stringResource(
@@ -305,35 +347,151 @@ internal fun SettingSwitchRow(
                 R.string.switch_state_off
             },
         )
+    val rowModifier =
+        Modifier.semantics(mergeDescendants = true) {
+            contentDescription = title
+            stateDescription = switchStateDescription
+        }
+    val rowClick =
+        if (enabled) {
+            { onCheckedChange(!checked) }
+        } else {
+            null
+        }
+    val rowTrailingContent: @Composable RowScope.() -> Unit = {
+        FoxholeSwitch(
+            checked = checked,
+            enabled = enabled,
+            onCheckedChange = if (enabled) onCheckedChange else null,
+            modifier =
+                Modifier.semantics {
+                    contentDescription = title
+                    stateDescription = switchStateDescription
+                },
+        )
+    }
+    if (grouped) {
+        SettingsControlRow(
+            modifier = rowModifier,
+            title = title,
+            summary = summary,
+            leadingIcon = leadingIcon,
+            summaryMaxLines = summaryMaxLines,
+            onClick = rowClick,
+            trailingContent = rowTrailingContent,
+        )
+        return
+    }
     FoxholePreferenceCard(
-        modifier =
-            Modifier.semantics(mergeDescendants = true) {
-                contentDescription = title
-                stateDescription = switchStateDescription
-            },
+        modifier = rowModifier,
         title = title,
         summary = summary,
         leadingIcon = leadingIcon,
         summaryMaxLines = summaryMaxLines,
-        onClick =
-            if (enabled) {
-                { onCheckedChange(!checked) }
-            } else {
-                null
-            },
-        trailingContent = {
-            FoxholeSwitch(
-                checked = checked,
-                enabled = enabled,
-                onCheckedChange = if (enabled) onCheckedChange else null,
-                modifier =
-                    Modifier.semantics {
-                        contentDescription = title
-                        stateDescription = switchStateDescription
-                    },
-            )
-        },
+        onClick = rowClick,
+        trailingContent = rowTrailingContent,
     )
+}
+
+@Composable
+internal fun SettingsControlGroup(
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.large,
+        color = LocalFoxholeUiPalette.current.cardContainerColor,
+        tonalElevation = 0.dp,
+        shadowElevation = 0.dp,
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 5.dp),
+            content = content,
+        )
+    }
+}
+
+@Composable
+internal fun SettingsControlGroupDivider() {
+    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.30f))
+}
+
+@Composable
+private fun SettingsControlRow(
+    modifier: Modifier = Modifier,
+    title: String,
+    summary: String? = null,
+    leadingIcon: ImageVector? = null,
+    leadingIconContainerColor: Color = Color.Unspecified,
+    leadingIconTint: Color = MaterialTheme.colorScheme.onSurfaceVariant,
+    summaryMaxLines: Int = 1,
+    onClick: (() -> Unit)?,
+    trailingContent: (@Composable RowScope.() -> Unit)? = null,
+) {
+    val rowShape = MaterialTheme.shapes.medium
+    Row(
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .clip(rowShape)
+                .then(
+                    if (onClick != null) {
+                        Modifier.clickable(onClick = onClick)
+                    } else {
+                        Modifier
+                    },
+                ).heightIn(min = if (summary.isNullOrBlank()) 48.dp else 60.dp)
+                .padding(vertical = 7.dp),
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        leadingIcon?.let { icon ->
+            Surface(
+                shape = MaterialTheme.shapes.medium,
+                color =
+                    if (leadingIconContainerColor == Color.Unspecified) {
+                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.62f)
+                    } else {
+                        leadingIconContainerColor
+                    },
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    modifier = Modifier.padding(7.dp).size(18.dp),
+                    tint = leadingIconTint,
+                )
+            }
+        }
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(3.dp),
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            summary?.takeIf(String::isNotBlank)?.let {
+                Text(
+                    text = it,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = summaryMaxLines,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+        trailingContent?.let {
+            Row(
+                modifier = Modifier.widthIn(min = 52.dp, max = 260.dp),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically,
+                content = it,
+            )
+        }
+    }
 }
 
 @Composable
@@ -455,6 +613,7 @@ internal fun InfoBlock(
 internal fun LocalProxyAuthEditor(
     auth: LocalAuthSettings,
     onAuthChanged: (LocalAuthSettings) -> Unit,
+    grouped: Boolean = false,
 ) {
     var usernameDialog by rememberSaveable { mutableStateOf(false) }
     var passwordDialog by rememberSaveable { mutableStateOf(false) }
@@ -478,7 +637,11 @@ internal fun LocalProxyAuthEditor(
                 }
             }
         },
+        grouped = grouped,
     )
+    if (grouped) {
+        SettingsControlGroupDivider()
+    }
     SettingValueRow(
         title = stringResource(R.string.password),
         value = maskedProxySecret(auth.password),
@@ -497,6 +660,7 @@ internal fun LocalProxyAuthEditor(
                 }
             }
         },
+        grouped = grouped,
     )
 
     if (usernameDialog) {

@@ -494,7 +494,7 @@ fun HomeScreen(
                                     contentDescription = null,
                                     onClick = onOpenProfiles,
                                     modifier = Modifier.size(30.dp),
-                                    tint = autoTone,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             },
                         )

@@ -462,7 +462,6 @@ private fun ProtocolMarkOrSelector(
                 }
                 protocolOptions.forEachIndexed { index, option ->
                     val optionSelected = option.id == selected.id
-                    val selectionTone = foxholeSystemAwareAccentColor()
                     FoxholeDropdownItem(
                         onClick = {
                             expanded = false
@@ -470,7 +469,7 @@ private fun ProtocolMarkOrSelector(
                         },
                         selected = optionSelected,
                         highlightSelected = true,
-                        selectedContainerColor = selectionTone.copy(alpha = 0.10f),
+                        selectedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.42f),
                         extendSelectedToMenuTop = index == 0 && dropdownInfoText == null,
                         extendSelectedToMenuBottom = index == protocolOptions.lastIndex,
                         shape =
@@ -599,7 +598,7 @@ internal fun SmartProfileConditionStars(
                         null
                     },
                 modifier = Modifier.size(if (compact) 9.dp else 10.dp),
-                tint = foxholeSystemAwareAccentColor(),
+                tint = MaterialTheme.colorScheme.onSurface,
             )
         }
     }
@@ -716,7 +715,7 @@ internal fun protocolLatencyIconTint(
     unavailable: Boolean = false,
 ): Color =
     when (classifyVpnLatency(latencyMs = latencyMs, failed = down, unavailable = unavailable || latencyMs == null)) {
-        LatencyQuality.FAST -> MaterialTheme.colorScheme.primary
+        LatencyQuality.FAST -> FoxholePositiveAccent
         LatencyQuality.NORMAL -> MaterialTheme.colorScheme.onSurfaceVariant
         LatencyQuality.SLOW -> Color(0xFFE0B84A)
         LatencyQuality.VERY_SLOW -> Color(0xFFE28131)

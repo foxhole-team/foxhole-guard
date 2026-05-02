@@ -156,9 +156,9 @@ private fun defaultFoxholeUiPalette(
             },
         cardContainerColor =
             if (useDarkPalette) {
-                colorScheme.surfaceContainerLow
+                colorScheme.surfaceContainerHigh
             } else {
-                colorScheme.surface
+                colorScheme.surfaceContainerLowest
             },
         cardBorderColor = colorScheme.outlineVariant.copy(alpha = 0.72f),
         leadingIconContainerColor = colorScheme.surfaceVariant,

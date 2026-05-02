@@ -141,7 +141,7 @@ internal fun SmartProfileAutoConnectMenu(
             border =
                 BorderStroke(
                     1.dp,
-                    foxholeSystemAwareAccentColor(fallback = FoxholeInfoAccent).copy(alpha = 0.18f),
+                    MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.42f),
                 ),
         ) {
             Box(
@@ -152,7 +152,7 @@ internal fun SmartProfileAutoConnectMenu(
                     imageVector = Icons.Outlined.Settings,
                     contentDescription = stringResource(R.string.smart_profile_menu_title),
                     modifier = Modifier.size(actionIconSize ?: if (compact) 16.dp else 20.dp),
-                    tint = foxholeSystemAwareAccentColor(fallback = FoxholeInfoAccent),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }
@@ -954,7 +954,7 @@ private fun SmartProfileLegendLine(
     compact: Boolean,
     modifier: Modifier = Modifier,
 ) {
-    val starColor = foxholeSystemAwareAccentColor()
+    val legendColor = MaterialTheme.colorScheme.onSurface
     Row(
         modifier = modifier,
         horizontalArrangement = Arrangement.spacedBy(0.dp),
@@ -962,14 +962,16 @@ private fun SmartProfileLegendLine(
     ) {
         SmartProfileLegendRow(
             starCount = 1,
-            starColor = starColor,
+            starColor = legendColor,
+            labelColor = legendColor,
             label = stringResource(R.string.smart_profile_legend_favorite),
             compact = compact,
         )
         SmartProfileLegendSeparator(compact = compact)
         SmartProfileLegendRow(
             starCount = 2,
-            starColor = starColor,
+            starColor = legendColor,
+            labelColor = legendColor,
             label = stringResource(R.string.smart_profile_legend_reconnect_recommended),
             compact = compact,
         )
@@ -987,7 +989,7 @@ private fun SmartProfileLegendSeparator(compact: Boolean) {
                 lineHeight = if (compact) 9.sp else 11.sp,
                 fontWeight = FontWeight.Medium,
             ),
-        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.82f),
+        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.70f),
         maxLines = 1,
         softWrap = false,
     )
@@ -997,6 +999,7 @@ private fun SmartProfileLegendSeparator(compact: Boolean) {
 private fun SmartProfileLegendRow(
     starCount: Int,
     starColor: Color,
+    labelColor: Color,
     label: String,
     compact: Boolean,
     modifier: Modifier = Modifier,
@@ -1027,7 +1030,7 @@ private fun SmartProfileLegendRow(
                     lineHeight = if (compact) 9.sp else 11.sp,
                     fontWeight = FontWeight.Medium,
                 ),
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = labelColor,
             maxLines = 1,
             softWrap = false,
             overflow = TextOverflow.Ellipsis,

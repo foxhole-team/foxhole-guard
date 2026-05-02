@@ -112,6 +112,7 @@ import com.foxhole.beta.ui.FoxholeChoiceCard
 import com.foxhole.beta.ui.FoxholeLazyScaffold
 import com.foxhole.beta.ui.FoxholePreferenceCard
 import com.foxhole.beta.ui.UsageTotalsCard
+import com.foxhole.beta.ui.theme.LocalFoxholeUiPalette
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -354,7 +355,7 @@ private fun SettingsNavigationGroup(content: @Composable ColumnScope.() -> Unit)
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.large,
-        color = MaterialTheme.colorScheme.surface,
+        color = LocalFoxholeUiPalette.current.cardContainerColor,
         tonalElevation = 0.dp,
         shadowElevation = 0.dp,
     ) {
@@ -392,7 +393,7 @@ private fun SettingsGroupedNavigationRow(
                 imageVector = icon,
                 contentDescription = null,
                 modifier = Modifier.padding(7.dp).size(18.dp),
-                tint = MaterialTheme.colorScheme.primary,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
         Column(
@@ -440,52 +441,55 @@ fun SmartStartSettingsScreen(
     ) {
         if (state.hasSmartProfile) {
             item {
-                DropdownSettingRow(
-                    title = stringResource(R.string.smart_start_protocol_timeout_title),
-                    value = smartStartTimeoutLabel(state.settings.connection.smartStartProtocolSelectionTimeoutSeconds),
-                    expanded = protocolTimeoutExpanded,
-                    onExpandedChange = { protocolTimeoutExpanded = it },
-                    values = smartStartTimeoutOptions(SMART_START_PROTOCOL_TIMEOUT_MIN_SECONDS),
-                    selected = state.settings.connection.smartStartProtocolSelectionTimeoutSeconds,
-                    label = { smartStartTimeoutLabel(it) },
-                    onSelect = onSmartStartProtocolSelectionTimeoutChanged,
-                    summary = stringResource(R.string.smart_start_protocol_timeout_summary),
-                    leadingIcon = Icons.Outlined.Speed,
-                    optionIcon = { Icons.Outlined.Speed },
-                    summaryMaxLines = 3,
-                )
-            }
-            item {
-                DropdownSettingRow(
-                    title = stringResource(R.string.smart_start_refresh_timeout_title),
-                    value = smartStartTimeoutLabel(state.settings.connection.smartStartRefreshSelectionTimeoutSeconds),
-                    expanded = refreshTimeoutExpanded,
-                    onExpandedChange = { refreshTimeoutExpanded = it },
-                    values = smartStartTimeoutOptions(SMART_START_REFRESH_TIMEOUT_MIN_SECONDS),
-                    selected = state.settings.connection.smartStartRefreshSelectionTimeoutSeconds,
-                    label = { smartStartTimeoutLabel(it) },
-                    onSelect = onSmartStartRefreshSelectionTimeoutChanged,
-                    summary = stringResource(R.string.smart_start_refresh_timeout_summary),
-                    leadingIcon = Icons.Outlined.Refresh,
-                    optionIcon = { Icons.Outlined.Refresh },
-                    summaryMaxLines = 3,
-                )
-            }
-            item {
-                DropdownSettingRow(
-                    title = stringResource(R.string.smart_start_transport_priority_title),
-                    value = smartStartTransportPriorityLabel(state.settings.connection.smartStartTransportPriority),
-                    expanded = transportPriorityExpanded,
-                    onExpandedChange = { transportPriorityExpanded = it },
-                    values = SmartStartTransportPriority.entries,
-                    selected = state.settings.connection.smartStartTransportPriority,
-                    label = { smartStartTransportPriorityLabel(it) },
-                    onSelect = onSmartStartTransportPrioritySelected,
-                    summary = stringResource(R.string.smart_start_transport_priority_summary),
-                    leadingIcon = Icons.Outlined.SwapVert,
-                    optionIcon = ::smartStartTransportPriorityIcon,
-                    summaryMaxLines = 3,
-                )
+                SettingsControlGroup {
+                    DropdownSettingRow(
+                        title = stringResource(R.string.smart_start_protocol_timeout_title),
+                        value = smartStartTimeoutLabel(state.settings.connection.smartStartProtocolSelectionTimeoutSeconds),
+                        expanded = protocolTimeoutExpanded,
+                        onExpandedChange = { protocolTimeoutExpanded = it },
+                        values = smartStartTimeoutOptions(SMART_START_PROTOCOL_TIMEOUT_MIN_SECONDS),
+                        selected = state.settings.connection.smartStartProtocolSelectionTimeoutSeconds,
+                        label = { smartStartTimeoutLabel(it) },
+                        onSelect = onSmartStartProtocolSelectionTimeoutChanged,
+                        summary = stringResource(R.string.smart_start_protocol_timeout_summary),
+                        leadingIcon = Icons.Outlined.Speed,
+                        optionIcon = { Icons.Outlined.Speed },
+                        summaryMaxLines = 3,
+                        grouped = true,
+                    )
+                    SettingsControlGroupDivider()
+                    DropdownSettingRow(
+                        title = stringResource(R.string.smart_start_refresh_timeout_title),
+                        value = smartStartTimeoutLabel(state.settings.connection.smartStartRefreshSelectionTimeoutSeconds),
+                        expanded = refreshTimeoutExpanded,
+                        onExpandedChange = { refreshTimeoutExpanded = it },
+                        values = smartStartTimeoutOptions(SMART_START_REFRESH_TIMEOUT_MIN_SECONDS),
+                        selected = state.settings.connection.smartStartRefreshSelectionTimeoutSeconds,
+                        label = { smartStartTimeoutLabel(it) },
+                        onSelect = onSmartStartRefreshSelectionTimeoutChanged,
+                        summary = stringResource(R.string.smart_start_refresh_timeout_summary),
+                        leadingIcon = Icons.Outlined.Refresh,
+                        optionIcon = { Icons.Outlined.Refresh },
+                        summaryMaxLines = 3,
+                        grouped = true,
+                    )
+                    SettingsControlGroupDivider()
+                    DropdownSettingRow(
+                        title = stringResource(R.string.smart_start_transport_priority_title),
+                        value = smartStartTransportPriorityLabel(state.settings.connection.smartStartTransportPriority),
+                        expanded = transportPriorityExpanded,
+                        onExpandedChange = { transportPriorityExpanded = it },
+                        values = SmartStartTransportPriority.entries,
+                        selected = state.settings.connection.smartStartTransportPriority,
+                        label = { smartStartTransportPriorityLabel(it) },
+                        onSelect = onSmartStartTransportPrioritySelected,
+                        summary = stringResource(R.string.smart_start_transport_priority_summary),
+                        leadingIcon = Icons.Outlined.SwapVert,
+                        optionIcon = ::smartStartTransportPriorityIcon,
+                        summaryMaxLines = 3,
+                        grouped = true,
+                    )
+                }
             }
         }
     }
@@ -661,187 +665,190 @@ fun TrafficSettingsScreen(
             )
         }
         item {
-            SettingSwitchRow(
-                title = stringResource(R.string.proxy_lan_access_title),
-                checked = state.settings.expert.localSurfaces.allowLanAccess,
-                leadingIcon = Icons.Outlined.Public,
-                onCheckedChange = { enabled ->
-                    if (!enabled || wifiLanAddress != null) {
-                        onLocalProxyLanAccessChanged(enabled)
-                    }
-                },
-                summary =
-                    proxyLanAccessSummary(
-                        allowLanAccess = state.settings.expert.localSurfaces.allowLanAccess,
-                        wifiLanAddress = wifiLanAddress,
-                    ),
-                enabled = wifiLanAddress != null || state.settings.expert.localSurfaces.allowLanAccess,
-            )
-        }
-        item {
-            DropdownSettingRow(
-                title = stringResource(R.string.traffic_mode),
-                value = trafficModeLabel(state.settings.traffic.mode),
-                expanded = modeMenuExpanded,
-                onExpandedChange = { modeMenuExpanded = it },
-                values = TrafficMode.entries,
-                selected = state.settings.traffic.mode,
-                label = { trafficModeLabel(it) },
-                onSelect = onTrafficModeSelected,
-                leadingIcon = Icons.Outlined.Tune,
-                optionIcon = ::trafficModeIcon,
-            )
-        }
-        if (state.settings.traffic.mode == TrafficMode.TUNNEL) {
-            item {
-                DropdownSettingRow(
-                    title = stringResource(R.string.tun_stack),
-                    value = tunStackLabel(state.settings.traffic.tunStack),
-                    expanded = tunStackMenuExpanded,
-                    onExpandedChange = { tunStackMenuExpanded = it },
-                    values = TunStack.entries,
-                    selected = state.settings.traffic.tunStack,
-                    label = { tunStackLabel(it) },
-                    onSelect = onTunStackSelected,
-                    leadingIcon = Icons.Outlined.Shield,
-                    optionIcon = ::tunStackIcon,
-                )
-            }
-            item {
-                SettingValueRow(
-                    title = stringResource(R.string.mtu),
-                    value = state.settings.traffic.mtu.toString(),
-                    leadingIcon = Icons.Outlined.Tune,
-                    onClick = { mtuDialog = true },
-                )
-            }
-        }
-        if (state.settings.traffic.mode == TrafficMode.PROXY) {
-            item {
+            SettingsControlGroup {
                 SettingSwitchRow(
-                    title = stringResource(R.string.proxy_auth_title),
-                    checked = state.settings.expert.localSurfaces.auth.enabled,
-                    leadingIcon = Icons.Outlined.Shield,
-                    summary = stringResource(R.string.proxy_auth_summary),
-                    onCheckedChange = onLocalProxyAuthEnabledChanged,
-                )
-            }
-            item {
-                LocalProxyAuthEditor(
-                    auth = state.settings.expert.localSurfaces.auth,
-                    onAuthChanged = onLocalProxyAuthChanged,
-                )
-            }
-            item {
-                SettingValueRow(
-                    title = stringResource(R.string.http_inbound),
-                    value = surfaceSummary(state.settings.expert.localSurfaces.http, state.settings.expert.localSurfaces.auth.enabled),
+                    title = stringResource(R.string.proxy_lan_access_title),
+                    checked = state.settings.expert.localSurfaces.allowLanAccess,
                     leadingIcon = Icons.Outlined.Public,
-                    onClick = { httpDialog = true },
+                    onCheckedChange = { enabled ->
+                        if (!enabled || wifiLanAddress != null) {
+                            onLocalProxyLanAccessChanged(enabled)
+                        }
+                    },
+                    summary =
+                        proxyLanAccessSummary(
+                            allowLanAccess = state.settings.expert.localSurfaces.allowLanAccess,
+                            wifiLanAddress = wifiLanAddress,
+                        ),
+                    enabled = wifiLanAddress != null || state.settings.expert.localSurfaces.allowLanAccess,
+                    grouped = true,
                 )
-            }
-            item {
+                SettingsControlGroupDivider()
+                DropdownSettingRow(
+                    title = stringResource(R.string.traffic_mode),
+                    value = trafficModeLabel(state.settings.traffic.mode),
+                    expanded = modeMenuExpanded,
+                    onExpandedChange = { modeMenuExpanded = it },
+                    values = TrafficMode.entries,
+                    selected = state.settings.traffic.mode,
+                    label = { trafficModeLabel(it) },
+                    onSelect = onTrafficModeSelected,
+                    leadingIcon = Icons.Outlined.Tune,
+                    optionIcon = ::trafficModeIcon,
+                    grouped = true,
+                )
+                if (state.settings.traffic.mode == TrafficMode.TUNNEL) {
+                    SettingsControlGroupDivider()
+                    DropdownSettingRow(
+                        title = stringResource(R.string.tun_stack),
+                        value = tunStackLabel(state.settings.traffic.tunStack),
+                        expanded = tunStackMenuExpanded,
+                        onExpandedChange = { tunStackMenuExpanded = it },
+                        values = TunStack.entries,
+                        selected = state.settings.traffic.tunStack,
+                        label = { tunStackLabel(it) },
+                        onSelect = onTunStackSelected,
+                        leadingIcon = Icons.Outlined.Shield,
+                        optionIcon = ::tunStackIcon,
+                        grouped = true,
+                    )
+                    SettingsControlGroupDivider()
+                    SettingValueRow(
+                        title = stringResource(R.string.mtu),
+                        value = state.settings.traffic.mtu.toString(),
+                        leadingIcon = Icons.Outlined.Tune,
+                        onClick = { mtuDialog = true },
+                        grouped = true,
+                    )
+                }
+                if (state.settings.traffic.mode == TrafficMode.PROXY) {
+                    SettingsControlGroupDivider()
+                    SettingSwitchRow(
+                        title = stringResource(R.string.proxy_auth_title),
+                        checked = state.settings.expert.localSurfaces.auth.enabled,
+                        leadingIcon = Icons.Outlined.Shield,
+                        summary = stringResource(R.string.proxy_auth_summary),
+                        onCheckedChange = onLocalProxyAuthEnabledChanged,
+                        grouped = true,
+                    )
+                    SettingsControlGroupDivider()
+                    LocalProxyAuthEditor(
+                        auth = state.settings.expert.localSurfaces.auth,
+                        onAuthChanged = onLocalProxyAuthChanged,
+                        grouped = true,
+                    )
+                    SettingsControlGroupDivider()
+                    SettingValueRow(
+                        title = stringResource(R.string.http_inbound),
+                        value = surfaceSummary(state.settings.expert.localSurfaces.http, state.settings.expert.localSurfaces.auth.enabled),
+                        leadingIcon = Icons.Outlined.Public,
+                        onClick = { httpDialog = true },
+                        grouped = true,
+                    )
+                    SettingsControlGroupDivider()
+                    SettingValueRow(
+                        title = stringResource(R.string.socks_inbound),
+                        value = surfaceSummary(state.settings.expert.localSurfaces.socks, state.settings.expert.localSurfaces.auth.enabled),
+                        leadingIcon = Icons.Outlined.Shield,
+                        onClick = { socksDialog = true },
+                        grouped = true,
+                    )
+                    SettingsControlGroupDivider()
+                    SettingValueRow(
+                        title = stringResource(R.string.mixed_inbound),
+                        value = surfaceSummary(state.settings.expert.localSurfaces.mixed, state.settings.expert.localSurfaces.auth.enabled),
+                        leadingIcon = Icons.Outlined.Apps,
+                        onClick = { mixedDialog = true },
+                        grouped = true,
+                    )
+                }
+                SettingsControlGroupDivider()
+                SettingSwitchRow(
+                    title = stringResource(R.string.prefer_ipv6_routes),
+                    checked = state.settings.traffic.preferIpv6,
+                    leadingIcon = Icons.Outlined.Public,
+                    onCheckedChange = onPreferIpv6Changed,
+                    grouped = true,
+                )
+                SettingsControlGroupDivider()
+                DropdownSettingRow(
+                    title = stringResource(R.string.domain_strategy),
+                    value = domainStrategyLabel(state.settings.traffic.domainStrategy),
+                    expanded = domainMenuExpanded,
+                    onExpandedChange = { domainMenuExpanded = it },
+                    values = DomainStrategy.entries,
+                    selected = state.settings.traffic.domainStrategy,
+                    label = { domainStrategyLabel(it) },
+                    onSelect = onDomainStrategySelected,
+                    leadingIcon = Icons.Outlined.AccountTree,
+                    optionIcon = ::domainStrategyIcon,
+                    grouped = true,
+                )
+                SettingsControlGroupDivider()
+                SettingSwitchRow(
+                    title = stringResource(R.string.bypass_lan),
+                    checked = state.settings.expert.bypassLan,
+                    summary = stringResource(R.string.bypass_lan_summary),
+                    leadingIcon = Icons.Outlined.Router,
+                    onCheckedChange = { enabled ->
+                        if (enabled) {
+                            requireWarning { onBypassLanChanged(true) }
+                        } else {
+                            onBypassLanChanged(false)
+                        }
+                    },
+                    summaryMaxLines = 3,
+                    grouped = true,
+                )
+                SettingsControlGroupDivider()
+                SettingSwitchRow(
+                    title = stringResource(R.string.auto_refresh_subscriptions_title),
+                    checked = state.settings.connection.autoRefreshSubscriptions,
+                    leadingIcon = Icons.Outlined.Refresh,
+                    summary = stringResource(R.string.auto_refresh_subscriptions_summary),
+                    onCheckedChange = onAutoRefreshSubscriptionsChanged,
+                    summaryMaxLines = 3,
+                    grouped = true,
+                )
+                SettingsControlGroupDivider()
+                DropdownSettingRow(
+                    title = stringResource(R.string.auto_refresh_subscriptions_interval_title),
+                    value = subscriptionRefreshIntervalLabel(state.settings.connection.subscriptionRefreshInterval),
+                    expanded = subscriptionRefreshIntervalMenuExpanded,
+                    onExpandedChange = { subscriptionRefreshIntervalMenuExpanded = it },
+                    values = SubscriptionRefreshInterval.entries,
+                    selected = state.settings.connection.subscriptionRefreshInterval,
+                    label = { subscriptionRefreshIntervalLabel(it) },
+                    onSelect = onSubscriptionRefreshIntervalSelected,
+                    leadingIcon = Icons.Outlined.Refresh,
+                    optionIcon = { Icons.Outlined.Refresh },
+                    grouped = true,
+                )
+                SettingsControlGroupDivider()
+                DropdownSettingRow(
+                    title = stringResource(R.string.latency_probe_method_title),
+                    value = latencyProbeMethodLabel(state.settings.connection.latencyProbeMethod),
+                    expanded = latencyProbeMethodMenuExpanded,
+                    onExpandedChange = { latencyProbeMethodMenuExpanded = it },
+                    values = LatencyProbeMethod.entries,
+                    selected = state.settings.connection.latencyProbeMethod,
+                    label = { latencyProbeMethodLabel(it) },
+                    onSelect = onLatencyProbeMethodSelected,
+                    summary = stringResource(R.string.latency_probe_method_summary),
+                    summaryMaxLines = 5,
+                    leadingIcon = Icons.Outlined.Speed,
+                    optionIcon = ::latencyProbeMethodIcon,
+                    grouped = true,
+                )
+                SettingsControlGroupDivider()
                 SettingValueRow(
-                    title = stringResource(R.string.socks_inbound),
-                    value = surfaceSummary(state.settings.expert.localSurfaces.socks, state.settings.expert.localSurfaces.auth.enabled),
-                    leadingIcon = Icons.Outlined.Shield,
-                    onClick = { socksDialog = true },
+                    title = stringResource(R.string.ip_info_endpoint),
+                    value = state.settings.connection.ipInfoEndpoint,
+                    leadingIcon = Icons.Outlined.Public,
+                    onClick = { endpointDialog = true },
+                    grouped = true,
                 )
             }
-            item {
-                SettingValueRow(
-                    title = stringResource(R.string.mixed_inbound),
-                    value = surfaceSummary(state.settings.expert.localSurfaces.mixed, state.settings.expert.localSurfaces.auth.enabled),
-                    leadingIcon = Icons.Outlined.Apps,
-                    onClick = { mixedDialog = true },
-                )
-            }
-        }
-        item {
-            SettingSwitchRow(
-                title = stringResource(R.string.prefer_ipv6_routes),
-                checked = state.settings.traffic.preferIpv6,
-                leadingIcon = Icons.Outlined.Public,
-                onCheckedChange = onPreferIpv6Changed,
-            )
-        }
-        item {
-            DropdownSettingRow(
-                title = stringResource(R.string.domain_strategy),
-                value = domainStrategyLabel(state.settings.traffic.domainStrategy),
-                expanded = domainMenuExpanded,
-                onExpandedChange = { domainMenuExpanded = it },
-                values = DomainStrategy.entries,
-                selected = state.settings.traffic.domainStrategy,
-                label = { domainStrategyLabel(it) },
-                onSelect = onDomainStrategySelected,
-                leadingIcon = Icons.Outlined.AccountTree,
-                optionIcon = ::domainStrategyIcon,
-            )
-        }
-        item {
-            SettingSwitchRow(
-                title = stringResource(R.string.bypass_lan),
-                checked = state.settings.expert.bypassLan,
-                summary = stringResource(R.string.bypass_lan_summary),
-                leadingIcon = Icons.Outlined.Router,
-                onCheckedChange = { enabled ->
-                    if (enabled) {
-                        requireWarning { onBypassLanChanged(true) }
-                    } else {
-                        onBypassLanChanged(false)
-                    }
-                },
-                summaryMaxLines = 3,
-            )
-        }
-        item {
-            SettingSwitchRow(
-                title = stringResource(R.string.auto_refresh_subscriptions_title),
-                checked = state.settings.connection.autoRefreshSubscriptions,
-                leadingIcon = Icons.Outlined.Refresh,
-                summary = stringResource(R.string.auto_refresh_subscriptions_summary),
-                onCheckedChange = onAutoRefreshSubscriptionsChanged,
-                summaryMaxLines = 3,
-            )
-        }
-        item {
-            DropdownSettingRow(
-                title = stringResource(R.string.auto_refresh_subscriptions_interval_title),
-                value = subscriptionRefreshIntervalLabel(state.settings.connection.subscriptionRefreshInterval),
-                expanded = subscriptionRefreshIntervalMenuExpanded,
-                onExpandedChange = { subscriptionRefreshIntervalMenuExpanded = it },
-                values = SubscriptionRefreshInterval.entries,
-                selected = state.settings.connection.subscriptionRefreshInterval,
-                label = { subscriptionRefreshIntervalLabel(it) },
-                onSelect = onSubscriptionRefreshIntervalSelected,
-                leadingIcon = Icons.Outlined.Refresh,
-                optionIcon = { Icons.Outlined.Refresh },
-            )
-        }
-        item {
-            DropdownSettingRow(
-                title = stringResource(R.string.latency_probe_method_title),
-                value = latencyProbeMethodLabel(state.settings.connection.latencyProbeMethod),
-                expanded = latencyProbeMethodMenuExpanded,
-                onExpandedChange = { latencyProbeMethodMenuExpanded = it },
-                values = LatencyProbeMethod.entries,
-                selected = state.settings.connection.latencyProbeMethod,
-                label = { latencyProbeMethodLabel(it) },
-                onSelect = onLatencyProbeMethodSelected,
-                summary = stringResource(R.string.latency_probe_method_summary),
-                summaryMaxLines = 5,
-                leadingIcon = Icons.Outlined.Speed,
-                optionIcon = ::latencyProbeMethodIcon,
-            )
-        }
-        item {
-            SettingValueRow(
-                title = stringResource(R.string.ip_info_endpoint),
-                value = state.settings.connection.ipInfoEndpoint,
-                leadingIcon = Icons.Outlined.Public,
-                onClick = { endpointDialog = true },
-            )
         }
     }
 
@@ -964,58 +971,61 @@ fun ApplicationSettingsScreen(
         onNavigateUp = onNavigateUp,
     ) {
         item {
-            DropdownSettingRow(
-                title = stringResource(R.string.theme),
-                value = themeModeLabel(state.settings.ui.themeMode),
-                expanded = themeMenuExpanded,
-                onExpandedChange = { themeMenuExpanded = it },
-                values = ThemeMode.entries,
-                selected = state.settings.ui.themeMode,
-                label = { themeModeLabel(it) },
-                onSelect = onThemeSelected,
-                leadingIcon = Icons.Outlined.Tune,
-                optionIcon = ::themeModeIcon,
-            )
-        }
-        item {
-            DropdownSettingRow(
-                title = stringResource(R.string.language),
-                value = localeLabel(state.settings.ui.locale),
-                expanded = localeMenuExpanded,
-                onExpandedChange = { localeMenuExpanded = it },
-                values = AppLocale.entries,
-                selected = state.settings.ui.locale,
-                label = { localeLabel(it) },
-                onSelect = onLocaleSelected,
-                leadingIcon = Icons.Outlined.Public,
-                optionIcon = ::localeIcon,
-            )
-        }
-        item {
-            SettingSwitchRow(
-                title = stringResource(R.string.auto_reconnect),
-                checked = state.settings.connection.autoReconnect,
-                leadingIcon = Icons.Outlined.Refresh,
-                onCheckedChange = onAutoReconnectChanged,
-            )
-        }
-        item {
-            SettingSwitchRow(
-                title = stringResource(R.string.auto_start_on_boot),
-                checked = state.settings.connection.autoStartOnBoot,
-                leadingIcon = Icons.Outlined.PhoneAndroid,
-                onCheckedChange = onAutoStartChanged,
-            )
-        }
-        item {
-            SettingSwitchRow(
-                title = stringResource(R.string.block_screenshots_title),
-                checked = state.settings.expert.blockScreenshots,
-                summary = stringResource(R.string.block_screenshots_summary),
-                leadingIcon = Icons.Outlined.Shield,
-                onCheckedChange = onBlockScreenshotsChanged,
-                summaryMaxLines = 3,
-            )
+            SettingsControlGroup {
+                DropdownSettingRow(
+                    title = stringResource(R.string.theme),
+                    value = themeModeLabel(state.settings.ui.themeMode),
+                    expanded = themeMenuExpanded,
+                    onExpandedChange = { themeMenuExpanded = it },
+                    values = ThemeMode.entries,
+                    selected = state.settings.ui.themeMode,
+                    label = { themeModeLabel(it) },
+                    onSelect = onThemeSelected,
+                    leadingIcon = Icons.Outlined.Tune,
+                    optionIcon = ::themeModeIcon,
+                    grouped = true,
+                )
+                SettingsControlGroupDivider()
+                DropdownSettingRow(
+                    title = stringResource(R.string.language),
+                    value = localeLabel(state.settings.ui.locale),
+                    expanded = localeMenuExpanded,
+                    onExpandedChange = { localeMenuExpanded = it },
+                    values = AppLocale.entries,
+                    selected = state.settings.ui.locale,
+                    label = { localeLabel(it) },
+                    onSelect = onLocaleSelected,
+                    leadingIcon = Icons.Outlined.Public,
+                    optionIcon = ::localeIcon,
+                    grouped = true,
+                )
+                SettingsControlGroupDivider()
+                SettingSwitchRow(
+                    title = stringResource(R.string.auto_reconnect),
+                    checked = state.settings.connection.autoReconnect,
+                    leadingIcon = Icons.Outlined.Refresh,
+                    onCheckedChange = onAutoReconnectChanged,
+                    grouped = true,
+                )
+                SettingsControlGroupDivider()
+                SettingSwitchRow(
+                    title = stringResource(R.string.auto_start_on_boot),
+                    checked = state.settings.connection.autoStartOnBoot,
+                    leadingIcon = Icons.Outlined.PhoneAndroid,
+                    onCheckedChange = onAutoStartChanged,
+                    grouped = true,
+                )
+                SettingsControlGroupDivider()
+                SettingSwitchRow(
+                    title = stringResource(R.string.block_screenshots_title),
+                    checked = state.settings.expert.blockScreenshots,
+                    summary = stringResource(R.string.block_screenshots_summary),
+                    leadingIcon = Icons.Outlined.Shield,
+                    onCheckedChange = onBlockScreenshotsChanged,
+                    summaryMaxLines = 3,
+                    grouped = true,
+                )
+            }
         }
     }
 }

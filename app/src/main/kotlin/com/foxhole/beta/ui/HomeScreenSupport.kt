@@ -782,7 +782,7 @@ internal fun HomeConnectionActions(
         activeProfile != null &&
             !autoConnectRunning &&
             state.connection.state !in setOf(ConnectionState.CONNECTING, ConnectionState.RECONNECTING)
-    val smartStartAccent = foxholeSystemAwareAccentColor(fallback = FoxholeInfoAccent)
+    val smartStartAccent = MaterialTheme.colorScheme.onSurface
     val autoConnectColor =
         if (autoConnectEnabled) {
             smartStartAccent

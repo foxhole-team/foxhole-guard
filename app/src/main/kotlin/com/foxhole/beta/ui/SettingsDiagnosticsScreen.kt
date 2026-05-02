@@ -190,21 +190,24 @@ private fun DiagnosticsScreenContent(
             )
         }
         item {
-            SettingsNavigationRow(
-                icon = Icons.Outlined.FileUpload,
-                title = stringResource(R.string.export_diagnostics),
-                summary = stringResource(R.string.export_diagnostics_summary),
-                onClick = onExportLogs,
-            )
-        }
-        item {
-            SettingsNavigationRow(
-                icon = Icons.Outlined.Info,
-                title = stringResource(R.string.logs_title),
-                summary = stringResource(R.string.logs_summary),
-                summaryMaxLines = 2,
-                onClick = onOpenLogs,
-            )
+            SettingsControlGroup {
+                SettingsNavigationRow(
+                    icon = Icons.Outlined.FileUpload,
+                    title = stringResource(R.string.export_diagnostics),
+                    summary = stringResource(R.string.export_diagnostics_summary),
+                    grouped = true,
+                    onClick = onExportLogs,
+                )
+                SettingsControlGroupDivider()
+                SettingsNavigationRow(
+                    icon = Icons.Outlined.Info,
+                    title = stringResource(R.string.logs_title),
+                    summary = stringResource(R.string.logs_summary),
+                    summaryMaxLines = 2,
+                    grouped = true,
+                    onClick = onOpenLogs,
+                )
+            }
         }
         item {
             SupportBotDiagnosticsCard(
