@@ -26,7 +26,6 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -59,7 +58,6 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.testTag
@@ -84,7 +82,7 @@ import java.util.Locale
 
 internal val HomePrimaryActionHeight = 52.dp
 internal val HomeTriangleIndicatorSize = 15.dp
-internal val HomeDashboardBannerTopPadding = 86.dp
+internal val HomeDashboardBannerTopPadding = 74.dp
 internal val HomeConnectingStatusSignalOffset = 3.dp
 internal val HomeNetworkContentHeight = 82.dp
 internal val HomeDashboardProfileContentHeight = 62.dp
@@ -295,7 +293,7 @@ internal fun HomeModeDropdown(
         FoxholeDropdownMenu(
             expanded = expanded,
             onDismissRequest = { expanded = false },
-            modifier = Modifier.widthIn(min = 232.dp, max = 278.dp),
+            modifier = Modifier.width(176.dp),
         ) {
             HomeModeOption.entries.forEachIndexed { index, option ->
                 val selectedOption = option == selected
@@ -417,7 +415,10 @@ internal fun HomeStatusSignal(
         return
     }
     Canvas(
-        modifier = modifier.size(HomeTriangleIndicatorSize),
+        modifier =
+            modifier
+                .offset(x = HomeConnectingStatusSignalOffset)
+                .size(HomeTriangleIndicatorSize),
     ) {
         val dotRadius = size.minDimension * 0.16f
         val anchors = homeTriangleAnchors(size.minDimension)
@@ -782,7 +783,7 @@ internal fun HomeConnectionActions(
         activeProfile != null &&
             !autoConnectRunning &&
             state.connection.state !in setOf(ConnectionState.CONNECTING, ConnectionState.RECONNECTING)
-    val smartStartAccent = MaterialTheme.colorScheme.onSurface
+    val smartStartAccent = foxholeSystemAwareAccentColor(fallback = MaterialTheme.colorScheme.primary)
     val autoConnectColor =
         if (autoConnectEnabled) {
             smartStartAccent
@@ -796,12 +797,7 @@ internal fun HomeConnectionActions(
             homePrimaryAction(state)
         }
     val primaryButtonColor =
-        when (primaryAction) {
-            HomePrimaryAction.START,
-            HomePrimaryAction.RECONNECT,
-            -> MaterialTheme.colorScheme.primary
-            HomePrimaryAction.STOP -> foxholeSystemAwareAccentColor(fallback = MaterialTheme.colorScheme.primary)
-        }
+        smartStartAccent
     val primaryButtonColors =
         ButtonDefaults.outlinedButtonColors(
             contentColor = primaryButtonColor,
@@ -826,7 +822,7 @@ internal fun HomeConnectionActions(
             expiresAtElapsedMs = reconnectExpiresAtElapsedMs,
             totalDurationMs = HomeViewModel.PROFILE_RECONNECT_PROMPT_WINDOW_MS,
         )
-    val reconnectCountdownColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.07f)
+    val reconnectCountdownColor = primaryButtonColor.copy(alpha = 0.08f)
     val reconnectCountdownModifier =
         if (reconnectExpiresAtElapsedMs != null) {
             Modifier
@@ -1008,7 +1004,7 @@ internal fun HomeAutoConnectStatusLine(
     Row(
         modifier =
             modifier
-                .graphicsLayer { translationX = 3f }
+                .offset(x = HomeConnectingStatusSignalOffset)
                 .testTag("home_auto_connect_status_line"),
         horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalAlignment = Alignment.CenterVertically,

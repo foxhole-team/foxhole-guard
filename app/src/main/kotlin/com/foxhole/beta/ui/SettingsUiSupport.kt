@@ -249,6 +249,12 @@ internal fun <T> DropdownSettingRow(
             textStyle = MaterialTheme.typography.bodyMedium,
             hasIcons = optionIcon != null,
         )
+    val triggerWidth =
+        rememberDropdownTriggerWidth(
+            label = value,
+            textStyle = MaterialTheme.typography.bodyMedium,
+        )
+            .coerceAtMost(menuWidth)
     SettingValueRow(
         title = title,
         value = value,
@@ -258,7 +264,7 @@ internal fun <T> DropdownSettingRow(
         summaryMaxLines = summaryMaxLines,
         trailingContent = {
             Box(
-                modifier = Modifier.width(menuWidth),
+                modifier = Modifier.width(triggerWidth),
                 contentAlignment = Alignment.TopEnd,
             ) {
                 FoxholeValuePill(
@@ -271,6 +277,7 @@ internal fun <T> DropdownSettingRow(
                     expanded = expanded,
                     onDismissRequest = { onExpandedChange(false) },
                     modifier = Modifier.width(menuWidth),
+                    horizontalAlignment = FoxholeDropdownHorizontalAlignment.ScreenEnd,
                 ) {
                     values.forEachIndexed { index, option ->
                         FoxholeDropdownItem(
@@ -322,8 +329,26 @@ private fun rememberDropdownMenuWidth(
             } ?: 0
         }
     return with(density) {
-        (maxTextWidthPx.toDp() + if (hasIcons) 88.dp else 56.dp)
-            .coerceAtLeast(if (hasIcons) 148.dp else 112.dp)
+        (maxTextWidthPx.toDp() + if (hasIcons) 64.dp else 44.dp)
+            .coerceAtLeast(if (hasIcons) 124.dp else 96.dp)
+            .coerceAtMost(260.dp)
+    }
+}
+
+@Composable
+private fun rememberDropdownTriggerWidth(
+    label: String,
+    textStyle: TextStyle,
+): Dp {
+    val textMeasurer = rememberTextMeasurer()
+    val density = LocalDensity.current
+    val textWidthPx =
+        remember(label, textStyle) {
+            textMeasurer.measure(text = label, style = textStyle).size.width
+        }
+    return with(density) {
+        (textWidthPx.toDp() + 52.dp)
+            .coerceAtLeast(96.dp)
             .coerceAtMost(260.dp)
     }
 }

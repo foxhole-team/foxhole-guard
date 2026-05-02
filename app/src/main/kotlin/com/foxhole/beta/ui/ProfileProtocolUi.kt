@@ -422,6 +422,7 @@ private fun ProtocolMarkOrSelector(
             expanded = expanded,
             onDismissRequest = { expanded = false },
             modifier = Modifier.width(selectorWidth),
+            horizontalAlignment = FoxholeDropdownHorizontalAlignment.ScreenEnd,
         ) {
             Column(
                 modifier = Modifier,
@@ -468,8 +469,7 @@ private fun ProtocolMarkOrSelector(
                             onProtocolOptionSelected(option.id)
                         },
                         selected = optionSelected,
-                        highlightSelected = true,
-                        selectedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.42f),
+                        highlightSelected = false,
                         extendSelectedToMenuTop = index == 0 && dropdownInfoText == null,
                         extendSelectedToMenuBottom = index == protocolOptions.lastIndex,
                         shape =

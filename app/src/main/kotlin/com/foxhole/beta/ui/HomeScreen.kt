@@ -41,6 +41,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.ArrowForward
 import androidx.compose.material.icons.outlined.AccountTree
 import androidx.compose.material.icons.outlined.Apps
 import androidx.compose.material.icons.outlined.ArrowDownward
@@ -173,7 +174,7 @@ fun HomeScreen(
     val lanProxyActive = proxyModel.lanProxyActive
     val darkTheme = MaterialTheme.colorScheme.background.luminance() < 0.3f
     val proxyAuth = state.settings.expert.localSurfaces.auth
-    val autoTone = MaterialTheme.colorScheme.primary
+    val autoTone = foxholeSystemAwareAccentColor(fallback = MaterialTheme.colorScheme.primary)
     val topStatusState = homeTopStatusState(state)
     val statusTone =
         if (state.autoConnect.running || state.reconnectInProgress) {
@@ -188,11 +189,14 @@ fun HomeScreen(
             MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.58f)
         }
     val dashboardSecondaryActionBorderColor =
-        if (darkTheme) {
-            MaterialTheme.colorScheme.outline.copy(alpha = 0.62f)
-        } else {
-            MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.42f)
-        }
+        autoTone.copy(alpha = if (darkTheme) 0.42f else 0.34f)
+    val dashboardSecondaryActionColors =
+        ButtonDefaults.outlinedButtonColors(
+            contentColor = autoTone,
+            containerColor = autoTone.copy(alpha = if (darkTheme) 0.07f else 0.05f),
+            disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.48f),
+            disabledContainerColor = Color.Transparent,
+        )
     val dashboardSecondaryActionIconSize = 21.dp
     val importFromClipboardTitle = stringResource(R.string.import_from_clipboard)
     val importFromFileTitle = stringResource(R.string.import_from_file)
@@ -490,11 +494,11 @@ fun HomeScreen(
                                 },
                             trailing = {
                                 HomeHeaderActionButton(
-                                    icon = Icons.Outlined.AccountTree,
+                                    icon = Icons.AutoMirrored.Outlined.ArrowForward,
                                     contentDescription = null,
                                     onClick = onOpenProfiles,
                                     modifier = Modifier.size(30.dp),
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    tint = autoTone,
                                 )
                             },
                         )
@@ -631,6 +635,7 @@ fun HomeScreen(
                                         .height(HomePrimaryActionHeight)
                                         .testTag("home_import_action"),
                                 border = BorderStroke(1.dp, dashboardSecondaryActionBorderColor),
+                                colors = dashboardSecondaryActionColors,
                             ) {
                                 Icon(
                                     Icons.Outlined.FileUpload,
@@ -701,6 +706,7 @@ fun HomeScreen(
                                     .height(HomePrimaryActionHeight)
                                     .testTag("home_refresh_action"),
                             border = BorderStroke(1.dp, dashboardSecondaryActionBorderColor),
+                            colors = dashboardSecondaryActionColors,
                         ) {
                             Icon(
                                 Icons.Outlined.Refresh,

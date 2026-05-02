@@ -29,7 +29,7 @@ val FoxholeLightOutline = Color(0xFFCDCDCD)
 val FoxholeLightPrimary = FoxholeComposerBluePressed
 val FoxholeLightPrimaryContainer = Color(0xFFDCE9F8)
 val FoxholeLightOnPrimary = Color(0xFFF9F9F9)
-val FoxholeLightOnBackground = Color(0xFF171717)
-val FoxholeLightOnSurfaceVariant = Color(0xFF676767)
+val FoxholeLightOnBackground = Color(0xFF303236)
+val FoxholeLightOnSurfaceVariant = Color(0xFF62676E)
 
 val FoxholeError = Color(0xFFE46C6C)

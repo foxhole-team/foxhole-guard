@@ -129,6 +129,7 @@ internal fun SmartProfileAutoConnectMenu(
                 showRefreshHeader = menuLayout.showHeader || onRefreshMetrics != null,
                 latencyProbeMethod = latencyProbeMethod,
             )
+        val actionTint = foxholeSystemAwareAccentColor(fallback = MaterialTheme.colorScheme.primary)
         Surface(
             modifier =
                 Modifier
@@ -141,7 +142,7 @@ internal fun SmartProfileAutoConnectMenu(
             border =
                 BorderStroke(
                     1.dp,
-                    MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.42f),
+                    actionTint.copy(alpha = if (enabled) 0.34f else 0.14f),
                 ),
         ) {
             Box(
@@ -152,7 +153,7 @@ internal fun SmartProfileAutoConnectMenu(
                     imageVector = Icons.Outlined.Settings,
                     contentDescription = stringResource(R.string.smart_profile_menu_title),
                     modifier = Modifier.size(actionIconSize ?: if (compact) 16.dp else 20.dp),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    tint = actionTint.copy(alpha = if (enabled) 1f else 0.38f),
                 )
             }
         }
@@ -167,6 +168,7 @@ internal fun SmartProfileAutoConnectMenu(
                 Modifier
                     .testTag("smart_profile_auto_connect_menu")
                     .width(menuWidth),
+            horizontalAlignment = FoxholeDropdownHorizontalAlignment.ScreenEnd,
         ) {
             SmartProfileProtocolMenuContent(
                 options = options,
@@ -650,12 +652,12 @@ private fun SmartProfileProtocolMenuContent(
                     nextExcluded?.let(onUpdateExcludedOptionIds)
                 },
                 selected = includedSelection || refreshingSelection,
-                highlightSelected = includedSelection || refreshingSelection,
+                highlightSelected = refreshingSelection,
                 selectedContainerColor =
                     if (refreshingSelection) {
-                        selectionTone.copy(alpha = 0.12f)
+                        selectionTone.copy(alpha = 0.16f)
                     } else {
-                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.18f)
+                        null
                     },
                 extendSelectedToMenuTop = index == 0 && !hasMenuHeader,
                 extendSelectedToMenuBottom = index == options.lastIndex && !hasFooter,

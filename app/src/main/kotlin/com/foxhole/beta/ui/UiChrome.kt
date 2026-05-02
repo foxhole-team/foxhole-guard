@@ -113,6 +113,7 @@ import androidx.compose.ui.window.PopupProperties
 import androidx.core.content.getSystemService
 import com.foxhole.beta.R
 import com.foxhole.beta.core.model.ThemeMode
+import com.foxhole.beta.ui.theme.LocalFoxholeDarkTheme
 import com.foxhole.beta.ui.theme.LocalFoxholeThemeMode
 import com.foxhole.beta.ui.theme.LocalFoxholeUiPalette
 import kotlin.math.max
@@ -147,6 +148,8 @@ internal val FoxholePositiveAccent = Color(0xFF2F9E6A)
 internal val FoxholeInfoAccent = Color(0xFF6288AE)
 internal val FoxholeWarningAccent = Color(0xFFE0B84A)
 private val FoxholeErrorAccent = Color(0xFFC63C3C)
+private val FoxholeCardShadowElevation = 6.dp
+private val FoxholeDropdownShadowElevation = 10.dp
 
 @Composable
 internal fun foxholeSystemAwareAccentColor(
@@ -181,6 +184,26 @@ internal fun Modifier.foxholeAnimateContentSize(): Modifier =
                 easing = FastOutSlowInEasing,
             ),
     )
+
+@Composable
+internal fun Modifier.foxholeMenuShadow(
+    shape: Shape,
+    elevation: Dp = FoxholeCardShadowElevation,
+): Modifier {
+    val shadowColor =
+        if (LocalFoxholeDarkTheme.current) {
+            Color.White.copy(alpha = 0.10f)
+        } else {
+            Color.Black.copy(alpha = 0.14f)
+        }
+    return shadow(
+        elevation = elevation,
+        shape = shape,
+        clip = false,
+        ambientColor = shadowColor,
+        spotColor = shadowColor,
+    )
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -888,6 +911,8 @@ internal fun FoxholeDropdownMenu(
     onDismissRequest: () -> Unit,
     modifier: Modifier = Modifier,
     offset: DpOffset = DpOffset.Zero,
+    horizontalAlignment: FoxholeDropdownHorizontalAlignment = FoxholeDropdownHorizontalAlignment.AnchorEnd,
+    screenEndPadding: Dp = ScreenHorizontalPadding,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     if (!expanded) {
@@ -901,17 +926,31 @@ internal fun FoxholeDropdownMenu(
                 y = (offset.y + FoxholeDropdownTriggerGap).roundToPx(),
             )
         }
+    val screenEndPaddingPx = with(density) { screenEndPadding.roundToPx() }
     Popup(
-        popupPositionProvider = remember(menuOffset) { FoxholeDropdownPositionProvider(menuOffset) },
+        popupPositionProvider =
+            remember(menuOffset, horizontalAlignment, screenEndPaddingPx) {
+                FoxholeDropdownPositionProvider(
+                    offset = menuOffset,
+                    horizontalAlignment = horizontalAlignment,
+                    screenEndPaddingPx = screenEndPaddingPx,
+                )
+            },
         onDismissRequest = onDismissRequest,
         properties = PopupProperties(focusable = true),
     ) {
         Surface(
-            modifier = modifier.widthIn(max = 392.dp),
+            modifier =
+                modifier
+                    .widthIn(max = 392.dp)
+                    .foxholeMenuShadow(
+                        shape = FoxholeDropdownShape,
+                        elevation = FoxholeDropdownShadowElevation,
+                    ),
             shape = FoxholeDropdownShape,
             color = MenuDefaults.containerColor,
             tonalElevation = MenuDefaults.TonalElevation,
-            shadowElevation = MenuDefaults.ShadowElevation,
+            shadowElevation = 0.dp,
         ) {
             Column(
                 verticalArrangement = Arrangement.spacedBy(0.dp),
@@ -925,8 +964,15 @@ private val FoxholeDropdownShape = RoundedCornerShape(18.dp)
 private val FoxholeDropdownTriggerGap = 8.dp
 private val FoxholeDropdownInternalVerticalPadding = 8.dp
 
+internal enum class FoxholeDropdownHorizontalAlignment {
+    AnchorEnd,
+    ScreenEnd,
+}
+
 private class FoxholeDropdownPositionProvider(
     private val offset: IntOffset,
+    private val horizontalAlignment: FoxholeDropdownHorizontalAlignment,
+    private val screenEndPaddingPx: Int,
 ) : PopupPositionProvider {
     override fun calculatePosition(
         anchorBounds: IntRect,
@@ -935,9 +981,17 @@ private class FoxholeDropdownPositionProvider(
         popupContentSize: IntSize,
     ): IntOffset {
         val requestedX =
-            when (layoutDirection) {
-                LayoutDirection.Ltr -> anchorBounds.right - popupContentSize.width + offset.x
-                LayoutDirection.Rtl -> anchorBounds.left - offset.x
+            when (horizontalAlignment) {
+                FoxholeDropdownHorizontalAlignment.AnchorEnd ->
+                    when (layoutDirection) {
+                        LayoutDirection.Ltr -> anchorBounds.right - popupContentSize.width + offset.x
+                        LayoutDirection.Rtl -> anchorBounds.left - offset.x
+                    }
+                FoxholeDropdownHorizontalAlignment.ScreenEnd ->
+                    when (layoutDirection) {
+                        LayoutDirection.Ltr -> windowSize.width - popupContentSize.width - screenEndPaddingPx + offset.x
+                        LayoutDirection.Rtl -> screenEndPaddingPx - offset.x
+                    }
             }
         val maxX = max(0, windowSize.width - popupContentSize.width)
         val x = requestedX.coerceIn(0, maxX)

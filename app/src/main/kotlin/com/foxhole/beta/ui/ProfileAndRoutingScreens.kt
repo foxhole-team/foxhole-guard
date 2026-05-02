@@ -511,7 +511,7 @@ fun ProfilesScreen(
                             }
                             if (showInsecureTlsActionBadge) {
                                 InsecureTlsProfileBadge(
-                                    modifier = Modifier.padding(top = 8.dp),
+                                    modifier = Modifier.padding(top = 2.dp),
                                     compact = true,
                                 )
                             }

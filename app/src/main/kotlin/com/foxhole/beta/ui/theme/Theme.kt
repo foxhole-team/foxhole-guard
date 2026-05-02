@@ -120,7 +120,7 @@ internal data class FoxholeUiPalette(
 internal val LocalFoxholeUiPalette =
     staticCompositionLocalOf {
         FoxholeUiPalette(
-            menuSelectedRowColor = FoxholeReadAccent.copy(alpha = 0.12f),
+            menuSelectedRowColor = FoxholeReadAccent.copy(alpha = 0.18f),
             cardContainerColor = FoxholeDarkSurface,
             cardBorderColor = FoxholeDarkSurfaceStrong,
             leadingIconContainerColor = FoxholeDarkSurfaceMuted,
@@ -150,9 +150,9 @@ private fun defaultFoxholeUiPalette(
     FoxholeUiPalette(
         menuSelectedRowColor =
             if (useDarkPalette) {
-                colorScheme.primary.copy(alpha = 0.14f)
+                colorScheme.primary.copy(alpha = 0.20f)
             } else {
-                colorScheme.primaryContainer.copy(alpha = 0.62f)
+                colorScheme.primaryContainer.copy(alpha = 0.72f)
             },
         cardContainerColor =
             if (useDarkPalette) {
@@ -207,7 +207,11 @@ fun FoxholeTheme(
         }
     val colorScheme =
         if (themeMode == ThemeMode.SYSTEM) {
-            baseColorScheme
+            if (useDarkPalette) {
+                baseColorScheme
+            } else {
+                baseColorScheme.withFoxholeReadableLightText()
+            }
         } else {
             baseColorScheme.withFoxholeSurfaces(useDarkPalette)
         }
@@ -265,9 +269,9 @@ private fun ColorScheme.withFoxholeSurfaces(dark: Boolean): ColorScheme =
     } else {
         copy(
             background = FoxholeLightBackground,
-            onBackground = Color(0xFF171717),
+            onBackground = FoxholeLightOnBackground,
             surface = Color.White,
-            onSurface = Color(0xFF171717),
+            onSurface = FoxholeLightOnBackground,
             surfaceDim = Color(0xFFE4E4E1),
             surfaceBright = Color(0xFFFAFAF8),
             surfaceContainerLowest = Color.White,
@@ -276,11 +280,18 @@ private fun ColorScheme.withFoxholeSurfaces(dark: Boolean): ColorScheme =
             surfaceContainerHigh = Color(0xFFE9E9E6),
             surfaceContainerHighest = Color(0xFFE2E2DF),
             surfaceVariant = Color(0xFFE9E9E6),
-            onSurfaceVariant = Color(0xFF5D6066),
+            onSurfaceVariant = FoxholeLightOnSurfaceVariant,
             outline = Color(0xFFD0D0CC),
             outlineVariant = Color(0xFFE0E0DD),
         )
     }
+
+private fun ColorScheme.withFoxholeReadableLightText(): ColorScheme =
+    copy(
+        onBackground = FoxholeLightOnBackground,
+        onSurface = FoxholeLightOnBackground,
+        onSurfaceVariant = FoxholeLightOnSurfaceVariant,
+    )
 
 @Composable
 fun FoxholeAppBackground(
