@@ -1,10 +1,20 @@
 package com.foxhole.beta.ui.theme
 
+import android.graphics.Bitmap
+import android.graphics.BitmapShader
+import android.graphics.LinearGradient
+import android.graphics.Paint
+import android.graphics.Shader
 import android.os.Build
+import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.LocalTextSelectionColors
 import androidx.compose.foundation.text.selection.TextSelectionColors
+import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Shapes
 import androidx.compose.material3.darkColorScheme
@@ -15,10 +25,16 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.foxhole.beta.core.model.ThemeMode
+import android.graphics.Color as AndroidColor
 
 private val FoxholeDarkColorScheme =
     darkColorScheme(
@@ -89,10 +105,6 @@ private val FixedSelectionColors =
     )
 
 internal data class FoxholeUiPalette(
-    val chromeContainerAlpha: Float,
-    val menuContainerColor: Color,
-    val menuBorderColor: Color,
-    val menuDividerColor: Color,
     val menuSelectedRowColor: Color,
     val cardContainerColor: Color,
     val cardBorderColor: Color,
@@ -107,20 +119,15 @@ internal data class FoxholeUiPalette(
 
 internal val LocalFoxholeUiPalette =
     staticCompositionLocalOf {
-        val chromeContainerAlpha = foxholeChromeContainerAlpha(transparencyEnabled = true)
         FoxholeUiPalette(
-            chromeContainerAlpha = chromeContainerAlpha,
-            menuContainerColor = FoxholeDarkBackground.copy(alpha = chromeContainerAlpha),
-            menuBorderColor = FoxholeDarkOutline.copy(alpha = 0.34f),
-            menuDividerColor = FoxholeDarkOutline.copy(alpha = 0.20f),
             menuSelectedRowColor = FoxholeReadAccent.copy(alpha = 0.12f),
-            cardContainerColor = FoxholeDarkSurface.copy(alpha = chromeContainerAlpha),
+            cardContainerColor = FoxholeDarkSurface,
             cardBorderColor = FoxholeDarkSurfaceStrong,
-            leadingIconContainerColor = FoxholeDarkSurfaceMuted.copy(alpha = chromeContainerAlpha),
-            valuePillContainerColor = FoxholeDarkPrimaryContainer.copy(alpha = chromeContainerAlpha),
+            leadingIconContainerColor = FoxholeDarkSurfaceMuted,
+            valuePillContainerColor = FoxholeDarkPrimaryContainer,
             valuePillBorderColor = Color.Transparent,
             valuePillContentColor = FoxholeDarkPrimary,
-            bottomBarContainerColor = FoxholeDarkSurface.copy(alpha = chromeContainerAlpha),
+            bottomBarContainerColor = FoxholeDarkSurface.copy(alpha = 0.88f),
             bottomBarBorderColor = FoxholeDarkSurfaceStrong.copy(alpha = 0.46f),
             bottomBarIndicatorColor = Color.White.copy(alpha = 0.10f),
         )
@@ -131,47 +138,46 @@ internal val LocalFoxholeThemeMode =
         ThemeMode.DARK
     }
 
-internal fun foxholeChromeContainerAlpha(transparencyEnabled: Boolean): Float =
-    if (transparencyEnabled) 0.88f else 1f
+internal val LocalFoxholeDarkTheme =
+    staticCompositionLocalOf {
+        true
+    }
 
 private fun defaultFoxholeUiPalette(
     colorScheme: androidx.compose.material3.ColorScheme,
     useDarkPalette: Boolean,
-    transparencyEnabled: Boolean,
 ): FoxholeUiPalette =
-    foxholeChromeContainerAlpha(transparencyEnabled).let { chromeContainerAlpha ->
-        FoxholeUiPalette(
-            chromeContainerAlpha = chromeContainerAlpha,
-            menuContainerColor = colorScheme.surface.copy(alpha = chromeContainerAlpha),
-            menuBorderColor = colorScheme.outlineVariant.copy(alpha = if (useDarkPalette) 0.34f else 0.38f),
-            menuDividerColor = colorScheme.outlineVariant.copy(alpha = if (useDarkPalette) 0.18f else 0.28f),
-            menuSelectedRowColor =
-                if (useDarkPalette) {
-                    colorScheme.primary.copy(alpha = 0.14f)
-                } else {
-                    colorScheme.primaryContainer.copy(alpha = 0.62f)
-                },
-            cardContainerColor = colorScheme.surface.copy(alpha = chromeContainerAlpha),
-            cardBorderColor = colorScheme.outlineVariant.copy(alpha = 0.72f),
-            leadingIconContainerColor = colorScheme.surfaceVariant.copy(alpha = chromeContainerAlpha),
-            valuePillContainerColor = colorScheme.primaryContainer.copy(alpha = chromeContainerAlpha),
-            valuePillBorderColor = Color.Transparent,
-            valuePillContentColor = colorScheme.primary,
-            bottomBarContainerColor = colorScheme.surface.copy(alpha = chromeContainerAlpha),
-            bottomBarBorderColor = colorScheme.outlineVariant.copy(alpha = if (useDarkPalette) 0.46f else 0.48f),
-            bottomBarIndicatorColor =
-                if (useDarkPalette) {
-                    Color.White.copy(alpha = 0.10f)
-                } else {
-                    Color.Black.copy(alpha = 0.06f)
-                },
-        )
-    }
+    FoxholeUiPalette(
+        menuSelectedRowColor =
+            if (useDarkPalette) {
+                colorScheme.primary.copy(alpha = 0.14f)
+            } else {
+                colorScheme.primaryContainer.copy(alpha = 0.62f)
+            },
+        cardContainerColor =
+            if (useDarkPalette) {
+                colorScheme.surfaceContainerLow
+            } else {
+                colorScheme.surface
+            },
+        cardBorderColor = colorScheme.outlineVariant.copy(alpha = 0.72f),
+        leadingIconContainerColor = colorScheme.surfaceVariant,
+        valuePillContainerColor = colorScheme.primaryContainer,
+        valuePillBorderColor = Color.Transparent,
+        valuePillContentColor = colorScheme.primary,
+        bottomBarContainerColor = colorScheme.surface.copy(alpha = 0.88f),
+        bottomBarBorderColor = colorScheme.outlineVariant.copy(alpha = if (useDarkPalette) 0.46f else 0.48f),
+        bottomBarIndicatorColor =
+            if (useDarkPalette) {
+                Color.White.copy(alpha = 0.10f)
+            } else {
+                Color.Black.copy(alpha = 0.06f)
+            },
+    )
 
 @Composable
 fun FoxholeTheme(
     themeMode: ThemeMode,
-    transparencyEnabled: Boolean = true,
     content: @Composable () -> Unit,
 ) {
     val context = LocalContext.current
@@ -182,7 +188,7 @@ fun FoxholeTheme(
             ThemeMode.DARK -> true
             ThemeMode.LIGHT -> false
         }
-    val colorScheme =
+    val baseColorScheme =
         when (themeMode) {
             ThemeMode.SYSTEM ->
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -199,6 +205,12 @@ fun FoxholeTheme(
             ThemeMode.DARK -> FoxholeDarkColorScheme
             ThemeMode.LIGHT -> FoxholeLightColorScheme
         }
+    val colorScheme =
+        if (themeMode == ThemeMode.SYSTEM) {
+            baseColorScheme
+        } else {
+            baseColorScheme.withFoxholeSurfaces(useDarkPalette)
+        }
     val selectionColors =
         remember(themeMode, colorScheme) {
             if (themeMode == ThemeMode.SYSTEM) {
@@ -211,15 +223,15 @@ fun FoxholeTheme(
             }
         }
     val uiPalette =
-        remember(themeMode, colorScheme, useDarkPalette, transparencyEnabled) {
+        remember(themeMode, colorScheme, useDarkPalette) {
             defaultFoxholeUiPalette(
                 colorScheme = colorScheme,
                 useDarkPalette = useDarkPalette,
-                transparencyEnabled = transparencyEnabled,
             )
         }
     CompositionLocalProvider(
         LocalTextSelectionColors provides selectionColors,
+        LocalFoxholeDarkTheme provides useDarkPalette,
         LocalFoxholeUiPalette provides uiPalette,
         LocalFoxholeThemeMode provides themeMode,
     ) {
@@ -229,4 +241,163 @@ fun FoxholeTheme(
             content = content,
         )
     }
+}
+
+private fun ColorScheme.withFoxholeSurfaces(dark: Boolean): ColorScheme =
+    if (dark) {
+        copy(
+            background = FoxholeDarkBackground,
+            onBackground = Color(0xFFE9E9EA),
+            surface = Color(0xFF101011),
+            onSurface = Color(0xFFE9E9EA),
+            surfaceDim = FoxholeDarkBackground,
+            surfaceBright = Color(0xFF202022),
+            surfaceContainerLowest = Color(0xFF09090A),
+            surfaceContainerLow = Color(0xFF0E0E0F),
+            surfaceContainer = Color(0xFF121213),
+            surfaceContainerHigh = Color(0xFF171719),
+            surfaceContainerHighest = Color(0xFF1D1D20),
+            surfaceVariant = Color(0xFF1D1D20),
+            onSurfaceVariant = Color(0xFFC7C7CA),
+            outline = Color(0xFF3A3B3D),
+            outlineVariant = Color(0xFF292A2C),
+        )
+    } else {
+        copy(
+            background = FoxholeLightBackground,
+            onBackground = Color(0xFF171717),
+            surface = Color.White,
+            onSurface = Color(0xFF171717),
+            surfaceDim = Color(0xFFE4E4E1),
+            surfaceBright = Color(0xFFFAFAF8),
+            surfaceContainerLowest = Color.White,
+            surfaceContainerLow = Color(0xFFF8F8F6),
+            surfaceContainer = Color(0xFFF0F0EE),
+            surfaceContainerHigh = Color(0xFFE9E9E6),
+            surfaceContainerHighest = Color(0xFFE2E2DF),
+            surfaceVariant = Color(0xFFE9E9E6),
+            onSurfaceVariant = Color(0xFF5D6066),
+            outline = Color(0xFFD0D0CC),
+            outlineVariant = Color(0xFFE0E0DD),
+        )
+    }
+
+@Composable
+fun FoxholeAppBackground(
+    modifier: Modifier = Modifier,
+    content: @Composable BoxScope.() -> Unit,
+) {
+    val dark = LocalFoxholeDarkTheme.current
+    val themeMode = LocalFoxholeThemeMode.current
+    val colorScheme = MaterialTheme.colorScheme
+    val base =
+        if (themeMode == ThemeMode.SYSTEM) {
+            colorScheme.background
+        } else if (dark) {
+            FoxholeDarkBackground
+        } else {
+            FoxholeLightBackground
+        }
+    val top =
+        if (themeMode == ThemeMode.SYSTEM) {
+            if (dark) {
+                colorScheme.surfaceContainerHigh
+            } else {
+                colorScheme.surfaceBright
+            }
+        } else if (dark) {
+            Color(0xFF09090A)
+        } else {
+            Color(0xFFFAFAF8)
+        }
+    val bottom =
+        if (themeMode == ThemeMode.SYSTEM) {
+            if (dark) {
+                colorScheme.surfaceDim
+            } else {
+                colorScheme.surfaceContainerLow
+            }
+        } else if (dark) {
+            Color(0xFF050506)
+        } else {
+            Color(0xFFECECEA)
+        }
+    val noiseBitmap =
+        remember(dark) {
+            createFoxholeNoiseBitmap(
+                size = 128,
+                dark = dark,
+                maxAlpha = if (dark) 3 else 2,
+            )
+        }
+
+    Box(
+        modifier =
+            modifier
+                .fillMaxSize()
+                .background(base)
+                .drawWithCache {
+                    val gradientPaint =
+                        Paint(Paint.ANTI_ALIAS_FLAG or Paint.DITHER_FLAG).apply {
+                            isDither = true
+                            shader =
+                                LinearGradient(
+                                    0f,
+                                    0f,
+                                    0f,
+                                    size.height,
+                                    intArrayOf(
+                                        top.toArgb(),
+                                        base.toArgb(),
+                                        bottom.toArgb(),
+                                    ),
+                                    floatArrayOf(0f, 0.55f, 1f),
+                                    Shader.TileMode.CLAMP,
+                                )
+                        }
+                    val noisePaint =
+                        Paint(Paint.DITHER_FLAG).apply {
+                            isDither = true
+                            shader =
+                                BitmapShader(
+                                    noiseBitmap,
+                                    Shader.TileMode.REPEAT,
+                                    Shader.TileMode.REPEAT,
+                                )
+                        }
+
+                    onDrawBehind {
+                        drawIntoCanvas { canvas ->
+                            val nativeCanvas = canvas.nativeCanvas
+                            nativeCanvas.drawRect(0f, 0f, size.width, size.height, gradientPaint)
+                            nativeCanvas.drawRect(0f, 0f, size.width, size.height, noisePaint)
+                        }
+                    }
+                },
+        content = content,
+    )
+}
+
+private fun createFoxholeNoiseBitmap(
+    size: Int,
+    dark: Boolean,
+    maxAlpha: Int,
+): Bitmap {
+    val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+    val pixels = IntArray(size * size)
+    var seed = if (dark) 0x13579BDF.toInt() else 0x2468ACE0.toInt()
+
+    for (index in pixels.indices) {
+        seed = seed * 1_664_525 + 1_013_904_223
+        val alpha = (seed ushr 24) % (maxAlpha + 1)
+        pixels[index] =
+            if (dark) {
+                AndroidColor.argb(alpha, 255, 255, 255)
+            } else {
+                AndroidColor.argb(alpha, 0, 0, 0)
+            }
+    }
+
+    bitmap.setPixels(pixels, 0, size, 0, 0, size, size)
+    return bitmap
 }

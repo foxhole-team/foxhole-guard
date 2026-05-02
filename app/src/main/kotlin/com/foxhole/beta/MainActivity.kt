@@ -26,6 +26,7 @@ import com.foxhole.beta.ui.FoxholeBannerHapticGate
 import com.foxhole.beta.ui.HomeViewModel
 import com.foxhole.beta.ui.handleSnackbarHaptic
 import com.foxhole.beta.ui.showBanner
+import com.foxhole.beta.ui.theme.FoxholeAppBackground
 import com.foxhole.beta.ui.theme.FoxholeTheme
 import kotlinx.coroutines.launch
 
@@ -53,7 +54,6 @@ class MainActivity : AppCompatActivity() {
         }
         setContent {
             val themeMode = homeViewModel.themeMode.collectAsStateWithLifecycle()
-            val transparencyEnabled = homeViewModel.transparencyEnabled.collectAsStateWithLifecycle()
             val snackbarHostState = remember { SnackbarHostState() }
             val snackbarHapticGate = remember { FoxholeBannerHapticGate() }
             vpnPermissionResult = homeViewModel::onVpnPermissionResult
@@ -92,12 +92,13 @@ class MainActivity : AppCompatActivity() {
 
             FoxholeTheme(
                 themeMode = themeMode.value,
-                transparencyEnabled = transparencyEnabled.value,
             ) {
-                FoxholeApp(
-                    viewModel = homeViewModel,
-                    snackbarHostState = snackbarHostState,
-                )
+                FoxholeAppBackground {
+                    FoxholeApp(
+                        viewModel = homeViewModel,
+                        snackbarHostState = snackbarHostState,
+                    )
+                }
             }
         }
     }

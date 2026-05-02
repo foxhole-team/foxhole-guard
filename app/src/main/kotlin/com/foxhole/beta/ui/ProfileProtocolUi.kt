@@ -29,7 +29,6 @@ import androidx.compose.material.icons.automirrored.outlined.HelpOutline
 import androidx.compose.material.icons.outlined.Apps
 import androidx.compose.material.icons.outlined.ArrowOutward
 import androidx.compose.material.icons.outlined.Block
-import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Cloud
 import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.Hub
@@ -76,7 +75,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
@@ -189,7 +187,7 @@ internal fun ProtocolMetadataRow(
                     modifier =
                         Modifier
                             .align(Alignment.CenterEnd)
-                            .offset(y = if (compact) 2.dp else 3.dp),
+                            .offset(y = 0.dp),
                     compact = compact,
                 )
             }
@@ -424,7 +422,6 @@ private fun ProtocolMarkOrSelector(
             expanded = expanded,
             onDismissRequest = { expanded = false },
             modifier = Modifier.width(selectorWidth),
-            offset = DpOffset(x = 0.dp, y = if (compact) (-4).dp else 0.dp),
         ) {
             Column(
                 modifier = Modifier,
@@ -474,8 +471,8 @@ private fun ProtocolMarkOrSelector(
                         selected = optionSelected,
                         highlightSelected = true,
                         selectedContainerColor = selectionTone.copy(alpha = 0.10f),
-                        showBorder = index != protocolOptions.lastIndex,
-                        accentColor = selectionTone,
+                        extendSelectedToMenuTop = index == 0 && dropdownInfoText == null,
+                        extendSelectedToMenuBottom = index == protocolOptions.lastIndex,
                         shape =
                             RectangleShape,
                         minHeight = if (compact) 34.dp else 42.dp,
@@ -1204,15 +1201,6 @@ internal fun <T> ChoiceDialog(
                             title = label(value),
                             leadingIcon = icon(value),
                             onClick = { onSelect(value) },
-                            trailingContent = {
-                                if (value == selected) {
-                                    Icon(
-                                        imageVector = Icons.Outlined.CheckCircle,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.primary,
-                                    )
-                                }
-                            },
                         )
                     }
                 }

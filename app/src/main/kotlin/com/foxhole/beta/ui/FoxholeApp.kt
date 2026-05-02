@@ -2,10 +2,18 @@ package com.foxhole.beta.ui
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedContentTransitionScope
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.FastOutLinearInEasing
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
@@ -37,8 +45,8 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -49,8 +57,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
@@ -58,6 +66,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavDestination
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
@@ -89,7 +98,6 @@ private object AppRoute {
     const val SMART_START = "settings/smart-start"
     const val APPLICATION = "settings/application"
     const val HELP = "settings/help"
-    const val ABOUT = "settings/about"
     const val EXPERT = "settings/expert"
     const val DIAGNOSTICS = "settings/diagnostics"
 
@@ -130,7 +138,9 @@ fun FoxholeApp(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
-    val currentSection = navBackStackEntry?.destination?.appSection()
+    val currentRoute = navBackStackEntry?.destination?.route
+    val currentSection = navBackStackEntry?.destination?.rootAppSection()
+    val showBottomBar = currentRoute.isRootRoute()
     val rootSwipeSection = navBackStackEntry?.destination?.rootSwipeSection()
     val settingsBackSwipeEnabled = navBackStackEntry?.destination?.settingsBackSwipeEnabled() == true
     var qrScannerVisible by rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
@@ -150,12 +160,14 @@ fun FoxholeApp(
         }
 
     Scaffold(
-        containerColor = androidx.compose.material3.MaterialTheme.colorScheme.background,
+        containerColor = Color.Transparent,
         bottomBar = {
-            FoxholeBottomBar(
-                currentSection = currentSection,
-                onSectionSelected = { section -> navController.navigateToSection(section) },
-            )
+            if (showBottomBar) {
+                FoxholeBottomBar(
+                    currentSection = currentSection,
+                    onSectionSelected = { section -> navController.navigateToSection(section) },
+                )
+            }
         },
     ) { innerPadding ->
         Box(
@@ -184,6 +196,34 @@ fun FoxholeApp(
                 navController = navController,
                 startDestination = AppRoute.HOME,
                 modifier = Modifier.fillMaxSize(),
+                enterTransition = {
+                    if (targetState.destination.route.isSettingsDetailRoute()) {
+                        detailForwardEnter()
+                    } else {
+                        rootEnter()
+                    }
+                },
+                exitTransition = {
+                    if (targetState.destination.route.isSettingsDetailRoute()) {
+                        detailForwardExit()
+                    } else {
+                        rootExit()
+                    }
+                },
+                popEnterTransition = {
+                    if (initialState.destination.route.isSettingsDetailRoute()) {
+                        detailBackEnter()
+                    } else {
+                        rootEnter()
+                    }
+                },
+                popExitTransition = {
+                    if (initialState.destination.route.isSettingsDetailRoute()) {
+                        detailBackExit()
+                    } else {
+                        rootExit()
+                    }
+                },
             ) {
                 composable(AppRoute.HOME) {
                     val state by viewModel.homeRouteState.collectAsStateWithLifecycle()
@@ -345,10 +385,8 @@ fun FoxholeApp(
                         onOpenSmartStart = { navController.navigate(AppRoute.SMART_START) },
                         onOpenApplication = { navController.navigate(AppRoute.APPLICATION) },
                         onOpenHelp = { navController.navigate(AppRoute.HELP) },
-                        onOpenAbout = { navController.navigate(AppRoute.ABOUT) },
                         onOpenExpert = { navController.navigate(AppRoute.EXPERT) },
                         onOpenDiagnostics = { navController.navigate(AppRoute.DIAGNOSTICS) },
-                        onShowExpertSettingsChanged = viewModel::onShowExpertSettingsChanged,
                         onUnlockExpertSettings = viewModel::unlockExpertSettings,
                     )
                 }
@@ -361,7 +399,6 @@ fun FoxholeApp(
                         onSmartStartProtocolSelectionTimeoutChanged = viewModel::onSmartStartProtocolSelectionTimeoutChanged,
                         onSmartStartRefreshSelectionTimeoutChanged = viewModel::onSmartStartRefreshSelectionTimeoutChanged,
                         onSmartStartTransportPrioritySelected = viewModel::onSmartStartTransportPrioritySelected,
-                        onClearSmartStartData = viewModel::clearSmartStartData,
                     )
                 }
                 composable(AppRoute.TRAFFIC) {
@@ -455,23 +492,13 @@ fun FoxholeApp(
                         onNavigateUp = navController::navigateUp,
                         onThemeSelected = viewModel::onThemeSelected,
                         onLocaleSelected = viewModel::onLocaleSelected,
-                        onTransparencyChanged = viewModel::onTransparencyChanged,
                         onAutoReconnectChanged = viewModel::onAutoReconnectChanged,
                         onAutoStartChanged = viewModel::onAutoStartChanged,
                         onBlockScreenshotsChanged = viewModel::onBlockScreenshotsChanged,
-                        onResetApplicationSettings = viewModel::resetApplicationSettingsToDefaults,
                     )
                 }
                 composable(AppRoute.HELP) {
                     HelpScreen(
-                        snackbarHostState = snackbarHostState,
-                        onNavigateUp = navController::navigateUp,
-                    )
-                }
-                composable(AppRoute.ABOUT) {
-                    val state by viewModel.aboutRouteState.collectAsStateWithLifecycle()
-                    AboutScreen(
-                        state = state,
                         snackbarHostState = snackbarHostState,
                         onNavigateUp = navController::navigateUp,
                     )
@@ -816,10 +843,11 @@ private fun Modifier.settingsBackSwipeNavigation(
         )
     }
 
-private fun NavDestination.appSection(): AppSection =
+private fun NavDestination.rootAppSection(): AppSection? =
     when {
-        route?.startsWith(AppRoute.SETTINGS) == true -> AppSection.SETTINGS
-        else -> AppSection.DASHBOARD
+        route == AppRoute.HOME -> AppSection.DASHBOARD
+        route == AppRoute.SETTINGS -> AppSection.SETTINGS
+        else -> null
     }
 
 private fun NavDestination.rootSwipeSection(): AppSection? =
@@ -833,6 +861,98 @@ private fun NavDestination.settingsBackSwipeEnabled(): Boolean {
     val currentRoute = route ?: return false
     return currentRoute.startsWith("${AppRoute.SETTINGS}/")
 }
+
+private fun String?.isRootRoute(): Boolean =
+    this == AppRoute.HOME || this == AppRoute.SETTINGS
+
+private fun String?.isSettingsDetailRoute(): Boolean =
+    this?.startsWith("${AppRoute.SETTINGS}/") == true
+
+private fun rootEnter(): EnterTransition =
+    fadeIn(
+        animationSpec =
+            tween(
+                durationMillis = ROOT_FADE_IN_MS,
+                easing = LinearOutSlowInEasing,
+            ),
+    )
+
+private fun rootExit(): ExitTransition =
+    fadeOut(
+        animationSpec =
+            tween(
+                durationMillis = ROOT_FADE_OUT_MS,
+                easing = FastOutLinearInEasing,
+            ),
+    )
+
+private fun AnimatedContentTransitionScope<NavBackStackEntry>.detailForwardEnter(): EnterTransition =
+    fadeIn(
+        animationSpec =
+            tween(
+                durationMillis = DETAIL_FADE_IN_MS,
+                easing = LinearOutSlowInEasing,
+            ),
+    ) +
+        slideIntoContainer(
+            towards = AnimatedContentTransitionScope.SlideDirection.Start,
+            animationSpec =
+                tween(
+                    durationMillis = DETAIL_TRANSITION_MS,
+                    easing = FastOutSlowInEasing,
+                ),
+        )
+
+private fun AnimatedContentTransitionScope<NavBackStackEntry>.detailForwardExit(): ExitTransition =
+    fadeOut(
+        animationSpec =
+            tween(
+                durationMillis = DETAIL_FADE_OUT_MS,
+                easing = FastOutLinearInEasing,
+            ),
+    ) +
+        slideOutOfContainer(
+            towards = AnimatedContentTransitionScope.SlideDirection.Start,
+            animationSpec =
+                tween(
+                    durationMillis = DETAIL_TRANSITION_MS,
+                    easing = FastOutSlowInEasing,
+                ),
+        )
+
+private fun AnimatedContentTransitionScope<NavBackStackEntry>.detailBackEnter(): EnterTransition =
+    fadeIn(
+        animationSpec =
+            tween(
+                durationMillis = DETAIL_FADE_IN_MS,
+                easing = LinearOutSlowInEasing,
+            ),
+    ) +
+        slideIntoContainer(
+            towards = AnimatedContentTransitionScope.SlideDirection.End,
+            animationSpec =
+                tween(
+                    durationMillis = DETAIL_TRANSITION_MS,
+                    easing = FastOutSlowInEasing,
+                ),
+        )
+
+private fun AnimatedContentTransitionScope<NavBackStackEntry>.detailBackExit(): ExitTransition =
+    fadeOut(
+        animationSpec =
+            tween(
+                durationMillis = DETAIL_FADE_OUT_MS,
+                easing = FastOutLinearInEasing,
+            ),
+    ) +
+        slideOutOfContainer(
+            towards = AnimatedContentTransitionScope.SlideDirection.End,
+            animationSpec =
+                tween(
+                    durationMillis = DETAIL_TRANSITION_MS,
+                    easing = FastOutSlowInEasing,
+                ),
+        )
 
 private fun NavHostController.navigateToProfilesRoot() {
     val currentRoute = currentDestination?.route
@@ -865,12 +985,17 @@ private fun NavHostController.navigateToSection(section: AppSection) {
     }
     navigate(section.rootRoute) {
         launchSingleTop = true
-        restoreState = false
+        restoreState = true
         popUpTo(graph.findStartDestination().id) {
-            saveState = false
+            saveState = true
         }
     }
 }
 
 private const val SECTION_SWIPE_THRESHOLD_FRACTION = 0.22f
 private const val DETAIL_BACK_SWIPE_THRESHOLD_FRACTION = 0.18f
+private const val ROOT_FADE_OUT_MS = 90
+private const val ROOT_FADE_IN_MS = 150
+private const val DETAIL_FADE_IN_MS = 120
+private const val DETAIL_FADE_OUT_MS = 90
+private const val DETAIL_TRANSITION_MS = 280

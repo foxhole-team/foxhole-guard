@@ -237,10 +237,10 @@ class SmartStartProtocolPresentationTest {
         assertEquals("Manage VPN protocols", stringValue(enStrings, "smart_profile_menu_title"))
         assertEquals("Protocol", stringValue(enStrings, "smart_profile_menu_protocol_column"))
         assertEquals("Status", stringValue(enStrings, "smart_profile_menu_status_column"))
-        assertEquals("ON", stringValue(enStrings, "smart_profile_menu_dashboard_on_column"))
         assertEquals("Server ping", stringValue(enStrings, "smart_profile_menu_server_ping_column"))
         assertEquals("Latency %1\$s", stringValue(enStrings, "smart_profile_menu_latency_column"))
-        assertEquals("ON", stringValue(enStrings, "smart_profile_menu_on_column"))
+        assertFalse(enStrings.contains("name=\"smart_profile_menu_dashboard_on_column\""))
+        assertFalse(enStrings.contains("name=\"smart_profile_menu_on_column\""))
         assertEquals(
             "Tap a protocol to turn it on/off\\nRefresh periodically to improve connection quality",
             stringValue(enStrings, "smart_profile_metrics_refresh_hint"),
@@ -303,10 +303,10 @@ class SmartStartProtocolPresentationTest {
         assertEquals("Управление протоколами VPN", stringValue(ruStrings, "smart_profile_menu_title"))
         assertEquals("Протокол", stringValue(ruStrings, "smart_profile_menu_protocol_column"))
         assertEquals("Статус", stringValue(ruStrings, "smart_profile_menu_status_column"))
-        assertEquals("ON", stringValue(ruStrings, "smart_profile_menu_dashboard_on_column"))
         assertEquals("Server ping", stringValue(ruStrings, "smart_profile_menu_server_ping_column"))
         assertEquals("Latency %1\$s", stringValue(ruStrings, "smart_profile_menu_latency_column"))
-        assertEquals("Вкл", stringValue(ruStrings, "smart_profile_menu_on_column"))
+        assertFalse(ruStrings.contains("name=\"smart_profile_menu_dashboard_on_column\""))
+        assertFalse(ruStrings.contains("name=\"smart_profile_menu_on_column\""))
         assertEquals(
             "Нажмите на протокол для включения/отключения\\nПериодически обновляйте для улучшения коннекта",
             stringValue(ruStrings, "smart_profile_metrics_refresh_hint"),

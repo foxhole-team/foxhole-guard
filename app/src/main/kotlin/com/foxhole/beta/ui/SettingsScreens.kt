@@ -1,19 +1,17 @@
 package com.foxhole.beta.ui
 
-import android.app.StatusBarManager
 import android.content.ActivityNotFoundException
 import android.content.ClipboardManager
-import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.graphics.drawable.Icon
 import android.net.Uri
 import android.os.Build
 import android.text.format.DateFormat
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
@@ -22,13 +20,13 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.AltRoute
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
-import androidx.compose.material.icons.automirrored.outlined.ArrowForward
 import androidx.compose.material.icons.automirrored.outlined.HelpOutline
 import androidx.compose.material.icons.outlined.AccountTree
 import androidx.compose.material.icons.outlined.Add
@@ -37,7 +35,6 @@ import androidx.compose.material.icons.outlined.BrightnessAuto
 import androidx.compose.material.icons.outlined.BugReport
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.DarkMode
-import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.FileDownload
 import androidx.compose.material.icons.outlined.Info
@@ -75,7 +72,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -116,7 +112,6 @@ import com.foxhole.beta.ui.FoxholeChoiceCard
 import com.foxhole.beta.ui.FoxholeLazyScaffold
 import com.foxhole.beta.ui.FoxholePreferenceCard
 import com.foxhole.beta.ui.UsageTotalsCard
-import com.foxhole.beta.vpn.FoxholeTileService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -134,10 +129,8 @@ fun SettingsHomeScreen(
     onOpenSmartStart: () -> Unit,
     onOpenApplication: () -> Unit,
     onOpenHelp: () -> Unit,
-    onOpenAbout: () -> Unit,
     onOpenExpert: () -> Unit,
     onOpenDiagnostics: () -> Unit,
-    onShowExpertSettingsChanged: (Boolean) -> Unit,
     onUnlockExpertSettings: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -147,122 +140,64 @@ fun SettingsHomeScreen(
     var unlockDialogVisible by rememberSaveable { mutableStateOf(false) }
     var versionTapCount by rememberSaveable { mutableIntStateOf(0) }
     val expertVisible = state.settings.ui.showExpertSettings
+    val onRepositoryClick = {
+        if (!openFoxholeRepository(context)) {
+            scope.launch {
+                snackbarHostState.showBanner(
+                    repositoryOpenFailed,
+                    FoxholeBannerTone.ERROR,
+                )
+            }
+        }
+    }
+    val onSupportBotClick = {
+        if (!openTelegramChannel(context)) {
+            scope.launch {
+                snackbarHostState.showBanner(
+                    supportChannelOpenFailed,
+                    FoxholeBannerTone.ERROR,
+                )
+            }
+        }
+    }
+    val onFooterClick = {
+        if (!unlockDialogVisible) {
+            if (expertVisible) {
+                versionTapCount = 0
+            } else {
+                val nextTapCount = versionTapCount + 1
+                versionTapCount = nextTapCount
+                if (nextTapCount >= 5) {
+                    unlockDialogVisible = true
+                }
+            }
+        }
+    }
 
     SettingsScaffold(
         title = stringResource(R.string.settings),
         snackbarHostState = snackbarHostState,
         onNavigateUp = onNavigateUp,
     ) {
-        if (state.hasSmartProfile) {
-            item {
-                SettingsNavigationRow(
-                    modifier = Modifier.testTag("settings_smart_start_action"),
-                    icon = Icons.Outlined.Speed,
-                    title = stringResource(R.string.smart_start_settings_title),
-                    summary = stringResource(R.string.smart_start_settings_summary),
-                    summaryMaxLines = 3,
-                    onClick = onOpenSmartStart,
-                )
-            }
-        }
-        item {
-            SettingsNavigationRow(
-                icon = Icons.Outlined.Tune,
-                title = stringResource(R.string.traffic_settings),
-                summary = stringResource(R.string.settings_home_network_summary),
-                onClick = onOpenTraffic,
-            )
-        }
-        item {
-            SettingsRoutingNavigationGroup(
-                onOpenRouting = onOpenRouting,
-                onOpenRoutingApps = onOpenRoutingApps,
-                onOpenRoutingSites = onOpenRoutingSites,
-            )
-        }
-        item {
-            SettingsNavigationRow(
-                icon = Icons.Outlined.PhoneAndroid,
-                title = stringResource(R.string.app_settings),
-                summary = stringResource(R.string.settings_home_application_summary),
-                onClick = onOpenApplication,
-            )
-        }
-        item {
-            SettingsNavigationRow(
-                icon = Icons.AutoMirrored.Outlined.HelpOutline,
-                title = stringResource(R.string.help_title),
-                summary = stringResource(R.string.settings_home_help_summary),
-                onClick = onOpenHelp,
-            )
-        }
-        item {
-            SettingsNavigationRow(
-                icon = Icons.Outlined.Info,
-                title = stringResource(R.string.diagnostics_and_usage),
-                summary = stringResource(R.string.settings_home_diagnostics_summary),
-                onClick = onOpenDiagnostics,
-            )
-        }
-        item {
-            SettingsNavigationRow(
-                icon = Icons.Outlined.Info,
-                title = stringResource(R.string.about_app_title),
-                summary = stringResource(R.string.settings_home_about_summary),
-                onClick = onOpenAbout,
-            )
-        }
-        if (expertVisible) {
-            item {
-                SettingsNavigationRow(
-                    modifier = Modifier.testTag("settings_expert_action"),
-                    icon = Icons.Outlined.Shield,
-                    title = stringResource(R.string.expert_settings),
-                    summary = stringResource(R.string.settings_home_advanced_summary),
-                    onClick = onOpenExpert,
-                )
-            }
-        }
-        item {
-            SettingsFooterVersionText(
-                text = stringResource(R.string.settings_footer_version, state.appVersion),
-                summary = stringResource(R.string.settings_home_version_summary_hidden),
-                onRepositoryClick = {
-                    if (!openFoxholeRepository(context)) {
-                        scope.launch {
-                            snackbarHostState.showBanner(
-                                repositoryOpenFailed,
-                                FoxholeBannerTone.ERROR,
-                            )
-                        }
-                    }
-                },
-                onSupportBotClick = {
-                    if (!openTelegramChannel(context)) {
-                        scope.launch {
-                            snackbarHostState.showBanner(
-                                supportChannelOpenFailed,
-                                FoxholeBannerTone.ERROR,
-                            )
-                        }
-                    }
-                },
-                onClick = {
-                    if (unlockDialogVisible) {
-                        return@SettingsFooterVersionText
-                    }
-                    if (expertVisible) {
-                        versionTapCount = 0
-                        return@SettingsFooterVersionText
-                    }
-                    val nextTapCount = versionTapCount + 1
-                    versionTapCount = nextTapCount
-                    if (nextTapCount >= 5) {
-                        unlockDialogVisible = true
-                    }
-                },
-            )
-        }
+        settingsHomeNavigationItems(
+            hasSmartProfile = state.hasSmartProfile,
+            expertVisible = expertVisible,
+            onOpenTraffic = onOpenTraffic,
+            onOpenRouting = onOpenRouting,
+            onOpenRoutingApps = onOpenRoutingApps,
+            onOpenRoutingSites = onOpenRoutingSites,
+            onOpenSmartStart = onOpenSmartStart,
+            onOpenApplication = onOpenApplication,
+            onOpenHelp = onOpenHelp,
+            onOpenExpert = onOpenExpert,
+            onOpenDiagnostics = onOpenDiagnostics,
+        )
+        settingsHomeFooterItem(
+            appVersion = state.appVersion,
+            onRepositoryClick = onRepositoryClick,
+            onSupportBotClick = onSupportBotClick,
+            onClick = onFooterClick,
+        )
     }
 
     if (unlockDialogVisible) {
@@ -287,13 +222,108 @@ fun SettingsHomeScreen(
     }
 }
 
+private fun LazyListScope.settingsHomeNavigationItems(
+    hasSmartProfile: Boolean,
+    expertVisible: Boolean,
+    onOpenTraffic: () -> Unit,
+    onOpenRouting: () -> Unit,
+    onOpenRoutingApps: () -> Unit,
+    onOpenRoutingSites: () -> Unit,
+    onOpenSmartStart: () -> Unit,
+    onOpenApplication: () -> Unit,
+    onOpenHelp: () -> Unit,
+    onOpenExpert: () -> Unit,
+    onOpenDiagnostics: () -> Unit,
+) {
+    item {
+        SettingsNavigationGroup {
+            if (hasSmartProfile) {
+                SettingsGroupedNavigationRow(
+                    modifier = Modifier.testTag("settings_smart_start_action"),
+                    icon = Icons.Outlined.Speed,
+                    title = stringResource(R.string.smart_start_settings_title),
+                    summary = stringResource(R.string.smart_start_settings_summary),
+                    summaryMaxLines = 3,
+                    onClick = onOpenSmartStart,
+                )
+                SettingsGroupDivider()
+            }
+            SettingsGroupedNavigationRow(
+                icon = Icons.Outlined.Tune,
+                title = stringResource(R.string.traffic_settings),
+                summary = stringResource(R.string.settings_home_network_summary),
+                onClick = onOpenTraffic,
+            )
+        }
+    }
+    item {
+        SettingsRoutingNavigationGroup(
+            onOpenRouting = onOpenRouting,
+            onOpenRoutingApps = onOpenRoutingApps,
+            onOpenRoutingSites = onOpenRoutingSites,
+        )
+    }
+    item {
+        SettingsNavigationGroup {
+            SettingsGroupedNavigationRow(
+                icon = Icons.Outlined.PhoneAndroid,
+                title = stringResource(R.string.app_settings),
+                summary = stringResource(R.string.settings_home_application_summary),
+                onClick = onOpenApplication,
+            )
+            SettingsGroupDivider()
+            SettingsGroupedNavigationRow(
+                icon = Icons.AutoMirrored.Outlined.HelpOutline,
+                title = stringResource(R.string.help_title),
+                summary = stringResource(R.string.settings_home_help_summary),
+                onClick = onOpenHelp,
+            )
+            SettingsGroupDivider()
+            SettingsGroupedNavigationRow(
+                icon = Icons.Outlined.Info,
+                title = stringResource(R.string.diagnostics_and_usage),
+                summary = stringResource(R.string.settings_home_diagnostics_summary),
+                onClick = onOpenDiagnostics,
+            )
+        }
+    }
+    if (expertVisible) {
+        item {
+            SettingsNavigationRow(
+                modifier = Modifier.testTag("settings_expert_action"),
+                icon = Icons.Outlined.Shield,
+                title = stringResource(R.string.expert_settings),
+                summary = stringResource(R.string.settings_home_advanced_summary),
+                onClick = onOpenExpert,
+            )
+        }
+    }
+}
+
+private fun LazyListScope.settingsHomeFooterItem(
+    appVersion: String,
+    onRepositoryClick: () -> Unit,
+    onSupportBotClick: () -> Unit,
+    onClick: () -> Unit,
+) {
+    item {
+        SettingsFooterVersionText(
+            text = stringResource(R.string.settings_footer_version, appVersion),
+            summary = stringResource(R.string.settings_home_version_summary_hidden),
+            onRepositoryClick = onRepositoryClick,
+            onSupportBotClick = onSupportBotClick,
+            onClick = onClick,
+        )
+    }
+}
+
 @Composable
 private fun SettingsRoutingNavigationGroup(
     onOpenRouting: () -> Unit,
     onOpenRoutingApps: () -> Unit,
     onOpenRoutingSites: () -> Unit,
 ) {
-    FoxholeCard {
+    SettingsNavigationGroup {
         SettingsGroupedNavigationRow(
             icon = Icons.Outlined.AccountTree,
             title = stringResource(R.string.traffic_rules),
@@ -320,6 +350,22 @@ private fun SettingsRoutingNavigationGroup(
 }
 
 @Composable
+private fun SettingsNavigationGroup(content: @Composable ColumnScope.() -> Unit) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.large,
+        color = MaterialTheme.colorScheme.surface,
+        tonalElevation = 0.dp,
+        shadowElevation = 0.dp,
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
+            content = content,
+        )
+    }
+}
+
+@Composable
 private fun SettingsGroupedNavigationRow(
     modifier: Modifier = Modifier,
     icon: ImageVector,
@@ -329,13 +375,12 @@ private fun SettingsGroupedNavigationRow(
     onClick: () -> Unit,
 ) {
     Row(
-        modifier =
-            modifier
-                .fillMaxWidth()
-                .clip(MaterialTheme.shapes.medium)
-                .clickable(onClick = onClick)
-                .heightIn(min = 52.dp)
-                .padding(vertical = 6.dp),
+            modifier =
+                modifier
+                    .fillMaxWidth()
+                    .clickable(onClick = onClick)
+                    .heightIn(min = 52.dp)
+                    .padding(vertical = 6.dp),
         horizontalArrangement = Arrangement.spacedBy(14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -367,11 +412,6 @@ private fun SettingsGroupedNavigationRow(
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        Icon(
-            imageVector = Icons.AutoMirrored.Outlined.ArrowForward,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
     }
 }
 
@@ -388,9 +428,7 @@ fun SmartStartSettingsScreen(
     onSmartStartProtocolSelectionTimeoutChanged: (Int) -> Unit,
     onSmartStartRefreshSelectionTimeoutChanged: (Int) -> Unit,
     onSmartStartTransportPrioritySelected: (SmartStartTransportPriority) -> Unit,
-    onClearSmartStartData: () -> Unit,
 ) {
-    var clearSmartStartDialogVisible by rememberSaveable { mutableStateOf(false) }
     var protocolTimeoutExpanded by rememberSaveable { mutableStateOf(false) }
     var refreshTimeoutExpanded by rememberSaveable { mutableStateOf(false) }
     var transportPriorityExpanded by rememberSaveable { mutableStateOf(false) }
@@ -449,41 +487,7 @@ fun SmartStartSettingsScreen(
                     summaryMaxLines = 3,
                 )
             }
-            item {
-                SettingValueRow(
-                    title = stringResource(R.string.smart_start_clear_data_title),
-                    value = "",
-                    summary = stringResource(R.string.smart_start_clear_data_summary),
-                    leadingIcon = Icons.Outlined.Delete,
-                    onClick = { clearSmartStartDialogVisible = true },
-                    summaryMaxLines = 3,
-                    trailingContent = {
-                        Icon(
-                            imageVector = Icons.Outlined.Delete,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.error,
-                        )
-                    },
-                )
-            }
         }
-    }
-
-    if (clearSmartStartDialogVisible) {
-        ConfirmDialog(
-            title = stringResource(R.string.smart_start_clear_data_confirm_title),
-            body = stringResource(R.string.smart_start_clear_data_confirm_body),
-            confirmLabel = stringResource(R.string.clear_data_action),
-            icon = Icons.Outlined.Delete,
-            iconTint = MaterialTheme.colorScheme.error,
-            iconContainerColor = MaterialTheme.colorScheme.error.copy(alpha = 0.12f),
-            dismissLabel = stringResource(R.string.cancel),
-            onDismiss = { clearSmartStartDialogVisible = false },
-            onConfirm = {
-                clearSmartStartDialogVisible = false
-                onClearSmartStartData()
-            },
-        )
     }
 }
 
@@ -927,25 +931,16 @@ fun ApplicationSettingsScreen(
     onNavigateUp: () -> Unit,
     onThemeSelected: (ThemeMode) -> Unit,
     onLocaleSelected: (AppLocale) -> Unit,
-    onTransparencyChanged: (Boolean) -> Unit,
     onAutoReconnectChanged: (Boolean) -> Unit,
     onAutoStartChanged: (Boolean) -> Unit,
     onBlockScreenshotsChanged: (Boolean) -> Unit,
-    onResetApplicationSettings: () -> Unit,
 ) {
-    val context = LocalContext.current
-    val coroutineScope = rememberCoroutineScope()
     val systemThemeLabel = stringResource(R.string.theme_mode_system)
     val darkThemeLabel = stringResource(R.string.theme_mode_dark)
     val lightThemeLabel = stringResource(R.string.theme_mode_light)
     val systemLocaleLabel = stringResource(R.string.language_system)
     val russianLocaleLabel = stringResource(R.string.language_russian)
     val englishLocaleLabel = stringResource(R.string.language_english)
-    val quickSettingsTileUnavailable = stringResource(R.string.quick_settings_tile_unavailable)
-    val quickSettingsTileAdded = stringResource(R.string.quick_settings_tile_added)
-    val quickSettingsTileAlreadyAdded = stringResource(R.string.quick_settings_tile_already_added)
-    val quickSettingsTileNotAdded = stringResource(R.string.quick_settings_tile_not_added)
-    val appName = stringResource(R.string.app_name)
     val themeModeLabel: (ThemeMode) -> String = { value ->
         when (value) {
             ThemeMode.SYSTEM -> systemThemeLabel
@@ -962,7 +957,6 @@ fun ApplicationSettingsScreen(
     }
     var themeMenuExpanded by rememberSaveable { mutableStateOf(false) }
     var localeMenuExpanded by rememberSaveable { mutableStateOf(false) }
-    var resetApplicationDialogVisible by rememberSaveable { mutableStateOf(false) }
 
     SettingsScaffold(
         title = stringResource(R.string.app_settings),
@@ -981,16 +975,6 @@ fun ApplicationSettingsScreen(
                 onSelect = onThemeSelected,
                 leadingIcon = Icons.Outlined.Tune,
                 optionIcon = ::themeModeIcon,
-            )
-        }
-        item {
-            SettingSwitchRow(
-                title = stringResource(R.string.transparency),
-                checked = state.settings.ui.transparencyEnabled,
-                summary = stringResource(R.string.transparency_summary),
-                leadingIcon = Icons.Outlined.BrightnessAuto,
-                onCheckedChange = onTransparencyChanged,
-                summaryMaxLines = 2,
             )
         }
         item {
@@ -1033,95 +1017,6 @@ fun ApplicationSettingsScreen(
                 summaryMaxLines = 3,
             )
         }
-        item {
-            SettingsNavigationRow(
-                icon = Icons.Outlined.PhoneAndroid,
-                title = stringResource(R.string.quick_settings_tile),
-                summary = stringResource(R.string.quick_settings_tile_summary),
-                containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.38f),
-                borderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.36f),
-                leadingIconContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.16f),
-                leadingIconTint = MaterialTheme.colorScheme.primary,
-                summaryMaxLines = 2,
-                onClick = {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                        val statusBarManager = context.getSystemService(StatusBarManager::class.java)
-                        if (statusBarManager == null) {
-                            coroutineScope.launch {
-                                snackbarHostState.showBanner(
-                                    quickSettingsTileUnavailable,
-                                    FoxholeBannerTone.INFO,
-                                )
-                            }
-                        } else {
-                            statusBarManager.requestAddTileService(
-                                ComponentName(context, FoxholeTileService::class.java),
-                                appName,
-                                Icon.createWithResource(context, R.drawable.foxhole_logo_bitmap),
-                                context.mainExecutor,
-                            ) { result ->
-                                val message =
-                                    when (result) {
-                                        StatusBarManager.TILE_ADD_REQUEST_RESULT_TILE_ADDED ->
-                                            quickSettingsTileAdded
-                                        StatusBarManager.TILE_ADD_REQUEST_RESULT_TILE_ALREADY_ADDED ->
-                                            quickSettingsTileAlreadyAdded
-                                        else -> quickSettingsTileNotAdded
-                                    }
-                                val tone =
-                                    when (result) {
-                                        StatusBarManager.TILE_ADD_REQUEST_RESULT_TILE_ADDED -> FoxholeBannerTone.SUCCESS
-                                        StatusBarManager.TILE_ADD_REQUEST_RESULT_TILE_ALREADY_ADDED -> FoxholeBannerTone.INFO
-                                        else -> FoxholeBannerTone.ERROR
-                                    }
-                                coroutineScope.launch {
-                                    snackbarHostState.showBanner(message, tone)
-                                }
-                            }
-                        }
-                    } else {
-                        coroutineScope.launch {
-                            snackbarHostState.showBanner(
-                                quickSettingsTileUnavailable,
-                                FoxholeBannerTone.INFO,
-                            )
-                        }
-                    }
-                },
-            )
-        }
-        item {
-            SettingValueRow(
-                title = stringResource(R.string.reset_application_settings_title),
-                value = "",
-                summary = stringResource(R.string.reset_application_settings_summary),
-                leadingIcon = Icons.Outlined.Refresh,
-                onClick = { resetApplicationDialogVisible = true },
-                summaryMaxLines = 3,
-                trailingContent = {
-                    Icon(
-                        imageVector = Icons.Outlined.Refresh,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                    )
-                },
-            )
-        }
-    }
-
-    if (resetApplicationDialogVisible) {
-        ConfirmDialog(
-            title = stringResource(R.string.attention_title),
-            body = stringResource(R.string.reset_application_settings_confirm_body),
-            confirmLabel = stringResource(R.string.reset_application_settings_confirm_action),
-            icon = Icons.Outlined.Refresh,
-            dismissLabel = stringResource(R.string.cancel),
-            onDismiss = { resetApplicationDialogVisible = false },
-            onConfirm = {
-                resetApplicationDialogVisible = false
-                onResetApplicationSettings()
-            },
-        )
     }
 }
 
@@ -1427,42 +1322,6 @@ private fun HelpConnectionModeRow(
                 text = body,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-    }
-}
-
-@Composable
-fun AboutScreen(
-    state: AboutRouteUiState,
-    snackbarHostState: SnackbarHostState,
-    onNavigateUp: () -> Unit,
-) {
-    SettingsScaffold(
-        title = stringResource(R.string.about_app_title),
-        snackbarHostState = snackbarHostState,
-        onNavigateUp = onNavigateUp,
-    ) {
-        item {
-            InfoBlock(
-                title = stringResource(R.string.about_app_title),
-                body = stringResource(R.string.settings_home_about_summary),
-            )
-        }
-        item {
-            SettingValueRow(
-                title = stringResource(R.string.app_version),
-                value = state.appVersion,
-                leadingIcon = Icons.Outlined.PhoneAndroid,
-                onClick = null,
-            )
-        }
-        item {
-            SettingValueRow(
-                title = stringResource(R.string.core_version),
-                value = "sing-box ${state.coreVersion}",
-                leadingIcon = Icons.Outlined.Tune,
-                onClick = null,
             )
         }
     }

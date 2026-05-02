@@ -19,7 +19,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Refresh
@@ -52,7 +51,6 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.foxhole.beta.R
@@ -169,7 +167,6 @@ internal fun SmartProfileAutoConnectMenu(
                 Modifier
                     .testTag("smart_profile_auto_connect_menu")
                     .width(menuWidth),
-            offset = DpOffset(x = 0.dp, y = if (compact) (-6).dp else 0.dp),
         ) {
             SmartProfileProtocolMenuContent(
                 options = options,
@@ -254,7 +251,6 @@ private fun rememberSmartProfileMenuWidth(
     val recommendedLegend = stringResource(R.string.smart_profile_legend_reconnect_recommended)
     val protocolLabel = stringResource(R.string.smart_profile_menu_protocol_column)
     val statusLabel = stringResource(R.string.smart_profile_menu_status_column)
-    val dashboardOnLabel = stringResource(R.string.smart_profile_menu_dashboard_on_column)
     val serverPingLabel = stringResource(R.string.smart_profile_menu_server_ping_column)
     val vpnLatencyLabel = smartProfileLatencyColumnLabel(latencyProbeMethod)
     val unavailableMetric = stringResource(R.string.smart_profile_metric_unavailable)
@@ -443,11 +439,7 @@ private fun rememberSmartProfileMenuWidth(
                         }
                     },
                 ) +
-                maxOf(
-                    textWidth(dashboardOnLabel, metricLabelStyle),
-                    with(density) { SmartProfileOnColumnWidth.toPx() },
-                ) +
-                with(density) { 24.dp.toPx() }
+                with(density) { 12.dp.toPx() }
         } else {
             0f
         }
@@ -507,7 +499,7 @@ private fun rememberSmartProfileMenuWidth(
                 protocolColumnWidth +
                     serverColumnWidth +
                     vpnColumnWidth +
-                    with(density) { (SmartProfileOnColumnWidth + 12.dp).toPx() }
+                    with(density) { 8.dp.toPx() }
             } else {
                 val statusValueWidth =
                     maxOf(
@@ -519,7 +511,7 @@ private fun rememberSmartProfileMenuWidth(
                     )
                 protocolColumnWidth +
                     statusValueWidth +
-                    with(density) { (SmartProfileOnColumnWidth + 18.dp).toPx() }
+                    with(density) { 8.dp.toPx() }
             }
         } ?: 0f
     val protocolAndLegendWidthPx = maxOf(legendWidthPx, rowWidthPx)
@@ -643,12 +635,6 @@ private fun SmartProfileProtocolMenuContent(
             val includedSelection = included && active
             val refreshingSelection = metricsRefreshing && option.id == refreshingOptionId
             val selectionTone = foxholeSystemAwareAccentColor(fallback = FoxholeInfoAccent)
-            val activeAccent =
-                smartProfileCurrentProtocolAccent(
-                    latencyMs = latencyMs,
-                    down = latencyDown,
-                    unavailable = latencyUnavailable,
-                )
             FoxholeDropdownItem(
                 onClick = {
                     val nextExcluded =
@@ -665,19 +651,14 @@ private fun SmartProfileProtocolMenuContent(
                 },
                 selected = includedSelection || refreshingSelection,
                 highlightSelected = includedSelection || refreshingSelection,
-                accentColor =
-                    when {
-                        refreshingSelection -> selectionTone
-                        included && recommended -> FoxholePositiveAccent
-                        included && active -> activeAccent
-                        else -> FoxholePositiveAccent
-                    },
                 selectedContainerColor =
                     if (refreshingSelection) {
                         selectionTone.copy(alpha = 0.12f)
                     } else {
                         MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.18f)
                     },
+                extendSelectedToMenuTop = index == 0 && !hasMenuHeader,
+                extendSelectedToMenuBottom = index == options.lastIndex && !hasFooter,
                 shape =
                     foxholeDropdownItemShape(
                         index = index,
@@ -685,7 +666,6 @@ private fun SmartProfileProtocolMenuContent(
                         hasHeader = hasMenuHeader,
                         hasFooter = hasFooter,
                     ),
-                showBorder = index != options.lastIndex,
                 minHeight =
                     if (menuLayout.showDetailedMetrics) {
                         SmartProfileProtocolAdaptiveCompactRowHeight
@@ -1226,22 +1206,6 @@ private fun SmartProfileMetricsRefreshButton(
     }
 }
 
-private fun smartProfileCurrentProtocolAccent(
-    latencyMs: Long?,
-    down: Boolean,
-    unavailable: Boolean,
-): Color =
-    when (classifyVpnLatency(latencyMs = latencyMs, failed = down, unavailable = unavailable || latencyMs == null)) {
-        LatencyQuality.FAST,
-        LatencyQuality.NORMAL,
-        LatencyQuality.SLOW,
-        -> SmartProfileCurrentWarningAccent
-        LatencyQuality.VERY_SLOW,
-        LatencyQuality.FAILED,
-        LatencyQuality.UNAVAILABLE,
-        -> SmartProfileCurrentDangerAccent
-    }
-
 @Composable
 private fun SmartProfileProtocolTableHeader(
     compact: Boolean,
@@ -1272,11 +1236,6 @@ private fun SmartProfileProtocolTableHeader(
             SmartProfileTableHeaderText(
                 text = smartProfileLatencyColumnLabel(latencyProbeMethod),
                 modifier = Modifier.width(SmartProfileMetricColumnWidth),
-                textAlign = TextAlign.Center,
-            )
-            SmartProfileTableHeaderText(
-                text = stringResource(R.string.smart_profile_menu_on_column),
-                modifier = Modifier.width(SmartProfileOnColumnWidth),
                 textAlign = TextAlign.Center,
             )
         }
@@ -1312,12 +1271,7 @@ private fun SmartProfileProtocolStatusHeader(compact: Boolean) {
                         } else {
                             SmartProfileStatusColumnWidth
                         },
-                    ),
-                textAlign = TextAlign.Center,
-            )
-            SmartProfileTableHeaderText(
-                text = stringResource(R.string.smart_profile_menu_dashboard_on_column),
-                modifier = Modifier.width(SmartProfileOnColumnWidth),
+                ),
                 textAlign = TextAlign.Center,
             )
         }
@@ -1431,12 +1385,6 @@ private fun SmartProfileProtocolMetricsTableRow(
                 modifier = Modifier.width(SmartProfileMetricColumnWidth),
             )
         }
-        Box(
-            modifier = Modifier.width(SmartProfileOnColumnWidth),
-            contentAlignment = Alignment.Center,
-        ) {
-            SmartProfileOnToggle(included = included, compact = compact)
-        }
     }
 }
 
@@ -1499,12 +1447,6 @@ private fun SmartProfileProtocolSimpleMenuRow(
             showLatencyDetails = true,
             compact = compact,
         )
-        Box(
-            modifier = Modifier.width(SmartProfileOnColumnWidth),
-            contentAlignment = Alignment.Center,
-        ) {
-            SmartProfileOnToggle(included = included, compact = compact)
-        }
     }
 }
 
@@ -1580,39 +1522,6 @@ private fun SmartProfileProtocolCell(
                 )
             }
         }
-    }
-}
-
-@Composable
-private fun SmartProfileOnToggle(
-    included: Boolean,
-    compact: Boolean,
-) {
-    val tone = foxholeSystemAwareAccentColor()
-    if (included) {
-        Surface(
-            modifier = Modifier.size(if (compact) 17.dp else 18.dp),
-            shape = CircleShape,
-            color = tone.copy(alpha = 0.16f),
-            border = BorderStroke(1.dp, tone.copy(alpha = 0.48f)),
-        ) {
-            Box(contentAlignment = Alignment.Center) {
-                Icon(
-                    imageVector = Icons.Outlined.Check,
-                    contentDescription = null,
-                    modifier = Modifier.size(if (compact) 12.dp else 13.dp),
-                    tint = tone,
-                )
-            }
-        }
-    } else {
-        Surface(
-            modifier = Modifier.size(if (compact) 14.dp else 15.dp),
-            shape = CircleShape,
-            color = Color.Transparent,
-            border = BorderStroke(1.dp, tone.copy(alpha = 0.42f)),
-            content = {},
-        )
     }
 }
 
@@ -1952,9 +1861,6 @@ private val SmartProfileMetricUnavailableSize = 18.dp
 private val SmartProfileMetricColumnWidth = 52.dp
 private val SmartProfileStatusColumnWidth = 88.dp
 private val SmartProfileCompactStatusColumnWidth = 78.dp
-private val SmartProfileOnColumnWidth = 24.dp
-private val SmartProfileCurrentWarningAccent = Color(0xFFE28131)
-private val SmartProfileCurrentDangerAccent = Color(0xFFC95353)
 
 @Composable
 private fun formatSmartMetricsUpdatedAgo(updatedAt: Long): String {

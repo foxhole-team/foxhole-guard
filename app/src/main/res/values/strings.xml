@@ -23,6 +23,7 @@
     <string name="dashboard">Dashboard</string>
     <string name="settings">Settings</string>
     <string name="profile">Profile</string>
+    <string name="vpn_profile">VPN Profile</string>
     <string name="no_profiles">Saved VPN profiles not found</string>
     <string name="no_profiles_import_hint">Use Import to add a profile</string>
     <string name="profiles_empty_message">Saved VPN profiles not found. Use the Import button on the dashboard to import VPN configurations.</string>
@@ -73,8 +74,6 @@
     <string name="theme_mode_system">System colors</string>
     <string name="theme_mode_dark">Dark</string>
     <string name="theme_mode_light">Light</string>
-    <string name="transparency">Transparency</string>
-    <string name="transparency_summary">Use translucent panels for app chrome without changing the selected colors.</string>
     <string name="language">Language</string>
     <string name="language_system">System</string>
     <string name="language_english">English</string>
@@ -88,12 +87,6 @@
     <string name="auto_refresh_subscriptions_interval_12h">Every 12 hours</string>
     <string name="auto_refresh_subscriptions_interval_24h">Every 24 hours</string>
     <string name="ip_info_endpoint">IP service</string>
-    <string name="quick_settings_tile">Foxhole tile</string>
-    <string name="quick_settings_tile_summary">Add the Foxhole tile to Quick Settings.</string>
-    <string name="quick_settings_tile_added">Quick Settings tile added.</string>
-    <string name="quick_settings_tile_already_added">Quick Settings tile is already added.</string>
-    <string name="quick_settings_tile_not_added">Quick Settings tile was not added.</string>
-    <string name="quick_settings_tile_unavailable">Open Quick Settings edit mode and add the Foxhole tile manually.</string>
     <string name="export_diagnostics">Export logs</string>
     <string name="export_diagnostics_summary">Saves the log file to device storage.</string>
     <string name="export_diagnostics_share_subject">Foxhole logs</string>
@@ -183,10 +176,6 @@
     <string name="smart_start_transport_priority_all">All</string>
     <string name="smart_start_transport_priority_udp">UDP</string>
     <string name="smart_start_transport_priority_tcp">TCP</string>
-    <string name="smart_start_clear_data_title">Reset data</string>
-    <string name="smart_start_clear_data_summary">Deletes local measurements, statuses, recommendations, and connection history.</string>
-    <string name="smart_start_clear_data_confirm_title">Reset data?</string>
-    <string name="smart_start_clear_data_confirm_body">Foxhole will remove local Smart start measurements and recommendations from this device.</string>
     <string name="smart_start_data_cleared">Smart start data cleared.</string>
     <string name="smart_start_first_analysis_title">VPN protocol analysis</string>
     <string name="smart_start_first_analysis_body">The first VPN protocol analysis will check every available VPN protocol in this configuration. After Foxhole finds the three best VPN protocols, future connections will use only those. Periodically refresh all available VPN protocols in Smart start settings to improve connection quality.</string>
@@ -201,10 +190,8 @@
     <string name="smart_profile_menu_title">Manage VPN protocols</string>
     <string name="smart_profile_menu_protocol_column">Protocol</string>
     <string name="smart_profile_menu_status_column">Status</string>
-    <string name="smart_profile_menu_dashboard_on_column">ON</string>
     <string name="smart_profile_menu_server_ping_column">Server ping</string>
     <string name="smart_profile_menu_latency_column">Latency %1$s</string>
-    <string name="smart_profile_menu_on_column">ON</string>
     <string name="smart_profile_menu_recommended_badge">Recommended</string>
     <string name="smart_profile_metric_unavailable">-</string>
     <string name="smart_start_protocol_status_available">Available</string>
@@ -252,7 +239,6 @@
     <string name="expert_unlock_confirm_body">This section changes routing and local control surfaces. Open it only if you understand the impact.</string>
     <string name="diagnostics_and_usage">Diagnostics</string>
     <string name="help_title">Help</string>
-    <string name="about_app_title">About</string>
     <string name="diagnostics_usage_title">Usage</string>
     <string name="diagnostics_usage_summary">Statistics update after each session.</string>
     <string name="diagnostics_usage_empty">Cumulative usage appears after the first successful session.</string>
@@ -414,10 +400,6 @@
     <string name="reset_settings">Reset settings</string>
     <string name="reset_experimental_settings_summary">Return Foxhole default settings.</string>
     <string name="attention_title">Warning</string>
-    <string name="reset_application_settings_title">Reset app settings</string>
-    <string name="reset_application_settings_summary">Return Foxhole defaults without deleting VPN profiles.</string>
-    <string name="reset_application_settings_confirm_body">This action will return Foxhole to the default mode without deleting VPN profiles.\n\nReturn Foxhole default settings?</string>
-    <string name="reset_application_settings_confirm_action">Reset Foxhole settings</string>
     <string name="app_version">Build version</string>
     <string name="core_version">Core version</string>
     <string name="action_label">Action</string>
@@ -489,9 +471,8 @@
     <string name="settings_home_routing_summary">Rules, presets, and catalogs</string>
     <string name="settings_home_apps_summary">Rules for apps.</string>
     <string name="settings_home_sites_summary">Rules for sites</string>
-    <string name="settings_home_application_summary">Theme, transparency, language, startup, and protection</string>
+    <string name="settings_home_application_summary">Theme, language, startup, and protection</string>
     <string name="settings_home_help_summary">Help section</string>
-    <string name="settings_home_about_summary">Build version, core, and licenses.</string>
     <string name="profile_editor_connection_section">Connection</string>
     <string name="profile_editor_auth_section">Access</string>
     <string name="profile_editor_tls_section">TLS</string>

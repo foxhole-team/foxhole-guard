@@ -23,6 +23,7 @@
     <string name="dashboard">Дашборд</string>
     <string name="settings">Настройки</string>
     <string name="profile">Профиль</string>
+    <string name="vpn_profile">VPN Профиль</string>
     <string name="no_profiles">Сохраненные профили VPN не обнаружены</string>
     <string name="no_profiles_import_hint">Для добавления профиля используйте кнопку Импорт</string>
     <string name="profiles_empty_message">Сохраненные профили VPN не обнаружены. Воспользуйтесь кнопкой Импорт в дашборде для импорта конфигураций VPN.</string>
@@ -73,8 +74,6 @@
     <string name="theme_mode_system">Системные цвета</string>
     <string name="theme_mode_dark">Тёмная</string>
     <string name="theme_mode_light">Светлая</string>
-    <string name="transparency">Прозрачность</string>
-    <string name="transparency_summary">Использовать прозрачные панели интерфейса без смены выбранных цветов.</string>
     <string name="language">Язык</string>
     <string name="language_system">Системный</string>
     <string name="language_english">English</string>
@@ -88,12 +87,6 @@
     <string name="auto_refresh_subscriptions_interval_12h">Каждые 12 часов</string>
     <string name="auto_refresh_subscriptions_interval_24h">Каждые 24 часа</string>
     <string name="ip_info_endpoint">IP-сервис</string>
-    <string name="quick_settings_tile">Плитка Foxhole</string>
-    <string name="quick_settings_tile_summary">Добавьте плитку Foxhole в быстрые настройки.</string>
-    <string name="quick_settings_tile_added">Плитка быстрых настроек добавлена.</string>
-    <string name="quick_settings_tile_already_added">Плитка быстрых настроек уже добавлена.</string>
-    <string name="quick_settings_tile_not_added">Плитка быстрых настроек не была добавлена.</string>
-    <string name="quick_settings_tile_unavailable">Откройте редактирование быстрых настроек и добавьте плитку Foxhole вручную.</string>
     <string name="export_diagnostics">Экспорт логов</string>
     <string name="export_diagnostics_summary">Сохранение лог файла в память устройства.</string>
     <string name="export_diagnostics_share_subject">Логи Foxhole</string>
@@ -185,10 +178,6 @@
     <string name="smart_start_transport_priority_all">Все</string>
     <string name="smart_start_transport_priority_udp">UDP</string>
     <string name="smart_start_transport_priority_tcp">TCP</string>
-    <string name="smart_start_clear_data_title">Сбросить данные</string>
-    <string name="smart_start_clear_data_summary">Удаляет локальные замеры, статусы, рекомендации и историю подключений.</string>
-    <string name="smart_start_clear_data_confirm_title">Сбросить данные?</string>
-    <string name="smart_start_clear_data_confirm_body">Foxhole удалит локальные замеры и рекомендации Смарт старт на этом устройстве.</string>
     <string name="smart_start_data_cleared">Данные Смарт старт очищены.</string>
     <string name="smart_start_first_analysis_title">Анализ протоколов VPN</string>
     <string name="smart_start_first_analysis_body">Первый анализ доступных протоколов VPN будет выполнен по всем протоколам VPN в конфигурации. После определения трех лучших протоколов VPN подключение будет выполняться только по ним. Периодически обновляйте все доступные протоколы VPN в настройках Смарт старт для улучшения качества соединения.</string>
@@ -203,10 +192,8 @@
     <string name="smart_profile_menu_title">Управление протоколами VPN</string>
     <string name="smart_profile_menu_protocol_column">Протокол</string>
     <string name="smart_profile_menu_status_column">Статус</string>
-    <string name="smart_profile_menu_dashboard_on_column">ON</string>
     <string name="smart_profile_menu_server_ping_column">Server ping</string>
     <string name="smart_profile_menu_latency_column">Latency %1$s</string>
-    <string name="smart_profile_menu_on_column">Вкл</string>
     <string name="smart_profile_menu_recommended_badge">Рекомендовано</string>
     <string name="smart_profile_metric_unavailable">-</string>
     <string name="smart_start_protocol_status_available">Доступен</string>
@@ -254,7 +241,6 @@
     <string name="expert_unlock_confirm_body">Этот раздел меняет маршрутизацию и локальные интерфейсы. Открывайте его только если понимаете последствия.</string>
     <string name="diagnostics_and_usage">Диагностика</string>
     <string name="help_title">Помощь</string>
-    <string name="about_app_title">О программе</string>
     <string name="diagnostics_usage_title">Использование</string>
     <string name="diagnostics_usage_summary">Статистика обновляется после каждой сессии.</string>
     <string name="diagnostics_usage_empty">Общая статистика появится после первой успешной сессии.</string>
@@ -424,10 +410,6 @@
     <string name="reset_settings">Сброс настроек</string>
     <string name="reset_experimental_settings_summary">Вернуть дефолтные настройки Foxhole.</string>
     <string name="attention_title">Внимание</string>
-    <string name="reset_application_settings_title">Сбросить настройки приложения</string>
-    <string name="reset_application_settings_summary">Вернуть дефолтный режим Foxhole без удаления профилей VPN.</string>
-    <string name="reset_application_settings_confirm_body">Это действие вернет приложение Foxhole в дефолтный режим без удаления профилей VPN.\n\nВернуть дефолтные настройки Foxhole?</string>
-    <string name="reset_application_settings_confirm_action">Вернуть настройки Foxhole</string>
     <string name="app_version">Версия сборки</string>
     <string name="core_version">Версия ядра</string>
     <string name="action_label">Действие</string>
@@ -503,9 +485,8 @@
     <string name="settings_home_routing_summary">Правила, пресеты и каталоги</string>
     <string name="settings_home_apps_summary">Правила для приложений.</string>
     <string name="settings_home_sites_summary">Правила для сайтов</string>
-    <string name="settings_home_application_summary">Тема, прозрачность, язык, запуск и защита</string>
+    <string name="settings_home_application_summary">Тема, язык, запуск и защита</string>
     <string name="settings_home_help_summary">Раздел помощи</string>
-    <string name="settings_home_about_summary">Версия сборки, ядро и лицензии.</string>
     <string name="profile_editor_connection_section">Подключение</string>
     <string name="profile_editor_auth_section">Доступ</string>
     <string name="profile_editor_tls_section">TLS</string>

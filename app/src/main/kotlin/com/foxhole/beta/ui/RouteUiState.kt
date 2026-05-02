@@ -111,11 +111,6 @@ data class DiagnosticsRouteUiState(
     val diagnosticEntries: List<DiagnosticEntry> = emptyList(),
 )
 
-data class AboutRouteUiState(
-    val appVersion: String = "",
-    val coreVersion: String = "",
-)
-
 internal fun HomeUiState.toHomeRouteUiState(
     autoConnect: AutoConnectUiState = AutoConnectUiState(),
     selectedProtocolLatencyMs: Long? = null,
@@ -229,12 +224,6 @@ internal fun HomeUiState.toDiagnosticsRouteUiState(): DiagnosticsRouteUiState =
         activeProfile = activeProfile,
         traffic = traffic,
         diagnosticEntries = diagnosticEntries,
-    )
-
-internal fun HomeUiState.toAboutRouteUiState(): AboutRouteUiState =
-    AboutRouteUiState(
-        appVersion = appVersion,
-        coreVersion = coreVersion,
     )
 
 internal fun ProfilesRouteUiState.profile(profileId: Long): Profile? = profiles.firstOrNull { it.id == profileId }

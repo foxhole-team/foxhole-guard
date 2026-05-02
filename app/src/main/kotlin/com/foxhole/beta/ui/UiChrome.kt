@@ -57,11 +57,12 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.MenuDefaults
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -86,7 +87,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.Shape
@@ -111,16 +115,12 @@ internal val ScreenSectionSpacing = 10.dp
 internal val CardInnerPadding = 12.dp
 internal val CardContentSpacing = 8.dp
 internal val BottomDockOverlayPadding = 100.dp
-internal val HomeTopStatusInnerSurfaceMinHeight = 74.dp
+internal val HomeTopStatusInnerSurfaceMinHeight = 42.dp
 internal val HomeTopStatusInnerHorizontalPadding = 10.dp
-internal val HomeTopStatusInnerVerticalPadding = 10.dp
+internal val HomeTopStatusInnerVerticalPadding = 6.dp
 internal val FoxholeTopBarBannerPadding = 86.dp
 
 internal val FoxholeDialogShape = RoundedCornerShape(24.dp)
-internal val FoxholeDropdownShape = RoundedCornerShape(18.dp)
-
-private val FoxholeBannerShellInset = 8.dp
-
 internal object FoxholeMotionTokens {
     const val FastDurationMs = 120
     const val StandardDurationMs = 180
@@ -142,7 +142,7 @@ private val FoxholeErrorAccent = Color(0xFFC63C3C)
 
 @Composable
 internal fun foxholeSystemAwareAccentColor(
-    fallback: Color = FoxholePositiveAccent,
+    fallback: Color = MaterialTheme.colorScheme.primary,
     darkFallback: Color = FoxholeInfoAccent,
 ): Color =
     when (LocalFoxholeThemeMode.current) {
@@ -154,7 +154,6 @@ internal fun foxholeSystemAwareAccentColor(
 @Composable
 internal fun foxholeSystemProfileSelectionColor(): Color =
     foxholeSystemAwareAccentColor(
-        fallback = FoxholePositiveAccent,
         darkFallback = FoxholeInfoAccent,
     )
 
@@ -186,10 +185,9 @@ internal fun FoxholeScaffold(
     bannerTopPadding: Dp = ScreenVerticalPadding,
     content: @Composable (PaddingValues) -> Unit,
 ) {
-    val uiPalette = LocalFoxholeUiPalette.current
-    val topBarContainerColor = MaterialTheme.colorScheme.background.copy(alpha = uiPalette.chromeContainerAlpha)
+    val topBarContainerColor = Color.Transparent
     Scaffold(
-        containerColor = MaterialTheme.colorScheme.background,
+        containerColor = Color.Transparent,
         topBar = {
             TopAppBar(
                 title = {
@@ -538,80 +536,73 @@ private fun FoxholeBanner(
                 .heightIn(min = HomeTopStatusInnerSurfaceMinHeight)
                 .testTag("foxhole_banner_shell"),
         shape = MaterialTheme.shapes.large,
-        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.10f),
+        color = containerColor,
         tonalElevation = 0.dp,
-        shadowElevation = 0.dp,
+        shadowElevation = 8.dp,
+        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.12f)),
     ) {
-        Surface(
+        Box(
             modifier =
                 Modifier
                     .fillMaxWidth()
-                    .padding(FoxholeBannerShellInset)
                     .testTag("foxhole_banner"),
-            shape = MaterialTheme.shapes.large,
-            color = containerColor,
-            tonalElevation = 0.dp,
-            shadowElevation = 0.dp,
-            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.12f)),
         ) {
-            Box(modifier = Modifier.fillMaxWidth()) {
-                Row(
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 14.dp, vertical = 12.dp),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Icon(
-                        imageVector = icon,
-                        contentDescription = null,
-                        tint = contentColor,
-                    )
-                    Text(
-                        text = visuals?.message ?: data.visuals.message,
-                        modifier = Modifier.weight(1f),
-                        color = contentColor,
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Medium,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    visuals?.actionLabel?.let { label ->
-                        IconButton(
-                            onClick = data::performAction,
-                            modifier = Modifier.size(28.dp),
-                        ) {
-                            Icon(
-                                imageVector = Icons.Outlined.Check,
-                                contentDescription = label,
-                                tint = contentColor,
-                            )
-                        }
-                    }
+            Row(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 14.dp, vertical = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = contentColor,
+                )
+                Text(
+                    text = visuals?.message ?: data.visuals.message,
+                    modifier = Modifier.weight(1f),
+                    color = contentColor,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                visuals?.actionLabel?.let { label ->
                     IconButton(
-                        onClick = data::dismiss,
+                        onClick = data::performAction,
                         modifier = Modifier.size(28.dp),
                     ) {
                         Icon(
-                            imageVector = Icons.Outlined.Close,
-                            contentDescription = stringResource(R.string.close),
+                            imageVector = Icons.Outlined.Check,
+                            contentDescription = label,
                             tint = contentColor,
                         )
                     }
                 }
-                Box(
-                    modifier =
-                        Modifier
-                            .align(Alignment.BottomStart)
-                            .fillMaxWidth(countdownProgress.coerceIn(0f, 1f))
-                            .height(3.dp)
-                            .background(
-                                color = contentColor.copy(alpha = 0.72f),
-                                shape = RoundedCornerShape(999.dp),
-                            ),
-                )
+                IconButton(
+                    onClick = data::dismiss,
+                    modifier = Modifier.size(28.dp),
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Close,
+                        contentDescription = stringResource(R.string.close),
+                        tint = contentColor,
+                    )
+                }
             }
+            Box(
+                modifier =
+                    Modifier
+                        .align(Alignment.BottomStart)
+                        .fillMaxWidth(countdownProgress.coerceIn(0f, 1f))
+                        .height(3.dp)
+                        .background(
+                            color = contentColor.copy(alpha = 0.72f),
+                            shape = RoundedCornerShape(999.dp),
+                        ),
+            )
         }
     }
 }
@@ -784,6 +775,7 @@ internal fun Modifier.foxholeDialogChrome(): Modifier =
     this.shadow(elevation = 18.dp, shape = FoxholeDialogShape, clip = false)
 
 @Composable
+@Suppress("UNUSED_PARAMETER")
 internal fun FoxholeCard(
     modifier: Modifier = Modifier,
     onClick: (() -> Unit)? = null,
@@ -798,20 +790,9 @@ internal fun FoxholeCard(
         } else {
             containerColor
         }
-    val resolvedBorderColor =
-        if (borderColor == Color.Unspecified) {
-            uiPalette.cardBorderColor
-        } else {
-            borderColor
-        }
     val colors =
         CardDefaults.cardColors(
             containerColor = resolvedContainerColor,
-        )
-    val border =
-        BorderStroke(
-            width = 1.dp,
-            color = resolvedBorderColor,
         )
     val elevation =
         CardDefaults.cardElevation(
@@ -823,7 +804,6 @@ internal fun FoxholeCard(
             modifier = modifier.fillMaxWidth(),
             shape = MaterialTheme.shapes.large,
             colors = colors,
-            border = border,
             elevation = elevation,
         ) {
             Column(
@@ -841,7 +821,6 @@ internal fun FoxholeCard(
         modifier = modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.large,
         colors = colors,
-        border = border,
         elevation = elevation,
     ) {
         Column(
@@ -902,25 +881,27 @@ internal fun FoxholeDropdownMenu(
     offset: DpOffset = DpOffset.Zero,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    val uiPalette = LocalFoxholeUiPalette.current
+    val menuOffset = DpOffset(x = offset.x, y = offset.y + FoxholeDropdownTriggerGap)
     DropdownMenu(
         expanded = expanded,
         onDismissRequest = onDismissRequest,
-        modifier = modifier.widthIn(min = 188.dp, max = 392.dp),
-        offset = offset,
+        modifier = modifier.widthIn(max = 392.dp),
+        offset = menuOffset,
         shape = FoxholeDropdownShape,
-        containerColor = uiPalette.menuContainerColor,
-        tonalElevation = 0.dp,
-        shadowElevation = 12.dp,
-        border = BorderStroke(1.dp, uiPalette.menuBorderColor),
+        containerColor = MenuDefaults.containerColor,
+        tonalElevation = MenuDefaults.TonalElevation,
+        shadowElevation = MenuDefaults.ShadowElevation,
     ) {
         Column(
-            modifier = Modifier.clip(FoxholeDropdownShape),
             verticalArrangement = Arrangement.spacedBy(0.dp),
             content = content,
         )
     }
 }
+
+private val FoxholeDropdownShape = RoundedCornerShape(18.dp)
+private val FoxholeDropdownTriggerGap = 8.dp
+private val FoxholeDropdownInternalVerticalPadding = 8.dp
 
 @Composable
 internal fun FoxholeDropdownItem(
@@ -928,9 +909,9 @@ internal fun FoxholeDropdownItem(
     modifier: Modifier = Modifier,
     selected: Boolean = false,
     highlightSelected: Boolean = true,
-    showBorder: Boolean = true,
-    accentColor: Color = FoxholePositiveAccent,
     selectedContainerColor: Color? = null,
+    extendSelectedToMenuTop: Boolean = false,
+    extendSelectedToMenuBottom: Boolean = false,
     shape: Shape = RectangleShape,
     minHeight: Dp = 46.dp,
     contentPadding: PaddingValues = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
@@ -946,49 +927,49 @@ internal fun FoxholeDropdownItem(
         } else {
             Color.Transparent
         }
-    Card(
-        onClick = onClick,
-        modifier = modifier.fillMaxWidth().clip(shape),
-        shape = shape,
-        colors = CardDefaults.cardColors(containerColor = containerColor),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-        border = null,
-    ) {
-        Column {
-            Row(
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .heightIn(min = minHeight)
-                        .padding(contentPadding),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                leadingContent?.invoke()
-                Row(
-                    modifier = Modifier.weight(1f),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    content = content,
+    val selectedBackgroundModifier =
+        if (selectedChrome && (extendSelectedToMenuTop || extendSelectedToMenuBottom)) {
+            Modifier.drawBehind {
+                val extensionPx = FoxholeDropdownInternalVerticalPadding.toPx()
+                val top = if (extendSelectedToMenuTop) -extensionPx else 0f
+                val bottom = if (extendSelectedToMenuBottom) extensionPx else 0f
+                drawRect(
+                    color = containerColor,
+                    topLeft = Offset(0f, top),
+                    size = Size(width = size.width, height = size.height - top + bottom),
                 )
-                trailingContent?.let {
+            }
+        } else {
+            Modifier.background(containerColor, shape)
+        }
+    DropdownMenuItem(
+        text = {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                content = content,
+            )
+        },
+        onClick = onClick,
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .heightIn(min = minHeight)
+                .then(selectedBackgroundModifier),
+        leadingIcon = leadingContent,
+        trailingIcon =
+            trailingContent?.let {
+                {
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         content = it,
                     )
                 }
-            }
-            HorizontalDivider(
-                color =
-                    if (showBorder) {
-                        uiPalette.menuDividerColor
-                    } else {
-                        Color.Transparent
-                    },
-            )
-        }
-    }
+            },
+        contentPadding = contentPadding,
+    )
 }
 
 @Composable
@@ -1075,6 +1056,7 @@ internal fun FoxholePreferenceCard(
                     text = title,
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface,
                 )
                 summary?.takeIf(String::isNotBlank)?.let {
                     Text(
@@ -1088,7 +1070,7 @@ internal fun FoxholePreferenceCard(
             }
             trailingContent?.let {
                 Row(
-                    modifier = Modifier.widthIn(min = 52.dp, max = 168.dp),
+                    modifier = Modifier.widthIn(min = 52.dp, max = 232.dp),
                     horizontalArrangement = Arrangement.End,
                     verticalAlignment = Alignment.CenterVertically,
                     content = it,
@@ -1211,20 +1193,13 @@ internal fun FoxholeChoiceCard(
     modifier: Modifier = Modifier,
     summary: String? = null,
 ) {
+    val uiPalette = LocalFoxholeUiPalette.current
     FoxholePreferenceCard(
         title = title,
         summary = summary,
         onClick = onClick,
         modifier = modifier,
-        trailingContent = {
-            if (selected) {
-                Icon(
-                    imageVector = Icons.Outlined.CheckCircle,
-                    contentDescription = null,
-                    tint = FoxholePositiveAccent,
-                )
-            }
-        },
+        containerColor = if (selected) uiPalette.menuSelectedRowColor else Color.Unspecified,
     )
 }
 

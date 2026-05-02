@@ -30,7 +30,6 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.ExpandMore
@@ -297,58 +296,43 @@ internal fun HomeModeDropdown(
             expanded = expanded,
             onDismissRequest = { expanded = false },
             modifier = Modifier.widthIn(min = 232.dp, max = 278.dp),
-            offset = androidx.compose.ui.unit.DpOffset(x = 0.dp, y = (-4).dp),
         ) {
-            Column(
-                modifier = Modifier.padding(3.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
-                HomeModeOption.entries.forEach { option ->
-                    val selectedOption = option == selected
-                    FoxholeDropdownItem(
-                        onClick = {
-                            expanded = false
-                            if (option != selected) {
-                                onSelect(option)
-                            }
-                        },
-                        selected = selectedOption,
-                        accentColor = MaterialTheme.colorScheme.primary,
-                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 9.dp),
-                        leadingContent = {
-                            Icon(
-                                imageVector = homeModeOptionIcon(option),
-                                contentDescription = null,
-                                modifier = Modifier.size(16.dp),
-                                tint =
-                                    if (selectedOption) {
-                                        MaterialTheme.colorScheme.primary
-                                    } else {
-                                        MaterialTheme.colorScheme.onSurfaceVariant
-                                    },
-                            )
-                        },
-                        trailingContent = {
-                            if (selectedOption) {
-                                Icon(
-                                    imageVector = Icons.Outlined.CheckCircle,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(17.dp),
-                                    tint = MaterialTheme.colorScheme.primary,
-                                )
-                            }
-                        },
-                    ) {
-                        Text(
-                            text = homeModeMenuLabel(option),
-                            modifier = Modifier.weight(1f),
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = if (selectedOption) FontWeight.SemiBold else FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
+            HomeModeOption.entries.forEachIndexed { index, option ->
+                val selectedOption = option == selected
+                FoxholeDropdownItem(
+                    onClick = {
+                        expanded = false
+                        if (option != selected) {
+                            onSelect(option)
+                        }
+                    },
+                    selected = selectedOption,
+                    extendSelectedToMenuTop = index == 0,
+                    extendSelectedToMenuBottom = index == HomeModeOption.entries.lastIndex,
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 9.dp),
+                    leadingContent = {
+                        Icon(
+                            imageVector = homeModeOptionIcon(option),
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                            tint =
+                                if (selectedOption) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                },
                         )
-                    }
+                    },
+                ) {
+                    Text(
+                        text = homeModeMenuLabel(option),
+                        modifier = Modifier.weight(1f),
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = if (selectedOption) FontWeight.SemiBold else FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
                 }
             }
         }
@@ -842,13 +826,14 @@ internal fun HomeConnectionActions(
             expiresAtElapsedMs = reconnectExpiresAtElapsedMs,
             totalDurationMs = HomeViewModel.PROFILE_RECONNECT_PROMPT_WINDOW_MS,
         )
+    val reconnectCountdownColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.07f)
     val reconnectCountdownModifier =
         if (reconnectExpiresAtElapsedMs != null) {
             Modifier
                 .clip(primaryButtonShape)
                 .drawBehind {
                     drawRect(
-                        color = Color.White.copy(alpha = 0.14f),
+                        color = reconnectCountdownColor,
                         size =
                             Size(
                                 width = size.width * reconnectProgress.coerceIn(0f, 1f),

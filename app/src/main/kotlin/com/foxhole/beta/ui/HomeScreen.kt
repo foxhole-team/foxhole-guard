@@ -41,7 +41,6 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.ArrowForward
 import androidx.compose.material.icons.outlined.AccountTree
 import androidx.compose.material.icons.outlined.Apps
 import androidx.compose.material.icons.outlined.ArrowDownward
@@ -52,7 +51,6 @@ import androidx.compose.material.icons.outlined.DeleteSweep
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.FileUpload
-import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.PowerSettingsNew
 import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.QrCodeScanner
@@ -360,91 +358,92 @@ fun HomeScreen(
             verticalArrangement = Arrangement.spacedBy(ScreenSectionSpacing),
         ) {
             item {
-                FoxholeCard {
-                    Surface(
-                        shape = MaterialTheme.shapes.large,
-                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.30f),
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = MaterialTheme.shapes.large,
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    tonalElevation = 0.dp,
+                    shadowElevation = 0.dp,
+                ) {
+                    Row(
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .heightIn(min = HomeTopStatusInnerSurfaceMinHeight)
+                                .padding(
+                                    horizontal = HomeTopStatusInnerHorizontalPadding,
+                                    vertical = HomeTopStatusInnerVerticalPadding,
+                                ),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Row(
+                        Box(
+                            modifier = Modifier.size(40.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Surface(
+                                modifier = Modifier.size(30.dp),
+                                shape = MaterialTheme.shapes.large,
+                                color = statusTone.copy(alpha = 0.13f),
+                            ) {
+                                Spacer(modifier = Modifier.fillMaxSize())
+                            }
+                            Image(
+                                painter = painterResource(R.drawable.foxhole_logo),
+                                contentDescription = stringResource(R.string.app_name),
+                                modifier = Modifier.size(34.dp),
+                            )
+                        }
+                        Column(
                             modifier =
                                 Modifier
-                                    .fillMaxWidth()
-                                    .heightIn(min = HomeTopStatusInnerSurfaceMinHeight)
-                                    .padding(
-                                        horizontal = HomeTopStatusInnerHorizontalPadding,
-                                        vertical = HomeTopStatusInnerVerticalPadding,
-                                    ),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalAlignment = Alignment.CenterVertically,
+                                    .weight(1f)
+                                    .foxholeAnimateContentSize(),
+                            verticalArrangement = Arrangement.Center,
                         ) {
-                            Box(
-                                modifier = Modifier.size(54.dp),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                Surface(
-                                    modifier = Modifier.size(36.dp),
-                                    shape = MaterialTheme.shapes.large,
-                                    color = statusTone.copy(alpha = 0.13f),
-                                ) {
-                                    Spacer(modifier = Modifier.fillMaxSize())
-                                }
-                                Image(
-                                    painter = painterResource(R.drawable.foxhole_logo),
-                                    contentDescription = stringResource(R.string.app_name),
-                                    modifier = Modifier.size(42.dp),
-                                )
-                            }
-                            Column(
-                                modifier =
-                                    Modifier
-                                        .weight(1f)
-                                        .foxholeAnimateContentSize(),
-                                verticalArrangement = Arrangement.Center,
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
                             ) {
                                 Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                    modifier = Modifier.weight(1f),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {
-                                    Row(
-                                        modifier = Modifier.weight(1f),
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                    ) {
-                                        if (state.autoConnect.running) {
-                                            HomeAutoConnectStatusLine(
-                                                state = state.autoConnect,
-                                                modifier = Modifier.weight(1f),
-                                                textStyle = MaterialTheme.typography.titleMedium,
-                                            )
-                                        } else {
-                                            HomeStatusBadge(
-                                                state = topStatusState,
-                                                label = homeStatusLabel(topStatusState),
-                                                textStyle = MaterialTheme.typography.titleMedium,
-                                                accentColor = statusTone,
-                                            )
-                                        }
-                                    }
-                                    Column(
-                                        horizontalAlignment = Alignment.End,
-                                        verticalArrangement = Arrangement.spacedBy(6.dp),
-                                    ) {
-                                        HomeModeDropdown(
-                                            selected = modeOption,
-                                            onSelect = { selectedMode ->
-                                                applyHomeModeSelection(
-                                                    mode = selectedMode,
-                                                    onTrafficModeSelected = onTrafficModeSelected,
-                                                    onPerAppRoutingModeSelected = onPerAppRoutingModeSelected,
-                                                )
-                                            },
+                                    if (state.autoConnect.running) {
+                                        HomeAutoConnectStatusLine(
+                                            state = state.autoConnect,
+                                            modifier = Modifier.weight(1f),
+                                            textStyle = MaterialTheme.typography.titleMedium,
                                         )
-                                        if (lanProxyActive) {
-                                            HomeLanProxyChip(
-                                                onClick = { lanProxyDisableConfirmationVisible = true },
+                                    } else {
+                                        HomeStatusBadge(
+                                            state = topStatusState,
+                                            label = homeStatusLabel(topStatusState),
+                                            textStyle = MaterialTheme.typography.titleMedium,
+                                            accentColor = statusTone,
+                                        )
+                                    }
+                                }
+                                Column(
+                                    horizontalAlignment = Alignment.End,
+                                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                                ) {
+                                    HomeModeDropdown(
+                                        selected = modeOption,
+                                        onSelect = { selectedMode ->
+                                            applyHomeModeSelection(
+                                                mode = selectedMode,
+                                                onTrafficModeSelected = onTrafficModeSelected,
+                                                onPerAppRoutingModeSelected = onPerAppRoutingModeSelected,
                                             )
-                                        }
+                                        },
+                                    )
+                                    if (lanProxyActive) {
+                                        HomeLanProxyChip(
+                                            onClick = { lanProxyDisableConfirmationVisible = true },
+                                        )
                                     }
                                 }
                             }
@@ -472,12 +471,12 @@ fun HomeScreen(
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         HomeCardHeader(
                             icon = Icons.Outlined.AccountTree,
-                            title = stringResource(R.string.profile),
+                            title = stringResource(R.string.vpn_profile),
                             titleContent =
                                 if (isSmartDashboardProfile) {
                                     {
                                         Text(
-                                            text = stringResource(R.string.profile),
+                                            text = stringResource(R.string.vpn_profile),
                                             modifier = Modifier.weight(1f, fill = false),
                                             style = MaterialTheme.typography.titleMedium,
                                             fontWeight = FontWeight.SemiBold,
@@ -491,7 +490,7 @@ fun HomeScreen(
                                 },
                             trailing = {
                                 HomeHeaderActionButton(
-                                    icon = Icons.AutoMirrored.Outlined.ArrowForward,
+                                    icon = Icons.Outlined.AccountTree,
                                     contentDescription = null,
                                     onClick = onOpenProfiles,
                                     modifier = Modifier.size(30.dp),
@@ -664,7 +663,7 @@ fun HomeScreen(
                                 FoxholeDropdownItem(
                                     modifier = Modifier.testTag("home_import_from_file_action"),
                                     leadingContent = {
-                                        Icon(Icons.AutoMirrored.Outlined.ArrowForward, contentDescription = null)
+                                        Icon(Icons.Outlined.FileUpload, contentDescription = null)
                                     },
                                     onClick = {
                                         importMenuExpanded = false
@@ -1148,8 +1147,7 @@ fun HomeScreen(
             title = stringResource(R.string.smart_start_first_analysis_title),
             body = stringResource(R.string.smart_start_first_analysis_body),
             confirmLabel = stringResource(R.string.smart_start_first_analysis_continue),
-            bodyIcon = Icons.Outlined.Info,
-            bodyIconTint = FoxholeInfoAccent,
+            icon = Icons.Outlined.Speed,
             dismissLabel = stringResource(R.string.cancel),
             onDismiss = { smartStartFirstAnalysisProfileId = null },
             onConfirm = {

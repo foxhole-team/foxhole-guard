@@ -31,10 +31,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.ArrowForward
 import androidx.compose.material.icons.outlined.AccountTree
 import androidx.compose.material.icons.outlined.Add
-import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.ExpandMore
@@ -75,14 +73,17 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -164,7 +165,6 @@ internal fun SettingsNavigationRow(
                             .background(MaterialTheme.colorScheme.error),
                 )
             }
-            Icon(Icons.AutoMirrored.Outlined.ArrowForward, contentDescription = null)
         },
     )
 }
@@ -208,6 +208,12 @@ internal fun <T> DropdownSettingRow(
     optionIcon: ((T) -> ImageVector)? = null,
     summaryMaxLines: Int = 1,
 ) {
+    val optionLabels = values.map { option -> label(option) }
+    val menuWidth =
+        rememberDropdownMenuWidth(
+            labels = optionLabels,
+            textStyle = MaterialTheme.typography.bodyMedium,
+        )
     SettingValueRow(
         title = title,
         value = value,
@@ -216,7 +222,10 @@ internal fun <T> DropdownSettingRow(
         onClick = { onExpandedChange(true) },
         summaryMaxLines = summaryMaxLines,
         trailingContent = {
-            Box {
+            Box(
+                modifier = Modifier.width(menuWidth),
+                contentAlignment = Alignment.TopEnd,
+            ) {
                 FoxholeValuePill(
                     value = value,
                     expanded = expanded,
@@ -225,16 +234,17 @@ internal fun <T> DropdownSettingRow(
                 FoxholeDropdownMenu(
                     expanded = expanded,
                     onDismissRequest = { onExpandedChange(false) },
+                    modifier = Modifier.width(menuWidth),
                 ) {
-                    values.forEach { option ->
+                    values.forEachIndexed { index, option ->
                         FoxholeDropdownItem(
                             onClick = {
                                 onSelect(option)
                                 onExpandedChange(false)
                             },
                             selected = option == selected,
-                            showBorder = false,
-                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
+                            extendSelectedToMenuTop = index == 0,
+                            extendSelectedToMenuBottom = index == values.lastIndex,
                             leadingContent =
                                 optionIcon?.let { icon ->
                                     {
@@ -244,18 +254,9 @@ internal fun <T> DropdownSettingRow(
                                         )
                                     }
                                 },
-                            trailingContent = {
-                                if (option == selected) {
-                                    Icon(
-                                        imageVector = Icons.Outlined.CheckCircle,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.primary,
-                                    )
-                                }
-                            },
                         ) {
                             Text(
-                                text = label(option),
+                                text = optionLabels[index],
                                 style = MaterialTheme.typography.bodyMedium,
                             )
                         }
@@ -264,6 +265,26 @@ internal fun <T> DropdownSettingRow(
             }
         },
     )
+}
+
+@Composable
+private fun rememberDropdownMenuWidth(
+    labels: List<String>,
+    textStyle: TextStyle,
+): Dp {
+    val textMeasurer = rememberTextMeasurer()
+    val density = LocalDensity.current
+    val maxTextWidthPx =
+        remember(labels, textStyle) {
+            labels.maxOfOrNull { label ->
+                textMeasurer.measure(text = label, style = textStyle).size.width
+            } ?: 0
+        }
+    return with(density) {
+        (maxTextWidthPx.toDp() + 52.dp)
+            .coerceAtLeast(104.dp)
+            .coerceAtMost(220.dp)
+    }
 }
 
 @Composable
@@ -418,6 +439,7 @@ internal fun InfoBlock(
                     text = title,
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface,
                 )
                 Text(
                     text = body,

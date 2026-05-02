@@ -105,17 +105,19 @@ class HomeScreenTest {
     }
 
     @Test
-    fun settingsTabAlwaysReturnsToSettingsRootAfterSwitchingSections() {
+    fun settingsDetailHidesBottomBarAndBackReturnsSettingsRoot() {
         composeRule.onNodeWithTag("bottom_nav_settings").performClick()
         composeRule.onNodeWithTag("settings_routing_apps_action").performClick()
         composeRule.onNodeWithTag("routing_apps_add_exception_action").assertIsDisplayed()
+        composeRule.onAllNodesWithTag("bottom_nav_dashboard").assertCountEquals(0)
+        composeRule.onAllNodesWithTag("bottom_nav_settings").assertCountEquals(0)
 
-        composeRule.onNodeWithTag("bottom_nav_dashboard").performClick()
-        composeRule.onNodeWithTag("home_connect_button").assertIsDisplayed()
-
-        composeRule.onNodeWithTag("bottom_nav_settings").performClick()
+        composeRule.activityRule.scenario.onActivity { activity ->
+            activity.onBackPressedDispatcher.onBackPressed()
+        }
         composeRule.onNodeWithTag("settings_screen").assertIsDisplayed()
         composeRule.onNodeWithTag("settings_routing_apps_action").assertIsDisplayed()
+        composeRule.onNodeWithTag("bottom_nav_settings").assertIsDisplayed()
         composeRule.onAllNodesWithTag("routing_apps_add_exception_action").assertCountEquals(0)
     }
 
