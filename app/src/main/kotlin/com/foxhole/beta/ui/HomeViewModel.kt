@@ -780,8 +780,6 @@ class HomeViewModel(
 
     fun onLocaleSelected(value: AppLocale) = onLocaleSelectedInternal(value)
 
-    fun onSupportBotHandleChanged(value: String?) = onSupportBotHandleChangedInternal(value)
-
     fun onAutoReconnectChanged(value: Boolean) = onAutoReconnectChangedInternal(value)
 
     fun onAutoStartChanged(value: Boolean) = onAutoStartChangedInternal(value)

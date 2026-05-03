@@ -349,7 +349,7 @@ private fun rememberSettingsDropdownWidth(
 
 private val DropdownMenuIconChrome = 64.dp
 private val DropdownMenuTextChrome = 24.dp
-private val DropdownTriggerChrome = 30.dp
+private val DropdownTriggerChrome = 42.dp
 private val DropdownMenuItemTextPadding = PaddingValues(start = 12.dp, end = 0.dp, top = 10.dp, bottom = 10.dp)
 
 @Composable

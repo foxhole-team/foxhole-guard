@@ -979,6 +979,7 @@ fun HomeScreen(
                                         secondary = formatRate(context, state.traffic.rxBytesPerSec),
                                         valueTag = "home_traffic_rx_value",
                                         secondaryTag = "home_traffic_rx_rate",
+                                        horizontalAlignment = Alignment.CenterHorizontally,
                                     )
                                     TrafficStatBlock(
                                         modifier = Modifier.weight(1f),
@@ -1014,7 +1015,7 @@ fun HomeScreen(
                                         secondary = formatRate(context, state.traffic.rxBytesPerSec + state.traffic.txBytesPerSec),
                                         valueTag = "home_traffic_total_value",
                                         secondaryTag = "home_traffic_total_rate",
-                                        horizontalAlignment = Alignment.End,
+                                        horizontalAlignment = Alignment.CenterHorizontally,
                                     )
                                 }
                             }

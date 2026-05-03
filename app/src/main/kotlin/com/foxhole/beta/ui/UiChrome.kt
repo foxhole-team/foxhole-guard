@@ -152,8 +152,8 @@ internal val FoxholeAnalysisAccent = Color(0xFF6288AE)
 internal val FoxholeInfoAccent = Color(0xFFA8ADB3)
 internal val FoxholeWarningAccent = Color(0xFFE0B84A)
 private val FoxholeErrorAccent = Color(0xFFC63C3C)
-private val FoxholeCardShadowElevation = 2.dp
-private val FoxholeDropdownShadowElevation = 6.dp
+private val FoxholeCardShadowElevation = 3.dp
+private val FoxholeDropdownShadowElevation = 8.dp
 
 @Composable
 internal fun foxholeSystemAwareAccentColor(
@@ -196,9 +196,9 @@ internal fun Modifier.foxholeMenuShadow(
 ): Modifier {
     val shadowColor =
         if (LocalFoxholeDarkTheme.current) {
-            Color.White.copy(alpha = 0.08f)
+            Color.Black.copy(alpha = 0.30f)
         } else {
-            Color.Black.copy(alpha = 0.14f)
+            Color.Black.copy(alpha = 0.16f)
         }
     return shadow(
         elevation = elevation,
@@ -832,13 +832,12 @@ internal fun FoxholeCard(
         )
     val elevation =
         CardDefaults.cardElevation(
-            defaultElevation = 0.dp,
+            defaultElevation = FoxholeCardShadowElevation,
         )
     val cardShape = MaterialTheme.shapes.large
     val cardModifier =
         modifier
             .fillMaxWidth()
-            .foxholeMenuShadow(shape = cardShape, elevation = FoxholeCardShadowElevation)
     if (onClick != null) {
         Card(
             onClick = onClick,
@@ -1245,15 +1244,15 @@ internal fun FoxholeValuePill(
     val pillShape = MaterialTheme.shapes.medium
     val pillColor = uiPalette.valuePillContainerColor
     val pillColors = CardDefaults.cardColors(containerColor = pillColor)
-    val pillElevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+    val pillElevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     val pillBorder =
         if (uiPalette.valuePillBorderColor == Color.Transparent) {
             null
         } else {
             BorderStroke(1.dp, uiPalette.valuePillBorderColor)
         }
-    val contentEndPadding = if (onClick != null) 0.dp else 11.dp
-    val contentSpacing = if (onClick != null) 1.dp else 6.dp
+    val contentEndPadding = if (onClick != null) 9.dp else 11.dp
+    val contentSpacing = if (onClick != null) 4.dp else 6.dp
     val pillContent: @Composable () -> Unit = {
         Box(
             modifier =

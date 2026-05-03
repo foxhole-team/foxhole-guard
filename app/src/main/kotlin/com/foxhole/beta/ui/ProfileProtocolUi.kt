@@ -60,7 +60,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
@@ -348,16 +347,20 @@ private fun ProtocolMarkOrSelector(
             recommendedProtocolOptionIds = recommendedProtocolOptionIds,
             favoriteProtocolOptionId = favoriteProtocolOptionId,
         )
+    val selectorShape = MaterialTheme.shapes.large
     Box {
         Surface(
             modifier =
                 Modifier
                     .testTag("protocol_selector_${selected.id}")
                     .width(selectorWidth)
-                    .clip(MaterialTheme.shapes.large)
+                    .foxholeMenuShadow(shape = selectorShape, elevation = 2.dp)
+                    .clip(selectorShape)
                     .clickable { expanded = true },
-            shape = MaterialTheme.shapes.large,
+            shape = selectorShape,
             color = MaterialTheme.colorScheme.surface.copy(alpha = if (compact) 0.20f else 0.24f),
+            tonalElevation = 1.dp,
+            shadowElevation = 0.dp,
             border = BorderStroke(1.dp, selectorBorderColor ?: MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.58f)),
         ) {
             Row(
@@ -474,7 +477,11 @@ private fun ProtocolMarkOrSelector(
                         extendSelectedToMenuTop = index == 0 && dropdownInfoText == null,
                         extendSelectedToMenuBottom = index == protocolOptions.lastIndex,
                         shape =
-                            RectangleShape,
+                            foxholeDropdownItemShape(
+                                index = index,
+                                lastIndex = protocolOptions.lastIndex,
+                                hasHeader = dropdownInfoText != null,
+                            ),
                         minHeight = if (compact) 34.dp else 42.dp,
                         contentPadding =
                             PaddingValues(

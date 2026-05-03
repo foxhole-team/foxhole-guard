@@ -1142,11 +1142,6 @@ fun HelpScreen(
                 body = stringResource(R.string.help_diagnostics_support_body),
             ),
             HelpTopic(
-                icon = Icons.Outlined.Settings,
-                title = stringResource(R.string.app_settings),
-                body = stringResource(R.string.help_application_settings_body),
-            ),
-            HelpTopic(
                 icon = Icons.Outlined.Tune,
                 title = stringResource(R.string.expert_settings),
                 body = stringResource(R.string.help_expert_full_body),

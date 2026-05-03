@@ -539,7 +539,6 @@ fun FoxholeApp(
                         onNavigateUp = navController::navigateUp,
                         onCreateDiagnosticsArchive = viewModel::createDiagnosticsArchive,
                         onShareDiagnosticsArchive = viewModel::exportDiagnostics,
-                        onSupportBotHandleChanged = viewModel::onSupportBotHandleChanged,
                         onClearUsage = viewModel::resetUsageTracking,
                     )
                 }

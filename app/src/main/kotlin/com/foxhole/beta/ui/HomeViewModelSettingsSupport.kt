@@ -58,12 +58,6 @@ internal fun HomeViewModel.onLocaleSelectedInternal(value: AppLocale) {
     }
 }
 
-internal fun HomeViewModel.onSupportBotHandleChangedInternal(value: String?) {
-    viewModelScope.launch {
-        container.settingsRepository.updateSupportBotHandleOverride(value)
-    }
-}
-
 internal fun HomeViewModel.onAutoReconnectChangedInternal(value: Boolean) {
     viewModelScope.launch {
         container.settingsRepository.updateAutoReconnect(value)

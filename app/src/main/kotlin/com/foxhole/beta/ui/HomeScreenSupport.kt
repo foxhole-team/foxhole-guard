@@ -317,7 +317,7 @@ internal fun HomeModeDropdown(
                     selected = selectedOption,
                     extendSelectedToMenuTop = index == 0,
                     extendSelectedToMenuBottom = index == HomeModeOption.entries.lastIndex,
-                    contentPadding = PaddingValues(start = 0.dp, end = 0.dp, top = 9.dp, bottom = 9.dp),
+                    contentPadding = PaddingValues(start = 12.dp, end = 8.dp, top = 9.dp, bottom = 9.dp),
                 ) {
                     Icon(
                         imageVector = homeModeOptionIcon(option),

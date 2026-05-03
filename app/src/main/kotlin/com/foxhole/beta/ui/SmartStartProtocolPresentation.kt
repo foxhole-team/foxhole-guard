@@ -74,7 +74,7 @@ internal fun resolveSmartStartProtocolMenuLayout(showMetricsTable: Boolean): Sma
 internal fun resolveSmartStartProtocolLegendFooterLayout(menuLayout: SmartStartProtocolMenuLayout): SmartStartProtocolLegendFooterLayout =
     SmartStartProtocolLegendFooterLayout(
         topPaddingDp = if (menuLayout.showDetailedMetrics) 5 else 4,
-        bottomPaddingDp = 1,
+        bottomPaddingDp = 4,
         centered = false,
     )
 

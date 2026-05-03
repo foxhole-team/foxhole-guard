@@ -187,8 +187,8 @@ class SmartStartProtocolPresentationTest {
 
         assertFalse(compact.centered)
         assertFalse(detailed.centered)
-        assertEquals(1, compact.bottomPaddingDp)
-        assertEquals(1, detailed.bottomPaddingDp)
+        assertEquals(4, compact.bottomPaddingDp)
+        assertEquals(4, detailed.bottomPaddingDp)
         assertEquals(4, compact.topPaddingDp)
         assertEquals(5, detailed.topPaddingDp)
     }

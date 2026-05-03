@@ -106,8 +106,8 @@ internal fun SmartProfileAutoConnectMenu(
             onRefreshMetrics?.invoke()
         }
     }
-    Box {
-        val density = LocalDensity.current
+	    Box {
+	        val density = LocalDensity.current
         val screenWidth = with(density) { LocalWindowInfo.current.containerSize.width.toDp() }
         val menuWidth =
             rememberSmartProfileMenuWidth(
@@ -134,11 +134,12 @@ internal fun SmartProfileAutoConnectMenu(
             modifier =
                 Modifier
                     .size(if (compact) 30.dp else 36.dp)
+                    .foxholeMenuShadow(shape = CircleShape, elevation = 2.dp)
                     .clip(CircleShape)
                     .clickable(enabled = enabled) { expanded = true }
                     .testTag("smart_profile_auto_connect_menu_action"),
             shape = CircleShape,
-            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.58f),
+            color = actionTint.copy(alpha = if (enabled) 0.14f else 0.06f),
             border =
                 BorderStroke(
                     1.dp,
