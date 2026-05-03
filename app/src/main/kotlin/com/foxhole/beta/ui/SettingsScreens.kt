@@ -72,6 +72,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -352,15 +353,16 @@ private fun SettingsRoutingNavigationGroup(
 
 @Composable
 private fun SettingsNavigationGroup(content: @Composable ColumnScope.() -> Unit) {
+    val shape = MaterialTheme.shapes.large
     Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.large,
+        modifier = Modifier.fillMaxWidth().clip(shape),
+        shape = shape,
         color = LocalFoxholeUiPalette.current.cardContainerColor,
         tonalElevation = 0.dp,
         shadowElevation = 0.dp,
     ) {
         Column(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
+            modifier = Modifier.fillMaxWidth(),
             content = content,
         )
     }
@@ -376,12 +378,12 @@ private fun SettingsGroupedNavigationRow(
     onClick: () -> Unit,
 ) {
     Row(
-            modifier =
-                modifier
-                    .fillMaxWidth()
-                    .clickable(onClick = onClick)
-                    .heightIn(min = 52.dp)
-                    .padding(vertical = 6.dp),
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .heightIn(min = 52.dp)
+                .clickable(onClick = onClick)
+                .padding(horizontal = 12.dp, vertical = 6.dp),
         horizontalArrangement = Arrangement.spacedBy(14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -418,7 +420,11 @@ private fun SettingsGroupedNavigationRow(
 
 @Composable
 private fun SettingsGroupDivider() {
-    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.30f))
+    HorizontalDivider(
+        modifier = Modifier.fillMaxWidth(),
+        thickness = 2.dp,
+        color = MaterialTheme.colorScheme.background,
+    )
 }
 
 @Composable

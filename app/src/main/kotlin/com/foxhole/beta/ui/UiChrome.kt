@@ -94,10 +94,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpOffset
@@ -145,7 +148,8 @@ internal object FoxholeMotionTokens {
 }
 
 internal val FoxholePositiveAccent = Color(0xFF2F9E6A)
-internal val FoxholeInfoAccent = Color(0xFF6288AE)
+internal val FoxholeAnalysisAccent = Color(0xFF6288AE)
+internal val FoxholeInfoAccent = Color(0xFFA8ADB3)
 internal val FoxholeWarningAccent = Color(0xFFE0B84A)
 private val FoxholeErrorAccent = Color(0xFFC63C3C)
 private val FoxholeCardShadowElevation = 6.dp
@@ -911,6 +915,7 @@ internal fun FoxholeDropdownMenu(
     onDismissRequest: () -> Unit,
     modifier: Modifier = Modifier,
     offset: DpOffset = DpOffset.Zero,
+    popupGap: Dp = 0.dp,
     horizontalAlignment: FoxholeDropdownHorizontalAlignment = FoxholeDropdownHorizontalAlignment.AnchorEnd,
     screenEndPadding: Dp = ScreenHorizontalPadding,
     content: @Composable ColumnScope.() -> Unit,
@@ -923,7 +928,7 @@ internal fun FoxholeDropdownMenu(
         with(density) {
             IntOffset(
                 x = offset.x.roundToPx(),
-                y = (offset.y + FoxholeDropdownTriggerGap).roundToPx(),
+                y = (offset.y + popupGap).roundToPx(),
             )
         }
     val screenEndPaddingPx = with(density) { screenEndPadding.roundToPx() }
@@ -946,7 +951,8 @@ internal fun FoxholeDropdownMenu(
                     .foxholeMenuShadow(
                         shape = FoxholeDropdownShape,
                         elevation = FoxholeDropdownShadowElevation,
-                    ),
+                    )
+                    .clip(FoxholeDropdownShape),
             shape = FoxholeDropdownShape,
             color = MenuDefaults.containerColor,
             tonalElevation = MenuDefaults.TonalElevation,
@@ -961,10 +967,10 @@ internal fun FoxholeDropdownMenu(
 }
 
 private val FoxholeDropdownShape = RoundedCornerShape(18.dp)
-private val FoxholeDropdownTriggerGap = 8.dp
 private val FoxholeDropdownInternalVerticalPadding = 8.dp
 
 internal enum class FoxholeDropdownHorizontalAlignment {
+    AnchorStart,
     AnchorEnd,
     ScreenEnd,
 }
@@ -982,6 +988,11 @@ private class FoxholeDropdownPositionProvider(
     ): IntOffset {
         val requestedX =
             when (horizontalAlignment) {
+                FoxholeDropdownHorizontalAlignment.AnchorStart ->
+                    when (layoutDirection) {
+                        LayoutDirection.Ltr -> anchorBounds.left + offset.x
+                        LayoutDirection.Rtl -> anchorBounds.right - popupContentSize.width - offset.x
+                    }
                 FoxholeDropdownHorizontalAlignment.AnchorEnd ->
                     when (layoutDirection) {
                         LayoutDirection.Ltr -> anchorBounds.right - popupContentSize.width + offset.x
@@ -1005,6 +1016,38 @@ private class FoxholeDropdownPositionProvider(
             }
         val maxY = max(0, windowSize.height - popupContentSize.height)
         return IntOffset(x = x, y = requestedY.coerceIn(0, maxY))
+    }
+}
+
+@Composable
+internal fun rememberFoxholeDropdownMenuWidth(
+    labels: List<String>,
+    textStyle: TextStyle,
+    hasIcons: Boolean,
+    minWidth: Dp = 0.dp,
+    maxWidth: Dp = 260.dp,
+): Dp {
+    val textMeasurer = rememberTextMeasurer()
+    val density = LocalDensity.current
+    val screenWidth = LocalConfiguration.current.screenWidthDp.dp
+    val maxTextWidthPx =
+        remember(labels, textStyle) {
+            labels.maxOfOrNull { label ->
+                textMeasurer.measure(text = label, style = textStyle).size.width
+            } ?: 0
+        }
+    val screenLimit = (screenWidth - ScreenHorizontalPadding * 2).coerceAtLeast(0.dp)
+    val boundedMaxWidth = maxWidth.coerceAtMost(screenLimit).coerceAtLeast(minWidth)
+    return with(density) {
+        val rowHorizontalChrome =
+            if (hasIcons) {
+                54.dp
+            } else {
+                24.dp
+            }
+        (maxTextWidthPx.toDp() + rowHorizontalChrome)
+            .coerceAtLeast(minWidth)
+            .coerceAtMost(boundedMaxWidth)
     }
 }
 
@@ -1204,41 +1247,52 @@ internal fun FoxholeValuePill(
             BorderStroke(1.dp, uiPalette.valuePillBorderColor)
         }
     val pillContent: @Composable () -> Unit = {
-        Row(
+        Box(
             modifier =
                 Modifier
-                    .widthIn(max = 184.dp)
-                    .padding(horizontal = 12.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = value,
-                modifier = Modifier.weight(1f, fill = false),
-                style = MaterialTheme.typography.labelLarge,
-                color = uiPalette.valuePillContentColor,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            if (onClick != null) {
-                Icon(
-                    imageVector =
-                        if (expanded) {
-                            Icons.Outlined.KeyboardArrowUp
+                    .then(
+                        if (onClick != null) {
+                            Modifier.fillMaxWidth()
                         } else {
-                            Icons.Outlined.KeyboardArrowDown
+                            Modifier
                         },
-                    contentDescription = null,
-                    modifier = Modifier.size(16.dp),
-                    tint = uiPalette.valuePillContentColor,
+                    )
+                    .padding(horizontal = 11.dp, vertical = 7.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Row(
+                modifier = Modifier.widthIn(max = 184.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = value,
+                    modifier = Modifier.weight(1f, fill = false),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = uiPalette.valuePillContentColor,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
+                if (onClick != null) {
+                    Icon(
+                        imageVector =
+                            if (expanded) {
+                                Icons.Outlined.KeyboardArrowUp
+                            } else {
+                                Icons.Outlined.KeyboardArrowDown
+                            },
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                        tint = uiPalette.valuePillContentColor,
+                    )
+                }
             }
         }
     }
     if (onClick != null) {
         Card(
             onClick = onClick,
-            modifier = modifier,
+            modifier = modifier.heightIn(min = 36.dp),
             shape = pillShape,
             colors = pillColors,
             elevation = pillElevation,
@@ -1249,7 +1303,7 @@ internal fun FoxholeValuePill(
         return
     }
     Card(
-        modifier = modifier,
+        modifier = modifier.heightIn(min = 34.dp),
         shape = pillShape,
         colors = pillColors,
         elevation = pillElevation,
@@ -1267,25 +1321,73 @@ internal fun FoxholeSwitch(
     enabled: Boolean = true,
 ) {
     val colorScheme = MaterialTheme.colorScheme
+    val darkTheme = LocalFoxholeDarkTheme.current
+    val checkedTrackColor =
+        if (darkTheme) {
+            Color.White.copy(alpha = 0.94f)
+        } else {
+            colorScheme.onSurface.copy(alpha = 0.82f)
+        }
+    val checkedThumbColor =
+        if (darkTheme) {
+            colorScheme.surfaceVariant
+        } else {
+            colorScheme.surface
+        }
+    val checkedIconColor =
+        if (darkTheme) {
+            Color.White.copy(alpha = 0.94f)
+        } else {
+            colorScheme.onSurface.copy(alpha = 0.76f)
+        }
+    val uncheckedTrackColor =
+        if (darkTheme) {
+            colorScheme.surface.copy(alpha = 0.18f)
+        } else {
+            colorScheme.surface.copy(alpha = 0.82f)
+        }
+    val uncheckedThumbColor =
+        if (darkTheme) {
+            colorScheme.surfaceVariant.copy(alpha = 0.86f)
+        } else {
+            colorScheme.surfaceContainerHighest
+        }
+    val uncheckedIconColor = colorScheme.onSurfaceVariant.copy(alpha = 0.86f)
     Switch(
         checked = checked,
         onCheckedChange = onCheckedChange,
         modifier = modifier,
         enabled = enabled,
+        thumbContent = {
+            Icon(
+                imageVector =
+                    if (checked) {
+                        Icons.Outlined.Check
+                    } else {
+                        Icons.Outlined.Close
+                    },
+                contentDescription = null,
+                modifier = Modifier.size(15.dp),
+            )
+        },
         colors =
             SwitchDefaults.colors(
-                checkedThumbColor = colorScheme.onPrimary,
-                checkedTrackColor = colorScheme.primary,
-                checkedBorderColor = colorScheme.primary,
-                uncheckedThumbColor = colorScheme.onSurfaceVariant,
-                uncheckedTrackColor = colorScheme.surfaceVariant.copy(alpha = 0.92f),
-                uncheckedBorderColor = colorScheme.outline.copy(alpha = 0.95f),
-                disabledCheckedThumbColor = colorScheme.onSurface.copy(alpha = 0.46f),
-                disabledCheckedTrackColor = colorScheme.surfaceVariant.copy(alpha = 0.48f),
-                disabledCheckedBorderColor = colorScheme.outline.copy(alpha = 0.56f),
-                disabledUncheckedThumbColor = colorScheme.onSurfaceVariant.copy(alpha = 0.62f),
-                disabledUncheckedTrackColor = colorScheme.surfaceVariant.copy(alpha = 0.54f),
-                disabledUncheckedBorderColor = colorScheme.outline.copy(alpha = 0.62f),
+                checkedThumbColor = checkedThumbColor,
+                checkedTrackColor = checkedTrackColor,
+                checkedBorderColor = checkedTrackColor,
+                checkedIconColor = checkedIconColor,
+                uncheckedThumbColor = uncheckedThumbColor,
+                uncheckedTrackColor = uncheckedTrackColor,
+                uncheckedBorderColor = colorScheme.outline.copy(alpha = 0.88f),
+                uncheckedIconColor = uncheckedIconColor,
+                disabledCheckedThumbColor = checkedThumbColor.copy(alpha = 0.44f),
+                disabledCheckedTrackColor = checkedTrackColor.copy(alpha = 0.34f),
+                disabledCheckedBorderColor = checkedTrackColor.copy(alpha = 0.34f),
+                disabledCheckedIconColor = checkedIconColor.copy(alpha = 0.44f),
+                disabledUncheckedThumbColor = uncheckedThumbColor.copy(alpha = 0.48f),
+                disabledUncheckedTrackColor = uncheckedTrackColor.copy(alpha = 0.48f),
+                disabledUncheckedBorderColor = colorScheme.outline.copy(alpha = 0.50f),
+                disabledUncheckedIconColor = uncheckedIconColor.copy(alpha = 0.50f),
             ),
     )
 }

@@ -168,7 +168,8 @@ internal fun SmartProfileAutoConnectMenu(
                 Modifier
                     .testTag("smart_profile_auto_connect_menu")
                     .width(menuWidth),
-            horizontalAlignment = FoxholeDropdownHorizontalAlignment.ScreenEnd,
+            popupGap = 0.dp,
+            horizontalAlignment = FoxholeDropdownHorizontalAlignment.AnchorStart,
         ) {
             SmartProfileProtocolMenuContent(
                 options = options,
@@ -1094,7 +1095,7 @@ private fun SmartProfileRefreshingIndicator(
     protocolLabel: String,
     compact: Boolean,
 ) {
-    val color = foxholeSystemAwareAccentColor(fallback = FoxholeInfoAccent)
+    val color = FoxholeAnalysisAccent
     Surface(
         shape = MaterialTheme.shapes.small,
         color = color.copy(alpha = 0.10f),

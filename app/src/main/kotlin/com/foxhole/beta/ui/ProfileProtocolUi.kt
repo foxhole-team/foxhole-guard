@@ -422,7 +422,8 @@ private fun ProtocolMarkOrSelector(
             expanded = expanded,
             onDismissRequest = { expanded = false },
             modifier = Modifier.width(selectorWidth),
-            horizontalAlignment = FoxholeDropdownHorizontalAlignment.ScreenEnd,
+            popupGap = 0.dp,
+            horizontalAlignment = FoxholeDropdownHorizontalAlignment.AnchorStart,
         ) {
             Column(
                 modifier = Modifier,

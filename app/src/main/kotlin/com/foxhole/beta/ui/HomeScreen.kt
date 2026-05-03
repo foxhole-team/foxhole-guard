@@ -189,7 +189,7 @@ fun HomeScreen(
             MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.58f)
         }
     val dashboardSecondaryActionBorderColor =
-        autoTone.copy(alpha = if (darkTheme) 0.42f else 0.34f)
+        autoTone.copy(alpha = if (darkTheme) 0.30f else 0.24f)
     val dashboardSecondaryActionColors =
         ButtonDefaults.outlinedButtonColors(
             contentColor = autoTone,
@@ -648,6 +648,7 @@ fun HomeScreen(
                             FoxholeDropdownMenu(
                                 expanded = importMenuExpanded,
                                 onDismissRequest = { importMenuExpanded = false },
+                                popupGap = 0.dp,
                                 modifier = Modifier.width(importDropdownMenuWidth),
                             ) {
                                 FoxholeDropdownItem(

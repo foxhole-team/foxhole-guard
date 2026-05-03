@@ -249,6 +249,15 @@ internal fun HomeModeDropdown(
 ) {
     val selectorTint = MaterialTheme.colorScheme.primary
     var expanded by rememberSaveable(selected) { mutableStateOf(false) }
+    val menuLabels = HomeModeOption.entries.map { option -> homeModeMenuLabel(option) }
+    val menuWidth =
+        rememberFoxholeDropdownMenuWidth(
+            labels = menuLabels,
+            textStyle = MaterialTheme.typography.bodyMedium,
+            hasIcons = true,
+            minWidth = 112.dp,
+            maxWidth = 176.dp,
+        )
     Box(modifier = modifier) {
         Surface(
             modifier =
@@ -293,7 +302,8 @@ internal fun HomeModeDropdown(
         FoxholeDropdownMenu(
             expanded = expanded,
             onDismissRequest = { expanded = false },
-            modifier = Modifier.width(176.dp),
+            popupGap = 0.dp,
+            modifier = Modifier.width(menuWidth),
         ) {
             HomeModeOption.entries.forEachIndexed { index, option ->
                 val selectedOption = option == selected
@@ -783,7 +793,7 @@ internal fun HomeConnectionActions(
         activeProfile != null &&
             !autoConnectRunning &&
             state.connection.state !in setOf(ConnectionState.CONNECTING, ConnectionState.RECONNECTING)
-    val smartStartAccent = foxholeSystemAwareAccentColor(fallback = MaterialTheme.colorScheme.primary)
+    val smartStartAccent = MaterialTheme.colorScheme.primary
     val autoConnectColor =
         if (autoConnectEnabled) {
             smartStartAccent
@@ -805,7 +815,7 @@ internal fun HomeConnectionActions(
             disabledContentColor = primaryButtonColor.copy(alpha = 0.52f),
             disabledContainerColor = primaryButtonColor.copy(alpha = 0.04f),
         )
-    val primaryButtonBorder = BorderStroke(1.dp, primaryButtonColor.copy(alpha = 0.36f))
+    val primaryButtonBorder = BorderStroke(1.dp, primaryButtonColor.copy(alpha = 0.25f))
     val primaryIcon =
         when (primaryAction) {
             HomePrimaryAction.RECONNECT -> Icons.Outlined.Refresh
@@ -905,7 +915,7 @@ internal fun HomeConnectionActions(
                     .weight(1f)
                     .height(HomePrimaryActionHeight)
                     .testTag("home_auto_connect_button"),
-            border = BorderStroke(1.dp, autoConnectColor.copy(alpha = 0.36f)),
+            border = BorderStroke(1.dp, autoConnectColor.copy(alpha = 0.25f)),
             colors =
                 ButtonDefaults.outlinedButtonColors(
                     contentColor = autoConnectColor,
@@ -1000,7 +1010,7 @@ internal fun HomeAutoConnectStatusLine(
     textStyle: TextStyle = MaterialTheme.typography.titleMedium,
 ) {
     val protocolLabel = autoConnectAnalysisProtocolLabel(state) ?: stringResource(R.string.auto_connect)
-    val tone = FoxholeInfoAccent
+    val tone = FoxholeAnalysisAccent
     Row(
         modifier =
             modifier

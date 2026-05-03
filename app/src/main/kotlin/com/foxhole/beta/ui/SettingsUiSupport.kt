@@ -12,7 +12,6 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -75,6 +74,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -243,18 +243,19 @@ internal fun <T> DropdownSettingRow(
     grouped: Boolean = false,
 ) {
     val optionLabels = values.map { option -> label(option) }
-    val menuWidth =
-        rememberDropdownMenuWidth(
+    val baseMenuWidth =
+        rememberFoxholeDropdownMenuWidth(
             labels = optionLabels,
             textStyle = MaterialTheme.typography.bodyMedium,
             hasIcons = optionIcon != null,
+            minWidth = 72.dp,
         )
     val triggerWidth =
         rememberDropdownTriggerWidth(
             label = value,
             textStyle = MaterialTheme.typography.bodyMedium,
         )
-            .coerceAtMost(menuWidth)
+    val menuWidth = baseMenuWidth.coerceAtLeast(triggerWidth)
     SettingValueRow(
         title = title,
         value = value,
@@ -277,7 +278,8 @@ internal fun <T> DropdownSettingRow(
                     expanded = expanded,
                     onDismissRequest = { onExpandedChange(false) },
                     modifier = Modifier.width(menuWidth),
-                    horizontalAlignment = FoxholeDropdownHorizontalAlignment.ScreenEnd,
+                    popupGap = 0.dp,
+                    horizontalAlignment = FoxholeDropdownHorizontalAlignment.AnchorEnd,
                 ) {
                     values.forEachIndexed { index, option ->
                         FoxholeDropdownItem(
@@ -315,41 +317,21 @@ internal fun <T> DropdownSettingRow(
 }
 
 @Composable
-private fun rememberDropdownMenuWidth(
-    labels: List<String>,
-    textStyle: TextStyle,
-    hasIcons: Boolean,
-): Dp {
-    val textMeasurer = rememberTextMeasurer()
-    val density = LocalDensity.current
-    val maxTextWidthPx =
-        remember(labels, textStyle) {
-            labels.maxOfOrNull { label ->
-                textMeasurer.measure(text = label, style = textStyle).size.width
-            } ?: 0
-        }
-    return with(density) {
-        (maxTextWidthPx.toDp() + if (hasIcons) 64.dp else 44.dp)
-            .coerceAtLeast(if (hasIcons) 124.dp else 96.dp)
-            .coerceAtMost(260.dp)
-    }
-}
-
-@Composable
 private fun rememberDropdownTriggerWidth(
     label: String,
     textStyle: TextStyle,
 ): Dp {
     val textMeasurer = rememberTextMeasurer()
     val density = LocalDensity.current
+    val screenWidth = LocalConfiguration.current.screenWidthDp.dp
     val textWidthPx =
         remember(label, textStyle) {
             textMeasurer.measure(text = label, style = textStyle).size.width
         }
     return with(density) {
-        (textWidthPx.toDp() + 52.dp)
-            .coerceAtLeast(96.dp)
-            .coerceAtMost(260.dp)
+        (textWidthPx.toDp() + 44.dp)
+            .coerceAtLeast(72.dp)
+            .coerceAtMost((screenWidth - ScreenHorizontalPadding * 2).coerceAtLeast(0.dp))
     }
 }
 
@@ -422,15 +404,16 @@ internal fun SettingSwitchRow(
 internal fun SettingsControlGroup(
     content: @Composable ColumnScope.() -> Unit,
 ) {
+    val shape = MaterialTheme.shapes.large
     Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.large,
+        modifier = Modifier.fillMaxWidth().clip(shape),
+        shape = shape,
         color = LocalFoxholeUiPalette.current.cardContainerColor,
         tonalElevation = 0.dp,
         shadowElevation = 0.dp,
     ) {
         Column(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 5.dp),
+            modifier = Modifier.fillMaxWidth(),
             content = content,
         )
     }
@@ -438,7 +421,11 @@ internal fun SettingsControlGroup(
 
 @Composable
 internal fun SettingsControlGroupDivider() {
-    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.30f))
+    HorizontalDivider(
+        modifier = Modifier.fillMaxWidth(),
+        thickness = 2.dp,
+        color = MaterialTheme.colorScheme.background,
+    )
 }
 
 @Composable
@@ -453,20 +440,19 @@ private fun SettingsControlRow(
     onClick: (() -> Unit)?,
     trailingContent: (@Composable RowScope.() -> Unit)? = null,
 ) {
-    val rowShape = MaterialTheme.shapes.medium
     Row(
         modifier =
             modifier
                 .fillMaxWidth()
-                .clip(rowShape)
+                .heightIn(min = if (summary.isNullOrBlank()) 48.dp else 60.dp)
                 .then(
                     if (onClick != null) {
                         Modifier.clickable(onClick = onClick)
                     } else {
                         Modifier
                     },
-                ).heightIn(min = if (summary.isNullOrBlank()) 48.dp else 60.dp)
-                .padding(vertical = 7.dp),
+                )
+                .padding(horizontal = 12.dp, vertical = 7.dp),
         horizontalArrangement = Arrangement.spacedBy(16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -510,7 +496,7 @@ private fun SettingsControlRow(
         }
         trailingContent?.let {
             Row(
-                modifier = Modifier.widthIn(min = 52.dp, max = 260.dp),
+                modifier = Modifier.widthIn(min = 52.dp),
                 horizontalArrangement = Arrangement.End,
                 verticalAlignment = Alignment.CenterVertically,
                 content = it,
@@ -724,7 +710,6 @@ internal fun SettingsFooterVersionText(
     onClick: () -> Unit,
 ) {
     val shape = MaterialTheme.shapes.large
-    val interactionSource = remember { MutableInteractionSource() }
     Column(
         modifier =
             Modifier
@@ -736,11 +721,8 @@ internal fun SettingsFooterVersionText(
                 Modifier
                     .fillMaxWidth()
                     .clip(shape)
-                    .clickable(
-                        interactionSource = interactionSource,
-                        indication = null,
-                        onClick = onClick,
-                    ).testTag("settings_footer_version_card"),
+                    .clickable(onClick = onClick)
+                    .testTag("settings_footer_version_card"),
             contentAlignment = Alignment.Center,
         ) {
             Column(
