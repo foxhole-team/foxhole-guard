@@ -653,7 +653,7 @@ private fun SmartProfileProtocolMenuContent(
                     nextExcluded?.let(onUpdateExcludedOptionIds)
                 },
                 selected = includedSelection || refreshingSelection,
-                highlightSelected = refreshingSelection,
+                highlightSelected = includedSelection || refreshingSelection,
                 selectedContainerColor =
                     if (refreshingSelection) {
                         selectionTone.copy(alpha = 0.16f)

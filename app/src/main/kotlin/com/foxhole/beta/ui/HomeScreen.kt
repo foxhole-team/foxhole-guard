@@ -940,17 +940,18 @@ fun HomeScreen(
                         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
                         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                                val trafficLabelTint = MaterialTheme.colorScheme.primary
                                 val incomingTrafficTint =
                                     if (trafficModel.hasIncomingTraffic) {
                                         FoxholePositiveAccent
                                     } else {
-                                        MaterialTheme.colorScheme.onSurfaceVariant
+                                        trafficLabelTint
                                     }
                                 val outgoingTrafficTint =
                                     if (trafficModel.hasOutgoingTraffic) {
                                         FoxholeInfoAccent
                                     } else {
-                                        MaterialTheme.colorScheme.onSurfaceVariant
+                                        trafficLabelTint
                                     }
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
@@ -972,6 +973,7 @@ fun HomeScreen(
                                         modifier = Modifier.weight(1f),
                                         icon = Icons.Outlined.ArrowDownward,
                                         iconTint = incomingTrafficTint,
+                                        labelColor = trafficLabelTint,
                                         label = stringResource(R.string.home_received_label),
                                         value = formatBytes(context, state.traffic.rxTotalBytes),
                                         secondary = formatRate(context, state.traffic.rxBytesPerSec),
@@ -982,6 +984,7 @@ fun HomeScreen(
                                         modifier = Modifier.weight(1f),
                                         icon = Icons.Outlined.ArrowUpward,
                                         iconTint = outgoingTrafficTint,
+                                        labelColor = trafficLabelTint,
                                         label = stringResource(R.string.home_sent_label),
                                         value = formatBytes(context, state.traffic.txTotalBytes),
                                         secondary = formatRate(context, state.traffic.txBytesPerSec),
@@ -1005,6 +1008,7 @@ fun HomeScreen(
                                             )
                                         },
                                         leadingContentSpacing = 0.dp,
+                                        labelColor = trafficLabelTint,
                                         label = stringResource(R.string.home_total_label),
                                         value = formatBytes(context, state.traffic.rxTotalBytes + state.traffic.txTotalBytes),
                                         secondary = formatRate(context, state.traffic.rxBytesPerSec + state.traffic.txBytesPerSec),

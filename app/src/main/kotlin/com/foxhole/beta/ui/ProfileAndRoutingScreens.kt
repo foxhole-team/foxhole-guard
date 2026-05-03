@@ -332,8 +332,6 @@ fun ProfilesScreen(
                 containerColor =
                     if (exportCardSelected) {
                         FoxholeInfoAccent.copy(alpha = 0.08f)
-                    } else if (isSelected) {
-                        profileSelectionColor.copy(alpha = 0.05f)
                     } else {
                         Color.Unspecified
                     },

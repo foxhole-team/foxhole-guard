@@ -470,7 +470,7 @@ private fun ProtocolMarkOrSelector(
                             onProtocolOptionSelected(option.id)
                         },
                         selected = optionSelected,
-                        highlightSelected = false,
+                        highlightSelected = true,
                         extendSelectedToMenuTop = index == 0 && dropdownInfoText == null,
                         extendSelectedToMenuBottom = index == protocolOptions.lastIndex,
                         shape =
@@ -478,8 +478,10 @@ private fun ProtocolMarkOrSelector(
                         minHeight = if (compact) 34.dp else 42.dp,
                         contentPadding =
                             PaddingValues(
-                                horizontal = 12.dp,
-                                vertical = 0.dp,
+                                start = 12.dp,
+                                top = 0.dp,
+                                end = 0.dp,
+                                bottom = 0.dp,
                             ),
                     ) {
                         ProtocolSelectorLabel(
@@ -496,11 +498,17 @@ private fun ProtocolMarkOrSelector(
                                     option.id in latencyUnavailableOptionIds,
                         )
                     }
+                    if (index != protocolOptions.lastIndex) {
+                        HorizontalDivider(
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.28f),
+                        )
+                    }
                 }
-            }
         }
     }
 }
+}
+
 
 @Composable
 internal fun ProtocolSelectorLabel(

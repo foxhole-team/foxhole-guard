@@ -83,9 +83,9 @@
     <string name="auto_refresh_subscriptions_title">Автообновление v2raytun подписок</string>
     <string name="auto_refresh_subscriptions_summary">Периодически обновляет профили v2raytun подписок в фоне.</string>
     <string name="auto_refresh_subscriptions_interval_title">Интервал обновления</string>
-    <string name="auto_refresh_subscriptions_interval_6h">Каждые 6 часов</string>
-    <string name="auto_refresh_subscriptions_interval_12h">Каждые 12 часов</string>
-    <string name="auto_refresh_subscriptions_interval_24h">Каждые 24 часа</string>
+    <string name="auto_refresh_subscriptions_interval_6h">6 часов</string>
+    <string name="auto_refresh_subscriptions_interval_12h">12 часов</string>
+    <string name="auto_refresh_subscriptions_interval_24h">24 часа</string>
     <string name="ip_info_endpoint">IP-сервис</string>
     <string name="export_diagnostics">Экспорт логов</string>
     <string name="export_diagnostics_summary">Сохранение лог файла в память устройства.</string>
@@ -168,10 +168,10 @@
     <string name="smart_start_refresh_timeout_title">Таймаут анализа</string>
     <string name="smart_start_refresh_timeout_summary">Сколько Foxhole ждёт каждый протокол VPN во время полного анализа.</string>
     <plurals name="smart_start_timeout_seconds_value">
-        <item quantity="one">%1$d сек</item>
-        <item quantity="few">%1$d сек</item>
-        <item quantity="many">%1$d сек</item>
-        <item quantity="other">%1$d сек</item>
+        <item quantity="one">%1$d Секунд</item>
+        <item quantity="few">%1$d Секунд</item>
+        <item quantity="many">%1$d Секунд</item>
+        <item quantity="other">%1$d Секунд</item>
     </plurals>
     <string name="smart_start_transport_priority_title">Приоритет транспорта</string>
     <string name="smart_start_transport_priority_summary">Предпочтительный порядок кандидатов Смарт старт.</string>
@@ -189,7 +189,7 @@
     <string name="auto_connect_success">Выбран: %1$s. Задержка: %2$d мс.</string>
     <string name="auto_connect_success_unavailable">Выбран: %1$s. Задержка недоступна.</string>
     <string name="smart_profile_tag">Smart</string>
-    <string name="smart_profile_menu_title">Управление протоколами VPN</string>
+    <string name="smart_profile_menu_title">Управление\nпротоколами VPN</string>
     <string name="smart_profile_menu_protocol_column">Протокол</string>
     <string name="smart_profile_menu_status_column">Статус</string>
     <string name="smart_profile_menu_server_ping_column">Server ping</string>

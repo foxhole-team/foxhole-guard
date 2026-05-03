@@ -72,9 +72,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -243,19 +243,18 @@ internal fun <T> DropdownSettingRow(
     grouped: Boolean = false,
 ) {
     val optionLabels = values.map { option -> label(option) }
-    val baseMenuWidth =
-        rememberFoxholeDropdownMenuWidth(
+    val menuWidth =
+        rememberSettingsDropdownWidth(
             labels = optionLabels,
             textStyle = MaterialTheme.typography.bodyMedium,
-            hasIcons = optionIcon != null,
-            minWidth = 72.dp,
+            horizontalChrome = if (optionIcon != null) DropdownMenuIconChrome else DropdownMenuTextChrome,
         )
     val triggerWidth =
-        rememberDropdownTriggerWidth(
-            label = value,
-            textStyle = MaterialTheme.typography.bodyMedium,
+        rememberSettingsDropdownWidth(
+            labels = listOf(value),
+            textStyle = MaterialTheme.typography.labelLarge,
+            horizontalChrome = DropdownTriggerChrome,
         )
-    val menuWidth = baseMenuWidth.coerceAtLeast(triggerWidth)
     SettingValueRow(
         title = title,
         value = value,
@@ -273,6 +272,7 @@ internal fun <T> DropdownSettingRow(
                     modifier = Modifier.fillMaxWidth(),
                     expanded = expanded,
                     onClick = { onExpandedChange(!expanded) },
+                    fillContent = true,
                 )
                 FoxholeDropdownMenu(
                     expanded = expanded,
@@ -282,20 +282,28 @@ internal fun <T> DropdownSettingRow(
                     horizontalAlignment = FoxholeDropdownHorizontalAlignment.AnchorEnd,
                 ) {
                     values.forEachIndexed { index, option ->
+                        val optionSelected = option == selected
+                        val optionContentColor =
+                            if (optionSelected) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurface
+                            }
                         FoxholeDropdownItem(
                             onClick = {
                                 onSelect(option)
                                 onExpandedChange(false)
                             },
-                            selected = option == selected,
-                            extendSelectedToMenuTop = index == 0,
-                            extendSelectedToMenuBottom = index == values.lastIndex,
+                            selected = optionSelected,
+                            highlightSelected = false,
+                            contentPadding = DropdownMenuItemTextPadding,
                             leadingContent =
                                 optionIcon?.let { icon ->
                                     {
                                         Icon(
                                             imageVector = icon(option),
                                             contentDescription = null,
+                                            tint = optionContentColor,
                                         )
                                     }
                                 },
@@ -303,9 +311,10 @@ internal fun <T> DropdownSettingRow(
                             Text(
                                 text = optionLabels[index],
                                 style = MaterialTheme.typography.bodyMedium,
+                                color = optionContentColor,
                                 maxLines = 1,
                                 softWrap = false,
-                                overflow = TextOverflow.Ellipsis,
+                                overflow = TextOverflow.Clip,
                             )
                         }
                     }
@@ -317,23 +326,31 @@ internal fun <T> DropdownSettingRow(
 }
 
 @Composable
-private fun rememberDropdownTriggerWidth(
-    label: String,
+private fun rememberSettingsDropdownWidth(
+    labels: List<String>,
     textStyle: TextStyle,
+    horizontalChrome: Dp,
 ): Dp {
     val textMeasurer = rememberTextMeasurer()
     val density = LocalDensity.current
     val screenWidth = LocalConfiguration.current.screenWidthDp.dp
-    val textWidthPx =
-        remember(label, textStyle) {
-            textMeasurer.measure(text = label, style = textStyle).size.width
+    val maxTextWidthPx =
+        remember(labels, textStyle) {
+            labels.maxOfOrNull { label ->
+                textMeasurer.measure(text = label, style = textStyle).size.width
+            } ?: 0
         }
     return with(density) {
-        (textWidthPx.toDp() + 44.dp)
+        (maxTextWidthPx.toDp() + horizontalChrome)
             .coerceAtLeast(72.dp)
             .coerceAtMost((screenWidth - ScreenHorizontalPadding * 2).coerceAtLeast(0.dp))
     }
 }
+
+private val DropdownMenuIconChrome = 64.dp
+private val DropdownMenuTextChrome = 24.dp
+private val DropdownTriggerChrome = 30.dp
+private val DropdownMenuItemTextPadding = PaddingValues(start = 12.dp, end = 0.dp, top = 10.dp, bottom = 10.dp)
 
 @Composable
 internal fun SettingSwitchRow(
@@ -406,7 +423,11 @@ internal fun SettingsControlGroup(
 ) {
     val shape = MaterialTheme.shapes.large
     Surface(
-        modifier = Modifier.fillMaxWidth().clip(shape),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .foxholeMenuShadow(shape = shape)
+                .clip(shape),
         shape = shape,
         color = LocalFoxholeUiPalette.current.cardContainerColor,
         tonalElevation = 0.dp,
@@ -424,7 +445,7 @@ internal fun SettingsControlGroupDivider() {
     HorizontalDivider(
         modifier = Modifier.fillMaxWidth(),
         thickness = 2.dp,
-        color = MaterialTheme.colorScheme.background,
+        color = Color.Transparent,
     )
 }
 

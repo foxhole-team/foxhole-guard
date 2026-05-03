@@ -152,8 +152,8 @@ internal val FoxholeAnalysisAccent = Color(0xFF6288AE)
 internal val FoxholeInfoAccent = Color(0xFFA8ADB3)
 internal val FoxholeWarningAccent = Color(0xFFE0B84A)
 private val FoxholeErrorAccent = Color(0xFFC63C3C)
-private val FoxholeCardShadowElevation = 6.dp
-private val FoxholeDropdownShadowElevation = 10.dp
+private val FoxholeCardShadowElevation = 2.dp
+private val FoxholeDropdownShadowElevation = 6.dp
 
 @Composable
 internal fun foxholeSystemAwareAccentColor(
@@ -196,7 +196,7 @@ internal fun Modifier.foxholeMenuShadow(
 ): Modifier {
     val shadowColor =
         if (LocalFoxholeDarkTheme.current) {
-            Color.White.copy(alpha = 0.10f)
+            Color.White.copy(alpha = 0.08f)
         } else {
             Color.Black.copy(alpha = 0.14f)
         }
@@ -834,11 +834,16 @@ internal fun FoxholeCard(
         CardDefaults.cardElevation(
             defaultElevation = 0.dp,
         )
+    val cardShape = MaterialTheme.shapes.large
+    val cardModifier =
+        modifier
+            .fillMaxWidth()
+            .foxholeMenuShadow(shape = cardShape, elevation = FoxholeCardShadowElevation)
     if (onClick != null) {
         Card(
             onClick = onClick,
-            modifier = modifier.fillMaxWidth(),
-            shape = MaterialTheme.shapes.large,
+            modifier = cardModifier,
+            shape = cardShape,
             colors = colors,
             elevation = elevation,
         ) {
@@ -854,8 +859,8 @@ internal fun FoxholeCard(
         return
     }
     Card(
-        modifier = modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.large,
+        modifier = cardModifier,
+        shape = cardShape,
         colors = colors,
         elevation = elevation,
     ) {
@@ -1234,6 +1239,7 @@ internal fun FoxholeValuePill(
     modifier: Modifier = Modifier,
     expanded: Boolean = false,
     onClick: (() -> Unit)? = null,
+    fillContent: Boolean = false,
 ) {
     val uiPalette = LocalFoxholeUiPalette.current
     val pillShape = MaterialTheme.shapes.medium
@@ -1246,6 +1252,8 @@ internal fun FoxholeValuePill(
         } else {
             BorderStroke(1.dp, uiPalette.valuePillBorderColor)
         }
+    val contentEndPadding = if (onClick != null) 0.dp else 11.dp
+    val contentSpacing = if (onClick != null) 1.dp else 6.dp
     val pillContent: @Composable () -> Unit = {
         Box(
             modifier =
@@ -1257,17 +1265,32 @@ internal fun FoxholeValuePill(
                             Modifier
                         },
                     )
-                    .padding(horizontal = 11.dp, vertical = 7.dp),
+                    .padding(start = 11.dp, end = contentEndPadding, top = 7.dp, bottom = 7.dp),
             contentAlignment = Alignment.Center,
         ) {
             Row(
-                modifier = Modifier.widthIn(max = 184.dp),
-                horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
+                modifier =
+                    if (fillContent) {
+                        Modifier.fillMaxWidth()
+                    } else {
+                        Modifier.widthIn(max = 184.dp)
+                    },
+                horizontalArrangement =
+                    if (fillContent && onClick != null) {
+                        Arrangement.spacedBy(contentSpacing)
+                    } else {
+                        Arrangement.spacedBy(contentSpacing, Alignment.CenterHorizontally)
+                    },
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
                     text = value,
-                    modifier = Modifier.weight(1f, fill = false),
+                    modifier =
+                        if (fillContent && onClick != null) {
+                            Modifier.weight(1f)
+                        } else {
+                            Modifier.weight(1f, fill = false)
+                        },
                     style = MaterialTheme.typography.labelLarge,
                     color = uiPalette.valuePillContentColor,
                     maxLines = 1,

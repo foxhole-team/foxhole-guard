@@ -256,7 +256,7 @@ internal fun HomeModeDropdown(
             textStyle = MaterialTheme.typography.bodyMedium,
             hasIcons = true,
             minWidth = 112.dp,
-            maxWidth = 176.dp,
+            maxWidth = 240.dp,
         )
     Box(modifier = modifier) {
         Surface(
@@ -317,21 +317,19 @@ internal fun HomeModeDropdown(
                     selected = selectedOption,
                     extendSelectedToMenuTop = index == 0,
                     extendSelectedToMenuBottom = index == HomeModeOption.entries.lastIndex,
-                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 9.dp),
-                    leadingContent = {
-                        Icon(
-                            imageVector = homeModeOptionIcon(option),
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp),
-                            tint =
-                                if (selectedOption) {
-                                    MaterialTheme.colorScheme.primary
-                                } else {
-                                    MaterialTheme.colorScheme.onSurfaceVariant
-                                },
-                        )
-                    },
+                    contentPadding = PaddingValues(start = 0.dp, end = 0.dp, top = 9.dp, bottom = 9.dp),
                 ) {
+                    Icon(
+                        imageVector = homeModeOptionIcon(option),
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                        tint =
+                            if (selectedOption) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            },
+                    )
                     Text(
                         text = homeModeMenuLabel(option),
                         modifier = Modifier.weight(1f),
@@ -504,6 +502,7 @@ internal fun TrafficStatBlock(
     modifier: Modifier = Modifier,
     icon: ImageVector? = null,
     iconTint: Color = MaterialTheme.colorScheme.onSurfaceVariant,
+    labelColor: Color = MaterialTheme.colorScheme.primary,
     leadingContent: (@Composable RowScope.() -> Unit)? = null,
     headerSpacing: Dp = 3.dp,
     leadingContentSpacing: Dp = 1.dp,
@@ -526,11 +525,10 @@ internal fun TrafficStatBlock(
             Alignment.End -> Arrangement.spacedBy(headerSpacing, Alignment.End)
             else -> Arrangement.spacedBy(headerSpacing, Alignment.Start)
         }
-    Box(
-        modifier =
-            modifier
-                .clip(MaterialTheme.shapes.medium)
-                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.38f)),
+    Surface(
+        modifier = modifier,
+        shape = MaterialTheme.shapes.medium,
+        color = labelColor.copy(alpha = 0.11f),
     ) {
         Column(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp),
@@ -559,7 +557,7 @@ internal fun TrafficStatBlock(
                 Text(
                     text = label,
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = labelColor,
                     textAlign = textAlign,
                 )
             }

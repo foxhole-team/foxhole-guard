@@ -83,9 +83,9 @@
     <string name="auto_refresh_subscriptions_title">Auto-refresh v2raytun subscriptions</string>
     <string name="auto_refresh_subscriptions_summary">Periodically updates v2raytun subscription profiles in the background.</string>
     <string name="auto_refresh_subscriptions_interval_title">Refresh interval</string>
-    <string name="auto_refresh_subscriptions_interval_6h">Every 6 hours</string>
-    <string name="auto_refresh_subscriptions_interval_12h">Every 12 hours</string>
-    <string name="auto_refresh_subscriptions_interval_24h">Every 24 hours</string>
+    <string name="auto_refresh_subscriptions_interval_6h">6 hours</string>
+    <string name="auto_refresh_subscriptions_interval_12h">12 hours</string>
+    <string name="auto_refresh_subscriptions_interval_24h">24 hours</string>
     <string name="ip_info_endpoint">IP service</string>
     <string name="export_diagnostics">Export logs</string>
     <string name="export_diagnostics_summary">Saves the log file to device storage.</string>
@@ -168,8 +168,8 @@
     <string name="smart_start_refresh_timeout_title">Analysis timeout</string>
     <string name="smart_start_refresh_timeout_summary">How long Foxhole waits for each VPN protocol during full analysis.</string>
     <plurals name="smart_start_timeout_seconds_value">
-        <item quantity="one">%1$d sec</item>
-        <item quantity="other">%1$d sec</item>
+        <item quantity="one">%1$d Seconds</item>
+        <item quantity="other">%1$d Seconds</item>
     </plurals>
     <string name="smart_start_transport_priority_title">Transport priority</string>
     <string name="smart_start_transport_priority_summary">Preferred transport order for Smart start candidates.</string>
@@ -187,7 +187,7 @@
     <string name="auto_connect_success">Selected: %1$s. Latency: %2$d ms.</string>
     <string name="auto_connect_success_unavailable">Selected: %1$s. Latency unavailable.</string>
     <string name="smart_profile_tag">smart</string>
-    <string name="smart_profile_menu_title">Manage VPN protocols</string>
+    <string name="smart_profile_menu_title">Manage\nVPN protocols</string>
     <string name="smart_profile_menu_protocol_column">Protocol</string>
     <string name="smart_profile_menu_status_column">Status</string>
     <string name="smart_profile_menu_server_ping_column">Server ping</string>

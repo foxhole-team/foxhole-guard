@@ -73,6 +73,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -355,7 +356,11 @@ private fun SettingsRoutingNavigationGroup(
 private fun SettingsNavigationGroup(content: @Composable ColumnScope.() -> Unit) {
     val shape = MaterialTheme.shapes.large
     Surface(
-        modifier = Modifier.fillMaxWidth().clip(shape),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .foxholeMenuShadow(shape = shape)
+                .clip(shape),
         shape = shape,
         color = LocalFoxholeUiPalette.current.cardContainerColor,
         tonalElevation = 0.dp,
@@ -406,6 +411,7 @@ private fun SettingsGroupedNavigationRow(
                 text = title,
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface,
             )
             Text(
                 text = summary.trimEnd().removeSuffix("."),
@@ -423,7 +429,7 @@ private fun SettingsGroupDivider() {
     HorizontalDivider(
         modifier = Modifier.fillMaxWidth(),
         thickness = 2.dp,
-        color = MaterialTheme.colorScheme.background,
+        color = Color.Transparent,
     )
 }
 

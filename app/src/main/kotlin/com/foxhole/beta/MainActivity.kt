@@ -3,14 +3,17 @@ package com.foxhole.beta
 import android.Manifest
 import android.app.Activity
 import android.content.pm.PackageManager
+import android.content.res.Configuration
 import android.os.Build
 import android.os.Bundle
 import android.view.WindowManager
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.runtime.LaunchedEffect
@@ -20,6 +23,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
+import com.foxhole.beta.core.model.ThemeMode
 import com.foxhole.beta.ui.FoxholeApp
 import com.foxhole.beta.ui.FoxholeBannerAction
 import com.foxhole.beta.ui.FoxholeBannerHapticGate
@@ -29,6 +33,7 @@ import com.foxhole.beta.ui.showBanner
 import com.foxhole.beta.ui.theme.FoxholeAppBackground
 import com.foxhole.beta.ui.theme.FoxholeTheme
 import kotlinx.coroutines.launch
+import android.graphics.Color as AndroidColor
 
 class MainActivity : AppCompatActivity() {
     private val homeViewModel: HomeViewModel by viewModels { HomeViewModel.factory(application) }
@@ -45,7 +50,10 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
+        applyEdgeToEdgeSystemBars(
+            themeMode = homeViewModel.themeMode.value,
+            systemDarkTheme = isSystemDarkTheme(),
+        )
         applySecureScreenPolicy(homeViewModel.secureScreenEnabled.value)
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
@@ -54,9 +62,17 @@ class MainActivity : AppCompatActivity() {
         }
         setContent {
             val themeMode = homeViewModel.themeMode.collectAsStateWithLifecycle()
+            val systemDarkTheme = isSystemInDarkTheme()
             val snackbarHostState = remember { SnackbarHostState() }
             val snackbarHapticGate = remember { FoxholeBannerHapticGate() }
             vpnPermissionResult = homeViewModel::onVpnPermissionResult
+
+            LaunchedEffect(themeMode.value, systemDarkTheme) {
+                applyEdgeToEdgeSystemBars(
+                    themeMode = themeMode.value,
+                    systemDarkTheme = systemDarkTheme,
+                )
+            }
 
             LaunchedEffect(Unit) {
                 requestPostNotificationsIfNeeded()
@@ -135,4 +151,35 @@ class MainActivity : AppCompatActivity() {
         }
         window.decorView.invalidate()
     }
+
+    private fun applyEdgeToEdgeSystemBars(
+        themeMode: ThemeMode,
+        systemDarkTheme: Boolean,
+    ) {
+        val appUsesDarkPalette = appUsesDarkPalette(themeMode, systemDarkTheme)
+        val systemBarStyle =
+            SystemBarStyle.auto(
+                lightScrim = AndroidColor.TRANSPARENT,
+                darkScrim = AndroidColor.TRANSPARENT,
+            ) {
+                appUsesDarkPalette
+            }
+        enableEdgeToEdge(
+            statusBarStyle = systemBarStyle,
+            navigationBarStyle = systemBarStyle,
+        )
+    }
+
+    private fun isSystemDarkTheme(): Boolean =
+        resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES
+
+    private fun appUsesDarkPalette(
+        themeMode: ThemeMode,
+        systemDarkTheme: Boolean,
+    ): Boolean =
+        when (themeMode) {
+            ThemeMode.SYSTEM -> systemDarkTheme
+            ThemeMode.DARK -> true
+            ThemeMode.LIGHT -> false
+        }
 }

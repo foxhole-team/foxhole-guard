@@ -146,27 +146,54 @@ internal val LocalFoxholeDarkTheme =
 private fun defaultFoxholeUiPalette(
     colorScheme: androidx.compose.material3.ColorScheme,
     useDarkPalette: Boolean,
+    themeMode: ThemeMode,
+): FoxholeUiPalette =
+    if (themeMode == ThemeMode.SYSTEM) {
+        systemFoxholeUiPalette(colorScheme, useDarkPalette)
+    } else {
+        FoxholeUiPalette(
+            menuSelectedRowColor =
+                if (useDarkPalette) {
+                    colorScheme.primary.copy(alpha = 0.20f)
+                } else {
+                    colorScheme.primaryContainer.copy(alpha = 0.72f)
+                },
+            cardContainerColor =
+                if (useDarkPalette) {
+                    colorScheme.surfaceContainerHigh
+                } else {
+                    colorScheme.surfaceContainerLowest
+                },
+            cardBorderColor = colorScheme.outlineVariant.copy(alpha = 0.72f),
+            leadingIconContainerColor = colorScheme.surfaceVariant,
+            valuePillContainerColor = colorScheme.primaryContainer,
+            valuePillBorderColor = colorScheme.outline.copy(alpha = if (useDarkPalette) 0.70f else 0.62f),
+            valuePillContentColor = colorScheme.primary,
+            bottomBarContainerColor = colorScheme.surface.copy(alpha = 0.88f),
+            bottomBarBorderColor = colorScheme.outlineVariant.copy(alpha = if (useDarkPalette) 0.46f else 0.48f),
+            bottomBarIndicatorColor =
+                if (useDarkPalette) {
+                    Color.White.copy(alpha = 0.10f)
+                } else {
+                    Color.Black.copy(alpha = 0.06f)
+                },
+        )
+    }
+
+private fun systemFoxholeUiPalette(
+    colorScheme: androidx.compose.material3.ColorScheme,
+    useDarkPalette: Boolean,
 ): FoxholeUiPalette =
     FoxholeUiPalette(
-        menuSelectedRowColor =
-            if (useDarkPalette) {
-                colorScheme.primary.copy(alpha = 0.20f)
-            } else {
-                colorScheme.primaryContainer.copy(alpha = 0.72f)
-            },
-        cardContainerColor =
-            if (useDarkPalette) {
-                colorScheme.surfaceContainerHigh
-            } else {
-                colorScheme.surfaceContainerLowest
-            },
-        cardBorderColor = colorScheme.outlineVariant.copy(alpha = 0.72f),
-        leadingIconContainerColor = colorScheme.surfaceVariant,
+        menuSelectedRowColor = colorScheme.secondaryContainer,
+        cardContainerColor = colorScheme.surfaceContainerHighest,
+        cardBorderColor = colorScheme.outlineVariant,
+        leadingIconContainerColor = colorScheme.surfaceContainerHigh,
         valuePillContainerColor = colorScheme.primaryContainer,
-        valuePillBorderColor = colorScheme.outline.copy(alpha = if (useDarkPalette) 0.70f else 0.62f),
-        valuePillContentColor = colorScheme.primary,
-        bottomBarContainerColor = colorScheme.surface.copy(alpha = 0.88f),
-        bottomBarBorderColor = colorScheme.outlineVariant.copy(alpha = if (useDarkPalette) 0.46f else 0.48f),
+        valuePillBorderColor = colorScheme.outlineVariant,
+        valuePillContentColor = colorScheme.onPrimaryContainer,
+        bottomBarContainerColor = colorScheme.surfaceContainerHigh.copy(alpha = 0.92f),
+        bottomBarBorderColor = colorScheme.outlineVariant.copy(alpha = if (useDarkPalette) 0.50f else 0.56f),
         bottomBarIndicatorColor =
             if (useDarkPalette) {
                 Color.White.copy(alpha = 0.10f)
@@ -231,6 +258,7 @@ fun FoxholeTheme(
             defaultFoxholeUiPalette(
                 colorScheme = colorScheme,
                 useDarkPalette = useDarkPalette,
+                themeMode = themeMode,
             )
         }
     CompositionLocalProvider(
