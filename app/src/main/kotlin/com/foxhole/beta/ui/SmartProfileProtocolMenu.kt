@@ -1049,6 +1049,12 @@ private fun SmartProfileMetricsRefreshStatus(
     refreshingProtocolLabel: String?,
     compact: Boolean,
 ) {
+    val updatedAtColor =
+        if (updatedAt != null) {
+            smartProfileMetricsUpdatedAtColor(updatedAt)
+        } else {
+            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.74f)
+        }
     Box(
         modifier =
             Modifier
@@ -1070,7 +1076,7 @@ private fun SmartProfileMetricsRefreshStatus(
                             fontSize = if (compact) 9.sp else 10.sp,
                             lineHeight = if (compact) 10.sp else 11.sp,
                         ),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.74f),
+                    color = updatedAtColor,
                     maxLines = 1,
                     textAlign = TextAlign.Start,
                     overflow = TextOverflow.Ellipsis,
@@ -1088,6 +1094,16 @@ private fun SmartProfileMetricsRefreshStatus(
                     overflow = TextOverflow.Ellipsis,
                 )
         }
+    }
+}
+
+@Composable
+private fun smartProfileMetricsUpdatedAtColor(updatedAt: Long): Color {
+    val elapsedMs = (System.currentTimeMillis() - updatedAt).coerceAtLeast(0L)
+    return when {
+        elapsedMs > SmartProfileMetricsCriticalAgeMs -> Color(0xFFC95353)
+        elapsedMs > SmartProfileMetricsWarningAgeMs -> Color(0xFFE0B84A)
+        else -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.74f)
     }
 }
 
@@ -1868,6 +1884,8 @@ private val SmartProfileMetricUnavailableSize = 18.dp
 private val SmartProfileMetricColumnWidth = 52.dp
 private val SmartProfileStatusColumnWidth = 88.dp
 private val SmartProfileCompactStatusColumnWidth = 78.dp
+private const val SmartProfileMetricsWarningAgeMs = 5L * 24L * 60L * 60L * 1000L
+private const val SmartProfileMetricsCriticalAgeMs = 10L * 24L * 60L * 60L * 1000L
 
 @Composable
 private fun formatSmartMetricsUpdatedAgo(updatedAt: Long): String {

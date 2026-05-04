@@ -1458,6 +1458,7 @@ internal fun FoxholeSearchField(
 @Composable
 internal fun FoxholeSkeletonBlock(
     modifier: Modifier = Modifier,
+    color: Color = MaterialTheme.colorScheme.surfaceVariant,
 ) {
     val alpha =
         rememberInfiniteTransition(label = "foxhole_skeleton").animateFloat(
@@ -1474,7 +1475,7 @@ internal fun FoxholeSkeletonBlock(
         modifier =
             modifier
                 .clip(MaterialTheme.shapes.medium)
-                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = alpha)),
+                .background(color.copy(alpha = alpha)),
     )
 }
 

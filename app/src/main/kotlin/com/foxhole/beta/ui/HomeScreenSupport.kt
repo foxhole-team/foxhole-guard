@@ -630,6 +630,7 @@ internal fun HomeNetworkLoadingBlock(
     labels: List<String>,
     modifier: Modifier = Modifier,
     valueWidth: Dp = HomeNetworkValueLoadingWidth,
+    loadingColor: Color = MaterialTheme.colorScheme.surfaceVariant,
 ) {
     Column(
         modifier = modifier.fillMaxWidth(),
@@ -637,7 +638,7 @@ internal fun HomeNetworkLoadingBlock(
     ) {
         HomeNetworkColumnTitle(title)
         labels.forEachIndexed { index, label ->
-            HomeNetworkLoadingLine(label = label, valueWidth = valueWidth)
+            HomeNetworkLoadingLine(label = label, valueWidth = valueWidth, loadingColor = loadingColor)
             if (index < labels.lastIndex) {
                 HomeNetworkSubtleDivider()
             }
@@ -646,7 +647,10 @@ internal fun HomeNetworkLoadingBlock(
 }
 
 @Composable
-internal fun HomeConnectionStatusLoadingBlock(modifier: Modifier = Modifier) {
+internal fun HomeConnectionStatusLoadingBlock(
+    modifier: Modifier = Modifier,
+    loadingColor: Color = MaterialTheme.colorScheme.surfaceVariant,
+) {
     HomeNetworkLoadingBlock(
         title = stringResource(R.string.home_network_profile_info_title),
         labels =
@@ -655,9 +659,10 @@ internal fun HomeConnectionStatusLoadingBlock(modifier: Modifier = Modifier) {
                 stringResource(R.string.home_network_server_ping_label),
                 stringResource(R.string.home_network_connect_time_label),
                 stringResource(R.string.home_network_status_label),
-            ),
+        ),
         modifier = modifier,
         valueWidth = HomeNetworkMetricValueLoadingWidth,
+        loadingColor = loadingColor,
     )
 }
 
@@ -665,6 +670,7 @@ internal fun HomeConnectionStatusLoadingBlock(modifier: Modifier = Modifier) {
 private fun HomeNetworkLoadingLine(
     label: String,
     valueWidth: Dp,
+    loadingColor: Color,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -693,6 +699,7 @@ private fun HomeNetworkLoadingLine(
                     Modifier
                         .width(valueWidth)
                         .height(HomeNetworkMetricValueLoadingHeight),
+                color = loadingColor,
             )
         }
     }
@@ -957,48 +964,6 @@ private fun ClippedOutlinedButton(
         colors = colors,
         content = content,
     )
-}
-
-@Composable
-internal fun SmartStartRefreshReminderCard(
-    onRefresh: () -> Unit,
-    onLater: () -> Unit,
-) {
-    FoxholeCard(
-        borderColor = FoxholeInfoAccent.copy(alpha = 0.34f),
-        containerColor = FoxholeInfoAccent.copy(alpha = 0.06f),
-        modifier = Modifier.testTag("smart_start_refresh_reminder"),
-    ) {
-        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text(
-                text = stringResource(R.string.smart_start_refresh_reminder_body),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                OutlinedButton(onClick = onLater) {
-                    Text(stringResource(R.string.later))
-                }
-                OutlinedButton(
-                    onClick = onRefresh,
-                    border = BorderStroke(1.dp, FoxholeInfoAccent.copy(alpha = 0.42f)),
-                    colors =
-                        ButtonDefaults.outlinedButtonColors(
-                            contentColor = FoxholeInfoAccent,
-                            containerColor = FoxholeInfoAccent.copy(alpha = 0.06f),
-                        ),
-                ) {
-                    Icon(Icons.Outlined.Refresh, contentDescription = null)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(stringResource(R.string.refresh))
-                }
-            }
-        }
-    }
 }
 
 @Composable

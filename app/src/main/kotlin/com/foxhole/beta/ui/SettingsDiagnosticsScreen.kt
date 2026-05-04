@@ -9,12 +9,10 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.FileUpload
 import androidx.compose.material.icons.outlined.Info
-import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material3.Icon
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
@@ -54,7 +52,6 @@ fun DiagnosticsScreen(
     val strings = diagnosticsActionStrings()
     var liveLogsVisible by rememberSaveable { mutableStateOf(false) }
     var sendLogToBotVisible by rememberSaveable { mutableStateOf(false) }
-    var sanitizerDialogVisible by rememberSaveable { mutableStateOf(false) }
     var pendingArchiveFile by remember { mutableStateOf<File?>(null) }
     val archiveSaver =
         rememberDiagnosticsArchiveSaver(
@@ -66,19 +63,14 @@ fun DiagnosticsScreen(
             archiveSaved = strings.archiveSaved,
             archiveSaveFailed = strings.archiveSaveFailed,
         )
-    val exportArchive: (Boolean, Boolean) -> Unit = { share, sanitize ->
+    val saveArchive: () -> Unit = {
         launchDiagnosticsArchiveExport(
             coroutineScope = coroutineScope,
-            context = context,
             snackbarHostState = snackbarHostState,
             onCreateDiagnosticsArchive = onCreateDiagnosticsArchive,
-            onShareDiagnosticsArchive = onShareDiagnosticsArchive,
             archiveSaver = archiveSaver,
             setPendingArchiveFile = { pendingArchiveFile = it },
-            exportDiagnosticsTitle = strings.exportTitle,
             diagnosticsArchiveSaveFailed = strings.archiveSaveFailed,
-            share = share,
-            sanitize = sanitize,
         )
     }
 
@@ -86,7 +78,7 @@ fun DiagnosticsScreen(
         state = state,
         snackbarHostState = snackbarHostState,
         onNavigateUp = onNavigateUp,
-        onExportLogs = { sanitizerDialogVisible = true },
+        onExportLogs = saveArchive,
         onOpenLogs = { liveLogsVisible = true },
         onSendLog = { sendLogToBotVisible = true },
         onClearUsage = onClearUsage,
@@ -95,16 +87,11 @@ fun DiagnosticsScreen(
         DiagnosticsDialogVisibility(
             liveLogsVisible = liveLogsVisible,
             sendLogToBotVisible = sendLogToBotVisible,
-            sanitizerDialogVisible = sanitizerDialogVisible,
         )
     val dialogActions =
         DiagnosticsDialogActions(
             onDismissLiveLogs = { liveLogsVisible = false },
             onDismissSendLog = { sendLogToBotVisible = false },
-            onDismissSanitizer = { sanitizerDialogVisible = false },
-            onShareArchive = { exportArchive(true, true) },
-            onSaveArchive = { sanitizerDialogVisible = true },
-            onConfirmSaveArchive = { sanitize -> exportArchive(false, sanitize) },
             onSendArchiveToSupportBot = {
                 launchDiagnosticsArchiveToSupportBot(
                     coroutineScope = coroutineScope,
@@ -196,8 +183,6 @@ private fun DiagnosticsScreenDialogs(
             networkActivityLoggingEnabled = state.settings.expert.networkActivityLogging,
             retention = state.settings.expert.diagnosticsRetention,
             onDismiss = actions.onDismissLiveLogs,
-            onShareArchive = actions.onShareArchive,
-            onSaveArchive = actions.onSaveArchive,
         )
     }
     if (visibility.sendLogToBotVisible) {
@@ -213,41 +198,16 @@ private fun DiagnosticsScreenDialogs(
             },
         )
     }
-    if (visibility.sanitizerDialogVisible) {
-        ConfirmDialog(
-            title = stringResource(R.string.diagnostics_sanitizer_title),
-            body = stringResource(R.string.diagnostics_sanitizer_body),
-            confirmLabel = stringResource(R.string.save),
-            dismissLabel = stringResource(R.string.cancel),
-            secondaryLabel = stringResource(R.string.save_without_sanitizing),
-            onSecondary = {
-                actions.onDismissSanitizer()
-                actions.onConfirmSaveArchive(false)
-            },
-            prominentActions = true,
-            icon = Icons.Outlined.Shield,
-            onDismiss = actions.onDismissSanitizer,
-            onConfirm = {
-                actions.onDismissSanitizer()
-                actions.onConfirmSaveArchive(true)
-            },
-        )
-    }
 }
 
 private data class DiagnosticsDialogVisibility(
     val liveLogsVisible: Boolean,
     val sendLogToBotVisible: Boolean,
-    val sanitizerDialogVisible: Boolean,
 )
 
 private data class DiagnosticsDialogActions(
     val onDismissLiveLogs: () -> Unit,
     val onDismissSendLog: () -> Unit,
-    val onDismissSanitizer: () -> Unit,
-    val onShareArchive: () -> Unit,
-    val onSaveArchive: () -> Unit,
-    val onConfirmSaveArchive: (Boolean) -> Unit,
     val onSendArchiveToSupportBot: () -> Unit,
 )
 
@@ -292,7 +252,6 @@ private fun diagnosticsActionStrings(): DiagnosticsActionStrings =
         supportBotBrowserFallback = stringResource(R.string.support_bot_browser_fallback),
         archiveSaved = stringResource(R.string.diagnostics_archive_saved),
         archiveSaveFailed = stringResource(R.string.diagnostics_archive_save_failed),
-        exportTitle = stringResource(R.string.export_diagnostics),
     )
 
 private data class DiagnosticsActionStrings(
@@ -300,44 +259,22 @@ private data class DiagnosticsActionStrings(
     val supportBotBrowserFallback: String,
     val archiveSaved: String,
     val archiveSaveFailed: String,
-    val exportTitle: String,
 )
 
 private fun launchDiagnosticsArchiveExport(
     coroutineScope: CoroutineScope,
-    context: Context,
     snackbarHostState: SnackbarHostState,
     onCreateDiagnosticsArchive: (Boolean) -> File,
-    onShareDiagnosticsArchive: (File) -> Intent,
     archiveSaver: ManagedActivityResultLauncher<String, Uri?>,
     setPendingArchiveFile: (File?) -> Unit,
-    exportDiagnosticsTitle: String,
     diagnosticsArchiveSaveFailed: String,
-    share: Boolean,
-    sanitize: Boolean = true,
 ) {
     coroutineScope.launch {
         runCatching {
-            withContext(Dispatchers.IO) { onCreateDiagnosticsArchive(sanitize) }
+            withContext(Dispatchers.IO) { onCreateDiagnosticsArchive(false) }
         }.onSuccess { archive ->
-            if (share) {
-                runCatching {
-                    context.startActivity(
-                        Intent.createChooser(
-                            onShareDiagnosticsArchive(archive),
-                            exportDiagnosticsTitle,
-                        ),
-                    )
-                }.onFailure {
-                    snackbarHostState.showBanner(
-                        it.message ?: diagnosticsArchiveSaveFailed,
-                        FoxholeBannerTone.ERROR,
-                    )
-                }
-            } else {
-                setPendingArchiveFile(archive)
-                archiveSaver.launch(archive.name)
-            }
+            setPendingArchiveFile(archive)
+            archiveSaver.launch(archive.name)
         }.onFailure {
             snackbarHostState.showBanner(
                 it.message ?: diagnosticsArchiveSaveFailed,

@@ -35,11 +35,9 @@ import com.foxhole.beta.core.model.ProxyInboundSettings
 import com.foxhole.beta.core.model.TrafficMode
 import com.foxhole.beta.core.model.isUdpTransport
 import com.foxhole.beta.core.profile.MultiProtocolProfileSupport
-import com.foxhole.beta.core.settings.SMART_START_FULL_REFRESH_STALE_MS
 import com.foxhole.beta.core.settings.needsSmartStartColdScan
 import com.foxhole.beta.core.settings.smartProfilePreference
 import com.foxhole.beta.core.settings.smartStartEnabledProtocolSetHash
-import com.foxhole.beta.core.model.Settings as FoxholeSettings
 
 internal data class HomeProxySurface(
     val label: String,
@@ -75,7 +73,6 @@ internal data class HomeDashboardProtocolModel(
 internal data class HomeDashboardProfileModel(
     val activeProfileId: Long?,
     val isSmartDashboardProfile: Boolean,
-    val showSmartStartRefreshReminder: Boolean,
 )
 
 internal data class HomeDashboardNetworkModel(
@@ -185,17 +182,6 @@ internal fun shouldAutoRefreshIpAfterConnect(
     previousState: ConnectionState?,
     currentState: ConnectionState,
 ): Boolean = previousState != ConnectionState.CONNECTED && currentState == ConnectionState.CONNECTED
-
-internal fun shouldShowSmartStartRefreshReminder(
-    activeProfile: Profile?,
-    settings: FoxholeSettings,
-    now: Long = System.currentTimeMillis(),
-): Boolean {
-    val profile = activeProfile?.takeIf(MultiProtocolProfileSupport::hasMultipleSupportedOptions) ?: return false
-    val preference = settings.smartProfilePreference(profile.id) ?: return false
-    val refreshedAt = preference.lastFullSmartRefreshAt ?: return false
-    return now - refreshedAt > SMART_START_FULL_REFRESH_STALE_MS
-}
 
 internal fun shouldShowAutoConnectAction(activeProfile: Profile?): Boolean =
     activeProfile?.let(MultiProtocolProfileSupport::hasMultipleSupportedOptions) == true
@@ -307,19 +293,11 @@ internal fun resolveHomeDashboardProtocolModel(state: HomeRouteUiState): HomeDas
 
 internal fun resolveHomeDashboardProfileModel(
     state: HomeRouteUiState,
-    dismissedSmartStartReminderProfileId: Long?,
 ): HomeDashboardProfileModel {
     val activeProfileId = state.activeProfile?.id
     return HomeDashboardProfileModel(
         activeProfileId = activeProfileId,
         isSmartDashboardProfile = state.activeProfile?.let(MultiProtocolProfileSupport::hasMultipleSupportedOptions) == true,
-        showSmartStartRefreshReminder =
-            activeProfileId != null &&
-                dismissedSmartStartReminderProfileId != activeProfileId &&
-                shouldShowSmartStartRefreshReminder(
-                    activeProfile = state.activeProfile,
-                    settings = state.settings,
-                ),
     )
 }
 

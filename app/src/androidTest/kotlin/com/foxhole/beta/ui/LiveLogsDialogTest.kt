@@ -20,9 +20,7 @@ class LiveLogsDialogTest {
     val composeRule = createComposeRule()
 
     @Test
-    fun emptyStateShowsRetentionSummaryAndInvokesActions() {
-        var saved = 0
-        var shared = 0
+    fun emptyStateShowsRetentionSummaryAndInvokesClose() {
         var dismissed = 0
 
         composeRule.setContent {
@@ -32,8 +30,6 @@ class LiveLogsDialogTest {
                     networkActivityLoggingEnabled = false,
                     retention = DiagnosticsRetention.HOURS_24,
                     onDismiss = { dismissed += 1 },
-                    onShareArchive = { shared += 1 },
-                    onSaveArchive = { saved += 1 },
                 )
             }
         }
@@ -43,12 +39,8 @@ class LiveLogsDialogTest {
         composeRule.onNodeWithTag(LIVE_LOGS_EMPTY_STATE_TAG).assertIsDisplayed()
         composeRule.onAllNodesWithTag(LIVE_LOGS_NETWORK_NOTICE_TAG).assertCountEquals(0)
 
-        composeRule.onNodeWithTag(LIVE_LOGS_SAVE_ACTION_TAG).performClick()
-        composeRule.onNodeWithTag(LIVE_LOGS_SHARE_ACTION_TAG).performClick()
         composeRule.onNodeWithTag(LIVE_LOGS_CLOSE_ACTION_TAG).performClick()
 
-        assertEquals(1, saved)
-        assertEquals(1, shared)
         assertEquals(1, dismissed)
     }
 
@@ -68,8 +60,6 @@ class LiveLogsDialogTest {
                     networkActivityLoggingEnabled = true,
                     retention = DiagnosticsRetention.HOURS_6,
                     onDismiss = {},
-                    onShareArchive = {},
-                    onSaveArchive = {},
                 )
             }
         }

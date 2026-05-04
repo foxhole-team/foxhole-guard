@@ -87,6 +87,7 @@ import com.foxhole.beta.core.model.ProtocolHint
 import com.foxhole.beta.core.model.RoutingRule
 import com.foxhole.beta.core.model.RoutingRuleAction
 import com.foxhole.beta.core.profile.MultiProtocolProfileSupport
+import com.foxhole.beta.ui.theme.LocalFoxholeUiPalette
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.text.DateFormat
@@ -348,6 +349,12 @@ private fun ProtocolMarkOrSelector(
             favoriteProtocolOptionId = favoriteProtocolOptionId,
         )
     val selectorShape = MaterialTheme.shapes.large
+    val selectorPalette = LocalFoxholeUiPalette.current
+    val selectorContainerColor = selectorPalette.valuePillContainerColor
+    val selectorResolvedBorderColor =
+        selectorBorderColor
+            ?: selectorPalette.valuePillBorderColor.takeUnless { it == Color.Transparent }
+            ?: MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.58f)
     Box {
         Surface(
             modifier =
@@ -358,10 +365,10 @@ private fun ProtocolMarkOrSelector(
                     .clip(selectorShape)
                     .clickable { expanded = true },
             shape = selectorShape,
-            color = MaterialTheme.colorScheme.surface.copy(alpha = if (compact) 0.20f else 0.24f),
+            color = selectorContainerColor,
             tonalElevation = 1.dp,
             shadowElevation = 0.dp,
-            border = BorderStroke(1.dp, selectorBorderColor ?: MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.58f)),
+            border = BorderStroke(1.dp, selectorResolvedBorderColor),
         ) {
             Row(
                 modifier =
@@ -708,6 +715,7 @@ internal fun ProtocolLatencyLoadingPill(
     modifier: Modifier = Modifier,
     compact: Boolean = false,
     showLabel: Boolean = false,
+    color: Color = MaterialTheme.colorScheme.surfaceVariant,
 ) {
     FoxholeSkeletonBlock(
         modifier =
@@ -721,6 +729,7 @@ internal fun ProtocolLatencyLoadingPill(
                     },
                 )
                 .height(if (compact) 16.dp else 24.dp),
+        color = color,
     )
 }
 

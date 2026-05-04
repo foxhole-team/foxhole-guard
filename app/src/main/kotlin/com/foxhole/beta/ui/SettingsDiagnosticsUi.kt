@@ -3,7 +3,6 @@ package com.foxhole.beta.ui
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -45,8 +44,6 @@ internal fun LiveLogsDialog(
     networkActivityLoggingEnabled: Boolean,
     retention: DiagnosticsRetention,
     onDismiss: () -> Unit,
-    onShareArchive: () -> Unit,
-    onSaveArchive: () -> Unit,
 ) {
     val locale = remember { Locale.getDefault() }
     val timeFormat = remember(locale) { SimpleDateFormat("HH:mm:ss", locale) }
@@ -145,26 +142,13 @@ internal fun LiveLogsDialog(
             }
         },
         confirmButton = {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FoxholeDialogSecondaryButton(
-                    label = stringResource(R.string.save_archive),
-                    modifier = Modifier.testTag(LIVE_LOGS_SAVE_ACTION_TAG),
-                    onClick = onSaveArchive,
-                )
-                FoxholeDialogConfirmButton(
-                    modifier = Modifier.testTag(LIVE_LOGS_SHARE_ACTION_TAG),
-                    onClick = onShareArchive,
-                    label = stringResource(R.string.share_archive),
-                )
-            }
-        },
-        dismissButton = {
-            FoxholeDialogDismissButton(
+            FoxholeDialogConfirmButton(
                 modifier = Modifier.testTag(LIVE_LOGS_CLOSE_ACTION_TAG),
                 onClick = onDismiss,
                 label = stringResource(R.string.close),
             )
         },
+        dismissButton = {},
     )
 }
 
@@ -300,7 +284,5 @@ internal const val LIVE_LOGS_RETENTION_SUMMARY_TAG = "live_logs_retention_summar
 internal const val LIVE_LOGS_NETWORK_NOTICE_TAG = "live_logs_network_notice"
 internal const val LIVE_LOGS_EMPTY_STATE_TAG = "live_logs_empty_state"
 internal const val LIVE_LOGS_LIST_TAG = "live_logs_list"
-internal const val LIVE_LOGS_SAVE_ACTION_TAG = "live_logs_save_action"
-internal const val LIVE_LOGS_SHARE_ACTION_TAG = "live_logs_share_action"
 internal const val LIVE_LOGS_CLOSE_ACTION_TAG = "live_logs_close_action"
 private const val LIVE_LOGS_VISIBLE_ENTRY_LIMIT = 600

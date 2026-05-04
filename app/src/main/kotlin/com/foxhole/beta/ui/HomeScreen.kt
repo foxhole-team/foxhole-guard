@@ -153,7 +153,6 @@ fun HomeScreen(
     var showRefreshProfileDialog by rememberSaveable { mutableStateOf(false) }
     var editProxyUsernameVisible by rememberSaveable { mutableStateOf(false) }
     var editProxyPasswordVisible by rememberSaveable { mutableStateOf(false) }
-    var dismissedSmartStartReminderProfileId by rememberSaveable { mutableStateOf<Long?>(null) }
     var smartRefreshConfirmationProfileId by rememberSaveable { mutableStateOf<Long?>(null) }
     var smartStartFirstAnalysisProfileId by rememberSaveable { mutableStateOf<Long?>(null) }
     var acceptedSmartStartFirstAnalysisProfileId by rememberSaveable { mutableStateOf<Long?>(null) }
@@ -181,12 +180,6 @@ fun HomeScreen(
             autoTone
         } else {
             homeStatusTone(state.connection.state)
-        }
-    val dashboardSelectorBorderColor =
-        if (darkTheme) {
-            MaterialTheme.colorScheme.outline.copy(alpha = 0.78f)
-        } else {
-            MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.58f)
         }
     val dashboardSecondaryActionBorderColor =
         autoTone.copy(alpha = if (darkTheme) 0.30f else 0.24f)
@@ -269,16 +262,9 @@ fun HomeScreen(
     val showNetworkLoading = networkModel.showLoading
     val showNetworkConnectionStatus = networkModel.showConnectionStatus
     val networkInfoTitleRes = networkModel.titleRes
-    val profileModel =
-        remember(state, dismissedSmartStartReminderProfileId) {
-            resolveHomeDashboardProfileModel(
-                state = state,
-                dismissedSmartStartReminderProfileId = dismissedSmartStartReminderProfileId,
-            )
-        }
+    val profileModel = remember(state) { resolveHomeDashboardProfileModel(state = state) }
     val isSmartDashboardProfile = profileModel.isSmartDashboardProfile
     val activeProfileId = profileModel.activeProfileId
-    val showSmartStartRefreshReminder = profileModel.showSmartStartRefreshReminder
     val firstAnalysisProtocolMenuActive = firstAnalysisProtocolMenuProfileId == activeProfileId
     val firstAnalysisProtocolMenuBusy = state.autoConnect.running || state.protocolMetricsRefreshing
     val firstAnalysisProtocolMenuForceExpanded =
@@ -455,15 +441,6 @@ fun HomeScreen(
                     }
                 }
             }
-            if (showSmartStartRefreshReminder) {
-                val reminderProfileId = checkNotNull(activeProfileId)
-                item {
-                    SmartStartRefreshReminderCard(
-                        onRefresh = { requestSmartProfileMetricsRefresh(reminderProfileId) },
-                        onLater = { dismissedSmartStartReminderProfileId = reminderProfileId },
-                    )
-                }
-            }
             item {
                 FoxholeCard(
                     onClick = onOpenProfiles,
@@ -533,6 +510,7 @@ fun HomeScreen(
                                                 ProtocolLatencyLoadingPill(
                                                     compact = true,
                                                     showLabel = true,
+                                                    color = autoTone,
                                                 )
                                             !dashboardConnectionDetailsReady -> Unit
                                             dashboardSelectedLatencyMs != null ->
@@ -570,7 +548,7 @@ fun HomeScreen(
                                     recommendedProtocolOptionId = state.recommendedProtocolOptionId,
                                     recommendedProtocolOptionIds = state.recommendedProtocolOptionIds,
                                     favoriteProtocolOptionId = state.favoriteProtocolOptionId,
-                                    selectorBorderColor = dashboardSelectorBorderColor,
+                                    selectorBorderColor = autoTone.copy(alpha = if (darkTheme) 0.30f else 0.24f),
                                     showInsecureTlsBadge = false,
                                     leadingContent =
                                         if (isSmartDashboardProfile) {
@@ -760,6 +738,7 @@ fun HomeScreen(
                                             Modifier
                                                 .weight(if (showNetworkConnectionStatus) 1f else 2f)
                                                 .testTag("home_network_loading"),
+                                        loadingColor = autoTone,
                                     )
                                     if (showNetworkConnectionStatus) {
                                         HomeNetworkVerticalDivider()
@@ -768,6 +747,7 @@ fun HomeScreen(
                                                 Modifier
                                                     .weight(1f)
                                                     .testTag("home_connection_status_loading"),
+                                            loadingColor = autoTone,
                                         )
                                     }
                                 }

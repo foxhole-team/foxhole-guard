@@ -267,7 +267,7 @@ class SmartStartProtocolPresentationTest {
             stringValue(enStrings, "profile_config_load_timeout"),
         )
         assertEquals(
-            "Run analysis of available protocols?",
+            "Run VPN protocol analysis?",
             stringValue(enStrings, "smart_profile_metrics_refresh_confirm_title"),
         )
         assertEquals("Enable expert settings?", stringValue(enStrings, "expert_unlock_confirm_title"))
@@ -275,11 +275,11 @@ class SmartStartProtocolPresentationTest {
         assertEquals("BETA", stringValue(enStrings, "beta_badge"))
         assertEquals("VPN protocol analysis", stringValue(enStrings, "smart_start_first_analysis_title"))
         assertEquals(
-            "The first VPN protocol analysis will check every available VPN protocol in this configuration. After Foxhole finds the three best VPN protocols, future connections will use only those. Periodically refresh all available VPN protocols in Smart start settings to improve connection quality.",
+            "Foxhole will run a quick analysis of available VPN protocols. After it finds the three best options, future connections will use only those.",
             stringValue(enStrings, "smart_start_first_analysis_body"),
         )
         assertEquals("Continue", stringValue(enStrings, "smart_start_first_analysis_continue"))
-        assertEquals("Turn off LAN Proxy?", stringValue(enStrings, "lan_proxy_disable_confirm_title"))
+        assertEquals("Turn off LAN proxy?", stringValue(enStrings, "lan_proxy_disable_confirm_title"))
         assertEquals("Quick start", stringValue(enStrings, "help_quick_start_title"))
         assertEquals("Connection modes", stringValue(enStrings, "help_connection_modes_title"))
         assertEquals("Diagnostics and support", stringValue(enStrings, "help_diagnostics_support_title"))
@@ -333,7 +333,7 @@ class SmartStartProtocolPresentationTest {
             stringValue(ruStrings, "profile_config_load_timeout"),
         )
         assertEquals(
-            "Выполнить анализ доступных протоколов?",
+            "Выполнить анализ протоколов VPN?",
             stringValue(ruStrings, "smart_profile_metrics_refresh_confirm_title"),
         )
         assertEquals("Включить экспертные настройки?", stringValue(ruStrings, "expert_unlock_confirm_title"))
@@ -341,11 +341,11 @@ class SmartStartProtocolPresentationTest {
         assertEquals("BETA", stringValue(ruStrings, "beta_badge"))
         assertEquals("Анализ протоколов VPN", stringValue(ruStrings, "smart_start_first_analysis_title"))
         assertEquals(
-            "Первый анализ доступных протоколов VPN будет выполнен по всем протоколам VPN в конфигурации. После определения трех лучших протоколов VPN подключение будет выполняться только по ним. Периодически обновляйте все доступные протоколы VPN в настройках Смарт старт для улучшения качества соединения.",
+            "Будет выполнен быстрый анализ доступных протоколов VPN. После определения трех лучших, подключение будет выполняться только по ним.",
             stringValue(ruStrings, "smart_start_first_analysis_body"),
         )
         assertEquals("Продолжить", stringValue(ruStrings, "smart_start_first_analysis_continue"))
-        assertEquals("Выключить LAN Proxy?", stringValue(ruStrings, "lan_proxy_disable_confirm_title"))
+        assertEquals("Выключить LAN proxy?", stringValue(ruStrings, "lan_proxy_disable_confirm_title"))
         assertEquals("Быстрый старт", stringValue(ruStrings, "help_quick_start_title"))
         assertEquals("Режимы подключения", stringValue(ruStrings, "help_connection_modes_title"))
         assertEquals("Диагностика и поддержка", stringValue(ruStrings, "help_diagnostics_support_title"))

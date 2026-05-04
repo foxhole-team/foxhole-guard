@@ -3,6 +3,7 @@ package com.foxhole.beta.ui
 import android.content.Context
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -17,6 +18,7 @@ import androidx.compose.material.icons.outlined.ExpandLess
 import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -43,6 +45,7 @@ import com.foxhole.beta.core.model.InstalledAppOption
 import com.foxhole.beta.core.model.PerAppRoutingMode
 import com.foxhole.beta.core.model.RoutingRule
 import com.foxhole.beta.core.model.RoutingRuleAction
+import com.foxhole.beta.ui.theme.LocalFoxholeUiPalette
 
 @Composable
 fun RoutingAppsScreen(
@@ -103,6 +106,8 @@ fun RoutingAppsScreen(
                 Button(
                     onClick = onOpenPicker,
                     modifier = Modifier.fillMaxWidth().testTag("routing_apps_add_exception_action"),
+                    colors = foxholeDropdownColoredButtonColors(),
+                    border = foxholeDropdownColoredButtonBorder(),
                 ) {
                     Icon(Icons.Outlined.Add, contentDescription = null)
                     Text(
@@ -335,6 +340,8 @@ fun RoutingSitesScreen(
                 Button(
                     onClick = { createDialogVisible = true },
                     modifier = Modifier.fillMaxWidth().testTag("routing_sites_add_exception_action"),
+                    colors = foxholeDropdownColoredButtonColors(),
+                    border = foxholeDropdownColoredButtonBorder(),
                 ) {
                     Icon(Icons.Outlined.Add, contentDescription = null)
                     Text(
@@ -425,4 +432,17 @@ fun RoutingSitesScreen(
             },
         )
     }
+}
+
+@Composable
+private fun foxholeDropdownColoredButtonColors() =
+    ButtonDefaults.buttonColors(
+        containerColor = LocalFoxholeUiPalette.current.valuePillContainerColor,
+        contentColor = MaterialTheme.colorScheme.onSurface,
+    )
+
+@Composable
+private fun foxholeDropdownColoredButtonBorder(): BorderStroke? {
+    val borderColor = LocalFoxholeUiPalette.current.valuePillBorderColor
+    return borderColor.takeUnless { it == androidx.compose.ui.graphics.Color.Transparent }?.let { BorderStroke(1.dp, it) }
 }

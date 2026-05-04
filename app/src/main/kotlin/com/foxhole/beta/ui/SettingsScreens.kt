@@ -32,7 +32,6 @@ import androidx.compose.material.icons.outlined.AccountTree
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Apps
 import androidx.compose.material.icons.outlined.BrightnessAuto
-import androidx.compose.material.icons.outlined.BugReport
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.DarkMode
 import androidx.compose.material.icons.outlined.Edit
@@ -600,7 +599,7 @@ private fun openTelegramChannel(context: Context): Boolean {
     }
 }
 
-@Suppress("CyclomaticComplexMethod", "LongMethod", "LongParameterList")
+@Suppress("CyclomaticComplexMethod", "LongMethod", "LongParameterList", "UNUSED_PARAMETER")
 @Composable
 fun TrafficSettingsScreen(
     title: String,
@@ -635,8 +634,6 @@ fun TrafficSettingsScreen(
     var domainMenuExpanded by rememberSaveable { mutableStateOf(false) }
     var subscriptionRefreshIntervalMenuExpanded by rememberSaveable { mutableStateOf(false) }
     var endpointDialog by rememberSaveable { mutableStateOf(false) }
-    var showWarning by rememberSaveable { mutableStateOf(false) }
-    var pendingUnsafeAction by remember { mutableStateOf<(() -> Unit)?>(null) }
     val wifiLanAddress by rememberWifiLanAddress()
     val tunnelModeLabel = stringResource(R.string.traffic_mode_tunnel)
     val proxyModeLabel = stringResource(R.string.traffic_mode_proxy)
@@ -656,15 +653,6 @@ fun TrafficSettingsScreen(
             LatencyProbeMethod.TCP -> pingTcpLabel
         }
     }
-    fun requireWarning(action: () -> Unit) {
-        if (state.settings.expert.warningAcknowledgedAt != null) {
-            action()
-        } else {
-            pendingUnsafeAction = action
-            showWarning = true
-        }
-    }
-
     SettingsScaffold(
         title = title,
         snackbarHostState = snackbarHostState,
@@ -802,13 +790,7 @@ fun TrafficSettingsScreen(
                     checked = state.settings.expert.bypassLan,
                     summary = stringResource(R.string.bypass_lan_summary),
                     leadingIcon = Icons.Outlined.Router,
-                    onCheckedChange = { enabled ->
-                        if (enabled) {
-                            requireWarning { onBypassLanChanged(true) }
-                        } else {
-                            onBypassLanChanged(false)
-                        }
-                    },
+                    onCheckedChange = onBypassLanChanged,
                     summaryMaxLines = 3,
                     grouped = true,
                 )
@@ -921,25 +903,6 @@ fun TrafficSettingsScreen(
         )
     }
 
-    if (showWarning) {
-        ConfirmDialog(
-            title = stringResource(R.string.expert_warning_title),
-            body = stringResource(R.string.expert_warning_body),
-            confirmLabel = stringResource(R.string.i_understand),
-            icon = Icons.Outlined.Shield,
-            dismissLabel = stringResource(R.string.cancel),
-            onDismiss = {
-                showWarning = false
-                pendingUnsafeAction = null
-            },
-            onConfirm = {
-                onAcknowledgeUnsafeWarning()
-                pendingUnsafeAction?.invoke()
-                showWarning = false
-                pendingUnsafeAction = null
-            },
-        )
-    }
 }
 
 @Suppress("CyclomaticComplexMethod", "LongMethod")
@@ -1135,11 +1098,6 @@ fun HelpScreen(
                 icon = Icons.AutoMirrored.Outlined.AltRoute,
                 title = stringResource(R.string.traffic_rules),
                 body = stringResource(R.string.help_routing_full_body),
-            ),
-            HelpTopic(
-                icon = Icons.Outlined.BugReport,
-                title = stringResource(R.string.help_diagnostics_support_title),
-                body = stringResource(R.string.help_diagnostics_support_body),
             ),
             HelpTopic(
                 icon = Icons.Outlined.Tune,
