@@ -28,6 +28,7 @@ class TunnelValidationEvidenceClassifierTest {
             )
 
         assertTrue(evidence.hasSuccessfulTunnelActivity)
+        assertTrue(evidence.hasOutboundTunnelActivity)
         assertEquals(null, evidence.fatalRuntimeMessage)
     }
 
@@ -52,6 +53,7 @@ class TunnelValidationEvidenceClassifierTest {
             )
 
         assertTrue(evidence.hasSuccessfulTunnelActivity)
+        assertFalse(evidence.hasOutboundTunnelActivity)
         assertEquals(
             "ERROR outbound/hysteria2[foxhole-vpn-direct]: authentication failed, status code: 404",
             evidence.fatalRuntimeMessage,
@@ -79,6 +81,7 @@ class TunnelValidationEvidenceClassifierTest {
             )
 
         assertFalse(evidence.hasSuccessfulTunnelActivity)
+        assertFalse(evidence.hasOutboundTunnelActivity)
         assertEquals(null, evidence.fatalRuntimeMessage)
     }
 
@@ -98,9 +101,50 @@ class TunnelValidationEvidenceClassifierTest {
             )
 
         assertFalse(evidence.hasSuccessfulTunnelActivity)
+        assertFalse(evidence.hasOutboundTunnelActivity)
         assertEquals(
             "start failed: decode config: outbounds[0].server: json: unknown field \"server\"",
             evidence.fatalRuntimeMessage,
         )
+    }
+
+    @Test
+    fun `inbound activity does not count as outbound platform validation evidence`() {
+        val evidence =
+            TunnelValidationEvidenceClassifier.classify(
+                entries =
+                    listOf(
+                        DiagnosticEntry(
+                            timestamp = 1_000L,
+                            tag = "libbox",
+                            message = "INFO inbound/tun[tun-in]: inbound connection to [ip]:443",
+                        ),
+                    ),
+                sinceMs = 900L,
+            )
+
+        assertTrue(evidence.hasSuccessfulTunnelActivity)
+        assertFalse(evidence.hasOutboundTunnelActivity)
+        assertEquals(null, evidence.fatalRuntimeMessage)
+    }
+
+    @Test
+    fun `wireguard handshake response counts as outbound platform validation evidence`() {
+        val evidence =
+            TunnelValidationEvidenceClassifier.classify(
+                entries =
+                    listOf(
+                        DiagnosticEntry(
+                            timestamp = 1_000L,
+                            tag = "libbox",
+                            message = "DEBUG endpoint/wireguard[wireguard-direct]: peer(abc) - received handshake response",
+                        ),
+                    ),
+                sinceMs = 900L,
+            )
+
+        assertTrue(evidence.hasSuccessfulTunnelActivity)
+        assertTrue(evidence.hasOutboundTunnelActivity)
+        assertEquals(null, evidence.fatalRuntimeMessage)
     }
 }

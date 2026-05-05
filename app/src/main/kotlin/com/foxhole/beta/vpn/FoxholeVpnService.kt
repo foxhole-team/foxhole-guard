@@ -725,12 +725,18 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
 
     internal suspend fun refreshProxyIpInfo(callTimeoutMs: Long): IpInfo = refreshProxyIpInfoInternal(callTimeoutMs)
 
+    internal suspend fun refreshTunnelRuntimeProxyIpInfo(callTimeoutMs: Long): IpInfo =
+        refreshTunnelRuntimeProxyIpInfoInternal(callTimeoutMs)
+
     internal suspend fun refreshVpnIpv4Info(
         callTimeoutMs: Long,
         network: Network? = null,
     ): IpInfo? = refreshVpnIpv4InfoInternal(callTimeoutMs, network)
 
     internal suspend fun refreshProxyIpv4Info(callTimeoutMs: Long): IpInfo? = refreshProxyIpv4InfoInternal(callTimeoutMs)
+
+    internal suspend fun refreshTunnelRuntimeProxyIpv4Info(callTimeoutMs: Long): IpInfo? =
+        refreshTunnelRuntimeProxyIpv4InfoInternal(callTimeoutMs)
 
     internal fun scheduleValidation(
         session: VpnSession,
@@ -871,6 +877,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         internal const val IPV4_ENRICHMENT_CALL_TIMEOUT_MS = 4_000L
         internal val CONNECTIVITY_PROBE_ENDPOINTS =
             listOf(
+                "https://www.google.com/generate_204",
                 "https://cp.cloudflare.com/generate_204",
                 "https://www.gstatic.com/generate_204",
             )
@@ -891,8 +898,8 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         internal const val CONNECTIVITY_PROBE_ATTEMPTS = 15
         internal const val CONNECTIVITY_PROBE_INITIAL_DELAY_MS = 2_000L
         internal const val CONNECTIVITY_PROBE_RETRY_DELAY_MS = 2_000L
-        internal const val CONNECTIVITY_PROBE_CALL_TIMEOUT_MS = 2_500L
-        internal const val CONNECTIVITY_PROBE_TOTAL_TIMEOUT_MS = 30_000L
+        internal const val CONNECTIVITY_PROBE_CALL_TIMEOUT_MS = 5_000L
+        internal const val CONNECTIVITY_PROBE_TOTAL_TIMEOUT_MS = 45_000L
         internal const val CONNECTIVITY_PROBE_GRACE_MAX_TIMEOUT_MS = com.foxhole.beta.vpn.CONNECTIVITY_PROBE_GRACE_MAX_TIMEOUT_MS
         internal const val LOCAL_GUARD_PROFILE_ID = -10L
         internal const val APP_TRAFFIC_SAMPLE_INTERVAL_MS = 60_000L

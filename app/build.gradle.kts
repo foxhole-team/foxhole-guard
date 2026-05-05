@@ -84,6 +84,7 @@ val releaseSigningKeyPassword = releaseSigningValue("keyPassword", "FOXHOLE_RELE
 val releaseSigningStoreType = releaseSigningValue("storeType", "FOXHOLE_RELEASE_STORE_TYPE") ?: "PKCS12"
 val bundledLibbox = file("libs/libbox.aar")
 val bundledLegacyLibbox = file("libs/libbox-legacy.aar")
+val bundledLibboxVersionStamp = file("libs/libbox.version")
 val buildLibboxScript = rootProject.file("scripts/build-libbox.sh")
 val releaseSigningReady =
     !releaseSigningStoreFilePath.isNullOrBlank() &&
@@ -93,12 +94,19 @@ val releaseSigningReady =
         file(releaseSigningStoreFilePath).isFile
 
 val prepareBundledLibbox by tasks.registering {
-    inputs.file(rootProject.file("third_party/sing-box.version"))
+    val versionFile = rootProject.file("third_party/sing-box.version")
+    inputs.file(versionFile)
     inputs.file(buildLibboxScript)
-    outputs.files(bundledLibbox, bundledLegacyLibbox)
+    outputs.files(bundledLibbox, bundledLegacyLibbox, bundledLibboxVersionStamp)
 
     doLast {
-        if (bundledLibbox.isFile && bundledLegacyLibbox.isFile) {
+        val expectedVersion = versionFile.readText()
+        if (
+            bundledLibbox.isFile &&
+            bundledLegacyLibbox.isFile &&
+            bundledLibboxVersionStamp.isFile &&
+            bundledLibboxVersionStamp.readText() == expectedVersion
+        ) {
             return@doLast
         }
         require(buildLibboxScript.isFile) { "missing libbox bootstrap script: ${buildLibboxScript.absolutePath}" }
@@ -114,6 +122,7 @@ val prepareBundledLibbox by tasks.registering {
         require(bundledLibbox.isFile && bundledLegacyLibbox.isFile) {
             "libbox bootstrap did not produce ${bundledLibbox.name} and ${bundledLegacyLibbox.name}"
         }
+        bundledLibboxVersionStamp.writeText(expectedVersion)
     }
 }
 
@@ -171,7 +180,7 @@ android {
         }
         buildConfigField("String", "DEFAULT_IP_INFO_ENDPOINT", "\"https://ipwho.is/\"")
         buildConfigField("String", "DEFAULT_SUPPORT_BOT_HANDLE", "\"@foxhole_repo_support_bot\"")
-        buildConfigField("String", "LIBBOX_SOURCE_VERSION", "\"1.13.6\"")
+        buildConfigField("String", "LIBBOX_SOURCE_VERSION", "\"1.13.11\"")
     }
 
     ksp {

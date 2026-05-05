@@ -4,6 +4,7 @@ import com.foxhole.beta.core.diagnostics.DiagnosticEntry
 
 internal data class TunnelValidationEvidence(
     val hasSuccessfulTunnelActivity: Boolean,
+    val hasOutboundTunnelActivity: Boolean = hasSuccessfulTunnelActivity,
     val fatalRuntimeMessage: String? = null,
 )
 
@@ -13,6 +14,7 @@ internal object TunnelValidationEvidenceClassifier {
         sinceMs: Long,
     ): TunnelValidationEvidence {
         var hasSuccessfulTunnelActivity = false
+        var hasOutboundTunnelActivity = false
         var fatalRuntimeMessage: String? = null
 
         entries.asSequence()
@@ -25,10 +27,14 @@ internal object TunnelValidationEvidenceClassifier {
                 if (!hasSuccessfulTunnelActivity && isSuccessfulTunnelActivityEntry(tag = entry.tag, message = message)) {
                     hasSuccessfulTunnelActivity = true
                 }
+                if (!hasOutboundTunnelActivity && isOutboundTunnelActivityEntry(tag = entry.tag, message = message)) {
+                    hasOutboundTunnelActivity = true
+                }
             }
 
         return TunnelValidationEvidence(
             hasSuccessfulTunnelActivity = hasSuccessfulTunnelActivity,
+            hasOutboundTunnelActivity = hasOutboundTunnelActivity,
             fatalRuntimeMessage = fatalRuntimeMessage,
         )
     }
@@ -61,7 +67,17 @@ internal object TunnelValidationEvidenceClassifier {
         if (tag != "libbox") {
             return false
         }
-        return message.contains("inbound/tun[") && message.contains("inbound connection to") ||
-            message.contains("outbound/") && message.contains("outbound connection to")
+        return message.contains("inbound/tun[") && message.contains("connection to") ||
+            isOutboundTunnelActivityMessage(message)
     }
+
+    private fun isOutboundTunnelActivityEntry(
+        tag: String,
+        message: String,
+    ): Boolean =
+        tag == "libbox" && isOutboundTunnelActivityMessage(message)
+
+    private fun isOutboundTunnelActivityMessage(message: String): Boolean =
+        message.contains("outbound/") && message.contains("outbound connection to") ||
+            message.contains("endpoint/wireguard[") && message.contains("received handshake response")
 }

@@ -113,10 +113,16 @@ internal class LibboxReflection(
         ) { _, method, args ->
             when (method.name) {
                 "autoDetectInterfaceControl" -> {
-                    host.protectSocket(args?.firstOrNull() as Int)
+                    val fd = args?.firstOrNull() as Int
+                    if (host.protectSocket(fd)) {
+                        defaultNetworkMonitor.bindSocketToDefaultNetwork(fd)
+                    } else {
+                        diagnosticsLogger.record("libbox", "protect upstream socket failed")
+                    }
                     Unit
                 }
                 "clearDNSCache" -> Unit
+                "closeNeighborMonitor" -> Unit
                 "closeDefaultInterfaceMonitor" -> {
                     defaultNetworkMonitor.setListener(null)
                     Unit
@@ -136,10 +142,12 @@ internal class LibboxReflection(
                 }
                 "openTun" -> openTun(host, args?.firstOrNull() ?: error("tun options missing"))
                 "readWIFIState" -> readWifiState()
+                "registerMyInterface" -> Unit
                 "sendNotification" -> {
                     logNotification(args?.firstOrNull())
                     Unit
                 }
+                "startNeighborMonitor" -> Unit
                 "startDefaultInterfaceMonitor" -> {
                     defaultNetworkMonitor.setListener(args?.firstOrNull())
                     Unit
@@ -266,6 +274,21 @@ internal class LibboxReflection(
         return items
     }
 
+    fun collectStringBoxOrIterator(value: Any?): List<String> {
+        if (value == null) {
+            return emptyList()
+        }
+        val methodNames = value.javaClass.methods.map { it.name }.toSet()
+        if ("hasNext" in methodNames && "next" in methodNames) {
+            return collectStrings(value)
+        }
+        return listOfNotNull(
+            runCatching { call(value, "getValue")?.toString() }
+                .getOrNull()
+                ?: value.toString(),
+        ).filter(String::isNotBlank)
+    }
+
     fun forEachRoutePrefix(
         iterator: Any?,
         block: (ReflectedRoutePrefix) -> Unit,
@@ -325,7 +348,10 @@ internal class LibboxReflection(
     private fun readWifiState(): Any? {
         val wifi = appContext.getSystemService<WifiManager>() ?: return null
         @Suppress("DEPRECATION")
-        val info = wifi.connectionInfo ?: return null
+        val info =
+            runCatching { wifi.connectionInfo }
+                .getOrNull()
+                ?: return null
         var ssid = info.ssid.orEmpty()
         if (ssid == "<unknown ssid>") {
             ssid = ""

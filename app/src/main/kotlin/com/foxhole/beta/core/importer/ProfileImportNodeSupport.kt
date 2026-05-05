@@ -2,6 +2,7 @@ package com.foxhole.beta.core.importer
 
 import com.foxhole.beta.core.model.ProtocolHint
 import com.foxhole.beta.core.network.RemoteHostResolver
+import com.foxhole.beta.core.network.requirePublicRemoteHost
 import com.foxhole.beta.vpn.FOXHOLE_RUNTIME_LOG_LEVEL
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -348,6 +349,12 @@ internal fun parseWireGuardConfig(
     validateOutboundHost(host, allowPrivateOutboundHosts)
     val port = remoteEndpoint.port ?: 51820
     val localAddress = interfaceSection["Address"]?.flatMap { it.split(',') }?.map(String::trim).orEmpty()
+    val dnsServers =
+        interfaceSection["DNS"]
+            ?.flatMap { it.split(',') }
+            ?.map(String::trim)
+            ?.filter(String::isNotBlank)
+            .orEmpty()
     val allowedIps =
         filterWireGuardAllowedIpsForLocalAddresses(
             allowedIps = peerSection["AllowedIPs"]?.flatMap { it.split(',') }?.map(String::trim).orEmpty(),
@@ -387,7 +394,13 @@ internal fun parseWireGuardConfig(
                 )
             }
         }
-    return ProxyNode(displayName, ProtocolHint.WIREGUARD, outbound = null, endpoint = wireGuardEndpoint)
+    return ProxyNode(
+        displayName = displayName,
+        protocolHint = ProtocolHint.WIREGUARD,
+        outbound = null,
+        endpoint = wireGuardEndpoint,
+        dnsServers = dnsServers,
+    )
 }
 
 internal fun filterWireGuardAllowedIpsForLocalAddresses(
@@ -419,10 +432,31 @@ internal fun buildConfigFromNodes(
         endpoints = JsonArray(nodes.mapNotNull { it.endpoint }),
         proxyTags = nodes.map { it.tag },
         tunAddresses = tunAddressesForProxyNodes(nodes),
+        wireGuardDnsServers = allowedWireGuardDnsServers(nodes, allowPrivateOutboundHosts),
     )
     requireAllowedRemoteHosts(normalizedConfig, allowPrivateOutboundHosts)
     return json.encodeToString(JsonObject.serializer(), normalizedConfig)
 }
+
+private fun allowedWireGuardDnsServers(
+    nodes: List<ProxyNode>,
+    allowPrivateOutboundHosts: Boolean,
+): List<String> =
+    nodes
+        .asSequence()
+        .filter { it.protocolHint == ProtocolHint.WIREGUARD }
+        .flatMap { it.dnsServers.asSequence() }
+        .map(String::trim)
+        .filter(String::isNotBlank)
+        .distinct()
+        .filter { server ->
+            allowPrivateOutboundHosts ||
+                runCatching {
+                    parseRemoteEndpoint(server, defaultPort = 53)
+                        .host
+                        .requirePublicRemoteHost(resolveHost = true, resolver = remoteHostResolver)
+                }.isSuccess
+        }.toList()
 
 internal fun parseWireGuardReserved(value: String?): JsonArray? {
     val normalized = value?.trim()?.takeIf(String::isNotBlank) ?: return null
@@ -447,6 +481,7 @@ internal fun buildBaseConfig(
     tunAddresses: List<String> = DEFAULT_TUN_ADDRESSES,
     routeOverride: JsonObject? = null,
     dnsOverride: JsonObject? = null,
+    wireGuardDnsServers: List<String> = emptyList(),
 ): JsonObject {
     require(proxyTags.isNotEmpty()) { "empty proxy tag list" }
     return buildJsonObject {
@@ -482,6 +517,9 @@ internal fun buildBaseConfig(
                                 put("detour", "proxy")
                             },
                         )
+                        wireGuardDnsServers.firstOrNull()?.let { server ->
+                            add(wireGuardDnsServer(server))
+                        }
                     },
                 )
                 put("strategy", "prefer_ipv4")
@@ -573,6 +611,17 @@ internal fun buildBaseConfig(
     }
 }
 
+private fun wireGuardDnsServer(server: String): JsonObject {
+    val endpoint = parseRemoteEndpoint(server, defaultPort = 53)
+    return buildJsonObject {
+        put("tag", WIREGUARD_DNS_TAG)
+        put("type", "udp")
+        put("server", endpoint.host)
+        put("server_port", endpoint.port ?: 53)
+        put("detour", "proxy")
+    }
+}
+
 internal fun tunAddressesForProxyNodes(nodes: List<ProxyNode>): List<String> {
     val endpoints = nodes.mapNotNull { it.endpoint }
     if (endpoints.isEmpty() || nodes.any { it.outbound != null }) {
@@ -601,6 +650,7 @@ private fun JsonObject.stringValues(key: String): List<String> =
 
 private val DEFAULT_TUN_ADDRESSES = listOf("172.19.0.1/30", "fdfe:dcba:9876::1/126")
 private val IPV4_ONLY_TUN_ADDRESSES = listOf("172.19.0.1/30")
+private val WIREGUARD_DNS_TAG = "dns-wireguard"
 
 internal fun buildTls(
     query: Map<String, String>,

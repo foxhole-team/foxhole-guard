@@ -88,12 +88,19 @@ class RuntimeConfigAssemblerTest {
     }
 
     @Test
-    fun `default settings keep local surfaces disabled`() {
+    fun `default settings expose loopback proxy for runtime owned refresh only`() {
         val config = parse(assembler.assemble(baseConfigWithRules("profile.example"), Settings(), null))
+        val inbounds = config["inbounds"]!!.jsonArray.map { it.jsonObject }
 
-        assertEquals(1, config["inbounds"]!!.jsonArray.size)
+        assertEquals(2, inbounds.size)
         assertEquals(FOXHOLE_RUNTIME_LOG_LEVEL, config["log"]!!.jsonObject["level"]!!.jsonPrimitive.content)
-        assertEquals("true", config["inbounds"]!!.jsonArray[0].jsonObject["sniff"]!!.jsonPrimitive.content)
+        assertFalse(inbounds[0].containsKey("sniff"))
+        assertEquals("tun", inbounds[0]["type"]!!.jsonPrimitive.content)
+        assertEquals("mixed", inbounds[1]["type"]!!.jsonPrimitive.content)
+        assertEquals("foxhole-runtime-proxy-in", inbounds[1]["tag"]!!.jsonPrimitive.content)
+        assertEquals("127.0.0.1", inbounds[1]["listen"]!!.jsonPrimitive.content)
+        assertFalse(inbounds[1].containsKey("users"))
+        assertSniffRule(config["route"]!!.jsonObject["rules"]!!.jsonArray[0].jsonObject)
         assertFalse(config.containsKey("experimental"))
     }
 
@@ -212,11 +219,319 @@ class RuntimeConfigAssemblerTest {
         val tunInbound = config["inbounds"]!!.jsonArray.first().jsonObject
         val rules = config["route"]!!.jsonObject["rules"]!!.jsonArray
 
-        assertEquals(1, config["inbounds"]!!.jsonArray.size)
+        assertEquals(2, config["inbounds"]!!.jsonArray.size)
         assertEquals("com.example.app", tunInbound["include_package"]!!.jsonArray[0].jsonPrimitive.content)
         assertFalse(tunInbound.containsKey("exclude_package"))
         assertTrue(rules.none { rule -> rule.jsonObject.containsKey("package_name") })
         assertEquals("proxy", config["route"]!!.jsonObject["final"]!!.jsonPrimitive.content)
+    }
+
+    @Test
+    fun `wireguard endpoint mtu caps android tun mtu`() {
+        val base = parse(baseConfigWithRules("profile.example"))
+        val config =
+            parse(
+                assembler.assemble(
+                    buildJsonObject {
+                        base.forEach { (key, value) -> put(key, value) }
+                        put(
+                            "endpoints",
+                            buildJsonArray {
+                                add(
+                                    buildJsonObject {
+                                        put("type", "wireguard")
+                                        put("tag", "wireguard-direct")
+                                        put("mtu", 1280)
+                                    },
+                                )
+                            },
+                        )
+                    }.toString(),
+                    Settings(),
+                    null,
+                ),
+            )
+
+        val tunInbound = config["inbounds"]!!.jsonArray.first().jsonObject
+        assertEquals(1280, tunInbound["mtu"]!!.jsonPrimitive.content.toInt())
+    }
+
+    @Test
+    fun `wireguard endpoint mtu does not raise lower configured tun mtu`() {
+        val base = parse(baseConfigWithRules("profile.example"))
+        val config =
+            parse(
+                assembler.assemble(
+                    buildJsonObject {
+                        base.forEach { (key, value) -> put(key, value) }
+                        put(
+                            "endpoints",
+                            buildJsonArray {
+                                add(
+                                    buildJsonObject {
+                                        put("type", "wireguard")
+                                        put("tag", "wireguard-direct")
+                                        put("mtu", 1420)
+                                    },
+                                )
+                            },
+                        )
+                    }.toString(),
+                    Settings(traffic = com.foxhole.beta.core.model.TrafficSettings(mtu = 1280)),
+                    null,
+                ),
+            )
+
+        val tunInbound = config["inbounds"]!!.jsonArray.first().jsonObject
+        assertEquals(1280, tunInbound["mtu"]!!.jsonPrimitive.content.toInt())
+    }
+
+    @Test
+    fun `wireguard endpoint mtu is ignored for non wireguard endpoints`() {
+        val base = parse(baseConfigWithRules("profile.example"))
+        val config =
+            parse(
+                assembler.assemble(
+                    buildJsonObject {
+                        base.forEach { (key, value) -> put(key, value) }
+                        put(
+                            "endpoints",
+                            buildJsonArray {
+                                add(
+                                    buildJsonObject {
+                                        put("type", "other")
+                                        put("tag", "other-direct")
+                                        put("mtu", 1280)
+                                    },
+                                )
+                            },
+                        )
+                    }.toString(),
+                    Settings(),
+                    null,
+                ),
+            )
+
+        val tunInbound = config["inbounds"]!!.jsonArray.first().jsonObject
+        assertEquals(1500, tunInbound["mtu"]!!.jsonPrimitive.content.toInt())
+    }
+
+    @Test
+    fun `wireguard endpoint mtu chooses the lowest endpoint mtu`() {
+        val base = parse(baseConfigWithRules("profile.example"))
+        val config =
+            parse(
+                assembler.assemble(
+                    buildJsonObject {
+                        base.forEach { (key, value) -> put(key, value) }
+                        put(
+                            "endpoints",
+                            buildJsonArray {
+                                add(
+                                    buildJsonObject {
+                                        put("type", "wireguard")
+                                        put("tag", "wireguard-direct-a")
+                                        put("mtu", 1420)
+                                    },
+                                )
+                                add(
+                                    buildJsonObject {
+                                        put("type", "wireguard")
+                                        put("tag", "wireguard-direct-b")
+                                        put("mtu", 1280)
+                                    },
+                                )
+                            },
+                        )
+                    }.toString(),
+                    Settings(),
+                    null,
+                ),
+            )
+
+        val tunInbound = config["inbounds"]!!.jsonArray.first().jsonObject
+        assertEquals(1280, tunInbound["mtu"]!!.jsonPrimitive.content.toInt())
+    }
+
+    @Test
+    fun `wireguard endpoint mtu ignores unparsable values`() {
+        val base = parse(baseConfigWithRules("profile.example"))
+        val config =
+            parse(
+                assembler.assemble(
+                    buildJsonObject {
+                        base.forEach { (key, value) -> put(key, value) }
+                        put(
+                            "endpoints",
+                            buildJsonArray {
+                                add(
+                                    buildJsonObject {
+                                        put("type", "wireguard")
+                                        put("tag", "wireguard-direct")
+                                        put("mtu", "bad")
+                                    },
+                                )
+                            },
+                        )
+                    }.toString(),
+                    Settings(),
+                    null,
+                ),
+            )
+
+        val tunInbound = config["inbounds"]!!.jsonArray.first().jsonObject
+        assertEquals(1500, tunInbound["mtu"]!!.jsonPrimitive.content.toInt())
+    }
+
+    @Test
+    fun `wireguard endpoint mtu accepts numeric string values`() {
+        val base = parse(baseConfigWithRules("profile.example"))
+        val config =
+            parse(
+                assembler.assemble(
+                    buildJsonObject {
+                        base.forEach { (key, value) -> put(key, value) }
+                        put(
+                            "endpoints",
+                            buildJsonArray {
+                                add(
+                                    buildJsonObject {
+                                        put("type", "wireguard")
+                                        put("tag", "wireguard-direct")
+                                        put("mtu", "1280")
+                                    },
+                                )
+                            },
+                        )
+                    }.toString(),
+                    Settings(),
+                    null,
+                ),
+            )
+
+        val tunInbound = config["inbounds"]!!.jsonArray.first().jsonObject
+        assertEquals(1280, tunInbound["mtu"]!!.jsonPrimitive.content.toInt())
+    }
+
+    @Test
+    fun `wireguard endpoint mtu keeps configured tun mtu when missing`() {
+        val base = parse(baseConfigWithRules("profile.example"))
+        val config =
+            parse(
+                assembler.assemble(
+                    buildJsonObject {
+                        base.forEach { (key, value) -> put(key, value) }
+                        put(
+                            "endpoints",
+                            buildJsonArray {
+                                add(
+                                    buildJsonObject {
+                                        put("type", "wireguard")
+                                        put("tag", "wireguard-direct")
+                                    },
+                                )
+                            },
+                        )
+                    }.toString(),
+                    Settings(),
+                    null,
+                ),
+            )
+
+        val tunInbound = config["inbounds"]!!.jsonArray.first().jsonObject
+        assertEquals(1500, tunInbound["mtu"]!!.jsonPrimitive.content.toInt())
+    }
+
+    @Test
+    fun `wireguard endpoint mtu handles uppercase type`() {
+        val base = parse(baseConfigWithRules("profile.example"))
+        val config =
+            parse(
+                assembler.assemble(
+                    buildJsonObject {
+                        base.forEach { (key, value) -> put(key, value) }
+                        put(
+                            "endpoints",
+                            buildJsonArray {
+                                add(
+                                    buildJsonObject {
+                                        put("type", "WireGuard")
+                                        put("tag", "wireguard-direct")
+                                        put("mtu", 1280)
+                                    },
+                                )
+                            },
+                        )
+                    }.toString(),
+                    Settings(),
+                    null,
+                ),
+            )
+
+        val tunInbound = config["inbounds"]!!.jsonArray.first().jsonObject
+        assertEquals(1280, tunInbound["mtu"]!!.jsonPrimitive.content.toInt())
+    }
+
+    @Test
+    fun `wireguard endpoint mtu keeps configured tun mtu without endpoints`() {
+        val config = parse(assembler.assemble(baseConfigWithRules("profile.example"), Settings(), null))
+
+        val tunInbound = config["inbounds"]!!.jsonArray.first().jsonObject
+        assertEquals(1500, tunInbound["mtu"]!!.jsonPrimitive.content.toInt())
+    }
+
+    @Test
+    fun `wireguard selected uses local resolver while preserving imported wireguard dns`() {
+        val config =
+            parse(
+                assembler.assemble(
+                    baseConfigWithWireGuardDns(selectedDefault = "wireguard-direct"),
+                    Settings(),
+                    null,
+                ),
+            )
+        val dns = config["dns"]!!.jsonObject
+        val wireGuardDns =
+            dns["servers"]!!
+                .jsonArray
+                .first { server -> server.jsonObject["tag"]!!.jsonPrimitive.content == "dns-wireguard" }
+                .jsonObject
+
+        assertEquals("dns-direct", dns["final"]!!.jsonPrimitive.content)
+        assertEquals("udp", wireGuardDns["type"]!!.jsonPrimitive.content)
+        assertEquals("1.1.1.1", wireGuardDns["server"]!!.jsonPrimitive.content)
+        assertEquals("53", wireGuardDns["server_port"]!!.jsonPrimitive.content)
+        assertEquals("proxy", wireGuardDns["detour"]!!.jsonPrimitive.content)
+    }
+
+    @Test
+    fun `non wireguard selected keeps proxied doh final with imported wireguard dns present`() {
+        val config =
+            parse(
+                assembler.assemble(
+                    baseConfigWithWireGuardDns(selectedDefault = "vless-direct"),
+                    Settings(),
+                    null,
+                ),
+            )
+        val dns = config["dns"]!!.jsonObject
+        val servers = dns["servers"]!!.jsonArray.map { it.jsonObject["tag"]!!.jsonPrimitive.content }
+
+        assertEquals("dns-remote", dns["final"]!!.jsonPrimitive.content)
+        assertTrue(servers.contains("dns-wireguard"))
+    }
+
+
+    @Test
+    fun `tunnel mode preserves platform http proxy settings`() {
+        val config = parse(assembler.assemble(baseConfigWithPlatformHttpProxy(), Settings(), null))
+        val tunInbound = config["inbounds"]!!.jsonArray.first().jsonObject
+        val httpProxy = tunInbound["platform"]!!.jsonObject["http_proxy"]!!.jsonObject
+
+        assertEquals("true", httpProxy["enabled"]!!.jsonPrimitive.content)
+        assertEquals("127.0.0.1", httpProxy["server"]!!.jsonPrimitive.content)
+        assertEquals("10809", httpProxy["server_port"]!!.jsonPrimitive.content)
+        assertFalse(httpProxy["server_port"]!!.jsonPrimitive.isString)
     }
 
     @Test
@@ -973,8 +1288,8 @@ class RuntimeConfigAssemblerTest {
         val tunInbound = config["inbounds"]!!.jsonArray.first().jsonObject
         val rules = config["route"]!!.jsonObject["rules"]!!.jsonArray
 
-        assertEquals("true", tunInbound["sniff"]!!.jsonPrimitive.content)
-        assertEquals("false", tunInbound["sniff_override_destination"]!!.jsonPrimitive.content)
+        assertFalse(tunInbound.containsKey("sniff"))
+        assertFalse(tunInbound.containsKey("sniff_override_destination"))
         assertEquals("sniff", rules[0].jsonObject["action"]!!.jsonPrimitive.content)
         assertPortDnsHijack(rules[1].jsonObject)
         assertProtocolDnsHijack(rules[2].jsonObject)
@@ -1076,6 +1391,120 @@ class RuntimeConfigAssemblerTest {
                 put("final", "proxy")
             })
         }.toString()
+
+    private fun baseConfigWithPlatformHttpProxy(): String {
+        val base = parse(baseConfigWithRules("profile.example"))
+        val sourceTun = base["inbounds"]!!.jsonArray.first().jsonObject
+        val patchedTun =
+            buildJsonObject {
+                sourceTun.forEach { (key, value) -> put(key, value) }
+                put(
+                    "platform",
+                    buildJsonObject {
+                        put(
+                            "http_proxy",
+                            buildJsonObject {
+                                put("enabled", true)
+                                put("server", "127.0.0.1")
+                                put("server_port", 10809)
+                            },
+                        )
+                    },
+                )
+            }
+        return buildJsonObject {
+            base.forEach { (key, value) ->
+                if (key == "inbounds") {
+                    put("inbounds", buildJsonArray { add(patchedTun) })
+                } else {
+                    put(key, value)
+                }
+            }
+        }.toString()
+    }
+
+    private fun baseConfigWithWireGuardDns(selectedDefault: String): String {
+        val base = parse(baseConfigWithRules("profile.example"))
+        return buildJsonObject {
+            put("inbounds", base["inbounds"]!!)
+            put(
+                "endpoints",
+                buildJsonArray {
+                    add(
+                        buildJsonObject {
+                            put("type", "wireguard")
+                            put("tag", "wireguard-direct")
+                            put("mtu", 1280)
+                        },
+                    )
+                },
+            )
+            put(
+                "outbounds",
+                buildJsonArray {
+                    add(
+                        buildJsonObject {
+                            put("type", "vless")
+                            put("tag", "vless-direct")
+                            put("server", "edge.example")
+                            put("server_port", 443)
+                            put("uuid", "11111111-1111-1111-1111-111111111111")
+                        },
+                    )
+                    add(
+                        buildJsonObject {
+                            put("type", "selector")
+                            put("tag", "proxy")
+                            put("default", selectedDefault)
+                            put(
+                                "outbounds",
+                                buildJsonArray {
+                                    add(JsonPrimitive("vless-direct"))
+                                    add(JsonPrimitive("wireguard-direct"))
+                                },
+                            )
+                        },
+                    )
+                    add(buildJsonObject { put("type", "direct"); put("tag", "direct") })
+                    add(buildJsonObject { put("type", "block"); put("tag", "block") })
+                },
+            )
+            put(
+                "dns",
+                buildJsonObject {
+                    put(
+                        "servers",
+                        buildJsonArray {
+                            add(buildJsonObject { put("tag", "dns-local"); put("type", "local") })
+                            add(buildJsonObject { put("tag", "dns-direct"); put("type", "local") })
+                            add(
+                                buildJsonObject {
+                                    put("tag", "dns-remote")
+                                    put("type", "https")
+                                    put("server", "1.1.1.1")
+                                    put("server_port", 443)
+                                    put("path", "/dns-query")
+                                    put("detour", "proxy")
+                                },
+                            )
+                            add(
+                                buildJsonObject {
+                                    put("tag", "dns-wireguard")
+                                    put("type", "udp")
+                                    put("server", "1.1.1.1")
+                                    put("server_port", 53)
+                                    put("detour", "proxy")
+                                },
+                            )
+                        },
+                    )
+                    put("strategy", "prefer_ipv4")
+                    put("final", "dns-remote")
+                },
+            )
+            put("route", base["route"]!!)
+        }.toString()
+    }
 
     private fun baseConfigWithOutbounds(outbounds: JsonArray): String =
         buildJsonObject {

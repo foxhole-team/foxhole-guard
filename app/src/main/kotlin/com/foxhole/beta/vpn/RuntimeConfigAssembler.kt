@@ -105,14 +105,21 @@ class RuntimeConfigAssembler(
     ): String {
         val tunInbound = base["inbounds"]?.jsonArray?.firstOrNull { it.jsonObject["type"]?.jsonPrimitive?.content == "tun" }?.jsonObject
             ?: error("base config must define a tun inbound")
-        val patchedTun = patchTunInbound(tunInbound, settings.traffic, settings.expert)
+        val runtimeBase = base.withTcpReliabilityOutbounds()
+        val patchedTun =
+            patchTunInbound(
+                tunInbound = tunInbound,
+                traffic = settings.traffic,
+                expert = settings.expert,
+                mtu = effectiveTunMtu(runtimeBase, settings.traffic.mtu),
+            )
         val inbounds =
             buildJsonArray {
                 add(patchedTun)
+                add(runtimeLoopbackProxyInbound(settings.expert.localSurfaces))
                 buildLocalSurfaceInbounds(settings.expert.localSurfaces, includeLocalProxy = false).forEach(::add)
             }
-        val runtimeBase = base.withTcpReliabilityOutbounds()
-        val patchedDns = patchDns(runtimeBase["dns"]?.jsonObject, settings.traffic, privateDnsMode)
+        val patchedDns = patchDns(runtimeBase["dns"]?.jsonObject, runtimeBase, settings.traffic, privateDnsMode)
         val patchedRoute = patchRoute(runtimeBase["route"]?.jsonObject, patchedDns, activePreset, settings.expert)
         val patchedExperimental =
             patchExperimental(
@@ -160,7 +167,7 @@ class RuntimeConfigAssembler(
                 buildLocalSurfaceInbounds(localSurfaces, includeLocalProxy = true).forEach(::add)
             }
         val runtimeBase = base.withTcpReliabilityOutbounds()
-        val patchedDns = patchDns(runtimeBase["dns"]?.jsonObject, settings.traffic)
+        val patchedDns = patchDns(runtimeBase["dns"]?.jsonObject, runtimeBase, settings.traffic)
         val patchedRoute = patchProxyRoute(runtimeBase["route"]?.jsonObject, patchedDns, activePreset, settings.expert)
         val patchedExperimental = patchExperimental(runtimeBase["experimental"]?.jsonObject, localSurfaces)
 
@@ -293,20 +300,26 @@ class RuntimeConfigAssembler(
         tunInbound: JsonObject,
         traffic: TrafficSettings,
         expert: ExpertSettings,
+        mtu: Int,
     ): JsonObject {
         val includePackages = expert.vpnIncludedPackages()
         val excludePackages = expert.vpnExcludedPackages()
         return buildJsonObject {
             tunInbound.forEach { (key, value) ->
                 when (key) {
-                    "mtu" -> put(key, traffic.mtu)
+                    "mtu" -> put(key, mtu)
                     "stack" -> put(key, traffic.tunStack.configValue)
                     "strict_route" -> put(key, expert.strictRoute)
-                    "sniff", "sniff_override_destination", "include_package", "exclude_package" -> Unit
+                    "sniff",
+                    "sniff_override_destination",
+                    "sniff_timeout",
+                    "domain_strategy",
+                    "include_package",
+                    "exclude_package" -> Unit
                     else -> put(key, value)
                 }
             }
-            put("mtu", traffic.mtu)
+            put("mtu", mtu)
             put("stack", traffic.tunStack.configValue)
             put("strict_route", expert.strictRoute)
             when {
@@ -319,11 +332,22 @@ class RuntimeConfigAssembler(
                         excludePackages.forEach { add(JsonPrimitive(it)) }
                     }
             }
-            if (expert.sniff) {
-                put("sniff", true)
-                put("sniff_override_destination", !expert.routeOnly)
-            }
         }
+    }
+
+    private fun effectiveTunMtu(
+        base: JsonObject,
+        configuredMtu: Int,
+    ): Int {
+        val wireGuardMtu =
+            base["endpoints"]
+                ?.jsonArray
+                .orEmpty()
+                .map { it.jsonObject }
+                .filter { endpoint -> endpoint["type"]?.jsonPrimitive?.contentOrNull.equals("wireguard", ignoreCase = true) }
+                .mapNotNull { endpoint -> endpoint["mtu"]?.jsonPrimitive?.contentOrNull?.toIntOrNull() }
+                .minOrNull()
+        return wireGuardMtu?.let { minOf(configuredMtu, it) } ?: configuredMtu
     }
 
     private fun localGuardTunInbound(
@@ -349,10 +373,6 @@ class RuntimeConfigAssembler(
                         packages.forEach { add(JsonPrimitive(it)) }
                     }
                 }
-            }
-            if (mode == LocalGuardMode.JOURNAL && settings.expert.sniff) {
-                put("sniff", true)
-                put("sniff_override_destination", !settings.expert.routeOnly)
             }
         }
 
@@ -412,6 +432,7 @@ class RuntimeConfigAssembler(
 
     private fun patchDns(
         existing: JsonObject?,
+        base: JsonObject,
         traffic: TrafficSettings,
         privateDnsMode: PrivateDnsMode? = null,
     ): JsonObject {
@@ -420,9 +441,20 @@ class RuntimeConfigAssembler(
                 traffic.preferIpv6 && traffic.domainStrategy == com.foxhole.beta.core.model.DomainStrategy.PREFER_IPV4 ->
                     com.foxhole.beta.core.model.DomainStrategy.PREFER_IPV6
                 else -> traffic.domainStrategy
-            }
+        }
         if (existing == null || !existing.hasDnsServers() || isFoxholeManagedDns(existing)) {
-            return buildFoxholeDnsConfig(effectiveStrategy.configValue, privateDnsMode)
+            val wireGuardDnsServers = wireGuardDnsServers(existing)
+            return buildFoxholeDnsConfig(
+                strategy = effectiveStrategy.configValue,
+                privateDnsMode = privateDnsMode,
+                extraServers = wireGuardDnsServers,
+                finalTag =
+                    if (selectedProxyEndpointType(base).equals("wireguard", ignoreCase = true)) {
+                        DNS_DIRECT_TAG
+                    } else {
+                        DNS_REMOTE_TAG
+                    },
+            )
         }
         val source = existing
         return buildJsonObject {
@@ -603,6 +635,17 @@ class RuntimeConfigAssembler(
                 )
             }
         }
+
+    private fun runtimeLoopbackProxyInbound(localSurfaces: LocalSurfaceSettings): JsonObject {
+        val localSurface = localSurfaces.proxySurface()
+        return proxyInbound(
+            type = ProxySurfaceMode.ALL.inboundType,
+            tag = "foxhole-runtime-proxy-in",
+            listenHost = localSurface.host,
+            port = localSurface.port,
+            auth = LocalAuthSettings(enabled = false),
+        )
+    }
 
     private fun proxyInbound(
         type: String,
@@ -835,6 +878,8 @@ class RuntimeConfigAssembler(
     private fun buildFoxholeDnsConfig(
         strategy: String,
         privateDnsMode: PrivateDnsMode?,
+        extraServers: List<JsonObject> = emptyList(),
+        finalTag: String = DNS_REMOTE_TAG,
     ): JsonObject =
         buildJsonObject {
             put(
@@ -852,11 +897,45 @@ class RuntimeConfigAssembler(
                     add(
                         foxholeRemoteDnsServer(privateDnsMode),
                     )
+                    extraServers.forEach(::add)
                 },
             )
             put("strategy", strategy)
-            put("final", DNS_REMOTE_TAG)
+            put("final", finalTag)
         }
+
+    private fun wireGuardDnsServers(dns: JsonObject?): List<JsonObject> =
+        dns
+            ?.get("servers")
+            ?.jsonArray
+            ?.map { it.jsonObject }
+            ?.filter { server -> server["tag"]?.jsonPrimitive?.contentOrNull == WIREGUARD_DNS_TAG }
+            .orEmpty()
+
+    private fun selectedProxyEndpointType(base: JsonObject): String? {
+        val selectedTag = selectedProxyTag(base) ?: return null
+        return base["endpoints"]
+            ?.jsonArray
+            ?.map { it.jsonObject }
+            ?.firstOrNull { endpoint -> endpoint["tag"]?.jsonPrimitive?.contentOrNull == selectedTag }
+            ?.get("type")
+            ?.jsonPrimitive
+            ?.contentOrNull
+    }
+
+    private fun selectedProxyTag(base: JsonObject): String? {
+        val selector =
+            base["outbounds"]
+                ?.jsonArray
+                ?.map { it.jsonObject }
+                ?.firstOrNull { outbound ->
+                    outbound["type"]?.jsonPrimitive?.contentOrNull == "selector" &&
+                        outbound["tag"]?.jsonPrimitive?.contentOrNull == "proxy"
+                }
+                ?: return null
+        return selector["default"]?.jsonPrimitive?.contentOrNull
+            ?: selector["outbounds"]?.jsonArray?.firstOrNull()?.jsonPrimitive?.contentOrNull
+    }
 
     private fun foxholeDirectDnsServer(): JsonObject =
         buildJsonObject {
@@ -1026,6 +1105,7 @@ class RuntimeConfigAssembler(
         const val DNS_LOCAL_TAG = "dns-local"
         const val DNS_DIRECT_TAG = "dns-direct"
         const val DNS_REMOTE_TAG = "dns-remote"
+        const val WIREGUARD_DNS_TAG = "dns-wireguard"
         const val FOXHOLE_REMOTE_DNS_SERVER = "1.1.1.1"
         const val FOXHOLE_DOH_ADDRESS = "https://1.1.1.1/dns-query"
         const val MOBILE_TCP_KEEP_ALIVE = "30s"

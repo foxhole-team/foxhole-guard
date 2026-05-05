@@ -8,6 +8,7 @@ import android.net.LinkProperties
 import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.NetworkRequest
+import android.net.ProxyInfo
 import android.net.VpnService
 import android.os.Build
 import android.os.Handler
@@ -21,6 +22,7 @@ import com.foxhole.beta.core.diagnostics.DiagnosticSanitizer
 import com.foxhole.beta.core.diagnostics.DiagnosticsLogger
 import com.foxhole.beta.core.model.VpnSession
 import java.net.InetAddress
+import java.net.NetworkInterface
 
 internal fun createVpnRuntime(
     context: Context,
@@ -190,10 +192,11 @@ private class ReflectiveLibboxRuntime(
         }
 
         if (reflection.callBoolean(tunOptions, "getAutoRoute")) {
-            val fallbackDnsServerAddress =
-                reflection.call(reflection.call(tunOptions, "getDNSServerAddress"), "getValue")
-                    ?.toString()
-                    ?.takeIf { it.isNotBlank() }
+            val fallbackDnsServerAddresses =
+                reflection.collectStringBoxOrIterator(
+                    reflection.call(tunOptions, "getDNSServerAddress"),
+                )
+            val fallbackDnsServerAddress = fallbackDnsServerAddresses.firstOrNull()
             val remoteDnsServers = VpnDnsServerSelector.remoteDnsServerAddresses(currentConfig)
             val advertisedDnsServers =
                 VpnDnsServerSelector.advertisedDnsServerAddresses(
@@ -204,7 +207,7 @@ private class ReflectiveLibboxRuntime(
             diagnosticsLogger.recordStructured(
                 "dns",
                 "VPN DNS selection",
-                "fallback=${fallbackDnsServerAddress.orEmpty()}",
+                "fallback=${fallbackDnsServerAddresses.joinToString()}",
                 "advertised=${advertisedDnsServers.joinToString()}",
                 "remote=${remoteDnsServers.joinToString()}",
             )
@@ -234,10 +237,49 @@ private class ReflectiveLibboxRuntime(
             }
         }
 
+        addHttpProxy(builder, tunOptions)
+
         val pfd = builder.establish() ?: error("android: vpn establish failed")
         fileDescriptor?.close()
         fileDescriptor = pfd
         return pfd.fd
+    }
+
+    private fun addHttpProxy(
+        builder: VpnService.Builder,
+        tunOptions: Any,
+    ) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+            return
+        }
+        val enabled =
+            runCatching { reflection.callBoolean(tunOptions, "isHTTPProxyEnabled") }
+                .getOrElse { return }
+        if (!enabled) {
+            return
+        }
+        val server =
+            runCatching { reflection.call(tunOptions, "getHTTPProxyServer")?.toString()?.trim() }
+                .getOrNull()
+                ?.takeIf(String::isNotBlank)
+        val port =
+            runCatching { reflection.callInt(tunOptions, "getHTTPProxyServerPort") }
+                .getOrDefault(0)
+        if (server == null || port !in 1..65535) {
+            diagnosticsLogger.record("libbox", "vpn http proxy skipped: invalid endpoint")
+            return
+        }
+        val bypassDomains =
+            runCatching { reflection.collectStrings(reflection.call(tunOptions, "getHTTPProxyBypassDomain")) }
+                .getOrDefault(emptyList())
+        builder.setHttpProxy(ProxyInfo.buildDirectProxy(server, port, bypassDomains))
+        diagnosticsLogger.recordStructured(
+            "libbox",
+            "VPN HTTP proxy configured",
+            "server=${DiagnosticSanitizer.sanitize(server)}",
+            "port=$port",
+            "bypass=${bypassDomains.size}",
+        )
     }
 
     @RequiresApi(Build.VERSION_CODES.TIRAMISU)
@@ -393,6 +435,28 @@ internal class DefaultNetworkMonitor(
         return preferredNetwork() ?: error("android: missing default network")
     }
 
+    fun bindSocketToDefaultNetwork(fd: Int) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
+            return
+        }
+        val network =
+            runCatching { requireNetwork() }
+                .getOrElse {
+                    diagnosticsLogger.record("libbox", "default network unavailable for socket bind")
+                    return
+                }
+        runCatching {
+            ParcelFileDescriptor.fromFd(fd).use { parcel ->
+                network.bindSocket(parcel.fileDescriptor)
+            }
+        }.onFailure { error ->
+            diagnosticsLogger.record(
+                "libbox",
+                "default network socket bind failed: ${error.javaClass.simpleName}",
+            )
+        }
+    }
+
     fun dispatchListenerUpdate() {
         val listener = listener ?: return
         val network = currentNetwork ?: preferredNetwork()
@@ -402,7 +466,7 @@ internal class DefaultNetworkMonitor(
                     listener,
                     "updateDefaultInterface",
                     "",
-                    reflection.interfaceTypeOther,
+                    -1,
                     false,
                     false,
                 )
@@ -413,13 +477,14 @@ internal class DefaultNetworkMonitor(
         }
         val linkProperties = connectivity.getLinkProperties(network) ?: return
         val capabilities = connectivity.getNetworkCapabilities(network) ?: return
-        val type =
-            when {
-                capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> reflection.interfaceTypeWifi
-                capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> reflection.interfaceTypeCellular
-                capabilities.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) -> reflection.interfaceTypeEthernet
-                else -> reflection.interfaceTypeOther
-            }
+        val interfaceName = linkProperties.interfaceName.orEmpty()
+        val interfaceIndex =
+            runCatching { NetworkInterface.getByName(interfaceName)?.index }
+                .getOrNull()
+        if (interfaceIndex == null) {
+            diagnosticsLogger.record("libbox", "default interface unavailable: $interfaceName")
+            return
+        }
         val isConstrained =
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                 !capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_CONGESTED)
@@ -428,13 +493,13 @@ internal class DefaultNetworkMonitor(
             }
         runCatching {
             reflection.call(
-                listener,
-                "updateDefaultInterface",
-                linkProperties.interfaceName.orEmpty(),
-                type,
-                !capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED),
-                isConstrained,
-            )
+                    listener,
+                    "updateDefaultInterface",
+                    interfaceName,
+                    interfaceIndex,
+                    !capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED),
+                    isConstrained,
+                )
         }.onFailure {
             diagnosticsLogger.record("libbox", "default interface callback failed")
         }

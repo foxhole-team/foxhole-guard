@@ -423,6 +423,7 @@ internal data class ProxyNode(
     val outbound: JsonObject?,
     val endpoint: JsonObject? = null,
     val subscriptionExpiresAt: Long? = null,
+    val dnsServers: List<String> = emptyList(),
 ) {
     val tag: String
         get() =

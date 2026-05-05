@@ -601,18 +601,28 @@ class ProfileImportParserTest {
                 .jsonArray
                 .first()
                 .jsonObject
+        val wireguardConfig = json.parseToJsonElement(wireguardOption.normalizedConfigJson).jsonObject
         val wireguardEndpoint =
-            json.parseToJsonElement(wireguardOption.normalizedConfigJson).jsonObject["endpoints"]!!
+            wireguardConfig["endpoints"]!!
                 .jsonArray
                 .first()
                 .jsonObject
         val wireguardPeer = wireguardEndpoint["peers"]!!.jsonArray.first().jsonObject
+        val wireguardDns =
+            wireguardConfig["dns"]!!
+                .jsonObject["servers"]!!
+                .jsonArray
+                .first { server -> server.jsonObject["tag"]!!.jsonPrimitive.content == "dns-wireguard" }
+                .jsonObject
 
         assertEquals("shadowsocks", outlineOutbound["type"]!!.jsonPrimitive.content)
         assertEquals("outline-direct.example.com", outlineOutbound["server"]!!.jsonPrimitive.content)
         assertEquals("wireguard", wireguardEndpoint["type"]!!.jsonPrimitive.content)
         assertEquals("wg-direct.example.com", wireguardPeer["address"]!!.jsonPrimitive.content)
         assertTrue(wireguardEndpoint.containsKey("address"))
+        assertEquals("udp", wireguardDns["type"]!!.jsonPrimitive.content)
+        assertEquals("1.1.1.1", wireguardDns["server"]!!.jsonPrimitive.content)
+        assertEquals("proxy", wireguardDns["detour"]!!.jsonPrimitive.content)
     }
 
     @Test

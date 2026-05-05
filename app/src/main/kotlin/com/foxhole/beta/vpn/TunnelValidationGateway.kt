@@ -13,6 +13,7 @@ import com.foxhole.beta.core.network.HttpProxyAccess
 import com.foxhole.beta.core.network.IpInfoFetchMode
 import com.foxhole.beta.core.network.IpInfoRepository
 import com.foxhole.beta.core.settings.SettingsRepository
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.StateFlow
 
 internal class TunnelValidationGateway(
@@ -64,6 +65,7 @@ internal class TunnelValidationGateway(
                     endpoint = endpoint,
                     fetchMode = fetchMode,
                     vpnNetwork = vpnNetwork,
+                    proxy = settings.tunnelRuntimeProxyAccess(),
                 )
             else ->
                 fetchDeviceIpInfo(
@@ -114,11 +116,44 @@ internal class TunnelValidationGateway(
         endpoint: String,
         fetchMode: IpInfoFetchMode,
         vpnNetwork: Network,
+        proxy: HttpProxyAccess?,
     ): IpInfo =
-        ipInfoRepository.fetch(
-            endpoint = endpoint,
-            network = tunnelValidationRequestNetwork(vpnNetwork),
-            resolverNetwork = currentUpstreamNetwork(),
-            mode = fetchMode,
-        ).also { diagnosticsLogger.record("ip", "dashboard ip refreshed after vpn network detected") }
+        runCatching {
+            val proxyAccess = proxy ?: error("runtime local proxy unavailable")
+            ipInfoRepository.fetch(
+                endpoint = endpoint,
+                proxy = proxyAccess,
+                resolverNetwork = currentUpstreamNetwork(),
+                mode = fetchMode,
+            )
+        }.getOrElse { proxyError ->
+            val proxyAccess = proxy
+            if (proxyAccess != null) {
+                delay(RUNTIME_PROXY_REFRESH_RETRY_DELAY_MS)
+                runCatching {
+                    ipInfoRepository.fetch(
+                        endpoint = endpoint,
+                        proxy = proxyAccess,
+                        resolverNetwork = currentUpstreamNetwork(),
+                        mode = IpInfoFetchMode.ENTRY_QUICK,
+                    )
+                }.getOrNull()?.let { return it.also { diagnosticsLogger.record("ip", "dashboard ip refreshed after vpn network detected") } }
+            }
+            diagnosticsLogger.record(
+                "ip",
+                "dashboard runtime local proxy refresh failed, retrying vpn-bound path",
+            )
+            runCatching {
+                ipInfoRepository.fetch(
+                    endpoint = endpoint,
+                    network = tunnelValidationRequestNetwork(vpnNetwork),
+                    resolverNetwork = currentUpstreamNetwork(),
+                    mode = fetchMode,
+                )
+            }.getOrElse {
+                throw proxyError
+            }
+        }.also { diagnosticsLogger.record("ip", "dashboard ip refreshed after vpn network detected") }
 }
+
+private const val RUNTIME_PROXY_REFRESH_RETRY_DELAY_MS = 1_000L

@@ -8,7 +8,6 @@ import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import com.foxhole.beta.core.diagnostics.DiagnosticEntry
-import com.foxhole.beta.core.model.DiagnosticsRetention
 import com.foxhole.beta.core.model.ThemeMode
 import com.foxhole.beta.ui.theme.FoxholeTheme
 import org.junit.Assert.assertEquals
@@ -26,16 +25,14 @@ class LiveLogsDialogTest {
         composeRule.setContent {
             FoxholeTheme(themeMode = ThemeMode.LIGHT) {
                 LiveLogsDialog(
+                    title = "Foxhole journal",
                     entries = emptyList(),
-                    networkActivityLoggingEnabled = false,
-                    retention = DiagnosticsRetention.HOURS_24,
                     onDismiss = { dismissed += 1 },
                 )
             }
         }
 
         composeRule.onNodeWithTag(LIVE_LOGS_DIALOG_TAG).assertIsDisplayed()
-        composeRule.onNodeWithTag(LIVE_LOGS_RETENTION_SUMMARY_TAG).assertTextContains("24 hours", substring = true)
         composeRule.onNodeWithTag(LIVE_LOGS_EMPTY_STATE_TAG).assertIsDisplayed()
         composeRule.onAllNodesWithTag(LIVE_LOGS_NETWORK_NOTICE_TAG).assertCountEquals(0)
 
@@ -49,6 +46,7 @@ class LiveLogsDialogTest {
         composeRule.setContent {
             FoxholeTheme(themeMode = ThemeMode.LIGHT) {
                 LiveLogsDialog(
+                    title = "Network activity journal",
                     entries =
                         listOf(
                             DiagnosticEntry(
@@ -57,14 +55,13 @@ class LiveLogsDialogTest {
                                 message = "App connection: app=Chrome • remote=1.1.1.1:443",
                             ),
                         ),
-                    networkActivityLoggingEnabled = true,
-                    retention = DiagnosticsRetention.HOURS_6,
+                    notice = "Network activity is logged only while Foxhole VPN is running.",
                     onDismiss = {},
                 )
             }
         }
 
-        composeRule.onNodeWithTag(LIVE_LOGS_RETENTION_SUMMARY_TAG).assertTextContains("6 hours", substring = true)
+        composeRule.onNodeWithTag(LIVE_LOGS_DIALOG_TAG).assertTextContains("Network activity journal", substring = true)
         composeRule.onNodeWithTag(LIVE_LOGS_NETWORK_NOTICE_TAG).assertIsDisplayed()
         composeRule.onNodeWithTag(LIVE_LOGS_LIST_TAG).assertIsDisplayed()
         composeRule.onAllNodesWithTag(LIVE_LOGS_EMPTY_STATE_TAG).assertCountEquals(0)
