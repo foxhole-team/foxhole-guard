@@ -507,7 +507,7 @@ class RuntimeConfigAssembler(
                         tag = "${localSurfaces.lanProxyMode.inboundTag}-in-lan",
                         listenHost = lanHost,
                         port = lanSurface.port,
-                        auth = localSurfaces.auth,
+                        auth = localSurfaces.lanAuth,
                     ),
                 )
             }

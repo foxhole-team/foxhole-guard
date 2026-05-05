@@ -614,6 +614,8 @@ fun TrafficSettingsScreen(
     onTunStackSelected: (TunStack) -> Unit,
     onLocalProxyAuthEnabledChanged: (Boolean) -> Unit,
     onLocalProxyAuthChanged: (LocalAuthSettings) -> Unit,
+    onLanProxyAuthEnabledChanged: (Boolean) -> Unit,
+    onLanProxyAuthChanged: (LocalAuthSettings) -> Unit,
     onLocalProxyLanAccessChanged: (Boolean) -> Unit,
     onProxySurfaceModeSelected: (ProxySurfaceMode) -> Unit,
     onLanProxySurfaceModeSelected: (ProxySurfaceMode) -> Unit,
@@ -633,9 +635,8 @@ fun TrafficSettingsScreen(
     var tunStackMenuExpanded by rememberSaveable { mutableStateOf(false) }
     var proxySurfaceModeMenuExpanded by rememberSaveable { mutableStateOf(false) }
     var lanProxySurfaceModeMenuExpanded by rememberSaveable { mutableStateOf(false) }
-    var socksDialog by rememberSaveable { mutableStateOf(false) }
-    var httpDialog by rememberSaveable { mutableStateOf(false) }
-    var mixedDialog by rememberSaveable { mutableStateOf(false) }
+    var proxyPortDialog by rememberSaveable { mutableStateOf(false) }
+    var lanProxyPortDialog by rememberSaveable { mutableStateOf(false) }
     var mtuDialog by rememberSaveable { mutableStateOf(false) }
     var domainMenuExpanded by rememberSaveable { mutableStateOf(false) }
     var subscriptionRefreshIntervalMenuExpanded by rememberSaveable { mutableStateOf(false) }
@@ -657,6 +658,17 @@ fun TrafficSettingsScreen(
             LatencyProbeMethod.HTTP -> pingHttpLabel
             LatencyProbeMethod.ICMP -> pingIcmpLabel
             LatencyProbeMethod.TCP -> pingTcpLabel
+        }
+    }
+    fun updateSurfacePort(
+        mode: ProxySurfaceMode,
+        port: Int,
+    ) {
+        val surface = state.settings.expert.localSurfaces.surfaceFor(mode).copy(port = port)
+        when (mode) {
+            ProxySurfaceMode.SOCKS5 -> onSocksSurfaceChanged(surface)
+            ProxySurfaceMode.HTTP -> onHttpSurfaceChanged(surface)
+            ProxySurfaceMode.ALL -> onMixedSurfaceChanged(surface)
         }
     }
     SettingsScaffold(
@@ -749,6 +761,14 @@ fun TrafficSettingsScreen(
                         onClick = null,
                         grouped = true,
                     )
+                    SettingsControlGroupDivider()
+                    SettingValueRow(
+                        title = stringResource(R.string.port),
+                        value = state.settings.expert.localSurfaces.surfaceFor(state.settings.expert.localSurfaces.proxyMode).port.toString(),
+                        leadingIcon = Icons.Outlined.Router,
+                        onClick = { proxyPortDialog = true },
+                        grouped = true,
+                    )
                 }
                 SettingsControlGroupDivider()
                 SettingSwitchRow(
@@ -784,6 +804,23 @@ fun TrafficSettingsScreen(
                         grouped = true,
                     )
                     SettingsControlGroupDivider()
+                    SettingSwitchRow(
+                        title = stringResource(R.string.lan_proxy_auth_title),
+                        checked = state.settings.expert.localSurfaces.lanAuth.enabled,
+                        leadingIcon = Icons.Outlined.Shield,
+                        summary = stringResource(R.string.lan_proxy_auth_summary),
+                        onCheckedChange = onLanProxyAuthEnabledChanged,
+                        grouped = true,
+                    )
+                    if (state.settings.expert.localSurfaces.lanAuth.enabled) {
+                        SettingsControlGroupDivider()
+                        LocalProxyAuthEditor(
+                            auth = state.settings.expert.localSurfaces.lanAuth,
+                            onAuthChanged = onLanProxyAuthChanged,
+                            grouped = true,
+                        )
+                    }
+                    SettingsControlGroupDivider()
                     SettingValueRow(
                         title = stringResource(R.string.proxy_surface_endpoint_title),
                         value = lanProxySurfaceEndpointSummary(
@@ -793,6 +830,14 @@ fun TrafficSettingsScreen(
                         ),
                         leadingIcon = Icons.Outlined.Public,
                         onClick = null,
+                        grouped = true,
+                    )
+                    SettingsControlGroupDivider()
+                    SettingValueRow(
+                        title = stringResource(R.string.port),
+                        value = state.settings.expert.localSurfaces.surfaceFor(state.settings.expert.localSurfaces.lanProxyMode).port.toString(),
+                        leadingIcon = Icons.Outlined.Router,
+                        onClick = { lanProxyPortDialog = true },
                         grouped = true,
                     )
                 }
@@ -890,39 +935,25 @@ fun TrafficSettingsScreen(
         )
     }
 
-    if (socksDialog) {
-        ProxySurfaceDialog(
-            title = stringResource(R.string.socks_inbound),
-            initialValue = state.settings.expert.localSurfaces.socks,
-            auth = state.settings.expert.localSurfaces.auth,
-            lanAccessEnabled = state.settings.expert.localSurfaces.allowLanAccess,
-            wifiLanAddress = wifiLanAddress,
-            onDismiss = { socksDialog = false },
-            onConfirm = onSocksSurfaceChanged,
+    if (proxyPortDialog) {
+        val mode = state.settings.expert.localSurfaces.proxyMode
+        IntValueDialog(
+            title = stringResource(R.string.port),
+            icon = Icons.Outlined.Router,
+            initialValue = state.settings.expert.localSurfaces.surfaceFor(mode).port,
+            onDismiss = { proxyPortDialog = false },
+            onConfirm = { port -> updateSurfacePort(mode, port) },
         )
     }
 
-    if (httpDialog) {
-        ProxySurfaceDialog(
-            title = stringResource(R.string.http_inbound),
-            initialValue = state.settings.expert.localSurfaces.http,
-            auth = state.settings.expert.localSurfaces.auth,
-            lanAccessEnabled = state.settings.expert.localSurfaces.allowLanAccess,
-            wifiLanAddress = wifiLanAddress,
-            onDismiss = { httpDialog = false },
-            onConfirm = onHttpSurfaceChanged,
-        )
-    }
-
-    if (mixedDialog) {
-        ProxySurfaceDialog(
-            title = stringResource(R.string.mixed_inbound),
-            initialValue = state.settings.expert.localSurfaces.mixed,
-            auth = state.settings.expert.localSurfaces.auth,
-            lanAccessEnabled = state.settings.expert.localSurfaces.allowLanAccess,
-            wifiLanAddress = wifiLanAddress,
-            onDismiss = { mixedDialog = false },
-            onConfirm = onMixedSurfaceChanged,
+    if (lanProxyPortDialog) {
+        val mode = state.settings.expert.localSurfaces.lanProxyMode
+        IntValueDialog(
+            title = stringResource(R.string.port),
+            icon = Icons.Outlined.Router,
+            initialValue = state.settings.expert.localSurfaces.surfaceFor(mode).port,
+            onDismiss = { lanProxyPortDialog = false },
+            onConfirm = { port -> updateSurfacePort(mode, port) },
         )
     }
 
@@ -1060,26 +1091,26 @@ private fun proxySurfaceModeIcon(value: ProxySurfaceMode): ImageVector =
         ProxySurfaceMode.ALL -> Icons.Outlined.Apps
     }
 
+@Suppress("UNUSED_PARAMETER")
 @Composable
 private fun proxySurfaceEndpointSummary(
     mode: ProxySurfaceMode,
     surfaces: LocalSurfaceSettings,
 ): String {
-    val surface = surfaces.surfaceFor(mode)
-    return stringResource(R.string.proxy_surface_loopback_endpoint, surface.port)
+    return stringResource(R.string.proxy_surface_loopback_endpoint)
 }
 
+@Suppress("UNUSED_PARAMETER")
 @Composable
 private fun lanProxySurfaceEndpointSummary(
     mode: ProxySurfaceMode,
     surfaces: LocalSurfaceSettings,
     wifiLanAddress: String?,
 ): String {
-    val surface = surfaces.surfaceFor(mode)
     return if (wifiLanAddress == null) {
         stringResource(R.string.proxy_surface_lan_waiting_for_wifi)
     } else {
-        stringResource(R.string.proxy_surface_lan_endpoint, wifiLanAddress, surface.port)
+        stringResource(R.string.proxy_surface_lan_endpoint, wifiLanAddress)
     }
 }
 

@@ -349,6 +349,12 @@ interface RoutingRuleDao {
         matchNetworks: List<String>,
     )
 
+    @Query("update routing_rules set `order` = :order where id = :id")
+    suspend fun updateOrder(
+        id: Long,
+        order: Int,
+    )
+
     @Query("delete from routing_rules where id = :id")
     suspend fun delete(id: Long)
 

@@ -85,17 +85,13 @@ internal fun ProxySurfaceDialog(
                 Text(
                     text =
                         if (lanAccessEnabled) {
-                            stringResource(
-                                if (wifiLanAddress == null) {
-                                    R.string.proxy_surface_lan_waiting_for_wifi
-                                } else {
-                                    R.string.proxy_surface_lan_endpoint
-                                },
-                                wifiLanAddress ?: "",
-                                port.toIntOrNull() ?: initialValue.port,
-                            )
+                            if (wifiLanAddress == null) {
+                                stringResource(R.string.proxy_surface_lan_waiting_for_wifi)
+                            } else {
+                                stringResource(R.string.proxy_surface_lan_endpoint, wifiLanAddress)
+                            }
                         } else {
-                            stringResource(R.string.proxy_surface_loopback_endpoint, port.toIntOrNull() ?: initialValue.port)
+                            stringResource(R.string.proxy_surface_loopback_endpoint)
                         },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,

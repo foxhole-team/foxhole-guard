@@ -251,6 +251,7 @@ data class LocalSurfaceSettings(
     val clashApi: ClashApiSettings = ClashApiSettings(),
     val v2RayApi: V2RayApiSettings = V2RayApiSettings(),
     val auth: LocalAuthSettings = LocalAuthSettings(),
+    val lanAuth: LocalAuthSettings = LocalAuthSettings(),
 )
 
 @Serializable

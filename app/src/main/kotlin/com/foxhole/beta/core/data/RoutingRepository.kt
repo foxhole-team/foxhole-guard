@@ -176,6 +176,32 @@ class RoutingRepository(
         ruleDao.delete(ruleId)
     }
 
+    suspend fun updateRuleActionAndOrder(
+        ruleId: Long,
+        name: String,
+        action: RoutingRuleAction,
+        ruleIdsInOrder: List<Long>,
+    ) {
+        database.withTransaction {
+            val rule = ruleDao.getById(ruleId) ?: return@withTransaction
+            ruleDao.update(
+                id = ruleId,
+                name = name,
+                enabled = rule.enabled,
+                order = rule.order,
+                action = action.name,
+                matchDomains = rule.matchDomains,
+                matchIpCidrs = rule.matchIpCidrs,
+                matchPorts = rule.matchPorts,
+                matchProtocols = rule.matchProtocols,
+                matchNetworks = rule.matchNetworks,
+            )
+            ruleIdsInOrder.distinct().forEachIndexed { index, orderedRuleId ->
+                ruleDao.updateOrder(orderedRuleId, index)
+            }
+        }
+    }
+
     suspend fun addCatalog(
         name: String,
         url: String,

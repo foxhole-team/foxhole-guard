@@ -624,13 +624,7 @@ internal fun resolveSelectedApps(
                     label = packageName,
                     isSystemApp = false,
                 )
-        }.sortedWith(
-            compareBy<InstalledAppOption>(
-                { it.isSystemApp },
-                { it.label.lowercase() },
-                { it.packageName.lowercase() },
-            ),
-        )
+        }
 }
 
 @Composable

@@ -313,37 +313,72 @@ fun ProfilesScreen(
                     SmartProfileExportSelectionState.NONE
                 }
             val exportCardSelected = exportMode && exportSelectedKeys.isNotEmpty()
-            FoxholeCard(
-                onClick = {
-                    if (exportMode) {
-                        exportSelectionState =
-                            when {
-                                exportChoices.size > 1 -> exportSelectionState.toggleSmartProfileExpanded(profile.id)
-                                else -> exportSelectionState.toggleSingleProfile(profile)
-                            }
-                    } else if (!isSelected) {
-                        onSetActiveProfile(profile.id)
+            val profileSwipeActions =
+                if (exportMode) {
+                    emptyList()
+                } else {
+                    buildList {
+                        if (showInlineRefreshAction) {
+                            add(
+                                FoxholeSwipeAction(
+                                    icon = Icons.Outlined.Refresh,
+                                    contentDescription = stringResource(R.string.refresh),
+                                    onClick = { refreshProfileId = profile.id },
+                                ),
+                            )
+                        }
+                        add(
+                            FoxholeSwipeAction(
+                                icon = Icons.Outlined.Edit,
+                                contentDescription = stringResource(R.string.edit_label),
+                                onClick = { onEditProfile(profile.id) },
+                            ),
+                        )
+                        add(
+                            FoxholeSwipeAction(
+                                icon = Icons.Outlined.Delete,
+                                contentDescription = stringResource(R.string.delete_label),
+                                tint = MaterialTheme.colorScheme.error,
+                                onClick = { deleteProfileId = profile.id },
+                            ),
+                        )
                     }
-                },
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .testTag("profiles_profile_row_${profile.id}"),
-                containerColor =
-                    if (exportCardSelected) {
-                        FoxholeInfoAccent.copy(alpha = 0.08f)
-                    } else {
-                        Color.Unspecified
-                    },
-                borderColor =
-                    if (exportCardSelected) {
-                        FoxholeInfoAccent.copy(alpha = 0.42f)
-                    } else if (isSelected) {
-                        profileSelectionColor.copy(alpha = 0.42f)
-                    } else {
-                        Color.Unspecified
-                    },
+                }
+            FoxholeSwipeActions(
+                key = "profile-${profile.id}",
+                actions = profileSwipeActions,
             ) {
+                FoxholeCard(
+                    onClick = {
+                        if (exportMode) {
+                            exportSelectionState =
+                                when {
+                                    exportChoices.size > 1 -> exportSelectionState.toggleSmartProfileExpanded(profile.id)
+                                    else -> exportSelectionState.toggleSingleProfile(profile)
+                                }
+                        } else if (!isSelected) {
+                            onSetActiveProfile(profile.id)
+                        }
+                    },
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .testTag("profiles_profile_row_${profile.id}"),
+                    containerColor =
+                        if (exportCardSelected) {
+                            FoxholeInfoAccent.copy(alpha = 0.08f)
+                        } else {
+                            Color.Unspecified
+                        },
+                    borderColor =
+                        if (exportCardSelected) {
+                            FoxholeInfoAccent.copy(alpha = 0.42f)
+                        } else if (isSelected) {
+                            profileSelectionColor.copy(alpha = 0.42f)
+                        } else {
+                            Color.Unspecified
+                        },
+                ) {
                 Row(
                     modifier =
                         Modifier
@@ -461,59 +496,11 @@ fun ProfilesScreen(
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
-                    } else {
-                        Column(
-                            horizontalAlignment = Alignment.End,
-                            verticalArrangement = Arrangement.spacedBy(4.dp),
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                            ) {
-                                if (showInlineRefreshAction) {
-                                    IconButton(
-                                        onClick = { refreshProfileId = profile.id },
-                                        modifier =
-                                            Modifier
-                                                .size(34.dp)
-                                                .testTag("profiles_profile_refresh_action_${profile.id}"),
-                                    ) {
-                                        Icon(
-                                            Icons.Outlined.Refresh,
-                                            contentDescription = stringResource(R.string.refresh),
-                                        )
-                                    }
-                                }
-                                IconButton(
-                                    onClick = { onEditProfile(profile.id) },
-                                    modifier =
-                                        Modifier
-                                            .size(34.dp)
-                                            .testTag("profiles_profile_edit_action_${profile.id}"),
-                                ) {
-                                    Icon(Icons.Outlined.Edit, contentDescription = stringResource(R.string.edit_label))
-                                }
-                                IconButton(
-                                    onClick = { deleteProfileId = profile.id },
-                                    modifier =
-                                        Modifier
-                                            .size(34.dp)
-                                            .testTag("profiles_profile_delete_action_${profile.id}"),
-                                ) {
-                                    Icon(
-                                        Icons.Outlined.Delete,
-                                        contentDescription = stringResource(R.string.delete_label),
-                                        tint = MaterialTheme.colorScheme.error,
-                                    )
-                                }
-                            }
-                            if (showInsecureTlsActionBadge) {
-                                InsecureTlsProfileBadge(
-                                    modifier = Modifier.padding(top = 2.dp),
-                                    compact = true,
-                                )
-                            }
-                        }
+                    } else if (showInsecureTlsActionBadge) {
+                        InsecureTlsProfileBadge(
+                            modifier = Modifier.align(Alignment.CenterVertically),
+                            compact = true,
+                        )
                     }
                 }
                 if (exportMode && exportChoices.size > 1 && exportSelectionState.isSmartProfileExpanded(profile.id)) {
@@ -538,6 +525,7 @@ fun ProfilesScreen(
                             )
                         }
                     }
+                }
                 }
             }
         }

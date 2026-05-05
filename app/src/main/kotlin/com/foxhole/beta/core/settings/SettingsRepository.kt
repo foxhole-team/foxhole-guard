@@ -52,6 +52,7 @@ import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import java.io.File
 import java.security.MessageDigest
+import java.security.SecureRandom
 import java.util.UUID
 
 class SettingsRepository(
@@ -551,29 +552,32 @@ class SettingsRepository(
 
     suspend fun updateSelectedPackages(value: List<String>) =
         update {
+            val normalizedSelectedPackages =
+                value
+                    .filterNot { packageName -> packageName == BuildConfig.APPLICATION_ID }
+                    .distinct()
             it.copy(
                 expert =
                     it.expert.copy(
-                        selectedPackages =
-                            value
-                                .filterNot { packageName -> packageName == BuildConfig.APPLICATION_ID }
-                                .distinct()
-                                .sorted(),
+                        selectedPackages = normalizedSelectedPackages,
+                        blockedPackages = it.expert.blockedPackages.filterNot { packageName -> packageName in normalizedSelectedPackages },
                     ),
             )
         }
 
     suspend fun updateBlockedPackages(value: List<String>) =
         update {
+            val normalizedBlockedPackages =
+                value
+                    .filterNot { packageName -> packageName == BuildConfig.APPLICATION_ID }
+                    .distinct()
             it.copy(
                 connection = it.connection.copy(stealthModeEnabled = false),
                 expert =
                     it.expert.copy(
-                        blockedPackages =
-                            value
-                                .filterNot { packageName -> packageName == BuildConfig.APPLICATION_ID }
-                                .distinct()
-                                .sorted(),
+                        blockedPackages = normalizedBlockedPackages,
+                        selectedPackages = it.expert.selectedPackages.filterNot { packageName -> packageName in normalizedBlockedPackages },
+                        blockedPackagesEnabled = normalizedBlockedPackages.isNotEmpty(),
                     ),
             )
         }
@@ -661,6 +665,34 @@ class SettingsRepository(
                         localSurfaces =
                             it.expert.localSurfaces.copy(
                                 auth = value.normalized(),
+                            ),
+                    ),
+            )
+        }
+
+    suspend fun updateLanProxyAuthEnabled(value: Boolean) =
+        update {
+            it.copy(
+                connection = it.connection.copy(stealthModeEnabled = it.connection.stealthModeEnabled && value),
+                expert =
+                    it.expert.copy(
+                        localSurfaces =
+                            it.expert.localSurfaces.copy(
+                                lanAuth = it.expert.localSurfaces.lanAuth.copy(enabled = value),
+                            ),
+                    ),
+            )
+        }
+
+    suspend fun updateLanProxyAuth(value: LocalAuthSettings) =
+        update {
+            it.copy(
+                connection = it.connection.copy(stealthModeEnabled = it.connection.stealthModeEnabled && value.enabled),
+                expert =
+                    it.expert.copy(
+                        localSurfaces =
+                            it.expert.localSurfaces.copy(
+                                lanAuth = value.normalized(),
                             ),
                     ),
             )
@@ -758,13 +790,16 @@ class SettingsRepository(
         withContext(Dispatchers.IO) {
             when (val encryptedResult = readEncryptedResult()) {
                 EncryptedSettingsLoadResult.Missing -> {
-                    val migrated = readLegacySettingsOrNull() ?: defaultSettings()
+                    val migrated = (readLegacySettingsOrNull() ?: defaultSettings()).normalized()
                     writeEncrypted(migrated)
                     deleteLegacySettings()
                     migrated
                 }
 
-                is EncryptedSettingsLoadResult.Loaded -> encryptedResult.settings
+                is EncryptedSettingsLoadResult.Loaded -> {
+                    writeEncrypted(encryptedResult.settings)
+                    encryptedResult.settings
+                }
 
                 is EncryptedSettingsLoadResult.Corrupt -> {
                     throw SettingsCorruptedException(
@@ -954,12 +989,11 @@ class SettingsRepository(
             selectedPackages
                 .filterNot { packageName -> packageName == BuildConfig.APPLICATION_ID }
                 .distinct()
-                .sorted()
         val normalizedBlockedPackages =
             blockedPackages
                 .filterNot { packageName -> packageName == BuildConfig.APPLICATION_ID }
                 .distinct()
-                .sorted()
+                .filterNot { packageName -> packageName in normalizedSelectedPackages }
         val normalized =
             copy(
                 selectedPackages = normalizedSelectedPackages,
@@ -997,6 +1031,7 @@ class SettingsRepository(
             clashApi = clashApi.normalized(),
             v2RayApi = v2RayApi.normalized(),
             auth = auth.normalized(),
+            lanAuth = lanAuth.normalized(),
         )
 
     private fun LocalSurfaceSettings.withProxyModeDefaults(enableDefaults: Boolean): LocalSurfaceSettings {
@@ -1048,8 +1083,8 @@ class SettingsRepository(
     private fun com.foxhole.beta.core.model.LocalAuthSettings.normalized(): com.foxhole.beta.core.model.LocalAuthSettings =
         copy(
             enabled = enabled,
-            username = username.trim().ifBlank { "foxhole-${UUID.randomUUID().toString().take(8)}" },
-            password = password.trim().ifBlank { UUID.randomUUID().toString().replace("-", "") },
+            username = username.trim().ifBlank { DEFAULT_PROXY_LOGIN },
+            password = password.trim().ifBlank { randomLocalProxyPassword() },
             apiSecret =
                 apiSecret.trim().ifBlank {
                     UUID.randomUUID().toString().replace("-", "") + UUID.randomUUID().toString().take(8)
@@ -1080,6 +1115,19 @@ class SettingsRepository(
         private const val MAX_PORT = 65535
         private const val MIN_MTU = 576
         private const val MAX_MTU = 9_000
+        private const val DEFAULT_PROXY_LOGIN = "foxhole"
+        private const val PROXY_PASSWORD_PREFIX = "foxhole-"
+        private const val PROXY_PASSWORD_RANDOM_LENGTH = 4
+        private const val PROXY_PASSWORD_ALPHABET = "abcdefghijklmnopqrstuvwxyz0123456789"
+        private val secureRandom = SecureRandom()
+
+        private fun randomLocalProxyPassword(): String =
+            buildString(PROXY_PASSWORD_PREFIX.length + PROXY_PASSWORD_RANDOM_LENGTH) {
+                append(PROXY_PASSWORD_PREFIX)
+                repeat(PROXY_PASSWORD_RANDOM_LENGTH) {
+                    append(PROXY_PASSWORD_ALPHABET[secureRandom.nextInt(PROXY_PASSWORD_ALPHABET.length)])
+                }
+            }
     }
 }
 
@@ -1118,6 +1166,12 @@ private fun ExpertSettings.experimentalSettingsComparable(): ExpertSettings =
                 clashApi = localSurfaces.clashApi.copy(secret = ""),
                 auth =
                     localSurfaces.auth.copy(
+                        username = "",
+                        password = "",
+                        apiSecret = "",
+                    ),
+                lanAuth =
+                    localSurfaces.lanAuth.copy(
                         username = "",
                         password = "",
                         apiSecret = "",

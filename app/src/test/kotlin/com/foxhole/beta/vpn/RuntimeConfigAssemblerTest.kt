@@ -356,6 +356,83 @@ class RuntimeConfigAssemblerTest {
     }
 
     @Test
+    fun `lan proxy uses independent auth credentials`() {
+        val lanAddressProvider = FakeLanProxyAddressProvider(address = "192.168.1.23")
+        val lanAwareAssembler = RuntimeConfigAssembler(json, lanAddressProvider)
+        val settings =
+            Settings(
+                traffic = com.foxhole.beta.core.model.TrafficSettings(mode = TrafficMode.PROXY),
+                expert =
+                    ExpertSettings(
+                        localSurfaces =
+                            LocalSurfaceSettings(
+                                proxyMode = ProxySurfaceMode.HTTP,
+                                lanProxyMode = ProxySurfaceMode.HTTP,
+                                allowLanAccess = true,
+                                http = ProxyInboundSettings(enabled = true, host = "127.0.0.1", port = 10809),
+                                auth =
+                                    LocalAuthSettings(
+                                        username = "local-user",
+                                        password = "local-pass",
+                                    ),
+                                lanAuth =
+                                    LocalAuthSettings(
+                                        username = "lan-user",
+                                        password = "lan-pass",
+                                    ),
+                            ),
+                    ),
+            )
+
+        val config = parse(lanAwareAssembler.assemble(baseConfigWithRules("profile.example"), settings, null))
+        val inbounds = config["inbounds"]!!.jsonArray.map { it.jsonObject }.associateBy { it["tag"]!!.jsonPrimitive.content }
+        val localUser = inbounds.getValue("http-in")["users"]!!.jsonArray.first().jsonObject
+        val lanUser = inbounds.getValue("http-in-lan")["users"]!!.jsonArray.first().jsonObject
+
+        assertEquals("local-user", localUser["username"]!!.jsonPrimitive.content)
+        assertEquals("local-pass", localUser["password"]!!.jsonPrimitive.content)
+        assertEquals("lan-user", lanUser["username"]!!.jsonPrimitive.content)
+        assertEquals("lan-pass", lanUser["password"]!!.jsonPrimitive.content)
+    }
+
+    @Test
+    fun `lan proxy omits users when lan auth is off`() {
+        val lanAddressProvider = FakeLanProxyAddressProvider(address = "192.168.1.23")
+        val lanAwareAssembler = RuntimeConfigAssembler(json, lanAddressProvider)
+        val settings =
+            Settings(
+                traffic = com.foxhole.beta.core.model.TrafficSettings(mode = TrafficMode.PROXY),
+                expert =
+                    ExpertSettings(
+                        localSurfaces =
+                            LocalSurfaceSettings(
+                                proxyMode = ProxySurfaceMode.HTTP,
+                                lanProxyMode = ProxySurfaceMode.HTTP,
+                                allowLanAccess = true,
+                                http = ProxyInboundSettings(enabled = true, host = "127.0.0.1", port = 10809),
+                                auth =
+                                    LocalAuthSettings(
+                                        username = "local-user",
+                                        password = "local-pass",
+                                    ),
+                                lanAuth =
+                                    LocalAuthSettings(
+                                        enabled = false,
+                                        username = "lan-user",
+                                        password = "lan-pass",
+                                    ),
+                            ),
+                    ),
+            )
+
+        val config = parse(lanAwareAssembler.assemble(baseConfigWithRules("profile.example"), settings, null))
+        val inbounds = config["inbounds"]!!.jsonArray.map { it.jsonObject }.associateBy { it["tag"]!!.jsonPrimitive.content }
+
+        assertTrue(inbounds.getValue("http-in").containsKey("users"))
+        assertFalse(inbounds.getValue("http-in-lan").containsKey("users"))
+    }
+
+    @Test
     fun `all proxy surface mode emits mixed inbound`() {
         val settings =
             Settings(

@@ -331,6 +331,18 @@ internal fun HomeViewModel.onLocalProxyAuthChangedInternal(value: LocalAuthSetti
     }
 }
 
+internal fun HomeViewModel.onLanProxyAuthEnabledChangedInternal(value: Boolean) {
+    updateRuntimeSettingAndMaybeReload {
+        container.settingsRepository.updateLanProxyAuthEnabled(value)
+    }
+}
+
+internal fun HomeViewModel.onLanProxyAuthChangedInternal(value: LocalAuthSettings) {
+    updateRuntimeSettingAndMaybeReload {
+        container.settingsRepository.updateLanProxyAuth(value)
+    }
+}
+
 internal fun HomeViewModel.onLocalProxyLanAccessChangedInternal(value: Boolean) {
     updateRuntimeSettingAndMaybeReload {
         container.settingsRepository.updateLocalProxyLanAccessEnabled(value)

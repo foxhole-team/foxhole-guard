@@ -20,6 +20,9 @@
     <string name="disconnect">Стоп</string>
     <string name="reconnect">Рестарт</string>
     <string name="refresh">Обновить</string>
+    <string name="choose_label">Выбрать</string>
+    <string name="add_label">Добавить</string>
+    <string name="drag_handle">Перетащить</string>
     <string name="dashboard">Дашборд</string>
     <string name="settings">Настройки</string>
     <string name="profile">Профиль</string>
@@ -277,6 +280,7 @@
     <string name="prefer_ipv6_routes">IPv6</string>
     <string name="domain_strategy">Стратегия DNS</string>
     <string name="routing_apps_title">Приложения</string>
+    <string name="enable_split_tunnel">Включить сплит туннель</string>
     <string name="routing_apps_mode_full_summary">Все приложения идут через туннель.</string>
     <string name="routing_apps_mode_include_summary">Только выбранные приложения идут через туннель.</string>
     <string name="routing_apps_mode_exclude_summary">Выбранные приложения идут напрямую.</string>
@@ -285,9 +289,10 @@
     <string name="add_app_exception">Добавить приложения</string>
     <string name="selected_app_exceptions">Выбранные приложения</string>
     <string name="blocked_app_exceptions">Заблокированные приложения</string>
+    <string name="blocked_apps_section_summary">Блокировать приложения</string>
     <string name="selected_apps_info_body">Выбранные приложения работают по режиму выше. Перетащите или долго нажмите приложение, чтобы перенести его в Заблокированные.</string>
     <string name="blocked_apps_info_body">Заблокированные приложения получают правило block перед proxy/direct. Список сохраняется, когда переключатель выключен.</string>
-    <string name="no_blocked_apps_summary">Перенесите сюда приложения, которые нужно блокировать при включенном переключателе.</string>
+    <string name="no_blocked_apps_summary">Перетащите сюда приложения, которые нужно заблокировать.</string>
     <plurals name="blocked_apps_count_summary">
         <item quantity="one">%1$d приложение заблокировано</item>
         <item quantity="few">%1$d приложения заблокировано</item>
@@ -310,6 +315,7 @@
     <string name="system_app_label">Системное</string>
     <string name="user_app_label">Пользовательское</string>
     <string name="routing_sites_title">Сайты</string>
+    <string name="routing_sites_summary">Правила применяются сразу после добавления.</string>
     <string name="routing_sites_create_preset_summary">Первое правило для сайта создаст локальный preset.</string>
     <string name="routing_sites_active_preset_summary">Правила для сайтов хранятся в preset “%1$s”.</string>
     <string name="add_site_exception">Добавить правило для сайта</string>
@@ -321,6 +327,9 @@
     <string name="site_exception_default_name">Исключение для сайта</string>
     <string name="site_exception_validation_error">Укажите хотя бы один домен</string>
     <string name="site_mask_type_title">Тип маски</string>
+    <string name="supported_site_masks_title">Поддерживаемые маски</string>
+    <string name="supported_site_masks_examples">example.com\n*.example.com\nkw:video\nre:^stun\\..+\ncidr:1.2.3.0/24</string>
+    <string name="site_mask_input_label">Сайт или маска</string>
     <string name="site_mask_exact">Точный домен</string>
     <string name="site_mask_suffix">Поддомен/suffix</string>
     <string name="site_mask_keyword">Keyword</string>
@@ -400,14 +409,16 @@
     <string name="proxy_lan_access_disabled_summary">Выключен. Доступен по Wi‑Fi: %1$s</string>
     <string name="proxy_lan_access_wifi_only_summary">Доступно только по Wi‑Fi</string>
     <string name="proxy_lan_access_waiting_for_wifi_summary">Wi‑Fi недоступен. LAN Proxy ждёт подключение к Wi‑Fi.</string>
-    <string name="proxy_surface_loopback_endpoint">Это устройство: 127.0.0.1:%1$d</string>
-    <string name="proxy_surface_lan_endpoint">Сеть Wi‑Fi: %1$s:%2$d</string>
+    <string name="proxy_surface_loopback_endpoint">127.0.0.1</string>
+    <string name="proxy_surface_lan_endpoint">%1$s</string>
     <string name="proxy_surface_lan_disabled">LAN Proxy выключен.</string>
     <string name="proxy_surface_lan_waiting_for_wifi">LAN Proxy включится после подключения к Wi‑Fi.</string>
     <string name="auth_required_label">С Авторизацией</string>
     <string name="no_auth_label">Без Авторизации</string>
     <string name="proxy_auth_title">Авторизация прокси</string>
+    <string name="lan_proxy_auth_title">Авторизация LAN Proxy</string>
     <string name="proxy_auth_summary">По умолчанию включена для HTTP, SOCKS5 и Mixed. Выключайте только для приложений без логина и пароля.</string>
+    <string name="lan_proxy_auth_summary">Отдельный логин и пароль для клиентов LAN Proxy.</string>
     <string name="proxy_auth_live_apply_summary">Общая для HTTP, SOCKS5 и Mixed. Изменения применяются к активному runtime автоматически.</string>
     <string name="username">Логин</string>
     <string name="password">Пароль</string>

@@ -188,6 +188,30 @@ internal fun HomeViewModel.saveSiteRuleInternal(
     }
 }
 
+internal fun HomeViewModel.onSiteRuleMovedInternal(
+    ruleId: Long,
+    action: RoutingRuleAction,
+    ruleIdsInOrder: List<Long>,
+) {
+    viewModelScope.launch {
+        runCatching {
+            val rule = uiState.value.activePreset?.rules?.firstOrNull { it.id == ruleId }
+                ?: error(getApplication<Application>().getString(R.string.routing_rule_save_failed))
+            val firstToken = (rule.matchDomains + rule.matchIpCidrs.map { "$SITE_CIDR_PREFIX$it" }).firstOrNull()
+            container.routingRepository.updateRuleActionAndOrder(
+                ruleId = ruleId,
+                name = siteRuleName(action, firstToken),
+                action = action,
+                ruleIdsInOrder = ruleIdsInOrder,
+            )
+        }.onSuccess {
+            maybeReloadActiveRuntime()
+        }.onFailure {
+            emitError(it.message ?: getApplication<Application>().getString(R.string.routing_rule_save_failed))
+        }
+    }
+}
+
 private const val SITE_CIDR_PREFIX = "cidr:"
 
 private fun HomeViewModel.siteRuleName(

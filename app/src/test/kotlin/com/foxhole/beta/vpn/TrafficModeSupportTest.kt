@@ -38,4 +38,34 @@ class TrafficModeSupportTest {
         assertNull(access.username)
         assertNull(access.password)
     }
+
+    @Test
+    fun `preferred app proxy access ignores lan proxy auth`() {
+        val settings =
+            Settings(
+                expert =
+                    ExpertSettings(
+                        localSurfaces =
+                            LocalSurfaceSettings(
+                                proxyMode = ProxySurfaceMode.HTTP,
+                                http = ProxyInboundSettings(enabled = true, port = 10809),
+                                auth =
+                                    LocalAuthSettings(
+                                        username = "local-user",
+                                        password = "local-pass",
+                                    ),
+                                lanAuth =
+                                    LocalAuthSettings(
+                                        username = "lan-user",
+                                        password = "lan-pass",
+                                    ),
+                            ),
+                    ),
+            )
+
+        val access = requireNotNull(settings.preferredAppProxyAccess())
+
+        assertEquals("local-user", access.username)
+        assertEquals("local-pass", access.password)
+    }
 }

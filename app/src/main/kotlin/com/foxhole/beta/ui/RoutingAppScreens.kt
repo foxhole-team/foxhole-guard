@@ -4,8 +4,6 @@ import android.content.ClipData
 import android.content.ClipDescription
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.draganddrop.dragAndDropSource
 import androidx.compose.foundation.draganddrop.dragAndDropTarget
 import androidx.compose.foundation.layout.Arrangement
@@ -17,24 +15,21 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.HelpOutline
+import androidx.compose.material.icons.outlined.AccountTree
 import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.Apps
+import androidx.compose.material.icons.outlined.Block
 import androidx.compose.material.icons.outlined.Close
-import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Edit
-import androidx.compose.material.icons.outlined.ExpandLess
-import androidx.compose.material.icons.outlined.ExpandMore
+import androidx.compose.material.icons.outlined.Public
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -43,18 +38,27 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.draganddrop.DragAndDropEvent
 import androidx.compose.ui.draganddrop.DragAndDropTarget
 import androidx.compose.ui.draganddrop.DragAndDropTransferData
 import androidx.compose.ui.draganddrop.mimeTypes
 import androidx.compose.ui.draganddrop.toAndroidDragEvent
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import com.foxhole.beta.R
 import com.foxhole.beta.core.model.InstalledAppOption
 import com.foxhole.beta.core.model.PerAppRoutingMode
@@ -69,15 +73,15 @@ fun RoutingAppsScreen(
     onNavigateUp: () -> Unit,
     onPerAppRoutingModeSelected: (PerAppRoutingMode) -> Unit,
     onOpenPicker: () -> Unit,
+    onOpenBlockedPicker: () -> Unit,
     onSelectedPackagesChanged: (List<String>) -> Unit,
     onBlockedPackagesChanged: (List<String>) -> Unit,
-    onBlockedPackagesEnabledChanged: (Boolean) -> Unit,
 ) {
     var modeMenuExpanded by rememberSaveable { mutableStateOf(false) }
-    var selectedInfoVisible by rememberSaveable { mutableStateOf(false) }
-    var blockedInfoVisible by rememberSaveable { mutableStateOf(false) }
-    val selectedPackages = state.settings.expert.selectedPackages.toSet()
-    val blockedPackages = state.settings.expert.blockedPackages.toSet()
+    val selectedPackages = state.settings.expert.selectedPackages
+    val blockedPackages = state.settings.expert.blockedPackages
+    val selectedPackageSet = selectedPackages.toSet()
+    val blockedPackageSet = blockedPackages.toSet()
     val selectedApps =
         remember(state.installedApps, state.settings.expert.selectedPackages) {
             resolveSelectedApps(state.installedApps, state.settings.expert.selectedPackages)
@@ -92,6 +96,7 @@ fun RoutingAppsScreen(
     val effectiveAppMode =
         state.settings.expert.perAppRoutingMode.takeIf { it != PerAppRoutingMode.FULL_TUNNEL }
             ?: PerAppRoutingMode.INCLUDE_SELECTED_APPS
+    val splitTunnelEnabled = state.settings.expert.perAppRoutingMode != PerAppRoutingMode.FULL_TUNNEL
 
     SettingsScaffold(
         title = stringResource(R.string.routing_apps_title),
@@ -99,82 +104,69 @@ fun RoutingAppsScreen(
         onNavigateUp = onNavigateUp,
     ) {
         item {
-            InfoBlock(
-                title = stringResource(R.string.information_title),
-                body = stringResource(R.string.routing_apps_info_body),
-            )
-        }
-        item {
-            DropdownSettingRow(
-                title = stringResource(R.string.operating_mode),
-                value = simpleAppRoutingModeLabel(effectiveAppMode),
-                expanded = modeMenuExpanded,
-                onExpandedChange = { modeMenuExpanded = it },
-                values = appModeValues,
-                selected = effectiveAppMode,
-                label = ::simpleAppRoutingModeLabel,
-                onSelect = onPerAppRoutingModeSelected,
-                summary = simpleAppRoutingModeGuidance(effectiveAppMode),
-                optionIcon = ::perAppRoutingModeIcon,
-            )
-        }
-        item {
-            FoxholeCard {
-                Text(
-                    text = pluralStringResource(R.plurals.selected_apps_count_summary, selectedPackages.size, selectedPackages.size),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                )
-                Text(
-                    text = stringResource(R.string.selected_apps_summary),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Button(
-                    onClick = {
-                        if (state.settings.expert.perAppRoutingMode == PerAppRoutingMode.FULL_TUNNEL) {
-                            onPerAppRoutingModeSelected(PerAppRoutingMode.INCLUDE_SELECTED_APPS)
-                        }
-                        onOpenPicker()
+            SettingsControlGroup {
+                SettingSwitchRow(
+                    title = stringResource(R.string.enable_split_tunnel),
+                    checked = splitTunnelEnabled,
+                    onCheckedChange = { enabled ->
+                        onPerAppRoutingModeSelected(
+                            if (enabled) {
+                                effectiveAppMode
+                            } else {
+                                PerAppRoutingMode.FULL_TUNNEL
+                            },
+                        )
                     },
-                    modifier = Modifier.fillMaxWidth().testTag("routing_apps_add_exception_action"),
-                    colors = foxholeDropdownColoredButtonColors(),
-                    border = foxholeDropdownColoredButtonBorder(),
-                ) {
-                    Icon(Icons.Outlined.Add, contentDescription = null)
-                    Text(
-                        text = stringResource(R.string.add_app_exception),
-                        modifier = Modifier.padding(start = 8.dp),
+                    leadingIcon = Icons.Outlined.AccountTree,
+                    grouped = true,
+                )
+                if (splitTunnelEnabled) {
+                    SettingsControlGroupDivider()
+                    DropdownSettingRow(
+                        title = stringResource(R.string.operating_mode),
+                        value = simpleAppRoutingModeLabel(effectiveAppMode),
+                        expanded = modeMenuExpanded,
+                        onExpandedChange = { modeMenuExpanded = it },
+                        values = appModeValues,
+                        selected = effectiveAppMode,
+                        label = ::simpleAppRoutingModeLabel,
+                        onSelect = onPerAppRoutingModeSelected,
+                        leadingIcon = perAppRoutingModeIcon(effectiveAppMode),
+                        optionIcon = ::perAppRoutingModeIcon,
+                        grouped = true,
                     )
-                }
-                if (selectedPackages.isNotEmpty()) {
-                    TextButton(
-                        onClick = { onSelectedPackagesChanged(emptyList()) },
-                        modifier = Modifier.align(Alignment.End),
-                    ) {
-                        Text(stringResource(R.string.clear_selection))
-                    }
+                    SettingsControlGroupDivider()
+                    Text(
+                        text = simpleAppRoutingModeGuidance(effectiveAppMode),
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
             }
         }
         item {
             AppGridSection(
-                title = stringResource(R.string.selected_app_exceptions),
-                summary = pluralStringResource(R.plurals.selected_apps_count_summary, selectedPackages.size, selectedPackages.size),
+                title = stringResource(R.string.routing_apps_title),
+                subtitle = stringResource(R.string.selected_app_exceptions),
+                leadingIcon = Icons.Outlined.Apps,
                 apps = selectedApps,
                 emptyText = stringResource(R.string.no_app_exceptions_summary),
-                onInfoClick = { selectedInfoVisible = true },
+                headerActionLabel = stringResource(R.string.choose_label),
+                headerActionTag = "routing_apps_add_exception_action",
+                onHeaderAction = {
+                    if (state.settings.expert.perAppRoutingMode == PerAppRoutingMode.FULL_TUNNEL) {
+                        onPerAppRoutingModeSelected(PerAppRoutingMode.INCLUDE_SELECTED_APPS)
+                    }
+                    onOpenPicker()
+                },
                 onRemove = { app ->
                     onSelectedPackagesChanged(selectedPackages.filterNot { it == app.packageName })
                 },
-                onMove = { app ->
-                    onSelectedPackagesChanged(selectedPackages.filterNot { it == app.packageName })
-                    onBlockedPackagesChanged((blockedPackages + app.packageName).toList())
-                },
-                onDropPackage = { packageName ->
-                    if (packageName !in selectedPackages) {
+                onDropPackage = { packageName, beforePackageName ->
+                    if (packageName in selectedPackageSet || packageName in blockedPackageSet) {
                         onBlockedPackagesChanged(blockedPackages.filterNot { it == packageName })
-                        onSelectedPackagesChanged((selectedPackages + packageName).toList())
+                        onSelectedPackagesChanged(insertPackageBefore(selectedPackages, packageName, beforePackageName))
                     }
                 },
                 modifier = Modifier.testTag("routing_apps_selected_section"),
@@ -183,68 +175,53 @@ fun RoutingAppsScreen(
         item {
             AppGridSection(
                 title = stringResource(R.string.blocked_app_exceptions),
-                summary = pluralStringResource(R.plurals.blocked_apps_count_summary, blockedPackages.size, blockedPackages.size),
+                subtitle = stringResource(R.string.blocked_apps_section_summary),
+                leadingIcon = Icons.Outlined.Block,
                 apps = blockedApps,
                 emptyText = stringResource(R.string.no_blocked_apps_summary),
-                toggleChecked = state.settings.expert.blockedPackagesEnabled,
-                onToggleChanged = onBlockedPackagesEnabledChanged,
-                onInfoClick = { blockedInfoVisible = true },
+                headerActionLabel = stringResource(R.string.choose_label),
+                headerActionTag = "routing_apps_blocked_add_exception_action",
+                onHeaderAction = onOpenBlockedPicker,
                 onRemove = { app ->
                     onBlockedPackagesChanged(blockedPackages.filterNot { it == app.packageName })
                 },
-                onMove = { app ->
-                    onBlockedPackagesChanged(blockedPackages.filterNot { it == app.packageName })
-                    onSelectedPackagesChanged((selectedPackages + app.packageName).toList())
-                },
-                onDropPackage = { packageName ->
-                    if (packageName !in blockedPackages) {
+                onDropPackage = { packageName, beforePackageName ->
+                    if (packageName in selectedPackageSet || packageName in blockedPackageSet) {
                         onSelectedPackagesChanged(selectedPackages.filterNot { it == packageName })
-                        onBlockedPackagesChanged((blockedPackages + packageName).toList())
+                        onBlockedPackagesChanged(insertPackageBefore(blockedPackages, packageName, beforePackageName))
                     }
                 },
                 modifier = Modifier.testTag("routing_apps_blocked_section"),
             )
         }
     }
-
-    if (selectedInfoVisible) {
-        AppInfoDialog(
-            title = stringResource(R.string.selected_app_exceptions),
-            body = stringResource(R.string.selected_apps_info_body),
-            onDismiss = { selectedInfoVisible = false },
-        )
-    }
-    if (blockedInfoVisible) {
-        AppInfoDialog(
-            title = stringResource(R.string.blocked_app_exceptions),
-            body = stringResource(R.string.blocked_apps_info_body),
-            onDismiss = { blockedInfoVisible = false },
-        )
-    }
 }
 
 @Composable
 private fun AppGridSection(
     title: String,
-    summary: String,
+    subtitle: String,
+    leadingIcon: androidx.compose.ui.graphics.vector.ImageVector,
     apps: List<InstalledAppOption>,
     emptyText: String,
-    onInfoClick: () -> Unit,
     onRemove: (InstalledAppOption) -> Unit,
-    onMove: (InstalledAppOption) -> Unit,
-    onDropPackage: (String) -> Unit,
+    onDropPackage: (String, String?) -> Unit,
     modifier: Modifier = Modifier,
-    toggleChecked: Boolean? = null,
-    onToggleChanged: ((Boolean) -> Unit)? = null,
+    headerActionLabel: String? = null,
+    headerActionTag: String? = null,
+    onHeaderAction: (() -> Unit)? = null,
 ) {
-    var removalPackage by rememberSaveable { mutableStateOf<String?>(null) }
+    val haptic = LocalHapticFeedback.current
     FoxholeCard(
         modifier =
             modifier.dragAndDropTarget(
-                shouldStartDragAndDrop = ::isFoxholeAppDragEvent,
+                shouldStartDragAndDrop = ::isFoxholeTextDragEvent,
                 target =
-                    remember(onDropPackage) {
-                        foxholeDropTarget(FOXHOLE_APP_DRAG_PREFIX, onDropPackage)
+                    remember(onDropPackage, haptic) {
+                        foxholeDropTarget(FOXHOLE_APP_DRAG_PREFIX) { packageName ->
+                            onDropPackage(packageName, null)
+                            haptic.performHapticFeedback(HapticFeedbackType.Confirm)
+                        }
                     },
             ),
     ) {
@@ -253,38 +230,40 @@ private fun AppGridSection(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            Icon(
+                imageVector = leadingIcon,
+                contentDescription = null,
+                modifier = Modifier.size(20.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
             Column(
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(2.dp),
             ) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        text = title,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                    IconButton(onClick = onInfoClick, modifier = Modifier.size(30.dp)) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Outlined.HelpOutline,
-                            contentDescription = stringResource(R.string.information_title),
-                            modifier = Modifier.size(17.dp),
-                        )
-                    }
-                }
                 Text(
-                    text = summary,
-                    style = MaterialTheme.typography.bodyMedium,
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            if (toggleChecked != null && onToggleChanged != null) {
-                FoxholeSwitch(
-                    checked = toggleChecked,
-                    onCheckedChange = onToggleChanged,
-                )
+            if (headerActionLabel != null && onHeaderAction != null) {
+                Button(
+                    onClick = onHeaderAction,
+                    modifier = headerActionTag?.let { Modifier.testTag(it) } ?: Modifier,
+                    colors = foxholeDropdownColoredButtonColors(),
+                    border = foxholeDropdownColoredButtonBorder(),
+                ) {
+                    Icon(Icons.Outlined.Add, contentDescription = null)
+                    Text(
+                        text = headerActionLabel,
+                        modifier = Modifier.padding(start = 8.dp),
+                    )
+                }
             }
         }
         if (apps.isEmpty()) {
@@ -302,22 +281,9 @@ private fun AppGridSection(
                 apps.forEach { app ->
                     AppGridTile(
                         app = app,
-                        removing = removalPackage == app.packageName,
-                        onToggleRemove = {
-                            removalPackage =
-                                if (removalPackage == app.packageName) {
-                                    null
-                                } else {
-                                    app.packageName
-                                }
-                        },
+                        onDropPackage = { packageName -> onDropPackage(packageName, app.packageName) },
                         onRemove = {
-                            removalPackage = null
                             onRemove(app)
-                        },
-                        onMove = {
-                            removalPackage = null
-                            onMove(app)
                         },
                     )
                 }
@@ -330,36 +296,68 @@ private fun AppGridSection(
 @Composable
 private fun AppGridTile(
     app: InstalledAppOption,
-    removing: Boolean,
-    onToggleRemove: () -> Unit,
+    onDropPackage: (String) -> Unit,
     onRemove: () -> Unit,
-    onMove: () -> Unit,
 ) {
+    val dragBitmap = rememberAppIconBitmap(packageName = app.packageName, bitmapSize = 72.dp)
+    val dragContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.92f)
+    val dragFallbackColor = MaterialTheme.colorScheme.primary
+    val haptic = LocalHapticFeedback.current
     Box(
         modifier =
             Modifier
-                .size(width = 76.dp, height = 92.dp)
-                .clip(MaterialTheme.shapes.medium)
-                .dragAndDropSource(transferData = {
-                    DragAndDropTransferData(
-                        clipData = ClipData.newPlainText(FOXHOLE_APP_DRAG_LABEL, "$FOXHOLE_APP_DRAG_PREFIX${app.packageName}"),
-                        localState = app.packageName,
-                    )
-                })
-                .combinedClickable(
-                    onClick = onToggleRemove,
-                    onLongClick = onMove,
-                ),
+                .size(width = 96.dp, height = 120.dp)
+                .dragAndDropSource(
+                    drawDragDecoration = {
+                        drawAppDragDecoration(
+                            bitmap = dragBitmap,
+                            containerColor = dragContainerColor,
+                            fallbackColor = dragFallbackColor,
+                        )
+                    },
+                    transferData = {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        DragAndDropTransferData(
+                            clipData = ClipData.newPlainText(FOXHOLE_APP_DRAG_LABEL, "$FOXHOLE_APP_DRAG_PREFIX${app.packageName}"),
+                            localState = app.packageName,
+                        )
+                    },
+                )
+                .dragAndDropTarget(
+                    shouldStartDragAndDrop = ::isFoxholeTextDragEvent,
+                    target =
+                        remember(onDropPackage, haptic) {
+                            foxholeDropTarget(FOXHOLE_APP_DRAG_PREFIX) { packageName ->
+                                onDropPackage(packageName)
+                                haptic.performHapticFeedback(HapticFeedbackType.Confirm)
+                            }
+                        },
+                )
     ) {
         Column(
-            modifier = Modifier.fillMaxWidth().padding(4.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            AppIcon(
-                packageName = app.packageName,
-                modifier = Modifier.size(44.dp),
-            )
+            Box(modifier = Modifier.size(76.dp)) {
+                AppIcon(
+                    packageName = app.packageName,
+                    modifier = Modifier.align(Alignment.Center).size(68.dp),
+                )
+                Surface(
+                    modifier = Modifier.align(Alignment.TopEnd).size(24.dp),
+                    shape = MaterialTheme.shapes.large,
+                    color = MaterialTheme.colorScheme.error,
+                    contentColor = MaterialTheme.colorScheme.onError,
+                    onClick = onRemove,
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Close,
+                        contentDescription = stringResource(R.string.delete_label),
+                        modifier = Modifier.padding(5.dp),
+                    )
+                }
+            }
             Text(
                 text = app.label,
                 style = MaterialTheme.typography.labelSmall,
@@ -368,52 +366,25 @@ private fun AppGridTile(
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        if (removing) {
-            Surface(
-                modifier = Modifier.align(Alignment.TopEnd).size(24.dp),
-                shape = MaterialTheme.shapes.large,
-                color = MaterialTheme.colorScheme.error,
-                contentColor = MaterialTheme.colorScheme.onError,
-                onClick = onRemove,
-            ) {
-                Icon(
-                    imageVector = Icons.Outlined.Close,
-                    contentDescription = stringResource(R.string.delete_label),
-                    modifier = Modifier.padding(5.dp),
-                )
-            }
-        }
     }
 }
 
 @Composable
-private fun AppInfoDialog(
-    title: String,
-    body: String,
-    onDismiss: () -> Unit,
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(title) },
-        text = { Text(body) },
-        confirmButton = {
-            FoxholeDialogDismissButton(onClick = onDismiss)
-        },
-    )
-}
-
-@Composable
 fun AppPickerScreen(
+    title: String,
+    selectionTitle: String,
+    selectedPackages: List<String>,
+    lockedPackages: Set<String>,
     state: RoutingRouteUiState,
     snackbarHostState: SnackbarHostState,
     onNavigateUp: () -> Unit,
-    onSaveSelection: (List<String>) -> Unit,
+    onSelectionChanged: (List<String>) -> Unit,
 ) {
     var query by rememberSaveable { mutableStateOf("") }
     var filterMenuExpanded by rememberSaveable { mutableStateOf(false) }
     var appFilter by rememberSaveable { mutableStateOf(InstalledAppFilter.ALL) }
-    var draftSelection by rememberSaveable(state.settings.expert.selectedPackages) {
-        mutableStateOf(state.settings.expert.selectedPackages)
+    var draftSelection by rememberSaveable(selectedPackages) {
+        mutableStateOf(selectedPackages)
     }
     val filteredApps = remember(state.installedApps, query, appFilter) {
         filterApps(state.installedApps, query)
@@ -427,16 +398,10 @@ fun AppPickerScreen(
     }
 
     SettingsScaffold(
-        title = stringResource(R.string.app_picker_title),
+        title = title,
         snackbarHostState = snackbarHostState,
         onNavigateUp = onNavigateUp,
         tag = "routing_apps_picker_screen",
-        actions = {
-            FoxholeSaveAction(
-                onClick = { onSaveSelection(draftSelection) },
-                modifier = Modifier.testTag("routing_apps_picker_save_action"),
-            )
-        },
     ) {
         item {
             WarningBlock(
@@ -468,7 +433,7 @@ fun AppPickerScreen(
         }
         item {
             SettingValueRow(
-                title = stringResource(R.string.selected_app_exceptions),
+                title = selectionTitle,
                 value = draftSelection.size.toString(),
                 summary = stringResource(R.string.selected_apps_summary),
                 onClick = null,
@@ -490,21 +455,27 @@ fun AppPickerScreen(
             }
         }
         items(filteredApps, key = InstalledAppOption::packageName) { app ->
-            val checked = draftSelection.contains(app.packageName)
+            val locked = app.packageName in lockedPackages
+            val checked = draftSelection.contains(app.packageName) || locked
             SelectableInstalledAppRow(
                 app = app,
                 checked = checked,
+                enabled = !locked,
                 onToggle = { value ->
-                    draftSelection =
-                        draftSelection
-                            .toMutableSet()
-                            .apply {
-                                if (value) {
-                                    add(app.packageName)
-                                } else {
-                                    remove(app.packageName)
-                                }
-                            }.toList()
+                    if (!locked) {
+                        val nextSelection =
+                            draftSelection
+                                .toMutableSet()
+                                .apply {
+                                    if (value) {
+                                        add(app.packageName)
+                                    } else {
+                                        remove(app.packageName)
+                                    }
+                                }.toList()
+                        draftSelection = nextSelection
+                        onSelectionChanged(nextSelection)
+                    }
                     Unit
                 },
             )
@@ -517,24 +488,17 @@ fun RoutingSitesScreen(
     state: RoutingRouteUiState,
     snackbarHostState: SnackbarHostState,
     onNavigateUp: () -> Unit,
-    onSiteRoutingActionSelected: (RoutingRuleAction) -> Unit,
     onSaveSiteRule: (Long?, List<String>, RoutingRuleAction) -> Unit,
     onDeleteRule: (Long) -> Unit,
 ) {
     var editingRule by remember { mutableStateOf<RoutingRule?>(null) }
     var createDialogVisible by rememberSaveable { mutableStateOf(false) }
     var deleteRuleId by rememberSaveable { mutableStateOf<Long?>(null) }
-    var siteModeMenuExpanded by rememberSaveable { mutableStateOf(false) }
-    var selectedInfoVisible by rememberSaveable { mutableStateOf(false) }
-    var blockedInfoVisible by rememberSaveable { mutableStateOf(false) }
     val siteRules =
         state.activePreset
             ?.rules
             .orEmpty()
             .filter { rule -> rule.isManagedSimpleSiteRule() && (rule.matchDomains.isNotEmpty() || rule.matchIpCidrs.isNotEmpty()) }
-    val selectedSiteRules = siteRules.filter { it.isManagedSelectedSiteRule() }
-    val blockedSiteRules = siteRules.filter { it.isManagedBlockedSiteRule() }
-    val siteModeValues = remember { listOf(RoutingRuleAction.PROXY, RoutingRuleAction.DIRECT) }
 
     SettingsScaffold(
         title = stringResource(R.string.routing_sites_title),
@@ -542,77 +506,27 @@ fun RoutingSitesScreen(
         onNavigateUp = onNavigateUp,
     ) {
         item {
-            InfoBlock(
-                title = stringResource(R.string.information_title),
-                body =
-                    if (state.activePreset == null) {
-                        stringResource(R.string.routing_sites_create_preset_summary)
-                    } else {
-                        stringResource(R.string.routing_sites_active_preset_summary, state.activePreset.name)
-                    },
+            SiteHeaderCard(
+                title = stringResource(R.string.routing_sites_title),
+                subtitle = stringResource(R.string.routing_sites_summary),
+                actionLabel = stringResource(R.string.add_label),
+                actionTag = "routing_sites_add_exception_action",
+                onAction = { createDialogVisible = true },
             )
         }
-        item {
-            FoxholeCard {
-                DropdownSettingRow(
-                    title = stringResource(R.string.operating_mode),
-                    value = siteActionLabel(state.settings.expert.siteRoutingAction),
-                    expanded = siteModeMenuExpanded,
-                    onExpandedChange = { siteModeMenuExpanded = it },
-                    values = siteModeValues,
-                    selected = state.settings.expert.siteRoutingAction,
-                    label = { siteActionLabel(it) },
-                    onSelect = onSiteRoutingActionSelected,
-                    optionIcon = { siteActionIcon(it) },
+        if (siteRules.isEmpty()) {
+            item {
+                WarningBlock(
+                    title = stringResource(R.string.no_site_exceptions_title),
+                    body = stringResource(R.string.no_site_exceptions_summary),
                 )
-                Button(
-                    onClick = { createDialogVisible = true },
-                    modifier = Modifier.fillMaxWidth().testTag("routing_sites_add_exception_action"),
-                    colors = foxholeDropdownColoredButtonColors(),
-                    border = foxholeDropdownColoredButtonBorder(),
-                ) {
-                    Icon(Icons.Outlined.Add, contentDescription = null)
-                    Text(
-                        text = stringResource(R.string.add_site_exception),
-                        modifier = Modifier.padding(start = 8.dp),
-                    )
-                }
             }
         }
-        item {
-            SiteChipSection(
-                title = stringResource(R.string.selected_sites_title),
-                rules = selectedSiteRules,
-                emptyText = stringResource(R.string.no_site_exceptions_summary),
-                onInfoClick = { selectedInfoVisible = true },
-                onEdit = { editingRule = it },
-                onDelete = { deleteRuleId = it.id },
-                onMove = { rule ->
-                    onSaveSiteRule(rule.id, rule.siteRuleTokens(), RoutingRuleAction.BLOCK)
-                },
-                onDropRuleId = { ruleId ->
-                    siteRules.firstOrNull { it.id == ruleId }?.takeIf { it.isManagedBlockedSiteRule() }?.let { rule ->
-                        onSaveSiteRule(rule.id, rule.siteRuleTokens(), state.settings.expert.siteRoutingAction)
-                    }
-                },
-            )
-        }
-        item {
-            SiteChipSection(
-                title = stringResource(R.string.blocked_sites_title),
-                rules = blockedSiteRules,
-                emptyText = stringResource(R.string.no_blocked_sites_summary),
-                onInfoClick = { blockedInfoVisible = true },
-                onEdit = { editingRule = it },
-                onDelete = { deleteRuleId = it.id },
-                onMove = { rule ->
-                    onSaveSiteRule(rule.id, rule.siteRuleTokens(), state.settings.expert.siteRoutingAction)
-                },
-                onDropRuleId = { ruleId ->
-                    siteRules.firstOrNull { it.id == ruleId }?.takeIf { it.isManagedSelectedSiteRule() }?.let { rule ->
-                        onSaveSiteRule(rule.id, rule.siteRuleTokens(), RoutingRuleAction.BLOCK)
-                    }
-                },
+        items(siteRules, key = RoutingRule::id) { rule ->
+            SiteRuleCard(
+                rule = rule,
+                onEdit = { editingRule = rule },
+                onDelete = { deleteRuleId = rule.id },
             )
         }
     }
@@ -620,9 +534,10 @@ fun RoutingSitesScreen(
     if (createDialogVisible) {
         SiteRuleDialog(
             rule = null,
+            defaultAction = RoutingRuleAction.PROXY,
             onDismiss = { createDialogVisible = false },
             onConfirm = { domains, action ->
-                onSaveSiteRule(null, domains, state.settings.expert.siteRoutingAction)
+                onSaveSiteRule(null, domains, action)
                 createDialogVisible = false
             },
         )
@@ -652,140 +567,111 @@ fun RoutingSitesScreen(
         )
     }
 
-    if (selectedInfoVisible) {
-        AppInfoDialog(
-            title = stringResource(R.string.selected_sites_title),
-            body = stringResource(R.string.selected_sites_info_body),
-            onDismiss = { selectedInfoVisible = false },
-        )
-    }
-    if (blockedInfoVisible) {
-        AppInfoDialog(
-            title = stringResource(R.string.blocked_sites_title),
-            body = stringResource(R.string.blocked_sites_info_body),
-            onDismiss = { blockedInfoVisible = false },
-        )
-    }
 }
 
 @Composable
-private fun SiteChipSection(
+private fun SiteHeaderCard(
     title: String,
-    rules: List<RoutingRule>,
-    emptyText: String,
-    onInfoClick: () -> Unit,
-    onEdit: (RoutingRule) -> Unit,
-    onDelete: (RoutingRule) -> Unit,
-    onMove: (RoutingRule) -> Unit,
-    onDropRuleId: (Long) -> Unit,
+    subtitle: String,
+    actionLabel: String,
+    actionTag: String,
+    onAction: () -> Unit,
 ) {
-    FoxholeCard(
-        modifier =
-            Modifier.dragAndDropTarget(
-                shouldStartDragAndDrop = ::isFoxholeSiteDragEvent,
-                target =
-                    remember(onDropRuleId) {
-                        foxholeDropTarget(FOXHOLE_SITE_DRAG_PREFIX) { payload ->
-                            payload.toLongOrNull()?.let(onDropRuleId)
-                        }
-                    },
-            ),
-    ) {
+    FoxholeCard {
         Row(
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
+            Icon(
+                imageVector = Icons.Outlined.Public,
+                contentDescription = null,
+                modifier = Modifier.size(20.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            IconButton(onClick = onInfoClick, modifier = Modifier.size(30.dp)) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Outlined.HelpOutline,
-                    contentDescription = stringResource(R.string.information_title),
-                    modifier = Modifier.size(17.dp),
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Button(
+                onClick = onAction,
+                modifier = Modifier.testTag(actionTag),
+                colors = foxholeDropdownColoredButtonColors(),
+                border = foxholeDropdownColoredButtonBorder(),
+            ) {
+                Icon(Icons.Outlined.Add, contentDescription = null)
+                Text(
+                    text = actionLabel,
+                    modifier = Modifier.padding(start = 8.dp),
                 )
             }
         }
-        if (rules.isEmpty()) {
-            Text(
-                text = emptyText,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        } else {
-            FlowRow(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                rules.forEach { rule ->
-                    SiteRuleChip(
-                        rule = rule,
-                        onEdit = { onEdit(rule) },
-                        onDelete = { onDelete(rule) },
-                        onMove = { onMove(rule) },
-                    )
-                }
-            }
-        }
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun SiteRuleChip(
+private fun SiteRuleCard(
     rule: RoutingRule,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
-    onMove: () -> Unit,
 ) {
-    var deleteVisible by rememberSaveable(rule.id) { mutableStateOf(false) }
-    Box {
-        Surface(
-            modifier =
-                Modifier
-                    .clip(MaterialTheme.shapes.large)
-                    .dragAndDropSource(transferData = {
-                        DragAndDropTransferData(
-                            clipData = ClipData.newPlainText(FOXHOLE_SITE_DRAG_LABEL, "$FOXHOLE_SITE_DRAG_PREFIX${rule.id}"),
-                            localState = rule.id,
-                        )
-                    })
-                    .combinedClickable(
-                        onClick = { deleteVisible = !deleteVisible },
-                        onLongClick = onMove,
-                    ),
-            shape = MaterialTheme.shapes.large,
-            color = LocalFoxholeUiPalette.current.valuePillContainerColor,
-            border = foxholeDropdownColoredButtonBorder(),
-        ) {
+    FoxholeSwipeActions(
+        key = "site-${rule.id}",
+        actions =
+            listOf(
+                FoxholeSwipeAction(
+                    icon = Icons.Outlined.Edit,
+                    contentDescription = stringResource(R.string.edit_label),
+                    onClick = onEdit,
+                ),
+                FoxholeSwipeAction(
+                    icon = Icons.Outlined.Close,
+                    contentDescription = stringResource(R.string.delete_label),
+                    tint = MaterialTheme.colorScheme.error,
+                    onClick = onDelete,
+                ),
+            ),
+    ) {
+        FoxholeCard {
             Row(
-                modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(
-                    text = rule.siteRuleTokens().firstOrNull() ?: rule.name,
-                    style = MaterialTheme.typography.bodyMedium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
+                Icon(
+                    imageVector = siteActionIcon(rule.action),
+                    contentDescription = null,
+                    modifier = Modifier.size(22.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                IconButton(onClick = onEdit, modifier = Modifier.size(28.dp)) {
-                    Icon(Icons.Outlined.Edit, contentDescription = stringResource(R.string.edit_label), modifier = Modifier.size(16.dp))
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(3.dp),
+                ) {
+                    Text(
+                        text = rule.siteRuleTokens().firstOrNull() ?: rule.name,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        text = siteActionLabel(rule.action),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
-            }
-        }
-        if (deleteVisible) {
-            Surface(
-                modifier = Modifier.align(Alignment.TopEnd).size(24.dp),
-                shape = MaterialTheme.shapes.large,
-                color = MaterialTheme.colorScheme.error,
-                contentColor = MaterialTheme.colorScheme.onError,
-                onClick = onDelete,
-            ) {
-                Icon(Icons.Outlined.Close, contentDescription = stringResource(R.string.delete_label), modifier = Modifier.padding(5.dp))
             }
         }
     }
@@ -803,13 +689,54 @@ private fun RoutingRule.isManagedSelectedSiteRule(): Boolean =
 private fun RoutingRule.isManagedBlockedSiteRule(): Boolean =
     name.startsWith(MANAGED_BLOCKED_SITE_RULE_PREFIX)
 
-private fun isFoxholeAppDragEvent(event: DragAndDropEvent): Boolean =
-    event.mimeTypes().contains(ClipDescription.MIMETYPE_TEXT_PLAIN) &&
-        event.dragPayload().startsWith(FOXHOLE_APP_DRAG_PREFIX)
+private fun insertPackageBefore(
+    packages: List<String>,
+    packageName: String,
+    beforePackageName: String?,
+): List<String> {
+    if (packageName == beforePackageName) {
+        return packages
+    }
+    val reordered = packages.filterNot { it == packageName }.toMutableList()
+    val insertIndex = beforePackageName?.let { reordered.indexOf(it).takeIf { index -> index >= 0 } } ?: reordered.size
+    reordered.add(insertIndex, packageName)
+    return reordered
+}
 
-private fun isFoxholeSiteDragEvent(event: DragAndDropEvent): Boolean =
-    event.mimeTypes().contains(ClipDescription.MIMETYPE_TEXT_PLAIN) &&
-        event.dragPayload().startsWith(FOXHOLE_SITE_DRAG_PREFIX)
+private fun DrawScope.drawAppDragDecoration(
+    bitmap: ImageBitmap?,
+    containerColor: Color,
+    fallbackColor: Color,
+) {
+    val containerSize = 84.dp.toPx()
+    val iconSize = 70.dp.toPx()
+    val left = (size.width - containerSize) / 2f
+    val top = 4.dp.toPx()
+    drawRoundRect(
+        color = containerColor,
+        topLeft = Offset(left, top),
+        size = Size(containerSize, containerSize),
+        cornerRadius = CornerRadius(22.dp.toPx(), 22.dp.toPx()),
+    )
+    if (bitmap == null) {
+        drawCircle(
+            color = fallbackColor.copy(alpha = 0.74f),
+            radius = iconSize / 3f,
+            center = Offset(size.width / 2f, top + containerSize / 2f),
+        )
+        return
+    }
+    val iconLeft = ((size.width - iconSize) / 2f).toInt()
+    val iconTop = (top + (containerSize - iconSize) / 2f).toInt()
+    drawImage(
+        image = bitmap,
+        dstOffset = IntOffset(iconLeft, iconTop),
+        dstSize = IntSize(iconSize.toInt(), iconSize.toInt()),
+    )
+}
+
+private fun isFoxholeTextDragEvent(event: DragAndDropEvent): Boolean =
+    event.mimeTypes().contains(ClipDescription.MIMETYPE_TEXT_PLAIN)
 
 private fun foxholeDropTarget(
     prefix: String,
@@ -817,7 +744,11 @@ private fun foxholeDropTarget(
 ): DragAndDropTarget =
     object : DragAndDropTarget {
         override fun onDrop(event: DragAndDropEvent): Boolean {
-            val payload = event.dragPayload().removePrefix(prefix).takeIf(String::isNotBlank) ?: return false
+            val rawPayload = event.dragPayload()
+            if (!rawPayload.startsWith(prefix)) {
+                return false
+            }
+            val payload = rawPayload.removePrefix(prefix).takeIf(String::isNotBlank) ?: return false
             onDropPayload(payload)
             return true
         }
@@ -828,8 +759,6 @@ private fun DragAndDropEvent.dragPayload(): String =
 
 private const val FOXHOLE_APP_DRAG_PREFIX = "foxhole-app:"
 private const val FOXHOLE_APP_DRAG_LABEL = "FoxHole app"
-private const val FOXHOLE_SITE_DRAG_PREFIX = "foxhole-site:"
-private const val FOXHOLE_SITE_DRAG_LABEL = "FoxHole site"
 private const val MANAGED_SELECTED_SITE_RULE_PREFIX = "FoxHole selected site:"
 private const val MANAGED_BLOCKED_SITE_RULE_PREFIX = "FoxHole blocked site:"
 

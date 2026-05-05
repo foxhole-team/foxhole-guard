@@ -38,7 +38,6 @@ import androidx.compose.material.icons.outlined.RemoveCircleOutline
 import androidx.compose.material.icons.outlined.Security
 import androidx.compose.material.icons.outlined.Speed
 import androidx.compose.material.icons.outlined.Star
-import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material.icons.outlined.VpnKey
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
@@ -74,6 +73,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
@@ -974,6 +974,7 @@ internal fun SelectedAppRow(
 internal fun SelectableInstalledAppRow(
     app: InstalledAppOption,
     checked: Boolean,
+    enabled: Boolean = true,
     onToggle: (Boolean) -> Unit,
 ) {
     FoxholeCard(
@@ -981,7 +982,7 @@ internal fun SelectableInstalledAppRow(
             Modifier
                 .fillMaxWidth()
                 .clip(MaterialTheme.shapes.large)
-                .clickable { onToggle(!checked) },
+                .clickable(enabled = enabled) { onToggle(!checked) },
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -992,7 +993,8 @@ internal fun SelectableInstalledAppRow(
             AppTextBlock(app = app, modifier = Modifier.weight(1f))
             FoxholeSwitch(
                 checked = checked,
-                onCheckedChange = onToggle,
+                enabled = enabled,
+                onCheckedChange = if (enabled) onToggle else null,
             )
         }
     }
@@ -1038,30 +1040,7 @@ internal fun AppIcon(
     packageName: String,
     modifier: Modifier = Modifier,
 ) {
-    val context = LocalContext.current
-    val sizePx = with(LocalDensity.current) { 40.dp.roundToPx() }
-    val cached = remember(packageName) { appIconCache.get(packageName) }
-    val bitmap by produceState<ImageBitmap?>(initialValue = cached, packageName, sizePx) {
-        if (value != null) {
-            return@produceState
-        }
-        val resolved =
-            withContext(Dispatchers.IO) {
-                runCatching {
-                    context.packageManager
-                        .getApplicationIcon(packageName)
-                        .toBitmap(
-                            width = sizePx,
-                            height = sizePx,
-                            config = Bitmap.Config.ARGB_8888,
-                        ).asImageBitmap()
-                }.getOrNull()
-            }
-        if (resolved != null) {
-            appIconCache.put(packageName, resolved)
-        }
-        value = resolved
-    }
+    val bitmap = rememberAppIconBitmap(packageName = packageName, bitmapSize = 48.dp)
 
     Surface(
         modifier = modifier.size(56.dp),
@@ -1088,6 +1067,39 @@ internal fun AppIcon(
             }
         }
     }
+}
+
+@Composable
+internal fun rememberAppIconBitmap(
+    packageName: String,
+    bitmapSize: Dp,
+): ImageBitmap? {
+    val context = LocalContext.current
+    val sizePx = with(LocalDensity.current) { bitmapSize.roundToPx() }
+    val cacheKey = remember(packageName, sizePx) { "$packageName@$sizePx" }
+    val cached = remember(cacheKey) { appIconCache.get(cacheKey) }
+    val bitmap by produceState<ImageBitmap?>(initialValue = cached, cacheKey, sizePx) {
+        if (value != null) {
+            return@produceState
+        }
+        val resolved =
+            withContext(Dispatchers.IO) {
+                runCatching {
+                    context.packageManager
+                        .getApplicationIcon(packageName)
+                        .toBitmap(
+                            width = sizePx,
+                            height = sizePx,
+                            config = Bitmap.Config.ARGB_8888,
+                        ).asImageBitmap()
+                }.getOrNull()
+            }
+        if (resolved != null) {
+            appIconCache.put(cacheKey, resolved)
+        }
+        value = resolved
+    }
+    return bitmap
 }
 
 @Composable
@@ -1139,26 +1151,17 @@ internal fun formatProfileUpdatedAt(value: Long?): String =
 @Composable
 internal fun siteRuleSummary(rule: RoutingRule): String = siteActionLabel(rule.action)
 
-private enum class SiteMaskType {
-    EXACT,
-    SUFFIX,
-    KEYWORD,
-    REGEX,
-    CIDR,
-}
-
 @Composable
 internal fun SiteRuleDialog(
     rule: RoutingRule?,
+    defaultAction: RoutingRuleAction = RoutingRuleAction.DIRECT,
     onDismiss: () -> Unit,
     onConfirm: (List<String>, RoutingRuleAction) -> Unit,
 ) {
     val initialToken = remember(rule?.id) { rule?.matchDomains?.firstOrNull() ?: rule?.matchIpCidrs?.firstOrNull()?.let { "cidr:$it" }.orEmpty() }
-    var maskType by rememberSaveable(rule?.id) { mutableStateOf(siteMaskTypeForToken(initialToken)) }
-    var value by rememberSaveable(rule?.id) { mutableStateOf(siteMaskValueForEditor(initialToken)) }
-    var action by rememberSaveable(rule?.id) { mutableStateOf(rule?.action ?: RoutingRuleAction.DIRECT) }
-    var maskDialog by rememberSaveable { mutableStateOf(false) }
-    var actionDialog by rememberSaveable { mutableStateOf(false) }
+    var value by rememberSaveable(rule?.id) { mutableStateOf(initialToken) }
+    var action by rememberSaveable(rule?.id, defaultAction) { mutableStateOf(rule?.action ?: defaultAction) }
+    var actionMenuExpanded by rememberSaveable { mutableStateOf(false) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -1175,30 +1178,36 @@ internal fun SiteRuleDialog(
         },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                FoxholePreferenceCard(
-                    title = stringResource(R.string.site_mask_type_title),
-                    summary = siteMaskExample(maskType),
-                    leadingIcon = Icons.Outlined.Public,
-                    onClick = { maskDialog = true },
-                    trailingContent = {
-                        FoxholeValuePill(siteMaskTypeLabel(maskType))
-                    },
+                Text(
+                    text = stringResource(R.string.supported_site_masks_title),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Text(
+                    text = stringResource(R.string.supported_site_masks_examples),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 OutlinedTextField(
                     value = value,
                     onValueChange = { value = it.trim() },
-                    label = { Text(siteMaskInputLabel(maskType)) },
+                    label = { Text(stringResource(R.string.site_mask_input_label)) },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                 )
-                FoxholePreferenceCard(
+                DropdownSettingRow(
                     title = stringResource(R.string.action_label),
+                    value = siteActionLabel(action),
+                    expanded = actionMenuExpanded,
+                    onExpandedChange = { actionMenuExpanded = it },
+                    values = RoutingRuleAction.entries,
+                    selected = action,
+                    label = { siteActionLabel(it) },
+                    onSelect = { action = it },
                     summary = stringResource(R.string.site_exception_action_summary),
                     leadingIcon = siteActionIcon(action),
-                    onClick = { actionDialog = true },
-                    trailingContent = {
-                        FoxholeValuePill(siteActionLabel(action))
-                    },
+                    optionIcon = { siteActionIcon(it) },
                 )
             }
         },
@@ -1206,7 +1215,7 @@ internal fun SiteRuleDialog(
             FoxholeDialogConfirmButton(
                 onClick = {
                     onConfirm(
-                        siteMaskToken(maskType, value)?.let(::listOf).orEmpty(),
+                        siteMaskToken(value)?.let(::listOf).orEmpty(),
                         action,
                     )
                 },
@@ -1216,92 +1225,17 @@ internal fun SiteRuleDialog(
             FoxholeDialogDismissButton(onClick = onDismiss)
         },
     )
-
-    if (maskDialog) {
-        ChoiceDialog(
-            title = stringResource(R.string.site_mask_type_title),
-            values = SiteMaskType.entries,
-            selected = maskType,
-            label = { siteMaskTypeLabel(it) },
-            icon = { Icons.Outlined.Public },
-            onDismiss = { maskDialog = false },
-            onSelect = {
-                maskType = it
-                maskDialog = false
-            },
-        )
-    }
-
-    if (actionDialog) {
-        ChoiceDialog(
-            title = stringResource(R.string.action_label),
-            values = RoutingRuleAction.entries,
-            selected = action,
-            label = { siteActionLabel(it) },
-            icon = { siteActionIcon(it) },
-            onDismiss = { actionDialog = false },
-            onSelect = {
-                action = it
-                actionDialog = false
-            },
-        )
-    }
 }
 
-@Composable
-private fun siteMaskTypeLabel(type: SiteMaskType): String =
-    when (type) {
-        SiteMaskType.EXACT -> stringResource(R.string.site_mask_exact)
-        SiteMaskType.SUFFIX -> stringResource(R.string.site_mask_suffix)
-        SiteMaskType.KEYWORD -> stringResource(R.string.site_mask_keyword)
-        SiteMaskType.REGEX -> stringResource(R.string.site_mask_regex)
-        SiteMaskType.CIDR -> stringResource(R.string.site_mask_cidr)
-    }
-
-@Composable
-private fun siteMaskInputLabel(type: SiteMaskType): String =
-    when (type) {
-        SiteMaskType.CIDR -> stringResource(R.string.match_ip_cidrs)
-        else -> stringResource(R.string.match_domains)
-    }
-
-private fun siteMaskExample(type: SiteMaskType): String =
-    when (type) {
-        SiteMaskType.EXACT -> "example.com"
-        SiteMaskType.SUFFIX -> "*.example.com"
-        SiteMaskType.KEYWORD -> "kw:video"
-        SiteMaskType.REGEX -> "re:^stun\\\\..+"
-        SiteMaskType.CIDR -> "cidr:1.2.3.0/24"
-    }
-
-private fun siteMaskTypeForToken(token: String): SiteMaskType =
-    when {
-        token.startsWith("cidr:") -> SiteMaskType.CIDR
-        token.startsWith("kw:") -> SiteMaskType.KEYWORD
-        token.startsWith("re:") -> SiteMaskType.REGEX
-        token.startsWith("*.") || token.startsWith(".") -> SiteMaskType.SUFFIX
-        else -> SiteMaskType.EXACT
-    }
-
-private fun siteMaskValueForEditor(token: String): String =
-    token
-        .removePrefix("cidr:")
-        .removePrefix("kw:")
-        .removePrefix("re:")
-        .removePrefix("*.")
-        .removePrefix(".")
-
-private fun siteMaskToken(
-    type: SiteMaskType,
-    value: String,
-): String? {
+private fun siteMaskToken(value: String): String? {
     val normalized = value.trim().takeIf(String::isNotBlank) ?: return null
-    return when (type) {
-        SiteMaskType.EXACT -> normalized
-        SiteMaskType.SUFFIX -> "*.${normalized.removePrefix("*.").removePrefix(".")}"
-        SiteMaskType.KEYWORD -> "kw:${normalized.removePrefix("kw:")}"
-        SiteMaskType.REGEX -> "re:${normalized.removePrefix("re:")}"
-        SiteMaskType.CIDR -> "cidr:${normalized.removePrefix("cidr:")}"
+    return when {
+        normalized.startsWith("cidr:") ||
+            normalized.startsWith("kw:") ||
+            normalized.startsWith("re:") ||
+            normalized.startsWith("*.") -> normalized
+        normalized.startsWith(".") -> "*.${normalized.removePrefix(".")}"
+        else -> normalized
     }
 }
 
@@ -1356,7 +1290,7 @@ internal fun siteActionLabel(action: RoutingRuleAction): String =
 
 internal fun siteActionIcon(action: RoutingRuleAction): ImageVector =
     when (action) {
-        RoutingRuleAction.PROXY -> Icons.Outlined.Tune
+        RoutingRuleAction.PROXY -> Icons.Outlined.Public
         RoutingRuleAction.DIRECT -> Icons.Outlined.ArrowOutward
         RoutingRuleAction.BLOCK -> Icons.Outlined.Block
     }

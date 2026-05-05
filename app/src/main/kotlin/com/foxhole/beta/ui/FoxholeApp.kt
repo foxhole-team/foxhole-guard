@@ -94,6 +94,7 @@ private object AppRoute {
     const val ROUTING = "settings/routing"
     const val ROUTING_APPS = "settings/routing/apps"
     const val ROUTING_APPS_PICKER = "settings/routing/apps/picker"
+    const val ROUTING_BLOCKED_APPS_PICKER = "settings/routing/apps/blocked-picker"
     const val ROUTING_SITES = "settings/routing/sites"
     const val SMART_START = "settings/smart-start"
     const val APPLICATION = "settings/application"
@@ -414,6 +415,8 @@ fun FoxholeApp(
                         onTunStackSelected = viewModel::onTunStackSelected,
                         onLocalProxyAuthEnabledChanged = viewModel::onLocalProxyAuthEnabledChanged,
                         onLocalProxyAuthChanged = viewModel::onLocalProxyAuthChanged,
+                        onLanProxyAuthEnabledChanged = viewModel::onLanProxyAuthEnabledChanged,
+                        onLanProxyAuthChanged = viewModel::onLanProxyAuthChanged,
                         onLocalProxyLanAccessChanged = viewModel::onLocalProxyLanAccessChanged,
                         onProxySurfaceModeSelected = viewModel::onProxySurfaceModeSelected,
                         onLanProxySurfaceModeSelected = viewModel::onLanProxySurfaceModeSelected,
@@ -458,9 +461,9 @@ fun FoxholeApp(
                         onNavigateUp = navController::navigateUp,
                         onPerAppRoutingModeSelected = viewModel::onPerAppRoutingModeSelected,
                         onOpenPicker = { navController.navigate(AppRoute.ROUTING_APPS_PICKER) },
+                        onOpenBlockedPicker = { navController.navigate(AppRoute.ROUTING_BLOCKED_APPS_PICKER) },
                         onSelectedPackagesChanged = viewModel::onSelectedPackagesChanged,
                         onBlockedPackagesChanged = viewModel::onBlockedPackagesChanged,
-                        onBlockedPackagesEnabledChanged = viewModel::onBlockedPackagesEnabledChanged,
                     )
                 }
                 composable(AppRoute.ROUTING_APPS_PICKER) {
@@ -469,13 +472,30 @@ fun FoxholeApp(
                     }
                     val state by viewModel.routingRouteState.collectAsStateWithLifecycle()
                     AppPickerScreen(
+                        title = stringResource(R.string.app_picker_title),
+                        selectionTitle = stringResource(R.string.selected_app_exceptions),
+                        selectedPackages = state.settings.expert.selectedPackages,
+                        lockedPackages = state.settings.expert.blockedPackages.toSet(),
                         state = state,
                         snackbarHostState = snackbarHostState,
                         onNavigateUp = navController::navigateUp,
-                        onSaveSelection = {
-                            viewModel.onSelectedPackagesChanged(it)
-                            navController.navigateUp()
-                        },
+                        onSelectionChanged = viewModel::onSelectedPackagesChanged,
+                    )
+                }
+                composable(AppRoute.ROUTING_BLOCKED_APPS_PICKER) {
+                    LaunchedEffect(Unit) {
+                        viewModel.ensureInstalledAppsLoaded()
+                    }
+                    val state by viewModel.routingRouteState.collectAsStateWithLifecycle()
+                    AppPickerScreen(
+                        title = stringResource(R.string.blocked_app_exceptions),
+                        selectionTitle = stringResource(R.string.blocked_app_exceptions),
+                        selectedPackages = state.settings.expert.blockedPackages,
+                        lockedPackages = state.settings.expert.selectedPackages.toSet(),
+                        state = state,
+                        snackbarHostState = snackbarHostState,
+                        onNavigateUp = navController::navigateUp,
+                        onSelectionChanged = viewModel::onBlockedPackagesChanged,
                     )
                 }
                 composable(AppRoute.ROUTING_SITES) {
@@ -484,7 +504,6 @@ fun FoxholeApp(
                         state = state,
                         snackbarHostState = snackbarHostState,
                         onNavigateUp = navController::navigateUp,
-                        onSiteRoutingActionSelected = viewModel::onSiteRoutingActionSelected,
                         onSaveSiteRule = viewModel::saveSiteRule,
                         onDeleteRule = viewModel::deleteRule,
                     )

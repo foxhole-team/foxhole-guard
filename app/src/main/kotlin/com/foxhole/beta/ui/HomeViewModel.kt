@@ -864,6 +864,10 @@ class HomeViewModel(
 
     fun onLocalProxyAuthChanged(value: LocalAuthSettings) = onLocalProxyAuthChangedInternal(value)
 
+    fun onLanProxyAuthEnabledChanged(value: Boolean) = onLanProxyAuthEnabledChangedInternal(value)
+
+    fun onLanProxyAuthChanged(value: LocalAuthSettings) = onLanProxyAuthChangedInternal(value)
+
     fun onLocalProxyLanAccessChanged(value: Boolean) = onLocalProxyLanAccessChangedInternal(value)
 
     fun onClashApiChanged(value: ClashApiSettings) = onClashApiChangedInternal(value)
@@ -988,6 +992,12 @@ class HomeViewModel(
         domains: List<String>,
         action: RoutingRuleAction,
     ) = saveSiteRuleInternal(ruleId, domains, action)
+
+    fun onSiteRuleMoved(
+        ruleId: Long,
+        action: RoutingRuleAction,
+        ruleIdsInOrder: List<Long>,
+    ) = onSiteRuleMovedInternal(ruleId, action, ruleIdsInOrder)
 
     fun createDiagnosticsArchive(sanitize: Boolean = true): File = createDiagnosticsArchiveInternal(sanitize = sanitize)
 

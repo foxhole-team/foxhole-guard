@@ -41,10 +41,12 @@ import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.FileDownload
 import androidx.compose.material.icons.outlined.FileUpload
 import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.Key
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.PhoneAndroid
 import androidx.compose.material.icons.outlined.PowerSettingsNew
 import androidx.compose.material.icons.outlined.Public
+import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Router
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.AlertDialog
@@ -725,6 +727,7 @@ internal fun LocalProxyAuthEditor(
         title = stringResource(R.string.username),
         value = auth.username,
         summary = stringResource(R.string.proxy_auth_live_apply_summary),
+        leadingIcon = Icons.Outlined.Person,
         onClick = { usernameDialog = true },
         trailingContent = {
             Row(
@@ -748,6 +751,7 @@ internal fun LocalProxyAuthEditor(
     SettingValueRow(
         title = stringResource(R.string.password),
         value = maskedProxySecret(auth.password),
+        leadingIcon = Icons.Outlined.Key,
         onClick = { passwordDialog = true },
         trailingContent = {
             Row(
