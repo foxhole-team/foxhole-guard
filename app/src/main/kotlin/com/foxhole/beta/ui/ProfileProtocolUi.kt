@@ -979,11 +979,8 @@ internal fun SelectableInstalledAppRow(
     onToggle: (Boolean) -> Unit,
 ) {
     FoxholeCard(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .clip(MaterialTheme.shapes.large)
-                .clickable(enabled = enabled) { onToggle(!checked) },
+        modifier = Modifier.fillMaxWidth(),
+        onClick = if (enabled) ({ onToggle(!checked) }) else null,
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),

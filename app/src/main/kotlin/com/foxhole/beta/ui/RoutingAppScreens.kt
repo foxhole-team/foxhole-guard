@@ -125,6 +125,57 @@ fun RoutingAppsScreen(
         bannerPlacement = FoxholeBannerPlacement.BOTTOM,
     ) {
         item {
+            SettingsControlGroup {
+                SettingSwitchRow(
+                    title = stringResource(R.string.enable_split_tunnel),
+                    checked = splitTunnelEnabled,
+                    enabled = splitTunnelToggleEnabled,
+                    leadingIcon = Icons.Outlined.AccountTree,
+                    summary =
+                        if (!splitTunnelToggleEnabled) {
+                            stringResource(R.string.split_tunnel_requires_apps)
+                        } else {
+                            null
+                        },
+                    onCheckedChange = { enabled ->
+                        if (enabled && !hasTunnelApps) {
+                            return@SettingSwitchRow
+                        }
+                        if (!enabled) {
+                            draftAppMode = effectiveAppMode
+                        }
+                        onPerAppRoutingModeSelected(
+                            if (enabled) {
+                                effectiveAppMode
+                            } else {
+                                PerAppRoutingMode.FULL_TUNNEL
+                            },
+                        )
+                    },
+                    grouped = true,
+                )
+                SettingsControlGroupDivider()
+                DropdownSettingRow(
+                    title = stringResource(R.string.operating_mode),
+                    value = simpleAppRoutingModeLabel(effectiveAppMode),
+                    expanded = modeMenuExpanded,
+                    onExpandedChange = { modeMenuExpanded = it },
+                    values = appModeValues,
+                    selected = effectiveAppMode,
+                    label = ::simpleAppRoutingModeLabel,
+                    onSelect = { mode ->
+                        draftAppMode = mode
+                        if (splitTunnelEnabled) {
+                            onPerAppRoutingModeSelected(mode)
+                        }
+                    },
+                    leadingIcon = perAppRoutingModeIcon(effectiveAppMode),
+                    optionIcon = ::perAppRoutingModeIcon,
+                    grouped = true,
+                )
+            }
+        }
+        item {
             AppGridSection(
                 title = stringResource(R.string.routing_apps_title),
                 subtitle = simpleAppRoutingModeGuidance(effectiveAppMode),
@@ -144,55 +195,27 @@ fun RoutingAppsScreen(
                     }
                 },
                 modifier = Modifier.testTag("routing_apps_selected_section"),
-                extraContent = {
-                    SettingSwitchRow(
-                        title = stringResource(R.string.enable_split_tunnel),
-                        checked = splitTunnelEnabled,
-                        enabled = splitTunnelToggleEnabled,
-                        leadingIcon = Icons.Outlined.AccountTree,
-                        summary =
-                            if (!splitTunnelToggleEnabled) {
-                                stringResource(R.string.split_tunnel_requires_apps)
-                            } else {
-                                null
-                            },
-                        onCheckedChange = { enabled ->
-                            if (enabled && !hasTunnelApps) {
-                                return@SettingSwitchRow
-                            }
-                            if (!enabled) {
-                                draftAppMode = effectiveAppMode
-                            }
-                            onPerAppRoutingModeSelected(
-                                if (enabled) {
-                                    effectiveAppMode
-                                } else {
-                                    PerAppRoutingMode.FULL_TUNNEL
-                                },
-                            )
-                        },
-                        grouped = true,
-                    )
-                    DropdownSettingRow(
-                        title = stringResource(R.string.operating_mode),
-                        value = simpleAppRoutingModeLabel(effectiveAppMode),
-                        expanded = modeMenuExpanded,
-                        onExpandedChange = { modeMenuExpanded = it },
-                        values = appModeValues,
-                        selected = effectiveAppMode,
-                        label = ::simpleAppRoutingModeLabel,
-                        onSelect = { mode ->
-                            draftAppMode = mode
-                            if (splitTunnelEnabled) {
-                                onPerAppRoutingModeSelected(mode)
-                            }
-                        },
-                        leadingIcon = perAppRoutingModeIcon(effectiveAppMode),
-                        optionIcon = ::perAppRoutingModeIcon,
-                        grouped = true,
-                    )
-                },
             )
+        }
+        item {
+            SettingsControlGroup {
+                SettingSwitchRow(
+                    title = stringResource(R.string.block_apps_always_title),
+                    checked = state.settings.expert.blockAppsAlways && state.settings.expert.blockedPackagesEnabled && blockedPackages.isNotEmpty(),
+                    enabled = blockedPackages.isNotEmpty(),
+                    leadingIcon = Icons.Outlined.Block,
+                    summary = stringResource(R.string.block_apps_always_summary),
+                    summaryMaxLines = 6,
+                    onCheckedChange = { enabled ->
+                        if (enabled) {
+                            blockAlwaysWarningVisible = true
+                        } else {
+                            onBlockAppsAlwaysChanged(false)
+                        }
+                    },
+                    grouped = true,
+                )
+            }
         }
         item {
             AppGridSection(
@@ -214,24 +237,6 @@ fun RoutingAppsScreen(
                     }
                 },
                 modifier = Modifier.testTag("routing_apps_blocked_section"),
-                extraContent = {
-                    SettingSwitchRow(
-                        title = stringResource(R.string.block_apps_always_title),
-                        checked = state.settings.expert.blockAppsAlways && state.settings.expert.blockedPackagesEnabled && blockedPackages.isNotEmpty(),
-                        enabled = blockedPackages.isNotEmpty(),
-                        leadingIcon = Icons.Outlined.Block,
-                        summary = stringResource(R.string.block_apps_always_summary),
-                        summaryMaxLines = 6,
-                        onCheckedChange = { enabled ->
-                            if (enabled) {
-                                blockAlwaysWarningVisible = true
-                            } else {
-                                onBlockAppsAlwaysChanged(false)
-                            }
-                        },
-                        grouped = true,
-                    )
-                },
             )
         }
     }
@@ -264,7 +269,6 @@ private fun AppGridSection(
     headerActionLabel: String? = null,
     headerActionTag: String? = null,
     onHeaderAction: (() -> Unit)? = null,
-    extraContent: (@Composable () -> Unit)? = null,
 ) {
     val haptic = LocalHapticFeedback.current
     FoxholeCard(
@@ -280,11 +284,6 @@ private fun AppGridSection(
                     },
             ),
     ) {
-        extraContent?.let { content ->
-            Column(modifier = Modifier.padding(start = 16.dp)) {
-                content()
-            }
-        }
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
