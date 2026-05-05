@@ -1084,6 +1084,7 @@ internal fun FoxholeVpnService.onConnectionStartedInternal(
     session: VpnSession,
     trafficMode: TrafficMode,
 ) {
+    val previousSnapshot = FoxholeVpnRuntimeBridge.snapshot.value
     resetAutoReconnectState()
     if (trafficJob == null) {
         trafficSampler.start()
@@ -1098,6 +1099,7 @@ internal fun FoxholeVpnService.onConnectionStartedInternal(
             profileName = session.profileName,
             protocolHint = session.protocolHint,
             protocolOptionId = session.protocolOptionId,
+            isSmartStartConnection = previousSnapshot.isSmartStartConnection,
         ),
     )
     updateNotification()
@@ -1140,13 +1142,15 @@ internal fun FoxholeVpnService.currentNotificationSnapshotInternal(): Notificati
         txTotal = traffic.txTotalBytes,
         rxTotal = traffic.rxTotalBytes,
         updatedAt = maxOf(connection.lastChangeAt, ipInfo?.fetchedAt ?: 0L, traffic.sampledAt),
+        isSmartStartConnection = connection.isSmartStartConnection,
     )
 }
 
 internal fun FoxholeVpnService.notificationCollapsedTextInternal(snapshot: NotificationSnapshot): String =
-    notificationHealthText(snapshot).orEmpty()
+    buildNotificationStatusText(snapshot, notificationHealthText(snapshot))
 
-internal fun FoxholeVpnService.notificationExpandedTextInternal(snapshot: NotificationSnapshot): String? = notificationHealthText(snapshot)
+internal fun FoxholeVpnService.notificationExpandedTextInternal(snapshot: NotificationSnapshot): String? =
+    buildNotificationStatusText(snapshot, notificationHealthText(snapshot))
 
 internal fun FoxholeVpnService.notificationHealthTextInternal(snapshot: NotificationSnapshot): String? =
     notificationBodyRes(snapshot)?.let(::getString)
@@ -1172,7 +1176,12 @@ internal fun FoxholeVpnService.notificationStateLabelInternal(snapshot: Notifica
     when {
         activeLocalGuardMode == LocalGuardMode.FIREWALL -> getString(R.string.notification_status_firewall)
         activeLocalGuardMode == LocalGuardMode.JOURNAL -> getString(R.string.notification_status_journal)
-        snapshot.state == ConnectionState.CONNECTED -> getString(R.string.notification_status_connected)
+        snapshot.state == ConnectionState.CONNECTED ->
+            if (snapshot.isSmartStartConnection) {
+                getString(R.string.notification_status_connected_smart)
+            } else {
+                getString(R.string.notification_status_connected)
+            }
         snapshot.state == ConnectionState.CONNECTING &&
             snapshot.statusMessage == getString(R.string.notification_status_analysis) ->
             getString(R.string.notification_status_analysis)
@@ -1180,6 +1189,19 @@ internal fun FoxholeVpnService.notificationStateLabelInternal(snapshot: Notifica
         snapshot.state == ConnectionState.RECONNECTING -> getString(R.string.notification_status_reconnecting)
         snapshot.state == ConnectionState.ERROR -> getString(R.string.notification_status_error)
         else -> getString(R.string.notification_status_disconnected)
+    }
+
+private fun FoxholeVpnService.buildNotificationStatusText(
+    snapshot: NotificationSnapshot,
+    baseText: String?,
+): String =
+    when {
+        activeLocalGuardMode != null -> baseText.orEmpty()
+        snapshot.state == ConnectionState.CONNECTED && snapshot.isSmartStartConnection ->
+            listOfNotNull(baseText, getString(R.string.smart_profile_tag))
+                .filter(String::isNotBlank)
+                .joinToString(separator = " • ")
+        else -> baseText.orEmpty()
     }
 
 private fun FoxholeVpnService.notificationBodyRes(snapshot: NotificationSnapshot): Int? =

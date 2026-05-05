@@ -27,6 +27,7 @@ import androidx.compose.material.icons.outlined.Block
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.Public
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
@@ -62,6 +63,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.IntOffset
@@ -204,7 +206,8 @@ fun RoutingAppsScreen(
                     enabled = blockedPackages.isNotEmpty(),
                     leadingIcon = Icons.Outlined.Block,
                     summary = stringResource(R.string.block_apps_always_summary),
-                    summaryMaxLines = 6,
+                    infoBody = stringResource(R.string.block_apps_always_warning_body),
+                    summaryMaxLines = 2,
                     onCheckedChange = { enabled ->
                         if (enabled) {
                             blockAlwaysWarningVisible = true
@@ -291,21 +294,26 @@ private fun AppGridSectionContent(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Icon(
-                imageVector = leadingIcon,
-                contentDescription = null,
-                modifier = Modifier.size(20.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
             Column(
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(2.dp),
             ) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                )
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        imageVector = leadingIcon,
+                        contentDescription = null,
+                        modifier = Modifier.size(22.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
                 subtitle?.takeIf(String::isNotBlank)?.let { text ->
                     Text(
                         text = text,
@@ -333,8 +341,12 @@ private fun AppGridSectionContent(
             if (emptyText.isNotBlank()) {
                 Text(
                     text = emptyText,
+                    modifier = Modifier.fillMaxWidth(),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
         } else {
@@ -611,7 +623,7 @@ fun RoutingSitesScreen(
                     title = stringResource(R.string.sniff_traffic),
                     checked = state.settings.expert.sniff,
                     summary = stringResource(R.string.sniff_traffic_summary),
-                    leadingIcon = Icons.Outlined.Public,
+                    leadingIcon = Icons.Outlined.Language,
                     onCheckedChange = onSniffChanged,
                     grouped = true,
                 )
@@ -688,9 +700,9 @@ private fun SiteHeaderCard(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Icon(
-                imageVector = Icons.Outlined.Public,
+                imageVector = Icons.Outlined.Language,
                 contentDescription = null,
-                modifier = Modifier.size(20.dp),
+                modifier = Modifier.size(22.dp),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Column(
@@ -771,13 +783,40 @@ private fun SiteRuleCard(
                         overflow = TextOverflow.Ellipsis,
                     )
                     Text(
-                        text = siteActionLabel(rule.action),
+                        text = rule.siteRuleTokens().drop(1).joinToString().ifBlank { siteActionLabel(rule.action) },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                     )
                 }
+                SiteActionBadge(action = rule.action)
             }
         }
+    }
+}
+
+@Composable
+private fun SiteActionBadge(action: RoutingRuleAction) {
+    val color =
+        when (action) {
+            RoutingRuleAction.BLOCK -> MaterialTheme.colorScheme.error
+            RoutingRuleAction.PROXY -> FoxholePositiveAccent
+            RoutingRuleAction.DIRECT -> MaterialTheme.colorScheme.primary
+        }
+    Surface(
+        shape = MaterialTheme.shapes.small,
+        color = color.copy(alpha = 0.12f),
+        border = BorderStroke(1.dp, color.copy(alpha = 0.34f)),
+    ) {
+        Text(
+            text = action.name,
+            modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.Black,
+            color = color,
+            maxLines = 1,
+        )
     }
 }
 

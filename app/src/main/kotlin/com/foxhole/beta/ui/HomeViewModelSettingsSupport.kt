@@ -12,6 +12,8 @@ import com.foxhole.beta.core.model.DomainStrategy
 import com.foxhole.beta.core.model.LocalAuthSettings
 import com.foxhole.beta.core.model.LatencyProbeMethod
 import com.foxhole.beta.core.model.PerAppRoutingMode
+import com.foxhole.beta.core.model.PrivacyRouteMode
+import com.foxhole.beta.core.model.PrivacyRouteScope
 import com.foxhole.beta.core.model.Profile
 import com.foxhole.beta.core.model.ProxyInboundSettings
 import com.foxhole.beta.core.model.ProxySurfaceMode
@@ -214,6 +216,13 @@ internal fun HomeViewModel.onBlockScreenshotsChangedInternal(value: Boolean) {
     }
 }
 
+internal fun HomeViewModel.onKillSwitchChangedInternal(value: Boolean) {
+    viewModelScope.launch {
+        container.settingsRepository.updateKillSwitchEnabled(value)
+        container.connectionController.syncLocalGuard()
+    }
+}
+
 internal fun HomeViewModel.onNetworkActivityLoggingChangedInternal(value: Boolean) {
     viewModelScope.launch {
         container.settingsRepository.updateNetworkActivityLogging(value)
@@ -300,6 +309,32 @@ internal fun HomeViewModel.onSelectedPackagesChangedInternal(value: List<String>
     }
 }
 
+internal fun HomeViewModel.onPrivacyRouteModeSelectedInternal(value: PrivacyRouteMode) {
+    updateRuntimeSettingAndMaybeReload {
+        container.settingsRepository.updatePrivacyRouteMode(value)
+        if (value == PrivacyRouteMode.TOR_OVER_VPN) {
+            container.settingsRepository.updateKillSwitchEnabled(true)
+        }
+    }
+}
+
+internal fun HomeViewModel.onPrivacyRouteScopeSelectedInternal(value: PrivacyRouteScope) {
+    updateRuntimeSettingAndMaybeReload {
+        container.settingsRepository.updatePrivacyRouteScope(value)
+        if (value == PrivacyRouteScope.ALL_APPS) {
+            container.settingsRepository.updateKillSwitchEnabled(true)
+        }
+    }
+}
+
+internal fun HomeViewModel.onPrivacyRouteSelectedPackagesChangedInternal(value: List<String>) {
+    updateRuntimeSettingAndMaybeReload {
+        container.settingsRepository.updatePrivacyRouteSelectedPackages(
+            value.filterNot { it == getApplication<Application>().packageName },
+        )
+    }
+}
+
 internal fun HomeViewModel.onBlockedPackagesChangedInternal(value: List<String>) {
     updateAppRoutingSettingAndPromptReconnect(requiresRuntimeWhenFull = true) {
         container.settingsRepository.updateBlockedPackages(
@@ -318,6 +353,9 @@ internal fun HomeViewModel.onBlockedPackagesEnabledChangedInternal(value: Boolea
 
 internal fun HomeViewModel.onBlockAppsAlwaysChangedInternal(value: Boolean) {
     updateAppRoutingSettingAndPromptReconnect(requiresRuntimeWhenFull = true) {
+        if (value) {
+            container.settingsRepository.updateKillSwitchEnabled(true)
+        }
         container.settingsRepository.updateBlockAppsAlways(value)
         container.connectionController.syncLocalGuard()
     }

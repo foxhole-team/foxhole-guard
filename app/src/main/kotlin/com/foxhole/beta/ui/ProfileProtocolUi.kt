@@ -33,7 +33,6 @@ import androidx.compose.material.icons.outlined.Cloud
 import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.Hub
 import androidx.compose.material.icons.outlined.Info
-import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.RemoveCircleOutline
 import androidx.compose.material.icons.outlined.Security
@@ -1058,8 +1057,9 @@ internal fun AppIcon(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Icon(
-                    imageVector = Icons.Outlined.Person,
+                    imageVector = Icons.Outlined.Apps,
                     contentDescription = null,
+                    modifier = Modifier.size(24.dp),
                     tint = MaterialTheme.colorScheme.primary,
                 )
             }

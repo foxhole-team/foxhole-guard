@@ -75,11 +75,13 @@ class FoxholeConnectionController(
         profileId: Long,
         protocolOptionId: String? = null,
         statusMessage: String? = null,
+        isSmartStartConnection: Boolean = false,
         previousVpnNetworkHandle: Long? = null,
     ) = lifecycle.connect(
         profileId = profileId,
         protocolOptionId = protocolOptionId,
         statusMessage = statusMessage,
+        isSmartStartConnection = isSmartStartConnection,
         previousVpnNetworkHandle = previousVpnNetworkHandle,
     )
 

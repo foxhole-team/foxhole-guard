@@ -97,6 +97,7 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
@@ -115,6 +116,8 @@ import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupPositionProvider
 import androidx.compose.ui.window.PopupProperties
 import androidx.core.content.getSystemService
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import com.foxhole.beta.R
 import com.foxhole.beta.core.model.ThemeMode
 import com.foxhole.beta.ui.theme.LocalFoxholeDarkTheme
@@ -180,6 +183,23 @@ internal fun foxholeTransportBadgeColor(): Color =
         ThemeMode.DARK -> MaterialTheme.colorScheme.onSurfaceVariant
         ThemeMode.LIGHT -> FoxholeInfoAccent
     }
+
+@Composable
+internal fun foxholeHorizontalSafePadding(): Pair<Dp, Dp> {
+    val view = LocalView.current
+    val configuration = LocalConfiguration.current
+    val density = LocalDensity.current
+    return remember(view, configuration, density) {
+        val insets = ViewCompat.getRootWindowInsets(view)
+        val cutoutInsets = insets?.getInsets(WindowInsetsCompat.Type.displayCutout())
+        val systemInsets = insets?.getInsets(WindowInsetsCompat.Type.systemBars())
+        with(density) {
+            val start = max(cutoutInsets?.left ?: 0, systemInsets?.left ?: 0).toDp()
+            val end = max(cutoutInsets?.right ?: 0, systemInsets?.right ?: 0).toDp()
+            start to end
+        }
+    }
+}
 
 internal fun Modifier.foxholeAnimateContentSize(): Modifier =
     animateContentSize(
@@ -691,6 +711,7 @@ internal fun FoxholeLazyScaffold(
         bannerTopPadding = FoxholeTopBarBannerPadding,
         bannerPlacement = bannerPlacement,
     ) { padding ->
+        val (safeStartPadding, safeEndPadding) = foxholeHorizontalSafePadding()
         LazyColumn(
             modifier =
                 modifier
@@ -699,9 +720,9 @@ internal fun FoxholeLazyScaffold(
                     .testTag(tag),
             contentPadding =
                 PaddingValues(
-                    start = ScreenHorizontalPadding,
+                    start = ScreenHorizontalPadding + safeStartPadding,
                     top = ScreenVerticalPadding,
-                    end = ScreenHorizontalPadding,
+                    end = ScreenHorizontalPadding + safeEndPadding,
                     bottom = BottomDockOverlayPadding,
                 ),
             verticalArrangement = Arrangement.spacedBy(ScreenSectionSpacing),

@@ -306,6 +306,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
                 protocolHint = session.protocolHint,
                 protocolOptionId = session.protocolOptionId,
                 message = FoxholeVpnRuntimeBridge.snapshot.value.message,
+                isSmartStartConnection = FoxholeVpnRuntimeBridge.snapshot.value.isSmartStartConnection,
             ),
         )
         updateNotification()

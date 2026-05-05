@@ -91,9 +91,11 @@ private object AppRoute {
     const val PROFILE_EDIT_CONFIG = "profiles/{$PROFILE_ID}/edit-config"
     const val SETTINGS = "settings"
     const val TRAFFIC = "settings/traffic"
+    const val PRIVACY_ROUTE = "settings/privacy-route"
     const val ROUTING_APPS = "settings/routing/apps"
     const val ROUTING_APPS_PICKER = "settings/routing/apps/picker"
     const val ROUTING_BLOCKED_APPS_PICKER = "settings/routing/apps/blocked-picker"
+    const val PRIVACY_ROUTE_APPS_PICKER = "settings/privacy-route/apps-picker"
     const val ROUTING_SITES = "settings/routing/sites"
     const val SMART_START = "settings/smart-start"
     const val APPLICATION = "settings/application"
@@ -379,6 +381,7 @@ fun FoxholeApp(
                         snackbarHostState = snackbarHostState,
                         onNavigateUp = null,
                         onOpenTraffic = { navController.navigate(AppRoute.TRAFFIC) },
+                        onOpenPrivacyRoute = { navController.navigate(AppRoute.PRIVACY_ROUTE) },
                         onOpenRoutingApps = { navController.navigate(AppRoute.ROUTING_APPS) },
                         onOpenRoutingSites = { navController.navigate(AppRoute.ROUTING_SITES) },
                         onOpenSmartStart = { navController.navigate(AppRoute.SMART_START) },
@@ -413,9 +416,13 @@ fun FoxholeApp(
                         snackbarHostState = snackbarHostState,
                         onNavigateUp = navController::navigateUp,
                         onAcknowledgeUnsafeWarning = viewModel::acknowledgeUnsafeWarning,
+                        onKillSwitchChanged = viewModel::onKillSwitchChanged,
                         onTrafficModeSelected = viewModel::onTrafficModeSelected,
                         onPerAppRoutingModeSelected = viewModel::onPerAppRoutingModeSelected,
                         onOpenRoutingApps = { navController.navigate(AppRoute.ROUTING_APPS) },
+                        onPrivacyRouteModeSelected = viewModel::onPrivacyRouteModeSelected,
+                        onPrivacyRouteScopeSelected = viewModel::onPrivacyRouteScopeSelected,
+                        onOpenPrivacyRouteApps = { navController.navigate(AppRoute.PRIVACY_ROUTE_APPS_PICKER) },
                         onLatencyProbeMethodSelected = viewModel::onLatencyProbeMethodSelected,
                         onTunStackSelected = viewModel::onTunStackSelected,
                         onLocalProxyAuthEnabledChanged = viewModel::onLocalProxyAuthEnabledChanged,
@@ -435,6 +442,17 @@ fun FoxholeApp(
                         onAutoRefreshSubscriptionsChanged = viewModel::onAutoRefreshSubscriptionsChanged,
                         onSubscriptionRefreshIntervalSelected = viewModel::onSubscriptionRefreshIntervalSelected,
                         onIpInfoEndpointChanged = viewModel::onIpInfoEndpointChanged,
+                    )
+                }
+                composable(AppRoute.PRIVACY_ROUTE) {
+                    val state by viewModel.settingsRouteState.collectAsStateWithLifecycle()
+                    PrivacyRouteSettingsScreen(
+                        state = state,
+                        snackbarHostState = snackbarHostState,
+                        onNavigateUp = navController::navigateUp,
+                        onPrivacyRouteModeSelected = viewModel::onPrivacyRouteModeSelected,
+                        onPrivacyRouteScopeSelected = viewModel::onPrivacyRouteScopeSelected,
+                        onOpenPrivacyRouteApps = { navController.navigate(AppRoute.PRIVACY_ROUTE_APPS_PICKER) },
                     )
                 }
                 composable(AppRoute.ROUTING_APPS) {
@@ -481,6 +499,22 @@ fun FoxholeApp(
                         snackbarHostState = snackbarHostState,
                         onNavigateUp = navController::navigateUp,
                         onSelectionChanged = viewModel::onBlockedPackagesChanged,
+                    )
+                }
+                composable(AppRoute.PRIVACY_ROUTE_APPS_PICKER) {
+                    LaunchedEffect(Unit) {
+                        viewModel.ensureInstalledAppsLoaded()
+                    }
+                    val state by viewModel.routingRouteState.collectAsStateWithLifecycle()
+                    AppPickerScreen(
+                        title = stringResource(R.string.privacy_route_selected_apps_title),
+                        selectionTitle = stringResource(R.string.privacy_route_selected_apps_title),
+                        selectedPackages = state.settings.privacyRoute.selectedPackages,
+                        lockedPackages = emptySet(),
+                        state = state,
+                        snackbarHostState = snackbarHostState,
+                        onNavigateUp = navController::navigateUp,
+                        onSelectionChanged = viewModel::onPrivacyRouteSelectedPackagesChanged,
                     )
                 }
                 composable(AppRoute.ROUTING_SITES) {

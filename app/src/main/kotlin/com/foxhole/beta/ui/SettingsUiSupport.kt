@@ -208,6 +208,7 @@ internal fun SettingValueRow(
     title: String,
     value: String,
     summary: String? = null,
+    infoBody: String? = null,
     leadingIcon: ImageVector? = null,
     onClick: (() -> Unit)?,
     trailingContent: (@Composable RowScope.() -> Unit)? = null,
@@ -218,6 +219,7 @@ internal fun SettingValueRow(
         SettingsControlRow(
             title = title,
             summary = summary,
+            infoBody = infoBody,
             leadingIcon = leadingIcon,
             onClick = onClick,
             summaryMaxLines = summaryMaxLines,
@@ -252,6 +254,7 @@ internal fun <T> DropdownSettingRow(
     label: @Composable (T) -> String,
     onSelect: (T) -> Unit,
     summary: String? = null,
+    infoBody: String? = null,
     leadingIcon: ImageVector? = null,
     optionIcon: ((T) -> ImageVector)? = null,
     enabled: Boolean = true,
@@ -275,6 +278,7 @@ internal fun <T> DropdownSettingRow(
         title = title,
         value = value,
         summary = summary,
+        infoBody = infoBody,
         leadingIcon = leadingIcon,
         onClick = if (enabled) ({ onExpandedChange(true) }) else null,
         summaryMaxLines = summaryMaxLines,
@@ -374,6 +378,8 @@ internal fun SettingSwitchRow(
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
     summary: String? = null,
+    inlineSummary: String? = null,
+    infoBody: String? = null,
     leadingIcon: ImageVector? = null,
     enabled: Boolean = true,
     summaryMaxLines: Int = 1,
@@ -415,6 +421,8 @@ internal fun SettingSwitchRow(
             modifier = rowModifier,
             title = title,
             summary = summary,
+            inlineSummary = inlineSummary,
+            infoBody = infoBody,
             leadingIcon = leadingIcon,
             summaryMaxLines = summaryMaxLines,
             onClick = rowClick,
@@ -470,6 +478,8 @@ private fun SettingsControlRow(
     modifier: Modifier = Modifier,
     title: String,
     summary: String? = null,
+    inlineSummary: String? = null,
+    infoBody: String? = null,
     leadingIcon: ImageVector? = null,
     leadingIconContainerColor: Color = Color.Unspecified,
     leadingIconTint: Color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -477,7 +487,8 @@ private fun SettingsControlRow(
     onClick: (() -> Unit)?,
     trailingContent: (@Composable RowScope.() -> Unit)? = null,
 ) {
-    val summaryText = summary?.takeIf(String::isNotBlank)
+    val summaryText = inlineSummary?.takeIf(String::isNotBlank) ?: summary?.takeIf(String::isNotBlank)
+    val infoText = infoBody?.takeIf(String::isNotBlank)
     Row(
         modifier =
             modifier
@@ -491,7 +502,7 @@ private fun SettingsControlRow(
                     },
                 )
                 .padding(horizontal = 12.dp, vertical = 7.dp),
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         leadingIcon?.let { icon ->
@@ -507,12 +518,15 @@ private fun SettingsControlRow(
                 Icon(
                     imageVector = icon,
                     contentDescription = null,
-                    modifier = Modifier.padding(7.dp).size(18.dp),
+                    modifier = Modifier.padding(7.dp).size(20.dp),
                     tint = leadingIconTint,
                 )
             }
         }
-        Column(modifier = Modifier.weight(1f)) {
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
             Row(
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -526,12 +540,21 @@ private fun SettingsControlRow(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                summaryText?.let {
+                infoText?.let {
                     SettingsInfoAnchor(
                         title = title,
                         body = it,
                     )
                 }
+            }
+            summaryText?.let { text ->
+                Text(
+                    text = text.trimMenuSummary(),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = summaryMaxLines,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
         }
         Row(
@@ -694,11 +717,7 @@ private fun SettingsInfoBottomSheet(
                     color = MaterialTheme.colorScheme.onSurface,
                 )
             }
-            Text(
-                text = body,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            FormattedHelpBody(body = body)
             content()
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -1035,11 +1054,54 @@ internal fun HelpSection(
         icon = icon,
         title = title,
     ) {
+        FormattedHelpBody(body = body)
+    }
+}
+
+@Composable
+internal fun FormattedHelpBody(
+    body: String,
+    modifier: Modifier = Modifier,
+) {
+    val items =
+        remember(body) {
+            body.split(Regex("\\n\\s*\\n"))
+                .map(String::trim)
+                .filter(String::isNotBlank)
+        }
+    if (items.size <= 1) {
         Text(
             text = body,
+            modifier = modifier,
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+        return
+    }
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        items.forEach { item ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.Top,
+            ) {
+                Text(
+                    text = "•",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    text = item,
+                    modifier = Modifier.weight(1f),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
     }
 }
 

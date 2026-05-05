@@ -7,6 +7,8 @@ import com.foxhole.beta.core.model.ExpertSettings
 import com.foxhole.beta.core.model.LocalAuthSettings
 import com.foxhole.beta.core.model.LocalSurfaceSettings
 import com.foxhole.beta.core.model.PerAppRoutingMode
+import com.foxhole.beta.core.model.PrivacyRouteMode
+import com.foxhole.beta.core.model.PrivacyRouteScope
 import com.foxhole.beta.core.model.ProfileTrafficTotal
 import com.foxhole.beta.core.model.ProtocolHint
 import com.foxhole.beta.core.model.ProxyInboundSettings
@@ -85,6 +87,102 @@ class RuntimeConfigAssemblerTest {
         assertPortDnsHijack(rules[1].jsonObject)
         assertProtocolDnsHijack(rules[2].jsonObject)
         assertEquals("local.example", rules[3].jsonObject["domain"]!!.jsonArray[0].jsonPrimitive.content)
+    }
+
+    @Test
+    fun `tor privacy route adds tor outbound detoured through proxy and blocks udp for all apps`() {
+        val config =
+            parse(
+                assembler.assemble(
+                    baseConfigJson = baseConfigWithRules("profile.example"),
+                    settings =
+                        Settings(
+                            privacyRoute =
+                                com.foxhole.beta.core.model.PrivacyRouteSettings(
+                                    mode = PrivacyRouteMode.TOR_OVER_VPN,
+                                    scope = PrivacyRouteScope.ALL_APPS,
+                                ),
+                        ),
+                    activePreset = null,
+                    torRuntimePaths =
+                        TorRuntimePaths(
+                            executablePath = "/data/user/0/com.foxhole.beta/files/tor/arm64-v8a/tor",
+                            dataDirectory = "/data/user/0/com.foxhole.beta/files/tor-data",
+                        ),
+                    vpnProtocolHint = ProtocolHint.VLESS,
+                ),
+            )
+
+        val outbounds = config["outbounds"]!!.jsonArray.map { it.jsonObject }
+        val tor = outbounds.single { it["tag"]!!.jsonPrimitive.content == "tor-over-vpn" }
+        assertEquals("tor", tor["type"]!!.jsonPrimitive.content)
+        assertEquals("proxy", tor["detour"]!!.jsonPrimitive.content)
+        assertEquals("/data/user/0/com.foxhole.beta/files/tor-data", tor["data_directory"]!!.jsonPrimitive.content)
+
+        val dnsRemote = config["dns"]!!.jsonObject["servers"]!!.jsonArray.map { it.jsonObject }
+            .single { it["tag"]!!.jsonPrimitive.content == "dns-remote" }
+        assertEquals("tor-over-vpn", dnsRemote["detour"]!!.jsonPrimitive.content)
+
+        val route = config["route"]!!.jsonObject
+        assertEquals("tor-over-vpn", route["final"]!!.jsonPrimitive.content)
+        val udpBlock = route["rules"]!!.jsonArray.map { it.jsonObject }
+            .single { it["network"]?.jsonPrimitive?.content == "udp" }
+        assertEquals("block", udpBlock["outbound"]!!.jsonPrimitive.content)
+    }
+
+    @Test
+    fun `tor privacy route selected apps routes only selected tcp packages and blocks their udp`() {
+        val config =
+            parse(
+                assembler.assemble(
+                    baseConfigJson = baseConfigWithRules("profile.example"),
+                    settings =
+                        Settings(
+                            privacyRoute =
+                                com.foxhole.beta.core.model.PrivacyRouteSettings(
+                                    mode = PrivacyRouteMode.TOR_OVER_VPN,
+                                    scope = PrivacyRouteScope.SELECTED_APPS,
+                                    selectedPackages = listOf("org.mozilla.firefox"),
+                                ),
+                        ),
+                    activePreset = null,
+                    torRuntimePaths = TorRuntimePaths(executablePath = "/tor", dataDirectory = "/tor-data"),
+                    vpnProtocolHint = ProtocolHint.VLESS,
+                ),
+            )
+
+        val route = config["route"]!!.jsonObject
+        assertEquals("proxy", route["final"]!!.jsonPrimitive.content)
+        val packageRules = route["rules"]!!.jsonArray.map { it.jsonObject }
+            .filter { it["package_name"] != null && it["network"] != null }
+        assertEquals(2, packageRules.size)
+        assertTrue(packageRules.any { it["network"]!!.jsonPrimitive.content == "tcp" && it["outbound"]!!.jsonPrimitive.content == "tor-over-vpn" })
+        assertTrue(packageRules.any { it["network"]!!.jsonPrimitive.content == "udp" && it["outbound"]!!.jsonPrimitive.content == "block" })
+    }
+
+    @Test
+    fun `tor privacy route is ignored for udp vpn protocols`() {
+        val config =
+            parse(
+                assembler.assemble(
+                    baseConfigJson = baseConfigWithRules("profile.example"),
+                    settings =
+                        Settings(
+                            privacyRoute =
+                                com.foxhole.beta.core.model.PrivacyRouteSettings(
+                                    mode = PrivacyRouteMode.TOR_OVER_VPN,
+                                    scope = PrivacyRouteScope.ALL_APPS,
+                                ),
+                        ),
+                    activePreset = null,
+                    torRuntimePaths = TorRuntimePaths(executablePath = "/tor", dataDirectory = "/tor-data"),
+                    vpnProtocolHint = ProtocolHint.HYSTERIA2,
+                ),
+            )
+
+        val outboundTags = config["outbounds"]!!.jsonArray.map { it.jsonObject["tag"]!!.jsonPrimitive.content }
+        assertFalse(outboundTags.contains("tor-over-vpn"))
+        assertEquals("proxy", config["route"]!!.jsonObject["final"]!!.jsonPrimitive.content)
     }
 
     @Test
@@ -224,6 +322,87 @@ class RuntimeConfigAssemblerTest {
         assertFalse(tunInbound.containsKey("exclude_package"))
         assertTrue(rules.none { rule -> rule.jsonObject.containsKey("package_name") })
         assertEquals("proxy", config["route"]!!.jsonObject["final"]!!.jsonPrimitive.content)
+    }
+
+    @Test
+    fun `local firewall guard does not depend on proxy DNS detour`() {
+        val settings =
+            Settings(
+                expert =
+                    ExpertSettings(
+                        blockedPackagesEnabled = true,
+                        blockedPackages = listOf("org.mozilla.firefox"),
+                        blockAppsAlways = true,
+                    ),
+            )
+
+        val config = parse(assembler.assembleLocalGuard(settings, LocalGuardMode.FIREWALL))
+        val dns = config["dns"]!!.jsonObject
+        val route = config["route"]!!.jsonObject
+        val outbounds = config["outbounds"]!!.jsonArray.map { it.jsonObject["tag"]!!.jsonPrimitive.content }
+        val dnsServers = dns["servers"]!!.jsonArray.map { it.jsonObject }
+        val tunInbound = config["inbounds"]!!.jsonArray.single().jsonObject
+
+        assertEquals(listOf("direct", "block"), outbounds)
+        assertEquals("dns-direct", dns["final"]!!.jsonPrimitive.content)
+        assertEquals("dns-direct", route["default_domain_resolver"]!!.jsonPrimitive.content)
+        assertEquals("block", route["final"]!!.jsonPrimitive.content)
+        assertFalse(dnsServers.any { server -> server["tag"]!!.jsonPrimitive.content == "dns-remote" })
+        assertFalse(dnsServers.any { server -> server["detour"]?.jsonPrimitive?.content == "proxy" })
+        assertEquals("org.mozilla.firefox", tunInbound["include_package"]!!.jsonArray.single().jsonPrimitive.content)
+    }
+
+    @Test
+    fun `kill switch local firewall guard captures all app traffic`() {
+        val settings =
+            Settings(
+                expert =
+                    ExpertSettings(
+                        killSwitchEnabled = true,
+                        blockedPackagesEnabled = true,
+                        blockedPackages = listOf("org.mozilla.firefox"),
+                        blockAppsAlways = true,
+                    ),
+            )
+
+        val config = parse(assembler.assembleLocalGuard(settings, LocalGuardMode.FIREWALL))
+        val tunInbound = config["inbounds"]!!.jsonArray.single().jsonObject
+        val route = config["route"]!!.jsonObject
+
+        assertFalse(tunInbound.containsKey("include_package"))
+        assertFalse(tunInbound.containsKey("exclude_package"))
+        assertEquals("block", route["final"]!!.jsonPrimitive.content)
+    }
+
+    @Test
+    fun `local journal guard keeps DNS direct while app block rules stay active`() {
+        val settings =
+            Settings(
+                expert =
+                    ExpertSettings(
+                        networkActivityLogging = true,
+                        networkActivityPersistentLogging = true,
+                        blockedPackagesEnabled = true,
+                        blockedPackages = listOf("org.mozilla.firefox"),
+                        blockAppsAlways = true,
+                    ),
+            )
+
+        val config = parse(assembler.assembleLocalGuard(settings, LocalGuardMode.JOURNAL))
+        val dns = config["dns"]!!.jsonObject
+        val route = config["route"]!!.jsonObject
+        val rules = route["rules"]!!.jsonArray.map { it.jsonObject }
+        val dnsServers = dns["servers"]!!.jsonArray.map { it.jsonObject }
+        val tunInbound = config["inbounds"]!!.jsonArray.single().jsonObject
+
+        assertEquals("dns-direct", dns["final"]!!.jsonPrimitive.content)
+        assertEquals("dns-direct", route["default_domain_resolver"]!!.jsonPrimitive.content)
+        assertEquals("direct", route["final"]!!.jsonPrimitive.content)
+        assertFalse(dnsServers.any { server -> server["tag"]!!.jsonPrimitive.content == "dns-remote" })
+        assertFalse(dnsServers.any { server -> server["detour"]?.jsonPrimitive?.content == "proxy" })
+        assertFalse(tunInbound.containsKey("include_package"))
+        assertTrue(rules.any { rule -> rule["package_name"]?.jsonArray?.single()?.jsonPrimitive?.content == "org.mozilla.firefox" })
+        assertTrue(rules.any { rule -> rule["action"]?.jsonPrimitive?.content == "hijack-dns" })
     }
 
     @Test

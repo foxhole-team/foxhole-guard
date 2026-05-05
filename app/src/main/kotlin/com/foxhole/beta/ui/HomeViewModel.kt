@@ -34,6 +34,8 @@ import com.foxhole.beta.core.model.IpInfo
 import com.foxhole.beta.core.model.LocalAuthSettings
 import com.foxhole.beta.core.model.LatencyProbeMethod
 import com.foxhole.beta.core.model.PerAppRoutingMode
+import com.foxhole.beta.core.model.PrivacyRouteMode
+import com.foxhole.beta.core.model.PrivacyRouteScope
 import com.foxhole.beta.core.model.Profile
 import com.foxhole.beta.core.model.ProfileSourceType
 import com.foxhole.beta.core.model.ProxyInboundSettings
@@ -854,6 +856,8 @@ class HomeViewModel(
 
     fun onBlockScreenshotsChanged(value: Boolean) = onBlockScreenshotsChangedInternal(value)
 
+    fun onKillSwitchChanged(value: Boolean) = onKillSwitchChangedInternal(value)
+
     fun onNetworkActivityLoggingChanged(value: Boolean) = onNetworkActivityLoggingChangedInternal(value)
 
     fun onNetworkActivityPersistentLoggingChanged(value: Boolean) = onNetworkActivityPersistentLoggingChangedInternal(value)
@@ -877,6 +881,12 @@ class HomeViewModel(
     fun onPerAppRoutingModeSelected(value: PerAppRoutingMode) = onPerAppRoutingModeSelectedInternal(value)
 
     fun onSelectedPackagesChanged(value: List<String>) = onSelectedPackagesChangedInternal(value)
+
+    fun onPrivacyRouteModeSelected(value: PrivacyRouteMode) = onPrivacyRouteModeSelectedInternal(value)
+
+    fun onPrivacyRouteScopeSelected(value: PrivacyRouteScope) = onPrivacyRouteScopeSelectedInternal(value)
+
+    fun onPrivacyRouteSelectedPackagesChanged(value: List<String>) = onPrivacyRouteSelectedPackagesChangedInternal(value)
 
     fun onBlockedPackagesChanged(value: List<String>) = onBlockedPackagesChangedInternal(value)
 
@@ -1092,8 +1102,15 @@ class HomeViewModel(
         profileId: Long,
         protocolOptionId: String? = null,
         statusMessage: String? = null,
+        isSmartStartConnection: Boolean = false,
         previousVpnNetworkHandle: Long? = null,
-    ) = connectNowInternal(profileId, protocolOptionId, statusMessage, previousVpnNetworkHandle)
+    ) = connectNowInternal(
+        profileId = profileId,
+        protocolOptionId = protocolOptionId,
+        statusMessage = statusMessage,
+        isSmartStartConnection = isSmartStartConnection,
+        previousVpnNetworkHandle = previousVpnNetworkHandle,
+    )
 
     internal fun invalidateIpInfoRefreshes(): Long = invalidateIpInfoRefreshesInternal()
 

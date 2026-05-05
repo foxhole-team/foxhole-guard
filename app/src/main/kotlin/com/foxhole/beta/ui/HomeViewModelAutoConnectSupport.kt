@@ -350,6 +350,8 @@ private suspend fun HomeViewModel.runColdSmartStartScan(
             connectNow(
                 profileId = profileId,
                 protocolOptionId = winner.candidate.optionId,
+                statusMessage = getApplication<Application>().getString(R.string.notification_status_analysis),
+                isSmartStartConnection = true,
                 previousVpnNetworkHandle = previousVpnNetworkHandle,
             )
             awaitReconnectConnectionOutcome()
@@ -940,6 +942,7 @@ internal suspend fun HomeViewModel.probeAutoConnectCandidateInternal(
         profileId = profileId,
         protocolOptionId = candidate.optionId,
         statusMessage = getApplication<Application>().getString(R.string.notification_status_analysis),
+        isSmartStartConnection = true,
         previousVpnNetworkHandle = previousVpnNetworkHandle,
     )
     val snapshot = awaitAutoConnectConnectionOutcome()

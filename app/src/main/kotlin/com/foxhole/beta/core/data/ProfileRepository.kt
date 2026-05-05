@@ -18,11 +18,13 @@ import com.foxhole.beta.core.model.Settings
 import com.foxhole.beta.core.model.StoredProfileProtocolOption
 import com.foxhole.beta.core.model.StoredProfileSecret
 import com.foxhole.beta.core.model.VpnSession
+import com.foxhole.beta.core.model.isUdpTransport
 import com.foxhole.beta.core.network.ensurePublicUrl
 import com.foxhole.beta.core.network.requirePublicUrl
 import com.foxhole.beta.core.settings.SettingsRepository
 import com.foxhole.beta.vpn.PrivateDnsMode
 import com.foxhole.beta.vpn.RuntimeConfigAssembler
+import com.foxhole.beta.vpn.TorRuntimeInstaller
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
@@ -46,6 +48,7 @@ class ProfileRepository(
     private val settingsRepository: SettingsRepository,
     private val routingRepository: RoutingRepository,
     private val runtimeConfigAssembler: RuntimeConfigAssembler,
+    private val torRuntimeInstaller: TorRuntimeInstaller,
     private val json: Json,
 ) {
     private data class SubscriptionResponse(
@@ -631,14 +634,28 @@ class ProfileRepository(
         val profile = requireProfile(profileId)
         val secret = secretStore.read(profile.secretRef) ?: error("profile secret is missing")
         val selectedOption = secret.selectedStoredProtocolOption(protocolOptionIdOverride)
+        val selectedProtocolHint = selectedOption?.protocolHint ?: profile.protocolHint
         val correlationId = newRuntimeCorrelationId()
+        val settings = settingsRepository.current()
+        val torRuntimePaths =
+            if (
+                settings.privacyRoute.enabled &&
+                settings.traffic.mode == com.foxhole.beta.core.model.TrafficMode.TUNNEL &&
+                !selectedProtocolHint.isUdpTransport()
+            ) {
+                torRuntimeInstaller.prepare()
+            } else {
+                null
+            }
         val assembled =
             runCatching {
                 runtimeConfigAssembler.assemble(
                     baseConfigJson = getResolvedConfig(profileId, protocolOptionIdOverride),
-                    settings = settingsRepository.current(),
+                    settings = settings,
                     activePreset = routingRepository.currentPresetForRuntime(),
                     privateDnsMode = privateDnsMode,
+                    torRuntimePaths = torRuntimePaths,
+                    vpnProtocolHint = selectedProtocolHint,
                 )
             }.onFailure { error ->
                 diagnosticsLogger.record(
@@ -655,7 +672,7 @@ class ProfileRepository(
         return VpnSession(
             profileId = profile.id,
             profileName = profile.name,
-            protocolHint = selectedOption?.protocolHint ?: profile.protocolHint,
+            protocolHint = selectedProtocolHint,
             protocolOptionId = selectedOption?.id,
             configJson = assembled,
             correlationId = correlationId,

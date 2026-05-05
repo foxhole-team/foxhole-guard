@@ -391,6 +391,7 @@ internal fun HomeStatusBadge(
     textStyle: TextStyle = MaterialTheme.typography.titleLarge,
     accentColor: Color? = null,
     smartMarker: Boolean = false,
+    torMarker: Boolean = false,
 ) {
     val color = accentColor ?: homeStatusTone(state)
     Row(
@@ -402,7 +403,10 @@ internal fun HomeStatusBadge(
             settled = state == ConnectionState.CONNECTED,
             animate = state == ConnectionState.CONNECTING || state == ConnectionState.RECONNECTING,
         )
-        Row(verticalAlignment = Alignment.Top) {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(5.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
             Text(
                 text = label,
                 style = textStyle,
@@ -410,19 +414,67 @@ internal fun HomeStatusBadge(
                 color = color,
             )
             if (smartMarker) {
-                Text(
-                    text = stringResource(R.string.smart_profile_tag),
-                    modifier = Modifier.offset(y = (-5).dp),
-                    style =
-                        MaterialTheme.typography.labelSmall.copy(
-                            fontSize = 8.5.sp,
-                            lineHeight = 9.sp,
-                            fontWeight = FontWeight.SemiBold,
-                        ),
-                    color = color.copy(alpha = 0.86f),
-                    maxLines = 1,
-                )
+                SmartConnectionBadge(color = color)
             }
+            if (torMarker) {
+                TorConnectionBadge()
+            }
+        }
+    }
+}
+
+@Composable
+private fun SmartConnectionBadge(color: Color) {
+    Surface(
+        shape = MaterialTheme.shapes.small,
+        color = color.copy(alpha = 0.12f),
+        border = BorderStroke(1.dp, color.copy(alpha = 0.34f)),
+    ) {
+        Text(
+            text = stringResource(R.string.smart_profile_tag),
+            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
+            style =
+                MaterialTheme.typography.labelSmall.copy(
+                    fontSize = 9.sp,
+                    lineHeight = 10.sp,
+                    fontWeight = FontWeight.Black,
+                ),
+            color = color,
+            maxLines = 1,
+        )
+    }
+}
+
+@Composable
+private fun TorConnectionBadge() {
+    val torColor = Color(0xFF8B4DFF)
+    Surface(
+        shape = MaterialTheme.shapes.small,
+        color = torColor.copy(alpha = 0.14f),
+        border = BorderStroke(1.dp, torColor.copy(alpha = 0.42f)),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
+            horizontalArrangement = Arrangement.spacedBy(3.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector = Icons.Outlined.Public,
+                contentDescription = null,
+                modifier = Modifier.size(10.dp),
+                tint = torColor,
+            )
+            Text(
+                text = stringResource(R.string.tor_badge),
+                style =
+                    MaterialTheme.typography.labelSmall.copy(
+                        fontSize = 9.sp,
+                        lineHeight = 10.sp,
+                        fontWeight = FontWeight.Black,
+                    ),
+                color = torColor,
+                maxLines = 1,
+            )
         }
     }
 }

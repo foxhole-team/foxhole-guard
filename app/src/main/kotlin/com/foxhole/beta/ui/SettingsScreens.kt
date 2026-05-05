@@ -26,6 +26,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.Article
 import androidx.compose.material.icons.outlined.AccountTree
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Apps
@@ -93,6 +94,8 @@ import com.foxhole.beta.core.model.LatencyProbeMethod
 import com.foxhole.beta.core.model.LocalAuthSettings
 import com.foxhole.beta.core.model.LocalSurfaceSettings
 import com.foxhole.beta.core.model.PerAppRoutingMode
+import com.foxhole.beta.core.model.PrivacyRouteMode
+import com.foxhole.beta.core.model.PrivacyRouteScope
 import com.foxhole.beta.core.model.ProxyInboundSettings
 import com.foxhole.beta.core.model.ProxySurfaceMode
 import com.foxhole.beta.core.model.RoutingPreset
@@ -124,6 +127,7 @@ fun SettingsHomeScreen(
     snackbarHostState: SnackbarHostState,
     onNavigateUp: (() -> Unit)?,
     onOpenTraffic: () -> Unit,
+    onOpenPrivacyRoute: () -> Unit,
     onOpenRoutingApps: () -> Unit,
     onOpenRoutingSites: () -> Unit,
     onOpenSmartStart: () -> Unit,
@@ -178,18 +182,12 @@ fun SettingsHomeScreen(
         title = stringResource(R.string.settings),
         snackbarHostState = snackbarHostState,
         onNavigateUp = onNavigateUp,
-        actions = {
-            SettingsHelpAction(
-                title = stringResource(R.string.help_quick_start_title),
-                body = stringResource(R.string.help_quick_start_body),
-                icon = Icons.Outlined.RocketLaunch,
-            )
-        },
     ) {
         settingsHomeNavigationItems(
             hasSmartStartSettings = state.hasSmartProfile || state.hasSubscriptionProfile,
             expertVisible = expertVisible,
             onOpenTraffic = onOpenTraffic,
+            onOpenPrivacyRoute = onOpenPrivacyRoute,
             onOpenRoutingApps = onOpenRoutingApps,
             onOpenRoutingSites = onOpenRoutingSites,
             onOpenSmartStart = onOpenSmartStart,
@@ -232,6 +230,7 @@ private fun LazyListScope.settingsHomeNavigationItems(
     hasSmartStartSettings: Boolean,
     expertVisible: Boolean,
     onOpenTraffic: () -> Unit,
+    onOpenPrivacyRoute: () -> Unit,
     onOpenRoutingApps: () -> Unit,
     onOpenRoutingSites: () -> Unit,
     onOpenSmartStart: () -> Unit,
@@ -254,10 +253,19 @@ private fun LazyListScope.settingsHomeNavigationItems(
                 SettingsGroupDivider()
             }
             SettingsGroupedNavigationRow(
-                icon = Icons.Outlined.Tune,
+                icon = Icons.Outlined.Public,
                 title = stringResource(R.string.traffic_settings),
                 summary = stringResource(R.string.settings_home_network_summary),
                 onClick = onOpenTraffic,
+            )
+            SettingsGroupDivider()
+            SettingsGroupedNavigationRow(
+                modifier = Modifier.testTag("settings_privacy_route_action"),
+                icon = Icons.Outlined.Public,
+                title = stringResource(R.string.privacy_route_title),
+                summary = stringResource(R.string.privacy_route_summary),
+                summaryMaxLines = 3,
+                onClick = onOpenPrivacyRoute,
             )
         }
     }
@@ -277,7 +285,7 @@ private fun LazyListScope.settingsHomeNavigationItems(
             )
             SettingsGroupDivider()
             SettingsGroupedNavigationRow(
-                icon = Icons.Outlined.Info,
+                icon = Icons.AutoMirrored.Outlined.Article,
                 title = stringResource(R.string.diagnostics_and_usage),
                 summary = stringResource(R.string.settings_home_diagnostics_summary),
                 onClick = onOpenDiagnostics,
@@ -329,7 +337,7 @@ private fun SettingsRoutingNavigationGroup(
     SettingsNavigationGroup {
         SettingsGroupedNavigationRow(
             modifier = Modifier.testTag("settings_routing_sites_action"),
-            icon = Icons.Outlined.Public,
+            icon = Icons.Outlined.Language,
             title = stringResource(R.string.routing_sites_title),
             summary = stringResource(R.string.settings_home_sites_summary),
             onClick = onOpenRoutingSites,
@@ -392,7 +400,7 @@ private fun SettingsGroupedNavigationRow(
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                modifier = Modifier.padding(7.dp).size(18.dp),
+                modifier = Modifier.padding(7.dp).size(20.dp),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
@@ -714,9 +722,13 @@ fun TrafficSettingsScreen(
     snackbarHostState: SnackbarHostState,
     onNavigateUp: () -> Unit,
     onAcknowledgeUnsafeWarning: () -> Unit,
+    onKillSwitchChanged: (Boolean) -> Unit,
     onTrafficModeSelected: (TrafficMode) -> Unit,
     onPerAppRoutingModeSelected: (PerAppRoutingMode) -> Unit,
     onOpenRoutingApps: () -> Unit,
+    onPrivacyRouteModeSelected: (PrivacyRouteMode) -> Unit,
+    onPrivacyRouteScopeSelected: (PrivacyRouteScope) -> Unit,
+    onOpenPrivacyRouteApps: () -> Unit,
     onLatencyProbeMethodSelected: (LatencyProbeMethod) -> Unit,
     onTunStackSelected: (TunStack) -> Unit,
     onLocalProxyAuthEnabledChanged: (Boolean) -> Unit,
@@ -738,6 +750,8 @@ fun TrafficSettingsScreen(
     onIpInfoEndpointChanged: (String) -> Unit,
 ) {
     var modeMenuExpanded by rememberSaveable { mutableStateOf(false) }
+    var privacyRouteModeMenuExpanded by rememberSaveable { mutableStateOf(false) }
+    var privacyRouteScopeMenuExpanded by rememberSaveable { mutableStateOf(false) }
     var latencyProbeMethodMenuExpanded by rememberSaveable { mutableStateOf(false) }
     var tunStackMenuExpanded by rememberSaveable { mutableStateOf(false) }
     var proxySurfaceModeMenuExpanded by rememberSaveable { mutableStateOf(false) }
@@ -775,16 +789,19 @@ fun TrafficSettingsScreen(
         title = title,
         snackbarHostState = snackbarHostState,
         onNavigateUp = onNavigateUp,
-        actions = {
-            SettingsHelpAction(
-                title = stringResource(R.string.help_connection_modes_title),
-                body = stringResource(R.string.help_connection_modes_body),
-                icon = Icons.Outlined.Shield,
-            )
-        },
     ) {
         item {
             SettingsControlGroup {
+                SettingSwitchRow(
+                    title = stringResource(R.string.kill_switch_title),
+                    checked = state.settings.expert.killSwitchEnabled,
+                    summary = stringResource(R.string.kill_switch_summary),
+                    leadingIcon = Icons.Outlined.Shield,
+                    onCheckedChange = onKillSwitchChanged,
+                    summaryMaxLines = 4,
+                    grouped = true,
+                )
+                SettingsControlGroupDivider()
                 DropdownSettingRow(
                     title = stringResource(R.string.traffic_mode),
                     value = homeModeMenuLabel(selectedModeOption),
@@ -806,7 +823,7 @@ fun TrafficSettingsScreen(
                             )
                         }
                     },
-                    summary = stringResource(R.string.traffic_mode_help_body),
+                    infoBody = stringResource(R.string.traffic_mode_help_body),
                     summaryMaxLines = 6,
                     leadingIcon = homeModeOptionIcon(selectedModeOption),
                     optionIcon = ::homeModeOptionIcon,
@@ -835,6 +852,53 @@ fun TrafficSettingsScreen(
                         onClick = { mtuDialog = true },
                         grouped = true,
                     )
+                }
+                SettingsControlGroupDivider()
+                DropdownSettingRow(
+                    title = stringResource(R.string.privacy_route_title),
+                    value = privacyRouteModeLabel(state.settings.privacyRoute.mode),
+                    expanded = privacyRouteModeMenuExpanded,
+                    onExpandedChange = { privacyRouteModeMenuExpanded = it },
+                    values = PrivacyRouteMode.entries,
+                    selected = state.settings.privacyRoute.mode,
+                    label = { privacyRouteModeLabel(it) },
+                    onSelect = onPrivacyRouteModeSelected,
+                    infoBody = stringResource(R.string.privacy_route_summary),
+                    leadingIcon = Icons.Outlined.Public,
+                    optionIcon = ::privacyRouteModeIcon,
+                    grouped = true,
+                )
+                if (state.settings.privacyRoute.enabled) {
+                    SettingsControlGroupDivider()
+                    DropdownSettingRow(
+                        title = stringResource(R.string.privacy_route_scope_title),
+                        value = privacyRouteScopeLabel(state.settings.privacyRoute.scope),
+                        expanded = privacyRouteScopeMenuExpanded,
+                        onExpandedChange = { privacyRouteScopeMenuExpanded = it },
+                        values = PrivacyRouteScope.entries,
+                        selected = state.settings.privacyRoute.scope,
+                        label = { privacyRouteScopeLabel(it) },
+                        onSelect = onPrivacyRouteScopeSelected,
+                        leadingIcon = Icons.Outlined.Apps,
+                        optionIcon = ::privacyRouteScopeIcon,
+                        grouped = true,
+                    )
+                    SettingsControlGroupDivider()
+                    if (state.settings.privacyRoute.scope == PrivacyRouteScope.ALL_APPS) {
+                        InfoBlock(
+                            title = stringResource(R.string.privacy_route_all_apps_warning_title),
+                            body = stringResource(R.string.privacy_route_all_apps_warning_body),
+                        )
+                    } else {
+                        SettingValueRow(
+                            title = stringResource(R.string.privacy_route_selected_apps_title),
+                            value = state.settings.privacyRoute.selectedPackages.size.toString(),
+                            summary = stringResource(R.string.privacy_route_selected_apps_summary),
+                            leadingIcon = Icons.Outlined.Apps,
+                            onClick = onOpenPrivacyRouteApps,
+                            grouped = true,
+                        )
+                    }
                 }
                 if (state.settings.traffic.mode == TrafficMode.PROXY) {
                     SettingsControlGroupDivider()
@@ -1083,6 +1147,77 @@ fun TrafficSettingsScreen(
 
 }
 
+@Suppress("LongParameterList")
+@Composable
+fun PrivacyRouteSettingsScreen(
+    state: SettingsRouteUiState,
+    snackbarHostState: SnackbarHostState,
+    onNavigateUp: () -> Unit,
+    onPrivacyRouteModeSelected: (PrivacyRouteMode) -> Unit,
+    onPrivacyRouteScopeSelected: (PrivacyRouteScope) -> Unit,
+    onOpenPrivacyRouteApps: () -> Unit,
+) {
+    var privacyRouteModeMenuExpanded by rememberSaveable { mutableStateOf(false) }
+    var privacyRouteScopeMenuExpanded by rememberSaveable { mutableStateOf(false) }
+    SettingsScaffold(
+        title = stringResource(R.string.privacy_route_title),
+        snackbarHostState = snackbarHostState,
+        onNavigateUp = onNavigateUp,
+        tag = "privacy_route_settings_screen",
+    ) {
+        item {
+            SettingsControlGroup {
+                DropdownSettingRow(
+                    title = stringResource(R.string.privacy_route_title),
+                    value = privacyRouteModeLabel(state.settings.privacyRoute.mode),
+                    expanded = privacyRouteModeMenuExpanded,
+                    onExpandedChange = { privacyRouteModeMenuExpanded = it },
+                    values = PrivacyRouteMode.entries,
+                    selected = state.settings.privacyRoute.mode,
+                    label = { privacyRouteModeLabel(it) },
+                    onSelect = onPrivacyRouteModeSelected,
+                    infoBody = stringResource(R.string.privacy_route_summary),
+                    leadingIcon = Icons.Outlined.Public,
+                    optionIcon = ::privacyRouteModeIcon,
+                    grouped = true,
+                )
+                if (state.settings.privacyRoute.enabled) {
+                    SettingsControlGroupDivider()
+                    DropdownSettingRow(
+                        title = stringResource(R.string.privacy_route_scope_title),
+                        value = privacyRouteScopeLabel(state.settings.privacyRoute.scope),
+                        expanded = privacyRouteScopeMenuExpanded,
+                        onExpandedChange = { privacyRouteScopeMenuExpanded = it },
+                        values = PrivacyRouteScope.entries,
+                        selected = state.settings.privacyRoute.scope,
+                        label = { privacyRouteScopeLabel(it) },
+                        onSelect = onPrivacyRouteScopeSelected,
+                        leadingIcon = Icons.Outlined.Apps,
+                        optionIcon = ::privacyRouteScopeIcon,
+                        grouped = true,
+                    )
+                    SettingsControlGroupDivider()
+                    if (state.settings.privacyRoute.scope == PrivacyRouteScope.ALL_APPS) {
+                        InfoBlock(
+                            title = stringResource(R.string.privacy_route_all_apps_warning_title),
+                            body = stringResource(R.string.privacy_route_all_apps_warning_body),
+                        )
+                    } else {
+                        SettingValueRow(
+                            title = stringResource(R.string.privacy_route_selected_apps_title),
+                            value = state.settings.privacyRoute.selectedPackages.size.toString(),
+                            summary = stringResource(R.string.privacy_route_selected_apps_summary),
+                            leadingIcon = Icons.Outlined.Apps,
+                            onClick = onOpenPrivacyRouteApps,
+                            grouped = true,
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
 @Suppress("CyclomaticComplexMethod", "LongMethod")
 @Composable
 fun ApplicationSettingsScreen(
@@ -1185,6 +1320,32 @@ private fun trafficModeIcon(value: TrafficMode): ImageVector =
     when (value) {
         TrafficMode.TUNNEL -> Icons.Outlined.Shield
         TrafficMode.PROXY -> Icons.Outlined.SwapVert
+    }
+
+@Composable
+private fun privacyRouteModeLabel(value: PrivacyRouteMode): String =
+    when (value) {
+        PrivacyRouteMode.OFF -> stringResource(R.string.privacy_route_mode_off)
+        PrivacyRouteMode.TOR_OVER_VPN -> stringResource(R.string.privacy_route_mode_tor_over_vpn)
+    }
+
+private fun privacyRouteModeIcon(value: PrivacyRouteMode): ImageVector =
+    when (value) {
+        PrivacyRouteMode.OFF -> Icons.Outlined.Shield
+        PrivacyRouteMode.TOR_OVER_VPN -> Icons.Outlined.Public
+    }
+
+@Composable
+private fun privacyRouteScopeLabel(value: PrivacyRouteScope): String =
+    when (value) {
+        PrivacyRouteScope.SELECTED_APPS -> stringResource(R.string.privacy_route_scope_selected_apps)
+        PrivacyRouteScope.ALL_APPS -> stringResource(R.string.privacy_route_scope_all_apps)
+    }
+
+private fun privacyRouteScopeIcon(value: PrivacyRouteScope): ImageVector =
+    when (value) {
+        PrivacyRouteScope.SELECTED_APPS -> Icons.Outlined.Apps
+        PrivacyRouteScope.ALL_APPS -> Icons.Outlined.PhoneAndroid
     }
 
 @Composable
@@ -1473,6 +1634,11 @@ private fun HelpConnectionModesContent() {
             icon = Icons.Outlined.Public,
             title = stringResource(R.string.traffic_mode_proxy),
             body = stringResource(R.string.help_connection_proxy_body),
+        )
+        HelpConnectionModeRow(
+            icon = Icons.Outlined.Info,
+            title = stringResource(R.string.information_title),
+            body = stringResource(R.string.help_connection_auth_note),
         )
     }
 }

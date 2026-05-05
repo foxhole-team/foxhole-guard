@@ -44,6 +44,7 @@ data class HomeRouteUiState(
     val activeProfile: Profile? = null,
     val activeProfileExcludedOptionIds: Set<String> = emptySet(),
     val settings: FoxholeSettings = FoxholeSettings(),
+    val activePreset: RoutingPreset? = null,
     val connection: ConnectionSnapshot = ConnectionSnapshot(),
     val ipInfo: IpInfo? = null,
     val ipInfoLoading: Boolean = false,
@@ -67,6 +68,7 @@ data class HomeRouteUiState(
     val favoriteProtocolOptionId: String? = null,
     val smartStartRememberedLatenciesByOptionId: Map<String, Long> = emptyMap(),
     val autoConnect: AutoConnectUiState = AutoConnectUiState(),
+    val installedApps: List<InstalledAppOption> = emptyList(),
 )
 
 data class ProfilesRouteUiState(
@@ -143,6 +145,7 @@ internal fun HomeUiState.toHomeRouteUiState(
                         ?.toSet()
                 }.orEmpty(),
         settings = settings,
+        activePreset = activePreset,
         connection = connection,
         ipInfo = ipInfo,
         ipInfoLoading = ipInfoLoading,
@@ -166,6 +169,7 @@ internal fun HomeUiState.toHomeRouteUiState(
         favoriteProtocolOptionId = favoriteProtocolOptionId,
         smartStartRememberedLatenciesByOptionId = smartStartRememberedLatenciesByOptionId,
         autoConnect = autoConnect,
+        installedApps = installedApps,
     )
 
 internal fun HomeUiState.toProfilesRouteUiState(

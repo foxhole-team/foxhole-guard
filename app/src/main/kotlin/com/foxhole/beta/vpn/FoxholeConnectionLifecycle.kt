@@ -28,6 +28,7 @@ internal class FoxholeConnectionLifecycle(
         profileId: Long,
         protocolOptionId: String?,
         statusMessage: String?,
+        isSmartStartConnection: Boolean,
         previousVpnNetworkHandle: Long?,
     ) {
         val profile = profileRepository.getProfile(profileId) ?: error("profile not found")
@@ -48,6 +49,7 @@ internal class FoxholeConnectionLifecycle(
                 protocolHint = runtimeProtocolOption?.protocolHint ?: profile.protocolHint,
                 protocolOptionId = runtimeProtocolOption?.id,
                 message = statusMessage,
+                isSmartStartConnection = isSmartStartConnection,
             ),
         )
         FoxholeConnectionServiceContract.startForegroundService(

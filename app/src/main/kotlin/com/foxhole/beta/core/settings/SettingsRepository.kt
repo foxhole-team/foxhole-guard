@@ -20,6 +20,9 @@ import com.foxhole.beta.core.model.LocalSurfaceSettings
 import com.foxhole.beta.core.model.LatencyProbeMethod
 import com.foxhole.beta.core.model.NETWORK_FINGERPRINT_SCHEMA_CURRENT
 import com.foxhole.beta.core.model.PerAppRoutingMode
+import com.foxhole.beta.core.model.PrivacyRouteMode
+import com.foxhole.beta.core.model.PrivacyRouteScope
+import com.foxhole.beta.core.model.PrivacyRouteSettings
 import com.foxhole.beta.core.model.ProfileTrafficTotal
 import com.foxhole.beta.core.model.ProtocolHint
 import com.foxhole.beta.core.model.ProxyInboundSettings
@@ -160,11 +163,13 @@ class SettingsRepository(
                 current.copy(
                     connection = current.connection.copy(stealthModeEnabled = true),
                     traffic = TrafficSettings(),
+                    privacyRoute = PrivacyRouteSettings(),
                     expert =
                         ExpertSettings(
                             unlockedAt = current.expert.unlockedAt,
                         warningAcknowledgedAt = current.expert.warningAcknowledgedAt,
                         blockScreenshots = current.expert.blockScreenshots,
+                        killSwitchEnabled = current.expert.killSwitchEnabled,
                         networkActivityLogging = current.expert.networkActivityLogging,
                         networkActivityPersistentLogging = current.expert.networkActivityPersistentLogging,
                         diagnosticsRetention = current.expert.diagnosticsRetention,
@@ -514,6 +519,40 @@ class SettingsRepository(
             )
         }
 
+    suspend fun updatePrivacyRouteMode(value: PrivacyRouteMode) =
+        update { current ->
+            current.copy(
+                connection =
+                    current.connection.copy(
+                        stealthModeEnabled = current.connection.stealthModeEnabled && value == PrivacyRouteMode.OFF,
+                    ),
+                traffic =
+                    if (value == PrivacyRouteMode.TOR_OVER_VPN) {
+                        current.traffic.copy(mode = TrafficMode.TUNNEL)
+                    } else {
+                        current.traffic
+                    },
+                privacyRoute = current.privacyRoute.copy(mode = value),
+            )
+        }
+
+    suspend fun updatePrivacyRouteScope(value: PrivacyRouteScope) =
+        update { current ->
+            current.copy(
+                privacyRoute = current.privacyRoute.copy(scope = value),
+            )
+        }
+
+    suspend fun updatePrivacyRouteSelectedPackages(value: List<String>) =
+        update { current ->
+            current.copy(
+                privacyRoute =
+                    current.privacyRoute.copy(
+                        selectedPackages = value.filterNot { it == BuildConfig.APPLICATION_ID },
+                    ),
+            )
+        }
+
     suspend fun updateTrafficMtu(value: Int) =
         update { it.copy(traffic = it.traffic.copy(mtu = value.coerceIn(MIN_MTU, MAX_MTU))) }
 
@@ -536,6 +575,14 @@ class SettingsRepository(
 
     suspend fun updateBlockScreenshots(value: Boolean) =
         update { it.copy(expert = it.expert.copy(blockScreenshots = value)) }
+
+    suspend fun updateKillSwitchEnabled(value: Boolean) =
+        update {
+            it.copy(
+                connection = it.connection.copy(stealthModeEnabled = it.connection.stealthModeEnabled && !value),
+                expert = it.expert.copy(killSwitchEnabled = value),
+            )
+        }
 
     suspend fun updateNetworkActivityLogging(value: Boolean) =
         update { it.copy(expert = it.expert.copy(networkActivityLogging = value)) }
@@ -1047,6 +1094,12 @@ class SettingsRepository(
                             mtu = traffic.mtu.coerceIn(MIN_MTU, MAX_MTU),
                         )
                     },
+                privacyRoute =
+                    if (connection.stealthModeEnabled) {
+                        PrivacyRouteSettings()
+                    } else {
+                        privacyRoute.normalized()
+                    },
                 expert =
                     expert.normalized(
                         stealthModeEnabled = connection.stealthModeEnabled,
@@ -1105,6 +1158,7 @@ class SettingsRepository(
                 unlockedAt = normalized.unlockedAt,
                 warningAcknowledgedAt = normalized.warningAcknowledgedAt,
                 blockScreenshots = normalized.blockScreenshots,
+                killSwitchEnabled = normalized.killSwitchEnabled,
                 networkActivityLogging = normalized.networkActivityLogging,
                 networkActivityPersistentLogging = normalized.networkActivityPersistentLogging,
                 diagnosticsRetention = normalized.diagnosticsRetention,
@@ -1116,6 +1170,14 @@ class SettingsRepository(
             )
         }
     }
+
+    private fun PrivacyRouteSettings.normalized(): PrivacyRouteSettings =
+        copy(
+            selectedPackages =
+                selectedPackages
+                    .filterNot { packageName -> packageName == BuildConfig.APPLICATION_ID }
+                    .distinct(),
+        )
 
     private fun LocalSurfaceSettings.normalized(): LocalSurfaceSettings =
         copy(

@@ -153,10 +153,9 @@ private fun SwipeActionsDismissOverlay(
     Box(
         modifier =
             modifier
-                .padding(end = actionWidth)
                 .pointerInput(onDismiss) {
                     var dragDistance = 0f
-                    val closeThreshold = size.width * SWIPE_ACTION_CLOSE_THRESHOLD_FRACTION
+                    val closeThreshold = (size.width - actionWidth.toPx()).coerceAtLeast(0f) * SWIPE_ACTION_CLOSE_THRESHOLD_FRACTION
                     detectHorizontalDragGestures(
                         onDragStart = { dragDistance = 0f },
                         onHorizontalDrag = { change, dragAmount ->

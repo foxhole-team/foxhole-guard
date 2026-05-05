@@ -7,6 +7,7 @@ import androidx.activity.compose.ManagedActivityResultLauncher
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.Rule
 import androidx.compose.material.icons.outlined.FileUpload
 import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material3.SnackbarHostState
@@ -145,6 +146,7 @@ private fun DiagnosticsScreenContent(
     onOpenFoxholeLog: () -> Unit,
     onClearUsage: () -> Unit,
 ) {
+    var persistentLoggingWarningVisible by rememberSaveable { mutableStateOf(false) }
     SettingsScaffold(
         title = stringResource(R.string.diagnostics_and_usage),
         snackbarHostState = snackbarHostState,
@@ -181,7 +183,13 @@ private fun DiagnosticsScreenContent(
                         checked = state.settings.expert.networkActivityPersistentLogging,
                         summary = stringResource(R.string.network_activity_persistent_logging_summary),
                         leadingIcon = Icons.Outlined.Public,
-                        onCheckedChange = onNetworkActivityPersistentLoggingChanged,
+                        onCheckedChange = { enabled ->
+                            if (enabled) {
+                                persistentLoggingWarningVisible = true
+                            } else {
+                                onNetworkActivityPersistentLoggingChanged(false)
+                            }
+                        },
                         grouped = true,
                     )
                     SettingsControlGroupDivider()
@@ -201,6 +209,20 @@ private fun DiagnosticsScreenContent(
                 )
             }
         }
+    }
+
+    if (persistentLoggingWarningVisible) {
+        ConfirmDialog(
+            title = stringResource(R.string.network_activity_persistent_logging_warning_title),
+            body = stringResource(R.string.network_activity_persistent_logging_warning_body),
+            confirmLabel = stringResource(R.string.i_understand),
+            icon = Icons.AutoMirrored.Outlined.Rule,
+            onDismiss = { persistentLoggingWarningVisible = false },
+            onConfirm = {
+                persistentLoggingWarningVisible = false
+                onNetworkActivityPersistentLoggingChanged(true)
+            },
+        )
     }
 }
 

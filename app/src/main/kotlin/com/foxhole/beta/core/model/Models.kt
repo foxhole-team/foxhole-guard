@@ -2,7 +2,7 @@ package com.foxhole.beta.core.model
 
 import kotlinx.serialization.Serializable
 
-const val SETTINGS_SCHEMA_VERSION = 12
+const val SETTINGS_SCHEMA_VERSION = 13
 const val NETWORK_FINGERPRINT_SCHEMA_CURRENT = 2
 const val NETWORK_FINGERPRINT_SCHEMA_LEGACY = 1
 
@@ -140,6 +140,18 @@ enum class PerAppRoutingMode {
 }
 
 @Serializable
+enum class PrivacyRouteMode {
+    OFF,
+    TOR_OVER_VPN,
+}
+
+@Serializable
+enum class PrivacyRouteScope {
+    SELECTED_APPS,
+    ALL_APPS,
+}
+
+@Serializable
 enum class DiagnosticsRetention(
     val retentionHours: Int,
     val maxEntries: Int,
@@ -218,6 +230,16 @@ data class TrafficSettings(
 )
 
 @Serializable
+data class PrivacyRouteSettings(
+    val mode: PrivacyRouteMode = PrivacyRouteMode.OFF,
+    val scope: PrivacyRouteScope = PrivacyRouteScope.SELECTED_APPS,
+    val selectedPackages: List<String> = emptyList(),
+) {
+    val enabled: Boolean
+        get() = mode == PrivacyRouteMode.TOR_OVER_VPN
+}
+
+@Serializable
 data class ProxyInboundSettings(
     val enabled: Boolean = false,
     val host: String = "127.0.0.1",
@@ -267,6 +289,7 @@ data class ExpertSettings(
     val unlockedAt: Long? = null,
     val warningAcknowledgedAt: Long? = null,
     val blockScreenshots: Boolean = false,
+    val killSwitchEnabled: Boolean = false,
     val networkActivityLogging: Boolean = false,
     val networkActivityPersistentLogging: Boolean = false,
     val diagnosticsRetention: DiagnosticsRetention = DiagnosticsRetention.HOURS_24,
@@ -292,6 +315,7 @@ data class Settings(
     val ui: UiSettings = UiSettings(),
     val connection: ConnectionSettings = ConnectionSettings(),
     val traffic: TrafficSettings = TrafficSettings(),
+    val privacyRoute: PrivacyRouteSettings = PrivacyRouteSettings(),
     val expert: ExpertSettings = ExpertSettings(),
     val lastActiveProfile: CachedActiveProfile? = null,
     val smartProfilePreferences: List<SmartProfilePreference> = emptyList(),
@@ -463,6 +487,7 @@ data class ConnectionSnapshot(
     val protocolOptionId: String? = null,
     val message: String? = null,
     val reasonCode: AutoConnectReasonCode? = null,
+    val isSmartStartConnection: Boolean = false,
     val lastChangeAt: Long = System.currentTimeMillis(),
 )
 
@@ -489,6 +514,7 @@ data class NotificationSnapshot(
     val txTotal: Long = 0,
     val rxTotal: Long = 0,
     val updatedAt: Long = 0,
+    val isSmartStartConnection: Boolean = false,
     val isRedacted: Boolean = false,
 )
 

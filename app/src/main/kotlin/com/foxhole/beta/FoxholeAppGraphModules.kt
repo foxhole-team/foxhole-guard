@@ -13,6 +13,7 @@ import com.foxhole.beta.core.settings.SettingsRepository
 import com.foxhole.beta.vpn.AndroidLanProxyAddressProvider
 import com.foxhole.beta.vpn.FoxholeConnectionController
 import com.foxhole.beta.vpn.RuntimeConfigAssembler
+import com.foxhole.beta.vpn.TorRuntimeInstaller
 import kotlinx.serialization.json.Json
 import okhttp3.OkHttpClient
 
@@ -53,6 +54,7 @@ internal class FoxholeDataGraphModule(
     val secretStore: EncryptedProfileSecretStore by lazy { EncryptedProfileSecretStore(appContext, core.json) }
     val importParser: ProfileImportParser by lazy { ProfileImportParser(core.json) }
     val routingRepository: RoutingRepository by lazy { RoutingRepository(profileDatabase, core.httpClient, core.json) }
+    val torRuntimeInstaller: TorRuntimeInstaller by lazy { TorRuntimeInstaller(appContext) }
     val runtimeConfigAssembler: RuntimeConfigAssembler by lazy {
         RuntimeConfigAssembler(core.json, AndroidLanProxyAddressProvider(appContext))
     }
@@ -67,6 +69,7 @@ internal class FoxholeDataGraphModule(
             settingsRepository = core.settingsRepository,
             routingRepository = routingRepository,
             runtimeConfigAssembler = runtimeConfigAssembler,
+            torRuntimeInstaller = torRuntimeInstaller,
             json = core.json,
         )
     }

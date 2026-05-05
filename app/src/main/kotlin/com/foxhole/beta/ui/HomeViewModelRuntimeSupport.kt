@@ -14,8 +14,11 @@ import com.foxhole.beta.core.data.InsecureTlsImportWarning
 import com.foxhole.beta.core.data.InsecureTlsProfileConsentRequiredException
 import com.foxhole.beta.core.model.ConnectionState
 import com.foxhole.beta.core.model.InstalledAppOption
+import com.foxhole.beta.core.model.PrivacyRouteMode
+import com.foxhole.beta.core.model.Profile
 import com.foxhole.beta.core.model.RoutingPresetSource
 import com.foxhole.beta.core.model.RoutingRuleAction
+import com.foxhole.beta.core.model.isUdpTransport
 import com.foxhole.beta.core.network.IpInfoFetchMode
 import com.foxhole.beta.vpn.FoxholeVpnRuntimeBridge
 import kotlinx.coroutines.Dispatchers
@@ -509,16 +512,45 @@ internal suspend fun HomeViewModel.connectNowInternal(
     profileId: Long,
     protocolOptionId: String? = null,
     statusMessage: String? = null,
+    isSmartStartConnection: Boolean = false,
     previousVpnNetworkHandle: Long? = null,
 ) {
     invalidateIpInfoRefreshes()
+    warnIfTorRouteCannotRunForProfile(profileId, protocolOptionId)
     container.connectionController.connect(
         profileId = profileId,
         protocolOptionId = protocolOptionId,
         statusMessage = statusMessage,
+        isSmartStartConnection = isSmartStartConnection,
         previousVpnNetworkHandle = previousVpnNetworkHandle,
     )
 }
+
+private suspend fun HomeViewModel.warnIfTorRouteCannotRunForProfile(
+    profileId: Long,
+    protocolOptionId: String?,
+) {
+    val settings = container.settingsRepository.current()
+    if (settings.privacyRoute.mode != PrivacyRouteMode.TOR_OVER_VPN) {
+        return
+    }
+    val profile = container.profileRepository.getProfile(profileId) ?: return
+    val protocolHint = profile.runtimeProtocolHint(protocolOptionId)
+    if (protocolHint.isUdpTransport()) {
+        snackbars.emit(errorBanner(R.string.privacy_route_udp_warning))
+    }
+}
+
+private fun Profile.runtimeProtocolHint(protocolOptionId: String?) =
+    (
+        protocolOptionId
+            ?.takeIf(String::isNotBlank)
+            ?.let { requestedId -> protocolOptions.firstOrNull { option -> option.id == requestedId } }
+            ?: selectedProtocolOptionId
+                ?.takeIf(String::isNotBlank)
+                ?.let { selectedId -> protocolOptions.firstOrNull { option -> option.id == selectedId } }
+            ?: protocolOptions.firstOrNull()
+    )?.protocolHint ?: protocolHint
 
 internal fun HomeViewModel.invalidateIpInfoRefreshesInternal(): Long {
     connectedIpRefreshJob?.cancel()

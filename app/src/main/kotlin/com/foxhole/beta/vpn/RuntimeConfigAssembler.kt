@@ -7,8 +7,12 @@ import com.foxhole.beta.core.model.ExpertSettings
 import com.foxhole.beta.core.model.LocalAuthSettings
 import com.foxhole.beta.core.model.LocalSurfaceSettings
 import com.foxhole.beta.core.model.PerAppRoutingMode
+import com.foxhole.beta.core.model.PrivacyRouteMode
+import com.foxhole.beta.core.model.PrivacyRouteScope
+import com.foxhole.beta.core.model.PrivacyRouteSettings
 import com.foxhole.beta.core.model.ProxyInboundSettings
 import com.foxhole.beta.core.model.ProxySurfaceMode
+import com.foxhole.beta.core.model.ProtocolHint
 import com.foxhole.beta.core.model.RoutingPreset
 import com.foxhole.beta.core.model.RoutingPresetOverrideMode
 import com.foxhole.beta.core.model.RoutingRule
@@ -17,6 +21,7 @@ import com.foxhole.beta.core.model.Settings
 import com.foxhole.beta.core.model.TrafficMode
 import com.foxhole.beta.core.model.TrafficSettings
 import com.foxhole.beta.core.model.V2RayApiSettings
+import com.foxhole.beta.core.model.isUdpTransport
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -41,6 +46,7 @@ class RuntimeConfigAssembler(
     @Serializable
     private data class RuntimeFingerprintSettings(
         val traffic: TrafficSettings,
+        val privacyRoute: PrivacyRouteSettings,
         val expert: ExpertSettings,
     )
 
@@ -49,11 +55,21 @@ class RuntimeConfigAssembler(
         settings: Settings,
         activePreset: RoutingPreset?,
         privateDnsMode: PrivateDnsMode? = null,
+        torRuntimePaths: TorRuntimePaths? = null,
+        vpnProtocolHint: ProtocolHint? = null,
     ): String {
         validate(settings.expert)
         val base = json.parseToJsonElement(baseConfigJson).jsonObject
         return when (settings.traffic.mode) {
-            TrafficMode.TUNNEL -> assembleTunnel(base, settings, activePreset, privateDnsMode)
+            TrafficMode.TUNNEL ->
+                assembleTunnel(
+                    base = base,
+                    settings = settings,
+                    activePreset = activePreset,
+                    privateDnsMode = privateDnsMode,
+                    torRuntimePaths = torRuntimePaths,
+                    vpnProtocolHint = vpnProtocolHint,
+                )
             TrafficMode.PROXY -> assembleProxy(base, settings, activePreset)
         }
     }
@@ -62,7 +78,13 @@ class RuntimeConfigAssembler(
         settings: Settings,
         mode: LocalGuardMode,
     ): String {
-        val dns = buildFoxholeDnsConfig(settings.traffic.domainStrategy.configValue, privateDnsMode = null)
+        val dns =
+            buildFoxholeDnsConfig(
+                strategy = settings.traffic.domainStrategy.configValue,
+                privateDnsMode = null,
+                finalTag = DNS_DIRECT_TAG,
+                includeRemote = false,
+            )
         val route =
             buildJsonObject {
                 val rules =
@@ -102,10 +124,16 @@ class RuntimeConfigAssembler(
         settings: Settings,
         activePreset: RoutingPreset?,
         privateDnsMode: PrivateDnsMode?,
+        torRuntimePaths: TorRuntimePaths?,
+        vpnProtocolHint: ProtocolHint?,
     ): String {
         val tunInbound = base["inbounds"]?.jsonArray?.firstOrNull { it.jsonObject["type"]?.jsonPrimitive?.content == "tun" }?.jsonObject
             ?: error("base config must define a tun inbound")
-        val runtimeBase = base.withTcpReliabilityOutbounds()
+        val privacyRouteActive = settings.isTorPrivacyRouteActive(vpnProtocolHint)
+        val runtimeBase =
+            base
+                .withTcpReliabilityOutbounds()
+                .withTorPrivacyRouteOutbound(torRuntimePaths.takeIf { privacyRouteActive })
         val patchedTun =
             patchTunInbound(
                 tunInbound = tunInbound,
@@ -119,8 +147,22 @@ class RuntimeConfigAssembler(
                 add(runtimeLoopbackProxyInbound(settings.expert.localSurfaces))
                 buildLocalSurfaceInbounds(settings.expert.localSurfaces, includeLocalProxy = false).forEach(::add)
             }
-        val patchedDns = patchDns(runtimeBase["dns"]?.jsonObject, runtimeBase, settings.traffic, privateDnsMode)
-        val patchedRoute = patchRoute(runtimeBase["route"]?.jsonObject, patchedDns, activePreset, settings.expert)
+        val patchedDns =
+            patchDns(
+                existing = runtimeBase["dns"]?.jsonObject,
+                base = runtimeBase,
+                traffic = settings.traffic,
+                privateDnsMode = privateDnsMode,
+                privacyRouteActive = privacyRouteActive,
+            )
+        val patchedRoute =
+            patchRoute(
+                existing = runtimeBase["route"]?.jsonObject,
+                dns = patchedDns,
+                activePreset = activePreset,
+                settings = settings,
+                privacyRouteActive = privacyRouteActive,
+            )
         val patchedExperimental =
             patchExperimental(
                 runtimeBase["experimental"]?.jsonObject,
@@ -209,6 +251,7 @@ class RuntimeConfigAssembler(
             json.encodeToString(
                 RuntimeFingerprintSettings(
                     traffic = settings.traffic,
+                    privacyRoute = settings.privacyRoute,
                     expert = settings.expert.runtimeFingerprintSettings(),
                 ),
             ).hashCode()
@@ -285,6 +328,7 @@ class RuntimeConfigAssembler(
             unlockedAt = null,
             warningAcknowledgedAt = null,
             blockScreenshots = false,
+            killSwitchEnabled = false,
             networkActivityLogging = false,
             networkActivityPersistentLogging = false,
             diagnosticsRetention = DiagnosticsRetention.HOURS_24,
@@ -366,7 +410,7 @@ class RuntimeConfigAssembler(
                 add(JsonPrimitive("172.19.0.1/30"))
                 add(JsonPrimitive("fdfe:dcba:9876::1/126"))
             }
-            if (mode == LocalGuardMode.FIREWALL) {
+            if (mode == LocalGuardMode.FIREWALL && !settings.expert.killSwitchEnabled) {
                 val packages = normalizedRuntimePackages(settings.expert.blockedPackages)
                 if (packages.isNotEmpty()) {
                     putJsonArray("include_package") {
@@ -388,6 +432,47 @@ class RuntimeConfigAssembler(
             }
         }
     }
+
+    private fun JsonObject.withTorPrivacyRouteOutbound(paths: TorRuntimePaths?): JsonObject {
+        paths ?: return this
+        val patchedOutbounds =
+            buildJsonArray {
+                this@withTorPrivacyRouteOutbound["outbounds"]
+                    ?.jsonArray
+                    .orEmpty()
+                    .map { it.jsonObject }
+                    .filterNot { outbound -> outbound["tag"]?.jsonPrimitive?.contentOrNull == TOR_OVER_VPN_OUTBOUND_TAG }
+                    .forEach(::add)
+                add(torOverVpnOutbound(paths))
+            }
+        return buildJsonObject {
+            this@withTorPrivacyRouteOutbound.forEach { (key, value) ->
+                if (key == "outbounds") {
+                    put(key, patchedOutbounds)
+                } else {
+                    put(key, value)
+                }
+            }
+            if (!containsKey("outbounds")) {
+                put("outbounds", patchedOutbounds)
+            }
+        }
+    }
+
+    private fun torOverVpnOutbound(paths: TorRuntimePaths): JsonObject =
+        buildJsonObject {
+            put("type", "tor")
+            put("tag", TOR_OVER_VPN_OUTBOUND_TAG)
+            put("executable_path", paths.executablePath)
+            put("data_directory", paths.dataDirectory)
+            putJsonObject("torrc") {
+                put("ClientOnly", 1)
+                put("AvoidDiskWrites", 1)
+                paths.geoIpFilePath?.let { put("GeoIPFile", it) }
+                paths.geoIpv6FilePath?.let { put("GeoIPv6File", it) }
+            }
+            put("detour", "proxy")
+        }
 
     private fun patchTcpReliabilityOutbounds(outbounds: JsonArray?): JsonArray? =
         outbounds?.let { source ->
@@ -435,6 +520,7 @@ class RuntimeConfigAssembler(
         base: JsonObject,
         traffic: TrafficSettings,
         privateDnsMode: PrivateDnsMode? = null,
+        privacyRouteActive: Boolean = false,
     ): JsonObject {
         val effectiveStrategy =
             when {
@@ -449,11 +535,14 @@ class RuntimeConfigAssembler(
                 privateDnsMode = privateDnsMode,
                 extraServers = wireGuardDnsServers,
                 finalTag =
-                    if (selectedProxyEndpointType(base).equals("wireguard", ignoreCase = true)) {
+                    if (privacyRouteActive) {
+                        DNS_REMOTE_TAG
+                    } else if (selectedProxyEndpointType(base).equals("wireguard", ignoreCase = true)) {
                         DNS_DIRECT_TAG
                     } else {
                         DNS_REMOTE_TAG
                     },
+                remoteDetourTag = if (privacyRouteActive) TOR_OVER_VPN_OUTBOUND_TAG else "proxy",
             )
         }
         val source = existing
@@ -475,8 +564,10 @@ class RuntimeConfigAssembler(
         existing: JsonObject?,
         dns: JsonObject,
         activePreset: RoutingPreset?,
-        expert: ExpertSettings,
+        settings: Settings,
+        privacyRouteActive: Boolean,
     ): JsonObject {
+        val expert = settings.expert
         val source = existing ?: buildJsonObject {}
         val preserveSource = existing != null && !isFoxholeManagedRoute(existing)
         val baseRules =
@@ -492,6 +583,12 @@ class RuntimeConfigAssembler(
                 ?.map { rule -> toRouteRule(rule, expert.siteRoutingAction) }
                 .orEmpty()
         val appRules = buildAppRouteRules(expert)
+        val privacyRouteRules =
+            if (privacyRouteActive) {
+                buildTorPrivacyRouteRules(settings)
+            } else {
+                emptyList()
+            }
         val combinedRules =
             buildJsonArray {
                 appRules.forEach(::add)
@@ -502,6 +599,7 @@ class RuntimeConfigAssembler(
                 if (expert.bypassLan) {
                     add(bypassLanRule())
                 }
+                privacyRouteRules.forEach(::add)
                 if (activePreset?.enabled == true && activePreset.overrideMode == RoutingPresetOverrideMode.FORCE_LOCAL) {
                     presetRules.forEach(::add)
                 } else {
@@ -521,11 +619,59 @@ class RuntimeConfigAssembler(
                 }
             }
             put("rules", combinedRules)
-            put("final", tunnelFinalOutbound(source))
+            put(
+                "final",
+                if (privacyRouteActive && settings.privacyRoute.scope == PrivacyRouteScope.ALL_APPS) {
+                    TOR_OVER_VPN_OUTBOUND_TAG
+                } else {
+                    tunnelFinalOutbound(source)
+                },
+            )
             resolverForRoute(dns, source)?.let { put("default_domain_resolver", it) }
             source["auto_detect_interface"]?.let { put("auto_detect_interface", it) } ?: put("auto_detect_interface", true)
         }
     }
+
+    private fun Settings.isTorPrivacyRouteActive(vpnProtocolHint: ProtocolHint?): Boolean =
+        privacyRoute.mode == PrivacyRouteMode.TOR_OVER_VPN &&
+            traffic.mode == TrafficMode.TUNNEL &&
+            vpnProtocolHint?.isUdpTransport() != true
+
+    private fun buildTorPrivacyRouteRules(settings: Settings): List<JsonObject> =
+        when (settings.privacyRoute.scope) {
+            PrivacyRouteScope.ALL_APPS ->
+                listOf(udpBlockRule())
+            PrivacyRouteScope.SELECTED_APPS ->
+                normalizedRuntimePackages(settings.privacyRoute.selectedPackages)
+                    .takeIf(List<String>::isNotEmpty)
+                    ?.let { packages ->
+                        listOf(
+                            packageNetworkRouteRule(packages, network = "udp", outboundTag = "block"),
+                            packageNetworkRouteRule(packages, network = "tcp", outboundTag = TOR_OVER_VPN_OUTBOUND_TAG),
+                        )
+                    }.orEmpty()
+        }
+
+    private fun udpBlockRule(): JsonObject =
+        buildJsonObject {
+            put("network", "udp")
+            put("action", "route")
+            put("outbound", "block")
+        }
+
+    private fun packageNetworkRouteRule(
+        packageNames: List<String>,
+        network: String,
+        outboundTag: String,
+    ): JsonObject =
+        buildJsonObject {
+            putJsonArray("package_name") {
+                packageNames.distinct().sorted().forEach { add(JsonPrimitive(it)) }
+            }
+            put("network", network)
+            put("action", "route")
+            put("outbound", outboundTag)
+        }
 
     private fun patchProxyRoute(
         existing: JsonObject?,
@@ -880,6 +1026,8 @@ class RuntimeConfigAssembler(
         privateDnsMode: PrivateDnsMode?,
         extraServers: List<JsonObject> = emptyList(),
         finalTag: String = DNS_REMOTE_TAG,
+        includeRemote: Boolean = true,
+        remoteDetourTag: String = "proxy",
     ): JsonObject =
         buildJsonObject {
             put(
@@ -894,9 +1042,11 @@ class RuntimeConfigAssembler(
                     add(
                         foxholeDirectDnsServer(),
                     )
-                    add(
-                        foxholeRemoteDnsServer(privateDnsMode),
-                    )
+                    if (includeRemote) {
+                        add(
+                            foxholeRemoteDnsServer(privateDnsMode, remoteDetourTag),
+                        )
+                    }
                     extraServers.forEach(::add)
                 },
             )
@@ -943,14 +1093,17 @@ class RuntimeConfigAssembler(
             put("type", "local")
         }
 
-    private fun foxholeRemoteDnsServer(_privateDnsMode: PrivateDnsMode?): JsonObject =
+    private fun foxholeRemoteDnsServer(
+        _privateDnsMode: PrivateDnsMode?,
+        detourTag: String = "proxy",
+    ): JsonObject =
         buildJsonObject {
             put("tag", DNS_REMOTE_TAG)
             put("server", FOXHOLE_REMOTE_DNS_SERVER)
             put("type", "https")
             put("server_port", 443)
             put("path", "/dns-query")
-            put("detour", "proxy")
+            put("detour", detourTag)
         }
 
     private fun sniffRule(): JsonObject =
@@ -1106,6 +1259,7 @@ class RuntimeConfigAssembler(
         const val DNS_DIRECT_TAG = "dns-direct"
         const val DNS_REMOTE_TAG = "dns-remote"
         const val WIREGUARD_DNS_TAG = "dns-wireguard"
+        const val TOR_OVER_VPN_OUTBOUND_TAG = "tor-over-vpn"
         const val FOXHOLE_REMOTE_DNS_SERVER = "1.1.1.1"
         const val FOXHOLE_DOH_ADDRESS = "https://1.1.1.1/dns-query"
         const val MOBILE_TCP_KEEP_ALIVE = "30s"

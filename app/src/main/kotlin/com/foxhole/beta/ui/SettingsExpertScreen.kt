@@ -73,10 +73,8 @@ fun ExpertSettingsScreen(
                 SettingSwitchRow(
                     title = stringResource(R.string.show_advanced_settings_title),
                     checked = state.settings.ui.showExpertSettings,
-                    summary = stringResource(R.string.show_advanced_settings_summary),
                     leadingIcon = Icons.Outlined.Shield,
                     onCheckedChange = onShowExpertSettingsChanged,
-                    summaryMaxLines = 3,
                     grouped = true,
                 )
             }
