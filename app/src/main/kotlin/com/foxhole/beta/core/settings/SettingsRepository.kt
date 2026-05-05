@@ -444,12 +444,10 @@ class SettingsRepository(
                 connection =
                     current.connection.copy(
                         stealthModeEnabled = current.connection.stealthModeEnabled && value == TrafficMode.TUNNEL,
-                    ),
+                ),
                 traffic = current.traffic.copy(mode = value),
                 expert =
                     current.expert.copy(
-                        perAppRoutingMode = PerAppRoutingMode.FULL_TUNNEL,
-                        selectedPackages = emptyList(),
                         localSurfaces =
                             current.expert.localSurfaces.withProxyModeDefaults(
                                 enableDefaults = value == TrafficMode.PROXY,

@@ -165,6 +165,23 @@ fun HomeScreen(
     val modeOption = proxyModel.modeOption
     val lanProxySurface = proxyModel.lanProxySurface
     val lanProxyActive = proxyModel.lanProxyActive
+    val homeModeOptions =
+        remember(
+            state.settings.traffic.mode,
+            state.settings.expert.perAppRoutingMode,
+            state.settings.expert.selectedPackages,
+        ) {
+            buildList {
+                add(HomeModeOption.TUNNEL)
+                if (
+                    state.settings.expert.perAppRoutingMode != PerAppRoutingMode.FULL_TUNNEL &&
+                    state.settings.expert.selectedPackages.isNotEmpty()
+                ) {
+                    add(HomeModeOption.SPLIT)
+                }
+                add(HomeModeOption.PROXY)
+            }
+        }
     val darkTheme = MaterialTheme.colorScheme.background.luminance() < 0.3f
     val autoTone = foxholeSystemAwareAccentColor(fallback = MaterialTheme.colorScheme.primary)
     val topStatusState = homeTopStatusState(state)
@@ -415,6 +432,7 @@ fun HomeScreen(
                                 ) {
                                     HomeModeDropdown(
                                         selected = modeOption,
+                                        values = homeModeOptions,
                                         onSelect = { selectedMode ->
                                             applyHomeModeSelection(
                                                 mode = selectedMode,

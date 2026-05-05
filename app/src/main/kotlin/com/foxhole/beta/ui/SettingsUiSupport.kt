@@ -96,19 +96,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
 import androidx.core.content.getSystemService
 import com.foxhole.beta.R
-import com.foxhole.beta.core.data.RoutingRepository
 import com.foxhole.beta.core.diagnostics.DiagnosticEntry
 import com.foxhole.beta.core.model.ClashApiSettings
 import com.foxhole.beta.core.model.DiagnosticsRetention
 import com.foxhole.beta.core.model.DomainStrategy
 import com.foxhole.beta.core.model.LocalAuthSettings
 import com.foxhole.beta.core.model.ProxyInboundSettings
-import com.foxhole.beta.core.model.RoutingCatalog
-import com.foxhole.beta.core.model.RoutingPreset
-import com.foxhole.beta.core.model.RoutingPresetOverrideMode
 import com.foxhole.beta.core.model.RoutingRule
 import com.foxhole.beta.core.model.RoutingRuleAction
-import com.foxhole.beta.core.model.TrafficMode
 import com.foxhole.beta.core.model.TunStack
 import com.foxhole.beta.ui.theme.LocalFoxholeUiPalette
 import com.foxhole.beta.vpn.AndroidLanProxyAddressProvider
@@ -729,7 +724,6 @@ internal fun LocalProxyAuthEditor(
     SettingValueRow(
         title = stringResource(R.string.username),
         value = auth.username,
-        summary = stringResource(R.string.proxy_auth_live_apply_summary),
         leadingIcon = Icons.Outlined.Person,
         onClick = { usernameDialog = true },
         trailingContent = {
@@ -1003,24 +997,6 @@ internal fun HelpSectionContent(
 }
 
 @Composable
-internal fun trafficInfoBody(state: SettingsRouteUiState): String =
-    buildList {
-        add(
-            when (currentHomeModeOption(state.settings)) {
-                HomeModeOption.TUNNEL -> stringResource(R.string.traffic_info_tunnel)
-                HomeModeOption.SPLIT -> stringResource(R.string.traffic_info_split)
-                HomeModeOption.PROXY -> stringResource(R.string.traffic_info_proxy)
-            },
-        )
-        if (state.settings.traffic.mode == TrafficMode.PROXY && state.settings.expert.localSurfaces.auth.enabled) {
-            add(stringResource(R.string.proxy_mode_firefox_hint))
-        }
-        if (state.reconnectRequired) {
-            add(stringResource(R.string.traffic_info_reconnect))
-        }
-    }.joinToString(separator = "\n\n")
-
-@Composable
 internal fun ActionRow(
     primaryLabel: String,
     onPrimary: (() -> Unit)?,
@@ -1052,29 +1028,6 @@ internal fun ActionRow(
                     Text(tertiaryLabel, modifier = Modifier.padding(start = 8.dp))
                 }
             }
-        }
-    }
-}
-
-@Composable
-internal fun PresetActionRow(
-    onActivate: () -> Unit,
-    activateLabel: String,
-    onEdit: () -> Unit,
-    onExport: () -> Unit,
-    onDelete: () -> Unit,
-    onAddRule: () -> Unit,
-) {
-    FoxholeCard {
-        FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            OutlinedButton(onClick = onActivate) { Text(activateLabel) }
-            OutlinedButton(onClick = onEdit) { Text(stringResource(R.string.edit_label)) }
-            OutlinedButton(onClick = onExport) { Text(stringResource(R.string.export_label)) }
-            OutlinedButton(onClick = onAddRule) { Text(stringResource(R.string.add_rule)) }
-            OutlinedButton(onClick = onDelete) { Text(stringResource(R.string.delete_label)) }
         }
     }
 }

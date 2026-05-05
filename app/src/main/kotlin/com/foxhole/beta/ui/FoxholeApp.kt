@@ -91,7 +91,6 @@ private object AppRoute {
     const val PROFILE_EDIT_CONFIG = "profiles/{$PROFILE_ID}/edit-config"
     const val SETTINGS = "settings"
     const val TRAFFIC = "settings/traffic"
-    const val ROUTING = "settings/routing"
     const val ROUTING_APPS = "settings/routing/apps"
     const val ROUTING_APPS_PICKER = "settings/routing/apps/picker"
     const val ROUTING_BLOCKED_APPS_PICKER = "settings/routing/apps/blocked-picker"
@@ -380,7 +379,6 @@ fun FoxholeApp(
                         snackbarHostState = snackbarHostState,
                         onNavigateUp = null,
                         onOpenTraffic = { navController.navigate(AppRoute.TRAFFIC) },
-                        onOpenRouting = { navController.navigate(AppRoute.ROUTING) },
                         onOpenRoutingApps = { navController.navigate(AppRoute.ROUTING_APPS) },
                         onOpenRoutingSites = { navController.navigate(AppRoute.ROUTING_SITES) },
                         onOpenSmartStart = { navController.navigate(AppRoute.SMART_START) },
@@ -412,6 +410,7 @@ fun FoxholeApp(
                         onAcknowledgeUnsafeWarning = viewModel::acknowledgeUnsafeWarning,
                         onTrafficModeSelected = viewModel::onTrafficModeSelected,
                         onPerAppRoutingModeSelected = viewModel::onPerAppRoutingModeSelected,
+                        onOpenRoutingApps = { navController.navigate(AppRoute.ROUTING_APPS) },
                         onLatencyProbeMethodSelected = viewModel::onLatencyProbeMethodSelected,
                         onTunStackSelected = viewModel::onTunStackSelected,
                         onLocalProxyAuthEnabledChanged = viewModel::onLocalProxyAuthEnabledChanged,
@@ -431,27 +430,6 @@ fun FoxholeApp(
                         onAutoRefreshSubscriptionsChanged = viewModel::onAutoRefreshSubscriptionsChanged,
                         onSubscriptionRefreshIntervalSelected = viewModel::onSubscriptionRefreshIntervalSelected,
                         onIpInfoEndpointChanged = viewModel::onIpInfoEndpointChanged,
-                    )
-                }
-                composable(AppRoute.ROUTING) {
-                    val state by viewModel.routingRouteState.collectAsStateWithLifecycle()
-                    RoutingSettingsScreen(
-                        state = state,
-                        snackbarHostState = snackbarHostState,
-                        onNavigateUp = navController::navigateUp,
-                        onCreatePreset = viewModel::createPreset,
-                        onUpdatePreset = viewModel::updatePreset,
-                        onSetActivePreset = viewModel::setActivePreset,
-                        onDeletePreset = viewModel::deletePreset,
-                        onSaveRule = viewModel::saveRule,
-                        onDeleteRule = viewModel::deleteRule,
-                        onImportPresetText = viewModel::importPresetText,
-                        onExportPresetDocument = viewModel::exportPresetDocument,
-                        onAddCatalog = viewModel::addCatalog,
-                        onRefreshCatalog = viewModel::refreshCatalog,
-                        onDeleteCatalog = viewModel::deleteCatalog,
-                        onLoadCatalogPreview = viewModel::loadCatalogPreview,
-                        onImportPresetFromCatalog = viewModel::importPresetFromCatalog,
                     )
                 }
                 composable(AppRoute.ROUTING_APPS) {

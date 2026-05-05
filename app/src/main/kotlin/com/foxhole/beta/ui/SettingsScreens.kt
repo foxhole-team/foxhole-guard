@@ -25,7 +25,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.AltRoute
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.HelpOutline
 import androidx.compose.material.icons.outlined.AccountTree
@@ -84,7 +83,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import com.foxhole.beta.R
-import com.foxhole.beta.core.data.RoutingRepository
 import com.foxhole.beta.core.diagnostics.DiagnosticEntry
 import com.foxhole.beta.core.model.AppLocale
 import com.foxhole.beta.core.model.ClashApiSettings
@@ -96,12 +94,7 @@ import com.foxhole.beta.core.model.LocalSurfaceSettings
 import com.foxhole.beta.core.model.PerAppRoutingMode
 import com.foxhole.beta.core.model.ProxyInboundSettings
 import com.foxhole.beta.core.model.ProxySurfaceMode
-import com.foxhole.beta.core.model.RoutingCatalog
 import com.foxhole.beta.core.model.RoutingPreset
-import com.foxhole.beta.core.model.RoutingPresetOverrideMode
-import com.foxhole.beta.core.model.RoutingPresetSource
-import com.foxhole.beta.core.model.RoutingRule
-import com.foxhole.beta.core.model.RoutingRuleAction
 import com.foxhole.beta.core.model.SMART_START_PROTOCOL_TIMEOUT_MIN_SECONDS
 import com.foxhole.beta.core.model.SMART_START_REFRESH_TIMEOUT_MIN_SECONDS
 import com.foxhole.beta.core.model.SMART_START_TIMEOUT_MAX_SECONDS
@@ -128,7 +121,6 @@ fun SettingsHomeScreen(
     snackbarHostState: SnackbarHostState,
     onNavigateUp: (() -> Unit)?,
     onOpenTraffic: () -> Unit,
-    onOpenRouting: () -> Unit,
     onOpenRoutingApps: () -> Unit,
     onOpenRoutingSites: () -> Unit,
     onOpenSmartStart: () -> Unit,
@@ -188,7 +180,6 @@ fun SettingsHomeScreen(
             hasSmartProfile = state.hasSmartProfile,
             expertVisible = expertVisible,
             onOpenTraffic = onOpenTraffic,
-            onOpenRouting = onOpenRouting,
             onOpenRoutingApps = onOpenRoutingApps,
             onOpenRoutingSites = onOpenRoutingSites,
             onOpenSmartStart = onOpenSmartStart,
@@ -231,7 +222,6 @@ private fun LazyListScope.settingsHomeNavigationItems(
     hasSmartProfile: Boolean,
     expertVisible: Boolean,
     onOpenTraffic: () -> Unit,
-    onOpenRouting: () -> Unit,
     onOpenRoutingApps: () -> Unit,
     onOpenRoutingSites: () -> Unit,
     onOpenSmartStart: () -> Unit,
@@ -263,7 +253,6 @@ private fun LazyListScope.settingsHomeNavigationItems(
     }
     item {
         SettingsRoutingNavigationGroup(
-            onOpenRouting = onOpenRouting,
             onOpenRoutingApps = onOpenRoutingApps,
             onOpenRoutingSites = onOpenRoutingSites,
         )
@@ -324,18 +313,10 @@ private fun LazyListScope.settingsHomeFooterItem(
 
 @Composable
 private fun SettingsRoutingNavigationGroup(
-    onOpenRouting: () -> Unit,
     onOpenRoutingApps: () -> Unit,
     onOpenRoutingSites: () -> Unit,
 ) {
     SettingsNavigationGroup {
-        SettingsGroupedNavigationRow(
-            icon = Icons.Outlined.AccountTree,
-            title = stringResource(R.string.traffic_rules),
-            summary = stringResource(R.string.settings_home_routing_summary),
-            onClick = onOpenRouting,
-        )
-        SettingsGroupDivider()
         SettingsGroupedNavigationRow(
             modifier = Modifier.testTag("settings_routing_apps_action"),
             icon = Icons.Outlined.Apps,
@@ -612,6 +593,7 @@ fun TrafficSettingsScreen(
     onAcknowledgeUnsafeWarning: () -> Unit,
     onTrafficModeSelected: (TrafficMode) -> Unit,
     onPerAppRoutingModeSelected: (PerAppRoutingMode) -> Unit,
+    onOpenRoutingApps: () -> Unit,
     onLatencyProbeMethodSelected: (LatencyProbeMethod) -> Unit,
     onTunStackSelected: (TunStack) -> Unit,
     onLocalProxyAuthEnabledChanged: (Boolean) -> Unit,
@@ -672,12 +654,6 @@ fun TrafficSettingsScreen(
         onNavigateUp = onNavigateUp,
     ) {
         item {
-            InfoBlock(
-                title = stringResource(R.string.information_title),
-                body = trafficInfoBody(state),
-            )
-        }
-        item {
             SettingsControlGroup {
                 DropdownSettingRow(
                     title = stringResource(R.string.traffic_mode),
@@ -688,14 +664,20 @@ fun TrafficSettingsScreen(
                     selected = selectedModeOption,
                     label = { homeModeMenuLabel(it) },
                     onSelect = { option ->
-                        applyHomeModeSelection(
-                            mode = option,
-                            onTrafficModeSelected = onTrafficModeSelected,
-                            onPerAppRoutingModeSelected = onPerAppRoutingModeSelected,
-                            selectedPackages = state.settings.expert.selectedPackages,
-                            currentPerAppRoutingMode = state.settings.expert.perAppRoutingMode,
-                        )
+                        if (option == HomeModeOption.SPLIT && state.settings.expert.selectedPackages.isEmpty()) {
+                            onOpenRoutingApps()
+                        } else {
+                            applyHomeModeSelection(
+                                mode = option,
+                                onTrafficModeSelected = onTrafficModeSelected,
+                                onPerAppRoutingModeSelected = onPerAppRoutingModeSelected,
+                                selectedPackages = state.settings.expert.selectedPackages,
+                                currentPerAppRoutingMode = state.settings.expert.perAppRoutingMode,
+                            )
+                        }
                     },
+                    summary = stringResource(R.string.traffic_mode_help_body),
+                    summaryMaxLines = 6,
                     leadingIcon = homeModeOptionIcon(selectedModeOption),
                     optionIcon = ::homeModeOptionIcon,
                     grouped = true,
@@ -744,7 +726,6 @@ fun TrafficSettingsScreen(
                         title = stringResource(R.string.proxy_auth_title),
                         checked = state.settings.expert.localSurfaces.auth.enabled,
                         leadingIcon = Icons.Outlined.Shield,
-                        summary = stringResource(R.string.proxy_auth_summary),
                         onCheckedChange = onLocalProxyAuthEnabledChanged,
                         grouped = true,
                     )
@@ -811,7 +792,6 @@ fun TrafficSettingsScreen(
                         title = stringResource(R.string.lan_proxy_auth_title),
                         checked = state.settings.expert.localSurfaces.lanAuth.enabled,
                         leadingIcon = Icons.Outlined.Shield,
-                        summary = stringResource(R.string.lan_proxy_auth_summary),
                         onCheckedChange = onLanProxyAuthEnabledChanged,
                         grouped = true,
                     )
@@ -1208,11 +1188,6 @@ fun HelpScreen(
                 content = HelpTopicContent.CONNECTION_MODES,
             ),
             HelpTopic(
-                icon = Icons.AutoMirrored.Outlined.AltRoute,
-                title = stringResource(R.string.traffic_rules),
-                body = stringResource(R.string.help_routing_full_body),
-            ),
-            HelpTopic(
                 icon = Icons.Outlined.Tune,
                 title = stringResource(R.string.expert_settings),
                 body = stringResource(R.string.help_expert_full_body),
@@ -1358,18 +1333,18 @@ private fun HelpConnectionModesContent() {
         )
         HelpConnectionModeRow(
             icon = Icons.Outlined.Apps,
-            title = stringResource(R.string.home_mode_split_tunnel),
-            body = stringResource(R.string.help_connection_split_tunnel_body),
+            title = stringResource(R.string.help_connection_split_proxy_title),
+            body = stringResource(R.string.help_connection_split_proxy_body),
+        )
+        HelpConnectionModeRow(
+            icon = Icons.Outlined.Apps,
+            title = stringResource(R.string.help_connection_split_direct_title),
+            body = stringResource(R.string.help_connection_split_direct_body),
         )
         HelpConnectionModeRow(
             icon = Icons.Outlined.Public,
             title = stringResource(R.string.traffic_mode_proxy),
             body = stringResource(R.string.help_connection_proxy_body),
-        )
-        HelpConnectionModeRow(
-            icon = Icons.Outlined.Router,
-            title = stringResource(R.string.proxy_lan_access_title),
-            body = stringResource(R.string.help_connection_lan_proxy_body),
         )
     }
 }

@@ -1,5 +1,9 @@
 package com.foxhole.beta.ui
 
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -24,6 +28,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -62,12 +67,31 @@ internal fun FoxholeSwipeActions(
     }
     val haptic = LocalHapticFeedback.current
     val actionWidth = (actions.size * 44).dp + 12.dp
+    val contentOffset by animateDpAsState(
+        targetValue = if (isRevealed) -actionWidth else 0.dp,
+        animationSpec =
+            tween(
+                durationMillis = FoxholeMotionTokens.StandardDurationMs,
+                easing = FoxholeMotionTokens.NavigationIndicatorEasing,
+            ),
+        label = "swipe_action_offset",
+    )
     val dismissState =
         rememberSwipeToDismissBoxState(
             confirmValueChange = { value ->
-                if (value == SwipeToDismissBoxValue.EndToStart) {
-                    setRevealed(true)
-                    haptic.performHapticFeedback(HapticFeedbackType.GestureThresholdActivate)
+                when (value) {
+                    SwipeToDismissBoxValue.EndToStart -> {
+                        setRevealed(true)
+                        haptic.performHapticFeedback(HapticFeedbackType.GestureThresholdActivate)
+                    }
+                    SwipeToDismissBoxValue.StartToEnd,
+                    SwipeToDismissBoxValue.Settled,
+                    -> {
+                        if (isRevealed) {
+                            setRevealed(false)
+                            haptic.performHapticFeedback(HapticFeedbackType.GestureEnd)
+                        }
+                    }
                 }
                 false
             },
@@ -83,20 +107,28 @@ internal fun FoxholeSwipeActions(
         SwipeToDismissBox(
             state = dismissState,
             backgroundContent = {},
-            enableDismissFromStartToEnd = false,
+            enableDismissFromStartToEnd = isRevealed,
             enableDismissFromEndToStart = true,
             content = {
                 Box(
                     modifier =
                         Modifier
                             .fillMaxWidth()
-                            .offset(x = if (isRevealed) -actionWidth else 0.dp),
+                            .offset(x = contentOffset),
                 ) {
                     content()
                 }
             },
         )
         if (isRevealed) {
+            SwipeActionsDismissOverlay(
+                actionWidth = actionWidth,
+                onDismiss = {
+                    setRevealed(false)
+                    haptic.performHapticFeedback(HapticFeedbackType.GestureEnd)
+                },
+                modifier = Modifier.matchParentSize().zIndex(1f),
+            )
             SwipeActionsBackground(
                 actions = actions,
                 onAction = {
@@ -106,10 +138,43 @@ internal fun FoxholeSwipeActions(
                 modifier =
                     Modifier
                         .align(Alignment.CenterEnd)
-                        .zIndex(1f),
+                        .zIndex(2f),
             )
         }
     }
+}
+
+@Composable
+private fun SwipeActionsDismissOverlay(
+    actionWidth: androidx.compose.ui.unit.Dp,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier =
+            modifier
+                .padding(end = actionWidth)
+                .pointerInput(onDismiss) {
+                    var dragDistance = 0f
+                    val closeThreshold = size.width * SWIPE_ACTION_CLOSE_THRESHOLD_FRACTION
+                    detectHorizontalDragGestures(
+                        onDragStart = { dragDistance = 0f },
+                        onHorizontalDrag = { change, dragAmount ->
+                            dragDistance += dragAmount
+                            if (dragDistance > closeThreshold) {
+                                change.consume()
+                                onDismiss()
+                                dragDistance = 0f
+                            }
+                        },
+                        onDragEnd = { dragDistance = 0f },
+                        onDragCancel = { dragDistance = 0f },
+                    )
+                }
+                .pointerInput(onDismiss) {
+                    detectTapGestures(onTap = { onDismiss() })
+                },
+    )
 }
 
 @Composable
@@ -140,3 +205,5 @@ private fun SwipeActionsBackground(
         }
     }
 }
+
+private const val SWIPE_ACTION_CLOSE_THRESHOLD_FRACTION = 0.08f

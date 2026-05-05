@@ -219,7 +219,7 @@ fun RoutingAppsScreen(
                 subtitle = stringResource(R.string.blocked_apps_info_body),
                 leadingIcon = Icons.Outlined.Block,
                 apps = blockedApps,
-                emptyText = stringResource(R.string.no_blocked_apps_summary),
+                emptyText = "",
                 headerActionLabel = stringResource(R.string.choose_label),
                 headerActionTag = "routing_apps_blocked_add_exception_action",
                 onHeaderAction = onOpenBlockedPicker,
@@ -312,11 +312,13 @@ private fun AppGridSection(
             }
         }
         if (apps.isEmpty()) {
-            Text(
-                text = emptyText,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            if (emptyText.isNotBlank()) {
+                Text(
+                    text = emptyText,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         } else {
             AppIconGrid(
                 apps = apps,

@@ -245,12 +245,13 @@ internal fun HomeNetworkColumnTitle(text: String) {
 @Composable
 internal fun HomeModeDropdown(
     selected: HomeModeOption,
+    values: List<HomeModeOption> = HomeModeOption.entries,
     onSelect: (HomeModeOption) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val selectorTint = MaterialTheme.colorScheme.primary
     var expanded by rememberSaveable(selected) { mutableStateOf(false) }
-    val menuLabels = HomeModeOption.entries.map { option -> homeModeMenuLabel(option) }
+    val menuLabels = values.map { option -> homeModeMenuLabel(option) }
     val menuWidth =
         rememberFoxholeDropdownMenuWidth(
             labels = menuLabels,
@@ -306,7 +307,7 @@ internal fun HomeModeDropdown(
             popupGap = 0.dp,
             modifier = Modifier.width(menuWidth),
         ) {
-            HomeModeOption.entries.forEachIndexed { index, option ->
+            values.forEachIndexed { index, option ->
                 val selectedOption = option == selected
                 FoxholeDropdownItem(
                     onClick = {
@@ -317,7 +318,7 @@ internal fun HomeModeDropdown(
                     },
                     selected = selectedOption,
                     extendSelectedToMenuTop = index == 0,
-                    extendSelectedToMenuBottom = index == HomeModeOption.entries.lastIndex,
+                    extendSelectedToMenuBottom = index == values.lastIndex,
                     contentPadding = PaddingValues(start = 12.dp, end = 8.dp, top = 9.dp, bottom = 9.dp),
                 ) {
                     Icon(

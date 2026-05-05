@@ -253,8 +253,10 @@ class RuntimeConfigAssembler(
         tunInbound: JsonObject,
         traffic: TrafficSettings,
         expert: ExpertSettings,
-    ): JsonObject =
-        buildJsonObject {
+    ): JsonObject {
+        val includePackages = expert.vpnIncludedPackages()
+        val excludePackages = expert.vpnExcludedPackages()
+        return buildJsonObject {
             tunInbound.forEach { (key, value) ->
                 when (key) {
                     "mtu" -> put(key, traffic.mtu)
@@ -267,11 +269,22 @@ class RuntimeConfigAssembler(
             put("mtu", traffic.mtu)
             put("stack", traffic.tunStack.configValue)
             put("strict_route", expert.strictRoute)
+            when {
+                includePackages.isNotEmpty() ->
+                    putJsonArray("include_package") {
+                        includePackages.forEach { add(JsonPrimitive(it)) }
+                    }
+                excludePackages.isNotEmpty() ->
+                    putJsonArray("exclude_package") {
+                        excludePackages.forEach { add(JsonPrimitive(it)) }
+                    }
+            }
             if (expert.sniff) {
                 put("sniff", true)
                 put("sniff_override_destination", !expert.routeOnly)
             }
         }
+    }
 
     private fun JsonObject.withTcpReliabilityOutbounds(): JsonObject {
         val patchedOutbounds = patchTcpReliabilityOutbounds(this["outbounds"]?.jsonArray) ?: return this
@@ -406,7 +419,7 @@ class RuntimeConfigAssembler(
                 }
             }
             put("rules", combinedRules)
-            put("final", tunnelFinalOutbound(expert, source))
+            put("final", tunnelFinalOutbound(source))
             resolverForRoute(dns, source)?.let { put("default_domain_resolver", it) }
             source["auto_detect_interface"]?.let { put("auto_detect_interface", it) } ?: put("auto_detect_interface", true)
         }
@@ -568,16 +581,34 @@ class RuntimeConfigAssembler(
             if (expert.blockedPackagesEnabled && expert.blockedPackages.isNotEmpty()) {
                 add(packageRouteRule(expert.blockedPackages, RoutingRuleAction.BLOCK))
             }
-            if (expert.selectedPackages.isNotEmpty()) {
-                when (expert.perAppRoutingMode) {
-                    PerAppRoutingMode.FULL_TUNNEL -> Unit
-                    PerAppRoutingMode.INCLUDE_SELECTED_APPS ->
-                        add(packageRouteRule(expert.selectedPackages, RoutingRuleAction.PROXY))
-                    PerAppRoutingMode.EXCLUDE_SELECTED_APPS ->
-                        add(packageRouteRule(expert.selectedPackages, RoutingRuleAction.DIRECT))
-                }
-            }
         }
+
+    private fun ExpertSettings.vpnIncludedPackages(): List<String> =
+        when (perAppRoutingMode) {
+            PerAppRoutingMode.INCLUDE_SELECTED_APPS ->
+                normalizedRuntimePackages(
+                    selectedPackages +
+                        blockedPackages.takeIf { blockedPackagesEnabled }.orEmpty(),
+                )
+            PerAppRoutingMode.FULL_TUNNEL,
+            PerAppRoutingMode.EXCLUDE_SELECTED_APPS,
+            -> emptyList()
+        }
+
+    private fun ExpertSettings.vpnExcludedPackages(): List<String> =
+        when (perAppRoutingMode) {
+            PerAppRoutingMode.EXCLUDE_SELECTED_APPS -> normalizedRuntimePackages(selectedPackages)
+            PerAppRoutingMode.FULL_TUNNEL,
+            PerAppRoutingMode.INCLUDE_SELECTED_APPS,
+            -> emptyList()
+        }
+
+    private fun normalizedRuntimePackages(packageNames: List<String>): List<String> =
+        packageNames
+            .map(String::trim)
+            .filter(String::isNotBlank)
+            .distinct()
+            .sorted()
 
     private fun packageRouteRule(
         packageNames: List<String>,
@@ -591,16 +622,7 @@ class RuntimeConfigAssembler(
             put("outbound", action.outboundTag)
         }
 
-    private fun tunnelFinalOutbound(
-        expert: ExpertSettings,
-        source: JsonObject,
-    ): String =
-        when (expert.perAppRoutingMode) {
-            PerAppRoutingMode.INCLUDE_SELECTED_APPS -> "direct"
-            PerAppRoutingMode.FULL_TUNNEL,
-            PerAppRoutingMode.EXCLUDE_SELECTED_APPS,
-            -> source["final"]?.jsonPrimitive?.contentOrNull ?: "proxy"
-        }
+    private fun tunnelFinalOutbound(source: JsonObject): String = source["final"]?.jsonPrimitive?.contentOrNull ?: "proxy"
 
     private fun toRouteRule(
         rule: RoutingRule,

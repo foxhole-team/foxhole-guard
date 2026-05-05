@@ -198,7 +198,7 @@ class RuntimeConfigAssemblerTest {
     }
 
     @Test
-    fun `expert settings add selected package route rules`() {
+    fun `include split tunnel writes selected packages to tun inbound`() {
         val settings =
             Settings(
                 expert =
@@ -210,13 +210,13 @@ class RuntimeConfigAssemblerTest {
 
         val config = parse(assembler.assemble(baseConfigWithRules("profile.example"), settings, null))
         val tunInbound = config["inbounds"]!!.jsonArray.first().jsonObject
-        val firstRule = config["route"]!!.jsonObject["rules"]!!.jsonArray.first().jsonObject
+        val rules = config["route"]!!.jsonObject["rules"]!!.jsonArray
 
         assertEquals(1, config["inbounds"]!!.jsonArray.size)
-        assertFalse(tunInbound.containsKey("include_package"))
-        assertEquals("com.example.app", firstRule["package_name"]!!.jsonArray[0].jsonPrimitive.content)
-        assertEquals("proxy", firstRule["outbound"]!!.jsonPrimitive.content)
-        assertEquals("direct", config["route"]!!.jsonObject["final"]!!.jsonPrimitive.content)
+        assertEquals("com.example.app", tunInbound["include_package"]!!.jsonArray[0].jsonPrimitive.content)
+        assertFalse(tunInbound.containsKey("exclude_package"))
+        assertTrue(rules.none { rule -> rule.jsonObject.containsKey("package_name") })
+        assertEquals("proxy", config["route"]!!.jsonObject["final"]!!.jsonPrimitive.content)
     }
 
     @Test
@@ -675,7 +675,7 @@ class RuntimeConfigAssemblerTest {
     }
 
     @Test
-    fun `exclude mode writes selected app direct route rule`() {
+    fun `exclude split tunnel writes selected packages to tun inbound`() {
         val settings =
             Settings(
                 expert =
@@ -687,12 +687,11 @@ class RuntimeConfigAssemblerTest {
 
         val config = parse(assembler.assemble(baseConfigWithRules("profile.example"), settings, null))
         val tunInbound = config["inbounds"]!!.jsonArray.first().jsonObject
-        val firstRule = config["route"]!!.jsonObject["rules"]!!.jsonArray.first().jsonObject
+        val rules = config["route"]!!.jsonObject["rules"]!!.jsonArray
 
-        assertEquals("com.bank.app", firstRule["package_name"]!!.jsonArray[0].jsonPrimitive.content)
-        assertEquals("direct", firstRule["outbound"]!!.jsonPrimitive.content)
         assertFalse(tunInbound.containsKey("include_package"))
-        assertFalse(tunInbound.containsKey("exclude_package"))
+        assertEquals("com.bank.app", tunInbound["exclude_package"]!!.jsonArray[0].jsonPrimitive.content)
+        assertTrue(rules.none { rule -> rule.jsonObject.containsKey("package_name") })
     }
 
     @Test
@@ -709,14 +708,16 @@ class RuntimeConfigAssemblerTest {
             )
 
         val config = parse(assembler.assemble(baseConfigWithRules("profile.example"), settings, null))
+        val tunInbound = config["inbounds"]!!.jsonArray.first().jsonObject
         val rules = config["route"]!!.jsonObject["rules"]!!.jsonArray
         val blockRule = rules[0].jsonObject
-        val selectedRule = rules[1].jsonObject
 
+        assertEquals(
+            listOf("com.example.blocked", "com.example.selected"),
+            tunInbound["include_package"]!!.jsonArray.map { it.jsonPrimitive.content },
+        )
         assertEquals("com.example.blocked", blockRule["package_name"]!!.jsonArray[0].jsonPrimitive.content)
         assertEquals("block", blockRule["outbound"]!!.jsonPrimitive.content)
-        assertEquals("com.example.selected", selectedRule["package_name"]!!.jsonArray[0].jsonPrimitive.content)
-        assertEquals("proxy", selectedRule["outbound"]!!.jsonPrimitive.content)
 
         val disabled =
             parse(
