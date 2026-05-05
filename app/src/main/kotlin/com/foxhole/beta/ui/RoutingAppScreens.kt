@@ -170,7 +170,6 @@ fun RoutingAppsScreen(
                                 },
                             )
                         },
-                        leadingIcon = Icons.Outlined.AccountTree,
                         grouped = true,
                     )
                     DropdownSettingRow(
@@ -187,7 +186,6 @@ fun RoutingAppsScreen(
                                 onPerAppRoutingModeSelected(mode)
                             }
                         },
-                        leadingIcon = perAppRoutingModeIcon(effectiveAppMode),
                         optionIcon = ::perAppRoutingModeIcon,
                         grouped = true,
                     )
@@ -221,7 +219,6 @@ fun RoutingAppsScreen(
                         enabled = blockedPackages.isNotEmpty(),
                         summary = stringResource(R.string.block_apps_always_summary),
                         summaryMaxLines = 6,
-                        leadingIcon = Icons.Outlined.Block,
                         onCheckedChange = { enabled ->
                             if (enabled) {
                                 blockAlwaysWarningVisible = true
@@ -280,7 +277,11 @@ private fun AppGridSection(
                     },
             ),
     ) {
-        extraContent?.invoke()
+        extraContent?.let { content ->
+            Column(modifier = Modifier.padding(start = 16.dp)) {
+                content()
+            }
+        }
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),

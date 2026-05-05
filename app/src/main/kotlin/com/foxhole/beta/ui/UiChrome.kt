@@ -1291,7 +1291,7 @@ internal fun FoxholeValuePill(
             modifier =
                 Modifier
                     .then(
-                        if (onClick != null) {
+                        if (fillContent) {
                             Modifier.fillMaxWidth()
                         } else {
                             Modifier

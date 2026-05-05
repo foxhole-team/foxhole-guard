@@ -728,20 +728,6 @@ internal fun LocalProxyAuthEditor(
         value = auth.username,
         leadingIcon = Icons.Outlined.Person,
         onClick = { usernameDialog = true },
-        trailingContent = {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                FoxholeValuePill(value = auth.username.ifBlank { "-" })
-                IconButton(onClick = { usernameDialog = true }, modifier = Modifier.size(32.dp)) {
-                    Icon(
-                        imageVector = Icons.Outlined.Edit,
-                        contentDescription = stringResource(R.string.edit_label),
-                    )
-                }
-            }
-        },
         grouped = grouped,
     )
     if (grouped) {
@@ -752,20 +738,6 @@ internal fun LocalProxyAuthEditor(
         value = maskedProxySecret(auth.password),
         leadingIcon = Icons.Outlined.Key,
         onClick = { passwordDialog = true },
-        trailingContent = {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                FoxholeValuePill(value = maskedProxySecret(auth.password))
-                IconButton(onClick = { passwordDialog = true }, modifier = Modifier.size(32.dp)) {
-                    Icon(
-                        imageVector = Icons.Outlined.Edit,
-                        contentDescription = stringResource(R.string.edit_label),
-                    )
-                }
-            }
-        },
         grouped = grouped,
     )
 
