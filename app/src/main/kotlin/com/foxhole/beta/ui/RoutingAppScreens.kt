@@ -258,7 +258,7 @@ fun RoutingAppsScreen(
 }
 
 @Composable
-private fun AppGridSectionContent(
+internal fun AppGridSectionContent(
     title: String,
     subtitle: String? = null,
     leadingIcon: androidx.compose.ui.graphics.vector.ImageVector,
@@ -832,7 +832,7 @@ private fun RoutingRule.isManagedSelectedSiteRule(): Boolean =
 private fun RoutingRule.isManagedBlockedSiteRule(): Boolean =
     name.startsWith(MANAGED_BLOCKED_SITE_RULE_PREFIX)
 
-private fun insertPackageBefore(
+internal fun insertPackageBefore(
     packages: List<String>,
     packageName: String,
     beforePackageName: String?,

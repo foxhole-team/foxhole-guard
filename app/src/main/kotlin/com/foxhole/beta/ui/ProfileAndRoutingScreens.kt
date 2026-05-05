@@ -327,6 +327,7 @@ fun ProfilesScreen(
                                 FoxholeSwipeAction(
                                     icon = Icons.Outlined.Refresh,
                                     contentDescription = stringResource(R.string.refresh),
+                                    testTag = "profiles_profile_refresh_action_${profile.id}",
                                     onClick = { refreshProfileId = profile.id },
                                 ),
                             )
@@ -335,6 +336,7 @@ fun ProfilesScreen(
                             FoxholeSwipeAction(
                                 icon = Icons.Outlined.Edit,
                                 contentDescription = stringResource(R.string.edit_label),
+                                testTag = "profiles_profile_edit_action_${profile.id}",
                                 onClick = { onEditProfile(profile.id) },
                             ),
                         )
@@ -342,6 +344,7 @@ fun ProfilesScreen(
                             FoxholeSwipeAction(
                                 icon = Icons.Outlined.Delete,
                                 contentDescription = stringResource(R.string.delete_label),
+                                testTag = "profiles_profile_delete_action_${profile.id}",
                                 tint = MaterialTheme.colorScheme.error,
                                 onClick = { deleteProfileId = profile.id },
                             ),

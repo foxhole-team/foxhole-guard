@@ -265,7 +265,6 @@ fun FoxholeApp(
                         onRefreshIpInfo = viewModel::refreshIpInfo,
                         onResetUsageTracking = viewModel::resetUsageTracking,
                         onTrafficUiVisibilityChanged = viewModel::onTrafficUiVisibilityChanged,
-                        onLocalProxyAuthChanged = viewModel::onLocalProxyAuthChanged,
                         onLocalProxyLanAccessChanged = viewModel::onLocalProxyLanAccessChanged,
                     )
                 }
@@ -420,9 +419,6 @@ fun FoxholeApp(
                         onTrafficModeSelected = viewModel::onTrafficModeSelected,
                         onPerAppRoutingModeSelected = viewModel::onPerAppRoutingModeSelected,
                         onOpenRoutingApps = { navController.navigate(AppRoute.ROUTING_APPS) },
-                        onPrivacyRouteModeSelected = viewModel::onPrivacyRouteModeSelected,
-                        onPrivacyRouteScopeSelected = viewModel::onPrivacyRouteScopeSelected,
-                        onOpenPrivacyRouteApps = { navController.navigate(AppRoute.PRIVACY_ROUTE_APPS_PICKER) },
                         onLatencyProbeMethodSelected = viewModel::onLatencyProbeMethodSelected,
                         onTunStackSelected = viewModel::onTunStackSelected,
                         onLocalProxyAuthEnabledChanged = viewModel::onLocalProxyAuthEnabledChanged,
@@ -445,6 +441,9 @@ fun FoxholeApp(
                     )
                 }
                 composable(AppRoute.PRIVACY_ROUTE) {
+                    LaunchedEffect(Unit) {
+                        viewModel.ensureInstalledAppsLoaded()
+                    }
                     val state by viewModel.settingsRouteState.collectAsStateWithLifecycle()
                     PrivacyRouteSettingsScreen(
                         state = state,
@@ -453,6 +452,7 @@ fun FoxholeApp(
                         onPrivacyRouteModeSelected = viewModel::onPrivacyRouteModeSelected,
                         onPrivacyRouteScopeSelected = viewModel::onPrivacyRouteScopeSelected,
                         onOpenPrivacyRouteApps = { navController.navigate(AppRoute.PRIVACY_ROUTE_APPS_PICKER) },
+                        onPrivacyRouteSelectedPackagesChanged = viewModel::onPrivacyRouteSelectedPackagesChanged,
                     )
                 }
                 composable(AppRoute.ROUTING_APPS) {

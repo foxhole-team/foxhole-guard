@@ -1,6 +1,7 @@
 import org.gradle.api.DefaultTask
 import org.gradle.api.file.DirectoryProperty
 import org.gradle.api.tasks.InputDirectory
+import org.gradle.api.tasks.Sync
 import org.gradle.api.tasks.TaskAction
 import org.gradle.testing.jacoco.tasks.JacocoCoverageVerification
 import org.gradle.testing.jacoco.tasks.JacocoReport
@@ -25,6 +26,8 @@ abstract class VerifyBundledLibboxInReleaseApkTask : DefaultTask() {
             setOf(
                 "lib/arm64-v8a/libbox.so",
                 "lib/armeabi-v7a/libbox.so",
+                "lib/arm64-v8a/libTor.so",
+                "lib/armeabi-v7a/libTor.so",
             )
         val discoveredEntries = linkedSetOf<String>()
 
@@ -32,7 +35,7 @@ abstract class VerifyBundledLibboxInReleaseApkTask : DefaultTask() {
             ZipFile(apk).use { zip ->
                 zip.entries().asSequence()
                     .map { entry -> entry.name }
-                    .filter { entryName -> entryName.endsWith("/libbox.so") }
+                    .filter { entryName -> entryName.endsWith("/libbox.so") || entryName.endsWith("/libTor.so") }
                     .forEach(discoveredEntries::add)
             }
         }
@@ -126,6 +129,18 @@ val prepareBundledLibbox by tasks.registering {
     }
 }
 
+val prepareTorNativeLibs by tasks.registering(Sync::class) {
+    from("src/main/assets/tor") {
+        include("*/tor/libTor.so")
+        includeEmptyDirs = false
+        eachFile {
+            val abi = relativePath.segments.first()
+            path = "$abi/libTor.so"
+        }
+    }
+    into(layout.buildDirectory.dir("generated/torNativeLibs"))
+}
+
 tasks.matching { task ->
     task.name in
         setOf(
@@ -136,6 +151,10 @@ tasks.matching { task ->
         )
 }.configureEach {
     dependsOn(prepareBundledLibbox)
+}
+
+tasks.matching { task -> task.name.endsWith("JniLibFolders") }.configureEach {
+    dependsOn(prepareTorNativeLibs)
 }
 
 val verifyReleaseContainsBundledLibbox by tasks.registering(VerifyBundledLibboxInReleaseApkTask::class) {
@@ -247,11 +266,17 @@ android {
         localeFilters += listOf("en", "ru")
     }
 
+    sourceSets {
+        getByName("main") {
+            jniLibs.srcDir(layout.buildDirectory.asFile.get().resolve("generated/torNativeLibs"))
+        }
+    }
+
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
-        jniLibs.useLegacyPackaging = false
+        jniLibs.useLegacyPackaging = true
     }
 
     lint {

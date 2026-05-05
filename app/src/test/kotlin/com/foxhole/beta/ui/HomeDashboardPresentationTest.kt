@@ -188,6 +188,14 @@ class HomeDashboardPresentationTest {
     }
 
     @Test
+    fun `dashboard transport label reports udp tcp and unknown`() {
+        assertEquals("UDP", dashboardTransportTypeLabel(ProtocolHint.WIREGUARD))
+        assertEquals("UDP", dashboardTransportTypeLabel(ProtocolHint.HYSTERIA2))
+        assertEquals("TCP", dashboardTransportTypeLabel(ProtocolHint.VLESS))
+        assertEquals("-", dashboardTransportTypeLabel(ProtocolHint.UNKNOWN))
+    }
+
+    @Test
     fun `proxy model prefers active proxy surface and marks lan chip only when address exists`() {
         val settings =
             Settings(

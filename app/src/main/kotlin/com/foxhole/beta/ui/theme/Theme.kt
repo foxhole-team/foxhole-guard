@@ -117,6 +117,12 @@ internal data class FoxholeUiPalette(
     val bottomBarIndicatorColor: Color,
 )
 
+data class FoxholeSemanticColors(
+    val success: Color,
+    val warning: Color,
+    val inactive: Color,
+)
+
 internal val LocalFoxholeUiPalette =
     staticCompositionLocalOf {
         FoxholeUiPalette(
@@ -130,6 +136,15 @@ internal val LocalFoxholeUiPalette =
             bottomBarContainerColor = FoxholeDarkSurface.copy(alpha = 0.88f),
             bottomBarBorderColor = FoxholeDarkSurfaceStrong.copy(alpha = 0.46f),
             bottomBarIndicatorColor = Color.White.copy(alpha = 0.10f),
+        )
+    }
+
+val LocalFoxholeSemanticColors =
+    staticCompositionLocalOf {
+        FoxholeSemanticColors(
+            success = FoxholeBrandGreen,
+            warning = FoxholeWarning,
+            inactive = FoxholeDarkOnSurfaceVariant,
         )
     }
 
@@ -202,6 +217,21 @@ private fun systemFoxholeUiPalette(
             },
     )
 
+private fun defaultFoxholeSemanticColors(
+    colorScheme: ColorScheme,
+    useDarkPalette: Boolean,
+): FoxholeSemanticColors =
+    FoxholeSemanticColors(
+        success = colorScheme.secondary,
+        warning =
+            if (useDarkPalette) {
+                FoxholeWarning
+            } else {
+                Color(0xFF8A6514)
+            },
+        inactive = colorScheme.onSurfaceVariant.copy(alpha = if (useDarkPalette) 0.72f else 0.68f),
+    )
+
 @Composable
 fun FoxholeTheme(
     themeMode: ThemeMode,
@@ -261,9 +291,17 @@ fun FoxholeTheme(
                 themeMode = themeMode,
             )
         }
+    val semanticColors =
+        remember(colorScheme, useDarkPalette) {
+            defaultFoxholeSemanticColors(
+                colorScheme = colorScheme,
+                useDarkPalette = useDarkPalette,
+            )
+        }
     CompositionLocalProvider(
         LocalTextSelectionColors provides selectionColors,
         LocalFoxholeDarkTheme provides useDarkPalette,
+        LocalFoxholeSemanticColors provides semanticColors,
         LocalFoxholeUiPalette provides uiPalette,
         LocalFoxholeThemeMode provides themeMode,
     ) {

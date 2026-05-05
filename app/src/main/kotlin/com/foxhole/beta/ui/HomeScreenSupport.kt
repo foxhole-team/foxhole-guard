@@ -391,7 +391,6 @@ internal fun HomeStatusBadge(
     textStyle: TextStyle = MaterialTheme.typography.titleLarge,
     accentColor: Color? = null,
     smartMarker: Boolean = false,
-    torMarker: Boolean = false,
 ) {
     val color = accentColor ?: homeStatusTone(state)
     Row(
@@ -416,9 +415,6 @@ internal fun HomeStatusBadge(
             if (smartMarker) {
                 SmartConnectionBadge(color = color)
             }
-            if (torMarker) {
-                TorConnectionBadge()
-            }
         }
     }
 }
@@ -442,40 +438,6 @@ private fun SmartConnectionBadge(color: Color) {
             color = color,
             maxLines = 1,
         )
-    }
-}
-
-@Composable
-private fun TorConnectionBadge() {
-    val torColor = Color(0xFF8B4DFF)
-    Surface(
-        shape = MaterialTheme.shapes.small,
-        color = torColor.copy(alpha = 0.14f),
-        border = BorderStroke(1.dp, torColor.copy(alpha = 0.42f)),
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
-            horizontalArrangement = Arrangement.spacedBy(3.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(
-                imageVector = Icons.Outlined.Public,
-                contentDescription = null,
-                modifier = Modifier.size(10.dp),
-                tint = torColor,
-            )
-            Text(
-                text = stringResource(R.string.tor_badge),
-                style =
-                    MaterialTheme.typography.labelSmall.copy(
-                        fontSize = 9.sp,
-                        lineHeight = 10.sp,
-                        fontWeight = FontWeight.Black,
-                    ),
-                color = torColor,
-                maxLines = 1,
-            )
-        }
     }
 }
 
@@ -726,10 +688,10 @@ internal fun HomeConnectionStatusLoadingBlock(
         title = stringResource(R.string.home_network_profile_info_title),
         labels =
             listOf(
-                stringResource(R.string.home_network_vpn_latency_label),
                 stringResource(R.string.home_network_server_ping_label),
+                stringResource(R.string.home_network_dns_label),
+                stringResource(R.string.home_network_transport_type_label),
                 stringResource(R.string.home_network_connect_time_label),
-                stringResource(R.string.home_network_status_label),
         ),
         modifier = modifier,
         valueWidth = HomeNetworkMetricValueLoadingWidth,

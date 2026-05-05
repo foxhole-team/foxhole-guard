@@ -258,21 +258,13 @@ private fun LazyListScope.settingsHomeNavigationItems(
                 summary = stringResource(R.string.settings_home_network_summary),
                 onClick = onOpenTraffic,
             )
-            SettingsGroupDivider()
-            SettingsGroupedNavigationRow(
-                modifier = Modifier.testTag("settings_privacy_route_action"),
-                icon = Icons.Outlined.Public,
-                title = stringResource(R.string.privacy_route_title),
-                summary = stringResource(R.string.privacy_route_summary),
-                summaryMaxLines = 3,
-                onClick = onOpenPrivacyRoute,
-            )
         }
     }
     item {
         SettingsRoutingNavigationGroup(
             onOpenRoutingApps = onOpenRoutingApps,
             onOpenRoutingSites = onOpenRoutingSites,
+            onOpenPrivacyRoute = onOpenPrivacyRoute,
         )
     }
     item {
@@ -333,6 +325,7 @@ private fun LazyListScope.settingsHomeFooterItem(
 private fun SettingsRoutingNavigationGroup(
     onOpenRoutingApps: () -> Unit,
     onOpenRoutingSites: () -> Unit,
+    onOpenPrivacyRoute: () -> Unit,
 ) {
     SettingsNavigationGroup {
         SettingsGroupedNavigationRow(
@@ -349,6 +342,15 @@ private fun SettingsRoutingNavigationGroup(
             title = stringResource(R.string.routing_apps_title),
             summary = stringResource(R.string.settings_home_apps_summary),
             onClick = onOpenRoutingApps,
+        )
+        SettingsGroupDivider()
+        SettingsGroupedNavigationRow(
+            modifier = Modifier.testTag("settings_privacy_route_action"),
+            icon = Icons.Outlined.Public,
+            title = stringResource(R.string.privacy_route_title),
+            summary = stringResource(R.string.privacy_route_summary),
+            summaryMaxLines = 2,
+            onClick = onOpenPrivacyRoute,
         )
     }
 }
@@ -726,9 +728,6 @@ fun TrafficSettingsScreen(
     onTrafficModeSelected: (TrafficMode) -> Unit,
     onPerAppRoutingModeSelected: (PerAppRoutingMode) -> Unit,
     onOpenRoutingApps: () -> Unit,
-    onPrivacyRouteModeSelected: (PrivacyRouteMode) -> Unit,
-    onPrivacyRouteScopeSelected: (PrivacyRouteScope) -> Unit,
-    onOpenPrivacyRouteApps: () -> Unit,
     onLatencyProbeMethodSelected: (LatencyProbeMethod) -> Unit,
     onTunStackSelected: (TunStack) -> Unit,
     onLocalProxyAuthEnabledChanged: (Boolean) -> Unit,
@@ -750,8 +749,6 @@ fun TrafficSettingsScreen(
     onIpInfoEndpointChanged: (String) -> Unit,
 ) {
     var modeMenuExpanded by rememberSaveable { mutableStateOf(false) }
-    var privacyRouteModeMenuExpanded by rememberSaveable { mutableStateOf(false) }
-    var privacyRouteScopeMenuExpanded by rememberSaveable { mutableStateOf(false) }
     var latencyProbeMethodMenuExpanded by rememberSaveable { mutableStateOf(false) }
     var tunStackMenuExpanded by rememberSaveable { mutableStateOf(false) }
     var proxySurfaceModeMenuExpanded by rememberSaveable { mutableStateOf(false) }
@@ -852,53 +849,6 @@ fun TrafficSettingsScreen(
                         onClick = { mtuDialog = true },
                         grouped = true,
                     )
-                }
-                SettingsControlGroupDivider()
-                DropdownSettingRow(
-                    title = stringResource(R.string.privacy_route_title),
-                    value = privacyRouteModeLabel(state.settings.privacyRoute.mode),
-                    expanded = privacyRouteModeMenuExpanded,
-                    onExpandedChange = { privacyRouteModeMenuExpanded = it },
-                    values = PrivacyRouteMode.entries,
-                    selected = state.settings.privacyRoute.mode,
-                    label = { privacyRouteModeLabel(it) },
-                    onSelect = onPrivacyRouteModeSelected,
-                    infoBody = stringResource(R.string.privacy_route_summary),
-                    leadingIcon = Icons.Outlined.Public,
-                    optionIcon = ::privacyRouteModeIcon,
-                    grouped = true,
-                )
-                if (state.settings.privacyRoute.enabled) {
-                    SettingsControlGroupDivider()
-                    DropdownSettingRow(
-                        title = stringResource(R.string.privacy_route_scope_title),
-                        value = privacyRouteScopeLabel(state.settings.privacyRoute.scope),
-                        expanded = privacyRouteScopeMenuExpanded,
-                        onExpandedChange = { privacyRouteScopeMenuExpanded = it },
-                        values = PrivacyRouteScope.entries,
-                        selected = state.settings.privacyRoute.scope,
-                        label = { privacyRouteScopeLabel(it) },
-                        onSelect = onPrivacyRouteScopeSelected,
-                        leadingIcon = Icons.Outlined.Apps,
-                        optionIcon = ::privacyRouteScopeIcon,
-                        grouped = true,
-                    )
-                    SettingsControlGroupDivider()
-                    if (state.settings.privacyRoute.scope == PrivacyRouteScope.ALL_APPS) {
-                        InfoBlock(
-                            title = stringResource(R.string.privacy_route_all_apps_warning_title),
-                            body = stringResource(R.string.privacy_route_all_apps_warning_body),
-                        )
-                    } else {
-                        SettingValueRow(
-                            title = stringResource(R.string.privacy_route_selected_apps_title),
-                            value = state.settings.privacyRoute.selectedPackages.size.toString(),
-                            summary = stringResource(R.string.privacy_route_selected_apps_summary),
-                            leadingIcon = Icons.Outlined.Apps,
-                            onClick = onOpenPrivacyRouteApps,
-                            grouped = true,
-                        )
-                    }
                 }
                 if (state.settings.traffic.mode == TrafficMode.PROXY) {
                     SettingsControlGroupDivider()
@@ -1156,9 +1106,15 @@ fun PrivacyRouteSettingsScreen(
     onPrivacyRouteModeSelected: (PrivacyRouteMode) -> Unit,
     onPrivacyRouteScopeSelected: (PrivacyRouteScope) -> Unit,
     onOpenPrivacyRouteApps: () -> Unit,
+    onPrivacyRouteSelectedPackagesChanged: (List<String>) -> Unit,
 ) {
-    var privacyRouteModeMenuExpanded by rememberSaveable { mutableStateOf(false) }
     var privacyRouteScopeMenuExpanded by rememberSaveable { mutableStateOf(false) }
+    val selectedPackages = state.settings.privacyRoute.selectedPackages
+    val selectedPackageSet = selectedPackages.toSet()
+    val selectedApps =
+        remember(state.installedApps, selectedPackages) {
+            resolveSelectedApps(state.installedApps, selectedPackages)
+        }
     SettingsScaffold(
         title = stringResource(R.string.privacy_route_title),
         snackbarHostState = snackbarHostState,
@@ -1167,18 +1123,22 @@ fun PrivacyRouteSettingsScreen(
     ) {
         item {
             SettingsControlGroup {
-                DropdownSettingRow(
+                SettingSwitchRow(
                     title = stringResource(R.string.privacy_route_title),
-                    value = privacyRouteModeLabel(state.settings.privacyRoute.mode),
-                    expanded = privacyRouteModeMenuExpanded,
-                    onExpandedChange = { privacyRouteModeMenuExpanded = it },
-                    values = PrivacyRouteMode.entries,
-                    selected = state.settings.privacyRoute.mode,
-                    label = { privacyRouteModeLabel(it) },
-                    onSelect = onPrivacyRouteModeSelected,
-                    infoBody = stringResource(R.string.privacy_route_summary),
+                    checked = state.settings.privacyRoute.enabled,
+                    onCheckedChange = { enabled ->
+                        onPrivacyRouteModeSelected(
+                            if (enabled) {
+                                PrivacyRouteMode.TOR_OVER_VPN
+                            } else {
+                                PrivacyRouteMode.OFF
+                            },
+                        )
+                    },
+                    summary = stringResource(R.string.privacy_route_summary),
+                    infoBody = stringResource(R.string.privacy_route_info_body),
                     leadingIcon = Icons.Outlined.Public,
-                    optionIcon = ::privacyRouteModeIcon,
+                    summaryMaxLines = 3,
                     grouped = true,
                 )
                 if (state.settings.privacyRoute.enabled) {
@@ -1203,13 +1163,26 @@ fun PrivacyRouteSettingsScreen(
                             body = stringResource(R.string.privacy_route_all_apps_warning_body),
                         )
                     } else {
-                        SettingValueRow(
+                        AppGridSectionContent(
                             title = stringResource(R.string.privacy_route_selected_apps_title),
-                            value = state.settings.privacyRoute.selectedPackages.size.toString(),
-                            summary = stringResource(R.string.privacy_route_selected_apps_summary),
+                            subtitle = stringResource(R.string.privacy_route_selected_apps_summary),
                             leadingIcon = Icons.Outlined.Apps,
-                            onClick = onOpenPrivacyRouteApps,
-                            grouped = true,
+                            apps = selectedApps,
+                            emptyText = stringResource(R.string.privacy_route_selected_apps_empty),
+                            headerActionLabel = stringResource(R.string.choose_label),
+                            headerActionTag = "privacy_route_apps_choose_action",
+                            onHeaderAction = onOpenPrivacyRouteApps,
+                            onRemove = { app ->
+                                onPrivacyRouteSelectedPackagesChanged(selectedPackages.filterNot { it == app.packageName })
+                            },
+                            onDropPackage = { packageName, beforePackageName ->
+                                if (packageName !in selectedPackageSet || beforePackageName != null) {
+                                    onPrivacyRouteSelectedPackagesChanged(
+                                        insertPackageBefore(selectedPackages, packageName, beforePackageName),
+                                    )
+                                }
+                            },
+                            modifier = Modifier.testTag("privacy_route_apps_section"),
                         )
                     }
                 }
@@ -1315,25 +1288,6 @@ fun ApplicationSettingsScreen(
         }
     }
 }
-
-private fun trafficModeIcon(value: TrafficMode): ImageVector =
-    when (value) {
-        TrafficMode.TUNNEL -> Icons.Outlined.Shield
-        TrafficMode.PROXY -> Icons.Outlined.SwapVert
-    }
-
-@Composable
-private fun privacyRouteModeLabel(value: PrivacyRouteMode): String =
-    when (value) {
-        PrivacyRouteMode.OFF -> stringResource(R.string.privacy_route_mode_off)
-        PrivacyRouteMode.TOR_OVER_VPN -> stringResource(R.string.privacy_route_mode_tor_over_vpn)
-    }
-
-private fun privacyRouteModeIcon(value: PrivacyRouteMode): ImageVector =
-    when (value) {
-        PrivacyRouteMode.OFF -> Icons.Outlined.Shield
-        PrivacyRouteMode.TOR_OVER_VPN -> Icons.Outlined.Public
-    }
 
 @Composable
 private fun privacyRouteScopeLabel(value: PrivacyRouteScope): String =

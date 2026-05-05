@@ -466,8 +466,8 @@ class RuntimeConfigAssembler(
             put("executable_path", paths.executablePath)
             put("data_directory", paths.dataDirectory)
             putJsonObject("torrc") {
-                put("ClientOnly", 1)
-                put("AvoidDiskWrites", 1)
+                put("ClientOnly", "1")
+                put("AvoidDiskWrites", "1")
                 paths.geoIpFilePath?.let { put("GeoIPFile", it) }
                 paths.geoIpv6FilePath?.let { put("GeoIPv6File", it) }
             }

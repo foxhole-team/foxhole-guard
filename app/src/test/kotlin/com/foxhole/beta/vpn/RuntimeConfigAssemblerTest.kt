@@ -118,6 +118,11 @@ class RuntimeConfigAssemblerTest {
         assertEquals("tor", tor["type"]!!.jsonPrimitive.content)
         assertEquals("proxy", tor["detour"]!!.jsonPrimitive.content)
         assertEquals("/data/user/0/com.foxhole.beta/files/tor-data", tor["data_directory"]!!.jsonPrimitive.content)
+        val torrc = tor["torrc"]!!.jsonObject
+        assertEquals("1", torrc["ClientOnly"]!!.jsonPrimitive.content)
+        assertTrue(torrc["ClientOnly"]!!.jsonPrimitive.isString)
+        assertEquals("1", torrc["AvoidDiskWrites"]!!.jsonPrimitive.content)
+        assertTrue(torrc["AvoidDiskWrites"]!!.jsonPrimitive.isString)
 
         val dnsRemote = config["dns"]!!.jsonObject["servers"]!!.jsonArray.map { it.jsonObject }
             .single { it["tag"]!!.jsonPrimitive.content == "dns-remote" }

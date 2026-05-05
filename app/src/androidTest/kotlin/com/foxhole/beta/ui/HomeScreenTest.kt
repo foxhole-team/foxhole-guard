@@ -188,6 +188,7 @@ class HomeScreenTest {
         }
 
         composeRule.onNodeWithText(context.getString(R.string.profile_list_title)).assertIsDisplayed()
+        composeRule.onNodeWithTag("profiles_profile_row_${targetProfileId}").performTouchInput { swipeLeft() }
         composeRule.onNodeWithTag("profiles_profile_edit_action_${targetProfileId}").assertIsDisplayed()
         composeRule.onNodeWithTag("profiles_profile_delete_action_${targetProfileId}").performClick()
         composeRule.onNodeWithText(context.getString(R.string.delete_profile_title)).assertIsDisplayed()
@@ -212,6 +213,7 @@ class HomeScreenTest {
             }
 
         composeRule.onNodeWithTag("home_profiles_action").performClick()
+        composeRule.onNodeWithTag("profiles_profile_row_${targetProfileId}").performTouchInput { swipeLeft() }
         composeRule.onNodeWithTag("profiles_profile_edit_action_${targetProfileId}").performClick()
 
         val serverLabel = context.getString(R.string.profile_editor_server)
@@ -477,7 +479,7 @@ class HomeScreenTest {
         composeRule.onNodeWithTag("bottom_nav_settings").performClick()
         composeRule.onNodeWithTag("settings_routing_sites_action").performClick()
         composeRule.onNodeWithTag("routing_sites_add_exception_action").performClick()
-        composeRule.onAllNodesWithText(context.getString(R.string.add_site_exception)).assertCountEquals(2)
+        composeRule.onNodeWithText(context.getString(R.string.add_site_exception)).assertIsDisplayed()
         composeRule.onNodeWithText(context.getString(R.string.action_label)).assertIsDisplayed()
     }
 }

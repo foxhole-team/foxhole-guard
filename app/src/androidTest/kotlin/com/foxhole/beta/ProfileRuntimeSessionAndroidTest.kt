@@ -77,7 +77,9 @@ class ProfileRuntimeSessionAndroidTest {
             val routeRules = root["route"]!!.jsonObject["rules"]!!.jsonArray
 
             assertEquals("43000", primary["server_port"]!!.jsonPrimitive.content)
-            assertEquals(false, routeRules[0].jsonObject["port"]!!.jsonPrimitive.isString)
+            routeRules
+                .mapNotNull { rule -> rule.jsonObject["port"]?.jsonPrimitive }
+                .forEach { port -> assertEquals(false, port.isString) }
 
             Log.d(
                 TEST_TAG,

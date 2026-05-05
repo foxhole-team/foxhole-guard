@@ -107,10 +107,8 @@ import androidx.compose.ui.unit.sp
 import com.foxhole.beta.R
 import com.foxhole.beta.core.model.ConnectionState
 import com.foxhole.beta.core.model.IpInfo
-import com.foxhole.beta.core.model.LocalAuthSettings
 import com.foxhole.beta.core.model.LocalSurfaceSettings
 import com.foxhole.beta.core.model.PerAppRoutingMode
-import com.foxhole.beta.core.model.PrivacyRouteMode
 import com.foxhole.beta.core.model.PrivacyRouteScope
 import com.foxhole.beta.core.model.Profile
 import com.foxhole.beta.core.model.ProfileProtocolOption
@@ -118,7 +116,6 @@ import com.foxhole.beta.core.model.ProfileSourceType
 import com.foxhole.beta.core.model.ProtocolHint
 import com.foxhole.beta.core.model.ProxyInboundSettings
 import com.foxhole.beta.core.model.TrafficMode
-import com.foxhole.beta.core.model.isUdpTransport
 import com.foxhole.beta.ui.BottomDockOverlayPadding
 import com.foxhole.beta.ui.FoxholeCard
 import com.foxhole.beta.ui.FoxholeScaffold
@@ -147,7 +144,6 @@ fun HomeScreen(
     onRefreshIpInfo: () -> Unit,
     onResetUsageTracking: () -> Unit,
     onTrafficUiVisibilityChanged: (Boolean) -> Unit,
-    onLocalProxyAuthChanged: (LocalAuthSettings) -> Unit,
     onLocalProxyLanAccessChanged: (Boolean) -> Unit,
 ) {
     val context = LocalContext.current
@@ -276,10 +272,12 @@ fun HomeScreen(
     val visibleNetworkIpInfo = networkModel.visibleIpInfo
     val showNetworkLoading = networkModel.showLoading
     val showNetworkConnectionStatus = networkModel.showConnectionStatus
+    val showNetworkRouteDetails = showNetworkConnectionStatus || state.activeProfile != null
     val networkInfoTitleRes = networkModel.titleRes
     val profileModel = remember(state) { resolveHomeDashboardProfileModel(state = state) }
     val isSmartDashboardProfile = profileModel.isSmartDashboardProfile
     val activeProfileId = profileModel.activeProfileId
+    val connectionPathState = remember(state) { connectionPathUiState(state) }
     val firstAnalysisProtocolMenuActive = firstAnalysisProtocolMenuProfileId == activeProfileId
     val firstAnalysisProtocolMenuBusy = state.autoConnect.running || state.protocolMetricsRefreshing
     val firstAnalysisProtocolMenuForceExpanded =
@@ -378,112 +376,111 @@ fun HomeScreen(
                     tonalElevation = 0.dp,
                     shadowElevation = 0.dp,
                 ) {
-                    Row(
-                        modifier =
-                            Modifier
-                                .fillMaxWidth()
-                                .heightIn(min = HomeTopStatusInnerSurfaceMinHeight)
-                                .padding(
-                                    horizontal = HomeTopStatusInnerHorizontalPadding,
-                                    vertical = HomeTopStatusInnerVerticalPadding,
-                                ),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Box(
-                            modifier = Modifier.size(40.dp),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Surface(
-                                modifier = Modifier.size(30.dp),
-                                shape = MaterialTheme.shapes.large,
-                                color = statusTone.copy(alpha = 0.13f),
-                            ) {
-                                Spacer(modifier = Modifier.fillMaxSize())
-                            }
-                            Image(
-                                painter = painterResource(R.drawable.foxhole_logo),
-                                contentDescription = stringResource(R.string.app_name),
-                                modifier = Modifier.size(34.dp),
-                            )
-                        }
-                        Column(
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        Row(
                             modifier =
                                 Modifier
-                                    .weight(1f)
-                                    .foxholeAnimateContentSize(),
-                            verticalArrangement = Arrangement.Center,
+                                    .fillMaxWidth()
+                                    .heightIn(min = HomeTopStatusInnerSurfaceMinHeight)
+                                    .padding(
+                                        horizontal = HomeTopStatusInnerHorizontalPadding,
+                                        vertical = HomeTopStatusInnerVerticalPadding,
+                                    ),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                                verticalAlignment = Alignment.CenterVertically,
+                            Box(
+                                modifier = Modifier.size(40.dp),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Surface(
+                                    modifier = Modifier.size(30.dp),
+                                    shape = MaterialTheme.shapes.large,
+                                    color = statusTone.copy(alpha = 0.13f),
+                                ) {
+                                    Spacer(modifier = Modifier.fillMaxSize())
+                                }
+                                Image(
+                                    painter = painterResource(R.drawable.foxhole_logo),
+                                    contentDescription = stringResource(R.string.app_name),
+                                    modifier = Modifier.size(34.dp),
+                                )
+                            }
+                            Column(
+                                modifier =
+                                    Modifier
+                                        .weight(1f)
+                                        .foxholeAnimateContentSize(),
+                                verticalArrangement = Arrangement.Center,
                             ) {
                                 Row(
-                                    modifier = Modifier.weight(1f),
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {
-                                    if (state.autoConnect.running) {
-                                        HomeAutoConnectStatusLine(
-                                            state = state.autoConnect,
-                                            modifier = Modifier.weight(1f),
-                                            textStyle = MaterialTheme.typography.titleMedium,
-                                        )
-                                    } else {
-                                        HomeStatusBadge(
-                                            state = topStatusState,
-                                            label = homeStatusLabel(topStatusState),
-                                            textStyle = MaterialTheme.typography.titleMedium,
-                                            accentColor = statusTone,
-                                            smartMarker =
-                                                state.connection.isSmartStartConnection &&
-                                                    topStatusState in setOf(
-                                                        ConnectionState.CONNECTED,
-                                                        ConnectionState.CONNECTING,
-                                                        ConnectionState.RECONNECTING,
-                                                    ),
-                                            torMarker =
-                                                state.settings.privacyRoute.mode == PrivacyRouteMode.TOR_OVER_VPN &&
-                                                    state.connection.protocolHint?.isUdpTransport() != true &&
-                                                    topStatusState in setOf(
-                                                        ConnectionState.CONNECTED,
-                                                        ConnectionState.CONNECTING,
-                                                        ConnectionState.RECONNECTING,
-                                                    ),
-                                        )
-                                    }
-                                }
-                                Column(
-                                    horizontalAlignment = Alignment.End,
-                                    verticalArrangement = Arrangement.spacedBy(6.dp),
-                                ) {
-                                    HomeModeDropdown(
-                                        selected = modeOption,
-                                        values = homeModeOptions,
-                                        onSelect = { selectedMode ->
-                                            applyHomeModeSelection(
-                                                mode = selectedMode,
-                                                onTrafficModeSelected = onTrafficModeSelected,
-                                                onPerAppRoutingModeSelected = onPerAppRoutingModeSelected,
-                                                selectedPackages = state.settings.expert.selectedPackages,
-                                                currentPerAppRoutingMode = state.settings.expert.perAppRoutingMode,
+                                    Row(
+                                        modifier = Modifier.weight(1f),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                    ) {
+                                        if (state.autoConnect.running) {
+                                            HomeAutoConnectStatusLine(
+                                                state = state.autoConnect,
+                                                modifier = Modifier.weight(1f),
+                                                textStyle = MaterialTheme.typography.titleMedium,
                                             )
-                                        },
-                                    )
-                                    if (lanProxyActive) {
-                                        HomeLanProxyChip(
-                                            onClick = { lanProxyDisableConfirmationVisible = true },
+                                        } else {
+                                            HomeStatusBadge(
+                                                state = topStatusState,
+                                                label = homeStatusLabel(topStatusState),
+                                                textStyle = MaterialTheme.typography.titleMedium,
+                                                accentColor = statusTone,
+                                                smartMarker =
+                                                    state.connection.isSmartStartConnection &&
+                                                        topStatusState in setOf(
+                                                            ConnectionState.CONNECTED,
+                                                            ConnectionState.CONNECTING,
+                                                            ConnectionState.RECONNECTING,
+                                                        ),
+                                            )
+                                        }
+                                    }
+                                    Column(
+                                        horizontalAlignment = Alignment.End,
+                                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                                    ) {
+                                        HomeModeDropdown(
+                                            selected = modeOption,
+                                            values = homeModeOptions,
+                                            onSelect = { selectedMode ->
+                                                applyHomeModeSelection(
+                                                    mode = selectedMode,
+                                                    onTrafficModeSelected = onTrafficModeSelected,
+                                                    onPerAppRoutingModeSelected = onPerAppRoutingModeSelected,
+                                                    selectedPackages = state.settings.expert.selectedPackages,
+                                                    currentPerAppRoutingMode = state.settings.expert.perAppRoutingMode,
+                                                )
+                                            },
                                         )
+                                        if (lanProxyActive) {
+                                            HomeLanProxyChip(
+                                                onClick = { lanProxyDisableConfirmationVisible = true },
+                                            )
+                                        }
                                     }
                                 }
                             }
                         }
+                        HorizontalDivider(
+                            modifier = Modifier.fillMaxWidth(),
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.16f),
+                        )
+                        ConnectionPathPanel(
+                            state = connectionPathState,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 7.dp),
+                        )
                     }
                 }
-            }
-            item {
-                HomePrivacyRouteCard(state = state)
             }
             item {
                 FoxholeCard(
@@ -767,11 +764,11 @@ fun HomeScreen(
                                             ),
                                         modifier =
                                             Modifier
-                                                .weight(if (showNetworkConnectionStatus) 1f else 2f)
+                                                .weight(if (showNetworkRouteDetails) 1f else 2f)
                                                 .testTag("home_network_loading"),
                                         loadingColor = autoTone,
                                     )
-                                    if (showNetworkConnectionStatus) {
+                                    if (showNetworkRouteDetails) {
                                         HomeNetworkVerticalDivider()
                                         HomeConnectionStatusLoadingBlock(
                                             modifier =
@@ -827,25 +824,13 @@ fun HomeScreen(
                                             value = providerText,
                                         )
                                     }
-                                    if (showNetworkConnectionStatus) {
+                                    if (showNetworkRouteDetails) {
                                         HomeNetworkVerticalDivider()
                                         Column(
                                             modifier = Modifier.weight(1f),
                                             verticalArrangement = Arrangement.spacedBy(2.dp),
                                         ) {
                                             val connectionMetricsAvailable = state.connection.state == ConnectionState.CONNECTED
-                                            val vpnLatencyText =
-                                                when {
-                                                    !connectionMetricsAvailable -> stringResource(R.string.smart_start_protocol_status_no_data)
-                                                    dashboardSelectedLatencyDown -> stringResource(R.string.latency_pill_down)
-                                                    dashboardSelectedLatencyMs != null ->
-                                                        stringResource(
-                                                            R.string.latency_pill_value,
-                                                            boundedDisplayLatencyMs(dashboardSelectedLatencyMs),
-                                                        )
-                                                    dashboardSelectedLatencyUnavailable -> stringResource(R.string.latency_pill_unavailable)
-                                                    else -> stringResource(R.string.smart_profile_metric_unavailable)
-                                                }
                                             val serverPingText =
                                                 when {
                                                     !connectionMetricsAvailable -> stringResource(R.string.smart_start_protocol_status_no_data)
@@ -857,28 +842,28 @@ fun HomeScreen(
                                                     dashboardSelectedServerPingUnavailable -> stringResource(R.string.latency_pill_unavailable)
                                                     else -> stringResource(R.string.smart_profile_metric_unavailable)
                                                 }
-                                            val profileStatusText =
+                                            val remoteDnsServer =
+                                                networkIpInfo?.remoteDnsServers?.firstOrNull { server -> server.isNotBlank() }
+                                            val localDnsServer =
+                                                networkIpInfo?.localDnsServers?.firstOrNull { server -> server.isNotBlank() }
+                                            val dnsStatusText =
                                                 when {
-                                                    !connectionMetricsAvailable -> stringResource(R.string.smart_start_protocol_status_no_data)
-                                                    dashboardSelectedLatencyDown -> stringResource(R.string.latency_quality_failed)
-                                                    dashboardSelectedLatencyMs != null ->
-                                                        latencyQualityLabel(
-                                                            classifyVpnLatency(
-                                                                latencyMs = dashboardSelectedLatencyMs,
-                                                                failed = false,
-                                                                unavailable = false,
-                                                            ),
+                                                    !connectionMetricsAvailable ->
+                                                        stringResource(R.string.smart_start_protocol_status_no_data)
+                                                    remoteDnsServer != null ->
+                                                        stringResource(
+                                                            R.string.home_network_dns_through_vpn,
+                                                            remoteDnsServer,
                                                         )
-                                                    dashboardSelectedLatencyUnavailable -> stringResource(R.string.latency_quality_unavailable)
-                                                    else -> stringResource(R.string.smart_start_protocol_status_no_data)
+                                                    localDnsServer != null ->
+                                                        stringResource(
+                                                            R.string.home_network_dns_local,
+                                                            localDnsServer,
+                                                        )
+                                                    else -> stringResource(R.string.home_network_dns_waiting)
                                                 }
+                                            val transportTypeText = dashboardTransportTypeLabel(dashboardProtocolPresentation.protocolHint)
                                             HomeNetworkColumnTitle(stringResource(R.string.home_network_profile_info_title))
-                                            HomeNetworkDetailLine(
-                                                label = stringResource(R.string.home_network_vpn_latency_label),
-                                                value = vpnLatencyText,
-                                                valueMonospace = connectionMetricsAvailable && dashboardSelectedLatencyMs != null,
-                                            )
-                                            HomeNetworkSubtleDivider()
                                             HomeNetworkDetailLine(
                                                 label = stringResource(R.string.home_network_server_ping_label),
                                                 value = serverPingText,
@@ -886,15 +871,21 @@ fun HomeScreen(
                                             )
                                             HomeNetworkSubtleDivider()
                                             HomeNetworkDetailLine(
+                                                label = stringResource(R.string.home_network_dns_label),
+                                                value = dnsStatusText,
+                                            )
+                                            HomeNetworkSubtleDivider()
+                                            HomeNetworkDetailLine(
+                                                label = stringResource(R.string.home_network_transport_type_label),
+                                                value = transportTypeText,
+                                                valueMonospace = transportTypeText != "-",
+                                            )
+                                            HomeNetworkSubtleDivider()
+                                            HomeNetworkDetailLine(
                                                 label = stringResource(R.string.home_network_connect_time_label),
                                                 value = connectionDurationText ?: "-",
                                                 valueMonospace = connectionDurationText != null,
                                                 modifier = Modifier.testTag("home_connection_duration"),
-                                            )
-                                            HomeNetworkSubtleDivider()
-                                            HomeNetworkDetailLine(
-                                                label = stringResource(R.string.home_network_status_label),
-                                                value = profileStatusText,
                                             )
                                         }
                                     }
@@ -1092,222 +1083,6 @@ fun HomeScreen(
                 lanProxyDisableConfirmationVisible = false
                 onLocalProxyLanAccessChanged(false)
             },
-        )
-    }
-}
-
-@Composable
-private fun HomePrivacyRouteCard(state: HomeRouteUiState) {
-    val torEnabled = state.settings.privacyRoute.mode == PrivacyRouteMode.TOR_OVER_VPN
-    val torActive =
-        torEnabled &&
-            state.connection.protocolHint?.isUdpTransport() != true &&
-            state.connection.state in setOf(ConnectionState.CONNECTING, ConnectionState.CONNECTED, ConnectionState.RECONNECTING)
-    val selectedApps =
-        remember(state.installedApps, state.settings.privacyRoute.selectedPackages) {
-            resolveSelectedApps(state.installedApps, state.settings.privacyRoute.selectedPackages)
-        }
-    FoxholeCard(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .testTag("home_privacy_route_card"),
-    ) {
-        HomeCardHeader(
-            icon = Icons.Outlined.Public,
-            title = stringResource(R.string.privacy_route_dashboard_title),
-            trailing = {
-                HomeTinyStatusPill(
-                    label = stringResource(if (torEnabled) R.string.status_on else R.string.status_off),
-                    active = torEnabled,
-                    color = if (torEnabled) Color(0xFF8B4DFF) else MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            },
-        )
-        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                PrivacyRouteNode(
-                    icon = Icons.Outlined.PhoneAndroid,
-                    label = stringResource(R.string.privacy_route_node_device),
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.weight(1f),
-                )
-                PrivacyRouteArrow(active = state.connection.state in setOf(ConnectionState.CONNECTING, ConnectionState.CONNECTED, ConnectionState.RECONNECTING))
-                PrivacyRouteNode(
-                    icon = Icons.Outlined.Shield,
-                    label = stringResource(R.string.privacy_route_node_vpn),
-                    color = homeStatusTone(state.connection.state),
-                    modifier = Modifier.weight(1f),
-                )
-                if (torEnabled) {
-                    PrivacyRouteArrow(active = torActive)
-                    PrivacyRouteNode(
-                        icon = Icons.Outlined.Public,
-                        label = stringResource(R.string.tor_badge),
-                        color = Color(0xFF8B4DFF),
-                        modifier = Modifier.weight(1f),
-                    )
-                }
-                PrivacyRouteArrow(active = state.connection.state == ConnectionState.CONNECTED)
-                PrivacyRouteNode(
-                    icon = Icons.Outlined.Public,
-                    label = stringResource(R.string.privacy_route_node_internet),
-                    color = if (state.connection.state == ConnectionState.CONNECTED) FoxholePositiveAccent else MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.weight(1f),
-                )
-            }
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(5.dp),
-                ) {
-                    PrivacyRouteInfoLine(stringResource(R.string.privacy_route_dns_leak_test), stringResource(R.string.privacy_route_not_run))
-                    PrivacyRouteInfoLine(stringResource(R.string.privacy_route_webrtc_test), stringResource(R.string.privacy_route_not_run))
-                }
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(5.dp),
-                ) {
-                    PrivacyRouteToggleLine(stringResource(R.string.tor_badge), torEnabled)
-                    PrivacyRouteToggleLine(stringResource(R.string.kill_switch_title), state.settings.expert.killSwitchEnabled)
-                    PrivacyRouteToggleLine(stringResource(R.string.block_ads_title), state.activePreset?.rules.orEmpty().any { it.enabled && it.name.contains("ads", ignoreCase = true) })
-                    PrivacyRouteToggleLine(stringResource(R.string.block_telemetry_title), state.activePreset?.rules.orEmpty().any { it.enabled && it.name.contains("telemetry", ignoreCase = true) })
-                }
-            }
-            if (torEnabled && state.settings.privacyRoute.scope == PrivacyRouteScope.SELECTED_APPS) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    selectedApps.take(4).forEach { app ->
-                        AppIcon(packageName = app.packageName, modifier = Modifier.size(24.dp))
-                    }
-                    Text(
-                        text =
-                            if (selectedApps.isEmpty()) {
-                                stringResource(R.string.privacy_route_selected_apps_empty)
-                            } else {
-                                selectedApps.take(3).joinToString { it.label } +
-                                    selectedApps.drop(3).takeIf(List<*>::isNotEmpty)?.let { " +${it.size}" }.orEmpty()
-                            },
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun PrivacyRouteNode(
-    icon: ImageVector,
-    label: String,
-    color: Color,
-    modifier: Modifier = Modifier,
-) {
-    Column(
-        modifier = modifier,
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(3.dp),
-    ) {
-        Surface(
-            shape = CircleShape,
-            color = color.copy(alpha = 0.13f),
-            border = BorderStroke(1.dp, color.copy(alpha = 0.26f)),
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                modifier = Modifier.padding(6.dp).size(16.dp),
-                tint = color,
-            )
-        }
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-    }
-}
-
-@Composable
-private fun PrivacyRouteArrow(active: Boolean) {
-    Icon(
-        imageVector = Icons.AutoMirrored.Outlined.ArrowForward,
-        contentDescription = null,
-        modifier = Modifier.size(15.dp),
-        tint = if (active) FoxholePositiveAccent else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.58f),
-    )
-}
-
-@Composable
-private fun HomeTinyStatusPill(
-    label: String,
-    active: Boolean,
-    color: Color,
-) {
-    Surface(
-        shape = MaterialTheme.shapes.small,
-        color = color.copy(alpha = if (active) 0.14f else 0.09f),
-        border = BorderStroke(1.dp, color.copy(alpha = if (active) 0.36f else 0.18f)),
-    ) {
-        Text(
-            text = label,
-            modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
-            style = MaterialTheme.typography.labelSmall,
-            fontWeight = FontWeight.SemiBold,
-            color = color,
-            maxLines = 1,
-        )
-    }
-}
-
-@Composable
-private fun PrivacyRouteInfoLine(
-    label: String,
-    value: String,
-) {
-    Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
-        Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Text(value, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
-    }
-}
-
-@Composable
-private fun PrivacyRouteToggleLine(
-    label: String,
-    enabled: Boolean,
-) {
-    val color = if (enabled) FoxholePositiveAccent else MaterialTheme.colorScheme.onSurfaceVariant
-    Row(
-        horizontalArrangement = Arrangement.spacedBy(5.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box(
-            modifier =
-                Modifier
-                    .size(7.dp)
-                    .clip(CircleShape)
-                    .background(color),
-        )
-        Text(
-            text = "$label: ${stringResource(if (enabled) R.string.status_on else R.string.status_off)}",
-            style = MaterialTheme.typography.bodySmall,
-            color = color,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
         )
     }
 }

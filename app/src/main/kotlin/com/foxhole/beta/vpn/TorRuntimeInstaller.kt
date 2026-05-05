@@ -30,13 +30,14 @@ class TorRuntimeInstaller(
             val targetRoot = File(appContext.filesDir, "tor/$assetAbi")
             val assetVersion = readAssetText("$assetRoot/.version").orEmpty()
             val targetVersion = File(targetRoot, ".version").takeIf(File::isFile)?.readText().orEmpty()
-            val executableRelativePath = torExecutableAssetName(assetRoot) ?: "tor"
-            val executable = File(targetRoot, executableRelativePath)
-            if (!executable.isFile || assetVersion != targetVersion) {
+            if (assetVersion != targetVersion || !targetRoot.isDirectory) {
                 targetRoot.deleteRecursively()
                 copyAssetTree(assetRoot, targetRoot)
             }
-            if (!executable.isFile || !executable.setExecutable(true, true)) {
+            val executable =
+                nativeTorExecutable()
+                    ?: throw TorRuntimeUnavailableException("Tor native executable is missing for this device ABI")
+            if (!executable.isFile || !executable.ensureExecutable()) {
                 throw TorRuntimeUnavailableException("Tor executable could not be prepared")
             }
             val dataDirectory = File(appContext.filesDir, "tor-data").apply { mkdirs() }
@@ -50,6 +51,13 @@ class TorRuntimeInstaller(
 
     private fun torExecutableAssetName(assetRoot: String): String? =
         TOR_EXECUTABLE_ASSET_NAMES.firstOrNull { name -> assetFileExists("$assetRoot/$name") }
+
+    private fun nativeTorExecutable(): File? =
+        File(appContext.applicationInfo.nativeLibraryDir, TOR_NATIVE_LIBRARY_NAME)
+            .takeIf(File::isFile)
+
+    private fun File.ensureExecutable(): Boolean =
+        canExecute() || setExecutable(true, true)
 
     private fun findTorDataFile(
         targetRoot: File,
@@ -89,6 +97,7 @@ class TorRuntimeInstaller(
     }
 
     private companion object {
+        const val TOR_NATIVE_LIBRARY_NAME = "libTor.so"
         val TOR_EXECUTABLE_ASSET_NAMES = listOf("tor", "libTor.so", "tor/libTor.so")
     }
 }

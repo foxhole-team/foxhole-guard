@@ -8,7 +8,6 @@ import android.net.NetworkCapabilities
 import android.text.format.Formatter
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Apps
-import androidx.compose.material.icons.outlined.ArrowDownward
 import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material.icons.outlined.SwapVert
 import androidx.compose.material3.MaterialTheme
@@ -487,6 +486,13 @@ internal fun protocolHintChipLabel(protocol: ProtocolHint): String =
         ProtocolHint.OUTLINE -> "OUTLINE"
         ProtocolHint.SING_BOX -> "SING-BOX"
         ProtocolHint.UNKNOWN -> "UNKNOWN"
+    }
+
+internal fun dashboardTransportTypeLabel(protocol: ProtocolHint): String =
+    when {
+        protocol in setOf(ProtocolHint.UNKNOWN, ProtocolHint.SING_BOX) -> "-"
+        protocol.isUdpTransport() -> "UDP"
+        else -> "TCP"
     }
 
 @Composable

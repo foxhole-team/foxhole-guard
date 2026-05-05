@@ -30,6 +30,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
@@ -38,6 +39,7 @@ import com.foxhole.beta.R
 internal data class FoxholeSwipeAction(
     val icon: ImageVector,
     val contentDescription: String,
+    val testTag: String? = null,
     val tint: Color? = null,
     val onClick: () -> Unit,
 )
@@ -102,6 +104,7 @@ internal fun FoxholeSwipeActions(
         SwipeActionsBackground(
             actions = actions,
             onAction = {},
+            exposeTestTags = false,
             modifier = Modifier.align(Alignment.CenterEnd),
         )
         SwipeToDismissBox(
@@ -135,6 +138,7 @@ internal fun FoxholeSwipeActions(
                     setRevealed(false)
                     haptic.performHapticFeedback(HapticFeedbackType.Confirm)
                 },
+                exposeTestTags = true,
                 modifier =
                     Modifier
                         .align(Alignment.CenterEnd)
@@ -180,6 +184,7 @@ private fun SwipeActionsDismissOverlay(
 private fun SwipeActionsBackground(
     actions: List<FoxholeSwipeAction>,
     onAction: () -> Unit,
+    exposeTestTags: Boolean,
     modifier: Modifier = Modifier,
 ) {
     Row(
@@ -193,7 +198,16 @@ private fun SwipeActionsBackground(
                     onAction()
                     action.onClick()
                 },
-                modifier = Modifier.size(40.dp),
+                modifier =
+                    Modifier
+                        .size(40.dp)
+                        .then(
+                            if (exposeTestTags) {
+                                action.testTag?.let { Modifier.testTag(it) } ?: Modifier
+                            } else {
+                                Modifier
+                            },
+                        ),
             ) {
                 Icon(
                     imageVector = action.icon,

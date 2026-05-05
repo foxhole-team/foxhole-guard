@@ -33,3 +33,4 @@ val FoxholeLightOnBackground = Color(0xFF303236)
 val FoxholeLightOnSurfaceVariant = Color(0xFF62676E)
 
 val FoxholeError = Color(0xFFE46C6C)
+val FoxholeWarning = Color(0xFFE0B84F)
