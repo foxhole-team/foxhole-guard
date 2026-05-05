@@ -244,6 +244,7 @@ internal fun HomeNetworkColumnTitle(text: String) {
 @Composable
 internal fun HomeModeDropdown(
     selected: HomeModeOption,
+    splitActive: Boolean,
     onSelect: (HomeModeOption) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -276,7 +277,7 @@ internal fun HomeModeDropdown(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Icon(
-                    imageVector = homeModeOptionIcon(selected),
+                    imageVector = homeModeOptionIcon(selected, splitActive = splitActive && selected == HomeModeOption.TUNNEL),
                     contentDescription = null,
                     modifier = Modifier.size(11.dp),
                     tint = selectorTint,

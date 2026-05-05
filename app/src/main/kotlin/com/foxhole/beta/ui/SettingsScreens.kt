@@ -92,7 +92,9 @@ import com.foxhole.beta.core.model.DiagnosticsRetention
 import com.foxhole.beta.core.model.DomainStrategy
 import com.foxhole.beta.core.model.LatencyProbeMethod
 import com.foxhole.beta.core.model.LocalAuthSettings
+import com.foxhole.beta.core.model.LocalSurfaceSettings
 import com.foxhole.beta.core.model.ProxyInboundSettings
+import com.foxhole.beta.core.model.ProxySurfaceMode
 import com.foxhole.beta.core.model.RoutingCatalog
 import com.foxhole.beta.core.model.RoutingPreset
 import com.foxhole.beta.core.model.RoutingPresetOverrideMode
@@ -613,6 +615,8 @@ fun TrafficSettingsScreen(
     onLocalProxyAuthEnabledChanged: (Boolean) -> Unit,
     onLocalProxyAuthChanged: (LocalAuthSettings) -> Unit,
     onLocalProxyLanAccessChanged: (Boolean) -> Unit,
+    onProxySurfaceModeSelected: (ProxySurfaceMode) -> Unit,
+    onLanProxySurfaceModeSelected: (ProxySurfaceMode) -> Unit,
     onSocksSurfaceChanged: (ProxyInboundSettings) -> Unit,
     onHttpSurfaceChanged: (ProxyInboundSettings) -> Unit,
     onMixedSurfaceChanged: (ProxyInboundSettings) -> Unit,
@@ -627,6 +631,8 @@ fun TrafficSettingsScreen(
     var modeMenuExpanded by rememberSaveable { mutableStateOf(false) }
     var latencyProbeMethodMenuExpanded by rememberSaveable { mutableStateOf(false) }
     var tunStackMenuExpanded by rememberSaveable { mutableStateOf(false) }
+    var proxySurfaceModeMenuExpanded by rememberSaveable { mutableStateOf(false) }
+    var lanProxySurfaceModeMenuExpanded by rememberSaveable { mutableStateOf(false) }
     var socksDialog by rememberSaveable { mutableStateOf(false) }
     var httpDialog by rememberSaveable { mutableStateOf(false) }
     var mixedDialog by rememberSaveable { mutableStateOf(false) }
@@ -666,24 +672,6 @@ fun TrafficSettingsScreen(
         }
         item {
             SettingsControlGroup {
-                SettingSwitchRow(
-                    title = stringResource(R.string.proxy_lan_access_title),
-                    checked = state.settings.expert.localSurfaces.allowLanAccess,
-                    leadingIcon = Icons.Outlined.Public,
-                    onCheckedChange = { enabled ->
-                        if (!enabled || wifiLanAddress != null) {
-                            onLocalProxyLanAccessChanged(enabled)
-                        }
-                    },
-                    summary =
-                        proxyLanAccessSummary(
-                            allowLanAccess = state.settings.expert.localSurfaces.allowLanAccess,
-                            wifiLanAddress = wifiLanAddress,
-                        ),
-                    enabled = wifiLanAddress != null || state.settings.expert.localSurfaces.allowLanAccess,
-                    grouped = true,
-                )
-                SettingsControlGroupDivider()
                 DropdownSettingRow(
                     title = stringResource(R.string.traffic_mode),
                     value = trafficModeLabel(state.settings.traffic.mode),
@@ -723,6 +711,20 @@ fun TrafficSettingsScreen(
                 }
                 if (state.settings.traffic.mode == TrafficMode.PROXY) {
                     SettingsControlGroupDivider()
+                    DropdownSettingRow(
+                        title = stringResource(R.string.proxy_surface_mode_title),
+                        value = proxySurfaceModeLabel(state.settings.expert.localSurfaces.proxyMode),
+                        expanded = proxySurfaceModeMenuExpanded,
+                        onExpandedChange = { proxySurfaceModeMenuExpanded = it },
+                        values = ProxySurfaceMode.entries,
+                        selected = state.settings.expert.localSurfaces.proxyMode,
+                        label = { proxySurfaceModeLabel(it) },
+                        onSelect = onProxySurfaceModeSelected,
+                        leadingIcon = Icons.Outlined.SwapVert,
+                        optionIcon = ::proxySurfaceModeIcon,
+                        grouped = true,
+                    )
+                    SettingsControlGroupDivider()
                     SettingSwitchRow(
                         title = stringResource(R.string.proxy_auth_title),
                         checked = state.settings.expert.localSurfaces.auth.enabled,
@@ -731,34 +733,66 @@ fun TrafficSettingsScreen(
                         onCheckedChange = onLocalProxyAuthEnabledChanged,
                         grouped = true,
                     )
-                    SettingsControlGroupDivider()
-                    LocalProxyAuthEditor(
-                        auth = state.settings.expert.localSurfaces.auth,
-                        onAuthChanged = onLocalProxyAuthChanged,
-                        grouped = true,
-                    )
+                    if (state.settings.expert.localSurfaces.auth.enabled) {
+                        SettingsControlGroupDivider()
+                        LocalProxyAuthEditor(
+                            auth = state.settings.expert.localSurfaces.auth,
+                            onAuthChanged = onLocalProxyAuthChanged,
+                            grouped = true,
+                        )
+                    }
                     SettingsControlGroupDivider()
                     SettingValueRow(
-                        title = stringResource(R.string.http_inbound),
-                        value = surfaceSummary(state.settings.expert.localSurfaces.http, state.settings.expert.localSurfaces.auth.enabled),
+                        title = stringResource(R.string.proxy_surface_endpoint_title),
+                        value = proxySurfaceEndpointSummary(state.settings.expert.localSurfaces.proxyMode, state.settings.expert.localSurfaces),
                         leadingIcon = Icons.Outlined.Public,
-                        onClick = { httpDialog = true },
+                        onClick = null,
+                        grouped = true,
+                    )
+                }
+                SettingsControlGroupDivider()
+                SettingSwitchRow(
+                    title = stringResource(R.string.proxy_lan_access_title),
+                    checked = state.settings.expert.localSurfaces.allowLanAccess,
+                    leadingIcon = Icons.Outlined.Router,
+                    onCheckedChange = { enabled ->
+                        if (!enabled || wifiLanAddress != null) {
+                            onLocalProxyLanAccessChanged(enabled)
+                        }
+                    },
+                    summary =
+                        proxyLanAccessSummary(
+                            allowLanAccess = state.settings.expert.localSurfaces.allowLanAccess,
+                            wifiLanAddress = wifiLanAddress,
+                        ),
+                    enabled = wifiLanAddress != null || state.settings.expert.localSurfaces.allowLanAccess,
+                    grouped = true,
+                )
+                if (state.settings.expert.localSurfaces.allowLanAccess) {
+                    SettingsControlGroupDivider()
+                    DropdownSettingRow(
+                        title = stringResource(R.string.proxy_surface_mode_title),
+                        value = proxySurfaceModeLabel(state.settings.expert.localSurfaces.lanProxyMode),
+                        expanded = lanProxySurfaceModeMenuExpanded,
+                        onExpandedChange = { lanProxySurfaceModeMenuExpanded = it },
+                        values = ProxySurfaceMode.entries,
+                        selected = state.settings.expert.localSurfaces.lanProxyMode,
+                        label = { proxySurfaceModeLabel(it) },
+                        onSelect = onLanProxySurfaceModeSelected,
+                        leadingIcon = Icons.Outlined.SwapVert,
+                        optionIcon = ::proxySurfaceModeIcon,
                         grouped = true,
                     )
                     SettingsControlGroupDivider()
                     SettingValueRow(
-                        title = stringResource(R.string.socks_inbound),
-                        value = surfaceSummary(state.settings.expert.localSurfaces.socks, state.settings.expert.localSurfaces.auth.enabled),
-                        leadingIcon = Icons.Outlined.Shield,
-                        onClick = { socksDialog = true },
-                        grouped = true,
-                    )
-                    SettingsControlGroupDivider()
-                    SettingValueRow(
-                        title = stringResource(R.string.mixed_inbound),
-                        value = surfaceSummary(state.settings.expert.localSurfaces.mixed, state.settings.expert.localSurfaces.auth.enabled),
-                        leadingIcon = Icons.Outlined.Apps,
-                        onClick = { mixedDialog = true },
+                        title = stringResource(R.string.proxy_surface_endpoint_title),
+                        value = lanProxySurfaceEndpointSummary(
+                            mode = state.settings.expert.localSurfaces.lanProxyMode,
+                            surfaces = state.settings.expert.localSurfaces,
+                            wifiLanAddress = wifiLanAddress,
+                        ),
+                        leadingIcon = Icons.Outlined.Public,
+                        onClick = null,
                         grouped = true,
                     )
                 }
@@ -1009,6 +1043,51 @@ private fun trafficModeIcon(value: TrafficMode): ImageVector =
     when (value) {
         TrafficMode.TUNNEL -> Icons.Outlined.Shield
         TrafficMode.PROXY -> Icons.Outlined.SwapVert
+    }
+
+@Composable
+private fun proxySurfaceModeLabel(value: ProxySurfaceMode): String =
+    when (value) {
+        ProxySurfaceMode.SOCKS5 -> stringResource(R.string.socks_inbound)
+        ProxySurfaceMode.HTTP -> stringResource(R.string.http_inbound)
+        ProxySurfaceMode.ALL -> stringResource(R.string.proxy_surface_mode_all)
+    }
+
+private fun proxySurfaceModeIcon(value: ProxySurfaceMode): ImageVector =
+    when (value) {
+        ProxySurfaceMode.SOCKS5 -> Icons.Outlined.Shield
+        ProxySurfaceMode.HTTP -> Icons.Outlined.Public
+        ProxySurfaceMode.ALL -> Icons.Outlined.Apps
+    }
+
+@Composable
+private fun proxySurfaceEndpointSummary(
+    mode: ProxySurfaceMode,
+    surfaces: LocalSurfaceSettings,
+): String {
+    val surface = surfaces.surfaceFor(mode)
+    return stringResource(R.string.proxy_surface_loopback_endpoint, surface.port)
+}
+
+@Composable
+private fun lanProxySurfaceEndpointSummary(
+    mode: ProxySurfaceMode,
+    surfaces: LocalSurfaceSettings,
+    wifiLanAddress: String?,
+): String {
+    val surface = surfaces.surfaceFor(mode)
+    return if (wifiLanAddress == null) {
+        stringResource(R.string.proxy_surface_lan_waiting_for_wifi)
+    } else {
+        stringResource(R.string.proxy_surface_lan_endpoint, wifiLanAddress, surface.port)
+    }
+}
+
+private fun LocalSurfaceSettings.surfaceFor(mode: ProxySurfaceMode): ProxyInboundSettings =
+    when (mode) {
+        ProxySurfaceMode.SOCKS5 -> socks
+        ProxySurfaceMode.HTTP -> http
+        ProxySurfaceMode.ALL -> mixed
     }
 
 private fun latencyProbeMethodIcon(value: LatencyProbeMethod): ImageVector =

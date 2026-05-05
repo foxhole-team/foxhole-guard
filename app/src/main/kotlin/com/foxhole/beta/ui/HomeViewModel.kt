@@ -37,6 +37,7 @@ import com.foxhole.beta.core.model.PerAppRoutingMode
 import com.foxhole.beta.core.model.Profile
 import com.foxhole.beta.core.model.ProfileSourceType
 import com.foxhole.beta.core.model.ProxyInboundSettings
+import com.foxhole.beta.core.model.ProxySurfaceMode
 import com.foxhole.beta.core.model.RoutingCatalog
 import com.foxhole.beta.core.model.RoutingPreset
 import com.foxhole.beta.core.model.RoutingPresetOverrideMode
@@ -842,6 +843,16 @@ class HomeViewModel(
     fun onPerAppRoutingModeSelected(value: PerAppRoutingMode) = onPerAppRoutingModeSelectedInternal(value)
 
     fun onSelectedPackagesChanged(value: List<String>) = onSelectedPackagesChangedInternal(value)
+
+    fun onBlockedPackagesChanged(value: List<String>) = onBlockedPackagesChangedInternal(value)
+
+    fun onBlockedPackagesEnabledChanged(value: Boolean) = onBlockedPackagesEnabledChangedInternal(value)
+
+    fun onSiteRoutingActionSelected(value: RoutingRuleAction) = onSiteRoutingActionSelectedInternal(value)
+
+    fun onProxySurfaceModeSelected(value: ProxySurfaceMode) = onProxySurfaceModeSelectedInternal(value)
+
+    fun onLanProxySurfaceModeSelected(value: ProxySurfaceMode) = onLanProxySurfaceModeSelectedInternal(value)
 
     fun onSocksSurfaceChanged(value: ProxyInboundSettings) = onSocksSurfaceChangedInternal(value)
 

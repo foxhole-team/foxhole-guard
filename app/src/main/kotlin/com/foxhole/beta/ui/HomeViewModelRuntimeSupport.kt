@@ -157,8 +157,10 @@ internal fun HomeViewModel.saveSiteRuleInternal(
 ) {
     viewModelScope.launch {
         runCatching {
-            val normalizedDomains = domains.map(String::trim).filter(String::isNotBlank).distinct()
-            require(normalizedDomains.isNotEmpty()) { getApplication<Application>().getString(R.string.site_exception_validation_error) }
+            val normalizedTokens = domains.map(String::trim).filter(String::isNotBlank).distinct()
+            require(normalizedTokens.isNotEmpty()) { getApplication<Application>().getString(R.string.site_exception_validation_error) }
+            val normalizedDomains = normalizedTokens.filterNot { it.startsWith(SITE_CIDR_PREFIX) }
+            val normalizedIpCidrs = normalizedTokens.filter { it.startsWith(SITE_CIDR_PREFIX) }.map { it.removePrefix(SITE_CIDR_PREFIX) }
             val presetId =
                 uiState.value.activePreset?.id ?: container.routingRepository.createPreset(
                     name = getApplication<Application>().getString(R.string.local_rules_preset_name),
@@ -167,12 +169,12 @@ internal fun HomeViewModel.saveSiteRuleInternal(
             container.routingRepository.upsertRule(
                 presetId = presetId,
                 ruleId = ruleId,
-                name = normalizedDomains.firstOrNull() ?: getApplication<Application>().getString(R.string.site_exception_default_name),
+                name = siteRuleName(action, normalizedTokens.firstOrNull()),
                 enabled = true,
                 order = uiState.value.activePreset?.rules?.firstOrNull { it.id == ruleId }?.order,
                 action = action,
                 matchDomains = normalizedDomains,
-                matchIpCidrs = emptyList(),
+                matchIpCidrs = normalizedIpCidrs,
                 matchPorts = emptyList(),
                 matchProtocols = emptyList(),
                 matchNetworks = emptyList(),
@@ -184,6 +186,22 @@ internal fun HomeViewModel.saveSiteRuleInternal(
             emitError(it.message ?: getApplication<Application>().getString(R.string.routing_rule_save_failed))
         }
     }
+}
+
+private const val SITE_CIDR_PREFIX = "cidr:"
+
+private fun HomeViewModel.siteRuleName(
+    action: RoutingRuleAction,
+    token: String?,
+): String {
+    val prefix =
+        when (action) {
+            RoutingRuleAction.BLOCK -> "FoxHole blocked site"
+            RoutingRuleAction.PROXY,
+            RoutingRuleAction.DIRECT,
+            -> "FoxHole selected site"
+        }
+    return "$prefix: ${token ?: getApplication<Application>().getString(R.string.site_exception_default_name)}"
 }
 
 internal fun HomeViewModel.createDiagnosticsArchiveInternal(sanitize: Boolean = true): File =

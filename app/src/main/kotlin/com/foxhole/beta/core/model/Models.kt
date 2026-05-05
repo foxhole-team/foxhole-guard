@@ -2,7 +2,7 @@ package com.foxhole.beta.core.model
 
 import kotlinx.serialization.Serializable
 
-const val SETTINGS_SCHEMA_VERSION = 10
+const val SETTINGS_SCHEMA_VERSION = 11
 const val NETWORK_FINGERPRINT_SCHEMA_CURRENT = 2
 const val NETWORK_FINGERPRINT_SCHEMA_LEGACY = 1
 
@@ -88,6 +88,13 @@ enum class TunStack(val configValue: String) {
 enum class TrafficMode {
     TUNNEL,
     PROXY,
+}
+
+@Serializable
+enum class ProxySurfaceMode {
+    SOCKS5,
+    HTTP,
+    ALL,
 }
 
 internal fun ProtocolHint.isUdpTransport(): Boolean =
@@ -235,6 +242,8 @@ data class V2RayApiSettings(
 
 @Serializable
 data class LocalSurfaceSettings(
+    val proxyMode: ProxySurfaceMode = ProxySurfaceMode.SOCKS5,
+    val lanProxyMode: ProxySurfaceMode = ProxySurfaceMode.SOCKS5,
     val socks: ProxyInboundSettings = ProxyInboundSettings(port = 10808),
     val http: ProxyInboundSettings = ProxyInboundSettings(port = 10809),
     val mixed: ProxyInboundSettings = ProxyInboundSettings(port = 10810),
@@ -261,6 +270,9 @@ data class ExpertSettings(
     val allowPrivateOutboundHosts: Boolean = false,
     val perAppRoutingMode: PerAppRoutingMode = PerAppRoutingMode.FULL_TUNNEL,
     val selectedPackages: List<String> = emptyList(),
+    val blockedPackages: List<String> = emptyList(),
+    val blockedPackagesEnabled: Boolean = false,
+    val siteRoutingAction: RoutingRuleAction = RoutingRuleAction.PROXY,
     val localSurfaces: LocalSurfaceSettings = LocalSurfaceSettings(),
 )
 

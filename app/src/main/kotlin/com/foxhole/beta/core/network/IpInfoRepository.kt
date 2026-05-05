@@ -21,15 +21,23 @@ import java.net.Inet4Address
 import java.net.Inet6Address
 import java.net.InetAddress
 import java.net.InetSocketAddress
+import java.net.PasswordAuthentication
 import java.net.Proxy
+import java.net.Authenticator
 import java.util.concurrent.TimeUnit
 import kotlin.system.measureTimeMillis
+
+enum class ProxyAccessType {
+    HTTP,
+    SOCKS,
+}
 
 data class HttpProxyAccess(
     val host: String,
     val port: Int,
     val username: String? = null,
     val password: String? = null,
+    val type: ProxyAccessType = ProxyAccessType.HTTP,
 )
 
 enum class IpInfoFetchMode {
@@ -263,8 +271,16 @@ class IpInfoRepository(
                 client.newBuilder().apply {
                     callTimeoutMs?.let { timeout -> callTimeout(timeout, TimeUnit.MILLISECONDS) }
                     if (proxy != null) {
-                        proxy(Proxy(Proxy.Type.HTTP, InetSocketAddress(proxy.host, proxy.port)))
-                        if (!proxy.username.isNullOrBlank() && !proxy.password.isNullOrBlank()) {
+                        proxy(
+                            Proxy(
+                                when (proxy.type) {
+                                    ProxyAccessType.HTTP -> Proxy.Type.HTTP
+                                    ProxyAccessType.SOCKS -> Proxy.Type.SOCKS
+                                },
+                                InetSocketAddress(proxy.host, proxy.port),
+                            ),
+                        )
+                        if (proxy.type == ProxyAccessType.HTTP && !proxy.username.isNullOrBlank() && !proxy.password.isNullOrBlank()) {
                             proxyAuthenticator { _, response ->
                                 if (response.request.header("Proxy-Authorization") != null) {
                                     null
@@ -291,7 +307,27 @@ class IpInfoRepository(
                     }
                 }.build()
             }
-        effectiveClient.newCall(request).execute()
+        if (proxy?.type == ProxyAccessType.SOCKS && !proxy.username.isNullOrBlank() && !proxy.password.isNullOrBlank()) {
+            synchronized(SOCKS_AUTH_LOCK) {
+                Authenticator.setDefault(
+                    object : Authenticator() {
+                        override fun getPasswordAuthentication(): PasswordAuthentication? =
+                            if (requestingHost == proxy.host && requestingPort == proxy.port) {
+                                PasswordAuthentication(proxy.username, proxy.password.toCharArray())
+                            } else {
+                                null
+                            }
+                    },
+                )
+                return@synchronized try {
+                    effectiveClient.newCall(request).execute()
+                } finally {
+                    Authenticator.setDefault(null)
+                }
+            }
+        } else {
+            effectiveClient.newCall(request).execute()
+        }
     }
 
     private fun effectiveEndpoints(endpoint: String): List<String> {
@@ -372,6 +408,7 @@ class IpInfoRepository(
     private fun primaryEndpoint(endpoint: String): String = endpoint.trim().ifBlank { BuildConfig.DEFAULT_IP_INFO_ENDPOINT }
 
     private companion object {
+        val SOCKS_AUTH_LOCK = Any()
         const val ENTRY_QUICK_CALL_TIMEOUT_MS = 2_500L
         const val FAMILY_PROBE_CALL_TIMEOUT_MS = 1_500L
         val FALLBACK_ENDPOINTS =

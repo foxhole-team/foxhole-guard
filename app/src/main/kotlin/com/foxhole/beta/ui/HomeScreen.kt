@@ -93,7 +93,6 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
@@ -147,12 +146,8 @@ fun HomeScreen(
     onLocalProxyLanAccessChanged: (Boolean) -> Unit,
 ) {
     val context = LocalContext.current
-    val usernameLabel = stringResource(R.string.username)
-    val passwordLabel = stringResource(R.string.password)
     var importMenuExpanded by rememberSaveable { mutableStateOf(false) }
     var showRefreshProfileDialog by rememberSaveable { mutableStateOf(false) }
-    var editProxyUsernameVisible by rememberSaveable { mutableStateOf(false) }
-    var editProxyPasswordVisible by rememberSaveable { mutableStateOf(false) }
     var smartRefreshConfirmationProfileId by rememberSaveable { mutableStateOf<Long?>(null) }
     var smartStartFirstAnalysisProfileId by rememberSaveable { mutableStateOf<Long?>(null) }
     var acceptedSmartStartFirstAnalysisProfileId by rememberSaveable { mutableStateOf<Long?>(null) }
@@ -169,10 +164,8 @@ fun HomeScreen(
         }
     val modeOption = proxyModel.modeOption
     val lanProxySurface = proxyModel.lanProxySurface
-    val dashboardProxySurface = proxyModel.dashboardProxySurface
     val lanProxyActive = proxyModel.lanProxyActive
     val darkTheme = MaterialTheme.colorScheme.background.luminance() < 0.3f
-    val proxyAuth = state.settings.expert.localSurfaces.auth
     val autoTone = foxholeSystemAwareAccentColor(fallback = MaterialTheme.colorScheme.primary)
     val topStatusState = homeTopStatusState(state)
     val statusTone =
@@ -422,6 +415,7 @@ fun HomeScreen(
                                 ) {
                                     HomeModeDropdown(
                                         selected = modeOption,
+                                        splitActive = state.settings.expert.perAppRoutingMode != PerAppRoutingMode.FULL_TUNNEL,
                                         onSelect = { selectedMode ->
                                             applyHomeModeSelection(
                                                 mode = selectedMode,
@@ -1003,110 +997,7 @@ fun HomeScreen(
                     }
                 }
             }
-            if (dashboardProxySurface != null) {
-                item {
-                    FoxholeCard {
-                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            HomeCardHeader(
-                                icon = Icons.Outlined.Tune,
-                                title =
-                                    if (lanProxySurface != null) {
-                                        stringResource(R.string.home_lan_proxy_title)
-                                    } else {
-                                        stringResource(R.string.home_proxy_title)
-                                    },
-                            )
-                            Text(
-                                text = dashboardProxySurface.label,
-                                style = MaterialTheme.typography.labelSmall,
-                                fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                            if (lanProxySurface != null) {
-                                Text(
-                                    text =
-                                        if (wifiLanAddress != null) {
-                                            "${wifiLanAddress}:${dashboardProxySurface.settings.port}"
-                                        } else {
-                                            stringResource(R.string.proxy_surface_lan_waiting_for_wifi)
-                                        },
-                                    style =
-                                        if (wifiLanAddress != null) {
-                                            MaterialTheme.typography.titleSmall
-                                        } else {
-                                            MaterialTheme.typography.bodyMedium
-                                        },
-                                    fontFamily = if (wifiLanAddress != null) FontFamily.Monospace else null,
-                                    fontWeight = if (wifiLanAddress != null) FontWeight.SemiBold else FontWeight.Normal,
-                                    color = if (wifiLanAddress != null) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            } else {
-                                Text(
-                                    text = "${dashboardProxySurface.settings.host}:${dashboardProxySurface.settings.port}",
-                                    style = MaterialTheme.typography.titleSmall,
-                                    fontFamily = FontFamily.Monospace,
-                                    fontWeight = FontWeight.SemiBold,
-                                )
-                            }
-                            if (proxyAuth.enabled) {
-                                ProxyCredentialRow(
-                                    label = stringResource(R.string.username),
-                                    value = proxyAuth.username,
-                                    onEdit = { editProxyUsernameVisible = true },
-                                    editContentDescription = stringResource(R.string.edit_proxy_username_title),
-                                    onCopy = {
-                                        copyTextToClipboard(
-                                            context = context,
-                                            label = usernameLabel,
-                                            value = proxyAuth.username,
-                                        )
-                                    },
-                                )
-                                ProxyCredentialRow(
-                                    label = stringResource(R.string.password),
-                                    value = proxyAuth.password,
-                                    onEdit = { editProxyPasswordVisible = true },
-                                    editContentDescription = stringResource(R.string.edit_proxy_password_title),
-                                    onCopy = {
-                                        copyTextToClipboard(
-                                            context = context,
-                                            label = passwordLabel,
-                                            value = proxyAuth.password,
-                                        )
-                                    },
-                                )
-                            }
-                        }
-                    }
-                }
-            }
         }
-    }
-
-    if (editProxyUsernameVisible) {
-        TextValueDialog(
-            title = stringResource(R.string.edit_proxy_username_title),
-            icon = Icons.Outlined.Edit,
-            initialValue = proxyAuth.username,
-            singleLine = true,
-            onDismiss = { editProxyUsernameVisible = false },
-            onConfirm = { updated ->
-                onLocalProxyAuthChanged(proxyAuth.copy(username = updated.trim().ifBlank { proxyAuth.username }))
-            },
-        )
-    }
-
-    if (editProxyPasswordVisible) {
-        TextValueDialog(
-            title = stringResource(R.string.edit_proxy_password_title),
-            icon = Icons.Outlined.Edit,
-            initialValue = proxyAuth.password,
-            singleLine = true,
-            onDismiss = { editProxyPasswordVisible = false },
-            onConfirm = { updated ->
-                onLocalProxyAuthChanged(proxyAuth.copy(password = updated.trim().ifBlank { proxyAuth.password }))
-            },
-        )
     }
 
     if (showRefreshProfileDialog) {

@@ -14,6 +14,7 @@ import com.foxhole.beta.core.model.LatencyProbeMethod
 import com.foxhole.beta.core.model.PerAppRoutingMode
 import com.foxhole.beta.core.model.Profile
 import com.foxhole.beta.core.model.ProxyInboundSettings
+import com.foxhole.beta.core.model.ProxySurfaceMode
 import com.foxhole.beta.core.model.RoutingPresetOverrideMode
 import com.foxhole.beta.core.model.RoutingPresetSource
 import com.foxhole.beta.core.model.RoutingRuleAction
@@ -265,6 +266,38 @@ internal fun HomeViewModel.onSelectedPackagesChangedInternal(value: List<String>
         container.settingsRepository.updateSelectedPackages(
             value.filterNot { it == getApplication<Application>().packageName },
         )
+    }
+}
+
+internal fun HomeViewModel.onBlockedPackagesChangedInternal(value: List<String>) {
+    updateRuntimeSettingAndMaybeReload {
+        container.settingsRepository.updateBlockedPackages(
+            value.filterNot { it == getApplication<Application>().packageName },
+        )
+    }
+}
+
+internal fun HomeViewModel.onBlockedPackagesEnabledChangedInternal(value: Boolean) {
+    updateRuntimeSettingAndMaybeReload {
+        container.settingsRepository.updateBlockedPackagesEnabled(value)
+    }
+}
+
+internal fun HomeViewModel.onSiteRoutingActionSelectedInternal(value: RoutingRuleAction) {
+    updateRuntimeSettingAndMaybeReload {
+        container.settingsRepository.updateSiteRoutingAction(value)
+    }
+}
+
+internal fun HomeViewModel.onProxySurfaceModeSelectedInternal(value: ProxySurfaceMode) {
+    updateRuntimeSettingAndMaybeReload {
+        container.settingsRepository.updateProxySurfaceMode(value)
+    }
+}
+
+internal fun HomeViewModel.onLanProxySurfaceModeSelectedInternal(value: ProxySurfaceMode) {
+    updateRuntimeSettingAndMaybeReload {
+        container.settingsRepository.updateLanProxySurfaceMode(value)
     }
 }
 

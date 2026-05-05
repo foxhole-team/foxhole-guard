@@ -107,38 +107,40 @@ internal fun ProxySurfaceDialog(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                OutlinedTextField(
-                    value = auth.username,
-                    onValueChange = {},
-                    readOnly = true,
-                    label = { Text(stringResource(R.string.username)) },
-                    singleLine = true,
-                    trailingIcon = {
-                        IconButton(
-                            onClick = {
-                                copyTextToClipboard(context, usernameLabel, auth.username)
-                            },
-                        ) {
-                            Icon(Icons.Outlined.ContentCopy, contentDescription = stringResource(R.string.copy_username))
-                        }
-                    },
-                )
-                OutlinedTextField(
-                    value = auth.password,
-                    onValueChange = {},
-                    readOnly = true,
-                    label = { Text(stringResource(R.string.password)) },
-                    singleLine = true,
-                    trailingIcon = {
-                        IconButton(
-                            onClick = {
-                                copyTextToClipboard(context, passwordLabel, auth.password)
-                            },
-                        ) {
-                            Icon(Icons.Outlined.ContentCopy, contentDescription = stringResource(R.string.copy_password))
-                        }
-                    },
-                )
+                if (auth.enabled) {
+                    OutlinedTextField(
+                        value = auth.username,
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text(stringResource(R.string.username)) },
+                        singleLine = true,
+                        trailingIcon = {
+                            IconButton(
+                                onClick = {
+                                    copyTextToClipboard(context, usernameLabel, auth.username)
+                                },
+                            ) {
+                                Icon(Icons.Outlined.ContentCopy, contentDescription = stringResource(R.string.copy_username))
+                            }
+                        },
+                    )
+                    OutlinedTextField(
+                        value = auth.password,
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text(stringResource(R.string.password)) },
+                        singleLine = true,
+                        trailingIcon = {
+                            IconButton(
+                                onClick = {
+                                    copyTextToClipboard(context, passwordLabel, auth.password)
+                                },
+                            ) {
+                                Icon(Icons.Outlined.ContentCopy, contentDescription = stringResource(R.string.copy_password))
+                            }
+                        },
+                    )
+                }
             }
         },
         confirmButton = {

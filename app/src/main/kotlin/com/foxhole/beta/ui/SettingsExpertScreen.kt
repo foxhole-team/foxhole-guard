@@ -259,18 +259,20 @@ fun ExpertSettingsScreen(
                     },
                     grouped = true,
                 )
-                SettingsControlGroupDivider()
-                LocalProxyAuthEditor(
-                    auth = state.settings.expert.localSurfaces.auth,
-                    onAuthChanged = { value ->
-                        if (value.username.isNotBlank() && value.password.isNotBlank()) {
-                            requireWarning { onLocalProxyAuthChanged(value) }
-                        } else {
-                            onLocalProxyAuthChanged(value)
-                        }
-                    },
-                    grouped = true,
-                )
+                if (state.settings.expert.localSurfaces.auth.enabled) {
+                    SettingsControlGroupDivider()
+                    LocalProxyAuthEditor(
+                        auth = state.settings.expert.localSurfaces.auth,
+                        onAuthChanged = { value ->
+                            if (value.username.isNotBlank() && value.password.isNotBlank()) {
+                                requireWarning { onLocalProxyAuthChanged(value) }
+                            } else {
+                                onLocalProxyAuthChanged(value)
+                            }
+                        },
+                        grouped = true,
+                    )
+                }
                 SettingsControlGroupDivider()
                 SettingValueRow(
                     title = stringResource(R.string.socks_inbound),

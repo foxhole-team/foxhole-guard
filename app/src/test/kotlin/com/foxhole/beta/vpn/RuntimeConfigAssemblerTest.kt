@@ -10,6 +10,7 @@ import com.foxhole.beta.core.model.PerAppRoutingMode
 import com.foxhole.beta.core.model.ProfileTrafficTotal
 import com.foxhole.beta.core.model.ProtocolHint
 import com.foxhole.beta.core.model.ProxyInboundSettings
+import com.foxhole.beta.core.model.ProxySurfaceMode
 import com.foxhole.beta.core.model.RoutingPreset
 import com.foxhole.beta.core.model.RoutingPresetOverrideMode
 import com.foxhole.beta.core.model.RoutingPresetSource
@@ -195,35 +196,37 @@ class RuntimeConfigAssemblerTest {
     }
 
     @Test
-    fun `expert settings add local surfaces and selected packages`() {
+    fun `expert settings add selected package route rules`() {
         val settings =
             Settings(
                 expert =
                     ExpertSettings(
                         perAppRoutingMode = PerAppRoutingMode.INCLUDE_SELECTED_APPS,
                         selectedPackages = listOf("com.example.app"),
-                        localSurfaces =
-                            LocalSurfaceSettings(
-                                socks = ProxyInboundSettings(enabled = true, host = "127.0.0.1", port = 10808),
-                            ),
                     ),
             )
 
         val config = parse(assembler.assemble(baseConfigWithRules("profile.example"), settings, null))
         val tunInbound = config["inbounds"]!!.jsonArray.first().jsonObject
+        val firstRule = config["route"]!!.jsonObject["rules"]!!.jsonArray.first().jsonObject
 
-        assertEquals(2, config["inbounds"]!!.jsonArray.size)
-        assertEquals("com.example.app", tunInbound["include_package"]!!.jsonArray[0].jsonPrimitive.content)
+        assertEquals(1, config["inbounds"]!!.jsonArray.size)
+        assertFalse(tunInbound.containsKey("include_package"))
+        assertEquals("com.example.app", firstRule["package_name"]!!.jsonArray[0].jsonPrimitive.content)
+        assertEquals("proxy", firstRule["outbound"]!!.jsonPrimitive.content)
+        assertEquals("direct", config["route"]!!.jsonObject["final"]!!.jsonPrimitive.content)
     }
 
     @Test
     fun `local proxy surfaces require auth and clash api uses shared secret`() {
         val settings =
             Settings(
+                traffic = com.foxhole.beta.core.model.TrafficSettings(mode = TrafficMode.PROXY),
                 expert =
                     ExpertSettings(
                         localSurfaces =
                             LocalSurfaceSettings(
+                                proxyMode = ProxySurfaceMode.SOCKS5,
                                 socks = ProxyInboundSettings(enabled = true, host = "127.0.0.1", port = 10808),
                                 clashApi = ClashApiSettings(enabled = true, host = "127.0.0.1", port = 9090),
                                 auth =
@@ -237,7 +240,7 @@ class RuntimeConfigAssemblerTest {
             )
 
         val config = parse(assembler.assemble(baseConfigWithRules("profile.example"), settings, null))
-        val socksInbound = config["inbounds"]!!.jsonArray[1].jsonObject
+        val socksInbound = config["inbounds"]!!.jsonArray[0].jsonObject
         val socksUser = socksInbound["users"]!!.jsonArray.first().jsonObject
         val clashApi = config["experimental"]!!.jsonObject["clash_api"]!!.jsonObject
 
@@ -256,6 +259,7 @@ class RuntimeConfigAssemblerTest {
                     ExpertSettings(
                         localSurfaces =
                             LocalSurfaceSettings(
+                                proxyMode = ProxySurfaceMode.HTTP,
                                 http = ProxyInboundSettings(enabled = true, host = "127.0.0.1", port = 10809),
                                 auth =
                                     LocalAuthSettings(
@@ -284,6 +288,7 @@ class RuntimeConfigAssemblerTest {
                     ExpertSettings(
                         localSurfaces =
                             LocalSurfaceSettings(
+                                proxyMode = ProxySurfaceMode.HTTP,
                                 http = ProxyInboundSettings(enabled = true, host = "127.0.0.1", port = 10809),
                             ),
                     ),
@@ -304,6 +309,7 @@ class RuntimeConfigAssemblerTest {
                     ExpertSettings(
                         localSurfaces =
                             LocalSurfaceSettings(
+                                proxyMode = ProxySurfaceMode.HTTP,
                                 http = ProxyInboundSettings(enabled = true, host = "127.0.0.1", port = 10809),
                                 auth =
                                     LocalAuthSettings(
@@ -333,7 +339,9 @@ class RuntimeConfigAssemblerTest {
                     ExpertSettings(
                         localSurfaces =
                             LocalSurfaceSettings(
+                                proxyMode = ProxySurfaceMode.HTTP,
                                 allowLanAccess = true,
+                                lanProxyMode = ProxySurfaceMode.HTTP,
                                 http = ProxyInboundSettings(enabled = true, host = "127.0.0.1", port = 10809),
                             ),
                     ),
@@ -343,8 +351,32 @@ class RuntimeConfigAssemblerTest {
         val inbounds = config["inbounds"]!!.jsonArray
         val listens = inbounds.map { inbound -> inbound.jsonObject["listen"]!!.jsonPrimitive.content }
 
-        assertEquals(1, inbounds.size)
+        assertEquals(2, inbounds.size)
         assertTrue("192.168.1.23" in listens)
+    }
+
+    @Test
+    fun `all proxy surface mode emits mixed inbound`() {
+        val settings =
+            Settings(
+                traffic = com.foxhole.beta.core.model.TrafficSettings(mode = TrafficMode.PROXY),
+                expert =
+                    ExpertSettings(
+                        localSurfaces =
+                            LocalSurfaceSettings(
+                                proxyMode = ProxySurfaceMode.ALL,
+                                mixed = ProxyInboundSettings(enabled = true, host = "127.0.0.1", port = 10810),
+                            ),
+                    ),
+            )
+
+        val config = parse(assembler.assemble(baseConfigWithRules("profile.example"), settings, null))
+        val inbound = config["inbounds"]!!.jsonArray.single().jsonObject
+
+        assertEquals("mixed", inbound["type"]!!.jsonPrimitive.content)
+        assertEquals("mixed-in", inbound["tag"]!!.jsonPrimitive.content)
+        assertEquals("10810", inbound["listen_port"]!!.jsonPrimitive.content)
+        assertFalse(inbound["listen_port"]!!.jsonPrimitive.isString)
     }
 
     @Test
@@ -375,6 +407,7 @@ class RuntimeConfigAssemblerTest {
                     ExpertSettings(
                         localSurfaces =
                             LocalSurfaceSettings(
+                                proxyMode = ProxySurfaceMode.HTTP,
                                 http = ProxyInboundSettings(enabled = true, host = "127.0.0.1", port = 10809),
                                 auth =
                                     LocalAuthSettings(
@@ -457,6 +490,7 @@ class RuntimeConfigAssemblerTest {
                     ExpertSettings(
                         localSurfaces =
                             LocalSurfaceSettings(
+                                proxyMode = ProxySurfaceMode.HTTP,
                                 http = ProxyInboundSettings(enabled = true, host = "127.0.0.1", port = 10809),
                                 auth =
                                     LocalAuthSettings(
@@ -489,7 +523,7 @@ class RuntimeConfigAssemblerTest {
     }
 
     @Test
-    fun `exclude mode writes exclude package list into tun inbound`() {
+    fun `exclude mode writes selected app direct route rule`() {
         val settings =
             Settings(
                 expert =
@@ -501,9 +535,121 @@ class RuntimeConfigAssemblerTest {
 
         val config = parse(assembler.assemble(baseConfigWithRules("profile.example"), settings, null))
         val tunInbound = config["inbounds"]!!.jsonArray.first().jsonObject
+        val firstRule = config["route"]!!.jsonObject["rules"]!!.jsonArray.first().jsonObject
 
-        assertEquals("com.bank.app", tunInbound["exclude_package"]!!.jsonArray[0].jsonPrimitive.content)
+        assertEquals("com.bank.app", firstRule["package_name"]!!.jsonArray[0].jsonPrimitive.content)
+        assertEquals("direct", firstRule["outbound"]!!.jsonPrimitive.content)
         assertFalse(tunInbound.containsKey("include_package"))
+        assertFalse(tunInbound.containsKey("exclude_package"))
+    }
+
+    @Test
+    fun `blocked package rules are ordered before selected app rules and honor block toggle`() {
+        val settings =
+            Settings(
+                expert =
+                    ExpertSettings(
+                        perAppRoutingMode = PerAppRoutingMode.INCLUDE_SELECTED_APPS,
+                        selectedPackages = listOf("com.example.selected"),
+                        blockedPackages = listOf("com.example.blocked"),
+                        blockedPackagesEnabled = true,
+                    ),
+            )
+
+        val config = parse(assembler.assemble(baseConfigWithRules("profile.example"), settings, null))
+        val rules = config["route"]!!.jsonObject["rules"]!!.jsonArray
+        val blockRule = rules[0].jsonObject
+        val selectedRule = rules[1].jsonObject
+
+        assertEquals("com.example.blocked", blockRule["package_name"]!!.jsonArray[0].jsonPrimitive.content)
+        assertEquals("block", blockRule["outbound"]!!.jsonPrimitive.content)
+        assertEquals("com.example.selected", selectedRule["package_name"]!!.jsonArray[0].jsonPrimitive.content)
+        assertEquals("proxy", selectedRule["outbound"]!!.jsonPrimitive.content)
+
+        val disabled =
+            parse(
+                assembler.assemble(
+                    baseConfigWithRules("profile.example"),
+                    settings.copy(expert = settings.expert.copy(blockedPackagesEnabled = false)),
+                    null,
+                ),
+            )
+        val disabledRules = disabled["route"]!!.jsonObject["rules"]!!.jsonArray
+        assertTrue(disabledRules.none { rule -> rule.jsonObject["outbound"]?.jsonPrimitive?.content == "block" })
+    }
+
+    @Test
+    fun `site rules map chips to sing-box fields and selected managed sites follow global mode`() {
+        val preset =
+            RoutingPreset(
+                id = 11,
+                name = "sites",
+                source = RoutingPresetSource.LOCAL,
+                overrideMode = RoutingPresetOverrideMode.RESPECT_PROFILE,
+                enabled = true,
+                updatedAt = 1,
+                rules =
+                    listOf(
+                        RoutingRule(
+                            id = 1,
+                            presetId = 11,
+                            name = "FoxHole selected site: example.com",
+                            enabled = true,
+                            order = 0,
+                            action = RoutingRuleAction.PROXY,
+                            matchDomains = listOf("example.com", "*.example.org", "kw:video", "re:^stun\\..+"),
+                            matchIpCidrs = listOf("1.2.3.0/24"),
+                            matchPorts = emptyList(),
+                            matchProtocols = emptyList(),
+                            matchNetworks = emptyList(),
+                        ),
+                        RoutingRule(
+                            id = 2,
+                            presetId = 11,
+                            name = "FoxHole blocked site: kw:ads",
+                            enabled = true,
+                            order = 1,
+                            action = RoutingRuleAction.BLOCK,
+                            matchDomains = listOf("kw:ads"),
+                            matchIpCidrs = emptyList(),
+                            matchPorts = emptyList(),
+                            matchProtocols = emptyList(),
+                            matchNetworks = emptyList(),
+                        ),
+                        RoutingRule(
+                            id = 3,
+                            presetId = 11,
+                            name = "custom site",
+                            enabled = true,
+                            order = 2,
+                            action = RoutingRuleAction.PROXY,
+                            matchDomains = listOf("custom.example"),
+                            matchIpCidrs = emptyList(),
+                            matchPorts = emptyList(),
+                            matchProtocols = emptyList(),
+                            matchNetworks = emptyList(),
+                        ),
+                    ),
+            )
+        val settings =
+            Settings(
+                expert = ExpertSettings(siteRoutingAction = RoutingRuleAction.DIRECT),
+            )
+
+        val config = parse(assembler.assemble(baseConfigWithRules("profile.example"), settings, preset))
+        val rules = config["route"]!!.jsonObject["rules"]!!.jsonArray.map { it.jsonObject }
+        val selectedRule = rules.first { it.stringArray("domain").contains("example.com") }
+        val blockedRule = rules.first { it.stringArray("domain_keyword").contains("ads") }
+        val customRule = rules.first { it.stringArray("domain").contains("custom.example") }
+
+        assertEquals(listOf("example.com"), selectedRule.stringArray("domain"))
+        assertEquals(listOf("example.org"), selectedRule.stringArray("domain_suffix"))
+        assertEquals(listOf("video"), selectedRule.stringArray("domain_keyword"))
+        assertEquals(listOf("^stun\\..+"), selectedRule.stringArray("domain_regex"))
+        assertEquals(listOf("1.2.3.0/24"), selectedRule.stringArray("ip_cidr"))
+        assertEquals("direct", selectedRule["outbound"]!!.jsonPrimitive.content)
+        assertEquals("block", blockedRule["outbound"]!!.jsonPrimitive.content)
+        assertEquals("proxy", customRule["outbound"]!!.jsonPrimitive.content)
     }
 
     @Test
@@ -704,7 +850,7 @@ class RuntimeConfigAssemblerTest {
                             localSurfaces =
                                 LocalSurfaceSettings(
                                     socks = ProxyInboundSettings(enabled = true, port = 10808),
-                                    http = ProxyInboundSettings(enabled = true, port = 10808),
+                                    clashApi = ClashApiSettings(enabled = true, port = 10808),
                                 ),
                         ),
                 ),
@@ -927,4 +1073,10 @@ class RuntimeConfigAssemblerTest {
         assertEquals("dns", rule["protocol"]!!.jsonPrimitive.content)
         assertFalse(rule.containsKey("port"))
     }
+
+    private fun JsonObject.stringArray(key: String): List<String> =
+        this[key]
+            ?.jsonArray
+            ?.map { value -> value.jsonPrimitive.content }
+            .orEmpty()
 }

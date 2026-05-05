@@ -1,7 +1,9 @@
 package com.foxhole.beta.ui
 
 import com.foxhole.beta.core.model.ExpertSettings
+import com.foxhole.beta.core.model.LocalSurfaceSettings
 import com.foxhole.beta.core.model.ProxyInboundSettings
+import com.foxhole.beta.core.model.ProxySurfaceMode
 import com.foxhole.beta.core.model.Settings
 import com.foxhole.beta.core.model.TrafficMode
 import com.foxhole.beta.core.model.TrafficSettings
@@ -22,7 +24,8 @@ class HomeProxySurfaceResolverTest {
                             expert =
                                 ExpertSettings(
                                     localSurfaces =
-                                        com.foxhole.beta.core.model.LocalSurfaceSettings(
+                                        LocalSurfaceSettings(
+                                            proxyMode = ProxySurfaceMode.HTTP,
                                             http = ProxyInboundSettings(enabled = true, port = 10809),
                                         ),
                                 ),
@@ -46,7 +49,7 @@ class HomeProxySurfaceResolverTest {
                             expert =
                                 ExpertSettings(
                                     localSurfaces =
-                                        com.foxhole.beta.core.model.LocalSurfaceSettings(
+                                        LocalSurfaceSettings(
                                             http = ProxyInboundSettings(enabled = true, port = 10809),
                                             allowLanAccess = true,
                                         ),
@@ -69,7 +72,8 @@ class HomeProxySurfaceResolverTest {
                             expert =
                                 ExpertSettings(
                                     localSurfaces =
-                                        com.foxhole.beta.core.model.LocalSurfaceSettings(
+                                        LocalSurfaceSettings(
+                                            lanProxyMode = ProxySurfaceMode.HTTP,
                                             http = ProxyInboundSettings(enabled = true, port = 10809),
                                             allowLanAccess = true,
                                         ),
@@ -84,7 +88,7 @@ class HomeProxySurfaceResolverTest {
     }
 
     @Test
-    fun `resolver keeps surface priority http then socks then mixed`() {
+    fun `resolver follows explicit proxy surface mode`() {
         val surface =
             activeProxySurface(
                 HomeRouteUiState(
@@ -94,7 +98,8 @@ class HomeProxySurfaceResolverTest {
                             expert =
                                 ExpertSettings(
                                     localSurfaces =
-                                        com.foxhole.beta.core.model.LocalSurfaceSettings(
+                                        LocalSurfaceSettings(
+                                            proxyMode = ProxySurfaceMode.ALL,
                                             http = ProxyInboundSettings(enabled = true, port = 10809),
                                             socks = ProxyInboundSettings(enabled = true, port = 10808),
                                             mixed = ProxyInboundSettings(enabled = true, port = 10810),
@@ -102,14 +107,14 @@ class HomeProxySurfaceResolverTest {
                                 ),
                         ),
                 ),
-            )
+        )
 
         assertNotNull(surface)
-        assertEquals("HTTP", surface?.label)
+        assertEquals("ALL", surface?.label)
     }
 
     @Test
-    fun `lan proxy fallback exposes default http surface in proxy mode`() {
+    fun `proxy mode exposes default socks surface`() {
         val surface =
             activeProxySurface(
                 HomeRouteUiState(
@@ -119,7 +124,7 @@ class HomeProxySurfaceResolverTest {
                             expert =
                                 ExpertSettings(
                                     localSurfaces =
-                                        com.foxhole.beta.core.model.LocalSurfaceSettings(
+                                        LocalSurfaceSettings(
                                             allowLanAccess = true,
                                         ),
                                 ),
@@ -128,9 +133,9 @@ class HomeProxySurfaceResolverTest {
             )
 
         assertNotNull(surface)
-        assertEquals("HTTP", surface?.label)
-        assertEquals(10809, surface?.settings?.port)
-        assertEquals(true, surface?.lanOnly)
+        assertEquals("SOCKS5", surface?.label)
+        assertEquals(10808, surface?.settings?.port)
+        assertEquals(false, surface?.lanOnly)
     }
 
     @Test

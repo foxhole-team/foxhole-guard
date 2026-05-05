@@ -1107,6 +1107,24 @@ internal fun routingAppsModeGuidance(mode: PerAppRoutingMode): String =
     }
 
 @Composable
+internal fun simpleAppRoutingModeLabel(mode: PerAppRoutingMode): String =
+    when (mode) {
+        PerAppRoutingMode.EXCLUDE_SELECTED_APPS -> stringResource(R.string.site_action_direct)
+        PerAppRoutingMode.FULL_TUNNEL,
+        PerAppRoutingMode.INCLUDE_SELECTED_APPS,
+        -> stringResource(R.string.site_action_proxy)
+    }
+
+@Composable
+internal fun simpleAppRoutingModeGuidance(mode: PerAppRoutingMode): String =
+    when (mode) {
+        PerAppRoutingMode.EXCLUDE_SELECTED_APPS -> stringResource(R.string.routing_apps_mode_direct_summary)
+        PerAppRoutingMode.FULL_TUNNEL,
+        PerAppRoutingMode.INCLUDE_SELECTED_APPS,
+        -> stringResource(R.string.routing_apps_mode_proxy_summary)
+    }
+
+@Composable
 internal fun profileSourceLabel(profile: Profile): String =
     when (profile.sourceType) {
         ProfileSourceType.SUBSCRIPTION_URL -> stringResource(R.string.profile_source_subscription)
@@ -1121,14 +1139,25 @@ internal fun formatProfileUpdatedAt(value: Long?): String =
 @Composable
 internal fun siteRuleSummary(rule: RoutingRule): String = siteActionLabel(rule.action)
 
+private enum class SiteMaskType {
+    EXACT,
+    SUFFIX,
+    KEYWORD,
+    REGEX,
+    CIDR,
+}
+
 @Composable
 internal fun SiteRuleDialog(
     rule: RoutingRule?,
     onDismiss: () -> Unit,
     onConfirm: (List<String>, RoutingRuleAction) -> Unit,
 ) {
-    var domains by rememberSaveable(rule?.id) { mutableStateOf(rule?.matchDomains?.joinToString("\n").orEmpty()) }
+    val initialToken = remember(rule?.id) { rule?.matchDomains?.firstOrNull() ?: rule?.matchIpCidrs?.firstOrNull()?.let { "cidr:$it" }.orEmpty() }
+    var maskType by rememberSaveable(rule?.id) { mutableStateOf(siteMaskTypeForToken(initialToken)) }
+    var value by rememberSaveable(rule?.id) { mutableStateOf(siteMaskValueForEditor(initialToken)) }
     var action by rememberSaveable(rule?.id) { mutableStateOf(rule?.action ?: RoutingRuleAction.DIRECT) }
+    var maskDialog by rememberSaveable { mutableStateOf(false) }
     var actionDialog by rememberSaveable { mutableStateOf(false) }
 
     AlertDialog(
@@ -1146,11 +1175,21 @@ internal fun SiteRuleDialog(
         },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                FoxholePreferenceCard(
+                    title = stringResource(R.string.site_mask_type_title),
+                    summary = siteMaskExample(maskType),
+                    leadingIcon = Icons.Outlined.Public,
+                    onClick = { maskDialog = true },
+                    trailingContent = {
+                        FoxholeValuePill(siteMaskTypeLabel(maskType))
+                    },
+                )
                 OutlinedTextField(
-                    value = domains,
-                    onValueChange = { domains = it },
-                    label = { Text(stringResource(R.string.match_domains)) },
+                    value = value,
+                    onValueChange = { value = it.trim() },
+                    label = { Text(siteMaskInputLabel(maskType)) },
                     modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
                 )
                 FoxholePreferenceCard(
                     title = stringResource(R.string.action_label),
@@ -1167,11 +1206,7 @@ internal fun SiteRuleDialog(
             FoxholeDialogConfirmButton(
                 onClick = {
                     onConfirm(
-                        domains
-                            .lineSequence()
-                            .map(String::trim)
-                            .filter(String::isNotBlank)
-                            .toList(),
+                        siteMaskToken(maskType, value)?.let(::listOf).orEmpty(),
                         action,
                     )
                 },
@@ -1181,6 +1216,21 @@ internal fun SiteRuleDialog(
             FoxholeDialogDismissButton(onClick = onDismiss)
         },
     )
+
+    if (maskDialog) {
+        ChoiceDialog(
+            title = stringResource(R.string.site_mask_type_title),
+            values = SiteMaskType.entries,
+            selected = maskType,
+            label = { siteMaskTypeLabel(it) },
+            icon = { Icons.Outlined.Public },
+            onDismiss = { maskDialog = false },
+            onSelect = {
+                maskType = it
+                maskDialog = false
+            },
+        )
+    }
 
     if (actionDialog) {
         ChoiceDialog(
@@ -1195,6 +1245,63 @@ internal fun SiteRuleDialog(
                 actionDialog = false
             },
         )
+    }
+}
+
+@Composable
+private fun siteMaskTypeLabel(type: SiteMaskType): String =
+    when (type) {
+        SiteMaskType.EXACT -> stringResource(R.string.site_mask_exact)
+        SiteMaskType.SUFFIX -> stringResource(R.string.site_mask_suffix)
+        SiteMaskType.KEYWORD -> stringResource(R.string.site_mask_keyword)
+        SiteMaskType.REGEX -> stringResource(R.string.site_mask_regex)
+        SiteMaskType.CIDR -> stringResource(R.string.site_mask_cidr)
+    }
+
+@Composable
+private fun siteMaskInputLabel(type: SiteMaskType): String =
+    when (type) {
+        SiteMaskType.CIDR -> stringResource(R.string.match_ip_cidrs)
+        else -> stringResource(R.string.match_domains)
+    }
+
+private fun siteMaskExample(type: SiteMaskType): String =
+    when (type) {
+        SiteMaskType.EXACT -> "example.com"
+        SiteMaskType.SUFFIX -> "*.example.com"
+        SiteMaskType.KEYWORD -> "kw:video"
+        SiteMaskType.REGEX -> "re:^stun\\\\..+"
+        SiteMaskType.CIDR -> "cidr:1.2.3.0/24"
+    }
+
+private fun siteMaskTypeForToken(token: String): SiteMaskType =
+    when {
+        token.startsWith("cidr:") -> SiteMaskType.CIDR
+        token.startsWith("kw:") -> SiteMaskType.KEYWORD
+        token.startsWith("re:") -> SiteMaskType.REGEX
+        token.startsWith("*.") || token.startsWith(".") -> SiteMaskType.SUFFIX
+        else -> SiteMaskType.EXACT
+    }
+
+private fun siteMaskValueForEditor(token: String): String =
+    token
+        .removePrefix("cidr:")
+        .removePrefix("kw:")
+        .removePrefix("re:")
+        .removePrefix("*.")
+        .removePrefix(".")
+
+private fun siteMaskToken(
+    type: SiteMaskType,
+    value: String,
+): String? {
+    val normalized = value.trim().takeIf(String::isNotBlank) ?: return null
+    return when (type) {
+        SiteMaskType.EXACT -> normalized
+        SiteMaskType.SUFFIX -> "*.${normalized.removePrefix("*.").removePrefix(".")}"
+        SiteMaskType.KEYWORD -> "kw:${normalized.removePrefix("kw:")}"
+        SiteMaskType.REGEX -> "re:${normalized.removePrefix("re:")}"
+        SiteMaskType.CIDR -> "cidr:${normalized.removePrefix("cidr:")}"
     }
 }
 

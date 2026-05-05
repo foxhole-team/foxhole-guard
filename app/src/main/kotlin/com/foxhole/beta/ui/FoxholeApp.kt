@@ -415,6 +415,8 @@ fun FoxholeApp(
                         onLocalProxyAuthEnabledChanged = viewModel::onLocalProxyAuthEnabledChanged,
                         onLocalProxyAuthChanged = viewModel::onLocalProxyAuthChanged,
                         onLocalProxyLanAccessChanged = viewModel::onLocalProxyLanAccessChanged,
+                        onProxySurfaceModeSelected = viewModel::onProxySurfaceModeSelected,
+                        onLanProxySurfaceModeSelected = viewModel::onLanProxySurfaceModeSelected,
                         onSocksSurfaceChanged = viewModel::onSocksSurfaceChanged,
                         onHttpSurfaceChanged = viewModel::onHttpSurfaceChanged,
                         onMixedSurfaceChanged = viewModel::onMixedSurfaceChanged,
@@ -457,6 +459,8 @@ fun FoxholeApp(
                         onPerAppRoutingModeSelected = viewModel::onPerAppRoutingModeSelected,
                         onOpenPicker = { navController.navigate(AppRoute.ROUTING_APPS_PICKER) },
                         onSelectedPackagesChanged = viewModel::onSelectedPackagesChanged,
+                        onBlockedPackagesChanged = viewModel::onBlockedPackagesChanged,
+                        onBlockedPackagesEnabledChanged = viewModel::onBlockedPackagesEnabledChanged,
                     )
                 }
                 composable(AppRoute.ROUTING_APPS_PICKER) {
@@ -480,6 +484,7 @@ fun FoxholeApp(
                         state = state,
                         snackbarHostState = snackbarHostState,
                         onNavigateUp = navController::navigateUp,
+                        onSiteRoutingActionSelected = viewModel::onSiteRoutingActionSelected,
                         onSaveSiteRule = viewModel::saveSiteRule,
                         onDeleteRule = viewModel::deleteRule,
                     )

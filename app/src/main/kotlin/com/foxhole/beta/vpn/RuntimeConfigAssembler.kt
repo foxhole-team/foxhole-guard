@@ -8,9 +8,11 @@ import com.foxhole.beta.core.model.LocalAuthSettings
 import com.foxhole.beta.core.model.LocalSurfaceSettings
 import com.foxhole.beta.core.model.PerAppRoutingMode
 import com.foxhole.beta.core.model.ProxyInboundSettings
+import com.foxhole.beta.core.model.ProxySurfaceMode
 import com.foxhole.beta.core.model.RoutingPreset
 import com.foxhole.beta.core.model.RoutingPresetOverrideMode
 import com.foxhole.beta.core.model.RoutingRule
+import com.foxhole.beta.core.model.RoutingRuleAction
 import com.foxhole.beta.core.model.Settings
 import com.foxhole.beta.core.model.TrafficMode
 import com.foxhole.beta.core.model.TrafficSettings
@@ -68,7 +70,7 @@ class RuntimeConfigAssembler(
         val inbounds =
             buildJsonArray {
                 add(patchedTun)
-                buildLocalSurfaceInbounds(settings.expert.localSurfaces).forEach(::add)
+                buildLocalSurfaceInbounds(settings.expert.localSurfaces, includeLocalProxy = false).forEach(::add)
             }
         val runtimeBase = base.withTcpReliabilityOutbounds()
         val patchedDns = patchDns(runtimeBase["dns"]?.jsonObject, settings.traffic, privateDnsMode)
@@ -114,16 +116,13 @@ class RuntimeConfigAssembler(
         activePreset: RoutingPreset?,
     ): String {
         val localSurfaces = settings.expert.localSurfaces
-        require(localSurfaces.socks.enabled || localSurfaces.http.enabled || localSurfaces.mixed.enabled) {
-            "proxy mode requires at least one enabled local proxy surface"
-        }
         val inbounds =
             buildJsonArray {
-                buildLocalSurfaceInbounds(localSurfaces).forEach(::add)
+                buildLocalSurfaceInbounds(localSurfaces, includeLocalProxy = true).forEach(::add)
             }
         val runtimeBase = base.withTcpReliabilityOutbounds()
         val patchedDns = patchDns(runtimeBase["dns"]?.jsonObject, settings.traffic)
-        val patchedRoute = patchProxyRoute(runtimeBase["route"]?.jsonObject, patchedDns, activePreset)
+        val patchedRoute = patchProxyRoute(runtimeBase["route"]?.jsonObject, patchedDns, activePreset, settings.expert)
         val patchedExperimental = patchExperimental(runtimeBase["experimental"]?.jsonObject, localSurfaces)
 
         return json.encodeToString(
@@ -179,32 +178,27 @@ class RuntimeConfigAssembler(
 
     fun validate(expert: ExpertSettings) {
         val enabledPorts =
-            buildMap<Int, String> {
-                addPort(expert.localSurfaces.socks, "SOCKS")
-                addPort(expert.localSurfaces.http, "HTTP")
-                addPort(expert.localSurfaces.mixed, "Mixed")
+            buildMap<String, String> {
+                addPort(expert.localSurfaces.proxySurface(), "Local Proxy")
                 addPort(expert.localSurfaces.clashApi, "Clash API")
                 addPort(expert.localSurfaces.v2RayApi, "V2Ray API")
             }
-        require(enabledPorts.size == enabledPorts.keys.distinct().size) { "enabled local surfaces must not share the same port" }
-        if (expert.perAppRoutingMode != PerAppRoutingMode.FULL_TUNNEL) {
-            require(expert.selectedPackages.isNotEmpty()) { "select at least one application for per-app routing" }
-        }
+        require(enabledPorts.size == enabledPorts.keys.distinct().size) { "enabled local surfaces must not share the same endpoint" }
     }
 
-    private fun MutableMap<Int, String>.addPort(
+    private fun MutableMap<String, String>.addPort(
         surface: ProxyInboundSettings,
         label: String,
+        validateHost: Boolean = true,
     ) {
-        if (!surface.enabled) {
-            return
+        if (validateHost) {
+            validateLocalHost(surface.host, label)
         }
-        validateLocalHost(surface.host, label)
-        val previous = put(surface.port, label)
+        val previous = put("${surface.host}:${surface.port}", label)
         require(previous == null) { "$label port conflicts with $previous" }
     }
 
-    private fun MutableMap<Int, String>.addPort(
+    private fun MutableMap<String, String>.addPort(
         surface: ClashApiSettings,
         label: String,
     ) {
@@ -212,11 +206,11 @@ class RuntimeConfigAssembler(
             return
         }
         validateLocalHost(surface.host, label)
-        val previous = put(surface.port, label)
+        val previous = put("${surface.host}:${surface.port}", label)
         require(previous == null) { "$label port conflicts with $previous" }
     }
 
-    private fun MutableMap<Int, String>.addPort(
+    private fun MutableMap<String, String>.addPort(
         surface: V2RayApiSettings,
         label: String,
     ) {
@@ -224,7 +218,7 @@ class RuntimeConfigAssembler(
             return
         }
         validateLocalHost(surface.host, label)
-        val previous = put(surface.port, label)
+        val previous = put("${surface.host}:${surface.port}", label)
         require(previous == null) { "$label port conflicts with $previous" }
     }
 
@@ -268,17 +262,6 @@ class RuntimeConfigAssembler(
             if (expert.sniff) {
                 put("sniff", true)
                 put("sniff_override_destination", !expert.routeOnly)
-            }
-            when (expert.perAppRoutingMode) {
-                PerAppRoutingMode.FULL_TUNNEL -> Unit
-                PerAppRoutingMode.INCLUDE_SELECTED_APPS ->
-                    putJsonArray("include_package") {
-                        expert.selectedPackages.forEach { add(JsonPrimitive(it)) }
-                    }
-                PerAppRoutingMode.EXCLUDE_SELECTED_APPS ->
-                    putJsonArray("exclude_package") {
-                        expert.selectedPackages.forEach { add(JsonPrimitive(it)) }
-                    }
             }
         }
 
@@ -383,10 +366,12 @@ class RuntimeConfigAssembler(
                 ?.takeIf { it.enabled }
                 ?.rules
                 ?.filter { it.enabled }
-                ?.map(::toRouteRule)
+                ?.map { rule -> toRouteRule(rule, expert.siteRoutingAction) }
                 .orEmpty()
+        val appRules = buildAppRouteRules(expert)
         val combinedRules =
             buildJsonArray {
+                appRules.forEach(::add)
                 if (expert.sniff) {
                     add(sniffRule())
                 }
@@ -413,7 +398,7 @@ class RuntimeConfigAssembler(
                 }
             }
             put("rules", combinedRules)
-            source["final"]?.let { put("final", it) } ?: put("final", "proxy")
+            put("final", tunnelFinalOutbound(expert, source))
             resolverForRoute(dns, source)?.let { put("default_domain_resolver", it) }
             source["auto_detect_interface"]?.let { put("auto_detect_interface", it) } ?: put("auto_detect_interface", true)
         }
@@ -423,6 +408,7 @@ class RuntimeConfigAssembler(
         existing: JsonObject?,
         dns: JsonObject,
         activePreset: RoutingPreset?,
+        expert: ExpertSettings,
     ): JsonObject {
         val source = existing ?: buildJsonObject {}
         val preserveSource = existing != null && !isFoxholeManagedRoute(existing)
@@ -436,10 +422,12 @@ class RuntimeConfigAssembler(
                 ?.takeIf { it.enabled }
                 ?.rules
                 ?.filter { it.enabled }
-                ?.map(::toRouteRule)
+                ?.map { rule -> toRouteRule(rule, expert.siteRoutingAction) }
                 .orEmpty()
+        val appRules = buildAppRouteRules(expert)
         val combinedRules =
             buildJsonArray {
+                appRules.forEach(::add)
                 if (activePreset?.enabled == true && activePreset.overrideMode == RoutingPresetOverrideMode.FORCE_LOCAL) {
                     presetRules.forEach(::add)
                 } else {
@@ -493,78 +481,36 @@ class RuntimeConfigAssembler(
             ?.mapNotNull { server -> server.jsonObject["tag"]?.jsonPrimitive?.contentOrNull }
             .orEmpty()
 
-    private fun buildLocalSurfaceInbounds(localSurfaces: LocalSurfaceSettings): List<JsonObject> =
-        buildList {
-            val lanListenAddress = localSurfaces.currentLanListenAddressOrNull()
-            if (!hasEnabledProxySurface(localSurfaces) && localSurfaces.allowLanAccess) {
-                lanListenAddress?.let { lanHost ->
-                    add(
-                        proxyInbound(
-                            type = "http",
-                            tag = "http-in-lan",
-                            listenHost = lanHost,
-                            port = localSurfaces.http.port,
-                            auth = localSurfaces.auth,
-                        ),
-                    )
-                }
-                return@buildList
-            }
-            if (localSurfaces.socks.enabled) {
-                addAll(
-                    proxyInbounds(
-                        type = "socks",
-                        tag = "socks-in",
-                        surface = localSurfaces.socks,
-                        auth = localSurfaces.auth,
-                        lanListenAddress = lanListenAddress,
-                        lanOnly = localSurfaces.allowLanAccess,
-                    ),
-                )
-            }
-            if (localSurfaces.http.enabled) {
-                addAll(
-                    proxyInbounds(
-                        type = "http",
-                        tag = "http-in",
-                        surface = localSurfaces.http,
-                        auth = localSurfaces.auth,
-                        lanListenAddress = lanListenAddress,
-                        lanOnly = localSurfaces.allowLanAccess,
-                    ),
-                )
-            }
-            if (localSurfaces.mixed.enabled) {
-                addAll(
-                    proxyInbounds(
-                        type = "mixed",
-                        tag = "mixed-in",
-                        surface = localSurfaces.mixed,
-                        auth = localSurfaces.auth,
-                        lanListenAddress = lanListenAddress,
-                        lanOnly = localSurfaces.allowLanAccess,
-                    ),
-                )
-            }
-        }
-
-    private fun proxyInbounds(
-        type: String,
-        tag: String,
-        surface: ProxyInboundSettings,
-        auth: LocalAuthSettings,
-        lanListenAddress: String?,
-        lanOnly: Boolean,
+    private fun buildLocalSurfaceInbounds(
+        localSurfaces: LocalSurfaceSettings,
+        includeLocalProxy: Boolean,
     ): List<JsonObject> =
         buildList {
-            if (!lanOnly) {
-                add(proxyInbound(type = type, tag = tag, listenHost = surface.host, port = surface.port, auth = auth))
+            val lanListenAddress = localSurfaces.currentLanListenAddressOrNull()
+            if (includeLocalProxy) {
+                val localSurface = localSurfaces.proxySurface()
+                add(
+                    proxyInbound(
+                        type = localSurfaces.proxyMode.inboundType,
+                        tag = "${localSurfaces.proxyMode.inboundTag}-in",
+                        listenHost = localSurface.host,
+                        port = localSurface.port,
+                        auth = localSurfaces.auth,
+                    ),
+                )
             }
-            lanListenAddress
-                ?.takeIf { it != surface.host || lanOnly }
-                ?.let { lanHost ->
-                    add(proxyInbound(type = type, tag = "$tag-lan", listenHost = lanHost, port = surface.port, auth = auth))
-                }
+            lanListenAddress?.let { lanHost ->
+                val lanSurface = localSurfaces.lanProxySurface()
+                add(
+                    proxyInbound(
+                        type = localSurfaces.lanProxyMode.inboundType,
+                        tag = "${localSurfaces.lanProxyMode.inboundTag}-in-lan",
+                        listenHost = lanHost,
+                        port = lanSurface.port,
+                        auth = localSurfaces.auth,
+                    ),
+                )
+            }
         }
 
     private fun proxyInbound(
@@ -609,11 +555,57 @@ class RuntimeConfigAssembler(
             }
         }
 
-    private fun toRouteRule(rule: RoutingRule): JsonObject =
+    private fun buildAppRouteRules(expert: ExpertSettings): List<JsonObject> =
+        buildList {
+            if (expert.blockedPackagesEnabled && expert.blockedPackages.isNotEmpty()) {
+                add(packageRouteRule(expert.blockedPackages, RoutingRuleAction.BLOCK))
+            }
+            if (expert.selectedPackages.isNotEmpty()) {
+                when (expert.perAppRoutingMode) {
+                    PerAppRoutingMode.FULL_TUNNEL -> Unit
+                    PerAppRoutingMode.INCLUDE_SELECTED_APPS ->
+                        add(packageRouteRule(expert.selectedPackages, RoutingRuleAction.PROXY))
+                    PerAppRoutingMode.EXCLUDE_SELECTED_APPS ->
+                        add(packageRouteRule(expert.selectedPackages, RoutingRuleAction.DIRECT))
+                }
+            }
+        }
+
+    private fun packageRouteRule(
+        packageNames: List<String>,
+        action: RoutingRuleAction,
+    ): JsonObject =
+        buildJsonObject {
+            putJsonArray("package_name") {
+                packageNames.distinct().sorted().forEach { add(JsonPrimitive(it)) }
+            }
+            put("action", "route")
+            put("outbound", action.outboundTag)
+        }
+
+    private fun tunnelFinalOutbound(
+        expert: ExpertSettings,
+        source: JsonObject,
+    ): String =
+        when (expert.perAppRoutingMode) {
+            PerAppRoutingMode.INCLUDE_SELECTED_APPS -> "direct"
+            PerAppRoutingMode.FULL_TUNNEL,
+            PerAppRoutingMode.EXCLUDE_SELECTED_APPS,
+            -> source["final"]?.jsonPrimitive?.contentOrNull ?: "proxy"
+        }
+
+    private fun toRouteRule(
+        rule: RoutingRule,
+        siteRoutingAction: RoutingRuleAction,
+    ): JsonObject =
         buildJsonObject {
             if (rule.matchDomains.isNotEmpty()) {
-                val exact = rule.matchDomains.filterNot { it.startsWith("*.") || it.startsWith(".") }
+                val exact = rule.matchDomains.filterNot {
+                    it.startsWith("*.") || it.startsWith(".") || it.startsWith(SITE_KEYWORD_PREFIX) || it.startsWith(SITE_REGEX_PREFIX)
+                }
                 val suffix = rule.matchDomains.filter { it.startsWith("*.") || it.startsWith(".") }.map { it.removePrefix("*.").removePrefix(".") }
+                val keywords = rule.matchDomains.filter { it.startsWith(SITE_KEYWORD_PREFIX) }.map { it.removePrefix(SITE_KEYWORD_PREFIX) }
+                val regexes = rule.matchDomains.filter { it.startsWith(SITE_REGEX_PREFIX) }.map { it.removePrefix(SITE_REGEX_PREFIX) }
                 if (exact.isNotEmpty()) {
                     putJsonArray("domain") {
                         exact.forEach { add(JsonPrimitive(it)) }
@@ -622,6 +614,16 @@ class RuntimeConfigAssembler(
                 if (suffix.isNotEmpty()) {
                     putJsonArray("domain_suffix") {
                         suffix.forEach { add(JsonPrimitive(it)) }
+                    }
+                }
+                if (keywords.isNotEmpty()) {
+                    putJsonArray("domain_keyword") {
+                        keywords.forEach { add(JsonPrimitive(it)) }
+                    }
+                }
+                if (regexes.isNotEmpty()) {
+                    putJsonArray("domain_regex") {
+                        regexes.forEach { add(JsonPrimitive(it)) }
                     }
                 }
             }
@@ -662,7 +664,7 @@ class RuntimeConfigAssembler(
                 }
             }
             put("action", "route")
-            put("outbound", rule.action.outboundTag)
+            put("outbound", rule.runtimeAction(siteRoutingAction).outboundTag)
         }
 
     private fun normalizeRoutePorts(matchPorts: List<String>): NormalizedRoutePort {
@@ -697,8 +699,35 @@ class RuntimeConfigAssembler(
     private fun LocalSurfaceSettings.currentLanListenAddressOrNull(): String? =
         lanProxyAddressProvider.currentWifiIpv4Address()?.takeIf { allowLanAccess }
 
-    private fun hasEnabledProxySurface(localSurfaces: LocalSurfaceSettings): Boolean =
-        localSurfaces.socks.enabled || localSurfaces.http.enabled || localSurfaces.mixed.enabled
+    private fun LocalSurfaceSettings.proxySurface(): ProxyInboundSettings =
+        when (proxyMode) {
+            ProxySurfaceMode.SOCKS5 -> socks
+            ProxySurfaceMode.HTTP -> http
+            ProxySurfaceMode.ALL -> mixed
+        }
+
+    private fun LocalSurfaceSettings.lanProxySurface(): ProxyInboundSettings =
+        when (lanProxyMode) {
+            ProxySurfaceMode.SOCKS5 -> socks
+            ProxySurfaceMode.HTTP -> http
+            ProxySurfaceMode.ALL -> mixed
+        }
+
+    private val ProxySurfaceMode.inboundType: String
+        get() =
+            when (this) {
+                ProxySurfaceMode.SOCKS5 -> "socks"
+                ProxySurfaceMode.HTTP -> "http"
+                ProxySurfaceMode.ALL -> "mixed"
+            }
+
+    private val ProxySurfaceMode.inboundTag: String
+        get() =
+            when (this) {
+                ProxySurfaceMode.SOCKS5 -> "socks"
+                ProxySurfaceMode.HTTP -> "http"
+                ProxySurfaceMode.ALL -> "mixed"
+            }
 
     private fun JsonObject.hasDnsServers(): Boolean =
         this["servers"]?.jsonArray?.isNotEmpty() == true
@@ -865,6 +894,10 @@ class RuntimeConfigAssembler(
                 rule["outbound"]?.jsonPrimitive?.contentOrNull == "direct" &&
                 rule["ip_is_private"]?.jsonPrimitive?.contentOrNull == "true" ->
                 rule.keys.all { it in setOf("ip_is_private", "action", "outbound") }
+            action == "route" &&
+                rule["outbound"]?.jsonPrimitive?.contentOrNull in setOf("proxy", "direct", "block") &&
+                rule["package_name"] != null ->
+                rule.keys.all { it in setOf("package_name", "action", "outbound") }
             else -> false
         }
     }
@@ -897,6 +930,8 @@ class RuntimeConfigAssembler(
         const val FOXHOLE_DOH_ADDRESS = "https://1.1.1.1/dns-query"
         const val MOBILE_TCP_KEEP_ALIVE = "30s"
         const val MOBILE_TCP_KEEP_ALIVE_INTERVAL = "15s"
+        const val SITE_KEYWORD_PREFIX = "kw:"
+        const val SITE_REGEX_PREFIX = "re:"
         val TCP_RELIABILITY_OUTBOUND_TYPES = setOf("vless", "trojan", "vmess", "shadowsocks", "http", "socks")
         val TCP_RELIABILITY_TRANSPORT_TYPES = setOf("tcp", "ws", "grpc", "http", "httpupgrade")
         val PORT_RANGE_REGEX = Regex("""\d{1,5}-\d{1,5}""")
@@ -907,5 +942,22 @@ private data class NormalizedRoutePort(
     val ports: List<Int>,
     val portRanges: List<String>,
 )
+
+private fun RoutingRule.runtimeAction(siteRoutingAction: RoutingRuleAction): RoutingRuleAction =
+    if (isManagedSelectedSiteRule()) {
+        when (siteRoutingAction) {
+            RoutingRuleAction.PROXY,
+            RoutingRuleAction.DIRECT,
+            -> siteRoutingAction
+            RoutingRuleAction.BLOCK -> RoutingRuleAction.PROXY
+        }
+    } else {
+        action
+    }
+
+private fun RoutingRule.isManagedSelectedSiteRule(): Boolean =
+    name.startsWith(MANAGED_SELECTED_SITE_RULE_PREFIX)
+
+private const val MANAGED_SELECTED_SITE_RULE_PREFIX = "FoxHole selected site:"
 
 private fun JsonArray?.orEmpty(): List<JsonElement> = this?.toList().orEmpty()

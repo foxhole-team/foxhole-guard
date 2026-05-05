@@ -105,8 +105,6 @@ internal enum class HomePrimaryAction {
 
 internal enum class HomeModeOption {
     TUNNEL,
-    INCLUDE_SELECTED_APPS,
-    EXCLUDE_SELECTED_APPS,
     PROXY,
 }
 
@@ -218,7 +216,7 @@ internal fun resolveHomeDashboardProxyModel(
         modeOption = currentHomeModeOption(state),
         proxySurface = proxySurface,
         lanProxySurface = lanProxySurface,
-        dashboardProxySurface = proxySurface ?: lanProxySurface,
+        dashboardProxySurface = null,
         lanProxyActive = wifiLanAddress != null && lanProxySurface != null,
     )
 }
@@ -507,14 +505,14 @@ internal fun activeProxySurface(state: HomeRouteUiState): HomeProxySurface? {
     if (state.settings.traffic.mode != TrafficMode.PROXY) {
         return null
     }
-    return preferredDashboardProxySurface(state.settings.expert.localSurfaces)
+    return state.settings.expert.localSurfaces.proxySurface()
 }
 
 internal fun activeLanProxySurface(state: HomeRouteUiState): HomeProxySurface? {
     if (!state.settings.expert.localSurfaces.allowLanAccess) {
         return null
     }
-    return preferredDashboardProxySurface(state.settings.expert.localSurfaces)
+    return state.settings.expert.localSurfaces.lanProxySurface()
 }
 
 internal fun resolveHomeDashboardProtocolPresentation(
@@ -638,23 +636,19 @@ internal fun resolveDashboardSelectedLatencyDown(state: HomeRouteUiState): Boole
 internal fun resolveDashboardSelectedLatencyUnavailable(state: HomeRouteUiState): Boolean =
     resolveDashboardLatencyPresentation(state).isUnavailable
 
-private fun preferredDashboardProxySurface(
-    surfaces: LocalSurfaceSettings,
-): HomeProxySurface? {
-    return listOf(
-        HomeProxySurface(label = "HTTP", settings = surfaces.http),
-        HomeProxySurface(label = "SOCKS5", settings = surfaces.socks),
-        HomeProxySurface(label = "Mixed", settings = surfaces.mixed),
-    ).firstOrNull { it.settings.enabled } ?: surfaces
-        .takeIf { it.allowLanAccess }
-        ?.let {
-            HomeProxySurface(
-                label = "HTTP",
-                settings = it.http,
-                lanOnly = true,
-            )
-        }
-}
+private fun LocalSurfaceSettings.proxySurface(): HomeProxySurface =
+    when (proxyMode) {
+        com.foxhole.beta.core.model.ProxySurfaceMode.SOCKS5 -> HomeProxySurface(label = "SOCKS5", settings = socks)
+        com.foxhole.beta.core.model.ProxySurfaceMode.HTTP -> HomeProxySurface(label = "HTTP", settings = http)
+        com.foxhole.beta.core.model.ProxySurfaceMode.ALL -> HomeProxySurface(label = "ALL", settings = mixed)
+    }
+
+private fun LocalSurfaceSettings.lanProxySurface(): HomeProxySurface =
+    when (lanProxyMode) {
+        com.foxhole.beta.core.model.ProxySurfaceMode.SOCKS5 -> HomeProxySurface(label = "SOCKS5", settings = socks, lanOnly = true)
+        com.foxhole.beta.core.model.ProxySurfaceMode.HTTP -> HomeProxySurface(label = "HTTP", settings = http, lanOnly = true)
+        com.foxhole.beta.core.model.ProxySurfaceMode.ALL -> HomeProxySurface(label = "ALL", settings = mixed, lanOnly = true)
+    }
 
 internal fun homePrimaryAction(state: HomeRouteUiState): HomePrimaryAction = homePrimaryAction(state.connection.state, state.reconnectRequired)
 
@@ -704,24 +698,21 @@ internal fun countryEmoji(countryCode: String?): String {
 internal fun currentHomeModeOption(state: HomeRouteUiState): HomeModeOption =
     when {
         state.settings.traffic.mode == TrafficMode.PROXY -> HomeModeOption.PROXY
-        state.settings.expert.perAppRoutingMode == PerAppRoutingMode.INCLUDE_SELECTED_APPS -> HomeModeOption.INCLUDE_SELECTED_APPS
-        state.settings.expert.perAppRoutingMode == PerAppRoutingMode.EXCLUDE_SELECTED_APPS -> HomeModeOption.EXCLUDE_SELECTED_APPS
         else -> HomeModeOption.TUNNEL
     }
 
-internal fun homeModeOptionIcon(option: HomeModeOption): ImageVector =
+internal fun homeModeOptionIcon(
+    option: HomeModeOption,
+    splitActive: Boolean = false,
+): ImageVector =
     when (option) {
-        HomeModeOption.TUNNEL -> Icons.Outlined.Shield
-        HomeModeOption.INCLUDE_SELECTED_APPS -> Icons.Outlined.Apps
-        HomeModeOption.EXCLUDE_SELECTED_APPS -> Icons.Outlined.ArrowDownward
+        HomeModeOption.TUNNEL -> if (splitActive) Icons.Outlined.Apps else Icons.Outlined.Shield
         HomeModeOption.PROXY -> Icons.Outlined.SwapVert
     }
 
 internal fun homeModeChipLabel(option: HomeModeOption): String =
     when (option) {
         HomeModeOption.TUNNEL -> "TUN"
-        HomeModeOption.INCLUDE_SELECTED_APPS -> "SELECT"
-        HomeModeOption.EXCLUDE_SELECTED_APPS -> "EXCLUDE"
         HomeModeOption.PROXY -> "PROXY"
     }
 
@@ -729,8 +720,6 @@ internal fun homeModeChipLabel(option: HomeModeOption): String =
 internal fun homeModeMenuLabel(option: HomeModeOption): String =
     when (option) {
         HomeModeOption.TUNNEL -> stringResource(R.string.per_app_mode_full_tunnel)
-        HomeModeOption.INCLUDE_SELECTED_APPS -> stringResource(R.string.per_app_mode_include_selected)
-        HomeModeOption.EXCLUDE_SELECTED_APPS -> stringResource(R.string.per_app_mode_exclude_selected)
         HomeModeOption.PROXY -> stringResource(R.string.traffic_mode_proxy)
     }
 
@@ -742,15 +731,6 @@ internal fun applyHomeModeSelection(
     when (mode) {
         HomeModeOption.TUNNEL -> {
             onTrafficModeSelected(TrafficMode.TUNNEL)
-            onPerAppRoutingModeSelected(PerAppRoutingMode.FULL_TUNNEL)
-        }
-        HomeModeOption.INCLUDE_SELECTED_APPS -> {
-            onTrafficModeSelected(TrafficMode.TUNNEL)
-            onPerAppRoutingModeSelected(PerAppRoutingMode.INCLUDE_SELECTED_APPS)
-        }
-        HomeModeOption.EXCLUDE_SELECTED_APPS -> {
-            onTrafficModeSelected(TrafficMode.TUNNEL)
-            onPerAppRoutingModeSelected(PerAppRoutingMode.EXCLUDE_SELECTED_APPS)
         }
         HomeModeOption.PROXY -> onTrafficModeSelected(TrafficMode.PROXY)
     }

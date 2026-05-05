@@ -21,6 +21,8 @@ import com.foxhole.beta.core.model.PerAppRoutingMode
 import com.foxhole.beta.core.model.ProfileTrafficTotal
 import com.foxhole.beta.core.model.ProtocolHint
 import com.foxhole.beta.core.model.ProxyInboundSettings
+import com.foxhole.beta.core.model.ProxySurfaceMode
+import com.foxhole.beta.core.model.RoutingRuleAction
 import com.foxhole.beta.core.model.Settings
 import com.foxhole.beta.core.model.SETTINGS_SCHEMA_VERSION
 import com.foxhole.beta.core.model.SMART_START_PROTOCOL_TIMEOUT_MIN_SECONDS
@@ -538,14 +540,11 @@ class SettingsRepository(
             current.copy(
                 connection =
                     current.connection.copy(
-                        stealthModeEnabled =
-                            current.connection.stealthModeEnabled && value == PerAppRoutingMode.FULL_TUNNEL,
+                        stealthModeEnabled = current.connection.stealthModeEnabled && value == PerAppRoutingMode.FULL_TUNNEL,
                     ),
                 expert =
                     current.expert.copy(
                         perAppRoutingMode = value,
-                        selectedPackages =
-                            current.expert.selectedPackages.takeIf { value != PerAppRoutingMode.FULL_TUNNEL } ?: emptyList(),
                     ),
             )
         }
@@ -561,6 +560,57 @@ class SettingsRepository(
                                 .distinct()
                                 .sorted(),
                     ),
+            )
+        }
+
+    suspend fun updateBlockedPackages(value: List<String>) =
+        update {
+            it.copy(
+                connection = it.connection.copy(stealthModeEnabled = false),
+                expert =
+                    it.expert.copy(
+                        blockedPackages =
+                            value
+                                .filterNot { packageName -> packageName == BuildConfig.APPLICATION_ID }
+                                .distinct()
+                                .sorted(),
+                    ),
+            )
+        }
+
+    suspend fun updateBlockedPackagesEnabled(value: Boolean) =
+        update {
+            it.copy(
+                connection = it.connection.copy(stealthModeEnabled = it.connection.stealthModeEnabled && !value),
+                expert = it.expert.copy(blockedPackagesEnabled = value),
+            )
+        }
+
+    suspend fun updateSiteRoutingAction(value: RoutingRuleAction) =
+        update {
+            it.copy(
+                connection = it.connection.copy(stealthModeEnabled = it.connection.stealthModeEnabled && value == RoutingRuleAction.PROXY),
+                expert = it.expert.copy(siteRoutingAction = value.coerceSiteRoutingAction()),
+            )
+        }
+
+    suspend fun updateProxySurfaceMode(value: ProxySurfaceMode) =
+        update {
+            it.copy(
+                connection = it.connection.copy(stealthModeEnabled = false),
+                expert =
+                    it.expert.copy(
+                        localSurfaces =
+                            it.expert.localSurfaces.copy(proxyMode = value).withEnabledProxyMode(value),
+                    ),
+            )
+        }
+
+    suspend fun updateLanProxySurfaceMode(value: ProxySurfaceMode) =
+        update {
+            it.copy(
+                connection = it.connection.copy(stealthModeEnabled = false),
+                expert = it.expert.copy(localSurfaces = it.expert.localSurfaces.copy(lanProxyMode = value)),
             )
         }
 
@@ -882,6 +932,7 @@ class SettingsRepository(
                     expert.normalized(
                         stealthModeEnabled = connection.stealthModeEnabled,
                         resetScreenshotBlocking = resetDefaults,
+                        storedSchemaVersion = schemaVersion,
                     ),
                 smartProfilePreferences = normalizeSmartProfilePreferences(smartProfilePreferences),
                 profileTrafficTotals =
@@ -897,20 +948,26 @@ class SettingsRepository(
     private fun ExpertSettings.normalized(
         stealthModeEnabled: Boolean,
         resetScreenshotBlocking: Boolean,
+        storedSchemaVersion: Int,
     ): ExpertSettings {
+        val normalizedSelectedPackages =
+            selectedPackages
+                .filterNot { packageName -> packageName == BuildConfig.APPLICATION_ID }
+                .distinct()
+                .sorted()
+        val normalizedBlockedPackages =
+            blockedPackages
+                .filterNot { packageName -> packageName == BuildConfig.APPLICATION_ID }
+                .distinct()
+                .sorted()
         val normalized =
             copy(
-                selectedPackages =
-                    if (perAppRoutingMode == PerAppRoutingMode.FULL_TUNNEL) {
-                        emptyList()
-                    } else {
-                        selectedPackages
-                            .filterNot { packageName -> packageName == BuildConfig.APPLICATION_ID }
-                            .distinct()
-                            .sorted()
-                    },
+                selectedPackages = normalizedSelectedPackages,
+                blockedPackages = normalizedBlockedPackages,
+                blockedPackagesEnabled = blockedPackagesEnabled && normalizedBlockedPackages.isNotEmpty(),
+                siteRoutingAction = siteRoutingAction.coerceSiteRoutingAction(),
                 blockScreenshots = if (resetScreenshotBlocking) false else blockScreenshots,
-                localSurfaces = localSurfaces.normalized(),
+                localSurfaces = localSurfaces.normalized().migratedProxySurfaceModesIfNeeded(storedSchemaVersion),
                 routeOnly = routeOnly && sniff,
             )
         return if (!stealthModeEnabled) {
@@ -931,6 +988,8 @@ class SettingsRepository(
 
     private fun LocalSurfaceSettings.normalized(): LocalSurfaceSettings =
         copy(
+            proxyMode = proxyMode,
+            lanProxyMode = lanProxyMode,
             socks = socks.normalized(),
             http = http.normalized(),
             mixed = mixed.normalized(),
@@ -944,10 +1003,46 @@ class SettingsRepository(
         if (!enableDefaults) {
             return this
         }
-        if (socks.enabled || http.enabled || mixed.enabled) {
+        return withEnabledProxyMode(proxyMode)
+    }
+
+    private fun LocalSurfaceSettings.withEnabledProxyMode(mode: ProxySurfaceMode): LocalSurfaceSettings =
+        when (mode) {
+            ProxySurfaceMode.SOCKS5 -> copy(
+                proxyMode = mode,
+                socks = socks.copy(enabled = true),
+                http = http.copy(enabled = false),
+                mixed = mixed.copy(enabled = false),
+            )
+            ProxySurfaceMode.HTTP -> copy(
+                proxyMode = mode,
+                socks = socks.copy(enabled = false),
+                http = http.copy(enabled = true),
+                mixed = mixed.copy(enabled = false),
+            )
+            ProxySurfaceMode.ALL -> copy(
+                proxyMode = mode,
+                socks = socks.copy(enabled = false),
+                http = http.copy(enabled = false),
+                mixed = mixed.copy(enabled = true),
+            )
+        }
+
+    private fun LocalSurfaceSettings.migratedProxySurfaceModesIfNeeded(schemaVersion: Int): LocalSurfaceSettings {
+        if (schemaVersion >= SETTINGS_SCHEMA_VERSION) {
             return this
         }
-        return copy(http = http.copy(enabled = true))
+        val migratedMode =
+            when {
+                http.enabled -> ProxySurfaceMode.HTTP
+                socks.enabled -> ProxySurfaceMode.SOCKS5
+                mixed.enabled -> ProxySurfaceMode.ALL
+                else -> proxyMode
+            }
+        return copy(
+            proxyMode = migratedMode,
+            lanProxyMode = migratedMode,
+        ).withEnabledProxyMode(migratedMode)
     }
 
     private fun com.foxhole.beta.core.model.LocalAuthSettings.normalized(): com.foxhole.beta.core.model.LocalAuthSettings =
@@ -1052,6 +1147,14 @@ internal fun Settings.withExpertSettingsVisibility(visible: Boolean): Settings =
 
 internal fun Settings.smartProfilePreference(profileId: Long): SmartProfilePreference? =
     smartProfilePreferences.firstOrNull { preference -> preference.profileId == profileId }
+
+private fun RoutingRuleAction.coerceSiteRoutingAction(): RoutingRuleAction =
+    when (this) {
+        RoutingRuleAction.PROXY,
+        RoutingRuleAction.DIRECT,
+        -> this
+        RoutingRuleAction.BLOCK -> RoutingRuleAction.PROXY
+    }
 
 internal fun SmartProfilePreference.networkMemory(networkFingerprint: String?): SmartProfileNetworkMemory? {
     val normalizedNetworkFingerprint = networkFingerprint?.trim()?.takeIf(String::isNotBlank) ?: return null

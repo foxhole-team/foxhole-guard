@@ -4,6 +4,7 @@ import com.foxhole.beta.core.model.ExpertSettings
 import com.foxhole.beta.core.model.LocalAuthSettings
 import com.foxhole.beta.core.model.LocalSurfaceSettings
 import com.foxhole.beta.core.model.ProxyInboundSettings
+import com.foxhole.beta.core.model.ProxySurfaceMode
 import com.foxhole.beta.core.model.Settings
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -18,6 +19,7 @@ class TrafficModeSupportTest {
                     ExpertSettings(
                         localSurfaces =
                             LocalSurfaceSettings(
+                                proxyMode = ProxySurfaceMode.HTTP,
                                 http = ProxyInboundSettings(enabled = true, port = 10809),
                                 auth =
                                     LocalAuthSettings(

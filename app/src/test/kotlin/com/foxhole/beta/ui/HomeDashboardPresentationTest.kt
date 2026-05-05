@@ -12,6 +12,7 @@ import com.foxhole.beta.core.model.ProfileSourceType
 import com.foxhole.beta.core.model.ProfileTrafficTotal
 import com.foxhole.beta.core.model.ProtocolHint
 import com.foxhole.beta.core.model.ProxyInboundSettings
+import com.foxhole.beta.core.model.ProxySurfaceMode
 import com.foxhole.beta.core.model.Settings
 import com.foxhole.beta.core.model.TrafficMode
 import com.foxhole.beta.core.model.TrafficSettings
@@ -195,6 +196,8 @@ class HomeDashboardPresentationTest {
                     ExpertSettings(
                         localSurfaces =
                             LocalSurfaceSettings(
+                                proxyMode = ProxySurfaceMode.HTTP,
+                                lanProxyMode = ProxySurfaceMode.HTTP,
                                 http = ProxyInboundSettings(enabled = true, port = 18080),
                                 allowLanAccess = true,
                             ),
@@ -204,8 +207,9 @@ class HomeDashboardPresentationTest {
         val model = resolveHomeDashboardProxyModel(HomeRouteUiState(settings = settings), wifiLanAddress = "192.168.1.10")
 
         assertEquals(HomeModeOption.PROXY, model.modeOption)
-        assertEquals("HTTP", model.dashboardProxySurface?.label)
-        assertEquals(18080, model.dashboardProxySurface?.settings?.port)
+        assertEquals("HTTP", model.proxySurface?.label)
+        assertEquals(18080, model.proxySurface?.settings?.port)
+        assertEquals(null, model.dashboardProxySurface)
         assertTrue(model.lanProxyActive)
     }
 
