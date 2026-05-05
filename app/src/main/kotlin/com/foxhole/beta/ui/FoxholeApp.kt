@@ -411,6 +411,7 @@ fun FoxholeApp(
                         onNavigateUp = navController::navigateUp,
                         onAcknowledgeUnsafeWarning = viewModel::acknowledgeUnsafeWarning,
                         onTrafficModeSelected = viewModel::onTrafficModeSelected,
+                        onPerAppRoutingModeSelected = viewModel::onPerAppRoutingModeSelected,
                         onLatencyProbeMethodSelected = viewModel::onLatencyProbeMethodSelected,
                         onTunStackSelected = viewModel::onTunStackSelected,
                         onLocalProxyAuthEnabledChanged = viewModel::onLocalProxyAuthEnabledChanged,
@@ -506,6 +507,7 @@ fun FoxholeApp(
                         onNavigateUp = navController::navigateUp,
                         onSaveSiteRule = viewModel::saveSiteRule,
                         onDeleteRule = viewModel::deleteRule,
+                        onSniffChanged = viewModel::onSniffChanged,
                     )
                 }
                 composable(AppRoute.APPLICATION) {
@@ -535,7 +537,6 @@ fun FoxholeApp(
                         onNavigateUp = navController::navigateUp,
                         onShowExpertSettingsChanged = viewModel::onShowExpertSettingsChanged,
                         onAcknowledgeUnsafeWarning = viewModel::acknowledgeUnsafeWarning,
-                        onSniffChanged = viewModel::onSniffChanged,
                         onRouteOnlyChanged = viewModel::onRouteOnlyChanged,
                         onStrictRouteChanged = viewModel::onStrictRouteChanged,
                         onAllowPrivateOutboundHostsChanged = viewModel::onAllowPrivateOutboundHostsChanged,
@@ -544,8 +545,6 @@ fun FoxholeApp(
                         onDiagnosticsRetentionSelected = viewModel::onDiagnosticsRetentionSelected,
                         onAllowHttpConfigImportsChanged = viewModel::onAllowHttpConfigImportsChanged,
                         onAllowInsecureTlsChanged = viewModel::onAllowInsecureTlsChanged,
-                        onLocalProxyAuthEnabledChanged = viewModel::onLocalProxyAuthEnabledChanged,
-                        onLocalProxyAuthChanged = viewModel::onLocalProxyAuthChanged,
                         onLocalProxyLanAccessChanged = viewModel::onLocalProxyLanAccessChanged,
                         onSocksSurfaceChanged = viewModel::onSocksSurfaceChanged,
                         onHttpSurfaceChanged = viewModel::onHttpSurfaceChanged,

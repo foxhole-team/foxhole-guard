@@ -230,8 +230,12 @@ class RuntimeConfigAssembler(
         require(normalized in LOCAL_HOSTS) { "$label host must stay on a local loopback address" }
     }
 
-    private fun ExpertSettings.runtimeFingerprintSettings(): ExpertSettings =
-        copy(
+    private fun ExpertSettings.runtimeFingerprintSettings(): ExpertSettings {
+        val runtimeSelectedPackages =
+            selectedPackages.takeIf { perAppRoutingMode != PerAppRoutingMode.FULL_TUNNEL }.orEmpty()
+        val runtimeBlockedPackages =
+            blockedPackages.takeIf { blockedPackagesEnabled }.orEmpty()
+        return copy(
             unlockedAt = null,
             warningAcknowledgedAt = null,
             blockScreenshots = false,
@@ -239,7 +243,11 @@ class RuntimeConfigAssembler(
             diagnosticsRetention = DiagnosticsRetention.HOURS_24,
             allowHttpConfigImports = false,
             allowInsecureTls = true,
+            selectedPackages = runtimeSelectedPackages,
+            blockedPackages = runtimeBlockedPackages,
+            blockedPackagesEnabled = runtimeBlockedPackages.isNotEmpty(),
         )
+    }
 
     private fun patchTunInbound(
         tunInbound: JsonObject,

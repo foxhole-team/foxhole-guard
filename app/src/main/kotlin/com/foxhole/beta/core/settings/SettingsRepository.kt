@@ -165,7 +165,7 @@ class SettingsRepository(
                         blockScreenshots = current.expert.blockScreenshots,
                         networkActivityLogging = current.expert.networkActivityLogging,
                         diagnosticsRetention = current.expert.diagnosticsRetention,
-                        smartStartReplayLogging = current.expert.smartStartReplayLogging,
+                        smartStartReplayLogging = current.expert.smartStartReplayLogging && BuildConfig.DEBUG,
                         allowHttpConfigImports = current.expert.allowHttpConfigImports,
                         allowInsecureTls = current.expert.allowInsecureTls,
                     ),
@@ -485,7 +485,7 @@ class SettingsRepository(
         update { it.copy(expert = it.expert.copy(networkActivityLogging = value)) }
 
     suspend fun updateSmartStartReplayLogging(value: Boolean) =
-        update { it.copy(expert = it.expert.copy(smartStartReplayLogging = value)) }
+        update { it.copy(expert = it.expert.copy(smartStartReplayLogging = value && BuildConfig.DEBUG)) }
 
     suspend fun updateDiagnosticsRetention(value: DiagnosticsRetention) =
         update { it.copy(expert = it.expert.copy(diagnosticsRetention = value)) }
@@ -538,14 +538,18 @@ class SettingsRepository(
 
     suspend fun updatePerAppRoutingMode(value: PerAppRoutingMode) =
         update { current ->
+            val nextMode =
+                value.takeUnless {
+                    it != PerAppRoutingMode.FULL_TUNNEL && current.expert.selectedPackages.isEmpty()
+                } ?: PerAppRoutingMode.FULL_TUNNEL
             current.copy(
                 connection =
                     current.connection.copy(
-                        stealthModeEnabled = current.connection.stealthModeEnabled && value == PerAppRoutingMode.FULL_TUNNEL,
+                        stealthModeEnabled = current.connection.stealthModeEnabled && nextMode == PerAppRoutingMode.FULL_TUNNEL,
                     ),
                 expert =
                     current.expert.copy(
-                        perAppRoutingMode = value,
+                        perAppRoutingMode = nextMode,
                     ),
             )
         }
@@ -561,6 +565,9 @@ class SettingsRepository(
                     it.expert.copy(
                         selectedPackages = normalizedSelectedPackages,
                         blockedPackages = it.expert.blockedPackages.filterNot { packageName -> packageName in normalizedSelectedPackages },
+                        perAppRoutingMode =
+                            it.expert.perAppRoutingMode.takeIf { normalizedSelectedPackages.isNotEmpty() }
+                                ?: PerAppRoutingMode.FULL_TUNNEL,
                     ),
             )
         }
@@ -1001,6 +1008,7 @@ class SettingsRepository(
                 blockedPackagesEnabled = blockedPackagesEnabled && normalizedBlockedPackages.isNotEmpty(),
                 siteRoutingAction = siteRoutingAction.coerceSiteRoutingAction(),
                 blockScreenshots = if (resetScreenshotBlocking) false else blockScreenshots,
+                smartStartReplayLogging = smartStartReplayLogging && BuildConfig.DEBUG,
                 localSurfaces = localSurfaces.normalized().migratedProxySurfaceModesIfNeeded(storedSchemaVersion),
                 routeOnly = routeOnly && sniff,
             )
@@ -1013,7 +1021,7 @@ class SettingsRepository(
                 blockScreenshots = normalized.blockScreenshots,
                 networkActivityLogging = normalized.networkActivityLogging,
                 diagnosticsRetention = normalized.diagnosticsRetention,
-                smartStartReplayLogging = normalized.smartStartReplayLogging,
+                smartStartReplayLogging = normalized.smartStartReplayLogging && BuildConfig.DEBUG,
                 allowHttpConfigImports = normalized.allowHttpConfigImports,
                 allowInsecureTls = normalized.allowInsecureTls,
             )

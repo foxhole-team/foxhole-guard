@@ -124,6 +124,7 @@ internal fun SettingsScaffold(
     onNavigateUp: (() -> Unit)?,
     tag: String = "settings_screen",
     actions: @Composable RowScope.() -> Unit = {},
+    bannerPlacement: FoxholeBannerPlacement = FoxholeBannerPlacement.TOP,
     content: androidx.compose.foundation.lazy.LazyListScope.() -> Unit,
 ) {
     FoxholeLazyScaffold(
@@ -132,6 +133,7 @@ internal fun SettingsScaffold(
         onNavigateUp = onNavigateUp,
         actions = actions,
         tag = tag,
+        bannerPlacement = bannerPlacement,
         content = content,
     )
 }
@@ -243,6 +245,7 @@ internal fun <T> DropdownSettingRow(
     summary: String? = null,
     leadingIcon: ImageVector? = null,
     optionIcon: ((T) -> ImageVector)? = null,
+    enabled: Boolean = true,
     summaryMaxLines: Int = 1,
     grouped: Boolean = false,
 ) {
@@ -264,7 +267,7 @@ internal fun <T> DropdownSettingRow(
         value = value,
         summary = summary,
         leadingIcon = leadingIcon,
-        onClick = { onExpandedChange(true) },
+        onClick = if (enabled) ({ onExpandedChange(true) }) else null,
         summaryMaxLines = summaryMaxLines,
         trailingContent = {
             Box(
@@ -274,12 +277,12 @@ internal fun <T> DropdownSettingRow(
                 FoxholeValuePill(
                     value = value,
                     modifier = Modifier.fillMaxWidth(),
-                    expanded = expanded,
-                    onClick = { onExpandedChange(!expanded) },
+                    expanded = expanded && enabled,
+                    onClick = if (enabled) ({ onExpandedChange(!expanded) }) else null,
                     fillContent = true,
                 )
                 FoxholeDropdownMenu(
-                    expanded = expanded,
+                    expanded = expanded && enabled,
                     onDismissRequest = { onExpandedChange(false) },
                     modifier = Modifier.width(menuWidth),
                     popupGap = 0.dp,
@@ -1003,10 +1006,10 @@ internal fun HelpSectionContent(
 internal fun trafficInfoBody(state: SettingsRouteUiState): String =
     buildList {
         add(
-            if (state.settings.traffic.mode == TrafficMode.TUNNEL) {
-                stringResource(R.string.traffic_info_tunnel)
-            } else {
-                stringResource(R.string.traffic_info_proxy)
+            when (currentHomeModeOption(state.settings)) {
+                HomeModeOption.TUNNEL -> stringResource(R.string.traffic_info_tunnel)
+                HomeModeOption.SPLIT -> stringResource(R.string.traffic_info_split)
+                HomeModeOption.PROXY -> stringResource(R.string.traffic_info_proxy)
             },
         )
         if (state.settings.traffic.mode == TrafficMode.PROXY && state.settings.expert.localSurfaces.auth.enabled) {

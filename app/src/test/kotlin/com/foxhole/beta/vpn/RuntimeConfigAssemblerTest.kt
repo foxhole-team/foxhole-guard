@@ -60,11 +60,12 @@ class RuntimeConfigAssemblerTest {
         )
 
         val rules = config["route"]!!.jsonObject["rules"]!!.jsonArray
-        assertEquals(4, rules.size)
-        assertPortDnsHijack(rules[0].jsonObject)
-        assertProtocolDnsHijack(rules[1].jsonObject)
-        assertEquals("profile.example", rules[2].jsonObject["domain"]!!.jsonArray[0].jsonPrimitive.content)
-        assertEquals("local.example", rules[3].jsonObject["domain"]!!.jsonArray[0].jsonPrimitive.content)
+        assertEquals(5, rules.size)
+        assertSniffRule(rules[0].jsonObject)
+        assertPortDnsHijack(rules[1].jsonObject)
+        assertProtocolDnsHijack(rules[2].jsonObject)
+        assertEquals("profile.example", rules[3].jsonObject["domain"]!!.jsonArray[0].jsonPrimitive.content)
+        assertEquals("local.example", rules[4].jsonObject["domain"]!!.jsonArray[0].jsonPrimitive.content)
     }
 
     @Test
@@ -79,10 +80,11 @@ class RuntimeConfigAssemblerTest {
             )
 
         val rules = config["route"]!!.jsonObject["rules"]!!.jsonArray
-        assertEquals(3, rules.size)
-        assertPortDnsHijack(rules[0].jsonObject)
-        assertProtocolDnsHijack(rules[1].jsonObject)
-        assertEquals("local.example", rules[2].jsonObject["domain"]!!.jsonArray[0].jsonPrimitive.content)
+        assertEquals(4, rules.size)
+        assertSniffRule(rules[0].jsonObject)
+        assertPortDnsHijack(rules[1].jsonObject)
+        assertProtocolDnsHijack(rules[2].jsonObject)
+        assertEquals("local.example", rules[3].jsonObject["domain"]!!.jsonArray[0].jsonPrimitive.content)
     }
 
     @Test
@@ -91,7 +93,7 @@ class RuntimeConfigAssemblerTest {
 
         assertEquals(1, config["inbounds"]!!.jsonArray.size)
         assertEquals(FOXHOLE_RUNTIME_LOG_LEVEL, config["log"]!!.jsonObject["level"]!!.jsonPrimitive.content)
-        assertFalse(config["inbounds"]!!.jsonArray[0].jsonObject.containsKey("sniff"))
+        assertEquals("true", config["inbounds"]!!.jsonArray[0].jsonObject["sniff"]!!.jsonPrimitive.content)
         assertFalse(config.containsKey("experimental"))
     }
 
@@ -559,6 +561,79 @@ class RuntimeConfigAssemblerTest {
     }
 
     @Test
+    fun `runtime fingerprint ignores selected packages when split tunnel is off`() {
+        val runtimeSettings =
+            Settings(
+                expert =
+                    ExpertSettings(
+                        perAppRoutingMode = PerAppRoutingMode.FULL_TUNNEL,
+                        selectedPackages = emptyList(),
+                    ),
+            )
+        val selectedAppsPrepared =
+            runtimeSettings.copy(
+                expert =
+                    runtimeSettings.expert.copy(
+                        selectedPackages = listOf("com.example.browser"),
+                    ),
+            )
+
+        assertEquals(
+            assembler.runtimeFingerprint(runtimeSettings, null),
+            assembler.runtimeFingerprint(selectedAppsPrepared, null),
+        )
+    }
+
+    @Test
+    fun `runtime fingerprint changes for selected packages when split tunnel is on`() {
+        val runtimeSettings =
+            Settings(
+                expert =
+                    ExpertSettings(
+                        perAppRoutingMode = PerAppRoutingMode.INCLUDE_SELECTED_APPS,
+                        selectedPackages = listOf("com.example.browser"),
+                    ),
+            )
+        val selectedAppsChanged =
+            runtimeSettings.copy(
+                expert =
+                    runtimeSettings.expert.copy(
+                        selectedPackages = listOf("com.example.browser", "com.example.chat"),
+                    ),
+            )
+
+        assertNotEquals(
+            assembler.runtimeFingerprint(runtimeSettings, null),
+            assembler.runtimeFingerprint(selectedAppsChanged, null),
+        )
+    }
+
+    @Test
+    fun `runtime fingerprint ignores blocked packages when blocking is off`() {
+        val runtimeSettings =
+            Settings(
+                expert =
+                    ExpertSettings(
+                        blockedPackages = emptyList(),
+                        blockedPackagesEnabled = false,
+                    ),
+            )
+        val blockedAppsPrepared =
+            runtimeSettings.copy(
+                expert =
+                    runtimeSettings.expert.copy(
+                        blockedPackages = listOf("com.example.chat"),
+                        blockedPackagesEnabled = false,
+                    ),
+            )
+
+        assertEquals(
+            assembler.runtimeFingerprint(runtimeSettings, null),
+            assembler.runtimeFingerprint(blockedAppsPrepared, null),
+        )
+    }
+
+    @Test
     fun `runtime fingerprint changes when proxy auth changes`() {
         val runtimeSettings =
             Settings(
@@ -827,8 +902,9 @@ class RuntimeConfigAssemblerTest {
         val route = config["route"]!!.jsonObject
         val rules = route["rules"]!!.jsonArray
 
-        assertPortDnsHijack(rules[0].jsonObject)
-        assertProtocolDnsHijack(rules[1].jsonObject)
+        assertSniffRule(rules[0].jsonObject)
+        assertPortDnsHijack(rules[1].jsonObject)
+        assertProtocolDnsHijack(rules[2].jsonObject)
         assertEquals("dns-direct", route["default_domain_resolver"]!!.jsonPrimitive.content)
         assertEquals("true", route["auto_detect_interface"]!!.jsonPrimitive.content)
     }
@@ -839,8 +915,9 @@ class RuntimeConfigAssemblerTest {
         val route = config["route"]!!.jsonObject
         val rules = route["rules"]!!.jsonArray
 
-        assertPortDnsHijack(rules[0].jsonObject)
-        assertProtocolDnsHijack(rules[1].jsonObject)
+        assertSniffRule(rules[0].jsonObject)
+        assertPortDnsHijack(rules[1].jsonObject)
+        assertProtocolDnsHijack(rules[2].jsonObject)
         assertEquals("proxy", route["final"]!!.jsonPrimitive.content)
         assertEquals("dns-direct", route["default_domain_resolver"]!!.jsonPrimitive.content)
         assertEquals("true", route["auto_detect_interface"]!!.jsonPrimitive.content)
@@ -875,7 +952,7 @@ class RuntimeConfigAssemblerTest {
             )
 
         val config = parse(assembler.assemble(baseConfigWithRules("profile.example"), Settings(), preset))
-        val rule = config["route"]!!.jsonObject["rules"]!!.jsonArray[3].jsonObject
+        val rule = config["route"]!!.jsonObject["rules"]!!.jsonArray[4].jsonObject
 
         assertEquals("53", rule["port"]!!.jsonPrimitive.content)
         assertFalse(rule["port"]!!.jsonPrimitive.isString)
@@ -1143,6 +1220,10 @@ class RuntimeConfigAssemblerTest {
         assertEquals("53", rule["port"]!!.jsonPrimitive.content)
         assertFalse(rule["port"]!!.jsonPrimitive.isString)
         assertFalse(rule.containsKey("protocol"))
+    }
+
+    private fun assertSniffRule(rule: JsonObject) {
+        assertEquals("sniff", rule["action"]!!.jsonPrimitive.content)
     }
 
     private fun assertProtocolDnsHijack(rule: JsonObject) {

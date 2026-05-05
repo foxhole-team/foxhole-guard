@@ -24,10 +24,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.foxhole.beta.BuildConfig
 import com.foxhole.beta.R
 import com.foxhole.beta.core.model.ClashApiSettings
 import com.foxhole.beta.core.model.DiagnosticsRetention
-import com.foxhole.beta.core.model.LocalAuthSettings
 import com.foxhole.beta.core.model.ProxyInboundSettings
 import com.foxhole.beta.core.settings.hasCustomExperimentalSettings
 
@@ -39,7 +39,6 @@ fun ExpertSettingsScreen(
     onNavigateUp: () -> Unit,
     onShowExpertSettingsChanged: (Boolean) -> Unit,
     onAcknowledgeUnsafeWarning: () -> Unit,
-    onSniffChanged: (Boolean) -> Unit,
     onRouteOnlyChanged: (Boolean) -> Unit,
     onStrictRouteChanged: (Boolean) -> Unit,
     onAllowPrivateOutboundHostsChanged: (Boolean) -> Unit,
@@ -48,8 +47,6 @@ fun ExpertSettingsScreen(
     onDiagnosticsRetentionSelected: (DiagnosticsRetention) -> Unit,
     onAllowHttpConfigImportsChanged: (Boolean) -> Unit,
     onAllowInsecureTlsChanged: (Boolean) -> Unit,
-    onLocalProxyAuthEnabledChanged: (Boolean) -> Unit,
-    onLocalProxyAuthChanged: (LocalAuthSettings) -> Unit,
     onLocalProxyLanAccessChanged: (Boolean) -> Unit,
     onSocksSurfaceChanged: (ProxyInboundSettings) -> Unit,
     onHttpSurfaceChanged: (ProxyInboundSettings) -> Unit,
@@ -124,21 +121,6 @@ fun ExpertSettingsScreen(
                 )
                 SettingsControlGroupDivider()
                 SettingSwitchRow(
-                    title = stringResource(R.string.sniff_traffic),
-                    checked = state.settings.expert.sniff,
-                    summary = stringResource(R.string.sniff_traffic_summary),
-                    onCheckedChange = { enabled ->
-                        if (enabled) {
-                            requireWarning { onSniffChanged(true) }
-                        } else {
-                            onSniffChanged(false)
-                        }
-                    },
-                    summaryMaxLines = 3,
-                    grouped = true,
-                )
-                SettingsControlGroupDivider()
-                SettingSwitchRow(
                     title = stringResource(R.string.route_only),
                     checked = state.settings.expert.routeOnly,
                     summary = stringResource(R.string.route_only_summary),
@@ -200,21 +182,23 @@ fun ExpertSettingsScreen(
                     optionIcon = { Icons.Outlined.Tune },
                     grouped = true,
                 )
-                SettingsControlGroupDivider()
-                SettingSwitchRow(
-                    title = stringResource(R.string.smart_start_replay_logging_title),
-                    checked = state.settings.expert.smartStartReplayLogging,
-                    summary = stringResource(R.string.smart_start_replay_logging_summary),
-                    onCheckedChange = { enabled ->
-                        if (enabled) {
-                            requireWarning { onSmartStartReplayLoggingChanged(true) }
-                        } else {
-                            onSmartStartReplayLoggingChanged(false)
-                        }
-                    },
-                    summaryMaxLines = 3,
-                    grouped = true,
-                )
+                if (BuildConfig.DEBUG) {
+                    SettingsControlGroupDivider()
+                    SettingSwitchRow(
+                        title = stringResource(R.string.smart_start_replay_logging_title),
+                        checked = state.settings.expert.smartStartReplayLogging,
+                        summary = stringResource(R.string.smart_start_replay_logging_summary),
+                        onCheckedChange = { enabled ->
+                            if (enabled) {
+                                requireWarning { onSmartStartReplayLoggingChanged(true) }
+                            } else {
+                                onSmartStartReplayLoggingChanged(false)
+                            }
+                        },
+                        summaryMaxLines = 3,
+                        grouped = true,
+                    )
+                }
                 SettingsControlGroupDivider()
                 SettingSwitchRow(
                     title = stringResource(R.string.allow_http_config_imports_title),
@@ -245,34 +229,6 @@ fun ExpertSettingsScreen(
                     summaryMaxLines = 3,
                     grouped = true,
                 )
-                SettingsControlGroupDivider()
-                SettingSwitchRow(
-                    title = stringResource(R.string.proxy_auth_title),
-                    checked = state.settings.expert.localSurfaces.auth.enabled,
-                    summary = stringResource(R.string.proxy_auth_summary),
-                    onCheckedChange = { enabled ->
-                        if (enabled) {
-                            requireWarning { onLocalProxyAuthEnabledChanged(true) }
-                        } else {
-                            onLocalProxyAuthEnabledChanged(false)
-                        }
-                    },
-                    grouped = true,
-                )
-                if (state.settings.expert.localSurfaces.auth.enabled) {
-                    SettingsControlGroupDivider()
-                    LocalProxyAuthEditor(
-                        auth = state.settings.expert.localSurfaces.auth,
-                        onAuthChanged = { value ->
-                            if (value.username.isNotBlank() && value.password.isNotBlank()) {
-                                requireWarning { onLocalProxyAuthChanged(value) }
-                            } else {
-                                onLocalProxyAuthChanged(value)
-                            }
-                        },
-                        grouped = true,
-                    )
-                }
                 SettingsControlGroupDivider()
                 SettingValueRow(
                     title = stringResource(R.string.socks_inbound),

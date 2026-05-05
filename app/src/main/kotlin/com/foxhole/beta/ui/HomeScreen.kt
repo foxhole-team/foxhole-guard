@@ -415,12 +415,13 @@ fun HomeScreen(
                                 ) {
                                     HomeModeDropdown(
                                         selected = modeOption,
-                                        splitActive = state.settings.expert.perAppRoutingMode != PerAppRoutingMode.FULL_TUNNEL,
                                         onSelect = { selectedMode ->
                                             applyHomeModeSelection(
                                                 mode = selectedMode,
                                                 onTrafficModeSelected = onTrafficModeSelected,
                                                 onPerAppRoutingModeSelected = onPerAppRoutingModeSelected,
+                                                selectedPackages = state.settings.expert.selectedPackages,
+                                                currentPerAppRoutingMode = state.settings.expert.perAppRoutingMode,
                                             )
                                         },
                                     )

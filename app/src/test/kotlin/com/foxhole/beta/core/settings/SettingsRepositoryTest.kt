@@ -214,7 +214,7 @@ class SettingsRepositoryTest {
         assertFalse(reset.expert.networkActivityLogging)
         assertFalse(reset.expert.allowHttpConfigImports)
         assertFalse(reset.expert.allowInsecureTls)
-        assertFalse(reset.expert.sniff)
+        assertTrue(reset.expert.sniff)
         assertFalse(reset.expert.bypassLan)
         assertFalse(reset.hasCustomExperimentalSettings())
     }

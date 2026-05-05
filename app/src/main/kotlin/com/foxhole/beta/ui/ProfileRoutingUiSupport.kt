@@ -33,16 +33,15 @@ import androidx.compose.material.icons.automirrored.outlined.HelpOutline
 import androidx.compose.material.icons.outlined.Apps
 import androidx.compose.material.icons.outlined.ArrowOutward
 import androidx.compose.material.icons.outlined.Block
-import androidx.compose.material.icons.outlined.Bolt
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Cloud
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.Hub
 import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.Refresh
-import androidx.compose.material.icons.outlined.RemoveCircleOutline
 import androidx.compose.material.icons.outlined.Security
 import androidx.compose.material.icons.outlined.Speed
 import androidx.compose.material.icons.outlined.Tune
@@ -638,7 +637,7 @@ internal fun appFilterLabel(filter: InstalledAppFilter): String =
 internal fun installedAppFilterIcon(filter: InstalledAppFilter) =
     when (filter) {
         InstalledAppFilter.ALL -> Icons.Outlined.Apps
-        InstalledAppFilter.USER -> Icons.Outlined.Bolt
+        InstalledAppFilter.USER -> Icons.Outlined.Person
         InstalledAppFilter.SYSTEM -> Icons.Outlined.Security
     }
 
@@ -646,7 +645,7 @@ internal fun perAppRoutingModeIcon(mode: PerAppRoutingMode) =
     when (mode) {
         PerAppRoutingMode.FULL_TUNNEL -> Icons.Outlined.Security
         PerAppRoutingMode.INCLUDE_SELECTED_APPS -> Icons.Outlined.Apps
-        PerAppRoutingMode.EXCLUDE_SELECTED_APPS -> Icons.Outlined.RemoveCircleOutline
+        PerAppRoutingMode.EXCLUDE_SELECTED_APPS -> Icons.Outlined.ArrowOutward
     }
 
 @Composable

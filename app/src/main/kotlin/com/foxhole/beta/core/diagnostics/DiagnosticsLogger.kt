@@ -125,7 +125,7 @@ class DiagnosticsLogger(
         event: SmartStartReplayEvent,
         enabled: Boolean,
     ) {
-        if (!enabled) {
+        if (!BuildConfig.DEBUG || !enabled) {
             return
         }
         runCatching {

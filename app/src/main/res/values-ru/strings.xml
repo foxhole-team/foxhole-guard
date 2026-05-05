@@ -269,6 +269,7 @@
     <string name="diagnostics_archive_save_failed">Не удалось сохранить архив.</string>
     <string name="traffic_mode">Режим работы</string>
     <string name="traffic_mode_tunnel">Туннель</string>
+    <string name="traffic_mode_split">Сплит</string>
     <string name="traffic_mode_proxy">Прокси</string>
     <string name="latency_probe_method_title">Пинг</string>
     <string name="latency_probe_method_summary">Выберите, как Foxhole измеряет задержку туннеля. ICMP использует VPN-интерфейс; TCP проверяет порт 443; HTTP использует HTTPS-проверку.</string>
@@ -281,17 +282,18 @@
     <string name="domain_strategy">Стратегия DNS</string>
     <string name="routing_apps_title">Приложения</string>
     <string name="enable_split_tunnel">Включить сплит туннель</string>
+    <string name="split_tunnel_requires_apps">Чтобы включить режим сплит туннель, сначала добавьте приложения.</string>
+    <string name="split_tunnel_reconnect_required">Переподключите VPN туннель для применения изменений.</string>
     <string name="routing_apps_mode_full_summary">Все приложения идут через туннель.</string>
     <string name="routing_apps_mode_include_summary">Только выбранные приложения идут через туннель.</string>
     <string name="routing_apps_mode_exclude_summary">Выбранные приложения идут напрямую.</string>
-    <string name="routing_apps_mode_proxy_summary">Выбранные приложения идут через Прокси. Остальные идут напрямую.</string>
-    <string name="routing_apps_mode_direct_summary">Выбранные приложения идут напрямую. Остальные идут через Прокси.</string>
+    <string name="routing_apps_mode_proxy_summary">Выбранные приложения используют VPN.</string>
+    <string name="routing_apps_mode_direct_summary">Выбранные приложения не используют VPN.</string>
     <string name="add_app_exception">Добавить приложения</string>
     <string name="selected_app_exceptions">Выбранные приложения</string>
-    <string name="blocked_app_exceptions">Заблокированные приложения</string>
-    <string name="blocked_apps_section_summary">Блокировать приложения</string>
+    <string name="blocked_app_exceptions">Заблокированные</string>
     <string name="selected_apps_info_body">Выбранные приложения работают по режиму выше. Перетащите или долго нажмите приложение, чтобы перенести его в Заблокированные.</string>
-    <string name="blocked_apps_info_body">Заблокированные приложения получают правило block перед proxy/direct. Список сохраняется, когда переключатель выключен.</string>
+    <string name="blocked_apps_info_body">Выберите приложения, которым нужно заблокировать доступ в интернет. Вы можете перетягивать значки приложений между разделами.</string>
     <string name="no_blocked_apps_summary">Перетащите сюда приложения, которые нужно заблокировать.</string>
     <plurals name="blocked_apps_count_summary">
         <item quantity="one">%1$d приложение заблокировано</item>
@@ -314,7 +316,7 @@
     <string name="no_matching_apps_summary">Попробуйте другое имя приложения или package id.</string>
     <string name="system_app_label">Системное</string>
     <string name="user_app_label">Пользовательское</string>
-    <string name="routing_sites_title">Сайты</string>
+    <string name="routing_sites_title">Домены</string>
     <string name="routing_sites_summary">Правила применяются сразу после добавления.</string>
     <string name="routing_sites_create_preset_summary">Первое правило для сайта создаст локальный preset.</string>
     <string name="routing_sites_active_preset_summary">Правила для сайтов хранятся в preset “%1$s”.</string>
@@ -327,9 +329,10 @@
     <string name="site_exception_default_name">Исключение для сайта</string>
     <string name="site_exception_validation_error">Укажите хотя бы один домен</string>
     <string name="site_mask_type_title">Тип маски</string>
-    <string name="supported_site_masks_title">Поддерживаемые маски</string>
-    <string name="supported_site_masks_examples">example.com\n*.example.com\nkw:video\nre:^stun\\..+\ncidr:1.2.3.0/24</string>
-    <string name="site_mask_input_label">Сайт или маска</string>
+    <string name="supported_site_masks_title">Формат</string>
+    <string name="supported_site_masks_examples">example.com, *.example.com, kw:video, re:^stun\\..+, cidr:1.2.3.0/24</string>
+    <string name="site_mask_input_label">Домен</string>
+    <string name="site_exception_invalid_error">Проверьте формат домена или маски.</string>
     <string name="site_mask_exact">Точный домен</string>
     <string name="site_mask_suffix">Поддомен/suffix</string>
     <string name="site_mask_keyword">Keyword</string>
@@ -368,8 +371,8 @@
     <string name="remote_catalogs">Удаленные каталоги</string>
     <string name="expert_warning_title">Внимание</string>
     <string name="expert_settings_info_body">Эти настройки меняют маршрутизацию, поведение DNS и локальные интерфейсы. Включайте их только если понимаете последствия.</string>
-    <string name="sniff_traffic">Sniff</string>
-    <string name="sniff_traffic_summary">Определяет домены из трафика, чтобы правила по сайтам срабатывали даже там, где приложение не раскрывает hostname напрямую.</string>
+    <string name="sniff_traffic">Определение доменов</string>
+    <string name="sniff_traffic_summary">Определяет домены из трафика, чтобы правила доменов срабатывали даже там, где приложение не раскрывает hostname напрямую.</string>
     <string name="route_only">Только маршрутизация</string>
     <string name="route_only_summary">Использовать определенные домены только для маршрутизации и сохранять исходный адрес назначения.</string>
     <string name="strict_route">Строгая маршрутизация</string>
@@ -497,6 +500,7 @@
     <string name="information_title">Информация</string>
     <string name="operating_mode">Режим работы</string>
     <string name="traffic_info_tunnel">Текущий режим - Туннель. Трафик устройства направляется через активный VPN-профиль.</string>
+    <string name="traffic_info_split">Текущий режим - Сплит. Выбранные приложения используют VPN-правила, остальные работают по режиму сплит туннеля.</string>
     <string name="traffic_info_proxy">Текущий режим - Прокси. Через Foxhole идет только трафик приложений, где настроен локальный прокси.</string>
     <string name="traffic_info_reconnect">Изменения применяются после переподключения.</string>
     <string name="proxy_mode_firefox_hint">С включенной аутентификацией локального прокси работает Firefox через расширение FoxyProxy.</string>
@@ -588,7 +592,7 @@
     <string name="help_diagnostics_support_title">Диагностика и поддержка</string>
     <string name="help_diagnostics_support_body">Диагностика показывает логи подключения, статистику трафика и экспорт очищенного архива.\n\nОчищенный архив не содержит IP-адреса и конфигурации. Он нужен для разбора ошибок подключения, импорта, подписок и Смарт старт.\n\nЕсли проблема повторяется, откройте Диагностика, создайте очищенный архив без IP-адресов и конфигураций и отправьте его в Telegram-бот поддержки.\n\nЕсли Telegram не установлен, Foxhole откроет ссылку в браузере.</string>
     <string name="help_expert_full_body">Экспертные настройки меняют маршрутизацию, DNS, локальные интерфейсы, импортные ограничения и диагностику.\n\nОткрывайте их только если понимаете последствия или действуете по инструкции поддержки.\n\nЧтобы открыть раздел, нажмите карточку версии сборки 5 раз.</string>
-    <string name="site_action_proxy">Прокси</string>
-    <string name="site_action_direct">Напрямую</string>
+    <string name="site_action_proxy">Proxy</string>
+    <string name="site_action_direct">Direct</string>
     <string name="site_action_block">Блокировать</string>
 </resources>

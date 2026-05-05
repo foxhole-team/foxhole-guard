@@ -27,6 +27,7 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 import com.foxhole.beta.R
 
 internal data class FoxholeSwipeAction(
@@ -76,10 +77,7 @@ internal fun FoxholeSwipeActions(
     Box(modifier = modifier.fillMaxWidth()) {
         SwipeActionsBackground(
             actions = actions,
-            onAction = {
-                setRevealed(false)
-                haptic.performHapticFeedback(HapticFeedbackType.Confirm)
-            },
+            onAction = {},
             modifier = Modifier.align(Alignment.CenterEnd),
         )
         SwipeToDismissBox(
@@ -98,6 +96,19 @@ internal fun FoxholeSwipeActions(
                 }
             },
         )
+        if (isRevealed) {
+            SwipeActionsBackground(
+                actions = actions,
+                onAction = {
+                    setRevealed(false)
+                    haptic.performHapticFeedback(HapticFeedbackType.Confirm)
+                },
+                modifier =
+                    Modifier
+                        .align(Alignment.CenterEnd)
+                        .zIndex(1f),
+            )
+        }
     }
 }
 

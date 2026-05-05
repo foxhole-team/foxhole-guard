@@ -102,6 +102,7 @@ class HomeViewModel(
     internal val protocolMetricsRefreshingOptionIdByProfileIdMutable = MutableStateFlow<Map<Long, String>>(emptyMap())
     internal val recommendedProtocolMutable = MutableStateFlow<ProtocolRecommendationState?>(null)
     internal val runtimeReloadPendingMutable = MutableStateFlow(false)
+    internal val runtimeReconnectRequiredMutable = MutableStateFlow(false)
     internal val reconnectInProgressMutable = MutableStateFlow(false)
     internal val profileReconnectPromptUntilMutable = MutableStateFlow(0L)
     internal val insecureTlsImportWarningMutable = MutableStateFlow<InsecureTlsImportWarningState?>(null)
@@ -216,10 +217,12 @@ class HomeViewModel(
         combine(
             reconnectInProgressMutable,
             profileReconnectPromptUntilMutable,
-        ) { reconnectInProgress, profileReconnectPromptUntil ->
+            runtimeReconnectRequiredMutable,
+        ) { reconnectInProgress, profileReconnectPromptUntil, runtimeReconnectRequired ->
             HomeReconnectStreams(
                 inProgress = reconnectInProgress,
                 promptUntilElapsedMs = profileReconnectPromptUntil,
+                runtimeReconnectRequired = runtimeReconnectRequired,
             )
         }
 
@@ -247,6 +250,9 @@ class HomeViewModel(
                 profileReconnectRequiredRaw &&
                     reconnectState.promptUntilElapsedMs > 0L &&
                     SystemClock.elapsedRealtime() <= reconnectState.promptUntilElapsedMs
+            val runtimeReconnectRequired =
+                reconnectState.runtimeReconnectRequired &&
+                    connectionStreams.connection.state in ACTIVE_CONNECTION_STATES
             HomeUiState(
                 profiles = connectionStreams.profiles,
                 profilesLoaded = localStreams.profilesLoaded,
@@ -268,7 +274,7 @@ class HomeViewModel(
                 installedApps = localStreams.installedApps,
                 installedAppsLoading = localStreams.installedAppsLoading,
                 installedAppsLoaded = localStreams.installedAppsLoaded,
-                reconnectRequired = profileReconnectRequired,
+                reconnectRequired = profileReconnectRequired || runtimeReconnectRequired,
                 reconnectInProgress = reconnectState.inProgress,
                 profileReconnectPromptUntilElapsedMs =
                     if (profileReconnectRequired) {
@@ -447,6 +453,7 @@ class HomeViewModel(
                 previousState = currentState
                 if (currentState !in ACTIVE_CONNECTION_STATES) {
                     clearRuntimeReloadPending()
+                    clearRuntimeReconnectRequired()
                     clearProfileLatencyRefresh()
                     clearProtocolLatencyState()
                     dashboardConnectionMetricsLoadingMutable.value = false
@@ -1066,6 +1073,10 @@ class HomeViewModel(
     internal fun markRuntimeReloadPending() = markRuntimeReloadPendingInternal()
 
     internal fun clearRuntimeReloadPending() = clearRuntimeReloadPendingInternal()
+
+    internal fun markRuntimeReconnectRequired() = markRuntimeReconnectRequiredInternal()
+
+    internal fun clearRuntimeReconnectRequired() = clearRuntimeReconnectRequiredInternal()
 
     internal fun loadInstalledApps() = loadInstalledAppsInternal()
 

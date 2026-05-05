@@ -93,6 +93,7 @@ import com.foxhole.beta.core.model.DomainStrategy
 import com.foxhole.beta.core.model.LatencyProbeMethod
 import com.foxhole.beta.core.model.LocalAuthSettings
 import com.foxhole.beta.core.model.LocalSurfaceSettings
+import com.foxhole.beta.core.model.PerAppRoutingMode
 import com.foxhole.beta.core.model.ProxyInboundSettings
 import com.foxhole.beta.core.model.ProxySurfaceMode
 import com.foxhole.beta.core.model.RoutingCatalog
@@ -610,6 +611,7 @@ fun TrafficSettingsScreen(
     onNavigateUp: () -> Unit,
     onAcknowledgeUnsafeWarning: () -> Unit,
     onTrafficModeSelected: (TrafficMode) -> Unit,
+    onPerAppRoutingModeSelected: (PerAppRoutingMode) -> Unit,
     onLatencyProbeMethodSelected: (LatencyProbeMethod) -> Unit,
     onTunStackSelected: (TunStack) -> Unit,
     onLocalProxyAuthEnabledChanged: (Boolean) -> Unit,
@@ -642,14 +644,7 @@ fun TrafficSettingsScreen(
     var subscriptionRefreshIntervalMenuExpanded by rememberSaveable { mutableStateOf(false) }
     var endpointDialog by rememberSaveable { mutableStateOf(false) }
     val wifiLanAddress by rememberWifiLanAddress()
-    val tunnelModeLabel = stringResource(R.string.traffic_mode_tunnel)
-    val proxyModeLabel = stringResource(R.string.traffic_mode_proxy)
-    val trafficModeLabel: (TrafficMode) -> String = { value ->
-        when (value) {
-            TrafficMode.TUNNEL -> tunnelModeLabel
-            TrafficMode.PROXY -> proxyModeLabel
-        }
-    }
+    val selectedModeOption = currentHomeModeOption(state.settings)
     val pingHttpLabel = stringResource(R.string.latency_probe_method_http)
     val pingIcmpLabel = stringResource(R.string.latency_probe_method_icmp)
     val pingTcpLabel = stringResource(R.string.latency_probe_method_tcp)
@@ -686,15 +681,23 @@ fun TrafficSettingsScreen(
             SettingsControlGroup {
                 DropdownSettingRow(
                     title = stringResource(R.string.traffic_mode),
-                    value = trafficModeLabel(state.settings.traffic.mode),
+                    value = homeModeMenuLabel(selectedModeOption),
                     expanded = modeMenuExpanded,
                     onExpandedChange = { modeMenuExpanded = it },
-                    values = TrafficMode.entries,
-                    selected = state.settings.traffic.mode,
-                    label = { trafficModeLabel(it) },
-                    onSelect = onTrafficModeSelected,
-                    leadingIcon = Icons.Outlined.Tune,
-                    optionIcon = ::trafficModeIcon,
+                    values = HomeModeOption.entries,
+                    selected = selectedModeOption,
+                    label = { homeModeMenuLabel(it) },
+                    onSelect = { option ->
+                        applyHomeModeSelection(
+                            mode = option,
+                            onTrafficModeSelected = onTrafficModeSelected,
+                            onPerAppRoutingModeSelected = onPerAppRoutingModeSelected,
+                            selectedPackages = state.settings.expert.selectedPackages,
+                            currentPerAppRoutingMode = state.settings.expert.perAppRoutingMode,
+                        )
+                    },
+                    leadingIcon = homeModeOptionIcon(selectedModeOption),
+                    optionIcon = ::homeModeOptionIcon,
                     grouped = true,
                 )
                 if (state.settings.traffic.mode == TrafficMode.TUNNEL) {

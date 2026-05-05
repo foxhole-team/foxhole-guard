@@ -32,6 +32,7 @@ import com.foxhole.beta.core.model.Profile
 import com.foxhole.beta.core.model.ProfileProtocolOption
 import com.foxhole.beta.core.model.ProtocolHint
 import com.foxhole.beta.core.model.ProxyInboundSettings
+import com.foxhole.beta.core.model.Settings
 import com.foxhole.beta.core.model.TrafficMode
 import com.foxhole.beta.core.model.isUdpTransport
 import com.foxhole.beta.core.profile.MultiProtocolProfileSupport
@@ -105,6 +106,7 @@ internal enum class HomePrimaryAction {
 
 internal enum class HomeModeOption {
     TUNNEL,
+    SPLIT,
     PROXY,
 }
 
@@ -696,23 +698,27 @@ internal fun countryEmoji(countryCode: String?): String {
 }
 
 internal fun currentHomeModeOption(state: HomeRouteUiState): HomeModeOption =
+    currentHomeModeOption(state.settings)
+
+internal fun currentHomeModeOption(settings: Settings): HomeModeOption =
     when {
-        state.settings.traffic.mode == TrafficMode.PROXY -> HomeModeOption.PROXY
+        settings.traffic.mode == TrafficMode.PROXY -> HomeModeOption.PROXY
+        settings.expert.perAppRoutingMode != PerAppRoutingMode.FULL_TUNNEL &&
+            settings.expert.selectedPackages.isNotEmpty() -> HomeModeOption.SPLIT
         else -> HomeModeOption.TUNNEL
     }
 
-internal fun homeModeOptionIcon(
-    option: HomeModeOption,
-    splitActive: Boolean = false,
-): ImageVector =
+internal fun homeModeOptionIcon(option: HomeModeOption): ImageVector =
     when (option) {
-        HomeModeOption.TUNNEL -> if (splitActive) Icons.Outlined.Apps else Icons.Outlined.Shield
+        HomeModeOption.TUNNEL -> Icons.Outlined.Shield
+        HomeModeOption.SPLIT -> Icons.Outlined.Apps
         HomeModeOption.PROXY -> Icons.Outlined.SwapVert
     }
 
 internal fun homeModeChipLabel(option: HomeModeOption): String =
     when (option) {
         HomeModeOption.TUNNEL -> "TUN"
+        HomeModeOption.SPLIT -> "SPLIT"
         HomeModeOption.PROXY -> "PROXY"
     }
 
@@ -720,6 +726,7 @@ internal fun homeModeChipLabel(option: HomeModeOption): String =
 internal fun homeModeMenuLabel(option: HomeModeOption): String =
     when (option) {
         HomeModeOption.TUNNEL -> stringResource(R.string.per_app_mode_full_tunnel)
+        HomeModeOption.SPLIT -> stringResource(R.string.traffic_mode_split)
         HomeModeOption.PROXY -> stringResource(R.string.traffic_mode_proxy)
     }
 
@@ -727,10 +734,22 @@ internal fun applyHomeModeSelection(
     mode: HomeModeOption,
     onTrafficModeSelected: (TrafficMode) -> Unit,
     onPerAppRoutingModeSelected: (PerAppRoutingMode) -> Unit,
+    selectedPackages: List<String>,
+    currentPerAppRoutingMode: PerAppRoutingMode,
 ) {
     when (mode) {
         HomeModeOption.TUNNEL -> {
+            onPerAppRoutingModeSelected(PerAppRoutingMode.FULL_TUNNEL)
             onTrafficModeSelected(TrafficMode.TUNNEL)
+        }
+        HomeModeOption.SPLIT -> {
+            onTrafficModeSelected(TrafficMode.TUNNEL)
+            if (selectedPackages.isNotEmpty()) {
+                onPerAppRoutingModeSelected(
+                    currentPerAppRoutingMode.takeIf { it != PerAppRoutingMode.FULL_TUNNEL }
+                        ?: PerAppRoutingMode.INCLUDE_SELECTED_APPS,
+                )
+            }
         }
         HomeModeOption.PROXY -> onTrafficModeSelected(TrafficMode.PROXY)
     }

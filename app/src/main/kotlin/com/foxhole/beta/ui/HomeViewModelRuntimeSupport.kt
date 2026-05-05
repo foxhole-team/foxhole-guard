@@ -157,8 +157,14 @@ internal fun HomeViewModel.saveSiteRuleInternal(
 ) {
     viewModelScope.launch {
         runCatching {
-            val normalizedTokens = domains.map(String::trim).filter(String::isNotBlank).distinct()
+            val normalizedTokens =
+                domains
+                    .mapNotNull(::normalizedSiteMaskToken)
+                    .distinct()
             require(normalizedTokens.isNotEmpty()) { getApplication<Application>().getString(R.string.site_exception_validation_error) }
+            require(normalizedTokens.all { siteMaskValidationErrorRes(it) == null }) {
+                getApplication<Application>().getString(R.string.site_exception_invalid_error)
+            }
             val normalizedDomains = normalizedTokens.filterNot { it.startsWith(SITE_CIDR_PREFIX) }
             val normalizedIpCidrs = normalizedTokens.filter { it.startsWith(SITE_CIDR_PREFIX) }.map { it.removePrefix(SITE_CIDR_PREFIX) }
             val presetId =
@@ -417,6 +423,9 @@ internal fun HomeViewModel.updateRuntimeSettingAndMaybeReloadInternal(
 }
 
 internal suspend fun HomeViewModel.maybeReloadActiveRuntimeInternal(): Boolean {
+    if (runtimeReconnectRequiredMutable.value) {
+        return false
+    }
     val targetProfileId = uiState.value.activeProfile?.id ?: return false
     val connectionState = container.connectionController.snapshot.value.state
     if (connectionState !in HomeViewModel.ACTIVE_CONNECTION_STATES) {
@@ -564,6 +573,14 @@ internal fun HomeViewModel.clearRuntimeReloadPendingInternal() {
     runtimeReloadPendingJob?.cancel()
     runtimeReloadPendingJob = null
     runtimeReloadPendingMutable.value = false
+}
+
+internal fun HomeViewModel.markRuntimeReconnectRequiredInternal() {
+    runtimeReconnectRequiredMutable.value = true
+}
+
+internal fun HomeViewModel.clearRuntimeReconnectRequiredInternal() {
+    runtimeReconnectRequiredMutable.value = false
 }
 
 internal fun HomeViewModel.loadInstalledAppsInternal() {

@@ -106,6 +106,7 @@ internal data class HomeTrailingLocalState(
 internal data class HomeReconnectStreams(
     val inProgress: Boolean,
     val promptUntilElapsedMs: Long,
+    val runtimeReconnectRequired: Boolean,
 )
 
 internal enum class PendingConnectAction {

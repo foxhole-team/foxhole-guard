@@ -6,14 +6,19 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.draganddrop.dragAndDropSource
 import androidx.compose.foundation.draganddrop.dragAndDropTarget
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items as gridItems
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AccountTree
 import androidx.compose.material.icons.outlined.Add
@@ -21,6 +26,7 @@ import androidx.compose.material.icons.outlined.Apps
 import androidx.compose.material.icons.outlined.Block
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Public
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
@@ -30,6 +36,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -93,22 +100,47 @@ fun RoutingAppsScreen(
     val appModeValues = remember {
         listOf(PerAppRoutingMode.INCLUDE_SELECTED_APPS, PerAppRoutingMode.EXCLUDE_SELECTED_APPS)
     }
-    val effectiveAppMode =
+    val storedAppMode =
         state.settings.expert.perAppRoutingMode.takeIf { it != PerAppRoutingMode.FULL_TUNNEL }
-            ?: PerAppRoutingMode.INCLUDE_SELECTED_APPS
-    val splitTunnelEnabled = state.settings.expert.perAppRoutingMode != PerAppRoutingMode.FULL_TUNNEL
+    var draftAppMode by rememberSaveable {
+        mutableStateOf(storedAppMode ?: PerAppRoutingMode.INCLUDE_SELECTED_APPS)
+    }
+    LaunchedEffect(storedAppMode) {
+        if (storedAppMode != null) {
+            draftAppMode = storedAppMode
+        }
+    }
+    val effectiveAppMode =
+        storedAppMode ?: draftAppMode
+    val splitTunnelEnabled = storedAppMode != null
+    val hasTunnelApps = selectedPackages.isNotEmpty()
+    val splitTunnelToggleEnabled = splitTunnelEnabled || hasTunnelApps
 
     SettingsScaffold(
         title = stringResource(R.string.routing_apps_title),
         snackbarHostState = snackbarHostState,
         onNavigateUp = onNavigateUp,
+        bannerPlacement = FoxholeBannerPlacement.BOTTOM,
     ) {
         item {
             SettingsControlGroup {
                 SettingSwitchRow(
                     title = stringResource(R.string.enable_split_tunnel),
                     checked = splitTunnelEnabled,
+                    enabled = splitTunnelToggleEnabled,
+                    summary =
+                        if (!splitTunnelToggleEnabled) {
+                            stringResource(R.string.split_tunnel_requires_apps)
+                        } else {
+                            null
+                        },
                     onCheckedChange = { enabled ->
+                        if (enabled && !hasTunnelApps) {
+                            return@SettingSwitchRow
+                        }
+                        if (!enabled) {
+                            draftAppMode = effectiveAppMode
+                        }
                         onPerAppRoutingModeSelected(
                             if (enabled) {
                                 effectiveAppMode
@@ -120,25 +152,39 @@ fun RoutingAppsScreen(
                     leadingIcon = Icons.Outlined.AccountTree,
                     grouped = true,
                 )
-                if (splitTunnelEnabled) {
-                    SettingsControlGroupDivider()
-                    DropdownSettingRow(
-                        title = stringResource(R.string.operating_mode),
-                        value = simpleAppRoutingModeLabel(effectiveAppMode),
-                        expanded = modeMenuExpanded,
-                        onExpandedChange = { modeMenuExpanded = it },
-                        values = appModeValues,
-                        selected = effectiveAppMode,
-                        label = ::simpleAppRoutingModeLabel,
-                        onSelect = onPerAppRoutingModeSelected,
-                        leadingIcon = perAppRoutingModeIcon(effectiveAppMode),
-                        optionIcon = ::perAppRoutingModeIcon,
-                        grouped = true,
+                SettingsControlGroupDivider()
+                DropdownSettingRow(
+                    title = stringResource(R.string.operating_mode),
+                    value = simpleAppRoutingModeLabel(effectiveAppMode),
+                    expanded = modeMenuExpanded,
+                    onExpandedChange = { modeMenuExpanded = it },
+                    values = appModeValues,
+                    selected = effectiveAppMode,
+                    label = ::simpleAppRoutingModeLabel,
+                    onSelect = { mode ->
+                        draftAppMode = mode
+                        if (splitTunnelEnabled) {
+                            onPerAppRoutingModeSelected(mode)
+                        }
+                    },
+                    leadingIcon = perAppRoutingModeIcon(effectiveAppMode),
+                    optionIcon = ::perAppRoutingModeIcon,
+                    grouped = true,
+                )
+                SettingsControlGroupDivider()
+                Row(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.Top,
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Info,
+                        contentDescription = null,
+                        modifier = Modifier.padding(top = 1.dp).size(16.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    SettingsControlGroupDivider()
                     Text(
                         text = simpleAppRoutingModeGuidance(effectiveAppMode),
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -151,15 +197,10 @@ fun RoutingAppsScreen(
                 subtitle = stringResource(R.string.selected_app_exceptions),
                 leadingIcon = Icons.Outlined.Apps,
                 apps = selectedApps,
-                emptyText = stringResource(R.string.no_app_exceptions_summary),
+                emptyText = stringResource(R.string.split_tunnel_requires_apps),
                 headerActionLabel = stringResource(R.string.choose_label),
                 headerActionTag = "routing_apps_add_exception_action",
-                onHeaderAction = {
-                    if (state.settings.expert.perAppRoutingMode == PerAppRoutingMode.FULL_TUNNEL) {
-                        onPerAppRoutingModeSelected(PerAppRoutingMode.INCLUDE_SELECTED_APPS)
-                    }
-                    onOpenPicker()
-                },
+                onHeaderAction = onOpenPicker,
                 onRemove = { app ->
                     onSelectedPackagesChanged(selectedPackages.filterNot { it == app.packageName })
                 },
@@ -175,7 +216,7 @@ fun RoutingAppsScreen(
         item {
             AppGridSection(
                 title = stringResource(R.string.blocked_app_exceptions),
-                subtitle = stringResource(R.string.blocked_apps_section_summary),
+                subtitle = stringResource(R.string.blocked_apps_info_body),
                 leadingIcon = Icons.Outlined.Block,
                 apps = blockedApps,
                 emptyText = stringResource(R.string.no_blocked_apps_summary),
@@ -200,7 +241,7 @@ fun RoutingAppsScreen(
 @Composable
 private fun AppGridSection(
     title: String,
-    subtitle: String,
+    subtitle: String? = null,
     leadingIcon: androidx.compose.ui.graphics.vector.ImageVector,
     apps: List<InstalledAppOption>,
     emptyText: String,
@@ -245,11 +286,15 @@ private fun AppGridSection(
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
                 )
-                Text(
-                    text = subtitle,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                if (apps.isEmpty()) {
+                    subtitle?.takeIf(String::isNotBlank)?.let { text ->
+                        Text(
+                            text = text,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
             }
             if (headerActionLabel != null && onHeaderAction != null) {
                 Button(
@@ -273,20 +318,50 @@ private fun AppGridSection(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         } else {
-            FlowRow(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                apps.forEach { app ->
-                    AppGridTile(
-                        app = app,
-                        onDropPackage = { packageName -> onDropPackage(packageName, app.packageName) },
-                        onRemove = {
-                            onRemove(app)
-                        },
-                    )
-                }
+            AppIconGrid(
+                apps = apps,
+                onDropPackage = onDropPackage,
+                onRemove = onRemove,
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun AppIconGrid(
+    apps: List<InstalledAppOption>,
+    onDropPackage: (String, String?) -> Unit,
+    onRemove: (InstalledAppOption) -> Unit,
+) {
+    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+        val columns =
+            when {
+                maxWidth < 420.dp -> 3
+                maxWidth < 520.dp -> 4
+                maxWidth < 640.dp -> 5
+                else -> 6
+            }
+        val rows = ((apps.size + columns - 1) / columns).coerceAtLeast(1)
+        val gridHeight = AppGridTileHeight * rows + AppGridGap * (rows - 1)
+        LazyVerticalGrid(
+            columns = GridCells.Fixed(columns),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .height(gridHeight)
+                    .foxholeAnimateContentSize(),
+            horizontalArrangement = Arrangement.spacedBy(AppGridGap),
+            verticalArrangement = Arrangement.spacedBy(AppGridGap),
+            userScrollEnabled = false,
+        ) {
+            gridItems(apps, key = InstalledAppOption::packageName) { app ->
+                AppGridTile(
+                    app = app,
+                    onDropPackage = { packageName -> onDropPackage(packageName, app.packageName) },
+                    onRemove = { onRemove(app) },
+                    modifier = Modifier.animateItem(),
+                )
             }
         }
     }
@@ -298,6 +373,7 @@ private fun AppGridTile(
     app: InstalledAppOption,
     onDropPackage: (String) -> Unit,
     onRemove: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val dragBitmap = rememberAppIconBitmap(packageName = app.packageName, bitmapSize = 72.dp)
     val dragContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.92f)
@@ -305,8 +381,9 @@ private fun AppGridTile(
     val haptic = LocalHapticFeedback.current
     Box(
         modifier =
-            Modifier
-                .size(width = 96.dp, height = 120.dp)
+            modifier
+                .fillMaxWidth()
+                .height(AppGridTileHeight)
                 .dragAndDropSource(
                     drawDragDecoration = {
                         drawAppDragDecoration(
@@ -427,7 +504,6 @@ fun AppPickerScreen(
                 selected = appFilter,
                 label = ::appFilterLabel,
                 onSelect = { appFilter = it },
-                summary = stringResource(R.string.app_filter_summary),
                 optionIcon = ::installedAppFilterIcon,
             )
         }
@@ -435,8 +511,10 @@ fun AppPickerScreen(
             SettingValueRow(
                 title = selectionTitle,
                 value = draftSelection.size.toString(),
-                summary = stringResource(R.string.selected_apps_summary),
                 onClick = null,
+                trailingContent = {
+                    SelectionCountBadge(count = draftSelection.size)
+                },
             )
         }
         if (state.installedAppsLoading || !state.installedAppsLoaded) {
@@ -490,6 +568,7 @@ fun RoutingSitesScreen(
     onNavigateUp: () -> Unit,
     onSaveSiteRule: (Long?, List<String>, RoutingRuleAction) -> Unit,
     onDeleteRule: (Long) -> Unit,
+    onSniffChanged: (Boolean) -> Unit,
 ) {
     var editingRule by remember { mutableStateOf<RoutingRule?>(null) }
     var createDialogVisible by rememberSaveable { mutableStateOf(false) }
@@ -504,7 +583,20 @@ fun RoutingSitesScreen(
         title = stringResource(R.string.routing_sites_title),
         snackbarHostState = snackbarHostState,
         onNavigateUp = onNavigateUp,
+        bannerPlacement = FoxholeBannerPlacement.BOTTOM,
     ) {
+        item {
+            SettingsControlGroup {
+                SettingSwitchRow(
+                    title = stringResource(R.string.sniff_traffic),
+                    checked = state.settings.expert.sniff,
+                    summary = stringResource(R.string.sniff_traffic_summary),
+                    leadingIcon = Icons.Outlined.Public,
+                    onCheckedChange = onSniffChanged,
+                    grouped = true,
+                )
+            }
+        }
         item {
             SiteHeaderCard(
                 title = stringResource(R.string.routing_sites_title),
@@ -759,8 +851,30 @@ private fun DragAndDropEvent.dragPayload(): String =
 
 private const val FOXHOLE_APP_DRAG_PREFIX = "foxhole-app:"
 private const val FOXHOLE_APP_DRAG_LABEL = "FoxHole app"
+private val AppGridTileHeight = 120.dp
+private val AppGridGap = 8.dp
 private const val MANAGED_SELECTED_SITE_RULE_PREFIX = "FoxHole selected site:"
 private const val MANAGED_BLOCKED_SITE_RULE_PREFIX = "FoxHole blocked site:"
+
+@Composable
+private fun SelectionCountBadge(count: Int) {
+    Surface(
+        modifier = Modifier.size(34.dp),
+        shape = CircleShape,
+        color = LocalFoxholeUiPalette.current.valuePillContainerColor,
+        contentColor = LocalFoxholeUiPalette.current.valuePillContentColor,
+        border = foxholeDropdownColoredButtonBorder(),
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Text(
+                text = count.toString(),
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+            )
+        }
+    }
+}
 
 @Composable
 private fun foxholeDropdownColoredButtonColors() =

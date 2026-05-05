@@ -218,6 +218,8 @@ internal fun FoxholeScaffold(
     titleBadge: String? = null,
     actions: @Composable RowScope.() -> Unit = {},
     bannerTopPadding: Dp = ScreenVerticalPadding,
+    bannerBottomPadding: Dp = ScreenVerticalPadding,
+    bannerPlacement: FoxholeBannerPlacement = FoxholeBannerPlacement.TOP,
     content: @Composable (PaddingValues) -> Unit,
 ) {
     val topBarContainerColor = Color.Transparent
@@ -285,13 +287,24 @@ internal fun FoxholeScaffold(
                 modifier = Modifier.fillMaxSize(),
             ) {
                 content(padding)
+                val bannerModifier =
+                    when (bannerPlacement) {
+                        FoxholeBannerPlacement.TOP ->
+                            Modifier
+                                .align(Alignment.TopCenter)
+                                .padding(horizontal = ScreenHorizontalPadding)
+                                .padding(top = bannerTopPadding)
+
+                        FoxholeBannerPlacement.BOTTOM ->
+                            Modifier
+                                .align(Alignment.BottomCenter)
+                                .padding(horizontal = ScreenHorizontalPadding)
+                                .padding(bottom = bannerBottomPadding)
+                    }
                 FoxholeBannerHost(
                     snackbarHostState = snackbarHostState,
-                    modifier =
-                        Modifier
-                            .align(Alignment.TopCenter)
-                            .padding(horizontal = ScreenHorizontalPadding)
-                            .padding(top = bannerTopPadding),
+                    placement = bannerPlacement,
+                    modifier = bannerModifier,
                 )
             }
         },
@@ -302,6 +315,11 @@ internal enum class FoxholeBannerTone {
     INFO,
     ERROR,
     SUCCESS,
+}
+
+internal enum class FoxholeBannerPlacement {
+    TOP,
+    BOTTOM,
 }
 
 internal class FoxholeBannerHapticGate(
@@ -477,6 +495,7 @@ internal fun rememberDeadlineProgress(
 @Composable
 private fun FoxholeBannerHost(
     snackbarHostState: SnackbarHostState,
+    placement: FoxholeBannerPlacement,
     modifier: Modifier = Modifier,
 ) {
     AnimatedVisibility(
@@ -489,7 +508,12 @@ private fun FoxholeBannerHost(
                         durationMillis = FoxholeMotionTokens.EmphasisDurationMs,
                         easing = FoxholeMotionTokens.NavigationEnterEasing,
                     ),
-                initialOffsetY = { fullHeight -> -fullHeight },
+                initialOffsetY = { fullHeight ->
+                    when (placement) {
+                        FoxholeBannerPlacement.TOP -> -fullHeight
+                        FoxholeBannerPlacement.BOTTOM -> fullHeight
+                    }
+                },
             ) +
                 fadeIn(
                     animationSpec =
@@ -505,7 +529,12 @@ private fun FoxholeBannerHost(
                         durationMillis = FoxholeMotionTokens.StandardDurationMs,
                         easing = FoxholeMotionTokens.NavigationExitEasing,
                     ),
-                targetOffsetY = { fullHeight -> -(fullHeight / 2) },
+                targetOffsetY = { fullHeight ->
+                    when (placement) {
+                        FoxholeBannerPlacement.TOP -> -(fullHeight / 2)
+                        FoxholeBannerPlacement.BOTTOM -> fullHeight / 2
+                    }
+                },
             ) +
                 fadeOut(
                     animationSpec =
@@ -650,6 +679,7 @@ internal fun FoxholeLazyScaffold(
     modifier: Modifier = Modifier,
     actions: @Composable RowScope.() -> Unit = {},
     tag: String = "settings_screen",
+    bannerPlacement: FoxholeBannerPlacement = FoxholeBannerPlacement.TOP,
     content: LazyListScope.() -> Unit,
 ) {
     FoxholeScaffold(
@@ -658,6 +688,7 @@ internal fun FoxholeLazyScaffold(
         onNavigateUp = onNavigateUp,
         actions = actions,
         bannerTopPadding = FoxholeTopBarBannerPadding,
+        bannerPlacement = bannerPlacement,
     ) { padding ->
         LazyColumn(
             modifier =

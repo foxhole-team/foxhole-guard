@@ -256,21 +256,23 @@ internal fun HomeViewModel.onAllowPrivateOutboundHostsChangedInternal(value: Boo
 }
 
 internal fun HomeViewModel.onPerAppRoutingModeSelectedInternal(value: PerAppRoutingMode) {
-    updateRuntimeSettingAndMaybeReload {
+    updateAppRoutingSettingAndPromptReconnect {
         container.settingsRepository.updatePerAppRoutingMode(value)
     }
 }
 
 internal fun HomeViewModel.onSelectedPackagesChangedInternal(value: List<String>) {
-    updateRuntimeSettingAndMaybeReload {
-        container.settingsRepository.updateSelectedPackages(
-            value.filterNot { it == getApplication<Application>().packageName },
-        )
+    updateAppRoutingSettingAndPromptReconnect {
+        val selectedPackages = value.filterNot { it == getApplication<Application>().packageName }
+        container.settingsRepository.updateSelectedPackages(selectedPackages)
+        if (selectedPackages.isEmpty()) {
+            container.settingsRepository.updatePerAppRoutingMode(PerAppRoutingMode.FULL_TUNNEL)
+        }
     }
 }
 
 internal fun HomeViewModel.onBlockedPackagesChangedInternal(value: List<String>) {
-    updateRuntimeSettingAndMaybeReload {
+    updateAppRoutingSettingAndPromptReconnect(requiresRuntimeWhenFull = true) {
         container.settingsRepository.updateBlockedPackages(
             value.filterNot { it == getApplication<Application>().packageName },
         )
@@ -278,8 +280,41 @@ internal fun HomeViewModel.onBlockedPackagesChangedInternal(value: List<String>)
 }
 
 internal fun HomeViewModel.onBlockedPackagesEnabledChangedInternal(value: Boolean) {
-    updateRuntimeSettingAndMaybeReload {
+    updateAppRoutingSettingAndPromptReconnect(requiresRuntimeWhenFull = true) {
         container.settingsRepository.updateBlockedPackagesEnabled(value)
+    }
+}
+
+private fun HomeViewModel.updateAppRoutingSettingAndPromptReconnect(
+    requiresRuntimeWhenFull: Boolean = false,
+    updateAction: suspend () -> Unit,
+) {
+    viewModelScope.launch {
+        val previousMode = uiState.value.settings.expert.perAppRoutingMode
+        val activeRuntime =
+            uiState.value.activeProfile != null &&
+                container.connectionController.snapshot.value.state in HomeViewModel.ACTIVE_CONNECTION_STATES
+        val reconnectAlreadyRequired = runtimeReconnectRequiredMutable.value
+        updateAction()
+        val updatedMode = container.settingsRepository.current().expert.perAppRoutingMode
+        val splitRulesAffectRuntime =
+            requiresRuntimeWhenFull ||
+                previousMode != PerAppRoutingMode.FULL_TUNNEL ||
+                updatedMode != PerAppRoutingMode.FULL_TUNNEL
+        if (!activeRuntime || !splitRulesAffectRuntime) {
+            clearRuntimeReconnectRequired()
+            return@launch
+        }
+        val appliedFingerprint = container.connectionController.appliedRuntimeSignature.value
+        val currentFingerprint = container.connectionController.currentRuntimeFingerprint()
+        if (appliedFingerprint != currentFingerprint) {
+            markRuntimeReconnectRequired()
+            if (!reconnectAlreadyRequired) {
+                snackbars.emit(infoBanner(R.string.split_tunnel_reconnect_required))
+            }
+        } else {
+            clearRuntimeReconnectRequired()
+        }
     }
 }
 

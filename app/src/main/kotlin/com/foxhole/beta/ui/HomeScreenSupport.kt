@@ -88,6 +88,7 @@ internal val HomeNetworkContentHeight = 82.dp
 internal val HomeDashboardProfileContentHeight = 62.dp
 private val HomeNetworkValueLoadingWidth = 68.dp
 private val HomeNetworkMetricValueLoadingWidth = 54.dp
+private val HomeModeSelectorWidth = 84.dp
 private val HomeNetworkMetricValueLoadingHeight = 12.dp
 internal const val HOME_PROFILE_LOADING_TAG = "home_profile_loading"
 
@@ -244,7 +245,6 @@ internal fun HomeNetworkColumnTitle(text: String) {
 @Composable
 internal fun HomeModeDropdown(
     selected: HomeModeOption,
-    splitActive: Boolean,
     onSelect: (HomeModeOption) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -264,7 +264,7 @@ internal fun HomeModeDropdown(
             modifier =
                 Modifier
                     .testTag("home_mode_selector")
-                    .foxholeAnimateContentSize()
+                    .width(HomeModeSelectorWidth)
                     .clip(MaterialTheme.shapes.small)
                     .clickable { expanded = true },
             shape = MaterialTheme.shapes.small,
@@ -273,11 +273,11 @@ internal fun HomeModeDropdown(
         ) {
             Row(
                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                horizontalArrangement = Arrangement.spacedBy(5.dp),
+                horizontalArrangement = Arrangement.spacedBy(5.dp, Alignment.CenterHorizontally),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Icon(
-                    imageVector = homeModeOptionIcon(selected, splitActive = splitActive && selected == HomeModeOption.TUNNEL),
+                    imageVector = homeModeOptionIcon(selected),
                     contentDescription = null,
                     modifier = Modifier.size(11.dp),
                     tint = selectorTint,

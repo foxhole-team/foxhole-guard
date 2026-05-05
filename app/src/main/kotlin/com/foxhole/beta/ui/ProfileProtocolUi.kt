@@ -33,6 +33,7 @@ import androidx.compose.material.icons.outlined.Cloud
 import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.Hub
 import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.RemoveCircleOutline
 import androidx.compose.material.icons.outlined.Security
@@ -1060,7 +1061,7 @@ internal fun AppIcon(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Icon(
-                    imageVector = Icons.Outlined.Apps,
+                    imageVector = Icons.Outlined.Person,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.primary,
                 )
@@ -1162,6 +1163,8 @@ internal fun SiteRuleDialog(
     var value by rememberSaveable(rule?.id) { mutableStateOf(initialToken) }
     var action by rememberSaveable(rule?.id, defaultAction) { mutableStateOf(rule?.action ?: defaultAction) }
     var actionMenuExpanded by rememberSaveable { mutableStateOf(false) }
+    val validationErrorRes = siteMaskValidationErrorRes(value)
+    val validationError = validationErrorRes?.let { stringResource(it) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -1188,13 +1191,20 @@ internal fun SiteRuleDialog(
                     text = stringResource(R.string.supported_site_masks_examples),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
                 )
                 OutlinedTextField(
                     value = value,
-                    onValueChange = { value = it.trim() },
+                    onValueChange = { value = it },
                     label = { Text(stringResource(R.string.site_mask_input_label)) },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
+                    isError = validationError != null,
+                    supportingText =
+                        validationError?.let { message ->
+                            { Text(text = message) }
+                        },
                 )
                 DropdownSettingRow(
                     title = stringResource(R.string.action_label),
@@ -1205,7 +1215,6 @@ internal fun SiteRuleDialog(
                     selected = action,
                     label = { siteActionLabel(it) },
                     onSelect = { action = it },
-                    summary = stringResource(R.string.site_exception_action_summary),
                     leadingIcon = siteActionIcon(action),
                     optionIcon = { siteActionIcon(it) },
                 )
@@ -1215,10 +1224,11 @@ internal fun SiteRuleDialog(
             FoxholeDialogConfirmButton(
                 onClick = {
                     onConfirm(
-                        siteMaskToken(value)?.let(::listOf).orEmpty(),
+                        normalizedSiteMaskToken(value)?.let(::listOf).orEmpty(),
                         action,
                     )
                 },
+                enabled = validationError == null,
             )
         },
         dismissButton = {
@@ -1227,7 +1237,7 @@ internal fun SiteRuleDialog(
     )
 }
 
-private fun siteMaskToken(value: String): String? {
+internal fun normalizedSiteMaskToken(value: String): String? {
     val normalized = value.trim().takeIf(String::isNotBlank) ?: return null
     return when {
         normalized.startsWith("cidr:") ||
@@ -1238,6 +1248,72 @@ private fun siteMaskToken(value: String): String? {
         else -> normalized
     }
 }
+
+internal fun siteMaskValidationErrorRes(value: String): Int? {
+    val token = normalizedSiteMaskToken(value) ?: return R.string.site_exception_validation_error
+    return if (isValidSiteMaskToken(token)) null else R.string.site_exception_invalid_error
+}
+
+private fun isValidSiteMaskToken(token: String): Boolean =
+    when {
+        token.startsWith("cidr:") -> isValidCidr(token.removePrefix("cidr:"))
+        token.startsWith("kw:") -> isValidKeywordMask(token.removePrefix("kw:"))
+        token.startsWith("re:") -> isValidRegexMask(token.removePrefix("re:"))
+        token.startsWith("*.") -> isValidDomainName(token.removePrefix("*."))
+        else -> isValidDomainName(token)
+    }
+
+private fun isValidKeywordMask(value: String): Boolean =
+    value.isNotBlank() && value.none { it.isWhitespace() } && "," !in value
+
+private fun isValidRegexMask(value: String): Boolean =
+    value.isNotBlank() &&
+        runCatching { Regex(value) }.isSuccess
+
+private fun isValidCidr(value: String): Boolean {
+    val parts = value.split("/", limit = 2)
+    if (parts.size != 2) {
+        return false
+    }
+    val address = parts[0]
+    val prefix = parts[1].toIntOrNull() ?: return false
+    return if (":" in address) {
+        prefix in 0..128 &&
+            runCatching {
+                java.net.InetAddress.getByName(address) is java.net.Inet6Address
+            }.getOrDefault(false)
+    } else {
+        prefix in 0..32 && isValidIpv4Address(address)
+    }
+}
+
+private fun isValidIpv4Address(value: String): Boolean {
+    val segments = value.split(".")
+    return segments.size == 4 &&
+        segments.all { segment ->
+            segment.isNotEmpty() &&
+                segment.all(Char::isDigit) &&
+                segment.toIntOrNull()?.let { it in 0..255 } == true
+        }
+}
+
+private fun isValidDomainName(value: String): Boolean {
+    val domain = value.trim().removeSuffix(".")
+    if (domain.length !in 3..253 || domain.contains("..")) {
+        return false
+    }
+    if (domain.any { it.isWhitespace() || it in "/:@," }) {
+        return false
+    }
+    val labels = domain.split(".")
+    return labels.size >= 2 && labels.all(::isValidDomainLabel)
+}
+
+private fun isValidDomainLabel(value: String): Boolean =
+    value.length in 1..63 &&
+        value.first().isLetterOrDigit() &&
+        value.last().isLetterOrDigit() &&
+        value.all { it.isLetterOrDigit() || it == '-' }
 
 @Composable
 internal fun <T> ChoiceDialog(

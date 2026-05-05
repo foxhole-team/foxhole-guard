@@ -264,7 +264,7 @@ data class ExpertSettings(
     val smartStartReplayLogging: Boolean = false,
     val allowHttpConfigImports: Boolean = false,
     val allowInsecureTls: Boolean = false,
-    val sniff: Boolean = false,
+    val sniff: Boolean = true,
     val routeOnly: Boolean = false,
     val strictRoute: Boolean = true,
     val bypassLan: Boolean = false,
