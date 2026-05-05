@@ -443,6 +443,7 @@ fun FoxholeApp(
                         onOpenBlockedPicker = { navController.navigate(AppRoute.ROUTING_BLOCKED_APPS_PICKER) },
                         onSelectedPackagesChanged = viewModel::onSelectedPackagesChanged,
                         onBlockedPackagesChanged = viewModel::onBlockedPackagesChanged,
+                        onBlockAppsAlwaysChanged = viewModel::onBlockAppsAlwaysChanged,
                     )
                 }
                 composable(AppRoute.ROUTING_APPS_PICKER) {
@@ -518,15 +519,9 @@ fun FoxholeApp(
                         onRouteOnlyChanged = viewModel::onRouteOnlyChanged,
                         onStrictRouteChanged = viewModel::onStrictRouteChanged,
                         onAllowPrivateOutboundHostsChanged = viewModel::onAllowPrivateOutboundHostsChanged,
-                        onNetworkActivityLoggingChanged = viewModel::onNetworkActivityLoggingChanged,
                         onSmartStartReplayLoggingChanged = viewModel::onSmartStartReplayLoggingChanged,
-                        onDiagnosticsRetentionSelected = viewModel::onDiagnosticsRetentionSelected,
-                        onAllowHttpConfigImportsChanged = viewModel::onAllowHttpConfigImportsChanged,
                         onAllowInsecureTlsChanged = viewModel::onAllowInsecureTlsChanged,
                         onLocalProxyLanAccessChanged = viewModel::onLocalProxyLanAccessChanged,
-                        onSocksSurfaceChanged = viewModel::onSocksSurfaceChanged,
-                        onHttpSurfaceChanged = viewModel::onHttpSurfaceChanged,
-                        onMixedSurfaceChanged = viewModel::onMixedSurfaceChanged,
                         onClashApiChanged = viewModel::onClashApiChanged,
                         onResetToSafeDefaults = viewModel::resetExpertToSafeDefaults,
                         onResetExperimentalSettings = viewModel::resetExperimentalSettingsToDefaults,
@@ -538,8 +533,9 @@ fun FoxholeApp(
                         state = state,
                         snackbarHostState = snackbarHostState,
                         onNavigateUp = navController::navigateUp,
-                        onCreateDiagnosticsArchive = viewModel::createDiagnosticsArchive,
-                        onShareDiagnosticsArchive = viewModel::exportDiagnostics,
+                        onNetworkActivityLoggingChanged = viewModel::onNetworkActivityLoggingChanged,
+                        onNetworkActivityPersistentLoggingChanged = viewModel::onNetworkActivityPersistentLoggingChanged,
+                        onDiagnosticsRetentionSelected = viewModel::onDiagnosticsRetentionSelected,
                         onClearUsage = viewModel::resetUsageTracking,
                     )
                 }

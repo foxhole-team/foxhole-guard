@@ -326,7 +326,7 @@ internal fun HomeViewModel.profileImportFailureMessageInternal(
     val trimmed = rawInput.trim()
     // Keep subscription-link failures readable instead of surfacing parser internals.
     return when {
-        (!uiState.value.settings.expert.allowHttpConfigImports && trimmed.startsWith("http://", ignoreCase = true)) ||
+        trimmed.startsWith("http://", ignoreCase = true) ||
             message.contains("only https subscriptions are allowed", ignoreCase = true) ->
             app.getString(R.string.profile_import_https_only)
 

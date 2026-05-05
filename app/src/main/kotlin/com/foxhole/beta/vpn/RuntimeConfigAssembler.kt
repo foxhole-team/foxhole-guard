@@ -58,6 +58,45 @@ class RuntimeConfigAssembler(
         }
     }
 
+    internal fun assembleLocalGuard(
+        settings: Settings,
+        mode: LocalGuardMode,
+    ): String {
+        val dns = buildFoxholeDnsConfig(settings.traffic.domainStrategy.configValue, privateDnsMode = null)
+        val route =
+            buildJsonObject {
+                val rules =
+                    buildJsonArray {
+                        if (mode == LocalGuardMode.JOURNAL) {
+                            buildAppRouteRules(settings.expert).forEach(::add)
+                            hijackDnsRules().forEach(::add)
+                        }
+                    }
+                put("rules", rules)
+                put("final", if (mode == LocalGuardMode.FIREWALL) "block" else "direct")
+                resolverForRoute(dns, buildJsonObject {})?.let { put("default_domain_resolver", it) }
+                put("auto_detect_interface", true)
+            }
+        return json.encodeToString(
+            JsonObject.serializer(),
+            buildJsonObject {
+                putJsonArray("inbounds") {
+                    add(localGuardTunInbound(settings, mode))
+                }
+                putJsonArray("outbounds") {
+                    add(buildJsonObject { put("type", "direct"); put("tag", "direct") })
+                    add(buildJsonObject { put("type", "block"); put("tag", "block") })
+                }
+                put("dns", dns)
+                put("route", route)
+                putJsonObject("log") {
+                    put("level", FOXHOLE_RUNTIME_LOG_LEVEL)
+                    put("timestamp", true)
+                }
+            },
+        )
+    }
+
     private fun assembleTunnel(
         base: JsonObject,
         settings: Settings,
@@ -240,12 +279,13 @@ class RuntimeConfigAssembler(
             warningAcknowledgedAt = null,
             blockScreenshots = false,
             networkActivityLogging = false,
+            networkActivityPersistentLogging = false,
             diagnosticsRetention = DiagnosticsRetention.HOURS_24,
-            allowHttpConfigImports = false,
             allowInsecureTls = true,
             selectedPackages = runtimeSelectedPackages,
             blockedPackages = runtimeBlockedPackages,
             blockedPackagesEnabled = runtimeBlockedPackages.isNotEmpty(),
+            blockAppsAlways = false,
         )
     }
 
@@ -285,6 +325,36 @@ class RuntimeConfigAssembler(
             }
         }
     }
+
+    private fun localGuardTunInbound(
+        settings: Settings,
+        mode: LocalGuardMode,
+    ): JsonObject =
+        buildJsonObject {
+            put("type", "tun")
+            put("tag", "tun-in")
+            put("interface_name", "foxhole")
+            put("mtu", settings.traffic.mtu)
+            put("auto_route", true)
+            put("strict_route", true)
+            put("stack", settings.traffic.tunStack.configValue)
+            putJsonArray("address") {
+                add(JsonPrimitive("172.19.0.1/30"))
+                add(JsonPrimitive("fdfe:dcba:9876::1/126"))
+            }
+            if (mode == LocalGuardMode.FIREWALL) {
+                val packages = normalizedRuntimePackages(settings.expert.blockedPackages)
+                if (packages.isNotEmpty()) {
+                    putJsonArray("include_package") {
+                        packages.forEach { add(JsonPrimitive(it)) }
+                    }
+                }
+            }
+            if (mode == LocalGuardMode.JOURNAL && settings.expert.sniff) {
+                put("sniff", true)
+                put("sniff_override_destination", !settings.expert.routeOnly)
+            }
+        }
 
     private fun JsonObject.withTcpReliabilityOutbounds(): JsonObject {
         val patchedOutbounds = patchTcpReliabilityOutbounds(this["outbounds"]?.jsonArray) ?: return this

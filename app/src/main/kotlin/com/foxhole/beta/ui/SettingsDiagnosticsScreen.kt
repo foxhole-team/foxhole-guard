@@ -1,21 +1,15 @@
 package com.foxhole.beta.ui
 
-import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.ManagedActivityResultLauncher
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.FileUpload
-import androidx.compose.material.icons.outlined.Info
-import androidx.compose.material3.Icon
+import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -23,103 +17,132 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
-import androidx.core.net.toUri
+import androidx.core.content.FileProvider
 import com.foxhole.beta.R
-import com.foxhole.beta.core.settings.effectiveSupportBotHandle
-import com.foxhole.beta.core.settings.supportBotUsername
+import com.foxhole.beta.core.diagnostics.DiagnosticEntry
+import com.foxhole.beta.core.model.DiagnosticsRetention
+import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import java.util.UUID
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.io.File
 
 @Composable
 fun DiagnosticsScreen(
     state: DiagnosticsRouteUiState,
     snackbarHostState: SnackbarHostState,
     onNavigateUp: () -> Unit,
-    onCreateDiagnosticsArchive: (Boolean) -> File,
-    onShareDiagnosticsArchive: (File) -> Intent,
+    onNetworkActivityLoggingChanged: (Boolean) -> Unit,
+    onNetworkActivityPersistentLoggingChanged: (Boolean) -> Unit,
+    onDiagnosticsRetentionSelected: (DiagnosticsRetention) -> Unit,
     onClearUsage: () -> Unit,
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
-    val supportBotHandle = effectiveSupportBotHandle(state.settings.ui.supportBotHandleOverride)
-    val strings = diagnosticsActionStrings()
-    var liveLogsVisible by rememberSaveable { mutableStateOf(false) }
-    var sendLogToBotVisible by rememberSaveable { mutableStateOf(false) }
-    var pendingArchiveFile by remember { mutableStateOf<File?>(null) }
-    val archiveSaver =
-        rememberDiagnosticsArchiveSaver(
+    var networkLogVisible by rememberSaveable { mutableStateOf(false) }
+    var foxholeLogVisible by rememberSaveable { mutableStateOf(false) }
+    var retentionMenuExpanded by rememberSaveable { mutableStateOf(false) }
+    var pendingSavedLog by remember { mutableStateOf<SavedLogPayload?>(null) }
+    val saveStrings =
+        SavedLogStrings(
+            saved = stringResource(R.string.log_file_saved),
+            failed = stringResource(R.string.log_file_save_failed),
+        )
+    val textLogSaver =
+        rememberTextLogSaver(
             context = context,
             coroutineScope = coroutineScope,
             snackbarHostState = snackbarHostState,
-            pendingArchive = { pendingArchiveFile },
-            clearPendingArchive = { pendingArchiveFile = null },
-            archiveSaved = strings.archiveSaved,
-            archiveSaveFailed = strings.archiveSaveFailed,
+            pendingLog = { pendingSavedLog },
+            clearPendingLog = { pendingSavedLog = null },
+            strings = saveStrings,
         )
-    val saveArchive: () -> Unit = {
-        launchDiagnosticsArchiveExport(
-            coroutineScope = coroutineScope,
-            snackbarHostState = snackbarHostState,
-            onCreateDiagnosticsArchive = onCreateDiagnosticsArchive,
-            archiveSaver = archiveSaver,
-            setPendingArchiveFile = { pendingArchiveFile = it },
-            diagnosticsArchiveSaveFailed = strings.archiveSaveFailed,
-        )
-    }
+    val networkEntries = remember(state.diagnosticEntries) { state.diagnosticEntries.filter { it.tag == NETWORK_ACTIVITY_TAG } }
+    val foxholeEntries = remember(state.diagnosticEntries) { state.diagnosticEntries.filterNot { it.tag == NETWORK_ACTIVITY_TAG } }
 
     DiagnosticsScreenContent(
         state = state,
         snackbarHostState = snackbarHostState,
+        retentionMenuExpanded = retentionMenuExpanded,
+        onRetentionMenuExpandedChange = { retentionMenuExpanded = it },
         onNavigateUp = onNavigateUp,
-        onExportLogs = saveArchive,
-        onOpenLogs = { liveLogsVisible = true },
-        onSendLog = { sendLogToBotVisible = true },
+        onNetworkActivityLoggingChanged = onNetworkActivityLoggingChanged,
+        onNetworkActivityPersistentLoggingChanged = onNetworkActivityPersistentLoggingChanged,
+        onDiagnosticsRetentionSelected = onDiagnosticsRetentionSelected,
+        onOpenNetworkLog = { networkLogVisible = true },
+        onOpenFoxholeLog = { foxholeLogVisible = true },
         onClearUsage = onClearUsage,
     )
-    val dialogVisibility =
-        DiagnosticsDialogVisibility(
-            liveLogsVisible = liveLogsVisible,
-            sendLogToBotVisible = sendLogToBotVisible,
-        )
-    val dialogActions =
-        DiagnosticsDialogActions(
-            onDismissLiveLogs = { liveLogsVisible = false },
-            onDismissSendLog = { sendLogToBotVisible = false },
-            onSendArchiveToSupportBot = {
-                launchDiagnosticsArchiveToSupportBot(
-                    coroutineScope = coroutineScope,
-                    context = context,
-                    snackbarHostState = snackbarHostState,
-                    supportBotHandle = supportBotHandle,
-                    strings = strings,
-                    onCreateDiagnosticsArchive = onCreateDiagnosticsArchive,
-                    onShareDiagnosticsArchive = onShareDiagnosticsArchive,
-                )
+
+    if (networkLogVisible) {
+        val title = stringResource(R.string.network_activity_log_title)
+        LiveLogsDialog(
+            title = title,
+            entries = networkEntries,
+            notice = stringResource(R.string.logs_network_activity_notice),
+            onDismiss = { networkLogVisible = false },
+            confirmLabel = stringResource(R.string.save_log),
+            onConfirm = {
+                pendingSavedLog =
+                    SavedLogPayload(
+                        filename = "foxhole-network-activity-${System.currentTimeMillis()}.log",
+                        text = formatPlainLog(title, networkEntries),
+                    )
+                textLogSaver.launch(pendingSavedLog?.filename ?: "foxhole-network-activity.log")
             },
         )
+    }
 
-    DiagnosticsScreenDialogs(
-        state = state,
-        visibility = dialogVisibility,
-        actions = dialogActions,
-    )
+    if (foxholeLogVisible) {
+        val title = stringResource(R.string.logs_title)
+        LiveLogsDialog(
+            title = title,
+            entries = foxholeEntries,
+            onDismiss = { foxholeLogVisible = false },
+            confirmLabel = stringResource(R.string.send_log_to_bot),
+            onConfirm = {
+                coroutineScope.launch {
+                    runCatching {
+                        withContext(Dispatchers.IO) {
+                            createPlainLogFile(
+                                context = context,
+                                title = title,
+                                entries = foxholeEntries,
+                                filenamePrefix = "foxhole-app-log",
+                            )
+                        }
+                    }.onSuccess { file ->
+                        context.startActivity(Intent.createChooser(sharePlainLogIntent(context, file), title))
+                    }.onFailure {
+                        snackbarHostState.showBanner(
+                            it.message ?: saveStrings.failed,
+                            FoxholeBannerTone.ERROR,
+                        )
+                    }
+                }
+            },
+        )
+    }
 }
 
 @Composable
 private fun DiagnosticsScreenContent(
     state: DiagnosticsRouteUiState,
     snackbarHostState: SnackbarHostState,
+    retentionMenuExpanded: Boolean,
+    onRetentionMenuExpandedChange: (Boolean) -> Unit,
     onNavigateUp: () -> Unit,
-    onExportLogs: () -> Unit,
-    onOpenLogs: () -> Unit,
-    onSendLog: () -> Unit,
+    onNetworkActivityLoggingChanged: (Boolean) -> Unit,
+    onNetworkActivityPersistentLoggingChanged: (Boolean) -> Unit,
+    onDiagnosticsRetentionSelected: (DiagnosticsRetention) -> Unit,
+    onOpenNetworkLog: () -> Unit,
+    onOpenFoxholeLog: () -> Unit,
     onClearUsage: () -> Unit,
 ) {
     SettingsScaffold(
@@ -128,37 +151,55 @@ private fun DiagnosticsScreenContent(
         onNavigateUp = onNavigateUp,
     ) {
         item {
-            InfoBlock(
-                title = stringResource(R.string.information_title),
-                body = stringResource(R.string.diagnostics_info_body),
-            )
-        }
-        item {
             SettingsControlGroup {
-                SettingsNavigationRow(
-                    icon = Icons.Outlined.FileUpload,
-                    title = stringResource(R.string.export_diagnostics),
-                    summary = stringResource(R.string.export_diagnostics_summary),
+                SettingSwitchRow(
+                    title = stringResource(R.string.network_activity_log_title),
+                    checked = state.settings.expert.networkActivityLogging,
+                    summary = stringResource(R.string.logs_network_activity_notice),
+                    leadingIcon = Icons.Outlined.Public,
+                    onCheckedChange = onNetworkActivityLoggingChanged,
                     grouped = true,
-                    onClick = onExportLogs,
                 )
+                if (state.settings.expert.networkActivityLogging) {
+                    SettingsControlGroupDivider()
+                    DropdownSettingRow(
+                        title = stringResource(R.string.diagnostics_retention_title),
+                        value = diagnosticsRetentionLabel(state.settings.expert.diagnosticsRetention),
+                        expanded = retentionMenuExpanded,
+                        onExpandedChange = onRetentionMenuExpandedChange,
+                        values = NetworkActivityRetentionValues,
+                        selected = state.settings.expert.diagnosticsRetention,
+                        label = { diagnosticsRetentionLabel(it) },
+                        onSelect = onDiagnosticsRetentionSelected,
+                        summary = stringResource(R.string.diagnostics_retention_summary),
+                        leadingIcon = Icons.Outlined.Public,
+                        grouped = true,
+                    )
+                    SettingsControlGroupDivider()
+                    SettingSwitchRow(
+                        title = stringResource(R.string.network_activity_persistent_logging_title),
+                        checked = state.settings.expert.networkActivityPersistentLogging,
+                        summary = stringResource(R.string.network_activity_persistent_logging_summary),
+                        leadingIcon = Icons.Outlined.Public,
+                        onCheckedChange = onNetworkActivityPersistentLoggingChanged,
+                        grouped = true,
+                    )
+                    SettingsControlGroupDivider()
+                    SettingsNavigationRow(
+                        icon = Icons.Outlined.Public,
+                        title = stringResource(R.string.open_network_activity_log),
+                        summary = stringResource(R.string.network_activity_log_summary),
+                        grouped = true,
+                        onClick = onOpenNetworkLog,
+                    )
+                }
                 SettingsControlGroupDivider()
                 SettingsNavigationRow(
                     icon = Icons.Outlined.FileUpload,
-                    title = stringResource(R.string.send_log_to_bot),
-                    summary = stringResource(R.string.send_log_to_bot_summary),
-                    summaryMaxLines = 2,
-                    grouped = true,
-                    onClick = onSendLog,
-                )
-                SettingsControlGroupDivider()
-                SettingsNavigationRow(
-                    icon = Icons.Outlined.Info,
                     title = stringResource(R.string.logs_title),
                     summary = stringResource(R.string.logs_summary),
-                    summaryMaxLines = 2,
                     grouped = true,
-                    onClick = onOpenLogs,
+                    onClick = onOpenFoxholeLog,
                 )
             }
         }
@@ -172,229 +213,104 @@ private fun DiagnosticsScreenContent(
 }
 
 @Composable
-private fun DiagnosticsScreenDialogs(
-    state: DiagnosticsRouteUiState,
-    visibility: DiagnosticsDialogVisibility,
-    actions: DiagnosticsDialogActions,
-) {
-    if (visibility.liveLogsVisible) {
-        LiveLogsDialog(
-            entries = state.diagnosticEntries,
-            networkActivityLoggingEnabled = state.settings.expert.networkActivityLogging,
-            retention = state.settings.expert.diagnosticsRetention,
-            onDismiss = actions.onDismissLiveLogs,
-        )
-    }
-    if (visibility.sendLogToBotVisible) {
-        ConfirmDialog(
-            title = stringResource(R.string.send_log_to_bot),
-            body = stringResource(R.string.send_log_to_bot_confirm_body),
-            confirmLabel = stringResource(R.string.send_log_to_bot),
-            icon = Icons.Outlined.FileUpload,
-            onDismiss = actions.onDismissSendLog,
-            onConfirm = {
-                actions.onDismissSendLog()
-                actions.onSendArchiveToSupportBot()
-            },
-        )
-    }
-}
-
-private data class DiagnosticsDialogVisibility(
-    val liveLogsVisible: Boolean,
-    val sendLogToBotVisible: Boolean,
-)
-
-private data class DiagnosticsDialogActions(
-    val onDismissLiveLogs: () -> Unit,
-    val onDismissSendLog: () -> Unit,
-    val onSendArchiveToSupportBot: () -> Unit,
-)
-
-@Composable
-private fun rememberDiagnosticsArchiveSaver(
+private fun rememberTextLogSaver(
     context: Context,
     coroutineScope: CoroutineScope,
     snackbarHostState: SnackbarHostState,
-    pendingArchive: () -> File?,
-    clearPendingArchive: () -> Unit,
-    archiveSaved: String,
-    archiveSaveFailed: String,
+    pendingLog: () -> SavedLogPayload?,
+    clearPendingLog: () -> Unit,
+    strings: SavedLogStrings,
 ): ManagedActivityResultLauncher<String, Uri?> =
-    rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/gzip")) { uri ->
-        val archive = pendingArchive()
-        clearPendingArchive()
-        if (uri == null || archive == null) {
+    rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/plain")) { uri ->
+        val payload = pendingLog()
+        clearPendingLog()
+        if (uri == null || payload == null) {
             return@rememberLauncherForActivityResult
         }
         coroutineScope.launch {
             runCatching {
                 withContext(Dispatchers.IO) {
-                    context.contentResolver.openOutputStream(uri)?.use { output ->
-                        archive.inputStream().use { input -> input.copyTo(output) }
+                    context.contentResolver.openOutputStream(uri)?.bufferedWriter(Charsets.UTF_8)?.use { writer ->
+                        writer.write(payload.text)
                     } ?: error("openOutputStream returned null")
                 }
             }.onSuccess {
-                snackbarHostState.showBanner(archiveSaved, FoxholeBannerTone.SUCCESS)
+                snackbarHostState.showBanner(strings.saved, FoxholeBannerTone.SUCCESS)
             }.onFailure {
                 snackbarHostState.showBanner(
-                    it.message ?: archiveSaveFailed,
+                    it.message ?: strings.failed,
                     FoxholeBannerTone.ERROR,
                 )
             }
         }
     }
 
-@Composable
-private fun diagnosticsActionStrings(): DiagnosticsActionStrings =
-    DiagnosticsActionStrings(
-        supportBotOpenFailed = stringResource(R.string.support_bot_open_failed),
-        supportBotBrowserFallback = stringResource(R.string.support_bot_browser_fallback),
-        archiveSaved = stringResource(R.string.diagnostics_archive_saved),
-        archiveSaveFailed = stringResource(R.string.diagnostics_archive_save_failed),
-    )
-
-private data class DiagnosticsActionStrings(
-    val supportBotOpenFailed: String,
-    val supportBotBrowserFallback: String,
-    val archiveSaved: String,
-    val archiveSaveFailed: String,
+private data class SavedLogPayload(
+    val filename: String,
+    val text: String,
 )
 
-private fun launchDiagnosticsArchiveExport(
-    coroutineScope: CoroutineScope,
-    snackbarHostState: SnackbarHostState,
-    onCreateDiagnosticsArchive: (Boolean) -> File,
-    archiveSaver: ManagedActivityResultLauncher<String, Uri?>,
-    setPendingArchiveFile: (File?) -> Unit,
-    diagnosticsArchiveSaveFailed: String,
-) {
-    coroutineScope.launch {
-        runCatching {
-            withContext(Dispatchers.IO) { onCreateDiagnosticsArchive(false) }
-        }.onSuccess { archive ->
-            setPendingArchiveFile(archive)
-            archiveSaver.launch(archive.name)
-        }.onFailure {
-            snackbarHostState.showBanner(
-                it.message ?: diagnosticsArchiveSaveFailed,
-                FoxholeBannerTone.ERROR,
-            )
-        }
-    }
-}
+private data class SavedLogStrings(
+    val saved: String,
+    val failed: String,
+)
 
-private fun showSupportBotOpenResult(
-    coroutineScope: CoroutineScope,
-    snackbarHostState: SnackbarHostState,
-    opened: Boolean,
-    strings: DiagnosticsActionStrings,
-) {
-    coroutineScope.launch {
-        snackbarHostState.showBanner(
-            if (opened) {
-                strings.supportBotBrowserFallback
-            } else {
-                strings.supportBotOpenFailed
-            },
-            if (opened) FoxholeBannerTone.INFO else FoxholeBannerTone.ERROR,
-        )
-    }
-}
-
-private fun launchDiagnosticsArchiveToSupportBot(
-    coroutineScope: CoroutineScope,
+private fun createPlainLogFile(
     context: Context,
-    snackbarHostState: SnackbarHostState,
-    supportBotHandle: String,
-    strings: DiagnosticsActionStrings,
-    onCreateDiagnosticsArchive: (Boolean) -> File,
-    onShareDiagnosticsArchive: (File) -> Intent,
-) {
-    val telegramPackage = installedTelegramPackage(context.packageManager)
-    if (telegramPackage == null) {
-        showSupportBotOpenResult(
-            coroutineScope = coroutineScope,
-            snackbarHostState = snackbarHostState,
-            opened = openSupportBot(context, supportBotHandle),
-            strings = strings,
-        )
-        return
-    }
-    coroutineScope.launch {
-        runCatching {
-            withContext(Dispatchers.IO) { onCreateDiagnosticsArchive(true) }
-        }.onSuccess { archive ->
-            val shareIntent =
-                createTelegramDiagnosticsShareIntent(
-                    packageName = telegramPackage,
-                    baseIntent = onShareDiagnosticsArchive(archive),
-                    context = context,
-                    handle = supportBotHandle,
-                )
-            runCatching { context.startActivity(shareIntent) }
-                .onFailure {
-                    showSupportBotOpenResult(
-                        coroutineScope = coroutineScope,
-                        snackbarHostState = snackbarHostState,
-                        opened = openSupportBot(context, supportBotHandle),
-                        strings = strings,
-                    )
-                }
-        }.onFailure {
-            snackbarHostState.showBanner(
-                it.message ?: strings.archiveSaveFailed,
-                FoxholeBannerTone.ERROR,
-            )
-        }
-    }
+    title: String,
+    entries: List<DiagnosticEntry>,
+    filenamePrefix: String,
+): File {
+    val targetDir = File(context.cacheDir, "diagnostics-export").apply { mkdirs() }
+    val file = File(targetDir, "$filenamePrefix-${UUID.randomUUID()}.log")
+    file.writeText(formatPlainLog(title, entries), Charsets.UTF_8)
+    return file
 }
 
-private fun supportBotBrowserUri(handle: String): Uri = "https://t.me/${supportBotUsername(handle)}".toUri()
-
-private fun supportBotTelegramUri(handle: String): Uri = "tg://resolve?domain=${supportBotUsername(handle)}".toUri()
-
-private fun openSupportBot(context: Context, handle: String): Boolean {
-    val browserIntent =
-        Intent(Intent.ACTION_VIEW, supportBotBrowserUri(handle))
-            .addCategory(Intent.CATEGORY_BROWSABLE)
-    val telegramPackage = installedTelegramPackage(context.packageManager)
-    if (telegramPackage != null) {
-        val telegramIntent =
-            Intent(Intent.ACTION_VIEW, supportBotTelegramUri(handle))
-                .setPackage(telegramPackage)
-                .addCategory(Intent.CATEGORY_BROWSABLE)
-        try {
-            context.startActivity(telegramIntent)
-            return true
-        } catch (_: ActivityNotFoundException) {
-        } catch (_: SecurityException) {
-        }
-    }
-    return try {
-        context.startActivity(browserIntent)
-        true
-    } catch (_: ActivityNotFoundException) {
-        false
-    } catch (_: SecurityException) {
-        false
-    }
-}
-
-private fun createTelegramDiagnosticsShareIntent(
-    packageName: String,
-    baseIntent: Intent,
+private fun sharePlainLogIntent(
     context: Context,
-    handle: String,
-): Intent =
-    Intent(baseIntent).apply {
-        `package` = packageName
-        putExtra(
-            Intent.EXTRA_TEXT,
-            context.getString(
-                R.string.support_bot_share_text,
-                handle,
-                supportBotBrowserUri(handle).toString(),
-            ),
+    file: File,
+): Intent {
+    val uri =
+        FileProvider.getUriForFile(
+            context,
+            "${context.packageName}.fileprovider",
+            file,
         )
+    return Intent(Intent.ACTION_SEND).apply {
+        type = "text/plain"
+        putExtra(Intent.EXTRA_STREAM, uri)
+        putExtra(Intent.EXTRA_SUBJECT, file.name)
+        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
     }
+}
+
+private fun formatPlainLog(
+    title: String,
+    entries: List<DiagnosticEntry>,
+): String {
+    val formatter = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
+    return buildString {
+        appendLine(title)
+        appendLine("Generated: ${formatter.format(Date())}")
+        appendLine()
+        if (entries.isEmpty()) {
+            appendLine("No entries.")
+        } else {
+            entries.forEach { entry ->
+                appendLine("${formatter.format(Date(entry.timestamp))} [${entry.tag}] ${entry.message}")
+            }
+        }
+    }
+}
+
+private val NetworkActivityRetentionValues =
+    listOf(
+        DiagnosticsRetention.HOURS_24,
+        DiagnosticsRetention.DAYS_2,
+        DiagnosticsRetention.DAYS_3,
+        DiagnosticsRetention.DAYS_7,
+        DiagnosticsRetention.DAYS_30,
+    )
+
+private const val NETWORK_ACTIVITY_TAG = "activity"

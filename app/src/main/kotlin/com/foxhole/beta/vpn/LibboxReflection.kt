@@ -405,7 +405,13 @@ internal class LibboxReflection(
         destinationPort: Int,
     ): ResolvedConnectionOwner? {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
-            return null
+            return resolveConnectionOwnerFromProcNet(
+                protocol = protocol,
+                sourceHost = sourceHost,
+                sourcePort = sourcePort,
+                destinationHost = destinationHost,
+                destinationPort = destinationPort,
+            )
         }
         val sourceAddress = sourceHost.toInetSocketAddress(sourcePort) ?: return null
         val destinationAddress = destinationHost.toInetSocketAddress(destinationPort) ?: return null
@@ -432,6 +438,102 @@ internal class LibboxReflection(
             packageNames = packageNames,
         )
     }
+
+    private fun resolveConnectionOwnerFromProcNet(
+        protocol: Int,
+        sourceHost: String,
+        sourcePort: Int,
+        destinationHost: String,
+        destinationPort: Int,
+    ): ResolvedConnectionOwner? {
+        val sourceAddress = sourceHost.toInetAddressOrNull() ?: return null
+        val destinationAddress = destinationHost.toInetAddressOrNull() ?: return null
+        val uid =
+            procNetFiles(protocol).firstNotNullOfOrNull { file ->
+                findProcNetUid(
+                    file = file,
+                    sourceAddress = sourceAddress,
+                    sourcePort = sourcePort,
+                    destinationAddress = destinationAddress,
+                    destinationPort = destinationPort,
+                )
+            } ?: return null
+        val packageNames = packageManager.getPackagesForUid(uid).orEmpty().distinct()
+        val userName = packageNames.firstNotNullOfOrNull(::labelForPackageName) ?: packageNames.firstOrNull().orEmpty()
+        return ResolvedConnectionOwner(
+            uid = uid,
+            userName = userName,
+            packageNames = packageNames,
+        )
+    }
+
+    private fun procNetFiles(protocol: Int): List<File> =
+        when (protocol) {
+            OsConstants.IPPROTO_UDP -> listOf(File("/proc/net/udp"), File("/proc/net/udp6"))
+            else -> listOf(File("/proc/net/tcp"), File("/proc/net/tcp6"))
+        }
+
+    private fun findProcNetUid(
+        file: File,
+        sourceAddress: InetAddress,
+        sourcePort: Int,
+        destinationAddress: InetAddress,
+        destinationPort: Int,
+    ): Int? =
+        runCatching {
+            if (!file.isFile || !file.canRead()) {
+                return null
+            }
+            file.useLines { lines ->
+                lines.drop(1).firstNotNullOfOrNull { line ->
+                    val columns = line.trim().split(Regex("\\s+"))
+                    val local = columns.getOrNull(1)?.let(::parseProcNetEndpoint) ?: return@firstNotNullOfOrNull null
+                    val remote = columns.getOrNull(2)?.let(::parseProcNetEndpoint) ?: return@firstNotNullOfOrNull null
+                    val uid = columns.getOrNull(7)?.toIntOrNull() ?: return@firstNotNullOfOrNull null
+                    if (local.matches(sourceAddress, sourcePort) && remote.matches(destinationAddress, destinationPort)) {
+                        uid
+                    } else {
+                        null
+                    }
+                }
+            }
+        }.getOrNull()
+
+    private fun parseProcNetEndpoint(value: String): ProcNetEndpoint? {
+        val addressHex = value.substringBefore(':').takeIf { it.isNotBlank() } ?: return null
+        val port = value.substringAfter(':', "").toIntOrNull(radix = 16) ?: return null
+        val addresses =
+            when (addressHex.length) {
+                8 -> procNetIpv4Candidates(addressHex)
+                32 -> procNetIpv6Candidates(addressHex)
+                else -> emptyList()
+            }
+        return ProcNetEndpoint(addresses = addresses, port = port)
+    }
+
+    private fun procNetIpv4Candidates(hex: String): List<InetAddress> {
+        val bytes = hexToBytes(hex).takeIf { it.size == 4 } ?: return emptyList()
+        return listOf(bytes.reversedArray(), bytes)
+            .distinctBy { it.contentToString() }
+            .mapNotNull { runCatching { InetAddress.getByAddress(it) }.getOrNull() }
+    }
+
+    private fun procNetIpv6Candidates(hex: String): List<InetAddress> {
+        val bytes = hexToBytes(hex).takeIf { it.size == 16 } ?: return emptyList()
+        val wordReversed =
+            bytes.toMutableList()
+                .chunked(4)
+                .flatMap { word -> word.reversed() }
+                .toByteArray()
+        return listOf(bytes, wordReversed)
+            .distinctBy { it.contentToString() }
+            .mapNotNull { runCatching { InetAddress.getByAddress(it) }.getOrNull() }
+    }
+
+    private fun hexToBytes(hex: String): ByteArray =
+        hex.chunked(2)
+            .mapNotNull { chunk -> chunk.toIntOrNull(radix = 16)?.toByte() }
+            .toByteArray()
 
     private fun logNetworkActivity(
         protocol: Int,
@@ -482,6 +584,9 @@ internal class LibboxReflection(
         return runCatching { InetSocketAddress(InetAddress.getByName(this), port) }.getOrNull()
     }
 
+    private fun String.toInetAddressOrNull(): InetAddress? =
+        takeIf { it.isNotBlank() }?.let { value -> runCatching { InetAddress.getByName(value) }.getOrNull() }
+
     private fun protocolLabel(protocol: Int): String =
         when (protocol) {
             OsConstants.IPPROTO_TCP -> "TCP"
@@ -494,6 +599,17 @@ internal class LibboxReflection(
         val userName: String,
         val packageNames: List<String>,
     )
+
+    private data class ProcNetEndpoint(
+        val addresses: List<InetAddress>,
+        val port: Int,
+    ) {
+        fun matches(
+            address: InetAddress,
+            port: Int,
+        ): Boolean =
+            this.port == port && addresses.any { candidate -> candidate == address }
+    }
 
     private fun systemProxyStatus(
         available: Boolean,

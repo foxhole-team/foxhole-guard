@@ -537,7 +537,6 @@ class RuntimeConfigAssemblerTest {
                         blockScreenshots = true,
                         networkActivityLogging = false,
                         diagnosticsRetention = DiagnosticsRetention.HOURS_6,
-                        allowHttpConfigImports = false,
                         sniff = true,
                     ),
             )
@@ -550,7 +549,6 @@ class RuntimeConfigAssemblerTest {
                         blockScreenshots = false,
                         networkActivityLogging = true,
                         diagnosticsRetention = DiagnosticsRetention.DAYS_14,
-                        allowHttpConfigImports = true,
                     ),
             )
 

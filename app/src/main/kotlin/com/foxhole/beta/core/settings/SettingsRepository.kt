@@ -164,10 +164,13 @@ class SettingsRepository(
                         warningAcknowledgedAt = current.expert.warningAcknowledgedAt,
                         blockScreenshots = current.expert.blockScreenshots,
                         networkActivityLogging = current.expert.networkActivityLogging,
+                        networkActivityPersistentLogging = current.expert.networkActivityPersistentLogging,
                         diagnosticsRetention = current.expert.diagnosticsRetention,
                         smartStartReplayLogging = current.expert.smartStartReplayLogging && BuildConfig.DEBUG,
-                        allowHttpConfigImports = current.expert.allowHttpConfigImports,
                         allowInsecureTls = current.expert.allowInsecureTls,
+                        blockedPackages = current.expert.blockedPackages,
+                        blockedPackagesEnabled = current.expert.blockedPackagesEnabled,
+                        blockAppsAlways = current.expert.blockAppsAlways,
                     ),
                 )
             } else {
@@ -482,14 +485,14 @@ class SettingsRepository(
     suspend fun updateNetworkActivityLogging(value: Boolean) =
         update { it.copy(expert = it.expert.copy(networkActivityLogging = value)) }
 
+    suspend fun updateNetworkActivityPersistentLogging(value: Boolean) =
+        update { it.copy(expert = it.expert.copy(networkActivityPersistentLogging = value)) }
+
     suspend fun updateSmartStartReplayLogging(value: Boolean) =
         update { it.copy(expert = it.expert.copy(smartStartReplayLogging = value && BuildConfig.DEBUG)) }
 
     suspend fun updateDiagnosticsRetention(value: DiagnosticsRetention) =
         update { it.copy(expert = it.expert.copy(diagnosticsRetention = value)) }
-
-    suspend fun updateAllowHttpConfigImports(value: Boolean) =
-        update { it.copy(expert = it.expert.copy(allowHttpConfigImports = value)) }
 
     suspend fun updateAllowInsecureTls(value: Boolean) =
         update { it.copy(expert = it.expert.copy(allowInsecureTls = value)) }
@@ -591,7 +594,22 @@ class SettingsRepository(
         update {
             it.copy(
                 connection = it.connection.copy(stealthModeEnabled = it.connection.stealthModeEnabled && !value),
-                expert = it.expert.copy(blockedPackagesEnabled = value),
+                expert =
+                    it.expert.copy(
+                        blockedPackagesEnabled = value,
+                        blockAppsAlways = it.expert.blockAppsAlways && value && it.expert.blockedPackages.isNotEmpty(),
+                    ),
+            )
+        }
+
+    suspend fun updateBlockAppsAlways(value: Boolean) =
+        update {
+            it.copy(
+                connection = it.connection.copy(stealthModeEnabled = it.connection.stealthModeEnabled && !value),
+                expert =
+                    it.expert.copy(
+                        blockAppsAlways = value && it.expert.blockedPackagesEnabled && it.expert.blockedPackages.isNotEmpty(),
+                    ),
             )
         }
 
@@ -1004,6 +1022,7 @@ class SettingsRepository(
                 selectedPackages = normalizedSelectedPackages,
                 blockedPackages = normalizedBlockedPackages,
                 blockedPackagesEnabled = blockedPackagesEnabled && normalizedBlockedPackages.isNotEmpty(),
+                blockAppsAlways = blockAppsAlways && blockedPackagesEnabled && normalizedBlockedPackages.isNotEmpty(),
                 siteRoutingAction = siteRoutingAction.coerceSiteRoutingAction(),
                 blockScreenshots = if (resetScreenshotBlocking) false else blockScreenshots,
                 smartStartReplayLogging = smartStartReplayLogging && BuildConfig.DEBUG,
@@ -1018,10 +1037,13 @@ class SettingsRepository(
                 warningAcknowledgedAt = normalized.warningAcknowledgedAt,
                 blockScreenshots = normalized.blockScreenshots,
                 networkActivityLogging = normalized.networkActivityLogging,
+                networkActivityPersistentLogging = normalized.networkActivityPersistentLogging,
                 diagnosticsRetention = normalized.diagnosticsRetention,
                 smartStartReplayLogging = normalized.smartStartReplayLogging && BuildConfig.DEBUG,
-                allowHttpConfigImports = normalized.allowHttpConfigImports,
                 allowInsecureTls = normalized.allowInsecureTls,
+                blockedPackages = normalized.blockedPackages,
+                blockedPackagesEnabled = normalized.blockedPackagesEnabled,
+                blockAppsAlways = normalized.blockAppsAlways,
             )
         }
     }

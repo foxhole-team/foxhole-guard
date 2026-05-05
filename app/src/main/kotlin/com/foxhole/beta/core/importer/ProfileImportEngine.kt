@@ -29,20 +29,17 @@ internal class ProfileImportEngine(
 fun parseUserInput(
     input: String,
     allowPrivateOutboundHosts: Boolean = false,
-    allowHttpSubscriptionUrls: Boolean = false,
     allowInsecureTls: Boolean = false,
 ): ParsedImport =
     parseUserInputWithStrategy(
         input = input,
         allowPrivateOutboundHosts = allowPrivateOutboundHosts,
-        allowHttpSubscriptionUrls = allowHttpSubscriptionUrls,
         allowInsecureTls = allowInsecureTls,
     ).parsed
 
 internal fun parseUserInputWithStrategy(
     input: String,
     allowPrivateOutboundHosts: Boolean = false,
-    allowHttpSubscriptionUrls: Boolean = false,
     allowInsecureTls: Boolean = false,
 ): ProfileImportStrategyResult {
     val trimmed = normalizeInput(input)
@@ -51,7 +48,6 @@ internal fun parseUserInputWithStrategy(
         UserInputStrategyContext(
             input = trimmed,
             allowPrivateOutboundHosts = allowPrivateOutboundHosts,
-            allowHttpSubscriptionUrls = allowHttpSubscriptionUrls,
             allowInsecureTls = allowInsecureTls,
         )
     userInputStrategies.forEach { strategy ->
@@ -79,11 +75,11 @@ private inner class SubscriptionUrlStrategy : UserInputImportStrategy {
         val candidate = extractSubscriptionUrlCandidate(context.input) ?: return null
         val url =
             candidate.ensurePublicUrl(
-                allowHttp = context.allowHttpSubscriptionUrls,
+                allowHttp = false,
                 resolveHost = true,
                 resolver = remoteHostResolver,
             )
-        require(url.isHttps || context.allowHttpSubscriptionUrls) { "only https subscriptions are allowed" }
+        require(url.isHttps) { "only https subscriptions are allowed" }
         return ParsedImport(
             sourceType = ProfileSourceType.SUBSCRIPTION_URL,
             protocolHint = ProtocolHint.UNKNOWN,
@@ -218,14 +214,12 @@ fun parseSubscriptionContent(
     rawContent: String,
     fallbackName: String,
     allowPrivateOutboundHosts: Boolean = false,
-    allowHttpSubscriptionUrls: Boolean = false,
     allowInsecureTls: Boolean = false,
 ): ParsedImport =
     parseSubscriptionContentWithStrategy(
         rawContent = rawContent,
         fallbackName = fallbackName,
         allowPrivateOutboundHosts = allowPrivateOutboundHosts,
-        allowHttpSubscriptionUrls = allowHttpSubscriptionUrls,
         allowInsecureTls = allowInsecureTls,
     ).parsed
 
@@ -233,7 +227,6 @@ internal fun parseSubscriptionContentWithStrategy(
     rawContent: String,
     fallbackName: String,
     allowPrivateOutboundHosts: Boolean = false,
-    allowHttpSubscriptionUrls: Boolean = false,
     allowInsecureTls: Boolean = false,
 ): ProfileSubscriptionContentStrategyResult {
     val trimmed = rawContent.trim()
@@ -243,7 +236,6 @@ internal fun parseSubscriptionContentWithStrategy(
             input = trimmed,
             fallbackName = fallbackName,
             allowPrivateOutboundHosts = allowPrivateOutboundHosts,
-            allowHttpSubscriptionUrls = allowHttpSubscriptionUrls,
             allowInsecureTls = allowInsecureTls,
         )
     subscriptionContentStrategies.forEach { strategy ->
@@ -270,7 +262,6 @@ private inner class UserInputSubscriptionContentStrategy : SubscriptionContentIm
             parseUserInput(
                 input = context.input,
                 allowPrivateOutboundHosts = context.allowPrivateOutboundHosts,
-                allowHttpSubscriptionUrls = context.allowHttpSubscriptionUrls,
                 allowInsecureTls = context.allowInsecureTls,
             )
         }.getOrNull()?.let { parsed ->
@@ -324,7 +315,6 @@ fun parseSubscriptionProfiles(
     rawContent: String,
     fallbackName: String,
     allowPrivateOutboundHosts: Boolean = false,
-    allowHttpSubscriptionUrls: Boolean = false,
     allowInsecureTls: Boolean = false,
 ): ParsedSubscriptionImport {
     val trimmed = normalizeInput(rawContent)
@@ -358,7 +348,6 @@ fun parseSubscriptionProfiles(
         parseUserInput(
             input = trimmed,
             allowPrivateOutboundHosts = allowPrivateOutboundHosts,
-            allowHttpSubscriptionUrls = allowHttpSubscriptionUrls,
             allowInsecureTls = allowInsecureTls,
         )
     }.getOrNull()?.let { parsed ->

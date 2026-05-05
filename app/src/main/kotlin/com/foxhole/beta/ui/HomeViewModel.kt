@@ -483,6 +483,8 @@ class HomeViewModel(
             val reconciledActiveVpn = container.connectionController.reconcileActiveVpnNetworkIfNeeded()
             if (reconciledActiveVpn) {
                 scheduleConnectedIpRefresh()
+            } else {
+                container.connectionController.syncLocalGuard()
             }
         }
         val runtimeState = container.connectionController.snapshot.value.state
@@ -829,11 +831,11 @@ class HomeViewModel(
 
     fun onNetworkActivityLoggingChanged(value: Boolean) = onNetworkActivityLoggingChangedInternal(value)
 
+    fun onNetworkActivityPersistentLoggingChanged(value: Boolean) = onNetworkActivityPersistentLoggingChangedInternal(value)
+
     fun onSmartStartReplayLoggingChanged(value: Boolean) = onSmartStartReplayLoggingChangedInternal(value)
 
     fun onDiagnosticsRetentionSelected(value: DiagnosticsRetention) = onDiagnosticsRetentionSelectedInternal(value)
-
-    fun onAllowHttpConfigImportsChanged(value: Boolean) = onAllowHttpConfigImportsChangedInternal(value)
 
     fun onAllowInsecureTlsChanged(value: Boolean) = onAllowInsecureTlsChangedInternal(value)
 
@@ -854,6 +856,8 @@ class HomeViewModel(
     fun onBlockedPackagesChanged(value: List<String>) = onBlockedPackagesChangedInternal(value)
 
     fun onBlockedPackagesEnabledChanged(value: Boolean) = onBlockedPackagesEnabledChangedInternal(value)
+
+    fun onBlockAppsAlwaysChanged(value: Boolean) = onBlockAppsAlwaysChangedInternal(value)
 
     fun onSiteRoutingActionSelected(value: RoutingRuleAction) = onSiteRoutingActionSelectedInternal(value)
 

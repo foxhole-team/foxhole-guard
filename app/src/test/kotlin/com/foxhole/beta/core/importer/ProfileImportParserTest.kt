@@ -74,19 +74,6 @@ class ProfileImportParserTest {
     }
 
     @Test
-    fun `allows http subscription url under explicit override`() {
-        val parsed =
-            parser.parseUserInput(
-                "http://example.org/subscription",
-                allowHttpSubscriptionUrls = true,
-            )
-
-        assertEquals(ProfileSourceType.SUBSCRIPTION_URL, parsed.sourceType)
-        assertEquals("example.org", parsed.displayName)
-        assertEquals("http://example.org/subscription", parsed.sourceUrl)
-    }
-
-    @Test
     fun `extracts subscription expiry from config query metadata`() {
         val parsed =
             parser.parseSubscriptionProfiles(

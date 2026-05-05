@@ -17,7 +17,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -33,46 +32,36 @@ internal fun diagnosticsRetentionLabel(value: DiagnosticsRetention): String =
     when (value) {
         DiagnosticsRetention.HOURS_6 -> stringResource(R.string.diagnostics_retention_hours_6)
         DiagnosticsRetention.HOURS_24 -> stringResource(R.string.diagnostics_retention_hours_24)
+        DiagnosticsRetention.DAYS_2 -> stringResource(R.string.diagnostics_retention_days_2)
         DiagnosticsRetention.DAYS_3 -> stringResource(R.string.diagnostics_retention_days_3)
         DiagnosticsRetention.DAYS_7 -> stringResource(R.string.diagnostics_retention_days_7)
         DiagnosticsRetention.DAYS_14 -> stringResource(R.string.diagnostics_retention_days_14)
+        DiagnosticsRetention.DAYS_30 -> stringResource(R.string.diagnostics_retention_days_30)
     }
 
 @Composable
 internal fun LiveLogsDialog(
+    title: String,
     entries: List<DiagnosticEntry>,
-    networkActivityLoggingEnabled: Boolean,
-    retention: DiagnosticsRetention,
     onDismiss: () -> Unit,
+    notice: String? = null,
+    confirmLabel: String? = null,
+    onConfirm: (() -> Unit)? = null,
 ) {
     val locale = remember { Locale.getDefault() }
-    val timeFormat = remember(locale) { SimpleDateFormat("HH:mm:ss", locale) }
-    val retentionLabel = diagnosticsRetentionLabel(retention)
-    val visibleEntries = remember(entries) { entries.asReversed().take(LIVE_LOGS_VISIBLE_ENTRY_LIMIT) }
+    val timeFormat = remember(locale) { SimpleDateFormat("yyyy-MM-dd HH:mm:ss", locale) }
+    val visibleEntries = remember(entries) { entries.asReversed() }
 
     AlertDialog(
         modifier = Modifier.testTag(LIVE_LOGS_DIALOG_TAG),
         onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.logs_title)) },
+        title = { Text(title) },
         text = {
             Column(
                 modifier = Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                Text(
-                    modifier = Modifier.testTag(LIVE_LOGS_RETENTION_SUMMARY_TAG),
-                    text =
-                        pluralStringResource(
-                            R.plurals.logs_dialog_summary,
-                            entries.size,
-                            visibleEntries.size,
-                            entries.size,
-                            retentionLabel,
-                        ),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                if (networkActivityLoggingEnabled) {
+                if (!notice.isNullOrBlank()) {
                     Surface(
                         modifier = Modifier.testTag(LIVE_LOGS_NETWORK_NOTICE_TAG),
                         shape = MaterialTheme.shapes.medium,
@@ -80,7 +69,7 @@ internal fun LiveLogsDialog(
                         border = BorderStroke(1.dp, FoxholePositiveAccent.copy(alpha = 0.24f)),
                     ) {
                         Text(
-                            text = stringResource(R.string.logs_network_activity_notice),
+                            text = notice,
                             modifier =
                                 Modifier
                                     .fillMaxWidth()
@@ -142,13 +131,19 @@ internal fun LiveLogsDialog(
             }
         },
         confirmButton = {
-            FoxholeDialogConfirmButton(
+            if (confirmLabel != null && onConfirm != null) {
+                FoxholeDialogConfirmButton(
+                    onClick = onConfirm,
+                    label = confirmLabel,
+                )
+            }
+        },
+        dismissButton = {
+            FoxholeDialogDismissButton(
                 modifier = Modifier.testTag(LIVE_LOGS_CLOSE_ACTION_TAG),
                 onClick = onDismiss,
-                label = stringResource(R.string.close),
             )
         },
-        dismissButton = {},
     )
 }
 
@@ -285,4 +280,3 @@ internal const val LIVE_LOGS_NETWORK_NOTICE_TAG = "live_logs_network_notice"
 internal const val LIVE_LOGS_EMPTY_STATE_TAG = "live_logs_empty_state"
 internal const val LIVE_LOGS_LIST_TAG = "live_logs_list"
 internal const val LIVE_LOGS_CLOSE_ACTION_TAG = "live_logs_close_action"
-private const val LIVE_LOGS_VISIBLE_ENTRY_LIMIT = 600

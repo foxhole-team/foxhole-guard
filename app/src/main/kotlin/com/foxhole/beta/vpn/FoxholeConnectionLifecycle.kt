@@ -69,6 +69,7 @@ internal class FoxholeConnectionLifecycle(
             context = context,
             mode = TrafficMode.TUNNEL,
             action = FoxholeConnectionServiceContract.ACTION_DISCONNECT,
+            suppressLocalGuard = true,
         )
         val deadline = System.currentTimeMillis() + STALE_VPN_DISCONNECT_TIMEOUT_MS
         while (hasActiveVpnNetwork() && System.currentTimeMillis() < deadline) {

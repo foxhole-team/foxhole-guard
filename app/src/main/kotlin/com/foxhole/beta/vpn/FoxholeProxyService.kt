@@ -132,6 +132,7 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
             launchPriorityCommand = ::launchPriorityCommand,
             connect = ::connect,
             disconnect = { commandStartId -> disconnect(commandStartId = commandStartId) },
+            disconnectWithOptions = { commandStartId, _ -> disconnect(commandStartId = commandStartId) },
             reload = ::reload,
         )
 

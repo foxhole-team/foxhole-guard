@@ -37,27 +37,23 @@ internal suspend fun rawImportRequiresInsecureTls(
     parser: ProfileImportParser,
     rawInput: String,
     allowPrivateOutboundHosts: Boolean,
-    allowHttpSubscriptionUrls: Boolean,
 ): Boolean =
     withContext(Dispatchers.IO) {
         parser
             .parseStrictlyOrInsecureTlsFailure(
                 rawInput = rawInput,
                 allowPrivateOutboundHosts = allowPrivateOutboundHosts,
-                allowHttpSubscriptionUrls = allowHttpSubscriptionUrls,
             )
     }
 
 private fun ProfileImportParser.parseStrictlyOrInsecureTlsFailure(
     rawInput: String,
     allowPrivateOutboundHosts: Boolean,
-    allowHttpSubscriptionUrls: Boolean,
 ): Boolean =
     runCatching {
         parseUserInput(
             input = rawInput,
             allowPrivateOutboundHosts = allowPrivateOutboundHosts,
-            allowHttpSubscriptionUrls = allowHttpSubscriptionUrls,
             allowInsecureTls = false,
         )
     }.exceptionOrNull()

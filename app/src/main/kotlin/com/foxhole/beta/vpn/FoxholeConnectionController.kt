@@ -99,6 +99,28 @@ class FoxholeConnectionController(
 
     fun reload(profileId: Long? = snapshot.value.profileId): Boolean = lifecycle.reload(profileId)
 
+    suspend fun syncLocalGuard() {
+        if (snapshot.value.state in ACTIVE_CONNECTION_STATES) {
+            return
+        }
+        val mode = settingsRepository.current().localGuardModeOrNull()
+        if (mode != null) {
+            FoxholeConnectionServiceContract.startForegroundService(
+                context = context,
+                mode = TrafficMode.TUNNEL,
+                action = FoxholeConnectionServiceContract.ACTION_START_LOCAL_GUARD,
+                localGuardMode = mode,
+            )
+        } else if (hasActiveVpnNetwork()) {
+            FoxholeConnectionServiceContract.startForegroundService(
+                context = context,
+                mode = TrafficMode.TUNNEL,
+                action = FoxholeConnectionServiceContract.ACTION_DISCONNECT,
+                suppressLocalGuard = true,
+            )
+        }
+    }
+
     suspend fun refreshProfile(profileId: Long): Profile = profileRepository.refreshProfile(profileId)
 
     suspend fun setActiveProfile(profileId: Long) {
@@ -129,6 +151,10 @@ class FoxholeConnectionController(
     suspend fun reconcileActiveVpnNetworkIfNeeded(): Boolean {
         val currentSnapshot = snapshot.value
         if (currentSnapshot.state in ACTIVE_CONNECTION_STATES || !hasActiveVpnNetwork()) {
+            return false
+        }
+        if (settingsRepository.current().localGuardModeOrNull() != null) {
+            diagnosticsLogger.record("connection", "active local guard vpn found with idle snapshot")
             return false
         }
         val activeProfile = profileRepository.getActiveProfile()

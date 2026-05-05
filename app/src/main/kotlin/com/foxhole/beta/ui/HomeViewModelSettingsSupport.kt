@@ -193,11 +193,22 @@ internal fun HomeViewModel.onBlockScreenshotsChangedInternal(value: Boolean) {
 internal fun HomeViewModel.onNetworkActivityLoggingChangedInternal(value: Boolean) {
     viewModelScope.launch {
         container.settingsRepository.updateNetworkActivityLogging(value)
+        if (!value) {
+            container.settingsRepository.updateNetworkActivityPersistentLogging(false)
+        }
+        container.connectionController.syncLocalGuard()
         emitInfo(
             getApplication<Application>().getString(
                 if (value) R.string.network_activity_logging_enabled else R.string.network_activity_logging_disabled,
             ),
         )
+    }
+}
+
+internal fun HomeViewModel.onNetworkActivityPersistentLoggingChangedInternal(value: Boolean) {
+    viewModelScope.launch {
+        container.settingsRepository.updateNetworkActivityPersistentLogging(value)
+        container.connectionController.syncLocalGuard()
     }
 }
 
@@ -210,12 +221,6 @@ internal fun HomeViewModel.onSmartStartReplayLoggingChangedInternal(value: Boole
 internal fun HomeViewModel.onDiagnosticsRetentionSelectedInternal(value: DiagnosticsRetention) {
     viewModelScope.launch {
         container.settingsRepository.updateDiagnosticsRetention(value)
-    }
-}
-
-internal fun HomeViewModel.onAllowHttpConfigImportsChangedInternal(value: Boolean) {
-    viewModelScope.launch {
-        container.settingsRepository.updateAllowHttpConfigImports(value)
     }
 }
 
@@ -276,12 +281,21 @@ internal fun HomeViewModel.onBlockedPackagesChangedInternal(value: List<String>)
         container.settingsRepository.updateBlockedPackages(
             value.filterNot { it == getApplication<Application>().packageName },
         )
+        container.connectionController.syncLocalGuard()
     }
 }
 
 internal fun HomeViewModel.onBlockedPackagesEnabledChangedInternal(value: Boolean) {
     updateAppRoutingSettingAndPromptReconnect(requiresRuntimeWhenFull = true) {
         container.settingsRepository.updateBlockedPackagesEnabled(value)
+        container.connectionController.syncLocalGuard()
+    }
+}
+
+internal fun HomeViewModel.onBlockAppsAlwaysChangedInternal(value: Boolean) {
+    updateAppRoutingSettingAndPromptReconnect(requiresRuntimeWhenFull = true) {
+        container.settingsRepository.updateBlockAppsAlways(value)
+        container.connectionController.syncLocalGuard()
     }
 }
 

@@ -13,9 +13,12 @@ internal object FoxholeConnectionServiceContract {
     const val ACTION_DISCONNECT = "com.foxhole.beta.action.DISCONNECT"
     const val ACTION_RELOAD = "com.foxhole.beta.action.RELOAD"
     const val ACTION_RESTORE = "com.foxhole.beta.action.RESTORE"
+    const val ACTION_START_LOCAL_GUARD = "com.foxhole.beta.action.START_LOCAL_GUARD"
     const val EXTRA_PROFILE_ID = "profile_id"
     const val EXTRA_PROTOCOL_OPTION_ID = "protocol_option_id"
     const val EXTRA_PREVIOUS_VPN_NETWORK_HANDLE = "previous_vpn_network_handle"
+    const val EXTRA_LOCAL_GUARD_MODE = "local_guard_mode"
+    const val EXTRA_SUPPRESS_LOCAL_GUARD = "suppress_local_guard"
     const val NOTIFICATION_ID = 1001
     const val NOTIFICATION_CHANNEL_ID = "foxhole-connection"
 
@@ -55,7 +58,11 @@ internal object FoxholeConnectionServiceContract {
     fun disconnectIntent(
         context: Context,
         mode: TrafficMode,
-    ): Intent = Intent(context, serviceClass(mode)).setAction(ACTION_DISCONNECT)
+        suppressLocalGuard: Boolean = false,
+    ): Intent =
+        Intent(context, serviceClass(mode))
+            .setAction(ACTION_DISCONNECT)
+            .putExtra(EXTRA_SUPPRESS_LOCAL_GUARD, suppressLocalGuard)
 
     fun reloadIntent(
         context: Context,
@@ -73,6 +80,14 @@ internal object FoxholeConnectionServiceContract {
         mode: TrafficMode,
     ): Intent = Intent(context, serviceClass(mode)).setAction(ACTION_RESTORE)
 
+    fun localGuardIntent(
+        context: Context,
+        mode: LocalGuardMode,
+    ): Intent =
+        Intent(context, FoxholeVpnService::class.java)
+            .setAction(ACTION_START_LOCAL_GUARD)
+            .putExtra(EXTRA_LOCAL_GUARD_MODE, mode.name)
+
     fun serviceIntent(
         context: Context,
         mode: TrafficMode,
@@ -80,12 +95,15 @@ internal object FoxholeConnectionServiceContract {
         profileId: Long? = null,
         protocolOptionId: String? = null,
         previousVpnNetworkHandle: Long? = null,
+        localGuardMode: LocalGuardMode? = null,
+        suppressLocalGuard: Boolean = false,
     ): Intent =
         when (action) {
             ACTION_CONNECT -> connectIntent(context, mode, requireNotNull(profileId), protocolOptionId, previousVpnNetworkHandle)
-            ACTION_DISCONNECT -> disconnectIntent(context, mode)
+            ACTION_DISCONNECT -> disconnectIntent(context, mode, suppressLocalGuard)
             ACTION_RELOAD -> reloadIntent(context, mode, profileId)
             ACTION_RESTORE -> restoreIntent(context, mode)
+            ACTION_START_LOCAL_GUARD -> localGuardIntent(context, requireNotNull(localGuardMode))
             else -> error("unsupported action: $action")
         }
 
@@ -96,8 +114,10 @@ internal object FoxholeConnectionServiceContract {
         profileId: Long? = null,
         protocolOptionId: String? = null,
         previousVpnNetworkHandle: Long? = null,
+        localGuardMode: LocalGuardMode? = null,
+        suppressLocalGuard: Boolean = false,
     ) {
-        val intent = serviceIntent(context, mode, action, profileId, protocolOptionId, previousVpnNetworkHandle)
+        val intent = serviceIntent(context, mode, action, profileId, protocolOptionId, previousVpnNetworkHandle, localGuardMode, suppressLocalGuard)
         ContextCompat.startForegroundService(context, intent)
     }
 

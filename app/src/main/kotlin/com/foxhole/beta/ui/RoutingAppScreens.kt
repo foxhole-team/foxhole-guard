@@ -83,8 +83,10 @@ fun RoutingAppsScreen(
     onOpenBlockedPicker: () -> Unit,
     onSelectedPackagesChanged: (List<String>) -> Unit,
     onBlockedPackagesChanged: (List<String>) -> Unit,
+    onBlockAppsAlwaysChanged: (Boolean) -> Unit,
 ) {
     var modeMenuExpanded by rememberSaveable { mutableStateOf(false) }
+    var blockAlwaysWarningVisible by rememberSaveable { mutableStateOf(false) }
     val selectedPackages = state.settings.expert.selectedPackages
     val blockedPackages = state.settings.expert.blockedPackages
     val selectedPackageSet = selectedPackages.toSet()
@@ -171,30 +173,12 @@ fun RoutingAppsScreen(
                     optionIcon = ::perAppRoutingModeIcon,
                     grouped = true,
                 )
-                SettingsControlGroupDivider()
-                Row(
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.Top,
-                ) {
-                    Icon(
-                        imageVector = Icons.Outlined.Info,
-                        contentDescription = null,
-                        modifier = Modifier.padding(top = 1.dp).size(16.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Text(
-                        text = simpleAppRoutingModeGuidance(effectiveAppMode),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
             }
         }
         item {
             AppGridSection(
                 title = stringResource(R.string.routing_apps_title),
-                subtitle = stringResource(R.string.selected_app_exceptions),
+                subtitle = simpleAppRoutingModeGuidance(effectiveAppMode),
                 leadingIcon = Icons.Outlined.Apps,
                 apps = selectedApps,
                 emptyText = stringResource(R.string.split_tunnel_requires_apps),
@@ -212,6 +196,26 @@ fun RoutingAppsScreen(
                 },
                 modifier = Modifier.testTag("routing_apps_selected_section"),
             )
+        }
+        item {
+            SettingsControlGroup {
+                SettingSwitchRow(
+                    title = stringResource(R.string.block_apps_always_title),
+                    checked = state.settings.expert.blockAppsAlways && state.settings.expert.blockedPackagesEnabled && blockedPackages.isNotEmpty(),
+                    enabled = blockedPackages.isNotEmpty(),
+                    summary = stringResource(R.string.block_apps_always_summary),
+                    summaryMaxLines = 6,
+                    leadingIcon = Icons.Outlined.Block,
+                    onCheckedChange = { enabled ->
+                        if (enabled) {
+                            blockAlwaysWarningVisible = true
+                        } else {
+                            onBlockAppsAlwaysChanged(false)
+                        }
+                    },
+                    grouped = true,
+                )
+            }
         }
         item {
             AppGridSection(
@@ -235,6 +239,20 @@ fun RoutingAppsScreen(
                 modifier = Modifier.testTag("routing_apps_blocked_section"),
             )
         }
+    }
+
+    if (blockAlwaysWarningVisible) {
+        ConfirmDialog(
+            title = stringResource(R.string.block_apps_always_warning_title),
+            body = stringResource(R.string.block_apps_always_warning_body),
+            confirmLabel = stringResource(R.string.i_understand),
+            icon = Icons.Outlined.Block,
+            onDismiss = { blockAlwaysWarningVisible = false },
+            onConfirm = {
+                blockAlwaysWarningVisible = false
+                onBlockAppsAlwaysChanged(true)
+            },
+        )
     }
 }
 
@@ -286,14 +304,12 @@ private fun AppGridSection(
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
                 )
-                if (apps.isEmpty()) {
-                    subtitle?.takeIf(String::isNotBlank)?.let { text ->
-                        Text(
-                            text = text,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
+                subtitle?.takeIf(String::isNotBlank)?.let { text ->
+                    Text(
+                        text = text,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
             }
             if (headerActionLabel != null && onHeaderAction != null) {

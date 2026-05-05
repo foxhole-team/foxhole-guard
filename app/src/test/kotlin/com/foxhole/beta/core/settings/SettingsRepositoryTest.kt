@@ -164,19 +164,17 @@ class SettingsRepositoryTest {
     }
 
     @Test
-    fun `reset expert safe defaults disables insecure import exceptions`() {
+    fun `reset expert safe defaults disables insecure tls import exceptions`() {
         val reset =
             Settings(
                 expert =
                     ExpertSettings(
                         unlockedAt = 1234L,
                         warningAcknowledgedAt = 5678L,
-                        allowHttpConfigImports = true,
                         allowInsecureTls = true,
                     ),
             ).resetExpertSettingsToSafeDefaults()
 
-        assertFalse(reset.expert.allowHttpConfigImports)
         assertFalse(reset.expert.allowInsecureTls)
         assertNull(reset.expert.warningAcknowledgedAt)
         assertEquals(1234L, reset.expert.unlockedAt)
@@ -197,7 +195,6 @@ class SettingsRepositoryTest {
                         networkActivityLogging = true,
                         diagnosticsRetention = DiagnosticsRetention.DAYS_7,
                         smartStartReplayLogging = true,
-                        allowHttpConfigImports = true,
                         allowInsecureTls = true,
                         sniff = true,
                         bypassLan = true,
@@ -212,7 +209,6 @@ class SettingsRepositoryTest {
         assertEquals(1234L, reset.expert.unlockedAt)
         assertTrue(reset.expert.blockScreenshots)
         assertFalse(reset.expert.networkActivityLogging)
-        assertFalse(reset.expert.allowHttpConfigImports)
         assertFalse(reset.expert.allowInsecureTls)
         assertTrue(reset.expert.sniff)
         assertFalse(reset.expert.bypassLan)

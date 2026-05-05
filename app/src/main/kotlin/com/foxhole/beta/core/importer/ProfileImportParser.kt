@@ -14,26 +14,22 @@ class ProfileImportParser(
     fun parseUserInput(
         input: String,
         allowPrivateOutboundHosts: Boolean = false,
-        allowHttpSubscriptionUrls: Boolean = false,
         allowInsecureTls: Boolean = false,
     ): ParsedImport =
         engine.parseUserInput(
             input = input,
             allowPrivateOutboundHosts = allowPrivateOutboundHosts,
-            allowHttpSubscriptionUrls = allowHttpSubscriptionUrls,
             allowInsecureTls = allowInsecureTls,
         )
 
     internal fun parseUserInputWithStrategy(
         input: String,
         allowPrivateOutboundHosts: Boolean = false,
-        allowHttpSubscriptionUrls: Boolean = false,
         allowInsecureTls: Boolean = false,
     ): ProfileImportStrategyResult =
         engine.parseUserInputWithStrategy(
             input = input,
             allowPrivateOutboundHosts = allowPrivateOutboundHosts,
-            allowHttpSubscriptionUrls = allowHttpSubscriptionUrls,
             allowInsecureTls = allowInsecureTls,
         )
 
@@ -41,14 +37,12 @@ class ProfileImportParser(
         rawContent: String,
         fallbackName: String,
         allowPrivateOutboundHosts: Boolean = false,
-        allowHttpSubscriptionUrls: Boolean = false,
         allowInsecureTls: Boolean = false,
     ): ParsedImport =
         engine.parseSubscriptionContent(
             rawContent = rawContent,
             fallbackName = fallbackName,
             allowPrivateOutboundHosts = allowPrivateOutboundHosts,
-            allowHttpSubscriptionUrls = allowHttpSubscriptionUrls,
             allowInsecureTls = allowInsecureTls,
         )
 
@@ -56,14 +50,12 @@ class ProfileImportParser(
         rawContent: String,
         fallbackName: String,
         allowPrivateOutboundHosts: Boolean = false,
-        allowHttpSubscriptionUrls: Boolean = false,
         allowInsecureTls: Boolean = false,
     ): ProfileSubscriptionContentStrategyResult =
         engine.parseSubscriptionContentWithStrategy(
             rawContent = rawContent,
             fallbackName = fallbackName,
             allowPrivateOutboundHosts = allowPrivateOutboundHosts,
-            allowHttpSubscriptionUrls = allowHttpSubscriptionUrls,
             allowInsecureTls = allowInsecureTls,
         )
 
@@ -71,14 +63,12 @@ class ProfileImportParser(
         rawContent: String,
         fallbackName: String,
         allowPrivateOutboundHosts: Boolean = false,
-        allowHttpSubscriptionUrls: Boolean = false,
         allowInsecureTls: Boolean = false,
     ): ParsedSubscriptionImport =
         engine.parseSubscriptionProfiles(
             rawContent = rawContent,
             fallbackName = fallbackName,
             allowPrivateOutboundHosts = allowPrivateOutboundHosts,
-            allowHttpSubscriptionUrls = allowHttpSubscriptionUrls,
             allowInsecureTls = allowInsecureTls,
         )
 

@@ -65,7 +65,9 @@ private fun diagnosticsRetentionLabel(value: DiagnosticsRetention): String =
     when (value) {
         DiagnosticsRetention.HOURS_6 -> "6 hours"
         DiagnosticsRetention.HOURS_24 -> "24 hours"
+        DiagnosticsRetention.DAYS_2 -> "2 days"
         DiagnosticsRetention.DAYS_3 -> "3 days"
         DiagnosticsRetention.DAYS_7 -> "7 days"
         DiagnosticsRetention.DAYS_14 -> "14 days"
+        DiagnosticsRetention.DAYS_30 -> "30 days"
     }

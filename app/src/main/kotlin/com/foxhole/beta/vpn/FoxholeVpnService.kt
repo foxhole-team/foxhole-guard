@@ -71,6 +71,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
     }
     internal val trafficSampler = TrafficStatsSampler()
     internal var activeSession: VpnSession? = null
+    internal var activeLocalGuardMode: LocalGuardMode? = null
     internal var trafficJob: Job? = null
     internal var immediateTrafficSampleJob: Job? = null
     internal var geoRefreshJob: Job? = null
@@ -180,7 +181,11 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
             launchPriorityCommand = ::launchPriorityCommand,
             connect = ::connect,
             disconnect = { commandStartId -> disconnect(commandStartId = commandStartId) },
+            disconnectWithOptions = { commandStartId, suppressLocalGuard ->
+                disconnect(commandStartId = commandStartId, suppressLocalGuard = suppressLocalGuard)
+            },
             reload = ::reload,
+            startLocalGuard = ::startLocalGuard,
         )
     }
 
@@ -274,6 +279,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
                 }
         currentCoroutineContext().ensureActive()
         activeSession = session
+        activeLocalGuardMode = null
         container.diagnosticsLogger.recordStructured(
             "connection",
             "session started",
@@ -341,8 +347,10 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         message: String? = null,
         commandStartId: Int? = null,
         reasonCode: AutoConnectReasonCode? = null,
+        suppressLocalGuard: Boolean = false,
     ) {
         val session = activeSession
+        val localGuardMode = activeLocalGuardMode
         val finalTraffic =
             if (session != null) {
                 trafficSampler.sample()
@@ -368,6 +376,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         runtime.stop()
         releaseRuntimeWakeLock()
         activeSession = null
+        activeLocalGuardMode = null
         container.connectionController.clearAppliedRuntime()
         FoxholeVpnRuntimeBridge.updateTraffic(trafficSampler.reset())
         // Keep the last IP visible until the disconnected-side refresh replaces it.
@@ -381,8 +390,70 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
             ),
         )
         updateNotification()
+        if (session != null && message == null && !suppressLocalGuard) {
+            val nextGuardMode = container.settingsRepository.current().localGuardModeOrNull()
+            if (nextGuardMode != null) {
+                startLocalGuard(nextGuardMode, commandStartId ?: 0)
+                return
+            }
+        }
+        if (localGuardMode != null && session == null) {
+            container.diagnosticsLogger.record("connection", "local guard stopped mode=${localGuardMode.name.lowercase()}")
+        }
         detachForegroundNotification()
         stopService(commandStartId)
+    }
+
+    internal suspend fun startLocalGuard(
+        mode: LocalGuardMode,
+        commandStartId: Int,
+    ) {
+        val settings = container.settingsRepository.current()
+        val desiredMode = settings.localGuardModeOrNull()
+        if (desiredMode == null || desiredMode != mode) {
+            disconnect(commandStartId = commandStartId, suppressLocalGuard = true)
+            return
+        }
+        if (!hasVpnPermission()) {
+            container.diagnosticsLogger.record("connection", "local guard skipped: missing vpn permission")
+            stopService(commandStartId)
+            return
+        }
+        stopTrafficUpdates()
+        stopGeoRefresh()
+        stopNotificationHealthMonitoring()
+        cancelScheduledAutoReconnect(resetAttempts = true)
+        validationJob?.cancel()
+        validationJob = null
+        FoxholeConnectionServiceContract.stopInactiveServices(context = this, activeMode = TrafficMode.TUNNEL)
+        val session =
+            VpnSession(
+                profileId = LOCAL_GUARD_PROFILE_ID,
+                profileName = mode.notificationProfileName(),
+                protocolHint = com.foxhole.beta.core.model.ProtocolHint.SING_BOX,
+                configJson = container.runtimeConfigAssembler.assembleLocalGuard(settings, mode),
+                correlationId = "local-guard-${System.currentTimeMillis()}",
+            )
+        activeSession = null
+        activeLocalGuardMode = mode
+        FoxholeVpnRuntimeBridge.clearTransientState(clearIpInfo = false)
+        FoxholeVpnRuntimeBridge.update(
+            ConnectionSnapshot(
+                state = ConnectionState.IDLE,
+                trafficMode = TrafficMode.TUNNEL,
+            ),
+        )
+        acquireRuntimeWakeLock()
+        val result = runtime.start(session, this)
+        if (result.isSuccess) {
+            container.diagnosticsLogger.record("connection", "local guard started mode=${mode.name.lowercase()}")
+            updateNotification()
+        } else {
+            activeLocalGuardMode = null
+            releaseRuntimeWakeLock()
+            val error = result.exceptionOrNull()
+            fail(error?.let { describeVpnRuntimeFailure(it) } ?: getString(R.string.error_runtime_missing), commandStartId)
+        }
     }
 
     internal fun fail(
@@ -788,8 +859,15 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         internal const val CONNECTIVITY_PROBE_CALL_TIMEOUT_MS = 2_500L
         internal const val CONNECTIVITY_PROBE_TOTAL_TIMEOUT_MS = 30_000L
         internal const val CONNECTIVITY_PROBE_GRACE_MAX_TIMEOUT_MS = com.foxhole.beta.vpn.CONNECTIVITY_PROBE_GRACE_MAX_TIMEOUT_MS
+        internal const val LOCAL_GUARD_PROFILE_ID = -10L
     }
 }
+
+private fun LocalGuardMode.notificationProfileName(): String =
+    when (this) {
+        LocalGuardMode.FIREWALL -> "Local firewall"
+        LocalGuardMode.JOURNAL -> "Network journal"
+    }
 
 internal interface VpnCoreRuntime {
     suspend fun start(session: VpnSession, host: RuntimeServiceHost): Result<Unit>

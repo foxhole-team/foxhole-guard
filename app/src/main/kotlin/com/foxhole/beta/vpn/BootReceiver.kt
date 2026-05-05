@@ -31,6 +31,16 @@ class BootReceiver : BroadcastReceiver() {
                         mode = settings.traffic.mode,
                         action = FoxholeConnectionServiceContract.ACTION_RESTORE,
                     )
+                } else {
+                    val localGuardMode = settings.localGuardModeOrNull()
+                    if (localGuardMode != null) {
+                        FoxholeConnectionServiceContract.startForegroundService(
+                            context = context,
+                            mode = com.foxhole.beta.core.model.TrafficMode.TUNNEL,
+                            action = FoxholeConnectionServiceContract.ACTION_START_LOCAL_GUARD,
+                            localGuardMode = localGuardMode,
+                        )
+                    }
                 }
             } finally {
                 pendingResult.finish()

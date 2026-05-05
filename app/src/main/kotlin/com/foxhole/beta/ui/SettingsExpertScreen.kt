@@ -27,8 +27,6 @@ import androidx.compose.ui.unit.dp
 import com.foxhole.beta.BuildConfig
 import com.foxhole.beta.R
 import com.foxhole.beta.core.model.ClashApiSettings
-import com.foxhole.beta.core.model.DiagnosticsRetention
-import com.foxhole.beta.core.model.ProxyInboundSettings
 import com.foxhole.beta.core.settings.hasCustomExperimentalSettings
 
 @Suppress("CyclomaticComplexMethod", "LongMethod", "LongParameterList")
@@ -42,27 +40,16 @@ fun ExpertSettingsScreen(
     onRouteOnlyChanged: (Boolean) -> Unit,
     onStrictRouteChanged: (Boolean) -> Unit,
     onAllowPrivateOutboundHostsChanged: (Boolean) -> Unit,
-    onNetworkActivityLoggingChanged: (Boolean) -> Unit,
     onSmartStartReplayLoggingChanged: (Boolean) -> Unit,
-    onDiagnosticsRetentionSelected: (DiagnosticsRetention) -> Unit,
-    onAllowHttpConfigImportsChanged: (Boolean) -> Unit,
     onAllowInsecureTlsChanged: (Boolean) -> Unit,
     onLocalProxyLanAccessChanged: (Boolean) -> Unit,
-    onSocksSurfaceChanged: (ProxyInboundSettings) -> Unit,
-    onHttpSurfaceChanged: (ProxyInboundSettings) -> Unit,
-    onMixedSurfaceChanged: (ProxyInboundSettings) -> Unit,
     onClashApiChanged: (ClashApiSettings) -> Unit,
     onResetToSafeDefaults: () -> Unit,
     onResetExperimentalSettings: () -> Unit,
 ) {
-    var socksDialog by rememberSaveable { mutableStateOf(false) }
-    var httpDialog by rememberSaveable { mutableStateOf(false) }
-    var mixedDialog by rememberSaveable { mutableStateOf(false) }
     var clashDialog by rememberSaveable { mutableStateOf(false) }
     var showWarning by rememberSaveable { mutableStateOf(false) }
-    var diagnosticsRetentionMenuExpanded by rememberSaveable { mutableStateOf(false) }
     var pendingUnsafeAction by remember { mutableStateOf<(() -> Unit)?>(null) }
-    val wifiLanAddress by rememberWifiLanAddress()
 
     fun requireWarning(action: () -> Unit) {
         if (state.settings.expert.warningAcknowledgedAt != null) {
@@ -159,29 +146,6 @@ fun ExpertSettingsScreen(
                     grouped = true,
                 )
                 SettingsControlGroupDivider()
-                SettingSwitchRow(
-                    title = stringResource(R.string.network_activity_logging_title),
-                    checked = state.settings.expert.networkActivityLogging,
-                    summary = stringResource(R.string.network_activity_logging_summary),
-                    onCheckedChange = onNetworkActivityLoggingChanged,
-                    summaryMaxLines = 4,
-                    grouped = true,
-                )
-                SettingsControlGroupDivider()
-                DropdownSettingRow(
-                    title = stringResource(R.string.diagnostics_retention_title),
-                    value = diagnosticsRetentionLabel(state.settings.expert.diagnosticsRetention),
-                    expanded = diagnosticsRetentionMenuExpanded,
-                    onExpandedChange = { diagnosticsRetentionMenuExpanded = it },
-                    values = DiagnosticsRetention.entries,
-                    selected = state.settings.expert.diagnosticsRetention,
-                    label = { diagnosticsRetentionLabel(it) },
-                    onSelect = onDiagnosticsRetentionSelected,
-                    summary = stringResource(R.string.diagnostics_retention_summary),
-                    leadingIcon = Icons.Outlined.Info,
-                    optionIcon = { Icons.Outlined.Tune },
-                    grouped = true,
-                )
                 if (BuildConfig.DEBUG) {
                     SettingsControlGroupDivider()
                     SettingSwitchRow(
@@ -201,21 +165,6 @@ fun ExpertSettingsScreen(
                 }
                 SettingsControlGroupDivider()
                 SettingSwitchRow(
-                    title = stringResource(R.string.allow_http_config_imports_title),
-                    checked = state.settings.expert.allowHttpConfigImports,
-                    summary = stringResource(R.string.allow_http_config_imports_summary),
-                    onCheckedChange = { enabled ->
-                        if (enabled) {
-                            requireWarning { onAllowHttpConfigImportsChanged(true) }
-                        } else {
-                            onAllowHttpConfigImportsChanged(false)
-                        }
-                    },
-                    summaryMaxLines = 3,
-                    grouped = true,
-                )
-                SettingsControlGroupDivider()
-                SettingSwitchRow(
                     title = stringResource(R.string.allow_insecure_tls_title),
                     checked = state.settings.expert.allowInsecureTls,
                     summary = stringResource(R.string.allow_insecure_tls_summary),
@@ -229,28 +178,6 @@ fun ExpertSettingsScreen(
                     summaryMaxLines = 3,
                     grouped = true,
                 )
-                SettingsControlGroupDivider()
-                SettingValueRow(
-                    title = stringResource(R.string.socks_inbound),
-                    value = surfaceSummary(state.settings.expert.localSurfaces.socks, state.settings.expert.localSurfaces.auth.enabled),
-                    onClick = { socksDialog = true },
-                    grouped = true,
-                )
-                SettingsControlGroupDivider()
-                SettingValueRow(
-                    title = stringResource(R.string.http_inbound),
-                    value = surfaceSummary(state.settings.expert.localSurfaces.http, state.settings.expert.localSurfaces.auth.enabled),
-                    onClick = { httpDialog = true },
-                    grouped = true,
-                )
-                SettingsControlGroupDivider()
-                SettingValueRow(
-                    title = stringResource(R.string.mixed_inbound),
-                    value = surfaceSummary(state.settings.expert.localSurfaces.mixed, state.settings.expert.localSurfaces.auth.enabled),
-                    onClick = { mixedDialog = true },
-                    grouped = true,
-                )
-                SettingsControlGroupDivider()
                 SettingValueRow(
                     title = stringResource(R.string.clash_api),
                     value = clashSummary(state.settings.expert.localSurfaces.clashApi),
@@ -272,60 +199,6 @@ fun ExpertSettingsScreen(
                 }
             }
         }
-    }
-
-    if (socksDialog) {
-        ProxySurfaceDialog(
-            title = stringResource(R.string.socks_inbound),
-            initialValue = state.settings.expert.localSurfaces.socks,
-            auth = state.settings.expert.localSurfaces.auth,
-            lanAccessEnabled = state.settings.expert.localSurfaces.allowLanAccess,
-            wifiLanAddress = wifiLanAddress,
-            onDismiss = { socksDialog = false },
-            onConfirm = { value ->
-                if (value.enabled) {
-                    requireWarning { onSocksSurfaceChanged(value) }
-                } else {
-                    onSocksSurfaceChanged(value)
-                }
-            },
-        )
-    }
-
-    if (httpDialog) {
-        ProxySurfaceDialog(
-            title = stringResource(R.string.http_inbound),
-            initialValue = state.settings.expert.localSurfaces.http,
-            auth = state.settings.expert.localSurfaces.auth,
-            lanAccessEnabled = state.settings.expert.localSurfaces.allowLanAccess,
-            wifiLanAddress = wifiLanAddress,
-            onDismiss = { httpDialog = false },
-            onConfirm = { value ->
-                if (value.enabled) {
-                    requireWarning { onHttpSurfaceChanged(value) }
-                } else {
-                    onHttpSurfaceChanged(value)
-                }
-            },
-        )
-    }
-
-    if (mixedDialog) {
-        ProxySurfaceDialog(
-            title = stringResource(R.string.mixed_inbound),
-            initialValue = state.settings.expert.localSurfaces.mixed,
-            auth = state.settings.expert.localSurfaces.auth,
-            lanAccessEnabled = state.settings.expert.localSurfaces.allowLanAccess,
-            wifiLanAddress = wifiLanAddress,
-            onDismiss = { mixedDialog = false },
-            onConfirm = { value ->
-                if (value.enabled) {
-                    requireWarning { onMixedSurfaceChanged(value) }
-                } else {
-                    onMixedSurfaceChanged(value)
-                }
-            },
-        )
     }
 
     if (clashDialog) {

@@ -18,8 +18,9 @@ internal fun handleRuntimeServiceCommand(
         protocolOptionId: String?,
         previousVpnNetworkHandle: Long?,
     ) -> Unit,
-    disconnect: suspend (commandStartId: Int?) -> Unit,
+    disconnect: suspend (commandStartId: Int?, suppressLocalGuard: Boolean) -> Unit,
     reload: suspend (profileIdHint: Long) -> Unit,
+    startLocalGuard: suspend (LocalGuardMode, Int) -> Unit,
 ) {
     when (intent?.action) {
         FoxholeConnectionServiceContract.ACTION_CONNECT -> {
@@ -32,7 +33,8 @@ internal fun handleRuntimeServiceCommand(
         }
 
         FoxholeConnectionServiceContract.ACTION_DISCONNECT -> {
-            launchPriorityCommand { disconnect(startId) }
+            val suppressLocalGuard = intent.getBooleanExtra(FoxholeConnectionServiceContract.EXTRA_SUPPRESS_LOCAL_GUARD, false)
+            launchPriorityCommand { disconnect(startId, suppressLocalGuard) }
         }
 
         FoxholeConnectionServiceContract.ACTION_RELOAD -> {
@@ -50,6 +52,14 @@ internal fun handleRuntimeServiceCommand(
                 )
             }
         }
+
+        FoxholeConnectionServiceContract.ACTION_START_LOCAL_GUARD -> {
+            val mode =
+                intent.getStringExtra(FoxholeConnectionServiceContract.EXTRA_LOCAL_GUARD_MODE)
+                    ?.let { raw -> runCatching { LocalGuardMode.valueOf(raw) }.getOrNull() }
+                    ?: LocalGuardMode.FIREWALL
+            launchCommand { startLocalGuard(mode, startId) }
+        }
     }
 }
 
@@ -65,11 +75,11 @@ private suspend fun restoreLastActiveConnection(
         protocolOptionId: String?,
         previousVpnNetworkHandle: Long?,
     ) -> Unit,
-    disconnect: suspend (commandStartId: Int?) -> Unit,
+    disconnect: suspend (commandStartId: Int?, suppressLocalGuard: Boolean) -> Unit,
 ) {
     val active = container.profileRepository.getActiveProfile()
     if (active == null) {
-        disconnect(startId)
+        disconnect(startId, false)
         return
     }
     val smartProfilePreference = container.settingsRepository.current().smartProfilePreference(active.id)

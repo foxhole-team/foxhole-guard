@@ -144,9 +144,11 @@ enum class DiagnosticsRetention(
 ) {
     HOURS_6(retentionHours = 6, maxEntries = 1_500),
     HOURS_24(retentionHours = 24, maxEntries = 5_000),
+    DAYS_2(retentionHours = 48, maxEntries = 7_000),
     DAYS_3(retentionHours = 72, maxEntries = 9_000),
     DAYS_7(retentionHours = 168, maxEntries = 15_000),
     DAYS_14(retentionHours = 336, maxEntries = 20_000),
+    DAYS_30(retentionHours = 720, maxEntries = 30_000),
 }
 
 @Serializable
@@ -260,9 +262,9 @@ data class ExpertSettings(
     val warningAcknowledgedAt: Long? = null,
     val blockScreenshots: Boolean = false,
     val networkActivityLogging: Boolean = false,
+    val networkActivityPersistentLogging: Boolean = false,
     val diagnosticsRetention: DiagnosticsRetention = DiagnosticsRetention.HOURS_24,
     val smartStartReplayLogging: Boolean = false,
-    val allowHttpConfigImports: Boolean = false,
     val allowInsecureTls: Boolean = false,
     val sniff: Boolean = true,
     val routeOnly: Boolean = false,
@@ -273,6 +275,7 @@ data class ExpertSettings(
     val selectedPackages: List<String> = emptyList(),
     val blockedPackages: List<String> = emptyList(),
     val blockedPackagesEnabled: Boolean = false,
+    val blockAppsAlways: Boolean = false,
     val siteRoutingAction: RoutingRuleAction = RoutingRuleAction.PROXY,
     val localSurfaces: LocalSurfaceSettings = LocalSurfaceSettings(),
 )

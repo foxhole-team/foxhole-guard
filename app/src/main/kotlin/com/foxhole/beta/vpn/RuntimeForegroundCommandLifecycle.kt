@@ -23,7 +23,13 @@ internal fun Service.handleForegroundRuntimeCommand(
         previousVpnNetworkHandle: Long?,
     ) -> Unit,
     disconnect: suspend (commandStartId: Int?) -> Unit,
+    disconnectWithOptions: suspend (commandStartId: Int?, suppressLocalGuard: Boolean) -> Unit = { commandStartId, _ ->
+        disconnect(commandStartId)
+    },
     reload: suspend (profileIdHint: Long) -> Unit,
+    startLocalGuard: suspend (LocalGuardMode, Int) -> Unit = { _, commandStartId ->
+        disconnect(commandStartId)
+    },
 ): Int {
     ensureConnectionNotificationChannel(notificationManager)
     startForeground(
@@ -37,8 +43,9 @@ internal fun Service.handleForegroundRuntimeCommand(
         launchCommand = launchCommand,
         launchPriorityCommand = launchPriorityCommand,
         connect = connect,
-        disconnect = disconnect,
+        disconnect = disconnectWithOptions,
         reload = reload,
+        startLocalGuard = startLocalGuard,
     )
     return Service.START_STICKY
 }

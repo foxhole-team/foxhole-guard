@@ -34,6 +34,7 @@ interface FoxholeRuntimeDependencies {
     val networkFingerprintProvider: NetworkFingerprintProvider
     val connectionController: FoxholeConnectionController
     val ipInfoRepository: IpInfoRepository
+    val runtimeConfigAssembler: RuntimeConfigAssembler
 }
 
 interface FoxholeTileDependencies {

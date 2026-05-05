@@ -124,7 +124,6 @@ class ProfileRepository(
             parser = parser,
             rawInput = rawInput,
             allowPrivateOutboundHosts = settings.expert.allowPrivateOutboundHosts,
-            allowHttpSubscriptionUrls = settings.expert.allowHttpConfigImports,
         )
         if (!requiresConsent) {
             return null
@@ -134,7 +133,6 @@ class ProfileRepository(
                 parser.parseUserInput(
                     input = rawInput,
                     allowPrivateOutboundHosts = settings.expert.allowPrivateOutboundHosts,
-                    allowHttpSubscriptionUrls = settings.expert.allowHttpConfigImports,
                     allowInsecureTls = true,
                 )
             val localParsedProfiles =
@@ -146,7 +144,6 @@ class ProfileRepository(
                             rawContent = rawInput,
                             fallbackName = parsed.displayName,
                             allowPrivateOutboundHosts = settings.expert.allowPrivateOutboundHosts,
-                            allowHttpSubscriptionUrls = settings.expert.allowHttpConfigImports,
                             allowInsecureTls = true,
                         )
                     }.getOrNull()
@@ -175,7 +172,6 @@ class ProfileRepository(
                     parser.parseUserInput(
                         input = rawInput,
                         allowPrivateOutboundHosts = settings.expert.allowPrivateOutboundHosts,
-                        allowHttpSubscriptionUrls = settings.expert.allowHttpConfigImports,
                         allowInsecureTls = effectiveAllowInsecureTls,
                     )
                 }
@@ -215,7 +211,6 @@ class ProfileRepository(
                                     rawContent = rawInput,
                                     fallbackName = resolvedPreferredName ?: parsed.displayName,
                                     allowPrivateOutboundHosts = settings.expert.allowPrivateOutboundHosts,
-                                    allowHttpSubscriptionUrls = settings.expert.allowHttpConfigImports,
                                     allowInsecureTls = effectiveAllowInsecureTls,
                                 )
                             }
@@ -307,9 +302,9 @@ class ProfileRepository(
         val safeUrl =
             withContext(Dispatchers.IO) {
                 sourceUrl
-                    .ensurePublicUrl(allowHttp = settings.expert.allowHttpConfigImports)
+                    .ensurePublicUrl(allowHttp = false)
                     .requirePublicUrl(
-                        allowHttp = settings.expert.allowHttpConfigImports,
+                        allowHttp = false,
                         resolveHost = true,
                     )
             }
@@ -319,7 +314,7 @@ class ProfileRepository(
                     sourceUrl = sourceUrl,
                     safeUrl = safeUrl,
                     lastEtag = null,
-                    allowHttp = settings.expert.allowHttpConfigImports,
+                    allowHttp = false,
                 )
             }.getOrElse { error ->
                 throw IllegalStateException(describeSubscriptionTransportFailure(sourceUrl, error), error)
@@ -684,9 +679,9 @@ class ProfileRepository(
         val safeUrl =
             withContext(Dispatchers.IO) {
                 sourceUrl
-                    .ensurePublicUrl(allowHttp = settings.expert.allowHttpConfigImports)
+                    .ensurePublicUrl(allowHttp = false)
                     .requirePublicUrl(
-                        allowHttp = settings.expert.allowHttpConfigImports,
+                        allowHttp = false,
                         resolveHost = true,
                     )
             }
@@ -696,7 +691,7 @@ class ProfileRepository(
                     sourceUrl = sourceUrl,
                     safeUrl = safeUrl,
                     lastEtag = entity.lastEtag,
-                    allowHttp = settings.expert.allowHttpConfigImports,
+                    allowHttp = false,
                 )
             }.getOrElse { error ->
                 throw IllegalStateException(describeSubscriptionTransportFailure(sourceUrl, error), error)
@@ -747,7 +742,6 @@ class ProfileRepository(
                         rawContent = rawBody,
                         fallbackName = fallbackName,
                         allowPrivateOutboundHosts = settings.expert.allowPrivateOutboundHosts,
-                        allowHttpSubscriptionUrls = settings.expert.allowHttpConfigImports,
                         allowInsecureTls = false,
                     )
                 }.exceptionOrNull()
@@ -767,7 +761,6 @@ class ProfileRepository(
                             rawContent = rawBody,
                             fallbackName = fallbackName,
                             allowPrivateOutboundHosts = settings.expert.allowPrivateOutboundHosts,
-                            allowHttpSubscriptionUrls = settings.expert.allowHttpConfigImports,
                             allowInsecureTls = true,
                         ).insecureTlsImportWarning(json)
                     }.getOrNull()
@@ -783,7 +776,6 @@ class ProfileRepository(
                         rawContent = rawBody,
                         fallbackName = fallbackName,
                         allowPrivateOutboundHosts = settings.expert.allowPrivateOutboundHosts,
-                        allowHttpSubscriptionUrls = settings.expert.allowHttpConfigImports,
                         allowInsecureTls = effectiveAllowInsecureTls,
                     )
                 }
@@ -1266,7 +1258,6 @@ internal fun ProfileImportParser.normalizeLegacyRawResolvedConfig(
         parseUserInput(
             input = trimmed,
             allowPrivateOutboundHosts = settings.expert.allowPrivateOutboundHosts,
-            allowHttpSubscriptionUrls = settings.expert.allowHttpConfigImports,
             allowInsecureTls = allowInsecureTls,
         ).normalizedConfigJson
     }.getOrNull()?.takeIf(String::isNotBlank)

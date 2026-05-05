@@ -10,7 +10,6 @@ internal data class NormalizedRoutePort(
 internal data class UserInputStrategyContext(
     val input: String,
     val allowPrivateOutboundHosts: Boolean,
-    val allowHttpSubscriptionUrls: Boolean,
     val allowInsecureTls: Boolean,
 )
 
@@ -24,7 +23,6 @@ internal data class SubscriptionContentStrategyContext(
     val input: String,
     val fallbackName: String,
     val allowPrivateOutboundHosts: Boolean,
-    val allowHttpSubscriptionUrls: Boolean,
     val allowInsecureTls: Boolean,
 )
 
