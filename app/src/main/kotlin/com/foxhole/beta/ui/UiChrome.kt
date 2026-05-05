@@ -48,6 +48,7 @@ import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.ErrorOutline
+import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.KeyboardArrowDown
 import androidx.compose.material.icons.outlined.KeyboardArrowUp
@@ -1270,6 +1271,7 @@ internal fun FoxholeValuePill(
     expanded: Boolean = false,
     onClick: (() -> Unit)? = null,
     fillContent: Boolean = false,
+    actionIcon: ImageVector? = null,
 ) {
     val uiPalette = LocalFoxholeUiPalette.current
     val pillShape = MaterialTheme.shapes.medium
@@ -1329,11 +1331,12 @@ internal fun FoxholeValuePill(
                 if (onClick != null) {
                     Icon(
                         imageVector =
-                            if (expanded) {
-                                Icons.Outlined.KeyboardArrowUp
-                            } else {
-                                Icons.Outlined.KeyboardArrowDown
-                            },
+                            actionIcon
+                                ?: if (expanded) {
+                                    Icons.Outlined.KeyboardArrowUp
+                                } else {
+                                    Icons.Outlined.KeyboardArrowDown
+                                },
                         contentDescription = null,
                         modifier = Modifier.size(16.dp),
                         tint = uiPalette.valuePillContentColor,

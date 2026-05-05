@@ -6,6 +6,8 @@ import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.preferencesDataStoreFile
 import com.foxhole.beta.BuildConfig
 import com.foxhole.beta.core.model.AutoConnectReasonCode
+import com.foxhole.beta.core.model.AppTrafficBaseline
+import com.foxhole.beta.core.model.AppTrafficSample
 import com.foxhole.beta.core.model.AppLocale
 import com.foxhole.beta.core.model.ClashApiSettings
 import com.foxhole.beta.core.model.CachedActiveProfile
@@ -438,6 +440,33 @@ class SettingsRepository(
         }
     }
 
+    suspend fun updateAppTrafficStatsEnabled(value: Boolean) =
+        update { current ->
+            current.copy(
+                appTrafficStatsEnabled = value,
+                appTrafficBaselines = if (value) current.appTrafficBaselines else emptyList(),
+            )
+        }
+
+    suspend fun recordAppTrafficSnapshot(
+        baselines: List<AppTrafficBaseline>,
+        samples: List<AppTrafficSample>,
+        now: Long = System.currentTimeMillis(),
+    ) = update { current ->
+        if (!current.appTrafficStatsEnabled) {
+            current.copy(appTrafficBaselines = baselines)
+        } else {
+            val cutoff = now - APP_TRAFFIC_SAMPLE_RETENTION_MS
+            current.copy(
+                appTrafficBaselines = baselines,
+                appTrafficSamples =
+                    (current.appTrafficSamples + samples)
+                        .filter { sample -> sample.sampledAt >= cutoff }
+                        .takeLast(APP_TRAFFIC_SAMPLE_MAX_COUNT),
+            )
+        }
+    }
+
     suspend fun updateTunStack(value: TunStack) =
         update { it.copy(traffic = it.traffic.copy(tunStack = value)) }
 
@@ -768,6 +797,8 @@ class SettingsRepository(
         update {
             it.copy(
                 profileTrafficTotals = emptyList(),
+                appTrafficBaselines = emptyList(),
+                appTrafficSamples = emptyList(),
                 usageTrackingStartedAt = timestamp,
             )
         }
@@ -999,6 +1030,14 @@ class SettingsRepository(
                         .values
                         .mapNotNull { items -> items.maxByOrNull(ProfileTrafficTotal::updatedAt) }
                         .sortedByDescending(ProfileTrafficTotal::updatedAt),
+                appTrafficBaselines =
+                    appTrafficBaselines
+                        .filter { baseline -> baseline.packageName.isNotBlank() && baseline.uid > 0 }
+                        .distinctBy { baseline -> baseline.packageName },
+                appTrafficSamples =
+                    appTrafficSamples
+                        .filter { sample -> sample.packageName.isNotBlank() && sample.uid > 0 && (sample.rxBytes > 0L || sample.txBytes > 0L) }
+                        .takeLast(APP_TRAFFIC_SAMPLE_MAX_COUNT),
                 usageTrackingStartedAt = usageTrackingStartedAt.takeIf { it > 0L } ?: System.currentTimeMillis(),
             )
         }
@@ -1143,6 +1182,8 @@ class SettingsRepository(
         private const val MAX_PORT = 65535
         private const val MIN_MTU = 576
         private const val MAX_MTU = 9_000
+        private const val APP_TRAFFIC_SAMPLE_RETENTION_MS = 31L * 24L * 60L * 60L * 1000L
+        private const val APP_TRAFFIC_SAMPLE_MAX_COUNT = 50_000
         private const val DEFAULT_PROXY_LOGIN = "foxhole"
         private const val PROXY_PASSWORD_PREFIX = "foxhole-"
         private const val PROXY_PASSWORD_RANDOM_LENGTH = 4

@@ -27,6 +27,7 @@ import com.foxhole.beta.core.model.TrafficMode
 import com.foxhole.beta.core.model.TrafficSnapshot
 import com.foxhole.beta.core.model.VpnSession
 import com.foxhole.beta.core.network.mergeIpInfo
+import com.foxhole.beta.core.settings.AppTrafficStatsRecorder
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -70,6 +71,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         )
     }
     internal val trafficSampler = TrafficStatsSampler()
+    internal val appTrafficStatsRecorder by lazy { AppTrafficStatsRecorder(applicationContext, container.settingsRepository) }
     internal var activeSession: VpnSession? = null
     internal var activeLocalGuardMode: LocalGuardMode? = null
     internal var trafficJob: Job? = null
@@ -78,6 +80,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
     internal var ipv4EnrichmentJob: Job? = null
     internal var validationJob: Job? = null
     internal var notificationHealthJob: Job? = null
+    internal var appTrafficStatsJob: Job? = null
     internal var networkCallbackRegistered = false
     internal var defaultNetworkCallbackRegistered = false
     internal var notificationConnectivityHealthState = ConnectivityHealthState.CHECKING
@@ -192,6 +195,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
     override fun onDestroy() {
         super.onDestroy()
         stopTrafficUpdates()
+        stopAppTrafficStatsUpdates()
         stopGeoRefresh()
         stopNotificationHealthMonitoring()
         cancelScheduledAutoReconnect(resetAttempts = true)
@@ -361,6 +365,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
             persistProfileTraffic(session, finalTraffic)
         }
         stopTrafficUpdates()
+        stopAppTrafficStatsUpdates()
         stopGeoRefresh()
         stopNotificationHealthMonitoring()
         cancelScheduledAutoReconnect(resetAttempts = true)
@@ -420,6 +425,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
             return
         }
         stopTrafficUpdates()
+        stopAppTrafficStatsUpdates()
         stopGeoRefresh()
         stopNotificationHealthMonitoring()
         cancelScheduledAutoReconnect(resetAttempts = true)
@@ -446,6 +452,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         acquireRuntimeWakeLock()
         val result = runtime.start(session, this)
         if (result.isSuccess) {
+            startAppTrafficStatsUpdates()
             container.diagnosticsLogger.record("connection", "local guard started mode=${mode.name.lowercase()}")
             updateNotification()
         } else {
@@ -599,6 +606,26 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         immediateTrafficSampleJob = null
         trafficJob?.cancel()
         trafficJob = null
+    }
+
+    internal fun startAppTrafficStatsUpdates() {
+        stopAppTrafficStatsUpdates()
+        if (!container.settingsRepository.settings.value.appTrafficStatsEnabled) {
+            return
+        }
+        appTrafficStatsJob =
+            scope.launch(Dispatchers.Default) {
+                while (currentCoroutineContext().isActive) {
+                    runCatching { appTrafficStatsRecorder.recordSnapshot() }
+                        .onFailure { container.diagnosticsLogger.record("traffic", "app traffic stats sample failed") }
+                    delay(APP_TRAFFIC_SAMPLE_INTERVAL_MS)
+                }
+            }
+    }
+
+    internal fun stopAppTrafficStatsUpdates() {
+        appTrafficStatsJob?.cancel()
+        appTrafficStatsJob = null
     }
 
     internal fun startGeoRefresh(initialNetwork: Network? = null) {
@@ -860,6 +887,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         internal const val CONNECTIVITY_PROBE_TOTAL_TIMEOUT_MS = 30_000L
         internal const val CONNECTIVITY_PROBE_GRACE_MAX_TIMEOUT_MS = com.foxhole.beta.vpn.CONNECTIVITY_PROBE_GRACE_MAX_TIMEOUT_MS
         internal const val LOCAL_GUARD_PROFILE_ID = -10L
+        internal const val APP_TRAFFIC_SAMPLE_INTERVAL_MS = 60_000L
     }
 }
 

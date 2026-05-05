@@ -91,6 +91,7 @@ data class SettingsRouteUiState(
     val appVersion: String = "",
     val reconnectRequired: Boolean = false,
     val hasSmartProfile: Boolean = false,
+    val installedApps: List<InstalledAppOption> = emptyList(),
 )
 
 data class RoutingRouteUiState(
@@ -204,6 +205,7 @@ internal fun HomeUiState.toSettingsRouteUiState(): SettingsRouteUiState =
         appVersion = appVersion,
         reconnectRequired = reconnectRequired,
         hasSmartProfile = profiles.any(MultiProtocolProfileSupport::hasMultipleSupportedOptions),
+        installedApps = installedApps,
     )
 
 internal fun HomeUiState.toRoutingRouteUiState(): RoutingRouteUiState =

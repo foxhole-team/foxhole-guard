@@ -61,6 +61,7 @@ import com.foxhole.beta.core.profile.PreparedProfileExport
 import com.foxhole.beta.core.profile.ProfileExportRequest
 import com.foxhole.beta.core.profile.classifyAutoConnectProbeFailure
 import com.foxhole.beta.core.smart.SmartStartController
+import com.foxhole.beta.core.settings.AppTrafficStatsRecorder
 import com.foxhole.beta.vpn.FoxholeVpnService
 import com.foxhole.beta.vpn.FoxholeVpnRuntimeBridge
 import kotlinx.coroutines.CancellationException
@@ -85,6 +86,7 @@ class HomeViewModel(
     application: Application,
 ) : AndroidViewModel(application) {
     internal val container: FoxholeHomeDependencies = (application as FoxholeApplication).appGraph
+    internal val appTrafficStatsRecorder = AppTrafficStatsRecorder(application, container.settingsRepository)
     internal val initialSettings = container.settingsRepository.settings.value
     internal val clipboard = application.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
     internal val installedAppsMutable = MutableStateFlow<List<InstalledAppOption>>(emptyList())
@@ -416,6 +418,7 @@ class HomeViewModel(
     internal var autoConnectJob: Job? = null
     internal var reconnectJob: Job? = null
     internal var protocolMetricsRefreshJob: Job? = null
+    internal var appTrafficStatsJob: Job? = null
     internal var protocolMetricsRestoreOnCancel: Boolean = true
     internal var dashboardVisible: Boolean = false
     internal var reconnectPromptPendingUntilDashboard: Boolean = false
@@ -426,6 +429,16 @@ class HomeViewModel(
                 .onFailure {
                     snackbars.emit(errorBanner(R.string.settings_secure_storage_failed))
                 }
+            val settings = container.settingsRepository.settings.value
+            if (settings.expert.selectedPackages.isNotEmpty() || settings.expert.blockedPackages.isNotEmpty()) {
+                loadInstalledApps()
+            }
+            syncAppTrafficStatsSampler(settings.appTrafficStatsEnabled)
+        }
+        viewModelScope.launch {
+            container.settingsRepository.settings.collect { settings ->
+                syncAppTrafficStatsSampler(settings.appTrafficStatsEnabled)
+            }
         }
         viewModelScope.launch {
             container.profileRepository.ensureActiveProfileInvariant()
@@ -1094,6 +1107,39 @@ class HomeViewModel(
         }
     }
 
+    fun onAppTrafficStatsEnabledChanged(value: Boolean) {
+        viewModelScope.launch {
+            container.settingsRepository.updateAppTrafficStatsEnabled(value)
+            container.connectionController.syncLocalGuard()
+            if (value) {
+                loadInstalledApps()
+                sampleAppTrafficStats()
+            }
+        }
+    }
+
+    internal fun syncAppTrafficStatsSampler(enabled: Boolean) {
+        if (!enabled) {
+            appTrafficStatsJob?.cancel()
+            appTrafficStatsJob = null
+            return
+        }
+        if (appTrafficStatsJob != null) {
+            return
+        }
+        appTrafficStatsJob =
+            viewModelScope.launch {
+                while (true) {
+                    sampleAppTrafficStats()
+                    delay(APP_TRAFFIC_SAMPLE_INTERVAL_MS)
+                }
+            }
+    }
+
+    internal suspend fun sampleAppTrafficStats() {
+        appTrafficStatsRecorder.recordSnapshot()
+    }
+
     internal fun ClipData.firstTextItem(): String? =
         if (itemCount > 0) {
             getItemAt(0).coerceToText(getApplication<Application>()).toString()
@@ -1127,6 +1173,7 @@ class HomeViewModel(
         internal const val AUTO_CONNECT_TOTAL_TIMEOUT_MS = 60_000L
         internal const val AUTO_CONNECT_MAX_ATTEMPTS = SmartStartController.AUTO_CONNECT_MAX_ATTEMPTS
         internal const val PROTOCOL_METRICS_PROBE_TIMEOUT_MS = 12_000L
+        internal const val APP_TRAFFIC_SAMPLE_INTERVAL_MS = 60_000L
         internal const val AUTO_CONNECT_LATENCY_FALLBACK_PENALTY_MS = 750L
         internal val ACTIVE_CONNECTION_STATES =
             setOf(

@@ -1027,6 +1027,7 @@ internal fun FoxholeVpnService.onConnectionStartedInternal(
         trafficSampler.start()
         startTrafficUpdates()
     }
+    startAppTrafficStatsUpdates()
     FoxholeVpnRuntimeBridge.update(
         ConnectionSnapshot(
             state = ConnectionState.CONNECTED,

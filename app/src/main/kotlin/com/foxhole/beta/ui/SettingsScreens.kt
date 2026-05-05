@@ -34,6 +34,7 @@ import androidx.compose.material.icons.outlined.BrightnessAuto
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.DarkMode
 import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.BarChart
 import androidx.compose.material.icons.outlined.FileDownload
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Language
@@ -128,6 +129,7 @@ fun SettingsHomeScreen(
     onOpenHelp: () -> Unit,
     onOpenExpert: () -> Unit,
     onOpenDiagnostics: () -> Unit,
+    onOpenStatistics: () -> Unit,
     onUnlockExpertSettings: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -187,6 +189,7 @@ fun SettingsHomeScreen(
             onOpenHelp = onOpenHelp,
             onOpenExpert = onOpenExpert,
             onOpenDiagnostics = onOpenDiagnostics,
+            onOpenStatistics = onOpenStatistics,
         )
         settingsHomeFooterItem(
             appVersion = state.appVersion,
@@ -229,6 +232,7 @@ private fun LazyListScope.settingsHomeNavigationItems(
     onOpenHelp: () -> Unit,
     onOpenExpert: () -> Unit,
     onOpenDiagnostics: () -> Unit,
+    onOpenStatistics: () -> Unit,
 ) {
     item {
         SettingsNavigationGroup {
@@ -278,6 +282,13 @@ private fun LazyListScope.settingsHomeNavigationItems(
                 title = stringResource(R.string.diagnostics_and_usage),
                 summary = stringResource(R.string.settings_home_diagnostics_summary),
                 onClick = onOpenDiagnostics,
+            )
+            SettingsGroupDivider()
+            SettingsGroupedNavigationRow(
+                icon = Icons.Outlined.BarChart,
+                title = stringResource(R.string.statistics_title),
+                summary = stringResource(R.string.settings_home_statistics_summary),
+                onClick = onOpenStatistics,
             )
         }
     }

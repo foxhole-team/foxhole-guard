@@ -210,7 +210,8 @@ internal fun SettingValueRow(
             onClick = onClick,
             summaryMaxLines = summaryMaxLines,
             trailingContent = {
-                trailingContent?.invoke(this) ?: FoxholeValuePill(value = value)
+                trailingContent?.invoke(this)
+                    ?: FoxholeValuePill(value = value, onClick = onClick, actionIcon = Icons.Outlined.Edit)
             },
         )
         return
@@ -222,7 +223,8 @@ internal fun SettingValueRow(
         onClick = onClick,
         summaryMaxLines = summaryMaxLines,
         trailingContent = {
-            trailingContent?.invoke(this) ?: FoxholeValuePill(value = value)
+            trailingContent?.invoke(this)
+                ?: FoxholeValuePill(value = value, onClick = onClick, actionIcon = Icons.Outlined.Edit)
         },
     )
 }

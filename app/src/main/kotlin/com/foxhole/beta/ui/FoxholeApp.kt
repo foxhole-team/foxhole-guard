@@ -100,6 +100,7 @@ private object AppRoute {
     const val HELP = "settings/help"
     const val EXPERT = "settings/expert"
     const val DIAGNOSTICS = "settings/diagnostics"
+    const val STATISTICS = "settings/statistics"
 
     fun profileDetail(profileId: Long): String = "profiles/$profileId"
 
@@ -386,6 +387,7 @@ fun FoxholeApp(
                         onOpenHelp = { navController.navigate(AppRoute.HELP) },
                         onOpenExpert = { navController.navigate(AppRoute.EXPERT) },
                         onOpenDiagnostics = { navController.navigate(AppRoute.DIAGNOSTICS) },
+                        onOpenStatistics = { navController.navigate(AppRoute.STATISTICS) },
                         onUnlockExpertSettings = viewModel::unlockExpertSettings,
                     )
                 }
@@ -536,6 +538,19 @@ fun FoxholeApp(
                         onNetworkActivityLoggingChanged = viewModel::onNetworkActivityLoggingChanged,
                         onNetworkActivityPersistentLoggingChanged = viewModel::onNetworkActivityPersistentLoggingChanged,
                         onDiagnosticsRetentionSelected = viewModel::onDiagnosticsRetentionSelected,
+                        onClearUsage = viewModel::resetUsageTracking,
+                    )
+                }
+                composable(AppRoute.STATISTICS) {
+                    LaunchedEffect(Unit) {
+                        viewModel.ensureInstalledAppsLoaded()
+                    }
+                    val state by viewModel.settingsRouteState.collectAsStateWithLifecycle()
+                    StatisticsScreen(
+                        state = state,
+                        snackbarHostState = snackbarHostState,
+                        onNavigateUp = navController::navigateUp,
+                        onAppTrafficStatsEnabledChanged = viewModel::onAppTrafficStatsEnabledChanged,
                         onClearUsage = viewModel::resetUsageTracking,
                     )
                 }

@@ -203,12 +203,6 @@ private fun DiagnosticsScreenContent(
                 )
             }
         }
-        item {
-            UsageTotalsCard(
-                state = state,
-                onClear = onClearUsage,
-            )
-        }
     }
 }
 

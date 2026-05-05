@@ -290,6 +290,9 @@ data class Settings(
     val lastActiveProfile: CachedActiveProfile? = null,
     val smartProfilePreferences: List<SmartProfilePreference> = emptyList(),
     val profileTrafficTotals: List<ProfileTrafficTotal> = emptyList(),
+    val appTrafficStatsEnabled: Boolean = false,
+    val appTrafficBaselines: List<AppTrafficBaseline> = emptyList(),
+    val appTrafficSamples: List<AppTrafficSample> = emptyList(),
     val usageTrackingStartedAt: Long = System.currentTimeMillis(),
 )
 
@@ -425,6 +428,24 @@ data class ProfileTrafficTotal(
     val rxTotalBytes: Long = 0,
     val txTotalBytes: Long = 0,
     val updatedAt: Long = 0,
+)
+
+@Serializable
+data class AppTrafficBaseline(
+    val packageName: String,
+    val uid: Int,
+    val rxBytes: Long,
+    val txBytes: Long,
+    val sampledAt: Long,
+)
+
+@Serializable
+data class AppTrafficSample(
+    val packageName: String,
+    val uid: Int,
+    val rxBytes: Long,
+    val txBytes: Long,
+    val sampledAt: Long,
 )
 
 data class ConnectionSnapshot(
