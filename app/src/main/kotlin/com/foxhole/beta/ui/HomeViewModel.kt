@@ -822,6 +822,18 @@ class HomeViewModel(
     fun onSmartStartTransportPrioritySelected(value: SmartStartTransportPriority) =
         onSmartStartTransportPrioritySelectedInternal(value)
 
+    fun onSmartStartV2RayTunSubscriptionsEnabledChanged(value: Boolean) =
+        onSmartStartV2RayTunSubscriptionsEnabledChangedInternal(value)
+
+    fun onSmartStartFailoverEnabledChanged(value: Boolean) =
+        onSmartStartFailoverEnabledChangedInternal(value)
+
+    fun onSmartStartSubscriptionRetryAttemptsChanged(value: Int) =
+        onSmartStartSubscriptionRetryAttemptsChangedInternal(value)
+
+    fun onSmartStartSubscriptionRetryDelaySecondsChanged(value: Int) =
+        onSmartStartSubscriptionRetryDelaySecondsChangedInternal(value)
+
     fun clearSmartStartData() = clearSmartStartDataInternal()
 
     fun onTunStackSelected(value: TunStack) = onTunStackSelectedInternal(value)

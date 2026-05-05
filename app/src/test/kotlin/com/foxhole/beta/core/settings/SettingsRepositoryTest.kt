@@ -10,6 +10,8 @@ import com.foxhole.beta.core.model.LatencyProbeMethod
 import com.foxhole.beta.core.model.NETWORK_FINGERPRINT_SCHEMA_CURRENT
 import com.foxhole.beta.core.model.SMART_START_PROTOCOL_TIMEOUT_DEFAULT_SECONDS
 import com.foxhole.beta.core.model.SMART_START_REFRESH_TIMEOUT_DEFAULT_SECONDS
+import com.foxhole.beta.core.model.SMART_START_SUBSCRIPTION_RETRY_ATTEMPTS_DEFAULT
+import com.foxhole.beta.core.model.SMART_START_SUBSCRIPTION_RETRY_DELAY_DEFAULT_SECONDS
 import com.foxhole.beta.core.model.SMART_START_TIMEOUT_MAX_SECONDS
 import com.foxhole.beta.core.model.Settings
 import com.foxhole.beta.core.model.SmartProfileNetworkMemory
@@ -148,6 +150,10 @@ class SettingsRepositoryTest {
         assertEquals(SMART_START_PROTOCOL_TIMEOUT_DEFAULT_SECONDS, connection.smartStartProtocolSelectionTimeoutSeconds)
         assertEquals(SMART_START_REFRESH_TIMEOUT_DEFAULT_SECONDS, connection.smartStartRefreshSelectionTimeoutSeconds)
         assertEquals(SmartStartTransportPriority.ALL, connection.smartStartTransportPriority)
+        assertTrue(connection.smartStartV2RayTunSubscriptionsEnabled)
+        assertTrue(connection.smartStartFailoverEnabled)
+        assertEquals(SMART_START_SUBSCRIPTION_RETRY_ATTEMPTS_DEFAULT, connection.smartStartSubscriptionRetryAttempts)
+        assertEquals(SMART_START_SUBSCRIPTION_RETRY_DELAY_DEFAULT_SECONDS, connection.smartStartSubscriptionRetryDelaySeconds)
     }
 
     @Test
@@ -560,8 +566,8 @@ class SettingsRepositoryTest {
     }
 
     @Test
-    fun `remembered smart start latency prefers fresh network scoped memory and drops stale values after 72 hours`() {
-        val now = 10L * 24L * 60L * 60L * 1000L
+    fun `remembered smart start latency prefers fresh network scoped memory and drops stale values after three weeks`() {
+        val now = 30L * 24L * 60L * 60L * 1000L
         val preference =
             SmartProfilePreference(
                 profileId = 42L,
@@ -569,7 +575,7 @@ class SettingsRepositoryTest {
                     listOf(
                         SmartProfileProtocolMemory(
                             optionId = "wireguard",
-                            lastSuccessAt = now - (80L * 60L * 60L * 1000L),
+                            lastSuccessAt = now - (22L * 24L * 60L * 60L * 1000L),
                             lastLatencyMs = 220L,
                         ),
                         SmartProfileProtocolMemory(
@@ -650,6 +656,67 @@ class SettingsRepositoryTest {
             mapOf(7L to mapOf("wireguard" to 160L)),
             settings.rememberedSmartStartLatencyByProfileId(
                 networkFingerprint = null,
+                now = now,
+            ),
+        )
+    }
+
+    @Test
+    fun `settings expose remembered down protocols by profile`() {
+        val now = 12_000_000L
+        val settings =
+            Settings(
+                smartProfilePreferences =
+                    listOf(
+                        SmartProfilePreference(
+                            profileId = 7L,
+                            protocolMemories =
+                                listOf(
+                                    SmartProfileProtocolMemory(
+                                        optionId = "wireguard",
+                                        lastSuccessAt = now - 8_000L,
+                                        lastFailureAt = now - 1_000L,
+                                        failureStreak = 2,
+                                        cooldownUntilAt = now + 60_000L,
+                                    ),
+                                    SmartProfileProtocolMemory(
+                                        optionId = "trojan",
+                                        lastSuccessAt = now - 1_000L,
+                                        lastFailureAt = now - 8_000L,
+                                        failureStreak = 0,
+                                    ),
+                                ),
+                            networkMemories =
+                                listOf(
+                                    SmartProfileNetworkMemory(
+                                        networkFingerprint = "wifi-home",
+                                        networkFingerprintSchema = NETWORK_FINGERPRINT_SCHEMA_CURRENT,
+                                        protocolMemories =
+                                            listOf(
+                                                SmartProfileProtocolMemory(
+                                                    optionId = "shadowsocks",
+                                                    lastFailureAt = now - 500L,
+                                                    failureStreak = 1,
+                                                    cooldownUntilAt = now + 90_000L,
+                                                ),
+                                            ),
+                                    ),
+                                ),
+                        ),
+                    ),
+            )
+
+        assertEquals(
+            mapOf(7L to setOf("shadowsocks", "wireguard")),
+            settings.rememberedSmartProfileDownOptionIdsByProfileId(
+                networkFingerprint = "wifi-home",
+                now = now,
+            ),
+        )
+        assertEquals(
+            mapOf(7L to setOf("wireguard")),
+            settings.rememberedSmartProfileDownOptionIdsByProfileId(
+                networkFingerprint = "cellular",
                 now = now,
             ),
         )

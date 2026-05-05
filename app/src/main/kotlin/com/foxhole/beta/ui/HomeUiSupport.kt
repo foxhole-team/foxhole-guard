@@ -30,6 +30,7 @@ import com.foxhole.beta.core.model.LocalSurfaceSettings
 import com.foxhole.beta.core.model.PerAppRoutingMode
 import com.foxhole.beta.core.model.Profile
 import com.foxhole.beta.core.model.ProfileProtocolOption
+import com.foxhole.beta.core.model.ProfileSourceType
 import com.foxhole.beta.core.model.ProtocolHint
 import com.foxhole.beta.core.model.ProxyInboundSettings
 import com.foxhole.beta.core.model.Settings
@@ -184,7 +185,13 @@ internal fun shouldAutoRefreshIpAfterConnect(
 ): Boolean = previousState != ConnectionState.CONNECTED && currentState == ConnectionState.CONNECTED
 
 internal fun shouldShowAutoConnectAction(activeProfile: Profile?): Boolean =
-    activeProfile?.let(MultiProtocolProfileSupport::hasMultipleSupportedOptions) == true
+    activeProfile?.let { profile ->
+        MultiProtocolProfileSupport.hasMultipleSupportedOptions(profile) ||
+            (
+                profile.sourceType == ProfileSourceType.SUBSCRIPTION_URL &&
+                    MultiProtocolProfileSupport.smartStartFullScanCandidates(profile).isNotEmpty()
+            )
+    } == true
 
 internal fun shouldShowSmartStartFirstAnalysisInfo(state: HomeRouteUiState): Boolean {
     val profile = state.activeProfile?.takeIf(MultiProtocolProfileSupport::hasMultipleSupportedOptions)

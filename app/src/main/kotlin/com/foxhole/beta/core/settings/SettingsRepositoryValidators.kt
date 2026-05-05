@@ -32,4 +32,20 @@ internal fun normalizeSmartStartTimeoutSeconds(
     return (minSeconds + roundedOffset).coerceIn(minSeconds, SMART_START_TIMEOUT_MAX_SECONDS)
 }
 
+internal fun normalizeSmartStartSubscriptionRetryAttempts(value: Int): Int =
+    SMART_START_SUBSCRIPTION_RETRY_ATTEMPT_OPTIONS
+        .minByOrNull { option -> kotlin.math.abs(option - value) }
+        ?: 3
+
+internal fun normalizeSmartStartSubscriptionRetryDelaySeconds(value: Int): Int =
+    SMART_START_SUBSCRIPTION_RETRY_DELAY_OPTIONS
+        .minByOrNull { option -> kotlin.math.abs(option - value) }
+        ?: 5
+
+internal val SMART_START_SUBSCRIPTION_RETRY_ATTEMPT_OPTIONS =
+    listOf(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 20)
+
+internal val SMART_START_SUBSCRIPTION_RETRY_DELAY_OPTIONS =
+    listOf(1, 3, 5, 10, 15, 20, 25, 30, 40, 50, 60)
+
 private val LEGACY_IP_INFO_HOSTS = setOf("api.ip.sb", "api.ipify.org")

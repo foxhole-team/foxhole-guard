@@ -32,6 +32,7 @@ import androidx.compose.material.icons.outlined.Apps
 import androidx.compose.material.icons.outlined.BrightnessAuto
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.DarkMode
+import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.BarChart
 import androidx.compose.material.icons.outlined.FileDownload
@@ -104,6 +105,8 @@ import com.foxhole.beta.core.model.SubscriptionRefreshInterval
 import com.foxhole.beta.core.model.ThemeMode
 import com.foxhole.beta.core.model.TrafficMode
 import com.foxhole.beta.core.model.TunStack
+import com.foxhole.beta.core.settings.SMART_START_SUBSCRIPTION_RETRY_ATTEMPT_OPTIONS
+import com.foxhole.beta.core.settings.SMART_START_SUBSCRIPTION_RETRY_DELAY_OPTIONS
 import com.foxhole.beta.ui.FoxholeCard
 import com.foxhole.beta.ui.FoxholeChoiceCard
 import com.foxhole.beta.ui.FoxholeLazyScaffold
@@ -184,7 +187,7 @@ fun SettingsHomeScreen(
         },
     ) {
         settingsHomeNavigationItems(
-            hasSmartProfile = state.hasSmartProfile,
+            hasSmartStartSettings = state.hasSmartProfile || state.hasSubscriptionProfile,
             expertVisible = expertVisible,
             onOpenTraffic = onOpenTraffic,
             onOpenRoutingApps = onOpenRoutingApps,
@@ -226,7 +229,7 @@ fun SettingsHomeScreen(
 }
 
 private fun LazyListScope.settingsHomeNavigationItems(
-    hasSmartProfile: Boolean,
+    hasSmartStartSettings: Boolean,
     expertVisible: Boolean,
     onOpenTraffic: () -> Unit,
     onOpenRoutingApps: () -> Unit,
@@ -239,7 +242,7 @@ private fun LazyListScope.settingsHomeNavigationItems(
 ) {
     item {
         SettingsNavigationGroup {
-            if (hasSmartProfile) {
+            if (hasSmartStartSettings) {
                 SettingsGroupedNavigationRow(
                     modifier = Modifier.testTag("settings_smart_start_action"),
                     icon = Icons.Outlined.Speed,
@@ -431,10 +434,18 @@ fun SmartStartSettingsScreen(
     onSmartStartProtocolSelectionTimeoutChanged: (Int) -> Unit,
     onSmartStartRefreshSelectionTimeoutChanged: (Int) -> Unit,
     onSmartStartTransportPrioritySelected: (SmartStartTransportPriority) -> Unit,
+    onSmartStartV2RayTunSubscriptionsEnabledChanged: (Boolean) -> Unit,
+    onSmartStartFailoverEnabledChanged: (Boolean) -> Unit,
+    onSmartStartSubscriptionRetryAttemptsChanged: (Int) -> Unit,
+    onSmartStartSubscriptionRetryDelaySecondsChanged: (Int) -> Unit,
+    onClearSmartStartData: () -> Unit,
 ) {
     var protocolTimeoutExpanded by rememberSaveable { mutableStateOf(false) }
     var refreshTimeoutExpanded by rememberSaveable { mutableStateOf(false) }
     var transportPriorityExpanded by rememberSaveable { mutableStateOf(false) }
+    var retryAttemptsExpanded by rememberSaveable { mutableStateOf(false) }
+    var retryDelayExpanded by rememberSaveable { mutableStateOf(false) }
+    var clearSmartStartConfirmVisible by rememberSaveable { mutableStateOf(false) }
 
     SettingsScaffold(
         title = stringResource(R.string.smart_start_settings_title),
@@ -456,59 +467,145 @@ fun SmartStartSettingsScreen(
             }
         },
     ) {
-        if (state.hasSmartProfile) {
+        if (state.hasSubscriptionProfile) {
             item {
                 SettingsControlGroup {
-                    DropdownSettingRow(
-                        title = stringResource(R.string.smart_start_protocol_timeout_title),
-                        value = smartStartTimeoutLabel(state.settings.connection.smartStartProtocolSelectionTimeoutSeconds),
-                        expanded = protocolTimeoutExpanded,
-                        onExpandedChange = { protocolTimeoutExpanded = it },
-                        values = smartStartTimeoutOptions(SMART_START_PROTOCOL_TIMEOUT_MIN_SECONDS),
-                        selected = state.settings.connection.smartStartProtocolSelectionTimeoutSeconds,
-                        label = { smartStartTimeoutLabel(it) },
-                        onSelect = onSmartStartProtocolSelectionTimeoutChanged,
-                        summary = stringResource(R.string.smart_start_protocol_timeout_summary),
-                        leadingIcon = Icons.Outlined.Speed,
-                        optionIcon = { Icons.Outlined.Speed },
-                        summaryMaxLines = 3,
-                        grouped = true,
-                    )
-                    SettingsControlGroupDivider()
-                    DropdownSettingRow(
-                        title = stringResource(R.string.smart_start_refresh_timeout_title),
-                        value = smartStartTimeoutLabel(state.settings.connection.smartStartRefreshSelectionTimeoutSeconds),
-                        expanded = refreshTimeoutExpanded,
-                        onExpandedChange = { refreshTimeoutExpanded = it },
-                        values = smartStartTimeoutOptions(SMART_START_REFRESH_TIMEOUT_MIN_SECONDS),
-                        selected = state.settings.connection.smartStartRefreshSelectionTimeoutSeconds,
-                        label = { smartStartTimeoutLabel(it) },
-                        onSelect = onSmartStartRefreshSelectionTimeoutChanged,
-                        summary = stringResource(R.string.smart_start_refresh_timeout_summary),
+                    SettingSwitchRow(
+                        title = stringResource(R.string.smart_start_v2raytun_subscriptions_title),
+                        checked = state.settings.connection.smartStartV2RayTunSubscriptionsEnabled,
+                        onCheckedChange = onSmartStartV2RayTunSubscriptionsEnabledChanged,
+                        summary = stringResource(R.string.smart_start_v2raytun_subscriptions_summary),
                         leadingIcon = Icons.Outlined.Refresh,
-                        optionIcon = { Icons.Outlined.Refresh },
                         summaryMaxLines = 3,
                         grouped = true,
                     )
-                    SettingsControlGroupDivider()
-                    DropdownSettingRow(
-                        title = stringResource(R.string.smart_start_transport_priority_title),
-                        value = smartStartTransportPriorityLabel(state.settings.connection.smartStartTransportPriority),
-                        expanded = transportPriorityExpanded,
-                        onExpandedChange = { transportPriorityExpanded = it },
-                        values = SmartStartTransportPriority.entries,
-                        selected = state.settings.connection.smartStartTransportPriority,
-                        label = { smartStartTransportPriorityLabel(it) },
-                        onSelect = onSmartStartTransportPrioritySelected,
-                        summary = stringResource(R.string.smart_start_transport_priority_summary),
-                        leadingIcon = Icons.Outlined.SwapVert,
-                        optionIcon = ::smartStartTransportPriorityIcon,
+                    if (state.settings.connection.smartStartV2RayTunSubscriptionsEnabled) {
+                        SettingsControlGroupDivider()
+                        DropdownSettingRow(
+                            title = stringResource(R.string.smart_start_subscription_retry_attempts_title),
+                            value = smartStartRetryAttemptsLabel(state.settings.connection.smartStartSubscriptionRetryAttempts),
+                            expanded = retryAttemptsExpanded,
+                            onExpandedChange = { retryAttemptsExpanded = it },
+                            values = SMART_START_SUBSCRIPTION_RETRY_ATTEMPT_OPTIONS,
+                            selected = state.settings.connection.smartStartSubscriptionRetryAttempts,
+                            label = { smartStartRetryAttemptsLabel(it) },
+                            onSelect = onSmartStartSubscriptionRetryAttemptsChanged,
+                            summary = stringResource(R.string.smart_start_subscription_retry_attempts_summary),
+                            leadingIcon = Icons.Outlined.Speed,
+                            optionIcon = { Icons.Outlined.Speed },
+                            summaryMaxLines = 3,
+                            grouped = true,
+                        )
+                        SettingsControlGroupDivider()
+                        DropdownSettingRow(
+                            title = stringResource(R.string.smart_start_subscription_retry_delay_title),
+                            value = smartStartTimeoutLabel(state.settings.connection.smartStartSubscriptionRetryDelaySeconds),
+                            expanded = retryDelayExpanded,
+                            onExpandedChange = { retryDelayExpanded = it },
+                            values = SMART_START_SUBSCRIPTION_RETRY_DELAY_OPTIONS,
+                            selected = state.settings.connection.smartStartSubscriptionRetryDelaySeconds,
+                            label = { smartStartTimeoutLabel(it) },
+                            onSelect = onSmartStartSubscriptionRetryDelaySecondsChanged,
+                            summary = stringResource(R.string.smart_start_subscription_retry_delay_summary),
+                            leadingIcon = Icons.Outlined.Refresh,
+                            optionIcon = { Icons.Outlined.Refresh },
+                            summaryMaxLines = 3,
+                            grouped = true,
+                        )
+                    }
+                }
+            }
+        }
+        if (state.hasSmartProfile || state.hasSubscriptionProfile) {
+            item {
+                SettingsControlGroup {
+                    if (state.hasSmartProfile) {
+                        SettingSwitchRow(
+                            title = stringResource(R.string.smart_start_failover_title),
+                            checked = state.settings.connection.smartStartFailoverEnabled,
+                            onCheckedChange = onSmartStartFailoverEnabledChanged,
+                            summary = stringResource(R.string.smart_start_failover_summary),
+                            leadingIcon = Icons.Outlined.SwapVert,
+                            summaryMaxLines = 4,
+                            grouped = true,
+                        )
+                        SettingsControlGroupDivider()
+                        DropdownSettingRow(
+                            title = stringResource(R.string.smart_start_protocol_timeout_title),
+                            value = smartStartTimeoutLabel(state.settings.connection.smartStartProtocolSelectionTimeoutSeconds),
+                            expanded = protocolTimeoutExpanded,
+                            onExpandedChange = { protocolTimeoutExpanded = it },
+                            values = smartStartTimeoutOptions(SMART_START_PROTOCOL_TIMEOUT_MIN_SECONDS),
+                            selected = state.settings.connection.smartStartProtocolSelectionTimeoutSeconds,
+                            label = { smartStartTimeoutLabel(it) },
+                            onSelect = onSmartStartProtocolSelectionTimeoutChanged,
+                            summary = stringResource(R.string.smart_start_protocol_timeout_summary),
+                            leadingIcon = Icons.Outlined.Speed,
+                            optionIcon = { Icons.Outlined.Speed },
+                            summaryMaxLines = 3,
+                            grouped = true,
+                        )
+                        SettingsControlGroupDivider()
+                        DropdownSettingRow(
+                            title = stringResource(R.string.smart_start_refresh_timeout_title),
+                            value = smartStartTimeoutLabel(state.settings.connection.smartStartRefreshSelectionTimeoutSeconds),
+                            expanded = refreshTimeoutExpanded,
+                            onExpandedChange = { refreshTimeoutExpanded = it },
+                            values = smartStartTimeoutOptions(SMART_START_REFRESH_TIMEOUT_MIN_SECONDS),
+                            selected = state.settings.connection.smartStartRefreshSelectionTimeoutSeconds,
+                            label = { smartStartTimeoutLabel(it) },
+                            onSelect = onSmartStartRefreshSelectionTimeoutChanged,
+                            summary = stringResource(R.string.smart_start_refresh_timeout_summary),
+                            leadingIcon = Icons.Outlined.Refresh,
+                            optionIcon = { Icons.Outlined.Refresh },
+                            summaryMaxLines = 3,
+                            grouped = true,
+                        )
+                        SettingsControlGroupDivider()
+                        DropdownSettingRow(
+                            title = stringResource(R.string.smart_start_transport_priority_title),
+                            value = smartStartTransportPriorityLabel(state.settings.connection.smartStartTransportPriority),
+                            expanded = transportPriorityExpanded,
+                            onExpandedChange = { transportPriorityExpanded = it },
+                            values = SmartStartTransportPriority.entries,
+                            selected = state.settings.connection.smartStartTransportPriority,
+                            label = { smartStartTransportPriorityLabel(it) },
+                            onSelect = onSmartStartTransportPrioritySelected,
+                            summary = stringResource(R.string.smart_start_transport_priority_summary),
+                            leadingIcon = Icons.Outlined.SwapVert,
+                            optionIcon = ::smartStartTransportPriorityIcon,
+                            summaryMaxLines = 3,
+                            grouped = true,
+                        )
+                    }
+                    if (state.hasSmartProfile) {
+                        SettingsControlGroupDivider()
+                    }
+                    SettingsGroupedNavigationRow(
+                        icon = Icons.Outlined.Delete,
+                        title = stringResource(R.string.smart_start_clear_data_title),
+                        summary = stringResource(R.string.smart_start_clear_data_summary),
                         summaryMaxLines = 3,
-                        grouped = true,
+                        onClick = { clearSmartStartConfirmVisible = true },
                     )
                 }
             }
         }
+    }
+    if (clearSmartStartConfirmVisible) {
+        ConfirmDialog(
+            title = stringResource(R.string.smart_start_clear_confirm_title),
+            body = stringResource(R.string.smart_start_clear_confirm_body),
+            confirmLabel = stringResource(R.string.yes_label),
+            icon = Icons.Outlined.Delete,
+            iconTint = MaterialTheme.colorScheme.error,
+            dismissLabel = stringResource(R.string.no_label),
+            onDismiss = { clearSmartStartConfirmVisible = false },
+            onConfirm = {
+                clearSmartStartConfirmVisible = false
+                onClearSmartStartData()
+            },
+        )
     }
 }
 
@@ -520,6 +617,10 @@ private fun smartStartTimeoutOptions(minSeconds: Int): List<Int> =
 @Composable
 private fun smartStartTimeoutLabel(seconds: Int): String =
     pluralStringResource(R.plurals.smart_start_timeout_seconds_value, seconds, seconds)
+
+@Composable
+private fun smartStartRetryAttemptsLabel(attempts: Int): String =
+    pluralStringResource(R.plurals.smart_start_retry_attempts_value, attempts, attempts)
 
 @Composable
 private fun smartStartTransportPriorityLabel(value: SmartStartTransportPriority): String =

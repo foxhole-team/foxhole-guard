@@ -1,6 +1,7 @@
 package com.foxhole.beta.ui
 
 internal enum class SmartStartProtocolStatus {
+    ANALYZING,
     AVAILABLE,
     SLOW,
     RECENTLY_FAILED,
@@ -44,8 +45,11 @@ internal fun resolveSmartStartProtocolPresentation(
     latencyMs: Long?,
     latencyDown: Boolean,
     latencyUnavailable: Boolean,
+    analyzing: Boolean = false,
 ): SmartStartProtocolPresentation =
     when {
+        analyzing ->
+            SmartStartProtocolPresentation(status = SmartStartProtocolStatus.ANALYZING)
         !included ->
             SmartStartProtocolPresentation(
                 status = SmartStartProtocolStatus.DISABLED,

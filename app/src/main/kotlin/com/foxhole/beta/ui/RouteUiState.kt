@@ -6,6 +6,7 @@ import com.foxhole.beta.core.model.ConnectionSnapshot
 import com.foxhole.beta.core.model.IpInfo
 import com.foxhole.beta.core.model.InstalledAppOption
 import com.foxhole.beta.core.model.Profile
+import com.foxhole.beta.core.model.ProfileSourceType
 import com.foxhole.beta.core.model.ProtocolHint
 import com.foxhole.beta.core.model.RoutingCatalog
 import com.foxhole.beta.core.model.RoutingPreset
@@ -91,6 +92,7 @@ data class SettingsRouteUiState(
     val appVersion: String = "",
     val reconnectRequired: Boolean = false,
     val hasSmartProfile: Boolean = false,
+    val hasSubscriptionProfile: Boolean = false,
     val installedApps: List<InstalledAppOption> = emptyList(),
 )
 
@@ -205,6 +207,7 @@ internal fun HomeUiState.toSettingsRouteUiState(): SettingsRouteUiState =
         appVersion = appVersion,
         reconnectRequired = reconnectRequired,
         hasSmartProfile = profiles.any(MultiProtocolProfileSupport::hasMultipleSupportedOptions),
+        hasSubscriptionProfile = profiles.any { profile -> profile.sourceType == ProfileSourceType.SUBSCRIPTION_URL },
         installedApps = installedApps,
     )
 

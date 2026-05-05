@@ -173,29 +173,28 @@ fun RoutingAppsScreen(
                     optionIcon = ::perAppRoutingModeIcon,
                     grouped = true,
                 )
+                SettingsControlGroupDivider()
+                AppGridSectionContent(
+                    title = stringResource(R.string.routing_apps_title),
+                    subtitle = simpleAppRoutingModeGuidance(effectiveAppMode),
+                    leadingIcon = Icons.Outlined.Apps,
+                    apps = selectedApps,
+                    emptyText = stringResource(R.string.split_tunnel_requires_apps),
+                    headerActionLabel = stringResource(R.string.choose_label),
+                    headerActionTag = "routing_apps_add_exception_action",
+                    onHeaderAction = onOpenPicker,
+                    onRemove = { app ->
+                        onSelectedPackagesChanged(selectedPackages.filterNot { it == app.packageName })
+                    },
+                    onDropPackage = { packageName, beforePackageName ->
+                        if (packageName in selectedPackageSet || packageName in blockedPackageSet) {
+                            onBlockedPackagesChanged(blockedPackages.filterNot { it == packageName })
+                            onSelectedPackagesChanged(insertPackageBefore(selectedPackages, packageName, beforePackageName))
+                        }
+                    },
+                    modifier = Modifier.testTag("routing_apps_selected_section"),
+                )
             }
-        }
-        item {
-            AppGridSection(
-                title = stringResource(R.string.routing_apps_title),
-                subtitle = simpleAppRoutingModeGuidance(effectiveAppMode),
-                leadingIcon = Icons.Outlined.Apps,
-                apps = selectedApps,
-                emptyText = stringResource(R.string.split_tunnel_requires_apps),
-                headerActionLabel = stringResource(R.string.choose_label),
-                headerActionTag = "routing_apps_add_exception_action",
-                onHeaderAction = onOpenPicker,
-                onRemove = { app ->
-                    onSelectedPackagesChanged(selectedPackages.filterNot { it == app.packageName })
-                },
-                onDropPackage = { packageName, beforePackageName ->
-                    if (packageName in selectedPackageSet || packageName in blockedPackageSet) {
-                        onBlockedPackagesChanged(blockedPackages.filterNot { it == packageName })
-                        onSelectedPackagesChanged(insertPackageBefore(selectedPackages, packageName, beforePackageName))
-                    }
-                },
-                modifier = Modifier.testTag("routing_apps_selected_section"),
-            )
         }
         item {
             SettingsControlGroup {
@@ -215,29 +214,28 @@ fun RoutingAppsScreen(
                     },
                     grouped = true,
                 )
+                SettingsControlGroupDivider()
+                AppGridSectionContent(
+                    title = stringResource(R.string.blocked_app_exceptions),
+                    subtitle = stringResource(R.string.blocked_apps_info_body),
+                    leadingIcon = Icons.Outlined.Block,
+                    apps = blockedApps,
+                    emptyText = "",
+                    headerActionLabel = stringResource(R.string.choose_label),
+                    headerActionTag = "routing_apps_blocked_add_exception_action",
+                    onHeaderAction = onOpenBlockedPicker,
+                    onRemove = { app ->
+                        onBlockedPackagesChanged(blockedPackages.filterNot { it == app.packageName })
+                    },
+                    onDropPackage = { packageName, beforePackageName ->
+                        if (packageName in selectedPackageSet || packageName in blockedPackageSet) {
+                            onSelectedPackagesChanged(selectedPackages.filterNot { it == packageName })
+                            onBlockedPackagesChanged(insertPackageBefore(blockedPackages, packageName, beforePackageName))
+                        }
+                    },
+                    modifier = Modifier.testTag("routing_apps_blocked_section"),
+                )
             }
-        }
-        item {
-            AppGridSection(
-                title = stringResource(R.string.blocked_app_exceptions),
-                subtitle = stringResource(R.string.blocked_apps_info_body),
-                leadingIcon = Icons.Outlined.Block,
-                apps = blockedApps,
-                emptyText = "",
-                headerActionLabel = stringResource(R.string.choose_label),
-                headerActionTag = "routing_apps_blocked_add_exception_action",
-                onHeaderAction = onOpenBlockedPicker,
-                onRemove = { app ->
-                    onBlockedPackagesChanged(blockedPackages.filterNot { it == app.packageName })
-                },
-                onDropPackage = { packageName, beforePackageName ->
-                    if (packageName in selectedPackageSet || packageName in blockedPackageSet) {
-                        onSelectedPackagesChanged(selectedPackages.filterNot { it == packageName })
-                        onBlockedPackagesChanged(insertPackageBefore(blockedPackages, packageName, beforePackageName))
-                    }
-                },
-                modifier = Modifier.testTag("routing_apps_blocked_section"),
-            )
         }
     }
 
@@ -257,7 +255,7 @@ fun RoutingAppsScreen(
 }
 
 @Composable
-private fun AppGridSection(
+private fun AppGridSectionContent(
     title: String,
     subtitle: String? = null,
     leadingIcon: androidx.compose.ui.graphics.vector.ImageVector,
@@ -271,18 +269,22 @@ private fun AppGridSection(
     onHeaderAction: (() -> Unit)? = null,
 ) {
     val haptic = LocalHapticFeedback.current
-    FoxholeCard(
+    Column(
         modifier =
-            modifier.dragAndDropTarget(
-                shouldStartDragAndDrop = ::isFoxholeTextDragEvent,
-                target =
-                    remember(onDropPackage, haptic) {
-                        foxholeDropTarget(FOXHOLE_APP_DRAG_PREFIX) { packageName ->
-                            onDropPackage(packageName, null)
-                            haptic.performHapticFeedback(HapticFeedbackType.Confirm)
-                        }
-                    },
-            ),
+            modifier
+                .fillMaxWidth()
+                .dragAndDropTarget(
+                    shouldStartDragAndDrop = ::isFoxholeTextDragEvent,
+                    target =
+                        remember(onDropPackage, haptic) {
+                            foxholeDropTarget(FOXHOLE_APP_DRAG_PREFIX) { packageName ->
+                                onDropPackage(packageName, null)
+                                haptic.performHapticFeedback(HapticFeedbackType.Confirm)
+                            }
+                        },
+                )
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),

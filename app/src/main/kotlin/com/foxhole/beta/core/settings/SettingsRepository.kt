@@ -224,6 +224,32 @@ class SettingsRepository(
     suspend fun updateSmartStartTransportPriority(value: SmartStartTransportPriority) =
         update { it.copy(connection = it.connection.copy(smartStartTransportPriority = value)) }
 
+    suspend fun updateSmartStartV2RayTunSubscriptionsEnabled(value: Boolean) =
+        update { it.copy(connection = it.connection.copy(smartStartV2RayTunSubscriptionsEnabled = value)) }
+
+    suspend fun updateSmartStartFailoverEnabled(value: Boolean) =
+        update { it.copy(connection = it.connection.copy(smartStartFailoverEnabled = value)) }
+
+    suspend fun updateSmartStartSubscriptionRetryAttempts(value: Int) =
+        update {
+            it.copy(
+                connection =
+                    it.connection.copy(
+                        smartStartSubscriptionRetryAttempts = normalizeSmartStartSubscriptionRetryAttempts(value),
+                    ),
+            )
+        }
+
+    suspend fun updateSmartStartSubscriptionRetryDelaySeconds(value: Int) =
+        update {
+            it.copy(
+                connection =
+                    it.connection.copy(
+                        smartStartSubscriptionRetryDelaySeconds = normalizeSmartStartSubscriptionRetryDelaySeconds(value),
+                    ),
+            )
+        }
+
     suspend fun updateLastActiveProfile(value: CachedActiveProfile?) =
         update { current ->
             if (current.lastActiveProfile == value) {
@@ -1008,6 +1034,10 @@ class SettingsRepository(
                                 value = connection.smartStartRefreshSelectionTimeoutSeconds,
                                 minSeconds = SMART_START_REFRESH_TIMEOUT_MIN_SECONDS,
                             ),
+                        smartStartSubscriptionRetryAttempts =
+                            normalizeSmartStartSubscriptionRetryAttempts(connection.smartStartSubscriptionRetryAttempts),
+                        smartStartSubscriptionRetryDelaySeconds =
+                            normalizeSmartStartSubscriptionRetryDelaySeconds(connection.smartStartSubscriptionRetryDelaySeconds),
                     ),
                 traffic =
                     if (connection.stealthModeEnabled) {
@@ -1291,7 +1321,8 @@ internal fun SmartProfilePreference.preferredLastKnownGoodOptionId(networkFinger
     networkMemory(networkFingerprint)?.lastKnownGoodOptionId ?: lastKnownGoodOptionId
 
 internal const val SMART_START_RECOMMENDED_LIMIT = 3
-internal const val SMART_START_REMEMBERED_LATENCY_RETENTION_MS = 72L * 60L * 60L * 1000L
+internal const val SMART_START_REMEMBERED_LATENCY_RETENTION_MS = 21L * 24L * 60L * 60L * 1000L
+internal const val SMART_START_MEMORY_RETENTION_MS = SMART_START_REMEMBERED_LATENCY_RETENTION_MS
 internal const val SMART_START_FULL_REFRESH_STALE_MS = 7L * 24L * 60L * 60L * 1000L
 
 internal fun smartStartEnabledProtocolSetHash(optionIds: Collection<String>): String {
@@ -1331,6 +1362,36 @@ internal fun Settings.rememberedSmartStartLatencyByProfileId(
                 .takeIf(Map<String, Long>::isNotEmpty)
                 ?.let { preference.profileId to it }
         }.toMap()
+
+internal fun Settings.rememberedSmartProfileDownOptionIdsByProfileId(
+    networkFingerprint: String?,
+    now: Long = System.currentTimeMillis(),
+): Map<Long, Set<String>> =
+    smartProfilePreferences
+        .mapNotNull { preference ->
+            preference
+                .rememberedSmartProfileDownOptionIds(networkFingerprint = networkFingerprint, now = now)
+                .takeIf(Set<String>::isNotEmpty)
+                ?.let { downOptionIds -> preference.profileId to downOptionIds }
+        }.toMap()
+
+internal fun SmartProfilePreference.rememberedSmartProfileDownOptionIds(
+    networkFingerprint: String?,
+    now: Long = System.currentTimeMillis(),
+): Set<String> {
+    val scopedMemories =
+        networkMemory(networkFingerprint)
+            ?.protocolMemories
+            ?.associateBy(SmartProfileProtocolMemory::optionId)
+            .orEmpty()
+    val globalMemories = protocolMemories.associateBy(SmartProfileProtocolMemory::optionId)
+    return (scopedMemories.keys + globalMemories.keys)
+        .filter { optionId ->
+            val scopedDown = scopedMemories[optionId].freshRememberedDown(now)
+            val globalDown = globalMemories[optionId].freshRememberedDown(now)
+            scopedDown || globalDown
+        }.toSet()
+}
 
 internal fun SmartProfilePreference.rememberedSmartStartLatencyByOptionId(
     networkFingerprint: String?,
@@ -1436,6 +1497,18 @@ private fun SmartProfileProtocolMemory?.freshRememberedLatency(
     val latencyMs = memory.lastLatencyMs?.takeIf { it > 0L } ?: return null
     val successAt = memory.lastSuccessAt?.takeIf { it > 0L } ?: return null
     return if (now - successAt <= retentionMs) latencyMs else null
+}
+
+private fun SmartProfileProtocolMemory?.freshRememberedDown(
+    now: Long,
+    retentionMs: Long = SMART_START_REMEMBERED_LATENCY_RETENTION_MS,
+): Boolean {
+    val memory = this ?: return false
+    val failureAt = memory.lastFailureAt?.takeIf { it > 0L } ?: return false
+    val successAt = memory.lastSuccessAt?.takeIf { it > 0L }
+    val failureIsLatest = successAt == null || failureAt >= successAt
+    val cooldownActive = memory.cooldownUntilAt?.let { cooldownUntil -> cooldownUntil > now } == true
+    return failureIsLatest && (cooldownActive || now - failureAt <= retentionMs)
 }
 
 private fun SmartProfileProtocolMemory?.freshRememberedServerPing(

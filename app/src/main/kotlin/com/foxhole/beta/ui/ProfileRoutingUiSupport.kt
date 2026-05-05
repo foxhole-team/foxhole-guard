@@ -730,6 +730,31 @@ internal fun SmartProfileBadge(
     modifier: Modifier = Modifier,
     compact: Boolean = false,
 ) {
+    ProfileTagBadge(
+        text = stringResource(R.string.smart_profile_tag),
+        modifier = modifier,
+        compact = compact,
+    )
+}
+
+@Composable
+internal fun V2RayTunProfileBadge(
+    modifier: Modifier = Modifier,
+    compact: Boolean = false,
+) {
+    ProfileTagBadge(
+        text = stringResource(R.string.v2raytun_profile_tag),
+        modifier = modifier,
+        compact = compact,
+    )
+}
+
+@Composable
+private fun ProfileTagBadge(
+    text: String,
+    modifier: Modifier = Modifier,
+    compact: Boolean = false,
+) {
     val tone = foxholeSystemAwareAccentColor()
     Surface(
         modifier =
@@ -743,7 +768,7 @@ internal fun SmartProfileBadge(
         border = BorderStroke(1.dp, tone.copy(alpha = if (compact) 0.34f else 0.26f)),
     ) {
         Text(
-            text = stringResource(R.string.smart_profile_tag),
+            text = text,
             modifier = Modifier.padding(horizontal = if (compact) 3.dp else 10.dp, vertical = if (compact) 0.5.dp else 6.dp),
             style =
                 if (compact) {
@@ -766,6 +791,7 @@ internal fun InlineSmartProfileTitle(
     isSmartProfile: Boolean,
     modifier: Modifier = Modifier,
     showSmartBadge: Boolean = true,
+    showV2RayTunBadge: Boolean = false,
     style: TextStyle = MaterialTheme.typography.titleMedium,
     fontWeight: FontWeight = FontWeight.SemiBold,
     maxLines: Int = 1,
@@ -792,6 +818,10 @@ internal fun InlineSmartProfileTitle(
             )
             if (isSmartProfile && showSmartBadge) {
                 SmartProfileBadge(
+                    compact = true,
+                )
+            } else if (showV2RayTunBadge) {
+                V2RayTunProfileBadge(
                     compact = true,
                 )
             }

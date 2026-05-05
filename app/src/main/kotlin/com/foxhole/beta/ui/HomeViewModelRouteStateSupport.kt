@@ -4,6 +4,8 @@ import com.foxhole.beta.core.model.Profile
 import com.foxhole.beta.core.model.ProfileProtocolOption
 import com.foxhole.beta.core.model.Settings
 import com.foxhole.beta.core.settings.preferredLastKnownGoodOptionId
+import com.foxhole.beta.core.settings.rememberedSmartProfileDownOptionIds
+import com.foxhole.beta.core.settings.rememberedSmartProfileDownOptionIdsByProfileId
 import com.foxhole.beta.core.settings.rememberedSmartProfileServerPingByOptionId
 import com.foxhole.beta.core.settings.rememberedSmartProfileServerPingByProfileId
 import com.foxhole.beta.core.settings.rememberedSmartStartLatencyByOptionId
@@ -36,10 +38,17 @@ internal fun buildHomeRouteUiState(
     val activeProfileDownOptionIds =
         state.activeProfile
             ?.let { activeProfile ->
-                protocolMetrics.downOptionIds
-                    .filter { key -> key.profileId == activeProfile.id }
-                    .map(ProfileOptionLatencyKey::optionId)
-                    .toSet()
+                val rememberedDownOptionIds =
+                    state.settings
+                        .smartProfilePreference(activeProfile.id)
+                        ?.rememberedSmartProfileDownOptionIds(currentNetworkFingerprintKey)
+                        .orEmpty()
+                val liveDownOptionIds =
+                    protocolMetrics.downOptionIds
+                        .filter { key -> key.profileId == activeProfile.id }
+                        .map(ProfileOptionLatencyKey::optionId)
+                        .toSet()
+                rememberedDownOptionIds + liveDownOptionIds
             }.orEmpty()
     val activeProfileServerPings =
         state.activeProfile
@@ -107,6 +116,7 @@ internal fun buildHomeRouteUiState(
                     .smartProfilePreference(activeProfile.id)
                     ?.preferredLastKnownGoodOptionId(currentNetworkFingerprintKey)
             }
+    val autoConnectRefreshingActiveProfile = autoConnect.running && state.activeProfile != null
     return state.toHomeRouteUiState(
         autoConnect = autoConnect,
         selectedProtocolLatencyMs = selectedProtocolLatencyMs,
@@ -117,9 +127,12 @@ internal fun buildHomeRouteUiState(
         protocolServerPingsByOptionId = activeProfileServerPings,
         protocolServerPingUnavailableOptionIds = activeProfileServerPingUnavailable,
         protocolMetricsUpdatedAtByOptionId = activeProfileMetricsUpdatedAt,
-        protocolMetricsRefreshing = state.activeProfile?.id in protocolMetrics.refreshingProfileIds,
+        protocolMetricsRefreshing =
+            state.activeProfile?.id in protocolMetrics.refreshingProfileIds ||
+                autoConnectRefreshingActiveProfile,
         protocolMetricsRefreshingOptionId =
-            state.activeProfile?.id?.let(protocolMetrics.refreshingOptionIdByProfileId::get),
+            state.activeProfile?.id?.let(protocolMetrics.refreshingOptionIdByProfileId::get)
+                ?: autoConnect.currentOptionId.takeIf { autoConnectRefreshingActiveProfile },
         recommendedProtocolOptionId =
             protocolMetrics.recommendation
                 ?.takeIf { recommendation -> recommendation.profileId == state.activeProfile?.id }
@@ -161,10 +174,20 @@ internal fun buildProfilesRouteUiState(
                 ).takeIf(Map<String, Long>::isNotEmpty)
                     ?.let { updatedAtByOptionId -> profile.id to updatedAtByOptionId }
             }.toMap()
-    val downOptionIdsByProfileId =
+    val rememberedDownOptionIdsByProfileId =
+        state.settings.rememberedSmartProfileDownOptionIdsByProfileId(
+            networkFingerprint = networkFingerprintKey,
+        )
+    val liveDownOptionIdsByProfileId =
         protocolMetrics.downOptionIds
             .groupBy(ProfileOptionLatencyKey::profileId, ProfileOptionLatencyKey::optionId)
             .mapValues { (_, values) -> values.toSet() }
+    val downOptionIdsByProfileId =
+        (rememberedDownOptionIdsByProfileId.keys + liveDownOptionIdsByProfileId.keys)
+            .associateWith { profileId ->
+                rememberedDownOptionIdsByProfileId[profileId].orEmpty() +
+                    liveDownOptionIdsByProfileId[profileId].orEmpty()
+            }
     val dashboardRefreshingProfileId = state.activeProfile?.id?.takeIf { state.dashboardConnectionMetricsLoading }
     val dashboardRefreshingOptionIdByProfileId =
         dashboardRefreshingProfileId
@@ -173,7 +196,10 @@ internal fun buildProfilesRouteUiState(
                     mapOf(profileId to optionId)
                 }
             }.orEmpty()
-    val refreshingProfileIds = protocolMetrics.refreshingProfileIds + listOfNotNull(dashboardRefreshingProfileId)
+    val autoConnectRefreshingProfileId = state.activeProfile?.id?.takeIf { autoConnect.running }
+    val refreshingProfileIds =
+        protocolMetrics.refreshingProfileIds +
+            listOfNotNull(dashboardRefreshingProfileId, autoConnectRefreshingProfileId)
     val autoConnectRefreshingOptionIdByProfileId =
         autoConnect.currentOptionId
             ?.takeIf { autoConnect.running }

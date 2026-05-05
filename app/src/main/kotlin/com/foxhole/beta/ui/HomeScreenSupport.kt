@@ -390,6 +390,7 @@ internal fun HomeStatusBadge(
     label: String,
     textStyle: TextStyle = MaterialTheme.typography.titleLarge,
     accentColor: Color? = null,
+    smartMarker: Boolean = false,
 ) {
     val color = accentColor ?: homeStatusTone(state)
     Row(
@@ -401,12 +402,28 @@ internal fun HomeStatusBadge(
             settled = state == ConnectionState.CONNECTED,
             animate = state == ConnectionState.CONNECTING || state == ConnectionState.RECONNECTING,
         )
-        Text(
-            text = label,
-            style = textStyle,
-            fontWeight = FontWeight.SemiBold,
-            color = color,
-        )
+        Row(verticalAlignment = Alignment.Top) {
+            Text(
+                text = label,
+                style = textStyle,
+                fontWeight = FontWeight.SemiBold,
+                color = color,
+            )
+            if (smartMarker) {
+                Text(
+                    text = stringResource(R.string.smart_profile_tag),
+                    modifier = Modifier.offset(y = (-5).dp),
+                    style =
+                        MaterialTheme.typography.labelSmall.copy(
+                            fontSize = 8.5.sp,
+                            lineHeight = 9.sp,
+                            fontWeight = FontWeight.SemiBold,
+                        ),
+                    color = color.copy(alpha = 0.86f),
+                    maxLines = 1,
+                )
+            }
+        }
     }
 }
 

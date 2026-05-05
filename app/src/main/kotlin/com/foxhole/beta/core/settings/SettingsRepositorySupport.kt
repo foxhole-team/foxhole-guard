@@ -87,7 +87,11 @@ internal fun recordProbeResultIntoMemory(
     countTowardOutcomeHistory: Boolean = true,
     affectsFailureRankingMemory: Boolean = true,
 ): SmartProfileMemoryUpdate {
-    val existingMemories = protocolMemories.associateBy(SmartProfileProtocolMemory::optionId).toMutableMap()
+    val existingMemories =
+        protocolMemories
+            .filter { memory -> memory.hasFreshSmartStartEvidence(recordedAt) }
+            .associateBy(SmartProfileProtocolMemory::optionId)
+            .toMutableMap()
     val previous = existingMemories[optionId]
     if (!success && !affectsFailureRankingMemory) {
         return SmartProfileMemoryUpdate(
@@ -171,6 +175,19 @@ internal fun recordProbeResultIntoMemory(
             },
         protocolMemories = existingMemories.values.sortedBy(SmartProfileProtocolMemory::optionId),
     )
+}
+
+private fun SmartProfileProtocolMemory.hasFreshSmartStartEvidence(now: Long): Boolean {
+    val newestEvidenceAt =
+        listOfNotNull(
+            lastSuccessAt,
+            lastFailureAt,
+            lastServerPingAt,
+            lastValidatedAt,
+            lastTrafficAt,
+            cooldownUntilAt?.takeIf { cooldownUntil -> cooldownUntil > now },
+        ).maxOrNull() ?: return false
+    return now - newestEvidenceAt <= SMART_START_MEMORY_RETENTION_MS
 }
 
 internal fun AutoConnectReasonCode?.isTunnelValidationFailure(): Boolean =

@@ -378,6 +378,14 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
             message?.let { "result=error" } ?: "result=stopped",
             message?.takeIf(String::isNotBlank)?.let { "reason=$it" },
         )
+        if (session != null && message != null) {
+            recordSmartStartProtocolDown(
+                session = session,
+                reasonCode = reasonCode ?: AutoConnectReasonCode.CONNECT_ERROR,
+                headline = "runtime error protocol marked down",
+                detail = message.takeIf(String::isNotBlank)?.let { "message=$it" },
+            )
+        }
         runtime.stop()
         releaseRuntimeWakeLock()
         activeSession = null

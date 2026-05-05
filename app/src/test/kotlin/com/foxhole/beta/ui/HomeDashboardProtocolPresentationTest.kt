@@ -227,6 +227,7 @@ class HomeDashboardProtocolPresentationTest {
                 selectedProtocolOptionId = "vless",
                 protocolHint = ProtocolHint.VLESS,
                 protocolOptions = emptyList(),
+                sourceType = ProfileSourceType.SHARE_URI,
             )
 
         assertFalse(shouldShowAutoConnectAction(activeProfile))
@@ -237,6 +238,7 @@ class HomeDashboardProtocolPresentationTest {
         val activeProfile =
             profile(
                 selectedProtocolOptionId = "vless",
+                sourceType = ProfileSourceType.SHARE_URI,
                 protocolOptions =
                     listOf(
                         option("vless", ProtocolHint.VLESS),
@@ -244,6 +246,18 @@ class HomeDashboardProtocolPresentationTest {
             )
 
         assertFalse(shouldShowAutoConnectAction(activeProfile))
+    }
+
+    @Test
+    fun `dashboard exposes Smart start action for subscription profile with one protocol`() {
+        val activeProfile =
+            profile(
+                selectedProtocolOptionId = "vless",
+                protocolHint = ProtocolHint.VLESS,
+                protocolOptions = emptyList(),
+            )
+
+        assertTrue(shouldShowAutoConnectAction(activeProfile))
     }
 
     @Test
@@ -674,10 +688,11 @@ class HomeDashboardProtocolPresentationTest {
         selectedProtocolOptionId: String?,
         protocolHint: ProtocolHint = ProtocolHint.OUTLINE,
         protocolOptions: List<ProfileProtocolOption>,
+        sourceType: ProfileSourceType = ProfileSourceType.SUBSCRIPTION_URL,
     ) = Profile(
         id = 1L,
         name = "Foxhole vpn direct",
-        sourceType = ProfileSourceType.SUBSCRIPTION_URL,
+        sourceType = sourceType,
         secretRef = "secret-1",
         protocolHint = protocolHint,
         lastUpdatedAt = null,

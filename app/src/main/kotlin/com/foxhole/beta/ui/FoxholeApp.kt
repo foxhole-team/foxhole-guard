@@ -398,6 +398,11 @@ fun FoxholeApp(
                         onSmartStartProtocolSelectionTimeoutChanged = viewModel::onSmartStartProtocolSelectionTimeoutChanged,
                         onSmartStartRefreshSelectionTimeoutChanged = viewModel::onSmartStartRefreshSelectionTimeoutChanged,
                         onSmartStartTransportPrioritySelected = viewModel::onSmartStartTransportPrioritySelected,
+                        onSmartStartV2RayTunSubscriptionsEnabledChanged = viewModel::onSmartStartV2RayTunSubscriptionsEnabledChanged,
+                        onSmartStartFailoverEnabledChanged = viewModel::onSmartStartFailoverEnabledChanged,
+                        onSmartStartSubscriptionRetryAttemptsChanged = viewModel::onSmartStartSubscriptionRetryAttemptsChanged,
+                        onSmartStartSubscriptionRetryDelaySecondsChanged = viewModel::onSmartStartSubscriptionRetryDelaySecondsChanged,
+                        onClearSmartStartData = viewModel::clearSmartStartData,
                     )
                 }
                 composable(AppRoute.TRAFFIC) {

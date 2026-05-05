@@ -423,6 +423,13 @@ fun HomeScreen(
                                             label = homeStatusLabel(topStatusState),
                                             textStyle = MaterialTheme.typography.titleMedium,
                                             accentColor = statusTone,
+                                            smartMarker =
+                                                isSmartDashboardProfile &&
+                                                    topStatusState in setOf(
+                                                        ConnectionState.CONNECTED,
+                                                        ConnectionState.CONNECTING,
+                                                        ConnectionState.RECONNECTING,
+                                                    ),
                                         )
                                     }
                                 }
@@ -466,22 +473,6 @@ fun HomeScreen(
                         HomeCardHeader(
                             icon = Icons.Outlined.AccountTree,
                             title = stringResource(R.string.vpn_profile),
-                            titleContent =
-                                if (isSmartDashboardProfile) {
-                                    {
-                                        Text(
-                                            text = stringResource(R.string.vpn_profile),
-                                            modifier = Modifier.weight(1f, fill = false),
-                                            style = MaterialTheme.typography.titleMedium,
-                                            fontWeight = FontWeight.SemiBold,
-                                        )
-                                        SmartProfileBadge(
-                                            compact = true,
-                                        )
-                                    }
-                                } else {
-                                    null
-                                },
                             trailing = {
                                 HomeHeaderActionButton(
                                     icon = Icons.AutoMirrored.Outlined.ArrowForward,
@@ -517,6 +508,9 @@ fun HomeScreen(
                                     title = dashboardProfileTitle(state.activeProfile.name),
                                     isSmartProfile = isSmartDashboardProfile,
                                     showSmartBadge = false,
+                                    showV2RayTunBadge =
+                                        state.activeProfile.sourceType == ProfileSourceType.SUBSCRIPTION_URL &&
+                                            !isSmartDashboardProfile,
                                     trailing = {
                                         when {
                                             dashboardConnectionMetricsLoading ->

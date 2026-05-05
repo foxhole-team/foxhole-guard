@@ -39,6 +39,20 @@ class SmartStartProtocolPresentationTest {
     }
 
     @Test
+    fun `analysis status wins while the current protocol is being tested`() {
+        val presentation =
+            resolveSmartStartProtocolPresentation(
+                included = true,
+                latencyMs = 420L,
+                latencyDown = false,
+                latencyUnavailable = false,
+                analyzing = true,
+            )
+
+        assertEquals(SmartStartProtocolStatus.ANALYZING, presentation.status)
+    }
+
+    @Test
     fun `slow status is used for high latency candidates`() {
         val presentation =
             resolveSmartStartProtocolPresentation(

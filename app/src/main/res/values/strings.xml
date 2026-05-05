@@ -59,6 +59,7 @@
     <string name="protocol">Protocol</string>
     <string name="status_connecting">Connecting</string>
     <string name="status_reconnecting">Reconnecting</string>
+    <string name="status_smart_start_reconnecting">Smart start recovery</string>
     <string name="status_error">Error</string>
     <string name="refresh_ip_info">Refresh network info</string>
     <string name="home_network_unavailable">Network info unavailable</string>
@@ -142,6 +143,7 @@
     <string name="notification_body_validating">Validating tunnel…</string>
     <string name="notification_body_waiting">Waiting for connection</string>
     <string name="notification_body_reconnecting">Connection will be restored automatically</string>
+    <string name="notification_body_smart_start_reconnecting">Smart start is checking another VPN protocol</string>
     <string name="notification_body_firewall">Selected apps are blocked locally.</string>
     <string name="notification_body_journal">Network activity is logged locally.</string>
     <string name="unknown_country">Unknown location</string>
@@ -177,15 +179,31 @@
     <string name="smart_start_refresh_timeout_title">Analysis timeout</string>
     <string name="smart_start_refresh_timeout_summary">How long Foxhole waits for each VPN protocol during full analysis.</string>
     <plurals name="smart_start_timeout_seconds_value">
-        <item quantity="one">%1$d Seconds</item>
-        <item quantity="other">%1$d Seconds</item>
+        <item quantity="one">%1$d second</item>
+        <item quantity="other">%1$d seconds</item>
     </plurals>
     <string name="smart_start_transport_priority_title">Transport priority</string>
     <string name="smart_start_transport_priority_summary">Preferred transport order for Smart start candidates.</string>
     <string name="smart_start_transport_priority_all">All</string>
     <string name="smart_start_transport_priority_udp">UDP</string>
     <string name="smart_start_transport_priority_tcp">TCP</string>
+    <string name="smart_start_v2raytun_subscriptions_title">Enable for v2raytun subscriptions</string>
+    <string name="smart_start_v2raytun_subscriptions_summary">Refresh compatible v2raytun subscriptions and reconnect VPN during Smart start recovery.</string>
+    <string name="smart_start_failover_title">Enable for smart links</string>
+    <string name="smart_start_failover_summary">Smart start will reconnect VPN protocols when the connection is lost. After repeated attempts on the current protocol, it can switch to another available protocol.</string>
+    <string name="smart_start_subscription_retry_attempts_title">Retry attempts</string>
+    <string name="smart_start_subscription_retry_attempts_summary">How many times Foxhole should try to refresh a v2raytun subscription and reconnect VPN.</string>
+    <string name="smart_start_subscription_retry_delay_title">Delay between attempts</string>
+    <string name="smart_start_subscription_retry_delay_summary">How long Foxhole waits before the next retry.</string>
+    <plurals name="smart_start_retry_attempts_value">
+        <item quantity="one">%1$d attempt</item>
+        <item quantity="other">%1$d attempts</item>
+    </plurals>
     <string name="smart_start_data_cleared">Smart start data cleared.</string>
+    <string name="smart_start_clear_data_title">Clear Smart start data</string>
+    <string name="smart_start_clear_data_summary">Reset saved latency, protocol history, recommendations, and failure cooldowns.</string>
+    <string name="smart_start_clear_confirm_title">Clear Smart start data?</string>
+    <string name="smart_start_clear_confirm_body">Saved latency, protocol history, recommendations, and failure cooldowns will be removed.</string>
     <string name="smart_start_first_analysis_title">VPN protocol analysis</string>
     <string name="smart_start_first_analysis_body">Foxhole will run a quick analysis of available VPN protocols. After it finds the three best options, future connections will use only those.</string>
     <string name="smart_start_first_analysis_continue">Continue</string>
@@ -194,8 +212,9 @@
     <string name="auto_connect_ip_unavailable">Connection was established, but IP validation did not finish in time.</string>
     <string name="auto_connect_failed">No working protocol was found.</string>
     <string name="auto_connect_success">Selected: %1$s. Latency: %2$d ms.</string>
-    <string name="auto_connect_success_unavailable">Selected: %1$s. Latency unavailable.</string>
+    <string name="auto_connect_success_unavailable">Selected: %1$s. Unavailable.</string>
     <string name="smart_profile_tag">smart</string>
+    <string name="v2raytun_profile_tag">v2raytun</string>
     <string name="smart_profile_menu_title">Manage\nVPN protocols</string>
     <string name="smart_profile_menu_protocol_column">Protocol</string>
     <string name="smart_profile_menu_status_column">Status</string>

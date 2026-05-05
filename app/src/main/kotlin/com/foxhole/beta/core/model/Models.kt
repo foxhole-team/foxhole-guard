@@ -2,7 +2,7 @@ package com.foxhole.beta.core.model
 
 import kotlinx.serialization.Serializable
 
-const val SETTINGS_SCHEMA_VERSION = 11
+const val SETTINGS_SCHEMA_VERSION = 12
 const val NETWORK_FINGERPRINT_SCHEMA_CURRENT = 2
 const val NETWORK_FINGERPRINT_SCHEMA_LEGACY = 1
 
@@ -106,6 +106,8 @@ const val SMART_START_REFRESH_TIMEOUT_MIN_SECONDS = 15
 const val SMART_START_REFRESH_TIMEOUT_DEFAULT_SECONDS = 20
 const val SMART_START_TIMEOUT_MAX_SECONDS = 60
 const val SMART_START_TIMEOUT_STEP_SECONDS = 5
+const val SMART_START_SUBSCRIPTION_RETRY_ATTEMPTS_DEFAULT = 3
+const val SMART_START_SUBSCRIPTION_RETRY_DELAY_DEFAULT_SECONDS = 5
 
 @Serializable
 enum class SmartStartTransportPriority {
@@ -191,6 +193,10 @@ data class ConnectionSettings(
     val smartStartProtocolSelectionTimeoutSeconds: Int = SMART_START_PROTOCOL_TIMEOUT_DEFAULT_SECONDS,
     val smartStartRefreshSelectionTimeoutSeconds: Int = SMART_START_REFRESH_TIMEOUT_DEFAULT_SECONDS,
     val smartStartTransportPriority: SmartStartTransportPriority = SmartStartTransportPriority.ALL,
+    val smartStartV2RayTunSubscriptionsEnabled: Boolean = true,
+    val smartStartFailoverEnabled: Boolean = true,
+    val smartStartSubscriptionRetryAttempts: Int = SMART_START_SUBSCRIPTION_RETRY_ATTEMPTS_DEFAULT,
+    val smartStartSubscriptionRetryDelaySeconds: Int = SMART_START_SUBSCRIPTION_RETRY_DELAY_DEFAULT_SECONDS,
     val stealthModeEnabled: Boolean = true,
 )
 

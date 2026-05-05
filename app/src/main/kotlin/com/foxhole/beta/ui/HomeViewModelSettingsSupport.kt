@@ -123,6 +123,30 @@ internal fun HomeViewModel.onSmartStartTransportPrioritySelectedInternal(value: 
     }
 }
 
+internal fun HomeViewModel.onSmartStartV2RayTunSubscriptionsEnabledChangedInternal(value: Boolean) {
+    viewModelScope.launch {
+        container.settingsRepository.updateSmartStartV2RayTunSubscriptionsEnabled(value)
+    }
+}
+
+internal fun HomeViewModel.onSmartStartFailoverEnabledChangedInternal(value: Boolean) {
+    viewModelScope.launch {
+        container.settingsRepository.updateSmartStartFailoverEnabled(value)
+    }
+}
+
+internal fun HomeViewModel.onSmartStartSubscriptionRetryAttemptsChangedInternal(value: Int) {
+    viewModelScope.launch {
+        container.settingsRepository.updateSmartStartSubscriptionRetryAttempts(value)
+    }
+}
+
+internal fun HomeViewModel.onSmartStartSubscriptionRetryDelaySecondsChangedInternal(value: Int) {
+    viewModelScope.launch {
+        container.settingsRepository.updateSmartStartSubscriptionRetryDelaySeconds(value)
+    }
+}
+
 internal fun HomeViewModel.clearSmartStartDataInternal() {
     viewModelScope.launch {
         cancelAutoConnect(clearUiOnly = true)

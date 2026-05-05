@@ -1137,7 +1137,12 @@ private fun FoxholeVpnService.notificationBodyRes(snapshot: NotificationSnapshot
             } else {
                 R.string.notification_body_waiting
             }
-        ConnectionState.RECONNECTING -> R.string.notification_body_reconnecting
+        ConnectionState.RECONNECTING ->
+            if (snapshot.statusMessage == getString(R.string.status_smart_start_reconnecting)) {
+                R.string.notification_body_smart_start_reconnecting
+            } else {
+                R.string.notification_body_reconnecting
+            }
         ConnectionState.IDLE,
         ConnectionState.ERROR,
         -> null

@@ -59,6 +59,7 @@
     <string name="protocol">Протокол</string>
     <string name="status_connecting">Подключение</string>
     <string name="status_reconnecting">Переподключение</string>
+    <string name="status_smart_start_reconnecting">Восстановление Смарт старт</string>
     <string name="status_error">Ошибка</string>
     <string name="refresh_ip_info">Обновить сетевые данные</string>
     <string name="home_network_unavailable">Сетевые данные недоступны</string>
@@ -142,6 +143,7 @@
     <string name="notification_body_validating">Проверка Tunnel…</string>
     <string name="notification_body_waiting">Ожидание подключения</string>
     <string name="notification_body_reconnecting">Подключение восстановится автоматически</string>
+    <string name="notification_body_smart_start_reconnecting">Смарт старт проверяет другой протокол VPN</string>
     <string name="notification_body_firewall">Выбранные приложения блокируются локально.</string>
     <string name="notification_body_journal">Сетевая активность пишется локально.</string>
     <string name="unknown_country">Местоположение не определено</string>
@@ -177,17 +179,35 @@
     <string name="smart_start_refresh_timeout_title">Таймаут анализа</string>
     <string name="smart_start_refresh_timeout_summary">Сколько Foxhole ждёт каждый протокол VPN во время полного анализа.</string>
     <plurals name="smart_start_timeout_seconds_value">
-        <item quantity="one">%1$d Секунд</item>
-        <item quantity="few">%1$d Секунд</item>
-        <item quantity="many">%1$d Секунд</item>
-        <item quantity="other">%1$d Секунд</item>
+        <item quantity="one">%1$d секунда</item>
+        <item quantity="few">%1$d секунды</item>
+        <item quantity="many">%1$d секунд</item>
+        <item quantity="other">%1$d секунды</item>
     </plurals>
     <string name="smart_start_transport_priority_title">Приоритет транспорта</string>
     <string name="smart_start_transport_priority_summary">Предпочтительный порядок кандидатов Смарт старт.</string>
     <string name="smart_start_transport_priority_all">Все</string>
     <string name="smart_start_transport_priority_udp">UDP</string>
     <string name="smart_start_transport_priority_tcp">TCP</string>
+    <string name="smart_start_v2raytun_subscriptions_title">Включить для v2raytun подписок</string>
+    <string name="smart_start_v2raytun_subscriptions_summary">Обновлять совместимые v2raytun подписки и переподключать VPN во время восстановления Смарт старт.</string>
+    <string name="smart_start_failover_title">Включить для смарт ссылок</string>
+    <string name="smart_start_failover_summary">Смарт старт будет переподключать протоколы VPN в случае потери соединения. После нескольких попыток текущего протокола он сможет переключиться на другой доступный протокол.</string>
+    <string name="smart_start_subscription_retry_attempts_title">Количество попыток</string>
+    <string name="smart_start_subscription_retry_attempts_summary">Сколько раз Foxhole пробует обновить v2raytun подписку и переподключить VPN.</string>
+    <string name="smart_start_subscription_retry_delay_title">Таймаут между попытками</string>
+    <string name="smart_start_subscription_retry_delay_summary">Сколько Foxhole ждёт перед следующей попыткой.</string>
+    <plurals name="smart_start_retry_attempts_value">
+        <item quantity="one">%1$d попытка</item>
+        <item quantity="few">%1$d попытки</item>
+        <item quantity="many">%1$d попыток</item>
+        <item quantity="other">%1$d попытки</item>
+    </plurals>
     <string name="smart_start_data_cleared">Данные Смарт старт очищены.</string>
+    <string name="smart_start_clear_data_title">Очистить данные Смарт старт</string>
+    <string name="smart_start_clear_data_summary">Сбросить сохранённую задержку, историю протоколов, рекомендации и паузы после сбоев.</string>
+    <string name="smart_start_clear_confirm_title">Очистить данные Смарт старт?</string>
+    <string name="smart_start_clear_confirm_body">Сохранённая задержка, история протоколов, рекомендации и паузы после сбоев будут удалены.</string>
     <string name="smart_start_first_analysis_title">Анализ протоколов VPN</string>
     <string name="smart_start_first_analysis_body">Будет выполнен быстрый анализ доступных протоколов VPN. После определения трех лучших, подключение будет выполняться только по ним.</string>
     <string name="smart_start_first_analysis_continue">Продолжить</string>
@@ -196,8 +216,9 @@
     <string name="auto_connect_ip_unavailable">Подключение установлено, но IP-проверка не завершилась вовремя.</string>
     <string name="auto_connect_failed">Не найден рабочий протокол.</string>
     <string name="auto_connect_success">Выбран: %1$s. Задержка: %2$d мс.</string>
-    <string name="auto_connect_success_unavailable">Выбран: %1$s. Задержка недоступна.</string>
+    <string name="auto_connect_success_unavailable">Выбран: %1$s. Недоступно.</string>
     <string name="smart_profile_tag">Smart</string>
+    <string name="v2raytun_profile_tag">v2raytun</string>
     <string name="smart_profile_menu_title">Управление\nпротоколами VPN</string>
     <string name="smart_profile_menu_protocol_column">Протокол</string>
     <string name="smart_profile_menu_status_column">Статус</string>

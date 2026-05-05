@@ -411,6 +411,7 @@ fun ProfilesScreen(
                         InlineSmartProfileTitle(
                             title = profile.name,
                             isSmartProfile = isSmartProfile,
+                            showV2RayTunBadge = profile.sourceType == ProfileSourceType.SUBSCRIPTION_URL && !isSmartProfile,
                         )
                         Text(
                             text = rememberProfileSourceSummary(profile),

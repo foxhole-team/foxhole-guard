@@ -9,6 +9,7 @@ import com.foxhole.beta.core.model.ConnectionSnapshot
 import com.foxhole.beta.core.model.ConnectionState
 import com.foxhole.beta.core.model.LatencyProbeMethod
 import com.foxhole.beta.core.model.Profile
+import com.foxhole.beta.core.model.ProfileSourceType
 import com.foxhole.beta.core.model.ProtocolHint
 import com.foxhole.beta.core.model.SMART_START_PROTOCOL_TIMEOUT_DEFAULT_SECONDS
 import com.foxhole.beta.core.model.SMART_START_PROTOCOL_TIMEOUT_MIN_SECONDS
@@ -121,8 +122,10 @@ internal fun HomeViewModel.startAutoConnectInternal(profileId: Long) {
     autoConnectJob =
         viewModelScope.launch {
             try {
-                val profile = container.profileRepository.getProfile(profileId) ?: error("profile not found")
+                var profile = container.profileRepository.getProfile(profileId) ?: error("profile not found")
+                profile = refreshSubscriptionBeforeSmartStartIfNeeded(profile)
                 val autoConnectNetworkFingerprint = container.networkFingerprintProvider.currentFingerprint()
+                recommendedProtocolMutable.value = null
                 val fullScanCandidates = fullScanAutoConnectCandidates(profileId, profile)
                 require(canStartAutoConnect(fullScanCandidates)) {
                     getApplication<Application>().getString(R.string.auto_connect_requires_supported_profile)
@@ -178,6 +181,35 @@ internal fun HomeViewModel.startAutoConnectInternal(profileId: Long) {
                 clearAutoConnectUiState()
             }
         }
+}
+
+private suspend fun HomeViewModel.refreshSubscriptionBeforeSmartStartIfNeeded(profile: Profile): Profile {
+    val settings = uiState.value.settings.connection
+    if (profile.sourceType != ProfileSourceType.SUBSCRIPTION_URL || !settings.smartStartV2RayTunSubscriptionsEnabled) {
+        return profile
+    }
+    val attempts = settings.smartStartSubscriptionRetryAttempts.coerceAtLeast(1)
+    val retryDelayMs = settings.smartStartSubscriptionRetryDelaySeconds.coerceAtLeast(1).toLong() * 1000L
+    repeat(attempts) { index ->
+        runCatching {
+            container.profileRepository.refreshProfile(profile.id)
+        }.onSuccess { refreshed ->
+            container.diagnosticsLogger.record(
+                "auto-connect",
+                "subscription refreshed before smart start attempt=${index + 1}",
+            )
+            return refreshed
+        }.onFailure { error ->
+            container.diagnosticsLogger.record(
+                "auto-connect",
+                "subscription refresh before smart start failed attempt=${index + 1}: ${error.message.orEmpty()}",
+            )
+        }
+        if (index < attempts - 1) {
+            delay(retryDelayMs)
+        }
+    }
+    return container.profileRepository.getProfile(profile.id) ?: profile
 }
 
 private suspend fun HomeViewModel.runFastSmartStartAttempts(
@@ -305,7 +337,6 @@ private suspend fun HomeViewModel.runColdSmartStartScan(
             recommendedProtocolIds = recommendedIds,
             enabledProtocolSetHash = enabledProtocolSetHash,
         )
-        updateRecommendedProtocolUi(profileId, profile, recommendedIds)
         val currentSnapshot = container.connectionController.snapshot.value
         val winnerAlreadyConnected =
             currentSnapshot.state == ConnectionState.CONNECTED &&
@@ -1449,23 +1480,42 @@ internal fun HomeViewModel.scheduleActiveProfileLatencyRefreshInternal() {
                             selectedOptionId = selectedOptionId,
                             fallbackProtocolHint = selectedProtocolHint,
                         ) ?: return@launch
-                    runCatching {
-                        withTimeoutOrNull(HomeViewModel.CONNECTED_LATENCY_TIMEOUT_MS) {
-                            container.connectionController.measureCurrentConnectionLatency()
-                        } ?: error("dashboard latency timed out")
-                    }
-                        .onSuccess { latencyMs ->
-                            cacheProtocolLatency(
-                                profileId = activeProfile.id,
-                                optionId = selectedOptionId,
-                                latencyMs = latencyMs,
-                            )
-                        }.onFailure { error ->
-                            markProtocolLatencyUnavailable(
-                                profileId = activeProfile.id,
-                                optionId = selectedOptionId,
-                            )
-                            container.diagnosticsLogger.record("latency", "dashboard latency unavailable: ${error.message.orEmpty()}")
+                    val latencyResult =
+                        runCatching {
+                            withTimeoutOrNull(HomeViewModel.CONNECTED_LATENCY_TIMEOUT_MS) {
+                                container.connectionController.measureCurrentConnectionLatency()
+                            } ?: error("dashboard latency timed out")
+                        }
+                    val measuredLatency = latencyResult.getOrNull()
+                    if (measuredLatency != null) {
+                        cacheProtocolLatency(
+                            profileId = activeProfile.id,
+                            optionId = selectedOptionId,
+                            latencyMs = measuredLatency,
+                        )
+                        recordConnectedProtocolSmartStartMemory(
+                            profile = refreshTarget.profile,
+                            optionId = selectedOptionId,
+                            protocolHint = refreshTarget.protocolHint,
+                            latencyMs = measuredLatency,
+                            reasonCode = null,
+                            countTowardOutcomeHistory = waitingForInitialSample,
+                        )
+                    } else {
+                        val error = latencyResult.exceptionOrNull()
+                        markProtocolLatencyUnavailable(
+                            profileId = activeProfile.id,
+                            optionId = selectedOptionId,
+                        )
+                        recordConnectedProtocolSmartStartMemory(
+                            profile = refreshTarget.profile,
+                            optionId = selectedOptionId,
+                            protocolHint = refreshTarget.protocolHint,
+                            latencyMs = null,
+                            reasonCode = AutoConnectReasonCode.LATENCY_ENDPOINT_BLOCKED,
+                            countTowardOutcomeHistory = waitingForInitialSample,
+                        )
+                        container.diagnosticsLogger.record("latency", "dashboard latency unavailable: ${error?.message.orEmpty()}")
                     }
                     if (!shouldMeasureProtocolServerPing(refreshTarget.protocolHint)) {
                         container.diagnosticsLogger.record("latency", "dashboard server ping skipped: unsupported for udp transport")
@@ -1505,6 +1555,58 @@ internal fun HomeViewModel.scheduleActiveProfileLatencyRefreshInternal() {
                 profileLatencyRefreshJob = null
             }
         }
+}
+
+private suspend fun HomeViewModel.recordConnectedProtocolSmartStartMemory(
+    profile: Profile,
+    optionId: String,
+    protocolHint: ProtocolHint?,
+    latencyMs: Long?,
+    reasonCode: AutoConnectReasonCode?,
+    countTowardOutcomeHistory: Boolean,
+) {
+    val resolvedProtocolHint =
+        protocolHint
+            ?: profile.protocolOptions.firstOrNull { option -> option.id == optionId }?.protocolHint
+            ?: profile.protocolHint
+    if (resolvedProtocolHint in setOf(ProtocolHint.UNKNOWN, ProtocolHint.SING_BOX)) {
+        return
+    }
+    val networkFingerprint = container.networkFingerprintProvider.currentFingerprint()
+    val recordedAt = System.currentTimeMillis()
+    container.settingsRepository.recordSmartProfileProbeResult(
+        profileId = profile.id,
+        optionId = optionId,
+        latencyMs = latencyMs,
+        success = true,
+        reasonCode = reasonCode,
+        markAsLastKnownGood = true,
+        networkFingerprint = networkFingerprint?.key,
+        validatedAt = recordedAt,
+        trafficObservedAt =
+            currentTrafficObservedAt(
+                traffic = container.connectionController.traffic.value,
+                fallbackAt = recordedAt,
+            ),
+        countTowardOutcomeHistory = countTowardOutcomeHistory,
+    )
+    val candidates = fullScanAutoConnectCandidates(profile.id, profile)
+    if (candidates.isEmpty()) {
+        return
+    }
+    val recommendedIds =
+        recomputeRecommendedProtocolIds(
+            profileId = profile.id,
+            candidates = candidates,
+            networkFingerprint = networkFingerprint,
+        )
+    if (recommendedIds.isNotEmpty()) {
+        container.settingsRepository.recordSmartProfileBaseline(
+            profileId = profile.id,
+            recommendedProtocolIds = recommendedIds,
+            enabledProtocolSetHash = smartStartEnabledProtocolSetHash(candidates.map(AutoConnectProbeCandidate::optionId)),
+        )
+    }
 }
 
 internal fun HomeViewModel.clearProfileLatencyRefreshInternal() {

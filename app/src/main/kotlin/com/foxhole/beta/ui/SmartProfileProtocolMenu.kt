@@ -570,6 +570,7 @@ private fun SmartStartProtocolStatus.label(
     disabled: String,
 ): String =
     when (this) {
+        SmartStartProtocolStatus.ANALYZING -> available
         SmartStartProtocolStatus.AVAILABLE -> available
         SmartStartProtocolStatus.SLOW -> slow
         SmartStartProtocolStatus.RECENTLY_FAILED -> failed
@@ -720,6 +721,7 @@ private fun SmartProfileProtocolMenuContent(
                         latencyMs = latencyMs,
                         latencyDown = latencyDown,
                         latencyUnavailable = latencyUnavailable,
+                        analyzing = refreshingSelection,
                         showTransportBadge = showTransportBadges,
                     )
                 }
@@ -1423,6 +1425,7 @@ private fun SmartProfileProtocolSimpleMenuRow(
     latencyMs: Long?,
     latencyDown: Boolean,
     latencyUnavailable: Boolean,
+    analyzing: Boolean,
     showTransportBadge: Boolean,
 ) {
     Row(
@@ -1463,6 +1466,7 @@ private fun SmartProfileProtocolSimpleMenuRow(
                     latencyMs = latencyMs,
                     latencyDown = latencyDown,
                     latencyUnavailable = latencyUnavailable,
+                    analyzing = analyzing,
                 ),
             latencyMs = latencyMs,
             latencyDown = latencyDown,
@@ -1682,7 +1686,7 @@ private fun smartStartProtocolCompactText(
     latencyUnavailable: Boolean,
 ): String {
     val base = smartStartProtocolPresentationText(presentation)
-    if (latencyMs == null || latencyDown || latencyUnavailable) {
+    if (presentation.status == SmartStartProtocolStatus.ANALYZING || latencyMs == null || latencyDown || latencyUnavailable) {
         return base
     }
     val quality =
@@ -1707,6 +1711,9 @@ private fun smartStartProtocolCompactTone(
     latencyDown: Boolean,
     latencyUnavailable: Boolean,
 ): SmartProfileMetricTone {
+    if (presentation.status == SmartStartProtocolStatus.ANALYZING) {
+        return SmartProfileMetricTone.INFO
+    }
     if (presentation.status == SmartStartProtocolStatus.DISABLED) {
         return SmartProfileMetricTone.NEUTRAL
     }
@@ -1743,6 +1750,7 @@ internal fun latencyQualityLabel(quality: LatencyQuality): String =
 @Composable
 private fun smartStartProtocolPresentationText(presentation: SmartStartProtocolPresentation): String =
     when (presentation.status) {
+        SmartStartProtocolStatus.ANALYZING -> stringResource(R.string.home_status_analysis)
         SmartStartProtocolStatus.AVAILABLE -> stringResource(R.string.smart_start_protocol_status_available)
         SmartStartProtocolStatus.SLOW -> stringResource(R.string.smart_start_protocol_status_slow)
         SmartStartProtocolStatus.RECENTLY_FAILED -> stringResource(R.string.latency_pill_down)
@@ -1753,6 +1761,7 @@ private fun smartStartProtocolPresentationText(presentation: SmartStartProtocolP
 
 private fun smartStartProtocolPresentationTone(presentation: SmartStartProtocolPresentation): SmartProfileMetricTone =
     when (presentation.status) {
+        SmartStartProtocolStatus.ANALYZING -> SmartProfileMetricTone.INFO
         SmartStartProtocolStatus.AVAILABLE -> SmartProfileMetricTone.NEUTRAL
         SmartStartProtocolStatus.SLOW -> SmartProfileMetricTone.WARNING
         SmartStartProtocolStatus.RECENTLY_FAILED -> SmartProfileMetricTone.DANGER
@@ -1776,6 +1785,7 @@ internal fun SmartProfileMetricPill(
             MaterialTheme.colorScheme.onSurfaceVariant
         } else {
             when (tone) {
+                SmartProfileMetricTone.INFO -> FoxholeAnalysisAccent
                 SmartProfileMetricTone.POSITIVE -> FoxholePositiveAccent
                 SmartProfileMetricTone.WARNING -> Color(0xFFE0B84A)
                 SmartProfileMetricTone.VERY_SLOW -> Color(0xFFE28131)
@@ -1855,6 +1865,7 @@ private enum class SmartProfileTransport {
 }
 
 internal enum class SmartProfileMetricTone {
+    INFO,
     POSITIVE,
     WARNING,
     VERY_SLOW,
