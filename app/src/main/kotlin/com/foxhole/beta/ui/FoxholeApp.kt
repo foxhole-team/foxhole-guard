@@ -97,7 +97,6 @@ private object AppRoute {
     const val ROUTING_SITES = "settings/routing/sites"
     const val SMART_START = "settings/smart-start"
     const val APPLICATION = "settings/application"
-    const val HELP = "settings/help"
     const val EXPERT = "settings/expert"
     const val DIAGNOSTICS = "settings/diagnostics"
     const val STATISTICS = "settings/statistics"
@@ -384,7 +383,6 @@ fun FoxholeApp(
                         onOpenRoutingSites = { navController.navigate(AppRoute.ROUTING_SITES) },
                         onOpenSmartStart = { navController.navigate(AppRoute.SMART_START) },
                         onOpenApplication = { navController.navigate(AppRoute.APPLICATION) },
-                        onOpenHelp = { navController.navigate(AppRoute.HELP) },
                         onOpenExpert = { navController.navigate(AppRoute.EXPERT) },
                         onOpenDiagnostics = { navController.navigate(AppRoute.DIAGNOSTICS) },
                         onOpenStatistics = { navController.navigate(AppRoute.STATISTICS) },
@@ -504,12 +502,6 @@ fun FoxholeApp(
                         onBlockScreenshotsChanged = viewModel::onBlockScreenshotsChanged,
                     )
                 }
-                composable(AppRoute.HELP) {
-                    HelpScreen(
-                        snackbarHostState = snackbarHostState,
-                        onNavigateUp = navController::navigateUp,
-                    )
-                }
                 composable(AppRoute.EXPERT) {
                     val state by viewModel.settingsRouteState.collectAsStateWithLifecycle()
                     ExpertSettingsScreen(
@@ -523,10 +515,8 @@ fun FoxholeApp(
                         onAllowPrivateOutboundHostsChanged = viewModel::onAllowPrivateOutboundHostsChanged,
                         onSmartStartReplayLoggingChanged = viewModel::onSmartStartReplayLoggingChanged,
                         onAllowInsecureTlsChanged = viewModel::onAllowInsecureTlsChanged,
-                        onLocalProxyLanAccessChanged = viewModel::onLocalProxyLanAccessChanged,
                         onClashApiChanged = viewModel::onClashApiChanged,
                         onResetToSafeDefaults = viewModel::resetExpertToSafeDefaults,
-                        onResetExperimentalSettings = viewModel::resetExperimentalSettingsToDefaults,
                     )
                 }
                 composable(AppRoute.DIAGNOSTICS) {

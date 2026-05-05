@@ -12,6 +12,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -29,12 +30,12 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.HelpOutline
 import androidx.compose.material.icons.outlined.AccountTree
 import androidx.compose.material.icons.outlined.Add
-import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.ExpandMore
@@ -53,21 +54,31 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RichTooltip
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TooltipAnchorPosition
+import androidx.compose.material3.TooltipBox
+import androidx.compose.material3.TooltipDefaults
+import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material3.rememberTooltipState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -107,6 +118,7 @@ import com.foxhole.beta.core.model.RoutingRuleAction
 import com.foxhole.beta.core.model.TunStack
 import com.foxhole.beta.ui.theme.LocalFoxholeUiPalette
 import com.foxhole.beta.vpn.AndroidLanProxyAddressProvider
+import kotlinx.coroutines.launch
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -466,7 +478,6 @@ private fun SettingsControlRow(
     trailingContent: (@Composable RowScope.() -> Unit)? = null,
 ) {
     val summaryText = summary?.takeIf(String::isNotBlank)
-    var infoDialogVisible by rememberSaveable(summaryText) { mutableStateOf(false) }
     Row(
         modifier =
             modifier
@@ -516,17 +527,10 @@ private fun SettingsControlRow(
                     overflow = TextOverflow.Ellipsis,
                 )
                 summaryText?.let {
-                    IconButton(
-                        onClick = { infoDialogVisible = true },
-                        modifier = Modifier.size(30.dp),
-                    ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Outlined.HelpOutline,
-                            contentDescription = stringResource(R.string.information_title),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(18.dp),
-                        )
-                    }
+                    SettingsInfoAnchor(
+                        title = title,
+                        body = it,
+                    )
                 }
             }
         }
@@ -538,66 +542,192 @@ private fun SettingsControlRow(
             trailingContent?.invoke(this)
         }
     }
-    summaryText?.let { infoBody ->
-        if (infoDialogVisible) {
-            SettingsInfoDialog(
-                body = infoBody,
-                onDismiss = { infoDialogVisible = false },
-            )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SettingsInfoAnchor(
+    title: String,
+    body: String,
+) {
+    when (remember(body) { settingsInfoPresentation(body) }) {
+        SettingsInfoPresentation.TOOLTIP -> {
+            val tooltipState = rememberTooltipState(isPersistent = true)
+            val scope = rememberCoroutineScope()
+            TooltipBox(
+                positionProvider = TooltipDefaults.rememberTooltipPositionProvider(TooltipAnchorPosition.Above),
+                tooltip = {
+                    RichTooltip(
+                        title = {
+                            Text(
+                                text = title,
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                        },
+                        action = {
+                            TextButton(onClick = { tooltipState.dismiss() }) {
+                                Text(stringResource(R.string.got_it))
+                            }
+                        },
+                    ) {
+                        Text(
+                            text = body,
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                    }
+                },
+                state = tooltipState,
+            ) {
+                SettingsInfoIconButton(
+                    onClick = {
+                        scope.launch { tooltipState.show() }
+                    },
+                )
+            }
+        }
+        SettingsInfoPresentation.BOTTOM_SHEET -> {
+            var sheetVisible by rememberSaveable(title, body) { mutableStateOf(false) }
+            SettingsInfoIconButton(onClick = { sheetVisible = true })
+            if (sheetVisible) {
+                SettingsInfoBottomSheet(
+                    title = title,
+                    body = body,
+                    icon = Icons.Outlined.Info,
+                    onDismiss = { sheetVisible = false },
+                )
+            }
         }
     }
 }
 
 @Composable
-private fun SettingsInfoDialog(
+private fun SettingsInfoIconButton(onClick: () -> Unit) {
+    IconButton(
+        onClick = onClick,
+        modifier = Modifier.size(30.dp),
+    ) {
+        Icon(
+            imageVector = Icons.Outlined.Info,
+            contentDescription = stringResource(R.string.information_title),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(18.dp),
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+internal fun SettingsHelpAction(
+    title: String,
     body: String,
-    onDismiss: () -> Unit,
+    icon: ImageVector = Icons.Outlined.Info,
+    content: @Composable ColumnScope.() -> Unit = {},
 ) {
-    AlertDialog(
+    var sheetVisible by rememberSaveable(title, body) { mutableStateOf(false) }
+    IconButton(onClick = { sheetVisible = true }) {
+        Icon(
+            imageVector = Icons.Outlined.Info,
+            contentDescription = title,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+    if (sheetVisible) {
+        SettingsInfoBottomSheet(
+            title = title,
+            body = body,
+            icon = icon,
+            onDismiss = { sheetVisible = false },
+            content = content,
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SettingsInfoBottomSheet(
+    title: String,
+    body: String,
+    icon: ImageVector,
+    onDismiss: () -> Unit,
+    content: @Composable ColumnScope.() -> Unit = {},
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val maxSheetHeight = LocalConfiguration.current.screenHeightDp.dp * 0.65f
+    ModalBottomSheet(
         onDismissRequest = onDismiss,
-        modifier = Modifier.foxholeDialogChrome(),
-        shape = FoxholeDialogShape,
-        title = {
+        sheetState = sheetState,
+        containerColor = LocalFoxholeUiPalette.current.cardContainerColor,
+        contentColor = MaterialTheme.colorScheme.onSurface,
+        scrimColor = MaterialTheme.colorScheme.scrim.copy(alpha = 0.24f),
+    ) {
+        Column(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = maxSheetHeight)
+                    .verticalScroll(rememberScrollState())
+                    .padding(start = 24.dp, end = 24.dp, bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Icon(
-                    imageVector = Icons.Outlined.Info,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(20.dp),
-                )
+                Surface(
+                    shape = MaterialTheme.shapes.medium,
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.62f),
+                ) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        modifier = Modifier.padding(8.dp).size(20.dp),
+                        tint = MaterialTheme.colorScheme.primary,
+                    )
+                }
                 Text(
-                    text = stringResource(R.string.information_title),
+                    text = title,
                     modifier = Modifier.weight(1f),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurface,
                 )
-                IconButton(
-                    onClick = onDismiss,
-                    modifier = Modifier.size(36.dp),
-                ) {
-                    Icon(
-                        imageVector = Icons.Outlined.Close,
-                        contentDescription = stringResource(R.string.close),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
             }
-        },
-        text = {
             Text(
                 text = body,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-        },
-        confirmButton = {},
-    )
+            content()
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+            ) {
+                FoxholeDialogConfirmButton(
+                    onClick = onDismiss,
+                    label = stringResource(R.string.got_it),
+                )
+            }
+        }
+    }
 }
+
+private enum class SettingsInfoPresentation {
+    TOOLTIP,
+    BOTTOM_SHEET,
+}
+
+private fun settingsInfoPresentation(body: String): SettingsInfoPresentation {
+    val nonBlankLineCount = body.lines().count { line -> line.isNotBlank() }
+    return if (nonBlankLineCount <= 3 && body.length <= SettingsTooltipMaxChars) {
+        SettingsInfoPresentation.TOOLTIP
+    } else {
+        SettingsInfoPresentation.BOTTOM_SHEET
+    }
+}
+
+private const val SettingsTooltipMaxChars = 180
 
 @Composable
 internal fun rememberWifiLanAddress(): State<String?> {
@@ -777,6 +907,7 @@ internal fun SettingsFooterVersionText(
     onClick: () -> Unit,
 ) {
     val shape = MaterialTheme.shapes.large
+    val versionInteractionSource = remember { MutableInteractionSource() }
     Column(
         modifier =
             Modifier
@@ -788,7 +919,11 @@ internal fun SettingsFooterVersionText(
                 Modifier
                     .fillMaxWidth()
                     .clip(shape)
-                    .clickable(onClick = onClick)
+                    .clickable(
+                        interactionSource = versionInteractionSource,
+                        indication = null,
+                        onClick = onClick,
+                    )
                     .testTag("settings_footer_version_card"),
             contentAlignment = Alignment.Center,
         ) {

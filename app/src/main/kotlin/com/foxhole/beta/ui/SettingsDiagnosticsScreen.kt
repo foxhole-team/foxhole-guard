@@ -188,7 +188,6 @@ private fun DiagnosticsScreenContent(
                     SettingsNavigationRow(
                         icon = Icons.Outlined.Public,
                         title = stringResource(R.string.open_network_activity_log),
-                        summary = stringResource(R.string.network_activity_log_summary),
                         grouped = true,
                         onClick = onOpenNetworkLog,
                     )
@@ -197,7 +196,6 @@ private fun DiagnosticsScreenContent(
                 SettingsNavigationRow(
                     icon = Icons.Outlined.FileUpload,
                     title = stringResource(R.string.logs_title),
-                    summary = stringResource(R.string.logs_summary),
                     grouped = true,
                     onClick = onOpenFoxholeLog,
                 )

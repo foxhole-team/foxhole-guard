@@ -28,7 +28,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.HelpOutline
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Apps
 import androidx.compose.material.icons.outlined.ArrowOutward
@@ -258,6 +257,11 @@ fun ProfilesScreen(
         snackbarHostState = snackbarHostState,
         onNavigateUp = onNavigateUp,
         actions = {
+            SettingsHelpAction(
+                title = stringResource(R.string.help_profiles_subscriptions_title),
+                body = stringResource(R.string.help_profiles_subscriptions_body),
+                icon = Icons.Outlined.VpnKey,
+            )
             if (exportMode) {
                 IconButton(
                     onClick = {

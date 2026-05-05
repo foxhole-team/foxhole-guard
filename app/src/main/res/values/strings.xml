@@ -30,7 +30,7 @@
     <string name="no_profiles">Saved VPN profiles not found</string>
     <string name="no_profiles_import_hint">Use import to add a profile</string>
     <string name="profiles_empty_message">Saved VPN profiles not found. Use the import button on the dashboard to import VPN configurations.</string>
-    <string name="profile_list_title">Profiles</string>
+    <string name="profile_list_title">VPN profiles and subscriptions</string>
     <string name="profile_source">Source</string>
     <string name="profile_status">Status</string>
     <string name="profile_source_subscription">v2raytun Subscription</string>
@@ -171,7 +171,7 @@
     <string name="subscription_profile_active_until_label">Active until:</string>
     <string name="auto_connect">Smart start</string>
     <string name="smart_start_settings_title">Smart start</string>
-    <string name="smart_start_settings_summary">VPN analysis timeouts</string>
+    <string name="smart_start_settings_summary">VPN protocol analysis timeouts</string>
     <string name="smart_start_protocol_timeout_title">Connection timeout</string>
     <string name="smart_start_protocol_timeout_summary">How long Foxhole waits for one protocol to respond when starting the VPN.</string>
     <string name="smart_start_refresh_timeout_title">Analysis timeout</string>
@@ -251,7 +251,7 @@
     <string name="diagnostics_usage_breakdown">RX %1$s • TX %2$s</string>
     <string name="clear_usage_title">Clear usage</string>
     <string name="statistics_title">Statistics</string>
-    <string name="settings_home_statistics_summary">Traffic usage by apps and profiles</string>
+    <string name="settings_home_statistics_summary">Network usage statistics</string>
     <string name="app_statistics_enabled_title">Enable extended statistics</string>
     <string name="app_statistics_enabled_summary">When enabled, Foxhole keeps traffic usage statistics by application.</string>
     <string name="statistics_period_title">Show statistics for</string>
@@ -306,7 +306,7 @@
     <string name="mtu">MTU</string>
     <string name="prefer_ipv6_routes">IPv6</string>
     <string name="domain_strategy">DNS strategy</string>
-    <string name="routing_apps_title">Apps</string>
+    <string name="routing_apps_title">App filter</string>
     <string name="enable_split_tunnel">Enable Split tunnel</string>
     <string name="split_tunnel_requires_apps">To enable Split tunnel, add apps first.</string>
     <string name="split_tunnel_reconnect_required">Restart the VPN Tunnel to apply changes.</string>
@@ -320,7 +320,7 @@
     <string name="blocked_app_exceptions">Blocked</string>
     <string name="selected_apps_info_body">Selected apps follow the mode above. Drag or long-press an app to move it to Blocked.</string>
     <string name="blocked_apps_info_body">Selected apps are blocked from internet access.</string>
-    <string name="block_apps_always_title">Block always</string>
+    <string name="block_apps_always_title">Block permanently</string>
     <string name="block_apps_always_warning_title">Warning</string>
     <string name="block_apps_always_summary">Starts a persistent firewall-only VPN for filtering.</string>
     <string name="block_apps_always_warning_body">Foxhole will start a local firewall-only VPN while no regular tunnel is connected. Selected blocked apps will have no internet access. For maximum reliability, select Foxhole in Android VPN settings, enable Always-on VPN, and then enable Block connections without VPN. This works only while Foxhole is the selected VPN app.</string>
@@ -342,7 +342,7 @@
     <string name="no_matching_apps_summary">Try a different application name or package id.</string>
     <string name="system_app_label">System</string>
     <string name="user_app_label">User</string>
-    <string name="routing_sites_title">Domains</string>
+    <string name="routing_sites_title">Domain filter</string>
     <string name="routing_sites_summary">Rules apply as soon as they are added.</string>
     <string name="routing_sites_create_preset_summary">The first site rule creates a local preset.</string>
     <string name="routing_sites_active_preset_summary">Site rules are stored in preset “%1$s”.</string>
@@ -501,7 +501,8 @@
     <string name="yes_label">Yes</string>
     <string name="no_label">No</string>
     <string name="close">Close</string>
-    <string name="i_understand">I understand</string>
+    <string name="got_it">Close</string>
+    <string name="i_understand">Save</string>
     <string name="match_domains">Match domains</string>
     <string name="match_ip_cidrs">Match IP CIDRs</string>
     <string name="match_ports">Match ports</string>
@@ -517,10 +518,10 @@
     <string name="traffic_mode_help_body">Tunnel - all device network traffic is routed through VPN.\nSplit tunnel (Proxy) - network traffic from selected apps is routed through VPN.\nSplit tunnel (Direct) - device network traffic is routed through VPN except selected apps.\nProxy - device network traffic is routed through VPN only in manually configured apps.\n*With local Proxy auth enabled, Firefox works through the FoxyProxy extension.</string>
     <string name="routing_apps_info_body">Choose how selected apps use Tunnel.</string>
     <string name="diagnostics_info_body">Logs and traffic statistics stay on this device unless you explicitly save or share a log file.</string>
-    <string name="settings_home_network_summary">Connection modes</string>
-    <string name="settings_home_apps_summary">Rules for apps.</string>
-    <string name="settings_home_sites_summary">Rules for sites</string>
-    <string name="settings_home_application_summary">Theme, language, startup, and protection</string>
+    <string name="settings_home_network_summary">Operating modes and network parameters</string>
+    <string name="settings_home_apps_summary">Application routing rules</string>
+    <string name="settings_home_sites_summary">Domain routing rules</string>
+    <string name="settings_home_application_summary">Theme, language, auto start</string>
     <string name="settings_home_help_summary">Help section</string>
     <string name="profile_editor_connection_section">Connection</string>
     <string name="profile_editor_auth_section">Access</string>
@@ -560,7 +561,7 @@
     <string name="profile_editor_path">Path</string>
     <string name="profile_editor_service_name">Service name</string>
     <string name="settings_home_advanced_summary">DNS, local interfaces, and overrides</string>
-    <string name="settings_home_diagnostics_summary">View Foxhole log files</string>
+    <string name="settings_home_diagnostics_summary">View Foxhole logs</string>
     <string name="home_proxy_title">Proxy</string>
     <string name="home_lan_proxy_title">LAN Proxy</string>
     <string name="home_lan_proxy_tag">LAN Proxy</string>

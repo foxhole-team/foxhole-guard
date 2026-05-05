@@ -26,7 +26,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
-import androidx.compose.material.icons.automirrored.outlined.HelpOutline
 import androidx.compose.material.icons.outlined.AccountTree
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Apps
@@ -126,7 +125,6 @@ fun SettingsHomeScreen(
     onOpenRoutingSites: () -> Unit,
     onOpenSmartStart: () -> Unit,
     onOpenApplication: () -> Unit,
-    onOpenHelp: () -> Unit,
     onOpenExpert: () -> Unit,
     onOpenDiagnostics: () -> Unit,
     onOpenStatistics: () -> Unit,
@@ -177,6 +175,13 @@ fun SettingsHomeScreen(
         title = stringResource(R.string.settings),
         snackbarHostState = snackbarHostState,
         onNavigateUp = onNavigateUp,
+        actions = {
+            SettingsHelpAction(
+                title = stringResource(R.string.help_quick_start_title),
+                body = stringResource(R.string.help_quick_start_body),
+                icon = Icons.Outlined.RocketLaunch,
+            )
+        },
     ) {
         settingsHomeNavigationItems(
             hasSmartProfile = state.hasSmartProfile,
@@ -186,7 +191,6 @@ fun SettingsHomeScreen(
             onOpenRoutingSites = onOpenRoutingSites,
             onOpenSmartStart = onOpenSmartStart,
             onOpenApplication = onOpenApplication,
-            onOpenHelp = onOpenHelp,
             onOpenExpert = onOpenExpert,
             onOpenDiagnostics = onOpenDiagnostics,
             onOpenStatistics = onOpenStatistics,
@@ -229,7 +233,6 @@ private fun LazyListScope.settingsHomeNavigationItems(
     onOpenRoutingSites: () -> Unit,
     onOpenSmartStart: () -> Unit,
     onOpenApplication: () -> Unit,
-    onOpenHelp: () -> Unit,
     onOpenExpert: () -> Unit,
     onOpenDiagnostics: () -> Unit,
     onOpenStatistics: () -> Unit,
@@ -268,13 +271,6 @@ private fun LazyListScope.settingsHomeNavigationItems(
                 title = stringResource(R.string.app_settings),
                 summary = stringResource(R.string.settings_home_application_summary),
                 onClick = onOpenApplication,
-            )
-            SettingsGroupDivider()
-            SettingsGroupedNavigationRow(
-                icon = Icons.AutoMirrored.Outlined.HelpOutline,
-                title = stringResource(R.string.help_title),
-                summary = stringResource(R.string.settings_home_help_summary),
-                onClick = onOpenHelp,
             )
             SettingsGroupDivider()
             SettingsGroupedNavigationRow(
@@ -329,19 +325,19 @@ private fun SettingsRoutingNavigationGroup(
 ) {
     SettingsNavigationGroup {
         SettingsGroupedNavigationRow(
-            modifier = Modifier.testTag("settings_routing_apps_action"),
-            icon = Icons.Outlined.Apps,
-            title = stringResource(R.string.routing_apps_title),
-            summary = stringResource(R.string.settings_home_apps_summary),
-            onClick = onOpenRoutingApps,
-        )
-        SettingsGroupDivider()
-        SettingsGroupedNavigationRow(
             modifier = Modifier.testTag("settings_routing_sites_action"),
             icon = Icons.Outlined.Public,
             title = stringResource(R.string.routing_sites_title),
             summary = stringResource(R.string.settings_home_sites_summary),
             onClick = onOpenRoutingSites,
+        )
+        SettingsGroupDivider()
+        SettingsGroupedNavigationRow(
+            modifier = Modifier.testTag("settings_routing_apps_action"),
+            icon = Icons.Outlined.Apps,
+            title = stringResource(R.string.routing_apps_title),
+            summary = stringResource(R.string.settings_home_apps_summary),
+            onClick = onOpenRoutingApps,
         )
     }
 }
@@ -444,6 +440,21 @@ fun SmartStartSettingsScreen(
         title = stringResource(R.string.smart_start_settings_title),
         snackbarHostState = snackbarHostState,
         onNavigateUp = onNavigateUp,
+        actions = {
+            SettingsHelpAction(
+                title = stringResource(R.string.auto_connect),
+                body = stringResource(R.string.help_smart_start_full_body),
+                icon = Icons.Outlined.Speed,
+            ) {
+                Text(
+                    text = stringResource(R.string.help_protocol_statuses_title),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                HelpProtocolStatusesContent()
+            }
+        },
     ) {
         if (state.hasSmartProfile) {
             item {
@@ -663,6 +674,13 @@ fun TrafficSettingsScreen(
         title = title,
         snackbarHostState = snackbarHostState,
         onNavigateUp = onNavigateUp,
+        actions = {
+            SettingsHelpAction(
+                title = stringResource(R.string.help_connection_modes_title),
+                body = stringResource(R.string.help_connection_modes_body),
+                icon = Icons.Outlined.Shield,
+            )
+        },
     ) {
         item {
             SettingsControlGroup {
@@ -1053,10 +1071,8 @@ fun ApplicationSettingsScreen(
                 SettingSwitchRow(
                     title = stringResource(R.string.block_screenshots_title),
                     checked = state.settings.expert.blockScreenshots,
-                    summary = stringResource(R.string.block_screenshots_summary),
                     leadingIcon = Icons.Outlined.Shield,
                     onCheckedChange = onBlockScreenshotsChanged,
-                    summaryMaxLines = 3,
                     grouped = true,
                 )
             }

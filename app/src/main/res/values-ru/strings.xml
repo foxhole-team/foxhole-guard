@@ -30,7 +30,7 @@
     <string name="no_profiles">Сохраненные профили VPN не обнаружены</string>
     <string name="no_profiles_import_hint">Для добавления профиля используйте кнопку импорт</string>
     <string name="profiles_empty_message">Сохраненные профили VPN не обнаружены. Воспользуйтесь кнопкой импорт в дашборде для импорта конфигураций VPN.</string>
-    <string name="profile_list_title">Профили</string>
+    <string name="profile_list_title">VPN профили и подписки</string>
     <string name="profile_source">Источник</string>
     <string name="profile_status">Статус</string>
     <string name="profile_source_subscription">v2raytun подписка</string>
@@ -171,7 +171,7 @@
     <string name="subscription_profile_active_until_label">Активен до:</string>
     <string name="auto_connect">Смарт старт</string>
     <string name="smart_start_settings_title">Смарт старт</string>
-    <string name="smart_start_settings_summary">Таймауты анализа VPN</string>
+    <string name="smart_start_settings_summary">Таймауты при анализе протоколов VPN</string>
     <string name="smart_start_protocol_timeout_title">Таймаут подключения</string>
     <string name="smart_start_protocol_timeout_summary">Сколько Foxhole ждёт ответ от одного протокола при запуске VPN.</string>
     <string name="smart_start_refresh_timeout_title">Таймаут анализа</string>
@@ -253,7 +253,7 @@
     <string name="diagnostics_usage_breakdown">RX %1$s • TX %2$s</string>
     <string name="clear_usage_title">Очистить использование</string>
     <string name="statistics_title">Статистика</string>
-    <string name="settings_home_statistics_summary">Расход трафика по приложениям и профилям</string>
+    <string name="settings_home_statistics_summary">Статистика использования сети</string>
     <string name="app_statistics_enabled_title">Включить расширенную статистику</string>
     <string name="app_statistics_enabled_summary">Если включено, Foxhole будет вести статистику потребления трафика приложениями.</string>
     <string name="statistics_period_title">Показывать статистику за</string>
@@ -310,7 +310,7 @@
     <string name="mtu">MTU</string>
     <string name="prefer_ipv6_routes">IPv6</string>
     <string name="domain_strategy">Стратегия DNS</string>
-    <string name="routing_apps_title">Приложения</string>
+    <string name="routing_apps_title">Фильтр приложений</string>
     <string name="enable_split_tunnel">Включить Split tunnel</string>
     <string name="split_tunnel_requires_apps">Чтобы включить Split tunnel, сначала добавьте приложения.</string>
     <string name="split_tunnel_reconnect_required">Переподключите VPN Tunnel для применения изменений.</string>
@@ -324,7 +324,7 @@
     <string name="blocked_app_exceptions">Заблокированные</string>
     <string name="selected_apps_info_body">Выбранные приложения работают по режиму выше. Перетащите или долго нажмите приложение, чтобы перенести его в Заблокированные.</string>
     <string name="blocked_apps_info_body">Выбранным приложениям запрещен доступ в интернет.</string>
-    <string name="block_apps_always_title">Блокировать всегда</string>
+    <string name="block_apps_always_title">Блокировать постоянно</string>
     <string name="block_apps_always_warning_title">Предупреждение</string>
     <string name="block_apps_always_summary">Запускает постоянный firewall-only VPN для фильтрации.</string>
     <string name="block_apps_always_warning_body">Foxhole будет поднимать локальный firewall-only VPN, пока обычный Tunnel не подключен. Выбранным заблокированным приложениям будет запрещен доступ в интернет. Для максимальной надежности выберите Foxhole в настройках VPN Android, включите Постоянная VPN, затем включите Блокировать подключения без VPN. Это работает только пока Foxhole выбран как приложение VPN.</string>
@@ -350,7 +350,7 @@
     <string name="no_matching_apps_summary">Попробуйте другое имя приложения или package id.</string>
     <string name="system_app_label">Системное</string>
     <string name="user_app_label">Пользовательское</string>
-    <string name="routing_sites_title">Домены</string>
+    <string name="routing_sites_title">Фильтр доменов</string>
     <string name="routing_sites_summary">Правила применяются сразу после добавления.</string>
     <string name="routing_sites_create_preset_summary">Первое правило для сайта создаст локальный preset.</string>
     <string name="routing_sites_active_preset_summary">Правила для сайтов хранятся в preset “%1$s”.</string>
@@ -517,7 +517,8 @@
     <string name="yes_label">Да</string>
     <string name="no_label">Нет</string>
     <string name="close">Закрыть</string>
-    <string name="i_understand">Понимаю последствия</string>
+    <string name="got_it">Закрыть</string>
+    <string name="i_understand">Сохранить</string>
     <string name="match_domains">Домены</string>
     <string name="match_ip_cidrs">IP CIDR</string>
     <string name="match_ports">Порты</string>
@@ -533,10 +534,10 @@
     <string name="traffic_mode_help_body">Tunnel - весь сетевой трафик устройства направляется через VPN.\nSplit tunnel (Proxy) - сетевой трафик выбранных приложений направляется через VPN.\nSplit tunnel (Direct) - сетевой трафик устройства направляется через VPN, кроме выбранных приложений.\nProxy - сетевой трафик устройства направляется через VPN только в приложениях, настроенных вручную.\n*С включенной аутентификацией локального Proxy работает Firefox через расширение FoxyProxy.</string>
     <string name="routing_apps_info_body">Выберите, как выбранные приложения используют Tunnel.</string>
     <string name="diagnostics_info_body">Логи и статистика трафика остаются на устройстве, если Вы явно не сохраняете или не отправляете лог файл.</string>
-    <string name="settings_home_network_summary">Режимы подключения</string>
-    <string name="settings_home_apps_summary">Правила для приложений.</string>
-    <string name="settings_home_sites_summary">Правила для сайтов</string>
-    <string name="settings_home_application_summary">Тема, язык, запуск и защита</string>
+    <string name="settings_home_network_summary">Режимы работы и сетевые параметры</string>
+    <string name="settings_home_apps_summary">Правила маршрутизации приложений</string>
+    <string name="settings_home_sites_summary">Правила маршрутизации доменов</string>
+    <string name="settings_home_application_summary">Тема, язык, автозапуск</string>
     <string name="settings_home_help_summary">Раздел помощи</string>
     <string name="profile_editor_connection_section">Подключение</string>
     <string name="profile_editor_auth_section">Доступ</string>
@@ -578,7 +579,7 @@
     <string name="profile_editor_path">Путь</string>
     <string name="profile_editor_service_name">Имя сервиса</string>
     <string name="settings_home_advanced_summary">DNS, локальные интерфейсы и переопределения</string>
-    <string name="settings_home_diagnostics_summary">Просмотр лог файлов Foxhole</string>
+    <string name="settings_home_diagnostics_summary">Просмотр журналов Foxhole</string>
     <string name="home_proxy_title">Proxy</string>
     <string name="home_lan_proxy_title">LAN Proxy</string>
     <string name="home_lan_proxy_tag">LAN Proxy</string>

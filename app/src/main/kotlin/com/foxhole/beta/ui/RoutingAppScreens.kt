@@ -149,6 +149,7 @@ fun RoutingAppsScreen(
                         title = stringResource(R.string.enable_split_tunnel),
                         checked = splitTunnelEnabled,
                         enabled = splitTunnelToggleEnabled,
+                        leadingIcon = Icons.Outlined.AccountTree,
                         summary =
                             if (!splitTunnelToggleEnabled) {
                                 stringResource(R.string.split_tunnel_requires_apps)
@@ -186,6 +187,7 @@ fun RoutingAppsScreen(
                                 onPerAppRoutingModeSelected(mode)
                             }
                         },
+                        leadingIcon = perAppRoutingModeIcon(effectiveAppMode),
                         optionIcon = ::perAppRoutingModeIcon,
                         grouped = true,
                     )
@@ -217,6 +219,7 @@ fun RoutingAppsScreen(
                         title = stringResource(R.string.block_apps_always_title),
                         checked = state.settings.expert.blockAppsAlways && state.settings.expert.blockedPackagesEnabled && blockedPackages.isNotEmpty(),
                         enabled = blockedPackages.isNotEmpty(),
+                        leadingIcon = Icons.Outlined.Block,
                         summary = stringResource(R.string.block_apps_always_summary),
                         summaryMaxLines = 6,
                         onCheckedChange = { enabled ->
