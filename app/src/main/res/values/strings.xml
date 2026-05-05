@@ -322,7 +322,7 @@
     <string name="blocked_apps_info_body">Selected apps are blocked from internet access.</string>
     <string name="block_apps_always_title">Block always</string>
     <string name="block_apps_always_warning_title">Warning</string>
-    <string name="block_apps_always_summary">If enabled, Foxhole starts a local firewall-only VPN when there is no active VPN tunnel. For maximum reliability, select Foxhole in Android VPN settings, enable Always-on VPN, and then enable Block connections without VPN. This works only while Foxhole is the selected VPN app. The runtime config is minimal: tun inbound, block outbound, and a route that sends selected packets to block; no profile, no proxy server, no IP refresh, latency, or health probes.</string>
+    <string name="block_apps_always_summary">Starts a persistent firewall-only VPN for filtering.</string>
     <string name="block_apps_always_warning_body">Foxhole will start a local firewall-only VPN while no regular tunnel is connected. Selected blocked apps will have no internet access. For maximum reliability, select Foxhole in Android VPN settings, enable Always-on VPN, and then enable Block connections without VPN. This works only while Foxhole is the selected VPN app.</string>
     <string name="no_blocked_apps_summary"></string>
     <plurals name="blocked_apps_count_summary">

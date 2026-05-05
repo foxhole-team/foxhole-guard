@@ -326,7 +326,7 @@
     <string name="blocked_apps_info_body">Выбранным приложениям запрещен доступ в интернет.</string>
     <string name="block_apps_always_title">Блокировать всегда</string>
     <string name="block_apps_always_warning_title">Предупреждение</string>
-    <string name="block_apps_always_summary">Если включено, Foxhole поднимает локальный firewall-only VPN, когда нет активного VPN Tunnel. Для максимальной надежности выберите Foxhole в настройках VPN Android, включите Постоянная VPN, затем включите Блокировать подключения без VPN. Это работает только пока Foxhole выбран как приложение VPN. Runtime-конфиг минимальный: tun inbound, block outbound и route выбранных пакетов в block; без профиля, без proxy-сервера, без IP refresh, latency и health probes.</string>
+    <string name="block_apps_always_summary">Запускает постоянный firewall-only VPN для фильтрации.</string>
     <string name="block_apps_always_warning_body">Foxhole будет поднимать локальный firewall-only VPN, пока обычный Tunnel не подключен. Выбранным заблокированным приложениям будет запрещен доступ в интернет. Для максимальной надежности выберите Foxhole в настройках VPN Android, включите Постоянная VPN, затем включите Блокировать подключения без VPN. Это работает только пока Foxhole выбран как приложение VPN.</string>
     <string name="no_blocked_apps_summary"></string>
     <plurals name="blocked_apps_count_summary">
