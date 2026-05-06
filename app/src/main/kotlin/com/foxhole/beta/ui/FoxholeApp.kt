@@ -91,6 +91,8 @@ private object AppRoute {
     const val PROFILE_EDIT_CONFIG = "profiles/{$PROFILE_ID}/edit-config"
     const val SETTINGS = "settings"
     const val TRAFFIC = "settings/traffic"
+    const val DNS = "settings/dns"
+    const val DNS_APPS_PICKER = "settings/dns/apps-picker"
     const val SECURITY = "settings/security"
     const val PRIVACY_ROUTE = "settings/privacy-route"
     const val ROUTING_APPS = "settings/routing/apps"
@@ -386,6 +388,7 @@ fun FoxholeApp(
                         snackbarHostState = snackbarHostState,
                         onNavigateUp = null,
                         onOpenTraffic = { navController.navigate(AppRoute.TRAFFIC) },
+                        onOpenDns = { navController.navigate(AppRoute.DNS) },
                         onOpenSecurity = { navController.navigate(AppRoute.SECURITY) },
                         onOpenPrivacyRoute = { navController.navigate(AppRoute.PRIVACY_ROUTE) },
                         onOpenRoutingApps = { navController.navigate(AppRoute.ROUTING_APPS) },
@@ -440,11 +443,26 @@ fun FoxholeApp(
                         onMixedSurfaceChanged = viewModel::onMixedSurfaceChanged,
                         onMtuChanged = viewModel::onMtuChanged,
                         onPreferIpv6Changed = viewModel::onPreferIpv6Changed,
-                        onDomainStrategySelected = viewModel::onDomainStrategySelected,
                         onBypassLanChanged = viewModel::onBypassLanChanged,
                         onAutoRefreshSubscriptionsChanged = viewModel::onAutoRefreshSubscriptionsChanged,
                         onSubscriptionRefreshIntervalSelected = viewModel::onSubscriptionRefreshIntervalSelected,
                         onIpInfoEndpointChanged = viewModel::onIpInfoEndpointChanged,
+                    )
+                }
+                composable(AppRoute.DNS) {
+                    LaunchedEffect(Unit) {
+                        viewModel.ensureInstalledAppsLoaded()
+                    }
+                    val state by viewModel.settingsRouteState.collectAsStateWithLifecycle()
+                    DnsSettingsScreen(
+                        state = state,
+                        snackbarHostState = snackbarHostState,
+                        onNavigateUp = navController::navigateUp,
+                        onDnsSettingsChanged = viewModel::onDnsSettingsChanged,
+                        onDomainStrategySelected = viewModel::onDomainStrategySelected,
+                        onOpenDnsBypassApps = { navController.navigate(AppRoute.DNS_APPS_PICKER) },
+                        onDnsDomainBypassRulesChanged = viewModel::onDnsDomainBypassRulesChanged,
+                        onDnsFilterManualRefresh = viewModel::onDnsFilterManualRefresh,
                     )
                 }
                 composable(AppRoute.SECURITY) {
@@ -535,6 +553,22 @@ fun FoxholeApp(
                         snackbarHostState = snackbarHostState,
                         onNavigateUp = navController::navigateUp,
                         onSelectionChanged = viewModel::onPrivacyRouteSelectedPackagesChanged,
+                    )
+                }
+                composable(AppRoute.DNS_APPS_PICKER) {
+                    LaunchedEffect(Unit) {
+                        viewModel.ensureInstalledAppsLoaded()
+                    }
+                    val state by viewModel.routingRouteState.collectAsStateWithLifecycle()
+                    AppPickerScreen(
+                        title = stringResource(R.string.dns_per_app_bypass_title),
+                        selectionTitle = stringResource(R.string.dns_per_app_bypass_title),
+                        selectedPackages = state.settings.dns.appBypassPackages,
+                        lockedPackages = emptySet(),
+                        state = state,
+                        snackbarHostState = snackbarHostState,
+                        onNavigateUp = navController::navigateUp,
+                        onSelectionChanged = viewModel::onDnsBypassPackagesChanged,
                     )
                 }
                 composable(AppRoute.ROUTING_SITES) {

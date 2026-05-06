@@ -27,6 +27,7 @@ import com.foxhole.beta.core.model.ClashApiSettings
 import com.foxhole.beta.core.model.ConnectionSnapshot
 import com.foxhole.beta.core.model.ConnectionState
 import com.foxhole.beta.core.model.DiagnosticsRetention
+import com.foxhole.beta.core.model.DnsSettings
 import com.foxhole.beta.core.model.DomainStrategy
 import com.foxhole.beta.core.model.ExpertSettings
 import com.foxhole.beta.core.model.InstalledAppOption
@@ -914,6 +915,14 @@ class HomeViewModel(
     fun onPreferIpv6Changed(value: Boolean) = onPreferIpv6ChangedInternal(value)
 
     fun onDomainStrategySelected(value: DomainStrategy) = onDomainStrategySelectedInternal(value)
+
+    fun onDnsSettingsChanged(value: DnsSettings) = onDnsSettingsChangedInternal(value)
+
+    fun onDnsBypassPackagesChanged(value: List<String>) = onDnsBypassPackagesChangedInternal(value)
+
+    fun onDnsDomainBypassRulesChanged(value: List<String>) = onDnsDomainBypassRulesChangedInternal(value)
+
+    fun onDnsFilterManualRefresh() = onDnsFilterManualRefreshInternal()
 
     fun acknowledgeUnsafeWarning() = acknowledgeUnsafeWarningInternal()
 

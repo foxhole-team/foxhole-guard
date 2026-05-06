@@ -13,6 +13,7 @@ import com.foxhole.beta.core.model.ClashApiSettings
 import com.foxhole.beta.core.model.CachedActiveProfile
 import com.foxhole.beta.core.model.ConnectionSettings
 import com.foxhole.beta.core.model.DiagnosticsRetention
+import com.foxhole.beta.core.model.DnsSettings
 import com.foxhole.beta.core.model.DomainStrategy
 import com.foxhole.beta.core.model.ExpertSettings
 import com.foxhole.beta.core.model.LocalAuthSettings
@@ -593,6 +594,41 @@ class SettingsRepository(
     suspend fun updateDomainStrategy(value: DomainStrategy) =
         update { it.copy(traffic = it.traffic.copy(domainStrategy = value)) }
 
+    suspend fun updateDnsSettings(value: DnsSettings) =
+        update { current ->
+            current.copy(
+                connection =
+                    current.connection.copy(
+                        stealthModeEnabled = current.connection.stealthModeEnabled && !value.runtimeRequiresExplicitTunnel(),
+                    ),
+                dns = value,
+            )
+        }
+
+    suspend fun updateDnsBypassPackages(value: List<String>) =
+        update { current ->
+            current.copy(
+                dns =
+                    current.dns.copy(
+                        appBypassPackages = value.filterNot { it == BuildConfig.APPLICATION_ID },
+                    ),
+            )
+        }
+
+    suspend fun updateDnsDomainBypassRules(value: List<String>) =
+        update { current ->
+            current.copy(
+                dns = current.dns.copy(domainBypassRules = value),
+            )
+        }
+
+    suspend fun markDnsFiltersUpdated(timestamp: Long = System.currentTimeMillis()) =
+        update { current ->
+            current.copy(
+                dns = current.dns.copy(filtersUpdatedAt = timestamp),
+            )
+        }
+
     suspend fun unlockExpertSettings(timestamp: Long = System.currentTimeMillis()) =
         update {
             it.copy(
@@ -1131,6 +1167,7 @@ class SettingsRepository(
                             mtu = traffic.mtu.coerceIn(MIN_MTU, MAX_MTU),
                         )
                     },
+                dns = dns.normalized(),
                 privacyRoute =
                     if (connection.stealthModeEnabled) {
                         PrivacyRouteSettings()
@@ -1252,6 +1289,23 @@ class SettingsRepository(
                     .distinct(),
         )
 
+    private fun DnsSettings.normalized(): DnsSettings =
+        copy(
+            server = normalizedDnsServer(server),
+            appBypassPackages =
+                appBypassPackages
+                    .filterNot { packageName -> packageName == BuildConfig.APPLICATION_ID }
+                    .distinct(),
+            domainBypassRules =
+                domainBypassRules
+                    .flatMap { raw -> raw.split(',', ';', '\n') }
+                    .map(String::trim)
+                    .map { value -> value.removePrefix("*.").removePrefix(".").lowercase() }
+                    .filter { value -> value.isNotBlank() && value.length <= 253 }
+                    .distinct(),
+            filtersUpdatedAt = filtersUpdatedAt?.takeIf { it > 0L },
+        )
+
     private fun LocalSurfaceSettings.normalized(): LocalSurfaceSettings =
         copy(
             proxyMode = proxyMode,
@@ -1364,6 +1418,30 @@ class SettingsRepository(
             }
     }
 }
+
+private fun DnsSettings.runtimeRequiresExplicitTunnel(): Boolean =
+    filteringEnabled ||
+        dnsThroughVpn ||
+        blockOutsideTunnel ||
+        interceptDnsRequests ||
+        appBypassPackages.isNotEmpty() ||
+        domainBypassRules.isNotEmpty()
+
+private fun normalizedDnsServer(value: String): String {
+    val trimmed = value.trim()
+    if (trimmed.isBlank()) {
+        return DEFAULT_DNS_SERVER
+    }
+    val url = trimmed.toHttpUrlOrNull()
+    return url?.host ?: trimmed
+        .removePrefix("https://")
+        .removePrefix("tls://")
+        .removeSuffix("/dns-query")
+        .trim()
+        .ifBlank { DEFAULT_DNS_SERVER }
+}
+
+private const val DEFAULT_DNS_SERVER = "1.1.1.1"
 
 internal fun Settings.resetExpertSettingsToSafeDefaults(): Settings =
     copy(

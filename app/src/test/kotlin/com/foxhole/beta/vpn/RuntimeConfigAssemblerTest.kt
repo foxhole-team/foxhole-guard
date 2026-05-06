@@ -3,6 +3,7 @@ package com.foxhole.beta.vpn
 import com.foxhole.beta.core.model.AppLocale
 import com.foxhole.beta.core.model.ClashApiSettings
 import com.foxhole.beta.core.model.DiagnosticsRetention
+import com.foxhole.beta.core.model.DnsSettings
 import com.foxhole.beta.core.model.ExpertSettings
 import com.foxhole.beta.core.model.LocalAuthSettings
 import com.foxhole.beta.core.model.LocalSurfaceSettings
@@ -18,6 +19,7 @@ import com.foxhole.beta.core.model.RoutingPresetOverrideMode
 import com.foxhole.beta.core.model.RoutingPresetSource
 import com.foxhole.beta.core.model.RoutingRule
 import com.foxhole.beta.core.model.RoutingRuleAction
+import com.foxhole.beta.core.model.SecureDnsMode
 import com.foxhole.beta.core.model.Settings
 import com.foxhole.beta.core.model.TrafficSettings
 import com.foxhole.beta.core.model.TrafficMode
@@ -1495,6 +1497,112 @@ class RuntimeConfigAssemblerTest {
         assertFalse(servers[1].jsonObject.containsKey("detour"))
         assertEquals("dns-remote", servers[2].jsonObject["tag"]!!.jsonPrimitive.content)
         assertEquals("proxy", servers[2].jsonObject["detour"]!!.jsonPrimitive.content)
+    }
+
+    @Test
+    fun `dns leak controls update tunnel strict routing and DNS hijack rules`() {
+        val settings =
+            Settings(
+                expert = ExpertSettings(strictRoute = false),
+                dns =
+                    DnsSettings(
+                        blockOutsideTunnel = false,
+                        interceptDnsRequests = false,
+                    ),
+            )
+
+        val config = parse(assembler.assemble(baseConfigWithRules("profile.example"), settings, null))
+        val tunInbound = config["inbounds"]!!.jsonArray.first().jsonObject
+        val rules = config["route"]!!.jsonObject["rules"]!!.jsonArray.map { it.jsonObject }
+
+        assertEquals(false, tunInbound["strict_route"]!!.jsonPrimitive.content.toBoolean())
+        assertTrue(rules.none { rule -> rule["action"]?.jsonPrimitive?.content == "hijack-dns" })
+        assertTrue(rules.any { rule -> rule.stringArray("domain").contains("profile.example") })
+
+        val forced =
+            parse(
+                assembler.assemble(
+                    baseConfigWithRules("profile.example"),
+                    settings.copy(dns = settings.dns.copy(blockOutsideTunnel = true)),
+                    null,
+                ),
+            )
+        assertEquals(true, forced["inbounds"]!!.jsonArray.first().jsonObject["strict_route"]!!.jsonPrimitive.content.toBoolean())
+    }
+
+    @Test
+    fun `dns through vpn and secure mode select remote resolver fields`() {
+        val settings =
+            Settings(
+                dns =
+                    DnsSettings(
+                        dnsThroughVpn = false,
+                        server = "dns.example",
+                        secureMode = SecureDnsMode.DOT,
+                    ),
+            )
+
+        val config = parse(assembler.assemble(baseConfigWithRules("profile.example"), settings, null))
+        val remote = config["dns"]!!.jsonObject["servers"]!!.jsonArray[2].jsonObject
+
+        assertEquals("dns-remote", remote["tag"]!!.jsonPrimitive.content)
+        assertEquals("tls", remote["type"]!!.jsonPrimitive.content)
+        assertEquals("dns.example", remote["server"]!!.jsonPrimitive.content)
+        assertEquals("853", remote["server_port"]!!.jsonPrimitive.content)
+        assertFalse(remote.containsKey("path"))
+        assertFalse(remote.containsKey("detour"))
+    }
+
+    @Test
+    fun `plain dns mode emits udp resolver without doh path`() {
+        val settings =
+            Settings(
+                dns =
+                    DnsSettings(
+                        server = "9.9.9.9",
+                        secureMode = SecureDnsMode.PLAIN,
+                    ),
+            )
+
+        val config = parse(assembler.assemble(baseConfigWithRules("profile.example"), settings, null))
+        val remote = config["dns"]!!.jsonObject["servers"]!!.jsonArray[2].jsonObject
+
+        assertEquals("udp", remote["type"]!!.jsonPrimitive.content)
+        assertEquals("9.9.9.9", remote["server"]!!.jsonPrimitive.content)
+        assertEquals("53", remote["server_port"]!!.jsonPrimitive.content)
+        assertFalse(remote.containsKey("path"))
+        assertEquals("proxy", remote["detour"]!!.jsonPrimitive.content)
+    }
+
+    @Test
+    fun `dns filtering bypass rules use remote resolver and disappear when filtering is disabled`() {
+        val settings =
+            Settings(
+                dns =
+                    DnsSettings(
+                        appBypassPackages = listOf("com.example.bank"),
+                        domainBypassRules = listOf("login.example", "push.example"),
+                    ),
+            )
+
+        val config = parse(assembler.assemble(baseConfigWithRules("profile.example"), settings, null))
+        val dnsRules = config["dns"]!!.jsonObject["rules"]!!.jsonArray.map { it.jsonObject }
+
+        assertEquals(2, dnsRules.size)
+        assertEquals(listOf("com.example.bank"), dnsRules[0].stringArray("package_name"))
+        assertEquals("dns-remote", dnsRules[0]["server"]!!.jsonPrimitive.content)
+        assertEquals(listOf("login.example", "push.example"), dnsRules[1].stringArray("domain_suffix"))
+        assertEquals("dns-remote", dnsRules[1]["server"]!!.jsonPrimitive.content)
+
+        val disabled =
+            parse(
+                assembler.assemble(
+                    baseConfigWithRules("profile.example"),
+                    settings.copy(dns = settings.dns.copy(filteringEnabled = false)),
+                    null,
+                ),
+            )
+        assertFalse(disabled["dns"]!!.jsonObject.containsKey("rules"))
     }
 
     @Test

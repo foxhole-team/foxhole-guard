@@ -28,6 +28,7 @@ import androidx.compose.material.icons.outlined.BrightnessAuto
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.DarkMode
 import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Dns
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.BarChart
 import androidx.compose.material.icons.outlined.FileDownload
@@ -122,6 +123,7 @@ fun SettingsHomeScreen(
     snackbarHostState: SnackbarHostState,
     onNavigateUp: (() -> Unit)?,
     onOpenTraffic: () -> Unit,
+    onOpenDns: () -> Unit,
     onOpenSecurity: () -> Unit,
     onOpenPrivacyRoute: () -> Unit,
     onOpenRoutingApps: () -> Unit,
@@ -183,6 +185,7 @@ fun SettingsHomeScreen(
             hasSmartStartSettings = state.hasSmartProfile || state.hasSubscriptionProfile,
             expertVisible = expertVisible,
             onOpenTraffic = onOpenTraffic,
+            onOpenDns = onOpenDns,
             onOpenSecurity = onOpenSecurity,
             onOpenPrivacyRoute = onOpenPrivacyRoute,
             onOpenRoutingApps = onOpenRoutingApps,
@@ -227,6 +230,7 @@ private fun LazyListScope.settingsHomeNavigationItems(
     hasSmartStartSettings: Boolean,
     expertVisible: Boolean,
     onOpenTraffic: () -> Unit,
+    onOpenDns: () -> Unit,
     onOpenSecurity: () -> Unit,
     onOpenPrivacyRoute: () -> Unit,
     onOpenRoutingApps: () -> Unit,
@@ -255,6 +259,14 @@ private fun LazyListScope.settingsHomeNavigationItems(
                 title = stringResource(R.string.traffic_settings),
                 summary = stringResource(R.string.settings_home_network_summary),
                 onClick = onOpenTraffic,
+            )
+            SettingsGroupDivider()
+            SettingsGroupedNavigationRow(
+                modifier = Modifier.testTag("settings_dns_action"),
+                icon = Icons.Outlined.Dns,
+                title = stringResource(R.string.dns_settings_title),
+                summary = stringResource(R.string.settings_home_dns_summary),
+                onClick = onOpenDns,
             )
         }
     }
@@ -682,7 +694,6 @@ fun TrafficSettingsScreen(
     onMixedSurfaceChanged: (ProxyInboundSettings) -> Unit,
     onMtuChanged: (Int) -> Unit,
     onPreferIpv6Changed: (Boolean) -> Unit,
-    onDomainStrategySelected: (DomainStrategy) -> Unit,
     onBypassLanChanged: (Boolean) -> Unit,
     onAutoRefreshSubscriptionsChanged: (Boolean) -> Unit,
     onSubscriptionRefreshIntervalSelected: (SubscriptionRefreshInterval) -> Unit,
@@ -696,7 +707,6 @@ fun TrafficSettingsScreen(
     var proxyPortDialog by rememberSaveable { mutableStateOf(false) }
     var lanProxyPortDialog by rememberSaveable { mutableStateOf(false) }
     var mtuDialog by rememberSaveable { mutableStateOf(false) }
-    var domainMenuExpanded by rememberSaveable { mutableStateOf(false) }
     var subscriptionRefreshIntervalMenuExpanded by rememberSaveable { mutableStateOf(false) }
     var endpointDialog by rememberSaveable { mutableStateOf(false) }
     val wifiLanAddress by rememberWifiLanAddress()
@@ -924,20 +934,6 @@ fun TrafficSettingsScreen(
                     grouped = true,
                 )
                 SettingsControlGroupDivider()
-                DropdownSettingRow(
-                    title = stringResource(R.string.domain_strategy),
-                    value = domainStrategyLabel(state.settings.traffic.domainStrategy),
-                    expanded = domainMenuExpanded,
-                    onExpandedChange = { domainMenuExpanded = it },
-                    values = DomainStrategy.entries,
-                    selected = state.settings.traffic.domainStrategy,
-                    label = { domainStrategyLabel(it) },
-                    onSelect = onDomainStrategySelected,
-                    leadingIcon = Icons.Outlined.AccountTree,
-                    optionIcon = ::domainStrategyIcon,
-                    grouped = true,
-                )
-                SettingsControlGroupDivider()
                 SettingSwitchRow(
                     title = stringResource(R.string.bypass_lan),
                     checked = state.settings.expert.bypassLan,
@@ -1088,50 +1084,48 @@ fun PrivacyRouteSettingsScreen(
                     summaryMaxLines = 3,
                     grouped = true,
                 )
-                if (state.settings.privacyRoute.enabled) {
-                    SettingsControlGroupDivider()
-                    DropdownSettingRow(
-                        title = stringResource(R.string.privacy_route_scope_title),
-                        value = privacyRouteScopeLabel(state.settings.privacyRoute.scope),
-                        expanded = privacyRouteScopeMenuExpanded,
-                        onExpandedChange = { privacyRouteScopeMenuExpanded = it },
-                        values = PrivacyRouteScope.entries,
-                        selected = state.settings.privacyRoute.scope,
-                        label = { privacyRouteScopeLabel(it) },
-                        onSelect = onPrivacyRouteScopeSelected,
-                        leadingIcon = Icons.Outlined.Apps,
-                        optionIcon = ::privacyRouteScopeIcon,
-                        grouped = true,
+                SettingsControlGroupDivider()
+                DropdownSettingRow(
+                    title = stringResource(R.string.privacy_route_scope_title),
+                    value = privacyRouteScopeLabel(state.settings.privacyRoute.scope),
+                    expanded = privacyRouteScopeMenuExpanded,
+                    onExpandedChange = { privacyRouteScopeMenuExpanded = it },
+                    values = PrivacyRouteScope.entries,
+                    selected = state.settings.privacyRoute.scope,
+                    label = { privacyRouteScopeLabel(it) },
+                    onSelect = onPrivacyRouteScopeSelected,
+                    leadingIcon = Icons.Outlined.Apps,
+                    optionIcon = ::privacyRouteScopeIcon,
+                    grouped = true,
+                )
+                SettingsControlGroupDivider()
+                if (state.settings.privacyRoute.scope == PrivacyRouteScope.ALL_APPS) {
+                    InfoBlock(
+                        title = stringResource(R.string.privacy_route_all_apps_warning_title),
+                        body = stringResource(R.string.privacy_route_all_apps_warning_body),
                     )
-                    SettingsControlGroupDivider()
-                    if (state.settings.privacyRoute.scope == PrivacyRouteScope.ALL_APPS) {
-                        InfoBlock(
-                            title = stringResource(R.string.privacy_route_all_apps_warning_title),
-                            body = stringResource(R.string.privacy_route_all_apps_warning_body),
-                        )
-                    } else {
-                        AppGridSectionContent(
-                            title = stringResource(R.string.privacy_route_selected_apps_title),
-                            subtitle = stringResource(R.string.privacy_route_selected_apps_summary),
-                            leadingIcon = Icons.Outlined.Apps,
-                            apps = selectedApps,
-                            emptyText = stringResource(R.string.privacy_route_selected_apps_empty),
-                            headerActionLabel = stringResource(R.string.choose_label),
-                            headerActionTag = "privacy_route_apps_choose_action",
-                            onHeaderAction = onOpenPrivacyRouteApps,
-                            onRemove = { app ->
-                                onPrivacyRouteSelectedPackagesChanged(selectedPackages.filterNot { it == app.packageName })
-                            },
-                            onDropPackage = { packageName, beforePackageName ->
-                                if (packageName !in selectedPackageSet || beforePackageName != null) {
-                                    onPrivacyRouteSelectedPackagesChanged(
-                                        insertPackageBefore(selectedPackages, packageName, beforePackageName),
-                                    )
-                                }
-                            },
-                            modifier = Modifier.testTag("privacy_route_apps_section"),
-                        )
-                    }
+                } else {
+                    AppGridSectionContent(
+                        title = stringResource(R.string.privacy_route_selected_apps_title),
+                        subtitle = stringResource(R.string.privacy_route_selected_apps_summary),
+                        leadingIcon = Icons.Outlined.Apps,
+                        apps = selectedApps,
+                        emptyText = stringResource(R.string.privacy_route_selected_apps_empty),
+                        headerActionLabel = stringResource(R.string.choose_label),
+                        headerActionTag = "privacy_route_apps_choose_action",
+                        onHeaderAction = onOpenPrivacyRouteApps,
+                        onRemove = { app ->
+                            onPrivacyRouteSelectedPackagesChanged(selectedPackages.filterNot { it == app.packageName })
+                        },
+                        onDropPackage = { packageName, beforePackageName ->
+                            if (packageName !in selectedPackageSet || beforePackageName != null) {
+                                onPrivacyRouteSelectedPackagesChanged(
+                                    insertPackageBefore(selectedPackages, packageName, beforePackageName),
+                                )
+                            }
+                        },
+                        modifier = Modifier.testTag("privacy_route_apps_section"),
+                    )
                 }
             }
         }

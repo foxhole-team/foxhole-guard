@@ -10,6 +10,7 @@ import com.foxhole.beta.applySubscriptionRefreshSchedule
 import com.foxhole.beta.core.model.AppLocale
 import com.foxhole.beta.core.model.ClashApiSettings
 import com.foxhole.beta.core.model.DiagnosticsRetention
+import com.foxhole.beta.core.model.DnsSettings
 import com.foxhole.beta.core.model.DomainStrategy
 import com.foxhole.beta.core.model.LatencyProbeMethod
 import com.foxhole.beta.core.model.LocalAuthSettings
@@ -189,8 +190,35 @@ internal fun HomeViewModel.onPreferIpv6ChangedInternal(value: Boolean) {
 }
 
 internal fun HomeViewModel.onDomainStrategySelectedInternal(value: DomainStrategy) {
-    viewModelScope.launch {
+    updateRuntimeSettingAndMaybeReload {
         container.settingsRepository.updateDomainStrategy(value)
+    }
+}
+
+internal fun HomeViewModel.onDnsSettingsChangedInternal(value: DnsSettings) {
+    updateRuntimeSettingAndMaybeReload {
+        container.settingsRepository.updateDnsSettings(value)
+    }
+}
+
+internal fun HomeViewModel.onDnsBypassPackagesChangedInternal(value: List<String>) {
+    updateRuntimeSettingAndMaybeReload {
+        container.settingsRepository.updateDnsBypassPackages(
+            value.filterNot { it == getApplication<Application>().packageName },
+        )
+    }
+}
+
+internal fun HomeViewModel.onDnsDomainBypassRulesChangedInternal(value: List<String>) {
+    updateRuntimeSettingAndMaybeReload {
+        container.settingsRepository.updateDnsDomainBypassRules(value)
+    }
+}
+
+internal fun HomeViewModel.onDnsFilterManualRefreshInternal() {
+    viewModelScope.launch {
+        container.settingsRepository.markDnsFiltersUpdated()
+        emitSuccess(getApplication<Application>().getString(R.string.dns_filter_refresh_complete))
     }
 }
 

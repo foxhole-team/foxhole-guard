@@ -3,6 +3,7 @@ package com.foxhole.beta.vpn
 import com.foxhole.beta.BuildConfig
 import com.foxhole.beta.core.model.ClashApiSettings
 import com.foxhole.beta.core.model.DiagnosticsRetention
+import com.foxhole.beta.core.model.DnsSettings
 import com.foxhole.beta.core.model.ExpertSettings
 import com.foxhole.beta.core.model.LocalAuthSettings
 import com.foxhole.beta.core.model.LocalSurfaceSettings
@@ -18,6 +19,7 @@ import com.foxhole.beta.core.model.RoutingPresetOverrideMode
 import com.foxhole.beta.core.model.RoutingRule
 import com.foxhole.beta.core.model.RoutingRuleAction
 import com.foxhole.beta.core.model.Settings
+import com.foxhole.beta.core.model.SecureDnsMode
 import com.foxhole.beta.core.model.TrafficMode
 import com.foxhole.beta.core.model.TrafficSettings
 import com.foxhole.beta.core.model.TunStack
@@ -47,6 +49,7 @@ class RuntimeConfigAssembler(
     @Serializable
     private data class RuntimeFingerprintSettings(
         val traffic: TrafficSettings,
+        val dns: DnsSettings,
         val privacyRoute: PrivacyRouteSettings,
         val expert: ExpertSettings,
     )
@@ -82,6 +85,7 @@ class RuntimeConfigAssembler(
         val dns =
             buildFoxholeDnsConfig(
                 strategy = settings.traffic.domainStrategy.configValue,
+                dnsSettings = settings.dns,
                 privateDnsMode = null,
                 finalTag = DNS_DIRECT_TAG,
                 includeRemote = false,
@@ -94,7 +98,9 @@ class RuntimeConfigAssembler(
                             if (settings.expert.blockAppsAlways) {
                                 buildAppRouteRules(settings.expert).forEach(::add)
                             }
-                            hijackDnsRules().forEach(::add)
+                            if (settings.dns.interceptDnsRequests) {
+                                hijackDnsRules().forEach(::add)
+                            }
                         }
                     }
                 put("rules", rules)
@@ -141,6 +147,7 @@ class RuntimeConfigAssembler(
             patchTunInbound(
                 tunInbound = tunInbound,
                 traffic = settings.traffic,
+                dnsSettings = settings.dns,
                 expert = settings.expert,
                 mtu = effectiveTunMtu(runtimeBase, settings.traffic.mtu),
                 stack = effectiveTunnelTunStack(settings.traffic.tunStack, vpnProtocolHint),
@@ -156,6 +163,7 @@ class RuntimeConfigAssembler(
                 existing = runtimeBase["dns"]?.jsonObject,
                 base = runtimeBase,
                 traffic = settings.traffic,
+                dnsSettings = settings.dns,
                 privateDnsMode = privateDnsMode,
                 privacyRouteActive = privacyRouteActive,
             )
@@ -213,7 +221,7 @@ class RuntimeConfigAssembler(
                 buildLocalSurfaceInbounds(localSurfaces, includeLocalProxy = true).forEach(::add)
             }
         val runtimeBase = base.withTcpReliabilityOutbounds()
-        val patchedDns = patchDns(runtimeBase["dns"]?.jsonObject, runtimeBase, settings.traffic)
+        val patchedDns = patchDns(runtimeBase["dns"]?.jsonObject, runtimeBase, settings.traffic, settings.dns)
         val patchedRoute = patchProxyRoute(runtimeBase["route"]?.jsonObject, patchedDns, activePreset, settings.expert)
         val patchedExperimental = patchExperimental(runtimeBase["experimental"]?.jsonObject, localSurfaces)
 
@@ -255,6 +263,7 @@ class RuntimeConfigAssembler(
             json.encodeToString(
                 RuntimeFingerprintSettings(
                     traffic = settings.traffic,
+                    dns = settings.dns,
                     privacyRoute = settings.privacyRoute,
                     expert = settings.expert.runtimeFingerprintSettings(),
                 ),
@@ -348,6 +357,7 @@ class RuntimeConfigAssembler(
     private fun patchTunInbound(
         tunInbound: JsonObject,
         traffic: TrafficSettings,
+        dnsSettings: DnsSettings,
         expert: ExpertSettings,
         mtu: Int,
         stack: TunStack,
@@ -359,7 +369,7 @@ class RuntimeConfigAssembler(
                 when (key) {
                     "mtu" -> put(key, mtu)
                     "stack" -> put(key, stack.configValue)
-                    "strict_route" -> put(key, expert.strictRoute)
+                    "strict_route" -> put(key, expert.strictRoute || dnsSettings.blockOutsideTunnel)
                     "sniff",
                     "sniff_override_destination",
                     "sniff_timeout",
@@ -371,7 +381,7 @@ class RuntimeConfigAssembler(
             }
             put("mtu", mtu)
             put("stack", stack.configValue)
-            put("strict_route", expert.strictRoute)
+            put("strict_route", expert.strictRoute || dnsSettings.blockOutsideTunnel)
             when {
                 includePackages.isNotEmpty() ->
                     putJsonArray("include_package") {
@@ -541,6 +551,7 @@ class RuntimeConfigAssembler(
         existing: JsonObject?,
         base: JsonObject,
         traffic: TrafficSettings,
+        dnsSettings: DnsSettings = DnsSettings(),
         privateDnsMode: PrivateDnsMode? = null,
         privacyRouteActive: Boolean = false,
     ): JsonObject {
@@ -554,6 +565,7 @@ class RuntimeConfigAssembler(
             val wireGuardDnsServers = wireGuardDnsServers(existing)
             return buildFoxholeDnsConfig(
                 strategy = effectiveStrategy.configValue,
+                dnsSettings = dnsSettings,
                 privateDnsMode = privateDnsMode,
                 extraServers = wireGuardDnsServers,
                 finalTag =
@@ -617,7 +629,9 @@ class RuntimeConfigAssembler(
                 if (expert.sniff) {
                     add(sniffRule())
                 }
-                hijackDnsRules().forEach(::add)
+                if (settings.dns.interceptDnsRequests) {
+                    hijackDnsRules().forEach(::add)
+                }
                 if (expert.bypassLan) {
                     add(bypassLanRule())
                 }
@@ -1049,6 +1063,7 @@ class RuntimeConfigAssembler(
 
     private fun buildFoxholeDnsConfig(
         strategy: String,
+        dnsSettings: DnsSettings = DnsSettings(),
         privateDnsMode: PrivateDnsMode?,
         extraServers: List<JsonObject> = emptyList(),
         finalTag: String = DNS_REMOTE_TAG,
@@ -1070,12 +1085,20 @@ class RuntimeConfigAssembler(
                     )
                     if (includeRemote) {
                         add(
-                            foxholeRemoteDnsServer(privateDnsMode, remoteDetourTag),
+                            foxholeRemoteDnsServer(
+                                dnsSettings = dnsSettings,
+                                _privateDnsMode = privateDnsMode,
+                                detourTag = remoteDetourTag.takeIf { dnsSettings.dnsThroughVpn },
+                            ),
                         )
                     }
                     extraServers.forEach(::add)
                 },
             )
+            val rules = buildDnsRules(dnsSettings)
+            if (rules.isNotEmpty()) {
+                put("rules", JsonArray(rules))
+            }
             put("strategy", strategy)
             put("final", finalTag)
         }
@@ -1120,16 +1143,54 @@ class RuntimeConfigAssembler(
         }
 
     private fun foxholeRemoteDnsServer(
+        dnsSettings: DnsSettings,
         _privateDnsMode: PrivateDnsMode?,
-        detourTag: String = "proxy",
+        detourTag: String?,
     ): JsonObject =
         buildJsonObject {
             put("tag", DNS_REMOTE_TAG)
-            put("server", FOXHOLE_REMOTE_DNS_SERVER)
-            put("type", "https")
-            put("server_port", 443)
-            put("path", "/dns-query")
-            put("detour", detourTag)
+            put("server", dnsSettings.server)
+            put("type", dnsSettings.secureMode.configType)
+            put("server_port", dnsSettings.secureMode.defaultPort)
+            if (dnsSettings.secureMode == SecureDnsMode.DOH) {
+                put("path", "/dns-query")
+            }
+            detourTag?.let { put("detour", it) }
+        }
+
+    private fun buildDnsRules(dnsSettings: DnsSettings): List<JsonObject> =
+        buildList {
+            if (!dnsSettings.filteringEnabled) {
+                return@buildList
+            }
+            val bypassPackages = normalizedRuntimePackages(dnsSettings.appBypassPackages)
+            if (bypassPackages.isNotEmpty()) {
+                add(
+                    buildJsonObject {
+                        putJsonArray("package_name") {
+                            bypassPackages.forEach { add(JsonPrimitive(it)) }
+                        }
+                        put("action", "route")
+                        put("server", DNS_REMOTE_TAG)
+                    },
+                )
+            }
+            val bypassDomains =
+                dnsSettings.domainBypassRules
+                    .map(String::trim)
+                    .filter(String::isNotBlank)
+                    .distinct()
+            if (bypassDomains.isNotEmpty()) {
+                add(
+                    buildJsonObject {
+                        putJsonArray("domain_suffix") {
+                            bypassDomains.forEach { add(JsonPrimitive(it)) }
+                        }
+                        put("action", "route")
+                        put("server", DNS_REMOTE_TAG)
+                    },
+                )
+            }
         }
 
     private fun sniffRule(): JsonObject =

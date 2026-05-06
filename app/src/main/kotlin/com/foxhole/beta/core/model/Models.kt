@@ -2,7 +2,7 @@ package com.foxhole.beta.core.model
 
 import kotlinx.serialization.Serializable
 
-const val SETTINGS_SCHEMA_VERSION = 13
+const val SETTINGS_SCHEMA_VERSION = 14
 const val NETWORK_FINGERPRINT_SCHEMA_CURRENT = 2
 const val NETWORK_FINGERPRINT_SCHEMA_LEGACY = 1
 
@@ -133,6 +133,22 @@ enum class DomainStrategy(val configValue: String) {
 }
 
 @Serializable
+enum class SecureDnsMode(
+    val configType: String,
+    val defaultPort: Int,
+) {
+    DOH("https", 443),
+    DOT("tls", 853),
+    PLAIN("udp", 53),
+}
+
+@Serializable
+enum class DnsFilterMode {
+    COMPATIBILITY,
+    STRICT,
+}
+
+@Serializable
 enum class PerAppRoutingMode {
     FULL_TUNNEL,
     INCLUDE_SELECTED_APPS,
@@ -248,6 +264,25 @@ data class TrafficSettings(
 )
 
 @Serializable
+data class DnsSettings(
+    val dnsThroughVpn: Boolean = true,
+    val blockOutsideTunnel: Boolean = true,
+    val interceptDnsRequests: Boolean = true,
+    val server: String = "1.1.1.1",
+    val secureMode: SecureDnsMode = SecureDnsMode.DOH,
+    val filteringEnabled: Boolean = true,
+    val filterMode: DnsFilterMode = DnsFilterMode.COMPATIBILITY,
+    val blockAds: Boolean = true,
+    val blockTrackers: Boolean = true,
+    val blockAppTelemetry: Boolean = true,
+    val blockMaliciousDomains: Boolean = true,
+    val autoUpdateFilters: Boolean = true,
+    val appBypassPackages: List<String> = emptyList(),
+    val domainBypassRules: List<String> = emptyList(),
+    val filtersUpdatedAt: Long? = null,
+)
+
+@Serializable
 data class PrivacyRouteSettings(
     val mode: PrivacyRouteMode = PrivacyRouteMode.OFF,
     val scope: PrivacyRouteScope = PrivacyRouteScope.SELECTED_APPS,
@@ -346,6 +381,7 @@ data class Settings(
     val ui: UiSettings = UiSettings(),
     val connection: ConnectionSettings = ConnectionSettings(),
     val traffic: TrafficSettings = TrafficSettings(),
+    val dns: DnsSettings = DnsSettings(),
     val privacyRoute: PrivacyRouteSettings = PrivacyRouteSettings(),
     val expert: ExpertSettings = ExpertSettings(),
     val statistics: StatisticsSettings = StatisticsSettings(),
