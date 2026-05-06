@@ -2,6 +2,7 @@ package com.foxhole.beta.ui
 
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.vectorResource
@@ -28,6 +29,7 @@ fun SecuritySettingsScreen(
                     summary = stringResource(R.string.security_firewall_summary),
                     infoBody = stringResource(R.string.security_firewall_info_body),
                     leadingIcon = ImageVector.vectorResource(R.drawable.ic_firewall_shield_key),
+                    leadingIconContainerColor = Color.Transparent,
                     onCheckedChange = onFirewallEnabledChanged,
                     summaryMaxLines = 3,
                     grouped = true,

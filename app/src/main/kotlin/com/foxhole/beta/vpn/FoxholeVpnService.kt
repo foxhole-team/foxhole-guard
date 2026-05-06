@@ -444,6 +444,12 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         cancelScheduledAutoReconnect(resetAttempts = true)
         validationJob?.cancel()
         validationJob = null
+        if (activeLocalGuardMode != null) {
+            container.diagnosticsLogger.record("connection", "local guard restarting mode=${activeLocalGuardMode?.name?.lowercase().orEmpty()}")
+            runtime.stop()
+            releaseRuntimeWakeLock()
+            activeLocalGuardMode = null
+        }
         FoxholeConnectionServiceContract.stopInactiveServices(context = this, activeMode = TrafficMode.TUNNEL)
         val session =
             VpnSession(
@@ -525,10 +531,12 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
 
     internal fun launchPriorityCommand(block: suspend () -> Unit) {
         commandJob?.cancel()
-        commandJob = null
-        scope.launch(Dispatchers.Default) {
-            block()
-        }
+        commandJob =
+            scope.launch(Dispatchers.Default) {
+                commandMutex.withLock {
+                    block()
+                }
+            }
     }
 
     internal fun stopService(commandStartId: Int?) {

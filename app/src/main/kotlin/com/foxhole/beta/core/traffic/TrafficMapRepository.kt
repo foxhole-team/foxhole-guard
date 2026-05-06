@@ -19,6 +19,12 @@ import java.util.Locale
 class TrafficMapRepository(
     private val connectionSource: TrafficMapConnectionSource = EmptyTrafficMapConnectionSource,
 ) {
+    @Volatile
+    private var retainedOriginInfo: TrafficMapOriginInfo? = null
+
+    @Volatile
+    private var retainedConnectionAccumulator = TrafficMapConnectionAccumulator()
+
     fun trafficMapState(
         scope: CoroutineScope,
         originIpInfo: Flow<IpInfo?>,
@@ -27,9 +33,10 @@ class TrafficMapRepository(
         combine(
             originIpInfo
                 .map(::trafficMapOriginInfo)
-                .runningFold(null as TrafficMapOriginInfo?) { previous, next -> next ?: previous }
-                .distinctUntilChanged()
-                .onStart { emit(null) },
+                .runningFold(retainedOriginInfo) { previous, next ->
+                    (next ?: previous).also { retainedOriginInfo = it }
+                }
+                .distinctUntilChanged(),
             runtimeAvailable
                 .distinctUntilChanged()
                 .onStart { emit(false) },
@@ -38,16 +45,15 @@ class TrafficMapRepository(
                 .combine(runtimeAvailable.distinctUntilChanged()) { samples, available ->
                     TrafficMapSampleBatch(samples = samples, runtimeAvailable = available)
                 }
-                .runningFold(TrafficMapConnectionAccumulator()) { accumulator, batch ->
-                    accumulator.updatedForBatch(batch)
+                .runningFold(retainedConnectionAccumulator) { accumulator, batch ->
+                    accumulator.updatedForBatch(batch).also { retainedConnectionAccumulator = it }
                 }
                 .map { accumulator ->
                     trafficMapPointsFromAggregates(
                         aggregates = accumulator.countryAggregates(),
                         limit = MaxTrafficMapDestinations,
                     )
-                }
-                .onStart { emit(emptyList()) },
+                },
             ::buildTrafficMapUiState,
         ).stateIn(
             scope = scope,

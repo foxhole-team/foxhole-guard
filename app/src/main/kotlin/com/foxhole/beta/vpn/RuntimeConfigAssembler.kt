@@ -420,13 +420,13 @@ class RuntimeConfigAssembler(
             put("interface_name", "foxhole")
             put("mtu", settings.traffic.mtu)
             put("auto_route", true)
-            put("strict_route", true)
+            put("strict_route", false)
             put("stack", settings.traffic.tunStack.configValue)
             putJsonArray("address") {
                 add(JsonPrimitive("172.19.0.1/30"))
                 add(JsonPrimitive("fdfe:dcba:9876::1/126"))
             }
-            if (mode == LocalGuardMode.FIREWALL && !settings.expert.killSwitchEnabled && settings.expert.blockAppsAlways) {
+            if (mode == LocalGuardMode.FIREWALL && settings.expert.blockAppsAlways) {
                 val packages = normalizedRuntimePackages(settings.expert.blockedPackages)
                 if (packages.isNotEmpty()) {
                     putJsonArray("include_package") {
@@ -657,7 +657,11 @@ class RuntimeConfigAssembler(
     private fun Settings.isTorPrivacyRouteActive(vpnProtocolHint: ProtocolHint?): Boolean =
         privacyRoute.mode == PrivacyRouteMode.TOR_OVER_VPN &&
             traffic.mode == TrafficMode.TUNNEL &&
-            vpnProtocolHint?.isUdpTransport() != true
+            vpnProtocolHint?.isUdpTransport() != true &&
+            when (privacyRoute.scope) {
+                PrivacyRouteScope.ALL_APPS -> true
+                PrivacyRouteScope.SELECTED_APPS -> privacyRoute.selectedPackages.any(String::isNotBlank)
+            }
 
     private fun buildTorPrivacyRouteRules(settings: Settings): List<JsonObject> =
         when (settings.privacyRoute.scope) {

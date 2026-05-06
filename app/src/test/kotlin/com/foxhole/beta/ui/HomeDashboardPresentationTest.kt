@@ -239,7 +239,7 @@ class HomeDashboardPresentationTest {
                 state =
                     HomeRouteUiState(
                         profilesLoaded = true,
-                        settings = Settings(expert = ExpertSettings(killSwitchEnabled = true)),
+                        settings = Settings(expert = ExpertSettings(firewallEnabled = true)),
                         connection = ConnectionSnapshot(state = ConnectionState.IDLE, lastChangeAt = 2_000L),
                     ),
                 visibleIpInfo = staleTunnelIp,
@@ -296,6 +296,7 @@ class HomeDashboardPresentationTest {
                         firewallEnabled = true,
                         blockedPackagesEnabled = true,
                         blockedPackages = listOf("org.mozilla.firefox"),
+                        localSurfaces = LocalSurfaceSettings(allowLanAccess = true),
                     ),
             )
         val state =
@@ -311,19 +312,37 @@ class HomeDashboardPresentationTest {
         val indicators = homeConnectionFeatureIndicators(state)
 
         assertEquals(
-            listOf(HomeConnectionFeature.KILL_SWITCH, HomeConnectionFeature.FIREWALL, HomeConnectionFeature.TOR),
+            listOf(
+                HomeConnectionFeature.KILL_SWITCH,
+                HomeConnectionFeature.FIREWALL,
+                HomeConnectionFeature.TOR,
+                HomeConnectionFeature.LAN_PROXY,
+            ),
             indicators.map { it.feature },
         )
         assertEquals(
-            listOf(HomeConnectionFeatureStatus.ON, HomeConnectionFeatureStatus.ON, HomeConnectionFeatureStatus.ON),
+            listOf(
+                HomeConnectionFeatureStatus.ON,
+                HomeConnectionFeatureStatus.ON,
+                HomeConnectionFeatureStatus.ON,
+                HomeConnectionFeatureStatus.ON,
+            ),
             indicators.map { it.status },
         )
         assertEquals(
-            listOf(HomeConnectionFeature.KILL_SWITCH, HomeConnectionFeature.FIREWALL, HomeConnectionFeature.TOR),
+            listOf(
+                HomeConnectionFeature.KILL_SWITCH,
+                HomeConnectionFeature.FIREWALL,
+                HomeConnectionFeature.TOR,
+            ),
             homeConnectionFeatureIndicators(HomeRouteUiState(settings = Settings())).map { it.feature },
         )
         assertEquals(
-            listOf(HomeConnectionFeatureStatus.OFF, HomeConnectionFeatureStatus.OFF, HomeConnectionFeatureStatus.OFF),
+            listOf(
+                HomeConnectionFeatureStatus.OFF,
+                HomeConnectionFeatureStatus.OFF,
+                HomeConnectionFeatureStatus.OFF,
+            ),
             homeConnectionFeatureIndicators(HomeRouteUiState(settings = Settings())).map { it.status },
         )
     }

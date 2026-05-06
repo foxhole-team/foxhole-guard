@@ -519,6 +519,7 @@ internal enum class HomeConnectionFeature {
     KILL_SWITCH,
     FIREWALL,
     TOR,
+    LAN_PROXY,
 }
 
 internal enum class HomeConnectionFeatureStatus(
@@ -568,6 +569,15 @@ internal fun homeConnectionFeatureIndicators(state: HomeRouteUiState): List<Home
                 status = homeTorFeatureStatus(state),
             ),
         )
+        if (state.settings.expert.localSurfaces.allowLanAccess) {
+            add(
+                HomeConnectionFeatureIndicator(
+                    feature = HomeConnectionFeature.LAN_PROXY,
+                    titleRes = R.string.home_lan_proxy_title,
+                    status = HomeConnectionFeatureStatus.ON,
+                ),
+            )
+        }
     }
 
 internal fun homeConnectionFeatureIndicator(
@@ -612,20 +622,28 @@ internal fun HomeConnectionFeatureIndicators(
     if (indicators.isEmpty()) {
         return
     }
-    Row(
+    Column(
         modifier =
             modifier
                 .fillMaxWidth()
-                .horizontalScroll(rememberScrollState())
                 .testTag("home_connection_feature_indicators"),
-        horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally),
-        verticalAlignment = Alignment.CenterVertically,
+        verticalArrangement = Arrangement.spacedBy(7.dp),
     ) {
-        indicators.forEach { indicator ->
-            HomeConnectionFeatureIndicatorItem(
-                indicator = indicator,
-                onClick = { onIndicatorClick(indicator.feature) },
-            )
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
+        Row(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            indicators.forEach { indicator ->
+                HomeConnectionFeatureIndicatorItem(
+                    indicator = indicator,
+                    onClick = { onIndicatorClick(indicator.feature) },
+                )
+            }
         }
     }
 }
@@ -636,24 +654,26 @@ private fun HomeConnectionFeatureIndicatorItem(
     onClick: () -> Unit,
 ) {
     val icon = homeConnectionFeatureIcon(indicator.feature)
+    val statusColor = homeConnectionFeatureStatusColor(indicator.status)
     Row(
         modifier =
             Modifier
                 .clip(RoundedCornerShape(999.dp))
                 .clickable(onClick = onClick)
-                .padding(horizontal = 4.dp, vertical = 2.dp)
+                .background(statusColor.copy(alpha = if (indicator.status == HomeConnectionFeatureStatus.OFF) 0.05f else 0.10f))
+                .padding(horizontal = 7.dp, vertical = 3.dp)
                 .testTag("home_connection_feature_indicator_${indicator.feature.name.lowercase(Locale.US)}"),
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        horizontalArrangement = Arrangement.spacedBy(5.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(
             imageVector = icon,
             contentDescription = null,
             modifier = Modifier.size(12.dp),
-            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.82f),
+            tint = statusColor,
         )
         Text(
-            text = "${stringResource(indicator.titleRes)}: ${indicator.status.label}",
+            text = stringResource(indicator.titleRes),
             style =
                 MaterialTheme.typography.labelSmall.copy(
                     fontSize = 10.sp,
@@ -663,6 +683,17 @@ private fun HomeConnectionFeatureIndicatorItem(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
+        )
+        Text(
+            text = indicator.status.label,
+            style =
+                MaterialTheme.typography.labelSmall.copy(
+                    fontSize = 10.sp,
+                    lineHeight = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                ),
+            color = statusColor,
+            maxLines = 1,
         )
     }
 }
@@ -681,8 +712,9 @@ internal fun HomeConnectionFeatureDialog(
     state: HomeRouteUiState,
     onDismiss: () -> Unit,
     onKillSwitchChanged: (Boolean) -> Unit,
-    onBlockedPackagesEnabledChanged: (Boolean) -> Unit,
+    onFirewallEnabledChanged: (Boolean) -> Unit,
     onPrivacyRouteModeSelected: (PrivacyRouteMode) -> Unit,
+    onLocalProxyLanAccessChanged: (Boolean) -> Unit,
     onRestart: () -> Unit,
 ) {
     val indicator = homeConnectionFeatureIndicator(feature, state) ?: return
@@ -700,6 +732,7 @@ internal fun HomeConnectionFeatureDialog(
             HomeConnectionFeature.KILL_SWITCH -> state.settings.expert.killSwitchEnabled
             HomeConnectionFeature.FIREWALL -> state.settings.expert.firewallEnabled
             HomeConnectionFeature.TOR -> state.settings.privacyRoute.enabled
+            HomeConnectionFeature.LAN_PROXY -> state.settings.expert.localSurfaces.allowLanAccess
         }
     val confirmLabel =
         if (restartAvailable) {
@@ -740,7 +773,7 @@ internal fun HomeConnectionFeatureDialog(
                     } else {
                         when (feature) {
                             HomeConnectionFeature.KILL_SWITCH -> onKillSwitchChanged(!enabled)
-                            HomeConnectionFeature.FIREWALL -> onBlockedPackagesEnabledChanged(!enabled)
+                            HomeConnectionFeature.FIREWALL -> onFirewallEnabledChanged(!enabled)
                             HomeConnectionFeature.TOR ->
                                 onPrivacyRouteModeSelected(
                                     if (enabled) {
@@ -749,6 +782,7 @@ internal fun HomeConnectionFeatureDialog(
                                         PrivacyRouteMode.TOR_OVER_VPN
                                     },
                                 )
+                            HomeConnectionFeature.LAN_PROXY -> onLocalProxyLanAccessChanged(!enabled)
                         }
                         if (!connectionActive) {
                             onDismiss()
@@ -770,6 +804,7 @@ private fun homeConnectionFeatureIcon(feature: HomeConnectionFeature): ImageVect
         HomeConnectionFeature.KILL_SWITCH -> Icons.Outlined.Shield
         HomeConnectionFeature.FIREWALL -> ImageVector.vectorResource(R.drawable.ic_firewall_shield_key)
         HomeConnectionFeature.TOR -> ImageVector.vectorResource(R.drawable.ic_tor_route)
+        HomeConnectionFeature.LAN_PROXY -> Icons.Outlined.Public
     }
 
 private fun homeConnectionFeatureSummaryRes(feature: HomeConnectionFeature): Int =
@@ -777,6 +812,7 @@ private fun homeConnectionFeatureSummaryRes(feature: HomeConnectionFeature): Int
         HomeConnectionFeature.KILL_SWITCH -> R.string.kill_switch_summary
         HomeConnectionFeature.FIREWALL -> R.string.security_firewall_summary
         HomeConnectionFeature.TOR -> R.string.privacy_route_summary
+        HomeConnectionFeature.LAN_PROXY -> R.string.proxy_lan_access_wifi_only_summary
     }
 
 @Composable

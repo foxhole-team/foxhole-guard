@@ -252,6 +252,9 @@ fun FoxholeApp(
                         onAutoConnect = viewModel::onAutoConnectActiveProfile,
                         onTrafficModeSelected = viewModel::onTrafficModeSelected,
                         onPerAppRoutingModeSelected = viewModel::onPerAppRoutingModeSelected,
+                        onKillSwitchChanged = viewModel::onKillSwitchChanged,
+                        onFirewallEnabledChanged = viewModel::onFirewallEnabledChanged,
+                        onPrivacyRouteModeSelected = viewModel::onPrivacyRouteModeSelected,
                         onSelectActiveProtocolOption = { optionId ->
                             state.activeProfile?.id?.let { profileId ->
                                 viewModel.onSelectProfileProtocolOption(profileId, optionId)

@@ -47,4 +47,30 @@ class TrafficMapRepositoryTest {
         assertEquals(1, aggregates["US"]?.connections)
         assertEquals(5L, aggregates["DE"]?.bytes)
     }
+
+    @Test
+    fun `accumulator keeps last map while waiting for fresh runtime sample`() {
+        val accumulator =
+            TrafficMapConnectionAccumulator()
+                .updatedForBatch(
+                    TrafficMapSampleBatch(
+                        samples = listOf(TrafficMapConnectionSample(connectionId = "old", countryCode = "US", bytes = 10L)),
+                        runtimeAvailable = true,
+                    ),
+                )
+                .updatedForBatch(TrafficMapSampleBatch(samples = emptyList(), runtimeAvailable = false))
+
+        assertEquals(10L, accumulator.countryAggregates()["US"]?.bytes)
+
+        val refreshed =
+            accumulator.updatedForBatch(
+                TrafficMapSampleBatch(
+                    samples = listOf(TrafficMapConnectionSample(connectionId = "fresh", countryCode = "DE", bytes = 5L)),
+                    runtimeAvailable = true,
+                ),
+            )
+
+        assertEquals(null, refreshed.countryAggregates()["US"])
+        assertEquals(5L, refreshed.countryAggregates()["DE"]?.bytes)
+    }
 }

@@ -208,6 +208,33 @@ class RuntimeConfigAssemblerTest {
     }
 
     @Test
+    fun `tor privacy route selected apps without packages leaves ordinary proxy route untouched`() {
+        val config =
+            parse(
+                assembler.assemble(
+                    baseConfigJson = baseConfigWithRules("profile.example"),
+                    settings =
+                        Settings(
+                            privacyRoute =
+                                com.foxhole.beta.core.model.PrivacyRouteSettings(
+                                    mode = PrivacyRouteMode.TOR_OVER_VPN,
+                                    scope = PrivacyRouteScope.SELECTED_APPS,
+                                    selectedPackages = emptyList(),
+                                ),
+                        ),
+                    activePreset = null,
+                    torRuntimePaths = TorRuntimePaths(executablePath = "/tor", dataDirectory = "/tor-data"),
+                    vpnProtocolHint = ProtocolHint.VLESS,
+                ),
+            )
+
+        val outboundTags = config["outbounds"]!!.jsonArray.map { it.jsonObject["tag"]!!.jsonPrimitive.content }
+
+        assertFalse(outboundTags.contains("tor-over-vpn"))
+        assertEquals("proxy", config["route"]!!.jsonObject["final"]!!.jsonPrimitive.content)
+    }
+
+    @Test
     fun `tor privacy route is ignored for udp vpn protocols`() {
         val config =
             parse(
@@ -394,13 +421,14 @@ class RuntimeConfigAssemblerTest {
         assertEquals("dns-direct", dns["final"]!!.jsonPrimitive.content)
         assertEquals("dns-direct", route["default_domain_resolver"]!!.jsonPrimitive.content)
         assertEquals("block", route["final"]!!.jsonPrimitive.content)
+        assertEquals(false, tunInbound["strict_route"]!!.jsonPrimitive.content.toBoolean())
         assertFalse(dnsServers.any { server -> server["tag"]!!.jsonPrimitive.content == "dns-remote" })
         assertFalse(dnsServers.any { server -> server["detour"]?.jsonPrimitive?.content == "proxy" })
         assertEquals("org.mozilla.firefox", tunInbound["include_package"]!!.jsonArray.single().jsonPrimitive.content)
     }
 
     @Test
-    fun `kill switch local firewall guard captures all app traffic`() {
+    fun `local firewall guard stays scoped when kill switch preference is enabled`() {
         val settings =
             Settings(
                 expert =
@@ -416,9 +444,41 @@ class RuntimeConfigAssemblerTest {
         val tunInbound = config["inbounds"]!!.jsonArray.single().jsonObject
         val route = config["route"]!!.jsonObject
 
-        assertFalse(tunInbound.containsKey("include_package"))
+        assertEquals("org.mozilla.firefox", tunInbound["include_package"]!!.jsonArray.single().jsonPrimitive.content)
         assertFalse(tunInbound.containsKey("exclude_package"))
+        assertEquals(false, tunInbound["strict_route"]!!.jsonPrimitive.content.toBoolean())
         assertEquals("block", route["final"]!!.jsonPrimitive.content)
+    }
+
+    @Test
+    fun `kill switch preference does not create a local guard mode`() {
+        assertEquals(
+            null,
+            Settings(expert = ExpertSettings(killSwitchEnabled = true)).localGuardModeOrNull(),
+        )
+        assertEquals(
+            LocalGuardMode.JOURNAL,
+            Settings(
+                expert =
+                    ExpertSettings(
+                        killSwitchEnabled = true,
+                        firewallEnabled = true,
+                    ),
+            ).localGuardModeOrNull(),
+        )
+        assertEquals(
+            LocalGuardMode.FIREWALL,
+            Settings(
+                expert =
+                    ExpertSettings(
+                        killSwitchEnabled = true,
+                        firewallEnabled = true,
+                        blockedPackagesEnabled = true,
+                        blockedPackages = listOf("org.mozilla.firefox"),
+                        blockAppsAlways = true,
+                    ),
+            ).localGuardModeOrNull(),
+        )
     }
 
     @Test
@@ -445,6 +505,7 @@ class RuntimeConfigAssemblerTest {
         assertEquals("dns-direct", dns["final"]!!.jsonPrimitive.content)
         assertEquals("dns-direct", route["default_domain_resolver"]!!.jsonPrimitive.content)
         assertEquals("direct", route["final"]!!.jsonPrimitive.content)
+        assertEquals(false, tunInbound["strict_route"]!!.jsonPrimitive.content.toBoolean())
         assertFalse(dnsServers.any { server -> server["tag"]!!.jsonPrimitive.content == "dns-remote" })
         assertFalse(dnsServers.any { server -> server["detour"]?.jsonPrimitive?.content == "proxy" })
         assertFalse(tunInbound.containsKey("include_package"))

@@ -79,8 +79,10 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.runningFold
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -379,27 +381,26 @@ class HomeViewModel(
                 )
         }
 
-    private val trafficMapOriginIpInfo =
+    private val initialTrafficMapOriginIpInfo =
+        trafficMapOriginIpInfoCandidate(
+            connection = container.connectionController.snapshot.value,
+            ipInfo = container.connectionController.ipInfo.value,
+        )
+
+    private val trafficMapOriginIpInfo: StateFlow<IpInfo?> =
         combine(
             container.connectionController.snapshot,
             container.connectionController.ipInfo,
         ) { connection, ipInfo ->
-            val remoteTunnelActive =
-                connection.state in ACTIVE_CONNECTION_STATES &&
-                    connection.trafficMode == TrafficMode.TUNNEL &&
-                    connection.profileId != FoxholeVpnService.LOCAL_GUARD_PROFILE_ID
-            val staleAfterRuntimeChange =
-                ipInfo != null &&
-                    connection.state !in ACTIVE_CONNECTION_STATES &&
-                    ipInfo.fetchedAt < connection.lastChangeAt
-            if (remoteTunnelActive) {
-                null
-            } else if (staleAfterRuntimeChange) {
-                null
-            } else {
-                ipInfo
-            }
+            trafficMapOriginIpInfoCandidate(connection = connection, ipInfo = ipInfo)
         }
+            .runningFold(initialTrafficMapOriginIpInfo) { previous: IpInfo?, next: IpInfo? -> next ?: previous }
+            .distinctUntilChanged()
+            .stateIn(
+                viewModelScope,
+                SharingStarted.Eagerly,
+                initialTrafficMapOriginIpInfo,
+            )
 
     val trafficMapUiState =
         container.trafficMapRepository.trafficMapState(
@@ -407,6 +408,24 @@ class HomeViewModel(
             originIpInfo = trafficMapOriginIpInfo,
             runtimeAvailable = trafficMapRuntimeAvailable,
         )
+
+    private fun trafficMapOriginIpInfoCandidate(
+        connection: ConnectionSnapshot,
+        ipInfo: IpInfo?,
+    ): IpInfo? {
+        val remoteRuntimeActive =
+            connection.state in ACTIVE_CONNECTION_STATES &&
+                connection.profileId != FoxholeVpnService.LOCAL_GUARD_PROFILE_ID
+        val staleAfterRuntimeChange =
+            ipInfo != null &&
+                connection.state !in ACTIVE_CONNECTION_STATES &&
+                ipInfo.fetchedAt < connection.lastChangeAt
+        return if (remoteRuntimeActive || staleAfterRuntimeChange) {
+            null
+        } else {
+            ipInfo
+        }
+    }
 
     val profilesRouteState: StateFlow<ProfilesRouteUiState> =
         combine(

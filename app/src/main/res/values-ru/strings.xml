@@ -168,7 +168,8 @@
     <string name="network_activity_logging_enabled">Лог сетевой активности приложений включен.</string>
     <string name="network_activity_logging_disabled">Лог сетевой активности приложений выключен.</string>
     <string name="kill_switch_title">Kill switch</string>
-    <string name="kill_switch_summary">Блокирует трафик устройства через локальный VPN Foxhole, пока Tunnel выключен. Android Always-on и lockdown остаются в системных настройках VPN.</string>
+    <string name="kill_switch_summary">Использует только системные настройки VPN Android: Always-on VPN и Блокировать подключения без VPN. FoxHole не запускает локальный guard для этого переключателя.</string>
+    <string name="vpn_settings_unavailable">Системный экран VPN Android недоступен на этом устройстве.</string>
     <string name="network_activity_persistent_logging_title">Записывать постоянно</string>
     <string name="network_activity_persistent_logging_summary">Если включено, Foxhole поднимает локальный journal-only VPN, когда обычный Tunnel не подключен. Он ведет журнал сетевой активности и работает вместе с блокировкой интернета приложениям. Журнал хранится на устройстве в зашифрованном виде и пишется только пока активен VPN runtime.</string>
     <string name="network_activity_persistent_logging_warning_title">Записывать постоянно?</string>

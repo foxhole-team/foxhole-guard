@@ -109,6 +109,7 @@ import com.foxhole.beta.core.model.ConnectionState
 import com.foxhole.beta.core.model.IpInfo
 import com.foxhole.beta.core.model.LocalSurfaceSettings
 import com.foxhole.beta.core.model.PerAppRoutingMode
+import com.foxhole.beta.core.model.PrivacyRouteMode
 import com.foxhole.beta.core.model.PrivacyRouteScope
 import com.foxhole.beta.core.model.Profile
 import com.foxhole.beta.core.model.ProfileProtocolOption
@@ -139,6 +140,9 @@ fun HomeScreen(
     onAutoConnect: () -> Unit,
     onTrafficModeSelected: (TrafficMode) -> Unit,
     onPerAppRoutingModeSelected: (PerAppRoutingMode) -> Unit,
+    onKillSwitchChanged: (Boolean) -> Unit,
+    onFirewallEnabledChanged: (Boolean) -> Unit,
+    onPrivacyRouteModeSelected: (PrivacyRouteMode) -> Unit,
     onSelectActiveProtocolOption: (String) -> Unit,
     onUpdateAutoConnectExcludedOptions: (Set<String>) -> Unit,
     onRefreshSmartProfileMetrics: (Long) -> Unit,
@@ -157,7 +161,7 @@ fun HomeScreen(
     var acceptedSmartStartFirstAnalysisProfileId by rememberSaveable { mutableStateOf<Long?>(null) }
     var firstAnalysisProtocolMenuProfileId by rememberSaveable { mutableStateOf<Long?>(null) }
     var firstAnalysisProtocolMenuStarted by rememberSaveable { mutableStateOf(false) }
-    var lanProxyDisableConfirmationVisible by rememberSaveable { mutableStateOf(false) }
+    var selectedConnectionFeature by rememberSaveable { mutableStateOf<HomeConnectionFeature?>(null) }
     val wifiLanAddress by rememberWifiLanAddress()
     val proxyModel =
         remember(state, wifiLanAddress) {
@@ -167,8 +171,7 @@ fun HomeScreen(
             )
         }
     val modeOption = proxyModel.modeOption
-    val lanProxySurface = proxyModel.lanProxySurface
-    val lanProxyActive = proxyModel.lanProxyActive
+    val connectionFeatureIndicators = remember(state) { homeConnectionFeatureIndicators(state) }
     val homeModeOptions =
         remember(
             state.settings.traffic.mode,
@@ -447,10 +450,7 @@ fun HomeScreen(
                                             )
                                         }
                                     }
-                                    Column(
-                                        horizontalAlignment = Alignment.End,
-                                        verticalArrangement = Arrangement.spacedBy(6.dp),
-                                    ) {
+                                    Column(horizontalAlignment = Alignment.End) {
                                         HomeModeDropdown(
                                             selected = modeOption,
                                             values = homeModeOptions,
@@ -464,15 +464,17 @@ fun HomeScreen(
                                                 )
                                             },
                                         )
-                                        if (lanProxyActive) {
-                                            HomeLanProxyChip(
-                                                onClick = { lanProxyDisableConfirmationVisible = true },
-                                            )
-                                        }
                                     }
                                 }
                             }
                         }
+                        HomeConnectionFeatureIndicators(
+                            indicators = connectionFeatureIndicators,
+                            onIndicatorClick = { feature -> selectedConnectionFeature = feature },
+                            modifier =
+                                Modifier
+                                    .padding(start = 8.dp, end = 8.dp, bottom = 8.dp),
+                        )
                     }
                 }
             }
@@ -1070,18 +1072,16 @@ fun HomeScreen(
         )
     }
 
-    if (lanProxyDisableConfirmationVisible) {
-        ConfirmDialog(
-            title = stringResource(R.string.lan_proxy_disable_confirm_title),
-            body = stringResource(R.string.lan_proxy_disable_confirm_body),
-            confirmLabel = stringResource(R.string.disable_label),
-            icon = Icons.Outlined.Public,
-            dismissLabel = stringResource(R.string.cancel),
-            onDismiss = { lanProxyDisableConfirmationVisible = false },
-            onConfirm = {
-                lanProxyDisableConfirmationVisible = false
-                onLocalProxyLanAccessChanged(false)
-            },
+    selectedConnectionFeature?.let { feature ->
+        HomeConnectionFeatureDialog(
+            feature = feature,
+            state = state,
+            onDismiss = { selectedConnectionFeature = null },
+            onKillSwitchChanged = onKillSwitchChanged,
+            onFirewallEnabledChanged = onFirewallEnabledChanged,
+            onPrivacyRouteModeSelected = onPrivacyRouteModeSelected,
+            onLocalProxyLanAccessChanged = onLocalProxyLanAccessChanged,
+            onRestart = onToggleConnection,
         )
     }
 }

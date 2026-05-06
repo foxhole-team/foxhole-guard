@@ -13,7 +13,7 @@ internal fun Settings.localGuardModeOrNull(): LocalGuardMode? {
             expert.blockAppsAlways &&
             expert.blockedPackagesEnabled &&
             expert.blockedPackages.isNotEmpty()
-    val firewallEnabled = expert.killSwitchEnabled || permanentAppBlockingEnabled
+    val firewallEnabled = permanentAppBlockingEnabled
     val journalEnabled = expert.firewallEnabled
     return when {
         firewallEnabled -> LocalGuardMode.FIREWALL

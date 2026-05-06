@@ -1,6 +1,8 @@
 package com.foxhole.beta.ui
 
 import android.app.Application
+import android.content.Intent
+import android.provider.Settings as AndroidSettings
 import androidx.lifecycle.viewModelScope
 import com.foxhole.beta.R
 import com.foxhole.beta.applyAppLocale
@@ -226,6 +228,7 @@ internal fun HomeViewModel.onKillSwitchChangedInternal(value: Boolean) {
     viewModelScope.launch {
         container.settingsRepository.updateKillSwitchEnabled(value)
         container.connectionController.syncLocalGuard()
+        openSystemVpnSettings()
     }
 }
 
@@ -330,7 +333,13 @@ internal fun HomeViewModel.onPrivacyRouteModeSelectedInternal(value: PrivacyRout
     updateRuntimeSettingAndMaybeReload {
         container.settingsRepository.updatePrivacyRouteMode(value)
         if (value == PrivacyRouteMode.TOR_OVER_VPN) {
-            container.settingsRepository.updateKillSwitchEnabled(true)
+            val settings = container.settingsRepository.settings.value
+            if (
+                settings.privacyRoute.scope == PrivacyRouteScope.SELECTED_APPS &&
+                settings.privacyRoute.selectedPackages.isEmpty()
+            ) {
+                container.settingsRepository.updatePrivacyRouteScope(PrivacyRouteScope.ALL_APPS)
+            }
         }
     }
 }
@@ -338,9 +347,6 @@ internal fun HomeViewModel.onPrivacyRouteModeSelectedInternal(value: PrivacyRout
 internal fun HomeViewModel.onPrivacyRouteScopeSelectedInternal(value: PrivacyRouteScope) {
     updateRuntimeSettingAndMaybeReload {
         container.settingsRepository.updatePrivacyRouteScope(value)
-        if (value == PrivacyRouteScope.ALL_APPS) {
-            container.settingsRepository.updateKillSwitchEnabled(true)
-        }
     }
 }
 
@@ -513,6 +519,18 @@ internal fun HomeViewModel.resetApplicationSettingsToDefaultsInternal() {
 internal fun HomeViewModel.resetUsageTrackingInternal() {
     viewModelScope.launch {
         container.settingsRepository.resetUsageTracking()
+    }
+}
+
+private suspend fun HomeViewModel.openSystemVpnSettings() {
+    val app = getApplication<Application>()
+    val vpnSettingsIntent =
+        Intent(AndroidSettings.ACTION_VPN_SETTINGS)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    runCatching {
+        app.startActivity(vpnSettingsIntent)
+    }.onFailure {
+        emitError(app.getString(R.string.vpn_settings_unavailable))
     }
 }
 
