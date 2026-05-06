@@ -8,16 +8,13 @@ internal enum class LocalGuardMode {
 }
 
 internal fun Settings.localGuardModeOrNull(): LocalGuardMode? {
-    val firewallEnabled =
-        expert.killSwitchEnabled ||
-            (
-                expert.blockAppsAlways &&
-                    expert.blockedPackagesEnabled &&
-                    expert.blockedPackages.isNotEmpty()
-            )
-    val journalEnabled =
-        expert.networkActivityLogging &&
-            expert.networkActivityPersistentLogging
+    val permanentAppBlockingEnabled =
+        expert.firewallEnabled &&
+            expert.blockAppsAlways &&
+            expert.blockedPackagesEnabled &&
+            expert.blockedPackages.isNotEmpty()
+    val firewallEnabled = expert.killSwitchEnabled || permanentAppBlockingEnabled
+    val journalEnabled = expert.firewallEnabled
     return when {
         firewallEnabled -> LocalGuardMode.FIREWALL
         journalEnabled -> LocalGuardMode.JOURNAL

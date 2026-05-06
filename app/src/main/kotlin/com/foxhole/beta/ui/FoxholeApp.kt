@@ -91,6 +91,7 @@ private object AppRoute {
     const val PROFILE_EDIT_CONFIG = "profiles/{$PROFILE_ID}/edit-config"
     const val SETTINGS = "settings"
     const val TRAFFIC = "settings/traffic"
+    const val SECURITY = "settings/security"
     const val PRIVACY_ROUTE = "settings/privacy-route"
     const val ROUTING_APPS = "settings/routing/apps"
     const val ROUTING_APPS_PICKER = "settings/routing/apps/picker"
@@ -229,8 +230,10 @@ fun FoxholeApp(
             ) {
                 composable(AppRoute.HOME) {
                     val state by viewModel.homeRouteState.collectAsStateWithLifecycle()
+                    val trafficMapState by viewModel.trafficMapUiState.collectAsStateWithLifecycle()
                     HomeScreen(
                         state = state,
+                        trafficMapState = trafficMapState,
                         snackbarHostState = snackbarHostState,
                         onImportFromClipboard = viewModel::onPasteFromClipboard,
                         onImportFromFile = {
@@ -249,9 +252,6 @@ fun FoxholeApp(
                         onAutoConnect = viewModel::onAutoConnectActiveProfile,
                         onTrafficModeSelected = viewModel::onTrafficModeSelected,
                         onPerAppRoutingModeSelected = viewModel::onPerAppRoutingModeSelected,
-                        onKillSwitchChanged = viewModel::onKillSwitchChanged,
-                        onBlockedPackagesEnabledChanged = viewModel::onBlockedPackagesEnabledChanged,
-                        onPrivacyRouteModeSelected = viewModel::onPrivacyRouteModeSelected,
                         onSelectActiveProtocolOption = { optionId ->
                             state.activeProfile?.id?.let { profileId ->
                                 viewModel.onSelectProfileProtocolOption(profileId, optionId)
@@ -383,6 +383,7 @@ fun FoxholeApp(
                         snackbarHostState = snackbarHostState,
                         onNavigateUp = null,
                         onOpenTraffic = { navController.navigate(AppRoute.TRAFFIC) },
+                        onOpenSecurity = { navController.navigate(AppRoute.SECURITY) },
                         onOpenPrivacyRoute = { navController.navigate(AppRoute.PRIVACY_ROUTE) },
                         onOpenRoutingApps = { navController.navigate(AppRoute.ROUTING_APPS) },
                         onOpenRoutingSites = { navController.navigate(AppRoute.ROUTING_SITES) },
@@ -443,6 +444,15 @@ fun FoxholeApp(
                         onIpInfoEndpointChanged = viewModel::onIpInfoEndpointChanged,
                     )
                 }
+                composable(AppRoute.SECURITY) {
+                    val state by viewModel.settingsRouteState.collectAsStateWithLifecycle()
+                    SecuritySettingsScreen(
+                        state = state,
+                        snackbarHostState = snackbarHostState,
+                        onNavigateUp = navController::navigateUp,
+                        onFirewallEnabledChanged = viewModel::onFirewallEnabledChanged,
+                    )
+                }
                 composable(AppRoute.PRIVACY_ROUTE) {
                     LaunchedEffect(Unit) {
                         viewModel.ensureInstalledAppsLoaded()
@@ -473,6 +483,7 @@ fun FoxholeApp(
                         onSelectedPackagesChanged = viewModel::onSelectedPackagesChanged,
                         onBlockedPackagesChanged = viewModel::onBlockedPackagesChanged,
                         onBlockAppsAlwaysChanged = viewModel::onBlockAppsAlwaysChanged,
+                        onFirewallEnabledChanged = viewModel::onFirewallEnabledChanged,
                     )
                 }
                 composable(AppRoute.ROUTING_APPS_PICKER) {
@@ -545,6 +556,7 @@ fun FoxholeApp(
                         onAutoReconnectChanged = viewModel::onAutoReconnectChanged,
                         onAutoStartChanged = viewModel::onAutoStartChanged,
                         onBlockScreenshotsChanged = viewModel::onBlockScreenshotsChanged,
+                        onTrafficMapEnabledChanged = viewModel::onTrafficMapEnabledChanged,
                     )
                 }
                 composable(AppRoute.EXPERT) {
@@ -572,8 +584,8 @@ fun FoxholeApp(
                         onNavigateUp = navController::navigateUp,
                         onNetworkActivityLoggingChanged = viewModel::onNetworkActivityLoggingChanged,
                         onNetworkActivityPersistentLoggingChanged = viewModel::onNetworkActivityPersistentLoggingChanged,
+                        onFirewallEnabledChanged = viewModel::onFirewallEnabledChanged,
                         onDiagnosticsRetentionSelected = viewModel::onDiagnosticsRetentionSelected,
-                        onClearUsage = viewModel::resetUsageTracking,
                     )
                 }
                 composable(AppRoute.STATISTICS) {

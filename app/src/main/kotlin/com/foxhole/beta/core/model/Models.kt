@@ -192,6 +192,7 @@ data class UiSettings(
     val onboardingCompleted: Boolean = true,
     val showExpertSettings: Boolean = false,
     val supportBotHandleOverride: String? = null,
+    val trafficMapEnabled: Boolean = true,
 )
 
 @Serializable
@@ -290,6 +291,7 @@ data class ExpertSettings(
     val warningAcknowledgedAt: Long? = null,
     val blockScreenshots: Boolean = false,
     val killSwitchEnabled: Boolean = false,
+    val firewallEnabled: Boolean = false,
     val networkActivityLogging: Boolean = false,
     val networkActivityPersistentLogging: Boolean = false,
     val diagnosticsRetention: DiagnosticsRetention = DiagnosticsRetention.HOURS_24,

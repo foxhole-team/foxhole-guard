@@ -10,6 +10,8 @@ import com.foxhole.beta.core.importer.ProfileImportParser
 import com.foxhole.beta.core.network.IpInfoRepository
 import com.foxhole.beta.core.network.NetworkFingerprintProvider
 import com.foxhole.beta.core.settings.SettingsRepository
+import com.foxhole.beta.core.traffic.LibboxTrafficMapConnectionSource
+import com.foxhole.beta.core.traffic.TrafficMapRepository
 import com.foxhole.beta.vpn.AndroidLanProxyAddressProvider
 import com.foxhole.beta.vpn.FoxholeConnectionController
 import com.foxhole.beta.vpn.RuntimeConfigAssembler
@@ -36,6 +38,10 @@ internal class FoxholeCoreGraphModule(
     }
 
     val settingsRepository: SettingsRepository by lazy { SettingsRepository(appContext) }
+
+    val trafficMapRepository: TrafficMapRepository by lazy {
+        TrafficMapRepository(LibboxTrafficMapConnectionSource(appContext))
+    }
 
     val diagnosticsLogger: DiagnosticsLogger by lazy {
         DiagnosticsLogger(

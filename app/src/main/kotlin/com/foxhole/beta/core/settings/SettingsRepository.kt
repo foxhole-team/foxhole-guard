@@ -576,6 +576,9 @@ class SettingsRepository(
     suspend fun updateBlockScreenshots(value: Boolean) =
         update { it.copy(expert = it.expert.copy(blockScreenshots = value)) }
 
+    suspend fun updateTrafficMapEnabled(value: Boolean) =
+        update { it.copy(ui = it.ui.copy(trafficMapEnabled = value)) }
+
     suspend fun updateKillSwitchEnabled(value: Boolean) =
         update {
             it.copy(
@@ -583,6 +586,9 @@ class SettingsRepository(
                 expert = it.expert.copy(killSwitchEnabled = value),
             )
         }
+
+    suspend fun updateFirewallEnabled(value: Boolean) =
+        update { it.copy(expert = it.expert.copy(firewallEnabled = value)) }
 
     suspend fun updateNetworkActivityLogging(value: Boolean) =
         update { it.copy(expert = it.expert.copy(networkActivityLogging = value)) }
@@ -1147,6 +1153,7 @@ class SettingsRepository(
                 blockAppsAlways = blockAppsAlways && blockedPackagesEnabled && normalizedBlockedPackages.isNotEmpty(),
                 siteRoutingAction = siteRoutingAction.coerceSiteRoutingAction(),
                 blockScreenshots = if (resetScreenshotBlocking) false else blockScreenshots,
+                firewallEnabled = firewallEnabled,
                 smartStartReplayLogging = smartStartReplayLogging && BuildConfig.DEBUG,
                 localSurfaces = localSurfaces.normalized().migratedProxySurfaceModesIfNeeded(storedSchemaVersion),
                 routeOnly = routeOnly && sniff,
@@ -1159,6 +1166,7 @@ class SettingsRepository(
                 warningAcknowledgedAt = normalized.warningAcknowledgedAt,
                 blockScreenshots = normalized.blockScreenshots,
                 killSwitchEnabled = normalized.killSwitchEnabled,
+                firewallEnabled = normalized.firewallEnabled,
                 networkActivityLogging = normalized.networkActivityLogging,
                 networkActivityPersistentLogging = normalized.networkActivityPersistentLogging,
                 diagnosticsRetention = normalized.diagnosticsRetention,

@@ -91,7 +91,9 @@ class RuntimeConfigAssembler(
                 val rules =
                     buildJsonArray {
                         if (mode == LocalGuardMode.JOURNAL) {
-                            buildAppRouteRules(settings.expert).forEach(::add)
+                            if (settings.expert.blockAppsAlways) {
+                                buildAppRouteRules(settings.expert).forEach(::add)
+                            }
                             hijackDnsRules().forEach(::add)
                         }
                     }
@@ -331,6 +333,7 @@ class RuntimeConfigAssembler(
             warningAcknowledgedAt = null,
             blockScreenshots = false,
             killSwitchEnabled = false,
+            firewallEnabled = false,
             networkActivityLogging = false,
             networkActivityPersistentLogging = false,
             diagnosticsRetention = DiagnosticsRetention.HOURS_24,
@@ -423,7 +426,7 @@ class RuntimeConfigAssembler(
                 add(JsonPrimitive("172.19.0.1/30"))
                 add(JsonPrimitive("fdfe:dcba:9876::1/126"))
             }
-            if (mode == LocalGuardMode.FIREWALL && !settings.expert.killSwitchEnabled) {
+            if (mode == LocalGuardMode.FIREWALL && !settings.expert.killSwitchEnabled && settings.expert.blockAppsAlways) {
                 val packages = normalizedRuntimePackages(settings.expert.blockedPackages)
                 if (packages.isNotEmpty()) {
                     putJsonArray("include_package") {

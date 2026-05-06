@@ -7,7 +7,6 @@ import androidx.activity.compose.ManagedActivityResultLauncher
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.Rule
 import androidx.compose.material.icons.outlined.FileUpload
 import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material3.SnackbarHostState
@@ -18,21 +17,23 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.vectorResource
 import androidx.core.content.FileProvider
 import com.foxhole.beta.R
 import com.foxhole.beta.core.diagnostics.DiagnosticEntry
 import com.foxhole.beta.core.model.DiagnosticsRetention
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.UUID
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 @Composable
 fun DiagnosticsScreen(
@@ -41,8 +42,8 @@ fun DiagnosticsScreen(
     onNavigateUp: () -> Unit,
     onNetworkActivityLoggingChanged: (Boolean) -> Unit,
     onNetworkActivityPersistentLoggingChanged: (Boolean) -> Unit,
+    onFirewallEnabledChanged: (Boolean) -> Unit,
     onDiagnosticsRetentionSelected: (DiagnosticsRetention) -> Unit,
-    onClearUsage: () -> Unit,
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
@@ -64,8 +65,14 @@ fun DiagnosticsScreen(
             clearPendingLog = { pendingSavedLog = null },
             strings = saveStrings,
         )
-    val networkEntries = remember(state.diagnosticEntries) { state.diagnosticEntries.filter { it.tag == NETWORK_ACTIVITY_TAG } }
-    val foxholeEntries = remember(state.diagnosticEntries) { state.diagnosticEntries.filterNot { it.tag == NETWORK_ACTIVITY_TAG } }
+    val networkEntries =
+        remember(state.diagnosticEntries) {
+            state.diagnosticEntries.filter { it.tag == NETWORK_ACTIVITY_TAG }
+        }
+    val foxholeEntries =
+        remember(state.diagnosticEntries) {
+            state.diagnosticEntries.filterNot { it.tag == NETWORK_ACTIVITY_TAG }
+        }
 
     DiagnosticsScreenContent(
         state = state,
@@ -75,10 +82,10 @@ fun DiagnosticsScreen(
         onNavigateUp = onNavigateUp,
         onNetworkActivityLoggingChanged = onNetworkActivityLoggingChanged,
         onNetworkActivityPersistentLoggingChanged = onNetworkActivityPersistentLoggingChanged,
+        onFirewallEnabledChanged = onFirewallEnabledChanged,
         onDiagnosticsRetentionSelected = onDiagnosticsRetentionSelected,
         onOpenNetworkLog = { networkLogVisible = true },
         onOpenFoxholeLog = { foxholeLogVisible = true },
-        onClearUsage = onClearUsage,
     )
 
     if (networkLogVisible) {
@@ -141,10 +148,10 @@ private fun DiagnosticsScreenContent(
     onNavigateUp: () -> Unit,
     onNetworkActivityLoggingChanged: (Boolean) -> Unit,
     onNetworkActivityPersistentLoggingChanged: (Boolean) -> Unit,
+    onFirewallEnabledChanged: (Boolean) -> Unit,
     onDiagnosticsRetentionSelected: (DiagnosticsRetention) -> Unit,
     onOpenNetworkLog: () -> Unit,
     onOpenFoxholeLog: () -> Unit,
-    onClearUsage: () -> Unit,
 ) {
     var persistentLoggingWarningVisible by rememberSaveable { mutableStateOf(false) }
     SettingsScaffold(
@@ -180,14 +187,14 @@ private fun DiagnosticsScreenContent(
                     SettingsControlGroupDivider()
                     SettingSwitchRow(
                         title = stringResource(R.string.network_activity_persistent_logging_title),
-                        checked = state.settings.expert.networkActivityPersistentLogging,
+                        checked = state.settings.expert.firewallEnabled && state.settings.expert.networkActivityPersistentLogging,
                         summary = stringResource(R.string.network_activity_persistent_logging_summary),
                         leadingIcon = Icons.Outlined.Public,
                         onCheckedChange = { enabled ->
-                            if (enabled) {
+                            if (enabled && !state.settings.expert.firewallEnabled) {
                                 persistentLoggingWarningVisible = true
                             } else {
-                                onNetworkActivityPersistentLoggingChanged(false)
+                                onNetworkActivityPersistentLoggingChanged(enabled)
                             }
                         },
                         grouped = true,
@@ -215,11 +222,13 @@ private fun DiagnosticsScreenContent(
         ConfirmDialog(
             title = stringResource(R.string.network_activity_persistent_logging_warning_title),
             body = stringResource(R.string.network_activity_persistent_logging_warning_body),
-            confirmLabel = stringResource(R.string.i_understand),
-            icon = Icons.AutoMirrored.Outlined.Rule,
+            confirmLabel = stringResource(R.string.security_firewall_enable_action),
+            dismissLabel = stringResource(R.string.close),
+            icon = ImageVector.vectorResource(R.drawable.ic_firewall_shield_key),
             onDismiss = { persistentLoggingWarningVisible = false },
             onConfirm = {
                 persistentLoggingWarningVisible = false
+                onFirewallEnabledChanged(true)
                 onNetworkActivityPersistentLoggingChanged(true)
             },
         )

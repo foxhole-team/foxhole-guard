@@ -11,6 +11,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.service.quicksettings.TileService
+import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
@@ -50,8 +51,8 @@ internal fun notificationActionForState(state: ConnectionState): ConnectionNotif
         )
     }
 
-internal fun Service.detachForegroundNotification() {
-    stopForeground(Service.STOP_FOREGROUND_DETACH)
+internal fun Service.removeForegroundNotification() {
+    stopForeground(Service.STOP_FOREGROUND_REMOVE)
 }
 
 internal fun Service.ensureConnectionNotificationChannel(notificationManager: NotificationManager) {
@@ -80,6 +81,8 @@ internal fun Service.buildConnectionNotification(
     collapsedText: (NotificationSnapshot) -> String,
     expandedText: (NotificationSnapshot) -> String?,
     stateLabel: (NotificationSnapshot) -> String,
+    @DrawableRes smallIconRes: Int = R.drawable.notification_icon,
+    showAction: Boolean = false,
 ): Notification {
     val openIntent =
         PendingIntent.getActivity(
@@ -89,16 +92,9 @@ internal fun Service.buildConnectionNotification(
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
     val action = notificationActionForState(snapshot.state)
-    val actionIntent =
-        PendingIntent.getService(
-            this,
-            action.requestCode,
-            FoxholeConnectionServiceContract.serviceIntent(this, mode, action.serviceAction),
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-        )
     val builder =
         NotificationCompat.Builder(this, FoxholeConnectionServiceContract.NOTIFICATION_CHANNEL_ID)
-            .setSmallIcon(R.drawable.notification_icon)
+            .setSmallIcon(smallIconRes)
             .setVisibility(NotificationCompat.VISIBILITY_SECRET)
             .setSilent(true)
             .setOnlyAlertOnce(true)
@@ -108,7 +104,16 @@ internal fun Service.buildConnectionNotification(
             .setContentTitle(stateLabel(snapshot))
             .setOngoing(action.ongoing)
             .setContentIntent(openIntent)
-            .addAction(0, getString(action.labelRes), actionIntent)
+    if (showAction) {
+        val actionIntent =
+            PendingIntent.getService(
+                this,
+                action.requestCode,
+                FoxholeConnectionServiceContract.serviceIntent(this, mode, action.serviceAction),
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            )
+        builder.addAction(0, getString(action.labelRes), actionIntent)
+    }
     collapsedText(snapshot).takeIf { it.isNotBlank() }?.let(builder::setContentText)
     expandedText(snapshot)?.let { expanded ->
         builder.setStyle(NotificationCompat.BigTextStyle().bigText(expanded))
@@ -133,6 +138,8 @@ internal fun Service.buildConnectionNotification(
                 collapsedText = collapsedText,
                 expandedText = expandedText,
                 stateLabel = stateLabel,
+                smallIconRes = smallIconRes,
+                showAction = showAction,
             ),
         )
     }

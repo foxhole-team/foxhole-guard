@@ -23,9 +23,11 @@ import com.foxhole.beta.core.model.ConnectionState
 import com.foxhole.beta.core.model.ConnectivityHealthState
 import com.foxhole.beta.core.model.IpInfo
 import com.foxhole.beta.core.model.NotificationSnapshot
+import com.foxhole.beta.core.model.PrivacyRouteMode
 import com.foxhole.beta.core.model.TrafficMode
 import com.foxhole.beta.core.model.TrafficSnapshot
 import com.foxhole.beta.core.model.VpnSession
+import com.foxhole.beta.core.model.isUdpTransport
 import com.foxhole.beta.core.network.mergeIpInfo
 import com.foxhole.beta.core.settings.AppTrafficStatsRecorder
 import kotlinx.coroutines.CoroutineScope
@@ -71,7 +73,9 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         )
     }
     internal val trafficSampler = TrafficStatsSampler()
-    internal val appTrafficStatsRecorder by lazy { AppTrafficStatsRecorder(applicationContext, container.settingsRepository) }
+    internal val appTrafficStatsRecorder by lazy {
+        AppTrafficStatsRecorder(applicationContext, container.settingsRepository)
+    }
     internal var activeSession: VpnSession? = null
     internal var activeLocalGuardMode: LocalGuardMode? = null
     internal var trafficJob: Job? = null
@@ -414,7 +418,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         if (localGuardMode != null && session == null) {
             container.diagnosticsLogger.record("connection", "local guard stopped mode=${localGuardMode.name.lowercase()}")
         }
-        detachForegroundNotification()
+        removeForegroundNotification()
         stopService(commandStartId)
     }
 
@@ -542,6 +546,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
             collapsedText = ::notificationCollapsedText,
             expandedText = ::notificationExpandedText,
             stateLabel = ::notificationStateLabel,
+            smallIconRes = notificationSmallIconRes(snapshot),
         )
 
     internal fun updateNotification() {
@@ -912,6 +917,21 @@ private fun LocalGuardMode.notificationProfileName(): String =
         LocalGuardMode.FIREWALL -> "Local firewall"
         LocalGuardMode.JOURNAL -> "Network journal"
     }
+
+private fun FoxholeVpnService.notificationSmallIconRes(snapshot: NotificationSnapshot): Int =
+    when {
+        activeLocalGuardMode != null -> R.drawable.ic_notification_firewall
+        snapshot.state in setOf(ConnectionState.CONNECTING, ConnectionState.CONNECTED, ConnectionState.RECONNECTING) &&
+            notificationTorRouteActive() -> R.drawable.ic_notification_tor
+        else -> R.drawable.ic_notification_vpn
+    }
+
+private fun FoxholeVpnService.notificationTorRouteActive(): Boolean {
+    val settings = container.settingsRepository.settings.value
+    return settings.privacyRoute.mode == PrivacyRouteMode.TOR_OVER_VPN &&
+        settings.traffic.mode == TrafficMode.TUNNEL &&
+        activeSession?.protocolHint?.isUdpTransport() != true
+}
 
 internal interface VpnCoreRuntime {
     suspend fun start(session: VpnSession, host: RuntimeServiceHost): Result<Unit>

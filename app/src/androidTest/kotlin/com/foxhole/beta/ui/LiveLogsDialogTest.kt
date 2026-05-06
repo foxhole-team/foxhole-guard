@@ -2,10 +2,10 @@ package com.foxhole.beta.ui
 
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import com.foxhole.beta.core.diagnostics.DiagnosticEntry
 import com.foxhole.beta.core.model.ThemeMode
@@ -61,7 +61,7 @@ class LiveLogsDialogTest {
             }
         }
 
-        composeRule.onNodeWithTag(LIVE_LOGS_DIALOG_TAG).assertTextContains("Network activity journal", substring = true)
+        composeRule.onNodeWithText("Network activity journal").assertIsDisplayed()
         composeRule.onNodeWithTag(LIVE_LOGS_NETWORK_NOTICE_TAG).assertIsDisplayed()
         composeRule.onNodeWithTag(LIVE_LOGS_LIST_TAG).assertIsDisplayed()
         composeRule.onAllNodesWithTag(LIVE_LOGS_EMPTY_STATE_TAG).assertCountEquals(0)

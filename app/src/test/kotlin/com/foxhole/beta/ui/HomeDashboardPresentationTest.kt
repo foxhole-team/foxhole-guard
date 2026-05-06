@@ -293,6 +293,7 @@ class HomeDashboardPresentationTest {
                 expert =
                     ExpertSettings(
                         killSwitchEnabled = true,
+                        firewallEnabled = true,
                         blockedPackagesEnabled = true,
                         blockedPackages = listOf("org.mozilla.firefox"),
                     ),

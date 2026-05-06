@@ -1,12 +1,6 @@
 package com.foxhole.beta.ui
 
-import android.content.ActivityNotFoundException
 import android.content.ClipboardManager
-import android.content.Context
-import android.content.Intent
-import android.content.pm.PackageManager
-import android.net.Uri
-import android.os.Build
 import android.text.format.DateFormat
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -40,6 +34,7 @@ import androidx.compose.material.icons.outlined.FileDownload
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.LightMode
+import androidx.compose.material.icons.outlined.Map
 import androidx.compose.material.icons.outlined.PhoneAndroid
 import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.QueryStats
@@ -84,7 +79,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.core.net.toUri
 import com.foxhole.beta.R
 import com.foxhole.beta.core.diagnostics.DiagnosticEntry
 import com.foxhole.beta.core.model.AppLocale
@@ -128,6 +122,7 @@ fun SettingsHomeScreen(
     snackbarHostState: SnackbarHostState,
     onNavigateUp: (() -> Unit)?,
     onOpenTraffic: () -> Unit,
+    onOpenSecurity: () -> Unit,
     onOpenPrivacyRoute: () -> Unit,
     onOpenRoutingApps: () -> Unit,
     onOpenRoutingSites: () -> Unit,
@@ -188,6 +183,7 @@ fun SettingsHomeScreen(
             hasSmartStartSettings = state.hasSmartProfile || state.hasSubscriptionProfile,
             expertVisible = expertVisible,
             onOpenTraffic = onOpenTraffic,
+            onOpenSecurity = onOpenSecurity,
             onOpenPrivacyRoute = onOpenPrivacyRoute,
             onOpenRoutingApps = onOpenRoutingApps,
             onOpenRoutingSites = onOpenRoutingSites,
@@ -231,6 +227,7 @@ private fun LazyListScope.settingsHomeNavigationItems(
     hasSmartStartSettings: Boolean,
     expertVisible: Boolean,
     onOpenTraffic: () -> Unit,
+    onOpenSecurity: () -> Unit,
     onOpenPrivacyRoute: () -> Unit,
     onOpenRoutingApps: () -> Unit,
     onOpenRoutingSites: () -> Unit,
@@ -260,6 +257,15 @@ private fun LazyListScope.settingsHomeNavigationItems(
                 onClick = onOpenTraffic,
             )
         }
+    }
+    item {
+        SettingsNavigationRow(
+            modifier = Modifier.testTag("settings_security_action"),
+            icon = ImageVector.vectorResource(R.drawable.ic_firewall_shield_key),
+            title = stringResource(R.string.security_settings_title),
+            summary = stringResource(R.string.security_settings_summary),
+            onClick = onOpenSecurity,
+        )
     }
     item {
         SettingsRoutingNavigationGroup(
@@ -649,73 +655,6 @@ private fun smartStartTransportPriorityIcon(value: SmartStartTransportPriority):
         SmartStartTransportPriority.UDP -> Icons.Outlined.Speed
         SmartStartTransportPriority.TCP -> Icons.Outlined.Public
     }
-
-private fun openFoxholeRepository(context: Context): Boolean {
-    val intent =
-        Intent(Intent.ACTION_VIEW, FOXHOLE_REPOSITORY_URL.toUri())
-            .addCategory(Intent.CATEGORY_BROWSABLE)
-    return try {
-        context.startActivity(intent)
-        true
-    } catch (_: ActivityNotFoundException) {
-        false
-    } catch (_: SecurityException) {
-        false
-    }
-}
-
-private const val FOXHOLE_REPOSITORY_URL = "https://github.com/foxhole-repo/foxhole-app"
-private val TELEGRAM_PACKAGE_CANDIDATES =
-    listOf(
-        "org.telegram.messenger",
-        "org.telegram.messenger.web",
-        "org.thunderdog.challegram",
-    )
-
-internal fun installedTelegramPackage(packageManager: PackageManager): String? =
-    TELEGRAM_PACKAGE_CANDIDATES.firstOrNull { packageName ->
-        runCatching {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                packageManager.getPackageInfo(packageName, PackageManager.PackageInfoFlags.of(0))
-            } else {
-                @Suppress("DEPRECATION")
-                packageManager.getPackageInfo(packageName, 0)
-            }
-        }.isSuccess
-    }
-
-private const val FOXHOLE_TELEGRAM_CHANNEL = "foxhole_repo"
-
-private fun supportChannelBrowserUri(): Uri = "https://t.me/$FOXHOLE_TELEGRAM_CHANNEL".toUri()
-
-private fun supportChannelTelegramUri(): Uri = "tg://resolve?domain=$FOXHOLE_TELEGRAM_CHANNEL".toUri()
-
-private fun openTelegramChannel(context: Context): Boolean {
-    val browserIntent =
-        Intent(Intent.ACTION_VIEW, supportChannelBrowserUri())
-            .addCategory(Intent.CATEGORY_BROWSABLE)
-    val telegramPackage = installedTelegramPackage(context.packageManager)
-    if (telegramPackage != null) {
-        val telegramIntent =
-            Intent(Intent.ACTION_VIEW, supportChannelTelegramUri())
-                .setPackage(telegramPackage)
-                .addCategory(Intent.CATEGORY_BROWSABLE)
-        try {
-            context.startActivity(telegramIntent)
-            return true
-        } catch (_: ActivityNotFoundException) {
-        } catch (_: SecurityException) {
-        }
-    }
-    return try {
-        context.startActivity(browserIntent)
-        true
-    } catch (_: ActivityNotFoundException) {
-        false
-    } catch (_: SecurityException) {
-        false
-    }
-}
 
 @Suppress("CyclomaticComplexMethod", "LongMethod", "LongParameterList", "UNUSED_PARAMETER")
 @Composable
@@ -1210,6 +1149,7 @@ fun ApplicationSettingsScreen(
     onAutoReconnectChanged: (Boolean) -> Unit,
     onAutoStartChanged: (Boolean) -> Unit,
     onBlockScreenshotsChanged: (Boolean) -> Unit,
+    onTrafficMapEnabledChanged: (Boolean) -> Unit,
 ) {
     val systemThemeLabel = stringResource(R.string.theme_mode_system)
     val darkThemeLabel = stringResource(R.string.theme_mode_dark)
@@ -1290,6 +1230,16 @@ fun ApplicationSettingsScreen(
                     checked = state.settings.expert.blockScreenshots,
                     leadingIcon = Icons.Outlined.Shield,
                     onCheckedChange = onBlockScreenshotsChanged,
+                    grouped = true,
+                )
+                SettingsControlGroupDivider()
+                SettingSwitchRow(
+                    title = stringResource(R.string.traffic_map_setting_title),
+                    checked = state.settings.ui.trafficMapEnabled,
+                    summary = stringResource(R.string.traffic_map_setting_summary),
+                    leadingIcon = Icons.Outlined.Map,
+                    onCheckedChange = onTrafficMapEnabledChanged,
+                    summaryMaxLines = 2,
                     grouped = true,
                 )
             }

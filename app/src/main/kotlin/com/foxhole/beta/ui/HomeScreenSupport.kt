@@ -577,7 +577,7 @@ internal fun homeConnectionFeatureIndicator(
     homeConnectionFeatureIndicators(state).firstOrNull { it.feature == feature }
 
 internal fun homeFirewallFeatureEnabled(settings: Settings): Boolean =
-    settings.expert.blockedPackagesEnabled && settings.expert.blockedPackages.isNotEmpty()
+    settings.expert.firewallEnabled
 
 internal fun homeTorFeatureStatus(state: HomeRouteUiState): HomeConnectionFeatureStatus {
     if (!state.settings.privacyRoute.enabled) {
@@ -635,7 +635,6 @@ private fun HomeConnectionFeatureIndicatorItem(
     indicator: HomeConnectionFeatureIndicator,
     onClick: () -> Unit,
 ) {
-    val statusColor = homeConnectionFeatureStatusColor(indicator.status)
     val icon = homeConnectionFeatureIcon(indicator.feature)
     Row(
         modifier =
@@ -653,13 +652,6 @@ private fun HomeConnectionFeatureIndicatorItem(
             modifier = Modifier.size(12.dp),
             tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.82f),
         )
-        Surface(
-            modifier = Modifier.size(5.dp),
-            shape = CircleShape,
-            color = statusColor,
-        ) {
-            Spacer(modifier = Modifier.size(5.dp))
-        }
         Text(
             text = "${stringResource(indicator.titleRes)}: ${indicator.status.label}",
             style =
@@ -706,7 +698,7 @@ internal fun HomeConnectionFeatureDialog(
     val enabled =
         when (feature) {
             HomeConnectionFeature.KILL_SWITCH -> state.settings.expert.killSwitchEnabled
-            HomeConnectionFeature.FIREWALL -> state.settings.expert.blockedPackagesEnabled
+            HomeConnectionFeature.FIREWALL -> state.settings.expert.firewallEnabled
             HomeConnectionFeature.TOR -> state.settings.privacyRoute.enabled
         }
     val confirmLabel =
@@ -776,14 +768,14 @@ internal fun HomeConnectionFeatureDialog(
 private fun homeConnectionFeatureIcon(feature: HomeConnectionFeature): ImageVector =
     when (feature) {
         HomeConnectionFeature.KILL_SWITCH -> Icons.Outlined.Shield
-        HomeConnectionFeature.FIREWALL -> Icons.Outlined.Apps
+        HomeConnectionFeature.FIREWALL -> ImageVector.vectorResource(R.drawable.ic_firewall_shield_key)
         HomeConnectionFeature.TOR -> ImageVector.vectorResource(R.drawable.ic_tor_route)
     }
 
 private fun homeConnectionFeatureSummaryRes(feature: HomeConnectionFeature): Int =
     when (feature) {
         HomeConnectionFeature.KILL_SWITCH -> R.string.kill_switch_summary
-        HomeConnectionFeature.FIREWALL -> R.string.blocked_apps_info_body
+        HomeConnectionFeature.FIREWALL -> R.string.security_firewall_summary
         HomeConnectionFeature.TOR -> R.string.privacy_route_summary
     }
 

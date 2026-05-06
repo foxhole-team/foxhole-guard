@@ -2,13 +2,10 @@ package com.foxhole.beta.ui
 
 import android.content.ClipData
 import android.content.ClipDescription
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.draganddrop.dragAndDropSource
 import androidx.compose.foundation.draganddrop.dragAndDropTarget
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items as gridItems
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -18,6 +15,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AccountTree
@@ -29,7 +29,6 @@ import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.Public
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -37,8 +36,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -46,34 +45,37 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.draganddrop.DragAndDropEvent
 import androidx.compose.ui.draganddrop.DragAndDropTarget
 import androidx.compose.ui.draganddrop.DragAndDropTransferData
 import androidx.compose.ui.draganddrop.mimeTypes
 import androidx.compose.ui.draganddrop.toAndroidDragEvent
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.dp
 import com.foxhole.beta.R
 import com.foxhole.beta.core.model.InstalledAppOption
 import com.foxhole.beta.core.model.PerAppRoutingMode
 import com.foxhole.beta.core.model.RoutingRule
 import com.foxhole.beta.core.model.RoutingRuleAction
 import com.foxhole.beta.ui.theme.LocalFoxholeUiPalette
+import androidx.compose.foundation.lazy.grid.items as gridItems
 
 @Composable
 fun RoutingAppsScreen(
@@ -86,6 +88,7 @@ fun RoutingAppsScreen(
     onSelectedPackagesChanged: (List<String>) -> Unit,
     onBlockedPackagesChanged: (List<String>) -> Unit,
     onBlockAppsAlwaysChanged: (Boolean) -> Unit,
+    onFirewallEnabledChanged: (Boolean) -> Unit,
 ) {
     var modeMenuExpanded by rememberSaveable { mutableStateOf(false) }
     var blockAlwaysWarningVisible by rememberSaveable { mutableStateOf(false) }
@@ -202,17 +205,21 @@ fun RoutingAppsScreen(
             SettingsControlGroup {
                 SettingSwitchRow(
                     title = stringResource(R.string.block_apps_always_title),
-                    checked = state.settings.expert.blockAppsAlways && state.settings.expert.blockedPackagesEnabled && blockedPackages.isNotEmpty(),
+                    checked =
+                        state.settings.expert.firewallEnabled &&
+                            state.settings.expert.blockAppsAlways &&
+                            state.settings.expert.blockedPackagesEnabled &&
+                            blockedPackages.isNotEmpty(),
                     enabled = blockedPackages.isNotEmpty(),
                     leadingIcon = Icons.Outlined.Block,
                     summary = stringResource(R.string.block_apps_always_summary),
                     infoBody = stringResource(R.string.block_apps_always_warning_body),
                     summaryMaxLines = 2,
                     onCheckedChange = { enabled ->
-                        if (enabled) {
+                        if (enabled && !state.settings.expert.firewallEnabled) {
                             blockAlwaysWarningVisible = true
                         } else {
-                            onBlockAppsAlwaysChanged(false)
+                            onBlockAppsAlwaysChanged(enabled)
                         }
                     },
                     grouped = true,
@@ -246,11 +253,13 @@ fun RoutingAppsScreen(
         ConfirmDialog(
             title = stringResource(R.string.block_apps_always_warning_title),
             body = stringResource(R.string.block_apps_always_warning_body),
-            confirmLabel = stringResource(R.string.i_understand),
-            icon = Icons.Outlined.Block,
+            confirmLabel = stringResource(R.string.security_firewall_enable_action),
+            dismissLabel = stringResource(R.string.close),
+            icon = ImageVector.vectorResource(R.drawable.ic_firewall_shield_key),
             onDismiss = { blockAlwaysWarningVisible = false },
             onConfirm = {
                 blockAlwaysWarningVisible = false
+                onFirewallEnabledChanged(true)
                 onBlockAppsAlwaysChanged(true)
             },
         )
@@ -682,7 +691,6 @@ fun RoutingSitesScreen(
             },
         )
     }
-
 }
 
 @Composable
@@ -929,5 +937,5 @@ private fun foxholeDropdownColoredButtonColors() =
 @Composable
 private fun foxholeDropdownColoredButtonBorder(): BorderStroke? {
     val borderColor = LocalFoxholeUiPalette.current.valuePillBorderColor
-    return borderColor.takeUnless { it == androidx.compose.ui.graphics.Color.Transparent }?.let { BorderStroke(1.dp, it) }
+    return borderColor.takeUnless { it == Color.Transparent }?.let { BorderStroke(1.dp, it) }
 }

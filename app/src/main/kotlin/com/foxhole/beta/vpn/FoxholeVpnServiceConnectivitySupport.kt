@@ -1174,7 +1174,7 @@ internal suspend fun FoxholeVpnService.persistProfileTrafficInternal(
 
 internal fun FoxholeVpnService.notificationStateLabelInternal(snapshot: NotificationSnapshot): String =
     when {
-        activeLocalGuardMode == LocalGuardMode.FIREWALL -> getString(R.string.notification_status_firewall)
+        localGuardFirewallNotificationActive() -> getString(R.string.notification_status_firewall)
         activeLocalGuardMode == LocalGuardMode.JOURNAL -> getString(R.string.notification_status_journal)
         snapshot.state == ConnectionState.CONNECTED ->
             if (snapshot.isSmartStartConnection) {
@@ -1204,11 +1204,23 @@ private fun FoxholeVpnService.buildNotificationStatusText(
         else -> baseText.orEmpty()
     }
 
-private fun FoxholeVpnService.notificationBodyRes(snapshot: NotificationSnapshot): Int? =
+private fun FoxholeVpnService.localGuardFirewallNotificationActive(): Boolean {
+    val firewallGuardActive = activeLocalGuardMode == LocalGuardMode.FIREWALL
+    val journalFirewallActive =
+        activeLocalGuardMode == LocalGuardMode.JOURNAL &&
+            container.settingsRepository.settings.value.expert.firewallEnabled
+    return firewallGuardActive || journalFirewallActive
+}
+
+private fun FoxholeVpnService.localGuardNotificationBodyRes(): Int? =
     when {
-        activeLocalGuardMode == LocalGuardMode.FIREWALL -> R.string.notification_body_firewall
+        localGuardFirewallNotificationActive() -> R.string.notification_body_firewall
         activeLocalGuardMode == LocalGuardMode.JOURNAL -> R.string.notification_body_journal
-        else -> when (snapshot.state) {
+        else -> null
+    }
+
+private fun FoxholeVpnService.notificationBodyRes(snapshot: NotificationSnapshot): Int? =
+    localGuardNotificationBodyRes() ?: when (snapshot.state) {
         ConnectionState.CONNECTED ->
             when (snapshot.connectivityHealthState) {
                 ConnectivityHealthState.CHECKING -> R.string.notification_body_validating
@@ -1230,7 +1242,6 @@ private fun FoxholeVpnService.notificationBodyRes(snapshot: NotificationSnapshot
         ConnectionState.IDLE,
         ConnectionState.ERROR,
         -> null
-        }
     }
 
 private fun String.isProbeIpLiteral(): Boolean = contains(':') || PROBE_IPV4_REGEX.matches(this)

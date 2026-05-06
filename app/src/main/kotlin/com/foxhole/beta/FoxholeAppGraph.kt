@@ -8,6 +8,7 @@ import com.foxhole.beta.core.diagnostics.DiagnosticsLogger
 import com.foxhole.beta.core.network.IpInfoRepository
 import com.foxhole.beta.core.network.NetworkFingerprintProvider
 import com.foxhole.beta.core.settings.SettingsRepository
+import com.foxhole.beta.core.traffic.TrafficMapRepository
 import com.foxhole.beta.vpn.FoxholeConnectionController
 import com.foxhole.beta.vpn.RuntimeConfigAssembler
 
@@ -25,6 +26,7 @@ interface FoxholeHomeDependencies {
     val diagnosticsLogger: DiagnosticsLogger
     val networkFingerprintProvider: NetworkFingerprintProvider
     val runtimeConfigAssembler: RuntimeConfigAssembler
+    val trafficMapRepository: TrafficMapRepository
 }
 
 interface FoxholeRuntimeDependencies {
@@ -64,6 +66,7 @@ class FoxholeAppGraph(
     val profileDatabase: ProfileDatabase by lazy { dataModule.profileDatabase }
     override val routingRepository: RoutingRepository by lazy { dataModule.routingRepository }
     override val runtimeConfigAssembler: RuntimeConfigAssembler by lazy { dataModule.runtimeConfigAssembler }
+    override val trafficMapRepository: TrafficMapRepository by lazy { coreModule.trafficMapRepository }
     override val ipInfoRepository: IpInfoRepository by lazy { runtimeModule.ipInfoRepository }
     override val networkFingerprintProvider: NetworkFingerprintProvider by lazy { runtimeModule.networkFingerprintProvider }
     override val profileRepository: ProfileRepository by lazy { dataModule.profileRepository }

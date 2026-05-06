@@ -274,7 +274,7 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
             ),
         )
         updateNotification()
-        detachForegroundNotification()
+        removeForegroundNotification()
         stopService(commandStartId)
     }
 

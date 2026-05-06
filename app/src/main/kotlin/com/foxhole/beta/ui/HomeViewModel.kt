@@ -22,8 +22,8 @@ import com.foxhole.beta.core.data.RoutingRepository
 import com.foxhole.beta.core.diagnostics.DiagnosticEntry
 import com.foxhole.beta.core.model.AppLocale
 import com.foxhole.beta.core.model.AutoConnectReasonCode
-import com.foxhole.beta.core.model.ClashApiSettings
 import com.foxhole.beta.core.model.CachedActiveProfile
+import com.foxhole.beta.core.model.ClashApiSettings
 import com.foxhole.beta.core.model.ConnectionSnapshot
 import com.foxhole.beta.core.model.ConnectionState
 import com.foxhole.beta.core.model.DiagnosticsRetention
@@ -31,8 +31,8 @@ import com.foxhole.beta.core.model.DomainStrategy
 import com.foxhole.beta.core.model.ExpertSettings
 import com.foxhole.beta.core.model.InstalledAppOption
 import com.foxhole.beta.core.model.IpInfo
-import com.foxhole.beta.core.model.LocalAuthSettings
 import com.foxhole.beta.core.model.LatencyProbeMethod
+import com.foxhole.beta.core.model.LocalAuthSettings
 import com.foxhole.beta.core.model.PerAppRoutingMode
 import com.foxhole.beta.core.model.PrivacyRouteMode
 import com.foxhole.beta.core.model.PrivacyRouteScope
@@ -47,28 +47,29 @@ import com.foxhole.beta.core.model.RoutingPresetSource
 import com.foxhole.beta.core.model.RoutingRule
 import com.foxhole.beta.core.model.RoutingRuleAction
 import com.foxhole.beta.core.model.SmartStartTransportPriority
-import com.foxhole.beta.core.model.Settings as FoxholeSettings
 import com.foxhole.beta.core.model.SubscriptionRefreshInterval
 import com.foxhole.beta.core.model.ThemeMode
 import com.foxhole.beta.core.model.TrafficMode
 import com.foxhole.beta.core.model.TrafficSnapshot
 import com.foxhole.beta.core.model.TunStack
 import com.foxhole.beta.core.model.V2RayApiSettings
-import com.foxhole.beta.core.network.NetworkFingerprint
 import com.foxhole.beta.core.network.IpInfoFetchMode
+import com.foxhole.beta.core.network.NetworkFingerprint
 import com.foxhole.beta.core.profile.AutoConnectProbeCandidate
 import com.foxhole.beta.core.profile.AutoConnectProbeResult
 import com.foxhole.beta.core.profile.MultiProtocolProfileSupport
 import com.foxhole.beta.core.profile.PreparedProfileExport
 import com.foxhole.beta.core.profile.ProfileExportRequest
 import com.foxhole.beta.core.profile.classifyAutoConnectProbeFailure
-import com.foxhole.beta.core.smart.SmartStartController
 import com.foxhole.beta.core.settings.AppTrafficStatsRecorder
-import com.foxhole.beta.vpn.FoxholeVpnService
+import com.foxhole.beta.core.smart.SmartStartController
 import com.foxhole.beta.vpn.FoxholeVpnRuntimeBridge
+import com.foxhole.beta.vpn.FoxholeVpnService
+import com.foxhole.beta.vpn.localGuardModeOrNull
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -78,7 +79,6 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
@@ -361,6 +361,43 @@ class HomeViewModel(
                 SharingStarted.WhileSubscribed(5_000),
                 HomeRouteUiState(),
             )
+
+    private val trafficMapRuntimeAvailable =
+        combine(
+            container.connectionController.snapshot,
+            container.settingsRepository.settings,
+        ) { connection, settings ->
+            settings.ui.trafficMapEnabled &&
+                settings.expert.firewallEnabled &&
+                (
+                    connection.state in ACTIVE_CONNECTION_STATES ||
+                        settings.localGuardModeOrNull() != null &&
+                        container.connectionController.hasActiveVpnNetwork()
+                )
+        }
+
+    private val trafficMapOriginIpInfo =
+        combine(
+            container.connectionController.snapshot,
+            container.connectionController.ipInfo,
+        ) { connection, ipInfo ->
+            val remoteTunnelActive =
+                connection.state in ACTIVE_CONNECTION_STATES &&
+                    connection.trafficMode == TrafficMode.TUNNEL &&
+                    connection.profileId != FoxholeVpnService.LOCAL_GUARD_PROFILE_ID
+            if (remoteTunnelActive) {
+                null
+            } else {
+                ipInfo
+            }
+        }
+
+    val trafficMapUiState =
+        container.trafficMapRepository.trafficMapState(
+            scope = viewModelScope,
+            originIpInfo = trafficMapOriginIpInfo,
+            runtimeAvailable = trafficMapRuntimeAvailable,
+        )
 
     val profilesRouteState: StateFlow<ProfilesRouteUiState> =
         combine(
@@ -853,7 +890,11 @@ class HomeViewModel(
 
     fun onBlockScreenshotsChanged(value: Boolean) = onBlockScreenshotsChangedInternal(value)
 
+    fun onTrafficMapEnabledChanged(value: Boolean) = onTrafficMapEnabledChangedInternal(value)
+
     fun onKillSwitchChanged(value: Boolean) = onKillSwitchChangedInternal(value)
+
+    fun onFirewallEnabledChanged(value: Boolean) = onFirewallEnabledChangedInternal(value)
 
     fun onNetworkActivityLoggingChanged(value: Boolean) = onNetworkActivityLoggingChangedInternal(value)
 

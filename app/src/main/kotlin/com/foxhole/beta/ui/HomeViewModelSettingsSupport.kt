@@ -9,8 +9,8 @@ import com.foxhole.beta.core.model.AppLocale
 import com.foxhole.beta.core.model.ClashApiSettings
 import com.foxhole.beta.core.model.DiagnosticsRetention
 import com.foxhole.beta.core.model.DomainStrategy
-import com.foxhole.beta.core.model.LocalAuthSettings
 import com.foxhole.beta.core.model.LatencyProbeMethod
+import com.foxhole.beta.core.model.LocalAuthSettings
 import com.foxhole.beta.core.model.PerAppRoutingMode
 import com.foxhole.beta.core.model.PrivacyRouteMode
 import com.foxhole.beta.core.model.PrivacyRouteScope
@@ -216,9 +216,22 @@ internal fun HomeViewModel.onBlockScreenshotsChangedInternal(value: Boolean) {
     }
 }
 
+internal fun HomeViewModel.onTrafficMapEnabledChangedInternal(value: Boolean) {
+    viewModelScope.launch {
+        container.settingsRepository.updateTrafficMapEnabled(value)
+    }
+}
+
 internal fun HomeViewModel.onKillSwitchChangedInternal(value: Boolean) {
     viewModelScope.launch {
         container.settingsRepository.updateKillSwitchEnabled(value)
+        container.connectionController.syncLocalGuard()
+    }
+}
+
+internal fun HomeViewModel.onFirewallEnabledChangedInternal(value: Boolean) {
+    viewModelScope.launch {
+        container.settingsRepository.updateFirewallEnabled(value)
         container.connectionController.syncLocalGuard()
     }
 }
@@ -240,6 +253,10 @@ internal fun HomeViewModel.onNetworkActivityLoggingChangedInternal(value: Boolea
 
 internal fun HomeViewModel.onNetworkActivityPersistentLoggingChangedInternal(value: Boolean) {
     viewModelScope.launch {
+        if (value) {
+            container.settingsRepository.updateFirewallEnabled(true)
+            container.settingsRepository.updateNetworkActivityLogging(true)
+        }
         container.settingsRepository.updateNetworkActivityPersistentLogging(value)
         container.connectionController.syncLocalGuard()
     }
@@ -354,7 +371,7 @@ internal fun HomeViewModel.onBlockedPackagesEnabledChangedInternal(value: Boolea
 internal fun HomeViewModel.onBlockAppsAlwaysChangedInternal(value: Boolean) {
     updateAppRoutingSettingAndPromptReconnect(requiresRuntimeWhenFull = true) {
         if (value) {
-            container.settingsRepository.updateKillSwitchEnabled(true)
+            container.settingsRepository.updateFirewallEnabled(true)
         }
         container.settingsRepository.updateBlockAppsAlways(value)
         container.connectionController.syncLocalGuard()
