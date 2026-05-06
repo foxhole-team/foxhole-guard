@@ -6,6 +6,8 @@ enum class StatisticsRange {
     DAYS_3,
     WEEK,
     MONTH,
+    MONTHS_3,
+    FOREVER,
     ALL,
 }
 

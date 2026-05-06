@@ -39,11 +39,7 @@ class TrafficMapRepository(
                     TrafficMapSampleBatch(samples = samples, runtimeAvailable = available)
                 }
                 .runningFold(TrafficMapConnectionAccumulator()) { accumulator, batch ->
-                    if (batch.runtimeAvailable) {
-                        accumulator.updatedWith(batch.samples)
-                    } else {
-                        TrafficMapConnectionAccumulator()
-                    }
+                    accumulator.updatedForBatch(batch)
                 }
                 .map { accumulator ->
                     trafficMapPointsFromAggregates(
@@ -55,7 +51,7 @@ class TrafficMapRepository(
             ::buildTrafficMapUiState,
         ).stateIn(
             scope = scope,
-            started = SharingStarted.WhileSubscribed(5_000),
+            started = SharingStarted.WhileSubscribed(stopTimeoutMillis = 0L),
             initialValue = TrafficMapUiState(),
         )
 
@@ -176,14 +172,31 @@ private data class TrafficMapOriginInfo(
     val city: String?,
 )
 
-private data class TrafficMapSampleBatch(
+internal data class TrafficMapSampleBatch(
     val samples: List<TrafficMapConnectionSample>,
     val runtimeAvailable: Boolean,
 )
 
 internal data class TrafficMapConnectionAccumulator(
     val samplesById: LinkedHashMap<String, TrafficMapConnectionSample> = linkedMapOf(),
+    val awaitingFreshRuntimeSample: Boolean = false,
 ) {
+    fun updatedForBatch(batch: TrafficMapSampleBatch): TrafficMapConnectionAccumulator {
+        if (!batch.runtimeAvailable) {
+            return copy(awaitingFreshRuntimeSample = true)
+        }
+        if (batch.samples.isEmpty()) {
+            return this
+        }
+        val base =
+            if (awaitingFreshRuntimeSample) {
+                TrafficMapConnectionAccumulator()
+            } else {
+                this
+            }
+        return base.updatedWith(batch.samples)
+    }
+
     fun updatedWith(samples: List<TrafficMapConnectionSample>): TrafficMapConnectionAccumulator {
         if (samples.isEmpty()) {
             return this
@@ -202,7 +215,7 @@ internal data class TrafficMapConnectionAccumulator(
             val oldestKey = next.keys.firstOrNull() ?: break
             next.remove(oldestKey)
         }
-        return TrafficMapConnectionAccumulator(next)
+        return TrafficMapConnectionAccumulator(samplesById = next)
     }
 
     fun countryAggregates(): Map<String, TrafficMapAggregate> =

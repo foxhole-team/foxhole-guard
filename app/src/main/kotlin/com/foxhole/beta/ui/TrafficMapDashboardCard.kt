@@ -341,12 +341,25 @@ private fun TrafficMapLegendDestinationRow(
 @Composable
 private fun rememberTrafficMapCountries(): State<List<TrafficMapCountryShape>?> {
     val appContext = LocalContext.current.applicationContext
-    return produceState<List<TrafficMapCountryShape>?>(initialValue = null, appContext) {
-        value =
-            withContext(Dispatchers.IO) {
-                runCatching { loadTrafficMapCountries(appContext) }.getOrDefault(emptyList())
-            }
+    return produceState<List<TrafficMapCountryShape>?>(initialValue = TrafficMapCountryShapeCache.snapshot(), appContext) {
+        if (value == null) {
+            value = TrafficMapCountryShapeCache.load(appContext)
+        }
     }
+}
+
+private object TrafficMapCountryShapeCache {
+    @Volatile
+    private var cached: List<TrafficMapCountryShape>? = null
+
+    fun snapshot(): List<TrafficMapCountryShape>? = cached
+
+    suspend fun load(context: Context): List<TrafficMapCountryShape> =
+        cached ?: withContext(Dispatchers.IO) {
+            cached ?: runCatching { loadTrafficMapCountries(context) }
+                .getOrDefault(emptyList())
+                .also { loaded -> cached = loaded }
+        }
 }
 
 private fun loadTrafficMapCountries(context: Context): List<TrafficMapCountryShape> {

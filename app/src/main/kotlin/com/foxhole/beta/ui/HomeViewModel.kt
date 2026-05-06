@@ -48,6 +48,8 @@ import com.foxhole.beta.core.model.RoutingRule
 import com.foxhole.beta.core.model.RoutingRuleAction
 import com.foxhole.beta.core.model.Settings
 import com.foxhole.beta.core.model.SmartStartTransportPriority
+import com.foxhole.beta.core.model.StatisticsMetric
+import com.foxhole.beta.core.model.StatisticsRetention
 import com.foxhole.beta.core.model.SubscriptionRefreshInterval
 import com.foxhole.beta.core.model.ThemeMode
 import com.foxhole.beta.core.model.TrafficMode
@@ -1186,6 +1188,43 @@ class HomeViewModel(
         }
     }
 
+    fun onStatisticsEnabledChanged(value: Boolean) {
+        viewModelScope.launch {
+            container.settingsRepository.updateStatisticsEnabled(value)
+            val runtimeAllowed =
+                appTrafficStatsRuntimeAllowed(
+                    settings = container.settingsRepository.settings.value,
+                    snapshot = container.connectionController.snapshot.value,
+                )
+            syncAppTrafficStatsSampler(runtimeAllowed)
+            if (value && runtimeAllowed) {
+                loadInstalledApps()
+                sampleAppTrafficStats()
+            }
+        }
+    }
+
+    fun onStatisticsRetentionSelected(value: StatisticsRetention) {
+        viewModelScope.launch {
+            container.settingsRepository.updateStatisticsRetention(value)
+        }
+    }
+
+    fun onStatisticsMetricEnabledChanged(
+        metric: StatisticsMetric,
+        value: Boolean,
+    ) {
+        viewModelScope.launch {
+            container.settingsRepository.updateStatisticsMetricEnabled(metric, value)
+            val runtimeAllowed =
+                appTrafficStatsRuntimeAllowed(
+                    settings = container.settingsRepository.settings.value,
+                    snapshot = container.connectionController.snapshot.value,
+                )
+            syncAppTrafficStatsSampler(runtimeAllowed)
+        }
+    }
+
     fun onAppTrafficStatsEnabledChanged(value: Boolean) {
         viewModelScope.launch {
             container.settingsRepository.updateAppTrafficStatsEnabled(value)
@@ -1229,7 +1268,9 @@ class HomeViewModel(
         settings: Settings,
         snapshot: ConnectionSnapshot,
     ): Boolean =
-        settings.appTrafficStatsEnabled &&
+        settings.statistics.enabled &&
+            settings.statistics.appTrafficEnabled &&
+            settings.appTrafficStatsEnabled &&
             settings.expert.firewallEnabled &&
             (
                 snapshot.state in ACTIVE_CONNECTION_STATES ||
@@ -1269,7 +1310,7 @@ class HomeViewModel(
         internal const val AUTO_CONNECT_TOTAL_TIMEOUT_MS = 60_000L
         internal const val AUTO_CONNECT_MAX_ATTEMPTS = SmartStartController.AUTO_CONNECT_MAX_ATTEMPTS
         internal const val PROTOCOL_METRICS_PROBE_TIMEOUT_MS = 12_000L
-        internal const val APP_TRAFFIC_SAMPLE_INTERVAL_MS = 60_000L
+        internal const val APP_TRAFFIC_SAMPLE_INTERVAL_MS = 10_000L
         internal const val AUTO_CONNECT_LATENCY_FALLBACK_PENALTY_MS = 750L
         internal val ACTIVE_CONNECTION_STATES =
             setOf(

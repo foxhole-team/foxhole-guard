@@ -99,6 +99,7 @@ data class SettingsRouteUiState(
     val activeProfile: Profile? = null,
     val traffic: TrafficSnapshot = TrafficSnapshot(),
     val installedApps: List<InstalledAppOption> = emptyList(),
+    val diagnosticEntries: List<DiagnosticEntry> = emptyList(),
 )
 
 data class RoutingRouteUiState(
@@ -219,6 +220,7 @@ internal fun HomeUiState.toSettingsRouteUiState(): SettingsRouteUiState =
         activeProfile = activeProfile,
         traffic = traffic,
         installedApps = installedApps,
+        diagnosticEntries = diagnosticEntries,
     )
 
 internal fun HomeUiState.toRoutingRouteUiState(): RoutingRouteUiState =

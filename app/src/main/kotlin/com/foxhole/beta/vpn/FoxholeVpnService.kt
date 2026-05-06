@@ -625,12 +625,21 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
     internal fun startAppTrafficStatsUpdates() {
         stopAppTrafficStatsUpdates()
         val settings = container.settingsRepository.settings.value
-        if (!settings.appTrafficStatsEnabled || !settings.expert.firewallEnabled) {
+        if (!settings.statistics.enabled || !settings.statistics.appTrafficEnabled || !settings.appTrafficStatsEnabled || !settings.expert.firewallEnabled) {
             return
         }
         appTrafficStatsJob =
             scope.launch(Dispatchers.Default) {
                 while (currentCoroutineContext().isActive) {
+                    val currentSettings = container.settingsRepository.settings.value
+                    if (
+                        !currentSettings.statistics.enabled ||
+                        !currentSettings.statistics.appTrafficEnabled ||
+                        !currentSettings.appTrafficStatsEnabled ||
+                        !currentSettings.expert.firewallEnabled
+                    ) {
+                        break
+                    }
                     runCatching { appTrafficStatsRecorder.recordSnapshot() }
                         .onFailure { container.diagnosticsLogger.record("traffic", "app traffic stats sample failed") }
                     delay(APP_TRAFFIC_SAMPLE_INTERVAL_MS)
@@ -909,7 +918,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         internal const val CONNECTIVITY_PROBE_TOTAL_TIMEOUT_MS = 45_000L
         internal const val CONNECTIVITY_PROBE_GRACE_MAX_TIMEOUT_MS = com.foxhole.beta.vpn.CONNECTIVITY_PROBE_GRACE_MAX_TIMEOUT_MS
         internal const val LOCAL_GUARD_PROFILE_ID = -10L
-        internal const val APP_TRAFFIC_SAMPLE_INTERVAL_MS = 60_000L
+        internal const val APP_TRAFFIC_SAMPLE_INTERVAL_MS = 10_000L
     }
 }
 

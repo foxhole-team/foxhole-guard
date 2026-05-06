@@ -8,6 +8,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -20,8 +21,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -32,11 +33,14 @@ import androidx.compose.material.icons.outlined.BarChart
 import androidx.compose.material.icons.outlined.DeleteSweep
 import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.Route
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.SettingsEthernet
 import androidx.compose.material.icons.outlined.Storage
+import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -44,6 +48,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -67,6 +72,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.foxhole.beta.R
+import com.foxhole.beta.core.diagnostics.DiagnosticEntry
 import com.foxhole.beta.core.model.AppTrafficSample
 import com.foxhole.beta.core.model.InstalledAppOption
 import com.foxhole.beta.core.model.OverallStatisticsUiItem
@@ -79,6 +85,8 @@ import com.foxhole.beta.core.model.ProtocolHint
 import com.foxhole.beta.core.model.ProtocolStatisticsUiItem
 import com.foxhole.beta.core.model.SmartProfileProtocolMemory
 import com.foxhole.beta.core.model.StatisticsRange
+import com.foxhole.beta.core.model.StatisticsMetric
+import com.foxhole.beta.core.model.StatisticsRetention
 import com.foxhole.beta.core.model.StatisticsUiState
 import com.foxhole.beta.core.model.TrafficMapPoint
 import com.foxhole.beta.core.model.TrafficMapUiState
@@ -90,113 +98,285 @@ import kotlin.math.ceil
 import kotlin.math.max
 import kotlin.math.roundToInt
 
-enum class StatisticsPeriod(val durationMs: Long?) {
-    HOUR(60L * 60L * 1000L),
-    DAY(24L * 60L * 60L * 1000L),
-    DAYS_3(3L * 24L * 60L * 60L * 1000L),
-    WEEK(7L * 24L * 60L * 1000L),
-    MONTH(31L * 24L * 60L * 60L * 1000L),
-    ALL(null),
-}
-
 @Composable
 fun StatisticsScreen(
     state: SettingsRouteUiState,
     trafficMapState: TrafficMapUiState,
     snackbarHostState: SnackbarHostState,
     onNavigateUp: () -> Unit,
+    onStatisticsEnabledChanged: (Boolean) -> Unit,
+    onStatisticsRetentionSelected: (StatisticsRetention) -> Unit,
+    onStatisticsMetricEnabledChanged: (StatisticsMetric, Boolean) -> Unit,
     onAppTrafficStatsEnabledChanged: (Boolean) -> Unit,
     onFirewallEnabledChanged: (Boolean) -> Unit,
     onClearUsage: () -> Unit,
 ) {
-    var periodMenuExpanded by rememberSaveable { mutableStateOf(false) }
+    var settingsVisible by rememberSaveable { mutableStateOf(false) }
+    var retentionMenuExpanded by rememberSaveable { mutableStateOf(false) }
     var allAppsVisible by rememberSaveable { mutableStateOf(false) }
+    var allCountriesVisible by rememberSaveable { mutableStateOf(false) }
+    var selectedApp by rememberSaveable { mutableStateOf<String?>(null) }
+    var selectedProfileId by rememberSaveable { mutableStateOf<Long?>(null) }
     var clearConfirmVisible by rememberSaveable { mutableStateOf(false) }
     var appStatsFirewallWarningVisible by rememberSaveable { mutableStateOf(false) }
-    var period by rememberSaveable { mutableStateOf(StatisticsPeriod.DAY) }
+    val statisticsSettings = state.settings.statistics
+    val retention = statisticsSettings.retention
     val statistics =
-        remember(state.settings, state.profiles, state.activeProfile, state.traffic, period) {
-            statisticsUiState(state = state, period = period)
+        remember(state.settings, state.profiles, state.activeProfile, state.traffic, retention) {
+            statisticsUiState(state = state, retention = retention)
         }
     val appRows =
-        remember(state.settings.appTrafficSamples, state.installedApps, period) {
+        remember(state.settings.appTrafficSamples, state.installedApps, retention) {
             appTrafficRows(
                 samples = state.settings.appTrafficSamples,
                 installedApps = state.installedApps,
-                period = period,
+                retention = retention,
             )
         }
     val topApps = appRows.take(10)
-    val appStatsEnabled = state.settings.appTrafficStatsEnabled && state.settings.expert.firewallEnabled
+    val countryRows = trafficMapState.destinations.take(10)
+    val appStatsSwitchChecked = state.settings.appTrafficStatsEnabled && state.settings.expert.firewallEnabled
+    val appStatsEnabled = statisticsSettings.enabled && statisticsSettings.appTrafficEnabled && appStatsSwitchChecked
+    val selectedAppRow = selectedApp?.let { packageName -> appRows.firstOrNull { row -> row.packageName == packageName } }
+    val selectedProfile =
+        selectedProfileId?.let { profileId ->
+            statistics.profileTraffic.firstOrNull { item -> item.profileId == profileId }
+        }
 
     SettingsScaffold(
         title = stringResource(R.string.statistics_title),
         snackbarHostState = snackbarHostState,
         onNavigateUp = onNavigateUp,
-    ) {
-        item(key = "profile-traffic") {
-            ProfileTrafficOverviewCard(
-                statistics = statistics,
-                onClear = { clearConfirmVisible = true },
-            )
-        }
-        item(key = "country-traffic") {
-            CountryTrafficCard(state = trafficMapState)
-        }
-        item(key = "protocols") {
-            ProtocolStatisticsSection(items = statistics.vpnProtocols)
-        }
-        if (statistics.profileComparisons.isNotEmpty()) {
-            item(key = "profile-comparisons") {
-                ProfileComparisonsSection(items = statistics.profileComparisons)
-            }
-        }
-        item(key = "transports") {
-            TransportStatisticsSection(items = statistics.transports)
-        }
-        item(key = "app-statistics-toggle") {
-            SettingsControlGroup {
-                SettingSwitchRow(
-                    title = stringResource(R.string.app_statistics_enabled_title),
-                    checked = appStatsEnabled,
-                    summary = stringResource(R.string.app_statistics_enabled_summary),
-                    leadingIcon = Icons.Outlined.Apps,
-                    onCheckedChange = { enabled ->
-                        if (enabled && !state.settings.expert.firewallEnabled) {
-                            appStatsFirewallWarningVisible = true
-                        } else {
-                            onAppTrafficStatsEnabledChanged(enabled)
-                        }
-                    },
-                    grouped = true,
+        actions = {
+            IconButton(onClick = { settingsVisible = true }) {
+                Icon(
+                    imageVector = Icons.Outlined.Settings,
+                    contentDescription = stringResource(R.string.statistics_settings_content_description),
                 )
             }
-        }
-        item(key = "app-statistics") {
-            AnimatedVisibility(visible = appStatsEnabled) {
-                Column(
-                    modifier = Modifier.animateContentSize(),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    DropdownSettingRow(
-                        title = stringResource(R.string.statistics_period_title),
-                        value = statisticsPeriodLabel(period),
-                        expanded = periodMenuExpanded,
-                        onExpandedChange = { periodMenuExpanded = it },
-                        values = StatisticsPeriod.entries,
-                        selected = period,
-                        label = { statisticsPeriodLabel(it) },
-                        onSelect = { period = it },
-                        leadingIcon = Icons.Outlined.BarChart,
+        },
+    ) {
+        if (!statisticsSettings.enabled) {
+            item(key = "statistics-disabled") {
+                StatisticsDisabledState(onEnable = { onStatisticsEnabledChanged(true) })
+            }
+        } else {
+            if (statisticsSettings.profileTrafficEnabled) {
+                item(key = "profile-traffic") {
+                    ProfileTrafficOverviewCard(
+                        statistics = statistics,
+                        state = state,
+                        onClear = { clearConfirmVisible = true },
+                        onProfileClick = { profileId -> selectedProfileId = profileId },
                     )
+                }
+            }
+            if (statisticsSettings.vpnProtocolsEnabled) {
+                item(key = "protocols") {
+                    ProtocolStatisticsSection(items = statistics.vpnProtocols)
+                }
+            }
+            if (statisticsSettings.profileComparisonsEnabled && statistics.profileComparisons.isNotEmpty()) {
+                item(key = "profile-comparisons") {
+                    ProfileComparisonsSection(items = statistics.profileComparisons)
+                }
+            }
+            if (statisticsSettings.transportsEnabled) {
+                item(key = "transports") {
+                    TransportStatisticsSection(items = statistics.transports)
+                }
+            }
+            if (statisticsSettings.appTrafficEnabled) {
+                item(key = "app-statistics") {
                     AppTrafficStatisticsCard(
                         rows = topApps,
                         allRowsCount = appRows.size,
+                        enabled = appStatsEnabled,
+                        runtimeActive = appStatsEnabled && state.traffic.available,
                         onShowAll = { allAppsVisible = true },
+                        onRowClick = { row -> selectedApp = row.packageName },
+                    )
+                }
+            }
+            if (statisticsSettings.countryTrafficEnabled) {
+                item(key = "country-traffic") {
+                    CountryTrafficCard(
+                        state = trafficMapState,
+                        rows = countryRows,
+                        enabled = state.settings.expert.firewallEnabled,
+                        onShowAll = { allCountriesVisible = true },
                     )
                 }
             }
         }
+    }
+
+    if (settingsVisible) {
+        AlertDialog(
+            onDismissRequest = { settingsVisible = false },
+            title = { Text(stringResource(R.string.statistics_settings_title)) },
+            text = {
+                Column(
+                    modifier = Modifier.verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    SettingsControlGroup {
+                        SettingSwitchRow(
+                            title = stringResource(R.string.statistics_enabled_title),
+                            checked = statisticsSettings.enabled,
+                            summary = stringResource(R.string.statistics_enabled_summary),
+                            leadingIcon = Icons.Outlined.BarChart,
+                            onCheckedChange = onStatisticsEnabledChanged,
+                            grouped = true,
+                        )
+                        SettingsControlGroupDivider()
+                        DropdownSettingRow(
+                            title = stringResource(R.string.statistics_retention_title),
+                            value = statisticsRetentionLabel(retention),
+                            expanded = retentionMenuExpanded,
+                            onExpandedChange = { retentionMenuExpanded = it },
+                            values = StatisticsRetention.entries,
+                            selected = retention,
+                            label = { statisticsRetentionLabel(it) },
+                            onSelect = onStatisticsRetentionSelected,
+                            leadingIcon = Icons.Outlined.Storage,
+                            grouped = true,
+                        )
+                    }
+                    SettingsControlGroup {
+                        SettingSwitchRow(
+                            title = stringResource(R.string.app_statistics_enabled_title),
+                            checked = appStatsSwitchChecked,
+                            summary = stringResource(R.string.app_statistics_enabled_summary),
+                            leadingIcon = Icons.Outlined.Apps,
+                            onCheckedChange = { enabled ->
+                                if (enabled && !state.settings.expert.firewallEnabled) {
+                                    appStatsFirewallWarningVisible = true
+                                } else {
+                                    onAppTrafficStatsEnabledChanged(enabled)
+                                }
+                            },
+                            enabled = statisticsSettings.enabled,
+                            grouped = true,
+                        )
+                    }
+                    SettingsControlGroup {
+                        StatisticsMetricSwitch(
+                            metric = StatisticsMetric.PROFILE_TRAFFIC,
+                            checked = statisticsSettings.profileTrafficEnabled,
+                            title = stringResource(R.string.statistics_metric_profiles),
+                            enabled = statisticsSettings.enabled,
+                            onMetricChanged = onStatisticsMetricEnabledChanged,
+                        )
+                        SettingsControlGroupDivider()
+                        StatisticsMetricSwitch(
+                            metric = StatisticsMetric.VPN_PROTOCOLS,
+                            checked = statisticsSettings.vpnProtocolsEnabled,
+                            title = stringResource(R.string.statistics_metric_protocols),
+                            enabled = statisticsSettings.enabled,
+                            onMetricChanged = onStatisticsMetricEnabledChanged,
+                        )
+                        SettingsControlGroupDivider()
+                        StatisticsMetricSwitch(
+                            metric = StatisticsMetric.PROFILE_COMPARISONS,
+                            checked = statisticsSettings.profileComparisonsEnabled,
+                            title = stringResource(R.string.statistics_metric_comparisons),
+                            enabled = statisticsSettings.enabled,
+                            onMetricChanged = onStatisticsMetricEnabledChanged,
+                        )
+                        SettingsControlGroupDivider()
+                        StatisticsMetricSwitch(
+                            metric = StatisticsMetric.TRANSPORTS,
+                            checked = statisticsSettings.transportsEnabled,
+                            title = stringResource(R.string.statistics_metric_transports),
+                            enabled = statisticsSettings.enabled,
+                            onMetricChanged = onStatisticsMetricEnabledChanged,
+                        )
+                        SettingsControlGroupDivider()
+                        StatisticsMetricSwitch(
+                            metric = StatisticsMetric.APP_TRAFFIC,
+                            checked = statisticsSettings.appTrafficEnabled,
+                            title = stringResource(R.string.statistics_metric_apps),
+                            enabled = statisticsSettings.enabled,
+                            onMetricChanged = onStatisticsMetricEnabledChanged,
+                        )
+                        SettingsControlGroupDivider()
+                        StatisticsMetricSwitch(
+                            metric = StatisticsMetric.COUNTRY_TRAFFIC,
+                            checked = statisticsSettings.countryTrafficEnabled,
+                            title = stringResource(R.string.statistics_metric_countries),
+                            summary =
+                                if (state.settings.expert.firewallEnabled) {
+                                    null
+                                } else {
+                                    stringResource(R.string.statistics_metric_countries_firewall_summary)
+                                },
+                            enabled = statisticsSettings.enabled && state.settings.expert.firewallEnabled,
+                            onMetricChanged = onStatisticsMetricEnabledChanged,
+                        )
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                FoxholeDialogDismissButton(onClick = { settingsVisible = false })
+            },
+        )
+    }
+
+    if (allCountriesVisible) {
+        AlertDialog(
+            onDismissRequest = { allCountriesVisible = false },
+            title = { Text(stringResource(R.string.statistics_country_all_title)) },
+            text = {
+                LazyColumn(modifier = Modifier.heightIn(max = 520.dp)) {
+                    items(trafficMapState.destinations, key = TrafficMapPoint::countryCode) { point ->
+                        CountryTrafficRow(point = point)
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                FoxholeDialogDismissButton(onClick = { allCountriesVisible = false })
+            },
+        )
+    }
+
+    if (selectedProfile != null) {
+        AlertDialog(
+            onDismissRequest = { selectedProfileId = null },
+            title = { Text(selectedProfile.profileName) },
+            text = {
+                ProfileStatisticsDetail(
+                    state = state,
+                    statistics = statistics,
+                    item = selectedProfile,
+                )
+            },
+            confirmButton = {},
+            dismissButton = {
+                FoxholeDialogDismissButton(onClick = { selectedProfileId = null })
+            },
+        )
+    }
+
+    if (selectedAppRow != null) {
+        AlertDialog(
+            onDismissRequest = { selectedApp = null },
+            title = { Text(selectedAppRow.label) },
+            text = {
+                AppTrafficDetail(
+                    row = selectedAppRow,
+                    samples = state.settings.appTrafficSamples,
+                    diagnosticEntries = state.diagnosticEntries,
+                )
+            },
+            confirmButton = {},
+            dismissButton = {
+                FoxholeDialogDismissButton(onClick = { selectedApp = null })
+            },
+        )
     }
 
     if (allAppsVisible) {
@@ -206,7 +386,7 @@ fun StatisticsScreen(
             text = {
                 LazyColumn(modifier = Modifier.heightIn(max = 520.dp)) {
                     items(appRows, key = AppTrafficRow::packageName) { row ->
-                        AppTrafficRowView(row = row)
+                        AppTrafficRowView(row = row, onClick = { selectedApp = row.packageName })
                         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
                     }
                 }
@@ -252,7 +432,9 @@ fun StatisticsScreen(
 @Composable
 private fun ProfileTrafficOverviewCard(
     statistics: StatisticsUiState,
+    state: SettingsRouteUiState,
     onClear: () -> Unit,
+    onProfileClick: (Long) -> Unit,
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -281,8 +463,11 @@ private fun ProfileTrafficOverviewCard(
                     )
                 }
             }
-            OverallMetricsGrid(total = statistics.total)
-            ProfileTrafficList(items = statistics.profileTraffic)
+            ProfileTrafficList(
+                items = statistics.profileTraffic,
+                state = state,
+                onProfileClick = onProfileClick,
+            )
         }
     }
 }
@@ -354,7 +539,11 @@ private fun MetricTile(
 }
 
 @Composable
-private fun ProfileTrafficList(items: List<ProfileTrafficUiItem>) {
+private fun ProfileTrafficList(
+    items: List<ProfileTrafficUiItem>,
+    state: SettingsRouteUiState,
+    onProfileClick: (Long) -> Unit,
+) {
     if (items.isEmpty()) {
         Text(
             text = stringResource(R.string.diagnostics_usage_empty),
@@ -366,9 +555,11 @@ private fun ProfileTrafficList(items: List<ProfileTrafficUiItem>) {
     val context = LocalContext.current
     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
         items.sortedByDescending(ProfileTrafficUiItem::totalBytes).take(ProfileTrafficPreviewLimit).forEachIndexed { index, item ->
+            val detail = profileStatisticsDetail(state, item)
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .clickable { onProfileClick(item.profileId) }
                     .padding(vertical = 6.dp),
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -388,17 +579,35 @@ private fun ProfileTrafficList(items: List<ProfileTrafficUiItem>) {
                         overflow = TextOverflow.Ellipsis,
                     )
                     Text(
-                        text = protocolDisplayName(item.protocolHint),
+                        text = stringResource(
+                            R.string.statistics_profile_subtitle,
+                            protocolDisplayName(detail.lastProtocolHint),
+                            detail.avgLatencyMs.formatLatency(),
+                        ),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                     )
                 }
-                Text(
-                    text = formatBytes(context, item.totalBytes),
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    textAlign = TextAlign.End,
-                )
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(
+                        text = stringResource(
+                            R.string.statistics_profile_rx_tx,
+                            formatBytes(context, item.rxBytes),
+                            formatBytes(context, item.txBytes),
+                        ),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.End,
+                    )
+                    Text(
+                        text = formatBytes(context, item.totalBytes),
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        textAlign = TextAlign.End,
+                    )
+                }
             }
             if (index != minOf(items.size, ProfileTrafficPreviewLimit) - 1) {
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.32f))
@@ -408,7 +617,12 @@ private fun ProfileTrafficList(items: List<ProfileTrafficUiItem>) {
 }
 
 @Composable
-private fun CountryTrafficCard(state: TrafficMapUiState) {
+private fun CountryTrafficCard(
+    state: TrafficMapUiState,
+    rows: List<TrafficMapPoint>,
+    enabled: Boolean,
+    onShowAll: () -> Unit,
+) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHighest),
@@ -420,41 +634,50 @@ private fun CountryTrafficCard(state: TrafficMapUiState) {
         ) {
             SectionTitle(
                 icon = Icons.Outlined.Public,
-                title = stringResource(R.string.statistics_country_traffic_title),
+                title = stringResource(R.string.statistics_country_traffic_top_title),
             )
-            if (state.destinations.isEmpty()) {
+            if (!enabled) {
                 Text(
+                    text = stringResource(R.string.traffic_map_live_requires_firewall),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            } else if (rows.isEmpty()) {
+                LoadingStatisticsBlock(
                     text =
                         stringResource(
                             if (state.isAvailable) {
-                                R.string.traffic_map_waiting_connections
+                                R.string.statistics_loading
                             } else {
-                                R.string.traffic_map_live_requires_firewall
+                                R.string.traffic_map_waiting_connections
                             },
                         ),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             } else {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(190.dp),
+                        .height(210.dp),
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
+                    verticalAlignment = Alignment.Bottom,
                 ) {
-                    CountryDonutChart(
-                        points = state.destinations.take(CountryChartSegmentLimit),
+                    CountryVerticalBarChart(
+                        points = rows,
                         modifier = Modifier
                             .weight(1f)
                             .fillMaxHeight(),
                     )
                     CountryTrafficList(
-                        points = state.destinations,
+                        points = rows,
                         modifier = Modifier
                             .weight(1f)
                             .fillMaxHeight(),
                     )
+                }
+                if (state.destinations.size > rows.size) {
+                    TextButton(onClick = onShowAll) {
+                        Text(stringResource(R.string.show_all_label))
+                    }
                 }
             }
         }
@@ -462,47 +685,128 @@ private fun CountryTrafficCard(state: TrafficMapUiState) {
 }
 
 @Composable
-private fun CountryDonutChart(
+private fun CountryVerticalBarChart(
     points: List<TrafficMapPoint>,
     modifier: Modifier = Modifier,
 ) {
     val colors = statisticsChartColors()
-    val trackColor = MaterialTheme.colorScheme.surfaceVariant
-    val totalBytes = points.sumOf(TrafficMapPoint::bytes).coerceAtLeast(1L)
+    val gridColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+    val maxBytes = points.maxOfOrNull(TrafficMapPoint::bytes)?.coerceAtLeast(1L) ?: 1L
     val visible = rememberOneShotVisible("countries")
     val progress by animateFloatAsState(
         targetValue = if (visible) 1f else 0f,
         animationSpec = tween(durationMillis = DonutAnimationDurationMs, easing = FastOutSlowInEasing),
-        label = "country-donut-progress",
+        label = "country-bars-progress",
     )
-    Box(modifier = modifier, contentAlignment = Alignment.Center) {
-        Canvas(modifier = Modifier.size(134.dp)) {
-            val stroke = Stroke(width = 18.dp.toPx(), cap = StrokeCap.Round)
-            var startAngle = -90f
-            drawArc(
-                color = trackColor,
-                startAngle = -90f,
-                sweepAngle = 360f,
-                useCenter = false,
-                style = stroke,
+    Canvas(modifier = modifier.fillMaxWidth()) {
+        val chartTop = 12.dp.toPx()
+        val chartBottom = size.height - 20.dp.toPx()
+        val chartHeight = (chartBottom - chartTop).coerceAtLeast(1f)
+        drawLine(
+            color = gridColor,
+            start = Offset(0f, chartTop),
+            end = Offset(size.width, chartTop),
+            pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 8f)),
+        )
+        val slotWidth = size.width / points.size.coerceAtLeast(1).toFloat()
+        val barWidth = (slotWidth * 0.48f).coerceAtMost(18.dp.toPx())
+        points.forEachIndexed { index, point ->
+            val normalized = point.bytes.toFloat() / maxBytes.toFloat()
+            val barHeight = (chartHeight * normalized * progress).coerceAtLeast(if (point.bytes > 0L) 2f else 0f)
+            val center = slotWidth * index + slotWidth / 2f
+            drawRoundRect(
+                color = colors[index % colors.size],
+                topLeft = Offset(center - barWidth / 2f, chartBottom - barHeight),
+                size = Size(barWidth, barHeight),
+                cornerRadius = CornerRadius(5.dp.toPx(), 5.dp.toPx()),
             )
-            points.forEachIndexed { index, point ->
-                val sweep = 360f * (point.bytes.toFloat() / totalBytes.toFloat()) * progress
-                drawArc(
-                    color = colors[index % colors.size],
-                    startAngle = startAngle,
-                    sweepAngle = sweep,
-                    useCenter = false,
-                    style = stroke,
-                )
-                startAngle += sweep
-            }
+        }
+    }
+}
+
+@Composable
+private fun CountryTrafficRow(point: TrafficMapPoint) {
+    val context = LocalContext.current
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 7.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = countryEmoji(point.countryCode),
+            style = MaterialTheme.typography.bodyMedium,
+        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = point.label,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = stringResource(R.string.statistics_country_connections, point.connections),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
         Text(
-            text = points.size.toString(),
-            style = MaterialTheme.typography.titleLarge,
+            text = formatBytes(context, point.bytes),
+            style = MaterialTheme.typography.labelMedium,
             fontWeight = FontWeight.SemiBold,
+            textAlign = TextAlign.End,
         )
+    }
+}
+
+@Composable
+private fun LoadingStatisticsBlock(text: String) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 72.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+        Text(
+            text = text,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+@Composable
+private fun StatisticsDisabledState(onEnable: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 420.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Icon(
+                imageVector = Icons.Outlined.BarChart,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(34.dp),
+            )
+            Text(
+                text = stringResource(R.string.statistics_disabled_title),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                textAlign = TextAlign.Center,
+            )
+            TextButton(onClick = onEnable) {
+                Text(stringResource(R.string.statistics_enable_action))
+            }
+        }
     }
 }
 
@@ -554,7 +858,7 @@ private fun ProtocolStatisticsSection(items: List<ProtocolStatisticsUiItem>) {
             EmptySectionText(text = stringResource(R.string.statistics_protocols_empty))
         } else {
             BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
-                val columns = if (maxWidth >= WideStatisticsGridWidth) 3 else 2
+                val columns = if (maxWidth >= CompactProtocolGridWidth) 4 else 2
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     items.chunked(columns).forEach { rowItems ->
                         Row(
@@ -589,8 +893,8 @@ private fun ProtocolStatCard(
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.42f)),
     ) {
         Column(
-            modifier = Modifier.padding(10.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.padding(8.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Text(
@@ -606,11 +910,11 @@ private fun ProtocolStatCard(
                     successRate = item.successRate,
                     errorRate = item.errorRate,
                     visible = visible,
-                    modifier = Modifier.size(78.dp),
+                    modifier = Modifier.size(58.dp),
                 )
                 Text(
                     text = formatPercent(item.successRate),
-                    style = MaterialTheme.typography.titleSmall,
+                    style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.SemiBold,
                 )
             }
@@ -882,7 +1186,10 @@ private fun TransportRow(item: TransportStatisticsUiItem) {
 private fun AppTrafficStatisticsCard(
     rows: List<AppTrafficRow>,
     allRowsCount: Int,
+    enabled: Boolean,
+    runtimeActive: Boolean,
     onShowAll: () -> Unit,
+    onRowClick: (AppTrafficRow) -> Unit,
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -895,16 +1202,38 @@ private fun AppTrafficStatisticsCard(
         ) {
             SectionTitle(
                 icon = Icons.Outlined.Apps,
-                title = stringResource(R.string.statistics_apps_title),
+                title = stringResource(R.string.statistics_apps_top_title),
             )
-            TrafficBarChart(rows = rows)
-            ChartLegend()
-            AppTrafficTable(rows = rows, emptyText = stringResource(R.string.app_statistics_empty))
-            if (allRowsCount > rows.size) {
-                FoxholeDialogConfirmButton(
-                    onClick = onShowAll,
-                    label = stringResource(R.string.show_all_label),
+            if (!enabled) {
+                Text(
+                    text = stringResource(R.string.app_statistics_disabled_body),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+            } else if (rows.isEmpty()) {
+                LoadingStatisticsBlock(
+                    text =
+                        stringResource(
+                            if (runtimeActive) {
+                                R.string.statistics_loading
+                            } else {
+                                R.string.app_statistics_empty
+                            },
+                        ),
+                )
+            } else {
+                TrafficBarChart(rows = rows)
+                ChartLegend()
+                AppTrafficTable(
+                    rows = rows,
+                    emptyText = stringResource(R.string.app_statistics_empty),
+                    onRowClick = onRowClick,
+                )
+                if (allRowsCount > rows.size) {
+                    TextButton(onClick = onShowAll) {
+                        Text(stringResource(R.string.show_all_label))
+                    }
+                }
             }
         }
     }
@@ -981,14 +1310,18 @@ private fun LegendItem(color: Color, text: String) {
 }
 
 @Composable
-private fun AppTrafficTable(rows: List<AppTrafficRow>, emptyText: String) {
+private fun AppTrafficTable(
+    rows: List<AppTrafficRow>,
+    emptyText: String,
+    onRowClick: (AppTrafficRow) -> Unit,
+) {
     if (rows.isEmpty()) {
         Text(text = emptyText, color = MaterialTheme.colorScheme.onSurfaceVariant)
         return
     }
     Column {
         rows.forEachIndexed { index, row ->
-            AppTrafficRowView(row = row)
+            AppTrafficRowView(row = row, onClick = { onRowClick(row) })
             if (index != rows.lastIndex) {
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
             }
@@ -997,9 +1330,15 @@ private fun AppTrafficTable(rows: List<AppTrafficRow>, emptyText: String) {
 }
 
 @Composable
-private fun AppTrafficRowView(row: AppTrafficRow) {
+private fun AppTrafficRowView(
+    row: AppTrafficRow,
+    onClick: (() -> Unit)? = null,
+) {
     Row(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
+            .padding(vertical = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -1084,12 +1423,318 @@ private fun EmptySectionText(text: String) {
     )
 }
 
+@Composable
+private fun StatisticsMetricSwitch(
+    metric: StatisticsMetric,
+    checked: Boolean,
+    title: String,
+    enabled: Boolean,
+    onMetricChanged: (StatisticsMetric, Boolean) -> Unit,
+    summary: String? = null,
+) {
+    SettingSwitchRow(
+        title = title,
+        checked = checked,
+        summary = summary,
+        leadingIcon = Icons.Outlined.Tune,
+        enabled = enabled,
+        onCheckedChange = { value -> onMetricChanged(metric, value) },
+        grouped = true,
+        summaryMaxLines = 2,
+    )
+}
+
+@Composable
+private fun ProfileStatisticsDetail(
+    state: SettingsRouteUiState,
+    statistics: StatisticsUiState,
+    item: ProfileTrafficUiItem,
+) {
+    val context = LocalContext.current
+    val detail = profileStatisticsDetail(state, item)
+    Column(
+        modifier = Modifier
+            .heightIn(max = 520.dp)
+            .verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        DetailMetricGrid(
+            metrics =
+                listOf(
+                    stringResource(R.string.statistics_total_traffic) to formatBytes(context, detail.totalBytes),
+                    stringResource(R.string.statistics_vpn_sessions) to detail.totalAttempts.toString(),
+                    stringResource(R.string.statistics_successful_connections) to detail.successCount.toString(),
+                    stringResource(R.string.statistics_errors) to detail.failureCount.toString(),
+                    stringResource(R.string.statistics_average_latency) to detail.avgLatencyMs.formatLatency(),
+                    stringResource(R.string.statistics_min_latency) to detail.minLatencyMs.formatLatency(),
+                    stringResource(R.string.statistics_max_latency) to detail.maxLatencyMs.formatLatency(),
+                    stringResource(R.string.statistics_last_activity) to detail.lastActivityAt.formatLastActivity(),
+                ),
+        )
+        if (detail.protocols.isNotEmpty()) {
+            Text(
+                text = stringResource(R.string.statistics_profile_protocols_title),
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                detail.protocols.forEach { protocol ->
+                    Surface(
+                        shape = MaterialTheme.shapes.small,
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.36f),
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(10.dp),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = protocolDisplayName(protocol.protocolHint),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.SemiBold,
+                                )
+                                Text(
+                                    text =
+                                        stringResource(
+                                            R.string.statistics_profile_protocol_metrics,
+                                            formatPercent(protocol.successRate),
+                                            formatPercent(protocol.errorRate),
+                                            protocol.avgLatencyMs.formatLatency(),
+                                        ),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            Text(
+                                text = formatBytes(context, protocol.totalBytes),
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                textAlign = TextAlign.End,
+                            )
+                        }
+                    }
+                }
+            }
+        }
+        val comparisons =
+            statistics.profileComparisons.filter { comparison ->
+                comparison.left.profileId == item.profileId || comparison.right.profileId == item.profileId
+            }
+        if (comparisons.isNotEmpty()) {
+            Text(
+                text = stringResource(R.string.statistics_profile_comparison_title),
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+            )
+            comparisons.forEach { comparison -> ProfileComparisonCard(item = comparison) }
+        }
+    }
+}
+
+@Composable
+private fun AppTrafficDetail(
+    row: AppTrafficRow,
+    samples: List<AppTrafficSample>,
+    diagnosticEntries: List<DiagnosticEntry>,
+) {
+    val context = LocalContext.current
+    val appSamples = samples.filter { sample -> sample.packageName == row.packageName }
+    val connectionRows = remember(row.packageName, diagnosticEntries) {
+        appConnectionRows(row.packageName, diagnosticEntries)
+    }
+    Column(
+        modifier = Modifier
+            .heightIn(max = 520.dp)
+            .verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        DetailMetricGrid(
+            metrics =
+                listOf(
+                    stringResource(R.string.home_total_label) to formatBytes(context, row.totalBytes),
+                    stringResource(R.string.traffic_received) to formatBytes(context, row.rxBytes),
+                    stringResource(R.string.traffic_sent) to formatBytes(context, row.txBytes),
+                    stringResource(R.string.statistics_app_samples) to appSamples.size.toString(),
+                    stringResource(R.string.statistics_last_activity) to appSamples.maxOfOrNull(AppTrafficSample::sampledAt).formatLastActivity(),
+                ),
+        )
+        if (connectionRows.isEmpty()) {
+            Text(
+                text = stringResource(R.string.statistics_app_detail_connections_unavailable),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        } else {
+            Text(
+                text = stringResource(R.string.statistics_app_detail_top_destinations),
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+            )
+            connectionRows.take(5).forEach { connection ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = connection.remote,
+                            style = MaterialTheme.typography.bodySmall,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Text(
+                            text = connection.protocol,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Text(
+                        text = connection.count.toString(),
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
+            }
+        }
+        if (appSamples.isNotEmpty()) {
+            AppTrafficMiniChart(samples = appSamples.takeLast(24))
+            Text(
+                text = stringResource(R.string.statistics_app_detail_top_samples),
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+            )
+            appSamples
+                .sortedByDescending { sample -> sample.rxBytes + sample.txBytes }
+                .take(5)
+                .forEach { sample ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = sample.sampledAt.formatLastActivity(),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Text(
+                            text = formatBytes(context, sample.rxBytes + sample.txBytes),
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                    }
+                }
+        }
+    }
+}
+
+@Composable
+private fun AppTrafficMiniChart(samples: List<AppTrafficSample>) {
+    val semanticColors = LocalFoxholeSemanticColors.current
+    val txColor = MaterialTheme.colorScheme.primary
+    val rxColor = semanticColors.success
+    val maxBytes = samples.maxOfOrNull { sample -> max(sample.rxBytes, sample.txBytes) }?.coerceAtLeast(1L) ?: 1L
+    Canvas(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(120.dp),
+    ) {
+        val step = size.width / (samples.size - 1).coerceAtLeast(1).toFloat()
+        fun point(index: Int, value: Long): Offset {
+            val ratio = value.toFloat() / maxBytes.toFloat()
+            return Offset(
+                x = index * step,
+                y = size.height - (size.height * ratio.coerceIn(0f, 1f)),
+            )
+        }
+        samples.zipWithNext().forEachIndexed { index, pair ->
+            drawLine(
+                color = rxColor,
+                start = point(index, pair.first.rxBytes),
+                end = point(index + 1, pair.second.rxBytes),
+                strokeWidth = 2.dp.toPx(),
+                cap = StrokeCap.Round,
+            )
+            drawLine(
+                color = txColor,
+                start = point(index, pair.first.txBytes),
+                end = point(index + 1, pair.second.txBytes),
+                strokeWidth = 2.dp.toPx(),
+                cap = StrokeCap.Round,
+            )
+        }
+    }
+}
+
+@Composable
+private fun DetailMetricGrid(metrics: List<Pair<String, String>>) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        metrics.chunked(2).forEach { row ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                row.forEach { (label, value) ->
+                    MetricTile(label = label, value = value, modifier = Modifier.weight(1f))
+                }
+                if (row.size == 1) {
+                    Box(modifier = Modifier.weight(1f))
+                }
+            }
+        }
+    }
+}
+
 private data class AppTrafficRow(
     val packageName: String,
     val label: String,
     val txBytes: Long,
     val rxBytes: Long,
+) {
+    val totalBytes: Long get() = txBytes + rxBytes
+}
+
+private data class AppConnectionRow(
+    val remote: String,
+    val protocol: String,
+    val count: Int,
+    val lastSeenAt: Long,
 )
+
+private data class ProfileStatisticsDetailModel(
+    val totalBytes: Long,
+    val successCount: Int,
+    val failureCount: Int,
+    val avgLatencyMs: Long?,
+    val minLatencyMs: Long?,
+    val maxLatencyMs: Long?,
+    val lastActivityAt: Long?,
+    val lastProtocolHint: ProtocolHint,
+    val protocols: List<ProfileProtocolDetail>,
+) {
+    val totalAttempts: Int get() = successCount + failureCount
+}
+
+private data class ProfileProtocolDetail(
+    val protocolHint: ProtocolHint,
+    val successCount: Int,
+    val failureCount: Int,
+    val rxBytes: Long,
+    val txBytes: Long,
+    val avgLatencyMs: Long?,
+    val minLatencyMs: Long?,
+    val maxLatencyMs: Long?,
+    val lastUsedAt: Long?,
+) {
+    val totalAttempts: Int get() = successCount + failureCount
+    val successRate: Float get() = if (totalAttempts == 0) 0f else successCount.toFloat() / totalAttempts
+    val errorRate: Float get() = if (totalAttempts == 0) 0f else failureCount.toFloat() / totalAttempts
+    val totalBytes: Long get() = rxBytes + txBytes
+}
 
 private data class ProtocolAccumulator(
     var successCount: Int = 0,
@@ -1164,16 +1809,114 @@ private data class ComparisonAccumulator(
     }
 }
 
+private fun profileStatisticsDetail(
+    state: SettingsRouteUiState,
+    item: ProfileTrafficUiItem,
+): ProfileStatisticsDetailModel {
+    val profile = state.profiles.firstOrNull { profile -> profile.id == item.profileId }
+    val options = profile?.protocolOptions.orEmpty().associateBy(ProfileProtocolOption::id)
+    val preference = state.settings.smartProfilePreferences.firstOrNull { preference -> preference.profileId == item.profileId }
+    val protocolDetails =
+        preference
+            ?.protocolMemories
+            .orEmpty()
+            .mapNotNull { memory ->
+                val protocol = options[memory.optionId]?.protocolHint ?: profile?.protocolHint ?: item.protocolHint
+                if (protocol == ProtocolHint.UNKNOWN) {
+                    return@mapNotNull null
+                }
+                val latency = memory.lastLatencyMs?.takeIf { value -> value > 0L }
+                val lastUsed =
+                    maxOfNotNull(
+                        memory.lastSuccessAt,
+                        memory.lastFailureAt,
+                        memory.lastValidatedAt,
+                        memory.lastTrafficAt,
+                    )
+                val trafficForProtocol =
+                    if (protocol == item.protocolHint || item.protocolHint == ProtocolHint.UNKNOWN) {
+                        item
+                    } else {
+                        null
+                    }
+                ProfileProtocolDetail(
+                    protocolHint = protocol,
+                    successCount = memory.successCount.coerceAtLeast(0),
+                    failureCount = memory.failureCount.coerceAtLeast(0),
+                    rxBytes = trafficForProtocol?.rxBytes ?: 0L,
+                    txBytes = trafficForProtocol?.txBytes ?: 0L,
+                    avgLatencyMs = latency,
+                    minLatencyMs = latency,
+                    maxLatencyMs = latency,
+                    lastUsedAt = lastUsed,
+                )
+            }
+            .filter { detail -> detail.totalAttempts > 0 || detail.totalBytes > 0L || detail.lastUsedAt != null }
+            .sortedWith(
+                compareByDescending<ProfileProtocolDetail> { detail -> detail.lastUsedAt ?: 0L }
+                    .thenByDescending { detail -> detail.totalBytes },
+            )
+    val fallbackProtocol =
+        item.protocolHint
+            .takeIf { hint -> hint != ProtocolHint.UNKNOWN }
+            ?: profile?.runtimeProtocolHint()
+            ?: ProtocolHint.UNKNOWN
+    val visibleProtocolDetails =
+        protocolDetails.takeIf(List<ProfileProtocolDetail>::isNotEmpty)
+            ?: listOf(
+                ProfileProtocolDetail(
+                    protocolHint = fallbackProtocol,
+                    successCount = if (item.totalBytes > 0L) 1 else 0,
+                    failureCount = 0,
+                    rxBytes = item.rxBytes,
+                    txBytes = item.txBytes,
+                    avgLatencyMs = null,
+                    minLatencyMs = null,
+                    maxLatencyMs = null,
+                    lastUsedAt = item.updatedAt.takeIf { updatedAt -> updatedAt > 0L },
+                ),
+            )
+    val latencies = visibleProtocolDetails.mapNotNull(ProfileProtocolDetail::avgLatencyMs)
+    val successCount = visibleProtocolDetails.sumOf(ProfileProtocolDetail::successCount).let { count ->
+        if (count == 0 && item.totalBytes > 0L) 1 else count
+    }
+    val failureCount = visibleProtocolDetails.sumOf(ProfileProtocolDetail::failureCount)
+    val lastProtocol =
+        visibleProtocolDetails
+            .maxByOrNull { detail -> detail.lastUsedAt ?: 0L }
+            ?.protocolHint
+            ?: fallbackProtocol
+    return ProfileStatisticsDetailModel(
+        totalBytes = item.totalBytes,
+        successCount = successCount,
+        failureCount = failureCount,
+        avgLatencyMs = latencies.averageOrNull(),
+        minLatencyMs = latencies.minOrNull(),
+        maxLatencyMs = latencies.maxOrNull(),
+        lastActivityAt =
+            maxOfNotNull(
+                item.updatedAt.takeIf { updatedAt -> updatedAt > 0L },
+                visibleProtocolDetails.mapNotNull(ProfileProtocolDetail::lastUsedAt).maxOrNull(),
+            ),
+        lastProtocolHint = lastProtocol,
+        protocols = visibleProtocolDetails,
+    )
+}
+
 private fun statisticsUiState(
     state: SettingsRouteUiState,
-    period: StatisticsPeriod,
+    retention: StatisticsRetention,
 ): StatisticsUiState {
     val profileTraffic = profileTrafficItems(state)
     val protocolStats = protocolStatistics(state, profileTraffic)
     val total = overallStatistics(profileTraffic, protocolStats, state)
     return StatisticsUiState(
-        range = period.toStatisticsRange(),
-        extendedMode = state.settings.appTrafficStatsEnabled && state.settings.expert.firewallEnabled,
+        range = retention.toStatisticsRange(),
+        extendedMode =
+            state.settings.statistics.enabled &&
+                state.settings.statistics.appTrafficEnabled &&
+                state.settings.appTrafficStatsEnabled &&
+                state.settings.expert.firewallEnabled,
         profileTraffic = profileTraffic,
         total = total,
         vpnProtocols = protocolStats,
@@ -1358,7 +2101,7 @@ private fun transportStatistics(
                 avgLatencyMs = accumulator.latencies.averageOrNull(),
             )
         }
-        .filter { item -> item.totalAttempts > 0 || item.totalBytes > 0L }
+        .filter { item -> item.transport != TransportProtocol.UNKNOWN && (item.totalAttempts > 0 || item.totalBytes > 0L) }
         .sortedWith(
             compareByDescending<TransportStatisticsUiItem> { item -> item.totalBytes }
                 .thenBy { item -> item.transport.name },
@@ -1368,36 +2111,81 @@ private fun transportStatistics(
 private fun appTrafficRows(
     samples: List<AppTrafficSample>,
     installedApps: List<InstalledAppOption>,
-    period: StatisticsPeriod,
+    retention: StatisticsRetention,
 ): List<AppTrafficRow> {
     val labels = installedApps.associate { it.packageName to it.label }
-    val cutoff = period.durationMs?.let { System.currentTimeMillis() - it }
-    val sampledRows =
-        samples
-            .asSequence()
-            .filter { sample -> cutoff == null || sample.sampledAt >= cutoff }
-            .groupBy(AppTrafficSample::packageName)
-            .map { (packageName, packageSamples) ->
-                AppTrafficRow(
-                    packageName = packageName,
-                    label = labels[packageName] ?: packageName,
-                    txBytes = packageSamples.sumOf(AppTrafficSample::txBytes),
-                    rxBytes = packageSamples.sumOf(AppTrafficSample::rxBytes),
+    val cutoff = retention.durationMs?.let { System.currentTimeMillis() - it }
+    return samples
+        .asSequence()
+        .filter { sample -> cutoff == null || sample.sampledAt >= cutoff }
+        .groupBy(AppTrafficSample::packageName)
+        .map { (packageName, packageSamples) ->
+            AppTrafficRow(
+                packageName = packageName,
+                label = labels[packageName] ?: packageName,
+                txBytes = packageSamples.sumOf(AppTrafficSample::txBytes),
+                rxBytes = packageSamples.sumOf(AppTrafficSample::rxBytes),
+            )
+        }
+        .filter { row -> row.totalBytes > 0L }
+        .sortedWith(
+            compareByDescending<AppTrafficRow> { it.totalBytes }
+                .thenBy { it.label.lowercase(Locale.getDefault()) },
+        )
+}
+
+private fun appConnectionRows(
+    packageName: String,
+    entries: List<DiagnosticEntry>,
+): List<AppConnectionRow> =
+    entries
+        .asSequence()
+        .filter { entry -> entry.tag == "activity" && entry.message.contains("packages=") && entry.message.contains(packageName) }
+        .mapNotNull { entry ->
+            val parts = entry.message.substringAfter(": ", missingDelimiterValue = entry.message)
+                .split(" • ")
+                .mapNotNull { part ->
+                    val key = part.substringBefore("=", missingDelimiterValue = "").takeIf(String::isNotBlank)
+                    val value = part.substringAfter("=", missingDelimiterValue = "").takeIf(String::isNotBlank)
+                    if (key != null && value != null) key to value else null
+                }
+                .toMap()
+            val packages = parts["packages"].orEmpty().split(",").map(String::trim)
+            if (packageName !in packages) {
+                null
+            } else {
+                val remote = parts["remote"]?.takeIf { remote -> remote != "?:0" && remote != "?" } ?: return@mapNotNull null
+                val protocol = parts["protocol"]?.takeIf(String::isNotBlank) ?: "?"
+                AppConnectionRow(
+                    remote = remote,
+                    protocol = protocol,
+                    count = 1,
+                    lastSeenAt = entry.timestamp,
                 )
             }
-    val sampledPackages = sampledRows.map(AppTrafficRow::packageName).toSet()
-    return (sampledRows + installedApps.filterNot { it.packageName in sampledPackages }.map { app ->
-        AppTrafficRow(
-            packageName = app.packageName,
-            label = app.label,
-            txBytes = 0L,
-            rxBytes = 0L,
+        }
+        .groupBy { row -> row.remote to row.protocol }
+        .map { (key, rows) ->
+            AppConnectionRow(
+                remote = key.first,
+                protocol = key.second,
+                count = rows.size,
+                lastSeenAt = rows.maxOf(AppConnectionRow::lastSeenAt),
+            )
+        }
+        .sortedWith(
+            compareByDescending<AppConnectionRow> { row -> row.count }
+                .thenByDescending { row -> row.lastSeenAt },
         )
-    }).sortedWith(
-        compareByDescending<AppTrafficRow> { it.txBytes + it.rxBytes }
-            .thenBy { it.label.lowercase(Locale.getDefault()) },
-    )
-}
+
+private val StatisticsRetention.durationMs: Long?
+    get() =
+        when (this) {
+            StatisticsRetention.WEEK -> 7L * 24L * 60L * 60L * 1000L
+            StatisticsRetention.MONTH -> 31L * 24L * 60L * 60L * 1000L
+            StatisticsRetention.MONTHS_3 -> 93L * 24L * 60L * 60L * 1000L
+            StatisticsRetention.FOREVER -> null
+        }
 
 private fun Profile.statisticsProtocolHints(): List<ProtocolHint> {
     val optionHints = protocolOptions.map(ProfileProtocolOption::protocolHint)
@@ -1470,26 +2258,22 @@ private fun niceTrafficScale(maxBytes: Long): Long {
 }
 
 @Composable
-private fun statisticsPeriodLabel(value: StatisticsPeriod): String =
+private fun statisticsRetentionLabel(value: StatisticsRetention): String =
     stringResource(
         when (value) {
-            StatisticsPeriod.HOUR -> R.string.statistics_period_hour
-            StatisticsPeriod.DAY -> R.string.statistics_period_day
-            StatisticsPeriod.DAYS_3 -> R.string.statistics_period_days_3
-            StatisticsPeriod.WEEK -> R.string.statistics_period_week
-            StatisticsPeriod.MONTH -> R.string.statistics_period_month
-            StatisticsPeriod.ALL -> R.string.statistics_period_all
+            StatisticsRetention.WEEK -> R.string.statistics_retention_week
+            StatisticsRetention.MONTH -> R.string.statistics_retention_month
+            StatisticsRetention.MONTHS_3 -> R.string.statistics_retention_months_3
+            StatisticsRetention.FOREVER -> R.string.statistics_retention_forever
         },
     )
 
-private fun StatisticsPeriod.toStatisticsRange(): StatisticsRange =
+private fun StatisticsRetention.toStatisticsRange(): StatisticsRange =
     when (this) {
-        StatisticsPeriod.HOUR -> StatisticsRange.HOUR
-        StatisticsPeriod.DAY -> StatisticsRange.DAY
-        StatisticsPeriod.DAYS_3 -> StatisticsRange.DAYS_3
-        StatisticsPeriod.WEEK -> StatisticsRange.WEEK
-        StatisticsPeriod.MONTH -> StatisticsRange.MONTH
-        StatisticsPeriod.ALL -> StatisticsRange.ALL
+        StatisticsRetention.WEEK -> StatisticsRange.WEEK
+        StatisticsRetention.MONTH -> StatisticsRange.MONTH
+        StatisticsRetention.MONTHS_3 -> StatisticsRange.MONTHS_3
+        StatisticsRetention.FOREVER -> StatisticsRange.FOREVER
     }
 
 private fun protocolDisplayName(protocol: ProtocolHint): String =
@@ -1531,8 +2315,7 @@ private fun List<Long>.averageOrNull(): Long? =
 private fun maxOfNotNull(vararg values: Long?): Long? =
     values.filterNotNull().maxOrNull()
 
-private val WideStatisticsGridWidth = 620.dp
+private val CompactProtocolGridWidth = 360.dp
 private const val DonutAnimationDurationMs = 700
-private const val CountryChartSegmentLimit = 8
 private const val ProfileTrafficPreviewLimit = 6
 private const val ProfileComparisonMinAttempts = 2

@@ -100,12 +100,12 @@ internal class LibboxTrafficMapConnectionSource(
             val ticker =
                 launch(Dispatchers.IO) {
                     while (isActive) {
-                        delay(SampleIntervalMillis)
                         val samples =
                             synchronized(lock) {
                                 connections.toTrafficMapSamples(countryResolver)
                             }
                         trySend(samples)
+                        delay(SampleIntervalMillis)
                     }
                 }
             runCatching { client.connect() }
@@ -117,7 +117,7 @@ internal class LibboxTrafficMapConnectionSource(
         }
 
     private companion object {
-        const val SampleIntervalMillis = 1_000L
+        const val SampleIntervalMillis = 3_000L
         const val ReconnectDelayMillis = 1_000L
         const val StatusIntervalNanos = 1_000_000_000L
     }

@@ -166,6 +166,23 @@ enum class DiagnosticsRetention(
 }
 
 @Serializable
+enum class StatisticsRetention {
+    WEEK,
+    MONTH,
+    MONTHS_3,
+    FOREVER,
+}
+
+enum class StatisticsMetric {
+    PROFILE_TRAFFIC,
+    VPN_PROTOCOLS,
+    PROFILE_COMPARISONS,
+    TRANSPORTS,
+    APP_TRAFFIC,
+    COUNTRY_TRAFFIC,
+}
+
+@Serializable
 enum class RoutingPresetSource {
     LOCAL,
     FILE,
@@ -312,6 +329,18 @@ data class ExpertSettings(
 )
 
 @Serializable
+data class StatisticsSettings(
+    val enabled: Boolean = false,
+    val retention: StatisticsRetention = StatisticsRetention.MONTH,
+    val profileTrafficEnabled: Boolean = true,
+    val vpnProtocolsEnabled: Boolean = true,
+    val profileComparisonsEnabled: Boolean = true,
+    val transportsEnabled: Boolean = true,
+    val appTrafficEnabled: Boolean = true,
+    val countryTrafficEnabled: Boolean = true,
+)
+
+@Serializable
 data class Settings(
     val schemaVersion: Int = SETTINGS_SCHEMA_VERSION,
     val ui: UiSettings = UiSettings(),
@@ -319,6 +348,7 @@ data class Settings(
     val traffic: TrafficSettings = TrafficSettings(),
     val privacyRoute: PrivacyRouteSettings = PrivacyRouteSettings(),
     val expert: ExpertSettings = ExpertSettings(),
+    val statistics: StatisticsSettings = StatisticsSettings(),
     val lastActiveProfile: CachedActiveProfile? = null,
     val smartProfilePreferences: List<SmartProfilePreference> = emptyList(),
     val profileTrafficTotals: List<ProfileTrafficTotal> = emptyList(),

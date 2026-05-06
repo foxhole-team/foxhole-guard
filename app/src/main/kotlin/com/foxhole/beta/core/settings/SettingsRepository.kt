@@ -36,6 +36,9 @@ import com.foxhole.beta.core.model.SmartProfileNetworkMemory
 import com.foxhole.beta.core.model.SmartProfilePreference
 import com.foxhole.beta.core.model.SmartProfileProtocolMemory
 import com.foxhole.beta.core.model.SmartStartTransportPriority
+import com.foxhole.beta.core.model.StatisticsMetric
+import com.foxhole.beta.core.model.StatisticsRetention
+import com.foxhole.beta.core.model.StatisticsSettings
 import com.foxhole.beta.core.model.SubscriptionRefreshInterval
 import com.foxhole.beta.core.model.ThemeMode
 import com.foxhole.beta.core.model.TrafficMode
@@ -453,7 +456,7 @@ class SettingsRepository(
         txBytes: Long,
         updatedAt: Long = System.currentTimeMillis(),
     ) = update { current ->
-        if (rxBytes <= 0L && txBytes <= 0L) {
+        if (!current.statistics.enabled || !current.statistics.profileTrafficEnabled || (rxBytes <= 0L && txBytes <= 0L)) {
             current
         } else {
             val existing = current.profileTrafficTotals.associateBy(ProfileTrafficTotal::profileId).toMutableMap()
@@ -471,6 +474,35 @@ class SettingsRepository(
         }
     }
 
+    suspend fun updateStatisticsEnabled(value: Boolean) =
+        update { current ->
+            current.copy(statistics = current.statistics.copy(enabled = value))
+        }
+
+    suspend fun updateStatisticsRetention(value: StatisticsRetention) =
+        update { current ->
+            current.copy(
+                statistics = current.statistics.copy(retention = value),
+                appTrafficSamples = current.appTrafficSamples.retainedFor(value, now = System.currentTimeMillis()),
+            )
+        }
+
+    suspend fun updateStatisticsMetricEnabled(
+        metric: StatisticsMetric,
+        value: Boolean,
+    ) = update { current ->
+        val statistics =
+            when (metric) {
+                StatisticsMetric.PROFILE_TRAFFIC -> current.statistics.copy(profileTrafficEnabled = value)
+                StatisticsMetric.VPN_PROTOCOLS -> current.statistics.copy(vpnProtocolsEnabled = value)
+                StatisticsMetric.PROFILE_COMPARISONS -> current.statistics.copy(profileComparisonsEnabled = value)
+                StatisticsMetric.TRANSPORTS -> current.statistics.copy(transportsEnabled = value)
+                StatisticsMetric.APP_TRAFFIC -> current.statistics.copy(appTrafficEnabled = value)
+                StatisticsMetric.COUNTRY_TRAFFIC -> current.statistics.copy(countryTrafficEnabled = value)
+            }
+        current.copy(statistics = statistics)
+    }
+
     suspend fun updateAppTrafficStatsEnabled(value: Boolean) =
         update { current ->
             current.copy(
@@ -484,15 +516,14 @@ class SettingsRepository(
         samples: List<AppTrafficSample>,
         now: Long = System.currentTimeMillis(),
     ) = update { current ->
-        if (!current.appTrafficStatsEnabled) {
-            current.copy(appTrafficBaselines = baselines)
+        if (!current.statistics.enabled || !current.statistics.appTrafficEnabled || !current.appTrafficStatsEnabled) {
+            current
         } else {
-            val cutoff = now - APP_TRAFFIC_SAMPLE_RETENTION_MS
             current.copy(
                 appTrafficBaselines = baselines,
                 appTrafficSamples =
                     (current.appTrafficSamples + samples)
-                        .filter { sample -> sample.sampledAt >= cutoff }
+                        .retainedFor(current.statistics.retention, now)
                         .takeLast(APP_TRAFFIC_SAMPLE_MAX_COUNT),
             )
         }
@@ -1112,6 +1143,7 @@ class SettingsRepository(
                         resetScreenshotBlocking = resetDefaults,
                         storedSchemaVersion = schemaVersion,
                     ),
+                statistics = statistics.normalized(),
                 smartProfilePreferences = normalizeSmartProfilePreferences(smartProfilePreferences),
                 profileTrafficTotals =
                     profileTrafficTotals
@@ -1126,6 +1158,7 @@ class SettingsRepository(
                 appTrafficSamples =
                     appTrafficSamples
                         .filter { sample -> sample.packageName.isNotBlank() && sample.uid > 0 && (sample.rxBytes > 0L || sample.txBytes > 0L) }
+                        .retainedFor(statistics.retention, now = System.currentTimeMillis())
                         .takeLast(APP_TRAFFIC_SAMPLE_MAX_COUNT),
                 usageTrackingStartedAt = usageTrackingStartedAt.takeIf { it > 0L } ?: System.currentTimeMillis(),
             )
@@ -1178,6 +1211,38 @@ class SettingsRepository(
             )
         }
     }
+
+    private fun StatisticsSettings.normalized(): StatisticsSettings =
+        copy(
+            retention =
+                when (retention) {
+                    StatisticsRetention.WEEK,
+                    StatisticsRetention.MONTH,
+                    StatisticsRetention.MONTHS_3,
+                    StatisticsRetention.FOREVER,
+                    -> retention
+                },
+        )
+
+    private fun List<AppTrafficSample>.retainedFor(
+        retention: StatisticsRetention,
+        now: Long,
+    ): List<AppTrafficSample> {
+        val cutoff = retention.cutoffMillis(now) ?: return this
+        return filter { sample -> sample.sampledAt >= cutoff }
+    }
+
+    private fun StatisticsRetention.cutoffMillis(now: Long): Long? =
+        durationMillis?.let { duration -> now - duration }
+
+    private val StatisticsRetention.durationMillis: Long?
+        get() =
+            when (this) {
+                StatisticsRetention.WEEK -> 7L * 24L * 60L * 60L * 1000L
+                StatisticsRetention.MONTH -> 31L * 24L * 60L * 60L * 1000L
+                StatisticsRetention.MONTHS_3 -> 93L * 24L * 60L * 60L * 1000L
+                StatisticsRetention.FOREVER -> null
+            }
 
     private fun PrivacyRouteSettings.normalized(): PrivacyRouteSettings =
         copy(
