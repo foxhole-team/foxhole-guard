@@ -624,7 +624,8 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
 
     internal fun startAppTrafficStatsUpdates() {
         stopAppTrafficStatsUpdates()
-        if (!container.settingsRepository.settings.value.appTrafficStatsEnabled) {
+        val settings = container.settingsRepository.settings.value
+        if (!settings.appTrafficStatsEnabled || !settings.expert.firewallEnabled) {
             return
         }
         appTrafficStatsJob =

@@ -46,6 +46,7 @@ import com.foxhole.beta.core.model.RoutingPresetOverrideMode
 import com.foxhole.beta.core.model.RoutingPresetSource
 import com.foxhole.beta.core.model.RoutingRule
 import com.foxhole.beta.core.model.RoutingRuleAction
+import com.foxhole.beta.core.model.Settings
 import com.foxhole.beta.core.model.SmartStartTransportPriority
 import com.foxhole.beta.core.model.SubscriptionRefreshInterval
 import com.foxhole.beta.core.model.ThemeMode
@@ -385,7 +386,13 @@ class HomeViewModel(
                 connection.state in ACTIVE_CONNECTION_STATES &&
                     connection.trafficMode == TrafficMode.TUNNEL &&
                     connection.profileId != FoxholeVpnService.LOCAL_GUARD_PROFILE_ID
+            val staleAfterRuntimeChange =
+                ipInfo != null &&
+                    connection.state !in ACTIVE_CONNECTION_STATES &&
+                    ipInfo.fetchedAt < connection.lastChangeAt
             if (remoteTunnelActive) {
+                null
+            } else if (staleAfterRuntimeChange) {
                 null
             } else {
                 ipInfo
@@ -469,11 +476,16 @@ class HomeViewModel(
                     snackbars.emit(errorBanner(R.string.settings_secure_storage_failed))
                 }
             val settings = container.settingsRepository.settings.value
-            syncAppTrafficStatsSampler(settings.appTrafficStatsEnabled)
+            syncAppTrafficStatsSampler(appTrafficStatsRuntimeAllowed(settings, container.connectionController.snapshot.value))
         }
         viewModelScope.launch {
-            container.settingsRepository.settings.collect { settings ->
-                syncAppTrafficStatsSampler(settings.appTrafficStatsEnabled)
+            combine(
+                container.settingsRepository.settings,
+                container.connectionController.snapshot,
+            ) { settings, snapshot ->
+                appTrafficStatsRuntimeAllowed(settings, snapshot)
+            }.collect { enabled ->
+                syncAppTrafficStatsSampler(enabled)
             }
         }
         viewModelScope.launch {
@@ -1178,7 +1190,13 @@ class HomeViewModel(
         viewModelScope.launch {
             container.settingsRepository.updateAppTrafficStatsEnabled(value)
             container.connectionController.syncLocalGuard()
-            if (value) {
+            val runtimeAllowed =
+                appTrafficStatsRuntimeAllowed(
+                    settings = container.settingsRepository.settings.value,
+                    snapshot = container.connectionController.snapshot.value,
+                )
+            syncAppTrafficStatsSampler(runtimeAllowed)
+            if (value && runtimeAllowed) {
                 loadInstalledApps()
                 sampleAppTrafficStats()
             }
@@ -1206,6 +1224,17 @@ class HomeViewModel(
     internal suspend fun sampleAppTrafficStats() {
         appTrafficStatsRecorder.recordSnapshot()
     }
+
+    private fun appTrafficStatsRuntimeAllowed(
+        settings: Settings,
+        snapshot: ConnectionSnapshot,
+    ): Boolean =
+        settings.appTrafficStatsEnabled &&
+            settings.expert.firewallEnabled &&
+            (
+                snapshot.state in ACTIVE_CONNECTION_STATES ||
+                    container.connectionController.hasActiveVpnNetwork()
+            )
 
     internal fun ClipData.firstTextItem(): String? =
         if (itemCount > 0) {

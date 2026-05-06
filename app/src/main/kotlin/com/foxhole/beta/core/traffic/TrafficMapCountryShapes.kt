@@ -9,6 +9,9 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import java.util.Locale
+import kotlin.math.abs
+import kotlin.math.ceil
+import kotlin.math.max
 
 data class TrafficMapGeoPoint(
     val lat: Double,
@@ -88,3 +91,118 @@ class TrafficMapCountryGeoJsonParser(
         val CountryCodePropertyNames = listOf("ISO_A2", "ISO_A2_EH", "WB_A2", "POSTAL")
     }
 }
+
+internal fun TrafficMapCountryShape.toTrafficMapVisualShape(
+    minRelativeRingArea: Double = TrafficMapVisualMinRelativeRingArea,
+    minAbsoluteRingArea: Double = TrafficMapVisualMinAbsoluteRingArea,
+    maxPointsPerRing: Int = TrafficMapVisualMaxPointsPerRing,
+): TrafficMapCountryShape? {
+    val normalizedRings =
+        rings
+            .asSequence()
+            .map(::normalizeTrafficMapRingLongitudes)
+            .map { ring -> simplifyTrafficMapRing(ring, maxPointsPerRing) }
+            .filter { ring -> ring.size >= TrafficMapVisualMinRingPoints }
+            .toList()
+    if (normalizedRings.isEmpty()) {
+        return null
+    }
+    val areas = normalizedRings.map(::trafficMapRingArea)
+    val largestArea = areas.maxOrNull() ?: return null
+    val largestIndex = areas.indexOf(largestArea)
+    val areaThreshold = max(largestArea * minRelativeRingArea, minAbsoluteRingArea)
+    val visualRings =
+        normalizedRings.filterIndexed { index, _ ->
+            index == largestIndex || areas[index] >= areaThreshold
+        }
+    return copy(rings = visualRings).takeIf { shape -> shape.rings.isNotEmpty() }
+}
+
+internal fun normalizeTrafficMapRingLongitudes(ring: List<TrafficMapGeoPoint>): List<TrafficMapGeoPoint> {
+    if (ring.size < TrafficMapVisualMinRingPoints) {
+        return ring
+    }
+    val normalizedLongitudes = ring.map { point -> normalizeTrafficMapLongitude(point.lon) }
+    val sorted = normalizedLongitudes.distinct().sorted()
+    if (sorted.size <= 1) {
+        return ring.mapIndexed { index, point -> point.copy(lon = normalizedLongitudes[index]) }
+    }
+    var largestGap = Double.NEGATIVE_INFINITY
+    var intervalStart = sorted.first()
+    sorted.forEachIndexed { index, longitude ->
+        val next = if (index == sorted.lastIndex) sorted.first() + FullLongitudeDegrees else sorted[index + 1]
+        val gap = next - longitude
+        if (gap > largestGap) {
+            largestGap = gap
+            intervalStart = if (index == sorted.lastIndex) sorted.first() else sorted[index + 1]
+        }
+    }
+    return ring.mapIndexed { index, point ->
+        val longitude = normalizedLongitudes[index]
+        point.copy(lon = if (longitude < intervalStart) longitude + FullLongitudeDegrees else longitude)
+    }
+}
+
+internal fun trafficMapRingArea(ring: List<TrafficMapGeoPoint>): Double {
+    if (ring.size < TrafficMapVisualMinRingPoints) {
+        return 0.0
+    }
+    var area = 0.0
+    ring.indices.forEach { index ->
+        val current = ring[index]
+        val next = ring[(index + 1) % ring.size]
+        area += current.lon * next.lat - next.lon * current.lat
+    }
+    return abs(area) / 2.0
+}
+
+internal fun simplifyTrafficMapRing(
+    ring: List<TrafficMapGeoPoint>,
+    maxPoints: Int = TrafficMapVisualMaxPointsPerRing,
+): List<TrafficMapGeoPoint> {
+    val openRing =
+        if (ring.size > 1 && ring.first() == ring.last()) {
+            ring.dropLast(1)
+        } else {
+            ring
+        }
+    if (openRing.size <= maxPoints) {
+        return openRing
+    }
+    val byDistance = mutableListOf<TrafficMapGeoPoint>()
+    openRing.forEach { point ->
+        val previous = byDistance.lastOrNull()
+        if (
+            previous == null ||
+            abs(point.lat - previous.lat) + abs(point.lon - previous.lon) >= TrafficMapVisualMinPointDeltaDegrees
+        ) {
+            byDistance += point
+        }
+    }
+    val reduced = byDistance.takeIf { points -> points.size >= TrafficMapVisualMinRingPoints } ?: openRing
+    if (reduced.size <= maxPoints) {
+        return reduced
+    }
+    val stride = ceil(reduced.size.toDouble() / maxPoints.toDouble()).toInt().coerceAtLeast(1)
+    val sampled = reduced.filterIndexed { index, _ -> index % stride == 0 }
+    return sampled.takeIf { points -> points.size >= TrafficMapVisualMinRingPoints } ?: reduced.take(maxPoints)
+}
+
+private fun normalizeTrafficMapLongitude(lon: Double): Double {
+    var normalized = lon % FullLongitudeDegrees
+    if (normalized < -HalfLongitudeDegrees) {
+        normalized += FullLongitudeDegrees
+    }
+    if (normalized > HalfLongitudeDegrees) {
+        normalized -= FullLongitudeDegrees
+    }
+    return normalized
+}
+
+private const val TrafficMapVisualMinRingPoints = 3
+private const val TrafficMapVisualMinRelativeRingArea = 0.004
+private const val TrafficMapVisualMinAbsoluteRingArea = 0.04
+private const val TrafficMapVisualMaxPointsPerRing = 220
+private const val TrafficMapVisualMinPointDeltaDegrees = 0.045
+private const val HalfLongitudeDegrees = 180.0
+private const val FullLongitudeDegrees = 360.0

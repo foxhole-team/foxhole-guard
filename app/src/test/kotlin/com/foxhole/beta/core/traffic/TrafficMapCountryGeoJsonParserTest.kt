@@ -48,4 +48,47 @@ class TrafficMapCountryGeoJsonParserTest {
         assertEquals(2, shapes.first { shape -> shape.countryCode == "DE" }.rings.size)
         assertTrue(shapes.all { shape -> shape.rings.all { ring -> ring.size >= 3 } })
     }
+
+    @Test
+    fun `normalizes dateline rings without spanning the whole world`() {
+        val ring =
+            listOf(
+                TrafficMapGeoPoint(lat = 51.0, lon = 179.0),
+                TrafficMapGeoPoint(lat = 51.5, lon = -179.5),
+                TrafficMapGeoPoint(lat = 52.0, lon = 179.5),
+                TrafficMapGeoPoint(lat = 51.0, lon = 179.0),
+            )
+
+        val normalized = normalizeTrafficMapRingLongitudes(ring)
+        val longitudeSpan = normalized.maxOf(TrafficMapGeoPoint::lon) - normalized.minOf(TrafficMapGeoPoint::lon)
+
+        assertTrue(longitudeSpan < 3.0)
+    }
+
+    @Test
+    fun `visual shape keeps major country objects and drops tiny secondary islands`() {
+        val shape =
+            TrafficMapCountryShape(
+                countryCode = "US",
+                rings =
+                    listOf(
+                        listOf(
+                            TrafficMapGeoPoint(lat = 20.0, lon = -130.0),
+                            TrafficMapGeoPoint(lat = 20.0, lon = -60.0),
+                            TrafficMapGeoPoint(lat = 50.0, lon = -60.0),
+                            TrafficMapGeoPoint(lat = 20.0, lon = -130.0),
+                        ),
+                        listOf(
+                            TrafficMapGeoPoint(lat = 10.0, lon = 10.0),
+                            TrafficMapGeoPoint(lat = 10.0, lon = 10.1),
+                            TrafficMapGeoPoint(lat = 10.1, lon = 10.1),
+                            TrafficMapGeoPoint(lat = 10.0, lon = 10.0),
+                        ),
+                    ),
+            )
+
+        val visualShape = shape.toTrafficMapVisualShape()
+
+        assertEquals(1, visualShape?.rings?.size)
+    }
 }

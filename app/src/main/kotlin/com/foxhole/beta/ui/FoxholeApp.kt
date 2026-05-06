@@ -593,11 +593,14 @@ fun FoxholeApp(
                         viewModel.ensureInstalledAppsLoaded()
                     }
                     val state by viewModel.settingsRouteState.collectAsStateWithLifecycle()
+                    val trafficMapState by viewModel.trafficMapUiState.collectAsStateWithLifecycle()
                     StatisticsScreen(
                         state = state,
+                        trafficMapState = trafficMapState,
                         snackbarHostState = snackbarHostState,
                         onNavigateUp = navController::navigateUp,
                         onAppTrafficStatsEnabledChanged = viewModel::onAppTrafficStatsEnabledChanged,
+                        onFirewallEnabledChanged = viewModel::onFirewallEnabledChanged,
                         onClearUsage = viewModel::resetUsageTracking,
                     )
                 }

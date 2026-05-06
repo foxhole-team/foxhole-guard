@@ -95,6 +95,9 @@ data class SettingsRouteUiState(
     val reconnectRequired: Boolean = false,
     val hasSmartProfile: Boolean = false,
     val hasSubscriptionProfile: Boolean = false,
+    val profiles: List<Profile> = emptyList(),
+    val activeProfile: Profile? = null,
+    val traffic: TrafficSnapshot = TrafficSnapshot(),
     val installedApps: List<InstalledAppOption> = emptyList(),
 )
 
@@ -212,6 +215,9 @@ internal fun HomeUiState.toSettingsRouteUiState(): SettingsRouteUiState =
         reconnectRequired = reconnectRequired,
         hasSmartProfile = profiles.any(MultiProtocolProfileSupport::hasMultipleSupportedOptions),
         hasSubscriptionProfile = profiles.any { profile -> profile.sourceType == ProfileSourceType.SUBSCRIPTION_URL },
+        profiles = profiles,
+        activeProfile = activeProfile,
+        traffic = traffic,
         installedApps = installedApps,
     )
 

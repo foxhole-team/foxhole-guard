@@ -1,8 +1,6 @@
 package com.foxhole.beta.ui
 
 import android.content.Context
-import android.graphics.Paint
-import android.graphics.Typeface
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,9 +11,13 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Map
+import androidx.compose.material.icons.outlined.PhoneAndroid
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -37,9 +39,6 @@ import androidx.compose.ui.graphics.PathFillType
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
-import androidx.compose.ui.graphics.nativeCanvas
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
@@ -53,6 +52,7 @@ import com.foxhole.beta.core.model.TrafficMapUiState
 import com.foxhole.beta.core.traffic.TrafficMapCountryGeoJsonParser
 import com.foxhole.beta.core.traffic.TrafficMapCountryShape
 import com.foxhole.beta.core.traffic.TrafficMapGeoPoint
+import com.foxhole.beta.core.traffic.toTrafficMapVisualShape
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlin.math.min
@@ -115,7 +115,6 @@ private fun TrafficWorldMap(
     val originColor = systemTone
     val destinationColor = FoxholePositiveAccent
     val phoneScreenColor = colorScheme.surface.copy(alpha = 0.88f)
-    val textColor = colorScheme.onSurface.toArgb()
     val countryShapes = remember(countries) { countries }
 
     Box(
@@ -135,12 +134,6 @@ private fun TrafficWorldMap(
                 val phoneCorner = CornerRadius(2.2.dp.toPx(), 2.2.dp.toPx())
                 val phoneScreenInset = 1.4.dp.toPx()
                 val phoneHomeRadius = 0.65.dp.toPx()
-                val destinationLabelPaint =
-                    trafficMapLabelPaint(
-                        color = textColor,
-                        textSize = 8.sp.toPx(),
-                        bold = false,
-                    )
 
                 onDrawBehind {
                     drawRoundRect(
@@ -198,16 +191,6 @@ private fun TrafficWorldMap(
                             radius = destinationRadius,
                             center = offset,
                         )
-                        if (index < MAX_TRAFFIC_MAP_LABELS) {
-                            drawIntoCanvas { canvas ->
-                                canvas.nativeCanvas.drawText(
-                                    point.countryCode,
-                                    offset.x,
-                                    offset.y - 6.dp.toPx(),
-                                    destinationLabelPaint,
-                                )
-                            }
-                        }
                     }
 
                     val origin = project(mapState.originLat, mapState.originLon, viewport)
@@ -238,25 +221,17 @@ private fun TrafficMapLegend(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
-    val destinations = remember(state.destinations) { state.destinations.take(MAX_TRAFFIC_MAP_LEGEND_DESTINATIONS) }
+    val destinations = remember(state.destinations) { state.destinations }
     val originLabel = remember(state.originCity, state.originCountryName, state.originCountryCode) { state.originLocationLabel() }
+    val scrollState = rememberScrollState()
     Column(
-        modifier = modifier,
+        modifier = modifier.fillMaxHeight(),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        Text(
-            text = originLabel,
-            style = MaterialTheme.typography.labelSmall.copy(
-                fontSize = 10.sp,
-                lineHeight = 12.sp,
-            ),
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onSurface,
-            maxLines = 3,
-            overflow = TextOverflow.Ellipsis,
-        )
+        TrafficMapOriginRow(originLabel = originLabel)
         if (destinations.isEmpty()) {
             Text(
+                modifier = Modifier.weight(1f),
                 text =
                     stringResource(
                         if (state.isAvailable) {
@@ -274,12 +249,45 @@ private fun TrafficMapLegend(
                 overflow = TextOverflow.Ellipsis,
             )
         } else {
-            Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            Column(
+                modifier =
+                    Modifier
+                        .weight(1f)
+                        .verticalScroll(scrollState),
+                verticalArrangement = Arrangement.spacedBy(3.dp),
+            ) {
                 destinations.forEach { point ->
                     TrafficMapLegendDestinationRow(context = context, point = point)
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun TrafficMapOriginRow(originLabel: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(5.dp),
+        verticalAlignment = Alignment.Top,
+    ) {
+        Icon(
+            imageVector = Icons.Outlined.PhoneAndroid,
+            contentDescription = stringResource(R.string.traffic_map_device_location_icon),
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(14.dp),
+        )
+        Text(
+            text = originLabel,
+            style = MaterialTheme.typography.labelSmall.copy(
+                fontSize = 10.sp,
+                lineHeight = 12.sp,
+            ),
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 4,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 
@@ -349,6 +357,7 @@ private fun loadTrafficMapCountries(context: Context): List<TrafficMapCountrySha
         }
     return TrafficMapCountryGeoJsonParser().parse(raw)
         .filterNot { country -> country.countryCode == TRAFFIC_MAP_ANTARCTICA_COUNTRY_CODE }
+        .mapNotNull(TrafficMapCountryShape::toTrafficMapVisualShape)
 }
 
 private fun TrafficMapCountryShape.toProjectedPath(viewport: TrafficMapViewport): ProjectedTrafficMapCountry? {
@@ -450,18 +459,6 @@ private fun trafficMapViewport(size: Size): TrafficMapViewport {
     }
 }
 
-private fun trafficMapLabelPaint(
-    color: Int,
-    textSize: Float,
-    bold: Boolean,
-): Paint =
-    Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        this.color = color
-        this.textSize = textSize
-        textAlign = Paint.Align.CENTER
-        typeface = Typeface.create(Typeface.DEFAULT, if (bold) Typeface.BOLD else Typeface.NORMAL)
-    }
-
 private data class TrafficMapViewport(
     val topLeft: Offset,
     val size: Size,
@@ -481,8 +478,6 @@ private const val TRAFFIC_MAP_MAX_LAT = 85.0
 private const val TRAFFIC_MAP_LAT_RANGE = TRAFFIC_MAP_MAX_LAT - TRAFFIC_MAP_MIN_LAT
 private const val MAX_TRAFFIC_MAP_DRAW_EDGES = 60
 private const val MAX_TRAFFIC_MAP_DRAW_DESTINATIONS = 60
-private const val MAX_TRAFFIC_MAP_LEGEND_DESTINATIONS = 5
-private const val MAX_TRAFFIC_MAP_LABELS = 6
 private const val MIN_TRAFFIC_MAP_RING_POINTS = 3
 private const val TRAFFIC_MAP_COUNTRIES_ASSET = "maps/ne_50m_admin_0_countries.geojson"
 private const val TRAFFIC_MAP_ANTARCTICA_COUNTRY_CODE = "AQ"
