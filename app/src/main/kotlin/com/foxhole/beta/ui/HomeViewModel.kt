@@ -432,9 +432,6 @@ class HomeViewModel(
                     snackbars.emit(errorBanner(R.string.settings_secure_storage_failed))
                 }
             val settings = container.settingsRepository.settings.value
-            if (settings.expert.selectedPackages.isNotEmpty() || settings.expert.blockedPackages.isNotEmpty()) {
-                loadInstalledApps()
-            }
             syncAppTrafficStatsSampler(settings.appTrafficStatsEnabled)
         }
         viewModelScope.launch {

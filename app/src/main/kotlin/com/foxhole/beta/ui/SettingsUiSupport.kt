@@ -379,6 +379,7 @@ internal fun SettingSwitchRow(
     onCheckedChange: (Boolean) -> Unit,
     summary: String? = null,
     inlineSummary: String? = null,
+    summaryColor: Color? = null,
     infoBody: String? = null,
     leadingIcon: ImageVector? = null,
     enabled: Boolean = true,
@@ -422,6 +423,7 @@ internal fun SettingSwitchRow(
             title = title,
             summary = summary,
             inlineSummary = inlineSummary,
+            summaryColor = summaryColor,
             infoBody = infoBody,
             leadingIcon = leadingIcon,
             summaryMaxLines = summaryMaxLines,
@@ -479,6 +481,7 @@ private fun SettingsControlRow(
     title: String,
     summary: String? = null,
     inlineSummary: String? = null,
+    summaryColor: Color? = null,
     infoBody: String? = null,
     leadingIcon: ImageVector? = null,
     leadingIconContainerColor: Color = Color.Unspecified,
@@ -551,7 +554,7 @@ private fun SettingsControlRow(
                 Text(
                     text = text.trimMenuSummary(),
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = summaryColor ?: MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = summaryMaxLines,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -717,7 +720,11 @@ private fun SettingsInfoBottomSheet(
                     color = MaterialTheme.colorScheme.onSurface,
                 )
             }
-            FormattedHelpBody(body = body)
+            Text(
+                text = body,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
             content()
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -793,19 +800,13 @@ internal fun rememberWifiLanAddress(): State<String?> {
 
 @Composable
 internal fun proxyLanAccessSummary(
-    allowLanAccess: Boolean,
     wifiLanAddress: String?,
+    port: Int,
 ): String =
-    when {
-        wifiLanAddress == null && allowLanAccess ->
-            stringResource(R.string.proxy_lan_access_waiting_for_wifi_summary)
-        wifiLanAddress == null ->
-            stringResource(R.string.proxy_lan_access_wifi_only_summary)
-        allowLanAccess ->
-            stringResource(R.string.proxy_lan_access_enabled_summary, wifiLanAddress)
-        else ->
-            stringResource(R.string.proxy_lan_access_disabled_summary, wifiLanAddress)
-    }
+    stringResource(
+        R.string.proxy_lan_access_current_endpoint_summary,
+        "${wifiLanAddress ?: "-"}:$port",
+    )
 
 @Composable
 internal fun WarningBlock(

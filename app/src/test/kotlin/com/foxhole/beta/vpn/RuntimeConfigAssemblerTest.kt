@@ -19,7 +19,9 @@ import com.foxhole.beta.core.model.RoutingPresetSource
 import com.foxhole.beta.core.model.RoutingRule
 import com.foxhole.beta.core.model.RoutingRuleAction
 import com.foxhole.beta.core.model.Settings
+import com.foxhole.beta.core.model.TrafficSettings
 import com.foxhole.beta.core.model.TrafficMode
+import com.foxhole.beta.core.model.TunStack
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -90,6 +92,40 @@ class RuntimeConfigAssemblerTest {
     }
 
     @Test
+    fun `system tun stack falls back to gvisor for non wireguard tunnel protocols`() {
+        val config =
+            parse(
+                assembler.assemble(
+                    baseConfigJson = baseConfigWithRules("profile.example"),
+                    settings = Settings(traffic = TrafficSettings(tunStack = TunStack.SYSTEM)),
+                    activePreset = null,
+                    vpnProtocolHint = ProtocolHint.VLESS,
+                ),
+            )
+
+        val tun = config["inbounds"]!!.jsonArray.first().jsonObject
+
+        assertEquals("gvisor", tun["stack"]!!.jsonPrimitive.content)
+    }
+
+    @Test
+    fun `system tun stack is preserved for wireguard tunnel protocols`() {
+        val config =
+            parse(
+                assembler.assemble(
+                    baseConfigJson = baseConfigWithRules("profile.example"),
+                    settings = Settings(traffic = TrafficSettings(tunStack = TunStack.SYSTEM)),
+                    activePreset = null,
+                    vpnProtocolHint = ProtocolHint.WIREGUARD,
+                ),
+            )
+
+        val tun = config["inbounds"]!!.jsonArray.first().jsonObject
+
+        assertEquals("system", tun["stack"]!!.jsonPrimitive.content)
+    }
+
+    @Test
     fun `tor privacy route adds tor outbound detoured through proxy and blocks udp for all apps`() {
         val config =
             parse(
@@ -106,8 +142,9 @@ class RuntimeConfigAssemblerTest {
                     activePreset = null,
                     torRuntimePaths =
                         TorRuntimePaths(
-                            executablePath = "/data/user/0/com.foxhole.beta/files/tor/arm64-v8a/tor",
-                            dataDirectory = "/data/user/0/com.foxhole.beta/files/tor-data",
+                            executablePath = "/data/app/com.foxhole.beta/lib/arm64/libTor.so",
+                            dataDirectory = "/data/user/0/com.foxhole.beta/files/tor-data/arm64-v8a",
+                            torrcDefaultsFilePath = "/data/user/0/com.foxhole.beta/files/tor-data/arm64-v8a/torrc-defaults",
                         ),
                     vpnProtocolHint = ProtocolHint.VLESS,
                 ),
@@ -117,7 +154,12 @@ class RuntimeConfigAssemblerTest {
         val tor = outbounds.single { it["tag"]!!.jsonPrimitive.content == "tor-over-vpn" }
         assertEquals("tor", tor["type"]!!.jsonPrimitive.content)
         assertEquals("proxy", tor["detour"]!!.jsonPrimitive.content)
-        assertEquals("/data/user/0/com.foxhole.beta/files/tor-data", tor["data_directory"]!!.jsonPrimitive.content)
+        assertEquals("/data/app/com.foxhole.beta/lib/arm64/libTor.so", tor["executable_path"]!!.jsonPrimitive.content)
+        assertEquals(
+            listOf("--defaults-torrc", "/data/user/0/com.foxhole.beta/files/tor-data/arm64-v8a/torrc-defaults"),
+            tor["extra_args"]!!.jsonArray.map { it.jsonPrimitive.content },
+        )
+        assertEquals("/data/user/0/com.foxhole.beta/files/tor-data/arm64-v8a", tor["data_directory"]!!.jsonPrimitive.content)
         val torrc = tor["torrc"]!!.jsonObject
         assertEquals("1", torrc["ClientOnly"]!!.jsonPrimitive.content)
         assertTrue(torrc["ClientOnly"]!!.jsonPrimitive.isString)

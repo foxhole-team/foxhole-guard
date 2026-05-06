@@ -79,6 +79,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -346,7 +347,7 @@ private fun SettingsRoutingNavigationGroup(
         SettingsGroupDivider()
         SettingsGroupedNavigationRow(
             modifier = Modifier.testTag("settings_privacy_route_action"),
-            icon = Icons.Outlined.Public,
+            icon = ImageVector.vectorResource(R.drawable.ic_tor_route),
             title = stringResource(R.string.privacy_route_title),
             summary = stringResource(R.string.privacy_route_summary),
             summaryMaxLines = 2,
@@ -910,8 +911,15 @@ fun TrafficSettingsScreen(
                     },
                     summary =
                         proxyLanAccessSummary(
-                            allowLanAccess = state.settings.expert.localSurfaces.allowLanAccess,
                             wifiLanAddress = wifiLanAddress,
+                            port =
+                                state.settings.expert.localSurfaces
+                                    .surfaceFor(state.settings.expert.localSurfaces.lanProxyMode)
+                                    .port,
+                        ),
+                    summaryColor =
+                        MaterialTheme.colorScheme.onSurfaceVariant.copy(
+                            alpha = if (state.settings.expert.localSurfaces.allowLanAccess) 1f else 0.54f,
                         ),
                     enabled = wifiLanAddress != null || state.settings.expert.localSurfaces.allowLanAccess,
                     grouped = true,
@@ -1137,7 +1145,7 @@ fun PrivacyRouteSettingsScreen(
                     },
                     summary = stringResource(R.string.privacy_route_summary),
                     infoBody = stringResource(R.string.privacy_route_info_body),
-                    leadingIcon = Icons.Outlined.Public,
+                    leadingIcon = ImageVector.vectorResource(R.drawable.ic_tor_route),
                     summaryMaxLines = 3,
                     grouped = true,
                 )

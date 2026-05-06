@@ -20,6 +20,7 @@ import com.foxhole.beta.core.model.RoutingRuleAction
 import com.foxhole.beta.core.model.Settings
 import com.foxhole.beta.core.model.TrafficMode
 import com.foxhole.beta.core.model.TrafficSettings
+import com.foxhole.beta.core.model.TunStack
 import com.foxhole.beta.core.model.V2RayApiSettings
 import com.foxhole.beta.core.model.isUdpTransport
 import kotlinx.serialization.Serializable
@@ -140,6 +141,7 @@ class RuntimeConfigAssembler(
                 traffic = settings.traffic,
                 expert = settings.expert,
                 mtu = effectiveTunMtu(runtimeBase, settings.traffic.mtu),
+                stack = effectiveTunnelTunStack(settings.traffic.tunStack, vpnProtocolHint),
             )
         val inbounds =
             buildJsonArray {
@@ -345,6 +347,7 @@ class RuntimeConfigAssembler(
         traffic: TrafficSettings,
         expert: ExpertSettings,
         mtu: Int,
+        stack: TunStack,
     ): JsonObject {
         val includePackages = expert.vpnIncludedPackages()
         val excludePackages = expert.vpnExcludedPackages()
@@ -352,7 +355,7 @@ class RuntimeConfigAssembler(
             tunInbound.forEach { (key, value) ->
                 when (key) {
                     "mtu" -> put(key, mtu)
-                    "stack" -> put(key, traffic.tunStack.configValue)
+                    "stack" -> put(key, stack.configValue)
                     "strict_route" -> put(key, expert.strictRoute)
                     "sniff",
                     "sniff_override_destination",
@@ -364,7 +367,7 @@ class RuntimeConfigAssembler(
                 }
             }
             put("mtu", mtu)
-            put("stack", traffic.tunStack.configValue)
+            put("stack", stack.configValue)
             put("strict_route", expert.strictRoute)
             when {
                 includePackages.isNotEmpty() ->
@@ -393,6 +396,16 @@ class RuntimeConfigAssembler(
                 .minOrNull()
         return wireGuardMtu?.let { minOf(configuredMtu, it) } ?: configuredMtu
     }
+
+    private fun effectiveTunnelTunStack(
+        configured: TunStack,
+        protocolHint: ProtocolHint?,
+    ): TunStack =
+        when {
+            configured != TunStack.SYSTEM -> configured
+            protocolHint == ProtocolHint.WIREGUARD -> configured
+            else -> TunStack.GVISOR
+        }
 
     private fun localGuardTunInbound(
         settings: Settings,
@@ -464,6 +477,12 @@ class RuntimeConfigAssembler(
             put("type", "tor")
             put("tag", TOR_OVER_VPN_OUTBOUND_TAG)
             put("executable_path", paths.executablePath)
+            paths.torrcDefaultsFilePath?.let { defaultsPath ->
+                putJsonArray("extra_args") {
+                    add(JsonPrimitive("--defaults-torrc"))
+                    add(JsonPrimitive(defaultsPath))
+                }
+            }
             put("data_directory", paths.dataDirectory)
             putJsonObject("torrc") {
                 put("ClientOnly", "1")

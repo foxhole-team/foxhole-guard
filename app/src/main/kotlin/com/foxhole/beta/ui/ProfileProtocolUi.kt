@@ -481,6 +481,7 @@ private fun ProtocolMarkOrSelector(
                         },
                         selected = optionSelected,
                         highlightSelected = true,
+                        selectedContainerColor = selectorResolvedBorderColor.copy(alpha = 0.16f),
                         extendSelectedToMenuTop = index == 0 && dropdownInfoText == null,
                         extendSelectedToMenuBottom = index == protocolOptions.lastIndex,
                         shape =

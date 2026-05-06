@@ -6,6 +6,8 @@ import com.foxhole.beta.core.model.ConnectionState
 import com.foxhole.beta.core.model.ExpertSettings
 import com.foxhole.beta.core.model.IpInfo
 import com.foxhole.beta.core.model.LocalSurfaceSettings
+import com.foxhole.beta.core.model.PrivacyRouteMode
+import com.foxhole.beta.core.model.PrivacyRouteSettings
 import com.foxhole.beta.core.model.Profile
 import com.foxhole.beta.core.model.ProfileProtocolOption
 import com.foxhole.beta.core.model.ProfileSourceType
@@ -17,6 +19,7 @@ import com.foxhole.beta.core.model.Settings
 import com.foxhole.beta.core.model.TrafficMode
 import com.foxhole.beta.core.model.TrafficSettings
 import com.foxhole.beta.core.model.TrafficSnapshot
+import com.foxhole.beta.vpn.FoxholeVpnService
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -188,6 +191,67 @@ class HomeDashboardPresentationTest {
     }
 
     @Test
+    fun `network model treats local guard firewall vpn as ordinary device network`() {
+        val ipInfo =
+            IpInfo(
+                ip = "198.51.100.20",
+                countryCode = "NL",
+                countryName = "Netherlands",
+                city = "Amsterdam",
+                isp = "Example",
+                fetchedAt = 2_000L,
+            )
+        val model =
+            resolveHomeDashboardNetworkModel(
+                state =
+                    HomeRouteUiState(
+                        profilesLoaded = true,
+                        connection =
+                            ConnectionSnapshot(
+                                state = ConnectionState.CONNECTED,
+                                profileId = FoxholeVpnService.LOCAL_GUARD_PROFILE_ID,
+                                lastChangeAt = 1_000L,
+                            ),
+                    ),
+                visibleIpInfo = ipInfo,
+                deviceInternetAvailable = true,
+            )
+
+        assertEquals(ipInfo, model.visibleIpInfo)
+        assertEquals(R.string.home_network_current_ip_title, model.titleRes)
+        assertFalse(model.showConnectionStatus)
+        assertFalse(model.showLoading)
+    }
+
+    @Test
+    fun `network model hides stale tunnel ip while local guard is idle`() {
+        val staleTunnelIp =
+            IpInfo(
+                ip = "203.0.113.10",
+                countryCode = "NL",
+                countryName = "Netherlands",
+                city = "Amsterdam",
+                isp = "Example",
+                fetchedAt = 1_000L,
+            )
+        val model =
+            resolveHomeDashboardNetworkModel(
+                state =
+                    HomeRouteUiState(
+                        profilesLoaded = true,
+                        settings = Settings(expert = ExpertSettings(killSwitchEnabled = true)),
+                        connection = ConnectionSnapshot(state = ConnectionState.IDLE, lastChangeAt = 2_000L),
+                    ),
+                visibleIpInfo = staleTunnelIp,
+                deviceInternetAvailable = true,
+            )
+
+        assertEquals(null, model.visibleIpInfo)
+        assertEquals(R.string.home_network_current_ip_title, model.titleRes)
+        assertFalse(model.showConnectionStatus)
+    }
+
+    @Test
     fun `dashboard transport label reports udp tcp and unknown`() {
         assertEquals("UDP", dashboardTransportTypeLabel(ProtocolHint.WIREGUARD))
         assertEquals("UDP", dashboardTransportTypeLabel(ProtocolHint.HYSTERIA2))
@@ -219,6 +283,78 @@ class HomeDashboardPresentationTest {
         assertEquals(18080, model.proxySurface?.settings?.port)
         assertEquals(null, model.dashboardProxySurface)
         assertTrue(model.lanProxyActive)
+    }
+
+    @Test
+    fun `connection feature indicators show enabled dashboard flags and tor status`() {
+        val settings =
+            Settings(
+                privacyRoute = PrivacyRouteSettings(mode = PrivacyRouteMode.TOR_OVER_VPN),
+                expert =
+                    ExpertSettings(
+                        killSwitchEnabled = true,
+                        blockedPackagesEnabled = true,
+                        blockedPackages = listOf("org.mozilla.firefox"),
+                    ),
+            )
+        val state =
+            HomeRouteUiState(
+                activeProfile = smartProfile(),
+                settings = settings,
+                connection =
+                    ConnectionSnapshot(
+                        state = ConnectionState.CONNECTED,
+                        protocolHint = ProtocolHint.VLESS,
+                    ),
+            )
+        val indicators = homeConnectionFeatureIndicators(state)
+
+        assertEquals(
+            listOf(HomeConnectionFeature.KILL_SWITCH, HomeConnectionFeature.FIREWALL, HomeConnectionFeature.TOR),
+            indicators.map { it.feature },
+        )
+        assertEquals(
+            listOf(HomeConnectionFeatureStatus.ON, HomeConnectionFeatureStatus.ON, HomeConnectionFeatureStatus.ON),
+            indicators.map { it.status },
+        )
+        assertEquals(
+            listOf(HomeConnectionFeature.KILL_SWITCH, HomeConnectionFeature.FIREWALL, HomeConnectionFeature.TOR),
+            homeConnectionFeatureIndicators(HomeRouteUiState(settings = Settings())).map { it.feature },
+        )
+        assertEquals(
+            listOf(HomeConnectionFeatureStatus.OFF, HomeConnectionFeatureStatus.OFF, HomeConnectionFeatureStatus.OFF),
+            homeConnectionFeatureIndicators(HomeRouteUiState(settings = Settings())).map { it.status },
+        )
+    }
+
+    @Test
+    fun `tor indicator is pending until a compatible tunnel is connected`() {
+        val settings = Settings(privacyRoute = PrivacyRouteSettings(mode = PrivacyRouteMode.TOR_OVER_VPN))
+
+        assertEquals(
+            HomeConnectionFeatureStatus.PENDING,
+            homeConnectionFeatureIndicators(
+                HomeRouteUiState(
+                    activeProfile = smartProfile(),
+                    settings = settings,
+                    connection = ConnectionSnapshot(state = ConnectionState.IDLE),
+                ),
+            ).single { it.feature == HomeConnectionFeature.TOR }.status,
+        )
+        assertEquals(
+            HomeConnectionFeatureStatus.PENDING,
+            homeConnectionFeatureIndicators(
+                HomeRouteUiState(
+                    activeProfile = smartProfile(),
+                    settings = settings,
+                    connection =
+                        ConnectionSnapshot(
+                            state = ConnectionState.CONNECTED,
+                            protocolHint = ProtocolHint.WIREGUARD,
+                        ),
+                ),
+            ).single { it.feature == HomeConnectionFeature.TOR }.status,
+        )
     }
 
     @Test

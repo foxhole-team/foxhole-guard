@@ -109,6 +109,7 @@ import com.foxhole.beta.core.model.ConnectionState
 import com.foxhole.beta.core.model.IpInfo
 import com.foxhole.beta.core.model.LocalSurfaceSettings
 import com.foxhole.beta.core.model.PerAppRoutingMode
+import com.foxhole.beta.core.model.PrivacyRouteMode
 import com.foxhole.beta.core.model.PrivacyRouteScope
 import com.foxhole.beta.core.model.Profile
 import com.foxhole.beta.core.model.ProfileProtocolOption
@@ -136,6 +137,9 @@ fun HomeScreen(
     onAutoConnect: () -> Unit,
     onTrafficModeSelected: (TrafficMode) -> Unit,
     onPerAppRoutingModeSelected: (PerAppRoutingMode) -> Unit,
+    onKillSwitchChanged: (Boolean) -> Unit,
+    onBlockedPackagesEnabledChanged: (Boolean) -> Unit,
+    onPrivacyRouteModeSelected: (PrivacyRouteMode) -> Unit,
     onSelectActiveProtocolOption: (String) -> Unit,
     onUpdateAutoConnectExcludedOptions: (Set<String>) -> Unit,
     onRefreshSmartProfileMetrics: (Long) -> Unit,
@@ -155,6 +159,7 @@ fun HomeScreen(
     var firstAnalysisProtocolMenuProfileId by rememberSaveable { mutableStateOf<Long?>(null) }
     var firstAnalysisProtocolMenuStarted by rememberSaveable { mutableStateOf(false) }
     var lanProxyDisableConfirmationVisible by rememberSaveable { mutableStateOf(false) }
+    var selectedConnectionFeature by rememberSaveable { mutableStateOf<HomeConnectionFeature?>(null) }
     val wifiLanAddress by rememberWifiLanAddress()
     val proxyModel =
         remember(state, wifiLanAddress) {
@@ -272,12 +277,12 @@ fun HomeScreen(
     val visibleNetworkIpInfo = networkModel.visibleIpInfo
     val showNetworkLoading = networkModel.showLoading
     val showNetworkConnectionStatus = networkModel.showConnectionStatus
-    val showNetworkRouteDetails = showNetworkConnectionStatus || state.activeProfile != null
+    val showNetworkRouteDetails = showNetworkConnectionStatus
     val networkInfoTitleRes = networkModel.titleRes
     val profileModel = remember(state) { resolveHomeDashboardProfileModel(state = state) }
     val isSmartDashboardProfile = profileModel.isSmartDashboardProfile
     val activeProfileId = profileModel.activeProfileId
-    val connectionPathState = remember(state) { connectionPathUiState(state) }
+    val connectionFeatureIndicators = homeConnectionFeatureIndicators(state)
     val firstAnalysisProtocolMenuActive = firstAnalysisProtocolMenuProfileId == activeProfileId
     val firstAnalysisProtocolMenuBusy = state.autoConnect.running || state.protocolMetricsRefreshing
     val firstAnalysisProtocolMenuForceExpanded =
@@ -471,14 +476,17 @@ fun HomeScreen(
                                 }
                             }
                         }
-                        HorizontalDivider(
-                            modifier = Modifier.fillMaxWidth(),
-                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.16f),
-                        )
-                        ConnectionPathPanel(
-                            state = connectionPathState,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 7.dp),
-                        )
+                        if (connectionFeatureIndicators.isNotEmpty()) {
+                            HorizontalDivider(
+                                modifier = Modifier.fillMaxWidth(),
+                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.16f),
+                            )
+                            HomeConnectionFeatureIndicators(
+                                indicators = connectionFeatureIndicators,
+                                onIndicatorClick = { selectedConnectionFeature = it },
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                            )
+                        }
                     }
                 }
             }
@@ -1083,6 +1091,17 @@ fun HomeScreen(
                 lanProxyDisableConfirmationVisible = false
                 onLocalProxyLanAccessChanged(false)
             },
+        )
+    }
+    selectedConnectionFeature?.let { feature ->
+        HomeConnectionFeatureDialog(
+            feature = feature,
+            state = state,
+            onDismiss = { selectedConnectionFeature = null },
+            onKillSwitchChanged = onKillSwitchChanged,
+            onBlockedPackagesEnabledChanged = onBlockedPackagesEnabledChanged,
+            onPrivacyRouteModeSelected = onPrivacyRouteModeSelected,
+            onRestart = onToggleConnection,
         )
     }
 }

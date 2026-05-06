@@ -40,6 +40,7 @@ internal class TunnelValidationGateway(
         val tunnelConnected = trafficMode == TrafficMode.TUNNEL && snapshot.value.state in ACTIVE_CONNECTION_STATES
         val vpnNetwork = if (tunnelConnected) currentVpnNetwork() ?: error("vpn network unavailable") else null
         val upstreamNetwork = if (tunnelConnected) null else currentUpstreamNetwork()
+        val localGuardActive = !tunnelConnected && settings.localGuardModeOrNull() != null
         val dnsNetwork =
             when {
                 trafficMode != TrafficMode.TUNNEL -> null
@@ -50,6 +51,7 @@ internal class TunnelValidationGateway(
             when {
                 trafficMode != TrafficMode.TUNNEL -> null
                 tunnelConnected -> null
+                localGuardActive -> upstreamNetwork
                 else -> upstreamNetwork
             }
         val remoteDnsServers =
@@ -72,6 +74,7 @@ internal class TunnelValidationGateway(
                     endpoint = endpoint,
                     fetchMode = fetchMode,
                     requestNetwork = requestNetwork,
+                    requireRequestNetwork = localGuardActive,
                     proxy = proxyAccess,
                 )
         }.withDnsServers(
@@ -84,6 +87,7 @@ internal class TunnelValidationGateway(
         endpoint: String,
         fetchMode: IpInfoFetchMode,
         requestNetwork: Network?,
+        requireRequestNetwork: Boolean,
         proxy: HttpProxyAccess?,
     ): IpInfo =
         if (proxy != null) {
@@ -92,6 +96,14 @@ internal class TunnelValidationGateway(
                 proxy = proxy,
                 mode = fetchMode,
             )
+        } else if (requestNetwork != null) {
+            ipInfoRepository.fetch(
+                endpoint = endpoint,
+                network = requestNetwork,
+                mode = fetchMode,
+            )
+        } else if (requireRequestNetwork) {
+            error("upstream network unavailable")
         } else {
             runCatching {
                 ipInfoRepository.fetch(

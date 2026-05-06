@@ -4,6 +4,7 @@ import androidx.compose.animation.core.InfiniteTransition
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.StartOffset
 import androidx.compose.animation.core.StartOffsetType
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.keyframes
@@ -12,6 +13,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -26,16 +28,20 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Apps
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.PowerSettingsNew
 import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material.icons.outlined.Speed
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -60,11 +66,15 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.vectorResource
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -76,6 +86,12 @@ import com.foxhole.beta.R
 import com.foxhole.beta.core.model.ConnectionSnapshot
 import com.foxhole.beta.core.model.ConnectionState
 import com.foxhole.beta.core.model.LocalAuthSettings
+import com.foxhole.beta.core.model.PrivacyRouteMode
+import com.foxhole.beta.core.model.Profile
+import com.foxhole.beta.core.model.ProtocolHint
+import com.foxhole.beta.core.model.Settings
+import com.foxhole.beta.core.model.TrafficMode
+import com.foxhole.beta.core.model.isUdpTransport
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import java.util.Locale
@@ -88,7 +104,8 @@ internal val HomeNetworkContentHeight = 82.dp
 internal val HomeDashboardProfileContentHeight = 62.dp
 private val HomeNetworkValueLoadingWidth = 68.dp
 private val HomeNetworkMetricValueLoadingWidth = 54.dp
-private val HomeModeSelectorWidth = 84.dp
+private val HomeModeSelectorMinWidth = 58.dp
+private val HomeModeSelectorMaxWidth = 104.dp
 private val HomeNetworkMetricValueLoadingHeight = 12.dp
 internal const val HOME_PROFILE_LOADING_TAG = "home_profile_loading"
 
@@ -252,6 +269,8 @@ internal fun HomeModeDropdown(
     val selectorTint = MaterialTheme.colorScheme.primary
     var expanded by rememberSaveable(selected) { mutableStateOf(false) }
     val menuLabels = values.map { option -> homeModeMenuLabel(option) }
+    val selectedLabel = homeModeChipLabel(selected)
+    val selectorWidth = rememberHomeModeSelectorWidth(selectedLabel)
     val menuWidth =
         rememberFoxholeDropdownMenuWidth(
             labels = menuLabels,
@@ -265,7 +284,7 @@ internal fun HomeModeDropdown(
             modifier =
                 Modifier
                     .testTag("home_mode_selector")
-                    .width(HomeModeSelectorWidth)
+                    .width(selectorWidth)
                     .clip(MaterialTheme.shapes.small)
                     .clickable { expanded = true },
             shape = MaterialTheme.shapes.small,
@@ -284,7 +303,7 @@ internal fun HomeModeDropdown(
                     tint = selectorTint,
                 )
                 Text(
-                    text = homeModeChipLabel(selected),
+                    text = selectedLabel,
                     style =
                         MaterialTheme.typography.labelSmall.copy(
                             fontSize = 10.sp,
@@ -348,6 +367,38 @@ internal fun HomeModeDropdown(
 }
 
 @Composable
+private fun rememberHomeModeSelectorWidth(label: String): Dp {
+    val density = LocalDensity.current
+    val textMeasurer = rememberTextMeasurer()
+    val textStyle =
+        MaterialTheme.typography.labelSmall.copy(
+            fontSize = 10.sp,
+            lineHeight = 10.sp,
+            fontWeight = FontWeight.SemiBold,
+        )
+    val targetWidth =
+        remember(label, textStyle, density, textMeasurer) {
+            val labelWidth =
+                textMeasurer
+                    .measure(
+                        text = AnnotatedString(label),
+                        style = textStyle,
+                        maxLines = 1,
+                    ).size
+                    .width
+            with(density) {
+                (labelWidth.toDp() + 11.dp + 14.dp + 10.dp + 16.dp)
+                    .coerceIn(HomeModeSelectorMinWidth, HomeModeSelectorMaxWidth)
+            }
+        }
+    val animatedWidth by animateDpAsState(
+        targetValue = targetWidth,
+        label = "home_mode_selector_width",
+    )
+    return animatedWidth
+}
+
+@Composable
 internal fun HomeLanProxyChip(onClick: () -> Unit) {
     val color = foxholeSystemAwareAccentColor(fallback = MaterialTheme.colorScheme.primary)
     Surface(
@@ -400,7 +451,6 @@ internal fun HomeStatusBadge(
         HomeStatusSignal(
             tint = color,
             settled = state == ConnectionState.CONNECTED,
-            animate = state == ConnectionState.CONNECTING || state == ConnectionState.RECONNECTING,
         )
         Row(
             horizontalArrangement = Arrangement.spacedBy(5.dp),
@@ -445,16 +495,8 @@ private fun SmartConnectionBadge(color: Color) {
 internal fun HomeStatusSignal(
     tint: Color,
     settled: Boolean,
-    animate: Boolean,
     modifier: Modifier = Modifier,
 ) {
-    if (animate) {
-        HomeAnalysisSignal(
-            tint = tint,
-            modifier = modifier.offset(x = HomeConnectingStatusSignalOffset),
-        )
-        return
-    }
     Canvas(
         modifier =
             modifier
@@ -472,6 +514,278 @@ internal fun HomeStatusSignal(
         }
     }
 }
+
+internal enum class HomeConnectionFeature {
+    KILL_SWITCH,
+    FIREWALL,
+    TOR,
+}
+
+internal enum class HomeConnectionFeatureStatus(
+    val label: String,
+) {
+    ON("ON"),
+    PENDING("PENDING"),
+    OFF("OFF"),
+}
+
+internal data class HomeConnectionFeatureIndicator(
+    val feature: HomeConnectionFeature,
+    val titleRes: Int,
+    val status: HomeConnectionFeatureStatus,
+)
+
+internal fun homeConnectionFeatureIndicators(state: HomeRouteUiState): List<HomeConnectionFeatureIndicator> =
+    buildList {
+        add(
+            HomeConnectionFeatureIndicator(
+                feature = HomeConnectionFeature.KILL_SWITCH,
+                titleRes = R.string.kill_switch_title,
+                status =
+                    if (state.settings.expert.killSwitchEnabled) {
+                        HomeConnectionFeatureStatus.ON
+                    } else {
+                        HomeConnectionFeatureStatus.OFF
+                    },
+            ),
+        )
+        add(
+            HomeConnectionFeatureIndicator(
+                feature = HomeConnectionFeature.FIREWALL,
+                titleRes = R.string.home_connection_feature_firewall,
+                status =
+                    if (homeFirewallFeatureEnabled(state.settings)) {
+                        HomeConnectionFeatureStatus.ON
+                    } else {
+                        HomeConnectionFeatureStatus.OFF
+                    },
+            ),
+        )
+        add(
+            HomeConnectionFeatureIndicator(
+                feature = HomeConnectionFeature.TOR,
+                titleRes = R.string.tor_badge,
+                status = homeTorFeatureStatus(state),
+            ),
+        )
+    }
+
+internal fun homeConnectionFeatureIndicator(
+    feature: HomeConnectionFeature,
+    state: HomeRouteUiState,
+): HomeConnectionFeatureIndicator? =
+    homeConnectionFeatureIndicators(state).firstOrNull { it.feature == feature }
+
+internal fun homeFirewallFeatureEnabled(settings: Settings): Boolean =
+    settings.expert.blockedPackagesEnabled && settings.expert.blockedPackages.isNotEmpty()
+
+internal fun homeTorFeatureStatus(state: HomeRouteUiState): HomeConnectionFeatureStatus {
+    if (!state.settings.privacyRoute.enabled) {
+        return HomeConnectionFeatureStatus.OFF
+    }
+    val profile = state.activeProfile ?: return HomeConnectionFeatureStatus.PENDING
+    val protocolHint = state.connection.protocolHint ?: profile.selectedRuntimeProtocolHint()
+    val torCanRun =
+        state.settings.traffic.mode == TrafficMode.TUNNEL &&
+            protocolHint?.isUdpTransport() != true
+    return if (torCanRun && state.connection.state == ConnectionState.CONNECTED) {
+        HomeConnectionFeatureStatus.ON
+    } else {
+        HomeConnectionFeatureStatus.PENDING
+    }
+}
+
+private fun Profile.selectedRuntimeProtocolHint(): ProtocolHint? {
+    val selectedId = selectedProtocolOptionId?.takeIf(String::isNotBlank)
+    return selectedId
+        ?.let { optionId -> protocolOptions.firstOrNull { it.id == optionId }?.protocolHint }
+        ?: protocolOptions.firstOrNull()?.protocolHint
+        ?: protocolHint
+}
+
+@Composable
+internal fun HomeConnectionFeatureIndicators(
+    indicators: List<HomeConnectionFeatureIndicator>,
+    onIndicatorClick: (HomeConnectionFeature) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    if (indicators.isEmpty()) {
+        return
+    }
+    Row(
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState())
+                .testTag("home_connection_feature_indicators"),
+        horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        indicators.forEach { indicator ->
+            HomeConnectionFeatureIndicatorItem(
+                indicator = indicator,
+                onClick = { onIndicatorClick(indicator.feature) },
+            )
+        }
+    }
+}
+
+@Composable
+private fun HomeConnectionFeatureIndicatorItem(
+    indicator: HomeConnectionFeatureIndicator,
+    onClick: () -> Unit,
+) {
+    val statusColor = homeConnectionFeatureStatusColor(indicator.status)
+    val icon = homeConnectionFeatureIcon(indicator.feature)
+    Row(
+        modifier =
+            Modifier
+                .clip(RoundedCornerShape(999.dp))
+                .clickable(onClick = onClick)
+                .padding(horizontal = 4.dp, vertical = 2.dp)
+                .testTag("home_connection_feature_indicator_${indicator.feature.name.lowercase(Locale.US)}"),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            modifier = Modifier.size(12.dp),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.82f),
+        )
+        Surface(
+            modifier = Modifier.size(5.dp),
+            shape = CircleShape,
+            color = statusColor,
+        ) {
+            Spacer(modifier = Modifier.size(5.dp))
+        }
+        Text(
+            text = "${stringResource(indicator.titleRes)}: ${indicator.status.label}",
+            style =
+                MaterialTheme.typography.labelSmall.copy(
+                    fontSize = 10.sp,
+                    lineHeight = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                ),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+@Composable
+private fun homeConnectionFeatureStatusColor(status: HomeConnectionFeatureStatus): Color =
+    when (status) {
+        HomeConnectionFeatureStatus.ON -> Color(0xFF7BD69D)
+        HomeConnectionFeatureStatus.PENDING -> MaterialTheme.colorScheme.primary
+        HomeConnectionFeatureStatus.OFF -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.58f)
+    }
+
+@Composable
+internal fun HomeConnectionFeatureDialog(
+    feature: HomeConnectionFeature,
+    state: HomeRouteUiState,
+    onDismiss: () -> Unit,
+    onKillSwitchChanged: (Boolean) -> Unit,
+    onBlockedPackagesEnabledChanged: (Boolean) -> Unit,
+    onPrivacyRouteModeSelected: (PrivacyRouteMode) -> Unit,
+    onRestart: () -> Unit,
+) {
+    val indicator = homeConnectionFeatureIndicator(feature, state) ?: return
+    val title = "${stringResource(indicator.titleRes)}: ${indicator.status.label}"
+    val icon = homeConnectionFeatureIcon(feature)
+    val connectionActive =
+        state.connection.state in setOf(
+            ConnectionState.CONNECTED,
+            ConnectionState.CONNECTING,
+            ConnectionState.RECONNECTING,
+        )
+    val restartAvailable = state.reconnectRequired && connectionActive
+    val enabled =
+        when (feature) {
+            HomeConnectionFeature.KILL_SWITCH -> state.settings.expert.killSwitchEnabled
+            HomeConnectionFeature.FIREWALL -> state.settings.expert.blockedPackagesEnabled
+            HomeConnectionFeature.TOR -> state.settings.privacyRoute.enabled
+        }
+    val confirmLabel =
+        if (restartAvailable) {
+            stringResource(R.string.reconnect)
+        } else {
+            stringResource(
+                if (enabled) {
+                    R.string.home_feature_turn_off
+                } else {
+                    R.string.home_feature_turn_on
+                },
+            )
+        }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        modifier = Modifier.foxholeDialogChrome(),
+        shape = FoxholeDialogShape,
+        title = {
+            FoxholeDialogTitle(
+                title = title,
+                icon = icon,
+                iconTint = homeConnectionFeatureStatusColor(indicator.status),
+            )
+        },
+        text = {
+            Text(
+                text = stringResource(homeConnectionFeatureSummaryRes(feature)),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        },
+        confirmButton = {
+            FoxholeDialogConfirmButton(
+                onClick = {
+                    if (restartAvailable) {
+                        onRestart()
+                        onDismiss()
+                    } else {
+                        when (feature) {
+                            HomeConnectionFeature.KILL_SWITCH -> onKillSwitchChanged(!enabled)
+                            HomeConnectionFeature.FIREWALL -> onBlockedPackagesEnabledChanged(!enabled)
+                            HomeConnectionFeature.TOR ->
+                                onPrivacyRouteModeSelected(
+                                    if (enabled) {
+                                        PrivacyRouteMode.OFF
+                                    } else {
+                                        PrivacyRouteMode.TOR_OVER_VPN
+                                    },
+                                )
+                        }
+                        if (!connectionActive) {
+                            onDismiss()
+                        }
+                    }
+                },
+                label = confirmLabel,
+            )
+        },
+        dismissButton = {
+            FoxholeDialogDismissButton(onClick = onDismiss)
+        },
+    )
+}
+
+@Composable
+private fun homeConnectionFeatureIcon(feature: HomeConnectionFeature): ImageVector =
+    when (feature) {
+        HomeConnectionFeature.KILL_SWITCH -> Icons.Outlined.Shield
+        HomeConnectionFeature.FIREWALL -> Icons.Outlined.Apps
+        HomeConnectionFeature.TOR -> ImageVector.vectorResource(R.drawable.ic_tor_route)
+    }
+
+private fun homeConnectionFeatureSummaryRes(feature: HomeConnectionFeature): Int =
+    when (feature) {
+        HomeConnectionFeature.KILL_SWITCH -> R.string.kill_switch_summary
+        HomeConnectionFeature.FIREWALL -> R.string.blocked_apps_info_body
+        HomeConnectionFeature.TOR -> R.string.privacy_route_summary
+    }
 
 @Composable
 internal fun HomeTypewriterProtocolText(
@@ -827,9 +1141,11 @@ internal fun HomeConnectionActions(
     val activeProfile = state.activeProfile
     val showAutoConnectAction = shouldShowAutoConnectAction(activeProfile)
     val autoConnectRunning = state.autoConnect.running
+    val protocolRefreshRunning = state.protocolMetricsRefreshing
     val autoConnectEnabled =
         activeProfile != null &&
             !autoConnectRunning &&
+            !protocolRefreshRunning &&
             state.connection.state !in setOf(ConnectionState.CONNECTING, ConnectionState.RECONNECTING)
     val smartStartAccent = MaterialTheme.colorScheme.primary
     val autoConnectColor =
@@ -839,7 +1155,7 @@ internal fun HomeConnectionActions(
             smartStartAccent.copy(alpha = 0.46f)
         }
     val primaryAction =
-        if (autoConnectRunning || state.reconnectInProgress) {
+        if (autoConnectRunning || protocolRefreshRunning || state.reconnectInProgress) {
             HomePrimaryAction.STOP
         } else {
             homePrimaryAction(state)
@@ -906,7 +1222,7 @@ internal fun HomeConnectionActions(
             Icon(primaryIcon, contentDescription = null)
             Spacer(modifier = Modifier.width(12.dp))
             Text(
-                if (autoConnectRunning || state.reconnectInProgress) {
+                if (autoConnectRunning || protocolRefreshRunning || state.reconnectInProgress) {
                     stringResource(R.string.disconnect)
                 } else {
                     homeConnectionLabel(state.connection.state, state.reconnectRequired)
@@ -938,7 +1254,7 @@ internal fun HomeConnectionActions(
             Icon(primaryIcon, contentDescription = null)
             Spacer(modifier = Modifier.width(8.dp))
             Text(
-                if (autoConnectRunning || state.reconnectInProgress) {
+                if (autoConnectRunning || protocolRefreshRunning || state.reconnectInProgress) {
                     stringResource(R.string.disconnect)
                 } else {
                     homeConnectionLabel(state.connection.state, state.reconnectRequired)

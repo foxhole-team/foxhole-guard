@@ -249,6 +249,9 @@ fun FoxholeApp(
                         onAutoConnect = viewModel::onAutoConnectActiveProfile,
                         onTrafficModeSelected = viewModel::onTrafficModeSelected,
                         onPerAppRoutingModeSelected = viewModel::onPerAppRoutingModeSelected,
+                        onKillSwitchChanged = viewModel::onKillSwitchChanged,
+                        onBlockedPackagesEnabledChanged = viewModel::onBlockedPackagesEnabledChanged,
+                        onPrivacyRouteModeSelected = viewModel::onPrivacyRouteModeSelected,
                         onSelectActiveProtocolOption = { optionId ->
                             state.activeProfile?.id?.let { profileId ->
                                 viewModel.onSelectProfileProtocolOption(profileId, optionId)
@@ -456,6 +459,9 @@ fun FoxholeApp(
                     )
                 }
                 composable(AppRoute.ROUTING_APPS) {
+                    LaunchedEffect(Unit) {
+                        viewModel.ensureInstalledAppsLoaded()
+                    }
                     val state by viewModel.routingRouteState.collectAsStateWithLifecycle()
                     RoutingAppsScreen(
                         state = state,

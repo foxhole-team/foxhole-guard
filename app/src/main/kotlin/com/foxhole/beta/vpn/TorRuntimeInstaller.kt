@@ -11,6 +11,7 @@ data class TorRuntimePaths(
     val dataDirectory: String,
     val geoIpFilePath: String? = null,
     val geoIpv6FilePath: String? = null,
+    val torrcDefaultsFilePath: String? = null,
 )
 
 class TorRuntimeUnavailableException(message: String) : IllegalStateException(message)
@@ -34,18 +35,23 @@ class TorRuntimeInstaller(
                 targetRoot.deleteRecursively()
                 copyAssetTree(assetRoot, targetRoot)
             }
+            markTorBundleExecutables(targetRoot)
             val executable =
                 nativeTorExecutable()
                     ?: throw TorRuntimeUnavailableException("Tor native executable is missing for this device ABI")
             if (!executable.isFile || !executable.ensureExecutable()) {
                 throw TorRuntimeUnavailableException("Tor executable could not be prepared")
             }
-            val dataDirectory = File(appContext.filesDir, "tor-data").apply { mkdirs() }
+            val dataDirectory = File(appContext.filesDir, "tor-data/$assetAbi").apply { mkdirs() }
+            val geoIpFile = copyTorDataFile(targetRoot, dataDirectory, "geoip")
+            val geoIpv6File = copyTorDataFile(targetRoot, dataDirectory, "geoip6")
+            val torrcDefaultsFile = writeRuntimeTorrcDefaults(targetRoot, dataDirectory)
             TorRuntimePaths(
                 executablePath = executable.absolutePath,
                 dataDirectory = dataDirectory.absolutePath,
-                geoIpFilePath = findTorDataFile(targetRoot, "geoip")?.absolutePath,
-                geoIpv6FilePath = findTorDataFile(targetRoot, "geoip6")?.absolutePath,
+                geoIpFilePath = geoIpFile?.absolutePath,
+                geoIpv6FilePath = geoIpv6File?.absolutePath,
+                torrcDefaultsFilePath = torrcDefaultsFile?.absolutePath,
             )
         }
 
@@ -58,6 +64,66 @@ class TorRuntimeInstaller(
 
     private fun File.ensureExecutable(): Boolean =
         canExecute() || setExecutable(true, true)
+
+    private fun markTorBundleExecutables(targetRoot: File) {
+        TOR_EXECUTABLE_ASSET_NAMES.forEach { name ->
+            File(targetRoot, name).takeIf(File::isFile)?.ensureExecutable()
+        }
+        TOR_PLUGGABLE_TRANSPORT_NAMES.forEach { name ->
+            File(targetRoot, "tor/pluggable_transports/$name").takeIf(File::isFile)?.ensureExecutable()
+        }
+    }
+
+    private fun copyTorDataFile(
+        targetRoot: File,
+        dataDirectory: File,
+        name: String,
+    ): File? {
+        val source = findTorDataFile(targetRoot, name) ?: return null
+        return File(dataDirectory, name)
+            .also { target -> source.copyTo(target, overwrite = true) }
+    }
+
+    private fun writeRuntimeTorrcDefaults(
+        targetRoot: File,
+        dataDirectory: File,
+    ): File? {
+        val source = findTorDataFile(targetRoot, TORRC_DEFAULTS_FILE_NAME) ?: return null
+        val transportRoot = File(targetRoot, "tor/pluggable_transports")
+        val content =
+            source
+                .readLines()
+                .mapNotNull { line -> normalizedTorrcDefaultsLine(line, transportRoot) }
+                .joinToString(separator = "\n", postfix = "\n")
+        return File(dataDirectory, TORRC_DEFAULTS_FILE_NAME)
+            .also { target -> target.writeText(content) }
+    }
+
+    private fun normalizedTorrcDefaultsLine(
+        line: String,
+        transportRoot: File,
+    ): String? {
+        if (!line.startsWith("ClientTransportPlugin ") || " exec " !in line) {
+            return line
+        }
+        val prefix = line.substringBefore(" exec ")
+        val command = line.substringAfter(" exec ")
+        val executableName = command.substringBefore(' ')
+        val executable = File(transportRoot, executableName)
+        if (!executable.isFile || !executable.ensureExecutable()) {
+            return null
+        }
+        val arguments = command.substringAfter(' ', missingDelimiterValue = "").trim()
+        return buildString {
+            append(prefix)
+            append(" exec ")
+            append(executable.absolutePath)
+            if (arguments.isNotBlank()) {
+                append(' ')
+                append(arguments)
+            }
+        }
+    }
 
     private fun findTorDataFile(
         targetRoot: File,
@@ -98,6 +164,8 @@ class TorRuntimeInstaller(
 
     private companion object {
         const val TOR_NATIVE_LIBRARY_NAME = "libTor.so"
+        const val TORRC_DEFAULTS_FILE_NAME = "torrc-defaults"
         val TOR_EXECUTABLE_ASSET_NAMES = listOf("tor", "libTor.so", "tor/libTor.so")
+        val TOR_PLUGGABLE_TRANSPORT_NAMES = listOf("lyrebird", "conjure-client")
     }
 }

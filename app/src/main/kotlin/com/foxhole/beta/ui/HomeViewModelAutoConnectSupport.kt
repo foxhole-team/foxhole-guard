@@ -740,6 +740,11 @@ internal fun HomeViewModel.refreshSmartProfileMetricsInternal(profileId: Long) {
 
 internal fun HomeViewModel.cancelSmartProfileMetricsRefreshInternal(restoreConnection: Boolean) {
     protocolMetricsRestoreOnCancel = restoreConnection
+    if (!restoreConnection) {
+        protocolMetricsRefreshingProfileIdsMutable.value = emptySet()
+        protocolMetricsRefreshingOptionIdByProfileIdMutable.value = emptyMap()
+        clearAutoConnectUiState()
+    }
     protocolMetricsRefreshJob?.cancel()
 }
 
