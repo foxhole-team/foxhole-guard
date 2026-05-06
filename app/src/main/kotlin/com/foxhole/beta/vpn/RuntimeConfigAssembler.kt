@@ -60,6 +60,7 @@ class RuntimeConfigAssembler(
         activePreset: RoutingPreset?,
         privateDnsMode: PrivateDnsMode? = null,
         torRuntimePaths: TorRuntimePaths? = null,
+        dnsFilterRuntimePaths: DnsFilterRuntimePaths? = null,
         vpnProtocolHint: ProtocolHint? = null,
     ): String {
         validate(settings.expert)
@@ -72,9 +73,10 @@ class RuntimeConfigAssembler(
                     activePreset = activePreset,
                     privateDnsMode = privateDnsMode,
                     torRuntimePaths = torRuntimePaths,
+                    dnsFilterRuntimePaths = dnsFilterRuntimePaths,
                     vpnProtocolHint = vpnProtocolHint,
                 )
-            TrafficMode.PROXY -> assembleProxy(base, settings, activePreset)
+            TrafficMode.PROXY -> assembleProxy(base, settings, activePreset, dnsFilterRuntimePaths)
         }
     }
 
@@ -134,6 +136,7 @@ class RuntimeConfigAssembler(
         activePreset: RoutingPreset?,
         privateDnsMode: PrivateDnsMode?,
         torRuntimePaths: TorRuntimePaths?,
+        dnsFilterRuntimePaths: DnsFilterRuntimePaths?,
         vpnProtocolHint: ProtocolHint?,
     ): String {
         val tunInbound = base["inbounds"]?.jsonArray?.firstOrNull { it.jsonObject["type"]?.jsonPrimitive?.content == "tun" }?.jsonObject
@@ -165,6 +168,7 @@ class RuntimeConfigAssembler(
                 traffic = settings.traffic,
                 dnsSettings = settings.dns,
                 privateDnsMode = privateDnsMode,
+                dnsFilterRuntimePaths = dnsFilterRuntimePaths,
                 privacyRouteActive = privacyRouteActive,
             )
         val patchedRoute =
@@ -173,6 +177,7 @@ class RuntimeConfigAssembler(
                 dns = patchedDns,
                 activePreset = activePreset,
                 settings = settings,
+                dnsFilterRuntimePaths = dnsFilterRuntimePaths,
                 privacyRouteActive = privacyRouteActive,
             )
         val patchedExperimental =
@@ -214,6 +219,7 @@ class RuntimeConfigAssembler(
         base: JsonObject,
         settings: Settings,
         activePreset: RoutingPreset?,
+        dnsFilterRuntimePaths: DnsFilterRuntimePaths?,
     ): String {
         val localSurfaces = settings.expert.localSurfaces
         val inbounds =
@@ -221,8 +227,10 @@ class RuntimeConfigAssembler(
                 buildLocalSurfaceInbounds(localSurfaces, includeLocalProxy = true).forEach(::add)
             }
         val runtimeBase = base.withTcpReliabilityOutbounds()
-        val patchedDns = patchDns(runtimeBase["dns"]?.jsonObject, runtimeBase, settings.traffic, settings.dns)
-        val patchedRoute = patchProxyRoute(runtimeBase["route"]?.jsonObject, patchedDns, activePreset, settings.expert)
+        val patchedDns =
+            patchDns(runtimeBase["dns"]?.jsonObject, runtimeBase, settings.traffic, settings.dns, dnsFilterRuntimePaths)
+        val patchedRoute =
+            patchProxyRoute(runtimeBase["route"]?.jsonObject, patchedDns, activePreset, settings, dnsFilterRuntimePaths)
         val patchedExperimental = patchExperimental(runtimeBase["experimental"]?.jsonObject, localSurfaces)
 
         return json.encodeToString(
@@ -552,6 +560,7 @@ class RuntimeConfigAssembler(
         base: JsonObject,
         traffic: TrafficSettings,
         dnsSettings: DnsSettings = DnsSettings(),
+        dnsFilterRuntimePaths: DnsFilterRuntimePaths? = null,
         privateDnsMode: PrivateDnsMode? = null,
         privacyRouteActive: Boolean = false,
     ): JsonObject {
@@ -567,6 +576,7 @@ class RuntimeConfigAssembler(
                 strategy = effectiveStrategy.configValue,
                 dnsSettings = dnsSettings,
                 privateDnsMode = privateDnsMode,
+                dnsFilterRuntimePaths = dnsFilterRuntimePaths,
                 extraServers = wireGuardDnsServers,
                 finalTag =
                     if (privacyRouteActive) {
@@ -599,6 +609,7 @@ class RuntimeConfigAssembler(
         dns: JsonObject,
         activePreset: RoutingPreset?,
         settings: Settings,
+        dnsFilterRuntimePaths: DnsFilterRuntimePaths?,
         privacyRouteActive: Boolean,
     ): JsonObject {
         val expert = settings.expert
@@ -643,18 +654,25 @@ class RuntimeConfigAssembler(
                     presetRules.forEach(::add)
                 }
             }
+        val ruleSets =
+            mergedRouteRuleSets(
+                source = source,
+                dnsSettings = settings.dns,
+                dnsFilterRuntimePaths = dnsFilterRuntimePaths,
+            )
 
         return buildJsonObject {
             if (preserveSource) {
                 source.forEach { (key, value) ->
-                    if (key == "rules") {
-                        put(key, combinedRules)
-                    } else {
-                        put(key, value)
+                    when (key) {
+                        "rules" -> put(key, combinedRules)
+                        "rule_set" -> Unit
+                        else -> put(key, value)
                     }
                 }
             }
             put("rules", combinedRules)
+            ruleSets?.let { put("rule_set", it) }
             put(
                 "final",
                 if (privacyRouteActive && settings.privacyRoute.scope == PrivacyRouteScope.ALL_APPS) {
@@ -717,8 +735,10 @@ class RuntimeConfigAssembler(
         existing: JsonObject?,
         dns: JsonObject,
         activePreset: RoutingPreset?,
-        expert: ExpertSettings,
+        settings: Settings,
+        dnsFilterRuntimePaths: DnsFilterRuntimePaths?,
     ): JsonObject {
+        val expert = settings.expert
         val source = existing ?: buildJsonObject {}
         val preserveSource = existing != null && !isFoxholeManagedRoute(existing)
         val baseRules =
@@ -744,18 +764,25 @@ class RuntimeConfigAssembler(
                     presetRules.forEach(::add)
                 }
             }
+        val ruleSets =
+            mergedRouteRuleSets(
+                source = source,
+                dnsSettings = settings.dns,
+                dnsFilterRuntimePaths = dnsFilterRuntimePaths,
+            )
 
         return buildJsonObject {
             if (preserveSource) {
                 source.forEach { (key, value) ->
-                    if (key == "rules") {
-                        put(key, combinedRules)
-                    } else {
-                        put(key, value)
+                    when (key) {
+                        "rules" -> put(key, combinedRules)
+                        "rule_set" -> Unit
+                        else -> put(key, value)
                     }
                 }
             }
             put("rules", combinedRules)
+            ruleSets?.let { put("rule_set", it) }
             source["final"]?.let { put("final", it) } ?: put("final", "proxy")
             resolverForRoute(dns, source)?.let { put("default_domain_resolver", it) }
             if (!preserveSource) {
@@ -763,6 +790,34 @@ class RuntimeConfigAssembler(
             }
         }
     }
+
+    private fun mergedRouteRuleSets(
+        source: JsonObject,
+        dnsSettings: DnsSettings,
+        dnsFilterRuntimePaths: DnsFilterRuntimePaths?,
+    ): JsonArray? {
+        val existing =
+            source["rule_set"]
+                ?.jsonArray
+                ?.filterNot { element -> element.jsonObject["tag"]?.jsonPrimitive?.contentOrNull == DNS_ADGUARD_RULE_SET_TAG }
+                .orEmpty()
+        val foxholeRuleSet =
+            if (dnsSettings.bundledAdGuardFilterEnabled() && dnsFilterRuntimePaths != null) {
+                buildJsonObject {
+                    put("type", "local")
+                    put("tag", DNS_ADGUARD_RULE_SET_TAG)
+                    put("format", "binary")
+                    put("path", dnsFilterRuntimePaths.adGuardDnsFilterPath)
+                }
+            } else {
+                null
+            }
+        val merged = existing + listOfNotNull(foxholeRuleSet)
+        return merged.takeIf(List<JsonElement>::isNotEmpty)?.let(::JsonArray)
+    }
+
+    private fun DnsSettings.bundledAdGuardFilterEnabled(): Boolean =
+        filteringEnabled && (blockAds || blockTrackers || blockAppTelemetry || blockMaliciousDomains)
 
     private fun resolverForRoute(
         dns: JsonObject,
@@ -1065,6 +1120,7 @@ class RuntimeConfigAssembler(
         strategy: String,
         dnsSettings: DnsSettings = DnsSettings(),
         privateDnsMode: PrivateDnsMode?,
+        dnsFilterRuntimePaths: DnsFilterRuntimePaths? = null,
         extraServers: List<JsonObject> = emptyList(),
         finalTag: String = DNS_REMOTE_TAG,
         includeRemote: Boolean = true,
@@ -1095,7 +1151,7 @@ class RuntimeConfigAssembler(
                     extraServers.forEach(::add)
                 },
             )
-            val rules = buildDnsRules(dnsSettings)
+            val rules = buildDnsRules(dnsSettings, dnsFilterRuntimePaths)
             if (rules.isNotEmpty()) {
                 put("rules", JsonArray(rules))
             }
@@ -1158,7 +1214,10 @@ class RuntimeConfigAssembler(
             detourTag?.let { put("detour", it) }
         }
 
-    private fun buildDnsRules(dnsSettings: DnsSettings): List<JsonObject> =
+    private fun buildDnsRules(
+        dnsSettings: DnsSettings,
+        dnsFilterRuntimePaths: DnsFilterRuntimePaths?,
+    ): List<JsonObject> =
         buildList {
             if (!dnsSettings.filteringEnabled) {
                 return@buildList
@@ -1188,6 +1247,17 @@ class RuntimeConfigAssembler(
                         }
                         put("action", "route")
                         put("server", DNS_REMOTE_TAG)
+                    },
+                )
+            }
+            if (dnsSettings.bundledAdGuardFilterEnabled() && dnsFilterRuntimePaths != null) {
+                add(
+                    buildJsonObject {
+                        putJsonArray("rule_set") {
+                            add(JsonPrimitive(DNS_ADGUARD_RULE_SET_TAG))
+                        }
+                        put("action", "predefined")
+                        put("rcode", "NXDOMAIN")
                     },
                 )
             }
@@ -1341,10 +1411,11 @@ class RuntimeConfigAssembler(
 
     private companion object {
         val LOCAL_HOSTS = setOf("127.0.0.1", "localhost", "::1")
-        val FOXHOLE_ROUTE_KEYS = setOf("rules", "final", "default_domain_resolver", "auto_detect_interface")
+        val FOXHOLE_ROUTE_KEYS = setOf("rules", "rule_set", "final", "default_domain_resolver", "auto_detect_interface")
         const val DNS_LOCAL_TAG = "dns-local"
         const val DNS_DIRECT_TAG = "dns-direct"
         const val DNS_REMOTE_TAG = "dns-remote"
+        const val DNS_ADGUARD_RULE_SET_TAG = "foxhole-adguard-dns-filter"
         const val WIREGUARD_DNS_TAG = "dns-wireguard"
         const val TOR_OVER_VPN_OUTBOUND_TAG = "tor-over-vpn"
         const val FOXHOLE_REMOTE_DNS_SERVER = "1.1.1.1"

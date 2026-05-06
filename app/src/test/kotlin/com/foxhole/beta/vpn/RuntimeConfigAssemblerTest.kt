@@ -1601,8 +1601,32 @@ class RuntimeConfigAssemblerTest {
                     settings.copy(dns = settings.dns.copy(filteringEnabled = false)),
                     null,
                 ),
-            )
+        )
         assertFalse(disabled["dns"]!!.jsonObject.containsKey("rules"))
+    }
+
+    @Test
+    fun `dns filtering attaches bundled adguard rule set when prepared`() {
+        val filterPath = "/data/user/0/com.foxhole.beta/files/dns-rule-sets/adguard-dns-filter.srs"
+        val config =
+            parse(
+                assembler.assemble(
+                    baseConfigWithRules("profile.example"),
+                    Settings(),
+                    null,
+                    dnsFilterRuntimePaths = DnsFilterRuntimePaths(adGuardDnsFilterPath = filterPath),
+                ),
+            )
+        val dnsRules = config["dns"]!!.jsonObject["rules"]!!.jsonArray.map { it.jsonObject }
+        val adGuardRule = dnsRules.single { rule -> rule.stringArray("rule_set").contains("foxhole-adguard-dns-filter") }
+        val ruleSet = config["route"]!!.jsonObject["rule_set"]!!.jsonArray.single().jsonObject
+
+        assertEquals("predefined", adGuardRule["action"]!!.jsonPrimitive.content)
+        assertEquals("NXDOMAIN", adGuardRule["rcode"]!!.jsonPrimitive.content)
+        assertEquals("local", ruleSet["type"]!!.jsonPrimitive.content)
+        assertEquals("foxhole-adguard-dns-filter", ruleSet["tag"]!!.jsonPrimitive.content)
+        assertEquals("binary", ruleSet["format"]!!.jsonPrimitive.content)
+        assertEquals(filterPath, ruleSet["path"]!!.jsonPrimitive.content)
     }
 
     @Test

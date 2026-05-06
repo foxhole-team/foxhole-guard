@@ -13,6 +13,7 @@ import com.foxhole.beta.core.settings.SettingsRepository
 import com.foxhole.beta.core.traffic.LibboxTrafficMapConnectionSource
 import com.foxhole.beta.core.traffic.TrafficMapRepository
 import com.foxhole.beta.vpn.AndroidLanProxyAddressProvider
+import com.foxhole.beta.vpn.DnsFilterAssetInstaller
 import com.foxhole.beta.vpn.FoxholeConnectionController
 import com.foxhole.beta.vpn.RuntimeConfigAssembler
 import com.foxhole.beta.vpn.TorRuntimeInstaller
@@ -61,6 +62,7 @@ internal class FoxholeDataGraphModule(
     val importParser: ProfileImportParser by lazy { ProfileImportParser(core.json) }
     val routingRepository: RoutingRepository by lazy { RoutingRepository(profileDatabase, core.httpClient, core.json) }
     val torRuntimeInstaller: TorRuntimeInstaller by lazy { TorRuntimeInstaller(appContext) }
+    val dnsFilterAssetInstaller: DnsFilterAssetInstaller by lazy { DnsFilterAssetInstaller(appContext) }
     val runtimeConfigAssembler: RuntimeConfigAssembler by lazy {
         RuntimeConfigAssembler(core.json, AndroidLanProxyAddressProvider(appContext))
     }
@@ -76,6 +78,7 @@ internal class FoxholeDataGraphModule(
             routingRepository = routingRepository,
             runtimeConfigAssembler = runtimeConfigAssembler,
             torRuntimeInstaller = torRuntimeInstaller,
+            dnsFilterAssetInstaller = dnsFilterAssetInstaller,
             json = core.json,
         )
     }

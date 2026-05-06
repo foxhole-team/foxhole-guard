@@ -8,6 +8,7 @@ import com.foxhole.beta.core.diagnostics.DiagnosticsLogger
 import com.foxhole.beta.core.importer.ProfileImportParser
 import com.foxhole.beta.core.importer.SubscriptionMetadataParser
 import com.foxhole.beta.core.model.CachedActiveProfile
+import com.foxhole.beta.core.model.DnsSettings
 import com.foxhole.beta.core.model.ParsedImport
 import com.foxhole.beta.core.model.ParsedSubscriptionImport
 import com.foxhole.beta.core.model.ParsedSubscriptionProfile
@@ -22,6 +23,7 @@ import com.foxhole.beta.core.model.isUdpTransport
 import com.foxhole.beta.core.network.ensurePublicUrl
 import com.foxhole.beta.core.network.requirePublicUrl
 import com.foxhole.beta.core.settings.SettingsRepository
+import com.foxhole.beta.vpn.DnsFilterAssetInstaller
 import com.foxhole.beta.vpn.PrivateDnsMode
 import com.foxhole.beta.vpn.RuntimeConfigAssembler
 import com.foxhole.beta.vpn.TorRuntimeInstaller
@@ -49,6 +51,7 @@ class ProfileRepository(
     private val routingRepository: RoutingRepository,
     private val runtimeConfigAssembler: RuntimeConfigAssembler,
     private val torRuntimeInstaller: TorRuntimeInstaller,
+    private val dnsFilterAssetInstaller: DnsFilterAssetInstaller,
     private val json: Json,
 ) {
     private data class SubscriptionResponse(
@@ -637,6 +640,12 @@ class ProfileRepository(
         val selectedProtocolHint = selectedOption?.protocolHint ?: profile.protocolHint
         val correlationId = newRuntimeCorrelationId()
         val settings = settingsRepository.current()
+        val dnsFilterRuntimePaths =
+            if (settings.dns.bundledAdGuardFilterEnabled()) {
+                dnsFilterAssetInstaller.prepare()
+            } else {
+                null
+            }
         val torRuntimePaths =
             if (
                 settings.privacyRoute.enabled &&
@@ -655,6 +664,7 @@ class ProfileRepository(
                     activePreset = routingRepository.currentPresetForRuntime(),
                     privateDnsMode = privateDnsMode,
                     torRuntimePaths = torRuntimePaths,
+                    dnsFilterRuntimePaths = dnsFilterRuntimePaths,
                     vpnProtocolHint = selectedProtocolHint,
                 )
             }.onFailure { error ->
@@ -1261,6 +1271,9 @@ internal fun StoredProfileSecret.withUpdatedResolvedConfigJson(
             },
     )
 }
+
+private fun DnsSettings.bundledAdGuardFilterEnabled(): Boolean =
+    filteringEnabled && (blockAds || blockTrackers || blockAppTelemetry || blockMaliciousDomains)
 
 internal fun ProfileImportParser.normalizeLegacyRawResolvedConfig(
     raw: String,
