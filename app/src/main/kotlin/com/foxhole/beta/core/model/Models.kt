@@ -225,7 +225,10 @@ data class UiSettings(
     val onboardingCompleted: Boolean = true,
     val showExpertSettings: Boolean = false,
     val supportBotHandleOverride: String? = null,
+    val networkCardEnabled: Boolean = true,
+    val trafficCardEnabled: Boolean = true,
     val trafficMapEnabled: Boolean = true,
+    val showTorQuickLaunch: Boolean = false,
 )
 
 @Serializable
@@ -366,7 +369,7 @@ data class ExpertSettings(
 @Serializable
 data class StatisticsSettings(
     val enabled: Boolean = false,
-    val retention: StatisticsRetention = StatisticsRetention.MONTH,
+    val retention: StatisticsRetention = StatisticsRetention.FOREVER,
     val profileTrafficEnabled: Boolean = true,
     val vpnProtocolsEnabled: Boolean = true,
     val profileComparisonsEnabled: Boolean = true,

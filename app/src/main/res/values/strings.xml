@@ -20,6 +20,9 @@
     <string name="traffic_map_device_location_icon">Device location</string>
     <string name="traffic_map_live_requires_firewall">To show real-time connections, enable Firewall in Foxhole settings.</string>
     <string name="traffic_map_waiting_connections">Waiting for real connections.</string>
+    <string name="traffic_map_country_header">Country</string>
+    <string name="traffic_map_sessions_header">Sessions</string>
+    <string name="traffic_map_total_header">Total</string>
     <string name="home_mode_split_tunnel">Split tunnel</string>
     <string name="connect">Start</string>
     <string name="disconnect">Stop</string>
@@ -94,7 +97,8 @@
     <string name="language_system">System</string>
     <string name="language_english">English</string>
     <string name="language_russian">Russian</string>
-    <string name="auto_reconnect">Auto reconnect</string>
+    <string name="auto_reconnect">VPN auto recovery</string>
+    <string name="auto_reconnect_summary">Restarts VPN after a network drop or runtime failure.</string>
     <string name="auto_start_on_boot">Auto start</string>
     <string name="auto_refresh_subscriptions_title">Auto-refresh v2raytun subscriptions</string>
     <string name="auto_refresh_subscriptions_summary">Periodically updates v2raytun subscription profiles in the background.</string>
@@ -192,6 +196,7 @@
     <string name="auto_connect">Smart start</string>
     <string name="smart_start_settings_title">Smart start</string>
     <string name="smart_start_settings_summary">VPN protocol analysis timeouts</string>
+    <string name="smart_start_settings_unavailable_hint">Settings become available after you add supported VPN configurations.</string>
     <string name="smart_start_protocol_timeout_title">Connection timeout</string>
     <string name="smart_start_protocol_timeout_summary">How long Foxhole waits for one protocol to respond when starting the VPN.</string>
     <string name="smart_start_refresh_timeout_title">Analysis timeout</string>
@@ -282,8 +287,14 @@
     <string name="security_firewall_summary">Enables the local Firewall for logging, permanent blocking, and the live connections map.</string>
     <string name="security_firewall_info_body">When Firewall is enabled, Foxhole can keep a local VPN runtime for features that need honest access to network connections.</string>
     <string name="security_firewall_enable_action">Enable Firewall</string>
+    <string name="network_card_setting_title">Network card</string>
+    <string name="network_card_setting_summary">Show the Network card on Dashboard.</string>
+    <string name="traffic_card_setting_title">Traffic card</string>
+    <string name="traffic_card_setting_summary">Show live traffic totals on Dashboard.</string>
     <string name="traffic_map_setting_title">Traffic map</string>
     <string name="traffic_map_setting_summary">Show the lightweight map on Dashboard.</string>
+    <string name="show_tor_quick_launch_title">Show TOR</string>
+    <string name="show_tor_quick_launch_summary">Show the TOR quick launch on Dashboard.</string>
     <string name="app_settings">App settings</string>
     <string name="expert_settings">Expert Settings</string>
     <string name="expert_unlock_confirm_title">Enable expert settings?</string>
@@ -348,6 +359,7 @@
     <string name="statistics_last_activity">Last activity</string>
     <string name="statistics_country_traffic_title">Traffic by country</string>
     <string name="statistics_country_traffic_top_title">Top 10 countries by traffic</string>
+    <string name="statistics_country_traffic_legend">Traffic size: %1$s</string>
     <string name="statistics_country_all_title">All countries</string>
     <string name="statistics_country_connections">%1$d connections</string>
     <string name="statistics_protocols_title">VPN protocols</string>
@@ -435,6 +447,19 @@
     <string name="dns_filter_list_status_summary">Bundled release list now; the download/convert/update pipeline is prepared but not run automatically.</string>
     <string name="dns_filter_status_bundled">Bundled</string>
     <string name="dns_filter_status_updated">Updated: %1$s</string>
+    <string name="dns_filter_status_never">Never</string>
+    <plurals name="dns_filter_status_minutes">
+        <item quantity="one">%1$d min</item>
+        <item quantity="other">%1$d min</item>
+    </plurals>
+    <plurals name="dns_filter_status_hours">
+        <item quantity="one">%1$d hour</item>
+        <item quantity="other">%1$d hours</item>
+    </plurals>
+    <plurals name="dns_filter_status_days">
+        <item quantity="one">%1$d day</item>
+        <item quantity="other">%1$d days</item>
+    </plurals>
     <string name="dns_filter_refresh_complete">DNS filter list checked.</string>
     <string name="dns_through_vpn_title">DNS through VPN</string>
     <string name="dns_through_vpn_summary">Send FoxHole DNS queries through the active tunnel.</string>
@@ -734,7 +759,7 @@
     <string name="help_quick_start_body">Import a profile from the clipboard, a file, or a QR code, select it as active, and tap Start.\n\nURL subscriptions are supported for compatible VPN configurations, including v2raytun-compatible node lists and smart profiles.</string>
     <string name="help_profiles_subscriptions_title">Profiles and subscriptions</string>
     <string name="help_profiles_subscriptions_body">Profiles store connection parameters: server, protocol, keys, routes, and tunnel settings.\n\nIn Profiles, you can choose the active profile, refresh a subscription, view or edit the configuration, and export the configuration.\n\nManual edits inside a subscription profile can be replaced by the next subscription refresh.\n\nRefresh is available for URL subscriptions. Foxhole downloads the latest configuration from the VPN provider. If the profile is already connected to the VPN tunnel, the app reconnects it to apply the changes.</string>
-    <string name="help_smart_start_full_body">Smart start chooses a working VPN protocol for the current network.\n\nIt tries the best available protocols, validates the connection, and keeps the first confirmed result. Full refresh checks every available protocol separately and updates latency, status, and recommendations.\n\nSmart start data stays on the device: saved latency, statuses, recommendations, and connection history are not sent out.\n\nSmart start settings appear automatically after Foxhole detects a smart profile. In settings, you can change connection timeouts, choose the UDP / TCP / All transport priority, or clear local Smart start data.\n\nProtocol menu legend:\n\n★ Fast - the fastest successful option from saved measurements.\n\n★★ Best - the protocol Foxhole recommends for connection based on the latest checks.</string>
+    <string name="help_smart_start_full_body">Smart start chooses a working VPN protocol for the current network.\n\nIt tries the best available protocols, validates the connection, and keeps the first confirmed result. Full refresh checks every available protocol separately and updates latency, status, and recommendations.\n\nSmart start data stays on the device: saved latency, statuses, recommendations, and connection history are not sent out.\n\nSmart start settings are visible all the time. Protocol controls become active after Foxhole detects a supported smart profile or subscription.\n\nProtocol menu legend:\n\n★ Fast - the fastest successful option from saved measurements.\n\n★★ Best - the protocol Foxhole recommends for connection based on the latest checks.</string>
     <string name="help_protocol_statuses_title">Protocol statuses</string>
     <string name="help_protocol_fast_summary">Up to 250 ms. The best everyday connection option.</string>
     <string name="help_protocol_normal_summary">251&#8211;750 ms. The connection works, but may not be the fastest.</string>

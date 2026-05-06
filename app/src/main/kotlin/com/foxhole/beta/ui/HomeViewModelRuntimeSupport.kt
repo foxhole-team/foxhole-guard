@@ -566,27 +566,20 @@ internal fun HomeViewModel.scheduleConnectedIpRefreshInternal() {
     connectedIpRefreshJob?.cancel()
     connectedIpRefreshJob =
         viewModelScope.launch {
-            ipInfoLoadingMutable.value = true
             delay(HomeViewModel.CONNECTED_IP_REFRESH_DELAY_MS)
             if (
                 container.connectionController.snapshot.value.state != ConnectionState.CONNECTED ||
                 ipInfoRefreshJob != null
             ) {
-                if (ipInfoRefreshJob == null) {
-                    ipInfoLoadingMutable.value = false
-                }
                 return@launch
             }
             startIpInfoRefresh(
                 reportFailures = false,
-                showLoading = true,
+                showLoading = false,
                 clearExistingIp = false,
                 fetchMode = IpInfoFetchMode.FULL,
                 minimumLoadingDurationMs = 0L,
             )
-            if (ipInfoRefreshJob == null) {
-                ipInfoLoadingMutable.value = false
-            }
         }
 }
 
@@ -685,5 +678,13 @@ internal fun HomeViewModel.onTrafficUiVisibilityChangedInternal(visible: Boolean
     FoxholeVpnRuntimeBridge.setHighFrequencyTrafficUpdates(visible)
     if (visible) {
         FoxholeVpnRuntimeBridge.requestImmediateTrafficSample()
+        if (
+            container.connectionController.snapshot.value.state == ConnectionState.CONNECTED &&
+            !autoConnectUiStateMutable.value.running
+        ) {
+            scheduleActiveProfileLatencyRefresh()
+        }
+    } else {
+        clearProfileLatencyRefresh()
     }
 }

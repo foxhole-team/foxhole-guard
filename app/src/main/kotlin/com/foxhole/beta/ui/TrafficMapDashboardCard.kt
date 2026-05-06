@@ -1,6 +1,12 @@
 package com.foxhole.beta.ui
 
 import android.content.Context
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -43,6 +49,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -116,6 +123,27 @@ private fun TrafficWorldMap(
     val destinationColor = FoxholePositiveAccent
     val phoneScreenColor = colorScheme.surface.copy(alpha = 0.88f)
     val countryShapes = remember(countries) { countries }
+    val transition = rememberInfiniteTransition(label = "traffic_map_motion")
+    val pulsePhase by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec =
+            infiniteRepeatable(
+                animation = tween(durationMillis = 1_650, easing = LinearEasing),
+                repeatMode = RepeatMode.Restart,
+            ),
+        label = "traffic_map_pulse",
+    )
+    val flowPhase by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec =
+            infiniteRepeatable(
+                animation = tween(durationMillis = 2_400, easing = LinearEasing),
+                repeatMode = RepeatMode.Restart,
+            ),
+        label = "traffic_map_flow",
+    )
 
     Box(
         modifier = modifier
@@ -128,6 +156,7 @@ private fun TrafficWorldMap(
                 val minLineStroke = 0.65.dp.toPx()
                 val destinationRadius = 3.3.dp.toPx()
                 val glowRadius = 8.dp.toPx()
+                val flowDotRadius = 1.8.dp.toPx()
                 val cornerRadius = CornerRadius(10.dp.toPx(), 10.dp.toPx())
                 val phoneWidth = 8.dp.toPx()
                 val phoneHeight = 12.dp.toPx()
@@ -175,15 +204,29 @@ private fun TrafficWorldMap(
                             strokeWidth = minLineStroke + ((maxLineStroke - minLineStroke) * weight),
                             cap = StrokeCap.Round,
                         )
+                        if (index < MAX_TRAFFIC_MAP_FLOW_DOTS) {
+                            val shiftedProgress = (flowPhase + index * 0.113f) % 1f
+                            val flowCenter =
+                                Offset(
+                                    x = from.x + (to.x - from.x) * shiftedProgress,
+                                    y = from.y + (to.y - from.y) * shiftedProgress,
+                                )
+                            drawCircle(
+                                color = lineColor.copy(alpha = 0.62f),
+                                radius = flowDotRadius + (flowDotRadius * 0.25f * weight),
+                                center = flowCenter,
+                            )
+                        }
                     }
 
                     val destinationCount = min(mapState.destinations.size, MAX_TRAFFIC_MAP_DRAW_DESTINATIONS)
                     for (index in 0 until destinationCount) {
                         val point = mapState.destinations[index]
                         val offset = project(point.lat, point.lon, viewport)
+                        val pointPulse = (pulsePhase + index * 0.071f) % 1f
                         drawCircle(
-                            color = destinationColor.copy(alpha = 0.22f),
-                            radius = glowRadius,
+                            color = destinationColor.copy(alpha = 0.12f + 0.14f * (1f - pointPulse)),
+                            radius = glowRadius + glowRadius * 0.42f * pointPulse,
                             center = offset,
                         )
                         drawCircle(
@@ -195,8 +238,8 @@ private fun TrafficWorldMap(
 
                     val origin = project(mapState.originLat, mapState.originLon, viewport)
                     drawCircle(
-                        color = originColor.copy(alpha = 0.24f),
-                        radius = glowRadius,
+                        color = originColor.copy(alpha = 0.16f + 0.10f * (1f - pulsePhase)),
+                        radius = glowRadius + glowRadius * 0.28f * pulsePhase,
                         center = origin,
                     )
                     drawPhoneMarker(
@@ -256,6 +299,7 @@ private fun TrafficMapLegend(
                         .verticalScroll(scrollState),
                 verticalArrangement = Arrangement.spacedBy(3.dp),
             ) {
+                TrafficMapLegendHeader()
                 destinations.forEach { point ->
                     TrafficMapLegendDestinationRow(context = context, point = point)
                 }
@@ -269,13 +313,13 @@ private fun TrafficMapOriginRow(originLabel: String) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(5.dp),
-        verticalAlignment = Alignment.Top,
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(
             imageVector = Icons.Outlined.PhoneAndroid,
             contentDescription = stringResource(R.string.traffic_map_device_location_icon),
             tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(14.dp),
+            modifier = Modifier.size(16.dp),
         )
         Text(
             text = originLabel,
@@ -285,7 +329,7 @@ private fun TrafficMapOriginRow(originLabel: String) {
             ),
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurface,
-            maxLines = 4,
+            maxLines = 2,
             overflow = TextOverflow.Ellipsis,
         )
     }
@@ -294,12 +338,42 @@ private fun TrafficMapOriginRow(originLabel: String) {
 private fun TrafficMapUiState.originLocationLabel(): String =
     listOfNotNull(
         originCity,
-        originCountryName
-            ?.let { countryName -> originCountryCode?.let { code -> "$countryName · $code" } ?: countryName }
-            ?: originCountryCode,
+        originCountryName?.let { countryName -> "${countryEmoji(originCountryCode)} $countryName" }
+            ?: originCountryCode?.let(::countryEmoji),
     )
         .joinToString(separator = "\n")
         .ifBlank { "IP" }
+
+@Composable
+private fun TrafficMapLegendHeader() {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        TrafficMapLegendCell(
+            text = stringResource(R.string.traffic_map_country_header),
+            modifier = Modifier.weight(1.15f),
+            textAlign = TextAlign.Start,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        TrafficMapLegendCell(
+            text = stringResource(R.string.traffic_map_sessions_header),
+            modifier = Modifier.weight(0.72f),
+            textAlign = TextAlign.End,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        TrafficMapLegendCell(
+            text = stringResource(R.string.traffic_map_total_header),
+            modifier = Modifier.weight(0.78f),
+            textAlign = TextAlign.End,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
 
 @Composable
 private fun TrafficMapLegendDestinationRow(
@@ -308,34 +382,67 @@ private fun TrafficMapLegendDestinationRow(
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(5.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(
-            modifier = Modifier
-                .size(7.dp)
-                .clip(CircleShape)
-                .padding(0.dp),
-            contentAlignment = Alignment.Center,
+        Row(
+            modifier = Modifier.weight(1.15f),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Surface(
-                modifier = Modifier.fillMaxSize(),
-                shape = CircleShape,
-                color = FoxholePositiveAccent,
-            ) {}
+            Box(
+                modifier = Modifier
+                    .size(7.dp)
+                    .clip(CircleShape)
+                    .padding(0.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    shape = CircleShape,
+                    color = FoxholePositiveAccent,
+                ) {}
+            }
+            TrafficMapLegendCell(
+                text = "${countryEmoji(point.countryCode)} ${point.label}",
+                modifier = Modifier.weight(1f),
+                textAlign = TextAlign.Start,
+            )
         }
-        Text(
-            text = "${countryEmoji(point.countryCode)} ${point.countryCode} · " +
-                "${point.connections} · ${formatBytes(context, point.bytes)}",
-            style = MaterialTheme.typography.labelSmall.copy(
-                fontSize = 9.sp,
-                lineHeight = 11.sp,
-            ),
-            color = MaterialTheme.colorScheme.onSurface,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
+        TrafficMapLegendCell(
+            text = point.connections.toString(),
+            modifier = Modifier.weight(0.72f),
+            textAlign = TextAlign.End,
+        )
+        TrafficMapLegendCell(
+            text = formatBytes(context, point.bytes),
+            modifier = Modifier.weight(0.78f),
+            textAlign = TextAlign.End,
         )
     }
+}
+
+@Composable
+private fun TrafficMapLegendCell(
+    text: String,
+    modifier: Modifier = Modifier,
+    textAlign: TextAlign,
+    fontWeight: FontWeight = FontWeight.Normal,
+    color: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.onSurface,
+) {
+    Text(
+        text = text,
+        modifier = modifier,
+        style = MaterialTheme.typography.labelSmall.copy(
+            fontSize = 8.5.sp,
+            lineHeight = 10.sp,
+        ),
+        fontWeight = fontWeight,
+        color = color,
+        textAlign = textAlign,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+    )
 }
 
 @Composable
@@ -491,6 +598,7 @@ private const val TRAFFIC_MAP_MAX_LAT = 85.0
 private const val TRAFFIC_MAP_LAT_RANGE = TRAFFIC_MAP_MAX_LAT - TRAFFIC_MAP_MIN_LAT
 private const val MAX_TRAFFIC_MAP_DRAW_EDGES = 60
 private const val MAX_TRAFFIC_MAP_DRAW_DESTINATIONS = 60
+private const val MAX_TRAFFIC_MAP_FLOW_DOTS = 18
 private const val MIN_TRAFFIC_MAP_RING_POINTS = 3
 private const val TRAFFIC_MAP_COUNTRIES_ASSET = "maps/ne_50m_admin_0_countries.geojson"
 private const val TRAFFIC_MAP_ANTARCTICA_COUNTRY_CODE = "AQ"

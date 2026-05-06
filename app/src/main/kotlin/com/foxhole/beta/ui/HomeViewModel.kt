@@ -489,6 +489,7 @@ class HomeViewModel(
     internal var appTrafficStatsJob: Job? = null
     internal var protocolMetricsRestoreOnCancel: Boolean = true
     internal var dashboardVisible: Boolean = false
+    internal var statisticsVisible: Boolean = false
     internal var reconnectPromptPendingUntilDashboard: Boolean = false
 
     init {
@@ -543,7 +544,7 @@ class HomeViewModel(
                 }
                 if (shouldRefreshConnectedIp) {
                     scheduleConnectedIpRefresh()
-                    if (!autoConnectUiStateMutable.value.running) {
+                    if (dashboardVisible && !autoConnectUiStateMutable.value.running) {
                         scheduleActiveProfileLatencyRefresh()
                     }
                 }
@@ -934,6 +935,12 @@ class HomeViewModel(
 
     fun onTrafficMapEnabledChanged(value: Boolean) = onTrafficMapEnabledChangedInternal(value)
 
+    fun onNetworkCardEnabledChanged(value: Boolean) = onNetworkCardEnabledChangedInternal(value)
+
+    fun onTrafficCardEnabledChanged(value: Boolean) = onTrafficCardEnabledChangedInternal(value)
+
+    fun onShowTorQuickLaunchChanged(value: Boolean) = onShowTorQuickLaunchChangedInternal(value)
+
     fun onKillSwitchChanged(value: Boolean) = onKillSwitchChangedInternal(value)
 
     fun onFirewallEnabledChanged(value: Boolean) = onFirewallEnabledChangedInternal(value)
@@ -1210,10 +1217,15 @@ class HomeViewModel(
 
     fun onTrafficUiVisibilityChanged(visible: Boolean) {
         dashboardVisible = visible
-        onTrafficUiVisibilityChangedInternal(visible)
+        onTrafficUiVisibilityChangedInternal(dashboardVisible || statisticsVisible)
         if (visible) {
             startPendingProfileReconnectPromptIfNeeded()
         }
+    }
+
+    fun onStatisticsUiVisibilityChanged(visible: Boolean) {
+        statisticsVisible = visible
+        onTrafficUiVisibilityChangedInternal(dashboardVisible || statisticsVisible)
     }
 
     fun onStatisticsEnabledChanged(value: Boolean) {
@@ -1313,10 +1325,10 @@ class HomeViewModel(
         }
 
     companion object {
-        internal const val CONNECTED_IP_REFRESH_DELAY_MS = 1_250L
+        internal const val CONNECTED_IP_REFRESH_DELAY_MS = 5_000L
         internal const val MANUAL_IP_REFRESH_MIN_LOADING_MS = 666L
         internal const val CONNECTED_LATENCY_FIRST_DELAY_MS = 2_000L
-        internal const val CONNECTED_LATENCY_REFRESH_INTERVAL_MS = 5L * 60L * 1000L
+        internal const val CONNECTED_LATENCY_REFRESH_INTERVAL_MS = 15_000L
         internal const val CONNECTED_LATENCY_TIMEOUT_MS = 4_000L
         internal const val CONNECTED_SERVER_PING_TIMEOUT_MS = 2_500L
         internal const val PROFILE_RECONNECT_PROMPT_WINDOW_MS = 13_000L
@@ -1338,7 +1350,7 @@ class HomeViewModel(
         internal const val AUTO_CONNECT_TOTAL_TIMEOUT_MS = 60_000L
         internal const val AUTO_CONNECT_MAX_ATTEMPTS = SmartStartController.AUTO_CONNECT_MAX_ATTEMPTS
         internal const val PROTOCOL_METRICS_PROBE_TIMEOUT_MS = 12_000L
-        internal const val APP_TRAFFIC_SAMPLE_INTERVAL_MS = 10_000L
+        internal const val APP_TRAFFIC_SAMPLE_INTERVAL_MS = 3_000L
         internal const val AUTO_CONNECT_LATENCY_FALLBACK_PENALTY_MS = 750L
         internal val ACTIVE_CONNECTION_STATES =
             setOf(

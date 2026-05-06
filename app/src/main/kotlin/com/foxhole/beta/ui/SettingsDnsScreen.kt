@@ -1,6 +1,5 @@
 package com.foxhole.beta.ui
 
-import android.text.format.DateUtils
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -165,6 +164,7 @@ fun DnsSettingsScreen(
                     value = dnsFilterStatusLabel(dns.filtersUpdatedAt),
                     summary = stringResource(R.string.dns_filter_list_status_summary),
                     leadingIcon = Icons.Outlined.Refresh,
+                    actionIcon = Icons.Outlined.Refresh,
                     onClick =
                         if (refreshInProgress) {
                             null
@@ -418,14 +418,21 @@ private fun secureDnsModeIcon(value: SecureDnsMode) =
 @Composable
 private fun dnsFilterStatusLabel(updatedAt: Long?): String =
     if (updatedAt == null) {
-        stringResource(R.string.dns_filter_status_bundled)
+        stringResource(R.string.dns_filter_status_never)
     } else {
-        stringResource(
-            R.string.dns_filter_status_updated,
-            DateUtils.getRelativeTimeSpanString(
-                updatedAt,
-                System.currentTimeMillis(),
-                DateUtils.MINUTE_IN_MILLIS,
-            ).toString(),
-        )
+        val elapsedMinutes = ((System.currentTimeMillis() - updatedAt).coerceAtLeast(0L) / 60_000L).coerceAtLeast(1L)
+        when {
+            elapsedMinutes < 60L -> {
+                val minutes = elapsedMinutes.toInt()
+                pluralStringResource(R.plurals.dns_filter_status_minutes, minutes, minutes)
+            }
+            elapsedMinutes < 24L * 60L -> {
+                val hours = (elapsedMinutes / 60L).toInt().coerceIn(1, 23)
+                pluralStringResource(R.plurals.dns_filter_status_hours, hours, hours)
+            }
+            else -> {
+                val days = (elapsedMinutes / (24L * 60L)).toInt().coerceAtLeast(1)
+                pluralStringResource(R.plurals.dns_filter_status_days, days, days)
+            }
+        }
     }

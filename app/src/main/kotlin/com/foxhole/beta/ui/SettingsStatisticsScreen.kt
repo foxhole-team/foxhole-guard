@@ -120,7 +120,7 @@ fun StatisticsScreen(
     var clearConfirmVisible by rememberSaveable { mutableStateOf(false) }
     var appStatsFirewallWarningVisible by rememberSaveable { mutableStateOf(false) }
     val statisticsSettings = state.settings.statistics
-    val retention = statisticsSettings.retention
+    val retention = StatisticsRetention.FOREVER
     val statistics =
         remember(state.settings, state.profiles, state.activeProfile, state.traffic, retention) {
             statisticsUiState(state = state, retention = retention)
@@ -186,7 +186,7 @@ fun StatisticsScreen(
                     TransportStatisticsSection(items = statistics.transports)
                 }
             }
-            if (statisticsSettings.appTrafficEnabled) {
+            if (statisticsSettings.appTrafficEnabled && appStatsSwitchChecked) {
                 item(key = "app-statistics") {
                     AppTrafficStatisticsCard(
                         rows = topApps,
@@ -232,11 +232,11 @@ fun StatisticsScreen(
                         SettingsControlGroupDivider()
                         DropdownSettingRow(
                             title = stringResource(R.string.statistics_retention_title),
-                            value = statisticsRetentionLabel(retention),
+                            value = statisticsRetentionLabel(state.settings.statistics.retention),
                             expanded = retentionMenuExpanded,
                             onExpandedChange = { retentionMenuExpanded = it },
                             values = StatisticsRetention.entries,
-                            selected = retention,
+                            selected = state.settings.statistics.retention,
                             label = { statisticsRetentionLabel(it) },
                             onSelect = onStatisticsRetentionSelected,
                             leadingIcon = Icons.Outlined.Storage,
@@ -689,7 +689,8 @@ private fun CountryVerticalBarChart(
     points: List<TrafficMapPoint>,
     modifier: Modifier = Modifier,
 ) {
-    val colors = statisticsChartColors()
+    val context = LocalContext.current
+    val colors = statisticsCountryChartColors()
     val gridColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
     val maxBytes = points.maxOfOrNull(TrafficMapPoint::bytes)?.coerceAtLeast(1L) ?: 1L
     val visible = rememberOneShotVisible("countries")
@@ -698,28 +699,54 @@ private fun CountryVerticalBarChart(
         animationSpec = tween(durationMillis = DonutAnimationDurationMs, easing = FastOutSlowInEasing),
         label = "country-bars-progress",
     )
-    Canvas(modifier = modifier.fillMaxWidth()) {
-        val chartTop = 12.dp.toPx()
-        val chartBottom = size.height - 20.dp.toPx()
-        val chartHeight = (chartBottom - chartTop).coerceAtLeast(1f)
-        drawLine(
-            color = gridColor,
-            start = Offset(0f, chartTop),
-            end = Offset(size.width, chartTop),
-            pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 8f)),
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Text(
+            text = stringResource(R.string.statistics_country_traffic_legend, formatBytes(context, maxBytes)),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        val slotWidth = size.width / points.size.coerceAtLeast(1).toFloat()
-        val barWidth = (slotWidth * 0.48f).coerceAtMost(18.dp.toPx())
-        points.forEachIndexed { index, point ->
-            val normalized = point.bytes.toFloat() / maxBytes.toFloat()
-            val barHeight = (chartHeight * normalized * progress).coerceAtLeast(if (point.bytes > 0L) 2f else 0f)
-            val center = slotWidth * index + slotWidth / 2f
-            drawRoundRect(
-                color = colors[index % colors.size],
-                topLeft = Offset(center - barWidth / 2f, chartBottom - barHeight),
-                size = Size(barWidth, barHeight),
-                cornerRadius = CornerRadius(5.dp.toPx(), 5.dp.toPx()),
+        Canvas(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+        ) {
+            val chartTop = 8.dp.toPx()
+            val chartBottom = size.height - 4.dp.toPx()
+            val chartHeight = (chartBottom - chartTop).coerceAtLeast(1f)
+            drawLine(
+                color = gridColor,
+                start = Offset(0f, chartTop),
+                end = Offset(size.width, chartTop),
+                pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 8f)),
             )
+            val slotWidth = size.width / points.size.coerceAtLeast(1).toFloat()
+            val barWidth = (slotWidth * 0.48f).coerceAtMost(18.dp.toPx())
+            points.forEachIndexed { index, point ->
+                val normalized = point.bytes.toFloat() / maxBytes.toFloat()
+                val barHeight = (chartHeight * normalized * progress).coerceAtLeast(if (point.bytes > 0L) 2f else 0f)
+                val center = slotWidth * index + slotWidth / 2f
+                drawRoundRect(
+                    color = colors[index % colors.size],
+                    topLeft = Offset(center - barWidth / 2f, chartBottom - barHeight),
+                    size = Size(barWidth, barHeight),
+                    cornerRadius = CornerRadius(5.dp.toPx(), 5.dp.toPx()),
+                )
+            }
+        }
+        Row(modifier = Modifier.fillMaxWidth()) {
+            points.forEach { point ->
+                Text(
+                    text = countryEmoji(point.countryCode),
+                    modifier = Modifier.weight(1f),
+                    style = MaterialTheme.typography.labelSmall,
+                    textAlign = TextAlign.Center,
+                    maxLines = 1,
+                )
+            }
         }
     }
 }
@@ -816,7 +843,7 @@ private fun CountryTrafficList(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
-    val colors = statisticsChartColors()
+    val colors = statisticsCountryChartColors()
     Column(
         modifier = modifier.verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(6.dp),
@@ -900,8 +927,9 @@ private fun ProtocolStatCard(
             Text(
                 text = protocolDisplayName(item.protocol),
                 modifier = Modifier.fillMaxWidth(),
-                style = MaterialTheme.typography.labelLarge,
+                style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.SemiBold,
+                textAlign = TextAlign.Center,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -2247,6 +2275,15 @@ private fun statisticsChartColors(): List<Color> {
         semanticColors.warning,
         MaterialTheme.colorScheme.secondary,
         MaterialTheme.colorScheme.error,
+    )
+}
+
+@Composable
+private fun statisticsCountryChartColors(): List<Color> {
+    val semanticColors = LocalFoxholeSemanticColors.current
+    return listOf(
+        MaterialTheme.colorScheme.primary,
+        semanticColors.success,
     )
 }
 

@@ -614,6 +614,7 @@ fun RoutingSitesScreen(
     var editingRule by remember { mutableStateOf<RoutingRule?>(null) }
     var createDialogVisible by rememberSaveable { mutableStateOf(false) }
     var deleteRuleId by rememberSaveable { mutableStateOf<Long?>(null) }
+    var revealedSiteSwipeKey by rememberSaveable { mutableStateOf<String?>(null) }
     val siteRules =
         state.activePreset
             ?.rules
@@ -648,8 +649,14 @@ fun RoutingSitesScreen(
             )
         }
         items(siteRules, key = RoutingRule::id) { rule ->
+            val siteSwipeKey = "site-${rule.id}"
             SiteRuleCard(
                 rule = rule,
+                swipeKey = siteSwipeKey,
+                revealed = revealedSiteSwipeKey == siteSwipeKey,
+                anyRevealed = revealedSiteSwipeKey != null,
+                onRevealChange = { revealed -> revealedSiteSwipeKey = siteSwipeKey.takeIf { revealed } },
+                onDismissRevealedSwipe = { revealedSiteSwipeKey = null },
                 onEdit = { editingRule = rule },
                 onDelete = { deleteRuleId = rule.id },
             )
@@ -747,11 +754,16 @@ private fun SiteHeaderCard(
 @Composable
 private fun SiteRuleCard(
     rule: RoutingRule,
+    swipeKey: String,
+    revealed: Boolean,
+    anyRevealed: Boolean,
+    onRevealChange: (Boolean) -> Unit,
+    onDismissRevealedSwipe: () -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
 ) {
     FoxholeSwipeActions(
-        key = "site-${rule.id}",
+        key = swipeKey,
         actions =
             listOf(
                 FoxholeSwipeAction(
@@ -766,8 +778,12 @@ private fun SiteRuleCard(
                     onClick = onDelete,
                 ),
             ),
+        revealed = revealed,
+        onRevealChange = onRevealChange,
     ) {
-        FoxholeCard {
+        FoxholeCard(
+            onClick = onDismissRevealedSwipe.takeIf { anyRevealed },
+        ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),

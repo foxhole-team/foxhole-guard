@@ -166,6 +166,7 @@ fun ProfilesScreen(
     var pendingProfileExportPath by rememberSaveable { mutableStateOf<String?>(null) }
     var pendingProfileExportFileName by rememberSaveable { mutableStateOf<String?>(null) }
     var pendingProfileExportMimeType by rememberSaveable { mutableStateOf<String?>(null) }
+    var revealedProfileSwipeKey by rememberSaveable { mutableStateOf<String?>(null) }
     val selectedExportRequests =
         remember(exportSelectionState) {
             exportSelectionState.requests()
@@ -317,6 +318,7 @@ fun ProfilesScreen(
                     SmartProfileExportSelectionState.NONE
                 }
             val exportCardSelected = exportMode && exportSelectedKeys.isNotEmpty()
+            val profileSwipeKey = "profile-${profile.id}"
             val profileSwipeActions =
                 if (exportMode) {
                     emptyList()
@@ -352,12 +354,22 @@ fun ProfilesScreen(
                     }
                 }
             FoxholeSwipeActions(
-                key = "profile-${profile.id}",
+                key = profileSwipeKey,
                 actions = profileSwipeActions,
+                revealed = revealedProfileSwipeKey == profileSwipeKey,
+                onRevealChange = { revealed -> revealedProfileSwipeKey = profileSwipeKey.takeIf { revealed } },
+                onSwipeRight =
+                    if (showInlineRefreshAction) {
+                        { onRefreshProfile(profile.id) }
+                    } else {
+                        null
+                    },
             ) {
                 FoxholeCard(
                     onClick = {
-                        if (exportMode) {
+                        if (revealedProfileSwipeKey != null) {
+                            revealedProfileSwipeKey = null
+                        } else if (exportMode) {
                             exportSelectionState =
                                 when {
                                     exportChoices.size > 1 -> exportSelectionState.toggleSmartProfileExpanded(profile.id)

@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onStart
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.runningFold
 import kotlinx.coroutines.flow.stateIn
 import java.util.Locale
@@ -24,6 +25,9 @@ class TrafficMapRepository(
 
     @Volatile
     private var retainedConnectionAccumulator = TrafficMapConnectionAccumulator()
+
+    @Volatile
+    private var retainedUiState: TrafficMapUiState? = null
 
     fun trafficMapState(
         scope: CoroutineScope,
@@ -55,11 +59,13 @@ class TrafficMapRepository(
                     )
                 },
             ::buildTrafficMapUiState,
-        ).stateIn(
-            scope = scope,
-            started = SharingStarted.WhileSubscribed(stopTimeoutMillis = 0L),
-            initialValue = TrafficMapUiState(),
         )
+            .onEach { state -> retainedUiState = state }
+            .stateIn(
+                scope = scope,
+                started = SharingStarted.WhileSubscribed(stopTimeoutMillis = 5_000L),
+                initialValue = retainedUiState ?: TrafficMapUiState(),
+            )
 
     private fun buildTrafficMapUiState(
         originInfo: TrafficMapOriginInfo?,

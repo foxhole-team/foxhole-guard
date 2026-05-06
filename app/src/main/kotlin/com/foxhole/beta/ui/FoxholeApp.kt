@@ -46,6 +46,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -410,6 +411,7 @@ fun FoxholeApp(
                         onSmartStartProtocolSelectionTimeoutChanged = viewModel::onSmartStartProtocolSelectionTimeoutChanged,
                         onSmartStartRefreshSelectionTimeoutChanged = viewModel::onSmartStartRefreshSelectionTimeoutChanged,
                         onSmartStartTransportPrioritySelected = viewModel::onSmartStartTransportPrioritySelected,
+                        onAutoReconnectChanged = viewModel::onAutoReconnectChanged,
                         onSmartStartV2RayTunSubscriptionsEnabledChanged = viewModel::onSmartStartV2RayTunSubscriptionsEnabledChanged,
                         onSmartStartFailoverEnabledChanged = viewModel::onSmartStartFailoverEnabledChanged,
                         onSmartStartSubscriptionRetryAttemptsChanged = viewModel::onSmartStartSubscriptionRetryAttemptsChanged,
@@ -590,10 +592,12 @@ fun FoxholeApp(
                         onNavigateUp = navController::navigateUp,
                         onThemeSelected = viewModel::onThemeSelected,
                         onLocaleSelected = viewModel::onLocaleSelected,
-                        onAutoReconnectChanged = viewModel::onAutoReconnectChanged,
                         onAutoStartChanged = viewModel::onAutoStartChanged,
                         onBlockScreenshotsChanged = viewModel::onBlockScreenshotsChanged,
+                        onNetworkCardEnabledChanged = viewModel::onNetworkCardEnabledChanged,
+                        onTrafficCardEnabledChanged = viewModel::onTrafficCardEnabledChanged,
                         onTrafficMapEnabledChanged = viewModel::onTrafficMapEnabledChanged,
+                        onShowTorQuickLaunchChanged = viewModel::onShowTorQuickLaunchChanged,
                     )
                 }
                 composable(AppRoute.EXPERT) {
@@ -628,6 +632,10 @@ fun FoxholeApp(
                 composable(AppRoute.STATISTICS) {
                     LaunchedEffect(Unit) {
                         viewModel.ensureInstalledAppsLoaded()
+                    }
+                    DisposableEffect(Unit) {
+                        viewModel.onStatisticsUiVisibilityChanged(true)
+                        onDispose { viewModel.onStatisticsUiVisibilityChanged(false) }
                     }
                     val state by viewModel.settingsRouteState.collectAsStateWithLifecycle()
                     val trafficMapState by viewModel.trafficMapUiState.collectAsStateWithLifecycle()

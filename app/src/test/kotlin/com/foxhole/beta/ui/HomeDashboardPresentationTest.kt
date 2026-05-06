@@ -19,6 +19,7 @@ import com.foxhole.beta.core.model.Settings
 import com.foxhole.beta.core.model.TrafficMode
 import com.foxhole.beta.core.model.TrafficSettings
 import com.foxhole.beta.core.model.TrafficSnapshot
+import com.foxhole.beta.core.model.UiSettings
 import com.foxhole.beta.vpn.FoxholeVpnService
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -308,6 +309,7 @@ class HomeDashboardPresentationTest {
                         state = ConnectionState.CONNECTED,
                         protocolHint = ProtocolHint.VLESS,
                     ),
+                traffic = TrafficSnapshot(available = true),
             )
         val indicators = homeConnectionFeatureIndicators(state)
 
@@ -333,7 +335,6 @@ class HomeDashboardPresentationTest {
             listOf(
                 HomeConnectionFeature.KILL_SWITCH,
                 HomeConnectionFeature.FIREWALL,
-                HomeConnectionFeature.TOR,
             ),
             homeConnectionFeatureIndicators(HomeRouteUiState(settings = Settings())).map { it.feature },
         )
@@ -341,9 +342,24 @@ class HomeDashboardPresentationTest {
             listOf(
                 HomeConnectionFeatureStatus.OFF,
                 HomeConnectionFeatureStatus.OFF,
-                HomeConnectionFeatureStatus.OFF,
             ),
             homeConnectionFeatureIndicators(HomeRouteUiState(settings = Settings())).map { it.status },
+        )
+        assertEquals(
+            listOf(
+                HomeConnectionFeature.KILL_SWITCH,
+                HomeConnectionFeature.FIREWALL,
+                HomeConnectionFeature.TOR,
+            ),
+            homeConnectionFeatureIndicators(
+                HomeRouteUiState(settings = Settings(ui = UiSettings(showTorQuickLaunch = true))),
+            ).map { it.feature },
+        )
+        assertEquals(
+            HomeConnectionFeatureStatus.PENDING,
+            homeConnectionFeatureIndicators(
+                HomeRouteUiState(settings = Settings(expert = ExpertSettings(firewallEnabled = true))),
+            ).single { it.feature == HomeConnectionFeature.FIREWALL }.status,
         )
     }
 

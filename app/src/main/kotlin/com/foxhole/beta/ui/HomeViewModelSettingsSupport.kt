@@ -252,6 +252,24 @@ internal fun HomeViewModel.onTrafficMapEnabledChangedInternal(value: Boolean) {
     }
 }
 
+internal fun HomeViewModel.onNetworkCardEnabledChangedInternal(value: Boolean) {
+    viewModelScope.launch {
+        container.settingsRepository.updateNetworkCardEnabled(value)
+    }
+}
+
+internal fun HomeViewModel.onTrafficCardEnabledChangedInternal(value: Boolean) {
+    viewModelScope.launch {
+        container.settingsRepository.updateTrafficCardEnabled(value)
+    }
+}
+
+internal fun HomeViewModel.onShowTorQuickLaunchChangedInternal(value: Boolean) {
+    viewModelScope.launch {
+        container.settingsRepository.updateShowTorQuickLaunch(value)
+    }
+}
+
 internal fun HomeViewModel.onKillSwitchChangedInternal(value: Boolean) {
     viewModelScope.launch {
         container.settingsRepository.updateKillSwitchEnabled(value)

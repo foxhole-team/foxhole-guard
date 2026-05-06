@@ -45,11 +45,18 @@ class MainActivity : AppCompatActivity() {
             vpnPermissionResult?.invoke(result.resultCode == Activity.RESULT_OK)
         }
     private val notificationPermissionLauncher =
-        registerForActivityResult(ActivityResultContracts.RequestPermission()) {
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            runCatching {
+                (application as FoxholeApplication).appGraph.diagnosticsLogger.record(
+                    "permissions",
+                    "post notifications permission result granted=$granted",
+                )
+            }
         }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        vpnPermissionResult = homeViewModel::onVpnPermissionResult
         applyEdgeToEdgeSystemBars(
             themeMode = homeViewModel.themeMode.value,
             systemDarkTheme = isSystemDarkTheme(),
@@ -65,7 +72,6 @@ class MainActivity : AppCompatActivity() {
             val systemDarkTheme = isSystemInDarkTheme()
             val snackbarHostState = remember { SnackbarHostState() }
             val snackbarHapticGate = remember { FoxholeBannerHapticGate() }
-            vpnPermissionResult = homeViewModel::onVpnPermissionResult
 
             LaunchedEffect(themeMode.value, systemDarkTheme) {
                 applyEdgeToEdgeSystemBars(

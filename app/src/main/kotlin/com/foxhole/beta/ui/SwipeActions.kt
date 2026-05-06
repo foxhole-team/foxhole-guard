@@ -52,6 +52,7 @@ internal fun FoxholeSwipeActions(
     modifier: Modifier = Modifier,
     revealed: Boolean? = null,
     onRevealChange: ((Boolean) -> Unit)? = null,
+    onSwipeRight: (() -> Unit)? = null,
     content: @Composable () -> Unit,
 ) {
     if (actions.isEmpty()) {
@@ -86,14 +87,17 @@ internal fun FoxholeSwipeActions(
                         setRevealed(true)
                         haptic.performHapticFeedback(HapticFeedbackType.GestureThresholdActivate)
                     }
-                    SwipeToDismissBoxValue.StartToEnd,
-                    SwipeToDismissBoxValue.Settled,
-                    -> {
-                        if (isRevealed) {
+                    SwipeToDismissBoxValue.StartToEnd -> {
+                        if (onSwipeRight != null) {
+                            setRevealed(false)
+                            haptic.performHapticFeedback(HapticFeedbackType.Confirm)
+                            onSwipeRight()
+                        } else if (isRevealed) {
                             setRevealed(false)
                             haptic.performHapticFeedback(HapticFeedbackType.GestureEnd)
                         }
                     }
+                    SwipeToDismissBoxValue.Settled -> Unit
                 }
                 false
             },
@@ -110,7 +114,7 @@ internal fun FoxholeSwipeActions(
         SwipeToDismissBox(
             state = dismissState,
             backgroundContent = {},
-            enableDismissFromStartToEnd = isRevealed,
+            enableDismissFromStartToEnd = isRevealed || onSwipeRight != null,
             enableDismissFromEndToStart = true,
             content = {
                 Box(

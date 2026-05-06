@@ -1469,11 +1469,7 @@ internal fun HomeViewModel.scheduleActiveProfileLatencyRefreshInternal() {
             .firstOrNull { option -> option.id == selectedOptionId }
             ?.protocolHint
     profileLatencyRefreshJob?.cancel()
-    dashboardConnectionMetricsLoadingMutable.value = true
-    clearProtocolLatencyState(
-        profileId = activeProfile.id,
-        optionId = selectedOptionId,
-    )
+    dashboardConnectionMetricsLoadingMutable.value = false
     profileLatencyRefreshJob =
         viewModelScope.launch {
             var waitingForInitialSample = true

@@ -484,7 +484,6 @@ class SettingsRepository(
         update { current ->
             current.copy(
                 statistics = current.statistics.copy(retention = value),
-                appTrafficSamples = current.appTrafficSamples.retainedFor(value, now = System.currentTimeMillis()),
             )
         }
 
@@ -524,7 +523,7 @@ class SettingsRepository(
                 appTrafficBaselines = baselines,
                 appTrafficSamples =
                     (current.appTrafficSamples + samples)
-                        .retainedFor(current.statistics.retention, now)
+                        .retainedFor(StatisticsRetention.FOREVER, now)
                         .takeLast(APP_TRAFFIC_SAMPLE_MAX_COUNT),
             )
         }
@@ -645,6 +644,15 @@ class SettingsRepository(
 
     suspend fun updateTrafficMapEnabled(value: Boolean) =
         update { it.copy(ui = it.ui.copy(trafficMapEnabled = value)) }
+
+    suspend fun updateNetworkCardEnabled(value: Boolean) =
+        update { it.copy(ui = it.ui.copy(networkCardEnabled = value)) }
+
+    suspend fun updateTrafficCardEnabled(value: Boolean) =
+        update { it.copy(ui = it.ui.copy(trafficCardEnabled = value)) }
+
+    suspend fun updateShowTorQuickLaunch(value: Boolean) =
+        update { it.copy(ui = it.ui.copy(showTorQuickLaunch = value)) }
 
     suspend fun updateKillSwitchEnabled(value: Boolean) =
         update {

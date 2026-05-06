@@ -478,6 +478,11 @@ fun HomeScreen(
                     }
                 }
             }
+            if (state.settings.ui.trafficMapEnabled) {
+                item {
+                    TrafficMapDashboardCard(state = trafficMapState)
+                }
+            }
             item {
                 FoxholeCard(
                     onClick = onOpenProfiles,
@@ -722,8 +727,9 @@ fun HomeScreen(
                     }
                 }
             }
-            item {
-                FoxholeCard(modifier = Modifier.testTag("home_network_card")) {
+            if (state.settings.ui.networkCardEnabled) {
+                item {
+                    FoxholeCard(modifier = Modifier.testTag("home_network_card")) {
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         HomeCardHeader(
                             icon = Icons.Outlined.Public,
@@ -889,9 +895,11 @@ fun HomeScreen(
                             }
                         }
                     }
+                    }
                 }
             }
-            item {
+            if (state.settings.ui.trafficCardEnabled) {
+                item {
                 val trafficModel = resolveHomeDashboardTrafficModel(state, System.currentTimeMillis())
                 val totalTrafficText =
                     buildAnnotatedString {
@@ -903,9 +911,9 @@ fun HomeScreen(
                         append(" ")
                         append(formatBytes(context, trafficModel.totalBytes))
                     }
-                FoxholeCard {
-                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        HomeCardHeader(
+                    FoxholeCard {
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            HomeCardHeader(
                             icon = Icons.Outlined.SwapVert,
                             title = stringResource(R.string.home_traffic_title),
                             titleContent = {
@@ -1018,12 +1026,8 @@ fun HomeScreen(
                                 }
                             }
                         }
+                        }
                     }
-                }
-            }
-            if (state.settings.ui.trafficMapEnabled) {
-                item {
-                    TrafficMapDashboardCard(state = trafficMapState)
                 }
             }
         }

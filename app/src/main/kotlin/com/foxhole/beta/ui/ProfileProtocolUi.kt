@@ -660,15 +660,9 @@ internal fun ProtocolLatencyPill(
         }
     val text =
         when {
-            showLabel -> {
+            showLabel && latencyMs != null && !isDown && !isUnavailable -> {
                 val label = stringResource(R.string.latency_pill_label)
-                val value =
-                    when {
-                        isDown -> stringResource(R.string.latency_pill_down)
-                        isUnavailable -> stringResource(R.string.latency_pill_unavailable)
-                        latencyMs != null -> stringResource(R.string.latency_pill_value, boundedDisplayLatencyMs(latencyMs))
-                        else -> stringResource(R.string.latency_pill_unavailable)
-                    }
+                val value = stringResource(R.string.latency_pill_value, boundedDisplayLatencyMs(latencyMs))
                 buildAnnotatedString {
                     pushStyle(
                         SpanStyle(

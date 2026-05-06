@@ -89,7 +89,6 @@ import com.foxhole.beta.core.model.LocalAuthSettings
 import com.foxhole.beta.core.model.PrivacyRouteMode
 import com.foxhole.beta.core.model.Profile
 import com.foxhole.beta.core.model.ProtocolHint
-import com.foxhole.beta.core.model.Settings
 import com.foxhole.beta.core.model.TrafficMode
 import com.foxhole.beta.core.model.isUdpTransport
 import kotlinx.coroutines.delay
@@ -554,21 +553,18 @@ internal fun homeConnectionFeatureIndicators(state: HomeRouteUiState): List<Home
             HomeConnectionFeatureIndicator(
                 feature = HomeConnectionFeature.FIREWALL,
                 titleRes = R.string.home_connection_feature_firewall,
-                status =
-                    if (homeFirewallFeatureEnabled(state.settings)) {
-                        HomeConnectionFeatureStatus.ON
-                    } else {
-                        HomeConnectionFeatureStatus.OFF
-                    },
+                status = homeFirewallFeatureStatus(state),
             ),
         )
-        add(
-            HomeConnectionFeatureIndicator(
-                feature = HomeConnectionFeature.TOR,
-                titleRes = R.string.tor_badge,
-                status = homeTorFeatureStatus(state),
-            ),
-        )
+        if (state.settings.ui.showTorQuickLaunch || state.settings.privacyRoute.enabled) {
+            add(
+                HomeConnectionFeatureIndicator(
+                    feature = HomeConnectionFeature.TOR,
+                    titleRes = R.string.tor_badge,
+                    status = homeTorFeatureStatus(state),
+                ),
+            )
+        }
         if (state.settings.expert.localSurfaces.allowLanAccess) {
             add(
                 HomeConnectionFeatureIndicator(
@@ -586,8 +582,12 @@ internal fun homeConnectionFeatureIndicator(
 ): HomeConnectionFeatureIndicator? =
     homeConnectionFeatureIndicators(state).firstOrNull { it.feature == feature }
 
-internal fun homeFirewallFeatureEnabled(settings: Settings): Boolean =
-    settings.expert.firewallEnabled
+internal fun homeFirewallFeatureStatus(state: HomeRouteUiState): HomeConnectionFeatureStatus =
+    when {
+        !state.settings.expert.firewallEnabled -> HomeConnectionFeatureStatus.OFF
+        state.traffic.available -> HomeConnectionFeatureStatus.ON
+        else -> HomeConnectionFeatureStatus.PENDING
+    }
 
 internal fun homeTorFeatureStatus(state: HomeRouteUiState): HomeConnectionFeatureStatus {
     if (!state.settings.privacyRoute.enabled) {
@@ -757,13 +757,6 @@ internal fun HomeConnectionFeatureDialog(
                 iconTint = homeConnectionFeatureStatusColor(indicator.status),
             )
         },
-        text = {
-            Text(
-                text = stringResource(homeConnectionFeatureSummaryRes(feature)),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        },
         confirmButton = {
             FoxholeDialogConfirmButton(
                 onClick = {
@@ -793,7 +786,10 @@ internal fun HomeConnectionFeatureDialog(
             )
         },
         dismissButton = {
-            FoxholeDialogDismissButton(onClick = onDismiss)
+            FoxholeDialogDismissButton(
+                onClick = onDismiss,
+                label = stringResource(R.string.close),
+            )
         },
     )
 }
@@ -805,14 +801,6 @@ private fun homeConnectionFeatureIcon(feature: HomeConnectionFeature): ImageVect
         HomeConnectionFeature.FIREWALL -> ImageVector.vectorResource(R.drawable.ic_firewall_shield_key)
         HomeConnectionFeature.TOR -> ImageVector.vectorResource(R.drawable.ic_tor_route)
         HomeConnectionFeature.LAN_PROXY -> Icons.Outlined.Public
-    }
-
-private fun homeConnectionFeatureSummaryRes(feature: HomeConnectionFeature): Int =
-    when (feature) {
-        HomeConnectionFeature.KILL_SWITCH -> R.string.kill_switch_summary
-        HomeConnectionFeature.FIREWALL -> R.string.security_firewall_summary
-        HomeConnectionFeature.TOR -> R.string.privacy_route_summary
-        HomeConnectionFeature.LAN_PROXY -> R.string.proxy_lan_access_wifi_only_summary
     }
 
 @Composable

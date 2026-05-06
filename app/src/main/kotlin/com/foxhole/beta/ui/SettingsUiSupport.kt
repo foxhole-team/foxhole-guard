@@ -212,6 +212,7 @@ internal fun SettingValueRow(
     leadingIcon: ImageVector? = null,
     onClick: (() -> Unit)?,
     trailingContent: (@Composable RowScope.() -> Unit)? = null,
+    actionIcon: ImageVector = Icons.Outlined.Edit,
     summaryMaxLines: Int = 1,
     grouped: Boolean = false,
 ) {
@@ -225,7 +226,7 @@ internal fun SettingValueRow(
             summaryMaxLines = summaryMaxLines,
             trailingContent = {
                 trailingContent?.invoke(this)
-                    ?: FoxholeValuePill(value = value, onClick = onClick, actionIcon = Icons.Outlined.Edit)
+                    ?: FoxholeValuePill(value = value, onClick = onClick, actionIcon = actionIcon)
             },
         )
         return
@@ -238,7 +239,7 @@ internal fun SettingValueRow(
         summaryMaxLines = summaryMaxLines,
         trailingContent = {
             trailingContent?.invoke(this)
-                ?: FoxholeValuePill(value = value, onClick = onClick, actionIcon = Icons.Outlined.Edit)
+                ?: FoxholeValuePill(value = value, onClick = onClick, actionIcon = actionIcon)
         },
     )
 }

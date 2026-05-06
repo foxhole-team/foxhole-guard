@@ -182,7 +182,6 @@ fun SettingsHomeScreen(
         onNavigateUp = onNavigateUp,
     ) {
         settingsHomeNavigationItems(
-            hasSmartStartSettings = state.hasSmartProfile || state.hasSubscriptionProfile,
             expertVisible = expertVisible,
             onOpenTraffic = onOpenTraffic,
             onOpenDns = onOpenDns,
@@ -227,7 +226,6 @@ fun SettingsHomeScreen(
 }
 
 private fun LazyListScope.settingsHomeNavigationItems(
-    hasSmartStartSettings: Boolean,
     expertVisible: Boolean,
     onOpenTraffic: () -> Unit,
     onOpenDns: () -> Unit,
@@ -243,17 +241,15 @@ private fun LazyListScope.settingsHomeNavigationItems(
 ) {
     item {
         SettingsNavigationGroup {
-            if (hasSmartStartSettings) {
-                SettingsGroupedNavigationRow(
-                    modifier = Modifier.testTag("settings_smart_start_action"),
-                    icon = Icons.Outlined.Speed,
-                    title = stringResource(R.string.smart_start_settings_title),
-                    summary = stringResource(R.string.smart_start_settings_summary),
-                    summaryMaxLines = 3,
-                    onClick = onOpenSmartStart,
-                )
-                SettingsGroupDivider()
-            }
+            SettingsGroupedNavigationRow(
+                modifier = Modifier.testTag("settings_smart_start_action"),
+                icon = Icons.Outlined.Speed,
+                title = stringResource(R.string.smart_start_settings_title),
+                summary = stringResource(R.string.smart_start_settings_summary),
+                summaryMaxLines = 3,
+                onClick = onOpenSmartStart,
+            )
+            SettingsGroupDivider()
             SettingsGroupedNavigationRow(
                 icon = Icons.Outlined.Public,
                 title = stringResource(R.string.traffic_settings),
@@ -402,14 +398,16 @@ private fun SettingsGroupedNavigationRow(
     title: String,
     summary: String,
     summaryMaxLines: Int = 1,
+    enabled: Boolean = true,
     onClick: () -> Unit,
 ) {
+    val contentAlpha = if (enabled) 1f else 0.52f
     Row(
         modifier =
             modifier
                 .fillMaxWidth()
                 .heightIn(min = 52.dp)
-                .clickable(onClick = onClick)
+                .then(if (enabled) Modifier.clickable(onClick = onClick) else Modifier)
                 .padding(horizontal = 12.dp, vertical = 6.dp),
         horizontalArrangement = Arrangement.spacedBy(14.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -422,7 +420,7 @@ private fun SettingsGroupedNavigationRow(
                 imageVector = icon,
                 contentDescription = null,
                 modifier = Modifier.padding(7.dp).size(20.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = contentAlpha),
             )
         }
         Column(
@@ -433,12 +431,12 @@ private fun SettingsGroupedNavigationRow(
                 text = title,
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = contentAlpha),
             )
             Text(
                 text = summary.trimEnd().removeSuffix("."),
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = contentAlpha),
                 maxLines = summaryMaxLines,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -463,6 +461,7 @@ fun SmartStartSettingsScreen(
     onSmartStartProtocolSelectionTimeoutChanged: (Int) -> Unit,
     onSmartStartRefreshSelectionTimeoutChanged: (Int) -> Unit,
     onSmartStartTransportPrioritySelected: (SmartStartTransportPriority) -> Unit,
+    onAutoReconnectChanged: (Boolean) -> Unit,
     onSmartStartV2RayTunSubscriptionsEnabledChanged: (Boolean) -> Unit,
     onSmartStartFailoverEnabledChanged: (Boolean) -> Unit,
     onSmartStartSubscriptionRetryAttemptsChanged: (Int) -> Unit,
@@ -475,6 +474,11 @@ fun SmartStartSettingsScreen(
     var retryAttemptsExpanded by rememberSaveable { mutableStateOf(false) }
     var retryDelayExpanded by rememberSaveable { mutableStateOf(false) }
     var clearSmartStartConfirmVisible by rememberSaveable { mutableStateOf(false) }
+    val smartStartSettingsEnabled = state.hasSmartProfile
+    val subscriptionRefreshEnabled = state.hasSubscriptionProfile
+    val subscriptionRetrySettingsEnabled =
+        subscriptionRefreshEnabled && state.settings.connection.smartStartV2RayTunSubscriptionsEnabled
+    val supportedConfigurationsAvailable = smartStartSettingsEnabled || subscriptionRefreshEnabled
 
     SettingsScaffold(
         title = stringResource(R.string.smart_start_settings_title),
@@ -496,128 +500,154 @@ fun SmartStartSettingsScreen(
             }
         },
     ) {
-        if (state.hasSubscriptionProfile) {
-            item {
-                SettingsControlGroup {
-                    SettingSwitchRow(
-                        title = stringResource(R.string.smart_start_v2raytun_subscriptions_title),
-                        checked = state.settings.connection.smartStartV2RayTunSubscriptionsEnabled,
-                        onCheckedChange = onSmartStartV2RayTunSubscriptionsEnabledChanged,
-                        summary = stringResource(R.string.smart_start_v2raytun_subscriptions_summary),
-                        leadingIcon = Icons.Outlined.Refresh,
-                        summaryMaxLines = 3,
-                        grouped = true,
-                    )
-                    if (state.settings.connection.smartStartV2RayTunSubscriptionsEnabled) {
-                        SettingsControlGroupDivider()
-                        DropdownSettingRow(
-                            title = stringResource(R.string.smart_start_subscription_retry_attempts_title),
-                            value = smartStartRetryAttemptsLabel(state.settings.connection.smartStartSubscriptionRetryAttempts),
-                            expanded = retryAttemptsExpanded,
-                            onExpandedChange = { retryAttemptsExpanded = it },
-                            values = SMART_START_SUBSCRIPTION_RETRY_ATTEMPT_OPTIONS,
-                            selected = state.settings.connection.smartStartSubscriptionRetryAttempts,
-                            label = { smartStartRetryAttemptsLabel(it) },
-                            onSelect = onSmartStartSubscriptionRetryAttemptsChanged,
-                            summary = stringResource(R.string.smart_start_subscription_retry_attempts_summary),
-                            leadingIcon = Icons.Outlined.Speed,
-                            optionIcon = { Icons.Outlined.Speed },
-                            summaryMaxLines = 3,
-                            grouped = true,
-                        )
-                        SettingsControlGroupDivider()
-                        DropdownSettingRow(
-                            title = stringResource(R.string.smart_start_subscription_retry_delay_title),
-                            value = smartStartTimeoutLabel(state.settings.connection.smartStartSubscriptionRetryDelaySeconds),
-                            expanded = retryDelayExpanded,
-                            onExpandedChange = { retryDelayExpanded = it },
-                            values = SMART_START_SUBSCRIPTION_RETRY_DELAY_OPTIONS,
-                            selected = state.settings.connection.smartStartSubscriptionRetryDelaySeconds,
-                            label = { smartStartTimeoutLabel(it) },
-                            onSelect = onSmartStartSubscriptionRetryDelaySecondsChanged,
-                            summary = stringResource(R.string.smart_start_subscription_retry_delay_summary),
-                            leadingIcon = Icons.Outlined.Refresh,
-                            optionIcon = { Icons.Outlined.Refresh },
-                            summaryMaxLines = 3,
-                            grouped = true,
-                        )
-                    }
-                }
+        item {
+            SettingsControlGroup {
+                SettingSwitchRow(
+                    title = stringResource(R.string.auto_reconnect),
+                    checked = state.settings.connection.autoReconnect,
+                    summary = stringResource(R.string.auto_reconnect_summary),
+                    leadingIcon = Icons.Outlined.Refresh,
+                    onCheckedChange = onAutoReconnectChanged,
+                    summaryMaxLines = 2,
+                    grouped = true,
+                )
             }
         }
-        if (state.hasSmartProfile || state.hasSubscriptionProfile) {
+        if (!supportedConfigurationsAvailable) {
             item {
-                SettingsControlGroup {
-                    if (state.hasSmartProfile) {
-                        SettingSwitchRow(
-                            title = stringResource(R.string.smart_start_failover_title),
-                            checked = state.settings.connection.smartStartFailoverEnabled,
-                            onCheckedChange = onSmartStartFailoverEnabledChanged,
-                            summary = stringResource(R.string.smart_start_failover_summary),
-                            leadingIcon = Icons.Outlined.SwapVert,
-                            summaryMaxLines = 4,
-                            grouped = true,
-                        )
-                        SettingsControlGroupDivider()
-                        DropdownSettingRow(
-                            title = stringResource(R.string.smart_start_protocol_timeout_title),
-                            value = smartStartTimeoutLabel(state.settings.connection.smartStartProtocolSelectionTimeoutSeconds),
-                            expanded = protocolTimeoutExpanded,
-                            onExpandedChange = { protocolTimeoutExpanded = it },
-                            values = smartStartTimeoutOptions(SMART_START_PROTOCOL_TIMEOUT_MIN_SECONDS),
-                            selected = state.settings.connection.smartStartProtocolSelectionTimeoutSeconds,
-                            label = { smartStartTimeoutLabel(it) },
-                            onSelect = onSmartStartProtocolSelectionTimeoutChanged,
-                            summary = stringResource(R.string.smart_start_protocol_timeout_summary),
-                            leadingIcon = Icons.Outlined.Speed,
-                            optionIcon = { Icons.Outlined.Speed },
-                            summaryMaxLines = 3,
-                            grouped = true,
-                        )
-                        SettingsControlGroupDivider()
-                        DropdownSettingRow(
-                            title = stringResource(R.string.smart_start_refresh_timeout_title),
-                            value = smartStartTimeoutLabel(state.settings.connection.smartStartRefreshSelectionTimeoutSeconds),
-                            expanded = refreshTimeoutExpanded,
-                            onExpandedChange = { refreshTimeoutExpanded = it },
-                            values = smartStartTimeoutOptions(SMART_START_REFRESH_TIMEOUT_MIN_SECONDS),
-                            selected = state.settings.connection.smartStartRefreshSelectionTimeoutSeconds,
-                            label = { smartStartTimeoutLabel(it) },
-                            onSelect = onSmartStartRefreshSelectionTimeoutChanged,
-                            summary = stringResource(R.string.smart_start_refresh_timeout_summary),
-                            leadingIcon = Icons.Outlined.Refresh,
-                            optionIcon = { Icons.Outlined.Refresh },
-                            summaryMaxLines = 3,
-                            grouped = true,
-                        )
-                        SettingsControlGroupDivider()
-                        DropdownSettingRow(
-                            title = stringResource(R.string.smart_start_transport_priority_title),
-                            value = smartStartTransportPriorityLabel(state.settings.connection.smartStartTransportPriority),
-                            expanded = transportPriorityExpanded,
-                            onExpandedChange = { transportPriorityExpanded = it },
-                            values = SmartStartTransportPriority.entries,
-                            selected = state.settings.connection.smartStartTransportPriority,
-                            label = { smartStartTransportPriorityLabel(it) },
-                            onSelect = onSmartStartTransportPrioritySelected,
-                            summary = stringResource(R.string.smart_start_transport_priority_summary),
-                            leadingIcon = Icons.Outlined.SwapVert,
-                            optionIcon = ::smartStartTransportPriorityIcon,
-                            summaryMaxLines = 3,
-                            grouped = true,
-                        )
-                    }
-                    if (state.hasSmartProfile) {
-                        SettingsControlGroupDivider()
-                    }
-                    SettingsGroupedNavigationRow(
-                        icon = Icons.Outlined.Delete,
-                        title = stringResource(R.string.smart_start_clear_data_title),
-                        summary = stringResource(R.string.smart_start_clear_data_summary),
-                        summaryMaxLines = 3,
-                        onClick = { clearSmartStartConfirmVisible = true },
-                    )
-                }
+                Text(
+                    text = stringResource(R.string.smart_start_settings_unavailable_hint),
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 2.dp),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                )
+            }
+        }
+        item {
+            SettingsControlGroup {
+                SettingSwitchRow(
+                    title = stringResource(R.string.smart_start_v2raytun_subscriptions_title),
+                    checked =
+                        subscriptionRefreshEnabled &&
+                            state.settings.connection.smartStartV2RayTunSubscriptionsEnabled,
+                    enabled = subscriptionRefreshEnabled,
+                    onCheckedChange = onSmartStartV2RayTunSubscriptionsEnabledChanged,
+                    summary = stringResource(R.string.smart_start_v2raytun_subscriptions_summary),
+                    leadingIcon = Icons.Outlined.Refresh,
+                    summaryMaxLines = 3,
+                    grouped = true,
+                )
+                SettingsControlGroupDivider()
+                DropdownSettingRow(
+                    title = stringResource(R.string.smart_start_subscription_retry_attempts_title),
+                    value = smartStartRetryAttemptsLabel(state.settings.connection.smartStartSubscriptionRetryAttempts),
+                    expanded = retryAttemptsExpanded,
+                    onExpandedChange = { retryAttemptsExpanded = it },
+                    values = SMART_START_SUBSCRIPTION_RETRY_ATTEMPT_OPTIONS,
+                    selected = state.settings.connection.smartStartSubscriptionRetryAttempts,
+                    label = { smartStartRetryAttemptsLabel(it) },
+                    onSelect = onSmartStartSubscriptionRetryAttemptsChanged,
+                    summary = stringResource(R.string.smart_start_subscription_retry_attempts_summary),
+                    leadingIcon = Icons.Outlined.Speed,
+                    optionIcon = { Icons.Outlined.Speed },
+                    enabled = subscriptionRetrySettingsEnabled,
+                    summaryMaxLines = 3,
+                    grouped = true,
+                )
+                SettingsControlGroupDivider()
+                DropdownSettingRow(
+                    title = stringResource(R.string.smart_start_subscription_retry_delay_title),
+                    value = smartStartTimeoutLabel(state.settings.connection.smartStartSubscriptionRetryDelaySeconds),
+                    expanded = retryDelayExpanded,
+                    onExpandedChange = { retryDelayExpanded = it },
+                    values = SMART_START_SUBSCRIPTION_RETRY_DELAY_OPTIONS,
+                    selected = state.settings.connection.smartStartSubscriptionRetryDelaySeconds,
+                    label = { smartStartTimeoutLabel(it) },
+                    onSelect = onSmartStartSubscriptionRetryDelaySecondsChanged,
+                    summary = stringResource(R.string.smart_start_subscription_retry_delay_summary),
+                    leadingIcon = Icons.Outlined.Refresh,
+                    optionIcon = { Icons.Outlined.Refresh },
+                    enabled = subscriptionRetrySettingsEnabled,
+                    summaryMaxLines = 3,
+                    grouped = true,
+                )
+            }
+        }
+        item {
+            SettingsControlGroup {
+                SettingSwitchRow(
+                    title = stringResource(R.string.smart_start_failover_title),
+                    checked =
+                        smartStartSettingsEnabled &&
+                            state.settings.connection.smartStartFailoverEnabled,
+                    enabled = smartStartSettingsEnabled,
+                    onCheckedChange = onSmartStartFailoverEnabledChanged,
+                    summary = stringResource(R.string.smart_start_failover_summary),
+                    leadingIcon = Icons.Outlined.SwapVert,
+                    summaryMaxLines = 4,
+                    grouped = true,
+                )
+                SettingsControlGroupDivider()
+                DropdownSettingRow(
+                    title = stringResource(R.string.smart_start_protocol_timeout_title),
+                    value = smartStartTimeoutLabel(state.settings.connection.smartStartProtocolSelectionTimeoutSeconds),
+                    expanded = protocolTimeoutExpanded,
+                    onExpandedChange = { protocolTimeoutExpanded = it },
+                    values = smartStartTimeoutOptions(SMART_START_PROTOCOL_TIMEOUT_MIN_SECONDS),
+                    selected = state.settings.connection.smartStartProtocolSelectionTimeoutSeconds,
+                    label = { smartStartTimeoutLabel(it) },
+                    onSelect = onSmartStartProtocolSelectionTimeoutChanged,
+                    summary = stringResource(R.string.smart_start_protocol_timeout_summary),
+                    leadingIcon = Icons.Outlined.Speed,
+                    optionIcon = { Icons.Outlined.Speed },
+                    enabled = smartStartSettingsEnabled,
+                    summaryMaxLines = 3,
+                    grouped = true,
+                )
+                SettingsControlGroupDivider()
+                DropdownSettingRow(
+                    title = stringResource(R.string.smart_start_refresh_timeout_title),
+                    value = smartStartTimeoutLabel(state.settings.connection.smartStartRefreshSelectionTimeoutSeconds),
+                    expanded = refreshTimeoutExpanded,
+                    onExpandedChange = { refreshTimeoutExpanded = it },
+                    values = smartStartTimeoutOptions(SMART_START_REFRESH_TIMEOUT_MIN_SECONDS),
+                    selected = state.settings.connection.smartStartRefreshSelectionTimeoutSeconds,
+                    label = { smartStartTimeoutLabel(it) },
+                    onSelect = onSmartStartRefreshSelectionTimeoutChanged,
+                    summary = stringResource(R.string.smart_start_refresh_timeout_summary),
+                    leadingIcon = Icons.Outlined.Refresh,
+                    optionIcon = { Icons.Outlined.Refresh },
+                    enabled = smartStartSettingsEnabled,
+                    summaryMaxLines = 3,
+                    grouped = true,
+                )
+                SettingsControlGroupDivider()
+                DropdownSettingRow(
+                    title = stringResource(R.string.smart_start_transport_priority_title),
+                    value = smartStartTransportPriorityLabel(state.settings.connection.smartStartTransportPriority),
+                    expanded = transportPriorityExpanded,
+                    onExpandedChange = { transportPriorityExpanded = it },
+                    values = SmartStartTransportPriority.entries,
+                    selected = state.settings.connection.smartStartTransportPriority,
+                    label = { smartStartTransportPriorityLabel(it) },
+                    onSelect = onSmartStartTransportPrioritySelected,
+                    summary = stringResource(R.string.smart_start_transport_priority_summary),
+                    leadingIcon = Icons.Outlined.SwapVert,
+                    optionIcon = ::smartStartTransportPriorityIcon,
+                    enabled = smartStartSettingsEnabled,
+                    summaryMaxLines = 3,
+                    grouped = true,
+                )
+                SettingsControlGroupDivider()
+                SettingsGroupedNavigationRow(
+                    icon = Icons.Outlined.Delete,
+                    title = stringResource(R.string.smart_start_clear_data_title),
+                    summary = stringResource(R.string.smart_start_clear_data_summary),
+                    summaryMaxLines = 3,
+                    enabled = supportedConfigurationsAvailable,
+                    onClick = { clearSmartStartConfirmVisible = true },
+                )
             }
         }
     }
@@ -714,6 +744,9 @@ fun TrafficSettingsScreen(
     val pingHttpLabel = stringResource(R.string.latency_probe_method_http)
     val pingIcmpLabel = stringResource(R.string.latency_probe_method_icmp)
     val pingTcpLabel = stringResource(R.string.latency_probe_method_tcp)
+    val subscriptionRefreshAvailable = state.hasSubscriptionProfile
+    val subscriptionRefreshEnabled =
+        subscriptionRefreshAvailable && state.settings.connection.autoRefreshSubscriptions
     val latencyProbeMethodLabel: (LatencyProbeMethod) -> String = { value ->
         when (value) {
             LatencyProbeMethod.HTTP -> pingHttpLabel
@@ -946,7 +979,8 @@ fun TrafficSettingsScreen(
                 SettingsControlGroupDivider()
                 SettingSwitchRow(
                     title = stringResource(R.string.auto_refresh_subscriptions_title),
-                    checked = state.settings.connection.autoRefreshSubscriptions,
+                    checked = subscriptionRefreshEnabled,
+                    enabled = subscriptionRefreshAvailable,
                     leadingIcon = Icons.Outlined.Refresh,
                     summary = stringResource(R.string.auto_refresh_subscriptions_summary),
                     onCheckedChange = onAutoRefreshSubscriptionsChanged,
@@ -965,6 +999,7 @@ fun TrafficSettingsScreen(
                     onSelect = onSubscriptionRefreshIntervalSelected,
                     leadingIcon = Icons.Outlined.Refresh,
                     optionIcon = { Icons.Outlined.Refresh },
+                    enabled = subscriptionRefreshEnabled,
                     grouped = true,
                 )
                 SettingsControlGroupDivider()
@@ -1140,10 +1175,12 @@ fun ApplicationSettingsScreen(
     onNavigateUp: () -> Unit,
     onThemeSelected: (ThemeMode) -> Unit,
     onLocaleSelected: (AppLocale) -> Unit,
-    onAutoReconnectChanged: (Boolean) -> Unit,
     onAutoStartChanged: (Boolean) -> Unit,
     onBlockScreenshotsChanged: (Boolean) -> Unit,
+    onNetworkCardEnabledChanged: (Boolean) -> Unit,
+    onTrafficCardEnabledChanged: (Boolean) -> Unit,
     onTrafficMapEnabledChanged: (Boolean) -> Unit,
+    onShowTorQuickLaunchChanged: (Boolean) -> Unit,
 ) {
     val systemThemeLabel = stringResource(R.string.theme_mode_system)
     val darkThemeLabel = stringResource(R.string.theme_mode_dark)
@@ -1204,14 +1241,6 @@ fun ApplicationSettingsScreen(
                 )
                 SettingsControlGroupDivider()
                 SettingSwitchRow(
-                    title = stringResource(R.string.auto_reconnect),
-                    checked = state.settings.connection.autoReconnect,
-                    leadingIcon = Icons.Outlined.Refresh,
-                    onCheckedChange = onAutoReconnectChanged,
-                    grouped = true,
-                )
-                SettingsControlGroupDivider()
-                SettingSwitchRow(
                     title = stringResource(R.string.auto_start_on_boot),
                     checked = state.settings.connection.autoStartOnBoot,
                     leadingIcon = Icons.Outlined.PhoneAndroid,
@@ -1228,11 +1257,41 @@ fun ApplicationSettingsScreen(
                 )
                 SettingsControlGroupDivider()
                 SettingSwitchRow(
+                    title = stringResource(R.string.network_card_setting_title),
+                    checked = state.settings.ui.networkCardEnabled,
+                    summary = stringResource(R.string.network_card_setting_summary),
+                    leadingIcon = Icons.Outlined.Public,
+                    onCheckedChange = onNetworkCardEnabledChanged,
+                    summaryMaxLines = 2,
+                    grouped = true,
+                )
+                SettingsControlGroupDivider()
+                SettingSwitchRow(
+                    title = stringResource(R.string.traffic_card_setting_title),
+                    checked = state.settings.ui.trafficCardEnabled,
+                    summary = stringResource(R.string.traffic_card_setting_summary),
+                    leadingIcon = Icons.Outlined.SwapVert,
+                    onCheckedChange = onTrafficCardEnabledChanged,
+                    summaryMaxLines = 2,
+                    grouped = true,
+                )
+                SettingsControlGroupDivider()
+                SettingSwitchRow(
                     title = stringResource(R.string.traffic_map_setting_title),
                     checked = state.settings.ui.trafficMapEnabled,
                     summary = stringResource(R.string.traffic_map_setting_summary),
                     leadingIcon = Icons.Outlined.Map,
                     onCheckedChange = onTrafficMapEnabledChanged,
+                    summaryMaxLines = 2,
+                    grouped = true,
+                )
+                SettingsControlGroupDivider()
+                SettingSwitchRow(
+                    title = stringResource(R.string.show_tor_quick_launch_title),
+                    checked = state.settings.ui.showTorQuickLaunch,
+                    summary = stringResource(R.string.show_tor_quick_launch_summary),
+                    leadingIcon = ImageVector.vectorResource(R.drawable.ic_tor_route),
+                    onCheckedChange = onShowTorQuickLaunchChanged,
                     summaryMaxLines = 2,
                     grouped = true,
                 )
