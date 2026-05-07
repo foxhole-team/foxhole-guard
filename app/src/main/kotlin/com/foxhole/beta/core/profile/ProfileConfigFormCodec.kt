@@ -18,6 +18,10 @@ data class EditableTlsConfig(
     val enabled: Boolean = false,
     val serverName: String = "",
     val alpn: String = "",
+    val minVersion: String = "",
+    val maxVersion: String = "",
+    val curvePreferences: String = "",
+    val echMode: String = "",
     val fingerprint: String = "",
     val realityPublicKey: String = "",
     val realityShortId: String = "",
@@ -35,6 +39,7 @@ data class EditableProfileConfig(
     val nodeCount: Int = 1,
     val server: String = "",
     val port: String = "",
+    val username: String = "",
     val uuid: String = "",
     val password: String = "",
     val method: String = "",
@@ -54,6 +59,9 @@ data class EditableProfileConfig(
     val localAddress: String = "",
     val allowedIps: String = "",
     val persistentKeepalive: String = "",
+    val naiveQuic: String = "",
+    val naiveUdpOverTcp: String = "",
+    val naiveQuicCongestionControl: String = "",
 )
 
 class ProfileConfigFormCodec(
@@ -82,6 +90,7 @@ class ProfileConfigFormCodec(
                 outbound["server_port"]?.jsonPrimitive?.contentOrNull
                     ?: wireGuardPeer?.get("server_port")?.jsonPrimitive?.contentOrNull
                     ?: wireGuardPeer?.get("port")?.jsonPrimitive?.contentOrNull.orEmpty(),
+            username = outbound["username"]?.jsonPrimitive?.contentOrNull.orEmpty(),
             uuid = outbound["uuid"]?.jsonPrimitive?.contentOrNull.orEmpty(),
             password = outbound["password"]?.jsonPrimitive?.contentOrNull.orEmpty(),
             method = outbound["method"]?.jsonPrimitive?.contentOrNull.orEmpty(),
@@ -93,7 +102,11 @@ class ProfileConfigFormCodec(
                 EditableTlsConfig(
                     enabled = tls != null && (tls["enabled"]?.jsonPrimitive?.booleanOrNull != false),
                     serverName = tls?.get("server_name")?.jsonPrimitive?.contentOrNull.orEmpty(),
-                    alpn = tls?.get("alpn")?.jsonArray.toCsv(),
+                    alpn = tls?.get("alpn").toCsv(),
+                    minVersion = tls?.get("min_version")?.jsonPrimitive?.contentOrNull.orEmpty(),
+                    maxVersion = tls?.get("max_version")?.jsonPrimitive?.contentOrNull.orEmpty(),
+                    curvePreferences = tls?.get("curve_preferences").toCsv(),
+                    echMode = tls?.get("ech")?.jsonObject?.get("enabled")?.jsonPrimitive?.booleanOrNull.toOnOffLabel(),
                     fingerprint =
                         tls
                             ?.get("utls")
@@ -134,14 +147,17 @@ class ProfileConfigFormCodec(
             peerPublicKey = outbound["peer_public_key"]?.jsonPrimitive?.contentOrNull ?: wireGuardPeer?.get("public_key")?.jsonPrimitive?.contentOrNull.orEmpty(),
             preSharedKey = outbound["pre_shared_key"]?.jsonPrimitive?.contentOrNull ?: wireGuardPeer?.get("pre_shared_key")?.jsonPrimitive?.contentOrNull.orEmpty(),
             localAddress =
-                outbound["local_address"]?.jsonArray.toCsv().ifBlank {
-                    outbound["address"]?.jsonArray.toCsv()
+                outbound["local_address"].toCsv().ifBlank {
+                    outbound["address"].toCsv()
                 },
             allowedIps =
-                outbound["allowed_ips"]?.jsonArray.toCsv().ifBlank {
-                    wireGuardPeer?.get("allowed_ips")?.jsonArray.toCsv()
+                outbound["allowed_ips"].toCsv().ifBlank {
+                    wireGuardPeer?.get("allowed_ips").toCsv()
                 },
             persistentKeepalive = outbound["persistent_keepalive_interval"]?.jsonPrimitive?.contentOrNull ?: wireGuardPeer?.get("persistent_keepalive_interval")?.jsonPrimitive?.contentOrNull.orEmpty(),
+            naiveQuic = outbound["quic"]?.jsonPrimitive?.booleanOrNull.toOnOffLabel(),
+            naiveUdpOverTcp = outbound["udp_over_tcp"].booleanObjectFlag().toOnOffLabel(),
+            naiveQuicCongestionControl = outbound["quic_congestion_control"]?.jsonPrimitive?.contentOrNull.orEmpty(),
         )
     }
 
@@ -180,6 +196,7 @@ class ProfileConfigFormCodec(
         when (draft.type) {
             "vless", "vmess" -> require(draft.uuid.trim().isNotBlank()) { "uuid is required" }
             "trojan", "hysteria2", "shadowsocks" -> require(draft.password.trim().isNotBlank()) { "password is required" }
+            "naive" -> require(draft.username.trim().isNotBlank() || draft.password.trim().isNotBlank()) { "naive credentials are required" }
             "wireguard" -> {
                 require(draft.privateKey.trim().isNotBlank()) { "private key is required" }
                 require(draft.peerPublicKey.trim().isNotBlank()) { "peer public key is required" }
@@ -235,6 +252,15 @@ class ProfileConfigFormCodec(
             "wireguard" -> {
                 updateWireGuardNode(map, outbound, draft, port)
             }
+            "naive" -> {
+                map["server"] = JsonPrimitive(draft.server.trim())
+                map["server_port"] = JsonPrimitive(port)
+                map.putStringOrRemove("username", draft.username)
+                map.putStringOrRemove("password", draft.password)
+                map.putOptionalBoolean("quic", draft.naiveQuic)
+                map.putOptionalBoolean("udp_over_tcp", draft.naiveUdpOverTcp)
+                map.putStringOrRemove("quic_congestion_control", draft.naiveQuicCongestionControl)
+            }
         }
 
         updateTls(outbound["tls"]?.jsonObject, draft)?.let { map["tls"] = it } ?: map.remove("tls")
@@ -253,6 +279,26 @@ class ProfileConfigFormCodec(
         map["enabled"] = JsonPrimitive(true)
         map["server_name"] = JsonPrimitive(draft.tls.serverName.trim().ifBlank { draft.server.trim() })
         draft.tls.alpn.toJsonArray()?.let { map["alpn"] = it } ?: map.remove("alpn")
+        map.putStringOrRemove("min_version", draft.tls.minVersion)
+        map.putStringOrRemove("max_version", draft.tls.maxVersion)
+        draft.tls.curvePreferences.toJsonArray()?.let { map["curve_preferences"] = it } ?: map.remove("curve_preferences")
+        when (draft.tls.echMode.trim().lowercase()) {
+            "on", "true", "1", "enabled" ->
+                map["ech"] =
+                    buildJsonObject {
+                        put("enabled", true)
+                    }
+            "off", "false", "0", "disabled" ->
+                map["ech"] =
+                    buildJsonObject {
+                        put("enabled", false)
+                    }
+            "auto", "" -> {
+                if (original?.get("ech") == null) {
+                    map.remove("ech")
+                }
+            }
+        }
 
         val originalUtls = original?.get("utls")?.jsonObject
         if (originalUtls != null || draft.tls.fingerprint.isNotBlank()) {
@@ -454,11 +500,26 @@ class ProfileConfigFormCodec(
         }
     }
 
-    private fun JsonArray?.toCsv(): String =
-        this
-            ?.mapNotNull { it.jsonPrimitive.contentOrNull }
-            ?.joinToString(", ")
-            .orEmpty()
+    private fun JsonElement?.toCsv(): String =
+        when (this) {
+            is JsonArray -> mapNotNull { it.jsonPrimitive.contentOrNull }.joinToString(", ")
+            is JsonPrimitive -> contentOrNull.orEmpty()
+            else -> ""
+        }
+
+    private fun JsonElement?.booleanObjectFlag(): Boolean? =
+        when (this) {
+            is JsonObject -> true
+            is JsonPrimitive -> booleanOrNull
+            else -> null
+        }
+
+    private fun Boolean?.toOnOffLabel(): String =
+        when (this) {
+            true -> "on"
+            false -> "off"
+            null -> ""
+        }
 
     private fun String.toJsonArray(): JsonArray? {
         val values = split(',').map(String::trim).filter(String::isNotBlank)
@@ -491,6 +552,17 @@ class ProfileConfigFormCodec(
             remove(key)
         } else {
             put(key, JsonPrimitive(normalized.toIntOrNull() ?: error("$key must be a number")))
+        }
+    }
+
+    private fun MutableMap<String, JsonElement>.putOptionalBoolean(
+        key: String,
+        value: String,
+    ) {
+        when (value.trim().lowercase()) {
+            "on", "true", "1", "enabled" -> put(key, JsonPrimitive(true))
+            "off", "false", "0", "disabled" -> put(key, JsonPrimitive(false))
+            "", "auto" -> remove(key)
         }
     }
 

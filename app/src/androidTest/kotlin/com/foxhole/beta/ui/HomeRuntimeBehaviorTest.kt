@@ -116,7 +116,7 @@ class HomeRuntimeBehaviorTest {
     }
 
     @Test
-    fun foregroundResumeWhileConnectedDoesNotTriggerIpRefresh() {
+    fun foregroundResumeWhileConnectedTriggersSilentIpRefreshWithoutClearingCurrentIp() {
         waitUntilNetworkBlockSettles()
 
         val expectedIp = "198.51.100.42"
@@ -170,10 +170,18 @@ class HomeRuntimeBehaviorTest {
         composeRule.runOnUiThread {
             viewModel.onAppForegrounded()
         }
-        Thread.sleep(HomeViewModel.CONNECTED_IP_REFRESH_DELAY_MS + 400L)
-        composeRule.waitForIdle()
+        composeRule.waitUntil(timeoutMillis = 10_000) {
+            app().container.diagnosticsLogger.entries.value.any {
+                it.tag == "ip" &&
+                    it.message.contains("mode=full") &&
+                    it.message.contains("showLoading=false") &&
+                    it.message.contains("clearExistingIp=false")
+            }
+        }
+        composeRule.runOnUiThread {
+            viewModel.invalidateIpInfoRefreshes()
+        }
 
-        composeRule.onNodeWithTag("home_network_primary_ip", useUnmergedTree = true).assertTextEquals(expectedIp)
         composeRule.onAllNodesWithTag("home_network_loading").assertCountEquals(0)
         assertTrue(
             app().container.diagnosticsLogger.entries.value.none {
@@ -185,7 +193,7 @@ class HomeRuntimeBehaviorTest {
     }
 
     @Test
-    fun connectedWithoutResolvedIpShowsUnavailableStateInsteadOfInfiniteLoading() {
+    fun connectedWithoutResolvedIpShowsLoadingInsteadOfUnavailableWhileInternetIsAvailable() {
         waitUntilNetworkBlockSettles()
 
         composeRule.runOnUiThread {
@@ -201,13 +209,15 @@ class HomeRuntimeBehaviorTest {
         }
 
         scrollToNetworkBlock()
-        composeRule.waitUntil(timeoutMillis = 10_000) { textOfOrNull("home_network_primary_ip") == "-" }
+        composeRule.waitUntil(timeoutMillis = 10_000) {
+            composeRule.onAllNodesWithTag("home_network_loading").fetchSemanticsNodes().isNotEmpty()
+        }
 
-        composeRule.onAllNodesWithTag("home_network_loading").assertCountEquals(0)
-        composeRule.onNodeWithTag("home_network_primary_ip", useUnmergedTree = true).assertTextEquals("-")
-        composeRule.onNodeWithText(
-            InstrumentationRegistry.getInstrumentation().targetContext.getString(R.string.home_network_unavailable),
-        ).assertIsDisplayed()
+        composeRule.onAllNodesWithTag("home_network_loading").assertCountEquals(1)
+        composeRule
+            .onAllNodesWithText(
+                InstrumentationRegistry.getInstrumentation().targetContext.getString(R.string.home_network_unavailable),
+            ).assertCountEquals(0)
     }
 
     @Test

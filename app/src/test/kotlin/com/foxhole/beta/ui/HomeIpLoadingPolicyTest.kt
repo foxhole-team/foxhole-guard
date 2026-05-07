@@ -149,8 +149,8 @@ class HomeIpLoadingPolicyTest {
     }
 
     @Test
-    fun `does not keep pending network loading after app loaded without ip`() {
-        assertFalse(
+    fun `keeps pending network loading after app loaded when internet is available and ip is empty`() {
+        assertTrue(
             shouldShowPendingNetworkLoading(
                 visibleIpInfo = null,
                 explicitLoading = false,

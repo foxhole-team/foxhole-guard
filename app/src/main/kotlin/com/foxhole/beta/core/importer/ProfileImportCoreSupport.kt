@@ -72,7 +72,7 @@ companion object {
     internal val SMART_CONFIG_HEADING_REGEX = Regex("""#\s*===\s*(.+?)\s*/\s*(.+?)\s*===""")
     internal val SMART_CONFIG_EXPIRE_REGEX = Regex("""(?:^|[;\s])expire=(\d{10,13})(?:$|[;\s])""")
     internal val SMART_CONFIG_PROFILE_ID_REGEX = Regex("""(?:^|[;\s])profile_id=([^;\s]+)(?:$|[;\s])""")
-    internal val SUBSCRIPTION_URL_REGEX = Regex("""https?://[^\s<>"']+""", RegexOption.IGNORE_CASE)
+    internal val SUBSCRIPTION_URL_REGEX = Regex("""(?<![A-Za-z0-9+.-])https?://[^\s<>"']+""", RegexOption.IGNORE_CASE)
 }
 
 internal fun decodeBase64IfNeeded(value: String): String {
@@ -104,8 +104,8 @@ internal fun buildStringArray(values: Iterable<String>): JsonArray =
 
 internal fun String.toFlexibleBoolean(): Boolean? =
     when (lowercase()) {
-        "1", "true" -> true
-        "0", "false" -> false
+        "1", "true", "on", "enabled" -> true
+        "0", "false", "off", "disabled" -> false
         else -> null
     }
 

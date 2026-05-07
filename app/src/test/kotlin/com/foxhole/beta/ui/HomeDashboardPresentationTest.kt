@@ -250,6 +250,7 @@ class HomeDashboardPresentationTest {
         assertEquals(null, model.visibleIpInfo)
         assertEquals(R.string.home_network_current_ip_title, model.titleRes)
         assertFalse(model.showConnectionStatus)
+        assertTrue(model.showLoading)
     }
 
     @Test

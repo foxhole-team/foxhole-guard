@@ -387,6 +387,40 @@ internal fun ProfileConfigForm(
                     ) { value -> onDraftChanged(draft.copy(persistentKeepalive = value.filter(Char::isDigit))) }
                 }
             }
+            "naive" -> {
+                ProfileEditorSection(title = stringResource(R.string.profile_editor_auth_section)) {
+                    ProfileEditorTextRow(
+                        title = stringResource(R.string.profile_editor_username),
+                        value = draft.username,
+                        editable = editable,
+                        onEditRequested = onEditRequested,
+                    ) { value -> onDraftChanged(draft.copy(username = value)) }
+                    ProfileEditorTextRow(
+                        title = stringResource(R.string.password),
+                        value = draft.password,
+                        editable = editable,
+                        onEditRequested = onEditRequested,
+                    ) { value -> onDraftChanged(draft.copy(password = value)) }
+                    ProfileEditorTextRow(
+                        title = stringResource(R.string.profile_editor_naive_quic),
+                        value = draft.naiveQuic,
+                        editable = editable,
+                        onEditRequested = onEditRequested,
+                    ) { value -> onDraftChanged(draft.copy(naiveQuic = value)) }
+                    ProfileEditorTextRow(
+                        title = stringResource(R.string.profile_editor_naive_udp_over_tcp),
+                        value = draft.naiveUdpOverTcp,
+                        editable = editable,
+                        onEditRequested = onEditRequested,
+                    ) { value -> onDraftChanged(draft.copy(naiveUdpOverTcp = value)) }
+                    ProfileEditorTextRow(
+                        title = stringResource(R.string.profile_editor_naive_quic_congestion),
+                        value = draft.naiveQuicCongestionControl,
+                        editable = editable,
+                        onEditRequested = onEditRequested,
+                    ) { value -> onDraftChanged(draft.copy(naiveQuicCongestionControl = value)) }
+                }
+            }
         }
         if (draft.tls.enabled || draft.tls.serverName.isNotBlank() || draft.tls.alpn.isNotBlank()) {
             ProfileEditorSection(title = stringResource(R.string.profile_editor_tls_section)) {
@@ -396,22 +430,42 @@ internal fun ProfileConfigForm(
                     editable = editable,
                     onEditRequested = onEditRequested,
                 ) { value -> onDraftChanged(draft.copy(tls = draft.tls.copy(serverName = value))) }
-                if (draft.tls.alpn.isNotBlank()) {
-                    ProfileEditorTextRow(
-                        title = stringResource(R.string.profile_editor_alpn),
-                        value = draft.tls.alpn,
-                        editable = editable,
-                        onEditRequested = onEditRequested,
-                    ) { value -> onDraftChanged(draft.copy(tls = draft.tls.copy(alpn = value))) }
-                }
-                if (draft.tls.fingerprint.isNotBlank()) {
-                    ProfileEditorTextRow(
-                        title = stringResource(R.string.profile_editor_fingerprint),
-                        value = draft.tls.fingerprint,
-                        editable = editable,
-                        onEditRequested = onEditRequested,
-                    ) { value -> onDraftChanged(draft.copy(tls = draft.tls.copy(fingerprint = value))) }
-                }
+                ProfileEditorTextRow(
+                    title = stringResource(R.string.profile_editor_alpn),
+                    value = draft.tls.alpn,
+                    editable = editable,
+                    onEditRequested = onEditRequested,
+                ) { value -> onDraftChanged(draft.copy(tls = draft.tls.copy(alpn = value))) }
+                ProfileEditorTextRow(
+                    title = stringResource(R.string.profile_editor_fingerprint),
+                    value = draft.tls.fingerprint,
+                    editable = editable,
+                    onEditRequested = onEditRequested,
+                ) { value -> onDraftChanged(draft.copy(tls = draft.tls.copy(fingerprint = value))) }
+                ProfileEditorTextRow(
+                    title = stringResource(R.string.profile_editor_ech),
+                    value = draft.tls.echMode,
+                    editable = editable,
+                    onEditRequested = onEditRequested,
+                ) { value -> onDraftChanged(draft.copy(tls = draft.tls.copy(echMode = value))) }
+                ProfileEditorTextRow(
+                    title = stringResource(R.string.profile_editor_tls_min_version),
+                    value = draft.tls.minVersion,
+                    editable = editable,
+                    onEditRequested = onEditRequested,
+                ) { value -> onDraftChanged(draft.copy(tls = draft.tls.copy(minVersion = value))) }
+                ProfileEditorTextRow(
+                    title = stringResource(R.string.profile_editor_tls_max_version),
+                    value = draft.tls.maxVersion,
+                    editable = editable,
+                    onEditRequested = onEditRequested,
+                ) { value -> onDraftChanged(draft.copy(tls = draft.tls.copy(maxVersion = value))) }
+                ProfileEditorTextRow(
+                    title = stringResource(R.string.profile_editor_tls_curves),
+                    value = draft.tls.curvePreferences,
+                    editable = editable,
+                    onEditRequested = onEditRequested,
+                ) { value -> onDraftChanged(draft.copy(tls = draft.tls.copy(curvePreferences = value))) }
                 if (draft.tls.realityPublicKey.isNotBlank() || draft.tls.realityShortId.isNotBlank()) {
                     ProfileEditorTextRow(
                         title = stringResource(R.string.profile_editor_reality_public_key),
@@ -537,6 +591,7 @@ internal fun profileProtocolLabel(type: String): String =
         "vmess" -> "VMess"
         "hysteria2" -> "Hysteria2"
         "wireguard" -> "WireGuard"
+        "naive" -> "NaiveProxy"
         else -> type
     }
 

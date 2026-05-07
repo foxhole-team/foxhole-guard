@@ -689,6 +689,12 @@ class ProfileRepository(
         )
     }
 
+    suspend fun verifyBundledDnsFilters() {
+        dnsFilterAssetInstaller.prepare()
+        settingsRepository.markDnsFiltersUpdated()
+        diagnosticsLogger.record("dns", "bundled filter list verified")
+    }
+
     @Suppress("LongMethod", "CyclomaticComplexMethod")
     suspend fun refreshProfile(
         profileId: Long,

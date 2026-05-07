@@ -87,6 +87,7 @@ internal fun parseSingleNode(
     return when (scheme) {
         "vless" -> parseVlessUri(value, allowPrivateOutboundHosts, allowInsecureTls)
         "trojan" -> parseTrojanUri(value, allowPrivateOutboundHosts, allowInsecureTls)
+        "naive", "naive+https" -> parseNaiveUri(value, allowPrivateOutboundHosts, allowInsecureTls)
         "ss", "outline" -> parseShadowsocksUri(value, allowPrivateOutboundHosts)
         "vmess" -> parseVmessUri(value, allowPrivateOutboundHosts, allowInsecureTls)
         "hy2", "hysteria2" -> parseHysteria2Uri(value, allowPrivateOutboundHosts, allowInsecureTls)
@@ -159,6 +160,63 @@ internal fun parseTrojanUri(
     )
 }
 
+internal fun parseNaiveUri(
+    value: String,
+    allowPrivateOutboundHosts: Boolean,
+    allowInsecureTls: Boolean,
+): ProxyNode {
+    val uri = parseLenientUri(value)
+    val query = parseQueryParameters(uri.rawQuery)
+    val host = uri.host ?: error("missing host")
+    validateOutboundHost(host, allowPrivateOutboundHosts)
+    val port = uri.port.takeIf { it > 0 } ?: 443
+    val displayName = displayNameFromUri(uri, host)
+    val userInfo = uri.rawUserInfo?.let(::uriDecode).orEmpty()
+    val username = userInfo.substringBefore(':', missingDelimiterValue = "")
+    val password = userInfo.substringAfter(':', missingDelimiterValue = "")
+    require(username.isNotBlank() || password.isNotBlank()) { "naive credentials are missing" }
+    val outbound =
+        buildJsonObject {
+            put("type", "naive")
+            put("tag", tagFor(displayName))
+            put("server", host)
+            put("server_port", port)
+            username.takeIf(String::isNotBlank)?.let { put("username", it) }
+            password.takeIf(String::isNotBlank)?.let { put("password", it) }
+            query.booleanValue("quic")?.let { put("quic", it) }
+            query.booleanValue("udp_over_tcp", "udpOverTcp", "uot")?.let { put("udp_over_tcp", it) }
+            query.firstValue("quic_congestion_control", "quicCongestionControl", "congestion")
+                ?.takeIf { it in setOf("bbr", "bbr2", "cubic", "reno") }
+                ?.let { put("quic_congestion_control", it) }
+            put(
+                "tls",
+                buildJsonObject {
+                    put("enabled", true)
+                    put("server_name", query["sni"]?.takeIf(String::isNotBlank) ?: host)
+                    val insecureTls =
+                        listOfNotNull(query["allowInsecure"], query["insecure"]).firstNotNullOfOrNull { item ->
+                            item.toFlexibleBoolean()
+                        } ?: false
+                    require(allowInsecureTls || !insecureTls) { "INSECURE TLS is not allowed" }
+                    if (insecureTls) {
+                        put("insecure", true)
+                    }
+                    query.booleanValue("ech")?.let { echEnabled ->
+                        putJsonObject("ech") {
+                            put("enabled", echEnabled)
+                        }
+                    }
+                },
+            )
+        }
+    return ProxyNode(
+        displayName = displayName,
+        protocolHint = ProtocolHint.SING_BOX,
+        outbound = outbound,
+        subscriptionExpiresAt = subscriptionExpirationFromQuery(uri.rawQuery),
+    )
+}
+
 internal fun parseShadowsocksUri(
     value: String,
     allowPrivateOutboundHosts: Boolean,
@@ -210,6 +268,12 @@ internal fun parseShadowsocksUri(
         }
     return ProxyNode(displayName, hint, outbound)
 }
+
+private fun Map<String, String>.firstValue(vararg keys: String): String? =
+    keys.firstNotNullOfOrNull { key -> this[key]?.trim()?.takeIf(String::isNotBlank) }
+
+private fun Map<String, String>.booleanValue(vararg keys: String): Boolean? =
+    firstValue(*keys)?.toFlexibleBoolean()
 
 internal fun decodeOutlineAccessKey(value: String): String {
     val payload = value.removePrefix("outline://")
@@ -679,6 +743,19 @@ internal fun buildTls(
                 "alpn",
                 buildStringArray(alpn.split(',').map(String::trim).filter(String::isNotBlank)),
             )
+        }
+        query.firstValue("min_version", "minVersion", "tlsMinVersion")?.let { put("min_version", it) }
+        query.firstValue("max_version", "maxVersion", "tlsMaxVersion")?.let { put("max_version", it) }
+        query.firstValue("curve_preferences", "curves", "tlsCurves")?.let { curves ->
+            put(
+                "curve_preferences",
+                buildStringArray(curves.split(',').map(String::trim).filter(String::isNotBlank)),
+            )
+        }
+        query.booleanValue("ech")?.let { echEnabled ->
+            putJsonObject("ech") {
+                put("enabled", echEnabled)
+            }
         }
         if (security == "reality") {
             putJsonObject("utls") {

@@ -488,6 +488,7 @@
         <item quantity="other">%1$d days</item>
     </plurals>
     <string name="dns_filter_refresh_complete">DNS filter list checked.</string>
+    <string name="dns_filter_refresh_failed">Could not verify DNS filter list.</string>
     <string name="dns_through_vpn_title">DNS through VPN</string>
     <string name="dns_through_vpn_summary">Send FoxHole DNS queries through the active tunnel.</string>
     <string name="dns_block_outside_tunnel_title">Block DNS outside tunnel</string>
@@ -762,6 +763,14 @@
     <string name="profile_editor_tls_server_name">TLS server name</string>
     <string name="profile_editor_alpn">ALPN</string>
     <string name="profile_editor_fingerprint">Fingerprint</string>
+    <string name="profile_editor_username">Username</string>
+    <string name="profile_editor_ech">ECH</string>
+    <string name="profile_editor_tls_min_version">TLS min version</string>
+    <string name="profile_editor_tls_max_version">TLS max version</string>
+    <string name="profile_editor_tls_curves">TLS curves</string>
+    <string name="profile_editor_naive_quic">NaiveProxy QUIC</string>
+    <string name="profile_editor_naive_udp_over_tcp">NaiveProxy UDP over TCP</string>
+    <string name="profile_editor_naive_quic_congestion">QUIC congestion</string>
     <string name="profile_editor_reality_public_key">Reality public key</string>
     <string name="profile_editor_reality_short_id">Reality short ID</string>
     <string name="profile_editor_transport">Transport</string>

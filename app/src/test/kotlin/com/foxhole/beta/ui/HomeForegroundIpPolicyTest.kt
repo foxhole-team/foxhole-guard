@@ -13,9 +13,9 @@ class HomeForegroundIpPolicyTest {
     }
 
     @Test
-    fun `foreground auto refresh stays off for active connection states`() {
+    fun `foreground auto refresh also runs for stable connected state`() {
         assertFalse(shouldAutoRefreshIpOnForeground(ConnectionState.CONNECTING))
-        assertFalse(shouldAutoRefreshIpOnForeground(ConnectionState.CONNECTED))
+        assertTrue(shouldAutoRefreshIpOnForeground(ConnectionState.CONNECTED))
         assertFalse(shouldAutoRefreshIpOnForeground(ConnectionState.RECONNECTING))
     }
 }

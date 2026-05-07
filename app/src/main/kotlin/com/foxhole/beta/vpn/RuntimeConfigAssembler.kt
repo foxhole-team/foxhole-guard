@@ -444,7 +444,7 @@ class RuntimeConfigAssembler(
                 add(JsonPrimitive("172.19.0.1/30"))
                 add(JsonPrimitive("fdfe:dcba:9876::1/126"))
             }
-            if (mode == LocalGuardMode.FIREWALL && settings.expert.blockAppsAlways) {
+            if (mode == LocalGuardMode.FIREWALL && settings.expert.blockAppsAlways && !settings.expert.killSwitchEnabled) {
                 val packages = normalizedRuntimePackages(settings.expert.blockedPackages)
                 if (packages.isNotEmpty()) {
                     putJsonArray("include_package") {
@@ -1211,6 +1211,9 @@ class RuntimeConfigAssembler(
             if (dnsSettings.secureMode == SecureDnsMode.DOH) {
                 put("path", "/dns-query")
             }
+            if (dnsSettings.server.requiresDnsDomainResolver()) {
+                put("domain_resolver", DNS_DIRECT_TAG)
+            }
             detourTag?.let { put("detour", it) }
         }
 
@@ -1262,6 +1265,28 @@ class RuntimeConfigAssembler(
                 )
             }
         }
+
+    private fun String.requiresDnsDomainResolver(): Boolean {
+        val host = trim().removeSurrounding("[", "]")
+        if (host.isBlank()) {
+            return false
+        }
+        return !host.isIpv4Literal() && !host.isIpv6Literal()
+    }
+
+    private fun String.isIpv4Literal(): Boolean {
+        val parts = split('.')
+        return parts.size == 4 &&
+            parts.all { part ->
+                part.isNotEmpty() &&
+                    part.all(Char::isDigit) &&
+                    part.toIntOrNull()?.let { value -> value in 0..255 } == true
+            }
+    }
+
+    private fun String.isIpv6Literal(): Boolean =
+        count { it == ':' } >= 2 &&
+            all { char -> char.isDigit() || char.lowercaseChar() in 'a'..'f' || char == ':' || char == '.' }
 
     private fun sniffRule(): JsonObject =
         buildJsonObject {

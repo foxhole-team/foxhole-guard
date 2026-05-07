@@ -91,6 +91,8 @@ import com.foxhole.beta.core.model.Profile
 import com.foxhole.beta.core.model.ProtocolHint
 import com.foxhole.beta.core.model.TrafficMode
 import com.foxhole.beta.core.model.isUdpTransport
+import com.foxhole.beta.vpn.ACTIVE_CONNECTION_STATES
+import com.foxhole.beta.vpn.FoxholeVpnService
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import java.util.Locale
@@ -586,7 +588,8 @@ internal fun homeConnectionFeatureIndicator(
 internal fun homeFirewallFeatureStatus(state: HomeRouteUiState): HomeConnectionFeatureStatus =
     when {
         !state.settings.expert.firewallEnabled -> HomeConnectionFeatureStatus.OFF
-        state.traffic.available -> HomeConnectionFeatureStatus.ON
+        state.connection.profileId == FoxholeVpnService.LOCAL_GUARD_PROFILE_ID -> HomeConnectionFeatureStatus.ON
+        state.connection.state in ACTIVE_CONNECTION_STATES -> HomeConnectionFeatureStatus.ON
         else -> HomeConnectionFeatureStatus.PENDING
     }
 

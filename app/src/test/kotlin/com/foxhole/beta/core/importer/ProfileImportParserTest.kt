@@ -86,6 +86,30 @@ class ProfileImportParserTest {
     }
 
     @Test
+    fun `parses naive proxy share uri with quic and ech`() {
+        val parsed =
+            parser.parseUserInput(
+                "naive+https://user:pass@example.com:443?quic=true&udpOverTcp=1&quicCongestionControl=cubic&ech=on&sni=front.example.com#Naive",
+            )
+
+        val root = json.parseToJsonElement(parsed.normalizedConfigJson!!).jsonObject
+        val outbound = root["outbounds"]!!.jsonArray.first().jsonObject
+        val tls = outbound["tls"]!!.jsonObject
+
+        assertEquals(ProfileSourceType.SHARE_URI, parsed.sourceType)
+        assertEquals(ProtocolHint.SING_BOX, parsed.protocolHint)
+        assertEquals("naive", outbound["type"]!!.jsonPrimitive.content)
+        assertEquals("example.com", outbound["server"]!!.jsonPrimitive.content)
+        assertEquals("user", outbound["username"]!!.jsonPrimitive.content)
+        assertEquals("pass", outbound["password"]!!.jsonPrimitive.content)
+        assertEquals("true", outbound["quic"]!!.jsonPrimitive.content)
+        assertEquals("true", outbound["udp_over_tcp"]!!.jsonPrimitive.content)
+        assertEquals("cubic", outbound["quic_congestion_control"]!!.jsonPrimitive.content)
+        assertEquals("front.example.com", tls["server_name"]!!.jsonPrimitive.content)
+        assertEquals("true", tls["ech"]!!.jsonObject["enabled"]!!.jsonPrimitive.content)
+    }
+
+    @Test
     fun `rejects html subscription response without vpn configs`() {
         val error =
             runCatching {

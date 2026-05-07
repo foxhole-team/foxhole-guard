@@ -475,6 +475,9 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
             ConnectionSnapshot(
                 state = ConnectionState.IDLE,
                 trafficMode = TrafficMode.TUNNEL,
+                profileId = LOCAL_GUARD_PROFILE_ID,
+                profileName = mode.notificationProfileName(),
+                protocolHint = com.foxhole.beta.core.model.ProtocolHint.SING_BOX,
             ),
         )
         acquireRuntimeWakeLock()
@@ -644,9 +647,6 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
 
     internal fun startAppTrafficStatsUpdates() {
         stopAppTrafficStatsUpdates()
-        if (activeSession != null) {
-            return
-        }
         val settings = container.settingsRepository.settings.value
         if (!settings.statistics.enabled || !settings.statistics.appTrafficEnabled || !settings.appTrafficStatsEnabled) {
             return

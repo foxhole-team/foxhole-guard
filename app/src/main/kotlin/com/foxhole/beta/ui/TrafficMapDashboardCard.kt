@@ -62,6 +62,7 @@ import com.foxhole.beta.core.traffic.TrafficMapGeoPoint
 import com.foxhole.beta.core.traffic.toTrafficMapVisualShape
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.util.Locale
 import kotlin.math.min
 
 @Composable
@@ -75,25 +76,32 @@ internal fun TrafficMapDashboardCard(
             .fillMaxWidth()
             .testTag("home_traffic_map_card"),
     ) {
-        HomeCardHeader(
-            icon = Icons.Outlined.Map,
-            title = stringResource(R.string.traffic_map_title),
-        )
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(TRAFFIC_MAP_CARD_CONTENT_HEIGHT),
+                .height(TRAFFIC_MAP_CARD_TOTAL_HEIGHT),
             horizontalArrangement = Arrangement.spacedBy(6.dp),
             verticalAlignment = Alignment.Top,
         ) {
-            TrafficWorldMap(
-                state = state,
-                countries = countries.orEmpty(),
+            Column(
                 modifier = Modifier
                     .weight(TRAFFIC_MAP_WEIGHT)
-                    .fillMaxHeight()
-                    .testTag("home_traffic_world_map"),
-            )
+                    .fillMaxHeight(),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                HomeCardHeader(
+                    icon = Icons.Outlined.Map,
+                    title = stringResource(R.string.traffic_map_title),
+                )
+                TrafficWorldMap(
+                    state = state,
+                    countries = countries.orEmpty(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                        .testTag("home_traffic_world_map"),
+                )
+            }
             TrafficMapLegend(
                 state = state,
                 modifier = Modifier
@@ -404,7 +412,7 @@ private fun TrafficMapLegendDestinationRow(
                 ) {}
             }
             TrafficMapLegendCell(
-                text = "${countryEmoji(point.countryCode)} ${point.label}",
+                text = "${countryEmoji(point.countryCode)} ${point.countryCode.uppercase(Locale.US)}",
                 modifier = Modifier.weight(1f),
                 textAlign = TextAlign.Start,
             )
@@ -589,7 +597,7 @@ private data class ProjectedTrafficMapCountry(
     val path: Path,
 )
 
-private val TRAFFIC_MAP_CARD_CONTENT_HEIGHT = 156.dp
+private val TRAFFIC_MAP_CARD_TOTAL_HEIGHT = 184.dp
 private const val TRAFFIC_MAP_WEIGHT = 0.70f
 private const val TRAFFIC_MAP_LEGEND_WEIGHT = 0.30f
 private const val TRAFFIC_MAP_WORLD_ASPECT_RATIO = 2f

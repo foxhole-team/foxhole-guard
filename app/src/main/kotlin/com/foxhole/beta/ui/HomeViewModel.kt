@@ -596,13 +596,17 @@ class HomeViewModel(
         if (!shouldAutoRefreshIpOnForeground(runtimeState) || ipInfoLoadingMutable.value) {
             return
         }
-        startIpInfoRefresh(
-            reportFailures = false,
-            showLoading = true,
-            clearExistingIp = true,
-            fetchMode = IpInfoFetchMode.ENTRY_QUICK,
-            minimumLoadingDurationMs = 0L,
-        )
+        if (runtimeState == ConnectionState.CONNECTED) {
+            scheduleConnectedIpRefresh()
+        } else {
+            startIpInfoRefresh(
+                reportFailures = false,
+                showLoading = true,
+                clearExistingIp = true,
+                fetchMode = IpInfoFetchMode.ENTRY_QUICK,
+                minimumLoadingDurationMs = 0L,
+            )
+        }
     }
 
     fun onPasteFromClipboard() {
@@ -682,6 +686,10 @@ class HomeViewModel(
             PendingConnectAction.MANUAL -> connect(request.profileId)
             PendingConnectAction.AUTO_CONNECT -> startAutoConnect(request.profileId)
             PendingConnectAction.RECONNECT -> reconnect(request.profileId)
+            PendingConnectAction.LOCAL_GUARD ->
+                viewModelScope.launch {
+                    container.connectionController.syncLocalGuard()
+                }
         }
     }
 

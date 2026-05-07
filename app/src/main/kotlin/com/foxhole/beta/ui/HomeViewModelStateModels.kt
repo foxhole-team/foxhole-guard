@@ -127,10 +127,11 @@ internal enum class PendingConnectAction {
     MANUAL,
     AUTO_CONNECT,
     RECONNECT,
+    LOCAL_GUARD,
 }
 
 internal data class PendingConnectRequest(
-    val profileId: Long,
+    val profileId: Long = 0L,
     val action: PendingConnectAction,
 )
 

@@ -114,7 +114,7 @@ internal enum class HomeModeOption {
 }
 
 internal fun shouldAutoRefreshIpOnForeground(connectionState: ConnectionState): Boolean =
-    connectionState == ConnectionState.IDLE || connectionState == ConnectionState.ERROR
+    connectionState !in setOf(ConnectionState.CONNECTING, ConnectionState.RECONNECTING)
 
 internal fun shouldShowIpInfoLoading(
     currentIpInfo: IpInfo?,
@@ -135,7 +135,7 @@ internal fun shouldShowPendingNetworkLoading(
         explicitLoading -> true
         deviceInternetAvailable == false -> false
         autoConnectRunning || connectionState in setOf(ConnectionState.CONNECTING, ConnectionState.RECONNECTING) -> false
-        else -> !appLoaded
+        else -> true
     }
 
 internal fun shouldShowDashboardNetworkLoading(

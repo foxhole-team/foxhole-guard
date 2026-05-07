@@ -219,8 +219,18 @@ internal fun HomeViewModel.onDnsDomainBypassRulesChangedInternal(value: List<Str
 
 internal fun HomeViewModel.onDnsFilterManualRefreshInternal() {
     viewModelScope.launch {
-        container.settingsRepository.markDnsFiltersUpdated()
-        emitSuccess(getApplication<Application>().getString(R.string.dns_filter_refresh_complete))
+        runCatching { container.profileRepository.verifyBundledDnsFilters() }
+            .onSuccess {
+                container.settingsRepository.markDnsFiltersUpdated()
+                emitSuccess(getApplication<Application>().getString(R.string.dns_filter_refresh_complete))
+            }
+            .onFailure { error ->
+                container.diagnosticsLogger.record(
+                    "dns",
+                    "bundled filter verification failed error=${error.javaClass.simpleName}",
+                )
+                emitError(getApplication<Application>().getString(R.string.dns_filter_refresh_failed))
+            }
     }
 }
 
@@ -281,14 +291,32 @@ internal fun HomeViewModel.onDashboardCardOrderChangedInternal(value: List<com.f
 internal fun HomeViewModel.onKillSwitchChangedInternal(value: Boolean) {
     viewModelScope.launch {
         container.settingsRepository.updateKillSwitchEnabled(value)
+        if (value && android.net.VpnService.prepare(getApplication<Application>()) != null) {
+            pendingConnectRequest =
+                PendingConnectRequest(
+                    action = PendingConnectAction.LOCAL_GUARD,
+                )
+            requestVpnPermission.tryEmit(Unit)
+            return@launch
+        }
         container.connectionController.syncLocalGuard()
-        openSystemVpnSettings()
+        if (value) {
+            openSystemVpnSettings()
+        }
     }
 }
 
 internal fun HomeViewModel.onFirewallEnabledChangedInternal(value: Boolean) {
     viewModelScope.launch {
         container.settingsRepository.updateFirewallEnabled(value)
+        if (value && android.net.VpnService.prepare(getApplication<Application>()) != null) {
+            pendingConnectRequest =
+                PendingConnectRequest(
+                    action = PendingConnectAction.LOCAL_GUARD,
+                )
+            requestVpnPermission.tryEmit(Unit)
+            return@launch
+        }
         container.connectionController.syncLocalGuard()
     }
 }

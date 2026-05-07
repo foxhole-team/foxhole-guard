@@ -430,7 +430,7 @@ class RuntimeConfigAssemblerTest {
     }
 
     @Test
-    fun `local firewall guard stays scoped when kill switch preference is enabled`() {
+    fun `kill switch local firewall guard blocks the whole tunnel`() {
         val settings =
             Settings(
                 expert =
@@ -446,20 +446,20 @@ class RuntimeConfigAssemblerTest {
         val tunInbound = config["inbounds"]!!.jsonArray.single().jsonObject
         val route = config["route"]!!.jsonObject
 
-        assertEquals("org.mozilla.firefox", tunInbound["include_package"]!!.jsonArray.single().jsonPrimitive.content)
+        assertFalse(tunInbound.containsKey("include_package"))
         assertFalse(tunInbound.containsKey("exclude_package"))
         assertEquals(false, tunInbound["strict_route"]!!.jsonPrimitive.content.toBoolean())
         assertEquals("block", route["final"]!!.jsonPrimitive.content)
     }
 
     @Test
-    fun `kill switch preference does not create a local guard mode`() {
+    fun `kill switch preference creates a local firewall guard mode`() {
         assertEquals(
-            null,
+            LocalGuardMode.FIREWALL,
             Settings(expert = ExpertSettings(killSwitchEnabled = true)).localGuardModeOrNull(),
         )
         assertEquals(
-            LocalGuardMode.JOURNAL,
+            LocalGuardMode.FIREWALL,
             Settings(
                 expert =
                     ExpertSettings(
@@ -1549,6 +1549,7 @@ class RuntimeConfigAssemblerTest {
         assertEquals("tls", remote["type"]!!.jsonPrimitive.content)
         assertEquals("dns.example", remote["server"]!!.jsonPrimitive.content)
         assertEquals("853", remote["server_port"]!!.jsonPrimitive.content)
+        assertEquals("dns-direct", remote["domain_resolver"]!!.jsonPrimitive.content)
         assertFalse(remote.containsKey("path"))
         assertFalse(remote.containsKey("detour"))
     }
@@ -1571,6 +1572,7 @@ class RuntimeConfigAssemblerTest {
         assertEquals("9.9.9.9", remote["server"]!!.jsonPrimitive.content)
         assertEquals("53", remote["server_port"]!!.jsonPrimitive.content)
         assertFalse(remote.containsKey("path"))
+        assertFalse(remote.containsKey("domain_resolver"))
         assertEquals("proxy", remote["detour"]!!.jsonPrimitive.content)
     }
 
