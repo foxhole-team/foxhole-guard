@@ -101,7 +101,7 @@ internal val HomePrimaryActionHeight = 52.dp
 internal val HomeTriangleIndicatorSize = 15.dp
 internal val HomeDashboardBannerTopPadding = 74.dp
 internal val HomeConnectingStatusSignalOffset = 3.dp
-internal val HomeNetworkContentHeight = 82.dp
+internal val HomeNetworkContentHeight = 90.dp
 internal val HomeDashboardProfileContentHeight = 62.dp
 private val HomeNetworkValueLoadingWidth = 68.dp
 private val HomeNetworkMetricValueLoadingWidth = 54.dp
@@ -202,8 +202,8 @@ internal fun HomeNetworkDetailLine(
             modifier = Modifier.weight(1f),
             style =
                 MaterialTheme.typography.labelSmall.copy(
-                    fontSize = 10.sp,
-                    lineHeight = 11.sp,
+                    fontSize = 11.sp,
+                    lineHeight = 12.sp,
                     fontWeight = FontWeight.SemiBold,
                 ),
             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -215,8 +215,8 @@ internal fun HomeNetworkDetailLine(
             modifier = modifier.weight(1f),
             style =
                 MaterialTheme.typography.labelSmall.copy(
-                    fontSize = 10.sp,
-                    lineHeight = 11.sp,
+                    fontSize = 11.sp,
+                    lineHeight = 12.sp,
                     fontWeight = FontWeight.SemiBold,
                     fontFamily = if (valueMonospace) FontFamily.Monospace else FontFamily.Default,
                 ),
@@ -251,7 +251,7 @@ internal fun HomeNetworkColumnTitle(text: String) {
         style =
             MaterialTheme.typography.labelSmall.copy(
                 fontSize = 10.sp,
-                lineHeight = 11.sp,
+                lineHeight = 12.sp,
                 fontWeight = FontWeight.Bold,
             ),
         color = MaterialTheme.colorScheme.onSurface,

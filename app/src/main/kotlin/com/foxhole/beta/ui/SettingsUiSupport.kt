@@ -271,7 +271,7 @@ internal fun <T> DropdownSettingRow(
         )
     val triggerWidth =
         rememberSettingsDropdownWidth(
-            labels = listOf(value),
+            labels = optionLabels,
             textStyle = MaterialTheme.typography.labelLarge,
             horizontalChrome = DropdownTriggerChrome,
         )

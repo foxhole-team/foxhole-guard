@@ -278,10 +278,10 @@
     <string name="latency_quality_slow">Медленно</string>
     <string name="latency_quality_very_slow">Очень медленно</string>
     <string name="latency_quality_unavailable">Недоступно</string>
-    <string name="latency_quality_failed">Неопределена</string>
+    <string name="latency_quality_failed">down</string>
     <string name="latency_pill_label">Задержка</string>
     <string name="latency_pill_value">%1$d мс</string>
-    <string name="latency_pill_down">Неопределена</string>
+    <string name="latency_pill_down">down</string>
     <string name="latency_pill_unavailable">Недоступно</string>
     <string name="reconnect_required">Требуется переподключение</string>
     <string name="traffic_settings">Сеть</string>
@@ -835,7 +835,7 @@
     <string name="help_protocol_unavailable_summary">Foxhole не получил корректный замер задержки или ping.</string>
     <string name="help_protocol_no_data_summary">Анализ еще не выполнялся или сохраненных результатов пока нет.</string>
     <string name="help_protocol_disabled_summary">Протокол выключен вручную и не участвует в автоподключении.</string>
-    <string name="help_protocol_statuses_body">Быстро - задержка до 250 мс. Обычно лучший вариант для повседневного подключения.\n\nНормально - задержка от 251 до 750 мс. Подключение рабочее, но может быть не самым быстрым.\n\nМедленно - задержка от 751 до 1500 мс. Протокол работает, но качество соединения хуже.\n\nОчень медленно - задержка выше 1500 мс. Использовать стоит только если другие варианты недоступны.\n\nНеопределена - последняя проверка протокола не прошла. Такой протокол не должен показываться как рекомендованный по свежему результату.\n\nНедоступно - Foxhole не смог получить корректный замер задержки или ping для этого протокола.\n\nНет данных - анализ еще не выполнялся, либо для протокола пока нет сохраненных результатов.\n\nОтключено - протокол выключен вручную и не участвует в автоподключении, пока пользователь не включит его обратно.</string>
+    <string name="help_protocol_statuses_body">Быстро - задержка до 250 мс. Обычно лучший вариант для повседневного подключения.\n\nНормально - задержка от 251 до 750 мс. Подключение рабочее, но может быть не самым быстрым.\n\nМедленно - задержка от 751 до 1500 мс. Протокол работает, но качество соединения хуже.\n\nОчень медленно - задержка выше 1500 мс. Использовать стоит только если другие варианты недоступны.\n\ndown - последняя проверка протокола не прошла. Такой протокол не должен показываться как рекомендованный по свежему результату.\n\nНедоступно - Foxhole не смог получить корректный замер задержки или ping для этого протокола.\n\nНет данных - анализ еще не выполнялся, либо для протокола пока нет сохраненных результатов.\n\nОтключено - протокол выключен вручную и не участвует в автоподключении, пока пользователь не включит его обратно.</string>
     <string name="help_connection_modes_title">Режимы подключения</string>
     <string name="help_connection_tunnel_body">Весь сетевой трафик устройства направляется через VPN.</string>
     <string name="help_connection_split_proxy_title">Split tunnel (Proxy)</string>

@@ -41,7 +41,6 @@ import com.foxhole.beta.core.settings.smartProfilePreference
 import com.foxhole.beta.core.settings.smartStartEnabledProtocolSetHash
 import com.foxhole.beta.vpn.ACTIVE_CONNECTION_STATES
 import com.foxhole.beta.vpn.FoxholeVpnService
-import com.foxhole.beta.vpn.localGuardModeOrNull
 
 internal data class HomeProxySurface(
     val label: String,
@@ -352,15 +351,9 @@ private fun HomeRouteUiState.dashboardVisibleIpInfo(visibleIpInfo: IpInfo?): IpI
         return visibleIpInfo
     }
     val realTunnelActive =
-        connection.state in ACTIVE_CONNECTION_STATES &&
+        (reconnectInProgress || connection.state in ACTIVE_CONNECTION_STATES) &&
             connection.profileId != FoxholeVpnService.LOCAL_GUARD_PROFILE_ID
     if (realTunnelActive) {
-        return visibleIpInfo
-    }
-    val localGuardSurface =
-        connection.profileId == FoxholeVpnService.LOCAL_GUARD_PROFILE_ID ||
-            settings.localGuardModeOrNull() != null
-    if (!localGuardSurface) {
         return visibleIpInfo
     }
     return visibleIpInfo.takeIf { info -> info.fetchedAt >= connection.lastChangeAt }
@@ -639,20 +632,6 @@ internal fun resolveDashboardLatencyPresentation(state: HomeRouteUiState): HomeD
             if (currentOption?.latencyUnavailable == true) {
                 return HomeDashboardLatencyPresentation(isUnavailable = true)
             }
-        }
-        state.autoConnect.options.firstOrNull { option ->
-            option.status in setOf(AutoConnectProbeStatus.SUCCESS, AutoConnectProbeStatus.WINNER) &&
-                option.latencyMs != null
-        }?.latencyMs?.let { latencyMs ->
-            return HomeDashboardLatencyPresentation(latencyMs = latencyMs)
-        }
-        if (
-            state.autoConnect.options.any { option ->
-                option.status in setOf(AutoConnectProbeStatus.SUCCESS, AutoConnectProbeStatus.WINNER) &&
-                    option.latencyUnavailable
-            }
-        ) {
-            return HomeDashboardLatencyPresentation(isUnavailable = true)
         }
         return HomeDashboardLatencyPresentation()
     }

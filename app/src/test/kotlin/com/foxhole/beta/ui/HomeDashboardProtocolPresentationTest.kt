@@ -362,6 +362,39 @@ class HomeDashboardProtocolPresentationTest {
     }
 
     @Test
+    fun `dashboard auto connect does not show stale success latency for current testing candidate`() {
+        val state =
+            HomeRouteUiState(
+                connection = ConnectionSnapshot(state = ConnectionState.CONNECTING),
+                autoConnect =
+                    AutoConnectUiState(
+                        running = true,
+                        currentOptionId = "trojan",
+                        options =
+                            listOf(
+                                AutoConnectProbeOptionUiState(
+                                    optionId = "outline",
+                                    displayName = "OUTLINE",
+                                    protocolHint = ProtocolHint.OUTLINE,
+                                    status = AutoConnectProbeStatus.SUCCESS,
+                                    latencyMs = 184L,
+                                ),
+                                AutoConnectProbeOptionUiState(
+                                    optionId = "trojan",
+                                    displayName = "TROJAN",
+                                    protocolHint = ProtocolHint.TROJAN,
+                                    status = AutoConnectProbeStatus.TESTING,
+                                ),
+                            ),
+                    ),
+            )
+
+        assertNull(resolveDashboardSelectedLatencyMs(state))
+        assertFalse(resolveDashboardSelectedLatencyDown(state))
+        assertFalse(resolveDashboardSelectedLatencyUnavailable(state))
+    }
+
+    @Test
     fun `manual metrics refresh does not move dashboard latency to current probe`() {
         val state =
             HomeRouteUiState(

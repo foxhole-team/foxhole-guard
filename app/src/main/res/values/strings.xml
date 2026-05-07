@@ -274,10 +274,10 @@
     <string name="latency_quality_slow">Slow</string>
     <string name="latency_quality_very_slow">Very slow</string>
     <string name="latency_quality_unavailable">Unavailable</string>
-    <string name="latency_quality_failed">Undefined</string>
+    <string name="latency_quality_failed">Down</string>
     <string name="latency_pill_label">Latency</string>
     <string name="latency_pill_value">%1$d ms</string>
-    <string name="latency_pill_down">undefined</string>
+    <string name="latency_pill_down">down</string>
     <string name="latency_pill_unavailable">unavailable</string>
     <string name="reconnect_required">Reconnect required</string>
     <string name="traffic_settings">Network</string>

@@ -31,7 +31,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -97,7 +96,6 @@ internal fun SmartProfileAutoConnectMenu(
         return
     }
     val menuLayout = resolveSmartStartProtocolMenuLayout(showMetricsTable = showMetricsTable)
-    var expanded by rememberForcedProtocolMenuExpanded(profile.id, forceExpanded)
     var showRefreshWarning by rememberSaveable(profile.id) { mutableStateOf(false) }
     val requestRefreshMetrics: () -> Unit = {
         if (refreshWarningRequired) {
@@ -106,8 +104,20 @@ internal fun SmartProfileAutoConnectMenu(
             onRefreshMetrics?.invoke()
         }
     }
-	    Box {
-	        val density = LocalDensity.current
+    var expanded by rememberSaveable(profile.id) { mutableStateOf(false) }
+    var forcedExpansionDismissed by rememberSaveable(profile.id) { mutableStateOf(false) }
+    LaunchedEffect(profile.id, forceExpanded) {
+        if (forceExpanded) {
+            if (!forcedExpansionDismissed) {
+                expanded = true
+            }
+        } else {
+            forcedExpansionDismissed = false
+            expanded = false
+        }
+    }
+    Box {
+        val density = LocalDensity.current
         val screenWidth = with(density) { LocalWindowInfo.current.containerSize.width.toDp() }
         val menuWidth =
             rememberSmartProfileMenuWidth(
@@ -161,8 +171,9 @@ internal fun SmartProfileAutoConnectMenu(
         FoxholeDropdownMenu(
             expanded = expanded,
             onDismissRequest = {
-                if (!forceExpanded) {
-                    expanded = false
+                expanded = false
+                if (forceExpanded) {
+                    forcedExpansionDismissed = true
                 }
             },
             modifier =
@@ -212,18 +223,6 @@ internal fun SmartProfileAutoConnectMenu(
             },
         )
     }
-}
-
-@Composable
-private fun rememberForcedProtocolMenuExpanded(
-    profileId: Long,
-    forceExpanded: Boolean,
-): MutableState<Boolean> {
-    val expandedState = rememberSaveable(profileId) { mutableStateOf(false) }
-    LaunchedEffect(forceExpanded) {
-        expandedState.value = forceExpanded
-    }
-    return expandedState
 }
 
 @Composable

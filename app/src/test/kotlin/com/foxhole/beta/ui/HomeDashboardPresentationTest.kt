@@ -254,6 +254,34 @@ class HomeDashboardPresentationTest {
     }
 
     @Test
+    fun `network model hides stale tunnel ip after ordinary vpn disconnect`() {
+        val staleTunnelIp =
+            IpInfo(
+                ip = "203.0.113.10",
+                countryCode = "NL",
+                countryName = "Netherlands",
+                city = "Amsterdam",
+                isp = "Example",
+                fetchedAt = 1_000L,
+            )
+        val model =
+            resolveHomeDashboardNetworkModel(
+                state =
+                    HomeRouteUiState(
+                        profilesLoaded = true,
+                        connection = ConnectionSnapshot(state = ConnectionState.IDLE, profileId = 1L, lastChangeAt = 2_000L),
+                    ),
+                visibleIpInfo = staleTunnelIp,
+                deviceInternetAvailable = true,
+            )
+
+        assertEquals(null, model.visibleIpInfo)
+        assertEquals(R.string.home_network_current_ip_title, model.titleRes)
+        assertFalse(model.showConnectionStatus)
+        assertTrue(model.showLoading)
+    }
+
+    @Test
     fun `dashboard transport label reports udp tcp and unknown`() {
         assertEquals("UDP", dashboardTransportTypeLabel(ProtocolHint.WIREGUARD))
         assertEquals("UDP", dashboardTransportTypeLabel(ProtocolHint.HYSTERIA2))

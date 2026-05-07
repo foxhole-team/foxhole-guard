@@ -24,6 +24,8 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -874,7 +876,6 @@ internal fun Modifier.foxholeDialogChrome(): Modifier =
     this.shadow(elevation = 18.dp, shape = FoxholeDialogShape, clip = false)
 
 @Composable
-@Suppress("UNUSED_PARAMETER")
 internal fun FoxholeCard(
     modifier: Modifier = Modifier,
     onClick: (() -> Unit)? = null,
@@ -894,6 +895,12 @@ internal fun FoxholeCard(
             containerColor = resolvedContainerColor,
             contentColor = MaterialTheme.colorScheme.onSurface,
         )
+    val resolvedBorder =
+        if (borderColor == Color.Unspecified) {
+            null
+        } else {
+            BorderStroke(1.dp, borderColor)
+        }
     val elevation =
         CardDefaults.cardElevation(
             defaultElevation = FoxholeCardShadowElevation,
@@ -909,6 +916,7 @@ internal fun FoxholeCard(
             shape = cardShape,
             colors = colors,
             elevation = elevation,
+            border = resolvedBorder,
         ) {
             Column(
                 modifier =
@@ -926,6 +934,7 @@ internal fun FoxholeCard(
         shape = cardShape,
         colors = colors,
         elevation = elevation,
+        border = resolvedBorder,
     ) {
         Column(
             modifier =
@@ -1000,6 +1009,7 @@ internal fun FoxholeDropdownMenu(
             )
         }
     val screenEndPaddingPx = with(density) { screenEndPadding.roundToPx() }
+    val menuMaxHeight = (LocalConfiguration.current.screenHeightDp.dp - 72.dp).coerceAtLeast(160.dp)
     Popup(
         popupPositionProvider =
             remember(menuOffset, horizontalAlignment, screenEndPaddingPx) {
@@ -1016,6 +1026,7 @@ internal fun FoxholeDropdownMenu(
             modifier =
                 modifier
                     .widthIn(max = 392.dp)
+                    .heightIn(max = menuMaxHeight)
                     .foxholeMenuShadow(
                         shape = FoxholeDropdownShape,
                         elevation = FoxholeDropdownShadowElevation,
@@ -1027,6 +1038,7 @@ internal fun FoxholeDropdownMenu(
             shadowElevation = 0.dp,
         ) {
             Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(0.dp),
                 content = content,
             )

@@ -812,7 +812,7 @@ fun HomeScreen(
                             },
                         )
                         Box(
-                            modifier = Modifier.fillMaxWidth().height(HomeNetworkContentHeight),
+                            modifier = Modifier.fillMaxWidth().heightIn(min = HomeNetworkContentHeight),
                             contentAlignment = Alignment.TopStart,
                         ) {
                             if (showNetworkLoading) {

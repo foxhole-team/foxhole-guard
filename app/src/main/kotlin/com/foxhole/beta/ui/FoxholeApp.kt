@@ -61,10 +61,12 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavBackStackEntry
@@ -82,6 +84,7 @@ import com.foxhole.beta.core.model.ConnectionState
 import com.foxhole.beta.ui.theme.LocalFoxholeUiPalette
 import kotlinx.coroutines.launch
 import kotlin.math.abs
+import kotlin.math.min
 
 private object AppRoute {
     const val HOME = "home"
@@ -922,24 +925,42 @@ private fun Modifier.sectionSwipeNavigation(
         )
     }
 
+@Composable
 private fun Modifier.settingsBackSwipeNavigation(
     onNavigateBack: () -> Unit,
-): Modifier =
-    pointerInput(Unit) {
+): Modifier {
+    val layoutDirection = LocalLayoutDirection.current
+    return pointerInput(layoutDirection) {
         var dragDistance = 0f
+        var edgeEligible = false
         var consumed = false
-        val switchThreshold = size.width * DETAIL_BACK_SWIPE_THRESHOLD_FRACTION
+        val switchThreshold = min(size.width * DETAIL_BACK_SWIPE_THRESHOLD_FRACTION, 96.dp.toPx())
+        val edgeWidth = DETAIL_BACK_SWIPE_EDGE_WIDTH.toPx()
         detectHorizontalDragGestures(
-            onDragStart = {
+            onDragStart = { start ->
                 dragDistance = 0f
+                edgeEligible =
+                    when (layoutDirection) {
+                        LayoutDirection.Ltr -> start.x <= edgeWidth
+                        LayoutDirection.Rtl -> start.x >= size.width - edgeWidth
+                    }
                 consumed = false
             },
             onHorizontalDrag = { change, dragAmount ->
-                if (consumed) {
+                if (consumed || !edgeEligible) {
                     return@detectHorizontalDragGestures
                 }
-                dragDistance += dragAmount
-                if (abs(dragDistance) < switchThreshold) {
+                val directedDrag =
+                    when (layoutDirection) {
+                        LayoutDirection.Ltr -> dragAmount
+                        LayoutDirection.Rtl -> -dragAmount
+                    }
+                if (directedDrag <= 0f) {
+                    dragDistance = 0f
+                    return@detectHorizontalDragGestures
+                }
+                dragDistance += directedDrag
+                if (dragDistance < switchThreshold) {
                     return@detectHorizontalDragGestures
                 }
                 change.consume()
@@ -948,14 +969,17 @@ private fun Modifier.settingsBackSwipeNavigation(
             },
             onDragEnd = {
                 dragDistance = 0f
+                edgeEligible = false
                 consumed = false
             },
             onDragCancel = {
                 dragDistance = 0f
+                edgeEligible = false
                 consumed = false
             },
         )
     }
+}
 
 private fun NavDestination.rootAppSection(): AppSection? =
     when {
@@ -1108,6 +1132,7 @@ private fun NavHostController.navigateToSection(section: AppSection) {
 
 private const val SECTION_SWIPE_THRESHOLD_FRACTION = 0.22f
 private const val DETAIL_BACK_SWIPE_THRESHOLD_FRACTION = 0.18f
+private val DETAIL_BACK_SWIPE_EDGE_WIDTH = 32.dp
 private const val ROOT_FADE_OUT_MS = 90
 private const val ROOT_FADE_IN_MS = 150
 private const val DETAIL_FADE_IN_MS = 120
