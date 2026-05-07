@@ -243,64 +243,75 @@ internal fun FoxholeScaffold(
     bannerPlacement: FoxholeBannerPlacement = FoxholeBannerPlacement.TOP,
     content: @Composable (PaddingValues) -> Unit,
 ) {
+    val uiPalette = LocalFoxholeUiPalette.current
     val topBarContainerColor = Color.Transparent
     Scaffold(
         containerColor = Color.Transparent,
         topBar = {
-            TopAppBar(
-                title = {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(5.dp),
-                        verticalAlignment = Alignment.Top,
-                    ) {
-                        Text(
-                            text = title,
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.SemiBold,
-                        )
-                        titleBadge?.let { badge ->
-                            val badgeTone = foxholeSystemAwareAccentColor(fallback = MaterialTheme.colorScheme.primary)
-                            Surface(
-                                modifier = Modifier.padding(top = 2.dp),
-                                shape = MaterialTheme.shapes.small,
-                                color = badgeTone.copy(alpha = 0.12f),
-                                border = BorderStroke(1.dp, badgeTone.copy(alpha = 0.30f)),
-                            ) {
-                                Text(
-                                    text = badge,
-                                    modifier = Modifier.padding(horizontal = 3.dp, vertical = 0.dp),
-                                    style =
-                                        MaterialTheme.typography.labelSmall.copy(
-                                            fontSize = 8.5.sp,
-                                            lineHeight = 9.sp,
-                                        ),
-                                    fontWeight = FontWeight.Black,
-                                    color = badgeTone,
+            Box {
+                FoxholeGlassPanel(
+                    modifier = Modifier.matchParentSize(),
+                    shape = RectangleShape,
+                    containerColor = uiPalette.bottomBarContainerColor,
+                    borderColor = uiPalette.bottomBarBorderColor.copy(alpha = 0.32f),
+                    blurRadius = 18.dp,
+                    backgroundAlpha = 0.82f,
+                ) {}
+                TopAppBar(
+                    title = {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(5.dp),
+                            verticalAlignment = Alignment.Top,
+                        ) {
+                            Text(
+                                text = title,
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                            titleBadge?.let { badge ->
+                                val badgeTone = foxholeSystemAwareAccentColor(fallback = MaterialTheme.colorScheme.primary)
+                                Surface(
+                                    modifier = Modifier.padding(top = 2.dp),
+                                    shape = MaterialTheme.shapes.small,
+                                    color = badgeTone.copy(alpha = 0.12f),
+                                    border = BorderStroke(1.dp, badgeTone.copy(alpha = 0.30f)),
+                                ) {
+                                    Text(
+                                        text = badge,
+                                        modifier = Modifier.padding(horizontal = 3.dp, vertical = 0.dp),
+                                        style =
+                                            MaterialTheme.typography.labelSmall.copy(
+                                                fontSize = 8.5.sp,
+                                                lineHeight = 9.sp,
+                                            ),
+                                        fontWeight = FontWeight.Black,
+                                        color = badgeTone,
+                                    )
+                                }
+                            }
+                        }
+                    },
+                    navigationIcon = {
+                        onNavigateUp?.let {
+                            IconButton(onClick = it) {
+                                Icon(
+                                    Icons.AutoMirrored.Outlined.ArrowBack,
+                                    contentDescription = stringResource(R.string.navigate_back),
                                 )
                             }
                         }
-                    }
-                },
-                navigationIcon = {
-                    onNavigateUp?.let {
-                        IconButton(onClick = it) {
-                            Icon(
-                                Icons.AutoMirrored.Outlined.ArrowBack,
-                                contentDescription = stringResource(R.string.navigate_back),
-                            )
-                        }
-                    }
-                },
-                actions = actions,
-                colors =
-                    TopAppBarDefaults.topAppBarColors(
-                        containerColor = topBarContainerColor,
-                        scrolledContainerColor = topBarContainerColor,
-                        titleContentColor = MaterialTheme.colorScheme.onBackground,
-                        navigationIconContentColor = MaterialTheme.colorScheme.onBackground,
-                        actionIconContentColor = MaterialTheme.colorScheme.onBackground,
-                    ),
-            )
+                    },
+                    actions = actions,
+                    colors =
+                        TopAppBarDefaults.topAppBarColors(
+                            containerColor = topBarContainerColor,
+                            scrolledContainerColor = topBarContainerColor,
+                            titleContentColor = MaterialTheme.colorScheme.onBackground,
+                            navigationIconContentColor = MaterialTheme.colorScheme.onBackground,
+                            actionIconContentColor = MaterialTheme.colorScheme.onBackground,
+                        ),
+                )
+            }
         },
         snackbarHost = {},
         content = { padding ->

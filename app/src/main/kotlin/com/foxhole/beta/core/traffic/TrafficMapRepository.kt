@@ -11,7 +11,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.runningFold
 import kotlinx.coroutines.flow.stateIn
@@ -43,7 +42,8 @@ class TrafficMapRepository(
                 .distinctUntilChanged(),
             runtimeAvailable
                 .distinctUntilChanged()
-                .onStart { emit(false) },
+                .runningFold(null as Boolean?) { _, next -> next }
+                .map { available -> available == true },
             connectionSource
                 .connectionSamples(runtimeAvailable.distinctUntilChanged())
                 .combine(runtimeAvailable.distinctUntilChanged()) { samples, available ->
@@ -63,7 +63,7 @@ class TrafficMapRepository(
             .onEach { state -> retainedUiState = state }
             .stateIn(
                 scope = scope,
-                started = SharingStarted.WhileSubscribed(stopTimeoutMillis = 5_000L),
+                started = SharingStarted.Eagerly,
                 initialValue = retainedUiState ?: TrafficMapUiState(),
             )
 

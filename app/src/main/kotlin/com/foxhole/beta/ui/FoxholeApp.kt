@@ -275,6 +275,7 @@ fun FoxholeApp(
                         onResetUsageTracking = viewModel::resetUsageTracking,
                         onTrafficUiVisibilityChanged = viewModel::onTrafficUiVisibilityChanged,
                         onLocalProxyLanAccessChanged = viewModel::onLocalProxyLanAccessChanged,
+                        onDashboardCardOrderChanged = viewModel::onDashboardCardOrderChanged,
                     )
                 }
                 composable(AppRoute.PROFILES) {
@@ -653,7 +654,6 @@ fun FoxholeApp(
                         onStatisticsRetentionSelected = viewModel::onStatisticsRetentionSelected,
                         onStatisticsMetricEnabledChanged = viewModel::onStatisticsMetricEnabledChanged,
                         onAppTrafficStatsEnabledChanged = viewModel::onAppTrafficStatsEnabledChanged,
-                        onFirewallEnabledChanged = viewModel::onFirewallEnabledChanged,
                         onClearUsage = viewModel::resetUsageTracking,
                     )
                 }

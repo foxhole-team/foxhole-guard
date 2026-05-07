@@ -18,6 +18,7 @@ import com.foxhole.beta.core.model.ProtocolHint
 import com.foxhole.beta.core.model.RoutingCatalog
 import com.foxhole.beta.core.model.RoutingPreset
 import com.foxhole.beta.core.model.TrafficSnapshot
+import com.foxhole.beta.core.model.TrafficWindow
 import com.foxhole.beta.core.model.Settings as FoxholeSettings
 
 data class HomeUiState(
@@ -42,6 +43,7 @@ data class HomeUiState(
     val diagnosticEntries: List<DiagnosticEntry> = emptyList(),
     val anomalyEvents: List<AnomalyEvent> = emptyList(),
     val appTrafficWindows: List<AppTrafficWindow> = emptyList(),
+    val trafficWindows: List<TrafficWindow> = emptyList(),
     val catalogPresetPreviews: Map<Long, List<RoutingRepository.RoutingCatalogPresetPreview>> = emptyMap(),
     val appVersion: String = BuildConfig.VERSION_NAME,
     val coreVersion: String = BuildConfig.LIBBOX_SOURCE_VERSION,
@@ -117,6 +119,7 @@ internal data class HomeActivityStreams(
     val diagnosticEntries: List<DiagnosticEntry>,
     val anomalyEvents: List<AnomalyEvent>,
     val appTrafficWindows: List<AppTrafficWindow>,
+    val trafficWindows: List<TrafficWindow>,
     val reconnectState: HomeReconnectStreams,
 )
 

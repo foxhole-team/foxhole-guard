@@ -765,6 +765,9 @@ interface AnomalyDao {
     @Query("select * from app_traffic_windows where startedAtMs >= :cutoff order by startedAtMs desc")
     fun observeRecentAppTrafficWindows(cutoff: Long): Flow<List<AppTrafficWindowEntity>>
 
+    @Query("select * from traffic_windows where startedAtMs >= :cutoff order by startedAtMs desc")
+    fun observeRecentTrafficWindows(cutoff: Long): Flow<List<TrafficWindowEntity>>
+
     @Query("select * from traffic_baselines where baselineKey = :key limit 1")
     suspend fun getTrafficBaseline(key: String): TrafficBaselineEntity?
 

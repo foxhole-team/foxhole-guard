@@ -43,8 +43,17 @@ class AnomalyRepository(
                 if (!settings.statistics.enabled || !settings.statistics.appTrafficEnabled || !settings.appTrafficStatsEnabled) {
                     flowOf(emptyList())
                 } else {
-                    val cutoff = nowProvider() - settings.statistics.retention.retentionDurationMsOrDefault()
-                    dao.observeRecentAppTrafficWindows(cutoff).map { entities -> entities.map(AppTrafficWindowEntity::toDomain) }
+                    dao.observeRecentAppTrafficWindows(cutoff = 0L).map { entities -> entities.map(AppTrafficWindowEntity::toDomain) }
+                }
+            }
+
+    val recentTrafficWindows: Flow<List<TrafficWindow>> =
+        settingsRepository.settings
+            .flatMapLatest { settings ->
+                if (!settings.statistics.enabled || !settings.statistics.countryTrafficEnabled) {
+                    flowOf(emptyList())
+                } else {
+                    dao.observeRecentTrafficWindows(cutoff = 0L).map { entities -> entities.map(TrafficWindowEntity::toDomain) }
                 }
             }
 
@@ -196,11 +205,3 @@ class AnomalyRepository(
         private const val ANOMALY_LOG_TAG = "anomaly"
     }
 }
-
-private fun com.foxhole.beta.core.model.StatisticsRetention.retentionDurationMsOrDefault(): Long =
-    when (this) {
-        com.foxhole.beta.core.model.StatisticsRetention.WEEK -> 7L * 24L * 60L * 60L * 1000L
-        com.foxhole.beta.core.model.StatisticsRetention.MONTH -> 31L * 24L * 60L * 60L * 1000L
-        com.foxhole.beta.core.model.StatisticsRetention.MONTHS_3 -> 93L * 24L * 60L * 60L * 1000L
-        com.foxhole.beta.core.model.StatisticsRetention.FOREVER -> 31L * 24L * 60L * 60L * 1000L
-    }

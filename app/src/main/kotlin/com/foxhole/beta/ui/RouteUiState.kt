@@ -13,6 +13,7 @@ import com.foxhole.beta.core.model.ProtocolHint
 import com.foxhole.beta.core.model.RoutingCatalog
 import com.foxhole.beta.core.model.RoutingPreset
 import com.foxhole.beta.core.model.TrafficSnapshot
+import com.foxhole.beta.core.model.TrafficWindow
 import com.foxhole.beta.core.profile.MultiProtocolProfileSupport
 import com.foxhole.beta.core.model.Settings as FoxholeSettings
 
@@ -104,6 +105,7 @@ data class SettingsRouteUiState(
     val diagnosticEntries: List<DiagnosticEntry> = emptyList(),
     val anomalyEvents: List<AnomalyEvent> = emptyList(),
     val appTrafficWindows: List<AppTrafficWindow> = emptyList(),
+    val trafficWindows: List<TrafficWindow> = emptyList(),
 )
 
 data class RoutingRouteUiState(
@@ -227,6 +229,7 @@ internal fun HomeUiState.toSettingsRouteUiState(): SettingsRouteUiState =
         diagnosticEntries = diagnosticEntries,
         anomalyEvents = anomalyEvents,
         appTrafficWindows = appTrafficWindows,
+        trafficWindows = trafficWindows,
     )
 
 internal fun HomeUiState.toRoutingRouteUiState(): RoutingRouteUiState =

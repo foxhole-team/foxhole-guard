@@ -18,7 +18,7 @@
     <string name="traffic_map_title">Карта трафика</string>
     <string name="traffic_map_destinations_title">Направления</string>
     <string name="traffic_map_device_location_icon">Местоположение устройства</string>
-    <string name="traffic_map_live_requires_firewall">Для отображения подключений в реальном времени включите Firewall в настройках Foxhole.</string>
+    <string name="traffic_map_live_requires_firewall">Жду активный VPN runtime.</string>
     <string name="traffic_map_waiting_connections">Жду реальные подключения.</string>
     <string name="traffic_map_country_header">Страна</string>
     <string name="traffic_map_sessions_header">Сеансов</string>
@@ -401,7 +401,7 @@
     <string name="statistics_transports_title">Транспортные протоколы</string>
     <string name="statistics_transports_empty">Данные по транспорту появятся, когда их можно честно определить из профилей.</string>
     <string name="statistics_apps_title">Приложения</string>
-    <string name="statistics_apps_top_title">Топ 11 приложений по трафику</string>
+    <string name="statistics_apps_top_title">Топ 10 приложений по трафику</string>
     <string name="statistics_app_detail_connections_unavailable">Домены и IP-адреса для трафика приложений пока не собираются; здесь показаны замеры по Android-счетчикам.</string>
     <string name="statistics_app_detail_top_destinations">Топ 5 направлений</string>
     <string name="statistics_app_detail_top_samples">Топ 5 замеров</string>

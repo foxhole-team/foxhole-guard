@@ -246,12 +246,14 @@ class HomeViewModel(
             container.diagnosticsLogger.entries,
             container.anomalyRepository.recentEvents,
             container.anomalyRepository.recentAppTrafficWindows,
+            container.anomalyRepository.recentTrafficWindows,
             reconnectState,
-        ) { diagnosticEntries, anomalyEvents, appTrafficWindows, reconnectState ->
+        ) { diagnosticEntries, anomalyEvents, appTrafficWindows, trafficWindows, reconnectState ->
             HomeActivityStreams(
                 diagnosticEntries = diagnosticEntries,
                 anomalyEvents = anomalyEvents,
                 appTrafficWindows = appTrafficWindows,
+                trafficWindows = trafficWindows,
                 reconnectState = reconnectState,
             )
         }
@@ -315,6 +317,7 @@ class HomeViewModel(
                 diagnosticEntries = activityStreams.diagnosticEntries,
                 anomalyEvents = activityStreams.anomalyEvents,
                 appTrafficWindows = activityStreams.appTrafficWindows,
+                trafficWindows = activityStreams.trafficWindows,
                 catalogPresetPreviews = localStreams.catalogPresetPreviews,
             )
         }.stateIn(
@@ -396,7 +399,6 @@ class HomeViewModel(
             container.settingsRepository.settings,
         ) { connection, settings ->
             settings.ui.trafficMapEnabled &&
-                settings.expert.firewallEnabled &&
                 (
                     connection.state in ACTIVE_CONNECTION_STATES ||
                         settings.localGuardModeOrNull() != null &&
@@ -509,6 +511,7 @@ class HomeViewModel(
     internal var reconnectJob: Job? = null
     internal var protocolMetricsRefreshJob: Job? = null
     internal var appTrafficStatsJob: Job? = null
+    internal var appTrafficStatsIntervalMs: Long = APP_TRAFFIC_BACKGROUND_SAMPLE_INTERVAL_MS
     internal var protocolMetricsRestoreOnCancel: Boolean = true
     internal var dashboardVisible: Boolean = false
     internal var statisticsVisible: Boolean = false
@@ -521,15 +524,11 @@ class HomeViewModel(
                     snackbars.emit(errorBanner(R.string.settings_secure_storage_failed))
                 }
             val settings = container.settingsRepository.settings.value
-            syncAppTrafficStatsSampler(appTrafficStatsRuntimeAllowed(settings, container.connectionController.snapshot.value))
+            syncAppTrafficStatsSampler(appTrafficStatsRuntimeAllowed(settings))
         }
         viewModelScope.launch {
-            combine(
-                container.settingsRepository.settings,
-                container.connectionController.snapshot,
-            ) { settings, snapshot ->
-                appTrafficStatsRuntimeAllowed(settings, snapshot)
-            }.collect { enabled ->
+            container.settingsRepository.settings.collect { settings ->
+                val enabled = appTrafficStatsRuntimeAllowed(settings)
                 syncAppTrafficStatsSampler(enabled)
             }
         }
@@ -963,6 +962,9 @@ class HomeViewModel(
 
     fun onShowTorQuickLaunchChanged(value: Boolean) = onShowTorQuickLaunchChangedInternal(value)
 
+    fun onDashboardCardOrderChanged(value: List<com.foxhole.beta.core.model.DashboardCard>) =
+        onDashboardCardOrderChangedInternal(value)
+
     fun onKillSwitchChanged(value: Boolean) = onKillSwitchChangedInternal(value)
 
     fun onFirewallEnabledChanged(value: Boolean) = onFirewallEnabledChangedInternal(value)
@@ -1252,12 +1254,29 @@ class HomeViewModel(
         onTrafficUiVisibilityChangedInternal(dashboardVisible || statisticsVisible)
         if (visible) {
             startPendingProfileReconnectPromptIfNeeded()
+            if (container.connectionController.snapshot.value.state == ConnectionState.CONNECTED && !autoConnectUiStateMutable.value.running) {
+                scheduleConnectedIpRefresh()
+                scheduleActiveProfileLatencyRefresh()
+            }
+        } else {
+            clearProfileLatencyRefresh()
         }
     }
 
     fun onStatisticsUiVisibilityChanged(visible: Boolean) {
         statisticsVisible = visible
         onTrafficUiVisibilityChangedInternal(dashboardVisible || statisticsVisible)
+        val runtimeAllowed =
+            appTrafficStatsRuntimeAllowed(
+                settings = container.settingsRepository.settings.value,
+            )
+        syncAppTrafficStatsSampler(runtimeAllowed)
+        if (visible && runtimeAllowed) {
+            viewModelScope.launch {
+                loadInstalledApps()
+                sampleAppTrafficStats()
+            }
+        }
     }
 
     fun onStatisticsEnabledChanged(value: Boolean) {
@@ -1266,7 +1285,6 @@ class HomeViewModel(
             val runtimeAllowed =
                 appTrafficStatsRuntimeAllowed(
                     settings = container.settingsRepository.settings.value,
-                    snapshot = container.connectionController.snapshot.value,
                 )
             syncAppTrafficStatsSampler(runtimeAllowed)
             if (value && runtimeAllowed) {
@@ -1291,7 +1309,6 @@ class HomeViewModel(
             val runtimeAllowed =
                 appTrafficStatsRuntimeAllowed(
                     settings = container.settingsRepository.settings.value,
-                    snapshot = container.connectionController.snapshot.value,
                 )
             syncAppTrafficStatsSampler(runtimeAllowed)
         }
@@ -1304,7 +1321,6 @@ class HomeViewModel(
             val runtimeAllowed =
                 appTrafficStatsRuntimeAllowed(
                     settings = container.settingsRepository.settings.value,
-                    snapshot = container.connectionController.snapshot.value,
                 )
             syncAppTrafficStatsSampler(runtimeAllowed)
             if (value && runtimeAllowed) {
@@ -1318,19 +1334,33 @@ class HomeViewModel(
         if (!enabled) {
             appTrafficStatsJob?.cancel()
             appTrafficStatsJob = null
+            appTrafficStatsIntervalMs = APP_TRAFFIC_BACKGROUND_SAMPLE_INTERVAL_MS
             return
+        }
+        val targetIntervalMs = appTrafficStatsSampleIntervalMs()
+        if (appTrafficStatsJob != null && appTrafficStatsIntervalMs != targetIntervalMs) {
+            appTrafficStatsJob?.cancel()
+            appTrafficStatsJob = null
         }
         if (appTrafficStatsJob != null) {
             return
         }
+        appTrafficStatsIntervalMs = targetIntervalMs
         appTrafficStatsJob =
             viewModelScope.launch {
                 while (true) {
                     sampleAppTrafficStats()
-                    delay(APP_TRAFFIC_SAMPLE_INTERVAL_MS)
+                    delay(appTrafficStatsIntervalMs)
                 }
             }
     }
+
+    private fun appTrafficStatsSampleIntervalMs(): Long =
+        if (statisticsVisible) {
+            APP_TRAFFIC_FOREGROUND_SAMPLE_INTERVAL_MS
+        } else {
+            APP_TRAFFIC_BACKGROUND_SAMPLE_INTERVAL_MS
+        }
 
     internal suspend fun sampleAppTrafficStats() {
         appTrafficStatsRecorder.recordSnapshot()
@@ -1338,7 +1368,6 @@ class HomeViewModel(
 
     private fun appTrafficStatsRuntimeAllowed(
         settings: Settings,
-        snapshot: ConnectionSnapshot,
     ): Boolean =
         settings.statistics.enabled &&
             settings.statistics.appTrafficEnabled &&
@@ -1377,7 +1406,8 @@ class HomeViewModel(
         internal const val AUTO_CONNECT_TOTAL_TIMEOUT_MS = 60_000L
         internal const val AUTO_CONNECT_MAX_ATTEMPTS = SmartStartController.AUTO_CONNECT_MAX_ATTEMPTS
         internal const val PROTOCOL_METRICS_PROBE_TIMEOUT_MS = 12_000L
-        internal const val APP_TRAFFIC_SAMPLE_INTERVAL_MS = 60_000L
+        internal const val APP_TRAFFIC_FOREGROUND_SAMPLE_INTERVAL_MS = 3_000L
+        internal const val APP_TRAFFIC_BACKGROUND_SAMPLE_INTERVAL_MS = 60_000L
         internal const val AUTO_CONNECT_LATENCY_FALLBACK_PENALTY_MS = 750L
         internal val ACTIVE_CONNECTION_STATES =
             setOf(

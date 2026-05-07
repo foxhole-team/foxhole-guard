@@ -18,7 +18,7 @@
     <string name="traffic_map_title">Traffic map</string>
     <string name="traffic_map_destinations_title">Destinations</string>
     <string name="traffic_map_device_location_icon">Device location</string>
-    <string name="traffic_map_live_requires_firewall">To show real-time connections, enable Firewall in Foxhole settings.</string>
+    <string name="traffic_map_live_requires_firewall">Waiting for an active VPN runtime.</string>
     <string name="traffic_map_waiting_connections">Waiting for real connections.</string>
     <string name="traffic_map_country_header">Country</string>
     <string name="traffic_map_sessions_header">Sessions</string>
@@ -397,7 +397,7 @@
     <string name="statistics_transports_title">Transport protocols</string>
     <string name="statistics_transports_empty">Transport data appears when it can be inferred honestly from profiles.</string>
     <string name="statistics_apps_title">Applications</string>
-    <string name="statistics_apps_top_title">Top 11 applications by traffic</string>
+    <string name="statistics_apps_top_title">Top 10 applications by traffic</string>
     <string name="statistics_app_detail_connections_unavailable">Per-domain and per-IP destinations are not collected for app traffic yet; this view shows traffic samples captured by Android counters.</string>
     <string name="statistics_app_detail_top_destinations">Top 5 destinations</string>
     <string name="statistics_app_detail_top_samples">Top 5 samples</string>

@@ -6,14 +6,13 @@ import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.preferencesDataStoreFile
 import com.foxhole.beta.BuildConfig
 import com.foxhole.beta.core.model.AutoConnectReasonCode
-import com.foxhole.beta.core.model.AppTrafficBaseline
-import com.foxhole.beta.core.model.AppTrafficSample
 import com.foxhole.beta.core.model.AnomalyHistoryRetention
 import com.foxhole.beta.core.model.AnomalySensitivity
 import com.foxhole.beta.core.model.AppLocale
 import com.foxhole.beta.core.model.ClashApiSettings
 import com.foxhole.beta.core.model.CachedActiveProfile
 import com.foxhole.beta.core.model.ConnectionSettings
+import com.foxhole.beta.core.model.DashboardCard
 import com.foxhole.beta.core.model.DiagnosticsRetention
 import com.foxhole.beta.core.model.DnsSettings
 import com.foxhole.beta.core.model.DomainStrategy
@@ -507,29 +506,8 @@ class SettingsRepository(
 
     suspend fun updateAppTrafficStatsEnabled(value: Boolean) =
         update { current ->
-            current.copy(
-                appTrafficStatsEnabled = value,
-                appTrafficBaselines = if (value) current.appTrafficBaselines else emptyList(),
-            )
+            current.copy(appTrafficStatsEnabled = value)
         }
-
-    suspend fun recordAppTrafficSnapshot(
-        baselines: List<AppTrafficBaseline>,
-        samples: List<AppTrafficSample>,
-        now: Long = System.currentTimeMillis(),
-    ) = update { current ->
-        if (!current.statistics.enabled || !current.statistics.appTrafficEnabled || !current.appTrafficStatsEnabled) {
-            current
-        } else {
-            current.copy(
-                appTrafficBaselines = baselines,
-                appTrafficSamples =
-                    (current.appTrafficSamples + samples)
-                        .retainedFor(StatisticsRetention.FOREVER, now)
-                        .takeLast(APP_TRAFFIC_SAMPLE_MAX_COUNT),
-            )
-        }
-    }
 
     suspend fun updateTunStack(value: TunStack) =
         update { it.copy(traffic = it.traffic.copy(tunStack = value)) }
@@ -655,6 +633,15 @@ class SettingsRepository(
 
     suspend fun updateShowTorQuickLaunch(value: Boolean) =
         update { it.copy(ui = it.ui.copy(showTorQuickLaunch = value)) }
+
+    suspend fun updateDashboardCardOrder(value: List<DashboardCard>) =
+        update { current ->
+            val normalized =
+                (value + DashboardCard.entries)
+                    .distinct()
+                    .filter { card -> card in DashboardCard.entries }
+            current.copy(ui = current.ui.copy(dashboardCardOrder = normalized))
+        }
 
     suspend fun updateKillSwitchEnabled(value: Boolean) =
         update {
@@ -968,8 +955,6 @@ class SettingsRepository(
         update {
             it.copy(
                 profileTrafficTotals = emptyList(),
-                appTrafficBaselines = emptyList(),
-                appTrafficSamples = emptyList(),
                 usageTrackingStartedAt = timestamp,
             )
         }
@@ -1213,15 +1198,6 @@ class SettingsRepository(
                         .values
                         .mapNotNull { items -> items.maxByOrNull(ProfileTrafficTotal::updatedAt) }
                         .sortedByDescending(ProfileTrafficTotal::updatedAt),
-                appTrafficBaselines =
-                    appTrafficBaselines
-                        .filter { baseline -> baseline.packageName.isNotBlank() && baseline.uid > 0 }
-                        .distinctBy { baseline -> baseline.packageName },
-                appTrafficSamples =
-                    appTrafficSamples
-                        .filter { sample -> sample.packageName.isNotBlank() && sample.uid > 0 && (sample.rxBytes > 0L || sample.txBytes > 0L) }
-                        .retainedFor(statistics.retention, now = System.currentTimeMillis())
-                        .takeLast(APP_TRAFFIC_SAMPLE_MAX_COUNT),
                 usageTrackingStartedAt = usageTrackingStartedAt.takeIf { it > 0L } ?: System.currentTimeMillis(),
             )
         }
@@ -1285,26 +1261,6 @@ class SettingsRepository(
                     -> retention
                 },
         )
-
-    private fun List<AppTrafficSample>.retainedFor(
-        retention: StatisticsRetention,
-        now: Long,
-    ): List<AppTrafficSample> {
-        val cutoff = retention.cutoffMillis(now) ?: return this
-        return filter { sample -> sample.sampledAt >= cutoff }
-    }
-
-    private fun StatisticsRetention.cutoffMillis(now: Long): Long? =
-        durationMillis?.let { duration -> now - duration }
-
-    private val StatisticsRetention.durationMillis: Long?
-        get() =
-            when (this) {
-                StatisticsRetention.WEEK -> 7L * 24L * 60L * 60L * 1000L
-                StatisticsRetention.MONTH -> 31L * 24L * 60L * 60L * 1000L
-                StatisticsRetention.MONTHS_3 -> 93L * 24L * 60L * 60L * 1000L
-                StatisticsRetention.FOREVER -> null
-            }
 
     private fun PrivacyRouteSettings.normalized(): PrivacyRouteSettings =
         copy(
@@ -1426,8 +1382,6 @@ class SettingsRepository(
         private const val MAX_PORT = 65535
         private const val MIN_MTU = 576
         private const val MAX_MTU = 9_000
-        private const val APP_TRAFFIC_SAMPLE_RETENTION_MS = 31L * 24L * 60L * 60L * 1000L
-        private const val APP_TRAFFIC_SAMPLE_MAX_COUNT = 50_000
         private const val DEFAULT_PROXY_LOGIN = "foxhole"
         private const val PROXY_PASSWORD_PREFIX = "foxhole-"
         private const val PROXY_PASSWORD_RANDOM_LENGTH = 4

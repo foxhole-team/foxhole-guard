@@ -20,8 +20,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -84,10 +83,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -104,8 +107,10 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import com.foxhole.beta.R
 import com.foxhole.beta.core.model.ConnectionState
+import com.foxhole.beta.core.model.DashboardCard
 import com.foxhole.beta.core.model.IpInfo
 import com.foxhole.beta.core.model.LocalSurfaceSettings
 import com.foxhole.beta.core.model.PerAppRoutingMode
@@ -125,6 +130,7 @@ import com.foxhole.beta.ui.ScreenHorizontalPadding
 import com.foxhole.beta.ui.ScreenSectionSpacing
 import com.foxhole.beta.ui.ScreenVerticalPadding
 import kotlinx.coroutines.delay
+import kotlin.math.abs
 
 @Composable
 @Suppress("LongParameterList")
@@ -152,6 +158,7 @@ fun HomeScreen(
     onResetUsageTracking: () -> Unit,
     onTrafficUiVisibilityChanged: (Boolean) -> Unit,
     onLocalProxyLanAccessChanged: (Boolean) -> Unit,
+    onDashboardCardOrderChanged: (List<DashboardCard>) -> Unit,
 ) {
     val context = LocalContext.current
     var importMenuExpanded by rememberSaveable { mutableStateOf(false) }
@@ -235,6 +242,26 @@ fun HomeScreen(
     val dashboardSelectedServerPingUnavailable = dashboardProtocolModel.selectedServerPingUnavailable
     val dashboardConnectionDetailsReady = dashboardProtocolModel.connectionDetailsReady
     val dashboardConnectionMetricsLoading = dashboardProtocolModel.connectionMetricsLoading
+    var activeReorderCard by rememberSaveable { mutableStateOf<DashboardCard?>(null) }
+    val dashboardCardOrder =
+        remember(state.settings.ui.dashboardCardOrder) {
+            normalizedDashboardCardOrder(state.settings.ui.dashboardCardOrder)
+        }
+
+    fun moveDashboardCard(
+        card: DashboardCard,
+        direction: Int,
+    ) {
+        val current = normalizedDashboardCardOrder(state.settings.ui.dashboardCardOrder).toMutableList()
+        val from = current.indexOf(card)
+        val to = (from + direction).coerceIn(0, current.lastIndex)
+        if (from < 0 || from == to) {
+            return
+        }
+        current.removeAt(from)
+        current.add(to, card)
+        onDashboardCardOrderChanged(current)
+    }
     val deviceInternetAvailable by rememberDefaultInternetAvailability()
     var pinnedIpInfo by remember { mutableStateOf(state.ipInfo) }
     var keepPinnedNetworkInfo by remember { mutableStateOf(false) }
@@ -478,13 +505,32 @@ fun HomeScreen(
                     }
                 }
             }
-            if (state.settings.ui.trafficMapEnabled) {
-                item {
-                    TrafficMapDashboardCard(state = trafficMapState)
-                }
-            }
-            item {
-                FoxholeCard(
+            dashboardCardOrder.forEach { card ->
+                when (card) {
+                    DashboardCard.TRAFFIC_MAP -> {
+                        if (state.settings.ui.trafficMapEnabled) {
+                            item(key = DashboardCard.TRAFFIC_MAP) {
+                                DashboardCardDragContainer(
+                                    card = DashboardCard.TRAFFIC_MAP,
+                                    activeCard = activeReorderCard,
+                                    onActiveCardChange = { activeReorderCard = it },
+                                    onMove = ::moveDashboardCard,
+                                ) {
+                                    TrafficMapDashboardCard(state = trafficMapState)
+                                }
+                            }
+                        }
+                    }
+
+                    DashboardCard.PROFILES -> {
+                        item(key = DashboardCard.PROFILES) {
+                            DashboardCardDragContainer(
+                                card = DashboardCard.PROFILES,
+                                activeCard = activeReorderCard,
+                                onActiveCardChange = { activeReorderCard = it },
+                                onMove = ::moveDashboardCard,
+                            ) {
+                                FoxholeCard(
                     onClick = onOpenProfiles,
                     modifier =
                         Modifier
@@ -619,10 +665,20 @@ fun HomeScreen(
                             }
                         }
                     }
-                }
-            }
-            item {
-                FoxholeCard {
+                                }
+                            }
+                        }
+                    }
+
+                    DashboardCard.ACTIONS -> {
+                        item(key = DashboardCard.ACTIONS) {
+                            DashboardCardDragContainer(
+                                card = DashboardCard.ACTIONS,
+                                activeCard = activeReorderCard,
+                                onActiveCardChange = { activeReorderCard = it },
+                                onMove = ::moveDashboardCard,
+                            ) {
+                                FoxholeCard {
                     HomeConnectionActions(
                         state = state,
                         onToggleConnection = onToggleConnection,
@@ -725,11 +781,21 @@ fun HomeScreen(
                             Text(stringResource(R.string.refresh))
                         }
                     }
-                }
-            }
-            if (state.settings.ui.networkCardEnabled) {
-                item {
-                    FoxholeCard(modifier = Modifier.testTag("home_network_card")) {
+                                }
+                            }
+                        }
+                    }
+
+                    DashboardCard.NETWORK -> {
+                        if (state.settings.ui.networkCardEnabled) {
+                            item(key = DashboardCard.NETWORK) {
+                                DashboardCardDragContainer(
+                                    card = DashboardCard.NETWORK,
+                                    activeCard = activeReorderCard,
+                                    onActiveCardChange = { activeReorderCard = it },
+                                    onMove = ::moveDashboardCard,
+                                ) {
+                                    FoxholeCard(modifier = Modifier.testTag("home_network_card")) {
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         HomeCardHeader(
                             icon = Icons.Outlined.Public,
@@ -895,11 +961,21 @@ fun HomeScreen(
                             }
                         }
                     }
+                                    }
+                                }
+                            }
+                        }
                     }
-                }
-            }
-            if (state.settings.ui.trafficCardEnabled) {
-                item {
+
+                    DashboardCard.TRAFFIC -> {
+                        if (state.settings.ui.trafficCardEnabled) {
+                            item(key = DashboardCard.TRAFFIC) {
+                                DashboardCardDragContainer(
+                                    card = DashboardCard.TRAFFIC,
+                                    activeCard = activeReorderCard,
+                                    onActiveCardChange = { activeReorderCard = it },
+                                    onMove = ::moveDashboardCard,
+                                ) {
                 val trafficModel = resolveHomeDashboardTrafficModel(state, System.currentTimeMillis())
                 val totalTrafficText =
                     buildAnnotatedString {
@@ -1027,6 +1103,9 @@ fun HomeScreen(
                             }
                         }
                         }
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -1089,6 +1168,63 @@ fun HomeScreen(
         )
     }
 }
+}
+
+@Composable
+private fun DashboardCardDragContainer(
+    card: DashboardCard,
+    activeCard: DashboardCard?,
+    onActiveCardChange: (DashboardCard?) -> Unit,
+    onMove: (DashboardCard, Int) -> Unit,
+    content: @Composable () -> Unit,
+) {
+    val haptic = LocalHapticFeedback.current
+    val density = LocalDensity.current
+    val dragThresholdPx = with(density) { DashboardCardReorderDragThreshold.toPx() }
+    var dragOffset by remember(card) { mutableStateOf(0f) }
+    val active = activeCard == card
+
+    Box(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .zIndex(if (active) 1f else 0f)
+                .graphicsLayer {
+                    val scale = if (active) 1.018f else 1f
+                    scaleX = scale
+                    scaleY = scale
+                    shadowElevation = if (active) 8f else 0f
+                }
+                .pointerInput(card, dragThresholdPx) {
+                    detectDragGesturesAfterLongPress(
+                        onDragStart = {
+                            dragOffset = 0f
+                            onActiveCardChange(card)
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        },
+                        onDragCancel = {
+                            dragOffset = 0f
+                            onActiveCardChange(null)
+                        },
+                        onDragEnd = {
+                            dragOffset = 0f
+                            onActiveCardChange(null)
+                        },
+                        onDrag = { _, dragAmount ->
+                            dragOffset += dragAmount.y
+                            if (abs(dragOffset) >= dragThresholdPx) {
+                                val direction = if (dragOffset > 0f) 1 else -1
+                                onMove(card, direction)
+                                dragOffset = 0f
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            }
+                        },
+                    )
+                },
+    ) {
+        content()
+    }
+}
 
 @Composable
 private fun rememberImportDropdownMenuWidth(titles: List<String>): Dp {
@@ -1134,6 +1270,12 @@ private fun ImportDropdownItemText(
     }
 }
 
+private fun normalizedDashboardCardOrder(order: List<DashboardCard>): List<DashboardCard> =
+    (order + DashboardCard.entries)
+        .distinct()
+        .filter { card -> card in DashboardCard.entries }
+
+private val DashboardCardReorderDragThreshold = 48.dp
 private val ImportMenuWidthChrome = 62.dp
 private val ImportMenuMinWidth = 188.dp
 private val ImportMenuMaxWidth = 392.dp

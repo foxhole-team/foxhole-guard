@@ -35,6 +35,7 @@ import androidx.compose.material.icons.outlined.FileDownload
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.LightMode
+import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Map
 import androidx.compose.material.icons.outlined.PhoneAndroid
 import androidx.compose.material.icons.outlined.Public
@@ -269,7 +270,7 @@ private fun LazyListScope.settingsHomeNavigationItems(
     item {
         SettingsNavigationRow(
             modifier = Modifier.testTag("settings_security_action"),
-            icon = ImageVector.vectorResource(R.drawable.ic_firewall_shield_key),
+            icon = Icons.Outlined.Lock,
             title = stringResource(R.string.security_settings_title),
             summary = stringResource(R.string.security_settings_summary),
             onClick = onOpenSecurity,

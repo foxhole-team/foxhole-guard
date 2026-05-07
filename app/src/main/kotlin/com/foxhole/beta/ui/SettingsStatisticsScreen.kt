@@ -73,6 +73,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.foxhole.beta.R
 import com.foxhole.beta.core.anomaly.UsageStatsAccess
 import com.foxhole.beta.core.diagnostics.DiagnosticEntry
@@ -98,6 +99,7 @@ import com.foxhole.beta.core.model.TrafficMapPoint
 import com.foxhole.beta.core.model.TrafficMapUiState
 import com.foxhole.beta.core.model.TransportProtocol
 import com.foxhole.beta.core.model.TransportStatisticsUiItem
+import com.foxhole.beta.core.model.TrafficWindow
 import com.foxhole.beta.ui.theme.LocalFoxholeSemanticColors
 import java.util.Locale
 import kotlin.math.ceil
@@ -114,7 +116,6 @@ fun StatisticsScreen(
     onStatisticsRetentionSelected: (StatisticsRetention) -> Unit,
     onStatisticsMetricEnabledChanged: (StatisticsMetric, Boolean) -> Unit,
     onAppTrafficStatsEnabledChanged: (Boolean) -> Unit,
-    onFirewallEnabledChanged: (Boolean) -> Unit,
     onClearUsage: () -> Unit,
 ) {
     var settingsVisible by rememberSaveable { mutableStateOf(false) }
@@ -140,8 +141,15 @@ fun StatisticsScreen(
                 retention = retention,
             )
         }
-    val topApps = appRows.take(11)
-    val countryRows = trafficMapState.destinations.take(10)
+    val topApps = appRows.take(10)
+    val countryRows =
+        remember(state.trafficWindows, trafficMapState.destinations) {
+            countryTrafficRows(
+                trafficWindows = state.trafficWindows,
+                liveDestinations = trafficMapState.destinations,
+            )
+        }
+    val topCountryRows = countryRows.take(10)
     val appStatsSwitchChecked = state.settings.appTrafficStatsEnabled
     val usageAccessGranted = UsageStatsAccess.isGranted(context)
     val appStatsEnabled = statisticsSettings.enabled && statisticsSettings.appTrafficEnabled && appStatsSwitchChecked && usageAccessGranted
@@ -208,17 +216,13 @@ fun StatisticsScreen(
                     )
                 }
             }
-            if (state.anomalyEvents.isNotEmpty()) {
-                item(key = "anomaly-events") {
-                    TrafficAnomalyCard(events = state.anomalyEvents.take(5))
-                }
-            }
             if (statisticsSettings.countryTrafficEnabled) {
                 item(key = "country-traffic") {
                     CountryTrafficCard(
                         state = trafficMapState,
-                        rows = countryRows,
-                        enabled = state.settings.expert.firewallEnabled,
+                        rows = topCountryRows,
+                        totalRowsCount = countryRows.size,
+                        enabled = state.settings.statistics.countryTrafficEnabled,
                         onShowAll = { allCountriesVisible = true },
                     )
                 }
@@ -339,8 +343,8 @@ fun StatisticsScreen(
             title = { Text(stringResource(R.string.statistics_country_all_title)) },
             text = {
                 LazyColumn(modifier = Modifier.heightIn(max = 520.dp)) {
-                    items(trafficMapState.destinations, key = TrafficMapPoint::countryCode) { point ->
-                        CountryTrafficRow(point = point)
+                    items(countryRows, key = CountryTrafficUiRow::countryCode) { row ->
+                        CountryTrafficRow(row = row)
                         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
                     }
                 }
@@ -466,39 +470,6 @@ private fun ProfileTrafficOverviewCard(
 }
 
 @Composable
-private fun OverallMetricsGrid(total: OverallStatisticsUiItem) {
-    val context = LocalContext.current
-    val metrics =
-        listOf(
-            stringResource(R.string.statistics_total_traffic) to formatBytes(context, total.totalBytes),
-            stringResource(R.string.statistics_vpn_sessions) to total.vpnSessions.toString(),
-            stringResource(R.string.statistics_successful_connections) to total.successCount.toString(),
-            stringResource(R.string.statistics_errors) to total.failureCount.toString(),
-            stringResource(R.string.statistics_average_latency) to total.avgLatencyMs.formatLatency(),
-            stringResource(R.string.statistics_last_activity) to total.lastActivityAt.formatLastActivity(),
-        )
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        metrics.chunked(2).forEach { row ->
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                row.forEach { (label, value) ->
-                    MetricTile(
-                        label = label,
-                        value = value,
-                        modifier = Modifier.weight(1f),
-                    )
-                }
-                if (row.size == 1) {
-                    Box(modifier = Modifier.weight(1f))
-                }
-            }
-        }
-    }
-}
-
-@Composable
 private fun MetricTile(
     label: String,
     value: String,
@@ -612,7 +583,8 @@ private fun ProfileTrafficList(
 @Composable
 private fun CountryTrafficCard(
     state: TrafficMapUiState,
-    rows: List<TrafficMapPoint>,
+    rows: List<CountryTrafficUiRow>,
+    totalRowsCount: Int,
     enabled: Boolean,
     onShowAll: () -> Unit,
 ) {
@@ -667,7 +639,7 @@ private fun CountryTrafficCard(
                             .fillMaxHeight(),
                     )
                 }
-                if (state.destinations.size > rows.size) {
+                if (totalRowsCount > rows.size) {
                     TextButton(onClick = onShowAll) {
                         Text(stringResource(R.string.show_all_label))
                     }
@@ -679,13 +651,13 @@ private fun CountryTrafficCard(
 
 @Composable
 private fun CountryVerticalBarChart(
-    points: List<TrafficMapPoint>,
+    points: List<CountryTrafficUiRow>,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
     val colors = statisticsCountryChartColors()
     val gridColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-    val maxBytes = points.maxOfOrNull(TrafficMapPoint::bytes)?.coerceAtLeast(1L) ?: 1L
+    val maxBytes = points.maxOfOrNull(CountryTrafficUiRow::bytes)?.coerceAtLeast(1L) ?: 1L
     val visible = rememberOneShotVisible("countries")
     val progress by animateFloatAsState(
         targetValue = if (visible) 1f else 0f,
@@ -745,7 +717,7 @@ private fun CountryVerticalBarChart(
 }
 
 @Composable
-private fun CountryTrafficRow(point: TrafficMapPoint) {
+private fun CountryTrafficRow(row: CountryTrafficUiRow) {
     val context = LocalContext.current
     Row(
         modifier = Modifier
@@ -755,25 +727,25 @@ private fun CountryTrafficRow(point: TrafficMapPoint) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            text = countryEmoji(point.countryCode),
+            text = countryEmoji(row.countryCode),
             style = MaterialTheme.typography.bodyMedium,
         )
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = point.label,
+                text = row.label,
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
-                text = stringResource(R.string.statistics_country_connections, point.connections),
+                text = stringResource(R.string.statistics_country_connections, row.sessions),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
         Text(
-            text = formatBytes(context, point.bytes),
+            text = formatBytes(context, row.bytes),
             style = MaterialTheme.typography.labelMedium,
             fontWeight = FontWeight.SemiBold,
             textAlign = TextAlign.End,
@@ -832,7 +804,7 @@ private fun StatisticsDisabledState(onEnable: () -> Unit) {
 
 @Composable
 private fun CountryTrafficList(
-    points: List<TrafficMapPoint>,
+    points: List<CountryTrafficUiRow>,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -920,7 +892,7 @@ private fun ProtocolStatCard(
             Text(
                 text = protocolDisplayName(item.protocol),
                 modifier = Modifier.fillMaxWidth(),
-                style = MaterialTheme.typography.labelSmall,
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.sp, lineHeight = 9.sp),
                 fontWeight = FontWeight.SemiBold,
                 textAlign = TextAlign.Center,
                 maxLines = 1,
@@ -1323,55 +1295,6 @@ private fun TrafficBarChart(rows: List<AppTrafficRow>) {
 }
 
 @Composable
-private fun TrafficAnomalyCard(events: List<AnomalyEvent>) {
-    StatisticsSectionCard(
-        icon = Icons.Outlined.Public,
-        title = stringResource(R.string.statistics_anomaly_card_title),
-    ) {
-        if (events.isEmpty()) {
-            EmptySectionText(text = stringResource(R.string.statistics_anomaly_empty))
-        } else {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                events.forEach { event ->
-                    Surface(
-                        shape = MaterialTheme.shapes.small,
-                        color =
-                            when (event.severity) {
-                                AnomalySeverity.HIGH -> MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.72f)
-                                AnomalySeverity.NOTIFICATION -> MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.72f)
-                                else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.44f)
-                            },
-                    ) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(10.dp),
-                            verticalArrangement = Arrangement.spacedBy(4.dp),
-                        ) {
-                            Text(
-                                text = event.reason,
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.SemiBold,
-                            )
-                            Text(
-                                text =
-                                    listOfNotNull(
-                                        "score ${event.score}",
-                                        event.packageName,
-                                        event.evidence["country"]?.let { country -> "country $country" },
-                                    ).joinToString(" • "),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
 private fun ChartLegend() {
     val semanticColors = LocalFoxholeSemanticColors.current
     Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -1711,7 +1634,7 @@ private fun AppTrafficDetail(
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.SemiBold,
             )
-            connectionRows.take(5).forEach { connection ->
+            connectionRows.take(10).forEach { connection ->
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -1725,9 +1648,11 @@ private fun AppTrafficDetail(
                             overflow = TextOverflow.Ellipsis,
                         )
                         Text(
-                            text = connection.protocol,
+                            text = listOf(connection.protocol, connection.lastSeenAt.formatLastActivity()).joinToString(" • "),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
                         )
                     }
                     Text(
@@ -1836,6 +1761,13 @@ private data class AppTrafficRow(
 ) {
     val totalBytes: Long get() = txBytes + rxBytes
 }
+
+private data class CountryTrafficUiRow(
+    val countryCode: String,
+    val label: String,
+    val bytes: Long,
+    val sessions: Int,
+)
 
 private enum class AppAnomalyBadge {
     NORMAL,
@@ -2000,8 +1932,8 @@ private fun profileStatisticsDetail(
             }
             .filter { detail -> detail.totalAttempts > 0 || detail.totalBytes > 0L || detail.lastUsedAt != null }
             .sortedWith(
-                compareByDescending<ProfileProtocolDetail> { detail -> detail.lastUsedAt ?: 0L }
-                    .thenByDescending { detail -> detail.totalBytes },
+                compareByDescending<ProfileProtocolDetail> { detail -> detail.totalBytes }
+                    .thenByDescending { detail -> detail.lastUsedAt ?: 0L },
             )
     val fallbackProtocol =
         item.protocolHint
@@ -2288,6 +2220,63 @@ private fun appTrafficRows(
         )
 }
 
+private fun countryTrafficRows(
+    trafficWindows: List<TrafficWindow>,
+    liveDestinations: List<TrafficMapPoint>,
+): List<CountryTrafficUiRow> {
+    val bytesByCountry = linkedMapOf<String, Long>()
+    val sessionsByCountry = linkedMapOf<String, Int>()
+    trafficWindows.forEach { window ->
+        window.destinationCountries.forEach { (countryCode, bytes) ->
+            val normalized = normalizedCountryCode(countryCode) ?: return@forEach
+            bytesByCountry[normalized] = (bytesByCountry[normalized] ?: 0L) + bytes.coerceAtLeast(0L)
+            if (bytes > 0L) {
+                sessionsByCountry[normalized] = (sessionsByCountry[normalized] ?: 0) + 1
+            }
+        }
+    }
+    if (bytesByCountry.isEmpty()) {
+        liveDestinations.forEach { point ->
+            val normalized = normalizedCountryCode(point.countryCode) ?: return@forEach
+            bytesByCountry[normalized] = (bytesByCountry[normalized] ?: 0L) + point.bytes.coerceAtLeast(0L)
+            sessionsByCountry[normalized] = (sessionsByCountry[normalized] ?: 0) + point.connections.coerceAtLeast(0)
+        }
+    }
+    val labelsByCountry =
+        liveDestinations.associate { point ->
+            point.countryCode.uppercase(Locale.US) to point.label
+        }
+    return bytesByCountry
+        .map { (countryCode, bytes) ->
+            CountryTrafficUiRow(
+                countryCode = countryCode,
+                label = labelsByCountry[countryCode] ?: countryDisplayName(countryCode),
+                bytes = bytes,
+                sessions = sessionsByCountry[countryCode]?.coerceAtLeast(1) ?: 1,
+            )
+        }
+        .filter { row -> row.bytes > 0L }
+        .sortedWith(
+            compareByDescending<CountryTrafficUiRow> { row -> row.bytes }
+                .thenByDescending { row -> row.sessions }
+                .thenBy { row -> row.countryCode },
+        )
+}
+
+private fun normalizedCountryCode(countryCode: String?): String? =
+    countryCode
+        ?.trim()
+        ?.uppercase(Locale.US)
+        ?.takeIf { code -> code.length == 2 && code.all { character -> character in 'A'..'Z' } }
+
+private fun countryDisplayName(countryCode: String): String =
+    Locale.Builder()
+        .setRegion(countryCode)
+        .build()
+        .displayCountry
+        .takeIf(String::isNotBlank)
+        ?: countryCode
+
 private fun anomalyBadgesFor(events: List<AnomalyEvent>): Set<AppAnomalyBadge> {
     val badges =
         events
@@ -2411,19 +2400,6 @@ private fun rememberOneShotVisible(key: String): Boolean {
         }
     }
     return visible
-}
-
-@Composable
-private fun statisticsChartColors(): List<Color> {
-    val semanticColors = LocalFoxholeSemanticColors.current
-    return listOf(
-        MaterialTheme.colorScheme.primary,
-        semanticColors.success,
-        MaterialTheme.colorScheme.tertiary,
-        semanticColors.warning,
-        MaterialTheme.colorScheme.secondary,
-        MaterialTheme.colorScheme.error,
-    )
 }
 
 @Composable

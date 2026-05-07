@@ -648,7 +648,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
             return
         }
         val settings = container.settingsRepository.settings.value
-        if (!settings.statistics.enabled || !settings.statistics.appTrafficEnabled || !settings.appTrafficStatsEnabled || !settings.expert.firewallEnabled) {
+        if (!settings.statistics.enabled || !settings.statistics.appTrafficEnabled || !settings.appTrafficStatsEnabled) {
             return
         }
         appTrafficStatsJob =
@@ -658,8 +658,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
                     if (
                         !currentSettings.statistics.enabled ||
                         !currentSettings.statistics.appTrafficEnabled ||
-                        !currentSettings.appTrafficStatsEnabled ||
-                        !currentSettings.expert.firewallEnabled
+                        !currentSettings.appTrafficStatsEnabled
                     ) {
                         break
                     }

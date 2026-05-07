@@ -272,6 +272,12 @@ internal fun HomeViewModel.onShowTorQuickLaunchChangedInternal(value: Boolean) {
     }
 }
 
+internal fun HomeViewModel.onDashboardCardOrderChangedInternal(value: List<com.foxhole.beta.core.model.DashboardCard>) {
+    viewModelScope.launch {
+        container.settingsRepository.updateDashboardCardOrder(value)
+    }
+}
+
 internal fun HomeViewModel.onKillSwitchChangedInternal(value: Boolean) {
     viewModelScope.launch {
         container.settingsRepository.updateKillSwitchEnabled(value)

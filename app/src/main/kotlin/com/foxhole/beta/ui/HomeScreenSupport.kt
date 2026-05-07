@@ -542,10 +542,11 @@ internal fun homeConnectionFeatureIndicators(state: HomeRouteUiState): List<Home
                 feature = HomeConnectionFeature.KILL_SWITCH,
                 titleRes = R.string.kill_switch_title,
                 status =
-                    if (state.settings.expert.killSwitchEnabled) {
-                        HomeConnectionFeatureStatus.ON
-                    } else {
-                        HomeConnectionFeatureStatus.OFF
+                    when {
+                        !state.settings.expert.killSwitchEnabled -> HomeConnectionFeatureStatus.OFF
+                        state.connection.state in setOf(ConnectionState.CONNECTING, ConnectionState.CONNECTED, ConnectionState.RECONNECTING) ->
+                            HomeConnectionFeatureStatus.ON
+                        else -> HomeConnectionFeatureStatus.PENDING
                     },
             ),
         )
