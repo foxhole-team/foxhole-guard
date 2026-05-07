@@ -21,6 +21,8 @@ import com.foxhole.beta.applyAppLocale
 import com.foxhole.beta.core.data.RoutingRepository
 import com.foxhole.beta.core.diagnostics.DiagnosticEntry
 import com.foxhole.beta.core.model.AppLocale
+import com.foxhole.beta.core.model.AnomalyHistoryRetention
+import com.foxhole.beta.core.model.AnomalySensitivity
 import com.foxhole.beta.core.model.AutoConnectReasonCode
 import com.foxhole.beta.core.model.CachedActiveProfile
 import com.foxhole.beta.core.model.ClashApiSettings
@@ -94,7 +96,11 @@ class HomeViewModel(
     application: Application,
 ) : AndroidViewModel(application) {
     internal val container: FoxholeHomeDependencies = (application as FoxholeApplication).appGraph
-    internal val appTrafficStatsRecorder = AppTrafficStatsRecorder(application, container.settingsRepository)
+    internal val appTrafficStatsRecorder =
+        AppTrafficStatsRecorder(
+            anomalyRepository = container.anomalyRepository,
+            context = application,
+        )
     internal val initialSettings = container.settingsRepository.settings.value
     internal val clipboard = application.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
     internal val installedAppsMutable = MutableStateFlow<List<InstalledAppOption>>(emptyList())
@@ -235,16 +241,30 @@ class HomeViewModel(
                 runtimeReconnectRequired = runtimeReconnectRequired,
             )
         }
+    private val activityStreams =
+        combine(
+            container.diagnosticsLogger.entries,
+            container.anomalyRepository.recentEvents,
+            container.anomalyRepository.recentAppTrafficWindows,
+            reconnectState,
+        ) { diagnosticEntries, anomalyEvents, appTrafficWindows, reconnectState ->
+            HomeActivityStreams(
+                diagnosticEntries = diagnosticEntries,
+                anomalyEvents = anomalyEvents,
+                appTrafficWindows = appTrafficWindows,
+                reconnectState = reconnectState,
+            )
+        }
 
     val uiState: StateFlow<HomeUiState> =
         combine(
             connectionStreams,
             routingStreams,
             localState,
-            container.diagnosticsLogger.entries,
-            reconnectState,
-        ) { connectionStreams, routingStreams, localState, diagnosticEntries, reconnectState ->
+            activityStreams,
+        ) { connectionStreams, routingStreams, localState, activityStreams ->
             val localStreams = localState.streams
+            val reconnectState = activityStreams.reconnectState
             val resolvedActiveProfile =
                 HomeActiveProfileResolver.resolve(
                     profiles = connectionStreams.profiles,
@@ -291,8 +311,10 @@ class HomeViewModel(
                         reconnectState.promptUntilElapsedMs
                     } else {
                         0L
-                    },
-                diagnosticEntries = diagnosticEntries,
+                },
+                diagnosticEntries = activityStreams.diagnosticEntries,
+                anomalyEvents = activityStreams.anomalyEvents,
+                appTrafficWindows = activityStreams.appTrafficWindows,
                 catalogPresetPreviews = localStreams.catalogPresetPreviews,
             )
         }.stateIn(
@@ -953,6 +975,16 @@ class HomeViewModel(
 
     fun onDiagnosticsRetentionSelected(value: DiagnosticsRetention) = onDiagnosticsRetentionSelectedInternal(value)
 
+    fun onNotifyUnusualTrafficChanged(value: Boolean) = onNotifyUnusualTrafficChangedInternal(value)
+
+    fun onAnomalySensitivitySelected(value: AnomalySensitivity) = onAnomalySensitivitySelectedInternal(value)
+
+    fun onAnalyzeBackgroundTrafficChanged(value: Boolean) = onAnalyzeBackgroundTrafficChangedInternal(value)
+
+    fun onAnalyzeDestinationCountriesChanged(value: Boolean) = onAnalyzeDestinationCountriesChangedInternal(value)
+
+    fun onAnomalyHistoryRetentionSelected(value: AnomalyHistoryRetention) = onAnomalyHistoryRetentionSelectedInternal(value)
+
     fun onAllowInsecureTlsChanged(value: Boolean) = onAllowInsecureTlsChangedInternal(value)
 
     fun onSniffChanged(value: Boolean) = onSniffChangedInternal(value)
@@ -1310,12 +1342,7 @@ class HomeViewModel(
     ): Boolean =
         settings.statistics.enabled &&
             settings.statistics.appTrafficEnabled &&
-            settings.appTrafficStatsEnabled &&
-            settings.expert.firewallEnabled &&
-            (
-                snapshot.state in ACTIVE_CONNECTION_STATES ||
-                    container.connectionController.hasActiveVpnNetwork()
-            )
+            settings.appTrafficStatsEnabled
 
     internal fun ClipData.firstTextItem(): String? =
         if (itemCount > 0) {
@@ -1350,7 +1377,7 @@ class HomeViewModel(
         internal const val AUTO_CONNECT_TOTAL_TIMEOUT_MS = 60_000L
         internal const val AUTO_CONNECT_MAX_ATTEMPTS = SmartStartController.AUTO_CONNECT_MAX_ATTEMPTS
         internal const val PROTOCOL_METRICS_PROBE_TIMEOUT_MS = 12_000L
-        internal const val APP_TRAFFIC_SAMPLE_INTERVAL_MS = 3_000L
+        internal const val APP_TRAFFIC_SAMPLE_INTERVAL_MS = 60_000L
         internal const val AUTO_CONNECT_LATENCY_FALLBACK_PENALTY_MS = 750L
         internal val ACTIVE_CONNECTION_STATES =
             setOf(

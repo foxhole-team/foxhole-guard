@@ -1,5 +1,7 @@
 package com.foxhole.beta.ui
 
+import android.content.Intent
+import android.provider.Settings
 import android.text.format.DateUtils
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
@@ -72,8 +74,12 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.foxhole.beta.R
+import com.foxhole.beta.core.anomaly.UsageStatsAccess
 import com.foxhole.beta.core.diagnostics.DiagnosticEntry
-import com.foxhole.beta.core.model.AppTrafficSample
+import com.foxhole.beta.core.model.AnomalyEvent
+import com.foxhole.beta.core.model.AnomalySeverity
+import com.foxhole.beta.core.model.AnomalyType
+import com.foxhole.beta.core.model.AppTrafficWindow
 import com.foxhole.beta.core.model.InstalledAppOption
 import com.foxhole.beta.core.model.OverallStatisticsUiItem
 import com.foxhole.beta.core.model.Profile
@@ -118,25 +124,27 @@ fun StatisticsScreen(
     var selectedApp by rememberSaveable { mutableStateOf<String?>(null) }
     var selectedProfileId by rememberSaveable { mutableStateOf<Long?>(null) }
     var clearConfirmVisible by rememberSaveable { mutableStateOf(false) }
-    var appStatsFirewallWarningVisible by rememberSaveable { mutableStateOf(false) }
     val statisticsSettings = state.settings.statistics
+    val context = LocalContext.current
     val retention = StatisticsRetention.FOREVER
     val statistics =
         remember(state.settings, state.profiles, state.activeProfile, state.traffic, retention) {
             statisticsUiState(state = state, retention = retention)
         }
     val appRows =
-        remember(state.settings.appTrafficSamples, state.installedApps, retention) {
+        remember(state.appTrafficWindows, state.installedApps, state.anomalyEvents, retention) {
             appTrafficRows(
-                samples = state.settings.appTrafficSamples,
+                samples = state.appTrafficWindows,
                 installedApps = state.installedApps,
+                anomalyEvents = state.anomalyEvents,
                 retention = retention,
             )
         }
-    val topApps = appRows.take(10)
+    val topApps = appRows.take(11)
     val countryRows = trafficMapState.destinations.take(10)
-    val appStatsSwitchChecked = state.settings.appTrafficStatsEnabled && state.settings.expert.firewallEnabled
-    val appStatsEnabled = statisticsSettings.enabled && statisticsSettings.appTrafficEnabled && appStatsSwitchChecked
+    val appStatsSwitchChecked = state.settings.appTrafficStatsEnabled
+    val usageAccessGranted = UsageStatsAccess.isGranted(context)
+    val appStatsEnabled = statisticsSettings.enabled && statisticsSettings.appTrafficEnabled && appStatsSwitchChecked && usageAccessGranted
     val selectedAppRow = selectedApp?.let { packageName -> appRows.firstOrNull { row -> row.packageName == packageName } }
     val selectedProfile =
         selectedProfileId?.let { profileId ->
@@ -193,9 +201,16 @@ fun StatisticsScreen(
                         allRowsCount = appRows.size,
                         enabled = appStatsEnabled,
                         runtimeActive = appStatsEnabled && state.traffic.available,
+                        usageAccessGranted = usageAccessGranted,
+                        onOpenUsageAccess = { context.startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)) },
                         onShowAll = { allAppsVisible = true },
                         onRowClick = { row -> selectedApp = row.packageName },
                     )
+                }
+            }
+            if (state.anomalyEvents.isNotEmpty()) {
+                item(key = "anomaly-events") {
+                    TrafficAnomalyCard(events = state.anomalyEvents.take(5))
                 }
             }
             if (statisticsSettings.countryTrafficEnabled) {
@@ -249,13 +264,7 @@ fun StatisticsScreen(
                             checked = appStatsSwitchChecked,
                             summary = stringResource(R.string.app_statistics_enabled_summary),
                             leadingIcon = Icons.Outlined.Apps,
-                            onCheckedChange = { enabled ->
-                                if (enabled && !state.settings.expert.firewallEnabled) {
-                                    appStatsFirewallWarningVisible = true
-                                } else {
-                                    onAppTrafficStatsEnabledChanged(enabled)
-                                }
-                            },
+                            onCheckedChange = onAppTrafficStatsEnabledChanged,
                             enabled = statisticsSettings.enabled,
                             grouped = true,
                         )
@@ -368,7 +377,7 @@ fun StatisticsScreen(
             text = {
                 AppTrafficDetail(
                     row = selectedAppRow,
-                    samples = state.settings.appTrafficSamples,
+                    samples = state.appTrafficWindows,
                     diagnosticEntries = state.diagnosticEntries,
                 )
             },
@@ -408,22 +417,6 @@ fun StatisticsScreen(
             onConfirm = {
                 clearConfirmVisible = false
                 onClearUsage()
-            },
-        )
-    }
-
-    if (appStatsFirewallWarningVisible) {
-        ConfirmDialog(
-            title = stringResource(R.string.app_statistics_firewall_warning_title),
-            body = stringResource(R.string.app_statistics_firewall_warning_body),
-            confirmLabel = stringResource(R.string.security_firewall_enable_action),
-            dismissLabel = stringResource(R.string.close),
-            icon = Icons.Outlined.Apps,
-            onDismiss = { appStatsFirewallWarningVisible = false },
-            onConfirm = {
-                appStatsFirewallWarningVisible = false
-                onFirewallEnabledChanged(true)
-                onAppTrafficStatsEnabledChanged(true)
             },
         )
     }
@@ -1216,6 +1209,8 @@ private fun AppTrafficStatisticsCard(
     allRowsCount: Int,
     enabled: Boolean,
     runtimeActive: Boolean,
+    usageAccessGranted: Boolean,
+    onOpenUsageAccess: () -> Unit,
     onShowAll: () -> Unit,
     onRowClick: (AppTrafficRow) -> Unit,
 ) {
@@ -1232,7 +1227,16 @@ private fun AppTrafficStatisticsCard(
                 icon = Icons.Outlined.Apps,
                 title = stringResource(R.string.statistics_apps_top_title),
             )
-            if (!enabled) {
+            if (!usageAccessGranted) {
+                Text(
+                    text = stringResource(R.string.statistics_usage_access_summary),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                TextButton(onClick = onOpenUsageAccess) {
+                    Text(stringResource(R.string.statistics_usage_access_action))
+                }
+            } else if (!enabled) {
                 Text(
                     text = stringResource(R.string.app_statistics_disabled_body),
                     style = MaterialTheme.typography.bodyMedium,
@@ -1319,6 +1323,55 @@ private fun TrafficBarChart(rows: List<AppTrafficRow>) {
 }
 
 @Composable
+private fun TrafficAnomalyCard(events: List<AnomalyEvent>) {
+    StatisticsSectionCard(
+        icon = Icons.Outlined.Public,
+        title = stringResource(R.string.statistics_anomaly_card_title),
+    ) {
+        if (events.isEmpty()) {
+            EmptySectionText(text = stringResource(R.string.statistics_anomaly_empty))
+        } else {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                events.forEach { event ->
+                    Surface(
+                        shape = MaterialTheme.shapes.small,
+                        color =
+                            when (event.severity) {
+                                AnomalySeverity.HIGH -> MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.72f)
+                                AnomalySeverity.NOTIFICATION -> MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.72f)
+                                else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.44f)
+                            },
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(10.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp),
+                        ) {
+                            Text(
+                                text = event.reason,
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                            Text(
+                                text =
+                                    listOfNotNull(
+                                        "score ${event.score}",
+                                        event.packageName,
+                                        event.evidence["country"]?.let { country -> "country $country" },
+                                    ).joinToString(" • "),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
 private fun ChartLegend() {
     val semanticColors = LocalFoxholeSemanticColors.current
     Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -1380,10 +1433,67 @@ private fun AppTrafficRowView(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            AnomalyBadges(row.badges)
         }
         TrafficCells(tx = row.txBytes, rx = row.rxBytes)
     }
 }
+
+@Composable
+private fun AnomalyBadges(badges: Set<AppAnomalyBadge>) {
+    val visibleBadges = badges.take(2)
+    Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+        visibleBadges.forEach { badge ->
+            Surface(
+                shape = MaterialTheme.shapes.extraSmall,
+                color = anomalyBadgeColor(badge),
+            ) {
+                Text(
+                    text = anomalyBadgeLabel(badge),
+                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = anomalyBadgeContentColor(badge),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun anomalyBadgeLabel(badge: AppAnomalyBadge): String =
+    stringResource(
+        when (badge) {
+            AppAnomalyBadge.NORMAL -> R.string.anomaly_badge_normal
+            AppAnomalyBadge.UNUSUAL -> R.string.anomaly_badge_unusual
+            AppAnomalyBadge.HIGH_UPLOAD -> R.string.anomaly_badge_high_upload
+            AppAnomalyBadge.NEW_ROUTE -> R.string.anomaly_badge_new_route
+            AppAnomalyBadge.BACKGROUND -> R.string.anomaly_badge_background
+        },
+    )
+
+@Composable
+private fun anomalyBadgeColor(badge: AppAnomalyBadge): Color {
+    val semanticColors = LocalFoxholeSemanticColors.current
+    return when (badge) {
+        AppAnomalyBadge.NORMAL -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.58f)
+        AppAnomalyBadge.UNUSUAL -> MaterialTheme.colorScheme.secondaryContainer
+        AppAnomalyBadge.HIGH_UPLOAD -> MaterialTheme.colorScheme.errorContainer
+        AppAnomalyBadge.NEW_ROUTE -> MaterialTheme.colorScheme.tertiaryContainer
+        AppAnomalyBadge.BACKGROUND -> semanticColors.warning.copy(alpha = 0.18f)
+    }
+}
+
+@Composable
+private fun anomalyBadgeContentColor(badge: AppAnomalyBadge): Color =
+    when (badge) {
+        AppAnomalyBadge.NORMAL -> MaterialTheme.colorScheme.onSurfaceVariant
+        AppAnomalyBadge.UNUSUAL -> MaterialTheme.colorScheme.onSecondaryContainer
+        AppAnomalyBadge.HIGH_UPLOAD -> MaterialTheme.colorScheme.onErrorContainer
+        AppAnomalyBadge.NEW_ROUTE -> MaterialTheme.colorScheme.onTertiaryContainer
+        AppAnomalyBadge.BACKGROUND -> MaterialTheme.colorScheme.onSurface
+    }
 
 @Composable
 private fun TrafficCells(tx: Long, rx: Long) {
@@ -1565,7 +1675,7 @@ private fun ProfileStatisticsDetail(
 @Composable
 private fun AppTrafficDetail(
     row: AppTrafficRow,
-    samples: List<AppTrafficSample>,
+    samples: List<AppTrafficWindow>,
     diagnosticEntries: List<DiagnosticEntry>,
 ) {
     val context = LocalContext.current
@@ -1586,7 +1696,7 @@ private fun AppTrafficDetail(
                     stringResource(R.string.traffic_received) to formatBytes(context, row.rxBytes),
                     stringResource(R.string.traffic_sent) to formatBytes(context, row.txBytes),
                     stringResource(R.string.statistics_app_samples) to appSamples.size.toString(),
-                    stringResource(R.string.statistics_last_activity) to appSamples.maxOfOrNull(AppTrafficSample::sampledAt).formatLastActivity(),
+                    stringResource(R.string.statistics_last_activity) to appSamples.maxOfOrNull(AppTrafficWindow::startedAtMs).formatLastActivity(),
                 ),
         )
         if (connectionRows.isEmpty()) {
@@ -1645,7 +1755,7 @@ private fun AppTrafficDetail(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text(
-                            text = sample.sampledAt.formatLastActivity(),
+                            text = sample.startedAtMs.formatLastActivity(),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -1661,7 +1771,7 @@ private fun AppTrafficDetail(
 }
 
 @Composable
-private fun AppTrafficMiniChart(samples: List<AppTrafficSample>) {
+private fun AppTrafficMiniChart(samples: List<AppTrafficWindow>) {
     val semanticColors = LocalFoxholeSemanticColors.current
     val txColor = MaterialTheme.colorScheme.primary
     val rxColor = semanticColors.success
@@ -1722,8 +1832,17 @@ private data class AppTrafficRow(
     val label: String,
     val txBytes: Long,
     val rxBytes: Long,
+    val badges: Set<AppAnomalyBadge>,
 ) {
     val totalBytes: Long get() = txBytes + rxBytes
+}
+
+private enum class AppAnomalyBadge {
+    NORMAL,
+    UNUSUAL,
+    HIGH_UPLOAD,
+    NEW_ROUTE,
+    BACKGROUND,
 }
 
 private data class AppConnectionRow(
@@ -2137,22 +2256,29 @@ private fun transportStatistics(
 }
 
 private fun appTrafficRows(
-    samples: List<AppTrafficSample>,
+    samples: List<AppTrafficWindow>,
     installedApps: List<InstalledAppOption>,
+    anomalyEvents: List<AnomalyEvent>,
     retention: StatisticsRetention,
 ): List<AppTrafficRow> {
     val labels = installedApps.associate { it.packageName to it.label }
     val cutoff = retention.durationMs?.let { System.currentTimeMillis() - it }
+    val badgesByPackage =
+        anomalyEvents
+            .groupBy { event -> event.packageName }
+            .mapNotNull { (packageName, events) -> packageName?.let { it to anomalyBadgesFor(events) } }
+            .toMap()
     return samples
         .asSequence()
-        .filter { sample -> cutoff == null || sample.sampledAt >= cutoff }
-        .groupBy(AppTrafficSample::packageName)
+        .filter { sample -> cutoff == null || sample.startedAtMs >= cutoff }
+        .groupBy(AppTrafficWindow::packageName)
         .map { (packageName, packageSamples) ->
             AppTrafficRow(
                 packageName = packageName,
                 label = labels[packageName] ?: packageName,
-                txBytes = packageSamples.sumOf(AppTrafficSample::txBytes),
-                rxBytes = packageSamples.sumOf(AppTrafficSample::rxBytes),
+                txBytes = packageSamples.sumOf(AppTrafficWindow::txBytes),
+                rxBytes = packageSamples.sumOf(AppTrafficWindow::rxBytes),
+                badges = badgesByPackage[packageName] ?: setOf(AppAnomalyBadge.NORMAL),
             )
         }
         .filter { row -> row.totalBytes > 0L }
@@ -2160,6 +2286,28 @@ private fun appTrafficRows(
             compareByDescending<AppTrafficRow> { it.totalBytes }
                 .thenBy { it.label.lowercase(Locale.getDefault()) },
         )
+}
+
+private fun anomalyBadgesFor(events: List<AnomalyEvent>): Set<AppAnomalyBadge> {
+    val badges =
+        events
+            .flatMap { event ->
+                when (event.type) {
+                    AnomalyType.APP_UPLOAD_SPIKE -> listOf(AppAnomalyBadge.HIGH_UPLOAD)
+                    AnomalyType.APP_BACKGROUND_TRAFFIC -> listOf(AppAnomalyBadge.BACKGROUND)
+                    AnomalyType.NEW_DESTINATION_COUNTRY,
+                    AnomalyType.TOR_OR_I2P_ROUTE_MISMATCH,
+                    -> listOf(AppAnomalyBadge.NEW_ROUTE)
+                    else -> listOf(AppAnomalyBadge.UNUSUAL)
+                } +
+                    if (event.severity == AnomalySeverity.HIGH) {
+                        listOf(AppAnomalyBadge.UNUSUAL)
+                    } else {
+                        emptyList()
+                    }
+            }
+            .toSet()
+    return badges.ifEmpty { setOf(AppAnomalyBadge.NORMAL) }
 }
 
 private fun appConnectionRows(

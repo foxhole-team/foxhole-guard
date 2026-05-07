@@ -67,6 +67,12 @@ class TrafficMapRepository(
                 initialValue = retainedUiState ?: TrafficMapUiState(),
             )
 
+    fun currentDestinationCountryBytes(): Map<String, Long> =
+        retainedUiState
+            ?.destinations
+            .orEmpty()
+            .associate { point -> point.countryCode to point.bytes }
+
     private fun buildTrafficMapUiState(
         originInfo: TrafficMapOriginInfo?,
         runtimeAvailable: Boolean,

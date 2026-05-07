@@ -3,6 +3,8 @@ package com.foxhole.beta.ui
 import com.foxhole.beta.BuildConfig
 import com.foxhole.beta.core.data.RoutingRepository
 import com.foxhole.beta.core.diagnostics.DiagnosticEntry
+import com.foxhole.beta.core.model.AnomalyEvent
+import com.foxhole.beta.core.model.AppTrafficWindow
 import com.foxhole.beta.core.model.AppLocale
 import com.foxhole.beta.core.model.CachedActiveProfile
 import com.foxhole.beta.core.model.ConnectionSnapshot
@@ -38,6 +40,8 @@ data class HomeUiState(
     val reconnectInProgress: Boolean = false,
     val profileReconnectPromptUntilElapsedMs: Long = 0L,
     val diagnosticEntries: List<DiagnosticEntry> = emptyList(),
+    val anomalyEvents: List<AnomalyEvent> = emptyList(),
+    val appTrafficWindows: List<AppTrafficWindow> = emptyList(),
     val catalogPresetPreviews: Map<Long, List<RoutingRepository.RoutingCatalogPresetPreview>> = emptyMap(),
     val appVersion: String = BuildConfig.VERSION_NAME,
     val coreVersion: String = BuildConfig.LIBBOX_SOURCE_VERSION,
@@ -107,6 +111,13 @@ internal data class HomeReconnectStreams(
     val inProgress: Boolean,
     val promptUntilElapsedMs: Long,
     val runtimeReconnectRequired: Boolean,
+)
+
+internal data class HomeActivityStreams(
+    val diagnosticEntries: List<DiagnosticEntry>,
+    val anomalyEvents: List<AnomalyEvent>,
+    val appTrafficWindows: List<AppTrafficWindow>,
+    val reconnectState: HomeReconnectStreams,
 )
 
 internal enum class PendingConnectAction {

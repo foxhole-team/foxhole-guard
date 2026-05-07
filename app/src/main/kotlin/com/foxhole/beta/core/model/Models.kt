@@ -388,6 +388,7 @@ data class Settings(
     val privacyRoute: PrivacyRouteSettings = PrivacyRouteSettings(),
     val expert: ExpertSettings = ExpertSettings(),
     val statistics: StatisticsSettings = StatisticsSettings(),
+    val anomaly: AnomalySettings = AnomalySettings(),
     val lastActiveProfile: CachedActiveProfile? = null,
     val smartProfilePreferences: List<SmartProfilePreference> = emptyList(),
     val profileTrafficTotals: List<ProfileTrafficTotal> = emptyList(),

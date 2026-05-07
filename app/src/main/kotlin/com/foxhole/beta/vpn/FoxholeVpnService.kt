@@ -17,6 +17,9 @@ import androidx.core.content.getSystemService
 import com.foxhole.beta.FoxholeApplication
 import com.foxhole.beta.FoxholeRuntimeDependencies
 import com.foxhole.beta.R
+import com.foxhole.beta.core.anomaly.AndroidNetworkTypeProvider
+import com.foxhole.beta.core.anomaly.TrafficAggregationContext
+import com.foxhole.beta.core.anomaly.TrafficWindowAggregator
 import com.foxhole.beta.core.model.AutoConnectReasonCode
 import com.foxhole.beta.core.model.ConnectionSnapshot
 import com.foxhole.beta.core.model.ConnectionState
@@ -73,8 +76,13 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         )
     }
     internal val trafficSampler = TrafficStatsSampler()
+    internal val anomalyTrafficAggregator = TrafficWindowAggregator()
+    internal val anomalyNetworkTypeProvider by lazy { AndroidNetworkTypeProvider(applicationContext) }
     internal val appTrafficStatsRecorder by lazy {
-        AppTrafficStatsRecorder(applicationContext, container.settingsRepository)
+        AppTrafficStatsRecorder(
+            anomalyRepository = container.anomalyRepository,
+            context = applicationContext,
+        )
     }
     internal var activeSession: VpnSession? = null
     internal var activeLocalGuardMode: LocalGuardMode? = null
@@ -199,6 +207,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
     override fun onDestroy() {
         super.onDestroy()
         stopTrafficUpdates()
+        anomalyTrafficAggregator.reset()
         stopAppTrafficStatsUpdates()
         stopGeoRefresh()
         stopNotificationHealthMonitoring()
@@ -618,7 +627,9 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
                             highFrequencyUiActive = FoxholeVpnRuntimeBridge.highFrequencyTrafficUpdates.value,
                         ),
                     )
-                    FoxholeVpnRuntimeBridge.updateTraffic(trafficSampler.sample())
+                    val sample = trafficSampler.sample()
+                    FoxholeVpnRuntimeBridge.updateTraffic(sample)
+                    recordAnomalyTrafficWindow(sample)
                 }
             }
     }
@@ -628,10 +639,14 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         immediateTrafficSampleJob = null
         trafficJob?.cancel()
         trafficJob = null
+        anomalyTrafficAggregator.reset()
     }
 
     internal fun startAppTrafficStatsUpdates() {
         stopAppTrafficStatsUpdates()
+        if (activeSession != null) {
+            return
+        }
         val settings = container.settingsRepository.settings.value
         if (!settings.statistics.enabled || !settings.statistics.appTrafficEnabled || !settings.appTrafficStatsEnabled || !settings.expert.firewallEnabled) {
             return
@@ -658,6 +673,35 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
     internal fun stopAppTrafficStatsUpdates() {
         appTrafficStatsJob?.cancel()
         appTrafficStatsJob = null
+    }
+
+    internal fun recordAnomalyTrafficWindow(sample: TrafficSnapshot) {
+        val connection = FoxholeVpnRuntimeBridge.snapshot.value
+        val settings = container.settingsRepository.settings.value
+        val window =
+            anomalyTrafficAggregator.aggregate(
+                snapshot = sample,
+                context =
+                    TrafficAggregationContext(
+                        connection = connection,
+                        settings = settings,
+                        networkType = anomalyNetworkTypeProvider.current(),
+                        destinationCountries = container.trafficMapRepository.currentDestinationCountryBytes(),
+                    ),
+            ) ?: return
+        scope.launch(Dispatchers.IO) {
+            val appWindows =
+                if (settings.statistics.enabled && settings.statistics.appTrafficEnabled && settings.appTrafficStatsEnabled) {
+                    runCatching { appTrafficStatsRecorder.sampleWindows() }.getOrDefault(emptyList())
+                } else {
+                    emptyList()
+                }
+            runCatching {
+                container.anomalyRepository.recordTrafficWindow(window, appWindows)
+            }.onFailure {
+                container.diagnosticsLogger.record("anomaly", "traffic window analysis failed")
+            }
+        }
     }
 
     internal fun startGeoRefresh(initialNetwork: Network? = null) {
@@ -926,7 +970,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         internal const val CONNECTIVITY_PROBE_TOTAL_TIMEOUT_MS = 45_000L
         internal const val CONNECTIVITY_PROBE_GRACE_MAX_TIMEOUT_MS = com.foxhole.beta.vpn.CONNECTIVITY_PROBE_GRACE_MAX_TIMEOUT_MS
         internal const val LOCAL_GUARD_PROFILE_ID = -10L
-        internal const val APP_TRAFFIC_SAMPLE_INTERVAL_MS = 3_000L
+        internal const val APP_TRAFFIC_SAMPLE_INTERVAL_MS = 60_000L
     }
 }
 

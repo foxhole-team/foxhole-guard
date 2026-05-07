@@ -8,6 +8,8 @@ import com.foxhole.beta.BuildConfig
 import com.foxhole.beta.core.model.AutoConnectReasonCode
 import com.foxhole.beta.core.model.AppTrafficBaseline
 import com.foxhole.beta.core.model.AppTrafficSample
+import com.foxhole.beta.core.model.AnomalyHistoryRetention
+import com.foxhole.beta.core.model.AnomalySensitivity
 import com.foxhole.beta.core.model.AppLocale
 import com.foxhole.beta.core.model.ClashApiSettings
 import com.foxhole.beta.core.model.CachedActiveProfile
@@ -676,6 +678,21 @@ class SettingsRepository(
 
     suspend fun updateDiagnosticsRetention(value: DiagnosticsRetention) =
         update { it.copy(expert = it.expert.copy(diagnosticsRetention = value)) }
+
+    suspend fun updateNotifyUnusualTraffic(value: Boolean) =
+        update { it.copy(anomaly = it.anomaly.copy(notifyUnusualTraffic = value)) }
+
+    suspend fun updateAnomalySensitivity(value: AnomalySensitivity) =
+        update { it.copy(anomaly = it.anomaly.copy(sensitivity = value)) }
+
+    suspend fun updateAnalyzeBackgroundTraffic(value: Boolean) =
+        update { it.copy(anomaly = it.anomaly.copy(analyzeBackgroundTraffic = value)) }
+
+    suspend fun updateAnalyzeDestinationCountries(value: Boolean) =
+        update { it.copy(anomaly = it.anomaly.copy(analyzeDestinationCountries = value)) }
+
+    suspend fun updateAnomalyHistoryRetention(value: AnomalyHistoryRetention) =
+        update { it.copy(anomaly = it.anomaly.copy(historyRetention = value)) }
 
     suspend fun updateAllowInsecureTls(value: Boolean) =
         update { it.copy(expert = it.expert.copy(allowInsecureTls = value)) }

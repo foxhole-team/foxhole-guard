@@ -1,6 +1,8 @@
 package com.foxhole.beta
 
 import android.content.Context
+import com.foxhole.beta.core.anomaly.AnomalyNotifier
+import com.foxhole.beta.core.anomaly.AnomalyRepository
 import com.foxhole.beta.core.data.EncryptedProfileSecretStore
 import com.foxhole.beta.core.data.ProfileDatabase
 import com.foxhole.beta.core.data.ProfileRepository
@@ -44,6 +46,8 @@ internal class FoxholeCoreGraphModule(
         TrafficMapRepository(LibboxTrafficMapConnectionSource(appContext))
     }
 
+    val anomalyNotifier: AnomalyNotifier by lazy { AnomalyNotifier(appContext) }
+
     val diagnosticsLogger: DiagnosticsLogger by lazy {
         DiagnosticsLogger(
             context = appContext,
@@ -80,6 +84,15 @@ internal class FoxholeDataGraphModule(
             torRuntimeInstaller = torRuntimeInstaller,
             dnsFilterAssetInstaller = dnsFilterAssetInstaller,
             json = core.json,
+        )
+    }
+
+    val anomalyRepository: AnomalyRepository by lazy {
+        AnomalyRepository(
+            dao = profileDatabase.anomalyDao(),
+            settingsRepository = core.settingsRepository,
+            diagnosticsLogger = core.diagnosticsLogger,
+            notifier = core.anomalyNotifier,
         )
     }
 }

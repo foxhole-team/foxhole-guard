@@ -7,6 +7,8 @@ import androidx.lifecycle.viewModelScope
 import com.foxhole.beta.R
 import com.foxhole.beta.applyAppLocale
 import com.foxhole.beta.applySubscriptionRefreshSchedule
+import com.foxhole.beta.core.model.AnomalyHistoryRetention
+import com.foxhole.beta.core.model.AnomalySensitivity
 import com.foxhole.beta.core.model.AppLocale
 import com.foxhole.beta.core.model.ClashApiSettings
 import com.foxhole.beta.core.model.DiagnosticsRetention
@@ -320,6 +322,36 @@ internal fun HomeViewModel.onSmartStartReplayLoggingChangedInternal(value: Boole
 internal fun HomeViewModel.onDiagnosticsRetentionSelectedInternal(value: DiagnosticsRetention) {
     viewModelScope.launch {
         container.settingsRepository.updateDiagnosticsRetention(value)
+    }
+}
+
+internal fun HomeViewModel.onNotifyUnusualTrafficChangedInternal(value: Boolean) {
+    viewModelScope.launch {
+        container.settingsRepository.updateNotifyUnusualTraffic(value)
+    }
+}
+
+internal fun HomeViewModel.onAnomalySensitivitySelectedInternal(value: AnomalySensitivity) {
+    viewModelScope.launch {
+        container.settingsRepository.updateAnomalySensitivity(value)
+    }
+}
+
+internal fun HomeViewModel.onAnalyzeBackgroundTrafficChangedInternal(value: Boolean) {
+    viewModelScope.launch {
+        container.settingsRepository.updateAnalyzeBackgroundTraffic(value)
+    }
+}
+
+internal fun HomeViewModel.onAnalyzeDestinationCountriesChangedInternal(value: Boolean) {
+    viewModelScope.launch {
+        container.settingsRepository.updateAnalyzeDestinationCountries(value)
+    }
+}
+
+internal fun HomeViewModel.onAnomalyHistoryRetentionSelectedInternal(value: AnomalyHistoryRetention) {
+    viewModelScope.launch {
+        container.settingsRepository.updateAnomalyHistoryRetention(value)
     }
 }
 

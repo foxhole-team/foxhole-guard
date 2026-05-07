@@ -1,6 +1,7 @@
 package com.foxhole.beta
 
 import android.content.Context
+import com.foxhole.beta.core.anomaly.AnomalyRepository
 import com.foxhole.beta.core.data.ProfileDatabase
 import com.foxhole.beta.core.data.ProfileRepository
 import com.foxhole.beta.core.data.RoutingRepository
@@ -27,6 +28,7 @@ interface FoxholeHomeDependencies {
     val networkFingerprintProvider: NetworkFingerprintProvider
     val runtimeConfigAssembler: RuntimeConfigAssembler
     val trafficMapRepository: TrafficMapRepository
+    val anomalyRepository: AnomalyRepository
 }
 
 interface FoxholeRuntimeDependencies {
@@ -37,6 +39,8 @@ interface FoxholeRuntimeDependencies {
     val connectionController: FoxholeConnectionController
     val ipInfoRepository: IpInfoRepository
     val runtimeConfigAssembler: RuntimeConfigAssembler
+    val trafficMapRepository: TrafficMapRepository
+    val anomalyRepository: AnomalyRepository
 }
 
 interface FoxholeTileDependencies {
@@ -67,6 +71,7 @@ class FoxholeAppGraph(
     override val routingRepository: RoutingRepository by lazy { dataModule.routingRepository }
     override val runtimeConfigAssembler: RuntimeConfigAssembler by lazy { dataModule.runtimeConfigAssembler }
     override val trafficMapRepository: TrafficMapRepository by lazy { coreModule.trafficMapRepository }
+    override val anomalyRepository: AnomalyRepository by lazy { dataModule.anomalyRepository }
     override val ipInfoRepository: IpInfoRepository by lazy { runtimeModule.ipInfoRepository }
     override val networkFingerprintProvider: NetworkFingerprintProvider by lazy { runtimeModule.networkFingerprintProvider }
     override val profileRepository: ProfileRepository by lazy { dataModule.profileRepository }

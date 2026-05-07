@@ -1,0 +1,191 @@
+package com.foxhole.beta.core.anomaly
+
+import android.app.AppOpsManager
+import android.app.usage.NetworkStats
+import android.app.usage.NetworkStatsManager
+import android.content.Context
+import android.content.pm.ApplicationInfo
+import android.content.pm.PackageManager
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
+import android.os.Build
+import android.os.Process
+import androidx.core.content.getSystemService
+import com.foxhole.beta.core.model.AppTrafficWindow
+import com.foxhole.beta.core.model.NetworkType
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+
+object UsageStatsAccess {
+    fun isGranted(context: Context): Boolean {
+        val appContext = context.applicationContext
+        val appOps = appContext.getSystemService<AppOpsManager>() ?: return false
+        val mode =
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                appOps.unsafeCheckOpNoThrow(
+                    AppOpsManager.OPSTR_GET_USAGE_STATS,
+                    Process.myUid(),
+                    appContext.packageName,
+                )
+            } else {
+                @Suppress("DEPRECATION")
+                appOps.checkOpNoThrow(
+                    AppOpsManager.OPSTR_GET_USAGE_STATS,
+                    Process.myUid(),
+                    appContext.packageName,
+                )
+            }
+        return mode == AppOpsManager.MODE_ALLOWED
+    }
+}
+
+class AndroidNetworkTypeProvider(
+    context: Context,
+) {
+    private val appContext = context.applicationContext
+    private val connectivityManager by lazy { appContext.getSystemService<ConnectivityManager>() }
+
+    fun current(): NetworkType {
+        val capabilities =
+            connectivityManager
+                ?.activeNetwork
+                ?.let { network -> connectivityManager?.getNetworkCapabilities(network) }
+                ?: return NetworkType.UNKNOWN
+        return when {
+            capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> NetworkType.WIFI
+            capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> NetworkType.MOBILE
+            else -> NetworkType.UNKNOWN
+        }
+    }
+}
+
+class AppTrafficSampler(
+    context: Context,
+    private val nowProvider: () -> Long = System::currentTimeMillis,
+) {
+    private val appContext = context.applicationContext
+    private val packageManager = appContext.packageManager
+    private val networkStatsManager by lazy { appContext.getSystemService<NetworkStatsManager>() }
+    private val networkTypeProvider = AndroidNetworkTypeProvider(appContext)
+    private var lastSampleAt: Long = 0L
+
+    fun hasUsageAccess(): Boolean = UsageStatsAccess.isGranted(appContext)
+
+    suspend fun sampleWindows(minDurationMs: Long = DEFAULT_SAMPLE_WINDOW_MS): List<AppTrafficWindow> =
+        withContext(Dispatchers.IO) {
+            val now = nowProvider()
+            val startAt = (lastSampleAt.takeIf { it > 0L } ?: (now - minDurationMs)).coerceAtMost(now - 1L)
+            val durationMs = (now - startAt).coerceAtLeast(1L)
+            if (!hasUsageAccess()) {
+                lastSampleAt = now
+                return@withContext emptyList()
+            }
+            val manager = networkStatsManager ?: return@withContext emptyList()
+            val networkType = networkTypeProvider.current()
+            val windows =
+                installedApplications()
+                    .asSequence()
+                    .filterNot { app -> app.packageName == appContext.packageName }
+                    .mapNotNull { app ->
+                        val usage = manager.queryUidUsage(app.uid, startAt, now)
+                        if (usage.rxBytes <= 0L && usage.txBytes <= 0L) {
+                            null
+                        } else {
+                            AppTrafficWindow(
+                                packageName = app.packageName,
+                                uid = app.uid,
+                                startedAtMs = startAt,
+                                durationSec = (durationMs / 1000L).toInt().coerceAtLeast(1),
+                                rxBytes = usage.rxBytes,
+                                txBytes = usage.txBytes,
+                                foreground = usage.foreground,
+                                networkType = networkType,
+                            )
+                        }
+                    }
+                    .distinctBy(AppTrafficWindow::packageName)
+                    .toList()
+            lastSampleAt = now
+            windows
+        }
+
+    private fun installedApplications(): List<ApplicationInfo> =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            packageManager.getInstalledApplications(PackageManager.ApplicationInfoFlags.of(0))
+        } else {
+            @Suppress("DEPRECATION")
+            packageManager.getInstalledApplications(0)
+        }
+
+    private fun NetworkStatsManager.queryUidUsage(
+        uid: Int,
+        startAt: Long,
+        endAt: Long,
+    ): UidTrafficUsage {
+        if (uid <= 0) {
+            return UidTrafficUsage()
+        }
+        val wifi = runCatching { queryUidUsageForNetwork(ConnectivityManager.TYPE_WIFI, uid, startAt, endAt) }.getOrDefault(UidTrafficUsage())
+        val mobile = runCatching { queryUidUsageForNetwork(ConnectivityManager.TYPE_MOBILE, uid, startAt, endAt) }.getOrDefault(UidTrafficUsage())
+        return wifi + mobile
+    }
+
+    private fun NetworkStatsManager.queryUidUsageForNetwork(
+        networkType: Int,
+        uid: Int,
+        startAt: Long,
+        endAt: Long,
+    ): UidTrafficUsage {
+        val bucket = NetworkStats.Bucket()
+        var rx = 0L
+        var tx = 0L
+        var foregroundBytes = 0L
+        var backgroundBytes = 0L
+        queryDetailsForUid(networkType, null, startAt, endAt, uid).use { stats ->
+            while (stats.hasNextBucket()) {
+                stats.getNextBucket(bucket)
+                val bucketRx = bucket.rxBytes.coerceAtLeast(0L)
+                val bucketTx = bucket.txBytes.coerceAtLeast(0L)
+                rx += bucketRx
+                tx += bucketTx
+                val bucketTotal = bucketRx + bucketTx
+                if (bucket.state == NetworkStats.Bucket.STATE_FOREGROUND) {
+                    foregroundBytes += bucketTotal
+                } else {
+                    backgroundBytes += bucketTotal
+                }
+            }
+        }
+        val foreground =
+            when {
+                foregroundBytes <= 0L && backgroundBytes <= 0L -> null
+                foregroundBytes >= backgroundBytes -> true
+                else -> false
+            }
+        return UidTrafficUsage(rxBytes = rx, txBytes = tx, foreground = foreground)
+    }
+
+    companion object {
+        const val DEFAULT_SAMPLE_WINDOW_MS = 60_000L
+    }
+}
+
+private data class UidTrafficUsage(
+    val rxBytes: Long = 0L,
+    val txBytes: Long = 0L,
+    val foreground: Boolean? = null,
+) {
+    operator fun plus(other: UidTrafficUsage): UidTrafficUsage {
+        val foreground =
+            when {
+                this.foreground == true || other.foreground == true -> true
+                this.foreground == false || other.foreground == false -> false
+                else -> null
+            }
+        return UidTrafficUsage(
+            rxBytes = rxBytes + other.rxBytes,
+            txBytes = txBytes + other.txBytes,
+            foreground = foreground,
+        )
+    }
+}

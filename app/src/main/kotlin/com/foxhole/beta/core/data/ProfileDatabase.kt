@@ -21,6 +21,12 @@ import androidx.room.TypeConverters
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SimpleSQLiteQuery
 import androidx.sqlite.db.SupportSQLiteDatabase
+import com.foxhole.beta.core.model.AnomalyEvent
+import com.foxhole.beta.core.model.AnomalySeverity
+import com.foxhole.beta.core.model.AnomalyType
+import com.foxhole.beta.core.model.AppBaseline
+import com.foxhole.beta.core.model.AppTrafficWindow
+import com.foxhole.beta.core.model.NetworkType
 import com.foxhole.beta.core.model.Profile
 import com.foxhole.beta.core.model.ProfileSourceType
 import com.foxhole.beta.core.model.ProtocolHint
@@ -30,6 +36,9 @@ import com.foxhole.beta.core.model.RoutingPresetOverrideMode
 import com.foxhole.beta.core.model.RoutingPresetSource
 import com.foxhole.beta.core.model.RoutingRule
 import com.foxhole.beta.core.model.RoutingRuleAction
+import com.foxhole.beta.core.model.TrafficBaseline
+import com.foxhole.beta.core.model.TrafficWindow
+import com.foxhole.beta.core.model.VpnMode
 import com.foxhole.beta.core.security.AndroidKeystoreFileCipher
 import com.foxhole.beta.core.security.readBytesMigratingLegacy
 import kotlinx.coroutines.flow.Flow
@@ -37,6 +46,7 @@ import kotlinx.serialization.json.Json
 import net.zetetic.database.sqlcipher.SupportOpenHelperFactory
 import java.io.File
 import java.security.SecureRandom
+import java.util.Calendar
 import java.util.concurrent.atomic.AtomicBoolean
 
 @Entity(tableName = "profiles")
@@ -176,6 +186,295 @@ data class RoutingPresetWithRules(
     )
     val rules: List<RoutingRuleEntity>,
 )
+
+fun anomalyHourBucket(timestampMs: Long): Int =
+    Calendar.getInstance()
+        .apply { timeInMillis = timestampMs.coerceAtLeast(0L) }
+        .get(Calendar.HOUR_OF_DAY)
+        .coerceIn(0, 23)
+
+private inline fun <reified T : Enum<T>> enumValueOrDefault(
+    value: String?,
+    defaultValue: T,
+): T =
+    value
+        ?.let { raw -> runCatching { enumValueOf<T>(raw) }.getOrNull() }
+        ?: defaultValue
+
+@Entity(
+    tableName = "traffic_windows",
+    indices = [
+        Index("startedAtMs"),
+        Index(value = ["profileId", "protocol", "networkType", "hourBucket"]),
+    ],
+)
+@TypeConverters(RoomValueConverters::class)
+data class TrafficWindowEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val startedAtMs: Long,
+    val durationSec: Int,
+    val networkType: String,
+    val vpnMode: String,
+    val profileId: String?,
+    val protocol: String?,
+    val hourBucket: Int,
+    val rxBytes: Long,
+    val txBytes: Long,
+    val blockedDns: Int,
+    val allowedDns: Int,
+    val reconnects: Int,
+    val latencyMs: Int?,
+    val destinationCountries: Map<String, Long>,
+) {
+    fun toDomain(): TrafficWindow =
+        TrafficWindow(
+            startedAtMs = startedAtMs,
+            durationSec = durationSec,
+            networkType = enumValueOrDefault(networkType, NetworkType.UNKNOWN),
+            vpnMode = enumValueOrDefault(vpnMode, VpnMode.NORMAL),
+            profileId = profileId,
+            protocol = protocol,
+            rxBytes = rxBytes,
+            txBytes = txBytes,
+            blockedDns = blockedDns,
+            allowedDns = allowedDns,
+            reconnects = reconnects,
+            latencyMs = latencyMs,
+            destinationCountries = destinationCountries,
+        )
+
+    companion object {
+        fun from(window: TrafficWindow): TrafficWindowEntity =
+            TrafficWindowEntity(
+                startedAtMs = window.startedAtMs,
+                durationSec = window.durationSec,
+                networkType = window.networkType.name,
+                vpnMode = window.vpnMode.name,
+                profileId = window.profileId,
+                protocol = window.protocol,
+                hourBucket = anomalyHourBucket(window.startedAtMs),
+                rxBytes = window.rxBytes,
+                txBytes = window.txBytes,
+                blockedDns = window.blockedDns,
+                allowedDns = window.allowedDns,
+                reconnects = window.reconnects,
+                latencyMs = window.latencyMs,
+                destinationCountries = window.destinationCountries,
+            )
+    }
+}
+
+@Entity(
+    tableName = "app_traffic_windows",
+    indices = [
+        Index("startedAtMs"),
+        Index("packageName"),
+        Index(value = ["packageName", "networkType", "hourBucket"]),
+    ],
+)
+data class AppTrafficWindowEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val packageName: String,
+    val uid: Int,
+    val startedAtMs: Long,
+    val durationSec: Int,
+    val rxBytes: Long,
+    val txBytes: Long,
+    val foreground: Boolean?,
+    val networkType: String,
+    val hourBucket: Int,
+) {
+    fun toDomain(): AppTrafficWindow =
+        AppTrafficWindow(
+            packageName = packageName,
+            startedAtMs = startedAtMs,
+            durationSec = durationSec,
+            rxBytes = rxBytes,
+            txBytes = txBytes,
+            foreground = foreground,
+            networkType = enumValueOrDefault(networkType, NetworkType.UNKNOWN),
+            uid = uid,
+        )
+
+    companion object {
+        fun from(window: AppTrafficWindow): AppTrafficWindowEntity =
+            AppTrafficWindowEntity(
+                packageName = window.packageName,
+                uid = window.uid,
+                startedAtMs = window.startedAtMs,
+                durationSec = window.durationSec,
+                rxBytes = window.rxBytes,
+                txBytes = window.txBytes,
+                foreground = window.foreground,
+                networkType = window.networkType.name,
+                hourBucket = anomalyHourBucket(window.startedAtMs),
+            )
+    }
+}
+
+@Entity(tableName = "traffic_baselines")
+data class TrafficBaselineEntity(
+    @PrimaryKey val baselineKey: String,
+    val profileId: String?,
+    val protocol: String?,
+    val networkType: String,
+    val hourBucket: Int,
+    val metric: String,
+    val median: Double,
+    val mad: Double,
+    val ewma: Double,
+    val ewmad: Double,
+    val sampleCount: Int,
+    val lastUpdatedAt: Long,
+) {
+    fun toDomain(): TrafficBaseline =
+        TrafficBaseline(
+            key = baselineKey,
+            profileId = profileId,
+            protocol = protocol,
+            networkType = enumValueOrDefault(networkType, NetworkType.UNKNOWN),
+            hourBucket = hourBucket,
+            metric = metric,
+            median = median,
+            mad = mad,
+            ewma = ewma,
+            ewmad = ewmad,
+            sampleCount = sampleCount,
+            lastUpdatedAt = lastUpdatedAt,
+        )
+
+    companion object {
+        fun from(baseline: TrafficBaseline): TrafficBaselineEntity =
+            TrafficBaselineEntity(
+                baselineKey = baseline.key,
+                profileId = baseline.profileId,
+                protocol = baseline.protocol,
+                networkType = baseline.networkType.name,
+                hourBucket = baseline.hourBucket,
+                metric = baseline.metric,
+                median = baseline.median,
+                mad = baseline.mad,
+                ewma = baseline.ewma,
+                ewmad = baseline.ewmad,
+                sampleCount = baseline.sampleCount,
+                lastUpdatedAt = baseline.lastUpdatedAt,
+            )
+    }
+}
+
+@Entity(
+    tableName = "app_baselines",
+    indices = [
+        Index("packageName"),
+        Index(value = ["packageName", "networkType", "hourBucket"]),
+    ],
+)
+data class AppBaselineEntity(
+    @PrimaryKey val baselineKey: String,
+    val packageName: String,
+    val profileId: String?,
+    val protocol: String?,
+    val networkType: String,
+    val hourBucket: Int,
+    val metric: String,
+    val median: Double,
+    val mad: Double,
+    val ewma: Double,
+    val ewmad: Double,
+    val sampleCount: Int,
+    val lastUpdatedAt: Long,
+) {
+    fun toDomain(): AppBaseline =
+        AppBaseline(
+            key = baselineKey,
+            packageName = packageName,
+            profileId = profileId,
+            protocol = protocol,
+            networkType = enumValueOrDefault(networkType, NetworkType.UNKNOWN),
+            hourBucket = hourBucket,
+            metric = metric,
+            median = median,
+            mad = mad,
+            ewma = ewma,
+            ewmad = ewmad,
+            sampleCount = sampleCount,
+            lastUpdatedAt = lastUpdatedAt,
+        )
+
+    companion object {
+        fun from(baseline: AppBaseline): AppBaselineEntity =
+            AppBaselineEntity(
+                baselineKey = baseline.key,
+                packageName = baseline.packageName,
+                profileId = baseline.profileId,
+                protocol = baseline.protocol,
+                networkType = baseline.networkType.name,
+                hourBucket = baseline.hourBucket,
+                metric = baseline.metric,
+                median = baseline.median,
+                mad = baseline.mad,
+                ewma = baseline.ewma,
+                ewmad = baseline.ewmad,
+                sampleCount = baseline.sampleCount,
+                lastUpdatedAt = baseline.lastUpdatedAt,
+            )
+    }
+}
+
+@Entity(
+    tableName = "anomaly_events",
+    indices = [
+        Index("createdAtMs"),
+        Index("packageName"),
+        Index(value = ["type", "packageName", "createdAtMs"]),
+    ],
+)
+@TypeConverters(RoomValueConverters::class)
+data class AnomalyEventEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val createdAtMs: Long,
+    val type: String,
+    val severity: String,
+    val score: Int,
+    val reason: String,
+    val evidence: Map<String, String>,
+    val packageName: String?,
+    val profileId: String?,
+    val protocol: String?,
+    val notificationShown: Boolean,
+) {
+    fun toDomain(): AnomalyEvent =
+        AnomalyEvent(
+            id = id,
+            createdAtMs = createdAtMs,
+            type = enumValueOrDefault(type, AnomalyType.TOTAL_TRAFFIC_SPIKE),
+            severity = enumValueOrDefault(severity, AnomalySeverity.SILENT),
+            score = score,
+            reason = reason,
+            evidence = evidence,
+            packageName = packageName,
+            profileId = profileId,
+            protocol = protocol,
+            notificationShown = notificationShown,
+        )
+
+    companion object {
+        fun from(event: AnomalyEvent): AnomalyEventEntity =
+            AnomalyEventEntity(
+                id = event.id,
+                createdAtMs = event.createdAtMs,
+                type = event.type.name,
+                severity = event.severity.name,
+                score = event.score,
+                reason = event.reason,
+                evidence = event.evidence,
+                packageName = event.packageName,
+                profileId = event.profileId,
+                protocol = event.protocol,
+                notificationShown = event.notificationShown,
+            )
+    }
+}
 
 @Dao
 interface ProfileDao {
@@ -404,6 +703,99 @@ interface RoutingCatalogDao {
     suspend fun delete(id: Long)
 }
 
+@Dao
+interface AnomalyDao {
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertTrafficWindow(entity: TrafficWindowEntity): Long
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAppTrafficWindows(entities: List<AppTrafficWindowEntity>)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertTrafficBaseline(entity: TrafficBaselineEntity)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertAppBaseline(entity: AppBaselineEntity)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAnomalyEvent(entity: AnomalyEventEntity): Long
+
+    @Query("select * from anomaly_events where createdAtMs >= :cutoff order by createdAtMs desc, id desc")
+    fun observeAnomalyEvents(cutoff: Long): Flow<List<AnomalyEventEntity>>
+
+    @Query("select * from anomaly_events where createdAtMs >= :cutoff order by createdAtMs desc, id desc")
+    suspend fun getAnomalyEvents(cutoff: Long): List<AnomalyEventEntity>
+
+    @Query(
+        """
+        select * from traffic_windows
+        where ((:profileId is null and profileId is null) or profileId = :profileId)
+            and ((:protocol is null and protocol is null) or protocol = :protocol)
+            and networkType = :networkType
+            and hourBucket = :hourBucket
+        order by startedAtMs desc
+        limit :limit
+        """,
+    )
+    suspend fun recentTrafficWindows(
+        profileId: String?,
+        protocol: String?,
+        networkType: String,
+        hourBucket: Int,
+        limit: Int,
+    ): List<TrafficWindowEntity>
+
+    @Query(
+        """
+        select * from app_traffic_windows
+        where packageName = :packageName
+            and networkType = :networkType
+            and hourBucket = :hourBucket
+        order by startedAtMs desc
+        limit :limit
+        """,
+    )
+    suspend fun recentAppTrafficWindows(
+        packageName: String,
+        networkType: String,
+        hourBucket: Int,
+        limit: Int,
+    ): List<AppTrafficWindowEntity>
+
+    @Query("select * from app_traffic_windows where startedAtMs >= :cutoff order by startedAtMs desc")
+    fun observeRecentAppTrafficWindows(cutoff: Long): Flow<List<AppTrafficWindowEntity>>
+
+    @Query("select * from traffic_baselines where baselineKey = :key limit 1")
+    suspend fun getTrafficBaseline(key: String): TrafficBaselineEntity?
+
+    @Query("select * from app_baselines where baselineKey = :key limit 1")
+    suspend fun getAppBaseline(key: String): AppBaselineEntity?
+
+    @Query(
+        """
+        select count(*) from anomaly_events
+        where type = :type
+            and ((:packageName is null and packageName is null) or packageName = :packageName)
+            and createdAtMs >= :since
+            and notificationShown = 1
+        """,
+    )
+    suspend fun notificationCountSince(
+        type: String,
+        packageName: String?,
+        since: Long,
+    ): Int
+
+    @Query("delete from traffic_windows where startedAtMs < :cutoff")
+    suspend fun deleteTrafficWindowsBefore(cutoff: Long)
+
+    @Query("delete from app_traffic_windows where startedAtMs < :cutoff")
+    suspend fun deleteAppTrafficWindowsBefore(cutoff: Long)
+
+    @Query("delete from anomaly_events where createdAtMs < :cutoff")
+    suspend fun deleteAnomalyEventsBefore(cutoff: Long)
+}
+
 class RoomValueConverters {
     private val json =
         Json {
@@ -419,11 +811,43 @@ class RoomValueConverters {
         if (value.isNullOrBlank()) {
             return emptyList()
         }
-        return runCatching { json.decodeFromString(ListSerializer, value) }.getOrDefault(emptyList())
+            return runCatching { json.decodeFromString(ListSerializer, value) }.getOrDefault(emptyList())
+    }
+
+    @TypeConverter
+    fun fromStringLongMap(value: Map<String, Long>): String = json.encodeToString(StringLongMapSerializer, value)
+
+    @TypeConverter
+    fun toStringLongMap(value: String?): Map<String, Long> {
+        if (value.isNullOrBlank()) {
+            return emptyMap()
+        }
+        return runCatching { json.decodeFromString(StringLongMapSerializer, value) }.getOrDefault(emptyMap())
+    }
+
+    @TypeConverter
+    fun fromStringStringMap(value: Map<String, String>): String = json.encodeToString(StringStringMapSerializer, value)
+
+    @TypeConverter
+    fun toStringStringMap(value: String?): Map<String, String> {
+        if (value.isNullOrBlank()) {
+            return emptyMap()
+        }
+        return runCatching { json.decodeFromString(StringStringMapSerializer, value) }.getOrDefault(emptyMap())
     }
 
     private companion object {
         val ListSerializer = kotlinx.serialization.builtins.ListSerializer(kotlinx.serialization.serializer<String>())
+        val StringLongMapSerializer =
+            kotlinx.serialization.builtins.MapSerializer(
+                kotlinx.serialization.serializer<String>(),
+                kotlinx.serialization.serializer<Long>(),
+            )
+        val StringStringMapSerializer =
+            kotlinx.serialization.builtins.MapSerializer(
+                kotlinx.serialization.serializer<String>(),
+                kotlinx.serialization.serializer<String>(),
+            )
     }
 }
 
@@ -433,8 +857,13 @@ class RoomValueConverters {
         RoutingPresetEntity::class,
         RoutingRuleEntity::class,
         RoutingCatalogEntity::class,
+        TrafficWindowEntity::class,
+        AppTrafficWindowEntity::class,
+        TrafficBaselineEntity::class,
+        AppBaselineEntity::class,
+        AnomalyEventEntity::class,
     ],
-    version = 2,
+    version = 3,
     exportSchema = true,
 )
 @TypeConverters(RoomValueConverters::class)
@@ -446,6 +875,8 @@ abstract class ProfileDatabase : RoomDatabase() {
     abstract fun routingRuleDao(): RoutingRuleDao
 
     abstract fun routingCatalogDao(): RoutingCatalogDao
+
+    abstract fun anomalyDao(): AnomalyDao
 
     companion object {
         private const val LEGACY_DB_NAME = "foxhole.db"
@@ -519,6 +950,113 @@ abstract class ProfileDatabase : RoomDatabase() {
                 }
             }
 
+        private val MIGRATION_2_3 =
+            object : Migration(2, 3) {
+                override fun migrate(db: SupportSQLiteDatabase) {
+                    db.execSQL(
+                        """
+                        create table if not exists `traffic_windows` (
+                            `id` integer primary key autoincrement not null,
+                            `startedAtMs` integer not null,
+                            `durationSec` integer not null,
+                            `networkType` text not null,
+                            `vpnMode` text not null,
+                            `profileId` text,
+                            `protocol` text,
+                            `hourBucket` integer not null,
+                            `rxBytes` integer not null,
+                            `txBytes` integer not null,
+                            `blockedDns` integer not null,
+                            `allowedDns` integer not null,
+                            `reconnects` integer not null,
+                            `latencyMs` integer,
+                            `destinationCountries` text not null
+                        )
+                        """.trimIndent(),
+                    )
+                    db.execSQL("create index if not exists `index_traffic_windows_startedAtMs` on `traffic_windows` (`startedAtMs`)")
+                    db.execSQL("create index if not exists `index_traffic_windows_profileId_protocol_networkType_hourBucket` on `traffic_windows` (`profileId`, `protocol`, `networkType`, `hourBucket`)")
+                    db.execSQL(
+                        """
+                        create table if not exists `app_traffic_windows` (
+                            `id` integer primary key autoincrement not null,
+                            `packageName` text not null,
+                            `uid` integer not null,
+                            `startedAtMs` integer not null,
+                            `durationSec` integer not null,
+                            `rxBytes` integer not null,
+                            `txBytes` integer not null,
+                            `foreground` integer,
+                            `networkType` text not null,
+                            `hourBucket` integer not null
+                        )
+                        """.trimIndent(),
+                    )
+                    db.execSQL("create index if not exists `index_app_traffic_windows_startedAtMs` on `app_traffic_windows` (`startedAtMs`)")
+                    db.execSQL("create index if not exists `index_app_traffic_windows_packageName` on `app_traffic_windows` (`packageName`)")
+                    db.execSQL("create index if not exists `index_app_traffic_windows_packageName_networkType_hourBucket` on `app_traffic_windows` (`packageName`, `networkType`, `hourBucket`)")
+                    db.execSQL(
+                        """
+                        create table if not exists `traffic_baselines` (
+                            `baselineKey` text not null primary key,
+                            `profileId` text,
+                            `protocol` text,
+                            `networkType` text not null,
+                            `hourBucket` integer not null,
+                            `metric` text not null,
+                            `median` real not null,
+                            `mad` real not null,
+                            `ewma` real not null,
+                            `ewmad` real not null,
+                            `sampleCount` integer not null,
+                            `lastUpdatedAt` integer not null
+                        )
+                        """.trimIndent(),
+                    )
+                    db.execSQL(
+                        """
+                        create table if not exists `app_baselines` (
+                            `baselineKey` text not null primary key,
+                            `packageName` text not null,
+                            `profileId` text,
+                            `protocol` text,
+                            `networkType` text not null,
+                            `hourBucket` integer not null,
+                            `metric` text not null,
+                            `median` real not null,
+                            `mad` real not null,
+                            `ewma` real not null,
+                            `ewmad` real not null,
+                            `sampleCount` integer not null,
+                            `lastUpdatedAt` integer not null
+                        )
+                        """.trimIndent(),
+                    )
+                    db.execSQL("create index if not exists `index_app_baselines_packageName` on `app_baselines` (`packageName`)")
+                    db.execSQL("create index if not exists `index_app_baselines_packageName_networkType_hourBucket` on `app_baselines` (`packageName`, `networkType`, `hourBucket`)")
+                    db.execSQL(
+                        """
+                        create table if not exists `anomaly_events` (
+                            `id` integer primary key autoincrement not null,
+                            `createdAtMs` integer not null,
+                            `type` text not null,
+                            `severity` text not null,
+                            `score` integer not null,
+                            `reason` text not null,
+                            `evidence` text not null,
+                            `packageName` text,
+                            `profileId` text,
+                            `protocol` text,
+                            `notificationShown` integer not null
+                        )
+                        """.trimIndent(),
+                    )
+                    db.execSQL("create index if not exists `index_anomaly_events_createdAtMs` on `anomaly_events` (`createdAtMs`)")
+                    db.execSQL("create index if not exists `index_anomaly_events_packageName` on `anomaly_events` (`packageName`)")
+                    db.execSQL("create index if not exists `index_anomaly_events_type_packageName_createdAtMs` on `anomaly_events` (`type`, `packageName`, `createdAtMs`)")
+                }
+            }
+
         fun create(context: Context): ProfileDatabase {
             val appContext = context.applicationContext
             val passphrase = DatabasePassphraseStore(appContext).readOrCreate()
@@ -531,6 +1069,7 @@ abstract class ProfileDatabase : RoomDatabase() {
                     SupportOpenHelperFactory(passphrase),
                 ).addMigrations(
                     MIGRATION_1_2,
+                    MIGRATION_2_3,
                 ).fallbackToDestructiveMigration(false).build()
             migrateLegacyPlaintextDatabase(appContext, database)
             return database

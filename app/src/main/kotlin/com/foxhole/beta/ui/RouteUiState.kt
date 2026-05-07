@@ -2,6 +2,8 @@ package com.foxhole.beta.ui
 
 import com.foxhole.beta.core.data.RoutingRepository
 import com.foxhole.beta.core.diagnostics.DiagnosticEntry
+import com.foxhole.beta.core.model.AnomalyEvent
+import com.foxhole.beta.core.model.AppTrafficWindow
 import com.foxhole.beta.core.model.ConnectionSnapshot
 import com.foxhole.beta.core.model.IpInfo
 import com.foxhole.beta.core.model.InstalledAppOption
@@ -100,6 +102,8 @@ data class SettingsRouteUiState(
     val traffic: TrafficSnapshot = TrafficSnapshot(),
     val installedApps: List<InstalledAppOption> = emptyList(),
     val diagnosticEntries: List<DiagnosticEntry> = emptyList(),
+    val anomalyEvents: List<AnomalyEvent> = emptyList(),
+    val appTrafficWindows: List<AppTrafficWindow> = emptyList(),
 )
 
 data class RoutingRouteUiState(
@@ -221,6 +225,8 @@ internal fun HomeUiState.toSettingsRouteUiState(): SettingsRouteUiState =
         traffic = traffic,
         installedApps = installedApps,
         diagnosticEntries = diagnosticEntries,
+        anomalyEvents = anomalyEvents,
+        appTrafficWindows = appTrafficWindows,
     )
 
 internal fun HomeUiState.toRoutingRouteUiState(): RoutingRouteUiState =

@@ -474,6 +474,11 @@ fun FoxholeApp(
                         snackbarHostState = snackbarHostState,
                         onNavigateUp = navController::navigateUp,
                         onFirewallEnabledChanged = viewModel::onFirewallEnabledChanged,
+                        onNotifyUnusualTrafficChanged = viewModel::onNotifyUnusualTrafficChanged,
+                        onAnomalySensitivitySelected = viewModel::onAnomalySensitivitySelected,
+                        onAnalyzeBackgroundTrafficChanged = viewModel::onAnalyzeBackgroundTrafficChanged,
+                        onAnalyzeDestinationCountriesChanged = viewModel::onAnalyzeDestinationCountriesChanged,
+                        onAnomalyHistoryRetentionSelected = viewModel::onAnomalyHistoryRetentionSelected,
                     )
                 }
                 composable(AppRoute.PRIVACY_ROUTE) {
