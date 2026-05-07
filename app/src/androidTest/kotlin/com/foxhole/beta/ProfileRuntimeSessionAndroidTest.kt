@@ -6,14 +6,16 @@ import android.util.Log
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import com.foxhole.beta.core.model.ConnectionState
+import com.foxhole.beta.core.model.LatencyProbeMethod
 import com.foxhole.beta.core.model.PerAppRoutingMode
 import com.foxhole.beta.core.model.ProtocolHint
 import com.foxhole.beta.core.model.Settings
 import com.foxhole.beta.core.model.TrafficMode
 import com.foxhole.beta.core.model.TunStack
-import com.foxhole.beta.core.model.ConnectionState
 import com.foxhole.beta.vpn.TunnelValidationEvidenceClassifier
 import java.io.File
+import java.io.FileInputStream
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withTimeoutOrNull
@@ -333,6 +335,156 @@ class ProfileRuntimeSessionAndroidTest {
     }
 
     @Test
+    fun manualSmartSubscriptionVlessTcpBackgroundHold() {
+        if (InstrumentationRegistry.getArguments().getString("foxhole.liveSmartVlessTcpBackground") != "1") {
+            Log.d(TEST_TAG, "manual smart VLESS TCP background hold skipped")
+            return
+        }
+        runBlocking {
+            val app = ApplicationProvider.getApplicationContext<FoxholeApplication>()
+            val subscriptionUrl =
+                InstrumentationRegistry
+                    .getArguments()
+                    .getString("foxhole.smartSubscriptionUrl")
+                    ?.trim()
+                    ?.takeIf { it.startsWith("https://", ignoreCase = true) }
+            if (subscriptionUrl == null) {
+                Log.d(TEST_TAG, "manual smart VLESS TCP background hold skipped: https url arg missing")
+                return@runBlocking
+            }
+            if (!ensureVpnPermission(app)) {
+                Log.d(TEST_TAG, "manual smart VLESS TCP background hold skipped: vpn permission missing")
+                return@runBlocking
+            }
+            val holdDurationMs = longArgument("foxhole.backgroundHoldMs", 15 * 60 * 1_000L)
+            val probeIntervalMs = longArgument("foxhole.backgroundProbeIntervalMs", 60_000L)
+            val requireSuccess = requireLiveSmartSuccess()
+            resetRelevantSettings(app)
+            clearProfiles(app)
+
+            val imported =
+                app.container.profileRepository.importProfile(
+                    rawInput = subscriptionUrl,
+                    preferredName = "Live Smart Background",
+                    allowInsecureTlsForProfile =
+                        InstrumentationRegistry
+                            .getArguments()
+                            .getString("foxhole.allowInsecureTlsForLiveSubscription") == "1",
+                )
+            app.container.connectionController.setActiveProfile(imported.id)
+            val profiles = app.container.profileRepository.profiles.first()
+            val vlessTargets =
+                profiles.flatMap { profile ->
+                    profile
+                        .runtimeProbeTargets()
+                        .filter { target -> target.protocolHint == ProtocolHint.VLESS }
+                        .map { target -> profile to target }
+                }
+            Log.d(
+                TEST_TAG,
+                "liveSmartBackground import profiles=${profiles.size} vlessTargets=${vlessTargets.size}",
+            )
+            val selectedTarget = vlessTargets.firstOrNull()
+            if (selectedTarget == null) {
+                if (requireSuccess) {
+                    assertTrue("smart subscription did not expose a VLESS target", false)
+                }
+                return@runBlocking
+            }
+            val (profile, target) = selectedTarget
+
+            disconnectAndWaitForIdle(app)
+            baselineRuntimeSettings(app)
+            app.container.settingsRepository.updateLatencyProbeMethod(LatencyProbeMethod.TCP)
+            app.container.connectionController.setActiveProfile(profile.id)
+            val startedAt = System.currentTimeMillis()
+            Log.d(
+                TEST_TAG,
+                "liveSmartBackground start profileId=${profile.id} protocol=vless optionId=${target.optionId.orEmpty()} durationMs=$holdDurationMs intervalMs=$probeIntervalMs",
+            )
+            app.container.connectionController.connect(profile.id, protocolOptionId = target.optionId)
+            val terminalState =
+                withTimeoutOrNull(liveSmartTerminalTimeoutMs(ProtocolHint.VLESS)) {
+                    waitForActiveConnectionAttempt(app)
+                    waitForTerminalState(app)
+                }
+            if (terminalState != ConnectionState.CONNECTED) {
+                val snapshot = app.container.connectionController.snapshot.value
+                val evidence =
+                    TunnelValidationEvidenceClassifier.classify(
+                        entries = app.container.diagnosticsLogger.entries.value,
+                        sinceMs = startedAt,
+                    )
+                Log.d(
+                    TEST_TAG,
+                    "liveSmartBackground connectFailed terminalState=${terminalState?.name ?: "TIMEOUT"} message=${snapshot.message.orEmpty().take(160)} fatal=${evidence.fatalRuntimeMessage.orEmpty().take(200)} successTraffic=${evidence.hasSuccessfulTunnelActivity}",
+                )
+                if (requireSuccess) {
+                    assertEquals(ConnectionState.CONNECTED, terminalState)
+                }
+                disconnectAndWaitForIdle(app)
+                return@runBlocking
+            }
+
+            val initialIpRefresh = runVpnBoundIpRefresh(app)
+            Log.d(TEST_TAG, "liveSmartBackground initialIpRefresh=$initialIpRefresh")
+            shell("input keyevent KEYCODE_HOME")
+
+            val failures = mutableListOf<String>()
+            var probeCount = 0
+            val holdStartedAt = System.currentTimeMillis()
+            val deadline = holdStartedAt + holdDurationMs.coerceAtLeast(1L)
+            while (System.currentTimeMillis() < deadline) {
+                val now = System.currentTimeMillis()
+                delay(probeIntervalMs.coerceAtLeast(1L).coerceAtMost(deadline - now))
+                probeCount += 1
+                val elapsedSec = (System.currentTimeMillis() - holdStartedAt) / 1_000L
+                val snapshot = app.container.connectionController.snapshot.value
+                val traffic = app.container.connectionController.traffic.value
+                val latencyResult =
+                    runCatching {
+                        app.container.connectionController.measureCurrentConnectionLatency(timeoutMs = 8_000L)
+                    }.fold(
+                        onSuccess = { "ok:$it" },
+                        onFailure = { error -> "fail:${error.javaClass.simpleName}:${error.message.orEmpty().take(80)}" },
+                    )
+                val ipRefreshResult = runVpnBoundIpRefresh(app)
+                if (snapshot.state != ConnectionState.CONNECTED) {
+                    failures += "state@$elapsedSec=${snapshot.state.name}:${snapshot.message.orEmpty().take(80)}"
+                }
+                if (!latencyResult.startsWith("ok:")) {
+                    failures += "tcpLatency@$elapsedSec=$latencyResult"
+                }
+                if (!ipRefreshResult.startsWith("ok:")) {
+                    failures += "ipRefresh@$elapsedSec=$ipRefreshResult"
+                }
+                Log.d(
+                    TEST_TAG,
+                    "liveSmartBackground tick elapsedSec=$elapsedSec state=${snapshot.state.name} latencyTcp=$latencyResult ipRefresh=$ipRefreshResult rxTotal=${traffic.rxTotalBytes} txTotal=${traffic.txTotalBytes}",
+                )
+            }
+
+            val evidence =
+                TunnelValidationEvidenceClassifier.classify(
+                    entries = app.container.diagnosticsLogger.entries.value,
+                    sinceMs = startedAt,
+                )
+            val finalSnapshot = app.container.connectionController.snapshot.value
+            Log.d(
+                TEST_TAG,
+                "liveSmartBackground result probes=$probeCount finalState=${finalSnapshot.state.name} failures=${failures.size} fatal=${evidence.fatalRuntimeMessage.orEmpty().take(200)} successTraffic=${evidence.hasSuccessfulTunnelActivity}",
+            )
+            if (requireSuccess) {
+                assertEquals(ConnectionState.CONNECTED, finalSnapshot.state)
+                assertTrue("background failures: ${failures.joinToString(" | ")}", failures.isEmpty())
+                assertTrue("fatal runtime evidence: ${evidence.fatalRuntimeMessage.orEmpty()}", evidence.fatalRuntimeMessage == null)
+                assertTrue("tunnel traffic evidence missing", evidence.hasSuccessfulTunnelActivity)
+            }
+            disconnectAndWaitForIdle(app)
+        }
+    }
+
+    @Test
     fun restoreBaselineRuntimeSettingsWhenRequested() {
         if (InstrumentationRegistry.getArguments().getString("foxhole.restoreRuntimeBaseline") != "1") {
             Log.d(TEST_TAG, "restore runtime baseline skipped")
@@ -564,6 +716,15 @@ class ProfileRuntimeSessionAndroidTest {
         deleteChildren(File(app.filesDir, "profile-secrets"))
     }
 
+    private fun shell(command: String): String {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        instrumentation.uiAutomation.executeShellCommand(command).use { descriptor ->
+            FileInputStream(descriptor.fileDescriptor).bufferedReader().use { reader ->
+                return reader.readText()
+            }
+        }
+    }
+
     private fun deleteChildren(dir: File) {
         dir.listFiles()?.forEach { child ->
             if (child.isDirectory) {
@@ -591,6 +752,23 @@ class ProfileRuntimeSessionAndroidTest {
 
     private fun requireLiveSmartSuccess(): Boolean =
         InstrumentationRegistry.getArguments().getString("foxhole.requireLiveSmartSuccess") == "1"
+
+    private fun longArgument(name: String, defaultValue: Long): Long =
+        InstrumentationRegistry
+            .getArguments()
+            .getString(name)
+            ?.toLongOrNull()
+            ?: defaultValue
+
+    private suspend fun runVpnBoundIpRefresh(app: FoxholeApplication): String =
+        runCatching {
+            withTimeoutOrNull(20_000L) {
+                app.container.connectionController.refreshIpInfo()
+            } ?: error("timeout")
+        }.fold(
+            onSuccess = { ipInfo -> "ok:${ipInfo.ipv4 ?: ipInfo.ipv6 ?: "unknown"}" },
+            onFailure = { error -> "fail:${error.javaClass.simpleName}:${error.message.orEmpty().take(80)}" },
+        )
 
     private data class RuntimeProbeTarget(
         val protocolHint: ProtocolHint,
