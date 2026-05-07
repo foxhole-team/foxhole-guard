@@ -30,8 +30,13 @@ internal fun Service.handleForegroundRuntimeCommand(
     startLocalGuard: suspend (LocalGuardMode, Int) -> Unit = { _, commandStartId ->
         disconnect(commandStartId)
     },
+    failClosedTeardown: suspend (commandStartId: Int, action: String?) -> Unit,
 ): Int {
     ensureConnectionNotificationChannel(notificationManager)
+    if (isFailClosedRuntimeServiceCommand(intent?.action)) {
+        launchPriorityCommand { failClosedTeardown(startId, intent?.action) }
+        return Service.START_NOT_STICKY
+    }
     startForeground(
         FoxholeConnectionServiceContract.NOTIFICATION_ID,
         buildNotification(currentNotificationSnapshot()),
@@ -47,5 +52,5 @@ internal fun Service.handleForegroundRuntimeCommand(
         reload = reload,
         startLocalGuard = startLocalGuard,
     )
-    return Service.START_STICKY
+    return Service.START_NOT_STICKY
 }

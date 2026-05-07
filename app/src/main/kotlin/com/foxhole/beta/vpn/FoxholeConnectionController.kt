@@ -152,6 +152,25 @@ class FoxholeConnectionController(
 
     suspend fun reconcileActiveVpnNetworkIfNeeded(): Boolean {
         val currentSnapshot = snapshot.value
+        if (
+            currentSnapshot.trafficMode == TrafficMode.TUNNEL &&
+            currentSnapshot.state in STALE_VPN_SNAPSHOT_STATES &&
+            !hasActiveVpnNetwork()
+        ) {
+            diagnosticsLogger.record(
+                "connection",
+                "active tunnel snapshot found without vpn network; cleared stale runtime state",
+            )
+            clearAppliedRuntime()
+            FoxholeVpnRuntimeBridge.clearTransientState()
+            FoxholeVpnRuntimeBridge.update(
+                ConnectionSnapshot(
+                    state = ConnectionState.ERROR,
+                    trafficMode = settingsRepository.current().traffic.mode,
+                ),
+            )
+            return false
+        }
         if (currentSnapshot.state in ACTIVE_CONNECTION_STATES || !hasActiveVpnNetwork()) {
             return false
         }
@@ -198,6 +217,12 @@ class FoxholeConnectionController(
 internal val ACTIVE_CONNECTION_STATES =
     setOf(
         ConnectionState.CONNECTING,
+        ConnectionState.CONNECTED,
+        ConnectionState.RECONNECTING,
+    )
+
+private val STALE_VPN_SNAPSHOT_STATES =
+    setOf(
         ConnectionState.CONNECTED,
         ConnectionState.RECONNECTING,
     )

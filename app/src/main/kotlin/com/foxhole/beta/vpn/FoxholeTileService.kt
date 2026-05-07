@@ -47,10 +47,17 @@ class FoxholeTileService : TileService() {
 
     override fun onClick() {
         super.onClick()
-        val state = FoxholeVpnRuntimeBridge.snapshot.value.state
-        val activating = state !in ACTIVE_STATES
+        scope.launch {
+            handleTileClick()
+        }
+    }
+
+    private suspend fun handleTileClick() {
         val app = applicationContext as FoxholeApplication
         val dependencies: FoxholeTileDependencies = app.appGraph
+        dependencies.connectionController.reconcileActiveVpnNetworkIfNeeded()
+        val state = FoxholeVpnRuntimeBridge.snapshot.value.state
+        val activating = state !in ACTIVE_STATES
         val trafficMode = dependencies.settingsRepository.settings.value.traffic.mode
         if (activating) {
             FoxholeVpnRuntimeBridge.update(

@@ -134,6 +134,7 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
             disconnect = { commandStartId -> disconnect(commandStartId = commandStartId) },
             disconnectWithOptions = { commandStartId, _ -> disconnect(commandStartId = commandStartId) },
             reload = ::reload,
+            failClosedTeardown = ::failClosedTeardown,
         )
 
     override fun onDestroy() {
@@ -284,6 +285,48 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
     ) {
         container.diagnosticsLogger.record("connection", "runtime failure: $message")
         launchCommand { disconnect(message, commandStartId) }
+    }
+
+    private suspend fun failClosedTeardown(
+        commandStartId: Int,
+        action: String?,
+    ) {
+        val snapshot = FoxholeVpnRuntimeBridge.snapshot.value
+        val session = activeSession
+        val hadActiveRuntime = session != null || snapshot.state in ACTIVE_CONNECTION_STATES
+        val finalTraffic =
+            if (session != null) {
+                trafficSampler.sample()
+            } else {
+                TrafficSnapshot()
+            }
+        if (session != null) {
+            persistProfileTraffic(session, finalTraffic)
+        }
+        stopTrafficUpdates()
+        stopGeoRefresh()
+        stopNotificationHealthMonitoring()
+        cancelScheduledAutoReconnect(resetAttempts = true)
+        container.diagnosticsLogger.recordStructured(
+            "connection",
+            "proxy command fail-closed teardown",
+            action?.let { "action=$it" } ?: "action=null",
+        )
+        runtime.stop()
+        runtimeWakeLock.release()
+        activeSession = null
+        container.connectionController.clearAppliedRuntime()
+        FoxholeVpnRuntimeBridge.updateTraffic(trafficSampler.reset())
+        FoxholeVpnRuntimeBridge.clearTransientState()
+        FoxholeVpnRuntimeBridge.update(
+            ConnectionSnapshot(
+                state = if (hadActiveRuntime) ConnectionState.ERROR else ConnectionState.IDLE,
+                trafficMode = container.settingsRepository.current().traffic.mode,
+                message = null,
+            ),
+        )
+        removeForegroundNotification()
+        stopService(commandStartId)
     }
 
     private suspend fun reload(profileIdHint: Long) {

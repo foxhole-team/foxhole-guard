@@ -45,6 +45,8 @@ interface FoxholeRuntimeDependencies {
 
 interface FoxholeTileDependencies {
     val settingsRepository: SettingsRepository
+    val diagnosticsLogger: DiagnosticsLogger
+    val connectionController: FoxholeConnectionController
 }
 
 interface FoxholeRefreshWorkerDependencies {

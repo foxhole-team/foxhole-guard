@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import com.foxhole.beta.FoxholeApplication
 import com.foxhole.beta.FoxholeTileDependencies
+import com.foxhole.beta.core.model.TrafficMode
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -26,6 +27,7 @@ class BootReceiver : BroadcastReceiver() {
                 val dependencies: FoxholeTileDependencies = app.appGraph
                 val settings = dependencies.settingsRepository.settings.first()
                 if (settings.connection.autoStartOnBoot) {
+                    dependencies.diagnosticsLogger.record("connection", "boot restore requested")
                     FoxholeConnectionServiceContract.startForegroundService(
                         context = context,
                         mode = settings.traffic.mode,
@@ -34,12 +36,18 @@ class BootReceiver : BroadcastReceiver() {
                 } else {
                     val localGuardMode = settings.localGuardModeOrNull()
                     if (localGuardMode != null) {
+                        dependencies.diagnosticsLogger.record(
+                            "connection",
+                            "boot local guard restore requested mode=${localGuardMode.name.lowercase()}",
+                        )
                         FoxholeConnectionServiceContract.startForegroundService(
                             context = context,
-                            mode = com.foxhole.beta.core.model.TrafficMode.TUNNEL,
+                            mode = TrafficMode.TUNNEL,
                             action = FoxholeConnectionServiceContract.ACTION_START_LOCAL_GUARD,
                             localGuardMode = localGuardMode,
                         )
+                    } else {
+                        dependencies.diagnosticsLogger.record("connection", "boot restore skipped: auto start disabled")
                     }
                 }
             } finally {

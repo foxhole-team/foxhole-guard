@@ -49,6 +49,7 @@ internal fun handleRuntimeServiceCommand(
                     startId = startId,
                     connect = connect,
                     disconnect = disconnect,
+                    startLocalGuard = startLocalGuard,
                 )
             }
         }
@@ -66,6 +67,9 @@ internal fun handleRuntimeServiceCommand(
 internal fun isPriorityRuntimeServiceCommand(action: String?): Boolean =
     action == FoxholeConnectionServiceContract.ACTION_DISCONNECT
 
+internal fun isFailClosedRuntimeServiceCommand(action: String?): Boolean =
+    action !in KNOWN_RUNTIME_SERVICE_ACTIONS
+
 private suspend fun restoreLastActiveConnection(
     container: FoxholeRuntimeDependencies,
     startId: Int,
@@ -76,9 +80,23 @@ private suspend fun restoreLastActiveConnection(
         previousVpnNetworkHandle: Long?,
     ) -> Unit,
     disconnect: suspend (commandStartId: Int?, suppressLocalGuard: Boolean) -> Unit,
+    startLocalGuard: suspend (LocalGuardMode, Int) -> Unit,
 ) {
     val active = container.profileRepository.getActiveProfile()
     if (active == null) {
+        val localGuardMode = container.settingsRepository.current().localGuardModeOrNull()
+        container.diagnosticsLogger.record(
+            "connection",
+            if (localGuardMode == null) {
+                "restore skipped: no active profile"
+            } else {
+                "restore fallback: no active profile, starting local guard"
+            },
+        )
+        if (localGuardMode != null) {
+            startLocalGuard(localGuardMode, startId)
+            return
+        }
         disconnect(startId, false)
         return
     }
@@ -109,3 +127,12 @@ private suspend fun restoreLastActiveConnection(
     }
     connect(active.id, startId, restoredOptionId, null)
 }
+
+private val KNOWN_RUNTIME_SERVICE_ACTIONS =
+    setOf(
+        FoxholeConnectionServiceContract.ACTION_CONNECT,
+        FoxholeConnectionServiceContract.ACTION_DISCONNECT,
+        FoxholeConnectionServiceContract.ACTION_RELOAD,
+        FoxholeConnectionServiceContract.ACTION_RESTORE,
+        FoxholeConnectionServiceContract.ACTION_START_LOCAL_GUARD,
+    )
