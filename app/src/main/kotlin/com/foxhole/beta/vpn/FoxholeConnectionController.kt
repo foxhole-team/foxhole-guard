@@ -5,6 +5,7 @@ import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
 import androidx.core.content.getSystemService
+import com.foxhole.beta.R
 import com.foxhole.beta.core.data.ProfileRepository
 import com.foxhole.beta.core.data.RoutingRepository
 import com.foxhole.beta.core.diagnostics.DiagnosticsLogger
@@ -123,7 +124,16 @@ class FoxholeConnectionController(
         }
     }
 
-    suspend fun refreshProfile(profileId: Long): Profile = profileRepository.refreshProfile(profileId)
+    suspend fun refreshProfile(
+        profileId: Long,
+        excludeInsecureTlsOptions: Boolean = false,
+        allowInsecureTlsForProfile: Boolean = false,
+    ): Profile =
+        profileRepository.refreshProfile(
+            profileId = profileId,
+            excludeInsecureTlsOptions = excludeInsecureTlsOptions,
+            allowInsecureTlsForProfile = allowInsecureTlsForProfile,
+        )
 
     suspend fun setActiveProfile(profileId: Long) {
         profileRepository.setActiveProfile(profileId)
@@ -152,48 +162,105 @@ class FoxholeConnectionController(
 
     suspend fun reconcileActiveVpnNetworkIfNeeded(): Boolean {
         val currentSnapshot = snapshot.value
-        if (
-            currentSnapshot.trafficMode == TrafficMode.TUNNEL &&
-            currentSnapshot.state in STALE_VPN_SNAPSHOT_STATES &&
-            !hasActiveVpnNetwork()
-        ) {
-            diagnosticsLogger.record(
-                "connection",
-                "active tunnel snapshot found without vpn network; cleared stale runtime state",
-            )
-            clearAppliedRuntime()
-            FoxholeVpnRuntimeBridge.clearTransientState()
-            FoxholeVpnRuntimeBridge.update(
-                ConnectionSnapshot(
-                    state = ConnectionState.ERROR,
-                    trafficMode = settingsRepository.current().traffic.mode,
-                ),
-            )
-            return false
+        val vpnNetwork = currentVpnNetwork()
+        return when {
+            currentSnapshot.isStaleTunnelSnapshotWithoutVpn(vpnNetwork) -> {
+                diagnosticsLogger.record(
+                    "connection",
+                    "active tunnel snapshot found without vpn network; cleared stale runtime state",
+                )
+                clearAppliedRuntime()
+                FoxholeVpnRuntimeBridge.clearTransientState()
+                FoxholeVpnRuntimeBridge.update(
+                    ConnectionSnapshot(
+                        state = ConnectionState.ERROR,
+                        trafficMode = settingsRepository.current().traffic.mode,
+                    ),
+                )
+                false
+            }
+
+            currentSnapshot.state in ACTIVE_CONNECTION_STATES || vpnNetwork == null -> false
+
+            settingsRepository.current().localGuardModeOrNull() != null -> {
+                diagnosticsLogger.record("connection", "active local guard vpn found with idle snapshot")
+                false
+            }
+
+            else -> restoreActiveVpnNetwork(vpnNetwork)
         }
-        if (currentSnapshot.state in ACTIVE_CONNECTION_STATES || !hasActiveVpnNetwork()) {
-            return false
-        }
-        if (settingsRepository.current().localGuardModeOrNull() != null) {
-            diagnosticsLogger.record("connection", "active local guard vpn found with idle snapshot")
-            return false
-        }
+    }
+
+    private suspend fun restoreActiveVpnNetwork(vpnNetwork: Network): Boolean {
         val activeProfile = profileRepository.getActiveProfile()
         diagnosticsLogger.record(
             "connection",
-            "active vpn network found with idle snapshot; restored connected state",
+            "active vpn network found with idle snapshot; validating before restore",
         )
         FoxholeVpnRuntimeBridge.update(
             ConnectionSnapshot(
-                state = ConnectionState.CONNECTED,
+                state = ConnectionState.RECONNECTING,
                 trafficMode = TrafficMode.TUNNEL,
                 profileId = activeProfile?.id,
                 profileName = activeProfile?.name,
                 protocolHint = activeProfile?.protocolHint,
                 protocolOptionId = activeProfile?.selectedProtocolOptionId,
+                message = context.getString(R.string.status_reconnecting),
             ),
         )
-        return true
+        return runCatching {
+            refreshRestoredVpnIpInfo(vpnNetwork)
+        }.fold(
+            onSuccess = { restoredIpInfo ->
+                diagnosticsLogger.record("connection", "active vpn restore passed vpn-bound ip validation")
+                FoxholeVpnRuntimeBridge.updateIpInfo(restoredIpInfo)
+                FoxholeVpnRuntimeBridge.update(
+                    ConnectionSnapshot(
+                        state = ConnectionState.CONNECTED,
+                        trafficMode = TrafficMode.TUNNEL,
+                        profileId = activeProfile?.id,
+                        profileName = activeProfile?.name,
+                        protocolHint = activeProfile?.protocolHint,
+                        protocolOptionId = activeProfile?.selectedProtocolOptionId,
+                    ),
+                )
+                true
+            },
+            onFailure = { error ->
+                diagnosticsLogger.record(
+                    "connection",
+                    "active vpn restore failed vpn-bound validation: ${error.message.orEmpty()}",
+                )
+                clearAppliedRuntime()
+                FoxholeVpnRuntimeBridge.clearTransientState()
+                FoxholeVpnRuntimeBridge.update(
+                    ConnectionSnapshot(
+                        state = ConnectionState.ERROR,
+                        trafficMode = settingsRepository.current().traffic.mode,
+                        message = context.getString(R.string.error_dns_probe_failed),
+                    ),
+                )
+                false
+            },
+        )
+    }
+
+    private suspend fun refreshRestoredVpnIpInfo(vpnNetwork: Network): IpInfo {
+        val settings = settingsRepository.current()
+        val endpoint = settings.connection.ipInfoEndpoint
+        val requestNetwork = tunnelValidationRequestNetwork(vpnNetwork)
+        val resolverNetwork = currentUpstreamNetwork()
+        return ipInfoRepository
+            .fetch(
+                endpoint = endpoint,
+                callTimeoutMs = FoxholeVpnService.CONNECTIVITY_PROBE_CALL_TIMEOUT_MS,
+                network = requestNetwork,
+                resolverNetwork = resolverNetwork,
+                mode = IpInfoFetchMode.FULL,
+            ).withDnsServers(
+                localDnsServers = connectivityManager.dnsServerAddresses(vpnNetwork),
+                remoteDnsServers = emptyList(),
+            )
     }
 
     private fun currentVpnNetwork(): Network? =
@@ -213,6 +280,11 @@ class FoxholeConnectionController(
             capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_RESTRICTED) &&
             !capabilities.hasTransport(NetworkCapabilities.TRANSPORT_VPN)
 }
+
+private fun ConnectionSnapshot.isStaleTunnelSnapshotWithoutVpn(vpnNetwork: Network?): Boolean =
+    trafficMode == TrafficMode.TUNNEL &&
+        state in STALE_VPN_SNAPSHOT_STATES &&
+        vpnNetwork == null
 
 internal val ACTIVE_CONNECTION_STATES =
     setOf(

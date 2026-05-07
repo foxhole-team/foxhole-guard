@@ -4,8 +4,8 @@ import com.foxhole.beta.BuildConfig
 import com.foxhole.beta.core.data.RoutingRepository
 import com.foxhole.beta.core.diagnostics.DiagnosticEntry
 import com.foxhole.beta.core.model.AnomalyEvent
-import com.foxhole.beta.core.model.AppTrafficWindow
 import com.foxhole.beta.core.model.AppLocale
+import com.foxhole.beta.core.model.AppTrafficWindow
 import com.foxhole.beta.core.model.CachedActiveProfile
 import com.foxhole.beta.core.model.ConnectionSnapshot
 import com.foxhole.beta.core.model.DiagnosticsRetention
@@ -137,6 +137,7 @@ internal data class PendingConnectRequest(
 
 data class InsecureTlsImportWarningState(
     val rawInput: String,
+    val profileId: Long? = null,
     val protocolLabels: List<String> = emptyList(),
     val canExcludeAndApply: Boolean = false,
 )

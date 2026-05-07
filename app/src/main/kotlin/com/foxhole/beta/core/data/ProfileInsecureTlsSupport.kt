@@ -181,6 +181,7 @@ private fun ParsedSubscriptionProfile.withoutInsecureTlsOptionsOrNull(json: Json
 internal fun StoredProfileSecret.withInsecureTlsMarkers(
     json: Json,
     forceRequiresInsecureTls: Boolean = false,
+    grantInsecureTlsConsent: Boolean = false,
 ): StoredProfileSecret {
     val markedOptions = protocolOptions.withInsecureTlsMarkers(json)
     val resolvedRequiresInsecureTls = resolvedConfigJson?.requiresInsecureTls(json) == true
@@ -191,15 +192,21 @@ internal fun StoredProfileSecret.withInsecureTlsMarkers(
                 forceRequiresInsecureTls ||
                 resolvedRequiresInsecureTls ||
                 markedOptions.any(StoredProfileProtocolOption::requiresInsecureTls),
+        insecureTlsConsentGranted =
+            when {
+                insecureTlsConsentGranted == true || grantInsecureTlsConsent -> true
+                insecureTlsConsentGranted == false -> false
+                else -> false
+            },
     )
 }
 
-internal fun StoredProfileSecret.hasInsecureTlsConsent(json: Json): Boolean =
-    requiresInsecureTls ||
-        resolvedConfigJson?.requiresInsecureTls(json) == true ||
-        protocolOptions.any { option ->
-            option.requiresInsecureTls || option.normalizedConfigJson.requiresInsecureTls(json)
-        }
+internal fun StoredProfileSecret.hasInsecureTlsConsent(): Boolean =
+    when (insecureTlsConsentGranted) {
+        true -> true
+        false -> false
+        null -> requiresInsecureTls
+    }
 
 internal fun List<StoredProfileProtocolOption>.withInsecureTlsMarkers(json: Json): List<StoredProfileProtocolOption> =
     map { option ->

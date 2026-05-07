@@ -700,8 +700,11 @@ class HomeViewModel(
             return
         }
         viewModelScope.launch {
-            runCatching { refreshProfileAndMaybeReconnect(activeProfile.id) }
-                .onFailure { handleProfileRefreshFailure(activeProfile.id, it) }
+            refreshProfileWithInsecureTlsDecision(
+                profileId = activeProfile.id,
+                allowInsecureTlsForProfile = false,
+                excludeInsecureTlsOptions = false,
+            )
         }
     }
 
@@ -1193,6 +1196,16 @@ class HomeViewModel(
 
     internal suspend fun refreshProfileAndMaybeReconnect(profileId: Long) =
         refreshProfileAndMaybeReconnectInternal(profileId)
+
+    internal suspend fun refreshProfileAndMaybeReconnect(
+        profileId: Long,
+        excludeInsecureTlsOptions: Boolean,
+        allowInsecureTlsForProfile: Boolean,
+    ) = refreshProfileAndMaybeReconnectInternal(
+        profileId = profileId,
+        excludeInsecureTlsOptions = excludeInsecureTlsOptions,
+        allowInsecureTlsForProfile = allowInsecureTlsForProfile,
+    )
 
     internal suspend fun handleProfileRefreshFailure(
         profileId: Long,

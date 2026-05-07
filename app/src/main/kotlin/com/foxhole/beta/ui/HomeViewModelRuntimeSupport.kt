@@ -10,8 +10,6 @@ import android.os.SystemClock
 import androidx.core.content.FileProvider
 import androidx.lifecycle.viewModelScope
 import com.foxhole.beta.R
-import com.foxhole.beta.core.data.InsecureTlsImportWarning
-import com.foxhole.beta.core.data.InsecureTlsProfileConsentRequiredException
 import com.foxhole.beta.core.model.ConnectionState
 import com.foxhole.beta.core.model.InstalledAppOption
 import com.foxhole.beta.core.model.PrivacyRouteMode
@@ -164,12 +162,17 @@ internal fun HomeViewModel.saveSiteRuleInternal(
                 domains
                     .mapNotNull(::normalizedSiteMaskToken)
                     .distinct()
-            require(normalizedTokens.isNotEmpty()) { getApplication<Application>().getString(R.string.site_exception_validation_error) }
+            require(normalizedTokens.isNotEmpty()) {
+                getApplication<Application>().getString(R.string.site_exception_validation_error)
+            }
             require(normalizedTokens.all { siteMaskValidationErrorRes(it) == null }) {
                 getApplication<Application>().getString(R.string.site_exception_invalid_error)
             }
             val normalizedDomains = normalizedTokens.filterNot { it.startsWith(SITE_CIDR_PREFIX) }
-            val normalizedIpCidrs = normalizedTokens.filter { it.startsWith(SITE_CIDR_PREFIX) }.map { it.removePrefix(SITE_CIDR_PREFIX) }
+            val normalizedIpCidrs =
+                normalizedTokens
+                    .filter { it.startsWith(SITE_CIDR_PREFIX) }
+                    .map { it.removePrefix(SITE_CIDR_PREFIX) }
             val presetId =
                 uiState.value.activePreset?.id ?: container.routingRepository.createPreset(
                     name = getApplication<Application>().getString(R.string.local_rules_preset_name),
@@ -254,131 +257,6 @@ internal fun HomeViewModel.exportDiagnosticsInternal(file: File = createDiagnost
         putExtra(Intent.EXTRA_TEXT, getApplication<Application>().getString(R.string.export_diagnostics_share_text))
         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
     }
-}
-
-internal fun HomeViewModel.importRawInternal(value: String) {
-    viewModelScope.launch {
-        val warning = container.profileRepository.rawInputInsecureTlsWarning(value)
-        if (warning != null) {
-            insecureTlsImportWarningMutable.value = warning.toUiState(rawInput = value)
-            return@launch
-        }
-        importRawWithInsecureTlsDecision(
-            value = value,
-            allowInsecureTlsForProfile = false,
-            excludeInsecureTlsOptions = false,
-        )
-    }
-}
-
-internal fun HomeViewModel.confirmInsecureTlsImportInternal(excludeInsecureTlsOptions: Boolean = false) {
-    val pending = insecureTlsImportWarningMutable.value ?: return
-    insecureTlsImportWarningMutable.value = null
-    viewModelScope.launch {
-        importRawWithInsecureTlsDecision(
-            value = pending.rawInput,
-            allowInsecureTlsForProfile = !excludeInsecureTlsOptions,
-            excludeInsecureTlsOptions = excludeInsecureTlsOptions,
-        )
-    }
-}
-
-internal fun HomeViewModel.dismissInsecureTlsImportWarningInternal() {
-    insecureTlsImportWarningMutable.value = null
-}
-
-private suspend fun HomeViewModel.importRawWithInsecureTlsDecision(
-    value: String,
-    allowInsecureTlsForProfile: Boolean,
-    excludeInsecureTlsOptions: Boolean,
-) {
-    runCatching {
-        container.profileRepository.importProfile(
-            rawInput = value,
-            allowInsecureTlsForProfile = allowInsecureTlsForProfile,
-            excludeInsecureTlsOptions = excludeInsecureTlsOptions,
-        )
-    }.onSuccess { imported ->
-        container.connectionController.setActiveProfile(imported.id)
-        startupActiveProfileMutable.value = imported.copy(isActive = true)
-        emitSuccess(getApplication<Application>().getString(R.string.profile_imported))
-    }.onFailure { error ->
-        if (error is InsecureTlsProfileConsentRequiredException) {
-            val warning = error.warning ?: container.profileRepository.rawInputInsecureTlsWarning(value)
-            insecureTlsImportWarningMutable.value =
-                warning?.toUiState(rawInput = value) ?: InsecureTlsImportWarningState(rawInput = value)
-        } else {
-            handleProfileImportFailure(value, error)
-        }
-    }
-}
-
-private fun InsecureTlsImportWarning.toUiState(rawInput: String): InsecureTlsImportWarningState =
-    InsecureTlsImportWarningState(
-        rawInput = rawInput,
-        protocolLabels = issues.map { issue -> issue.protocolLabel },
-        canExcludeAndApply = canExcludeAndApply,
-    )
-
-internal fun HomeViewModel.profileImportFailureMessageInternal(
-    rawInput: String,
-    throwable: Throwable,
-): String {
-    val app = getApplication<Application>()
-    val message = throwable.message.orEmpty()
-    val trimmed = rawInput.trim()
-    // Keep subscription-link failures readable instead of surfacing parser internals.
-    return when {
-        trimmed.startsWith("http://", ignoreCase = true) ||
-            message.contains("only https subscriptions are allowed", ignoreCase = true) ->
-            app.getString(R.string.profile_import_https_only)
-
-        trimmed.startsWith("https://", ignoreCase = true) &&
-            message.contains("unsupported subscription payload", ignoreCase = true) ->
-            app.getString(R.string.profile_import_subscription_invalid)
-
-        throwable is InsecureTlsProfileConsentRequiredException ||
-            message.contains("insecure tls is not allowed", ignoreCase = true) ->
-            app.getString(R.string.profile_import_insecure_tls_required)
-
-        else -> throwable.message ?: app.getString(R.string.profile_import_failed)
-        }
-}
-
-internal suspend fun HomeViewModel.refreshProfileAndMaybeReconnectInternal(profileId: Long) {
-    val refreshedProfile = container.connectionController.refreshProfile(profileId)
-    val reconnected = reconnectProfileIfRequested(profileId, reconnectNow = true)
-    val app = getApplication<Application>()
-    val message =
-        if (reconnected) {
-            app.getString(R.string.profile_refreshed_reconnecting)
-        } else {
-            app.getString(R.string.profile_refreshed)
-        }
-    container.diagnosticsLogger.record(
-        "profile",
-        "profile refresh in-app notification emitted profileId=$profileId name=${refreshedProfile.name} reconnecting=$reconnected",
-    )
-    emitSuccess(message)
-}
-
-internal suspend fun HomeViewModel.handleProfileRefreshFailureInternal(
-    profileId: Long,
-    throwable: Throwable,
-) {
-    val app = getApplication<Application>()
-    container.diagnosticsLogger.record(
-        "profile",
-        "profile refresh failed profileId=$profileId: ${throwable.javaClass.simpleName}: ${throwable.message.orEmpty()}",
-    )
-    emitError(app.getString(R.string.profile_refresh_failed))
-}
-
-internal suspend fun HomeViewModel.handleProfileImportFailureInternal(
-    rawInput: String,
-    throwable: Throwable,
-) {
-    emitError(profileImportFailureMessage(rawInput, throwable))
 }
 
 internal suspend fun HomeViewModel.reconnectProfileIfRequestedInternal(
@@ -574,7 +452,7 @@ internal fun HomeViewModel.scheduleConnectedIpRefreshInternal() {
                 return@launch
             }
             startIpInfoRefresh(
-                reportFailures = false,
+                reportFailures = true,
                 showLoading = false,
                 clearExistingIp = false,
                 fetchMode = IpInfoFetchMode.FULL,

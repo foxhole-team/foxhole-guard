@@ -343,21 +343,6 @@ internal suspend fun FoxholeVpnService.validateTunnelConnectivityInternal(
                 }
                 val androidValidated = isVpnNetworkValidated(vpnNetwork)
                 val evidence = inspectValidatedTunnelEvidence(validationStartedAt)
-                if (acceptsAndroidValidatedVpnNetworkProbe(
-                        androidValidated = androidValidated,
-                        evidence = evidence,
-                        context = validationPolicyContext,
-                    )
-                ) {
-                    container.diagnosticsLogger.record(
-                        "dns",
-                        "android validated vpn network accepted as platform validation endpoint",
-                    )
-                    scope.launch(Dispatchers.IO) {
-                        refreshValidatedTunnelIpInfoBestEffort(vpnNetwork)
-                    }
-                    return@run vpnNetwork
-                }
                 val ipErrorMessage = ipRefresh.exceptionOrNull()?.message.orEmpty()
                 container.diagnosticsLogger.record(
                     "dns",

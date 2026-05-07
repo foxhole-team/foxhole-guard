@@ -112,6 +112,7 @@ class MultiProtocolProfileSupportTest {
         val profile =
             profile(
                 requiresInsecureTls = true,
+                insecureTlsConsentGranted = true,
                 options =
                     listOf(
                         option("safe", ProtocolHint.TROJAN),
@@ -402,6 +403,7 @@ class MultiProtocolProfileSupportTest {
     private fun profile(
         selectedOptionId: String? = null,
         requiresInsecureTls: Boolean = false,
+        insecureTlsConsentGranted: Boolean = false,
         options: List<ProfileProtocolOption>,
     ): Profile =
         Profile(
@@ -415,6 +417,7 @@ class MultiProtocolProfileSupportTest {
             protocolOptions = options,
             selectedProtocolOptionId = selectedOptionId,
             requiresInsecureTls = requiresInsecureTls,
+            insecureTlsConsentGranted = insecureTlsConsentGranted,
             isActive = true,
         )
 }

@@ -116,7 +116,7 @@ class ProfileInsecureTlsSupportTest {
     }
 
     @Test
-    fun `legacy stored insecure tls config counts as refresh consent`() {
+    fun `stored insecure tls consent is separate from raw option marker`() {
         val secret =
             StoredProfileSecret(
                 requiresInsecureTls = false,
@@ -142,11 +142,18 @@ class ProfileInsecureTlsSupportTest {
                     ),
             )
 
-        assertTrue(secret.hasInsecureTlsConsent(json))
+        assertFalse(secret.hasInsecureTlsConsent())
+    }
+
+    @Test
+    fun `legacy stored profile-level insecure tls marker counts as refresh consent`() {
+        val secret = StoredProfileSecret(requiresInsecureTls = true)
+
+        assertTrue(secret.hasInsecureTlsConsent())
         assertFalse(
             shouldRequireInsecureTlsRefreshConsent(
                 allowInsecureTlsGlobally = false,
-                profileInsecureTlsConsentGranted = secret.hasInsecureTlsConsent(json),
+                profileInsecureTlsConsentGranted = secret.hasInsecureTlsConsent(),
                 strictParseFailedForInsecureTls = true,
             ),
         )

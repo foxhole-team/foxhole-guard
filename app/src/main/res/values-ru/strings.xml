@@ -108,7 +108,7 @@
     <string name="auto_refresh_subscriptions_interval_24h">24 часа</string>
     <string name="ip_info_endpoint">IP-сервис</string>
     <string name="export_diagnostics">Сохранить лог файл</string>
-    <string name="export_diagnostics_summary">Сохранение лог файла в память устройства.</string>
+    <string name="export_diagnostics_summary">Сохранение сырого лог файла в память устройства.</string>
     <string name="export_diagnostics_share_subject">Лог файл Foxhole</string>
     <string name="export_diagnostics_share_text">Очищенный архив Foxhole для отладки и поддержки.</string>
     <string name="clipboard_empty">Буфер обмена пуст</string>
@@ -139,6 +139,7 @@
     <string name="error_profile_missing">Сначала выберите или импортируйте профиль</string>
     <string name="error_profile_invalid">Конфигурация профиля некорректна</string>
     <string name="error_runtime_missing">В этой сборке пока не подключен sing-box core bridge</string>
+    <string name="error_runtime_stopped">VPN runtime неожиданно остановился</string>
     <string name="error_tcp_runtime_readiness_failed">TCP-цель VPN недоступна в текущей сети. Попробуйте еще раз или выберите другой протокол.</string>
     <string name="error_dns_probe_failed">После старта рантайма не прошла проверка связи</string>
     <string name="error_private_dns_strict_unsupported">Android Private DNS пока не поддерживается в режиме Tunnel. Переключите Private DNS на Выключено и подключитесь снова</string>
@@ -436,7 +437,7 @@
     <string name="support_bot_browser_fallback">Telegram не найден.</string>
     <string name="support_bot_share_text">Отправьте этот архив в %1$s.\n\nЕсли нужный чат не открыт автоматически, откройте %2$s.</string>
     <string name="send_log_to_bot">Отправить</string>
-    <string name="send_log_to_bot_summary">Создает лог файл Foxhole и открывает стандартное меню отправки Android.</string>
+    <string name="send_log_to_bot_summary">Создает очищенный лог файл Foxhole и открывает стандартное меню отправки Android.</string>
     <string name="send_log_to_bot_confirm_body">Foxhole отправляет только лог приложения. Журнал сетевой активности хранится отдельно, пока вы сами не откроете и не сохраните его.</string>
     <string name="save_archive">Сохранить архив</string>
     <string name="share_archive">Поделиться</string>
@@ -866,7 +867,7 @@
     <string name="block_ads_title">Block ads</string>
     <string name="block_telemetry_title">Block telemetry</string>
     <string name="help_diagnostics_support_title">Диагностика и поддержка</string>
-    <string name="help_diagnostics_support_body">Диагностика показывает логи подключения, статистику трафика и экспорт очищенного архива.\n\nОчищенный архив не содержит IP-адреса и конфигурации. Он нужен для разбора ошибок подключения, импорта, подписок и Смарт старт.\n\nЕсли проблема повторяется, откройте Диагностика, создайте очищенный архив без IP-адресов и конфигураций и отправьте его в Telegram-бот поддержки.\n\nЕсли Telegram не установлен, Foxhole откроет ссылку в браузере.</string>
+    <string name="help_diagnostics_support_body">Диагностика показывает логи подключения, статистику трафика и локальный экспорт логов.\n\nФайлы, сохраненные в память устройства, являются сырыми локальными логами и могут содержать IP-адреса, хосты, имена профилей, package names и детали конфигурации. Используйте их только когда нужен полный локальный отчет на этом устройстве.\n\nЛоги, отправляемые через стандартное меню Android, сначала очищаются санитайзером. Санитайзер удаляет IP-адреса, хосты, идентификаторы профилей и детали конфигурации до отправки в поддержку.\n\nЖурнал сетевой активности остается отдельным, пока вы сами не откроете и не сохраните этот журнал.</string>
     <string name="help_expert_full_body">Экспертные настройки меняют маршрутизацию, DNS, локальные интерфейсы, импортные ограничения и диагностику.\n\nОткрывайте их только если понимаете последствия или действуете по инструкции поддержки.\n\nЧтобы открыть раздел, нажмите карточку версии сборки 5 раз.</string>
     <string name="site_action_proxy">Proxy</string>
     <string name="site_action_direct">Direct</string>

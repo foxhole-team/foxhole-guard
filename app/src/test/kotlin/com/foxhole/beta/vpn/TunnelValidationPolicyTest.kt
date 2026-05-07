@@ -10,7 +10,6 @@ class TunnelValidationPolicyTest {
     fun `accepts only vpn-bound dns-capable probes as tunnel validation`() {
         assertTrue(acceptsTunnelValidationProbe(TunnelValidationProbeKind.VPN_IP_REFRESH))
         assertTrue(acceptsTunnelValidationProbe(TunnelValidationProbeKind.VPN_VALIDATION_ENDPOINT))
-        assertTrue(acceptsTunnelValidationProbe(TunnelValidationProbeKind.ANDROID_VALIDATED_VPN_NETWORK))
         assertTrue(acceptsTunnelValidationProbe(TunnelValidationProbeKind.VALIDATED_VPN_LITERAL_IP_ENDPOINT))
         assertFalse(acceptsTunnelValidationProbe(TunnelValidationProbeKind.DNS_INDEPENDENT_LITERAL_IP))
     }
@@ -83,48 +82,11 @@ class TunnelValidationPolicyTest {
     }
 
     @Test
-    fun `android validated vpn network requires outbound tunnel activity`() {
-        assertTrue(
-            acceptsAndroidValidatedVpnNetworkProbe(
-                androidValidated = true,
-                evidence =
-                    TunnelValidationEvidence(
-                        hasSuccessfulTunnelActivity = true,
-                        hasOutboundTunnelActivity = true,
-                    ),
-            ),
-        )
-        assertFalse(
-            acceptsAndroidValidatedVpnNetworkProbe(
-                androidValidated = false,
-                evidence =
-                    TunnelValidationEvidence(
-                        hasSuccessfulTunnelActivity = true,
-                        hasOutboundTunnelActivity = true,
-                    ),
-            ),
-        )
-        assertFalse(
-            acceptsAndroidValidatedVpnNetworkProbe(
-                androidValidated = true,
-                evidence =
-                    TunnelValidationEvidence(
-                        hasSuccessfulTunnelActivity = true,
-                        hasOutboundTunnelActivity = false,
-                    ),
-            ),
-        )
-        assertFalse(
-            acceptsAndroidValidatedVpnNetworkProbe(
-                androidValidated = true,
-                evidence =
-                    TunnelValidationEvidence(
-                        hasSuccessfulTunnelActivity = true,
-                        hasOutboundTunnelActivity = true,
-                        fatalRuntimeMessage = "authentication failed",
-                    ),
-            ),
-        )
+    fun `android validated vpn network is not a terminal tunnel validation kind`() {
+        val terminalKinds = TunnelValidationProbeKind.entries.filter(::acceptsTunnelValidationProbe)
+
+        assertFalse(TunnelValidationProbeKind.entries.any { it.name == "ANDROID_VALIDATED_VPN_NETWORK" })
+        assertFalse(terminalKinds.any { it.name == "ANDROID_VALIDATED_VPN_NETWORK" })
     }
 
     @Test

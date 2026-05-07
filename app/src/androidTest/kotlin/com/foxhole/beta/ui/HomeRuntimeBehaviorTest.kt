@@ -52,6 +52,10 @@ class HomeRuntimeBehaviorTest {
                     val app = app()
                     grantNotificationsPermission(app.packageName)
                     runBlocking {
+                        app.container.settingsRepository.updateKillSwitchEnabled(false)
+                        app.container.settingsRepository.updateFirewallEnabled(false)
+                        app.container.settingsRepository.updateNetworkActivityLogging(false)
+                        app.container.settingsRepository.updateNetworkActivityPersistentLogging(false)
                         if (hasActiveFoxholeVpnNetwork(app.packageName)) {
                             FoxholeVpnRuntimeBridge.update(
                                 ConnectionSnapshot(
@@ -124,7 +128,7 @@ class HomeRuntimeBehaviorTest {
             FoxholeVpnRuntimeBridge.update(
                 ConnectionSnapshot(
                     state = ConnectionState.CONNECTED,
-                    trafficMode = TrafficMode.TUNNEL,
+                    trafficMode = TrafficMode.PROXY,
                     profileId = 7L,
                     profileName = "Instrumentation",
                 ),

@@ -108,7 +108,7 @@
     <string name="auto_refresh_subscriptions_interval_24h">24 hours</string>
     <string name="ip_info_endpoint">IP service</string>
     <string name="export_diagnostics">Save log file</string>
-    <string name="export_diagnostics_summary">Saves the log file to device storage.</string>
+    <string name="export_diagnostics_summary">Saves the raw log file to device storage.</string>
     <string name="export_diagnostics_share_subject">Foxhole log file</string>
     <string name="export_diagnostics_share_text">Sanitized Foxhole archive for debugging and support.</string>
     <string name="clipboard_empty">Clipboard is empty</string>
@@ -139,6 +139,7 @@
     <string name="error_profile_missing">Select or import a profile first</string>
     <string name="error_profile_invalid">Profile config is invalid</string>
     <string name="error_runtime_missing">The sing-box core bridge is not bundled in this source build yet</string>
+    <string name="error_runtime_stopped">VPN runtime stopped unexpectedly</string>
     <string name="error_tcp_runtime_readiness_failed">TCP VPN target is unavailable on the current network. Try again or choose another protocol.</string>
     <string name="error_dns_probe_failed">Connectivity validation failed after runtime start</string>
     <string name="error_private_dns_strict_unsupported">Android Private DNS is not supported yet in tunnel mode. Set Private DNS to Off and reconnect</string>
@@ -430,7 +431,7 @@
     <string name="support_bot_browser_fallback">Telegram is not installed.</string>
     <string name="support_bot_share_text">Send this archive to %1$s.\n\nIf the correct chat is not opened automatically, use %2$s.</string>
     <string name="send_log_to_bot">Send</string>
-    <string name="send_log_to_bot_summary">Creates the Foxhole app log and opens the Android share sheet.</string>
+    <string name="send_log_to_bot_summary">Creates a sanitized Foxhole app log and opens the Android share sheet.</string>
     <string name="send_log_to_bot_confirm_body">Foxhole sends only the app log file. Network activity journal entries stay separate unless you open and save that journal yourself.</string>
     <string name="save_archive">Save archive</string>
     <string name="share_archive">Share</string>
@@ -836,7 +837,7 @@
     <string name="block_ads_title">Block ads</string>
     <string name="block_telemetry_title">Block telemetry</string>
     <string name="help_diagnostics_support_title">Diagnostics and support</string>
-    <string name="help_diagnostics_support_body">Diagnostics shows connection logs, traffic statistics, and sanitized archive export.\n\nThe sanitized archive does not contain IP addresses or configurations. It is used to debug connection, import, subscription, and Smart start issues.\n\nIf the problem repeats, open Diagnostics, create a sanitized archive without IP addresses or configurations, and send it to the Telegram support bot.\n\nIf Telegram is not installed, Foxhole opens the link in a browser.</string>
+    <string name="help_diagnostics_support_body">Diagnostics shows connection logs, traffic statistics, and local log export.\n\nFiles saved to device storage are raw local logs and can include IP addresses, hosts, profile names, package names, and configuration details. Use them only when you want a full local record on this device.\n\nLogs sent through the Android share sheet are sanitized first. The sanitizer removes IP addresses, hosts, profile identifiers, and configuration details before support sees the file.\n\nNetwork activity journal entries stay separate unless you open and save that journal yourself.</string>
     <string name="help_expert_full_body">Expert settings change routing, DNS, local interfaces, import restrictions, and diagnostics.\n\nOpen them only if you understand the consequences or are following support instructions.\n\nTo open the section, tap the build version card 5 times.</string>
     <string name="site_action_proxy">Proxy</string>
     <string name="site_action_direct">Direct</string>

@@ -206,6 +206,10 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
     }
 
     override fun onDestroy() {
+        val hadActiveRuntime =
+            activeSession != null ||
+                activeLocalGuardMode != null ||
+                FoxholeVpnRuntimeBridge.snapshot.value.state in ACTIVE_CONNECTION_STATES
         super.onDestroy()
         stopTrafficUpdates()
         anomalyTrafficAggregator.reset()
@@ -217,6 +221,13 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         validationJob = null
         runCatching { kotlinx.coroutines.runBlocking { runtime.stop() } }
         releaseRuntimeWakeLock()
+        if (hadActiveRuntime) {
+            container.diagnosticsLogger.record(
+                "connection",
+                "vpn service destroyed while runtime was active; failing closed",
+            )
+            publishUnexpectedRuntimeStopSnapshot()
+        }
         scope.cancel()
         if (networkCallbackRegistered) {
             runCatching { connectivityManager.unregisterNetworkCallback(networkCallback) }
@@ -240,7 +251,10 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         get() = this
 
     override fun stopRuntimeService() {
-        stopSelf()
+        container.diagnosticsLogger.record("connection", "native runtime requested vpn service stop; failing closed")
+        launchPriorityCommand {
+            failClosedTeardown(commandStartId = 0, action = ACTION_NATIVE_RUNTIME_STOP)
+        }
     }
 
     override fun protectSocket(socket: Int): Boolean = protect(socket)
@@ -426,7 +440,10 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
             }
         }
         if (localGuardMode != null && session == null) {
-            container.diagnosticsLogger.record("connection", "local guard stopped mode=${localGuardMode.name.lowercase()}")
+            container.diagnosticsLogger.record(
+                "connection",
+                "local guard stopped mode=${localGuardMode.name.lowercase()}",
+            )
         }
         removeForegroundNotification()
         stopService(commandStartId)
@@ -455,7 +472,10 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         validationJob?.cancel()
         validationJob = null
         if (activeLocalGuardMode != null) {
-            container.diagnosticsLogger.record("connection", "local guard restarting mode=${activeLocalGuardMode?.name?.lowercase().orEmpty()}")
+            container.diagnosticsLogger.record(
+                "connection",
+                "local guard restarting mode=${activeLocalGuardMode?.name?.lowercase().orEmpty()}",
+            )
             runtime.stop()
             releaseRuntimeWakeLock()
             activeLocalGuardMode = null
@@ -538,6 +558,12 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         releaseRuntimeWakeLock()
         activeSession = null
         activeLocalGuardMode = null
+        val failClosedMessage =
+            if (action == ACTION_NATIVE_RUNTIME_STOP && hadActiveRuntime) {
+                getString(R.string.error_runtime_stopped)
+            } else {
+                null
+            }
         container.connectionController.clearAppliedRuntime()
         FoxholeVpnRuntimeBridge.updateTraffic(trafficSampler.reset())
         FoxholeVpnRuntimeBridge.clearTransientState()
@@ -545,11 +571,26 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
             ConnectionSnapshot(
                 state = if (hadActiveRuntime) ConnectionState.ERROR else ConnectionState.IDLE,
                 trafficMode = container.settingsRepository.current().traffic.mode,
-                message = null,
+                message = failClosedMessage,
             ),
         )
         removeForegroundNotification()
         stopService(commandStartId)
+    }
+
+    private fun publishUnexpectedRuntimeStopSnapshot() {
+        activeSession = null
+        activeLocalGuardMode = null
+        container.connectionController.clearAppliedRuntime()
+        FoxholeVpnRuntimeBridge.updateTraffic(trafficSampler.reset())
+        FoxholeVpnRuntimeBridge.clearTransientState()
+        FoxholeVpnRuntimeBridge.update(
+            ConnectionSnapshot(
+                state = ConnectionState.ERROR,
+                trafficMode = container.settingsRepository.settings.value.traffic.mode,
+                message = getString(R.string.error_runtime_stopped),
+            ),
+        )
     }
 
     internal suspend fun reload(profileIdHint: Long) {
@@ -562,21 +603,36 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
             runCatching { container.profileRepository.getSession(targetProfileId) }
                 .getOrElse {
                     container.diagnosticsLogger.record("connection", "runtime reload session failed: ${it.message.orEmpty()}")
+                    fail(it.message ?: getString(R.string.error_profile_invalid))
                     return
                 }
         val result = runtime.reload(session, this)
         if (result.isSuccess) {
             activeSession = session
             container.connectionController.markCurrentRuntimeApplied()
-            container.diagnosticsLogger.record("connection", "runtime reloaded")
+            container.diagnosticsLogger.record("connection", "runtime reloaded, tunnel validation required")
+            FoxholeVpnRuntimeBridge.update(
+                snapshot.copy(
+                    state = ConnectionState.RECONNECTING,
+                    profileId = session.profileId,
+                    profileName = session.profileName,
+                    protocolHint = session.protocolHint,
+                    protocolOptionId = session.protocolOptionId,
+                    message = getString(R.string.status_reconnecting),
+                ),
+            )
             FoxholeVpnRuntimeBridge.requestImmediateTrafficSample()
             updateNotification()
+            scheduleValidation(
+                session = session,
+                failOnFailure = true,
+                onSuccess = { vpnNetwork -> onTunnelValidated(session, vpnNetwork) },
+            )
         } else {
             val error = result.exceptionOrNull()
-            container.diagnosticsLogger.record(
-                "connection",
-                "runtime reload failed: ${error?.let(::describeVpnRuntimeFailure) ?: "unknown"}",
-            )
+            val message = error?.let(::describeVpnRuntimeFailure) ?: "unknown"
+            container.diagnosticsLogger.record("connection", "runtime reload failed: $message")
+            fail(message)
         }
     }
 
@@ -726,16 +782,17 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
     internal fun recordAnomalyTrafficWindow(sample: TrafficSnapshot) {
         val connection = FoxholeVpnRuntimeBridge.snapshot.value
         val settings = container.settingsRepository.settings.value
+        val aggregationContext =
+            TrafficAggregationContext(
+                connection = connection,
+                settings = settings,
+                networkType = anomalyNetworkTypeProvider.current(),
+                destinationCountries = container.trafficMapRepository.currentDestinationCountryBytes(),
+            )
         val window =
             anomalyTrafficAggregator.aggregate(
                 snapshot = sample,
-                context =
-                    TrafficAggregationContext(
-                        connection = connection,
-                        settings = settings,
-                        networkType = anomalyNetworkTypeProvider.current(),
-                        destinationCountries = container.trafficMapRepository.currentDestinationCountryBytes(),
-                    ),
+                context = aggregationContext,
             ) ?: return
         scope.launch(Dispatchers.IO) {
             val appWindows =
@@ -1019,6 +1076,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         internal const val CONNECTIVITY_PROBE_GRACE_MAX_TIMEOUT_MS = com.foxhole.beta.vpn.CONNECTIVITY_PROBE_GRACE_MAX_TIMEOUT_MS
         internal const val LOCAL_GUARD_PROFILE_ID = -10L
         internal const val APP_TRAFFIC_SAMPLE_INTERVAL_MS = 60_000L
+        private const val ACTION_NATIVE_RUNTIME_STOP = "libbox_service_stop"
     }
 }
 

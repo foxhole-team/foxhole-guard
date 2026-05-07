@@ -24,6 +24,7 @@ import androidx.compose.ui.res.vectorResource
 import androidx.core.content.FileProvider
 import com.foxhole.beta.R
 import com.foxhole.beta.core.diagnostics.DiagnosticEntry
+import com.foxhole.beta.core.diagnostics.DiagnosticSanitizer
 import com.foxhole.beta.core.model.DiagnosticsRetention
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -100,7 +101,7 @@ fun DiagnosticsScreen(
                 pendingSavedLog =
                     SavedLogPayload(
                         filename = "foxhole-network-activity-${System.currentTimeMillis()}.log",
-                        text = formatPlainLog(title, networkEntries),
+                        text = formatPlainLog(title, networkEntries, sanitize = false),
                     )
                 textLogSaver.launch(pendingSavedLog?.filename ?: "foxhole-network-activity.log")
             },
@@ -158,6 +159,13 @@ private fun DiagnosticsScreenContent(
         title = stringResource(R.string.diagnostics_and_usage),
         snackbarHostState = snackbarHostState,
         onNavigateUp = onNavigateUp,
+        actions = {
+            SettingsHelpAction(
+                title = stringResource(R.string.help_diagnostics_support_title),
+                body = stringResource(R.string.help_diagnostics_support_body),
+                icon = Icons.Outlined.FileUpload,
+            )
+        },
     ) {
         item {
             SettingsControlGroup {
@@ -283,10 +291,11 @@ private fun createPlainLogFile(
     title: String,
     entries: List<DiagnosticEntry>,
     filenamePrefix: String,
+    sanitize: Boolean = true,
 ): File {
     val targetDir = File(context.cacheDir, "diagnostics-export").apply { mkdirs() }
     val file = File(targetDir, "$filenamePrefix-${UUID.randomUUID()}.log")
-    file.writeText(formatPlainLog(title, entries), Charsets.UTF_8)
+    file.writeText(formatPlainLog(title, entries, sanitize = sanitize), Charsets.UTF_8)
     return file
 }
 
@@ -311,6 +320,7 @@ private fun sharePlainLogIntent(
 private fun formatPlainLog(
     title: String,
     entries: List<DiagnosticEntry>,
+    sanitize: Boolean = true,
 ): String {
     val formatter = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
     return buildString {
@@ -321,7 +331,13 @@ private fun formatPlainLog(
             appendLine("No entries.")
         } else {
             entries.forEach { entry ->
-                appendLine("${formatter.format(Date(entry.timestamp))} [${entry.tag}] ${entry.message}")
+                val message =
+                    if (sanitize) {
+                        DiagnosticSanitizer.sanitizeForExport(entry.message)
+                    } else {
+                        entry.message
+                    }
+                appendLine("${formatter.format(Date(entry.timestamp))} [${entry.tag}] $message")
             }
         }
     }

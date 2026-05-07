@@ -111,7 +111,10 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
         get() = this
 
     override fun stopRuntimeService() {
-        stopSelf()
+        container.diagnosticsLogger.record("connection", "native runtime requested proxy service stop; failing closed")
+        launchPriorityCommand {
+            failClosedTeardown(commandStartId = 0, action = ACTION_NATIVE_RUNTIME_STOP)
+        }
     }
 
     override fun protectSocket(socket: Int): Boolean = true
@@ -138,6 +141,7 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
         )
 
     override fun onDestroy() {
+        val hadActiveRuntime = activeSession != null || FoxholeVpnRuntimeBridge.snapshot.value.state in ACTIVE_CONNECTION_STATES
         super.onDestroy()
         stopTrafficUpdates()
         stopGeoRefresh()
@@ -145,6 +149,13 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
         cancelScheduledAutoReconnect(resetAttempts = true)
         runCatching { kotlinx.coroutines.runBlocking { runtime.stop() } }
         runtimeWakeLock.release()
+        if (hadActiveRuntime) {
+            container.diagnosticsLogger.record(
+                "connection",
+                "proxy service destroyed while runtime was active; failing closed",
+            )
+            publishUnexpectedRuntimeStopSnapshot()
+        }
         scope.cancel()
         if (defaultNetworkCallbackRegistered) {
             runCatching { connectivityManager.unregisterNetworkCallback(defaultNetworkCallback) }
@@ -315,6 +326,12 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
         runtime.stop()
         runtimeWakeLock.release()
         activeSession = null
+        val failClosedMessage =
+            if (action == ACTION_NATIVE_RUNTIME_STOP && hadActiveRuntime) {
+                getString(R.string.error_runtime_stopped)
+            } else {
+                null
+            }
         container.connectionController.clearAppliedRuntime()
         FoxholeVpnRuntimeBridge.updateTraffic(trafficSampler.reset())
         FoxholeVpnRuntimeBridge.clearTransientState()
@@ -322,11 +339,25 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
             ConnectionSnapshot(
                 state = if (hadActiveRuntime) ConnectionState.ERROR else ConnectionState.IDLE,
                 trafficMode = container.settingsRepository.current().traffic.mode,
-                message = null,
+                message = failClosedMessage,
             ),
         )
         removeForegroundNotification()
         stopService(commandStartId)
+    }
+
+    private fun publishUnexpectedRuntimeStopSnapshot() {
+        activeSession = null
+        container.connectionController.clearAppliedRuntime()
+        FoxholeVpnRuntimeBridge.updateTraffic(trafficSampler.reset())
+        FoxholeVpnRuntimeBridge.clearTransientState()
+        FoxholeVpnRuntimeBridge.update(
+            ConnectionSnapshot(
+                state = ConnectionState.ERROR,
+                trafficMode = container.settingsRepository.settings.value.traffic.mode,
+                message = getString(R.string.error_runtime_stopped),
+            ),
+        )
     }
 
     private suspend fun reload(profileIdHint: Long) {
@@ -344,16 +375,33 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
         val result = runtime.reload(session, this)
         if (result.isSuccess) {
             activeSession = session
-            container.connectionController.markCurrentRuntimeApplied()
-            container.diagnosticsLogger.record("connection", "proxy runtime reloaded")
+            container.diagnosticsLogger.record("connection", "proxy runtime reloaded, validation required")
+            FoxholeVpnRuntimeBridge.update(
+                snapshot.copy(
+                    state = ConnectionState.RECONNECTING,
+                    profileId = session.profileId,
+                    profileName = session.profileName,
+                    protocolHint = session.protocolHint,
+                    protocolOptionId = session.protocolOptionId,
+                    message = getString(R.string.status_reconnecting),
+                ),
+            )
             FoxholeVpnRuntimeBridge.requestImmediateTrafficSample()
             updateNotification()
+            val validation = validateProxyConnectivity(session)
+            if (validation.isSuccess) {
+                container.connectionController.markCurrentRuntimeApplied()
+                onConnectionStarted(session)
+            } else {
+                val message = validation.exceptionOrNull()?.message ?: getString(R.string.error_dns_probe_failed)
+                container.diagnosticsLogger.record("connection", "proxy reload validation failed: $message")
+                fail(getString(R.string.error_dns_probe_failed))
+            }
         } else {
             val error = result.exceptionOrNull()
-            container.diagnosticsLogger.record(
-                "connection",
-                "proxy reload failed: ${error?.let(::describeVpnRuntimeFailure) ?: "unknown"}",
-            )
+            val message = error?.let(::describeVpnRuntimeFailure) ?: "unknown"
+            container.diagnosticsLogger.record("connection", "proxy reload failed: $message")
+            fail(message)
         }
     }
 
@@ -983,6 +1031,7 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
         private const val PROXY_VALIDATION_RETRY_DELAY_MS = 1_000L
         private const val PROXY_VALIDATION_CALL_TIMEOUT_MS = 5_000L
         private const val PROXY_VALIDATION_TOTAL_TIMEOUT_MS = 18_000L
+        private const val ACTION_NATIVE_RUNTIME_STOP = "libbox_service_stop"
         private val CONNECTIVITY_PROBE_ENDPOINTS =
             listOf(
                 "https://cp.cloudflare.com/generate_204",

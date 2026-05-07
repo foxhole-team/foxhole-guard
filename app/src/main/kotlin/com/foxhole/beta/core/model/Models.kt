@@ -469,6 +469,7 @@ data class Profile(
     val protocolOptions: List<ProfileProtocolOption> = emptyList(),
     val selectedProtocolOptionId: String? = null,
     val requiresInsecureTls: Boolean = false,
+    val insecureTlsConsentGranted: Boolean = false,
     val isActive: Boolean,
 )
 
@@ -623,6 +624,7 @@ data class StoredProfileSecret(
     val protocolOptions: List<StoredProfileProtocolOption> = emptyList(),
     val selectedProtocolOptionId: String? = null,
     val requiresInsecureTls: Boolean = false,
+    val insecureTlsConsentGranted: Boolean? = null,
 )
 
 @Serializable

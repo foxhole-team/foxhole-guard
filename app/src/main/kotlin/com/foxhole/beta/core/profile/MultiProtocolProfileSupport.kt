@@ -116,7 +116,7 @@ object MultiProtocolProfileSupport {
         transportPriority: SmartStartTransportPriority = SmartStartTransportPriority.ALL,
         now: Long = System.currentTimeMillis(),
     ): List<AutoConnectProbeCandidate> {
-        val insecureTlsConsentGranted = profile.requiresInsecureTls || allowInsecureTlsGlobally
+        val insecureTlsConsentGranted = profile.insecureTlsConsentGranted || allowInsecureTlsGlobally
         return SmartStartController.eligibleCandidatesForRanking(
             candidates =
                 autoConnectOptions(profile).map { option ->
@@ -140,7 +140,7 @@ object MultiProtocolProfileSupport {
         transportPriority: SmartStartTransportPriority = SmartStartTransportPriority.ALL,
         now: Long = System.currentTimeMillis(),
     ): List<AutoConnectProbeCandidate> {
-        val insecureTlsConsentGranted = profile.requiresInsecureTls || allowInsecureTlsGlobally
+        val insecureTlsConsentGranted = profile.insecureTlsConsentGranted || allowInsecureTlsGlobally
         return SmartStartController.eligibleCandidatesForFullScan(
             candidates =
                 autoConnectOptions(profile).map { option ->

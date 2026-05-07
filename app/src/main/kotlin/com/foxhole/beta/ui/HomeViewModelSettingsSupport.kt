@@ -37,8 +37,11 @@ internal fun HomeViewModel.profileInternal(profileId: Long): Profile? = uiState.
 
 internal fun HomeViewModel.refreshProfileInternal(profileId: Long) {
     viewModelScope.launch {
-        runCatching { refreshProfileAndMaybeReconnect(profileId) }
-            .onFailure { handleProfileRefreshFailure(profileId, it) }
+        refreshProfileWithInsecureTlsDecision(
+            profileId = profileId,
+            allowInsecureTlsForProfile = false,
+            excludeInsecureTlsOptions = false,
+        )
     }
 }
 

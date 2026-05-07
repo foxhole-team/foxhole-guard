@@ -244,6 +244,7 @@ class ProfileRepository(
                 sourceType = parsed.sourceType,
                 parsed = importPlan.parsed,
                 forceRequiresInsecureTls = allowInsecureTlsForProfile || importPlan.parsed.requiresInsecureTls(json),
+                grantInsecureTlsConsent = allowInsecureTlsForProfile,
             )
         }
         val secretRef = UUID.randomUUID().toString()
@@ -273,6 +274,7 @@ class ProfileRepository(
                     ).withInsecureTlsMarkers(
                         json = json,
                         forceRequiresInsecureTls = allowInsecureTlsForProfile || parsed.requiresInsecureTls(json),
+                        grantInsecureTlsConsent = allowInsecureTlsForProfile && parsed.requiresInsecureTls(json),
                     ),
             )
         val id =
@@ -336,7 +338,9 @@ class ProfileRepository(
                 fallbackName = resolvedPreferredName ?: parsed.displayName,
                 settings = settings,
                 profileInsecureTlsConsentGranted = allowInsecureTlsForProfile,
+                allowInsecureTlsForProfile = allowInsecureTlsForProfile,
                 excludeInsecureTlsOptions = excludeInsecureTlsOptions,
+                subscriptionGroup = emptyList(),
             )
         return applyFetchedSubscriptionProfiles(
             sourceUrl = sourceUrl,
@@ -344,6 +348,8 @@ class ProfileRepository(
             response = response,
             targetProfileId = null,
             activateFirstIfNoProfiles = dao.count() == 0,
+            subscriptionGroup = emptyList(),
+            grantInsecureTlsConsent = allowInsecureTlsForProfile,
         )
     }
 
@@ -352,6 +358,7 @@ class ProfileRepository(
         sourceType: ProfileSourceType,
         parsed: ParsedSubscriptionImport,
         forceRequiresInsecureTls: Boolean,
+        grantInsecureTlsConsent: Boolean,
     ): Profile {
         val now = System.currentTimeMillis()
         val count = dao.count()
@@ -393,6 +400,8 @@ class ProfileRepository(
                                     json = json,
                                     forceRequiresInsecureTls =
                                         forceRequiresInsecureTls && importedProfile.requiresInsecureTls(json),
+                                    grantInsecureTlsConsent =
+                                        grantInsecureTlsConsent && importedProfile.requiresInsecureTls(json),
                                 ),
                         ),
                 )
@@ -699,6 +708,7 @@ class ProfileRepository(
     suspend fun refreshProfile(
         profileId: Long,
         excludeInsecureTlsOptions: Boolean = false,
+        allowInsecureTlsForProfile: Boolean = false,
     ): Profile {
         val entity = dao.getById(profileId) ?: error("profile not found")
         require(entity.sourceType == ProfileSourceType.SUBSCRIPTION_URL.name) { "profile is not refreshable" }
@@ -739,14 +749,17 @@ class ProfileRepository(
             return resolveDomainProfile(entity)
         }
 
-        val profileInsecureTlsConsentGranted = secret.hasInsecureTlsConsent(json)
+        val subscriptionGroup = loadSubscriptionGroup(sourceUrl)
+        val profileInsecureTlsConsentGranted = secret.hasInsecureTlsConsent()
         val parsed =
             parseFetchedSubscriptionProfiles(
                 rawBody = response.body.orEmpty(),
                 fallbackName = entity.name,
                 settings = settings,
                 profileInsecureTlsConsentGranted = profileInsecureTlsConsentGranted,
+                allowInsecureTlsForProfile = allowInsecureTlsForProfile,
                 excludeInsecureTlsOptions = excludeInsecureTlsOptions,
+                subscriptionGroup = subscriptionGroup,
             )
         return applyFetchedSubscriptionProfiles(
             sourceUrl = sourceUrl,
@@ -754,6 +767,8 @@ class ProfileRepository(
             response = response,
             targetProfileId = profileId,
             activateFirstIfNoProfiles = false,
+            subscriptionGroup = subscriptionGroup,
+            grantInsecureTlsConsent = allowInsecureTlsForProfile,
         )
     }
 
@@ -762,7 +777,9 @@ class ProfileRepository(
         fallbackName: String,
         settings: Settings,
         profileInsecureTlsConsentGranted: Boolean,
+        allowInsecureTlsForProfile: Boolean,
         excludeInsecureTlsOptions: Boolean,
+        subscriptionGroup: List<SubscriptionGroupMember>,
     ): ParsedSubscriptionImport {
         diagnosticsLogger.record(
             "profile",
@@ -780,28 +797,36 @@ class ProfileRepository(
                 }.exceptionOrNull()
                     ?.isInsecureTlsPolicyFailure() == true
             }
-        val subscriptionRequiresInsecureTlsConsent =
-            shouldRequireInsecureTlsRefreshConsent(
-                allowInsecureTlsGlobally = settings.expert.allowInsecureTls,
-                profileInsecureTlsConsentGranted = profileInsecureTlsConsentGranted,
-                strictParseFailedForInsecureTls = strictParseFailedForInsecureTls,
-            )
-        if (subscriptionRequiresInsecureTlsConsent && !excludeInsecureTlsOptions) {
-            val warning =
+        val groupInsecureTlsConsentGranted =
+            profileInsecureTlsConsentGranted ||
+                subscriptionGroup.any { member -> member.storedSecret.hasInsecureTlsConsent() }
+        val refreshInsecureTlsConsentResolved =
+            settings.expert.allowInsecureTls ||
+                allowInsecureTlsForProfile ||
+                excludeInsecureTlsOptions
+        val parsedForConsent =
+            if (strictParseFailedForInsecureTls && !refreshInsecureTlsConsentResolved) {
                 withContext(Dispatchers.IO) {
-                    runCatching {
-                        parser.parseSubscriptionProfiles(
-                            rawContent = rawBody,
-                            fallbackName = fallbackName,
-                            allowPrivateOutboundHosts = settings.expert.allowPrivateOutboundHosts,
-                            allowInsecureTls = true,
-                        ).insecureTlsImportWarning(json)
-                    }.getOrNull()
+                    parser.parseSubscriptionProfiles(
+                        rawContent = rawBody,
+                        fallbackName = fallbackName,
+                        allowPrivateOutboundHosts = settings.expert.allowPrivateOutboundHosts,
+                        allowInsecureTls = true,
+                    )
                 }
+            } else {
+                null
+            }
+        if (parsedForConsent?.hasUnconsentedInsecureTlsProfiles(subscriptionGroup) == true) {
+            val warning = parsedForConsent.insecureTlsImportWarning(json)
             diagnosticsLogger.record("profile", "subscription requires INSECURE TLS consent")
             throw InsecureTlsProfileConsentRequiredException(warning = warning)
         }
-        val effectiveAllowInsecureTls = settings.expert.allowInsecureTls || profileInsecureTlsConsentGranted || excludeInsecureTlsOptions
+        val effectiveAllowInsecureTls =
+            settings.expert.allowInsecureTls ||
+                allowInsecureTlsForProfile ||
+                groupInsecureTlsConsentGranted ||
+                excludeInsecureTlsOptions
         val parsedRaw =
             withContext(Dispatchers.IO) {
                 runCatching {
@@ -837,12 +862,14 @@ class ProfileRepository(
         response: SubscriptionResponse,
         targetProfileId: Long?,
         activateFirstIfNoProfiles: Boolean,
+        subscriptionGroup: List<SubscriptionGroupMember>? = null,
+        grantInsecureTlsConsent: Boolean = false,
     ): Profile {
-        val subscriptionGroup = loadSubscriptionGroup(sourceUrl)
+        val resolvedSubscriptionGroup = subscriptionGroup ?: loadSubscriptionGroup(sourceUrl)
         val refreshPlan =
             planSubscriptionRefresh(
                 existingProfiles =
-                    subscriptionGroup.map { member ->
+                    resolvedSubscriptionGroup.map { member ->
                         ExistingSubscriptionProfile(
                             id = member.entity.id,
                             name = member.entity.name,
@@ -863,7 +890,7 @@ class ProfileRepository(
             "profile",
             "subscription apply plan prepared matched=$matchedProfiles inserted=$insertedProfiles deleted=${refreshPlan.deletedProfileIds.size}",
         )
-        val subscriptionGroupById = subscriptionGroup.associateBy { it.entity.id }
+        val subscriptionGroupById = resolvedSubscriptionGroup.associateBy { it.entity.id }
         val defaultImportedName = subscriptionDefaultName(sourceUrl)
         val now = System.currentTimeMillis()
         val removedProfiles = refreshPlan.deletedProfileIds.mapNotNull(subscriptionGroupById::get)
@@ -884,6 +911,8 @@ class ProfileRepository(
                 val nextSecretRef = UUID.randomUUID().toString()
                 val selectedProtocolOptionId =
                     importedProfile.resolveSelectedProtocolOptionId(matchedProfile?.storedSecret?.selectedProtocolOptionId)
+                val importedRequiresInsecureTls = importedProfile.requiresInsecureTls(json)
+                val previousInsecureTlsConsentGranted = matchedProfile?.storedSecret?.hasInsecureTlsConsent() == true
                 PreparedSubscriptionRefreshProfile(
                     existingEntity = matchedProfile?.entity,
                     resolvedName = resolvedName,
@@ -903,7 +932,10 @@ class ProfileRepository(
                                     selectedProtocolOptionId = selectedProtocolOptionId,
                                 ).withInsecureTlsMarkers(
                                     json = json,
-                                    forceRequiresInsecureTls = importedProfile.requiresInsecureTls(json),
+                                    forceRequiresInsecureTls = importedRequiresInsecureTls,
+                                    grantInsecureTlsConsent =
+                                        importedRequiresInsecureTls &&
+                                            (grantInsecureTlsConsent || previousInsecureTlsConsentGranted),
                                 ),
                         ),
                     importedProfile = importedProfile,
@@ -979,7 +1011,7 @@ class ProfileRepository(
                     removedProfiles.forEach { member ->
                         dao.delete(member.entity.id)
                     }
-                    val groupHadActive = subscriptionGroup.any { it.entity.isActive }
+                    val groupHadActive = resolvedSubscriptionGroup.any { it.entity.isActive }
                     val preservedActive = committedProfiles.any(AppliedSubscriptionProfile::wasActive)
                     val shouldPromoteFirstProfile =
                         (groupHadActive && !preservedActive) || activateFirstIfNoProfiles
@@ -1102,6 +1134,7 @@ class ProfileRepository(
                     secret?.requiresInsecureTls == true ||
                         secret?.resolvedConfigJson?.requiresInsecureTls(json) == true ||
                         secret?.protocolOptions.orEmpty().any { option -> option.normalizedConfigJson.requiresInsecureTls(json) },
+                insecureTlsConsentGranted = secret?.hasInsecureTlsConsent() == true,
             )
         }
 
@@ -1239,6 +1272,41 @@ class ProfileRepository(
             .map(ParsedSubscriptionProfile::protocolHint)
             .distinct()
             .joinToString(separator = ",") { hint -> hint.name.lowercase() }
+
+    private fun ParsedSubscriptionImport.hasUnconsentedInsecureTlsProfiles(
+        subscriptionGroup: List<SubscriptionGroupMember>,
+    ): Boolean {
+        if (!requiresInsecureTls(json)) {
+            return false
+        }
+        val subscriptionGroupById = subscriptionGroup.associateBy { member -> member.entity.id }
+        val refreshPlan =
+            planSubscriptionRefresh(
+                existingProfiles =
+                    subscriptionGroup.map { member ->
+                        ExistingSubscriptionProfile(
+                            id = member.entity.id,
+                            name = member.entity.name,
+                            protocolHint = member.entity.toDomain().protocolHint,
+                        )
+                    },
+                importedProfiles =
+                    profiles.map { imported ->
+                        ImportedSubscriptionProfile(
+                            displayName = imported.displayName,
+                            protocolHint = imported.protocolHint,
+                        )
+                    },
+            )
+        return refreshPlan.assignments.withIndex().any { (index, assignment) ->
+            val importedProfile = profiles[index]
+            importedProfile.requiresInsecureTls(json) &&
+                assignment.existingProfileId
+                    ?.let(subscriptionGroupById::get)
+                    ?.storedSecret
+                    ?.hasInsecureTlsConsent() != true
+        }
+    }
 
     private companion object {
         private const val LOG_TAG = "FoxholeProfileRepo"
