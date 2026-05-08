@@ -26,6 +26,7 @@ import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Apps
 import androidx.compose.material.icons.outlined.BarChart
 import androidx.compose.material.icons.outlined.BrightnessAuto
+import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.DarkMode
 import androidx.compose.material.icons.outlined.Delete
@@ -407,6 +408,7 @@ private fun SettingsNavigationGroup(content: @Composable ColumnScope.() -> Unit)
     }
 }
 
+@Suppress("UNUSED_PARAMETER")
 @Composable
 private fun SettingsGroupedNavigationRow(
     modifier: Modifier = Modifier,
@@ -418,14 +420,15 @@ private fun SettingsGroupedNavigationRow(
     onClick: () -> Unit,
 ) {
     val contentAlpha = if (enabled) 1f else 0.52f
+    val infoBody = summary.trimEnd().removeSuffix(".").takeIf(String::isNotBlank)
     Row(
         modifier =
             modifier
                 .fillMaxWidth()
-                .heightIn(min = 52.dp)
+                .heightIn(min = 48.dp)
                 .then(if (enabled) Modifier.clickable(onClick = onClick) else Modifier)
-                .padding(horizontal = 12.dp, vertical = 6.dp),
-        horizontalArrangement = Arrangement.spacedBy(14.dp),
+                .padding(horizontal = 10.dp, vertical = 5.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Surface(
@@ -435,28 +438,39 @@ private fun SettingsGroupedNavigationRow(
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                modifier = Modifier.padding(7.dp).size(20.dp),
+                modifier = Modifier.padding(4.dp).size(24.dp),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = contentAlpha),
             )
         }
-        Column(
+        Row(
             modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(2.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
                 text = title,
+                modifier = Modifier.weight(1f, fill = false),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = contentAlpha),
-            )
-            Text(
-                text = summary.trimEnd().removeSuffix("."),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = contentAlpha),
-                maxLines = summaryMaxLines,
+                maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
+            if (enabled) {
+                infoBody?.let { body ->
+                    SettingsInfoAnchor(
+                        title = title,
+                        body = body,
+                    )
+                }
+            }
         }
+        Icon(
+            imageVector = Icons.Outlined.ChevronRight,
+            contentDescription = null,
+            modifier = Modifier.size(20.dp),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = contentAlpha),
+        )
     }
 }
 
@@ -464,8 +478,8 @@ private fun SettingsGroupedNavigationRow(
 private fun SettingsGroupDivider() {
     HorizontalDivider(
         modifier = Modifier.fillMaxWidth(),
-        thickness = 2.dp,
-        color = Color.Transparent,
+        thickness = 1.dp,
+        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.36f),
     )
 }
 

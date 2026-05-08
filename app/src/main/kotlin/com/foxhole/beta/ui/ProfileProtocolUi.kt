@@ -117,6 +117,7 @@ internal fun ProtocolMetadataRow(
     favoriteProtocolOptionId: String? = null,
     selectorMenuInfoText: String? = null,
     selectorBorderColor: Color? = null,
+    highlightSelectedOption: Boolean = true,
     requiresInsecureTls: Boolean = false,
     showInsecureTlsBadge: Boolean = true,
     reserveTrailingSpace: Boolean = true,
@@ -169,6 +170,7 @@ internal fun ProtocolMetadataRow(
             selectedLatencyUnavailable = selectedLatencyUnavailable,
             dropdownInfoText = selectorMenuInfoText,
             selectorBorderColor = selectorBorderColor,
+            highlightSelectedOption = highlightSelectedOption,
         )
         trailingContent?.invoke(this)
         if (selectedRequiresInsecureTls) {
@@ -320,6 +322,7 @@ private fun ProtocolMarkOrSelector(
     selectedLatencyUnavailable: Boolean,
     dropdownInfoText: String?,
     selectorBorderColor: Color?,
+    highlightSelectedOption: Boolean,
 ) {
     if (protocolOptions.size < 2 || onProtocolOptionSelected == null) {
         ProtocolMark(
@@ -480,7 +483,7 @@ private fun ProtocolMarkOrSelector(
                             onProtocolOptionSelected(option.id)
                         },
                         selected = optionSelected,
-                        highlightSelected = true,
+                        highlightSelected = highlightSelectedOption,
                         selectedContainerColor = selectorResolvedBorderColor.copy(alpha = 0.16f),
                         extendSelectedToMenuTop = index == 0 && dropdownInfoText == null,
                         extendSelectedToMenuBottom = index == protocolOptions.lastIndex,

@@ -36,6 +36,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AccountTree
 import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.ExpandMore
@@ -50,6 +51,7 @@ import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Router
 import androidx.compose.material.icons.outlined.Tune
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -160,7 +162,14 @@ internal fun SettingsNavigationRow(
     grouped: Boolean = false,
     onClick: () -> Unit,
 ) {
+    val infoBody = summary?.trimMenuSummary()
     val trailingContent: @Composable RowScope.() -> Unit = {
+        infoBody?.let { body ->
+            SettingsInfoAnchor(
+                title = title,
+                body = body,
+            )
+        }
         if (showAlertDot) {
             Box(
                 modifier =
@@ -171,12 +180,19 @@ internal fun SettingsNavigationRow(
                         .background(MaterialTheme.colorScheme.error),
             )
         }
+        Icon(
+            imageVector = Icons.Outlined.ChevronRight,
+            contentDescription = null,
+            modifier = Modifier.size(20.dp),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
     if (grouped) {
         SettingsControlRow(
             modifier = modifier,
             title = title,
-            summary = summary?.trimMenuSummary(),
+            summary = null,
+            infoBody = infoBody,
             leadingIcon = icon,
             leadingIconContainerColor = leadingIconContainerColor,
             leadingIconTint = leadingIconTint,
@@ -189,7 +205,8 @@ internal fun SettingsNavigationRow(
     FoxholePreferenceCard(
         modifier = modifier,
         title = title,
-        summary = summary?.trimMenuSummary(),
+        summary = null,
+        infoBody = infoBody,
         leadingIcon = icon,
         onClick = onClick,
         containerColor = containerColor,
@@ -219,8 +236,8 @@ internal fun SettingValueRow(
     if (grouped) {
         SettingsControlRow(
             title = title,
-            summary = summary,
-            infoBody = infoBody,
+            summary = null,
+            infoBody = infoBody ?: summary?.trimMenuSummary(),
             leadingIcon = leadingIcon,
             onClick = onClick,
             summaryMaxLines = summaryMaxLines,
@@ -233,7 +250,8 @@ internal fun SettingValueRow(
     }
     FoxholePreferenceCard(
         title = title,
-        summary = summary,
+        summary = null,
+        infoBody = infoBody ?: summary?.trimMenuSummary(),
         leadingIcon = leadingIcon,
         onClick = onClick,
         summaryMaxLines = summaryMaxLines,
@@ -423,10 +441,10 @@ internal fun SettingSwitchRow(
         SettingsControlRow(
             modifier = rowModifier,
             title = title,
-            summary = summary,
+            summary = null,
             inlineSummary = inlineSummary,
             summaryColor = summaryColor,
-            infoBody = infoBody,
+            infoBody = infoBody ?: summary?.trimMenuSummary(),
             leadingIcon = leadingIcon,
             leadingIconContainerColor = leadingIconContainerColor,
             summaryMaxLines = summaryMaxLines,
@@ -438,7 +456,8 @@ internal fun SettingSwitchRow(
     FoxholePreferenceCard(
         modifier = rowModifier,
         title = title,
-        summary = summary,
+        summary = null,
+        infoBody = infoBody ?: summary?.trimMenuSummary(),
         leadingIcon = leadingIcon,
         leadingIconContainerColor = leadingIconContainerColor,
         summaryMaxLines = summaryMaxLines,
@@ -474,8 +493,8 @@ internal fun SettingsControlGroup(
 internal fun SettingsControlGroupDivider() {
     HorizontalDivider(
         modifier = Modifier.fillMaxWidth(),
-        thickness = 2.dp,
-        color = Color.Transparent,
+        thickness = 1.dp,
+        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.36f),
     )
 }
 
@@ -494,8 +513,8 @@ private fun SettingsControlRow(
     onClick: (() -> Unit)?,
     trailingContent: (@Composable RowScope.() -> Unit)? = null,
 ) {
-    val summaryText = inlineSummary?.takeIf(String::isNotBlank) ?: summary?.takeIf(String::isNotBlank)
-    val infoText = infoBody?.takeIf(String::isNotBlank)
+    val summaryText = inlineSummary?.takeIf(String::isNotBlank)
+    val infoText = infoBody?.takeIf(String::isNotBlank) ?: summary?.trimMenuSummary()?.takeIf(String::isNotBlank)
     Row(
         modifier =
             modifier
@@ -508,8 +527,8 @@ private fun SettingsControlRow(
                         Modifier
                     },
                 )
-                .padding(horizontal = 12.dp, vertical = 7.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                .padding(horizontal = 10.dp, vertical = 5.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         leadingIcon?.let { icon ->
@@ -525,7 +544,7 @@ private fun SettingsControlRow(
                 Icon(
                     imageVector = icon,
                     contentDescription = null,
-                    modifier = Modifier.padding(7.dp).size(20.dp),
+                    modifier = Modifier.padding(4.dp).size(24.dp),
                     tint = leadingIconTint,
                 )
             }
@@ -565,7 +584,7 @@ private fun SettingsControlRow(
             }
         }
         Row(
-            modifier = Modifier.widthIn(min = 52.dp),
+            modifier = Modifier.widthIn(min = 44.dp),
             horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.End),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -576,7 +595,7 @@ private fun SettingsControlRow(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun SettingsInfoAnchor(
+internal fun SettingsInfoAnchor(
     title: String,
     body: String,
 ) {
@@ -597,7 +616,7 @@ private fun SettingsInfoAnchor(
                         },
                         action = {
                             TextButton(onClick = { tooltipState.dismiss() }) {
-                                Text(stringResource(R.string.got_it))
+                                Text(stringResource(R.string.close))
                             }
                         },
                     ) {
@@ -635,13 +654,13 @@ private fun SettingsInfoAnchor(
 private fun SettingsInfoIconButton(onClick: () -> Unit) {
     IconButton(
         onClick = onClick,
-        modifier = Modifier.size(30.dp),
+        modifier = Modifier.size(32.dp),
     ) {
         Icon(
             imageVector = Icons.Outlined.Info,
             contentDescription = stringResource(R.string.information_title),
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(18.dp),
+            tint = LocalContentColor.current.copy(alpha = 0.76f),
+            modifier = Modifier.size(20.dp),
         )
     }
 }
@@ -736,7 +755,7 @@ private fun SettingsInfoBottomSheet(
             ) {
                 FoxholeDialogConfirmButton(
                     onClick = onDismiss,
-                    label = stringResource(R.string.got_it),
+                    label = stringResource(R.string.close),
                 )
             }
         }

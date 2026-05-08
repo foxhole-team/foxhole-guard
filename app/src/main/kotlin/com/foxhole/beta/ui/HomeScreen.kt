@@ -394,7 +394,6 @@ fun HomeScreen(
 
     FoxholeScaffold(
         title = stringResource(R.string.app_name),
-        titleBadge = stringResource(R.string.beta_badge),
         snackbarHostState = snackbarHostState,
         bannerTopPadding = HomeDashboardBannerTopPadding,
         actions = {
@@ -532,6 +531,7 @@ fun HomeScreen(
                         if (state.settings.ui.trafficMapEnabled) {
                             item(key = DashboardCard.TRAFFIC_MAP) {
                                 DashboardCardDragContainer(
+                                    modifier = Modifier.animateItem(),
                                     card = DashboardCard.TRAFFIC_MAP,
                                     activeCard = activeReorderCard,
                                     onActiveCardChange = { activeReorderCard = it },
@@ -546,6 +546,7 @@ fun HomeScreen(
                     DashboardCard.PROFILES -> {
                         item(key = DashboardCard.PROFILES) {
                             DashboardCardDragContainer(
+                                modifier = Modifier.animateItem(),
                                 card = DashboardCard.PROFILES,
                                 activeCard = activeReorderCard,
                                 onActiveCardChange = { activeReorderCard = it },
@@ -668,6 +669,7 @@ fun HomeScreen(
                                     recommendedProtocolOptionIds = state.recommendedProtocolOptionIds,
                                     favoriteProtocolOptionId = state.favoriteProtocolOptionId,
                                     selectorBorderColor = autoTone.copy(alpha = if (darkTheme) 0.30f else 0.24f),
+                                    highlightSelectedOption = false,
                                     showInsecureTlsBadge = false,
                                     leadingContent =
                                         if (isSmartDashboardProfile) {
@@ -717,6 +719,7 @@ fun HomeScreen(
                     DashboardCard.ACTIONS -> {
                         item(key = DashboardCard.ACTIONS) {
                             DashboardCardDragContainer(
+                                modifier = Modifier.animateItem(),
                                 card = DashboardCard.ACTIONS,
                                 activeCard = activeReorderCard,
                                 onActiveCardChange = { activeReorderCard = it },
@@ -834,6 +837,7 @@ fun HomeScreen(
                         if (state.settings.ui.networkCardEnabled) {
                             item(key = DashboardCard.NETWORK) {
                                 DashboardCardDragContainer(
+                                    modifier = Modifier.animateItem(),
                                     card = DashboardCard.NETWORK,
                                     activeCard = activeReorderCard,
                                     onActiveCardChange = { activeReorderCard = it },
@@ -1015,6 +1019,7 @@ fun HomeScreen(
                         if (state.settings.ui.trafficCardEnabled) {
                             item(key = DashboardCard.TRAFFIC) {
                                 DashboardCardDragContainer(
+                                    modifier = Modifier.animateItem(),
                                     card = DashboardCard.TRAFFIC,
                                     activeCard = activeReorderCard,
                                     onActiveCardChange = { activeReorderCard = it },
@@ -1290,6 +1295,7 @@ private fun DashboardProtocolMetricPager(
 
 @Composable
 private fun DashboardCardDragContainer(
+    modifier: Modifier = Modifier,
     card: DashboardCard,
     activeCard: DashboardCard?,
     onActiveCardChange: (DashboardCard?) -> Unit,
@@ -1304,13 +1310,14 @@ private fun DashboardCardDragContainer(
 
     Box(
         modifier =
-            Modifier
+            modifier
                 .fillMaxWidth()
                 .zIndex(if (active) 1f else 0f)
                 .graphicsLayer {
                     val scale = if (active) 1.018f else 1f
                     scaleX = scale
                     scaleY = scale
+                    translationY = if (active) dragOffset else 0f
                     shadowElevation = if (active) 8f else 0f
                 }
                 .pointerInput(card, dragThresholdPx) {
@@ -1328,12 +1335,13 @@ private fun DashboardCardDragContainer(
                             dragOffset = 0f
                             onActiveCardChange(null)
                         },
-                        onDrag = { _, dragAmount ->
+                        onDrag = { change, dragAmount ->
+                            change.consume()
                             dragOffset += dragAmount.y
-                            if (abs(dragOffset) >= dragThresholdPx) {
+                            while (abs(dragOffset) >= dragThresholdPx) {
                                 val direction = if (dragOffset > 0f) 1 else -1
                                 onMove(card, direction)
-                                dragOffset = 0f
+                                dragOffset -= dragThresholdPx * direction
                                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                             }
                         },

@@ -113,7 +113,6 @@ import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupPositionProvider
 import androidx.compose.ui.window.PopupProperties
@@ -238,7 +237,6 @@ internal fun FoxholeScaffold(
     title: String,
     snackbarHostState: SnackbarHostState,
     onNavigateUp: (() -> Unit)? = null,
-    titleBadge: String? = null,
     actions: @Composable RowScope.() -> Unit = {},
     bannerTopPadding: Dp = ScreenVerticalPadding,
     bannerBottomPadding: Dp = ScreenVerticalPadding,
@@ -246,74 +244,38 @@ internal fun FoxholeScaffold(
     content: @Composable (PaddingValues) -> Unit,
 ) {
     val uiPalette = LocalFoxholeUiPalette.current
-    val topBarContainerColor = Color.Transparent
+    val topBarContainerColor = uiPalette.bottomBarContainerColor
     Scaffold(
         containerColor = Color.Transparent,
         topBar = {
-            Box {
-                FoxholeGlassPanel(
-                    modifier = Modifier.matchParentSize(),
-                    shape = RectangleShape,
-                    containerColor = uiPalette.bottomBarContainerColor,
-                    borderColor = uiPalette.bottomBarBorderColor.copy(alpha = 0.32f),
-                    blurRadius = 18.dp,
-                    backgroundAlpha = 0.82f,
-                ) {}
-                TopAppBar(
-                    title = {
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(5.dp),
-                            verticalAlignment = Alignment.Top,
-                        ) {
-                            Text(
-                                text = title,
-                                style = MaterialTheme.typography.titleLarge,
-                                fontWeight = FontWeight.SemiBold,
+            TopAppBar(
+                title = {
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                },
+                navigationIcon = {
+                    onNavigateUp?.let {
+                        IconButton(onClick = it) {
+                            Icon(
+                                Icons.AutoMirrored.Outlined.ArrowBack,
+                                contentDescription = stringResource(R.string.navigate_back),
                             )
-                            titleBadge?.let { badge ->
-                                val badgeTone = foxholeSystemAwareAccentColor(fallback = MaterialTheme.colorScheme.primary)
-                                Surface(
-                                    modifier = Modifier.padding(top = 2.dp),
-                                    shape = MaterialTheme.shapes.small,
-                                    color = badgeTone.copy(alpha = 0.12f),
-                                    border = BorderStroke(1.dp, badgeTone.copy(alpha = 0.30f)),
-                                ) {
-                                    Text(
-                                        text = badge,
-                                        modifier = Modifier.padding(horizontal = 3.dp, vertical = 0.dp),
-                                        style =
-                                            MaterialTheme.typography.labelSmall.copy(
-                                                fontSize = 8.5.sp,
-                                                lineHeight = 9.sp,
-                                            ),
-                                        fontWeight = FontWeight.Black,
-                                        color = badgeTone,
-                                    )
-                                }
-                            }
                         }
-                    },
-                    navigationIcon = {
-                        onNavigateUp?.let {
-                            IconButton(onClick = it) {
-                                Icon(
-                                    Icons.AutoMirrored.Outlined.ArrowBack,
-                                    contentDescription = stringResource(R.string.navigate_back),
-                                )
-                            }
-                        }
-                    },
-                    actions = actions,
-                    colors =
-                        TopAppBarDefaults.topAppBarColors(
-                            containerColor = topBarContainerColor,
-                            scrolledContainerColor = topBarContainerColor,
-                            titleContentColor = MaterialTheme.colorScheme.onBackground,
-                            navigationIconContentColor = MaterialTheme.colorScheme.onBackground,
-                            actionIconContentColor = MaterialTheme.colorScheme.onBackground,
-                        ),
-                )
-            }
+                    }
+                },
+                actions = actions,
+                colors =
+                    TopAppBarDefaults.topAppBarColors(
+                        containerColor = topBarContainerColor,
+                        scrolledContainerColor = topBarContainerColor,
+                        titleContentColor = MaterialTheme.colorScheme.onBackground,
+                        navigationIconContentColor = MaterialTheme.colorScheme.onBackground,
+                        actionIconContentColor = MaterialTheme.colorScheme.onBackground,
+                    ),
+            )
         },
         snackbarHost = {},
         content = { padding ->
@@ -1231,6 +1193,7 @@ internal fun FoxholePreferenceCard(
     modifier: Modifier = Modifier,
     title: String,
     summary: String? = null,
+    infoBody: String? = null,
     leadingIcon: ImageVector? = null,
     onClick: (() -> Unit)? = null,
     trailingContent: (@Composable RowScope.() -> Unit)? = null,
@@ -1241,6 +1204,7 @@ internal fun FoxholePreferenceCard(
     summaryMaxLines: Int = 1,
 ) {
     val uiPalette = LocalFoxholeUiPalette.current
+    val infoText = infoBody?.takeIf(String::isNotBlank)
     FoxholeCard(
         modifier = modifier,
         onClick = onClick,
@@ -1252,7 +1216,7 @@ internal fun FoxholePreferenceCard(
                 Modifier
                     .fillMaxWidth()
                     .heightIn(min = if (summary.isNullOrBlank()) 48.dp else 60.dp),
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             leadingIcon?.let { icon ->
@@ -1270,8 +1234,8 @@ internal fun FoxholePreferenceCard(
                         contentDescription = null,
                         modifier =
                             Modifier
-                                .padding(7.dp)
-                                .size(18.dp),
+                                .padding(4.dp)
+                                .size(24.dp),
                         tint = leadingIconTint,
                     )
                 }
@@ -1280,12 +1244,26 @@ internal fun FoxholePreferenceCard(
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(3.dp),
             ) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = title,
+                        modifier = Modifier.weight(1f, fill = false),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    infoText?.let {
+                        SettingsInfoAnchor(
+                            title = title,
+                            body = it,
+                        )
+                    }
+                }
                 summary?.takeIf(String::isNotBlank)?.let {
                     Text(
                         text = it,

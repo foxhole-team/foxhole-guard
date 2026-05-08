@@ -1060,11 +1060,9 @@ private fun ProfileComparisonsSection(items: List<ProfileComparisonUiItem>) {
 
 @Composable
 private fun ProfileComparisonCard(item: ProfileComparisonUiItem) {
-    val connectorColor = MaterialTheme.colorScheme.outline
     Card(
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.34f)),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHighest),
         shape = MaterialTheme.shapes.small,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.42f)),
     ) {
         Column(
             modifier = Modifier.padding(10.dp),
@@ -1086,18 +1084,7 @@ private fun ProfileComparisonCard(item: ProfileComparisonUiItem) {
                     stable = item.left.stability >= item.right.stability,
                     problematic = item.left.errorRate > item.right.errorRate,
                 )
-                Canvas(
-                    modifier = Modifier
-                        .width(30.dp)
-                        .height(1.dp),
-                ) {
-                    drawLine(
-                        color = connectorColor,
-                        start = Offset.Zero,
-                        end = Offset(size.width, 0f),
-                        pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 7f)),
-                    )
-                }
+                HorizontalDivider(modifier = Modifier.width(30.dp), color = MaterialTheme.colorScheme.outlineVariant)
                 ComparisonSide(
                     side = item.right,
                     modifier = Modifier.weight(1f),
@@ -1116,18 +1103,11 @@ private fun ComparisonSide(
     problematic: Boolean,
     modifier: Modifier = Modifier,
 ) {
-    val semanticColors = LocalFoxholeSemanticColors.current
-    val borderColor =
-        when {
-            stable -> semanticColors.success.copy(alpha = 0.62f)
-            problematic -> MaterialTheme.colorScheme.error.copy(alpha = 0.58f)
-            else -> MaterialTheme.colorScheme.outlineVariant
-        }
     Surface(
         modifier = modifier,
         shape = MaterialTheme.shapes.small,
-        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.44f),
-        border = BorderStroke(1.dp, borderColor),
+        color = MaterialTheme.colorScheme.surface,
+        tonalElevation = 1.dp,
     ) {
         Column(
             modifier = Modifier.padding(8.dp),
@@ -1150,14 +1130,7 @@ private fun ComparisonSide(
                         stringResource(R.string.statistics_even)
                     },
                 style = MaterialTheme.typography.labelSmall,
-                color =
-                    if (stable) {
-                        semanticColors.success
-                    } else if (problematic) {
-                        MaterialTheme.colorScheme.error
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    },
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Text(
                 text =
@@ -1799,43 +1772,47 @@ private fun ProfileStatisticsDetail(
                 fontWeight = FontWeight.SemiBold,
             )
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                detail.protocols.forEach { protocol ->
-                    Surface(
-                        shape = MaterialTheme.shapes.small,
-                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.36f),
-                    ) {
-                        Row(
-                            modifier = Modifier
+                detail.protocols.forEachIndexed { index, protocol ->
+                    Row(
+                        modifier =
+                            Modifier
                                 .fillMaxWidth()
-                                .padding(10.dp),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = protocolDisplayName(protocol.protocolHint),
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    fontWeight = FontWeight.SemiBold,
-                                )
-                                Text(
-                                    text =
-                                        stringResource(
-                                            R.string.statistics_profile_protocol_metrics,
-                                            formatPercent(protocol.successRate),
-                                            formatPercent(protocol.errorRate),
-                                            protocol.avgLatencyMs.formatLatency(),
-                                        ),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
+                                .padding(vertical = 6.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = formatBytes(context, protocol.totalBytes),
-                                style = MaterialTheme.typography.labelMedium,
+                                text = protocolDisplayName(protocol.protocolHint),
+                                style = MaterialTheme.typography.bodyMedium,
                                 fontWeight = FontWeight.SemiBold,
-                                textAlign = TextAlign.End,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            Text(
+                                text =
+                                    stringResource(
+                                        R.string.statistics_profile_protocol_metrics,
+                                        formatPercent(protocol.successRate),
+                                        formatPercent(protocol.errorRate),
+                                        protocol.avgLatencyMs.formatLatency(),
+                                    ),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
                             )
                         }
+                        Text(
+                            text = formatBytes(context, protocol.totalBytes),
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            textAlign = TextAlign.End,
+                            maxLines = 1,
+                        )
+                    }
+                    if (index != detail.protocols.lastIndex) {
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.36f))
                     }
                 }
             }
@@ -2047,18 +2024,35 @@ private fun DetailMetricGrid(metrics: List<Pair<String, String>>) {
         EmptySectionText(text = stringResource(R.string.statistics_no_data))
         return
     }
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        metrics.chunked(2).forEach { row ->
+    Column(verticalArrangement = Arrangement.spacedBy(0.dp)) {
+        metrics.forEachIndexed { index, (label, value) ->
             Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 7.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                row.forEach { (label, value) ->
-                    MetricTile(label = label, value = value, modifier = Modifier.weight(1f))
-                }
-                if (row.size == 1) {
-                    Box(modifier = Modifier.weight(1f))
-                }
+                Text(
+                    text = label,
+                    modifier = Modifier.weight(1f),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = value,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    textAlign = TextAlign.End,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            if (index != metrics.lastIndex) {
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.36f))
             }
         }
     }
