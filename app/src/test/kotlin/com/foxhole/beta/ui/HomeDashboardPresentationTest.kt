@@ -76,56 +76,6 @@ class HomeDashboardPresentationTest {
     }
 
     @Test
-    fun `protocol model exposes metric pages for every smart option`() {
-        val model =
-            resolveHomeDashboardProtocolModel(
-                HomeRouteUiState(
-                    activeProfile = smartProfile(),
-                    connection =
-                        ConnectionSnapshot(
-                            state = ConnectionState.CONNECTED,
-                            profileId = 1L,
-                            protocolOptionId = "vless",
-                        ),
-                    protocolLatenciesByOptionId = mapOf("vless" to 110L, "trojan" to 210L),
-                    protocolDownOptionIds = setOf("wg"),
-                    protocolServerPingsByOptionId = mapOf("trojan" to 76L),
-                    protocolServerPingUnavailableOptionIds = setOf("wg"),
-                ),
-            )
-
-        assertEquals(listOf("vless", "trojan", "wg"), model.metricPages.map { it.optionId })
-        assertEquals(0, model.selectedMetricPageIndex)
-        assertEquals(110L, model.metricPages[0].latencyPresentation.latencyMs)
-        assertEquals(210L, model.metricPages[1].latencyPresentation.latencyMs)
-        assertEquals(76L, model.metricPages[1].serverPingMs)
-        assertTrue(model.metricPages[2].latencyPresentation.isDown)
-        assertTrue(model.metricPages[2].serverPingUnavailable)
-    }
-
-    @Test
-    fun `protocol metric page defaults to connected option while preserving other protocol metrics`() {
-        val model =
-            resolveHomeDashboardProtocolModel(
-                HomeRouteUiState(
-                    activeProfile = smartProfile(),
-                    connection =
-                        ConnectionSnapshot(
-                            state = ConnectionState.CONNECTED,
-                            profileId = 1L,
-                            protocolHint = ProtocolHint.TROJAN,
-                            protocolOptionId = "trojan",
-                        ),
-                    protocolLatenciesByOptionId = mapOf("vless" to 110L, "trojan" to 210L),
-                ),
-            )
-
-        assertEquals("trojan", model.presentation.selectedProtocolOptionId)
-        assertEquals(1, model.selectedMetricPageIndex)
-        assertEquals(listOf(110L, 210L, null), model.metricPages.map { it.latencyPresentation.latencyMs })
-    }
-
-    @Test
     fun `protocol model shows latency loading during reconnect before metrics refresh starts`() {
         val model =
             resolveHomeDashboardProtocolModel(

@@ -243,8 +243,7 @@ internal fun FoxholeScaffold(
     bannerPlacement: FoxholeBannerPlacement = FoxholeBannerPlacement.TOP,
     content: @Composable (PaddingValues) -> Unit,
 ) {
-    val uiPalette = LocalFoxholeUiPalette.current
-    val topBarContainerColor = uiPalette.bottomBarContainerColor
+    val topBarContainerColor = Color.Transparent
     Scaffold(
         containerColor = Color.Transparent,
         topBar = {
