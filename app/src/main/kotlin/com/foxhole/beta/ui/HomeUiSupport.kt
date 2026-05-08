@@ -60,6 +60,17 @@ internal data class HomeDashboardLatencyPresentation(
     val isUnavailable: Boolean = false,
 )
 
+internal data class HomeDashboardProtocolMetricPage(
+    val optionId: String,
+    val displayName: String,
+    val protocolHint: ProtocolHint,
+    val latencyPresentation: HomeDashboardLatencyPresentation,
+    val serverPingMs: Long? = null,
+    val serverPingUnavailable: Boolean = false,
+    val isSelected: Boolean = false,
+    val isRefreshing: Boolean = false,
+)
+
 internal data class HomeDashboardProtocolModel(
     val presentation: HomeDashboardProtocolPresentation,
     val latencyPresentation: HomeDashboardLatencyPresentation,
@@ -71,6 +82,8 @@ internal data class HomeDashboardProtocolModel(
     val selectedServerPingUnavailable: Boolean,
     val connectionDetailsReady: Boolean,
     val connectionMetricsLoading: Boolean,
+    val metricPages: List<HomeDashboardProtocolMetricPage>,
+    val selectedMetricPageIndex: Int,
 )
 
 internal data class HomeDashboardProfileModel(
@@ -272,6 +285,19 @@ internal fun resolveHomeDashboardProtocolModel(state: HomeRouteUiState): HomeDas
             selectedServerPingMs == null &&
             selectedServerPingOptionId in state.protocolServerPingUnavailableOptionIds
     val connectionMetricsLoading = state.dashboardConnectionMetricsLoading || state.reconnectInProgress
+    val metricPages =
+        dashboardProtocolMetricPages(
+            state = state,
+            presentation = protocolPresentation,
+            latenciesByOptionId = latenciesByOptionId,
+            downOptionIds = downOptionIds,
+            latencyUnavailableOptionIds = latencyUnavailableOptionIds,
+        )
+    val selectedMetricPageIndex =
+        metricPages
+            .indexOfFirst { page -> page.optionId == protocolPresentation.selectedProtocolOptionId }
+            .takeIf { index -> index >= 0 }
+            ?: 0
     return HomeDashboardProtocolModel(
         presentation = protocolPresentation,
         latencyPresentation = latencyPresentation,
@@ -296,8 +322,38 @@ internal fun resolveHomeDashboardProtocolModel(state: HomeRouteUiState): HomeDas
                 selectedServerPingUnsupported = protocolPresentation.protocolHint.isUdpTransport(),
             ),
         connectionMetricsLoading = connectionMetricsLoading,
+        metricPages = metricPages,
+        selectedMetricPageIndex = selectedMetricPageIndex,
     )
 }
+
+private fun dashboardProtocolMetricPages(
+    state: HomeRouteUiState,
+    presentation: HomeDashboardProtocolPresentation,
+    latenciesByOptionId: Map<String, Long>,
+    downOptionIds: Set<String>,
+    latencyUnavailableOptionIds: Set<String>,
+): List<HomeDashboardProtocolMetricPage> =
+    presentation.protocolOptions.map { option ->
+        HomeDashboardProtocolMetricPage(
+            optionId = option.id,
+            displayName = option.displayName,
+            protocolHint = option.protocolHint,
+            latencyPresentation =
+                when {
+                    option.id in downOptionIds -> HomeDashboardLatencyPresentation(isDown = true)
+                    option.id in latencyUnavailableOptionIds -> HomeDashboardLatencyPresentation(isUnavailable = true)
+                    latenciesByOptionId[option.id] != null -> HomeDashboardLatencyPresentation(latencyMs = latenciesByOptionId[option.id])
+                    else -> HomeDashboardLatencyPresentation()
+                },
+            serverPingMs = state.protocolServerPingsByOptionId[option.id],
+            serverPingUnavailable =
+                state.protocolServerPingsByOptionId[option.id] == null &&
+                    option.id in state.protocolServerPingUnavailableOptionIds,
+            isSelected = option.id == presentation.selectedProtocolOptionId,
+            isRefreshing = state.protocolMetricsRefreshing && option.id == state.protocolMetricsRefreshingOptionId,
+        )
+    }
 
 internal fun resolveHomeDashboardProfileModel(
     state: HomeRouteUiState,

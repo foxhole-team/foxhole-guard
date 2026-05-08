@@ -41,6 +41,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowForward
+import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowLeft
+import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.AccountTree
 import androidx.compose.material.icons.outlined.Apps
 import androidx.compose.material.icons.outlined.ArrowDownward
@@ -74,6 +76,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -238,8 +241,26 @@ fun HomeScreen(
     val dashboardSelectedLatencyDown = dashboardLatencyPresentation.isDown
     val dashboardSelectedLatencyUnavailable = dashboardLatencyPresentation.isUnavailable
     val dashboardProtocolPresentation = dashboardProtocolModel.presentation
-    val dashboardSelectedServerPingMs = dashboardProtocolModel.selectedServerPingMs
-    val dashboardSelectedServerPingUnavailable = dashboardProtocolModel.selectedServerPingUnavailable
+    val dashboardMetricPages = dashboardProtocolModel.metricPages
+    var dashboardMetricPageIndex by rememberSaveable(state.activeProfile?.id) {
+        mutableIntStateOf(dashboardProtocolModel.selectedMetricPageIndex)
+    }
+    LaunchedEffect(state.activeProfile?.id, dashboardMetricPages.size) {
+        if (dashboardMetricPages.isEmpty()) {
+            dashboardMetricPageIndex = 0
+        } else if (dashboardMetricPageIndex !in dashboardMetricPages.indices) {
+            dashboardMetricPageIndex = dashboardProtocolModel.selectedMetricPageIndex.coerceIn(dashboardMetricPages.indices)
+        }
+    }
+    val dashboardMetricPage = dashboardMetricPages.getOrNull(dashboardMetricPageIndex)
+    val dashboardVisibleLatencyPresentation = dashboardMetricPage?.latencyPresentation ?: dashboardLatencyPresentation
+    val dashboardVisibleLatencyMs = dashboardVisibleLatencyPresentation.latencyMs
+    val dashboardVisibleLatencyDown = dashboardVisibleLatencyPresentation.isDown
+    val dashboardVisibleLatencyUnavailable = dashboardVisibleLatencyPresentation.isUnavailable
+    val dashboardVisibleServerPingMs = dashboardMetricPage?.serverPingMs ?: dashboardProtocolModel.selectedServerPingMs
+    val dashboardVisibleServerPingUnavailable =
+        dashboardMetricPage?.serverPingUnavailable ?: dashboardProtocolModel.selectedServerPingUnavailable
+    val dashboardVisibleProtocolHint = dashboardMetricPage?.protocolHint ?: dashboardProtocolPresentation.protocolHint
     val dashboardConnectionDetailsReady = dashboardProtocolModel.connectionDetailsReady
     val dashboardConnectionMetricsLoading = dashboardProtocolModel.connectionMetricsLoading
     var activeReorderCard by rememberSaveable { mutableStateOf<DashboardCard?>(null) }
@@ -581,6 +602,29 @@ fun HomeScreen(
                                             !isSmartDashboardProfile,
                                     trailing = {
                                         when {
+                                            dashboardMetricPages.size > 1 && dashboardMetricPage != null ->
+                                                DashboardProtocolMetricPager(
+                                                    page = dashboardMetricPage,
+                                                    pageIndex = dashboardMetricPageIndex,
+                                                    pageCount = dashboardMetricPages.size,
+                                                    loading = dashboardConnectionMetricsLoading || dashboardMetricPage.isRefreshing,
+                                                    onPrevious = {
+                                                        dashboardMetricPageIndex =
+                                                            if (dashboardMetricPageIndex <= 0) {
+                                                                dashboardMetricPages.lastIndex
+                                                            } else {
+                                                                dashboardMetricPageIndex - 1
+                                                            }
+                                                    },
+                                                    onNext = {
+                                                        dashboardMetricPageIndex =
+                                                            if (dashboardMetricPageIndex >= dashboardMetricPages.lastIndex) {
+                                                                0
+                                                            } else {
+                                                                dashboardMetricPageIndex + 1
+                                                            }
+                                                    },
+                                                )
                                             dashboardConnectionMetricsLoading ->
                                                 ProtocolLatencyLoadingPill(
                                                     compact = true,
@@ -588,19 +632,19 @@ fun HomeScreen(
                                                     color = autoTone,
                                                 )
                                             !dashboardConnectionDetailsReady -> Unit
-                                            dashboardSelectedLatencyMs != null ->
+                                            dashboardVisibleLatencyMs != null ->
                                                 ProtocolLatencyPill(
-                                                    latencyMs = dashboardSelectedLatencyMs,
+                                                    latencyMs = dashboardVisibleLatencyMs,
                                                     compact = true,
                                                     showLabel = true,
                                                 )
-                                            dashboardSelectedLatencyDown ->
+                                            dashboardVisibleLatencyDown ->
                                                 ProtocolLatencyPill(
                                                     compact = true,
                                                     isDown = true,
                                                     showLabel = true,
                                                 )
-                                            dashboardSelectedLatencyUnavailable ->
+                                            dashboardVisibleLatencyUnavailable ->
                                                 ProtocolLatencyPill(
                                                     compact = true,
                                                     isUnavailable = true,
@@ -902,12 +946,12 @@ fun HomeScreen(
                                             val serverPingText =
                                                 when {
                                                     !connectionMetricsAvailable -> stringResource(R.string.smart_start_protocol_status_no_data)
-                                                    dashboardSelectedServerPingMs != null ->
+                                                    dashboardVisibleServerPingMs != null ->
                                                         stringResource(
                                                             R.string.latency_pill_value,
-                                                            boundedDisplayLatencyMs(dashboardSelectedServerPingMs),
+                                                            boundedDisplayLatencyMs(dashboardVisibleServerPingMs),
                                                         )
-                                                    dashboardSelectedServerPingUnavailable -> stringResource(R.string.latency_pill_unavailable)
+                                                    dashboardVisibleServerPingUnavailable -> stringResource(R.string.latency_pill_unavailable)
                                                     else -> stringResource(R.string.smart_profile_metric_unavailable)
                                                 }
                                             val remoteDnsServer =
@@ -930,12 +974,12 @@ fun HomeScreen(
                                                         )
                                                     else -> stringResource(R.string.home_network_dns_waiting)
                                                 }
-                                            val transportTypeText = dashboardTransportTypeLabel(dashboardProtocolPresentation.protocolHint)
+                                            val transportTypeText = dashboardTransportTypeLabel(dashboardVisibleProtocolHint)
                                             HomeNetworkColumnTitle(stringResource(R.string.home_network_profile_info_title))
                                             HomeNetworkDetailLine(
                                                 label = stringResource(R.string.home_network_server_ping_label),
                                                 value = serverPingText,
-                                                valueMonospace = connectionMetricsAvailable && dashboardSelectedServerPingMs != null,
+                                                valueMonospace = connectionMetricsAvailable && dashboardVisibleServerPingMs != null,
                                             )
                                             HomeNetworkSubtleDivider()
                                             HomeNetworkDetailLine(
@@ -1168,6 +1212,80 @@ fun HomeScreen(
         )
     }
 }
+}
+
+@Composable
+private fun DashboardProtocolMetricPager(
+    page: HomeDashboardProtocolMetricPage,
+    pageIndex: Int,
+    pageCount: Int,
+    loading: Boolean,
+    onPrevious: () -> Unit,
+    onNext: () -> Unit,
+) {
+    Surface(
+        modifier = Modifier.widthIn(max = 188.dp),
+        shape = MaterialTheme.shapes.medium,
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.30f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.42f)),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 2.dp, vertical = 2.dp),
+            horizontalArrangement = Arrangement.spacedBy(2.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            IconButton(
+                onClick = onPrevious,
+                modifier = Modifier.size(24.dp),
+            ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowLeft,
+                    contentDescription = stringResource(R.string.smart_profile_metrics_previous_protocol),
+                    modifier = Modifier.size(16.dp),
+                )
+            }
+            Column(
+                modifier = Modifier.weight(1f, fill = false),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(1.dp),
+            ) {
+                Text(
+                    text = protocolHintChipLabel(page.protocolHint),
+                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.sp, lineHeight = 8.sp),
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    textAlign = TextAlign.Center,
+                )
+                Text(
+                    text = "${pageIndex + 1}/$pageCount",
+                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 7.sp, lineHeight = 7.sp),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                )
+            }
+            if (loading) {
+                ProtocolLatencyLoadingPill(compact = true)
+            } else {
+                ProtocolLatencyPill(
+                    latencyMs = page.latencyPresentation.latencyMs,
+                    compact = true,
+                    isDown = page.latencyPresentation.isDown,
+                    isUnavailable = page.latencyPresentation.isUnavailable,
+                )
+            }
+            IconButton(
+                onClick = onNext,
+                modifier = Modifier.size(24.dp),
+            ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowRight,
+                    contentDescription = stringResource(R.string.smart_profile_metrics_next_protocol),
+                    modifier = Modifier.size(16.dp),
+                )
+            }
+        }
+    }
 }
 
 @Composable

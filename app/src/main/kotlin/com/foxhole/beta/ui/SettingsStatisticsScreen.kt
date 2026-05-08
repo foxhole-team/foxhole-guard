@@ -37,6 +37,7 @@ import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.Route
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.SettingsEthernet
+import androidx.compose.material.icons.outlined.WarningAmber
 import androidx.compose.material.icons.outlined.Storage
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.AlertDialog
@@ -68,6 +69,7 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -93,6 +95,7 @@ import com.foxhole.beta.core.model.ProtocolStatisticsUiItem
 import com.foxhole.beta.core.model.SmartProfileProtocolMemory
 import com.foxhole.beta.core.model.StatisticsRange
 import com.foxhole.beta.core.model.StatisticsMetric
+import com.foxhole.beta.core.model.StatisticsRefreshInterval
 import com.foxhole.beta.core.model.StatisticsRetention
 import com.foxhole.beta.core.model.StatisticsUiState
 import com.foxhole.beta.core.model.TrafficMapPoint
@@ -114,20 +117,24 @@ fun StatisticsScreen(
     onNavigateUp: () -> Unit,
     onStatisticsEnabledChanged: (Boolean) -> Unit,
     onStatisticsRetentionSelected: (StatisticsRetention) -> Unit,
+    onStatisticsRefreshIntervalSelected: (StatisticsRefreshInterval) -> Unit,
     onStatisticsMetricEnabledChanged: (StatisticsMetric, Boolean) -> Unit,
     onAppTrafficStatsEnabledChanged: (Boolean) -> Unit,
+    onFirewallEnabledChanged: (Boolean) -> Unit,
     onClearUsage: () -> Unit,
 ) {
     var settingsVisible by rememberSaveable { mutableStateOf(false) }
     var retentionMenuExpanded by rememberSaveable { mutableStateOf(false) }
+    var refreshIntervalMenuExpanded by rememberSaveable { mutableStateOf(false) }
     var allAppsVisible by rememberSaveable { mutableStateOf(false) }
     var allCountriesVisible by rememberSaveable { mutableStateOf(false) }
     var selectedApp by rememberSaveable { mutableStateOf<String?>(null) }
     var selectedProfileId by rememberSaveable { mutableStateOf<Long?>(null) }
     var clearConfirmVisible by rememberSaveable { mutableStateOf(false) }
+    var appStatsFirewallConfirmVisible by rememberSaveable { mutableStateOf(false) }
     val statisticsSettings = state.settings.statistics
     val context = LocalContext.current
-    val retention = StatisticsRetention.FOREVER
+    val retention = state.settings.statistics.retention
     val statistics =
         remember(state.settings, state.profiles, state.activeProfile, state.traffic, retention) {
             statisticsUiState(state = state, retention = retention)
@@ -152,7 +159,13 @@ fun StatisticsScreen(
     val topCountryRows = countryRows.take(10)
     val appStatsSwitchChecked = state.settings.appTrafficStatsEnabled
     val usageAccessGranted = UsageStatsAccess.isGranted(context)
-    val appStatsEnabled = statisticsSettings.enabled && statisticsSettings.appTrafficEnabled && appStatsSwitchChecked && usageAccessGranted
+    val firewallEnabled = state.settings.expert.firewallEnabled
+    val appStatsEnabled =
+        statisticsSettings.enabled &&
+            statisticsSettings.appTrafficEnabled &&
+            appStatsSwitchChecked &&
+            usageAccessGranted &&
+            firewallEnabled
     val selectedAppRow = selectedApp?.let { packageName -> appRows.firstOrNull { row -> row.packageName == packageName } }
     val selectedProfile =
         selectedProfileId?.let { profileId ->
@@ -202,6 +215,11 @@ fun StatisticsScreen(
                     TransportStatisticsSection(items = statistics.transports)
                 }
             }
+            if (statisticsSettings.anomalyMetricsEnabled) {
+                item(key = "anomalies") {
+                    AnomalyStatisticsCard(events = state.anomalyEvents)
+                }
+            }
             if (statisticsSettings.appTrafficEnabled && appStatsSwitchChecked) {
                 item(key = "app-statistics") {
                     AppTrafficStatisticsCard(
@@ -210,6 +228,8 @@ fun StatisticsScreen(
                         enabled = appStatsEnabled,
                         runtimeActive = appStatsEnabled && state.traffic.available,
                         usageAccessGranted = usageAccessGranted,
+                        firewallEnabled = firewallEnabled,
+                        onEnableFirewall = { appStatsFirewallConfirmVisible = true },
                         onOpenUsageAccess = { context.startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)) },
                         onShowAll = { allAppsVisible = true },
                         onRowClick = { row -> selectedApp = row.packageName },
@@ -222,7 +242,7 @@ fun StatisticsScreen(
                         state = trafficMapState,
                         rows = topCountryRows,
                         totalRowsCount = countryRows.size,
-                        enabled = state.settings.statistics.countryTrafficEnabled,
+                        enabled = state.settings.statistics.countryTrafficEnabled && firewallEnabled,
                         onShowAll = { allCountriesVisible = true },
                     )
                 }
@@ -261,6 +281,20 @@ fun StatisticsScreen(
                             leadingIcon = Icons.Outlined.Storage,
                             grouped = true,
                         )
+                        SettingsControlGroupDivider()
+                        DropdownSettingRow(
+                            title = stringResource(R.string.statistics_refresh_interval_title),
+                            value = statisticsRefreshIntervalLabel(state.settings.statistics.refreshInterval),
+                            expanded = refreshIntervalMenuExpanded,
+                            onExpandedChange = { refreshIntervalMenuExpanded = it },
+                            values = StatisticsRefreshInterval.entries,
+                            selected = state.settings.statistics.refreshInterval,
+                            label = { statisticsRefreshIntervalLabel(it) },
+                            onSelect = onStatisticsRefreshIntervalSelected,
+                            summary = stringResource(R.string.statistics_refresh_interval_summary),
+                            leadingIcon = Icons.Outlined.BarChart,
+                            grouped = true,
+                        )
                     }
                     SettingsControlGroup {
                         SettingSwitchRow(
@@ -268,7 +302,13 @@ fun StatisticsScreen(
                             checked = appStatsSwitchChecked,
                             summary = stringResource(R.string.app_statistics_enabled_summary),
                             leadingIcon = Icons.Outlined.Apps,
-                            onCheckedChange = onAppTrafficStatsEnabledChanged,
+                            onCheckedChange = { enabled ->
+                                if (enabled && !firewallEnabled) {
+                                    appStatsFirewallConfirmVisible = true
+                                } else {
+                                    onAppTrafficStatsEnabledChanged(enabled)
+                                }
+                            },
                             enabled = statisticsSettings.enabled,
                             grouped = true,
                         )
@@ -325,6 +365,14 @@ fun StatisticsScreen(
                                     stringResource(R.string.statistics_metric_countries_firewall_summary)
                                 },
                             enabled = statisticsSettings.enabled && state.settings.expert.firewallEnabled,
+                            onMetricChanged = onStatisticsMetricEnabledChanged,
+                        )
+                        SettingsControlGroupDivider()
+                        StatisticsMetricSwitch(
+                            metric = StatisticsMetric.ANOMALIES,
+                            checked = statisticsSettings.anomalyMetricsEnabled,
+                            title = stringResource(R.string.statistics_metric_anomalies),
+                            enabled = statisticsSettings.enabled,
                             onMetricChanged = onStatisticsMetricEnabledChanged,
                         )
                     }
@@ -399,7 +447,13 @@ fun StatisticsScreen(
             text = {
                 LazyColumn(modifier = Modifier.heightIn(max = 520.dp)) {
                     items(appRows, key = AppTrafficRow::packageName) { row ->
-                        AppTrafficRowView(row = row, onClick = { selectedApp = row.packageName })
+                        AppTrafficRowView(
+                            row = row,
+                            onClick = {
+                                allAppsVisible = false
+                                selectedApp = row.packageName
+                            },
+                        )
                         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
                     }
                 }
@@ -421,6 +475,21 @@ fun StatisticsScreen(
             onConfirm = {
                 clearConfirmVisible = false
                 onClearUsage()
+            },
+        )
+    }
+
+    if (appStatsFirewallConfirmVisible) {
+        ConfirmDialog(
+            title = stringResource(R.string.app_statistics_firewall_warning_title),
+            body = stringResource(R.string.app_statistics_firewall_warning_body),
+            confirmLabel = stringResource(R.string.security_firewall_enable_action),
+            icon = Icons.Outlined.WarningAmber,
+            onDismiss = { appStatsFirewallConfirmVisible = false },
+            onConfirm = {
+                appStatsFirewallConfirmVisible = false
+                onFirewallEnabledChanged(true)
+                onAppTrafficStatsEnabledChanged(true)
             },
         )
     }
@@ -1176,12 +1245,190 @@ private fun TransportRow(item: TransportStatisticsUiItem) {
 }
 
 @Composable
+private fun AnomalyStatisticsCard(events: List<AnomalyEvent>) {
+    val recentEvents = remember(events) { events.sortedByDescending(AnomalyEvent::createdAtMs) }
+    val appsCount =
+        remember(recentEvents) {
+            recentEvents.mapNotNull(AnomalyEvent::packageName).distinct().size
+        }
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHighest),
+        shape = MaterialTheme.shapes.medium,
+    ) {
+        Column(
+            modifier = Modifier.padding(CardInnerPadding),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            SectionTitle(
+                icon = Icons.Outlined.WarningAmber,
+                title = stringResource(R.string.statistics_anomaly_summary_title),
+            )
+            if (recentEvents.isEmpty()) {
+                EmptySectionText(text = stringResource(R.string.statistics_anomaly_empty))
+            } else {
+                DetailMetricGrid(
+                    metrics =
+                        listOfNotNull(
+                            metricIfPositive(
+                                stringResource(R.string.statistics_anomaly_events),
+                                recentEvents.size,
+                            ),
+                            metricIfPositive(
+                                stringResource(R.string.statistics_anomaly_high_events),
+                                recentEvents.count { event -> event.severity == AnomalySeverity.HIGH },
+                            ),
+                            metricIfPositive(
+                                stringResource(R.string.statistics_anomaly_notified_events),
+                                recentEvents.count(AnomalyEvent::notificationShown),
+                            ),
+                            metricIfPositive(
+                                stringResource(R.string.statistics_anomaly_apps),
+                                appsCount,
+                            ),
+                        ),
+                )
+                Text(
+                    text = stringResource(R.string.statistics_anomaly_score_trend),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                AnomalyScoreChart(events = recentEvents)
+                Text(
+                    text = stringResource(R.string.statistics_anomaly_recent_events),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    recentEvents.take(5).forEach { event ->
+                        AnomalyEventRow(event = event)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AnomalyScoreChart(events: List<AnomalyEvent>) {
+    val semanticColors = LocalFoxholeSemanticColors.current
+    val gridColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+    val lineColor = MaterialTheme.colorScheme.primary
+    val highColor = MaterialTheme.colorScheme.error
+    val points = remember(events) { anomalyChartPoints(events) }
+    val maxScore = points.maxOfOrNull(AnomalyChartPoint::score)?.coerceAtLeast(1) ?: 1
+    Canvas(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .height(130.dp),
+    ) {
+        val top = 10.dp.toPx()
+        val bottom = size.height - 10.dp.toPx()
+        val height = (bottom - top).coerceAtLeast(1f)
+        drawLine(
+            color = gridColor,
+            start = Offset(0f, top),
+            end = Offset(size.width, top),
+            pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 8f)),
+        )
+        if (points.size == 1) {
+            val radius = 4.dp.toPx()
+            drawCircle(
+                color = if (points.first().high) highColor else semanticColors.success,
+                radius = radius,
+                center = Offset(size.width / 2f, bottom - height * (points.first().score.toFloat() / maxScore.toFloat())),
+            )
+            return@Canvas
+        }
+        val step = size.width / (points.size - 1).coerceAtLeast(1).toFloat()
+        fun point(index: Int): Offset {
+            val ratio = points[index].score.toFloat() / maxScore.toFloat()
+            return Offset(
+                x = index * step,
+                y = bottom - height * ratio.coerceIn(0f, 1f),
+            )
+        }
+        points.indices.zipWithNext().forEach { (left, right) ->
+            drawLine(
+                color = lineColor,
+                start = point(left),
+                end = point(right),
+                strokeWidth = 2.dp.toPx(),
+                cap = StrokeCap.Round,
+            )
+        }
+        points.forEachIndexed { index, chartPoint ->
+            drawCircle(
+                color = if (chartPoint.high) highColor else semanticColors.success,
+                radius = 3.5.dp.toPx(),
+                center = point(index),
+            )
+        }
+    }
+}
+
+@Composable
+private fun AnomalyEventRow(event: AnomalyEvent) {
+    val eventColor =
+        when (event.severity) {
+            AnomalySeverity.HIGH -> MaterialTheme.colorScheme.error
+            AnomalySeverity.NOTIFICATION -> MaterialTheme.colorScheme.primary
+            AnomalySeverity.ACTIVITY_LOG -> MaterialTheme.colorScheme.tertiary
+            AnomalySeverity.SILENT -> MaterialTheme.colorScheme.onSurfaceVariant
+        }
+    Surface(
+        shape = MaterialTheme.shapes.small,
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.34f),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(10.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Canvas(modifier = Modifier.size(10.dp)) {
+                drawCircle(eventColor)
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = event.reason,
+                    style = MaterialTheme.typography.bodySmall,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = listOfNotNull(
+                        event.packageName,
+                        event.protocol,
+                        event.createdAtMs.formatLastActivity(),
+                    ).joinToString(" • "),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            Text(
+                text = event.score.toString(),
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold,
+                color = eventColor,
+            )
+        }
+    }
+}
+
+@Composable
 private fun AppTrafficStatisticsCard(
     rows: List<AppTrafficRow>,
     allRowsCount: Int,
     enabled: Boolean,
     runtimeActive: Boolean,
     usageAccessGranted: Boolean,
+    firewallEnabled: Boolean,
+    onEnableFirewall: () -> Unit,
     onOpenUsageAccess: () -> Unit,
     onShowAll: () -> Unit,
     onRowClick: (AppTrafficRow) -> Unit,
@@ -1207,6 +1454,15 @@ private fun AppTrafficStatisticsCard(
                 )
                 TextButton(onClick = onOpenUsageAccess) {
                     Text(stringResource(R.string.statistics_usage_access_action))
+                }
+            } else if (!firewallEnabled) {
+                Text(
+                    text = stringResource(R.string.app_statistics_firewall_warning_body),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                TextButton(onClick = onEnableFirewall) {
+                    Text(stringResource(R.string.security_firewall_enable_action))
                 }
             } else if (!enabled) {
                 Text(
@@ -1521,15 +1777,19 @@ private fun ProfileStatisticsDetail(
     ) {
         DetailMetricGrid(
             metrics =
-                listOf(
-                    stringResource(R.string.statistics_total_traffic) to formatBytes(context, detail.totalBytes),
-                    stringResource(R.string.statistics_vpn_sessions) to detail.totalAttempts.toString(),
-                    stringResource(R.string.statistics_successful_connections) to detail.successCount.toString(),
-                    stringResource(R.string.statistics_errors) to detail.failureCount.toString(),
-                    stringResource(R.string.statistics_average_latency) to detail.avgLatencyMs.formatLatency(),
-                    stringResource(R.string.statistics_min_latency) to detail.minLatencyMs.formatLatency(),
-                    stringResource(R.string.statistics_max_latency) to detail.maxLatencyMs.formatLatency(),
-                    stringResource(R.string.statistics_last_activity) to detail.lastActivityAt.formatLastActivity(),
+                listOfNotNull(
+                    metricIfPositive(
+                        stringResource(R.string.statistics_total_traffic),
+                        detail.totalBytes,
+                        formatBytes(context, detail.totalBytes),
+                    ),
+                    metricIfPositive(stringResource(R.string.statistics_vpn_sessions), detail.totalAttempts),
+                    metricIfPositive(stringResource(R.string.statistics_successful_connections), detail.successCount),
+                    metricIfPositive(stringResource(R.string.statistics_errors), detail.failureCount),
+                    detail.avgLatencyMs?.let { stringResource(R.string.statistics_average_latency) to it.formatLatency() },
+                    detail.minLatencyMs?.let { stringResource(R.string.statistics_min_latency) to it.formatLatency() },
+                    detail.maxLatencyMs?.let { stringResource(R.string.statistics_max_latency) to it.formatLatency() },
+                    detail.lastActivityAt?.let { stringResource(R.string.statistics_last_activity) to it.formatLastActivity() },
                 ),
         )
         if (detail.protocols.isNotEmpty()) {
@@ -1614,12 +1874,25 @@ private fun AppTrafficDetail(
     ) {
         DetailMetricGrid(
             metrics =
-                listOf(
-                    stringResource(R.string.home_total_label) to formatBytes(context, row.totalBytes),
-                    stringResource(R.string.traffic_received) to formatBytes(context, row.rxBytes),
-                    stringResource(R.string.traffic_sent) to formatBytes(context, row.txBytes),
-                    stringResource(R.string.statistics_app_samples) to appSamples.size.toString(),
-                    stringResource(R.string.statistics_last_activity) to appSamples.maxOfOrNull(AppTrafficWindow::startedAtMs).formatLastActivity(),
+                listOfNotNull(
+                    metricIfPositive(
+                        stringResource(R.string.home_total_label),
+                        row.totalBytes,
+                        formatBytes(context, row.totalBytes),
+                    ),
+                    metricIfPositive(
+                        stringResource(R.string.traffic_received),
+                        row.rxBytes,
+                        formatBytes(context, row.rxBytes),
+                    ),
+                    metricIfPositive(
+                        stringResource(R.string.traffic_sent),
+                        row.txBytes,
+                        formatBytes(context, row.txBytes),
+                    ),
+                    metricIfPositive(stringResource(R.string.statistics_app_samples), appSamples.size),
+                    appSamples.maxOfOrNull(AppTrafficWindow::startedAtMs)
+                        ?.let { stringResource(R.string.statistics_last_activity) to it.formatLastActivity() },
                 ),
         )
         if (connectionRows.isEmpty()) {
@@ -1648,7 +1921,12 @@ private fun AppTrafficDetail(
                             overflow = TextOverflow.Ellipsis,
                         )
                         Text(
-                            text = listOf(connection.protocol, connection.lastSeenAt.formatLastActivity()).joinToString(" • "),
+                            text =
+                                listOf(
+                                    connection.protocol,
+                                    stringResource(R.string.statistics_app_detail_connection_count, connection.count),
+                                    connection.lastSeenAt.formatLastActivity(),
+                                ).joinToString(" • "),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1,
@@ -1662,6 +1940,36 @@ private fun AppTrafficDetail(
                     )
                 }
             }
+            Text(
+                text = stringResource(R.string.statistics_app_detail_recent_connections),
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+            )
+            appConnectionEventRows(row.packageName, diagnosticEntries)
+                .take(10)
+                .forEach { connection ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = connection.remote,
+                                style = MaterialTheme.typography.bodySmall,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            Text(
+                                text = listOf(connection.protocol, connection.lastSeenAt.formatLastActivity()).joinToString(" • "),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                    }
+                }
         }
         if (appSamples.isNotEmpty()) {
             AppTrafficMiniChart(samples = appSamples.takeLast(24))
@@ -1735,6 +2043,10 @@ private fun AppTrafficMiniChart(samples: List<AppTrafficWindow>) {
 
 @Composable
 private fun DetailMetricGrid(metrics: List<Pair<String, String>>) {
+    if (metrics.isEmpty()) {
+        EmptySectionText(text = stringResource(R.string.statistics_no_data))
+        return
+    }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         metrics.chunked(2).forEach { row ->
             Row(
@@ -1782,6 +2094,12 @@ private data class AppConnectionRow(
     val protocol: String,
     val count: Int,
     val lastSeenAt: Long,
+)
+
+private data class AnomalyChartPoint(
+    val bucketStartAt: Long,
+    val score: Int,
+    val high: Boolean,
 )
 
 private data class ProfileStatisticsDetailModel(
@@ -2299,7 +2617,61 @@ private fun anomalyBadgesFor(events: List<AnomalyEvent>): Set<AppAnomalyBadge> {
     return badges.ifEmpty { setOf(AppAnomalyBadge.NORMAL) }
 }
 
+private fun metricIfPositive(
+    label: String,
+    value: Int,
+    displayValue: String = value.toString(),
+): Pair<String, String>? = value.takeIf { it > 0 }?.let { label to displayValue }
+
+private fun metricIfPositive(
+    label: String,
+    value: Long,
+    displayValue: String = value.toString(),
+): Pair<String, String>? = value.takeIf { it > 0L }?.let { label to displayValue }
+
+private fun anomalyChartPoints(events: List<AnomalyEvent>): List<AnomalyChartPoint> {
+    if (events.isEmpty()) {
+        return emptyList()
+    }
+    val ordered = events.sortedBy(AnomalyEvent::createdAtMs)
+    val firstAt = ordered.first().createdAtMs
+    val lastAt = ordered.last().createdAtMs
+    val bucketSizeMs = ((lastAt - firstAt) / AnomalyChartBucketCount.coerceAtLeast(1)).coerceAtLeast(1L)
+    return ordered
+        .groupBy { event ->
+            firstAt + ((event.createdAtMs - firstAt) / bucketSizeMs) * bucketSizeMs
+        }
+        .toSortedMap()
+        .map { (bucketStartAt, bucketEvents) ->
+            AnomalyChartPoint(
+                bucketStartAt = bucketStartAt,
+                score = bucketEvents.maxOf(AnomalyEvent::score),
+                high = bucketEvents.any { event -> event.severity == AnomalySeverity.HIGH },
+            )
+        }
+        .takeLast(AnomalyChartBucketCount)
+}
+
 private fun appConnectionRows(
+    packageName: String,
+    entries: List<DiagnosticEntry>,
+): List<AppConnectionRow> =
+    appConnectionEventRows(packageName, entries)
+        .groupBy { row -> row.remote to row.protocol }
+        .map { (key, rows) ->
+            AppConnectionRow(
+                remote = key.first,
+                protocol = key.second,
+                count = rows.size,
+                lastSeenAt = rows.maxOf(AppConnectionRow::lastSeenAt),
+            )
+        }
+        .sortedWith(
+            compareByDescending<AppConnectionRow> { row -> row.count }
+                .thenByDescending { row -> row.lastSeenAt },
+        )
+
+private fun appConnectionEventRows(
     packageName: String,
     entries: List<DiagnosticEntry>,
 ): List<AppConnectionRow> =
@@ -2329,19 +2701,8 @@ private fun appConnectionRows(
                 )
             }
         }
-        .groupBy { row -> row.remote to row.protocol }
-        .map { (key, rows) ->
-            AppConnectionRow(
-                remote = key.first,
-                protocol = key.second,
-                count = rows.size,
-                lastSeenAt = rows.maxOf(AppConnectionRow::lastSeenAt),
-            )
-        }
-        .sortedWith(
-            compareByDescending<AppConnectionRow> { row -> row.count }
-                .thenByDescending { row -> row.lastSeenAt },
-        )
+        .sortedByDescending(AppConnectionRow::lastSeenAt)
+        .toList()
 
 private val StatisticsRetention.durationMs: Long?
     get() =
@@ -2437,6 +2798,14 @@ private fun StatisticsRetention.toStatisticsRange(): StatisticsRange =
         StatisticsRetention.FOREVER -> StatisticsRange.FOREVER
     }
 
+@Composable
+private fun statisticsRefreshIntervalLabel(value: StatisticsRefreshInterval): String =
+    pluralStringResource(
+        R.plurals.statistics_refresh_interval_seconds,
+        value.seconds,
+        value.seconds,
+    )
+
 private fun protocolDisplayName(protocol: ProtocolHint): String =
     when (protocol) {
         ProtocolHint.HYSTERIA2 -> "Hysteria2"
@@ -2480,3 +2849,4 @@ private val CompactProtocolGridWidth = 360.dp
 private const val DonutAnimationDurationMs = 700
 private const val ProfileTrafficPreviewLimit = 6
 private const val ProfileComparisonMinAttempts = 2
+private const val AnomalyChartBucketCount = 12

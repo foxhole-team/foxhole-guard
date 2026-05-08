@@ -67,17 +67,21 @@ class AppTrafficSampler(
     private val packageManager = appContext.packageManager
     private val networkStatsManager by lazy { appContext.getSystemService<NetworkStatsManager>() }
     private val networkTypeProvider = AndroidNetworkTypeProvider(appContext)
-    private var lastSampleAt: Long = 0L
 
     fun hasUsageAccess(): Boolean = UsageStatsAccess.isGranted(appContext)
 
     suspend fun sampleWindows(minDurationMs: Long = DEFAULT_SAMPLE_WINDOW_MS): List<AppTrafficWindow> =
         withContext(Dispatchers.IO) {
             val now = nowProvider()
-            val startAt = (lastSampleAt.takeIf { it > 0L } ?: (now - minDurationMs)).coerceAtMost(now - 1L)
+            val startAt =
+                synchronized(SampleWatermarkLock) {
+                    val reservedStartAt =
+                        (lastSampleAt.takeIf { it > 0L } ?: (now - minDurationMs)).coerceAtMost(now - 1L)
+                    lastSampleAt = maxOf(lastSampleAt, now)
+                    reservedStartAt
+                }
             val durationMs = (now - startAt).coerceAtLeast(1L)
             if (!hasUsageAccess()) {
-                lastSampleAt = now
                 return@withContext emptyList()
             }
             val manager = networkStatsManager ?: return@withContext emptyList()
@@ -105,7 +109,6 @@ class AppTrafficSampler(
                     }
                     .distinctBy(AppTrafficWindow::packageName)
                     .toList()
-            lastSampleAt = now
             windows
         }
 
@@ -167,6 +170,8 @@ class AppTrafficSampler(
 
     companion object {
         const val DEFAULT_SAMPLE_WINDOW_MS = 60_000L
+        private val SampleWatermarkLock = Any()
+        private var lastSampleAt: Long = 0L
     }
 }
 

@@ -10,11 +10,12 @@ class AppTrafficStatsRecorder(
     context: Context,
     private val sampler: AppTrafficSampler = AppTrafficSampler(context),
 ) {
-    suspend fun recordSnapshot() {
-        anomalyRepository.recordAppTrafficWindows(sampleWindows())
+    suspend fun recordSnapshot(minDurationMs: Long = AppTrafficSampler.DEFAULT_SAMPLE_WINDOW_MS) {
+        anomalyRepository.recordAppTrafficWindows(sampleWindows(minDurationMs))
     }
 
-    suspend fun sampleWindows(): List<AppTrafficWindow> = sampler.sampleWindows()
+    suspend fun sampleWindows(minDurationMs: Long = AppTrafficSampler.DEFAULT_SAMPLE_WINDOW_MS): List<AppTrafficWindow> =
+        sampler.sampleWindows(minDurationMs)
 
     fun hasUsageAccess(): Boolean = sampler.hasUsageAccess()
 }

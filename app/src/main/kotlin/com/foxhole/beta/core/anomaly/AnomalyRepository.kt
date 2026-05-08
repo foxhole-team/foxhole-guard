@@ -11,6 +11,7 @@ import com.foxhole.beta.core.model.AnomalySeverity
 import com.foxhole.beta.core.model.AnomalySettings
 import com.foxhole.beta.core.model.AnomalySignal
 import com.foxhole.beta.core.model.AppTrafficWindow
+import com.foxhole.beta.core.model.StatisticsRetention
 import com.foxhole.beta.core.model.TrafficWindow
 import com.foxhole.beta.core.settings.SettingsRepository
 import kotlinx.coroutines.flow.Flow
@@ -40,20 +41,27 @@ class AnomalyRepository(
     val recentAppTrafficWindows: Flow<List<AppTrafficWindow>> =
         settingsRepository.settings
             .flatMapLatest { settings ->
-                if (!settings.statistics.enabled || !settings.statistics.appTrafficEnabled || !settings.appTrafficStatsEnabled) {
+                if (
+                    !settings.statistics.enabled ||
+                    !settings.statistics.appTrafficEnabled ||
+                    !settings.appTrafficStatsEnabled ||
+                    !settings.expert.firewallEnabled
+                ) {
                     flowOf(emptyList())
                 } else {
-                    dao.observeRecentAppTrafficWindows(cutoff = 0L).map { entities -> entities.map(AppTrafficWindowEntity::toDomain) }
+                    dao.observeRecentAppTrafficWindows(cutoff = statisticsCutoff(settings.statistics.retention))
+                        .map { entities -> entities.map(AppTrafficWindowEntity::toDomain) }
                 }
             }
 
     val recentTrafficWindows: Flow<List<TrafficWindow>> =
         settingsRepository.settings
             .flatMapLatest { settings ->
-                if (!settings.statistics.enabled || !settings.statistics.countryTrafficEnabled) {
+                if (!settings.statistics.enabled || !settings.statistics.countryTrafficEnabled || !settings.expert.firewallEnabled) {
                     flowOf(emptyList())
                 } else {
-                    dao.observeRecentTrafficWindows(cutoff = 0L).map { entities -> entities.map(TrafficWindowEntity::toDomain) }
+                    dao.observeRecentTrafficWindows(cutoff = statisticsCutoff(settings.statistics.retention))
+                        .map { entities -> entities.map(TrafficWindowEntity::toDomain) }
                 }
             }
 
@@ -205,3 +213,11 @@ class AnomalyRepository(
         private const val ANOMALY_LOG_TAG = "anomaly"
     }
 }
+
+private fun statisticsCutoff(retention: StatisticsRetention): Long =
+    when (retention) {
+        StatisticsRetention.WEEK -> System.currentTimeMillis() - 7L * 24L * 60L * 60L * 1000L
+        StatisticsRetention.MONTH -> System.currentTimeMillis() - 31L * 24L * 60L * 60L * 1000L
+        StatisticsRetention.MONTHS_3 -> System.currentTimeMillis() - 93L * 24L * 60L * 60L * 1000L
+        StatisticsRetention.FOREVER -> 0L
+    }

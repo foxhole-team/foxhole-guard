@@ -252,6 +252,8 @@
     <string name="smart_start_protocol_status_disabled">Off</string>
     <string name="insecure_tls_profile_badge">INSECURE TLS</string>
     <string name="smart_profile_metrics_refresh_action">Refresh protocol metrics</string>
+    <string name="smart_profile_metrics_previous_protocol">Previous protocol metrics</string>
+    <string name="smart_profile_metrics_next_protocol">Next protocol metrics</string>
     <string name="smart_profile_metrics_cancel_action">Stop protocol metrics refresh</string>
     <string name="smart_profile_metrics_refresh_hint">Tap a protocol to turn it on/off\nRefresh periodically to improve connection quality</string>
     <string name="smart_profile_metrics_refresh_compact_hint">Tap a protocol to turn it on/off\nRefresh periodically to improve connection quality</string>
@@ -356,12 +358,19 @@
     <string name="statistics_retention_month">1 month</string>
     <string name="statistics_retention_months_3">3 months</string>
     <string name="statistics_retention_forever">Forever</string>
+    <string name="statistics_refresh_interval_title">Refresh while open</string>
+    <string name="statistics_refresh_interval_summary">Keeps old results visible and updates samples in the background.</string>
+    <plurals name="statistics_refresh_interval_seconds">
+        <item quantity="one">%1$d second</item>
+        <item quantity="other">%1$d seconds</item>
+    </plurals>
     <string name="statistics_metric_profiles">VPN profiles</string>
     <string name="statistics_metric_protocols">VPN protocols</string>
     <string name="statistics_metric_comparisons">Profile comparison</string>
     <string name="statistics_metric_transports">Transport protocols</string>
     <string name="statistics_metric_apps">Applications</string>
     <string name="statistics_metric_countries">Countries</string>
+    <string name="statistics_metric_anomalies">Anomalies</string>
     <string name="statistics_metric_countries_firewall_summary">Enable Firewall to collect country traffic.</string>
     <string name="statistics_disabled_title">Enable statistics to use this screen</string>
     <string name="statistics_enable_action">Enable statistics</string>
@@ -401,8 +410,17 @@
     <string name="statistics_apps_top_title">Top 10 applications by traffic</string>
     <string name="statistics_app_detail_connections_unavailable">Per-domain and per-IP destinations are not collected for app traffic yet; this view shows traffic samples captured by Android counters.</string>
     <string name="statistics_app_detail_top_destinations">Top 5 destinations</string>
+    <string name="statistics_app_detail_recent_connections">Recent connections</string>
+    <string name="statistics_app_detail_connection_count">%1$d times</string>
     <string name="statistics_app_detail_top_samples">Top 5 samples</string>
     <string name="statistics_app_samples">Samples</string>
+    <string name="statistics_anomaly_summary_title">Anomaly metrics</string>
+    <string name="statistics_anomaly_events">Events</string>
+    <string name="statistics_anomaly_high_events">High</string>
+    <string name="statistics_anomaly_notified_events">Notified</string>
+    <string name="statistics_anomaly_apps">Apps</string>
+    <string name="statistics_anomaly_score_trend">Score trend</string>
+    <string name="statistics_anomaly_recent_events">Recent events</string>
     <string name="statistics_errors_percent">Errors: %1$s</string>
     <string name="statistics_protocol_footer">%1$s • %2$d sessions</string>
     <string name="statistics_more_stable">More stable</string>

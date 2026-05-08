@@ -53,6 +53,7 @@ import com.foxhole.beta.core.model.RoutingRuleAction
 import com.foxhole.beta.core.model.Settings
 import com.foxhole.beta.core.model.SmartStartTransportPriority
 import com.foxhole.beta.core.model.StatisticsMetric
+import com.foxhole.beta.core.model.StatisticsRefreshInterval
 import com.foxhole.beta.core.model.StatisticsRetention
 import com.foxhole.beta.core.model.SubscriptionRefreshInterval
 import com.foxhole.beta.core.model.ThemeMode
@@ -1325,6 +1326,17 @@ class HomeViewModel(
         }
     }
 
+    fun onStatisticsRefreshIntervalSelected(value: StatisticsRefreshInterval) {
+        viewModelScope.launch {
+            container.settingsRepository.updateStatisticsRefreshInterval(value)
+            syncAppTrafficStatsSampler(
+                appTrafficStatsRuntimeAllowed(
+                    settings = container.settingsRepository.settings.value,
+                ),
+            )
+        }
+    }
+
     fun onStatisticsMetricEnabledChanged(
         metric: StatisticsMetric,
         value: Boolean,
@@ -1382,13 +1394,13 @@ class HomeViewModel(
 
     private fun appTrafficStatsSampleIntervalMs(): Long =
         if (statisticsVisible) {
-            APP_TRAFFIC_FOREGROUND_SAMPLE_INTERVAL_MS
+            container.settingsRepository.settings.value.statistics.refreshInterval.seconds * 1_000L
         } else {
             APP_TRAFFIC_BACKGROUND_SAMPLE_INTERVAL_MS
         }
 
     internal suspend fun sampleAppTrafficStats() {
-        appTrafficStatsRecorder.recordSnapshot()
+        appTrafficStatsRecorder.recordSnapshot(minDurationMs = appTrafficStatsIntervalMs)
     }
 
     private fun appTrafficStatsRuntimeAllowed(
@@ -1396,7 +1408,8 @@ class HomeViewModel(
     ): Boolean =
         settings.statistics.enabled &&
             settings.statistics.appTrafficEnabled &&
-            settings.appTrafficStatsEnabled
+            settings.appTrafficStatsEnabled &&
+            settings.expert.firewallEnabled
 
     internal fun ClipData.firstTextItem(): String? =
         if (itemCount > 0) {
@@ -1431,7 +1444,6 @@ class HomeViewModel(
         internal const val AUTO_CONNECT_TOTAL_TIMEOUT_MS = 60_000L
         internal const val AUTO_CONNECT_MAX_ATTEMPTS = SmartStartController.AUTO_CONNECT_MAX_ATTEMPTS
         internal const val PROTOCOL_METRICS_PROBE_TIMEOUT_MS = 12_000L
-        internal const val APP_TRAFFIC_FOREGROUND_SAMPLE_INTERVAL_MS = 3_000L
         internal const val APP_TRAFFIC_BACKGROUND_SAMPLE_INTERVAL_MS = 60_000L
         internal const val AUTO_CONNECT_LATENCY_FALLBACK_PENALTY_MS = 750L
         internal val ACTIVE_CONNECTION_STATES =

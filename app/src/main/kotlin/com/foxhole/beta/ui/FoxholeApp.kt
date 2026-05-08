@@ -667,8 +667,10 @@ fun FoxholeApp(
                         onNavigateUp = navController::navigateUp,
                         onStatisticsEnabledChanged = viewModel::onStatisticsEnabledChanged,
                         onStatisticsRetentionSelected = viewModel::onStatisticsRetentionSelected,
+                        onStatisticsRefreshIntervalSelected = viewModel::onStatisticsRefreshIntervalSelected,
                         onStatisticsMetricEnabledChanged = viewModel::onStatisticsMetricEnabledChanged,
                         onAppTrafficStatsEnabledChanged = viewModel::onAppTrafficStatsEnabledChanged,
+                        onFirewallEnabledChanged = viewModel::onFirewallEnabledChanged,
                         onClearUsage = viewModel::resetUsageTracking,
                     )
                 }

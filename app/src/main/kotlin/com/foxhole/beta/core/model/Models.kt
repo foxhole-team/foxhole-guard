@@ -198,6 +198,14 @@ enum class StatisticsRetention {
     FOREVER,
 }
 
+@Serializable
+enum class StatisticsRefreshInterval(val seconds: Int) {
+    SECONDS_1(1),
+    SECONDS_3(3),
+    SECONDS_5(5),
+    SECONDS_10(10),
+}
+
 enum class StatisticsMetric {
     PROFILE_TRAFFIC,
     VPN_PROTOCOLS,
@@ -205,6 +213,7 @@ enum class StatisticsMetric {
     TRANSPORTS,
     APP_TRAFFIC,
     COUNTRY_TRAFFIC,
+    ANOMALIES,
 }
 
 @Serializable
@@ -390,12 +399,14 @@ data class ExpertSettings(
 data class StatisticsSettings(
     val enabled: Boolean = false,
     val retention: StatisticsRetention = StatisticsRetention.FOREVER,
+    val refreshInterval: StatisticsRefreshInterval = StatisticsRefreshInterval.SECONDS_3,
     val profileTrafficEnabled: Boolean = true,
     val vpnProtocolsEnabled: Boolean = true,
     val profileComparisonsEnabled: Boolean = true,
     val transportsEnabled: Boolean = true,
     val appTrafficEnabled: Boolean = true,
     val countryTrafficEnabled: Boolean = true,
+    val anomalyMetricsEnabled: Boolean = true,
 )
 
 @Serializable

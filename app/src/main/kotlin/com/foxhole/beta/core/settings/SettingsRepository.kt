@@ -40,6 +40,7 @@ import com.foxhole.beta.core.model.SmartProfilePreference
 import com.foxhole.beta.core.model.SmartProfileProtocolMemory
 import com.foxhole.beta.core.model.SmartStartTransportPriority
 import com.foxhole.beta.core.model.StatisticsMetric
+import com.foxhole.beta.core.model.StatisticsRefreshInterval
 import com.foxhole.beta.core.model.StatisticsRetention
 import com.foxhole.beta.core.model.StatisticsSettings
 import com.foxhole.beta.core.model.SubscriptionRefreshInterval
@@ -489,6 +490,13 @@ class SettingsRepository(
             )
         }
 
+    suspend fun updateStatisticsRefreshInterval(value: StatisticsRefreshInterval) =
+        update { current ->
+            current.copy(
+                statistics = current.statistics.copy(refreshInterval = value),
+            )
+        }
+
     suspend fun updateStatisticsMetricEnabled(
         metric: StatisticsMetric,
         value: Boolean,
@@ -501,6 +509,7 @@ class SettingsRepository(
                 StatisticsMetric.TRANSPORTS -> current.statistics.copy(transportsEnabled = value)
                 StatisticsMetric.APP_TRAFFIC -> current.statistics.copy(appTrafficEnabled = value)
                 StatisticsMetric.COUNTRY_TRAFFIC -> current.statistics.copy(countryTrafficEnabled = value)
+                StatisticsMetric.ANOMALIES -> current.statistics.copy(anomalyMetricsEnabled = value)
             }
         current.copy(statistics = statistics)
     }
@@ -1266,6 +1275,14 @@ class SettingsRepository(
                     StatisticsRetention.MONTHS_3,
                     StatisticsRetention.FOREVER,
                     -> retention
+                },
+            refreshInterval =
+                when (refreshInterval) {
+                    StatisticsRefreshInterval.SECONDS_1,
+                    StatisticsRefreshInterval.SECONDS_3,
+                    StatisticsRefreshInterval.SECONDS_5,
+                    StatisticsRefreshInterval.SECONDS_10,
+                    -> refreshInterval
                 },
         )
 

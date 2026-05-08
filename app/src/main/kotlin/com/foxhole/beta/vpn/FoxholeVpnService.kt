@@ -753,7 +753,12 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
     internal fun startAppTrafficStatsUpdates() {
         stopAppTrafficStatsUpdates()
         val settings = container.settingsRepository.settings.value
-        if (!settings.statistics.enabled || !settings.statistics.appTrafficEnabled || !settings.appTrafficStatsEnabled) {
+        if (
+            !settings.statistics.enabled ||
+            !settings.statistics.appTrafficEnabled ||
+            !settings.appTrafficStatsEnabled ||
+            !settings.expert.firewallEnabled
+        ) {
             return
         }
         appTrafficStatsJob =
@@ -763,7 +768,8 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
                     if (
                         !currentSettings.statistics.enabled ||
                         !currentSettings.statistics.appTrafficEnabled ||
-                        !currentSettings.appTrafficStatsEnabled
+                        !currentSettings.appTrafficStatsEnabled ||
+                        !currentSettings.expert.firewallEnabled
                     ) {
                         break
                     }
@@ -796,7 +802,12 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
             ) ?: return
         scope.launch(Dispatchers.IO) {
             val appWindows =
-                if (settings.statistics.enabled && settings.statistics.appTrafficEnabled && settings.appTrafficStatsEnabled) {
+                if (
+                    settings.statistics.enabled &&
+                    settings.statistics.appTrafficEnabled &&
+                    settings.appTrafficStatsEnabled &&
+                    settings.expert.firewallEnabled
+                ) {
                     runCatching { appTrafficStatsRecorder.sampleWindows() }.getOrDefault(emptyList())
                 } else {
                     emptyList()
