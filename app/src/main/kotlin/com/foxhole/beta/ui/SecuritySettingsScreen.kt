@@ -35,6 +35,12 @@ fun SecuritySettingsScreen(
         snackbarHostState = snackbarHostState,
         onNavigateUp = onNavigateUp,
         tag = "security_settings_screen",
+        actions = {
+            SettingsHelpAction(
+                title = stringResource(R.string.anomaly_algorithms_title),
+                body = stringResource(R.string.anomaly_algorithms_info_body),
+            )
+        },
     ) {
         item {
             SettingsControlGroup {
@@ -56,6 +62,7 @@ fun SecuritySettingsScreen(
                     title = stringResource(R.string.anomaly_notify_title),
                     checked = state.settings.anomaly.notifyUnusualTraffic,
                     summary = stringResource(R.string.anomaly_notify_summary),
+                    infoBody = stringResource(R.string.anomaly_notify_info_body),
                     leadingIcon = Icons.Outlined.Notifications,
                     onCheckedChange = onNotifyUnusualTrafficChanged,
                     summaryMaxLines = 2,
@@ -71,6 +78,7 @@ fun SecuritySettingsScreen(
                     selected = state.settings.anomaly.sensitivity,
                     label = { anomalySensitivityLabel(it) },
                     onSelect = onAnomalySensitivitySelected,
+                    infoBody = stringResource(R.string.anomaly_sensitivity_info_body),
                     leadingIcon = Icons.Outlined.QueryStats,
                     grouped = true,
                 )
@@ -79,6 +87,7 @@ fun SecuritySettingsScreen(
                     title = stringResource(R.string.anomaly_background_title),
                     checked = state.settings.anomaly.analyzeBackgroundTraffic,
                     summary = stringResource(R.string.anomaly_background_summary),
+                    infoBody = stringResource(R.string.anomaly_background_info_body),
                     leadingIcon = Icons.Outlined.QueryStats,
                     onCheckedChange = onAnalyzeBackgroundTrafficChanged,
                     summaryMaxLines = 2,
@@ -89,6 +98,7 @@ fun SecuritySettingsScreen(
                     title = stringResource(R.string.anomaly_countries_title),
                     checked = state.settings.anomaly.analyzeDestinationCountries,
                     summary = stringResource(R.string.anomaly_countries_summary),
+                    infoBody = stringResource(R.string.anomaly_countries_info_body),
                     leadingIcon = Icons.Outlined.QueryStats,
                     onCheckedChange = onAnalyzeDestinationCountriesChanged,
                     summaryMaxLines = 2,
@@ -104,6 +114,7 @@ fun SecuritySettingsScreen(
                     selected = state.settings.anomaly.historyRetention,
                     label = { anomalyHistoryRetentionLabel(it) },
                     onSelect = onAnomalyHistoryRetentionSelected,
+                    infoBody = stringResource(R.string.anomaly_history_info_body),
                     leadingIcon = Icons.Outlined.QueryStats,
                     grouped = true,
                 )
