@@ -812,8 +812,11 @@
     <string name="profile_editor_allowed_ips">Allowed IPs</string>
     <string name="profile_editor_keepalive">Keepalive</string>
     <string name="profile_editor_tls_server_name">TLS server name</string>
+    <string name="profile_editor_tls_camouflage_mode">Режим маскировки TLS</string>
+    <string name="profile_editor_tls_camouflage_naive">NaiveProxy</string>
     <string name="profile_editor_alpn">ALPN</string>
     <string name="profile_editor_fingerprint">TLS fingerprint</string>
+    <string name="profile_editor_fingerprint_summary">Меняет TLS ClientHello для совместимости с некоторыми серверами.</string>
     <string name="profile_editor_username">Логин</string>
     <string name="profile_editor_ech">Encrypted Client Hello</string>
     <string name="profile_editor_tls_min_version">Минимальная версия TLS</string>
@@ -838,7 +841,7 @@
     <string name="profile_editor_tls_version_12">TLS 1.2</string>
     <string name="profile_editor_tls_version_13">TLS 1.3</string>
     <string name="profile_editor_tls_curves_compatibility">Совместимость</string>
-    <string name="profile_editor_tls_curves_modern">Современный</string>
+    <string name="profile_editor_tls_curves_modern">Современные</string>
     <string name="profile_editor_reality_public_key">Reality public key</string>
     <string name="profile_editor_reality_short_id">Reality short ID</string>
     <string name="profile_reality_info_title">Проверка Reality</string>

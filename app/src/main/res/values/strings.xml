@@ -780,8 +780,11 @@
     <string name="profile_editor_allowed_ips">Allowed IPs</string>
     <string name="profile_editor_keepalive">Keepalive</string>
     <string name="profile_editor_tls_server_name">TLS server name</string>
+    <string name="profile_editor_tls_camouflage_mode">TLS camouflage mode</string>
+    <string name="profile_editor_tls_camouflage_naive">NaiveProxy</string>
     <string name="profile_editor_alpn">ALPN</string>
     <string name="profile_editor_fingerprint">TLS fingerprint</string>
+    <string name="profile_editor_fingerprint_summary">Changes TLS ClientHello for compatibility with some servers.</string>
     <string name="profile_editor_username">Username</string>
     <string name="profile_editor_ech">Encrypted Client Hello</string>
     <string name="profile_editor_tls_min_version">TLS min version</string>

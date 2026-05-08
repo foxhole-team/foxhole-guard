@@ -814,7 +814,21 @@ class ProfileImportParserTest {
                         "network": "tcp",
                         "realitySettings": {
                           "allowInsecure": false,
+                          "alpn": [
+                            "h2",
+                            "http/1.1"
+                          ],
+                          "curvePreferences": [
+                            "X25519",
+                            "X25519MLKEM768",
+                            "P256"
+                          ],
+                          "ech": {
+                            "enabled": true
+                          },
                           "fingerprint": "chrome",
+                          "maxVersion": "1.3",
+                          "minVersion": "1.2",
                           "publicKey": "IiUOQtR3zqUg32FfqorRXwUVSz9e1CSPFsJnafcFVmE",
                           "serverName": "api-maps.yandex.ru",
                           "shortId": "736acf61"
@@ -873,6 +887,14 @@ class ProfileImportParserTest {
         assertEquals("43000", primary["server_port"]!!.jsonPrimitive.content)
         assertEquals("xtls-rprx-vision", primary["flow"]!!.jsonPrimitive.content)
         assertEquals("api-maps.yandex.ru", tls["server_name"]!!.jsonPrimitive.content)
+        assertEquals("h2", tls["alpn"]!!.jsonArray[0].jsonPrimitive.content)
+        assertEquals("http/1.1", tls["alpn"]!!.jsonArray[1].jsonPrimitive.content)
+        assertEquals("1.2", tls["min_version"]!!.jsonPrimitive.content)
+        assertEquals("1.3", tls["max_version"]!!.jsonPrimitive.content)
+        assertEquals("X25519", tls["curve_preferences"]!!.jsonArray[0].jsonPrimitive.content)
+        assertEquals("X25519MLKEM768", tls["curve_preferences"]!!.jsonArray[1].jsonPrimitive.content)
+        assertEquals("P256", tls["curve_preferences"]!!.jsonArray[2].jsonPrimitive.content)
+        assertEquals("true", tls["ech"]!!.jsonObject["enabled"]!!.jsonPrimitive.content)
         assertEquals("chrome", tls["utls"]!!.jsonObject["fingerprint"]!!.jsonPrimitive.content)
         assertEquals("IiUOQtR3zqUg32FfqorRXwUVSz9e1CSPFsJnafcFVmE", tls["reality"]!!.jsonObject["public_key"]!!.jsonPrimitive.content)
         assertEquals("736acf61", tls["reality"]!!.jsonObject["short_id"]!!.jsonPrimitive.content)

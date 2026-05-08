@@ -147,4 +147,39 @@ class ProfileConfigFormCodecTest {
         assertEquals("X25519MLKEM768", tls["curve_preferences"]!!.jsonArray[1].jsonPrimitive.content)
         assertEquals("P256", tls["curve_preferences"]!!.jsonArray[2].jsonPrimitive.content)
     }
+
+    @Test
+    fun `encode naive strips unsupported tls expert options`() {
+        val config =
+            parser.parseUserInput(
+                "naive+https://user:pass@example.com:443?quic=true&udpOverTcp=1&quicCongestionControl=cubic&ech=on&sni=front.example.com#Naive",
+            ).normalizedConfigJson!!
+
+        val originalDraft = codec.decode(config)
+        val draft =
+            originalDraft.copy(
+                tls =
+                    originalDraft.tls.copy(
+                        alpn = "h2,http/1.1",
+                        fingerprint = "chrome",
+                        minVersion = "1.2",
+                        maxVersion = "1.3",
+                        curvePreferences = "X25519,P256",
+                        realityPublicKey = "pubkey",
+                        realityShortId = "abcd",
+                    ),
+            )
+
+        val encoded = json.parseToJsonElement(codec.encode(config, draft)).jsonObject
+        val tls = encoded["outbounds"]!!.jsonArray.first().jsonObject["tls"]!!.jsonObject
+
+        assertEquals("front.example.com", tls["server_name"]!!.jsonPrimitive.content)
+        assertEquals("true", tls["ech"]!!.jsonObject["enabled"]!!.jsonPrimitive.content)
+        assertTrue(!tls.containsKey("alpn"))
+        assertTrue(!tls.containsKey("utls"))
+        assertTrue(!tls.containsKey("reality"))
+        assertTrue(!tls.containsKey("min_version"))
+        assertTrue(!tls.containsKey("max_version"))
+        assertTrue(!tls.containsKey("curve_preferences"))
+    }
 }

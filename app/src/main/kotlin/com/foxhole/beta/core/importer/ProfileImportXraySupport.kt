@@ -4,6 +4,7 @@ import com.foxhole.beta.core.model.ProtocolHint
 import com.foxhole.beta.core.network.RemoteHostResolver
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
@@ -304,7 +305,19 @@ internal fun buildXrayTls(
         if (insecureTls) {
             put("insecure", true)
         }
-        extractStringValues(tlsSettings?.get("alpn")).takeIf { it.isNotEmpty() }?.let { put("alpn", buildStringArray(it)) }
+        extractStringValues(realitySettings?.get("alpn")).ifEmpty { extractStringValues(tlsSettings?.get("alpn")) }
+            .takeIf { it.isNotEmpty() }
+            ?.let { put("alpn", buildStringArray(it)) }
+        firstXrayTlsValue(realitySettings, tlsSettings, "minVersion", "min_version", "tlsMinVersion")?.let { put("min_version", it) }
+        firstXrayTlsValue(realitySettings, tlsSettings, "maxVersion", "max_version", "tlsMaxVersion")?.let { put("max_version", it) }
+        firstXrayTlsList(realitySettings, tlsSettings, "curvePreferences", "curve_preferences", "curves", "tlsCurves")
+            .takeIf { it.isNotEmpty() }
+            ?.let { put("curve_preferences", buildStringArray(it)) }
+        xrayEchEnabled(realitySettings?.get("ech") ?: tlsSettings?.get("ech"))?.let { echEnabled ->
+            putJsonObject("ech") {
+                put("enabled", echEnabled)
+            }
+        }
         if (security == "reality" || realitySettings != null) {
             putJsonObject("utls") {
                 put("enabled", true)
@@ -327,6 +340,36 @@ internal fun buildXrayTls(
         }
     }
 }
+
+private fun firstXrayTlsValue(
+    primary: JsonObject?,
+    secondary: JsonObject?,
+    vararg keys: String,
+): String? =
+    keys.firstNotNullOfOrNull { key ->
+        primary?.get(key)?.jsonPrimitive?.contentOrNull?.trim()?.takeIf(String::isNotBlank)
+            ?: secondary?.get(key)?.jsonPrimitive?.contentOrNull?.trim()?.takeIf(String::isNotBlank)
+    }
+
+private fun firstXrayTlsList(
+    primary: JsonObject?,
+    secondary: JsonObject?,
+    vararg keys: String,
+): List<String> =
+    keys.firstNotNullOfOrNull { key ->
+        splitCommaSeparated(primary?.get(key))
+            .ifEmpty { splitCommaSeparated(secondary?.get(key)) }
+            .takeIf { it.isNotEmpty() }
+    }.orEmpty()
+
+private fun xrayEchEnabled(element: JsonElement?): Boolean? =
+    when (element) {
+        is JsonObject ->
+            listOfNotNull(element["enabled"], element["enable"])
+                .firstNotNullOfOrNull(::flexibleBooleanOrNull)
+        is JsonPrimitive -> flexibleBooleanOrNull(element)
+        else -> null
+    }
 
 internal fun buildXrayTransport(streamSettings: JsonObject?): JsonObject? {
     val network = streamSettings?.get("network")?.jsonPrimitive?.contentOrNull?.lowercase().orEmpty()

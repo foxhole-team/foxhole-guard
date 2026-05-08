@@ -352,9 +352,11 @@ fun FoxholeApp(
                     arguments = listOf(navArgument(AppRoute.PROFILE_ID) { type = NavType.LongType }),
                 ) { backStackEntry ->
                     val state by viewModel.profilesRouteState.collectAsStateWithLifecycle()
+                    val homeState by viewModel.homeRouteState.collectAsStateWithLifecycle()
                     val profileId = backStackEntry.arguments?.getLong(AppRoute.PROFILE_ID) ?: return@composable
                     ProfileConfigViewScreen(
                         profile = state.profile(profileId),
+                        showExpertSettings = homeState.settings.ui.showExpertSettings,
                         snackbarHostState = snackbarHostState,
                         onNavigateUp = navController::navigateUp,
                         onEditConfig = { navController.navigate(AppRoute.profileEditConfig(profileId)) },
@@ -378,6 +380,7 @@ fun FoxholeApp(
                                     ConnectionState.CONNECTED,
                                     ConnectionState.RECONNECTING,
                         ),
+                        showExpertSettings = homeState.settings.ui.showExpertSettings,
                         snackbarHostState = snackbarHostState,
                         onNavigateUp = navController::navigateUp,
                         onLoadConfig = { id, optionId -> viewModel.getResolvedConfig(id, optionId) },

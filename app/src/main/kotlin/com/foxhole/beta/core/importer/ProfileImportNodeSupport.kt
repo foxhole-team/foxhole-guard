@@ -198,9 +198,7 @@ internal fun parseNaiveUri(
                             item.toFlexibleBoolean()
                         } ?: false
                     require(allowInsecureTls || !insecureTls) { "INSECURE TLS is not allowed" }
-                    if (insecureTls) {
-                        put("insecure", true)
-                    }
+                    require(!insecureTls) { "insecure is not supported on naive outbound" }
                     query.booleanValue("ech")?.let { echEnabled ->
                         putJsonObject("ech") {
                             put("enabled", echEnabled)

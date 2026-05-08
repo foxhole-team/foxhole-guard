@@ -272,16 +272,21 @@ class ProfileConfigFormCodec(
         original: JsonObject?,
         draft: EditableProfileConfig,
     ): JsonObject? {
-        if (original == null && !draft.tls.enabled) {
+        if (original == null && !draft.tls.enabled && draft.type != "naive") {
             return null
         }
+        val naiveOutbound = draft.type == "naive"
         val map = original?.toMutableMap() ?: mutableMapOf()
         map["enabled"] = JsonPrimitive(true)
         map["server_name"] = JsonPrimitive(draft.tls.serverName.trim().ifBlank { draft.server.trim() })
-        draft.tls.alpn.toJsonArray()?.let { map["alpn"] = it } ?: map.remove("alpn")
-        map.putStringOrRemove("min_version", draft.tls.minVersion)
-        map.putStringOrRemove("max_version", draft.tls.maxVersion)
-        draft.tls.curvePreferences.toJsonArray()?.let { map["curve_preferences"] = it } ?: map.remove("curve_preferences")
+        if (naiveOutbound) {
+            map.removeNaiveUnsupportedTlsOptions()
+        } else {
+            draft.tls.alpn.toJsonArray()?.let { map["alpn"] = it } ?: map.remove("alpn")
+            map.putStringOrRemove("min_version", draft.tls.minVersion)
+            map.putStringOrRemove("max_version", draft.tls.maxVersion)
+            draft.tls.curvePreferences.toJsonArray()?.let { map["curve_preferences"] = it } ?: map.remove("curve_preferences")
+        }
         when (draft.tls.echMode.trim().lowercase()) {
             "on", "true", "1", "enabled" ->
                 map["ech"] =
@@ -296,18 +301,22 @@ class ProfileConfigFormCodec(
             "auto", "" -> map.remove("ech")
         }
 
-        when (val fingerprint = draft.tls.fingerprint.trim().lowercase()) {
-            "", "auto", "off", "false", "0", "disabled" -> map.remove("utls")
-            else -> {
-                val utls = original?.get("utls")?.jsonObject?.toMutableMap() ?: mutableMapOf()
-                utls["enabled"] = JsonPrimitive(true)
-                utls["fingerprint"] = JsonPrimitive(fingerprint)
-                map["utls"] = JsonObject(utls)
+        if (naiveOutbound) {
+            map.remove("utls")
+        } else {
+            when (val fingerprint = draft.tls.fingerprint.trim().lowercase()) {
+                "", "auto", "off", "false", "0", "disabled" -> map.remove("utls")
+                else -> {
+                    val utls = original?.get("utls")?.jsonObject?.toMutableMap() ?: mutableMapOf()
+                    utls["enabled"] = JsonPrimitive(true)
+                    utls["fingerprint"] = JsonPrimitive(fingerprint)
+                    map["utls"] = JsonObject(utls)
+                }
             }
         }
 
         val originalReality = original?.get("reality")?.jsonObject
-        if (originalReality != null || draft.tls.realityPublicKey.isNotBlank() || draft.tls.realityShortId.isNotBlank()) {
+        if (!naiveOutbound && (originalReality != null || draft.tls.realityPublicKey.isNotBlank() || draft.tls.realityShortId.isNotBlank())) {
             val reality = originalReality?.toMutableMap() ?: mutableMapOf()
             reality["enabled"] = JsonPrimitive(true)
             if (draft.tls.realityPublicKey.isNotBlank()) {
@@ -560,6 +569,28 @@ class ProfileConfigFormCodec(
             "off", "false", "0", "disabled" -> put(key, JsonPrimitive(false))
             "", "auto" -> remove(key)
         }
+    }
+
+    private fun MutableMap<String, JsonElement>.removeNaiveUnsupportedTlsOptions() {
+        listOf(
+            "disable_sni",
+            "insecure",
+            "alpn",
+            "min_version",
+            "max_version",
+            "cipher_suites",
+            "curve_preferences",
+            "client_certificate",
+            "client_certificate_path",
+            "client_key",
+            "client_key_path",
+            "fragment",
+            "record_fragment",
+            "kernel_tx",
+            "kernel_rx",
+            "utls",
+            "reality",
+        ).forEach(::remove)
     }
 
     private data class EditableOutboundRef(

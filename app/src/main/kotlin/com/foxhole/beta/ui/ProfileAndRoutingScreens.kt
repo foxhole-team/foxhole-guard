@@ -1424,6 +1424,7 @@ internal fun visibleProfilesForProfilesSession(
 @Composable
 fun ProfileConfigViewScreen(
     profile: Profile?,
+    showExpertSettings: Boolean,
     snackbarHostState: SnackbarHostState,
     onNavigateUp: () -> Unit,
     onEditConfig: () -> Unit,
@@ -1479,6 +1480,7 @@ fun ProfileConfigViewScreen(
                             profile = profile,
                             draft = draft ?: return@item,
                             editable = false,
+                            showExpertSettings = showExpertSettings,
                             onDraftChanged = {},
                             onEditRequested = { _, _, _, _ -> },
                         )
@@ -1493,6 +1495,7 @@ fun ProfileConfigViewScreen(
 fun ProfileConfigEditScreen(
     profile: Profile?,
     canReconnectNow: Boolean,
+    showExpertSettings: Boolean,
     snackbarHostState: SnackbarHostState,
     onNavigateUp: () -> Unit,
     onLoadConfig: suspend (Long, String?) -> String,
@@ -1574,6 +1577,7 @@ fun ProfileConfigEditScreen(
                             profile = profile,
                             draft = draft ?: return@item,
                             editable = true,
+                            showExpertSettings = showExpertSettings,
                             selectedProtocolOptionId = editorProtocolOptionId,
                             onProtocolOptionSelected = { optionId -> loadEditorConfig(profile, optionId) },
                             onDraftChanged = { draft = it },
