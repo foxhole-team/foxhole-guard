@@ -41,11 +41,12 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 
 internal fun HomeViewModel.onAutoConnectActiveProfileInternal() {
-    val profile = uiState.value.activeProfile
+    val state = uiState.value
+    val profile = mobileNetworkProfileOverride(state) ?: state.activeProfile
     val profileId = profile?.id ?: return
     val availableCandidates =
         profile?.let {
-            availableAutoConnectCandidates(it.id, it, container.networkFingerprintProvider.currentFingerprint())
+            availableAutoConnectCandidates(it.id, it, currentNetworkFingerprintForSmartRules())
         }.orEmpty()
     if (availableCandidates.isEmpty()) {
         snackbars.tryEmit(infoBanner(R.string.auto_connect_requires_supported_profile))
@@ -124,7 +125,7 @@ internal fun HomeViewModel.startAutoConnectInternal(profileId: Long) {
             try {
                 var profile = container.profileRepository.getProfile(profileId) ?: error("profile not found")
                 profile = refreshSubscriptionBeforeSmartStartIfNeeded(profile)
-                val autoConnectNetworkFingerprint = container.networkFingerprintProvider.currentFingerprint()
+                val autoConnectNetworkFingerprint = currentNetworkFingerprintForSmartRules()
                 recommendedProtocolMutable.value = null
                 val fullScanCandidates = fullScanAutoConnectCandidates(profileId, profile)
                 require(canStartAutoConnect(fullScanCandidates)) {
@@ -567,6 +568,13 @@ private data class BudgetedAutoConnectProbe(
 
 internal fun HomeViewModel.refreshSmartProfileMetricsInternal(profileId: Long) {
     protocolMetricsRefreshJob?.cancel()
+    if (shouldSkipSpeedTestsOnCurrentNetwork()) {
+        protocolMetricsRefreshJob = null
+        dashboardConnectionMetricsLoadingMutable.value = false
+        container.diagnosticsLogger.record("latency", "manual speed tests skipped: cellular or metered network")
+        snackbars.tryEmit(infoBanner(R.string.network_rules_speed_tests_skipped_mobile))
+        return
+    }
     protocolMetricsRestoreOnCancel = true
     protocolMetricsRefreshJob =
         viewModelScope.launch {
@@ -579,7 +587,7 @@ internal fun HomeViewModel.refreshSmartProfileMetricsInternal(profileId: Long) {
                     container.connectionController.snapshot.value.state in HomeViewModel.ACTIVE_CONNECTION_STATES &&
                     container.connectionController.snapshot.value.profileId == profileId
                 val profile = container.profileRepository.getProfile(profileId) ?: error("profile not found")
-                val networkFingerprint = container.networkFingerprintProvider.currentFingerprint()
+                val networkFingerprint = currentNetworkFingerprintForSmartRules()
                 val candidates = fullScanAutoConnectCandidates(profileId, profile)
                 require(canStartAutoConnect(candidates)) {
                     getApplication<Application>().getString(R.string.auto_connect_requires_supported_profile)
@@ -1457,6 +1465,7 @@ internal fun HomeViewModel.clearProtocolLatencyStateInternal(
         }
 }
 
+@Suppress("ReturnCount")
 internal fun HomeViewModel.scheduleActiveProfileLatencyRefreshInternal() {
     val activeProfile = uiState.value.activeProfile ?: return
     val selectedOptionId =
@@ -1464,6 +1473,13 @@ internal fun HomeViewModel.scheduleActiveProfileLatencyRefreshInternal() {
             activeProfile = activeProfile,
             connection = container.connectionController.snapshot.value,
         ) ?: return
+    if (shouldSkipSpeedTestsOnCurrentNetwork()) {
+        profileLatencyRefreshJob?.cancel()
+        profileLatencyRefreshJob = null
+        dashboardConnectionMetricsLoadingMutable.value = false
+        container.diagnosticsLogger.record("latency", "dashboard speed tests skipped: cellular or metered network")
+        return
+    }
     val selectedProtocolHint =
         activeProfile.protocolOptions
             .firstOrNull { option -> option.id == selectedOptionId }
@@ -1543,7 +1559,7 @@ internal fun HomeViewModel.scheduleActiveProfileLatencyRefreshInternal() {
                             profileId = activeProfile.id,
                             optionId = selectedOptionId,
                             serverPingMs = pingMs,
-                            networkFingerprint = container.networkFingerprintProvider.currentFingerprint()?.key,
+                            networkFingerprint = currentNetworkFingerprintForSmartRules()?.key,
                         )
                     }.onFailure { error ->
                         markProtocolServerPingUnavailableInternal(
@@ -1576,7 +1592,7 @@ private suspend fun HomeViewModel.recordConnectedProtocolSmartStartMemory(
     if (resolvedProtocolHint in setOf(ProtocolHint.UNKNOWN, ProtocolHint.SING_BOX)) {
         return
     }
-    val networkFingerprint = container.networkFingerprintProvider.currentFingerprint()
+    val networkFingerprint = currentNetworkFingerprintForSmartRules()
     val recordedAt = System.currentTimeMillis()
     container.settingsRepository.recordSmartProfileProbeResult(
         profileId = profile.id,

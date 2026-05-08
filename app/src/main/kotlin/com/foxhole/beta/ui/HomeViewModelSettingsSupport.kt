@@ -2,7 +2,6 @@ package com.foxhole.beta.ui
 
 import android.app.Application
 import android.content.Intent
-import android.provider.Settings as AndroidSettings
 import androidx.lifecycle.viewModelScope
 import com.foxhole.beta.R
 import com.foxhole.beta.applyAppLocale
@@ -16,6 +15,7 @@ import com.foxhole.beta.core.model.DnsSettings
 import com.foxhole.beta.core.model.DomainStrategy
 import com.foxhole.beta.core.model.LatencyProbeMethod
 import com.foxhole.beta.core.model.LocalAuthSettings
+import com.foxhole.beta.core.model.NetworkRulesSettings
 import com.foxhole.beta.core.model.PerAppRoutingMode
 import com.foxhole.beta.core.model.PrivacyRouteMode
 import com.foxhole.beta.core.model.PrivacyRouteScope
@@ -32,6 +32,7 @@ import com.foxhole.beta.core.model.TrafficMode
 import com.foxhole.beta.core.model.TunStack
 import com.foxhole.beta.core.model.V2RayApiSettings
 import kotlinx.coroutines.launch
+import android.provider.Settings as AndroidSettings
 
 internal fun HomeViewModel.profileInternal(profileId: Long): Profile? = uiState.value.profiles.firstOrNull { it.id == profileId }
 
@@ -234,6 +235,12 @@ internal fun HomeViewModel.onDnsFilterManualRefreshInternal() {
                 )
                 emitError(getApplication<Application>().getString(R.string.dns_filter_refresh_failed))
             }
+    }
+}
+
+internal fun HomeViewModel.onNetworkRulesChangedInternal(value: NetworkRulesSettings) {
+    viewModelScope.launch {
+        container.settingsRepository.updateNetworkRulesSettings(value)
     }
 }
 

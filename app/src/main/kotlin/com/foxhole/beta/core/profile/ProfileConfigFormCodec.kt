@@ -293,21 +293,17 @@ class ProfileConfigFormCodec(
                     buildJsonObject {
                         put("enabled", false)
                     }
-            "auto", "" -> {
-                if (original?.get("ech") == null) {
-                    map.remove("ech")
-                }
-            }
+            "auto", "" -> map.remove("ech")
         }
 
-        val originalUtls = original?.get("utls")?.jsonObject
-        if (originalUtls != null || draft.tls.fingerprint.isNotBlank()) {
-            val utls = originalUtls?.toMutableMap() ?: mutableMapOf()
-            utls["enabled"] = JsonPrimitive(true)
-            if (draft.tls.fingerprint.isNotBlank()) {
-                utls["fingerprint"] = JsonPrimitive(draft.tls.fingerprint.trim())
+        when (val fingerprint = draft.tls.fingerprint.trim().lowercase()) {
+            "", "auto", "off", "false", "0", "disabled" -> map.remove("utls")
+            else -> {
+                val utls = original?.get("utls")?.jsonObject?.toMutableMap() ?: mutableMapOf()
+                utls["enabled"] = JsonPrimitive(true)
+                utls["fingerprint"] = JsonPrimitive(fingerprint)
+                map["utls"] = JsonObject(utls)
             }
-            map["utls"] = JsonObject(utls)
         }
 
         val originalReality = original?.get("reality")?.jsonObject

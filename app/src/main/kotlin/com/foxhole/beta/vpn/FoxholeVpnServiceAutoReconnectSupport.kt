@@ -5,6 +5,7 @@ import com.foxhole.beta.core.model.AutoConnectReasonCode
 import com.foxhole.beta.core.model.ConnectionState
 import com.foxhole.beta.core.model.Settings
 import com.foxhole.beta.core.model.VpnSession
+import com.foxhole.beta.core.network.scopedByNetworkRules
 import com.foxhole.beta.core.profile.MultiProtocolProfileSupport
 import com.foxhole.beta.core.settings.smartProfilePreference
 import kotlinx.coroutines.Dispatchers
@@ -148,6 +149,11 @@ internal suspend fun FoxholeVpnService.recordSmartStartProtocolDown(
         return
     }
     val recordedAt = System.currentTimeMillis()
+    val settings = container.settingsRepository.current()
+    val networkFingerprint =
+        container.networkFingerprintProvider
+            .currentFingerprint()
+            ?.scopedByNetworkRules(settings.networkRules)
     container.settingsRepository.recordSmartProfileProbeResult(
         profileId = session.profileId,
         optionId = optionId,
@@ -155,7 +161,7 @@ internal suspend fun FoxholeVpnService.recordSmartStartProtocolDown(
         success = false,
         reasonCode = reasonCode,
         markAsLastKnownGood = false,
-        networkFingerprint = container.networkFingerprintProvider.currentFingerprint()?.key,
+        networkFingerprint = networkFingerprint?.key,
         recordedAt = recordedAt,
         connectDurationMs = null,
         validatedAt = null,

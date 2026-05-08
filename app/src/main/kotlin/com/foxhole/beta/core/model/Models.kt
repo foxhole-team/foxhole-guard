@@ -296,6 +296,16 @@ data class DnsSettings(
 )
 
 @Serializable
+data class NetworkRulesSettings(
+    val wifiRulesEnabled: Boolean = true,
+    val cellularRulesEnabled: Boolean = true,
+    val skipSubscriptionRefreshOnCellular: Boolean = true,
+    val skipSpeedTestsOnCellular: Boolean = true,
+    val useCellularProfile: Boolean = false,
+    val cellularProfileId: Long? = null,
+)
+
+@Serializable
 data class PrivacyRouteSettings(
     val mode: PrivacyRouteMode = PrivacyRouteMode.OFF,
     val scope: PrivacyRouteScope = PrivacyRouteScope.SELECTED_APPS,
@@ -395,6 +405,7 @@ data class Settings(
     val connection: ConnectionSettings = ConnectionSettings(),
     val traffic: TrafficSettings = TrafficSettings(),
     val dns: DnsSettings = DnsSettings(),
+    val networkRules: NetworkRulesSettings = NetworkRulesSettings(),
     val privacyRoute: PrivacyRouteSettings = PrivacyRouteSettings(),
     val expert: ExpertSettings = ExpertSettings(),
     val statistics: StatisticsSettings = StatisticsSettings(),

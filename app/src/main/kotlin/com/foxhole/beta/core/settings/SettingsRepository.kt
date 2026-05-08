@@ -5,22 +5,23 @@ import androidx.core.content.edit
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.preferencesDataStoreFile
 import com.foxhole.beta.BuildConfig
-import com.foxhole.beta.core.model.AutoConnectReasonCode
 import com.foxhole.beta.core.model.AnomalyHistoryRetention
 import com.foxhole.beta.core.model.AnomalySensitivity
 import com.foxhole.beta.core.model.AppLocale
-import com.foxhole.beta.core.model.ClashApiSettings
+import com.foxhole.beta.core.model.AutoConnectReasonCode
 import com.foxhole.beta.core.model.CachedActiveProfile
+import com.foxhole.beta.core.model.ClashApiSettings
 import com.foxhole.beta.core.model.ConnectionSettings
 import com.foxhole.beta.core.model.DashboardCard
 import com.foxhole.beta.core.model.DiagnosticsRetention
 import com.foxhole.beta.core.model.DnsSettings
 import com.foxhole.beta.core.model.DomainStrategy
 import com.foxhole.beta.core.model.ExpertSettings
+import com.foxhole.beta.core.model.LatencyProbeMethod
 import com.foxhole.beta.core.model.LocalAuthSettings
 import com.foxhole.beta.core.model.LocalSurfaceSettings
-import com.foxhole.beta.core.model.LatencyProbeMethod
 import com.foxhole.beta.core.model.NETWORK_FINGERPRINT_SCHEMA_CURRENT
+import com.foxhole.beta.core.model.NetworkRulesSettings
 import com.foxhole.beta.core.model.PerAppRoutingMode
 import com.foxhole.beta.core.model.PrivacyRouteMode
 import com.foxhole.beta.core.model.PrivacyRouteScope
@@ -30,10 +31,10 @@ import com.foxhole.beta.core.model.ProtocolHint
 import com.foxhole.beta.core.model.ProxyInboundSettings
 import com.foxhole.beta.core.model.ProxySurfaceMode
 import com.foxhole.beta.core.model.RoutingRuleAction
-import com.foxhole.beta.core.model.Settings
 import com.foxhole.beta.core.model.SETTINGS_SCHEMA_VERSION
 import com.foxhole.beta.core.model.SMART_START_PROTOCOL_TIMEOUT_MIN_SECONDS
 import com.foxhole.beta.core.model.SMART_START_REFRESH_TIMEOUT_MIN_SECONDS
+import com.foxhole.beta.core.model.Settings
 import com.foxhole.beta.core.model.SmartProfileNetworkMemory
 import com.foxhole.beta.core.model.SmartProfilePreference
 import com.foxhole.beta.core.model.SmartProfileProtocolMemory
@@ -608,6 +609,11 @@ class SettingsRepository(
             )
         }
 
+    suspend fun updateNetworkRulesSettings(value: NetworkRulesSettings) =
+        update { current ->
+            current.copy(networkRules = value.normalized())
+        }
+
     suspend fun unlockExpertSettings(timestamp: Long = System.currentTimeMillis()) =
         update {
             it.copy(
@@ -1178,6 +1184,7 @@ class SettingsRepository(
                         )
                     },
                 dns = dns.normalized(),
+                networkRules = networkRules.normalized(),
                 privacyRoute =
                     if (connection.stealthModeEnabled) {
                         PrivacyRouteSettings()
@@ -1285,6 +1292,12 @@ class SettingsRepository(
                     .filter { value -> value.isNotBlank() && value.length <= 253 }
                     .distinct(),
             filtersUpdatedAt = filtersUpdatedAt?.takeIf { it > 0L },
+        )
+
+    private fun NetworkRulesSettings.normalized(): NetworkRulesSettings =
+        copy(
+            cellularProfileId = cellularProfileId?.takeIf { it > 0L },
+            useCellularProfile = useCellularProfile && cellularProfileId != null && cellularProfileId > 0L,
         )
 
     private fun LocalSurfaceSettings.normalized(): LocalSurfaceSettings =
@@ -1475,6 +1488,7 @@ internal fun Settings.resetApplicationSettingsToDefaults(): Settings =
         ui = UiSettings(),
         connection = ConnectionSettings(ipInfoEndpoint = BuildConfig.DEFAULT_IP_INFO_ENDPOINT),
         traffic = TrafficSettings(),
+        networkRules = NetworkRulesSettings(),
         expert = ExpertSettings(),
     )
 

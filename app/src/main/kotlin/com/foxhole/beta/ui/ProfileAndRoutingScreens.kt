@@ -119,7 +119,15 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import java.net.InetSocketAddress
+import java.net.Socket
+import java.net.SocketTimeoutException
 import java.text.DateFormat
+import java.util.Locale
+import javax.net.ssl.SNIHostName
+import javax.net.ssl.SSLHandshakeException
+import javax.net.ssl.SSLSocket
+import javax.net.ssl.SSLSocketFactory
 import kotlin.math.max
 
 internal enum class InstalledAppFilter {
@@ -128,6 +136,7 @@ internal enum class InstalledAppFilter {
     SYSTEM,
 }
 
+@Suppress("CyclomaticComplexMethod", "LongMethod", "LongParameterList")
 @Composable
 fun ProfilesScreen(
     state: ProfilesRouteUiState,
@@ -141,6 +150,7 @@ fun ProfilesScreen(
     onCancelSmartProfileMetricsRefresh: () -> Unit,
     onRefreshProfile: (Long) -> Unit,
     onDeleteProfile: (Long) -> Unit,
+    onLoadProfileConfig: suspend (Long, String?) -> String,
     onCreateProfileExport: suspend (List<ProfileExportSelectionRequest>) -> PreparedProfileExport,
     onCreateProfileExportShareIntent: (PreparedProfileExport) -> Intent,
 ) {
@@ -157,6 +167,7 @@ fun ProfilesScreen(
         }
     var deleteProfileId by rememberSaveable { mutableStateOf<Long?>(null) }
     var refreshProfileId by rememberSaveable { mutableStateOf<Long?>(null) }
+    var realityInfoProfileId by rememberSaveable { mutableStateOf<Long?>(null) }
     var exportMode by rememberSaveable { mutableStateOf(false) }
     var exportSelectionState by rememberSaveable(stateSaver = ProfilesExportSelectionStateSaver) {
         mutableStateOf(ProfilesExportSelectionState())
@@ -324,6 +335,16 @@ fun ProfilesScreen(
                     emptyList()
                 } else {
                     buildList {
+                        if (profile.supportsRealityInfoAction()) {
+                            add(
+                                FoxholeSwipeAction(
+                                    icon = Icons.Outlined.Info,
+                                    contentDescription = stringResource(R.string.profile_reality_info_title),
+                                    testTag = "profiles_profile_reality_info_action_${profile.id}",
+                                    onClick = { realityInfoProfileId = profile.id },
+                                ),
+                            )
+                        }
                         if (showInlineRefreshAction) {
                             add(
                                 FoxholeSwipeAction(
@@ -667,7 +688,366 @@ fun ProfilesScreen(
             },
         )
     }
+
+    realityInfoProfileId?.let { profileId ->
+        RealityValidationDialog(
+            profile = state.profile(profileId),
+            onDismiss = { realityInfoProfileId = null },
+            onLoadConfig = onLoadProfileConfig,
+        )
+    }
 }
+
+@Suppress("CyclomaticComplexMethod", "LongMethod")
+@Composable
+private fun RealityValidationDialog(
+    profile: Profile?,
+    onDismiss: () -> Unit,
+    onLoadConfig: suspend (Long, String?) -> String,
+) {
+    val codec = remember { ProfileConfigFormCodec() }
+    val scope = rememberCoroutineScope()
+    val loadTimeoutMessage = stringResource(R.string.profile_config_load_timeout)
+    val selectedProtocolOptionId = remember(profile) { profile?.let(MultiProtocolProfileSupport::selectedOption)?.id }
+    var draft by remember(profile?.id, selectedProtocolOptionId) { mutableStateOf<EditableProfileConfig?>(null) }
+    var loadError by remember(profile?.id, selectedProtocolOptionId) { mutableStateOf<String?>(null) }
+    var resultMessage by rememberSaveable(profile?.id, selectedProtocolOptionId) { mutableStateOf<String?>(null) }
+    var tlsHandshakeChecking by rememberSaveable(profile?.id, selectedProtocolOptionId) { mutableStateOf(false) }
+    val handshakeMessages =
+        RealityTlsHandshakeMessages(
+            success = stringResource(R.string.profile_reality_tls_handshake_ok),
+            realityMismatch = stringResource(R.string.vpn_error_reality_verification_failed),
+            certificateFailed = stringResource(R.string.vpn_error_certificate_verify_failed),
+            timeout = stringResource(R.string.vpn_error_server_timeout),
+            failed = stringResource(R.string.vpn_error_tls_handshake_failed),
+        )
+
+    LaunchedEffect(profile?.id, selectedProtocolOptionId) {
+        draft = null
+        loadError = null
+        resultMessage = null
+        tlsHandshakeChecking = false
+        val currentProfile = profile ?: return@LaunchedEffect
+        runCatching {
+            val loadedConfig =
+                withTimeoutOrNull(ProfileConfigLoadTimeoutMs) {
+                    onLoadConfig(currentProfile.id, selectedProtocolOptionId)
+                } ?: error(loadTimeoutMessage)
+            codec.decode(loadedConfig)
+        }.onSuccess { loadedDraft ->
+            draft = loadedDraft
+        }.onFailure { error ->
+            loadError = error.message ?: "failed to load config"
+        }
+    }
+
+    val currentDraft = draft
+    val report = if (currentDraft != null) realityValidationReport(currentDraft) else null
+    val realityCheckResult =
+        report?.let { validation ->
+            if (validation.realityReady) {
+                stringResource(R.string.profile_reality_result_ok)
+            } else {
+                stringResource(
+                    R.string.profile_reality_result_missing,
+                    validation.missingLabels.joinToString(separator = ", "),
+                )
+            }
+        }.orEmpty()
+    val tlsCheckResult =
+        report?.let { validation ->
+            if (validation.tlsReady) {
+                stringResource(R.string.profile_reality_tls_preflight_ok)
+            } else {
+                stringResource(
+                    R.string.profile_reality_tls_preflight_missing,
+                    validation.tlsMissingLabels.joinToString(separator = ", "),
+                )
+            }
+        }.orEmpty()
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            FoxholeDialogTitle(
+                title = stringResource(R.string.profile_reality_info_title),
+                icon = Icons.Outlined.Info,
+            )
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                when {
+                    profile == null -> {
+                        Text(stringResource(R.string.profile_not_found_summary))
+                    }
+                    loadError != null -> {
+                        Text(loadError.orEmpty(), color = MaterialTheme.colorScheme.error)
+                    }
+                    draft == null -> {
+                        Text(stringResource(R.string.loading_label))
+                    }
+                    report?.hasReality != true -> {
+                        Text(
+                            text = stringResource(R.string.profile_reality_not_found),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    else -> {
+                        Text(
+                            text = stringResource(R.string.profile_reality_info_summary),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        report.items.forEach { item ->
+                            RealityValidationItemRow(item)
+                        }
+                    }
+                }
+                resultMessage?.let { message ->
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.42f))
+                    Text(
+                        text = message,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                FoxholeDialogSecondaryButton(
+                    label = stringResource(R.string.profile_reality_check_reality),
+                    enabled = report?.hasReality == true,
+                    onClick = { resultMessage = realityCheckResult },
+                )
+                FoxholeDialogSecondaryButton(
+                    label = stringResource(R.string.profile_reality_check_tls_handshake),
+                    enabled = report?.hasReality == true && !tlsHandshakeChecking,
+                    onClick = {
+                        val validation = report
+                        val editableDraft = currentDraft
+                        if (validation?.tlsReady != true || editableDraft == null) {
+                            resultMessage = tlsCheckResult
+                        } else {
+                            scope.launch {
+                                tlsHandshakeChecking = true
+                                resultMessage = verifyRealityTlsHandshake(editableDraft, handshakeMessages)
+                                tlsHandshakeChecking = false
+                            }
+                        }
+                    },
+                )
+                FoxholeDialogDismissButton(
+                    label = stringResource(R.string.close),
+                    onClick = onDismiss,
+                )
+            }
+        },
+        dismissButton = {},
+    )
+}
+
+@Composable
+private fun RealityValidationItemRow(item: RealityValidationItem) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.Top,
+    ) {
+        Icon(
+            imageVector =
+                if (item.ok) {
+                    Icons.Outlined.CheckCircle
+                } else {
+                    Icons.Outlined.RemoveCircleOutline
+                },
+            contentDescription = null,
+            tint =
+                if (item.ok) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.error
+                },
+            modifier = Modifier.size(20.dp),
+        )
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(
+                text = item.label,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            item.value?.takeIf(String::isNotBlank)?.let { value ->
+                Text(
+                    text = value,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun realityValidationReport(draft: EditableProfileConfig): RealityValidationReport {
+    val tls = draft.tls
+    val serverName = tls.serverName.ifBlank { draft.server }
+    val fingerprint = tls.fingerprint.trim()
+    val hasFingerprint = fingerprint.isNotBlank() && !fingerprint.equals("auto", ignoreCase = true) && !fingerprint.equals("off", ignoreCase = true)
+    val items =
+        listOf(
+            RealityValidationItem(
+                label = stringResource(R.string.profile_reality_check_tls_enabled),
+                ok = tls.enabled,
+            ),
+            RealityValidationItem(
+                label = stringResource(R.string.profile_reality_check_server_name),
+                ok = serverName.isNotBlank(),
+                value = serverName,
+            ),
+            RealityValidationItem(
+                label = stringResource(R.string.profile_reality_check_public_key),
+                ok = tls.realityPublicKey.isNotBlank(),
+                value = tls.realityPublicKey,
+            ),
+            RealityValidationItem(
+                label = stringResource(R.string.profile_reality_check_short_id),
+                ok = tls.realityShortId.isNotBlank(),
+                value = tls.realityShortId,
+            ),
+            RealityValidationItem(
+                label = stringResource(R.string.profile_reality_check_flow),
+                ok = draft.flow.isNotBlank(),
+                value = draft.flow,
+            ),
+            RealityValidationItem(
+                label = stringResource(R.string.profile_reality_check_utls_fingerprint),
+                ok = hasFingerprint,
+                value = fingerprint,
+            ),
+        )
+    return RealityValidationReport(
+        hasReality = tls.realityPublicKey.isNotBlank() || tls.realityShortId.isNotBlank(),
+        items = items,
+    )
+}
+
+private data class RealityValidationReport(
+    val hasReality: Boolean,
+    val items: List<RealityValidationItem>,
+) {
+    val missingLabels: List<String> =
+        items
+            .filterNot(RealityValidationItem::ok)
+            .map(RealityValidationItem::label)
+    val tlsMissingLabels: List<String> =
+        items
+            .take(2)
+            .filterNot(RealityValidationItem::ok)
+            .map(RealityValidationItem::label)
+    val realityReady: Boolean = hasReality && missingLabels.isEmpty()
+    val tlsReady: Boolean = hasReality && tlsMissingLabels.isEmpty()
+}
+
+private data class RealityValidationItem(
+    val label: String,
+    val ok: Boolean,
+    val value: String? = null,
+)
+
+private data class RealityTlsHandshakeMessages(
+    val success: String,
+    val realityMismatch: String,
+    val certificateFailed: String,
+    val timeout: String,
+    val failed: String,
+)
+
+private suspend fun verifyRealityTlsHandshake(
+    draft: EditableProfileConfig,
+    messages: RealityTlsHandshakeMessages,
+): String =
+    withContext(Dispatchers.IO) {
+        runCatching {
+            performRealityTlsHandshake(
+                host = draft.server.trim(),
+                port = draft.port.toIntOrNull() ?: 0,
+                serverName = draft.tls.serverName.trim().ifBlank { draft.server.trim() },
+            )
+        }.fold(
+            onSuccess = { messages.success },
+            onFailure = { error -> error.toRealityTlsHandshakeMessage(messages) },
+        )
+    }
+
+private fun performRealityTlsHandshake(
+    host: String,
+    port: Int,
+    serverName: String,
+) {
+    require(host.isNotBlank()) { "host is blank" }
+    require(port in 1..65_535) { "port is invalid" }
+    val socket = Socket()
+    var tlsSocket: SSLSocket? = null
+    try {
+        socket.soTimeout = REALITY_TLS_HANDSHAKE_TIMEOUT_MS
+        socket.connect(InetSocketAddress(host, port), REALITY_TLS_HANDSHAKE_TIMEOUT_MS)
+        tlsSocket =
+            (SSLSocketFactory.getDefault() as SSLSocketFactory)
+                .createSocket(socket, host, port, true) as SSLSocket
+        tlsSocket.use { handshakeSocket ->
+            handshakeSocket.soTimeout = REALITY_TLS_HANDSHAKE_TIMEOUT_MS
+            handshakeSocket.applyRealityTlsHandshakeOptions(serverName)
+            handshakeSocket.startHandshake()
+        }
+    } finally {
+        if (tlsSocket == null) {
+            runCatching { socket.close() }
+        }
+    }
+}
+
+private fun SSLSocket.applyRealityTlsHandshakeOptions(serverName: String) {
+    if (serverName.isBlank()) {
+        return
+    }
+    sslParameters =
+        sslParameters.apply {
+            serverNames = listOf(SNIHostName(serverName))
+        }
+}
+
+private fun Throwable.toRealityTlsHandshakeMessage(messages: RealityTlsHandshakeMessages): String {
+    val normalized = generateSequence(this) { error -> error.cause }
+        .joinToString(separator = " ") { error ->
+            "${error.javaClass.simpleName} ${error.message.orEmpty()}"
+        }.lowercase(Locale.US)
+    return when {
+        normalized.contains("reality verification failed") -> messages.realityMismatch
+        normalized.contains("certificate verify failed") ||
+            normalized.contains("certpath") ||
+            this is SSLHandshakeException && normalized.contains("certificate") ->
+            messages.certificateFailed
+
+        this is SocketTimeoutException ||
+            normalized.contains("timeout") ||
+            normalized.contains("timed out") ||
+            normalized.contains("connection refused") ||
+            normalized.contains("network is unreachable") ->
+            messages.timeout
+
+        else -> messages.failed
+    }
+}
+
+private fun Profile.supportsRealityInfoAction(): Boolean =
+    protocolHint == ProtocolHint.VLESS || protocolOptions.any { option -> option.protocolHint == ProtocolHint.VLESS }
 
 @Composable
 private fun ProfilesEmptyInfoBlock() {
@@ -1260,4 +1640,5 @@ private data class ProfileFieldDialogState(
 )
 
 private const val ProfileConfigLoadTimeoutMs = 8_000L
+private const val REALITY_TLS_HANDSHAKE_TIMEOUT_MS = 5_000
 private const val PROFILE_EXPORT_SHARE_CLEANUP_DELAY_MS = 5L * 60L * 1000L

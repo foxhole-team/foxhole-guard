@@ -30,6 +30,13 @@ internal fun isRetryableScheduledRefreshFailure(error: Throwable): Boolean {
     return httpCode != null && httpCode >= 500
 }
 
+internal fun shouldSkipScheduledRefreshForNetwork(
+    skipOnCellular: Boolean,
+    transport: String?,
+    isMetered: Boolean,
+): Boolean =
+    skipOnCellular && (transport?.trim()?.lowercase() == "cellular" || isMetered)
+
 private val HTTP_STATUS_PATTERN = Regex("""http\s+(\d{3})""", RegexOption.IGNORE_CASE)
 
 private inline fun <reified T : Throwable> Throwable.hasCause(): Boolean =

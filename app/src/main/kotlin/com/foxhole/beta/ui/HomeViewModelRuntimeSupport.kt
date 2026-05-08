@@ -25,6 +25,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.util.Locale
 
 internal fun HomeViewModel.importPresetTextInternal(
     raw: String,
@@ -326,7 +327,14 @@ internal suspend fun HomeViewModel.maybeReloadActiveRuntimeInternal(): Boolean {
 internal fun HomeViewModel.connectInternal(profileId: Long) {
     dashboardConnectionMetricsLoadingMutable.value = true
     viewModelScope.launch {
-        runCatching { connectNow(profileId) }
+        runCatching {
+            if (uiState.value.activeProfile?.id != profileId) {
+                container.connectionController.setActiveProfile(profileId)
+                val updated = container.profileRepository.getProfile(profileId)?.copy(isActive = true)
+                startupActiveProfileMutable.value = updated
+            }
+            connectNow(profileId)
+        }
             .onFailure {
                 dashboardConnectionMetricsLoadingMutable.value = false
                 emitError(runtimeConnectionFailureMessage(it))
@@ -343,7 +351,31 @@ private fun HomeViewModel.runtimeConnectionFailureMessage(error: Throwable): Str
             message.contains("profile has no resolved config", ignoreCase = true) ->
             app.getString(R.string.profile_config_invalid_reimport)
 
-        else -> error.message ?: app.getString(R.string.error_runtime_missing)
+        else -> localizedVpnRuntimeMessage(message, app) ?: error.message ?: app.getString(R.string.error_runtime_missing)
+    }
+}
+
+private fun localizedVpnRuntimeMessage(
+    message: String,
+    app: Application,
+): String? {
+    val normalized = message.lowercase(Locale.US)
+    return when {
+        normalized.contains("reality verification failed") ->
+            app.getString(R.string.vpn_error_reality_verification_failed)
+
+        normalized.contains("certificate verify failed") ||
+            normalized.contains("certpath") ||
+            normalized.contains("certificate") && normalized.contains("verify") ->
+            app.getString(R.string.vpn_error_certificate_verify_failed)
+
+        normalized.contains("timeout") ||
+            normalized.contains("timed out") ||
+            normalized.contains("connection refused") ||
+            normalized.contains("network is unreachable") ->
+            app.getString(R.string.vpn_error_server_timeout)
+
+        else -> null
     }
 }
 

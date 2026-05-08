@@ -24,13 +24,13 @@ import androidx.compose.material.icons.automirrored.outlined.Article
 import androidx.compose.material.icons.outlined.AccountTree
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Apps
+import androidx.compose.material.icons.outlined.BarChart
 import androidx.compose.material.icons.outlined.BrightnessAuto
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.DarkMode
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Dns
 import androidx.compose.material.icons.outlined.Edit
-import androidx.compose.material.icons.outlined.BarChart
 import androidx.compose.material.icons.outlined.FileDownload
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Language
@@ -90,9 +90,11 @@ import com.foxhole.beta.core.model.DomainStrategy
 import com.foxhole.beta.core.model.LatencyProbeMethod
 import com.foxhole.beta.core.model.LocalAuthSettings
 import com.foxhole.beta.core.model.LocalSurfaceSettings
+import com.foxhole.beta.core.model.NetworkRulesSettings
 import com.foxhole.beta.core.model.PerAppRoutingMode
 import com.foxhole.beta.core.model.PrivacyRouteMode
 import com.foxhole.beta.core.model.PrivacyRouteScope
+import com.foxhole.beta.core.model.Profile
 import com.foxhole.beta.core.model.ProxyInboundSettings
 import com.foxhole.beta.core.model.ProxySurfaceMode
 import com.foxhole.beta.core.model.RoutingPreset
@@ -118,6 +120,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.Date
 
+@Suppress("LongParameterList")
 @Composable
 fun SettingsHomeScreen(
     state: SettingsRouteUiState,
@@ -125,6 +128,7 @@ fun SettingsHomeScreen(
     onNavigateUp: (() -> Unit)?,
     onOpenTraffic: () -> Unit,
     onOpenDns: () -> Unit,
+    onOpenNetworkRules: () -> Unit,
     onOpenSecurity: () -> Unit,
     onOpenPrivacyRoute: () -> Unit,
     onOpenRoutingApps: () -> Unit,
@@ -186,6 +190,7 @@ fun SettingsHomeScreen(
             expertVisible = expertVisible,
             onOpenTraffic = onOpenTraffic,
             onOpenDns = onOpenDns,
+            onOpenNetworkRules = onOpenNetworkRules,
             onOpenSecurity = onOpenSecurity,
             onOpenPrivacyRoute = onOpenPrivacyRoute,
             onOpenRoutingApps = onOpenRoutingApps,
@@ -230,6 +235,7 @@ private fun LazyListScope.settingsHomeNavigationItems(
     expertVisible: Boolean,
     onOpenTraffic: () -> Unit,
     onOpenDns: () -> Unit,
+    onOpenNetworkRules: () -> Unit,
     onOpenSecurity: () -> Unit,
     onOpenPrivacyRoute: () -> Unit,
     onOpenRoutingApps: () -> Unit,
@@ -264,6 +270,15 @@ private fun LazyListScope.settingsHomeNavigationItems(
                 title = stringResource(R.string.dns_settings_title),
                 summary = stringResource(R.string.settings_home_dns_summary),
                 onClick = onOpenDns,
+            )
+            SettingsGroupDivider()
+            SettingsGroupedNavigationRow(
+                modifier = Modifier.testTag("settings_network_rules_action"),
+                icon = Icons.Outlined.Router,
+                title = stringResource(R.string.network_rules_settings_title),
+                summary = stringResource(R.string.network_rules_settings_summary),
+                summaryMaxLines = 2,
+                onClick = onOpenNetworkRules,
             )
         }
     }
@@ -1076,6 +1091,150 @@ fun TrafficSettingsScreen(
 
 }
 
+@Composable
+fun NetworkRulesSettingsScreen(
+    state: SettingsRouteUiState,
+    snackbarHostState: SnackbarHostState,
+    onNavigateUp: () -> Unit,
+    onNetworkRulesChanged: (NetworkRulesSettings) -> Unit,
+) {
+    val networkRules = state.settings.networkRules
+    SettingsScaffold(
+        title = stringResource(R.string.network_rules_settings_title),
+        snackbarHostState = snackbarHostState,
+        onNavigateUp = onNavigateUp,
+    ) {
+        item {
+            SettingsControlGroup {
+                SettingSwitchRow(
+                    title = stringResource(R.string.network_rules_wifi_title),
+                    checked = networkRules.wifiRulesEnabled,
+                    summary = stringResource(R.string.network_rules_wifi_summary),
+                    leadingIcon = Icons.Outlined.Router,
+                    onCheckedChange = { enabled ->
+                        onNetworkRulesChanged(networkRules.copy(wifiRulesEnabled = enabled))
+                    },
+                    summaryMaxLines = 3,
+                    grouped = true,
+                )
+                SettingsControlGroupDivider()
+                SettingSwitchRow(
+                    title = stringResource(R.string.network_rules_cellular_title),
+                    checked = networkRules.cellularRulesEnabled,
+                    summary = stringResource(R.string.network_rules_cellular_summary),
+                    leadingIcon = Icons.Outlined.PhoneAndroid,
+                    onCheckedChange = { enabled ->
+                        onNetworkRulesChanged(networkRules.copy(cellularRulesEnabled = enabled))
+                    },
+                    summaryMaxLines = 3,
+                    grouped = true,
+                )
+                SettingsControlGroupDivider()
+                SettingSwitchRow(
+                    title = stringResource(R.string.network_rules_skip_subscription_refresh_mobile_title),
+                    checked = networkRules.skipSubscriptionRefreshOnCellular,
+                    summary = stringResource(R.string.network_rules_skip_subscription_refresh_mobile_summary),
+                    leadingIcon = Icons.Outlined.Refresh,
+                    onCheckedChange = { enabled ->
+                        onNetworkRulesChanged(networkRules.copy(skipSubscriptionRefreshOnCellular = enabled))
+                    },
+                    summaryMaxLines = 3,
+                    grouped = true,
+                )
+                SettingsControlGroupDivider()
+                SettingSwitchRow(
+                    title = stringResource(R.string.network_rules_skip_speed_tests_mobile_title),
+                    checked = networkRules.skipSpeedTestsOnCellular,
+                    summary = stringResource(R.string.network_rules_skip_speed_tests_mobile_summary),
+                    leadingIcon = Icons.Outlined.Speed,
+                    onCheckedChange = { enabled ->
+                        onNetworkRulesChanged(networkRules.copy(skipSpeedTestsOnCellular = enabled))
+                    },
+                    summaryMaxLines = 3,
+                    grouped = true,
+                )
+                SettingsControlGroupDivider()
+                NetworkRulesMobileProfileRows(
+                    networkRules = networkRules,
+                    profiles = state.profiles,
+                    activeProfileId = state.activeProfile?.id,
+                    onNetworkRulesChanged = onNetworkRulesChanged,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun NetworkRulesMobileProfileRows(
+    networkRules: NetworkRulesSettings,
+    profiles: List<Profile>,
+    activeProfileId: Long?,
+    onNetworkRulesChanged: (NetworkRulesSettings) -> Unit,
+) {
+    val cellularProfileIds = listOf<Long?>(null) + profiles.map(Profile::id)
+    val selectedCellularProfile =
+        profiles.firstOrNull { profile -> profile.id == networkRules.cellularProfileId }
+    val defaultCellularProfileId =
+        remember(profiles, activeProfileId, networkRules.cellularProfileId) {
+            networkRules.cellularProfileId
+                ?: profiles.firstOrNull { profile -> profile.id != activeProfileId }?.id
+                ?: profiles.firstOrNull()?.id
+        }
+    var cellularProfileMenuExpanded by rememberSaveable { mutableStateOf(false) }
+    SettingSwitchRow(
+        title = stringResource(R.string.network_rules_mobile_profile_title),
+        checked = networkRules.useCellularProfile,
+        enabled = profiles.isNotEmpty(),
+        summary =
+            if (profiles.isEmpty()) {
+                stringResource(R.string.network_rules_mobile_profile_summary_empty)
+            } else {
+                stringResource(R.string.network_rules_mobile_profile_summary)
+            },
+        leadingIcon = Icons.Outlined.SwapVert,
+        onCheckedChange = { enabled ->
+            onNetworkRulesChanged(
+                networkRules.copy(
+                    useCellularProfile = enabled,
+                    cellularProfileId =
+                        if (enabled) {
+                            networkRules.cellularProfileId ?: defaultCellularProfileId
+                        } else {
+                            networkRules.cellularProfileId
+                        },
+                ),
+            )
+        },
+        summaryMaxLines = 4,
+        grouped = true,
+    )
+    SettingsControlGroupDivider()
+    DropdownSettingRow(
+        title = stringResource(R.string.network_rules_mobile_profile_picker_title),
+        value =
+            selectedCellularProfile?.name
+                ?: stringResource(R.string.network_rules_mobile_profile_value_unselected),
+        expanded = cellularProfileMenuExpanded,
+        onExpandedChange = { cellularProfileMenuExpanded = it },
+        values = cellularProfileIds,
+        selected = networkRules.cellularProfileId,
+        label = { profileId ->
+            profiles.profileNameOrDefault(
+                profileId = profileId,
+                fallback = stringResource(R.string.network_rules_mobile_profile_value_unselected),
+            )
+        },
+        onSelect = { profileId ->
+            onNetworkRulesChanged(networkRules.copy(cellularProfileId = profileId))
+        },
+        leadingIcon = Icons.Outlined.PhoneAndroid,
+        optionIcon = { Icons.Outlined.VpnKey },
+        enabled = networkRules.useCellularProfile && profiles.isNotEmpty(),
+        grouped = true,
+    )
+}
+
 @Suppress("LongParameterList")
 @Composable
 fun PrivacyRouteSettingsScreen(
@@ -1307,6 +1466,12 @@ private fun privacyRouteScopeLabel(value: PrivacyRouteScope): String =
         PrivacyRouteScope.SELECTED_APPS -> stringResource(R.string.privacy_route_scope_selected_apps)
         PrivacyRouteScope.ALL_APPS -> stringResource(R.string.privacy_route_scope_all_apps)
     }
+
+private fun List<Profile>.profileNameOrDefault(
+    profileId: Long?,
+    fallback: String,
+): String =
+    firstOrNull { profile -> profile.id == profileId }?.name ?: fallback
 
 private fun privacyRouteScopeIcon(value: PrivacyRouteScope): ImageVector =
     when (value) {

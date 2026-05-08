@@ -2,6 +2,7 @@ package com.foxhole.beta.vpn
 
 import android.content.Intent
 import com.foxhole.beta.FoxholeRuntimeDependencies
+import com.foxhole.beta.core.network.scopedByNetworkRules
 import com.foxhole.beta.core.settings.networkMemory
 import com.foxhole.beta.core.settings.preferredLastKnownGoodOptionId
 import com.foxhole.beta.core.settings.smartProfilePreference
@@ -100,8 +101,12 @@ private suspend fun restoreLastActiveConnection(
         disconnect(startId, false)
         return
     }
-    val smartProfilePreference = container.settingsRepository.current().smartProfilePreference(active.id)
-    val networkFingerprint = container.networkFingerprintProvider.currentFingerprint()
+    val settings = container.settingsRepository.current()
+    val smartProfilePreference = settings.smartProfilePreference(active.id)
+    val networkFingerprint =
+        container.networkFingerprintProvider
+            .currentFingerprint()
+            ?.scopedByNetworkRules(settings.networkRules)
     val scopedLastKnownGoodOptionId = smartProfilePreference?.networkMemory(networkFingerprint?.key)?.lastKnownGoodOptionId
     val restoredOptionId =
         smartProfilePreference

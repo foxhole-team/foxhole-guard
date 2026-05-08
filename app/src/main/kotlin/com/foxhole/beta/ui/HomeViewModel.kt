@@ -20,9 +20,9 @@ import com.foxhole.beta.R
 import com.foxhole.beta.applyAppLocale
 import com.foxhole.beta.core.data.RoutingRepository
 import com.foxhole.beta.core.diagnostics.DiagnosticEntry
-import com.foxhole.beta.core.model.AppLocale
 import com.foxhole.beta.core.model.AnomalyHistoryRetention
 import com.foxhole.beta.core.model.AnomalySensitivity
+import com.foxhole.beta.core.model.AppLocale
 import com.foxhole.beta.core.model.AutoConnectReasonCode
 import com.foxhole.beta.core.model.CachedActiveProfile
 import com.foxhole.beta.core.model.ClashApiSettings
@@ -36,6 +36,7 @@ import com.foxhole.beta.core.model.InstalledAppOption
 import com.foxhole.beta.core.model.IpInfo
 import com.foxhole.beta.core.model.LatencyProbeMethod
 import com.foxhole.beta.core.model.LocalAuthSettings
+import com.foxhole.beta.core.model.NetworkRulesSettings
 import com.foxhole.beta.core.model.PerAppRoutingMode
 import com.foxhole.beta.core.model.PrivacyRouteMode
 import com.foxhole.beta.core.model.PrivacyRouteScope
@@ -384,7 +385,7 @@ class HomeViewModel(
                 profileOptionLatencies = profileOptionLatencies,
                 profileOptionLatencyUnavailable = profileOptionLatencyUnavailable,
                 protocolMetrics = protocolMetrics,
-                currentNetworkFingerprintKey = container.networkFingerprintProvider.currentFingerprint()?.key,
+                currentNetworkFingerprintKey = currentNetworkFingerprintForSmartRules()?.key,
             )
         }
             .stateIn(
@@ -462,7 +463,7 @@ class HomeViewModel(
                 state = state,
                 autoConnect = autoConnect,
                 protocolMetrics = protocolMetrics,
-                networkFingerprintKey = container.networkFingerprintProvider.currentFingerprint()?.key,
+                networkFingerprintKey = currentNetworkFingerprintForSmartRules()?.key,
             )
         }
             .stateIn(
@@ -650,6 +651,7 @@ class HomeViewModel(
             snackbars.tryEmit(errorBanner(R.string.error_profile_missing))
             return
         }
+        val connectProfile = mobileNetworkProfileOverride(state) ?: activeProfile
         if (state.connection.state in ACTIVE_CONNECTION_STATES) {
             if (state.reconnectRequired) {
                 requestReconnect(activeProfile.id)
@@ -659,18 +661,18 @@ class HomeViewModel(
             return
         }
         if (state.settings.traffic.mode == TrafficMode.PROXY) {
-            connect(activeProfile.id)
+            connect(connectProfile.id)
         } else {
             val prepareIntent = android.net.VpnService.prepare(getApplication())
             if (prepareIntent != null) {
                 pendingConnectRequest =
                     PendingConnectRequest(
-                        profileId = activeProfile.id,
+                        profileId = connectProfile.id,
                         action = PendingConnectAction.MANUAL,
                     )
                 requestVpnPermission.tryEmit(Unit)
             } else {
-                connect(activeProfile.id)
+                connect(connectProfile.id)
             }
         }
     }
@@ -956,6 +958,8 @@ class HomeViewModel(
     fun onDnsDomainBypassRulesChanged(value: List<String>) = onDnsDomainBypassRulesChangedInternal(value)
 
     fun onDnsFilterManualRefresh() = onDnsFilterManualRefreshInternal()
+
+    fun onNetworkRulesChanged(value: NetworkRulesSettings) = onNetworkRulesChangedInternal(value)
 
     fun acknowledgeUnsafeWarning() = acknowledgeUnsafeWarningInternal()
 

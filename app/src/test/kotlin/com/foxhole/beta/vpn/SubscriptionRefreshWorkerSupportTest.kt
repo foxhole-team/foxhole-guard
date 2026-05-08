@@ -56,4 +56,36 @@ class SubscriptionRefreshWorkerSupportTest {
 
         assertFalse(isRetryableScheduledRefreshFailure(trustFailure))
     }
+
+    @Test
+    fun `skips scheduled refresh on cellular or metered networks when enabled`() {
+        assertTrue(
+            shouldSkipScheduledRefreshForNetwork(
+                skipOnCellular = true,
+                transport = "cellular",
+                isMetered = false,
+            ),
+        )
+        assertTrue(
+            shouldSkipScheduledRefreshForNetwork(
+                skipOnCellular = true,
+                transport = "wifi",
+                isMetered = true,
+            ),
+        )
+        assertFalse(
+            shouldSkipScheduledRefreshForNetwork(
+                skipOnCellular = false,
+                transport = "cellular",
+                isMetered = true,
+            ),
+        )
+        assertFalse(
+            shouldSkipScheduledRefreshForNetwork(
+                skipOnCellular = true,
+                transport = "wifi",
+                isMetered = false,
+            ),
+        )
+    }
 }

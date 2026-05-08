@@ -114,4 +114,37 @@ class ProfileConfigFormCodecTest {
         assertEquals("30", peer["persistent_keepalive_interval"]!!.jsonPrimitive.content)
         assertTrue(!peer.containsKey("pre_shared_key"))
     }
+
+    @Test
+    fun `encode tls expert presets`() {
+        val config =
+            parser.parseUserInput(
+                "vless://11111111-1111-1111-1111-111111111111@example.com:443?security=reality&sni=edge.example.com&pbk=pubkey&sid=abcd&fp=chrome#reality",
+            ).normalizedConfigJson!!
+
+        val originalDraft = codec.decode(config)
+        val updatedTls =
+            originalDraft.tls.copy(
+                alpn = "h2,http/1.1",
+                fingerprint = "off",
+                echMode = "on",
+                minVersion = "1.2",
+                maxVersion = "1.3",
+                curvePreferences = "X25519,X25519MLKEM768,P256",
+            )
+        val draft = originalDraft.copy(tls = updatedTls)
+
+        val encoded = json.parseToJsonElement(codec.encode(config, draft)).jsonObject
+        val tls = encoded["outbounds"]!!.jsonArray.first().jsonObject["tls"]!!.jsonObject
+
+        assertTrue(!tls.containsKey("utls"))
+        assertEquals("h2", tls["alpn"]!!.jsonArray[0].jsonPrimitive.content)
+        assertEquals("http/1.1", tls["alpn"]!!.jsonArray[1].jsonPrimitive.content)
+        assertEquals("true", tls["ech"]!!.jsonObject["enabled"]!!.jsonPrimitive.content)
+        assertEquals("1.2", tls["min_version"]!!.jsonPrimitive.content)
+        assertEquals("1.3", tls["max_version"]!!.jsonPrimitive.content)
+        assertEquals("X25519", tls["curve_preferences"]!!.jsonArray[0].jsonPrimitive.content)
+        assertEquals("X25519MLKEM768", tls["curve_preferences"]!!.jsonArray[1].jsonPrimitive.content)
+        assertEquals("P256", tls["curve_preferences"]!!.jsonArray[2].jsonPrimitive.content)
+    }
 }

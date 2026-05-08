@@ -97,6 +97,7 @@ private object AppRoute {
     const val TRAFFIC = "settings/traffic"
     const val DNS = "settings/dns"
     const val DNS_APPS_PICKER = "settings/dns/apps-picker"
+    const val NETWORK_RULES = "settings/network-rules"
     const val SECURITY = "settings/security"
     const val PRIVACY_ROUTE = "settings/privacy-route"
     const val ROUTING_APPS = "settings/routing/apps"
@@ -295,6 +296,7 @@ fun FoxholeApp(
                         onCancelSmartProfileMetricsRefresh = viewModel::cancelSmartProfileMetricsRefresh,
                         onRefreshProfile = viewModel::refreshProfile,
                         onDeleteProfile = viewModel::deleteProfile,
+                        onLoadProfileConfig = { id, optionId -> viewModel.getResolvedConfig(id, optionId) },
                         onCreateProfileExport = { requests ->
                             viewModel.createProfileExport(
                                 requests.map { request ->
@@ -394,6 +396,7 @@ fun FoxholeApp(
                         onNavigateUp = null,
                         onOpenTraffic = { navController.navigate(AppRoute.TRAFFIC) },
                         onOpenDns = { navController.navigate(AppRoute.DNS) },
+                        onOpenNetworkRules = { navController.navigate(AppRoute.NETWORK_RULES) },
                         onOpenSecurity = { navController.navigate(AppRoute.SECURITY) },
                         onOpenPrivacyRoute = { navController.navigate(AppRoute.PRIVACY_ROUTE) },
                         onOpenRoutingApps = { navController.navigate(AppRoute.ROUTING_APPS) },
@@ -483,6 +486,15 @@ fun FoxholeApp(
                         onAnalyzeBackgroundTrafficChanged = viewModel::onAnalyzeBackgroundTrafficChanged,
                         onAnalyzeDestinationCountriesChanged = viewModel::onAnalyzeDestinationCountriesChanged,
                         onAnomalyHistoryRetentionSelected = viewModel::onAnomalyHistoryRetentionSelected,
+                    )
+                }
+                composable(AppRoute.NETWORK_RULES) {
+                    val state by viewModel.settingsRouteState.collectAsStateWithLifecycle()
+                    NetworkRulesSettingsScreen(
+                        state = state,
+                        snackbarHostState = snackbarHostState,
+                        onNavigateUp = navController::navigateUp,
+                        onNetworkRulesChanged = viewModel::onNetworkRulesChanged,
                     )
                 }
                 composable(AppRoute.PRIVACY_ROUTE) {

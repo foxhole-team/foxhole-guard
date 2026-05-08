@@ -2,6 +2,7 @@ package com.foxhole.beta.ui
 
 import android.graphics.Bitmap
 import android.util.LruCache
+import androidx.annotation.StringRes
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -93,6 +94,7 @@ import com.foxhole.beta.core.model.ProtocolHint
 import com.foxhole.beta.core.model.RoutingRule
 import com.foxhole.beta.core.model.RoutingRuleAction
 import com.foxhole.beta.core.profile.EditableProfileConfig
+import com.foxhole.beta.core.profile.EditableTlsConfig
 import com.foxhole.beta.core.profile.MultiProtocolProfileSupport
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -401,71 +403,85 @@ internal fun ProfileConfigForm(
                         editable = editable,
                         onEditRequested = onEditRequested,
                     ) { value -> onDraftChanged(draft.copy(password = value)) }
-                    ProfileEditorTextRow(
+                    ProfileEditorPresetRow(
                         title = stringResource(R.string.profile_editor_naive_quic),
                         value = draft.naiveQuic,
                         editable = editable,
-                        onEditRequested = onEditRequested,
-                    ) { value -> onDraftChanged(draft.copy(naiveQuic = value)) }
-                    ProfileEditorTextRow(
+                        presets = profileEditorAutoOnOffPresets,
+                        onValueChanged = { value -> onDraftChanged(draft.copy(naiveQuic = value)) },
+                    )
+                    ProfileEditorPresetRow(
                         title = stringResource(R.string.profile_editor_naive_udp_over_tcp),
                         value = draft.naiveUdpOverTcp,
                         editable = editable,
-                        onEditRequested = onEditRequested,
-                    ) { value -> onDraftChanged(draft.copy(naiveUdpOverTcp = value)) }
-                    ProfileEditorTextRow(
+                        presets = profileEditorAutoOnOffPresets,
+                        onValueChanged = { value -> onDraftChanged(draft.copy(naiveUdpOverTcp = value)) },
+                    )
+                    ProfileEditorPresetRow(
                         title = stringResource(R.string.profile_editor_naive_quic_congestion),
                         value = draft.naiveQuicCongestionControl,
                         editable = editable,
+                        presets = profileEditorQuicCongestionPresets,
                         onEditRequested = onEditRequested,
-                    ) { value -> onDraftChanged(draft.copy(naiveQuicCongestionControl = value)) }
+                        onValueChanged = { value -> onDraftChanged(draft.copy(naiveQuicCongestionControl = value)) },
+                    )
                 }
             }
         }
-        if (draft.tls.enabled || draft.tls.serverName.isNotBlank() || draft.tls.alpn.isNotBlank()) {
+        if (draft.tls.enabled || draft.tls.serverName.isNotBlank() || draft.tls.hasVisibleValues()) {
             ProfileEditorSection(title = stringResource(R.string.profile_editor_tls_section)) {
                 ProfileEditorTextRow(
                     title = stringResource(R.string.profile_editor_tls_server_name),
                     value = draft.tls.serverName,
-                    editable = editable,
-                    onEditRequested = onEditRequested,
-                ) { value -> onDraftChanged(draft.copy(tls = draft.tls.copy(serverName = value))) }
-                ProfileEditorTextRow(
+                        editable = editable,
+                        onEditRequested = onEditRequested,
+                    ) { value -> onDraftChanged(draft.copy(tls = draft.tls.copy(serverName = value))) }
+                ProfileEditorPresetRow(
                     title = stringResource(R.string.profile_editor_alpn),
                     value = draft.tls.alpn,
                     editable = editable,
+                    presets = profileEditorAlpnPresets,
                     onEditRequested = onEditRequested,
-                ) { value -> onDraftChanged(draft.copy(tls = draft.tls.copy(alpn = value))) }
-                ProfileEditorTextRow(
+                    onValueChanged = { value -> onDraftChanged(draft.copy(tls = draft.tls.copy(alpn = value))) },
+                )
+                ProfileEditorPresetRow(
                     title = stringResource(R.string.profile_editor_fingerprint),
                     value = draft.tls.fingerprint,
                     editable = editable,
-                    onEditRequested = onEditRequested,
-                ) { value -> onDraftChanged(draft.copy(tls = draft.tls.copy(fingerprint = value))) }
-                ProfileEditorTextRow(
+                    presets = profileEditorFingerprintPresets,
+                    onValueChanged = { value -> onDraftChanged(draft.copy(tls = draft.tls.copy(fingerprint = value))) },
+                )
+                ProfileEditorPresetRow(
                     title = stringResource(R.string.profile_editor_ech),
                     value = draft.tls.echMode,
                     editable = editable,
-                    onEditRequested = onEditRequested,
-                ) { value -> onDraftChanged(draft.copy(tls = draft.tls.copy(echMode = value))) }
-                ProfileEditorTextRow(
+                    presets = profileEditorAutoOnOffPresets,
+                    onValueChanged = { value -> onDraftChanged(draft.copy(tls = draft.tls.copy(echMode = value))) },
+                )
+                ProfileEditorPresetRow(
                     title = stringResource(R.string.profile_editor_tls_min_version),
                     value = draft.tls.minVersion,
                     editable = editable,
-                    onEditRequested = onEditRequested,
-                ) { value -> onDraftChanged(draft.copy(tls = draft.tls.copy(minVersion = value))) }
-                ProfileEditorTextRow(
+                    presets = profileEditorTlsMinVersionPresets,
+                    onValueChanged = { value -> onDraftChanged(draft.copy(tls = draft.tls.copy(minVersion = value))) },
+                )
+                ProfileEditorPresetRow(
                     title = stringResource(R.string.profile_editor_tls_max_version),
                     value = draft.tls.maxVersion,
                     editable = editable,
-                    onEditRequested = onEditRequested,
-                ) { value -> onDraftChanged(draft.copy(tls = draft.tls.copy(maxVersion = value))) }
-                ProfileEditorTextRow(
+                    presets = profileEditorTlsMaxVersionPresets,
+                    onValueChanged = { value -> onDraftChanged(draft.copy(tls = draft.tls.copy(maxVersion = value))) },
+                )
+                ProfileEditorPresetRow(
                     title = stringResource(R.string.profile_editor_tls_curves),
                     value = draft.tls.curvePreferences,
                     editable = editable,
+                    presets = profileEditorTlsCurvesPresets,
                     onEditRequested = onEditRequested,
-                ) { value -> onDraftChanged(draft.copy(tls = draft.tls.copy(curvePreferences = value))) }
+                    onValueChanged = { value ->
+                        onDraftChanged(draft.copy(tls = draft.tls.copy(curvePreferences = value)))
+                    },
+                )
                 if (draft.tls.realityPublicKey.isNotBlank() || draft.tls.realityShortId.isNotBlank()) {
                     ProfileEditorTextRow(
                         title = stringResource(R.string.profile_editor_reality_public_key),
@@ -568,6 +584,46 @@ internal fun ProfileEditorReadOnlyRow(
 }
 
 @Composable
+private fun ProfileEditorPresetRow(
+    title: String,
+    value: String,
+    editable: Boolean,
+    presets: List<ProfileEditorPreset>,
+    onEditRequested: ((title: String, value: String, singleLine: Boolean, onConfirm: (String) -> Unit) -> Unit)? = null,
+    onValueChanged: (String) -> Unit,
+) {
+    var expanded by rememberSaveable(title) { mutableStateOf(false) }
+    val selectedPreset =
+        remember(value, presets) {
+            presets.firstOrNull { preset ->
+                !preset.custom && preset.value.normalizedProfilePresetValue() == value.normalizedProfilePresetValue()
+            } ?: presets.firstOrNull(ProfileEditorPreset::custom)
+                ?: presets.first()
+        }
+    DropdownSettingRow(
+        title = title,
+        value = stringResource(selectedPreset.labelRes),
+        expanded = expanded,
+        onExpandedChange = { expanded = it },
+        values = presets,
+        selected = selectedPreset,
+        label = { preset -> stringResource(preset.labelRes) },
+        onSelect = { preset ->
+            if (preset.custom && onEditRequested != null) {
+                onEditRequested(title, value, true, onValueChanged)
+            } else {
+                onValueChanged(preset.value)
+            }
+        },
+        summary = value.takeIf { selectedPreset.custom && it.isNotBlank() },
+        leadingIcon = Icons.Outlined.Tune,
+        optionIcon = { Icons.Outlined.Tune },
+        enabled = editable,
+        summaryMaxLines = 2,
+    )
+}
+
+@Composable
 internal fun profileEditorInfoBody(
     profile: Profile,
     draft: EditableProfileConfig,
@@ -582,6 +638,16 @@ internal fun profileEditorInfoBody(
         }
     }.joinToString(separator = "\n\n")
 
+private fun EditableTlsConfig.hasVisibleValues(): Boolean =
+    alpn.isNotBlank() ||
+        minVersion.isNotBlank() ||
+        maxVersion.isNotBlank() ||
+        curvePreferences.isNotBlank() ||
+        echMode.isNotBlank() ||
+        fingerprint.isNotBlank() ||
+        realityPublicKey.isNotBlank() ||
+        realityShortId.isNotBlank()
+
 @Composable
 internal fun profileProtocolLabel(type: String): String =
     when (type) {
@@ -594,6 +660,72 @@ internal fun profileProtocolLabel(type: String): String =
         "naive" -> "NaiveProxy"
         else -> type
     }
+
+private data class ProfileEditorPreset(
+    val value: String,
+    @param:StringRes val labelRes: Int,
+    val custom: Boolean = false,
+)
+
+private fun String.normalizedProfilePresetValue(): String =
+    trim()
+        .lowercase()
+        .replace(" ", "")
+
+private val profileEditorAutoOnOffPresets =
+    listOf(
+        ProfileEditorPreset("", R.string.profile_editor_preset_auto),
+        ProfileEditorPreset("on", R.string.profile_editor_preset_on),
+        ProfileEditorPreset("off", R.string.profile_editor_preset_off),
+    )
+
+private val profileEditorQuicCongestionPresets =
+    listOf(
+        ProfileEditorPreset("", R.string.profile_editor_preset_auto),
+        ProfileEditorPreset("bbr", R.string.profile_editor_quic_congestion_bbr),
+        ProfileEditorPreset("cubic", R.string.profile_editor_quic_congestion_cubic),
+        ProfileEditorPreset("__custom__", R.string.profile_editor_preset_custom, custom = true),
+    )
+
+private val profileEditorAlpnPresets =
+    listOf(
+        ProfileEditorPreset("", R.string.profile_editor_preset_auto),
+        ProfileEditorPreset("h2,http/1.1", R.string.profile_editor_alpn_h2_http1),
+        ProfileEditorPreset("http/1.1", R.string.profile_editor_alpn_http1),
+        ProfileEditorPreset("h3", R.string.profile_editor_alpn_h3),
+        ProfileEditorPreset("__custom__", R.string.profile_editor_preset_custom, custom = true),
+    )
+
+private val profileEditorFingerprintPresets =
+    listOf(
+        ProfileEditorPreset("", R.string.profile_editor_preset_auto),
+        ProfileEditorPreset("chrome", R.string.profile_editor_fingerprint_chrome),
+        ProfileEditorPreset("firefox", R.string.profile_editor_fingerprint_firefox),
+        ProfileEditorPreset("ios", R.string.profile_editor_fingerprint_safari_ios),
+        ProfileEditorPreset("edge", R.string.profile_editor_fingerprint_edge),
+        ProfileEditorPreset("off", R.string.profile_editor_preset_off),
+    )
+
+private val profileEditorTlsMinVersionPresets =
+    listOf(
+        ProfileEditorPreset("", R.string.profile_editor_preset_auto),
+        ProfileEditorPreset("1.2", R.string.profile_editor_tls_version_12),
+        ProfileEditorPreset("1.3", R.string.profile_editor_tls_version_13),
+    )
+
+private val profileEditorTlsMaxVersionPresets =
+    listOf(
+        ProfileEditorPreset("", R.string.profile_editor_preset_auto),
+        ProfileEditorPreset("1.3", R.string.profile_editor_tls_version_13),
+    )
+
+private val profileEditorTlsCurvesPresets =
+    listOf(
+        ProfileEditorPreset("", R.string.profile_editor_preset_auto),
+        ProfileEditorPreset("P256,P384,X25519", R.string.profile_editor_tls_curves_compatibility),
+        ProfileEditorPreset("X25519,X25519MLKEM768,P256", R.string.profile_editor_tls_curves_modern),
+        ProfileEditorPreset("__custom__", R.string.profile_editor_preset_custom, custom = true),
+    )
 
 @Composable
 private fun profileEditorProtocolOptionLabel(option: ProfileProtocolOption): String =
