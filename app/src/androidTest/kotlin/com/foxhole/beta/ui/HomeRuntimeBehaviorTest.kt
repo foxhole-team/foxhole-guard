@@ -94,29 +94,20 @@ class HomeRuntimeBehaviorTest {
             .around(composeRule)
 
     @Test
-    fun coldStartWhileDisconnectedRefreshesIpAndShowsResolvedAddress() {
-        composeRule.waitUntil(timeoutMillis = 20_000) {
-            app().container.diagnosticsLogger.entries.value.any {
-                it.tag == "ip" &&
-                    (it.message == "geo refreshed" || it.message.startsWith("geo refresh failed"))
-            }
-        }
+    fun coldStartWhileDisconnectedDoesNotForceIpRefreshOrLoading() {
         composeRule.waitUntil(timeoutMillis = 20_000) {
             composeRule.onAllNodesWithTag("home_network_loading").fetchSemanticsNodes().isEmpty()
         }
 
-        val geoRefreshSucceeded =
-            app().container.diagnosticsLogger.entries.value.any { it.tag == "ip" && it.message == "geo refreshed" }
-        val resolvedIp = textOf("home_network_primary_ip")
-        if (geoRefreshSucceeded) {
-            assertTrue(resolvedIp.isNotBlank())
-            assertTrue(resolvedIp != "-")
-        } else {
-            composeRule.onNodeWithTag("home_network_primary_ip", useUnmergedTree = true).assertTextEquals("-")
-            composeRule.onNodeWithText(
-                InstrumentationRegistry.getInstrumentation().targetContext.getString(R.string.home_network_unavailable),
-            ).assertIsDisplayed()
-        }
+        assertTrue(
+            app().container.diagnosticsLogger.entries.value.none {
+                it.tag == "ip" && it.message.contains("dashboard refresh started")
+            },
+        )
+        composeRule.onNodeWithTag("home_network_primary_ip", useUnmergedTree = true).assertTextEquals("-")
+        composeRule.onNodeWithText(
+            InstrumentationRegistry.getInstrumentation().targetContext.getString(R.string.home_network_unavailable),
+        ).assertIsDisplayed()
     }
 
     @Test
@@ -197,7 +188,7 @@ class HomeRuntimeBehaviorTest {
     }
 
     @Test
-    fun connectedWithoutResolvedIpShowsLoadingInsteadOfUnavailableWhileInternetIsAvailable() {
+    fun connectedWithoutResolvedIpShowsUnavailableAfterRefreshFailed() {
         waitUntilNetworkBlockSettles()
 
         composeRule.runOnUiThread {
@@ -214,14 +205,13 @@ class HomeRuntimeBehaviorTest {
 
         scrollToNetworkBlock()
         composeRule.waitUntil(timeoutMillis = 10_000) {
-            composeRule.onAllNodesWithTag("home_network_loading").fetchSemanticsNodes().isNotEmpty()
+            textOfOrNull("home_network_primary_ip") == "-"
         }
 
-        composeRule.onAllNodesWithTag("home_network_loading").assertCountEquals(1)
-        composeRule
-            .onAllNodesWithText(
-                InstrumentationRegistry.getInstrumentation().targetContext.getString(R.string.home_network_unavailable),
-            ).assertCountEquals(0)
+        composeRule.onAllNodesWithTag("home_network_loading").assertCountEquals(0)
+        composeRule.onNodeWithText(
+            InstrumentationRegistry.getInstrumentation().targetContext.getString(R.string.home_network_unavailable),
+        ).assertIsDisplayed()
     }
 
     @Test

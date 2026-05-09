@@ -421,8 +421,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         activeLocalGuardMode = null
         container.connectionController.clearAppliedRuntime()
         FoxholeVpnRuntimeBridge.updateTraffic(trafficSampler.reset())
-        // Keep the last IP visible until the disconnected-side refresh replaces it.
-        FoxholeVpnRuntimeBridge.clearTransientState(clearIpInfo = false)
+        FoxholeVpnRuntimeBridge.clearTransientState(clearIpInfo = true)
         FoxholeVpnRuntimeBridge.update(
             ConnectionSnapshot(
                 state = if (message == null) ConnectionState.IDLE else ConnectionState.ERROR,
@@ -808,7 +807,9 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
                     settings.appTrafficStatsEnabled &&
                     settings.expert.firewallEnabled
                 ) {
-                    runCatching { appTrafficStatsRecorder.sampleWindows() }.getOrDefault(emptyList())
+                    runCatching {
+                        appTrafficStatsRecorder.sampleWindows(maxCacheAgeMs = APP_TRAFFIC_SAMPLE_CACHE_MAX_AGE_MS)
+                    }.getOrDefault(emptyList())
                 } else {
                     emptyList()
                 }
@@ -1085,8 +1086,12 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         internal const val CONNECTIVITY_PROBE_CALL_TIMEOUT_MS = 5_000L
         internal const val CONNECTIVITY_PROBE_TOTAL_TIMEOUT_MS = 45_000L
         internal const val CONNECTIVITY_PROBE_GRACE_MAX_TIMEOUT_MS = com.foxhole.beta.vpn.CONNECTIVITY_PROBE_GRACE_MAX_TIMEOUT_MS
+        internal const val CONNECTIVITY_LITERAL_PROBE_EARLY_WINDOW_MS = 8_000L
+        internal const val CONNECTIVITY_LITERAL_PROBE_POLL_MS = 500L
+        internal const val CONNECTIVITY_LITERAL_PROBE_CALL_TIMEOUT_MS = 2_000L
         internal const val LOCAL_GUARD_PROFILE_ID = -10L
         internal const val APP_TRAFFIC_SAMPLE_INTERVAL_MS = 60_000L
+        internal const val APP_TRAFFIC_SAMPLE_CACHE_MAX_AGE_MS = 15_000L
         private const val ACTION_NATIVE_RUNTIME_STOP = "libbox_service_stop"
     }
 }

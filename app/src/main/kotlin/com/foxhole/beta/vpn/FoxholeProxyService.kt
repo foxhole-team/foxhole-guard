@@ -276,8 +276,7 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
         activeSession = null
         container.connectionController.clearAppliedRuntime()
         FoxholeVpnRuntimeBridge.updateTraffic(trafficSampler.reset())
-        // Keep the last IP visible until the disconnected-side refresh replaces it.
-        FoxholeVpnRuntimeBridge.clearTransientState(clearIpInfo = false)
+        FoxholeVpnRuntimeBridge.clearTransientState(clearIpInfo = true)
         FoxholeVpnRuntimeBridge.update(
             ConnectionSnapshot(
                 state = if (message == null) ConnectionState.IDLE else ConnectionState.ERROR,

@@ -20,9 +20,6 @@ class TrafficMapRepository(
     private val connectionSource: TrafficMapConnectionSource = EmptyTrafficMapConnectionSource,
 ) {
     @Volatile
-    private var retainedOriginInfo: TrafficMapOriginInfo? = null
-
-    @Volatile
     private var retainedConnectionAccumulator = TrafficMapConnectionAccumulator()
 
     @Volatile
@@ -36,9 +33,6 @@ class TrafficMapRepository(
         combine(
             originIpInfo
                 .map(::trafficMapOriginInfo)
-                .runningFold(retainedOriginInfo) { previous, next ->
-                    (next ?: previous).also { retainedOriginInfo = it }
-                }
                 .distinctUntilChanged(),
             runtimeAvailable
                 .distinctUntilChanged()
@@ -49,7 +43,7 @@ class TrafficMapRepository(
                 .combine(runtimeAvailable.distinctUntilChanged()) { samples, available ->
                     TrafficMapSampleBatch(samples = samples, runtimeAvailable = available)
                 }
-                .runningFold(retainedConnectionAccumulator) { accumulator, batch ->
+                .runningFold(TrafficMapConnectionAccumulator()) { accumulator, batch ->
                     accumulator.updatedForBatch(batch).also { retainedConnectionAccumulator = it }
                 }
                 .map { accumulator ->
@@ -64,11 +58,12 @@ class TrafficMapRepository(
             .stateIn(
                 scope = scope,
                 started = SharingStarted.Eagerly,
-                initialValue = retainedUiState ?: TrafficMapUiState(),
+                initialValue = TrafficMapUiState(),
             )
 
     fun currentDestinationCountryBytes(): Map<String, Long> =
         retainedUiState
+            ?.takeIf(TrafficMapUiState::isAvailable)
             ?.destinations
             .orEmpty()
             .associate { point -> point.countryCode to point.bytes }
@@ -197,22 +192,12 @@ internal data class TrafficMapSampleBatch(
 
 internal data class TrafficMapConnectionAccumulator(
     val samplesById: LinkedHashMap<String, TrafficMapConnectionSample> = linkedMapOf(),
-    val awaitingFreshRuntimeSample: Boolean = false,
 ) {
     fun updatedForBatch(batch: TrafficMapSampleBatch): TrafficMapConnectionAccumulator {
         if (!batch.runtimeAvailable) {
-            return copy(awaitingFreshRuntimeSample = true)
+            return TrafficMapConnectionAccumulator()
         }
-        if (batch.samples.isEmpty()) {
-            return this
-        }
-        val base =
-            if (awaitingFreshRuntimeSample) {
-                TrafficMapConnectionAccumulator()
-            } else {
-                this
-            }
-        return base.updatedWith(batch.samples)
+        return TrafficMapConnectionAccumulator().updatedWith(batch.samples)
     }
 
     fun updatedWith(samples: List<TrafficMapConnectionSample>): TrafficMapConnectionAccumulator {

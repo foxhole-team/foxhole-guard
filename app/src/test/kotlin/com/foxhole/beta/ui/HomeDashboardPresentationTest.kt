@@ -124,7 +124,14 @@ class HomeDashboardPresentationTest {
             )
         val model =
             resolveHomeDashboardNetworkModel(
-                state = HomeRouteUiState(connection = ConnectionSnapshot(state = ConnectionState.CONNECTED)),
+                state =
+                    HomeRouteUiState(
+                        connection =
+                            ConnectionSnapshot(
+                                state = ConnectionState.CONNECTED,
+                                lastChangeAt = 500L,
+                            ),
+                    ),
                 visibleIpInfo = ipInfo,
                 deviceInternetAvailable = true,
             )
@@ -150,7 +157,11 @@ class HomeDashboardPresentationTest {
             resolveHomeDashboardNetworkModel(
                 state =
                     HomeRouteUiState(
-                        connection = ConnectionSnapshot(state = ConnectionState.CONNECTED),
+                        connection =
+                            ConnectionSnapshot(
+                                state = ConnectionState.CONNECTED,
+                                lastChangeAt = 500L,
+                            ),
                         dashboardConnectionMetricsLoading = true,
                     ),
                 visibleIpInfo = ipInfo,
@@ -178,7 +189,7 @@ class HomeDashboardPresentationTest {
             resolveHomeDashboardNetworkModel(
                 state =
                     HomeRouteUiState(
-                        connection = ConnectionSnapshot(state = ConnectionState.IDLE),
+                        connection = ConnectionSnapshot(state = ConnectionState.IDLE, lastChangeAt = 500L),
                         reconnectInProgress = true,
                     ),
                 visibleIpInfo = ipInfo,
@@ -250,7 +261,7 @@ class HomeDashboardPresentationTest {
         assertEquals(null, model.visibleIpInfo)
         assertEquals(R.string.home_network_current_ip_title, model.titleRes)
         assertFalse(model.showConnectionStatus)
-        assertTrue(model.showLoading)
+        assertFalse(model.showLoading)
     }
 
     @Test
@@ -278,7 +289,7 @@ class HomeDashboardPresentationTest {
         assertEquals(null, model.visibleIpInfo)
         assertEquals(R.string.home_network_current_ip_title, model.titleRes)
         assertFalse(model.showConnectionStatus)
-        assertTrue(model.showLoading)
+        assertFalse(model.showLoading)
     }
 
     @Test

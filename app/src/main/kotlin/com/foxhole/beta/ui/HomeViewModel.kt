@@ -87,7 +87,6 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.runningFold
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -402,7 +401,10 @@ class HomeViewModel(
         ) { connection, settings ->
             settings.ui.trafficMapEnabled &&
                 (
-                    connection.state in ACTIVE_CONNECTION_STATES ||
+                    (
+                        connection.state == ConnectionState.CONNECTED &&
+                            connection.profileId != FoxholeVpnService.LOCAL_GUARD_PROFILE_ID
+                    ) ||
                         settings.localGuardModeOrNull() != null &&
                         container.connectionController.hasActiveVpnNetwork()
                 )
@@ -421,7 +423,6 @@ class HomeViewModel(
         ) { connection, ipInfo ->
             trafficMapOriginIpInfoCandidate(connection = connection, ipInfo = ipInfo)
         }
-            .runningFold(initialTrafficMapOriginIpInfo) { previous: IpInfo?, next: IpInfo? -> next ?: previous }
             .distinctUntilChanged()
             .stateIn(
                 viewModelScope,
@@ -440,14 +441,11 @@ class HomeViewModel(
         connection: ConnectionSnapshot,
         ipInfo: IpInfo?,
     ): IpInfo? {
-        val remoteRuntimeActive =
-            connection.state in ACTIVE_CONNECTION_STATES &&
-                connection.profileId != FoxholeVpnService.LOCAL_GUARD_PROFILE_ID
         val staleAfterRuntimeChange =
             ipInfo != null &&
                 connection.state !in ACTIVE_CONNECTION_STATES &&
                 ipInfo.fetchedAt < connection.lastChangeAt
-        return if (remoteRuntimeActive || staleAfterRuntimeChange) {
+        return if (staleAfterRuntimeChange) {
             null
         } else {
             ipInfo
@@ -554,11 +552,9 @@ class HomeViewModel(
                         previousState = previousState,
                         currentState = currentState,
                     )
-                val shouldRefreshDeviceIp =
-                    previousState in ACTIVE_CONNECTION_STATES &&
-                        currentState in setOf(ConnectionState.IDLE, ConnectionState.ERROR)
                 previousState = currentState
                 if (currentState !in ACTIVE_CONNECTION_STATES) {
+                    invalidateIpInfoRefreshes()
                     clearRuntimeReloadPending()
                     clearRuntimeReconnectRequired()
                     clearProfileLatencyRefresh()
@@ -570,16 +566,6 @@ class HomeViewModel(
                     if (dashboardVisible && !autoConnectUiStateMutable.value.running) {
                         scheduleActiveProfileLatencyRefresh()
                     }
-                }
-                if (shouldRefreshDeviceIp) {
-                    // After disconnect, keep the last IP visible until the quick local-network refresh completes.
-                    startIpInfoRefresh(
-                        reportFailures = false,
-                        showLoading = false,
-                        clearExistingIp = false,
-                        fetchMode = IpInfoFetchMode.ENTRY_QUICK,
-                        minimumLoadingDurationMs = 0L,
-                    )
                 }
             }
         }

@@ -592,18 +592,6 @@ internal fun HomeViewModel.onTrafficUiVisibilityChangedInternal(visible: Boolean
         if (connectionState == ConnectionState.CONNECTED && !autoConnectUiStateMutable.value.running) {
             scheduleActiveProfileLatencyRefresh()
             scheduleConnectedIpRefresh()
-        } else if (
-            connectionState in setOf(ConnectionState.IDLE, ConnectionState.ERROR) &&
-            ipInfoRefreshJob == null &&
-            !ipInfoLoadingMutable.value
-        ) {
-            startIpInfoRefresh(
-                reportFailures = false,
-                showLoading = true,
-                clearExistingIp = false,
-                fetchMode = IpInfoFetchMode.ENTRY_QUICK,
-                minimumLoadingDurationMs = 0L,
-            )
         }
     } else {
         clearProfileLatencyRefresh()

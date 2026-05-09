@@ -67,6 +67,9 @@ class AppTrafficSampler(
     private val packageManager = appContext.packageManager
     private val networkStatsManager by lazy { appContext.getSystemService<NetworkStatsManager>() }
     private val networkTypeProvider = AndroidNetworkTypeProvider(appContext)
+    private val installedApplicationsLock = Any()
+    private var installedApplicationsCachedAtMs: Long = 0L
+    private var installedApplicationsCache: List<ApplicationInfo> = emptyList()
 
     fun hasUsageAccess(): Boolean = UsageStatsAccess.isGranted(appContext)
 
@@ -87,7 +90,7 @@ class AppTrafficSampler(
             val manager = networkStatsManager ?: return@withContext emptyList()
             val networkType = networkTypeProvider.current()
             val windows =
-                installedApplications()
+                cachedInstalledApplications(now)
                     .asSequence()
                     .filterNot { app -> app.packageName == appContext.packageName }
                     .mapNotNull { app ->
@@ -110,6 +113,17 @@ class AppTrafficSampler(
                     .distinctBy(AppTrafficWindow::packageName)
                     .toList()
             windows
+        }
+
+    private fun cachedInstalledApplications(now: Long): List<ApplicationInfo> =
+        synchronized(installedApplicationsLock) {
+            installedApplicationsCache
+                .takeIf { apps ->
+                    apps.isNotEmpty() && now - installedApplicationsCachedAtMs <= INSTALLED_APPS_CACHE_TTL_MS
+                } ?: installedApplications().also { apps ->
+                    installedApplicationsCache = apps
+                    installedApplicationsCachedAtMs = now
+                }
         }
 
     private fun installedApplications(): List<ApplicationInfo> =
@@ -170,6 +184,7 @@ class AppTrafficSampler(
 
     companion object {
         const val DEFAULT_SAMPLE_WINDOW_MS = 60_000L
+        const val INSTALLED_APPS_CACHE_TTL_MS = 5 * 60_000L
         private val SampleWatermarkLock = Any()
         private var lastSampleAt: Long = 0L
     }

@@ -49,7 +49,7 @@ class TrafficMapRepositoryTest {
     }
 
     @Test
-    fun `accumulator keeps last map while waiting for fresh runtime sample`() {
+    fun `accumulator clears map when runtime is unavailable`() {
         val accumulator =
             TrafficMapConnectionAccumulator()
                 .updatedForBatch(
@@ -60,7 +60,19 @@ class TrafficMapRepositoryTest {
                 )
                 .updatedForBatch(TrafficMapSampleBatch(samples = emptyList(), runtimeAvailable = false))
 
-        assertEquals(10L, accumulator.countryAggregates()["US"]?.bytes)
+        assertEquals(null, accumulator.countryAggregates()["US"])
+    }
+
+    @Test
+    fun `accumulator replaces old map with fresh live runtime samples`() {
+        val accumulator =
+            TrafficMapConnectionAccumulator()
+                .updatedForBatch(
+                    TrafficMapSampleBatch(
+                        samples = listOf(TrafficMapConnectionSample(connectionId = "old", countryCode = "US", bytes = 10L)),
+                        runtimeAvailable = true,
+                    ),
+                )
 
         val refreshed =
             accumulator.updatedForBatch(
