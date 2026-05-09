@@ -232,9 +232,9 @@
     <ID>ArgumentListWrapping:SettingsDnsScreen.kt$(title = stringResource(R.string.dns_domain_bypass_title), icon = Icons.Outlined.Language)</ID>
     <ID>ArgumentListWrapping:SettingsRepository.kt$SettingsRepository$(connection.smartStartSubscriptionRetryAttempts)</ID>
     <ID>ArgumentListWrapping:SettingsRepository.kt$SettingsRepository$(connection.smartStartSubscriptionRetryDelaySeconds)</ID>
-    <ID>ArgumentListWrapping:SettingsRepository.kt$SettingsRepository$(stealthModeEnabled = current.connection.stealthModeEnabled &amp;&amp; !value)</ID>
-    <ID>ArgumentListWrapping:SettingsRepository.kt$SettingsRepository$(stealthModeEnabled = it.connection.stealthModeEnabled &amp;&amp; !value.enabled)</ID>
-    <ID>ArgumentListWrapping:SettingsRepository.kt$SettingsRepository$(stealthModeEnabled = it.connection.stealthModeEnabled &amp;&amp; value == RoutingRuleAction.PROXY)</ID>
+    <ID>ArgumentListWrapping:SettingsRepository.kt$SettingsRepository$(safeModeEnabled = current.connection.safeModeEnabled &amp;&amp; !value)</ID>
+    <ID>ArgumentListWrapping:SettingsRepository.kt$SettingsRepository$(safeModeEnabled = it.connection.safeModeEnabled &amp;&amp; !value.enabled)</ID>
+    <ID>ArgumentListWrapping:SettingsRepository.kt$SettingsRepository$(safeModeEnabled = it.connection.safeModeEnabled &amp;&amp; value == RoutingRuleAction.PROXY)</ID>
     <ID>ArgumentListWrapping:SettingsRepository.kt$SettingsRepository$(value)</ID>
     <ID>ArgumentListWrapping:SettingsRepositoryTest.kt$SettingsRepositoryTest$(SMART_START_SUBSCRIPTION_RETRY_DELAY_DEFAULT_SECONDS, connection.smartStartSubscriptionRetryDelaySeconds)</ID>
     <ID>ArgumentListWrapping:SettingsRoutingDialogs.kt$(Icons.Outlined.ContentCopy, contentDescription = stringResource(R.string.copy_password))</ID>

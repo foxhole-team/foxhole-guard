@@ -3,7 +3,7 @@ package com.foxhole.beta.vpn
 import com.foxhole.beta.core.model.NotificationSnapshot
 import java.util.Locale
 
-internal object StealthNotificationFormatter {
+internal object SafeModeNotificationFormatter {
     fun subtext(snapshot: NotificationSnapshot): String? {
         if (snapshot.isRedacted) {
             return null

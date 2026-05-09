@@ -1,3 +1,5 @@
+@file:Suppress("ImportOrdering")
+
 package com.foxhole.beta.ui
 
 import android.content.ClipData
@@ -923,11 +925,11 @@ private fun DragAndDropEvent.dragPayload(): String =
     toAndroidDragEvent().clipData?.getItemAt(0)?.text?.toString().orEmpty()
 
 private const val FOXHOLE_APP_DRAG_PREFIX = "foxhole-app:"
-private const val FOXHOLE_APP_DRAG_LABEL = "FoxHole app"
+private const val FOXHOLE_APP_DRAG_LABEL = "Foxhole app"
 private val AppGridTileHeight = 120.dp
 private val AppGridGap = 8.dp
-private const val MANAGED_SELECTED_SITE_RULE_PREFIX = "FoxHole selected site:"
-private const val MANAGED_BLOCKED_SITE_RULE_PREFIX = "FoxHole blocked site:"
+private const val MANAGED_SELECTED_SITE_RULE_PREFIX = "Foxhole selected site:"
+private const val MANAGED_BLOCKED_SITE_RULE_PREFIX = "Foxhole blocked site:"
 
 @Composable
 private fun SelectionCountBadge(count: Int) {

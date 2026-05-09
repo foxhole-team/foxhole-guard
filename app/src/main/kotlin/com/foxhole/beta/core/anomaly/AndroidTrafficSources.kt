@@ -120,7 +120,8 @@ class AppTrafficSampler(
             installedApplicationsCache
                 .takeIf { apps ->
                     apps.isNotEmpty() && now - installedApplicationsCachedAtMs <= INSTALLED_APPS_CACHE_TTL_MS
-                } ?: installedApplications().also { apps ->
+                } ?: installedApplications()
+                .also { apps ->
                     installedApplicationsCache = apps
                     installedApplicationsCachedAtMs = now
                 }

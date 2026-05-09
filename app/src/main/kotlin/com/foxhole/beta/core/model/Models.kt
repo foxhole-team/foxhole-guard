@@ -1,5 +1,6 @@
 package com.foxhole.beta.core.model
 
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 const val SETTINGS_SCHEMA_VERSION = 14
@@ -265,7 +266,8 @@ data class ConnectionSettings(
     val smartStartFailoverEnabled: Boolean = true,
     val smartStartSubscriptionRetryAttempts: Int = SMART_START_SUBSCRIPTION_RETRY_ATTEMPTS_DEFAULT,
     val smartStartSubscriptionRetryDelaySeconds: Int = SMART_START_SUBSCRIPTION_RETRY_DELAY_DEFAULT_SECONDS,
-    val stealthModeEnabled: Boolean = true,
+    @SerialName("stealthModeEnabled")
+    val safeModeEnabled: Boolean = true,
 )
 
 @Serializable

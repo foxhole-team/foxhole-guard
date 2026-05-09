@@ -1,3 +1,5 @@
+@file:Suppress("ImportOrdering")
+
 package com.foxhole.beta.ui
 
 import android.content.Intent
@@ -110,6 +112,7 @@ import kotlin.math.max
 import kotlin.math.roundToInt
 
 @Composable
+@Suppress("CyclomaticComplexMethod", "LongMethod")
 fun StatisticsScreen(
     state: SettingsRouteUiState,
     trafficMapState: TrafficMapUiState,
@@ -539,39 +542,6 @@ private fun ProfileTrafficOverviewCard(
 }
 
 @Composable
-private fun MetricTile(
-    label: String,
-    value: String,
-    modifier: Modifier = Modifier,
-) {
-    Surface(
-        modifier = modifier,
-        shape = MaterialTheme.shapes.small,
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.48f),
-    ) {
-        Column(
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(3.dp),
-        ) {
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                text = value,
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-    }
-}
-
-@Composable
 private fun ProfileTrafficList(
     items: List<ProfileTrafficUiItem>,
     state: SettingsRouteUiState,
@@ -587,65 +557,68 @@ private fun ProfileTrafficList(
     }
     val context = LocalContext.current
     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        items.sortedByDescending(ProfileTrafficUiItem::totalBytes).take(ProfileTrafficPreviewLimit).forEachIndexed { index, item ->
-            val detail = profileStatisticsDetail(state, item)
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { onProfileClick(item.profileId) }
-                    .padding(vertical = 6.dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Icon(
-                    imageVector = Icons.Outlined.Storage,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(18.dp),
-                )
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = item.profileName,
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
+        items
+            .sortedByDescending(ProfileTrafficUiItem::totalBytes)
+            .take(PROFILE_TRAFFIC_PREVIEW_LIMIT)
+            .forEachIndexed { index, item ->
+                val detail = profileStatisticsDetail(state, item)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onProfileClick(item.profileId) }
+                        .padding(vertical = 6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Storage,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(18.dp),
                     )
-                    Text(
-                        text = stringResource(
-                            R.string.statistics_profile_subtitle,
-                            protocolDisplayName(detail.lastProtocolHint),
-                            detail.avgLatencyMs.formatLatency(),
-                        ),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = item.profileName,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Text(
+                            text = stringResource(
+                                R.string.statistics_profile_subtitle,
+                                protocolDisplayName(detail.lastProtocolHint),
+                                detail.avgLatencyMs.formatLatency(),
+                            ),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text(
+                            text = stringResource(
+                                R.string.statistics_profile_rx_tx,
+                                formatBytes(context, item.rxBytes),
+                                formatBytes(context, item.txBytes),
+                            ),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.End,
+                        )
+                        Text(
+                            text = formatBytes(context, item.totalBytes),
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            textAlign = TextAlign.End,
+                        )
+                    }
                 }
-                Column(horizontalAlignment = Alignment.End) {
-                    Text(
-                        text = stringResource(
-                            R.string.statistics_profile_rx_tx,
-                            formatBytes(context, item.rxBytes),
-                            formatBytes(context, item.txBytes),
-                        ),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        textAlign = TextAlign.End,
-                    )
-                    Text(
-                        text = formatBytes(context, item.totalBytes),
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        textAlign = TextAlign.End,
-                    )
+                if (index != minOf(items.size, PROFILE_TRAFFIC_PREVIEW_LIMIT) - 1) {
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.32f))
                 }
             }
-            if (index != minOf(items.size, ProfileTrafficPreviewLimit) - 1) {
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.32f))
-            }
-        }
     }
 }
 
@@ -730,7 +703,7 @@ private fun CountryVerticalBarChart(
     val visible = rememberOneShotVisible("countries")
     val progress by animateFloatAsState(
         targetValue = if (visible) 1f else 0f,
-        animationSpec = tween(durationMillis = DonutAnimationDurationMs, easing = FastOutSlowInEasing),
+        animationSpec = tween(durationMillis = DONUT_ANIMATION_DURATION_MS, easing = FastOutSlowInEasing),
         label = "country-bars-progress",
     )
     Column(
@@ -919,7 +892,7 @@ private fun ProtocolStatisticsSection(items: List<ProtocolStatisticsUiItem>) {
             EmptySectionText(text = stringResource(R.string.statistics_protocols_empty))
         } else {
             BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
-                val columns = if (maxWidth >= CompactProtocolGridWidth) 4 else 2
+                val columns = if (maxWidth >= COMPACT_PROTOCOL_GRID_WIDTH) 4 else 2
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     items.chunked(columns).forEach { rowItems ->
                         Row(
@@ -1013,7 +986,7 @@ private fun AnimatedDonutChart(
     val errorColor = MaterialTheme.colorScheme.error
     val progress by animateFloatAsState(
         targetValue = if (visible) 1f else 0f,
-        animationSpec = tween(durationMillis = DonutAnimationDurationMs, easing = FastOutSlowInEasing),
+        animationSpec = tween(durationMillis = DONUT_ANIMATION_DURATION_MS, easing = FastOutSlowInEasing),
         label = "donut-progress",
     )
     Canvas(modifier = modifier) {
@@ -1310,7 +1283,11 @@ private fun AnomalyScoreChart(events: List<AnomalyEvent>) {
             drawCircle(
                 color = if (points.first().high) highColor else semanticColors.success,
                 radius = radius,
-                center = Offset(size.width / 2f, bottom - height * (points.first().score.toFloat() / maxScore.toFloat())),
+                center =
+                    Offset(
+                        size.width / 2f,
+                        bottom - height * (points.first().score.toFloat() / maxScore.toFloat()),
+                    ),
             )
             return@Canvas
         }
@@ -1833,6 +1810,7 @@ private fun ProfileStatisticsDetail(
 }
 
 @Composable
+@Suppress("LongMethod")
 private fun AppTrafficDetail(
     row: AppTrafficRow,
     samples: List<AppTrafficWindow>,
@@ -2446,7 +2424,7 @@ private fun profileComparisons(
         val candidates =
             profileMap.values
                 .map(ComparisonAccumulator::toSide)
-                .filter { side -> side.totalAttempts >= ProfileComparisonMinAttempts }
+                .filter { side -> side.totalAttempts >= PROFILE_COMPARISON_MIN_ATTEMPTS }
                 .sortedWith(
                     compareByDescending<ProfileComparisonSideUiItem> { side -> side.totalAttempts }
                         .thenByDescending { side -> side.totalBytes },
@@ -2630,7 +2608,7 @@ private fun anomalyChartPoints(events: List<AnomalyEvent>): List<AnomalyChartPoi
     val ordered = events.sortedBy(AnomalyEvent::createdAtMs)
     val firstAt = ordered.first().createdAtMs
     val lastAt = ordered.last().createdAtMs
-    val bucketSizeMs = ((lastAt - firstAt) / AnomalyChartBucketCount.coerceAtLeast(1)).coerceAtLeast(1L)
+    val bucketSizeMs = ((lastAt - firstAt) / ANOMALY_CHART_BUCKET_COUNT.coerceAtLeast(1)).coerceAtLeast(1L)
     return ordered
         .groupBy { event ->
             firstAt + ((event.createdAtMs - firstAt) / bucketSizeMs) * bucketSizeMs
@@ -2643,7 +2621,7 @@ private fun anomalyChartPoints(events: List<AnomalyEvent>): List<AnomalyChartPoi
                 high = bucketEvents.any { event -> event.severity == AnomalySeverity.HIGH },
             )
         }
-        .takeLast(AnomalyChartBucketCount)
+        .takeLast(ANOMALY_CHART_BUCKET_COUNT)
 }
 
 private fun appConnectionRows(
@@ -2839,8 +2817,8 @@ private fun List<Long>.averageOrNull(): Long? =
 private fun maxOfNotNull(vararg values: Long?): Long? =
     values.filterNotNull().maxOrNull()
 
-private val CompactProtocolGridWidth = 360.dp
-private const val DonutAnimationDurationMs = 700
-private const val ProfileTrafficPreviewLimit = 6
-private const val ProfileComparisonMinAttempts = 2
-private const val AnomalyChartBucketCount = 12
+private val COMPACT_PROTOCOL_GRID_WIDTH = 360.dp
+private const val DONUT_ANIMATION_DURATION_MS = 700
+private const val PROFILE_TRAFFIC_PREVIEW_LIMIT = 6
+private const val PROFILE_COMPARISON_MIN_ATTEMPTS = 2
+private const val ANOMALY_CHART_BUCKET_COUNT = 12

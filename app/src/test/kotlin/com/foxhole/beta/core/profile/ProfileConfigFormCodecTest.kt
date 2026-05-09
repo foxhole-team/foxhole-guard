@@ -158,16 +158,15 @@ class ProfileConfigFormCodecTest {
         val originalDraft = codec.decode(config)
         val draft =
             originalDraft.copy(
-                tls =
-                    originalDraft.tls.copy(
-                        alpn = "h2,http/1.1",
-                        fingerprint = "chrome",
-                        minVersion = "1.2",
-                        maxVersion = "1.3",
-                        curvePreferences = "X25519,P256",
-                        realityPublicKey = "pubkey",
-                        realityShortId = "abcd",
-                    ),
+                tls = originalDraft.tls.copy(
+                    alpn = "h2,http/1.1",
+                    fingerprint = "chrome",
+                    minVersion = "1.2",
+                    maxVersion = "1.3",
+                    curvePreferences = "X25519,P256",
+                    realityPublicKey = "pubkey",
+                    realityShortId = "abcd",
+                ),
             )
 
         val encoded = json.parseToJsonElement(codec.encode(config, draft)).jsonObject

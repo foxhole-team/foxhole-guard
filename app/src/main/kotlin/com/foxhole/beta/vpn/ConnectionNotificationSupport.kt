@@ -51,6 +51,21 @@ internal fun notificationActionForState(state: ConnectionState): ConnectionNotif
         )
     }
 
+internal fun notificationActionForSnapshot(
+    snapshot: NotificationSnapshot,
+    analysisStatus: String,
+): ConnectionNotificationAction {
+    val action = notificationActionForState(snapshot.state)
+    return if (
+        snapshot.statusMessage == analysisStatus &&
+        snapshot.state in ACTIVE_NOTIFICATION_ACTION_STATES
+    ) {
+        action.copy(labelRes = R.string.notification_action_auto_connect)
+    } else {
+        action
+    }
+}
+
 internal fun Service.removeForegroundNotification() {
     stopForeground(Service.STOP_FOREGROUND_REMOVE)
 }
@@ -91,7 +106,11 @@ internal fun Service.buildConnectionNotification(
             Intent(this, MainActivity::class.java),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
-    val action = notificationActionForState(snapshot.state)
+    val action =
+        notificationActionForSnapshot(
+            snapshot = snapshot,
+            analysisStatus = getString(R.string.notification_status_analysis),
+        )
     val builder =
         NotificationCompat.Builder(this, FoxholeConnectionServiceContract.NOTIFICATION_CHANNEL_ID)
             .setSmallIcon(smallIconRes)
@@ -145,6 +164,13 @@ internal fun Service.buildConnectionNotification(
     }
     return builder.build()
 }
+
+private val ACTIVE_NOTIFICATION_ACTION_STATES =
+    setOf(
+        ConnectionState.CONNECTING,
+        ConnectionState.CONNECTED,
+        ConnectionState.RECONNECTING,
+    )
 
 internal fun Service.updateConnectionNotification(buildNotification: () -> Notification) {
     TileService.requestListeningState(this, ComponentName(this, FoxholeTileService::class.java))

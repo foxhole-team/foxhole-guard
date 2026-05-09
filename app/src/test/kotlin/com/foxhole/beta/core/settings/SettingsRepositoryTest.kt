@@ -21,6 +21,9 @@ import com.foxhole.beta.core.model.SmartStartTransportPriority
 import com.foxhole.beta.core.model.SubscriptionRefreshInterval
 import com.foxhole.beta.core.model.ThemeMode
 import com.foxhole.beta.core.model.UiSettings
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -28,11 +31,27 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class SettingsRepositoryTest {
+    private val json =
+        Json {
+            encodeDefaults = true
+            ignoreUnknownKeys = true
+        }
+
     @Test
     fun `system locale uses empty appcompat tag and explicit locales keep their tags`() {
         assertEquals("", AppLocale.SYSTEM.appLanguageTags())
         assertEquals("en", AppLocale.EN.appLanguageTags())
         assertEquals("ru", AppLocale.RU.appLanguageTags())
+    }
+
+    @Test
+    fun `safe mode setting keeps legacy storage key compatibility`() {
+        val decoded = json.decodeFromString<ConnectionSettings>("""{"stealthModeEnabled":false}""")
+        val encoded = json.encodeToString(ConnectionSettings(safeModeEnabled = false))
+
+        assertFalse(decoded.safeModeEnabled)
+        assertTrue(encoded.contains(""""stealthModeEnabled":false"""))
+        assertFalse(encoded.contains("safeModeEnabled"))
     }
 
     @Test
@@ -184,7 +203,7 @@ class SettingsRepositoryTest {
         assertFalse(reset.expert.allowInsecureTls)
         assertNull(reset.expert.warningAcknowledgedAt)
         assertEquals(1234L, reset.expert.unlockedAt)
-        assertTrue(reset.connection.stealthModeEnabled)
+        assertTrue(reset.connection.safeModeEnabled)
     }
 
     @Test

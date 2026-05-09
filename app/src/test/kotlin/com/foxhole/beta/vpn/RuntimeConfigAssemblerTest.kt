@@ -1348,7 +1348,7 @@ class RuntimeConfigAssemblerTest {
                         RoutingRule(
                             id = 1,
                             presetId = 11,
-                            name = "FoxHole selected site: example.com",
+                            name = "Foxhole selected site: example.com",
                             enabled = true,
                             order = 0,
                             action = RoutingRuleAction.PROXY,
@@ -1361,7 +1361,7 @@ class RuntimeConfigAssemblerTest {
                         RoutingRule(
                             id = 2,
                             presetId = 11,
-                            name = "FoxHole blocked site: kw:ads",
+                            name = "Foxhole blocked site: kw:ads",
                             enabled = true,
                             order = 1,
                             action = RoutingRuleAction.BLOCK,

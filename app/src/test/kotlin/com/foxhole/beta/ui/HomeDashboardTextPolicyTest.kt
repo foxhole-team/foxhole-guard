@@ -7,7 +7,7 @@ import org.junit.Test
 class HomeDashboardTextPolicyTest {
     @Test
     fun `keeps dashboard profile title unchanged when within limit`() {
-        assertEquals("FoxHole vpn direct", dashboardProfileTitle("FoxHole vpn direct"))
+        assertEquals("Foxhole vpn direct", dashboardProfileTitle("Foxhole vpn direct"))
     }
 
     @Test

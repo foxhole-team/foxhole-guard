@@ -308,8 +308,24 @@ internal fun buildXrayTls(
         extractStringValues(realitySettings?.get("alpn")).ifEmpty { extractStringValues(tlsSettings?.get("alpn")) }
             .takeIf { it.isNotEmpty() }
             ?.let { put("alpn", buildStringArray(it)) }
-        firstXrayTlsValue(realitySettings, tlsSettings, "minVersion", "min_version", "tlsMinVersion")?.let { put("min_version", it) }
-        firstXrayTlsValue(realitySettings, tlsSettings, "maxVersion", "max_version", "tlsMaxVersion")?.let { put("max_version", it) }
+        firstXrayTlsValue(
+            realitySettings,
+            tlsSettings,
+            "minVersion",
+            "min_version",
+            "tlsMinVersion",
+        )?.let { value ->
+            put("min_version", value)
+        }
+        firstXrayTlsValue(
+            realitySettings,
+            tlsSettings,
+            "maxVersion",
+            "max_version",
+            "tlsMaxVersion",
+        )?.let { value ->
+            put("max_version", value)
+        }
         firstXrayTlsList(realitySettings, tlsSettings, "curvePreferences", "curve_preferences", "curves", "tlsCurves")
             .takeIf { it.isNotEmpty() }
             ?.let { put("curve_preferences", buildStringArray(it)) }

@@ -3,6 +3,7 @@ package com.foxhole.beta.vpn
 import com.foxhole.beta.R
 import com.foxhole.beta.core.model.ConnectionState
 import com.foxhole.beta.core.model.IpInfo
+import com.foxhole.beta.core.model.NotificationSnapshot
 import com.foxhole.beta.core.model.TrafficSnapshot
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -34,6 +35,24 @@ class ConnectionNotificationSupportTest {
             assertEquals(R.string.connect, action.labelRes)
             assertFalse(action.ongoing)
         }
+    }
+
+    @Test
+    fun `smart start analysis keeps stop command with auto connect label`() {
+        val snapshot =
+            NotificationSnapshot(
+                state = ConnectionState.CONNECTED,
+                statusMessage = "Analysis",
+            )
+        val action =
+            notificationActionForSnapshot(
+                snapshot = snapshot,
+                analysisStatus = "Analysis",
+            )
+
+        assertEquals(FoxholeConnectionServiceContract.ACTION_DISCONNECT, action.serviceAction)
+        assertEquals(R.string.notification_action_auto_connect, action.labelRes)
+        assertTrue(action.ongoing)
     }
 
     @Test

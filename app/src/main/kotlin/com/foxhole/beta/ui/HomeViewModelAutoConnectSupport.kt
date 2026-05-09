@@ -471,6 +471,7 @@ private suspend fun HomeViewModel.commitAutoConnectWinner(
         markAsLastKnownGood = true,
         countTowardOutcomeHistory = false,
     )
+    container.connectionController.clearSmartStartAnalysisStatus()
     emitSuccess(
         result.displayLatencyMs?.let { latencyMs ->
             getApplication<Application>().getString(
@@ -867,9 +868,42 @@ private fun HomeViewModel.connectedAutoConnectFallbackResult(
     timeoutMs: Long,
 ): AutoConnectProbeResult? {
     val snapshot = container.connectionController.snapshot.value
-    if (snapshot.state != ConnectionState.CONNECTED || snapshot.profileId != profileId) {
-        return null
+    return when {
+        snapshot.state != ConnectionState.CONNECTED || snapshot.profileId != profileId -> null
+        !snapshot.matchesAutoConnectCandidate(candidate) -> {
+            container.diagnosticsLogger.recordStructured(
+                "auto-connect",
+                "connected fallback ignored because runtime candidate changed",
+                "profile_id=$profileId",
+                "expected_option=${candidate.optionId}",
+                "expected_protocol=${candidate.protocolHint.name.lowercase()}",
+                "actual_option=${snapshot.protocolOptionId ?: "none"}",
+                "actual_protocol=${snapshot.protocolHint?.name?.lowercase() ?: "none"}",
+            )
+            null
+        }
+        else ->
+            buildConnectedAutoConnectFallbackResult(
+                profileId = profileId,
+                candidate = candidate,
+                networkFingerprint = networkFingerprint,
+                startedAtElapsedMs = startedAtElapsedMs,
+                timeoutMs = timeoutMs,
+            )
     }
+}
+
+private fun ConnectionSnapshot.matchesAutoConnectCandidate(candidate: AutoConnectProbeCandidate): Boolean =
+    protocolOptionId == candidate.optionId ||
+        (protocolOptionId == null && protocolHint == candidate.protocolHint)
+
+private fun HomeViewModel.buildConnectedAutoConnectFallbackResult(
+    profileId: Long,
+    candidate: AutoConnectProbeCandidate,
+    networkFingerprint: String?,
+    startedAtElapsedMs: Long,
+    timeoutMs: Long,
+): AutoConnectProbeResult {
     val elapsedMs = (SystemClock.elapsedRealtime() - startedAtElapsedMs).coerceAtLeast(1L)
     val outcomeRecordedAt = System.currentTimeMillis()
     val rememberedLatencyMs =

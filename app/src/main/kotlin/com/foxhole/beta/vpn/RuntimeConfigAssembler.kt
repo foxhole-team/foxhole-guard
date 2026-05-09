@@ -1475,6 +1475,6 @@ private fun RoutingRule.runtimeAction(siteRoutingAction: RoutingRuleAction): Rou
 private fun RoutingRule.isManagedSelectedSiteRule(): Boolean =
     name.startsWith(MANAGED_SELECTED_SITE_RULE_PREFIX)
 
-private const val MANAGED_SELECTED_SITE_RULE_PREFIX = "FoxHole selected site:"
+private const val MANAGED_SELECTED_SITE_RULE_PREFIX = "Foxhole selected site:"
 
 private fun JsonArray?.orEmpty(): List<JsonElement> = this?.toList().orEmpty()

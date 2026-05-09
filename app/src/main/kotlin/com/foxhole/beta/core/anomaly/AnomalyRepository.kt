@@ -1,3 +1,5 @@
+@file:Suppress("ImportOrdering")
+
 package com.foxhole.beta.core.anomaly
 
 import com.foxhole.beta.core.data.AnomalyDao
@@ -11,14 +13,15 @@ import com.foxhole.beta.core.model.AnomalySeverity
 import com.foxhole.beta.core.model.AnomalySettings
 import com.foxhole.beta.core.model.AnomalySignal
 import com.foxhole.beta.core.model.AppTrafficWindow
+import com.foxhole.beta.core.model.Settings
 import com.foxhole.beta.core.model.StatisticsRetention
 import com.foxhole.beta.core.model.TrafficWindow
 import com.foxhole.beta.core.settings.SettingsRepository
-import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import java.util.Locale
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -41,12 +44,7 @@ class AnomalyRepository(
     val recentAppTrafficWindows: Flow<List<AppTrafficWindow>> =
         settingsRepository.settings
             .flatMapLatest { settings ->
-                if (
-                    !settings.statistics.enabled ||
-                    !settings.statistics.appTrafficEnabled ||
-                    !settings.appTrafficStatsEnabled ||
-                    !settings.expert.firewallEnabled
-                ) {
+                if (!settings.appTrafficStatsRuntimeEnabled()) {
                     flowOf(emptyList())
                 } else {
                     dao.observeRecentAppTrafficWindows(cutoff = statisticsCutoff(settings.statistics.retention))
@@ -221,3 +219,9 @@ private fun statisticsCutoff(retention: StatisticsRetention): Long =
         StatisticsRetention.MONTHS_3 -> System.currentTimeMillis() - 93L * 24L * 60L * 60L * 1000L
         StatisticsRetention.FOREVER -> 0L
     }
+
+private fun Settings.appTrafficStatsRuntimeEnabled(): Boolean =
+    statistics.enabled &&
+        statistics.appTrafficEnabled &&
+        appTrafficStatsEnabled &&
+        expert.firewallEnabled

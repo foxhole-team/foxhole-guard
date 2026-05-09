@@ -484,6 +484,7 @@ internal suspend fun FoxholeVpnService.validateTunnelConnectivityInternal(
         Result.failure(IllegalStateException(getString(R.string.error_dns_probe_failed)))
     }
 
+@Suppress("ReturnCount")
 internal suspend fun FoxholeVpnService.tryAcceptEarlyValidatedVpnLiteralEndpoint(
     vpnNetwork: Network,
     requestNetwork: Network?,
@@ -539,6 +540,7 @@ internal suspend fun FoxholeVpnService.tryAcceptEarlyValidatedVpnLiteralEndpoint
     return true
 }
 
+@Suppress("TooGenericExceptionCaught")
 private suspend inline fun <T> runCatchingUnlessCancelled(crossinline block: suspend () -> T): Result<T> =
     try {
         Result.success(block())
@@ -548,7 +550,10 @@ private suspend inline fun <T> runCatchingUnlessCancelled(crossinline block: sus
         Result.failure(error)
     }
 
-private suspend inline fun <T> Result<T>.recoverCatchingUnlessCancelled(crossinline transform: suspend (Throwable) -> T): Result<T> {
+@Suppress("ReturnCount")
+private suspend inline fun <T> Result<T>.recoverCatchingUnlessCancelled(
+    crossinline transform: suspend (Throwable) -> T,
+): Result<T> {
     if (isSuccess) {
         return this
     }
@@ -1155,6 +1160,7 @@ internal fun FoxholeVpnService.onConnectionStartedInternal(
     trafficMode: TrafficMode,
 ) {
     val previousSnapshot = FoxholeVpnRuntimeBridge.snapshot.value
+    val analysisStatus = getString(R.string.notification_status_analysis)
     resetAutoReconnectState()
     if (trafficJob == null) {
         trafficSampler.start()
@@ -1169,6 +1175,8 @@ internal fun FoxholeVpnService.onConnectionStartedInternal(
             profileName = session.profileName,
             protocolHint = session.protocolHint,
             protocolOptionId = session.protocolOptionId,
+            message = previousSnapshot.message
+                .takeIf { previousSnapshot.isSmartStartConnection && it == analysisStatus },
             isSmartStartConnection = previousSnapshot.isSmartStartConnection,
         ),
     )
@@ -1246,15 +1254,14 @@ internal fun FoxholeVpnService.notificationStateLabelInternal(snapshot: Notifica
     when {
         localGuardFirewallNotificationActive() -> getString(R.string.notification_status_firewall)
         activeLocalGuardMode == LocalGuardMode.JOURNAL -> getString(R.string.notification_status_journal)
+        snapshot.statusMessage == getString(R.string.notification_status_analysis) ->
+            getString(R.string.notification_status_analysis)
         snapshot.state == ConnectionState.CONNECTED ->
             if (snapshot.isSmartStartConnection) {
                 getString(R.string.notification_status_connected_smart)
             } else {
                 getString(R.string.notification_status_connected)
             }
-        snapshot.state == ConnectionState.CONNECTING &&
-            snapshot.statusMessage == getString(R.string.notification_status_analysis) ->
-            getString(R.string.notification_status_analysis)
         snapshot.state == ConnectionState.CONNECTING -> getString(R.string.notification_status_connecting)
         snapshot.state == ConnectionState.RECONNECTING -> getString(R.string.notification_status_reconnecting)
         snapshot.state == ConnectionState.ERROR -> getString(R.string.notification_status_error)
@@ -1292,10 +1299,14 @@ private fun FoxholeVpnService.localGuardNotificationBodyRes(): Int? =
 private fun FoxholeVpnService.notificationBodyRes(snapshot: NotificationSnapshot): Int? =
     localGuardNotificationBodyRes() ?: when (snapshot.state) {
         ConnectionState.CONNECTED ->
-            when (snapshot.connectivityHealthState) {
-                ConnectivityHealthState.CHECKING -> R.string.notification_body_validating
-                ConnectivityHealthState.ONLINE -> R.string.notification_body_connected
-                ConnectivityHealthState.OFFLINE -> R.string.notification_body_waiting
+            if (snapshot.statusMessage == getString(R.string.notification_status_analysis)) {
+                R.string.notification_body_validating
+            } else {
+                when (snapshot.connectivityHealthState) {
+                    ConnectivityHealthState.CHECKING -> R.string.notification_body_validating
+                    ConnectivityHealthState.ONLINE -> R.string.notification_body_connected
+                    ConnectivityHealthState.OFFLINE -> R.string.notification_body_waiting
+                }
             }
         ConnectionState.CONNECTING ->
             if (snapshot.statusMessage == getString(R.string.notification_status_analysis)) {

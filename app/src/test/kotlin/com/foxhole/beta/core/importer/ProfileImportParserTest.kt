@@ -776,6 +776,7 @@ class ProfileImportParserTest {
     }
 
     @Test
+    @Suppress("LongMethod")
     fun `parses xray json config into normalized sing-box config`() {
         val parsed =
             parser.parseUserInput(

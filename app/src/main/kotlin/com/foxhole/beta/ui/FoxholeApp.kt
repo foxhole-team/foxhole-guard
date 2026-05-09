@@ -80,6 +80,8 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.foxhole.beta.R
+import com.foxhole.beta.core.data.ProfileImportPayloadTooLargeException
+import com.foxhole.beta.core.data.readLocalProfileImportUtf8Capped
 import com.foxhole.beta.core.model.ConnectionState
 import com.foxhole.beta.ui.theme.LocalFoxholeUiPalette
 import kotlinx.coroutines.launch
@@ -161,11 +163,19 @@ fun FoxholeApp(
                 return@rememberLauncherForActivityResult
             }
             scope.launch {
-                val raw =
-                    context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { reader ->
-                        reader.readText()
+                runCatching {
+                    context.contentResolver.openInputStream(uri)?.use { stream ->
+                        stream.readLocalProfileImportUtf8Capped()
                     }.orEmpty()
-                viewModel.importProfileRaw(raw)
+                }.onSuccess { raw ->
+                    viewModel.importProfileRaw(raw)
+                }.onFailure { error ->
+                    if (error is ProfileImportPayloadTooLargeException) {
+                        snackbarHostState.showSnackbar(context.getString(R.string.profile_import_too_large))
+                    } else {
+                        snackbarHostState.showSnackbar(context.getString(R.string.profile_import_failed))
+                    }
+                }
             }
         }
 

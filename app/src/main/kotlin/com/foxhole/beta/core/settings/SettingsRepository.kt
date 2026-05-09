@@ -164,11 +164,11 @@ class SettingsRepository(
     suspend fun updateSubscriptionRefreshInterval(value: SubscriptionRefreshInterval) =
         update { it.copy(connection = it.connection.copy(subscriptionRefreshInterval = value)) }
 
-    suspend fun updateStealthModeEnabled(value: Boolean) =
+    suspend fun updateSafeModeEnabled(value: Boolean) =
         update { current ->
             if (value) {
                 current.copy(
-                    connection = current.connection.copy(stealthModeEnabled = true),
+                    connection = current.connection.copy(safeModeEnabled = true),
                     traffic = TrafficSettings(),
                     privacyRoute = PrivacyRouteSettings(),
                     expert =
@@ -188,7 +188,7 @@ class SettingsRepository(
                     ),
                 )
             } else {
-                current.copy(connection = current.connection.copy(stealthModeEnabled = false))
+                current.copy(connection = current.connection.copy(safeModeEnabled = false))
             }
         }
 
@@ -527,7 +527,7 @@ class SettingsRepository(
             current.copy(
                 connection =
                     current.connection.copy(
-                        stealthModeEnabled = current.connection.stealthModeEnabled && value == TrafficMode.TUNNEL,
+                        safeModeEnabled = current.connection.safeModeEnabled && value == TrafficMode.TUNNEL,
                 ),
                 traffic = current.traffic.copy(mode = value),
                 expert =
@@ -545,7 +545,7 @@ class SettingsRepository(
             current.copy(
                 connection =
                     current.connection.copy(
-                        stealthModeEnabled = current.connection.stealthModeEnabled && value == PrivacyRouteMode.OFF,
+                        safeModeEnabled = current.connection.safeModeEnabled && value == PrivacyRouteMode.OFF,
                     ),
                 traffic =
                     if (value == PrivacyRouteMode.TOR_OVER_VPN) {
@@ -588,7 +588,7 @@ class SettingsRepository(
             current.copy(
                 connection =
                     current.connection.copy(
-                        stealthModeEnabled = current.connection.stealthModeEnabled && !value.runtimeRequiresExplicitTunnel(),
+                        safeModeEnabled = current.connection.safeModeEnabled && !value.runtimeRequiresExplicitTunnel(),
                     ),
                 dns = value,
             )
@@ -661,7 +661,7 @@ class SettingsRepository(
     suspend fun updateKillSwitchEnabled(value: Boolean) =
         update {
             it.copy(
-                connection = it.connection.copy(stealthModeEnabled = it.connection.stealthModeEnabled && !value),
+                connection = it.connection.copy(safeModeEnabled = it.connection.safeModeEnabled && !value),
                 expert = it.expert.copy(killSwitchEnabled = value),
             )
         }
@@ -702,7 +702,7 @@ class SettingsRepository(
     suspend fun updateSniff(value: Boolean) =
         update { current ->
             current.copy(
-                connection = current.connection.copy(stealthModeEnabled = current.connection.stealthModeEnabled && !value),
+                connection = current.connection.copy(safeModeEnabled = current.connection.safeModeEnabled && !value),
                 expert = current.expert.copy(sniff = value, routeOnly = if (value) current.expert.routeOnly else false),
             )
         }
@@ -710,7 +710,7 @@ class SettingsRepository(
     suspend fun updateRouteOnly(value: Boolean) =
         update { current ->
             current.copy(
-                connection = current.connection.copy(stealthModeEnabled = current.connection.stealthModeEnabled && !value),
+                connection = current.connection.copy(safeModeEnabled = current.connection.safeModeEnabled && !value),
                 expert = current.expert.copy(routeOnly = value, sniff = current.expert.sniff || value),
             )
         }
@@ -718,7 +718,7 @@ class SettingsRepository(
     suspend fun updateStrictRoute(value: Boolean) =
         update {
             it.copy(
-                connection = it.connection.copy(stealthModeEnabled = it.connection.stealthModeEnabled && value),
+                connection = it.connection.copy(safeModeEnabled = it.connection.safeModeEnabled && value),
                 expert = it.expert.copy(strictRoute = value),
             )
         }
@@ -726,7 +726,7 @@ class SettingsRepository(
     suspend fun updateBypassLan(value: Boolean) =
         update {
             it.copy(
-                connection = it.connection.copy(stealthModeEnabled = it.connection.stealthModeEnabled && !value),
+                connection = it.connection.copy(safeModeEnabled = it.connection.safeModeEnabled && !value),
                 expert = it.expert.copy(bypassLan = value),
             )
         }
@@ -734,7 +734,7 @@ class SettingsRepository(
     suspend fun updateAllowPrivateOutboundHosts(value: Boolean) =
         update { current ->
             current.copy(
-                connection = current.connection.copy(stealthModeEnabled = current.connection.stealthModeEnabled && !value),
+                connection = current.connection.copy(safeModeEnabled = current.connection.safeModeEnabled && !value),
                 expert = current.expert.copy(allowPrivateOutboundHosts = value),
             )
         }
@@ -748,7 +748,7 @@ class SettingsRepository(
             current.copy(
                 connection =
                     current.connection.copy(
-                        stealthModeEnabled = current.connection.stealthModeEnabled && nextMode == PerAppRoutingMode.FULL_TUNNEL,
+                        safeModeEnabled = current.connection.safeModeEnabled && nextMode == PerAppRoutingMode.FULL_TUNNEL,
                     ),
                 expert =
                     current.expert.copy(
@@ -782,7 +782,7 @@ class SettingsRepository(
                     .filterNot { packageName -> packageName == BuildConfig.APPLICATION_ID }
                     .distinct()
             it.copy(
-                connection = it.connection.copy(stealthModeEnabled = false),
+                connection = it.connection.copy(safeModeEnabled = false),
                 expert =
                     it.expert.copy(
                         blockedPackages = normalizedBlockedPackages,
@@ -795,7 +795,7 @@ class SettingsRepository(
     suspend fun updateBlockedPackagesEnabled(value: Boolean) =
         update {
             it.copy(
-                connection = it.connection.copy(stealthModeEnabled = it.connection.stealthModeEnabled && !value),
+                connection = it.connection.copy(safeModeEnabled = it.connection.safeModeEnabled && !value),
                 expert =
                     it.expert.copy(
                         blockedPackagesEnabled = value,
@@ -807,7 +807,7 @@ class SettingsRepository(
     suspend fun updateBlockAppsAlways(value: Boolean) =
         update {
             it.copy(
-                connection = it.connection.copy(stealthModeEnabled = it.connection.stealthModeEnabled && !value),
+                connection = it.connection.copy(safeModeEnabled = it.connection.safeModeEnabled && !value),
                 expert =
                     it.expert.copy(
                         blockAppsAlways = value && it.expert.blockedPackagesEnabled && it.expert.blockedPackages.isNotEmpty(),
@@ -818,7 +818,7 @@ class SettingsRepository(
     suspend fun updateSiteRoutingAction(value: RoutingRuleAction) =
         update {
             it.copy(
-                connection = it.connection.copy(stealthModeEnabled = it.connection.stealthModeEnabled && value == RoutingRuleAction.PROXY),
+                connection = it.connection.copy(safeModeEnabled = it.connection.safeModeEnabled && value == RoutingRuleAction.PROXY),
                 expert = it.expert.copy(siteRoutingAction = value.coerceSiteRoutingAction()),
             )
         }
@@ -826,7 +826,7 @@ class SettingsRepository(
     suspend fun updateProxySurfaceMode(value: ProxySurfaceMode) =
         update {
             it.copy(
-                connection = it.connection.copy(stealthModeEnabled = false),
+                connection = it.connection.copy(safeModeEnabled = false),
                 expert =
                     it.expert.copy(
                         localSurfaces =
@@ -838,7 +838,7 @@ class SettingsRepository(
     suspend fun updateLanProxySurfaceMode(value: ProxySurfaceMode) =
         update {
             it.copy(
-                connection = it.connection.copy(stealthModeEnabled = false),
+                connection = it.connection.copy(safeModeEnabled = false),
                 expert = it.expert.copy(localSurfaces = it.expert.localSurfaces.copy(lanProxyMode = value)),
             )
         }
@@ -846,7 +846,7 @@ class SettingsRepository(
     suspend fun updateSocksSurface(value: ProxyInboundSettings) =
         update {
             it.copy(
-                connection = it.connection.copy(stealthModeEnabled = it.connection.stealthModeEnabled && !value.enabled),
+                connection = it.connection.copy(safeModeEnabled = it.connection.safeModeEnabled && !value.enabled),
                 expert = it.expert.copy(localSurfaces = it.expert.localSurfaces.copy(socks = value.normalized())),
             )
         }
@@ -854,7 +854,7 @@ class SettingsRepository(
     suspend fun updateHttpSurface(value: ProxyInboundSettings) =
         update {
             it.copy(
-                connection = it.connection.copy(stealthModeEnabled = it.connection.stealthModeEnabled && !value.enabled),
+                connection = it.connection.copy(safeModeEnabled = it.connection.safeModeEnabled && !value.enabled),
                 expert = it.expert.copy(localSurfaces = it.expert.localSurfaces.copy(http = value.normalized())),
             )
         }
@@ -862,7 +862,7 @@ class SettingsRepository(
     suspend fun updateMixedSurface(value: ProxyInboundSettings) =
         update {
             it.copy(
-                connection = it.connection.copy(stealthModeEnabled = it.connection.stealthModeEnabled && !value.enabled),
+                connection = it.connection.copy(safeModeEnabled = it.connection.safeModeEnabled && !value.enabled),
                 expert = it.expert.copy(localSurfaces = it.expert.localSurfaces.copy(mixed = value.normalized())),
             )
         }
@@ -870,7 +870,7 @@ class SettingsRepository(
     suspend fun updateLocalProxyAuthEnabled(value: Boolean) =
         update {
             it.copy(
-                connection = it.connection.copy(stealthModeEnabled = it.connection.stealthModeEnabled && value),
+                connection = it.connection.copy(safeModeEnabled = it.connection.safeModeEnabled && value),
                 expert =
                     it.expert.copy(
                         localSurfaces =
@@ -884,7 +884,7 @@ class SettingsRepository(
     suspend fun updateLocalProxyAuth(value: LocalAuthSettings) =
         update {
             it.copy(
-                connection = it.connection.copy(stealthModeEnabled = it.connection.stealthModeEnabled && value.enabled),
+                connection = it.connection.copy(safeModeEnabled = it.connection.safeModeEnabled && value.enabled),
                 expert =
                     it.expert.copy(
                         localSurfaces =
@@ -898,7 +898,7 @@ class SettingsRepository(
     suspend fun updateLanProxyAuthEnabled(value: Boolean) =
         update {
             it.copy(
-                connection = it.connection.copy(stealthModeEnabled = it.connection.stealthModeEnabled && value),
+                connection = it.connection.copy(safeModeEnabled = it.connection.safeModeEnabled && value),
                 expert =
                     it.expert.copy(
                         localSurfaces =
@@ -912,7 +912,7 @@ class SettingsRepository(
     suspend fun updateLanProxyAuth(value: LocalAuthSettings) =
         update {
             it.copy(
-                connection = it.connection.copy(stealthModeEnabled = it.connection.stealthModeEnabled && value.enabled),
+                connection = it.connection.copy(safeModeEnabled = it.connection.safeModeEnabled && value.enabled),
                 expert =
                     it.expert.copy(
                         localSurfaces =
@@ -926,7 +926,7 @@ class SettingsRepository(
     suspend fun updateLocalProxyLanAccessEnabled(value: Boolean) =
         update {
             it.copy(
-                connection = it.connection.copy(stealthModeEnabled = it.connection.stealthModeEnabled && !value),
+                connection = it.connection.copy(safeModeEnabled = it.connection.safeModeEnabled && !value),
                 expert =
                     it.expert.copy(
                         localSurfaces =
@@ -940,7 +940,7 @@ class SettingsRepository(
     suspend fun updateClashApi(value: ClashApiSettings) =
         update {
             it.copy(
-                connection = it.connection.copy(stealthModeEnabled = it.connection.stealthModeEnabled && !value.enabled),
+                connection = it.connection.copy(safeModeEnabled = it.connection.safeModeEnabled && !value.enabled),
                 expert = it.expert.copy(localSurfaces = it.expert.localSurfaces.copy(clashApi = value.normalized())),
             )
         }
@@ -950,8 +950,8 @@ class SettingsRepository(
             it.copy(
                 connection =
                     it.connection.copy(
-                        stealthModeEnabled =
-                            it.connection.stealthModeEnabled && !(value.enabled || value.statsEnabled),
+                        safeModeEnabled =
+                            it.connection.safeModeEnabled && !(value.enabled || value.statsEnabled),
                     ),
                 expert = it.expert.copy(localSurfaces = it.expert.localSurfaces.copy(v2RayApi = value.normalized())),
             )
@@ -1185,7 +1185,7 @@ class SettingsRepository(
                             normalizeSmartStartSubscriptionRetryDelaySeconds(connection.smartStartSubscriptionRetryDelaySeconds),
                     ),
                 traffic =
-                    if (connection.stealthModeEnabled) {
+                    if (connection.safeModeEnabled) {
                         TrafficSettings()
                     } else {
                         traffic.copy(
@@ -1195,14 +1195,14 @@ class SettingsRepository(
                 dns = dns.normalized(),
                 networkRules = networkRules.normalized(),
                 privacyRoute =
-                    if (connection.stealthModeEnabled) {
+                    if (connection.safeModeEnabled) {
                         PrivacyRouteSettings()
                     } else {
                         privacyRoute.normalized()
                     },
                 expert =
                     expert.normalized(
-                        stealthModeEnabled = connection.stealthModeEnabled,
+                        safeModeEnabled = connection.safeModeEnabled,
                         resetScreenshotBlocking = resetDefaults,
                         storedSchemaVersion = schemaVersion,
                     ),
@@ -1219,7 +1219,7 @@ class SettingsRepository(
         }
 
     private fun ExpertSettings.normalized(
-        stealthModeEnabled: Boolean,
+        safeModeEnabled: Boolean,
         resetScreenshotBlocking: Boolean,
         storedSchemaVersion: Int,
     ): ExpertSettings {
@@ -1245,7 +1245,7 @@ class SettingsRepository(
                 localSurfaces = localSurfaces.normalized().migratedProxySurfaceModesIfNeeded(storedSchemaVersion),
                 routeOnly = routeOnly && sniff,
             )
-        return if (!stealthModeEnabled) {
+        return if (!safeModeEnabled) {
             normalized
         } else {
             ExpertSettings(
@@ -1454,7 +1454,7 @@ private const val DEFAULT_DNS_SERVER = "1.1.1.1"
 
 internal fun Settings.resetExpertSettingsToSafeDefaults(): Settings =
     copy(
-        connection = connection.copy(stealthModeEnabled = true),
+        connection = connection.copy(safeModeEnabled = true),
         traffic = TrafficSettings(),
         expert =
             ExpertSettings(

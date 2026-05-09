@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.foxhole.beta.R
 import com.foxhole.beta.core.data.InsecureTlsImportWarning
 import com.foxhole.beta.core.data.InsecureTlsProfileConsentRequiredException
+import com.foxhole.beta.core.data.ProfileImportPayloadTooLargeException
 import kotlinx.coroutines.launch
 
 internal fun HomeViewModel.importRawInternal(value: String) {
@@ -108,6 +109,9 @@ internal fun HomeViewModel.profileImportFailureMessageInternal(
         throwable is InsecureTlsProfileConsentRequiredException ||
             message.contains("insecure tls is not allowed", ignoreCase = true) ->
             app.getString(R.string.profile_import_insecure_tls_required)
+
+        throwable is ProfileImportPayloadTooLargeException ->
+            app.getString(R.string.profile_import_too_large)
 
         else -> throwable.message ?: app.getString(R.string.profile_import_failed)
     }

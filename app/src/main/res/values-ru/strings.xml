@@ -54,6 +54,7 @@
     <string name="profile_refresh_summary">Обновить конфигурацию из подписки.</string>
     <string name="profile_refresh_confirm_title">Обновить конфигурацию?</string>
     <string name="profile_refresh_confirm_body">Получить актуальную конфигурацию VPN от вашего провайдера VPN. Foxhole автоматически переподключится с новой конфигурацией.</string>
+    <string name="profile_import_too_large">Файл импорта слишком большой.</string>
     <string name="view_profile_config">Профиль</string>
     <string name="view_profile_config_summary">Открыть сохраненные настройки профиля.</string>
     <string name="edit_profile_config">Редактор профиля</string>
@@ -155,6 +156,7 @@
     <string name="notification_status_disconnected">Отключен</string>
     <string name="notification_status_error">Ошибка подключения</string>
     <string name="notification_status_analysis">Анализ</string>
+    <string name="notification_action_auto_connect">Автоподключение</string>
     <string name="notification_status_firewall">Firewall активен</string>
     <string name="notification_status_journal">Журнал сети</string>
     <string name="notification_body_connected">Tunnel активен</string>
@@ -173,7 +175,7 @@
     <string name="network_activity_logging_enabled">Лог сетевой активности приложений включен.</string>
     <string name="network_activity_logging_disabled">Лог сетевой активности приложений выключен.</string>
     <string name="kill_switch_title">Kill switch</string>
-    <string name="kill_switch_summary">Использует только системные настройки VPN Android: Always-on VPN и Блокировать подключения без VPN. FoxHole не запускает локальный guard для этого переключателя.</string>
+    <string name="kill_switch_summary">Использует только системные настройки VPN Android: Always-on VPN и Блокировать подключения без VPN. Foxhole не запускает локальный guard для этого переключателя.</string>
     <string name="vpn_settings_unavailable">Системный экран VPN Android недоступен на этом устройстве.</string>
     <string name="network_activity_persistent_logging_title">Записывать постоянно</string>
     <string name="network_activity_persistent_logging_summary">Если включено, Foxhole поднимает локальный journal-only VPN, когда обычный Tunnel не подключен. Он ведет журнал сетевой активности и работает вместе с блокировкой интернета приложениям. Журнал хранится на устройстве в зашифрованном виде и пишется только пока активен VPN runtime.</string>
@@ -530,7 +532,7 @@
     <string name="dns_filter_refresh_complete">DNS-список проверен.</string>
     <string name="dns_filter_refresh_failed">Не удалось проверить DNS-список.</string>
     <string name="dns_through_vpn_title">DNS через VPN</string>
-    <string name="dns_through_vpn_summary">Отправлять DNS-запросы FoxHole через активный туннель.</string>
+    <string name="dns_through_vpn_summary">Отправлять DNS-запросы Foxhole через активный туннель.</string>
     <string name="dns_block_outside_tunnel_title">Блокировать DNS вне туннеля</string>
     <string name="dns_block_outside_tunnel_summary">Удерживает DNS на VPN-маршруте через строгую маршрутизацию Tunnel.</string>
     <string name="dns_intercept_requests_title">Перехватывать DNS-запросы</string>
@@ -916,7 +918,7 @@
     <string name="help_connection_modes_body">Tunnel - весь сетевой трафик устройства направляется через VPN.\nSplit tunnel (Proxy) - сетевой трафик выбранных приложений направляется через VPN.\nSplit tunnel (Direct) - сетевой трафик устройства направляется через VPN, кроме выбранных приложений.\nProxy - сетевой трафик устройства направляется через VPN только в приложениях, настроенных вручную.\n*С включенной аутентификацией локального Proxy работает Firefox через расширение FoxyProxy.</string>
     <string name="privacy_route_title">Маршрутизация TOR</string>
     <string name="privacy_route_summary">Включает туннель в сеть TOR внутри VPN.</string>
-    <string name="privacy_route_info_body">TOR защищает только приложения, чей трафик направлен через TOR. В режиме выбранных приложений FoxHole не показывает, что весь трафик устройства идет через TOR. Поддерживаемый TCP-трафик идет через TOR внутри активного VPN; UDP для TOR-маршрутов блокируется.</string>
+    <string name="privacy_route_info_body">TOR защищает только приложения, чей трафик направлен через TOR. В режиме выбранных приложений Foxhole не показывает, что весь трафик устройства идет через TOR. Поддерживаемый TCP-трафик идет через TOR внутри активного VPN; UDP для TOR-маршрутов блокируется.</string>
     <string name="privacy_route_mode_off">Выкл.</string>
     <string name="privacy_route_mode_tor_over_vpn">TOR поверх текущего VPN</string>
     <string name="privacy_route_scope_title">Область</string>
@@ -950,7 +952,7 @@
     <string name="network_rules_skip_speed_tests_mobile_title">Не делать тест скорости через мобильную сеть</string>
     <string name="network_rules_skip_speed_tests_mobile_summary">Ручные и фоновые замеры задержки пропускаются в мобильной или лимитной сети.</string>
     <string name="network_rules_mobile_profile_title">Использовать другой профиль на мобильной сети</string>
-    <string name="network_rules_mobile_profile_summary">При нажатии Старт в мобильной или лимитной сети FoxHole подключит выбранный мобильный профиль.</string>
+    <string name="network_rules_mobile_profile_summary">При нажатии Старт в мобильной или лимитной сети Foxhole подключит выбранный мобильный профиль.</string>
     <string name="network_rules_mobile_profile_summary_empty">Сначала импортируйте ещё один профиль, чтобы выбрать отдельный профиль для мобильной сети.</string>
     <string name="network_rules_mobile_profile_picker_title">Профиль для мобильной сети</string>
     <string name="network_rules_mobile_profile_value_unselected">Не выбран</string>

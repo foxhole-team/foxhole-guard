@@ -100,6 +100,14 @@ class FoxholeConnectionController(
         lifecycle.clearAppliedRuntime()
     }
 
+    fun clearSmartStartAnalysisStatus() {
+        val currentSnapshot = snapshot.value
+        if (currentSnapshot.message != context.getString(R.string.notification_status_analysis)) {
+            return
+        }
+        FoxholeVpnRuntimeBridge.update(currentSnapshot.copy(message = null))
+    }
+
     fun reload(profileId: Long? = snapshot.value.profileId): Boolean = lifecycle.reload(profileId)
 
     suspend fun syncLocalGuard() {

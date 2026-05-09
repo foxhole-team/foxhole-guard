@@ -168,9 +168,13 @@ class ProfileRepository(
         val settings = settingsRepository.current()
         val effectiveAllowInsecureTls = settings.expert.allowInsecureTls || allowInsecureTlsForProfile || excludeInsecureTlsOptions
         val resolvedPreferredName = preferredName?.trim().takeUnless { it.isNullOrBlank() }
+        val rawInputSizeBytes = localProfileImportByteCount(rawInput)
+        if (rawInputSizeBytes > MAX_LOCAL_PROFILE_IMPORT_BYTES) {
+            throw ProfileImportPayloadTooLargeException()
+        }
         diagnosticsLogger.record(
             "profile",
-            "import parse started bytes=${rawInput.toByteArray(Charsets.UTF_8).size}",
+            "import parse started bytes=$rawInputSizeBytes",
         )
         val parsedRaw =
             withContext(Dispatchers.IO) {

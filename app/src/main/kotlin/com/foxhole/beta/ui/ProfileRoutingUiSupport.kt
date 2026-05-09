@@ -191,6 +191,7 @@ internal fun ProfileListLoadingCard(tag: String) {
 }
 
 @Composable
+@Suppress("CyclomaticComplexMethod", "LongMethod")
 internal fun ProfileConfigForm(
     profile: Profile,
     draft: EditableProfileConfig,
@@ -425,13 +426,20 @@ internal fun ProfileConfigForm(
                             editable = editable,
                             presets = profileEditorQuicCongestionPresets,
                             onEditRequested = onEditRequested,
-                            onValueChanged = { value -> onDraftChanged(draft.copy(naiveQuicCongestionControl = value)) },
+                            onValueChanged = { value ->
+                                onDraftChanged(draft.copy(naiveQuicCongestionControl = value))
+                            },
                         )
                     }
                 }
             }
         }
-        if (draft.tls.enabled || draft.tls.serverName.isNotBlank() || draft.tls.hasVisibleValues() || draft.type == "naive") {
+        val showTlsSection =
+            draft.tls.enabled ||
+                draft.tls.serverName.isNotBlank() ||
+                draft.tls.hasVisibleValues() ||
+                draft.type == "naive"
+        if (showTlsSection) {
             ProfileEditorSection(title = stringResource(R.string.profile_editor_tls_section)) {
                 ProfileEditorTextRow(
                     title = stringResource(R.string.profile_editor_tls_server_name),
@@ -453,7 +461,9 @@ internal fun ProfileConfigForm(
                         editable = editable,
                         presets = profileEditorFingerprintPresets,
                         infoBody = stringResource(R.string.profile_editor_fingerprint_summary),
-                        onValueChanged = { value -> onDraftChanged(draft.copy(tls = draft.tls.copy(fingerprint = value))) },
+                        onValueChanged = { value ->
+                            onDraftChanged(draft.copy(tls = draft.tls.copy(fingerprint = value)))
+                        },
                     )
                 }
                 ProfileEditorPresetRow(
@@ -461,7 +471,9 @@ internal fun ProfileConfigForm(
                     value = draft.tls.echMode,
                     editable = editable,
                     presets = profileEditorAutoOnOffPresets,
-                    onValueChanged = { value -> onDraftChanged(draft.copy(tls = draft.tls.copy(echMode = value))) },
+                    onValueChanged = { value ->
+                        onDraftChanged(draft.copy(tls = draft.tls.copy(echMode = value)))
+                    },
                 )
                 if (showExpertSettings && draft.type != "naive") {
                     ProfileEditorPresetRow(
@@ -470,21 +482,27 @@ internal fun ProfileConfigForm(
                         editable = editable,
                         presets = profileEditorAlpnPresets,
                         onEditRequested = onEditRequested,
-                        onValueChanged = { value -> onDraftChanged(draft.copy(tls = draft.tls.copy(alpn = value))) },
+                        onValueChanged = { value ->
+                            onDraftChanged(draft.copy(tls = draft.tls.copy(alpn = value)))
+                        },
                     )
                     ProfileEditorPresetRow(
                         title = stringResource(R.string.profile_editor_tls_min_version),
                         value = draft.tls.minVersion,
                         editable = editable,
                         presets = profileEditorTlsMinVersionPresets,
-                        onValueChanged = { value -> onDraftChanged(draft.copy(tls = draft.tls.copy(minVersion = value))) },
+                        onValueChanged = { value ->
+                            onDraftChanged(draft.copy(tls = draft.tls.copy(minVersion = value)))
+                        },
                     )
                     ProfileEditorPresetRow(
                         title = stringResource(R.string.profile_editor_tls_max_version),
                         value = draft.tls.maxVersion,
                         editable = editable,
                         presets = profileEditorTlsMaxVersionPresets,
-                        onValueChanged = { value -> onDraftChanged(draft.copy(tls = draft.tls.copy(maxVersion = value))) },
+                        onValueChanged = { value ->
+                            onDraftChanged(draft.copy(tls = draft.tls.copy(maxVersion = value)))
+                        },
                     )
                     ProfileEditorPresetRow(
                         title = stringResource(R.string.profile_editor_tls_curves),

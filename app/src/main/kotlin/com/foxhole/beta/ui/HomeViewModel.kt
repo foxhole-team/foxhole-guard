@@ -18,7 +18,9 @@ import com.foxhole.beta.FoxholeApplication
 import com.foxhole.beta.FoxholeHomeDependencies
 import com.foxhole.beta.R
 import com.foxhole.beta.applyAppLocale
+import com.foxhole.beta.core.data.ProfileImportPayloadTooLargeException
 import com.foxhole.beta.core.data.RoutingRepository
+import com.foxhole.beta.core.data.requireLocalProfileImportWithinLimit
 import com.foxhole.beta.core.diagnostics.DiagnosticEntry
 import com.foxhole.beta.core.model.AnomalyHistoryRetention
 import com.foxhole.beta.core.model.AnomalySensitivity
@@ -606,7 +608,14 @@ class HomeViewModel(
             snackbars.tryEmit(errorBanner(R.string.profile_import_failed))
             return
         }
-        importRaw(value)
+        val boundedValue =
+            try {
+                requireLocalProfileImportWithinLimit(value)
+            } catch (_: ProfileImportPayloadTooLargeException) {
+                snackbars.tryEmit(errorBanner(R.string.profile_import_too_large))
+                return
+            }
+        importRaw(boundedValue)
     }
 
     fun onToggleConnection() {

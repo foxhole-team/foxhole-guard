@@ -233,10 +233,10 @@ private fun HomeViewModel.siteRuleName(
 ): String {
     val prefix =
         when (action) {
-            RoutingRuleAction.BLOCK -> "FoxHole blocked site"
+            RoutingRuleAction.BLOCK -> "Foxhole blocked site"
             RoutingRuleAction.PROXY,
             RoutingRuleAction.DIRECT,
-            -> "FoxHole selected site"
+            -> "Foxhole selected site"
         }
     return "$prefix: ${token ?: getApplication<Application>().getString(R.string.site_exception_default_name)}"
 }

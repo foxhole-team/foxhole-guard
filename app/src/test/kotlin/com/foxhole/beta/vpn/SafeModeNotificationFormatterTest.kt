@@ -6,7 +6,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
 
-class StealthNotificationFormatterTest {
+class SafeModeNotificationFormatterTest {
     @Test
     fun `uses country flag as subtext`() {
         val snapshot =
@@ -21,14 +21,14 @@ class StealthNotificationFormatterTest {
                 rxRate = 4_096,
             )
 
-        assertEquals("🇳🇱", StealthNotificationFormatter.subtext(snapshot))
+        assertEquals("🇳🇱", SafeModeNotificationFormatter.subtext(snapshot))
     }
 
     @Test
     fun `hides subtext for redacted notifications`() {
         val snapshot = NotificationSnapshot(isRedacted = true)
 
-        assertNull(StealthNotificationFormatter.subtext(snapshot))
+        assertNull(SafeModeNotificationFormatter.subtext(snapshot))
     }
 
     @Test
@@ -40,6 +40,6 @@ class StealthNotificationFormatterTest {
                 ipAddress = "185.62.57.44",
             )
 
-        assertNull(StealthNotificationFormatter.subtext(snapshot))
+        assertNull(SafeModeNotificationFormatter.subtext(snapshot))
     }
 }

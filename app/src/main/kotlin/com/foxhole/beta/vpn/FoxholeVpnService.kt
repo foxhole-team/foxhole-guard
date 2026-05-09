@@ -27,6 +27,7 @@ import com.foxhole.beta.core.model.ConnectivityHealthState
 import com.foxhole.beta.core.model.IpInfo
 import com.foxhole.beta.core.model.NotificationSnapshot
 import com.foxhole.beta.core.model.PrivacyRouteMode
+import com.foxhole.beta.core.model.Settings
 import com.foxhole.beta.core.model.TrafficMode
 import com.foxhole.beta.core.model.TrafficSnapshot
 import com.foxhole.beta.core.model.VpnSession
@@ -762,24 +763,14 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
     internal fun startAppTrafficStatsUpdates() {
         stopAppTrafficStatsUpdates()
         val settings = container.settingsRepository.settings.value
-        if (
-            !settings.statistics.enabled ||
-            !settings.statistics.appTrafficEnabled ||
-            !settings.appTrafficStatsEnabled ||
-            !settings.expert.firewallEnabled
-        ) {
+        if (!settings.appTrafficStatsRuntimeEnabled()) {
             return
         }
         appTrafficStatsJob =
             scope.launch(Dispatchers.Default) {
                 while (currentCoroutineContext().isActive) {
                     val currentSettings = container.settingsRepository.settings.value
-                    if (
-                        !currentSettings.statistics.enabled ||
-                        !currentSettings.statistics.appTrafficEnabled ||
-                        !currentSettings.appTrafficStatsEnabled ||
-                        !currentSettings.expert.firewallEnabled
-                    ) {
+                    if (!currentSettings.appTrafficStatsRuntimeEnabled()) {
                         break
                     }
                     runCatching { appTrafficStatsRecorder.recordSnapshot() }
@@ -811,12 +802,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
             ) ?: return
         scope.launch(Dispatchers.IO) {
             val appWindows =
-                if (
-                    settings.statistics.enabled &&
-                    settings.statistics.appTrafficEnabled &&
-                    settings.appTrafficStatsEnabled &&
-                    settings.expert.firewallEnabled
-                ) {
+                if (settings.appTrafficStatsRuntimeEnabled()) {
                     runCatching {
                         appTrafficStatsRecorder.sampleWindows(maxCacheAgeMs = APP_TRAFFIC_SAMPLE_CACHE_MAX_AGE_MS)
                     }.getOrDefault(emptyList())
@@ -1120,6 +1106,12 @@ private fun FoxholeVpnService.notificationTorRouteActive(): Boolean {
         settings.traffic.mode == TrafficMode.TUNNEL &&
         activeSession?.protocolHint?.isUdpTransport() != true
 }
+
+private fun Settings.appTrafficStatsRuntimeEnabled(): Boolean =
+    statistics.enabled &&
+        statistics.appTrafficEnabled &&
+        appTrafficStatsEnabled &&
+        expert.firewallEnabled
 
 internal interface VpnCoreRuntime {
     suspend fun start(session: VpnSession, host: RuntimeServiceHost): Result<Unit>

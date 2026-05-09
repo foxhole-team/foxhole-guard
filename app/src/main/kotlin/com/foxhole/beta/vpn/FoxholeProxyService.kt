@@ -215,6 +215,7 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
                 protocolHint = session.protocolHint,
                 protocolOptionId = session.protocolOptionId,
                 message = FoxholeVpnRuntimeBridge.snapshot.value.message,
+                isSmartStartConnection = FoxholeVpnRuntimeBridge.snapshot.value.isSmartStartConnection,
             ),
         )
         updateNotification()
@@ -416,10 +417,12 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
 
     private fun launchPriorityCommand(block: suspend () -> Unit) {
         commandJob?.cancel()
-        commandJob = null
-        scope.launch(Dispatchers.Default) {
-            block()
-        }
+        commandJob =
+            scope.launch(Dispatchers.Default) {
+                commandMutex.withLock {
+                    block()
+                }
+            }
     }
 
     private fun scheduleAutoReconnect(reason: String) {
@@ -923,6 +926,8 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
     }
 
     private fun onConnectionStarted(session: VpnSession) {
+        val previousSnapshot = FoxholeVpnRuntimeBridge.snapshot.value
+        val analysisStatus = getString(R.string.notification_status_analysis)
         resetAutoReconnectState()
         if (trafficJob == null) {
             trafficSampler.start()
@@ -936,6 +941,9 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
                 profileName = session.profileName,
                 protocolHint = session.protocolHint,
                 protocolOptionId = session.protocolOptionId,
+                message = previousSnapshot.message
+                    .takeIf { previousSnapshot.isSmartStartConnection && it == analysisStatus },
+                isSmartStartConnection = previousSnapshot.isSmartStartConnection,
             ),
         )
         updateNotification()
@@ -960,6 +968,7 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
             txTotal = traffic.txTotalBytes,
             rxTotal = traffic.rxTotalBytes,
             updatedAt = maxOf(connection.lastChangeAt, ipInfo?.fetchedAt ?: 0L, traffic.sampledAt),
+            isSmartStartConnection = connection.isSmartStartConnection,
         )
     }
 
@@ -990,10 +999,9 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
 
     private fun notificationStateLabel(snapshot: NotificationSnapshot): String =
         when {
-            snapshot.state == ConnectionState.CONNECTED -> getString(R.string.notification_status_connected)
-            snapshot.state == ConnectionState.CONNECTING &&
-                snapshot.statusMessage == getString(R.string.notification_status_analysis) ->
+            snapshot.statusMessage == getString(R.string.notification_status_analysis) ->
                 getString(R.string.notification_status_analysis)
+            snapshot.state == ConnectionState.CONNECTED -> getString(R.string.notification_status_connected)
             snapshot.state == ConnectionState.CONNECTING -> getString(R.string.notification_status_connecting)
             snapshot.state == ConnectionState.RECONNECTING -> getString(R.string.notification_status_reconnecting)
             snapshot.state == ConnectionState.ERROR -> getString(R.string.notification_status_error)
@@ -1003,10 +1011,14 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
     private fun notificationBodyRes(snapshot: NotificationSnapshot): Int? =
         when (snapshot.state) {
             ConnectionState.CONNECTED ->
-                when (snapshot.connectivityHealthState) {
-                    ConnectivityHealthState.CHECKING -> R.string.notification_body_validating
-                    ConnectivityHealthState.ONLINE -> R.string.notification_body_connected
-                    ConnectivityHealthState.OFFLINE -> R.string.notification_body_waiting
+                if (snapshot.statusMessage == getString(R.string.notification_status_analysis)) {
+                    R.string.notification_body_validating
+                } else {
+                    when (snapshot.connectivityHealthState) {
+                        ConnectivityHealthState.CHECKING -> R.string.notification_body_validating
+                        ConnectivityHealthState.ONLINE -> R.string.notification_body_connected
+                        ConnectivityHealthState.OFFLINE -> R.string.notification_body_waiting
+                    }
                 }
             ConnectionState.CONNECTING ->
                 if (snapshot.statusMessage == getString(R.string.notification_status_analysis)) {

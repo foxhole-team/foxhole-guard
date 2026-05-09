@@ -1492,6 +1492,7 @@ fun ProfileConfigViewScreen(
 }
 
 @Composable
+@Suppress("CyclomaticComplexMethod")
 fun ProfileConfigEditScreen(
     profile: Profile?,
     canReconnectNow: Boolean,

@@ -316,7 +316,11 @@ class ProfileConfigFormCodec(
         }
 
         val originalReality = original?.get("reality")?.jsonObject
-        if (!naiveOutbound && (originalReality != null || draft.tls.realityPublicKey.isNotBlank() || draft.tls.realityShortId.isNotBlank())) {
+        val hasRealitySettings =
+            originalReality != null ||
+                draft.tls.realityPublicKey.isNotBlank() ||
+                draft.tls.realityShortId.isNotBlank()
+        if (!naiveOutbound && hasRealitySettings) {
             val reality = originalReality?.toMutableMap() ?: mutableMapOf()
             reality["enabled"] = JsonPrimitive(true)
             if (draft.tls.realityPublicKey.isNotBlank()) {
