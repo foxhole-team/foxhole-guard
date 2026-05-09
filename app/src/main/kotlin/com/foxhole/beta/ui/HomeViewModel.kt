@@ -73,7 +73,6 @@ import com.foxhole.beta.core.settings.AppTrafficStatsRecorder
 import com.foxhole.beta.core.smart.SmartStartController
 import com.foxhole.beta.vpn.FoxholeVpnRuntimeBridge
 import com.foxhole.beta.vpn.FoxholeVpnService
-import com.foxhole.beta.vpn.localGuardModeOrNull
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -399,15 +398,11 @@ class HomeViewModel(
             container.connectionController.snapshot,
             container.settingsRepository.settings,
         ) { connection, settings ->
-            settings.ui.trafficMapEnabled &&
-                (
-                    (
-                        connection.state == ConnectionState.CONNECTED &&
-                            connection.profileId != FoxholeVpnService.LOCAL_GUARD_PROFILE_ID
-                    ) ||
-                        settings.localGuardModeOrNull() != null &&
-                        container.connectionController.hasActiveVpnNetwork()
-                )
+            isTrafficMapRuntimeAvailable(
+                connection = connection,
+                settings = settings,
+                activeVpnNetworkAvailable = container.connectionController.hasActiveVpnNetwork(),
+            )
         }
 
     private val initialTrafficMapOriginIpInfo =

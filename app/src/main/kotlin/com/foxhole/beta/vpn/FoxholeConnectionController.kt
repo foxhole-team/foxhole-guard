@@ -103,11 +103,20 @@ class FoxholeConnectionController(
     fun reload(profileId: Long? = snapshot.value.profileId): Boolean = lifecycle.reload(profileId)
 
     suspend fun syncLocalGuard() {
-        if (snapshot.value.state in ACTIVE_CONNECTION_STATES) {
+        val currentSnapshot = snapshot.value
+        val localGuardSnapshot = currentSnapshot.profileId == FoxholeVpnService.LOCAL_GUARD_PROFILE_ID
+        if (currentSnapshot.state in ACTIVE_CONNECTION_STATES && !localGuardSnapshot) {
             return
         }
         val mode = settingsRepository.current().localGuardModeOrNull()
         if (mode != null) {
+            if (
+                localGuardSnapshot &&
+                hasActiveVpnNetwork() &&
+                currentSnapshot.profileName == mode.runtimeProfileName()
+            ) {
+                return
+            }
             FoxholeConnectionServiceContract.startForegroundService(
                 context = context,
                 mode = TrafficMode.TUNNEL,

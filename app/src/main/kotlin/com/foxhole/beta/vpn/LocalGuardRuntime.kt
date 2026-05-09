@@ -7,6 +7,12 @@ internal enum class LocalGuardMode {
     JOURNAL,
 }
 
+internal fun LocalGuardMode.runtimeProfileName(): String =
+    when (this) {
+        LocalGuardMode.FIREWALL -> "Local firewall"
+        LocalGuardMode.JOURNAL -> "Network journal"
+    }
+
 internal fun Settings.localGuardModeOrNull(): LocalGuardMode? {
     val permanentAppBlockingEnabled =
         expert.firewallEnabled &&

@@ -293,6 +293,57 @@ class HomeDashboardPresentationTest {
     }
 
     @Test
+    fun `traffic map runtime is available for connected tunnel and active local firewall guard only`() {
+        assertTrue(
+            isTrafficMapRuntimeAvailable(
+                connection = ConnectionSnapshot(state = ConnectionState.CONNECTED, profileId = 42L),
+                settings = Settings(),
+                activeVpnNetworkAvailable = true,
+            ),
+        )
+        assertTrue(
+            isTrafficMapRuntimeAvailable(
+                connection =
+                    ConnectionSnapshot(
+                        state = ConnectionState.CONNECTED,
+                        profileId = FoxholeVpnService.LOCAL_GUARD_PROFILE_ID,
+                    ),
+                settings = Settings(expert = ExpertSettings(firewallEnabled = true)),
+                activeVpnNetworkAvailable = true,
+            ),
+        )
+        assertTrue(
+            isTrafficMapRuntimeAvailable(
+                connection =
+                    ConnectionSnapshot(
+                        state = ConnectionState.CONNECTED,
+                        profileId = FoxholeVpnService.LOCAL_GUARD_PROFILE_ID,
+                    ),
+                settings = Settings(expert = ExpertSettings(firewallEnabled = true)),
+                activeVpnNetworkAvailable = false,
+            ),
+        )
+        assertFalse(
+            isTrafficMapRuntimeAvailable(
+                connection =
+                    ConnectionSnapshot(
+                        state = ConnectionState.IDLE,
+                        profileId = FoxholeVpnService.LOCAL_GUARD_PROFILE_ID,
+                    ),
+                settings = Settings(expert = ExpertSettings(firewallEnabled = true)),
+                activeVpnNetworkAvailable = false,
+            ),
+        )
+        assertFalse(
+            isTrafficMapRuntimeAvailable(
+                connection = ConnectionSnapshot(state = ConnectionState.CONNECTED, profileId = 42L),
+                settings = Settings(ui = UiSettings(trafficMapEnabled = false)),
+                activeVpnNetworkAvailable = true,
+            ),
+        )
+    }
+
+    @Test
     fun `dashboard transport label reports udp tcp and unknown`() {
         assertEquals("UDP", dashboardTransportTypeLabel(ProtocolHint.WIREGUARD))
         assertEquals("UDP", dashboardTransportTypeLabel(ProtocolHint.HYSTERIA2))

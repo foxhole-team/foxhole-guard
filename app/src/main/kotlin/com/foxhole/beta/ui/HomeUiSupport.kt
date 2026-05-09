@@ -41,6 +41,7 @@ import com.foxhole.beta.core.settings.smartProfilePreference
 import com.foxhole.beta.core.settings.smartStartEnabledProtocolSetHash
 import com.foxhole.beta.vpn.ACTIVE_CONNECTION_STATES
 import com.foxhole.beta.vpn.FoxholeVpnService
+import com.foxhole.beta.vpn.localGuardModeOrNull
 
 internal data class HomeProxySurface(
     val label: String,
@@ -77,6 +78,20 @@ internal data class HomeDashboardProfileModel(
     val activeProfileId: Long?,
     val isSmartDashboardProfile: Boolean,
 )
+
+internal fun isTrafficMapRuntimeAvailable(
+    connection: ConnectionSnapshot,
+    settings: Settings,
+    activeVpnNetworkAvailable: Boolean,
+): Boolean {
+    val connected = connection.state == ConnectionState.CONNECTED
+    val localGuardConnected = connected && connection.profileId == FoxholeVpnService.LOCAL_GUARD_PROFILE_ID
+    val tunnelConnected = connected && connection.profileId != FoxholeVpnService.LOCAL_GUARD_PROFILE_ID
+    val localGuardAvailable =
+        settings.localGuardModeOrNull() != null &&
+            (activeVpnNetworkAvailable || localGuardConnected)
+    return settings.ui.trafficMapEnabled && (tunnelConnected || localGuardAvailable)
+}
 
 internal data class HomeDashboardNetworkModel(
     val visibleIpInfo: IpInfo?,

@@ -549,6 +549,7 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
             collapsedText = ::notificationCollapsedText,
             expandedText = ::notificationExpandedText,
             stateLabel = ::notificationStateLabel,
+            showAction = true,
         )
 
     private fun updateNotification() {

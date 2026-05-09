@@ -2,6 +2,7 @@ package com.foxhole.beta
 
 import android.content.Intent
 import android.net.VpnService
+import android.util.Base64
 import android.util.Log
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -9,11 +10,17 @@ import androidx.test.platform.app.InstrumentationRegistry
 import com.foxhole.beta.core.model.ConnectionState
 import com.foxhole.beta.core.model.LatencyProbeMethod
 import com.foxhole.beta.core.model.PerAppRoutingMode
+import com.foxhole.beta.core.model.PrivacyRouteMode
+import com.foxhole.beta.core.model.PrivacyRouteScope
 import com.foxhole.beta.core.model.ProtocolHint
 import com.foxhole.beta.core.model.Settings
 import com.foxhole.beta.core.model.TrafficMode
 import com.foxhole.beta.core.model.TunStack
+import com.foxhole.beta.vpn.FoxholeConnectionServiceContract
+import com.foxhole.beta.vpn.FoxholeVpnService
+import com.foxhole.beta.vpn.LocalGuardMode
 import com.foxhole.beta.vpn.TunnelValidationEvidenceClassifier
+import com.foxhole.beta.vpn.localGuardModeOrNull
 import java.io.File
 import java.io.FileInputStream
 import kotlinx.coroutines.delay
@@ -237,14 +244,9 @@ class ProfileRuntimeSessionAndroidTest {
         }
         runBlocking {
             val app = ApplicationProvider.getApplicationContext<FoxholeApplication>()
-            val subscriptionUrl =
-                InstrumentationRegistry
-                    .getArguments()
-                    .getString("foxhole.smartSubscriptionUrl")
-                    ?.trim()
-                    ?.takeIf { it.startsWith("https://", ignoreCase = true) }
-            if (subscriptionUrl == null) {
-                Log.d(TEST_TAG, "manual smart subscription skipped: https url arg missing")
+            val subscriptionInput = smartSubscriptionInput()
+            if (subscriptionInput == null) {
+                Log.d(TEST_TAG, "manual smart subscription skipped: subscription input missing")
                 return@runBlocking
             }
             if (!ensureVpnPermission(app)) {
@@ -257,7 +259,7 @@ class ProfileRuntimeSessionAndroidTest {
 
             val imported =
                 app.container.profileRepository.importProfile(
-                    rawInput = subscriptionUrl,
+                    rawInput = subscriptionInput,
                     preferredName = "Live Smart",
                     allowInsecureTlsForProfile =
                         InstrumentationRegistry
@@ -331,6 +333,237 @@ class ProfileRuntimeSessionAndroidTest {
                     }
             }
             disconnectAndWaitForIdle(app)
+        }
+    }
+
+    @Test
+    fun manualSmartSubscriptionTcpTorRuntime() {
+        if (InstrumentationRegistry.getArguments().getString("foxhole.liveSmartTcpTor") != "1") {
+            Log.d(TEST_TAG, "manual smart TCP Tor live connect skipped")
+            return
+        }
+        runBlocking {
+            val app = ApplicationProvider.getApplicationContext<FoxholeApplication>()
+            val subscriptionInput = smartSubscriptionInput()
+            if (subscriptionInput == null) {
+                Log.d(TEST_TAG, "manual smart TCP Tor skipped: subscription input missing")
+                return@runBlocking
+            }
+            if (!ensureVpnPermission(app)) {
+                Log.d(TEST_TAG, "manual smart TCP Tor skipped: vpn permission missing")
+                return@runBlocking
+            }
+            val targetProtocols =
+                requestedSmartProbeProtocols(
+                    defaultProtocols = setOf(ProtocolHint.VLESS, ProtocolHint.TROJAN, ProtocolHint.SHADOWSOCKS, ProtocolHint.OUTLINE),
+                )
+            val requireSuccess = requireLiveSmartSuccess()
+            resetRelevantSettings(app)
+            clearProfiles(app)
+
+            val imported =
+                app.container.profileRepository.importProfile(
+                    rawInput = subscriptionInput,
+                    preferredName = "Live Smart Tor",
+                    allowInsecureTlsForProfile =
+                        InstrumentationRegistry
+                            .getArguments()
+                            .getString("foxhole.allowInsecureTlsForLiveSubscription") == "1",
+                )
+            app.container.connectionController.setActiveProfile(imported.id)
+            val profiles = app.container.profileRepository.profiles.first()
+            val selectedTarget =
+                profiles
+                    .flatMap { profile ->
+                        profile
+                            .runtimeProbeTargets()
+                            .filter { target -> target.protocolHint in targetProtocols }
+                            .map { target -> profile to target }
+                    }.firstOrNull()
+            if (selectedTarget == null) {
+                Log.d(TEST_TAG, "manual smart TCP Tor skipped: no TCP target for ${targetProtocols.joinToString { it.name }}")
+                if (requireSuccess) {
+                    assertTrue("smart subscription did not expose requested TCP target", false)
+                }
+                return@runBlocking
+            }
+            val (profile, target) = selectedTarget
+
+            try {
+                disconnectAndWaitForIdle(app)
+                baselineRuntimeSettings(app)
+                app.container.settingsRepository.updatePrivacyRouteScope(PrivacyRouteScope.ALL_APPS)
+                app.container.settingsRepository.updatePrivacyRouteMode(PrivacyRouteMode.TOR_OVER_VPN)
+                app.container.connectionController.setActiveProfile(profile.id)
+                val torSession = app.container.profileRepository.getSession(profile.id, target.optionId)
+                val torSettings = app.container.settingsRepository.current()
+                val outbounds =
+                    json.parseToJsonElement(torSession.configJson)
+                        .jsonObject["outbounds"]
+                        ?.jsonArray
+                        .orEmpty()
+                        .map { it.jsonObject }
+                val torConfigActive =
+                    outbounds.any { outbound ->
+                        outbound["tag"]?.jsonPrimitive?.content == "tor-over-vpn" &&
+                            outbound["type"]?.jsonPrimitive?.content == "tor"
+                    }
+                val outboundSummary =
+                    outbounds.joinToString { outbound ->
+                        "${outbound["tag"]?.jsonPrimitive?.content.orEmpty()}:${outbound["type"]?.jsonPrimitive?.content.orEmpty()}"
+                    }
+                Log.d(
+                    TEST_TAG,
+                    "liveSmartTcpTor config profileId=${profile.id} targetProtocol=${target.protocolHint.name.lowercase()} sessionProtocol=${torSession.protocolHint.name.lowercase()} optionId=${target.optionId.orEmpty()} privacyMode=${torSettings.privacyRoute.mode.name} privacyScope=${torSettings.privacyRoute.scope.name} trafficMode=${torSettings.traffic.mode.name} torConfigActive=$torConfigActive outbounds=$outboundSummary",
+                )
+                assertTrue("assembled TCP Tor config is missing tor-over-vpn outbound", torConfigActive)
+
+                val startedAt = System.currentTimeMillis()
+                app.container.connectionController.connect(profile.id, protocolOptionId = target.optionId)
+                val terminalState =
+                    withTimeoutOrNull(longArgument("foxhole.torTerminalTimeoutMs", 240_000L)) {
+                        waitForActiveConnectionAttempt(app)
+                        waitForTerminalState(app)
+                    }
+                delay(2_000)
+                val evidence =
+                    TunnelValidationEvidenceClassifier.classify(
+                        entries = app.container.diagnosticsLogger.entries.value,
+                        sinceMs = startedAt,
+                    )
+                val snapshot = app.container.connectionController.snapshot.value
+                val terminalStateLabel = terminalState?.name ?: "TIMEOUT"
+                Log.d(
+                    TEST_TAG,
+                    "liveSmartTcpTor result profileId=${profile.id} protocol=${target.protocolHint.name.lowercase()} terminalState=$terminalStateLabel message=${snapshot.message.orEmpty().take(160)} fatal=${evidence.fatalRuntimeMessage.orEmpty().take(200)} successTraffic=${evidence.hasSuccessfulTunnelActivity}",
+                )
+                if (requireSuccess) {
+                    assertEquals(ConnectionState.CONNECTED.name, terminalStateLabel)
+                    assertTrue(evidence.hasSuccessfulTunnelActivity)
+                    assertTrue(evidence.fatalRuntimeMessage.orEmpty().isEmpty())
+                }
+            } finally {
+                app.container.settingsRepository.updatePrivacyRouteMode(PrivacyRouteMode.OFF)
+                disconnectAndWaitForIdle(app)
+            }
+        }
+    }
+
+    @Test
+    fun manualSmartHysteriaLocalGuardSwitchingRuntime() {
+        if (InstrumentationRegistry.getArguments().getString("foxhole.liveSmartLocalGuardSwitch") != "1") {
+            Log.d(TEST_TAG, "manual smart local guard switching skipped")
+            return
+        }
+        runBlocking {
+            val app = ApplicationProvider.getApplicationContext<FoxholeApplication>()
+            val subscriptionInput = smartSubscriptionInput()
+            if (subscriptionInput == null) {
+                Log.d(TEST_TAG, "manual smart local guard switching skipped: subscription input missing")
+                return@runBlocking
+            }
+            if (!ensureVpnPermission(app)) {
+                Log.d(TEST_TAG, "manual smart local guard switching skipped: vpn permission missing")
+                return@runBlocking
+            }
+            resetRelevantSettings(app)
+            app.container.settingsRepository.updateFirewallEnabled(false)
+            app.container.settingsRepository.updateNetworkActivityLogging(false)
+            app.container.settingsRepository.updateNetworkActivityPersistentLogging(false)
+            app.container.settingsRepository.updateBlockAppsAlways(false)
+            app.container.settingsRepository.updateBlockedPackages(emptyList())
+            FoxholeConnectionServiceContract.stopAllServices(app)
+            disconnectAndWaitForIdle(app)
+            clearProfiles(app)
+
+            val imported =
+                app.container.profileRepository.importProfile(
+                    rawInput = subscriptionInput,
+                    preferredName = "Live Smart Switch",
+                    allowInsecureTlsForProfile =
+                        InstrumentationRegistry
+                            .getArguments()
+                            .getString("foxhole.allowInsecureTlsForLiveSubscription") == "1",
+                )
+            val profiles = app.container.profileRepository.profiles.first()
+            val selectedTarget =
+                profiles
+                    .flatMap { profile ->
+                        profile
+                            .runtimeProbeTargets()
+                            .filter { target -> target.protocolHint == ProtocolHint.HYSTERIA2 }
+                            .map { target -> profile to target }
+                    }.firstOrNull()
+            if (selectedTarget == null) {
+                Log.d(TEST_TAG, "manual smart local guard switching skipped: no Hysteria2 target")
+                assertTrue("smart subscription did not expose Hysteria2 target", false)
+                return@runBlocking
+            }
+            val (profile, target) = selectedTarget
+            assertEquals(imported.id, profile.id)
+            val blockedPackage = firstInstalledPackageExcept(app.packageName)
+
+            try {
+                app.container.settingsRepository.updateNetworkActivityLogging(true)
+                app.container.settingsRepository.updateNetworkActivityPersistentLogging(true)
+                app.container.settingsRepository.updateBlockedPackages(listOf(blockedPackage))
+                app.container.settingsRepository.updateBlockAppsAlways(true)
+                app.container.settingsRepository.updateFirewallEnabled(true)
+                app.container.connectionController.syncLocalGuard()
+                assertTrue(
+                    "local guard did not start before VPN switch",
+                    waitUntil(timeoutMs = 20_000L) {
+                        val snapshot = app.container.connectionController.snapshot.value
+                        snapshot.state == ConnectionState.CONNECTED &&
+                            snapshot.profileId == FoxholeVpnService.LOCAL_GUARD_PROFILE_ID
+                    },
+                )
+                assertEquals(LocalGuardMode.FIREWALL, app.container.settingsRepository.current().localGuardModeOrNull())
+
+                app.container.connectionController.connect(profile.id, protocolOptionId = target.optionId)
+                val terminalState =
+                    withTimeoutOrNull(liveSmartTerminalTimeoutMs(ProtocolHint.HYSTERIA2)) {
+                        waitForActiveConnectionAttempt(app)
+                        waitForTerminalState(app)
+                    }
+                val vpnSnapshot = app.container.connectionController.snapshot.value
+                Log.d(
+                    TEST_TAG,
+                    "liveSmartLocalGuardSwitch vpn terminalState=${terminalState?.name ?: "TIMEOUT"} profileId=${vpnSnapshot.profileId} protocol=${vpnSnapshot.protocolHint?.name.orEmpty()}",
+                )
+                assertEquals(ConnectionState.CONNECTED, terminalState)
+                assertEquals(profile.id, vpnSnapshot.profileId)
+                assertEquals(ProtocolHint.HYSTERIA2, vpnSnapshot.protocolHint)
+
+                app.container.connectionController.disconnect()
+                assertTrue(
+                    "local guard did not resume after VPN disconnect",
+                    waitUntil(timeoutMs = 30_000L) {
+                        if (app.container.connectionController.snapshot.value.state == ConnectionState.IDLE) {
+                            app.container.connectionController.syncLocalGuard()
+                        }
+                        val snapshot = app.container.connectionController.snapshot.value
+                        snapshot.state == ConnectionState.CONNECTED &&
+                            snapshot.profileId == FoxholeVpnService.LOCAL_GUARD_PROFILE_ID
+                    },
+                )
+                Log.d(TEST_TAG, "liveSmartLocalGuardSwitch local guard resumed")
+            } finally {
+                FoxholeConnectionServiceContract.startForegroundService(
+                    context = app,
+                    mode = TrafficMode.TUNNEL,
+                    action = FoxholeConnectionServiceContract.ACTION_DISCONNECT,
+                    suppressLocalGuard = true,
+                )
+                app.container.settingsRepository.updateFirewallEnabled(false)
+                app.container.settingsRepository.updateNetworkActivityLogging(false)
+                app.container.settingsRepository.updateNetworkActivityPersistentLogging(false)
+                app.container.settingsRepository.updateBlockAppsAlways(false)
+                app.container.settingsRepository.updateBlockedPackages(emptyList())
+                waitUntil(timeoutMs = 20_000L) {
+                    app.container.connectionController.snapshot.value.state in setOf(ConnectionState.IDLE, ConnectionState.ERROR)
+                }
+            }
         }
     }
 
@@ -668,6 +901,20 @@ class ProfileRuntimeSessionAndroidTest {
         delay(2_000)
     }
 
+    private suspend fun waitUntil(
+        timeoutMs: Long,
+        predicate: suspend () -> Boolean,
+    ): Boolean {
+        val deadline = System.currentTimeMillis() + timeoutMs
+        while (System.currentTimeMillis() < deadline) {
+            if (predicate()) {
+                return true
+            }
+            delay(250L)
+        }
+        return predicate()
+    }
+
     private suspend fun runWarmupProbe(
         app: FoxholeApplication,
         label: String,
@@ -716,6 +963,13 @@ class ProfileRuntimeSessionAndroidTest {
         deleteChildren(File(app.filesDir, "profile-secrets"))
     }
 
+    private fun firstInstalledPackageExcept(packageName: String): String =
+        shell("cmd package list packages")
+            .lineSequence()
+            .map { line -> line.removePrefix("package:").trim() }
+            .firstOrNull { candidate -> candidate.isNotBlank() && candidate != packageName }
+            ?: "com.android.settings"
+
     private fun shell(command: String): String {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         instrumentation.uiAutomation.executeShellCommand(command).use { descriptor ->
@@ -724,6 +978,50 @@ class ProfileRuntimeSessionAndroidTest {
             }
         }
     }
+
+    private fun smartSubscriptionInput(): String? {
+        val args = InstrumentationRegistry.getArguments()
+        args
+            .getString("foxhole.smartSubscriptionBase64")
+            ?.trim()
+            ?.takeIf(String::isNotBlank)
+            ?.let { encoded ->
+                return String(Base64.decode(encoded, Base64.DEFAULT), Charsets.UTF_8)
+                    .trim()
+                    .takeIf(String::isNotBlank)
+            }
+        val rawFile =
+            args
+                .getString("foxhole.smartSubscriptionRawFile")
+                ?.trim()
+                ?.takeIf(String::isNotBlank)
+        if (rawFile != null) {
+            return readDeviceTextFile(rawFile)
+        }
+        val configuredInput =
+            args
+                .getString("foxhole.smartSubscriptionUrl")
+                ?.trim()
+                ?.takeIf(String::isNotBlank)
+                ?: return readDeviceTextFile(DEFAULT_SMART_SUBSCRIPTION_DEVICE_PATH)
+                    .also { fallback ->
+                        Log.d(
+                            TEST_TAG,
+                            "smartSubscription fallback path=$DEFAULT_SMART_SUBSCRIPTION_DEVICE_PATH bytes=${fallback?.length ?: 0} args=${args.keySet().joinToString()}",
+                        )
+                    }
+        if (!configuredInput.startsWith("https://", ignoreCase = true)) {
+            return readDeviceTextFile(configuredInput)
+        }
+        return configuredInput
+    }
+
+    private fun readDeviceTextFile(path: String): String? =
+        shell("[ -s ${path.shellSingleQuoted()} ] && cat ${path.shellSingleQuoted()} || true")
+            .trim()
+            .takeIf(String::isNotBlank)
+
+    private fun String.shellSingleQuoted(): String = "'${replace("'", "'\\''")}'"
 
     private fun deleteChildren(dir: File) {
         dir.listFiles()?.forEach { child ->
@@ -734,7 +1032,9 @@ class ProfileRuntimeSessionAndroidTest {
         }
     }
 
-    private fun requestedSmartProbeProtocols(): Set<ProtocolHint> {
+    private fun requestedSmartProbeProtocols(
+        defaultProtocols: Set<ProtocolHint> = setOf(ProtocolHint.TROJAN, ProtocolHint.WIREGUARD),
+    ): Set<ProtocolHint> {
         val requested =
             InstrumentationRegistry
                 .getArguments()
@@ -747,7 +1047,7 @@ class ProfileRuntimeSessionAndroidTest {
                 }
                 ?.toSet()
                 .orEmpty()
-        return requested.ifEmpty { setOf(ProtocolHint.TROJAN, ProtocolHint.WIREGUARD) }
+        return requested.ifEmpty { defaultProtocols }
     }
 
     private fun requireLiveSmartSuccess(): Boolean =
@@ -819,6 +1119,7 @@ class ProfileRuntimeSessionAndroidTest {
 
     companion object {
         private const val TEST_TAG = "FoxholeSessionTest"
+        private const val DEFAULT_SMART_SUBSCRIPTION_DEVICE_PATH = "/data/local/tmp/foxhole-subscription.raw"
         private const val VPN_PERMISSION_REQUEST_CODE = 7301
         private const val LIVE_DIRECT_LINK_TERMINAL_TIMEOUT_MS = 150_000L
         private data class DirectLinkCase(

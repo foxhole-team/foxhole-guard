@@ -483,7 +483,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         val session =
             VpnSession(
                 profileId = LOCAL_GUARD_PROFILE_ID,
-                profileName = mode.notificationProfileName(),
+                profileName = mode.runtimeProfileName(),
                 protocolHint = com.foxhole.beta.core.model.ProtocolHint.SING_BOX,
                 configJson = container.runtimeConfigAssembler.assembleLocalGuard(settings, mode),
                 correlationId = "local-guard-${System.currentTimeMillis()}",
@@ -496,7 +496,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
                 state = ConnectionState.IDLE,
                 trafficMode = TrafficMode.TUNNEL,
                 profileId = LOCAL_GUARD_PROFILE_ID,
-                profileName = mode.notificationProfileName(),
+                profileName = mode.runtimeProfileName(),
                 protocolHint = com.foxhole.beta.core.model.ProtocolHint.SING_BOX,
             ),
         )
@@ -506,6 +506,15 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
             trafficSampler.start()
             startTrafficUpdates()
             startAppTrafficStatsUpdates()
+            FoxholeVpnRuntimeBridge.update(
+                ConnectionSnapshot(
+                    state = ConnectionState.CONNECTED,
+                    trafficMode = TrafficMode.TUNNEL,
+                    profileId = LOCAL_GUARD_PROFILE_ID,
+                    profileName = mode.runtimeProfileName(),
+                    protocolHint = com.foxhole.beta.core.model.ProtocolHint.SING_BOX,
+                ),
+            )
             container.diagnosticsLogger.record("connection", "local guard started mode=${mode.name.lowercase()}")
             updateNotification()
         } else {
@@ -671,6 +680,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
             expandedText = ::notificationExpandedText,
             stateLabel = ::notificationStateLabel,
             smallIconRes = notificationSmallIconRes(snapshot),
+            showAction = true,
         )
 
     internal fun updateNotification() {
@@ -1095,12 +1105,6 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         private const val ACTION_NATIVE_RUNTIME_STOP = "libbox_service_stop"
     }
 }
-
-private fun LocalGuardMode.notificationProfileName(): String =
-    when (this) {
-        LocalGuardMode.FIREWALL -> "Local firewall"
-        LocalGuardMode.JOURNAL -> "Network journal"
-    }
 
 private fun FoxholeVpnService.notificationSmallIconRes(snapshot: NotificationSnapshot): Int =
     when {
