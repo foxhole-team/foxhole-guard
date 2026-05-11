@@ -567,6 +567,7 @@ internal fun HomeViewModel.loadInstalledAppsInternal() {
             }
             installedAppsMutable.value = installed
             installedAppsLoadedMutable.value = true
+            container.settingsRepository.recordInstalledAppInventory(installed)
         } catch (error: RuntimeException) {
             container.diagnosticsLogger.record(
                 "apps",

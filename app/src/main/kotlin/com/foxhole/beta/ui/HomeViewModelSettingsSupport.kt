@@ -646,6 +646,7 @@ internal fun HomeViewModel.resetApplicationSettingsToDefaultsInternal() {
 internal fun HomeViewModel.resetUsageTrackingInternal() {
     viewModelScope.launch {
         container.settingsRepository.resetUsageTracking()
+        container.anomalyRepository.clearTrafficStatistics()
     }
 }
 

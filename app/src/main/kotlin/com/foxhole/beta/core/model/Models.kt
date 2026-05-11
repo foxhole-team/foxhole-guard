@@ -3,7 +3,7 @@ package com.foxhole.beta.core.model
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
-const val SETTINGS_SCHEMA_VERSION = 15
+const val SETTINGS_SCHEMA_VERSION = 16
 const val NETWORK_FINGERPRINT_SCHEMA_CURRENT = 2
 const val NETWORK_FINGERPRINT_SCHEMA_LEGACY = 1
 
@@ -213,8 +213,10 @@ enum class StatisticsMetric {
     PROFILE_COMPARISONS,
     TRANSPORTS,
     APP_TRAFFIC,
+    DNS_FILTERING,
     COUNTRY_TRAFFIC,
     ANOMALIES,
+    APP_CHANGES,
 }
 
 @Serializable
@@ -404,12 +406,43 @@ data class StatisticsSettings(
     val retention: StatisticsRetention = StatisticsRetention.FOREVER,
     val refreshInterval: StatisticsRefreshInterval = StatisticsRefreshInterval.SECONDS_3,
     val profileTrafficEnabled: Boolean = true,
-    val vpnProtocolsEnabled: Boolean = true,
-    val profileComparisonsEnabled: Boolean = true,
-    val transportsEnabled: Boolean = true,
-    val appTrafficEnabled: Boolean = true,
-    val countryTrafficEnabled: Boolean = true,
-    val anomalyMetricsEnabled: Boolean = true,
+    val vpnProtocolsEnabled: Boolean = false,
+    val profileComparisonsEnabled: Boolean = false,
+    val transportsEnabled: Boolean = false,
+    val appTrafficEnabled: Boolean = false,
+    val dnsFilteringEnabled: Boolean = false,
+    val countryTrafficEnabled: Boolean = false,
+    val anomalyMetricsEnabled: Boolean = false,
+    val appChangesEnabled: Boolean = false,
+)
+
+@Serializable
+enum class InstalledAppChangeType {
+    INSTALLED,
+    REMOVED,
+}
+
+@Serializable
+data class InstalledAppInventoryEntry(
+    val packageName: String,
+    val label: String,
+    val isSystemApp: Boolean = false,
+)
+
+@Serializable
+data class InstalledAppInventoryChange(
+    val packageName: String,
+    val label: String,
+    val isSystemApp: Boolean = false,
+    val type: InstalledAppChangeType,
+    val detectedAt: Long,
+)
+
+@Serializable
+data class InstalledAppInventoryAudit(
+    val capturedAt: Long = 0L,
+    val packages: List<InstalledAppInventoryEntry> = emptyList(),
+    val recentChanges: List<InstalledAppInventoryChange> = emptyList(),
 )
 
 @Serializable
@@ -427,6 +460,7 @@ data class Settings(
     val lastActiveProfile: CachedActiveProfile? = null,
     val smartProfilePreferences: List<SmartProfilePreference> = emptyList(),
     val profileTrafficTotals: List<ProfileTrafficTotal> = emptyList(),
+    val installedAppInventoryAudit: InstalledAppInventoryAudit = InstalledAppInventoryAudit(),
     val appTrafficStatsEnabled: Boolean = false,
     val usageTrackingStartedAt: Long = System.currentTimeMillis(),
 )

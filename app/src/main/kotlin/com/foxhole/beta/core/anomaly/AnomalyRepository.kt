@@ -126,6 +126,12 @@ class AnomalyRepository(
         cleanupExpired(settingsRepository.current().anomaly)
     }
 
+    suspend fun clearTrafficStatistics() {
+        dao.deleteTrafficWindowsBefore(Long.MAX_VALUE)
+        dao.deleteAppTrafficWindowsBefore(Long.MAX_VALUE)
+        dao.deleteAnomalyEventsBefore(Long.MAX_VALUE)
+    }
+
     private suspend fun persistAssessment(
         assessment: AnomalyAssessment,
         window: TrafficWindow,

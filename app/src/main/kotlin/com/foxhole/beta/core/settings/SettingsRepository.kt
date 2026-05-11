@@ -17,6 +17,11 @@ import com.foxhole.beta.core.model.DiagnosticsRetention
 import com.foxhole.beta.core.model.DnsSettings
 import com.foxhole.beta.core.model.DomainStrategy
 import com.foxhole.beta.core.model.ExpertSettings
+import com.foxhole.beta.core.model.InstalledAppChangeType
+import com.foxhole.beta.core.model.InstalledAppInventoryAudit
+import com.foxhole.beta.core.model.InstalledAppInventoryChange
+import com.foxhole.beta.core.model.InstalledAppInventoryEntry
+import com.foxhole.beta.core.model.InstalledAppOption
 import com.foxhole.beta.core.model.LatencyProbeMethod
 import com.foxhole.beta.core.model.LocalAuthSettings
 import com.foxhole.beta.core.model.LocalSurfaceSettings
@@ -508,8 +513,10 @@ class SettingsRepository(
                 StatisticsMetric.PROFILE_COMPARISONS -> current.statistics.copy(profileComparisonsEnabled = value)
                 StatisticsMetric.TRANSPORTS -> current.statistics.copy(transportsEnabled = value)
                 StatisticsMetric.APP_TRAFFIC -> current.statistics.copy(appTrafficEnabled = value)
+                StatisticsMetric.DNS_FILTERING -> current.statistics.copy(dnsFilteringEnabled = value)
                 StatisticsMetric.COUNTRY_TRAFFIC -> current.statistics.copy(countryTrafficEnabled = value)
                 StatisticsMetric.ANOMALIES -> current.statistics.copy(anomalyMetricsEnabled = value)
+                StatisticsMetric.APP_CHANGES -> current.statistics.copy(appChangesEnabled = value)
             }
         current.copy(statistics = statistics)
     }
@@ -518,6 +525,126 @@ class SettingsRepository(
         update { current ->
             current.copy(appTrafficStatsEnabled = value)
         }
+
+    suspend fun recordInstalledAppInventory(
+        apps: List<InstalledAppOption>,
+        detectedAt: Long = System.currentTimeMillis(),
+    ) = update { current ->
+        if (!current.statistics.enabled || !current.statistics.appChangesEnabled) {
+            return@update current
+        }
+        val currentPackages =
+            apps
+                .asSequence()
+                .filterNot { app -> app.packageName == BuildConfig.APPLICATION_ID }
+                .map { app ->
+                    InstalledAppInventoryEntry(
+                        packageName = app.packageName,
+                        label = app.label.takeIf(String::isNotBlank) ?: app.packageName,
+                        isSystemApp = app.isSystemApp,
+                    )
+                }
+                .distinctBy(InstalledAppInventoryEntry::packageName)
+                .sortedBy(InstalledAppInventoryEntry::packageName)
+                .toList()
+        val previousPackages = current.installedAppInventoryAudit.packages
+        val previousByPackage = previousPackages.associateBy(InstalledAppInventoryEntry::packageName)
+        val currentByPackage = currentPackages.associateBy(InstalledAppInventoryEntry::packageName)
+        val changes =
+            if (previousPackages.isEmpty()) {
+                emptyList()
+            } else {
+                buildList {
+                    currentPackages
+                        .filterNot { app -> app.packageName in previousByPackage }
+                        .forEach { app ->
+                            add(
+                                InstalledAppInventoryChange(
+                                    packageName = app.packageName,
+                                    label = app.label,
+                                    isSystemApp = app.isSystemApp,
+                                    type = InstalledAppChangeType.INSTALLED,
+                                    detectedAt = detectedAt,
+                                ),
+                            )
+                        }
+                    previousPackages
+                        .filterNot { app -> app.packageName in currentByPackage }
+                        .forEach { app ->
+                            add(
+                                InstalledAppInventoryChange(
+                                    packageName = app.packageName,
+                                    label = app.label,
+                                    isSystemApp = app.isSystemApp,
+                                    type = InstalledAppChangeType.REMOVED,
+                                    detectedAt = detectedAt,
+                                ),
+                            )
+                        }
+                }
+            }
+        current.copy(
+            installedAppInventoryAudit =
+                InstalledAppInventoryAudit(
+                    capturedAt = detectedAt,
+                    packages = currentPackages,
+                    recentChanges =
+                        (changes + current.installedAppInventoryAudit.recentChanges)
+                            .distinctBy { change -> "${change.type}:${change.packageName}:${change.detectedAt}" }
+                            .sortedByDescending(InstalledAppInventoryChange::detectedAt)
+                            .take(INSTALLED_APP_CHANGE_HISTORY_LIMIT),
+                ),
+        )
+    }
+
+    suspend fun recordInstalledAppChange(
+        packageName: String,
+        label: String,
+        isSystemApp: Boolean,
+        type: InstalledAppChangeType,
+        detectedAt: Long = System.currentTimeMillis(),
+    ) = update { current ->
+        if (!current.statistics.enabled || !current.statistics.appChangesEnabled || packageName == BuildConfig.APPLICATION_ID) {
+            return@update current
+        }
+        val normalizedPackageName = packageName.trim().takeIf(String::isNotBlank) ?: return@update current
+        val normalizedLabel = label.trim().takeIf(String::isNotBlank) ?: normalizedPackageName
+        val packageEntry =
+            InstalledAppInventoryEntry(
+                packageName = normalizedPackageName,
+                label = normalizedLabel,
+                isSystemApp = isSystemApp,
+            )
+        val updatedPackages =
+            when (type) {
+                InstalledAppChangeType.INSTALLED ->
+                    (current.installedAppInventoryAudit.packages.filterNot { app -> app.packageName == normalizedPackageName } + packageEntry)
+                        .sortedBy(InstalledAppInventoryEntry::packageName)
+                InstalledAppChangeType.REMOVED ->
+                    current.installedAppInventoryAudit.packages
+                        .filterNot { app -> app.packageName == normalizedPackageName }
+            }
+        val change =
+            InstalledAppInventoryChange(
+                packageName = normalizedPackageName,
+                label = normalizedLabel,
+                isSystemApp = isSystemApp,
+                type = type,
+                detectedAt = detectedAt,
+            )
+        current.copy(
+            installedAppInventoryAudit =
+                current.installedAppInventoryAudit.copy(
+                    capturedAt = detectedAt,
+                    packages = updatedPackages,
+                    recentChanges =
+                        (listOf(change) + current.installedAppInventoryAudit.recentChanges)
+                            .distinctBy { item -> "${item.type}:${item.packageName}:${item.detectedAt}" }
+                            .sortedByDescending(InstalledAppInventoryChange::detectedAt)
+                            .take(INSTALLED_APP_CHANGE_HISTORY_LIMIT),
+                ),
+        )
+    }
 
     suspend fun updateTunStack(value: TunStack) =
         update { it.copy(traffic = it.traffic.copy(tunStack = value)) }
@@ -1213,7 +1340,7 @@ class SettingsRepository(
                         resetScreenshotBlocking = resetDefaults,
                         storedSchemaVersion = schemaVersion,
                     ),
-                statistics = statistics.normalized(),
+                statistics = statistics.normalized(resetOptionalMetrics = schemaVersion < SETTINGS_SCHEMA_VERSION),
                 smartProfilePreferences = normalizeSmartProfilePreferences(smartProfilePreferences),
                 profileTrafficTotals =
                     profileTrafficTotals
@@ -1221,6 +1348,8 @@ class SettingsRepository(
                         .values
                         .mapNotNull { items -> items.maxByOrNull(ProfileTrafficTotal::updatedAt) }
                         .sortedByDescending(ProfileTrafficTotal::updatedAt),
+                installedAppInventoryAudit = installedAppInventoryAudit.normalized(),
+                appTrafficStatsEnabled = if (schemaVersion < SETTINGS_SCHEMA_VERSION) false else appTrafficStatsEnabled,
                 usageTrackingStartedAt = usageTrackingStartedAt.takeIf { it > 0L } ?: System.currentTimeMillis(),
             )
         }
@@ -1273,7 +1402,7 @@ class SettingsRepository(
         }
     }
 
-    private fun StatisticsSettings.normalized(): StatisticsSettings =
+    private fun StatisticsSettings.normalized(resetOptionalMetrics: Boolean = false): StatisticsSettings =
         copy(
             retention =
                 when (retention) {
@@ -1291,6 +1420,31 @@ class SettingsRepository(
                     StatisticsRefreshInterval.SECONDS_10,
                     -> refreshInterval
                 },
+            profileTrafficEnabled = if (resetOptionalMetrics) true else profileTrafficEnabled,
+            vpnProtocolsEnabled = if (resetOptionalMetrics) false else vpnProtocolsEnabled,
+            profileComparisonsEnabled = if (resetOptionalMetrics) false else profileComparisonsEnabled,
+            transportsEnabled = if (resetOptionalMetrics) false else transportsEnabled,
+            appTrafficEnabled = if (resetOptionalMetrics) false else appTrafficEnabled,
+            dnsFilteringEnabled = if (resetOptionalMetrics) false else dnsFilteringEnabled,
+            countryTrafficEnabled = if (resetOptionalMetrics) false else countryTrafficEnabled,
+            anomalyMetricsEnabled = if (resetOptionalMetrics) false else anomalyMetricsEnabled,
+            appChangesEnabled = if (resetOptionalMetrics) false else appChangesEnabled,
+        )
+
+    private fun InstalledAppInventoryAudit.normalized(): InstalledAppInventoryAudit =
+        copy(
+            capturedAt = capturedAt.takeIf { it > 0L } ?: 0L,
+            packages =
+                packages
+                    .filter { app -> app.packageName.isNotBlank() }
+                    .distinctBy(InstalledAppInventoryEntry::packageName)
+                    .sortedBy(InstalledAppInventoryEntry::packageName),
+            recentChanges =
+                recentChanges
+                    .filter { change -> change.packageName.isNotBlank() && change.detectedAt > 0L }
+                    .distinctBy { change -> "${change.type}:${change.packageName}:${change.detectedAt}" }
+                    .sortedByDescending(InstalledAppInventoryChange::detectedAt)
+                    .take(INSTALLED_APP_CHANGE_HISTORY_LIMIT),
         )
 
     private fun PrivacyRouteSettings.normalized(): PrivacyRouteSettings =
@@ -1423,6 +1577,7 @@ class SettingsRepository(
         private const val PROXY_PASSWORD_PREFIX = "foxhole-"
         private const val PROXY_PASSWORD_RANDOM_LENGTH = 4
         private const val PROXY_PASSWORD_ALPHABET = "abcdefghijklmnopqrstuvwxyz0123456789"
+        private const val INSTALLED_APP_CHANGE_HISTORY_LIMIT = 60
         private val secureRandom = SecureRandom()
 
         private fun randomLocalProxyPassword(): String =

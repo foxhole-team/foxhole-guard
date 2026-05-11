@@ -8,6 +8,7 @@ import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
+import android.net.TrafficStats
 import android.os.Build
 import android.os.Process
 import androidx.core.content.getSystemService
@@ -70,6 +71,8 @@ class AppTrafficSampler(
     private val installedApplicationsLock = Any()
     private var installedApplicationsCachedAtMs: Long = 0L
     private var installedApplicationsCache: List<ApplicationInfo> = emptyList()
+    private val uidTrafficStatsLock = Any()
+    private val uidTrafficStatsBaseline = mutableMapOf<Int, UidTrafficUsage>()
 
     fun hasUsageAccess(): Boolean = UsageStatsAccess.isGranted(appContext)
 
@@ -87,14 +90,18 @@ class AppTrafficSampler(
             if (!hasUsageAccess()) {
                 return@withContext emptyList()
             }
-            val manager = networkStatsManager ?: return@withContext emptyList()
+            val manager = networkStatsManager
             val networkType = networkTypeProvider.current()
             val windows =
                 cachedInstalledApplications(now)
                     .asSequence()
                     .filterNot { app -> app.packageName == appContext.packageName }
                     .mapNotNull { app ->
-                        val usage = manager.queryUidUsage(app.uid, startAt, now)
+                        val usage =
+                            manager
+                                ?.queryUidUsage(app.uid, startAt, now)
+                                ?.takeIf(UidTrafficUsage::hasTraffic)
+                                ?: uidTrafficStatsDelta(app.uid)
                         if (usage.rxBytes <= 0L && usage.txBytes <= 0L) {
                             null
                         } else {
@@ -148,6 +155,33 @@ class AppTrafficSampler(
         return wifi + mobile
     }
 
+    private fun uidTrafficStatsDelta(uid: Int): UidTrafficUsage {
+        if (uid <= 0) {
+            return UidTrafficUsage()
+        }
+        val rx = TrafficStats.getUidRxBytes(uid)
+        val tx = TrafficStats.getUidTxBytes(uid)
+        if (rx == TrafficStats.UNSUPPORTED.toLong() && tx == TrafficStats.UNSUPPORTED.toLong()) {
+            return UidTrafficUsage()
+        }
+        val current =
+            UidTrafficUsage(
+                rxBytes = rx.coerceAtLeast(0L),
+                txBytes = tx.coerceAtLeast(0L),
+            )
+        return synchronized(uidTrafficStatsLock) {
+            val previous = uidTrafficStatsBaseline.put(uid, current) ?: return@synchronized UidTrafficUsage()
+            if (current.rxBytes < previous.rxBytes || current.txBytes < previous.txBytes) {
+                UidTrafficUsage()
+            } else {
+                UidTrafficUsage(
+                    rxBytes = current.rxBytes - previous.rxBytes,
+                    txBytes = current.txBytes - previous.txBytes,
+                )
+            }
+        }
+    }
+
     private fun NetworkStatsManager.queryUidUsageForNetwork(
         networkType: Int,
         uid: Int,
@@ -196,6 +230,8 @@ private data class UidTrafficUsage(
     val txBytes: Long = 0L,
     val foreground: Boolean? = null,
 ) {
+    fun hasTraffic(): Boolean = rxBytes > 0L || txBytes > 0L
+
     operator fun plus(other: UidTrafficUsage): UidTrafficUsage {
         val foreground =
             when {

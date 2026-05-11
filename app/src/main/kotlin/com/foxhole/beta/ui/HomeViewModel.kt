@@ -1308,6 +1308,11 @@ class HomeViewModel(
                 sampleAppTrafficStats()
             }
         }
+        if (visible && container.settingsRepository.settings.value.statistics.appChangesEnabled) {
+            viewModelScope.launch {
+                recordInstalledAppInventoryFromLoadedApps()
+            }
+        }
     }
 
     fun onStatisticsEnabledChanged(value: Boolean) {
@@ -1321,6 +1326,9 @@ class HomeViewModel(
             if (value && runtimeAllowed) {
                 loadInstalledApps()
                 sampleAppTrafficStats()
+            }
+            if (value && container.settingsRepository.settings.value.statistics.appChangesEnabled) {
+                recordInstalledAppInventoryFromLoadedApps()
             }
         }
     }
@@ -1353,6 +1361,13 @@ class HomeViewModel(
                     settings = container.settingsRepository.settings.value,
                 )
             syncAppTrafficStatsSampler(runtimeAllowed)
+            if (value && metric == StatisticsMetric.APP_TRAFFIC && runtimeAllowed) {
+                loadInstalledApps()
+                sampleAppTrafficStats()
+            }
+            if (value && metric == StatisticsMetric.APP_CHANGES) {
+                recordInstalledAppInventoryFromLoadedApps()
+            }
         }
     }
 
@@ -1406,6 +1421,15 @@ class HomeViewModel(
 
     internal suspend fun sampleAppTrafficStats() {
         appTrafficStatsRecorder.recordSnapshot(minDurationMs = appTrafficStatsIntervalMs)
+    }
+
+    private suspend fun recordInstalledAppInventoryFromLoadedApps() {
+        val apps = installedAppsMutable.value
+        if (apps.isEmpty()) {
+            loadInstalledApps()
+        } else {
+            container.settingsRepository.recordInstalledAppInventory(apps)
+        }
     }
 
     private fun appTrafficStatsRuntimeAllowed(

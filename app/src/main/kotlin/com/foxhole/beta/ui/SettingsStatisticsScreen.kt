@@ -85,7 +85,10 @@ import com.foxhole.beta.core.model.AnomalyEvent
 import com.foxhole.beta.core.model.AnomalySeverity
 import com.foxhole.beta.core.model.AnomalyType
 import com.foxhole.beta.core.model.AppTrafficWindow
+import com.foxhole.beta.core.model.DnsSettings
 import com.foxhole.beta.core.model.InstalledAppOption
+import com.foxhole.beta.core.model.InstalledAppChangeType
+import com.foxhole.beta.core.model.InstalledAppInventoryChange
 import com.foxhole.beta.core.model.OverallStatisticsUiItem
 import com.foxhole.beta.core.model.Profile
 import com.foxhole.beta.core.model.ProfileComparisonSideUiItem
@@ -159,9 +162,25 @@ fun StatisticsScreen(
             )
         }
     val topCountryRows = countryRows.take(10)
+    val appChanges =
+        remember(state.settings.installedAppInventoryAudit.recentChanges, retention) {
+            installedAppChangesForRetention(
+                changes = state.settings.installedAppInventoryAudit.recentChanges,
+                retention = retention,
+            )
+        }
+    val dnsSummary =
+        remember(state.trafficWindows, appRows, retention) {
+            dnsProtectionSummary(
+                trafficWindows = state.trafficWindows,
+                appRows = appRows,
+                retention = retention,
+            )
+        }
     val appStatsSwitchChecked = state.settings.appTrafficStatsEnabled
     val usageAccessGranted = UsageStatsAccess.isGranted(context)
     val firewallEnabled = state.settings.expert.firewallEnabled
+    val dnsFilteringAvailable = state.settings.dns.adGuardFilteringEnabled()
     val appStatsEnabled =
         statisticsSettings.enabled &&
             statisticsSettings.appTrafficEnabled &&
@@ -201,7 +220,7 @@ fun StatisticsScreen(
                     )
                 }
             }
-            if (statisticsSettings.vpnProtocolsEnabled) {
+            if (statisticsSettings.vpnProtocolsEnabled && statistics.vpnProtocols.isNotEmpty()) {
                 item(key = "protocols") {
                     ProtocolStatisticsSection(items = statistics.vpnProtocols)
                 }
@@ -211,14 +230,26 @@ fun StatisticsScreen(
                     ProfileComparisonsSection(items = statistics.profileComparisons)
                 }
             }
-            if (statisticsSettings.transportsEnabled) {
+            if (statisticsSettings.transportsEnabled && statistics.transports.isNotEmpty()) {
                 item(key = "transports") {
                     TransportStatisticsSection(items = statistics.transports)
                 }
             }
-            if (statisticsSettings.anomalyMetricsEnabled) {
+            if (statisticsSettings.dnsFilteringEnabled && dnsFilteringAvailable && dnsSummary.totalQueries > 0) {
+                item(key = "dns-protection") {
+                    DnsProtectionCard(summary = dnsSummary)
+                }
+            }
+            if (
+                (statisticsSettings.anomalyMetricsEnabled && state.anomalyEvents.isNotEmpty()) ||
+                (statisticsSettings.appChangesEnabled && appChanges.isNotEmpty())
+            ) {
                 item(key = "anomalies") {
-                    AnomalyStatisticsCard(events = state.anomalyEvents)
+                    AnomalyStatisticsCard(
+                        events = if (statisticsSettings.anomalyMetricsEnabled) state.anomalyEvents else emptyList(),
+                        appChanges = if (statisticsSettings.appChangesEnabled) appChanges else emptyList(),
+                        installedApps = state.installedApps,
+                    )
                 }
             }
             if (statisticsSettings.appTrafficEnabled && appStatsSwitchChecked) {
@@ -227,7 +258,6 @@ fun StatisticsScreen(
                         rows = topApps,
                         allRowsCount = appRows.size,
                         enabled = appStatsEnabled,
-                        runtimeActive = appStatsEnabled && state.traffic.available,
                         usageAccessGranted = usageAccessGranted,
                         onOpenUsageAccess = { context.startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)) },
                         onShowAll = { allAppsVisible = true },
@@ -235,7 +265,7 @@ fun StatisticsScreen(
                     )
                 }
             }
-            if (statisticsSettings.countryTrafficEnabled) {
+            if (statisticsSettings.countryTrafficEnabled && firewallEnabled && topCountryRows.isNotEmpty()) {
                 item(key = "country-traffic") {
                     CountryTrafficCard(
                         state = trafficMapState,
@@ -348,6 +378,20 @@ fun StatisticsScreen(
                         )
                         SettingsControlGroupDivider()
                         StatisticsMetricSwitch(
+                            metric = StatisticsMetric.DNS_FILTERING,
+                            checked = statisticsSettings.dnsFilteringEnabled,
+                            title = stringResource(R.string.statistics_metric_dns_filtering),
+                            summary =
+                                if (dnsFilteringAvailable) {
+                                    null
+                                } else {
+                                    stringResource(R.string.statistics_metric_dns_filtering_summary)
+                                },
+                            enabled = statisticsSettings.enabled && dnsFilteringAvailable,
+                            onMetricChanged = onStatisticsMetricEnabledChanged,
+                        )
+                        SettingsControlGroupDivider()
+                        StatisticsMetricSwitch(
                             metric = StatisticsMetric.COUNTRY_TRAFFIC,
                             checked = statisticsSettings.countryTrafficEnabled,
                             title = stringResource(R.string.statistics_metric_countries),
@@ -365,6 +409,15 @@ fun StatisticsScreen(
                             metric = StatisticsMetric.ANOMALIES,
                             checked = statisticsSettings.anomalyMetricsEnabled,
                             title = stringResource(R.string.statistics_metric_anomalies),
+                            enabled = statisticsSettings.enabled,
+                            onMetricChanged = onStatisticsMetricEnabledChanged,
+                        )
+                        SettingsControlGroupDivider()
+                        StatisticsMetricSwitch(
+                            metric = StatisticsMetric.APP_CHANGES,
+                            checked = statisticsSettings.appChangesEnabled,
+                            title = stringResource(R.string.statistics_metric_app_changes),
+                            summary = stringResource(R.string.statistics_metric_app_changes_summary),
                             enabled = statisticsSettings.enabled,
                             onMetricChanged = onStatisticsMetricEnabledChanged,
                         )
@@ -1167,7 +1220,113 @@ private fun TransportRow(item: TransportStatisticsUiItem) {
 }
 
 @Composable
-private fun AnomalyStatisticsCard(events: List<AnomalyEvent>) {
+private fun DnsProtectionCard(summary: DnsProtectionSummary) {
+    val context = LocalContext.current
+    StatisticsSectionCard(
+        icon = Icons.Outlined.Public,
+        title = stringResource(R.string.statistics_dns_filtering_title),
+    ) {
+        DetailMetricGrid(
+            metrics =
+                listOfNotNull(
+                    metricIfPositive(
+                        stringResource(R.string.statistics_dns_blocked_queries),
+                        summary.blockedQueries,
+                    ),
+                    metricIfPositive(
+                        stringResource(R.string.statistics_dns_allowed_queries),
+                        summary.allowedQueries,
+                    ),
+                    stringResource(R.string.statistics_dns_block_ratio) to formatPercent(summary.blockRatio),
+                ),
+        )
+        if (summary.appRows.isNotEmpty()) {
+            Text(
+                text = stringResource(R.string.statistics_dns_apps_estimated),
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+            )
+            DnsProtectionChart(rows = summary.appRows.take(8))
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                summary.appRows.take(8).forEach { row ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        AppIcon(packageName = row.packageName, modifier = Modifier.size(34.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = row.label,
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            Text(
+                                text = row.packageName,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                        Text(
+                            text =
+                                stringResource(
+                                    R.string.statistics_dns_blocked_app_value,
+                                    row.estimatedBlockedQueries,
+                                    formatBytes(context, row.totalBytes),
+                                ),
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            textAlign = TextAlign.End,
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DnsProtectionChart(rows: List<DnsProtectionAppRow>) {
+    val semanticColors = LocalFoxholeSemanticColors.current
+    val primaryColor = MaterialTheme.colorScheme.primary
+    val warningColor = semanticColors.warning
+    val maxBlocked = rows.maxOfOrNull(DnsProtectionAppRow::estimatedBlockedQueries)?.coerceAtLeast(1) ?: 1
+    Canvas(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .height(118.dp),
+    ) {
+        val chartTop = 8.dp.toPx()
+        val chartBottom = size.height - 10.dp.toPx()
+        val chartHeight = (chartBottom - chartTop).coerceAtLeast(1f)
+        val slotWidth = size.width / rows.size.coerceAtLeast(1).toFloat()
+        val barWidth = (slotWidth * 0.46f).coerceAtMost(22.dp.toPx())
+        rows.forEachIndexed { index, row ->
+            val height =
+                (chartHeight * (row.estimatedBlockedQueries.toFloat() / maxBlocked.toFloat()))
+                    .coerceAtLeast(if (row.estimatedBlockedQueries > 0) 2f else 0f)
+            val center = slotWidth * index + slotWidth / 2f
+            drawRoundRect(
+                color = if (index % 2 == 0) primaryColor else warningColor,
+                topLeft = Offset(center - barWidth / 2f, chartBottom - height),
+                size = Size(barWidth, height),
+                cornerRadius = CornerRadius(5.dp.toPx(), 5.dp.toPx()),
+            )
+        }
+    }
+}
+
+@Composable
+private fun AnomalyStatisticsCard(
+    events: List<AnomalyEvent>,
+    appChanges: List<InstalledAppInventoryChange>,
+    installedApps: List<InstalledAppOption>,
+) {
     val recentEvents = remember(events) { events.sortedByDescending(AnomalyEvent::createdAtMs) }
     val appsCount =
         remember(recentEvents) {
@@ -1186,7 +1345,7 @@ private fun AnomalyStatisticsCard(events: List<AnomalyEvent>) {
                 icon = Icons.Outlined.WarningAmber,
                 title = stringResource(R.string.statistics_anomaly_summary_title),
             )
-            if (recentEvents.isEmpty()) {
+            if (recentEvents.isEmpty() && appChanges.isEmpty()) {
                 EmptySectionText(text = stringResource(R.string.statistics_anomaly_empty))
             } else {
                 DetailMetricGrid(
@@ -1208,22 +1367,40 @@ private fun AnomalyStatisticsCard(events: List<AnomalyEvent>) {
                                 stringResource(R.string.statistics_anomaly_apps),
                                 appsCount,
                             ),
+                            metricIfPositive(
+                                stringResource(R.string.statistics_app_changes),
+                                appChanges.size,
+                            ),
                         ),
                 )
-                Text(
-                    text = stringResource(R.string.statistics_anomaly_score_trend),
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold,
-                )
-                AnomalyScoreChart(events = recentEvents)
-                Text(
-                    text = stringResource(R.string.statistics_anomaly_recent_events),
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold,
-                )
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    recentEvents.take(5).forEach { event ->
-                        AnomalyEventRow(event = event)
+                if (recentEvents.isNotEmpty()) {
+                    Text(
+                        text = stringResource(R.string.statistics_anomaly_score_trend),
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    AnomalyScoreChart(events = recentEvents)
+                    Text(
+                        text = stringResource(R.string.statistics_anomaly_recent_events),
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        recentEvents.take(5).forEach { event ->
+                            AnomalyEventRow(event = event, installedApps = installedApps)
+                        }
+                    }
+                }
+                if (appChanges.isNotEmpty()) {
+                    Text(
+                        text = stringResource(R.string.statistics_recent_app_changes),
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        appChanges.take(6).forEach { change ->
+                            InstalledAppChangeRow(change = change)
+                        }
                     }
                 }
             }
@@ -1295,7 +1472,15 @@ private fun AnomalyScoreChart(events: List<AnomalyEvent>) {
 }
 
 @Composable
-private fun AnomalyEventRow(event: AnomalyEvent) {
+private fun AnomalyEventRow(
+    event: AnomalyEvent,
+    installedApps: List<InstalledAppOption>,
+) {
+    val context = LocalContext.current
+    val appLabel =
+        event.packageName
+            ?.let { packageName -> installedApps.firstOrNull { app -> app.packageName == packageName }?.label ?: packageName }
+            ?: stringResource(R.string.statistics_anomaly_whole_tunnel)
     val eventColor =
         when (event.severity) {
             AnomalySeverity.HIGH -> MaterialTheme.colorScheme.error
@@ -1319,7 +1504,11 @@ private fun AnomalyEventRow(event: AnomalyEvent) {
             }
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = event.reason,
+                    text = anomalyReasonText(
+                        event = event,
+                        appLabel = appLabel,
+                        formatBytes = { bytes -> formatBytes(context, bytes) },
+                    ),
                     style = MaterialTheme.typography.bodySmall,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
@@ -1347,11 +1536,59 @@ private fun AnomalyEventRow(event: AnomalyEvent) {
 }
 
 @Composable
+private fun InstalledAppChangeRow(change: InstalledAppInventoryChange) {
+    val color =
+        when (change.type) {
+            InstalledAppChangeType.INSTALLED -> LocalFoxholeSemanticColors.current.warning
+            InstalledAppChangeType.REMOVED -> MaterialTheme.colorScheme.error
+        }
+    Surface(
+        shape = MaterialTheme.shapes.small,
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.34f),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(10.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Canvas(modifier = Modifier.size(10.dp)) {
+                drawCircle(color)
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = change.label,
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text =
+                        stringResource(
+                            when (change.type) {
+                                InstalledAppChangeType.INSTALLED -> R.string.statistics_app_change_installed
+                                InstalledAppChangeType.REMOVED -> R.string.statistics_app_change_removed
+                            },
+                            change.packageName,
+                            change.detectedAt.formatLastActivity(),
+                        ),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+    }
+}
+
+@Composable
 private fun AppTrafficStatisticsCard(
     rows: List<AppTrafficRow>,
     allRowsCount: Int,
     enabled: Boolean,
-    runtimeActive: Boolean,
     usageAccessGranted: Boolean,
     onOpenUsageAccess: () -> Unit,
     onShowAll: () -> Unit,
@@ -1386,16 +1623,7 @@ private fun AppTrafficStatisticsCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             } else if (rows.isEmpty()) {
-                LoadingStatisticsBlock(
-                    text =
-                        stringResource(
-                            if (runtimeActive) {
-                                R.string.statistics_loading
-                            } else {
-                                R.string.app_statistics_empty
-                            },
-                        ),
-                )
+                EmptySectionText(text = stringResource(R.string.app_statistics_empty))
             } else {
                 TrafficBarChart(rows = rows)
                 ChartLegend()
@@ -1725,7 +1953,7 @@ private fun ProfileStatisticsDetail(
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = protocolDisplayName(protocol.protocolHint),
+                                text = protocol.label,
                                 style = MaterialTheme.typography.bodyMedium,
                                 fontWeight = FontWeight.SemiBold,
                                 maxLines = 1,
@@ -2018,6 +2246,22 @@ private data class CountryTrafficUiRow(
     val sessions: Int,
 )
 
+private data class DnsProtectionSummary(
+    val blockedQueries: Int,
+    val allowedQueries: Int,
+    val appRows: List<DnsProtectionAppRow>,
+) {
+    val totalQueries: Int get() = blockedQueries + allowedQueries
+    val blockRatio: Float get() = if (totalQueries == 0) 0f else blockedQueries.toFloat() / totalQueries.toFloat()
+}
+
+private data class DnsProtectionAppRow(
+    val packageName: String,
+    val label: String,
+    val totalBytes: Long,
+    val estimatedBlockedQueries: Int,
+)
+
 private enum class AppAnomalyBadge {
     NORMAL,
     UNUSUAL,
@@ -2054,6 +2298,7 @@ private data class ProfileStatisticsDetailModel(
 }
 
 private data class ProfileProtocolDetail(
+    val label: String,
     val protocolHint: ProtocolHint,
     val successCount: Int,
     val failureCount: Int,
@@ -2148,17 +2393,57 @@ private fun profileStatisticsDetail(
     item: ProfileTrafficUiItem,
 ): ProfileStatisticsDetailModel {
     val profile = state.profiles.firstOrNull { profile -> profile.id == item.profileId }
-    val options = profile?.protocolOptions.orEmpty().associateBy(ProfileProtocolOption::id)
+    val optionList = profile?.protocolOptions.orEmpty()
+    val options = optionList.associateBy(ProfileProtocolOption::id)
     val preference = state.settings.smartProfilePreferences.firstOrNull { preference -> preference.profileId == item.profileId }
-    val protocolDetails =
+    val memoriesByOptionId = preference?.protocolMemories.orEmpty().associateBy(SmartProfileProtocolMemory::optionId)
+    val selectedOptionId = profile?.selectedProtocolOptionId ?: optionList.firstOrNull(ProfileProtocolOption::isSelected)?.id
+    val configuredProtocolDetails =
+        optionList
+            .filter { option -> option.protocolHint != ProtocolHint.UNKNOWN }
+            .map { option ->
+                val memory = memoriesByOptionId[option.id]
+                val latency = memory?.lastLatencyMs?.takeIf { value -> value > 0L }
+                val lastUsed =
+                    memory?.let {
+                        maxOfNotNull(
+                            it.lastSuccessAt,
+                            it.lastFailureAt,
+                            it.lastValidatedAt,
+                            it.lastTrafficAt,
+                        )
+                    }
+                val trafficForProtocol =
+                    if (
+                        option.id == selectedOptionId ||
+                        (selectedOptionId == null && option.protocolHint == item.protocolHint) ||
+                        (selectedOptionId == null && item.protocolHint == ProtocolHint.UNKNOWN && optionList.size == 1)
+                    ) {
+                        item
+                    } else {
+                        null
+                    }
+                ProfileProtocolDetail(
+                    label = option.displayName.ifBlank { protocolDisplayName(option.protocolHint) },
+                    protocolHint = option.protocolHint,
+                    successCount = memory?.successCount?.coerceAtLeast(0) ?: 0,
+                    failureCount = memory?.failureCount?.coerceAtLeast(0) ?: 0,
+                    rxBytes = trafficForProtocol?.rxBytes ?: 0L,
+                    txBytes = trafficForProtocol?.txBytes ?: 0L,
+                    avgLatencyMs = latency,
+                    minLatencyMs = latency,
+                    maxLatencyMs = latency,
+                    lastUsedAt = lastUsed ?: trafficForProtocol?.updatedAt?.takeIf { updatedAt -> updatedAt > 0L },
+                )
+            }
+    val memoryOnlyDetails =
         preference
             ?.protocolMemories
             .orEmpty()
+            .filterNot { memory -> memory.optionId in options }
             .mapNotNull { memory ->
-                val protocol = options[memory.optionId]?.protocolHint ?: profile?.protocolHint ?: item.protocolHint
-                if (protocol == ProtocolHint.UNKNOWN) {
-                    return@mapNotNull null
-                }
+                val protocol = profile?.protocolHint ?: item.protocolHint
+                if (protocol == ProtocolHint.UNKNOWN) return@mapNotNull null
                 val latency = memory.lastLatencyMs?.takeIf { value -> value > 0L }
                 val lastUsed =
                     maxOfNotNull(
@@ -2167,18 +2452,13 @@ private fun profileStatisticsDetail(
                         memory.lastValidatedAt,
                         memory.lastTrafficAt,
                     )
-                val trafficForProtocol =
-                    if (protocol == item.protocolHint || item.protocolHint == ProtocolHint.UNKNOWN) {
-                        item
-                    } else {
-                        null
-                    }
                 ProfileProtocolDetail(
+                    label = protocolDisplayName(protocol),
                     protocolHint = protocol,
                     successCount = memory.successCount.coerceAtLeast(0),
                     failureCount = memory.failureCount.coerceAtLeast(0),
-                    rxBytes = trafficForProtocol?.rxBytes ?: 0L,
-                    txBytes = trafficForProtocol?.txBytes ?: 0L,
+                    rxBytes = 0L,
+                    txBytes = 0L,
                     avgLatencyMs = latency,
                     minLatencyMs = latency,
                     maxLatencyMs = latency,
@@ -2186,19 +2466,20 @@ private fun profileStatisticsDetail(
                 )
             }
             .filter { detail -> detail.totalAttempts > 0 || detail.totalBytes > 0L || detail.lastUsedAt != null }
-            .sortedWith(
-                compareByDescending<ProfileProtocolDetail> { detail -> detail.totalBytes }
-                    .thenByDescending { detail -> detail.lastUsedAt ?: 0L },
-            )
     val fallbackProtocol =
         item.protocolHint
             .takeIf { hint -> hint != ProtocolHint.UNKNOWN }
             ?: profile?.runtimeProtocolHint()
             ?: ProtocolHint.UNKNOWN
+    val protocolDetails =
+        (configuredProtocolDetails + memoryOnlyDetails)
+            .takeIf(List<ProfileProtocolDetail>::isNotEmpty)
+            ?: emptyList()
     val visibleProtocolDetails =
         protocolDetails.takeIf(List<ProfileProtocolDetail>::isNotEmpty)
             ?: listOf(
                 ProfileProtocolDetail(
+                    label = protocolDisplayName(fallbackProtocol),
                     protocolHint = fallbackProtocol,
                     successCount = if (item.totalBytes > 0L) 1 else 0,
                     failureCount = 0,
@@ -2474,6 +2755,56 @@ private fun appTrafficRows(
         )
 }
 
+private fun dnsProtectionSummary(
+    trafficWindows: List<TrafficWindow>,
+    appRows: List<AppTrafficRow>,
+    retention: StatisticsRetention,
+): DnsProtectionSummary {
+    val cutoff = retention.durationMs?.let { System.currentTimeMillis() - it }
+    val windows =
+        trafficWindows.filter { window -> cutoff == null || window.startedAtMs >= cutoff }
+    val blocked = windows.sumOf(TrafficWindow::blockedDns).coerceAtLeast(0)
+    val allowed = windows.sumOf(TrafficWindow::allowedDns).coerceAtLeast(0)
+    val totalAppBytes = appRows.sumOf(AppTrafficRow::totalBytes).coerceAtLeast(1L)
+    val appDnsRows =
+        if (blocked <= 0 || appRows.isEmpty()) {
+            emptyList()
+        } else {
+            appRows
+                .mapNotNull { row ->
+                    val estimatedBlocked = ((blocked.toDouble() * row.totalBytes.toDouble()) / totalAppBytes.toDouble()).roundToInt()
+                    estimatedBlocked
+                        .takeIf { it > 0 }
+                        ?.let {
+                            DnsProtectionAppRow(
+                                packageName = row.packageName,
+                                label = row.label,
+                                totalBytes = row.totalBytes,
+                                estimatedBlockedQueries = it,
+                            )
+                        }
+                }
+                .sortedByDescending(DnsProtectionAppRow::estimatedBlockedQueries)
+        }
+    return DnsProtectionSummary(
+        blockedQueries = blocked,
+        allowedQueries = allowed,
+        appRows = appDnsRows,
+    )
+}
+
+private fun installedAppChangesForRetention(
+    changes: List<InstalledAppInventoryChange>,
+    retention: StatisticsRetention,
+): List<InstalledAppInventoryChange> {
+    val cutoff = retention.durationMs?.let { System.currentTimeMillis() - it }
+    return changes
+        .asSequence()
+        .filter { change -> cutoff == null || change.detectedAt >= cutoff }
+        .sortedByDescending(InstalledAppInventoryChange::detectedAt)
+        .toList()
+}
+
 private fun countryTrafficRows(
     trafficWindows: List<TrafficWindow>,
     liveDestinations: List<TrafficMapPoint>,
@@ -2552,6 +2883,71 @@ private fun anomalyBadgesFor(events: List<AnomalyEvent>): Set<AppAnomalyBadge> {
             .toSet()
     return badges.ifEmpty { setOf(AppAnomalyBadge.NORMAL) }
 }
+
+@Composable
+private fun anomalyReasonText(
+    event: AnomalyEvent,
+    appLabel: String,
+    formatBytes: (Long) -> String,
+): String =
+    when (event.type) {
+        AnomalyType.APP_UPLOAD_SPIKE ->
+            stringResource(
+                R.string.anomaly_reason_app_upload,
+                appLabel,
+                event.evidence["tx_per_min"]?.toLongOrNull()?.let(formatBytes) ?: stringResource(R.string.statistics_no_data),
+                event.evidence["upload_ratio"].asPercentText(),
+            )
+        AnomalyType.APP_BACKGROUND_TRAFFIC ->
+            stringResource(
+                R.string.anomaly_reason_background,
+                appLabel,
+                event.evidence["app_share"].asPercentText(),
+                event.evidence["upload_ratio"].asPercentText(),
+            )
+        AnomalyType.TOTAL_TRAFFIC_SPIKE ->
+            stringResource(
+                R.string.anomaly_reason_total_spike,
+                event.evidence["bytes_per_min"]?.toLongOrNull()?.let(formatBytes) ?: stringResource(R.string.statistics_no_data),
+                event.evidence["robust_z"].orEmpty().ifBlank { stringResource(R.string.statistics_no_data) },
+            )
+        AnomalyType.NEW_DESTINATION_COUNTRY ->
+            stringResource(
+                R.string.anomaly_reason_new_country,
+                event.evidence["country"].orEmpty().ifBlank { stringResource(R.string.statistics_no_data) },
+                event.evidence["traffic_share"].asPercentText(),
+            )
+        AnomalyType.DNS_BLOCK_RATIO_SPIKE ->
+            stringResource(
+                R.string.anomaly_reason_dns_blocks,
+                event.evidence["blocked_dns"].orEmpty().ifBlank { "0" },
+                event.evidence["allowed_dns"].orEmpty().ifBlank { "0" },
+                event.evidence["blocked_ratio"].asPercentText(),
+            )
+        AnomalyType.RECONNECT_STORM ->
+            stringResource(
+                R.string.anomaly_reason_reconnects,
+                event.evidence["reconnects"].orEmpty().ifBlank { "0" },
+            )
+        AnomalyType.LATENCY_SHIFT ->
+            stringResource(
+                R.string.anomaly_reason_latency,
+                event.evidence["latency_ms"].orEmpty().ifBlank { "0" },
+                event.evidence["robust_z"].orEmpty().ifBlank { stringResource(R.string.statistics_no_data) },
+            )
+        AnomalyType.TOR_OR_I2P_ROUTE_MISMATCH ->
+            stringResource(
+                R.string.anomaly_reason_privacy_route,
+                event.evidence["route_share"].asPercentText(),
+            )
+    }
+
+@Composable
+private fun String?.asPercentText(): String =
+    this
+        ?.toFloatOrNull()
+        ?.let(::formatPercent)
+        ?: stringResource(R.string.statistics_no_data)
 
 private fun metricIfPositive(
     label: String,
@@ -2653,6 +3049,9 @@ private fun Profile.statisticsProtocolHints(): List<ProtocolHint> {
     val optionHints = protocolOptions.map(ProfileProtocolOption::protocolHint)
     return (optionHints + protocolHint).distinct()
 }
+
+private fun DnsSettings.adGuardFilteringEnabled(): Boolean =
+    filteringEnabled && (blockAds || blockTrackers || blockAppTelemetry || blockMaliciousDomains)
 
 private fun Profile.runtimeProtocolHint(): ProtocolHint =
     selectedProtocolOptionId
