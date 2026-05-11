@@ -350,7 +350,7 @@ internal suspend fun FoxholeVpnService.validateTunnelConnectivityInternal(
                         )
                     }
                 if (ipRefresh.isSuccess) {
-                    FoxholeVpnRuntimeBridge.updateIpInfo(ipRefresh.getOrThrow())
+                    ipRefresh.getOrThrow()
                     container.diagnosticsLogger.record("dns", "vpn network passed in-process ip refresh")
                     return@run vpnNetwork
                 }
@@ -588,7 +588,7 @@ internal suspend fun FoxholeVpnService.retryValidatedTunnelConnectivityWithGrace
                 )
             }
         if (ipRefresh.isSuccess) {
-            FoxholeVpnRuntimeBridge.updateIpInfo(ipRefresh.getOrThrow())
+            ipRefresh.getOrThrow()
             return@run Unit
         }
         val endpointProbe =
@@ -678,7 +678,9 @@ internal suspend fun FoxholeVpnService.refreshValidatedTunnelIpInfoBestEffortInt
             remoteDnsServers = remoteDnsServers,
         )
     }
-        .onSuccess(FoxholeVpnRuntimeBridge::updateIpInfo)
+        .onSuccess {
+            container.diagnosticsLogger.record("ip", "validated tunnel ip refresh kept as validation-only")
+        }
         .onFailure { error ->
             container.diagnosticsLogger.record(
                 "ip",

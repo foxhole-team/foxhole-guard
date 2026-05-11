@@ -13,7 +13,6 @@ import com.foxhole.beta.core.network.HttpProxyAccess
 import com.foxhole.beta.core.network.IpInfoFetchMode
 import com.foxhole.beta.core.network.IpInfoRepository
 import com.foxhole.beta.core.settings.SettingsRepository
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.StateFlow
 
 internal class TunnelValidationGateway(
@@ -38,20 +37,16 @@ internal class TunnelValidationGateway(
                 ?: TrafficMode.TUNNEL
         val proxyAccess = if (trafficMode == TrafficMode.PROXY) settings.preferredAppProxyAccess() else null
         val tunnelConnected = trafficMode == TrafficMode.TUNNEL && snapshot.value.state in ACTIVE_CONNECTION_STATES
-        val vpnNetwork = if (tunnelConnected) currentVpnNetwork() ?: error("vpn network unavailable") else null
-        val upstreamNetwork = if (tunnelConnected) null else currentUpstreamNetwork()
+        val upstreamNetwork = currentUpstreamNetwork()
         val localGuardActive = !tunnelConnected && settings.localGuardModeOrNull() != null
         val dnsNetwork =
             when {
                 trafficMode != TrafficMode.TUNNEL -> null
-                tunnelConnected -> vpnNetwork
                 else -> upstreamNetwork
             }
         val requestNetwork =
             when {
                 trafficMode != TrafficMode.TUNNEL -> null
-                tunnelConnected -> null
-                localGuardActive -> upstreamNetwork
                 else -> upstreamNetwork
             }
         val remoteDnsServers =
@@ -61,23 +56,13 @@ internal class TunnelValidationGateway(
                         VpnDnsServerSelector.remoteDnsServerAddresses(profileRepository.getSession(profileId).configJson)
                     }.getOrDefault(emptyList())
                 }.orEmpty()
-        return when {
-            trafficMode == TrafficMode.TUNNEL && tunnelConnected && vpnNetwork != null ->
-                fetchTunnelIpInfo(
-                    endpoint = endpoint,
-                    fetchMode = fetchMode,
-                    vpnNetwork = vpnNetwork,
-                    proxy = settings.tunnelRuntimeProxyAccess(),
-                )
-            else ->
-                fetchDeviceIpInfo(
-                    endpoint = endpoint,
-                    fetchMode = fetchMode,
-                    requestNetwork = requestNetwork,
-                    requireRequestNetwork = localGuardActive,
-                    proxy = proxyAccess,
-                )
-        }.withDnsServers(
+        return fetchDeviceIpInfo(
+            endpoint = endpoint,
+            fetchMode = fetchMode,
+            requestNetwork = requestNetwork,
+            requireRequestNetwork = localGuardActive || tunnelConnected,
+            proxy = proxyAccess,
+        ).withDnsServers(
             localDnsServers = connectivityManager.dnsServerAddresses(dnsNetwork),
             remoteDnsServers = remoteDnsServers,
         )
@@ -124,48 +109,4 @@ internal class TunnelValidationGateway(
             }
         }
 
-    private suspend fun fetchTunnelIpInfo(
-        endpoint: String,
-        fetchMode: IpInfoFetchMode,
-        vpnNetwork: Network,
-        proxy: HttpProxyAccess?,
-    ): IpInfo =
-        runCatching {
-            val proxyAccess = proxy ?: error("runtime local proxy unavailable")
-            ipInfoRepository.fetch(
-                endpoint = endpoint,
-                proxy = proxyAccess,
-                resolverNetwork = currentUpstreamNetwork(),
-                mode = fetchMode,
-            )
-        }.getOrElse { proxyError ->
-            val proxyAccess = proxy
-            if (proxyAccess != null) {
-                delay(RUNTIME_PROXY_REFRESH_RETRY_DELAY_MS)
-                runCatching {
-                    ipInfoRepository.fetch(
-                        endpoint = endpoint,
-                        proxy = proxyAccess,
-                        resolverNetwork = currentUpstreamNetwork(),
-                        mode = IpInfoFetchMode.ENTRY_QUICK,
-                    )
-                }.getOrNull()?.let { return it.also { diagnosticsLogger.record("ip", "dashboard ip refreshed after vpn network detected") } }
-            }
-            diagnosticsLogger.record(
-                "ip",
-                "dashboard runtime local proxy refresh failed, retrying vpn-bound path",
-            )
-            runCatching {
-                ipInfoRepository.fetch(
-                    endpoint = endpoint,
-                    network = tunnelValidationRequestNetwork(vpnNetwork),
-                    resolverNetwork = currentUpstreamNetwork(),
-                    mode = fetchMode,
-                )
-            }.getOrElse {
-                throw proxyError
-            }
-        }.also { diagnosticsLogger.record("ip", "dashboard ip refreshed after vpn network detected") }
 }
-
-private const val RUNTIME_PROXY_REFRESH_RETRY_DELAY_MS = 1_000L

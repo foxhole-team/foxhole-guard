@@ -95,7 +95,7 @@ internal fun HomeViewModel.reconnectInternal(profileId: Long) {
         dashboardConnectionMetricsLoadingMutable.value = true
         try {
             if (container.connectionController.snapshot.value.state in HomeViewModel.ACTIVE_CONNECTION_STATES) {
-                container.connectionController.disconnect()
+                container.connectionController.disconnect(suppressLocalGuard = true)
                 awaitDisconnectedForAutoConnect()
             }
             connectNow(profileId)
@@ -391,7 +391,12 @@ private suspend fun HomeViewModel.probeSmartStartCandidateWithinBudget(
             ),
         )
     if (probeBudgetMs <= 0L) {
-        runCatching { container.connectionController.disconnect() }
+        runCatching {
+            container.connectionController.disconnect(
+                suppressLocalGuard = true,
+                preserveSmartStartAnalysis = true,
+            )
+        }
         return BudgetedAutoConnectProbe(
             result =
                 autoConnectWallClockTimeoutResult(
@@ -420,7 +425,12 @@ private suspend fun HomeViewModel.probeSmartStartCandidateWithinBudget(
             )?.let { fallback ->
                 return BudgetedAutoConnectProbe(result = fallback, timedOut = false)
             }
-            runCatching { container.connectionController.disconnect() }
+            runCatching {
+                container.connectionController.disconnect(
+                    suppressLocalGuard = true,
+                    preserveSmartStartAnalysis = true,
+                )
+            }
             return BudgetedAutoConnectProbe(
                 result =
                     autoConnectWallClockTimeoutResult(
@@ -802,7 +812,12 @@ private fun HomeViewModel.protocolMetricsProbeTimeoutResult(
     timeoutMs: Long,
 ): AutoConnectProbeResult {
     val elapsedMs = (SystemClock.elapsedRealtime() - startedAtElapsedMs).coerceAtLeast(1L)
-    runCatching { container.connectionController.disconnect() }
+    runCatching {
+        container.connectionController.disconnect(
+            suppressLocalGuard = true,
+            preserveSmartStartAnalysis = true,
+        )
+    }
     val reasonCode =
         classifyAutoConnectProbeFailure(
             snapshot = null,
@@ -1230,7 +1245,10 @@ internal suspend fun HomeViewModel.awaitDisconnectedForAutoConnectInternal(
     val expectedPreviousVpnNetworkHandle =
         previousVpnNetworkHandle ?: container.connectionController.currentVpnNetworkHandle()
     if (container.connectionController.snapshot.value.state in HomeViewModel.ACTIVE_CONNECTION_STATES) {
-        container.connectionController.disconnect()
+        container.connectionController.disconnect(
+            suppressLocalGuard = true,
+            preserveSmartStartAnalysis = true,
+        )
     }
     val deadlineAt = SystemClock.elapsedRealtime() + HomeViewModel.AUTO_CONNECT_DISCONNECT_TIMEOUT_MS
     while (true) {

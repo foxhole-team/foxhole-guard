@@ -32,6 +32,7 @@ import com.foxhole.beta.core.model.TrafficMode
 import com.foxhole.beta.core.model.TrafficSnapshot
 import com.foxhole.beta.core.model.VpnSession
 import com.foxhole.beta.core.model.isUdpTransport
+import com.foxhole.beta.core.network.IpInfoFetchMode
 import com.foxhole.beta.core.network.mergeIpInfo
 import com.foxhole.beta.core.settings.AppTrafficStatsRecorder
 import kotlinx.coroutines.CoroutineScope
@@ -197,8 +198,12 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
             launchPriorityCommand = ::launchPriorityCommand,
             connect = ::connect,
             disconnect = { commandStartId -> disconnect(commandStartId = commandStartId) },
-            disconnectWithOptions = { commandStartId, suppressLocalGuard ->
-                disconnect(commandStartId = commandStartId, suppressLocalGuard = suppressLocalGuard)
+            disconnectWithOptions = { commandStartId, suppressLocalGuard, preserveSmartStartAnalysis ->
+                disconnect(
+                    commandStartId = commandStartId,
+                    suppressLocalGuard = suppressLocalGuard,
+                    preserveSmartStartAnalysis = preserveSmartStartAnalysis,
+                )
             },
             reload = ::reload,
             startLocalGuard = ::startLocalGuard,
@@ -401,13 +406,15 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         commandStartId: Int? = null,
         reasonCode: AutoConnectReasonCode? = null,
         suppressLocalGuard: Boolean = false,
+        preserveSmartStartAnalysis: Boolean = false,
     ) {
         val session = activeSession
         val localGuardMode = activeLocalGuardMode
         val previousSnapshot = FoxholeVpnRuntimeBridge.snapshot.value
         val analysisStatus = getString(R.string.notification_status_analysis)
-        val preserveSmartStartAnalysis =
-            message == null &&
+        val shouldPreserveSmartStartAnalysis =
+            preserveSmartStartAnalysis &&
+                message == null &&
                 previousSnapshot.isSmartStartConnection &&
                 previousSnapshot.message == analysisStatus
         val finalTraffic =
@@ -452,9 +459,9 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
             ConnectionSnapshot(
                 state = if (message == null) ConnectionState.IDLE else ConnectionState.ERROR,
                 trafficMode = container.settingsRepository.current().traffic.mode,
-                message = message ?: analysisStatus.takeIf { preserveSmartStartAnalysis },
+                message = message ?: analysisStatus.takeIf { shouldPreserveSmartStartAnalysis },
                 reasonCode = reasonCode,
-                isSmartStartConnection = preserveSmartStartAnalysis,
+                isSmartStartConnection = shouldPreserveSmartStartAnalysis,
             ),
         )
         updateNotification()
@@ -860,10 +867,10 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
                     delay(GEO_REFRESH_INITIAL_DELAY_MS)
                 }
                 repeat(GEO_REFRESH_ATTEMPTS) { attempt ->
-                    val requestNetwork = tunnelValidationRequestNetwork(initialNetwork ?: currentVpnNetworkOrNull())
+                    val requestNetwork = currentUpstreamNetworkOrNull()
                     val success =
                         runCatching {
-                            refreshConnectionIpInfo(
+                            refreshAppOwnedIpInfo(
                                 callTimeoutMs = GEO_REFRESH_CALL_TIMEOUT_MS,
                                 network = requestNetwork,
                             )
@@ -911,7 +918,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
             scope.launch(Dispatchers.IO) {
                 val ipv4Info =
                     runCatching {
-                        refreshConnectionIpv4Info(
+                        refreshAppOwnedIpv4Info(
                             callTimeoutMs = IPV4_ENRICHMENT_CALL_TIMEOUT_MS,
                             network = network,
                         )
@@ -921,6 +928,43 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
                 container.diagnosticsLogger.record("ip", "ipv4 enriched")
                 launch(Dispatchers.Main.immediate) { updateNotification() }
             }
+    }
+
+    private suspend fun refreshAppOwnedIpInfo(
+        callTimeoutMs: Long,
+        network: Network?,
+    ): IpInfo {
+        val requestNetwork = network ?: error("upstream network unavailable")
+        val endpoint = container.settingsRepository.current().connection.ipInfoEndpoint
+        return container.ipInfoRepository
+            .fetch(
+                endpoint = endpoint,
+                callTimeoutMs = callTimeoutMs,
+                network = requestNetwork,
+                resolverNetwork = requestNetwork,
+                mode = IpInfoFetchMode.ENTRY_QUICK,
+            ).withDnsServers(
+                localDnsServers = connectivityManager.dnsServerAddresses(requestNetwork),
+                remoteDnsServers = emptyList(),
+            )
+    }
+
+    private suspend fun refreshAppOwnedIpv4Info(
+        callTimeoutMs: Long,
+        network: Network?,
+    ): IpInfo? {
+        val requestNetwork = network ?: return null
+        val endpoint = container.settingsRepository.current().connection.ipInfoEndpoint
+        return container.ipInfoRepository
+            .fetchIpv4(
+                endpoint = endpoint,
+                callTimeoutMs = callTimeoutMs,
+                network = requestNetwork,
+                resolverNetwork = requestNetwork,
+            )?.withDnsServers(
+                localDnsServers = connectivityManager.dnsServerAddresses(requestNetwork),
+                remoteDnsServers = emptyList(),
+            )
     }
 
     internal suspend fun refreshVpnIpInfo(

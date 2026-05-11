@@ -274,7 +274,7 @@ internal suspend fun HomeViewModel.reconnectProfileIfRequestedInternal(
 
     return runCatching {
         dashboardConnectionMetricsLoadingMutable.value = true
-        container.connectionController.disconnect()
+        container.connectionController.disconnect(suppressLocalGuard = true)
         container.connectionController.snapshot.first { snapshot ->
             snapshot.state == ConnectionState.IDLE || snapshot.state == ConnectionState.ERROR
         }

@@ -487,6 +487,49 @@ class RuntimeConfigAssemblerTest {
     }
 
     @Test
+    fun `firewall toggle owns local guard mode without leaking blocked app state`() {
+        val blockedApps =
+            ExpertSettings(
+                blockedPackagesEnabled = true,
+                blockedPackages = listOf("org.mozilla.firefox"),
+                blockAppsAlways = true,
+            )
+
+        assertEquals(
+            null,
+            Settings(expert = blockedApps).localGuardModeOrNull(),
+        )
+        assertEquals(
+            LocalGuardMode.JOURNAL,
+            Settings(
+                expert =
+                    blockedApps.copy(
+                        firewallEnabled = true,
+                        blockAppsAlways = false,
+                    ),
+            ).localGuardModeOrNull(),
+        )
+        assertEquals(
+            LocalGuardMode.FIREWALL,
+            Settings(
+                expert =
+                    blockedApps.copy(
+                        firewallEnabled = true,
+                    ),
+            ).localGuardModeOrNull(),
+        )
+        assertEquals(
+            null,
+            Settings(
+                expert =
+                    blockedApps.copy(
+                        firewallEnabled = false,
+                    ),
+            ).localGuardModeOrNull(),
+        )
+    }
+
+    @Test
     fun `local journal guard keeps DNS direct while app block rules stay active`() {
         val settings =
             Settings(
@@ -1411,7 +1454,7 @@ class RuntimeConfigAssemblerTest {
     }
 
     @Test
-    fun `foxhole dns defaults use local bootstrap and proxied doh final resolver`() {
+    fun `foxhole dns defaults use local bootstrap and proxied plain final resolver`() {
         val config = parse(assembler.assemble(baseConfigWithLegacyFoxholeDns(), Settings(), null))
         val dns = config["dns"]!!.jsonObject
         val route = config["route"]!!.jsonObject
@@ -1428,16 +1471,16 @@ class RuntimeConfigAssemblerTest {
         assertFalse(servers[1].jsonObject.containsKey("path"))
         assertFalse(servers[1].jsonObject.containsKey("detour"))
         assertEquals("dns-remote", servers[2].jsonObject["tag"]!!.jsonPrimitive.content)
-        assertEquals("https", servers[2].jsonObject["type"]!!.jsonPrimitive.content)
+        assertEquals("udp", servers[2].jsonObject["type"]!!.jsonPrimitive.content)
         assertEquals("1.1.1.1", servers[2].jsonObject["server"]!!.jsonPrimitive.content)
-        assertEquals("443", servers[2].jsonObject["server_port"]!!.jsonPrimitive.content)
-        assertEquals("/dns-query", servers[2].jsonObject["path"]!!.jsonPrimitive.content)
+        assertEquals("53", servers[2].jsonObject["server_port"]!!.jsonPrimitive.content)
+        assertFalse(servers[2].jsonObject.containsKey("path"))
         assertEquals("proxy", servers[2].jsonObject["detour"]!!.jsonPrimitive.content)
         assertEquals("true", route["auto_detect_interface"]!!.jsonPrimitive.content)
     }
 
     @Test
-    fun `foxhole dns keeps proxied doh final resolver when private dns is off`() {
+    fun `foxhole dns keeps proxied plain final resolver when private dns is off`() {
         val config =
             parse(
                 assembler.assemble(
@@ -1452,10 +1495,10 @@ class RuntimeConfigAssemblerTest {
 
         assertEquals("dns-remote", dns["final"]!!.jsonPrimitive.content)
         assertEquals("dns-remote", servers[2].jsonObject["tag"]!!.jsonPrimitive.content)
-        assertEquals("https", servers[2].jsonObject["type"]!!.jsonPrimitive.content)
+        assertEquals("udp", servers[2].jsonObject["type"]!!.jsonPrimitive.content)
         assertEquals("1.1.1.1", servers[2].jsonObject["server"]!!.jsonPrimitive.content)
-        assertEquals("443", servers[2].jsonObject["server_port"]!!.jsonPrimitive.content)
-        assertEquals("/dns-query", servers[2].jsonObject["path"]!!.jsonPrimitive.content)
+        assertEquals("53", servers[2].jsonObject["server_port"]!!.jsonPrimitive.content)
+        assertFalse(servers[2].jsonObject.containsKey("path"))
         assertEquals("proxy", servers[2].jsonObject["detour"]!!.jsonPrimitive.content)
     }
 
@@ -1483,7 +1526,7 @@ class RuntimeConfigAssemblerTest {
         assertFalse(servers[1].jsonObject.containsKey("path"))
         assertFalse(servers[1].jsonObject.containsKey("detour"))
         assertEquals("dns-remote", servers[2].jsonObject["tag"]!!.jsonPrimitive.content)
-        assertEquals("https", servers[2].jsonObject["type"]!!.jsonPrimitive.content)
+        assertEquals("udp", servers[2].jsonObject["type"]!!.jsonPrimitive.content)
         assertEquals("proxy", servers[2].jsonObject["detour"]!!.jsonPrimitive.content)
     }
 
@@ -1585,6 +1628,7 @@ class RuntimeConfigAssemblerTest {
             Settings(
                 dns =
                     DnsSettings(
+                        filteringEnabled = true,
                         appBypassPackages = listOf("com.example.bank"),
                         domainBypassRules = listOf("login.example", "push.example"),
                     ),
@@ -1617,7 +1661,7 @@ class RuntimeConfigAssemblerTest {
             parse(
                 assembler.assemble(
                     baseConfigWithRules("profile.example"),
-                    Settings(),
+                    Settings(dns = DnsSettings(filteringEnabled = true)),
                     null,
                     dnsFilterRuntimePaths = DnsFilterRuntimePaths(adGuardDnsFilterPath = filterPath),
                 ),

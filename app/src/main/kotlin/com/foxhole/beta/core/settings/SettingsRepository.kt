@@ -1171,6 +1171,7 @@ class SettingsRepository(
                         onboardingCompleted = true,
                         showExpertSettings = ui.showExpertSettings && expert.unlockedAt != null,
                         supportBotHandleOverride = storedSupportBotHandleOverride(ui.supportBotHandleOverride),
+                        trafficMapEnabled = if (resetDefaults) false else ui.trafficMapEnabled,
                     ),
                 connection =
                     connection.copy(

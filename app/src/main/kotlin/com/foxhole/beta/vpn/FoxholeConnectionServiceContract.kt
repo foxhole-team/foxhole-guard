@@ -19,6 +19,7 @@ internal object FoxholeConnectionServiceContract {
     const val EXTRA_PREVIOUS_VPN_NETWORK_HANDLE = "previous_vpn_network_handle"
     const val EXTRA_LOCAL_GUARD_MODE = "local_guard_mode"
     const val EXTRA_SUPPRESS_LOCAL_GUARD = "suppress_local_guard"
+    const val EXTRA_PRESERVE_SMART_START_ANALYSIS = "preserve_smart_start_analysis"
     const val NOTIFICATION_ID = 1001
     const val NOTIFICATION_CHANNEL_ID = "foxhole-connection"
 
@@ -59,10 +60,12 @@ internal object FoxholeConnectionServiceContract {
         context: Context,
         mode: TrafficMode,
         suppressLocalGuard: Boolean = false,
+        preserveSmartStartAnalysis: Boolean = false,
     ): Intent =
         Intent(context, serviceClass(mode))
             .setAction(ACTION_DISCONNECT)
             .putExtra(EXTRA_SUPPRESS_LOCAL_GUARD, suppressLocalGuard)
+            .putExtra(EXTRA_PRESERVE_SMART_START_ANALYSIS, preserveSmartStartAnalysis)
 
     fun reloadIntent(
         context: Context,
@@ -97,10 +100,11 @@ internal object FoxholeConnectionServiceContract {
         previousVpnNetworkHandle: Long? = null,
         localGuardMode: LocalGuardMode? = null,
         suppressLocalGuard: Boolean = false,
+        preserveSmartStartAnalysis: Boolean = false,
     ): Intent =
         when (action) {
             ACTION_CONNECT -> connectIntent(context, mode, requireNotNull(profileId), protocolOptionId, previousVpnNetworkHandle)
-            ACTION_DISCONNECT -> disconnectIntent(context, mode, suppressLocalGuard)
+            ACTION_DISCONNECT -> disconnectIntent(context, mode, suppressLocalGuard, preserveSmartStartAnalysis)
             ACTION_RELOAD -> reloadIntent(context, mode, profileId)
             ACTION_RESTORE -> restoreIntent(context, mode)
             ACTION_START_LOCAL_GUARD -> localGuardIntent(context, requireNotNull(localGuardMode))
@@ -116,8 +120,20 @@ internal object FoxholeConnectionServiceContract {
         previousVpnNetworkHandle: Long? = null,
         localGuardMode: LocalGuardMode? = null,
         suppressLocalGuard: Boolean = false,
+        preserveSmartStartAnalysis: Boolean = false,
     ) {
-        val intent = serviceIntent(context, mode, action, profileId, protocolOptionId, previousVpnNetworkHandle, localGuardMode, suppressLocalGuard)
+        val intent =
+            serviceIntent(
+                context,
+                mode,
+                action,
+                profileId,
+                protocolOptionId,
+                previousVpnNetworkHandle,
+                localGuardMode,
+                suppressLocalGuard,
+                preserveSmartStartAnalysis,
+            )
         ContextCompat.startForegroundService(context, intent)
     }
 

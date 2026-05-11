@@ -86,8 +86,14 @@ class FoxholeConnectionController(
         previousVpnNetworkHandle = previousVpnNetworkHandle,
     )
 
-    fun disconnect(suppressLocalGuard: Boolean = false) {
-        lifecycle.disconnect(suppressLocalGuard = suppressLocalGuard)
+    fun disconnect(
+        suppressLocalGuard: Boolean = false,
+        preserveSmartStartAnalysis: Boolean = false,
+    ) {
+        lifecycle.disconnect(
+            suppressLocalGuard = suppressLocalGuard,
+            preserveSmartStartAnalysis = preserveSmartStartAnalysis,
+        )
     }
 
     suspend fun currentRuntimeFingerprint(): Int = lifecycle.currentRuntimeFingerprint()

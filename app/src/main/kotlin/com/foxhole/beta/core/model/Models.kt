@@ -3,7 +3,7 @@ package com.foxhole.beta.core.model
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
-const val SETTINGS_SCHEMA_VERSION = 14
+const val SETTINGS_SCHEMA_VERSION = 15
 const val NETWORK_FINGERPRINT_SCHEMA_CURRENT = 2
 const val NETWORK_FINGERPRINT_SCHEMA_LEGACY = 1
 
@@ -246,7 +246,7 @@ data class UiSettings(
     val supportBotHandleOverride: String? = null,
     val networkCardEnabled: Boolean = true,
     val trafficCardEnabled: Boolean = true,
-    val trafficMapEnabled: Boolean = true,
+    val trafficMapEnabled: Boolean = false,
     val showFirewallStatus: Boolean = false,
     val showTorQuickLaunch: Boolean = false,
     val dashboardCardOrder: List<DashboardCard> = DashboardCard.entries,
@@ -294,8 +294,8 @@ data class DnsSettings(
     val blockOutsideTunnel: Boolean = true,
     val interceptDnsRequests: Boolean = true,
     val server: String = "1.1.1.1",
-    val secureMode: SecureDnsMode = SecureDnsMode.DOH,
-    val filteringEnabled: Boolean = true,
+    val secureMode: SecureDnsMode = SecureDnsMode.PLAIN,
+    val filteringEnabled: Boolean = false,
     val filterMode: DnsFilterMode = DnsFilterMode.COMPATIBILITY,
     val blockAds: Boolean = true,
     val blockTrackers: Boolean = true,

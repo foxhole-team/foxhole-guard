@@ -27,6 +27,7 @@ internal data class ConnectionNotificationAction(
     @param:StringRes val labelRes: Int,
     val requestCode: Int,
     val ongoing: Boolean,
+    val suppressLocalGuard: Boolean = false,
 )
 
 internal fun notificationActionForState(state: ConnectionState): ConnectionNotificationAction =
@@ -39,6 +40,7 @@ internal fun notificationActionForState(state: ConnectionState): ConnectionNotif
             labelRes = R.string.disconnect,
             requestCode = 2,
             ongoing = true,
+            suppressLocalGuard = true,
         )
 
         ConnectionState.IDLE,
@@ -128,7 +130,12 @@ internal fun Service.buildConnectionNotification(
             PendingIntent.getService(
                 this,
                 action.requestCode,
-                FoxholeConnectionServiceContract.serviceIntent(this, mode, action.serviceAction),
+                FoxholeConnectionServiceContract.serviceIntent(
+                    context = this,
+                    mode = mode,
+                    action = action.serviceAction,
+                    suppressLocalGuard = action.suppressLocalGuard,
+                ),
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
             )
         builder.addAction(0, getString(action.labelRes), actionIntent)

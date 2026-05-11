@@ -60,11 +60,15 @@ fun SecuritySettingsScreen(
                     title = stringResource(R.string.security_firewall_title),
                     checked = state.settings.expert.firewallEnabled,
                     summary = stringResource(R.string.security_firewall_summary),
-                    infoBody = stringResource(R.string.security_firewall_info_body),
                     leadingIcon = ImageVector.vectorResource(R.drawable.ic_firewall_shield_key),
                     onCheckedChange = onFirewallEnabledChanged,
                     summaryMaxLines = 3,
                     grouped = true,
+                )
+                SettingsControlGroupDivider()
+                InfoBlock(
+                    title = stringResource(R.string.security_firewall_title),
+                    body = stringResource(R.string.security_firewall_info_body),
                 )
             }
         }

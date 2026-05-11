@@ -19,7 +19,7 @@ internal fun handleRuntimeServiceCommand(
         protocolOptionId: String?,
         previousVpnNetworkHandle: Long?,
     ) -> Unit,
-    disconnect: suspend (commandStartId: Int?, suppressLocalGuard: Boolean) -> Unit,
+    disconnect: suspend (commandStartId: Int?, suppressLocalGuard: Boolean, preserveSmartStartAnalysis: Boolean) -> Unit,
     reload: suspend (profileIdHint: Long) -> Unit,
     startLocalGuard: suspend (LocalGuardMode, Int) -> Unit,
 ) {
@@ -35,7 +35,9 @@ internal fun handleRuntimeServiceCommand(
 
         FoxholeConnectionServiceContract.ACTION_DISCONNECT -> {
             val suppressLocalGuard = intent.getBooleanExtra(FoxholeConnectionServiceContract.EXTRA_SUPPRESS_LOCAL_GUARD, false)
-            launchPriorityCommand { disconnect(startId, suppressLocalGuard) }
+            val preserveSmartStartAnalysis =
+                intent.getBooleanExtra(FoxholeConnectionServiceContract.EXTRA_PRESERVE_SMART_START_ANALYSIS, false)
+            launchPriorityCommand { disconnect(startId, suppressLocalGuard, preserveSmartStartAnalysis) }
         }
 
         FoxholeConnectionServiceContract.ACTION_RELOAD -> {
@@ -49,7 +51,7 @@ internal fun handleRuntimeServiceCommand(
                     container = container,
                     startId = startId,
                     connect = connect,
-                    disconnect = disconnect,
+                    disconnect = { commandStartId, suppressLocalGuard -> disconnect(commandStartId, suppressLocalGuard, false) },
                     startLocalGuard = startLocalGuard,
                 )
             }

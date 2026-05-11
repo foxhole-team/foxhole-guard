@@ -424,7 +424,7 @@ class RuntimeConfigAssembler(
     ): TunStack =
         when {
             configured != TunStack.SYSTEM -> configured
-            protocolHint == ProtocolHint.WIREGUARD -> configured
+            protocolHint?.isUdpTransport() == true -> configured
             else -> TunStack.GVISOR
         }
 
@@ -1352,10 +1352,8 @@ class RuntimeConfigAssembler(
                     remote["address"]?.jsonPrimitive?.contentOrNull == FOXHOLE_DOH_ADDRESS
                     )
         val remoteDetourMatches =
-            when (remote["type"]?.jsonPrimitive?.contentOrNull) {
-                "tcp", "udp" -> !remote.containsKey("detour")
-                else -> remote["detour"]?.jsonPrimitive?.contentOrNull == "proxy"
-            }
+            remote["detour"]?.jsonPrimitive?.contentOrNull == null ||
+                remote["detour"]?.jsonPrimitive?.contentOrNull == "proxy"
         return localMatches &&
             directMatches &&
             remoteMatches &&

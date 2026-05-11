@@ -23,7 +23,7 @@ internal fun Service.handleForegroundRuntimeCommand(
         previousVpnNetworkHandle: Long?,
     ) -> Unit,
     disconnect: suspend (commandStartId: Int?) -> Unit,
-    disconnectWithOptions: suspend (commandStartId: Int?, suppressLocalGuard: Boolean) -> Unit = { commandStartId, _ ->
+    disconnectWithOptions: suspend (commandStartId: Int?, suppressLocalGuard: Boolean, preserveSmartStartAnalysis: Boolean) -> Unit = { commandStartId, _, _ ->
         disconnect(commandStartId)
     },
     reload: suspend (profileIdHint: Long) -> Unit,

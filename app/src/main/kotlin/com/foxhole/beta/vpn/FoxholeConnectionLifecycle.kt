@@ -82,7 +82,10 @@ internal class FoxholeConnectionLifecycle(
         }
     }
 
-    fun disconnect(suppressLocalGuard: Boolean = false) {
+    fun disconnect(
+        suppressLocalGuard: Boolean = false,
+        preserveSmartStartAnalysis: Boolean = false,
+    ) {
         clearAppliedRuntime()
         diagnosticsLogger.record("connection", "disconnect requested")
         val currentSnapshot = snapshot.value
@@ -108,6 +111,7 @@ internal class FoxholeConnectionLifecycle(
                 mode = disconnectMode,
                 action = FoxholeConnectionServiceContract.ACTION_DISCONNECT,
                 suppressLocalGuard = suppressLocalGuard,
+                preserveSmartStartAnalysis = preserveSmartStartAnalysis,
             )
         }
     }
