@@ -135,13 +135,16 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
             launchPriorityCommand = ::launchPriorityCommand,
             connect = ::connect,
             disconnect = { commandStartId -> disconnect(commandStartId = commandStartId) },
-            disconnectWithOptions = { commandStartId, _, _ -> disconnect(commandStartId = commandStartId) },
+            disconnectWithOptions = { commandStartId, _, preserveSmartStartAnalysis ->
+                disconnect(commandStartId = commandStartId, preserveSmartStartAnalysis = preserveSmartStartAnalysis)
+            },
             reload = ::reload,
             failClosedTeardown = ::failClosedTeardown,
         )
 
     override fun onDestroy() {
-        val hadActiveRuntime = activeSession != null || FoxholeVpnRuntimeBridge.snapshot.value.state in ACTIVE_CONNECTION_STATES
+        val snapshot = FoxholeVpnRuntimeBridge.snapshot.value
+        val hadActiveRuntime = activeSession != null || snapshot.isActiveRuntimeFor(TrafficMode.PROXY)
         super.onDestroy()
         stopTrafficUpdates()
         stopGeoRefresh()
@@ -250,8 +253,18 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
     private suspend fun disconnect(
         message: String? = null,
         commandStartId: Int? = null,
+        preserveSmartStartAnalysis: Boolean = false,
     ) {
         val session = activeSession
+        val previousSnapshot = FoxholeVpnRuntimeBridge.snapshot.value
+        val analysisStatus = getString(R.string.notification_status_analysis)
+        val smartStartAnalysis =
+            resolveSmartStartAnalysisPreservation(
+                previousSnapshot = previousSnapshot,
+                analysisStatus = analysisStatus,
+                disconnectMessage = message,
+                preserveSmartStartAnalysis = preserveSmartStartAnalysis,
+            )
         val finalTraffic =
             if (session != null) {
                 trafficSampler.sample()
@@ -282,7 +295,8 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
             ConnectionSnapshot(
                 state = if (message == null) ConnectionState.IDLE else ConnectionState.ERROR,
                 trafficMode = container.settingsRepository.current().traffic.mode,
-                message = message,
+                message = message ?: smartStartAnalysis.message,
+                isSmartStartConnection = smartStartAnalysis.isSmartStartConnection,
             ),
         )
         updateNotification()
@@ -304,7 +318,15 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
     ) {
         val snapshot = FoxholeVpnRuntimeBridge.snapshot.value
         val session = activeSession
-        val hadActiveRuntime = session != null || snapshot.state in ACTIVE_CONNECTION_STATES
+        val hadActiveRuntime = session != null || snapshot.isActiveRuntimeFor(TrafficMode.PROXY)
+        if (!hadActiveRuntime && snapshot.isActiveRuntimeForAnotherMode(TrafficMode.PROXY)) {
+            container.diagnosticsLogger.record(
+                "connection",
+                "proxy command ignored by inactive proxy service while another mode is active",
+            )
+            stopService(commandStartId)
+            return
+        }
         val finalTraffic =
             if (session != null) {
                 trafficSampler.sample()

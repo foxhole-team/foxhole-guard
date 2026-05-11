@@ -128,7 +128,7 @@ internal enum class HomeModeOption {
 }
 
 internal fun shouldAutoRefreshIpOnForeground(connectionState: ConnectionState): Boolean =
-    connectionState == ConnectionState.CONNECTED
+    connectionState != ConnectionState.CONNECTING && connectionState != ConnectionState.RECONNECTING
 
 internal fun shouldShowIpInfoLoading(
     currentIpInfo: IpInfo?,
@@ -200,6 +200,13 @@ internal fun shouldAutoRefreshIpAfterConnect(
     previousState: ConnectionState?,
     currentState: ConnectionState,
 ): Boolean = previousState != ConnectionState.CONNECTED && currentState == ConnectionState.CONNECTED
+
+internal fun shouldAutoRefreshIpAfterDisconnect(
+    previousState: ConnectionState?,
+    currentState: ConnectionState,
+): Boolean =
+    previousState in ACTIVE_CONNECTION_STATES &&
+        currentState !in ACTIVE_CONNECTION_STATES
 
 internal fun shouldShowAutoConnectAction(activeProfile: Profile?): Boolean =
     activeProfile?.let { profile ->

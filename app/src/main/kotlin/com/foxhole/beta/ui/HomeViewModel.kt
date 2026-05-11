@@ -549,6 +549,11 @@ class HomeViewModel(
                         previousState = previousState,
                         currentState = currentState,
                     )
+                val shouldRefreshIdleIp =
+                    shouldAutoRefreshIpAfterDisconnect(
+                        previousState = previousState,
+                        currentState = currentState,
+                    )
                 previousState = currentState
                 if (currentState !in ACTIVE_CONNECTION_STATES) {
                     invalidateIpInfoRefreshes()
@@ -563,6 +568,14 @@ class HomeViewModel(
                     if (dashboardVisible && !autoConnectUiStateMutable.value.running) {
                         scheduleActiveProfileLatencyRefresh()
                     }
+                } else if (shouldRefreshIdleIp && !autoConnectUiStateMutable.value.running) {
+                    startIpInfoRefresh(
+                        reportFailures = false,
+                        showLoading = false,
+                        clearExistingIp = true,
+                        fetchMode = IpInfoFetchMode.ENTRY_QUICK,
+                        minimumLoadingDurationMs = 0L,
+                    )
                 }
             }
         }
@@ -586,7 +599,7 @@ class HomeViewModel(
         } else {
             startIpInfoRefresh(
                 reportFailures = false,
-                showLoading = true,
+                showLoading = false,
                 clearExistingIp = true,
                 fetchMode = IpInfoFetchMode.ENTRY_QUICK,
                 minimumLoadingDurationMs = 0L,

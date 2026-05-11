@@ -1,10 +1,13 @@
 package com.foxhole.beta.ui
 
 import android.view.WindowManager
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.click
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
@@ -307,7 +310,14 @@ class HomeScreenTest {
         assertSecureFlag(expected = true)
 
         composeRule.onNodeWithTag("bottom_nav_settings").performClick()
-        composeRule.onNodeWithText(context.getString(R.string.app_settings)).performClick()
+        composeRule
+            .onNodeWithTag("settings_screen")
+            .performScrollToNode(hasTestTag("settings_application_action"))
+        composeRule.onNodeWithTag("settings_application_action").tapNearTop()
+        composeRule.waitForIdle()
+        composeRule
+            .onNodeWithTag("settings_screen")
+            .performScrollToNode(hasText(context.getString(R.string.block_screenshots_title)))
         composeRule.onNodeWithText(context.getString(R.string.block_screenshots_title)).assertIsDisplayed()
         composeRule.onNodeWithText(context.getString(R.string.block_screenshots_title)).performClick()
         assertSecureFlag(expected = false)
@@ -477,9 +487,22 @@ class HomeScreenTest {
     fun routingSitesScreenOpensAddExceptionDialog() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         composeRule.onNodeWithTag("bottom_nav_settings").performClick()
-        composeRule.onNodeWithTag("settings_routing_sites_action").performClick()
+        composeRule
+            .onNodeWithTag("settings_screen")
+            .performScrollToNode(hasTestTag("settings_routing_sites_action"))
+        composeRule.onNodeWithTag("settings_routing_sites_action").tapNearTop()
+        composeRule.waitForIdle()
+        composeRule
+            .onNodeWithTag("settings_screen")
+            .performScrollToNode(hasTestTag("routing_sites_add_exception_action"))
         composeRule.onNodeWithTag("routing_sites_add_exception_action").performClick()
         composeRule.onNodeWithText(context.getString(R.string.add_site_exception)).assertIsDisplayed()
         composeRule.onNodeWithText(context.getString(R.string.action_label)).assertIsDisplayed()
+    }
+
+    private fun androidx.compose.ui.test.SemanticsNodeInteraction.tapNearTop() {
+        performTouchInput {
+            click(topLeft + Offset(x = 24f, y = 24f))
+        }
     }
 }

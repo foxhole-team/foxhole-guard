@@ -1,5 +1,8 @@
 package com.foxhole.beta.vpn
 
+import com.foxhole.beta.core.model.ConnectionSnapshot
+import com.foxhole.beta.core.model.ConnectionState
+import com.foxhole.beta.core.model.TrafficMode
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -28,5 +31,18 @@ class RuntimeServiceCommandSupportTest {
         assertFalse(isFailClosedRuntimeServiceCommand(FoxholeConnectionServiceContract.ACTION_RELOAD))
         assertFalse(isFailClosedRuntimeServiceCommand(FoxholeConnectionServiceContract.ACTION_RESTORE))
         assertFalse(isFailClosedRuntimeServiceCommand(FoxholeConnectionServiceContract.ACTION_START_LOCAL_GUARD))
+    }
+
+    @Test
+    fun `runtime service ownership follows active snapshot mode`() {
+        val proxySnapshot =
+            ConnectionSnapshot(
+                state = ConnectionState.CONNECTED,
+                trafficMode = TrafficMode.PROXY,
+            )
+
+        assertTrue(proxySnapshot.isActiveRuntimeFor(TrafficMode.PROXY))
+        assertFalse(proxySnapshot.isActiveRuntimeFor(TrafficMode.TUNNEL))
+        assertTrue(proxySnapshot.isActiveRuntimeForAnotherMode(TrafficMode.TUNNEL))
     }
 }

@@ -94,14 +94,17 @@ class HomeRuntimeBehaviorTest {
             .around(composeRule)
 
     @Test
-    fun coldStartWhileDisconnectedDoesNotForceIpRefreshOrLoading() {
+    fun coldStartWhileDisconnectedRefreshesIpSilentlyWithoutLoading() {
         composeRule.waitUntil(timeoutMillis = 20_000) {
             composeRule.onAllNodesWithTag("home_network_loading").fetchSemanticsNodes().isEmpty()
         }
 
         assertTrue(
-            app().container.diagnosticsLogger.entries.value.none {
-                it.tag == "ip" && it.message.contains("dashboard refresh started")
+            app().container.diagnosticsLogger.entries.value.any {
+                it.tag == "ip" &&
+                    it.message.contains("mode=entry_quick") &&
+                    it.message.contains("showLoading=false") &&
+                    it.message.contains("clearExistingIp=true")
             },
         )
         composeRule.onNodeWithTag("home_network_primary_ip", useUnmergedTree = true).assertTextEquals("-")

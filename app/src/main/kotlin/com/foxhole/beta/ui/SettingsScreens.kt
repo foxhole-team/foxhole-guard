@@ -300,12 +300,13 @@ private fun LazyListScope.settingsHomeNavigationItems(
         )
     }
     item {
-        SettingsNavigationGroup {
-            SettingsGroupedNavigationRow(
-                icon = Icons.Outlined.PhoneAndroid,
-                title = stringResource(R.string.app_settings),
-                summary = stringResource(R.string.settings_home_application_summary),
-                onClick = onOpenApplication,
+            SettingsNavigationGroup {
+                SettingsGroupedNavigationRow(
+                    modifier = Modifier.testTag("settings_application_action"),
+                    icon = Icons.Outlined.PhoneAndroid,
+                    title = stringResource(R.string.app_settings),
+                    summary = stringResource(R.string.settings_home_application_summary),
+                    onClick = onOpenApplication,
             )
             SettingsGroupDivider()
             SettingsGroupedNavigationRow(
@@ -423,10 +424,11 @@ private fun SettingsGroupedNavigationRow(
     val infoBody = summary.trimEnd().removeSuffix(".").takeIf(String::isNotBlank)
     Row(
         modifier =
-            modifier
+            Modifier
                 .fillMaxWidth()
                 .heightIn(min = 48.dp)
                 .then(if (enabled) Modifier.clickable(onClick = onClick) else Modifier)
+                .then(modifier)
                 .padding(horizontal = 10.dp, vertical = 5.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalAlignment = Alignment.CenterVertically,

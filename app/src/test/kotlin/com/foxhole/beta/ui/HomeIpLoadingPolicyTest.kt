@@ -60,6 +60,43 @@ class HomeIpLoadingPolicyTest {
     }
 
     @Test
+    fun `auto refreshes ip on foreground when disconnected`() {
+        assertTrue(shouldAutoRefreshIpOnForeground(ConnectionState.IDLE))
+        assertTrue(shouldAutoRefreshIpOnForeground(ConnectionState.ERROR))
+        assertTrue(shouldAutoRefreshIpOnForeground(ConnectionState.CONNECTED))
+        assertFalse(shouldAutoRefreshIpOnForeground(ConnectionState.CONNECTING))
+        assertFalse(shouldAutoRefreshIpOnForeground(ConnectionState.RECONNECTING))
+    }
+
+    @Test
+    fun `auto refreshes device ip after active connection ends`() {
+        assertTrue(
+            shouldAutoRefreshIpAfterDisconnect(
+                previousState = ConnectionState.CONNECTED,
+                currentState = ConnectionState.IDLE,
+            ),
+        )
+        assertTrue(
+            shouldAutoRefreshIpAfterDisconnect(
+                previousState = ConnectionState.CONNECTING,
+                currentState = ConnectionState.ERROR,
+            ),
+        )
+        assertFalse(
+            shouldAutoRefreshIpAfterDisconnect(
+                previousState = ConnectionState.IDLE,
+                currentState = ConnectionState.IDLE,
+            ),
+        )
+        assertFalse(
+            shouldAutoRefreshIpAfterDisconnect(
+                previousState = ConnectionState.CONNECTED,
+                currentState = ConnectionState.RECONNECTING,
+            ),
+        )
+    }
+
+    @Test
     fun `shows ip loading during explicit idle refresh`() {
         assertTrue(
             shouldShowIpInfoLoading(

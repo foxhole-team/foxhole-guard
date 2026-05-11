@@ -212,10 +212,11 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
     }
 
     override fun onDestroy() {
+        val snapshot = FoxholeVpnRuntimeBridge.snapshot.value
         val hadActiveRuntime =
             activeSession != null ||
                 activeLocalGuardMode != null ||
-                FoxholeVpnRuntimeBridge.snapshot.value.state in ACTIVE_CONNECTION_STATES
+                snapshot.isActiveRuntimeFor(TrafficMode.TUNNEL)
         super.onDestroy()
         stopTrafficUpdates()
         anomalyTrafficAggregator.reset()
@@ -412,11 +413,13 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         val localGuardMode = activeLocalGuardMode
         val previousSnapshot = FoxholeVpnRuntimeBridge.snapshot.value
         val analysisStatus = getString(R.string.notification_status_analysis)
-        val shouldPreserveSmartStartAnalysis =
-            preserveSmartStartAnalysis &&
-                message == null &&
-                previousSnapshot.isSmartStartConnection &&
-                previousSnapshot.message == analysisStatus
+        val smartStartAnalysis =
+            resolveSmartStartAnalysisPreservation(
+                previousSnapshot = previousSnapshot,
+                analysisStatus = analysisStatus,
+                disconnectMessage = message,
+                preserveSmartStartAnalysis = preserveSmartStartAnalysis,
+            )
         val finalTraffic =
             if (session != null) {
                 trafficSampler.sample()
@@ -459,9 +462,9 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
             ConnectionSnapshot(
                 state = if (message == null) ConnectionState.IDLE else ConnectionState.ERROR,
                 trafficMode = container.settingsRepository.current().traffic.mode,
-                message = message ?: analysisStatus.takeIf { shouldPreserveSmartStartAnalysis },
+                message = message ?: smartStartAnalysis.message,
                 reasonCode = reasonCode,
-                isSmartStartConnection = shouldPreserveSmartStartAnalysis,
+                isSmartStartConnection = smartStartAnalysis.isSmartStartConnection,
             ),
         )
         updateNotification()
@@ -583,7 +586,18 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
     ) {
         val snapshot = FoxholeVpnRuntimeBridge.snapshot.value
         val session = activeSession
-        val hadActiveRuntime = session != null || activeLocalGuardMode != null || snapshot.state in ACTIVE_CONNECTION_STATES
+        val hadActiveRuntime =
+            session != null ||
+                activeLocalGuardMode != null ||
+                snapshot.isActiveRuntimeFor(TrafficMode.TUNNEL)
+        if (!hadActiveRuntime && snapshot.isActiveRuntimeForAnotherMode(TrafficMode.TUNNEL)) {
+            container.diagnosticsLogger.record(
+                "connection",
+                "runtime command ignored by inactive tunnel service while another mode is active",
+            )
+            stopService(commandStartId)
+            return
+        }
         val finalTraffic =
             if (session != null) {
                 trafficSampler.sample()
@@ -1155,14 +1169,14 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         internal const val NOTIFICATION_HEALTH_PROBE_TIMEOUT_MS = 1_000L
         internal const val NOTIFICATION_HEALTH_FAILURE_THRESHOLD = 3
         internal val UDP_HEALTH_PROBE_PAYLOAD = byteArrayOf(0x66)
-        internal const val CONNECTIVITY_PROBE_ATTEMPTS = 15
-        internal const val CONNECTIVITY_PROBE_INITIAL_DELAY_MS = 2_000L
-        internal const val CONNECTIVITY_PROBE_RETRY_DELAY_MS = 2_000L
-        internal const val CONNECTIVITY_PROBE_CALL_TIMEOUT_MS = 5_000L
-        internal const val CONNECTIVITY_PROBE_TOTAL_TIMEOUT_MS = 45_000L
+        internal const val CONNECTIVITY_PROBE_ATTEMPTS = 8
+        internal const val CONNECTIVITY_PROBE_INITIAL_DELAY_MS = 300L
+        internal const val CONNECTIVITY_PROBE_RETRY_DELAY_MS = 1_000L
+        internal const val CONNECTIVITY_PROBE_CALL_TIMEOUT_MS = 4_000L
+        internal const val CONNECTIVITY_PROBE_TOTAL_TIMEOUT_MS = 24_000L
         internal const val CONNECTIVITY_PROBE_GRACE_MAX_TIMEOUT_MS = com.foxhole.beta.vpn.CONNECTIVITY_PROBE_GRACE_MAX_TIMEOUT_MS
-        internal const val CONNECTIVITY_LITERAL_PROBE_EARLY_WINDOW_MS = 8_000L
-        internal const val CONNECTIVITY_LITERAL_PROBE_POLL_MS = 500L
+        internal const val CONNECTIVITY_LITERAL_PROBE_EARLY_WINDOW_MS = 1_200L
+        internal const val CONNECTIVITY_LITERAL_PROBE_POLL_MS = 150L
         internal const val CONNECTIVITY_LITERAL_PROBE_CALL_TIMEOUT_MS = 2_000L
         internal const val LOCAL_GUARD_PROFILE_ID = -10L
         internal const val APP_TRAFFIC_SAMPLE_INTERVAL_MS = 60_000L
