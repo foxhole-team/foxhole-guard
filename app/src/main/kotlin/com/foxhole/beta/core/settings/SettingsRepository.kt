@@ -649,6 +649,9 @@ class SettingsRepository(
     suspend fun updateShowTorQuickLaunch(value: Boolean) =
         update { it.copy(ui = it.ui.copy(showTorQuickLaunch = value)) }
 
+    suspend fun updateShowFirewallStatus(value: Boolean) =
+        update { it.copy(ui = it.ui.copy(showFirewallStatus = value)) }
+
     suspend fun updateDashboardCardOrder(value: List<DashboardCard>) =
         update { current ->
             val normalized =
@@ -683,6 +686,9 @@ class SettingsRepository(
 
     suspend fun updateNotifyUnusualTraffic(value: Boolean) =
         update { it.copy(anomaly = it.anomaly.copy(notifyUnusualTraffic = value)) }
+
+    suspend fun updateAnomalyEnabled(value: Boolean) =
+        update { it.copy(anomaly = it.anomaly.copy(enabled = value)) }
 
     suspend fun updateAnomalySensitivity(value: AnomalySensitivity) =
         update { it.copy(anomaly = it.anomaly.copy(sensitivity = value)) }

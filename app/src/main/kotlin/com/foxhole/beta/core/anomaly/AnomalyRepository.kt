@@ -223,5 +223,4 @@ private fun statisticsCutoff(retention: StatisticsRetention): Long =
 private fun Settings.appTrafficStatsRuntimeEnabled(): Boolean =
     statistics.enabled &&
         statistics.appTrafficEnabled &&
-        appTrafficStatsEnabled &&
-        expert.firewallEnabled
+        appTrafficStatsEnabled

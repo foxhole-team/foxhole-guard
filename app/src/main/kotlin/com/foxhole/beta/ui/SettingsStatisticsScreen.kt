@@ -134,7 +134,6 @@ fun StatisticsScreen(
     var selectedApp by rememberSaveable { mutableStateOf<String?>(null) }
     var selectedProfileId by rememberSaveable { mutableStateOf<Long?>(null) }
     var clearConfirmVisible by rememberSaveable { mutableStateOf(false) }
-    var appStatsFirewallConfirmVisible by rememberSaveable { mutableStateOf(false) }
     val statisticsSettings = state.settings.statistics
     val context = LocalContext.current
     val retention = state.settings.statistics.retention
@@ -167,8 +166,7 @@ fun StatisticsScreen(
         statisticsSettings.enabled &&
             statisticsSettings.appTrafficEnabled &&
             appStatsSwitchChecked &&
-            usageAccessGranted &&
-            firewallEnabled
+            usageAccessGranted
     val selectedAppRow = selectedApp?.let { packageName -> appRows.firstOrNull { row -> row.packageName == packageName } }
     val selectedProfile =
         selectedProfileId?.let { profileId ->
@@ -231,8 +229,6 @@ fun StatisticsScreen(
                         enabled = appStatsEnabled,
                         runtimeActive = appStatsEnabled && state.traffic.available,
                         usageAccessGranted = usageAccessGranted,
-                        firewallEnabled = firewallEnabled,
-                        onEnableFirewall = { appStatsFirewallConfirmVisible = true },
                         onOpenUsageAccess = { context.startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)) },
                         onShowAll = { allAppsVisible = true },
                         onRowClick = { row -> selectedApp = row.packageName },
@@ -305,13 +301,7 @@ fun StatisticsScreen(
                             checked = appStatsSwitchChecked,
                             summary = stringResource(R.string.app_statistics_enabled_summary),
                             leadingIcon = Icons.Outlined.Apps,
-                            onCheckedChange = { enabled ->
-                                if (enabled && !firewallEnabled) {
-                                    appStatsFirewallConfirmVisible = true
-                                } else {
-                                    onAppTrafficStatsEnabledChanged(enabled)
-                                }
-                            },
+                            onCheckedChange = onAppTrafficStatsEnabledChanged,
                             enabled = statisticsSettings.enabled,
                             grouped = true,
                         )
@@ -482,20 +472,6 @@ fun StatisticsScreen(
         )
     }
 
-    if (appStatsFirewallConfirmVisible) {
-        ConfirmDialog(
-            title = stringResource(R.string.app_statistics_firewall_warning_title),
-            body = stringResource(R.string.app_statistics_firewall_warning_body),
-            confirmLabel = stringResource(R.string.security_firewall_enable_action),
-            icon = Icons.Outlined.WarningAmber,
-            onDismiss = { appStatsFirewallConfirmVisible = false },
-            onConfirm = {
-                appStatsFirewallConfirmVisible = false
-                onFirewallEnabledChanged(true)
-                onAppTrafficStatsEnabledChanged(true)
-            },
-        )
-    }
 }
 
 @Composable
@@ -1377,8 +1353,6 @@ private fun AppTrafficStatisticsCard(
     enabled: Boolean,
     runtimeActive: Boolean,
     usageAccessGranted: Boolean,
-    firewallEnabled: Boolean,
-    onEnableFirewall: () -> Unit,
     onOpenUsageAccess: () -> Unit,
     onShowAll: () -> Unit,
     onRowClick: (AppTrafficRow) -> Unit,
@@ -1404,15 +1378,6 @@ private fun AppTrafficStatisticsCard(
                 )
                 TextButton(onClick = onOpenUsageAccess) {
                     Text(stringResource(R.string.statistics_usage_access_action))
-                }
-            } else if (!firewallEnabled) {
-                Text(
-                    text = stringResource(R.string.app_statistics_firewall_warning_body),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                TextButton(onClick = onEnableFirewall) {
-                    Text(stringResource(R.string.security_firewall_enable_action))
                 }
             } else if (!enabled) {
                 Text(
@@ -2284,8 +2249,7 @@ private fun statisticsUiState(
         extendedMode =
             state.settings.statistics.enabled &&
                 state.settings.statistics.appTrafficEnabled &&
-                state.settings.appTrafficStatsEnabled &&
-                state.settings.expert.firewallEnabled,
+                state.settings.appTrafficStatsEnabled,
         profileTraffic = profileTraffic,
         total = total,
         vpnProtocols = protocolStats,

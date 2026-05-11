@@ -381,6 +381,11 @@ class HomeDashboardPresentationTest {
     fun `connection feature indicators show enabled dashboard flags and tor status`() {
         val settings =
             Settings(
+                ui =
+                    UiSettings(
+                        showFirewallStatus = true,
+                        showTorQuickLaunch = true,
+                    ),
                 privacyRoute = PrivacyRouteSettings(mode = PrivacyRouteMode.TOR_OVER_VPN),
                 expert =
                     ExpertSettings(
@@ -425,13 +430,11 @@ class HomeDashboardPresentationTest {
         assertEquals(
             listOf(
                 HomeConnectionFeature.KILL_SWITCH,
-                HomeConnectionFeature.FIREWALL,
             ),
             homeConnectionFeatureIndicators(HomeRouteUiState(settings = Settings())).map { it.feature },
         )
         assertEquals(
             listOf(
-                HomeConnectionFeatureStatus.OFF,
                 HomeConnectionFeatureStatus.OFF,
             ),
             homeConnectionFeatureIndicators(HomeRouteUiState(settings = Settings())).map { it.status },
@@ -439,7 +442,6 @@ class HomeDashboardPresentationTest {
         assertEquals(
             listOf(
                 HomeConnectionFeature.KILL_SWITCH,
-                HomeConnectionFeature.FIREWALL,
                 HomeConnectionFeature.TOR,
             ),
             homeConnectionFeatureIndicators(
@@ -449,14 +451,24 @@ class HomeDashboardPresentationTest {
         assertEquals(
             HomeConnectionFeatureStatus.PENDING,
             homeConnectionFeatureIndicators(
-                HomeRouteUiState(settings = Settings(expert = ExpertSettings(firewallEnabled = true))),
+                HomeRouteUiState(
+                    settings =
+                        Settings(
+                            ui = UiSettings(showFirewallStatus = true),
+                            expert = ExpertSettings(firewallEnabled = true),
+                        ),
+                ),
             ).single { it.feature == HomeConnectionFeature.FIREWALL }.status,
         )
     }
 
     @Test
     fun `tor indicator is pending until a compatible tunnel is connected`() {
-        val settings = Settings(privacyRoute = PrivacyRouteSettings(mode = PrivacyRouteMode.TOR_OVER_VPN))
+        val settings =
+            Settings(
+                ui = UiSettings(showTorQuickLaunch = true),
+                privacyRoute = PrivacyRouteSettings(mode = PrivacyRouteMode.TOR_OVER_VPN),
+            )
 
         assertEquals(
             HomeConnectionFeatureStatus.PENDING,

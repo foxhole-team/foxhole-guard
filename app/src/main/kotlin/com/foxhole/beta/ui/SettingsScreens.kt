@@ -1354,6 +1354,7 @@ fun ApplicationSettingsScreen(
     onNetworkCardEnabledChanged: (Boolean) -> Unit,
     onTrafficCardEnabledChanged: (Boolean) -> Unit,
     onTrafficMapEnabledChanged: (Boolean) -> Unit,
+    onShowFirewallStatusChanged: (Boolean) -> Unit,
     onShowTorQuickLaunchChanged: (Boolean) -> Unit,
 ) {
     val systemThemeLabel = stringResource(R.string.theme_mode_system)
@@ -1466,6 +1467,17 @@ fun ApplicationSettingsScreen(
                     summary = stringResource(R.string.show_tor_quick_launch_summary),
                     leadingIcon = ImageVector.vectorResource(R.drawable.ic_tor_route),
                     onCheckedChange = onShowTorQuickLaunchChanged,
+                    summaryMaxLines = 2,
+                    grouped = true,
+                )
+                SettingsControlGroupDivider()
+                SettingSwitchRow(
+                    title = stringResource(R.string.show_firewall_status_title),
+                    checked = state.settings.expert.firewallEnabled && state.settings.ui.showFirewallStatus,
+                    summary = stringResource(R.string.show_firewall_status_summary),
+                    leadingIcon = ImageVector.vectorResource(R.drawable.ic_firewall_shield_key),
+                    onCheckedChange = onShowFirewallStatusChanged,
+                    enabled = state.settings.expert.firewallEnabled,
                     summaryMaxLines = 2,
                     grouped = true,
                 )

@@ -292,6 +292,12 @@ internal fun HomeViewModel.onShowTorQuickLaunchChangedInternal(value: Boolean) {
     }
 }
 
+internal fun HomeViewModel.onShowFirewallStatusChangedInternal(value: Boolean) {
+    viewModelScope.launch {
+        container.settingsRepository.updateShowFirewallStatus(value)
+    }
+}
+
 internal fun HomeViewModel.onDashboardCardOrderChangedInternal(value: List<com.foxhole.beta.core.model.DashboardCard>) {
     viewModelScope.launch {
         container.settingsRepository.updateDashboardCardOrder(value)
@@ -301,14 +307,6 @@ internal fun HomeViewModel.onDashboardCardOrderChangedInternal(value: List<com.f
 internal fun HomeViewModel.onKillSwitchChangedInternal(value: Boolean) {
     viewModelScope.launch {
         container.settingsRepository.updateKillSwitchEnabled(value)
-        if (value && android.net.VpnService.prepare(getApplication<Application>()) != null) {
-            pendingConnectRequest =
-                PendingConnectRequest(
-                    action = PendingConnectAction.LOCAL_GUARD,
-                )
-            requestVpnPermission.tryEmit(Unit)
-            return@launch
-        }
         container.connectionController.syncLocalGuard()
         if (value) {
             openSystemVpnSettings()
@@ -319,6 +317,7 @@ internal fun HomeViewModel.onKillSwitchChangedInternal(value: Boolean) {
 internal fun HomeViewModel.onFirewallEnabledChangedInternal(value: Boolean) {
     viewModelScope.launch {
         container.settingsRepository.updateFirewallEnabled(value)
+        container.settingsRepository.updateShowFirewallStatus(value)
         if (value && android.net.VpnService.prepare(getApplication<Application>()) != null) {
             pendingConnectRequest =
                 PendingConnectRequest(
@@ -372,6 +371,12 @@ internal fun HomeViewModel.onDiagnosticsRetentionSelectedInternal(value: Diagnos
 internal fun HomeViewModel.onNotifyUnusualTrafficChangedInternal(value: Boolean) {
     viewModelScope.launch {
         container.settingsRepository.updateNotifyUnusualTraffic(value)
+    }
+}
+
+internal fun HomeViewModel.onAnomalyEnabledChangedInternal(value: Boolean) {
+    viewModelScope.launch {
+        container.settingsRepository.updateAnomalyEnabled(value)
     }
 }
 

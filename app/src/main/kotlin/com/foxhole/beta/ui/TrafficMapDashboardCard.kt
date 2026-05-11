@@ -1,12 +1,6 @@
 package com.foxhole.beta.ui
 
 import android.content.Context
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -131,27 +125,6 @@ private fun TrafficWorldMap(
     val destinationColor = FoxholePositiveAccent
     val phoneScreenColor = colorScheme.surface.copy(alpha = 0.88f)
     val countryShapes = remember(countries) { countries }
-    val transition = rememberInfiniteTransition(label = "traffic_map_motion")
-    val pulsePhase by transition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec =
-            infiniteRepeatable(
-                animation = tween(durationMillis = 1_650, easing = LinearEasing),
-                repeatMode = RepeatMode.Restart,
-            ),
-        label = "traffic_map_pulse",
-    )
-    val flowPhase by transition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec =
-            infiniteRepeatable(
-                animation = tween(durationMillis = 2_400, easing = LinearEasing),
-                repeatMode = RepeatMode.Restart,
-            ),
-        label = "traffic_map_flow",
-    )
 
     Box(
         modifier = modifier
@@ -164,7 +137,6 @@ private fun TrafficWorldMap(
                 val minLineStroke = 0.65.dp.toPx()
                 val destinationRadius = 3.3.dp.toPx()
                 val glowRadius = 8.dp.toPx()
-                val flowDotRadius = 1.8.dp.toPx()
                 val cornerRadius = CornerRadius(10.dp.toPx(), 10.dp.toPx())
                 val phoneWidth = 8.dp.toPx()
                 val phoneHeight = 12.dp.toPx()
@@ -212,29 +184,15 @@ private fun TrafficWorldMap(
                             strokeWidth = minLineStroke + ((maxLineStroke - minLineStroke) * weight),
                             cap = StrokeCap.Round,
                         )
-                        if (index < MAX_TRAFFIC_MAP_FLOW_DOTS) {
-                            val shiftedProgress = (flowPhase + index * 0.113f) % 1f
-                            val flowCenter =
-                                Offset(
-                                    x = from.x + (to.x - from.x) * shiftedProgress,
-                                    y = from.y + (to.y - from.y) * shiftedProgress,
-                                )
-                            drawCircle(
-                                color = lineColor.copy(alpha = 0.62f),
-                                radius = flowDotRadius + (flowDotRadius * 0.25f * weight),
-                                center = flowCenter,
-                            )
-                        }
                     }
 
                     val destinationCount = min(mapState.destinations.size, MAX_TRAFFIC_MAP_DRAW_DESTINATIONS)
                     for (index in 0 until destinationCount) {
                         val point = mapState.destinations[index]
                         val offset = project(point.lat, point.lon, viewport)
-                        val pointPulse = (pulsePhase + index * 0.071f) % 1f
                         drawCircle(
-                            color = destinationColor.copy(alpha = 0.12f + 0.14f * (1f - pointPulse)),
-                            radius = glowRadius + glowRadius * 0.42f * pointPulse,
+                            color = destinationColor.copy(alpha = 0.16f),
+                            radius = glowRadius,
                             center = offset,
                         )
                         drawCircle(
@@ -246,8 +204,8 @@ private fun TrafficWorldMap(
 
                     val origin = project(mapState.originLat, mapState.originLon, viewport)
                     drawCircle(
-                        color = originColor.copy(alpha = 0.16f + 0.10f * (1f - pulsePhase)),
-                        radius = glowRadius + glowRadius * 0.28f * pulsePhase,
+                        color = originColor.copy(alpha = 0.18f),
+                        radius = glowRadius,
                         center = origin,
                     )
                     drawPhoneMarker(
@@ -606,7 +564,6 @@ private const val TRAFFIC_MAP_MAX_LAT = 85.0
 private const val TRAFFIC_MAP_LAT_RANGE = TRAFFIC_MAP_MAX_LAT - TRAFFIC_MAP_MIN_LAT
 private const val MAX_TRAFFIC_MAP_DRAW_EDGES = 60
 private const val MAX_TRAFFIC_MAP_DRAW_DESTINATIONS = 60
-private const val MAX_TRAFFIC_MAP_FLOW_DOTS = 18
 private const val MIN_TRAFFIC_MAP_RING_POINTS = 3
 private const val TRAFFIC_MAP_COUNTRIES_ASSET = "maps/ne_50m_admin_0_countries.geojson"
 private const val TRAFFIC_MAP_ANTARCTICA_COUNTRY_CODE = "AQ"

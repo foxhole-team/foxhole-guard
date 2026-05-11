@@ -444,7 +444,7 @@ class RuntimeConfigAssembler(
                 add(JsonPrimitive("172.19.0.1/30"))
                 add(JsonPrimitive("fdfe:dcba:9876::1/126"))
             }
-            if (mode == LocalGuardMode.FIREWALL && settings.expert.blockAppsAlways && !settings.expert.killSwitchEnabled) {
+            if (mode == LocalGuardMode.FIREWALL && settings.expert.blockAppsAlways) {
                 val packages = normalizedRuntimePackages(settings.expert.blockedPackages)
                 if (packages.isNotEmpty()) {
                     putJsonArray("include_package") {

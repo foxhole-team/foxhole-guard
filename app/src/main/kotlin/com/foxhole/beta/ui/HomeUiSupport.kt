@@ -545,6 +545,21 @@ internal fun homeStatusLabel(state: ConnectionState): String =
     }
 
 @Composable
+internal fun homeStatusLabel(
+    routeState: HomeRouteUiState,
+    state: ConnectionState,
+): String =
+    if (
+        state == ConnectionState.CONNECTED &&
+        routeState.connection.profileId == FoxholeVpnService.LOCAL_GUARD_PROFILE_ID &&
+        routeState.settings.expert.firewallEnabled
+    ) {
+        stringResource(R.string.notification_status_firewall)
+    } else {
+        homeStatusLabel(state)
+    }
+
+@Composable
 internal fun homeStatusTone(state: ConnectionState): Color =
     when (state) {
         ConnectionState.CONNECTED -> Color(0xFF7BD69D)

@@ -544,22 +544,23 @@ internal fun homeConnectionFeatureIndicators(state: HomeRouteUiState): List<Home
                 feature = HomeConnectionFeature.KILL_SWITCH,
                 titleRes = R.string.kill_switch_title,
                 status =
-                    when {
-                        !state.settings.expert.killSwitchEnabled -> HomeConnectionFeatureStatus.OFF
-                        state.connection.state in setOf(ConnectionState.CONNECTING, ConnectionState.CONNECTED, ConnectionState.RECONNECTING) ->
-                            HomeConnectionFeatureStatus.ON
-                        else -> HomeConnectionFeatureStatus.PENDING
+                    if (state.settings.expert.killSwitchEnabled) {
+                        HomeConnectionFeatureStatus.ON
+                    } else {
+                        HomeConnectionFeatureStatus.OFF
                     },
             ),
         )
-        add(
-            HomeConnectionFeatureIndicator(
-                feature = HomeConnectionFeature.FIREWALL,
-                titleRes = R.string.home_connection_feature_firewall,
-                status = homeFirewallFeatureStatus(state),
-            ),
-        )
-        if (state.settings.ui.showTorQuickLaunch || state.settings.privacyRoute.enabled) {
+        if (state.settings.expert.firewallEnabled && state.settings.ui.showFirewallStatus) {
+            add(
+                HomeConnectionFeatureIndicator(
+                    feature = HomeConnectionFeature.FIREWALL,
+                    titleRes = R.string.home_connection_feature_firewall,
+                    status = homeFirewallFeatureStatus(state),
+                ),
+            )
+        }
+        if (state.settings.ui.showTorQuickLaunch) {
             add(
                 HomeConnectionFeatureIndicator(
                     feature = HomeConnectionFeature.TOR,
@@ -659,12 +660,13 @@ private fun HomeConnectionFeatureIndicatorItem(
 ) {
     val icon = homeConnectionFeatureIcon(indicator.feature)
     val statusColor = homeConnectionFeatureStatusColor(indicator.status)
+    val neutralIconColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.82f)
     Row(
         modifier =
             Modifier
                 .clip(RoundedCornerShape(999.dp))
                 .clickable(onClick = onClick)
-                .background(statusColor.copy(alpha = if (indicator.status == HomeConnectionFeatureStatus.OFF) 0.05f else 0.10f))
+                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.42f))
                 .padding(horizontal = 7.dp, vertical = 3.dp)
                 .testTag("home_connection_feature_indicator_${indicator.feature.name.lowercase(Locale.US)}"),
         horizontalArrangement = Arrangement.spacedBy(5.dp),
@@ -674,7 +676,7 @@ private fun HomeConnectionFeatureIndicatorItem(
             imageVector = icon,
             contentDescription = null,
             modifier = Modifier.size(12.dp),
-            tint = statusColor,
+            tint = neutralIconColor,
         )
         Text(
             text = stringResource(indicator.titleRes),
@@ -781,9 +783,7 @@ internal fun HomeConnectionFeatureDialog(
                                 )
                             HomeConnectionFeature.LAN_PROXY -> onLocalProxyLanAccessChanged(!enabled)
                         }
-                        if (!connectionActive) {
-                            onDismiss()
-                        }
+                        onDismiss()
                     }
                 },
                 label = confirmLabel,

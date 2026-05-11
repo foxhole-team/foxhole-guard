@@ -66,23 +66,16 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.RichTooltip
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TooltipAnchorPosition
-import androidx.compose.material3.TooltipBox
-import androidx.compose.material3.TooltipDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
-import androidx.compose.material3.rememberTooltipState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -122,7 +115,6 @@ import com.foxhole.beta.core.model.RoutingRuleAction
 import com.foxhole.beta.core.model.TunStack
 import com.foxhole.beta.ui.theme.LocalFoxholeUiPalette
 import com.foxhole.beta.vpn.AndroidLanProxyAddressProvider
-import kotlinx.coroutines.launch
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -164,14 +156,8 @@ internal fun SettingsNavigationRow(
     grouped: Boolean = false,
     onClick: () -> Unit,
 ) {
-    val infoBody = summary?.trimMenuSummary()
+    val infoBody = settingsInfoBodyOrNull(summary)
     val trailingContent: @Composable RowScope.() -> Unit = {
-        infoBody?.let { body ->
-            SettingsInfoAnchor(
-                title = title,
-                body = body,
-            )
-        }
         if (showAlertDot) {
             Box(
                 modifier =
@@ -193,7 +179,7 @@ internal fun SettingsNavigationRow(
         SettingsControlRow(
             modifier = modifier,
             title = title,
-            summary = null,
+            summary = summary,
             infoBody = infoBody,
             leadingIcon = icon,
             leadingIconContainerColor = leadingIconContainerColor,
@@ -207,7 +193,7 @@ internal fun SettingsNavigationRow(
     FoxholePreferenceCard(
         modifier = modifier,
         title = title,
-        summary = null,
+        summary = summary,
         infoBody = infoBody,
         leadingIcon = icon,
         onClick = onClick,
@@ -235,11 +221,12 @@ internal fun SettingValueRow(
     summaryMaxLines: Int = 1,
     grouped: Boolean = false,
 ) {
+    val resolvedInfoBody = settingsInfoBodyOrNull(infoBody) ?: settingsInfoBodyOrNull(summary)
     if (grouped) {
         SettingsControlRow(
             title = title,
-            summary = null,
-            infoBody = infoBody ?: summary?.trimMenuSummary(),
+            summary = summary,
+            infoBody = resolvedInfoBody,
             leadingIcon = leadingIcon,
             onClick = onClick,
             summaryMaxLines = summaryMaxLines,
@@ -252,8 +239,8 @@ internal fun SettingValueRow(
     }
     FoxholePreferenceCard(
         title = title,
-        summary = null,
-        infoBody = infoBody ?: summary?.trimMenuSummary(),
+        summary = summary,
+        infoBody = resolvedInfoBody,
         leadingIcon = leadingIcon,
         onClick = onClick,
         summaryMaxLines = summaryMaxLines,
@@ -404,10 +391,12 @@ internal fun SettingSwitchRow(
     infoBody: String? = null,
     leadingIcon: ImageVector? = null,
     leadingIconContainerColor: Color = Color.Unspecified,
+    titleTrailingContent: (@Composable RowScope.() -> Unit)? = null,
     enabled: Boolean = true,
     summaryMaxLines: Int = 1,
     grouped: Boolean = false,
 ) {
+    val resolvedInfoBody = settingsInfoBodyOrNull(infoBody) ?: settingsInfoBodyOrNull(summary)
     val switchStateDescription =
         stringResource(
             if (checked) {
@@ -443,12 +432,13 @@ internal fun SettingSwitchRow(
         SettingsControlRow(
             modifier = rowModifier,
             title = title,
-            summary = null,
+            summary = summary,
             inlineSummary = inlineSummary,
             summaryColor = summaryColor,
-            infoBody = infoBody ?: summary?.trimMenuSummary(),
+            infoBody = resolvedInfoBody,
             leadingIcon = leadingIcon,
             leadingIconContainerColor = leadingIconContainerColor,
+            titleTrailingContent = titleTrailingContent,
             summaryMaxLines = summaryMaxLines,
             onClick = rowClick,
             trailingContent = rowTrailingContent,
@@ -458,10 +448,11 @@ internal fun SettingSwitchRow(
     FoxholePreferenceCard(
         modifier = rowModifier,
         title = title,
-        summary = null,
-        infoBody = infoBody ?: summary?.trimMenuSummary(),
+        summary = summary,
+        infoBody = resolvedInfoBody,
         leadingIcon = leadingIcon,
         leadingIconContainerColor = leadingIconContainerColor,
+        titleTrailingContent = titleTrailingContent,
         summaryMaxLines = summaryMaxLines,
         onClick = rowClick,
         trailingContent = rowTrailingContent,
@@ -511,12 +502,13 @@ private fun SettingsControlRow(
     leadingIcon: ImageVector? = null,
     leadingIconContainerColor: Color = Color.Unspecified,
     leadingIconTint: Color = MaterialTheme.colorScheme.onSurfaceVariant,
+    titleTrailingContent: (@Composable RowScope.() -> Unit)? = null,
     summaryMaxLines: Int = 1,
     onClick: (() -> Unit)?,
     trailingContent: (@Composable RowScope.() -> Unit)? = null,
 ) {
-    val summaryText = inlineSummary?.takeIf(String::isNotBlank)
-    val infoText = infoBody?.takeIf(String::isNotBlank) ?: summary?.trimMenuSummary()?.takeIf(String::isNotBlank)
+    val summaryText = inlineSummary?.takeIf(String::isNotBlank) ?: summary?.takeIf(String::isNotBlank)
+    val infoText = settingsInfoBodyOrNull(infoBody)
     Row(
         modifier =
             modifier
@@ -568,6 +560,7 @@ private fun SettingsControlRow(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
+                titleTrailingContent?.invoke(this)
                 infoText?.let {
                     SettingsInfoAnchor(
                         title = title,
@@ -601,54 +594,15 @@ internal fun SettingsInfoAnchor(
     title: String,
     body: String,
 ) {
-    when (remember(body) { settingsInfoPresentation(body) }) {
-        SettingsInfoPresentation.TOOLTIP -> {
-            val tooltipState = rememberTooltipState(isPersistent = true)
-            val scope = rememberCoroutineScope()
-            TooltipBox(
-                positionProvider = TooltipDefaults.rememberTooltipPositionProvider(TooltipAnchorPosition.Above),
-                tooltip = {
-                    RichTooltip(
-                        title = {
-                            Text(
-                                text = title,
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.SemiBold,
-                            )
-                        },
-                        action = {
-                            TextButton(onClick = { tooltipState.dismiss() }) {
-                                Text(stringResource(R.string.close))
-                            }
-                        },
-                    ) {
-                        Text(
-                            text = body,
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
-                    }
-                },
-                state = tooltipState,
-            ) {
-                SettingsInfoIconButton(
-                    onClick = {
-                        scope.launch { tooltipState.show() }
-                    },
-                )
-            }
-        }
-        SettingsInfoPresentation.BOTTOM_SHEET -> {
-            var sheetVisible by rememberSaveable(title, body) { mutableStateOf(false) }
-            SettingsInfoIconButton(onClick = { sheetVisible = true })
-            if (sheetVisible) {
-                SettingsInfoBottomSheet(
-                    title = title,
-                    body = body,
-                    icon = Icons.Outlined.Info,
-                    onDismiss = { sheetVisible = false },
-                )
-            }
-        }
+    var sheetVisible by rememberSaveable(title, body) { mutableStateOf(false) }
+    SettingsInfoIconButton(onClick = { sheetVisible = true })
+    if (sheetVisible) {
+        SettingsInfoBottomSheet(
+            title = title,
+            body = body,
+            icon = Icons.Outlined.Info,
+            onDismiss = { sheetVisible = false },
+        )
     }
 }
 
@@ -764,21 +718,17 @@ private fun SettingsInfoBottomSheet(
     }
 }
 
-private enum class SettingsInfoPresentation {
-    TOOLTIP,
-    BOTTOM_SHEET,
+private fun settingsInfoBodyOrNull(body: String?): String? {
+    val normalized = body?.trimMenuSummary()?.takeIf(String::isNotBlank) ?: return null
+    return normalized.takeIf(::shouldUseSettingsInfoSheet)
 }
 
-private fun settingsInfoPresentation(body: String): SettingsInfoPresentation {
+private fun shouldUseSettingsInfoSheet(body: String): Boolean {
     val nonBlankLineCount = body.lines().count { line -> line.isNotBlank() }
-    return if (nonBlankLineCount <= 3 && body.length <= SettingsTooltipMaxChars) {
-        SettingsInfoPresentation.TOOLTIP
-    } else {
-        SettingsInfoPresentation.BOTTOM_SHEET
-    }
+    return nonBlankLineCount > 3 || body.length > SettingsInfoSheetMinChars
 }
 
-private const val SettingsTooltipMaxChars = 180
+private const val SettingsInfoSheetMinChars = 180
 
 @Composable
 internal fun rememberWifiLanAddress(): State<String?> {

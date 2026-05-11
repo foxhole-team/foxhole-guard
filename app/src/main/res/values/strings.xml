@@ -292,6 +292,9 @@
     <string name="security_firewall_summary">Enables the local Firewall for logging, permanent blocking, and the live connections map.</string>
     <string name="security_firewall_info_body">When Firewall is enabled, Foxhole can keep a local VPN runtime for features that need honest access to network connections.</string>
     <string name="security_firewall_enable_action">Enable Firewall</string>
+    <string name="anomaly_enabled_title">Anomaly analysis</string>
+    <string name="anomaly_enabled_summary">Analyzes network traffic anomalies using algorithms: upload spike, background traffic, total traffic spike, new destination country, DNS block ratio, reconnect storm, latency shift, and privacy route mismatch.</string>
+    <string name="experimental_badge">EXPERIMENTAL</string>
     <string name="anomaly_notify_title">Notify about unusual traffic usage</string>
     <string name="anomaly_notify_summary">Shows a calm alert only when local aggregate traffic differs strongly from baseline.</string>
     <string name="anomaly_notify_info_body">Compares current local traffic with the learned baseline and notifies only when the anomaly score crosses the alert level.</string>
@@ -334,6 +337,8 @@
     <string name="traffic_map_setting_summary">Show the lightweight map on Dashboard.</string>
     <string name="show_tor_quick_launch_title">Show TOR</string>
     <string name="show_tor_quick_launch_summary">Show the TOR quick launch on Dashboard.</string>
+    <string name="show_firewall_status_title">Show Firewall status</string>
+    <string name="show_firewall_status_summary">Show the Firewall status chip on Dashboard when Firewall is enabled.</string>
     <string name="app_settings">App settings</string>
     <string name="expert_settings">Expert Settings</string>
     <string name="expert_unlock_confirm_title">Enable expert settings?</string>
@@ -347,7 +352,7 @@
     <string name="clear_usage_title">Clear statistics</string>
     <string name="statistics_title">Statistics</string>
     <string name="settings_home_statistics_summary">Network usage statistics</string>
-    <string name="app_statistics_enabled_title">Use Firewall for statistics</string>
+    <string name="app_statistics_enabled_title">Per-app traffic statistics</string>
     <string name="app_statistics_enabled_summary">Records per-app traffic with Android NetworkStats when Usage Access is granted.</string>
     <string name="app_statistics_firewall_warning_title">Enable Firewall for statistics?</string>
     <string name="app_statistics_firewall_warning_body">Application traffic statistics need Firewall so Foxhole can sample runtime traffic only while VPN is active.</string>

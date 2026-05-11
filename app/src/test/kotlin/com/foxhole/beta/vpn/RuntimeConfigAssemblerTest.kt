@@ -430,7 +430,7 @@ class RuntimeConfigAssemblerTest {
     }
 
     @Test
-    fun `kill switch local firewall guard blocks the whole tunnel`() {
+    fun `local firewall guard blocks explicitly selected apps only`() {
         val settings =
             Settings(
                 expert =
@@ -446,20 +446,23 @@ class RuntimeConfigAssemblerTest {
         val tunInbound = config["inbounds"]!!.jsonArray.single().jsonObject
         val route = config["route"]!!.jsonObject
 
-        assertFalse(tunInbound.containsKey("include_package"))
+        assertEquals(
+            listOf("org.mozilla.firefox"),
+            tunInbound["include_package"]!!.jsonArray.map { it.jsonPrimitive.content },
+        )
         assertFalse(tunInbound.containsKey("exclude_package"))
         assertEquals(false, tunInbound["strict_route"]!!.jsonPrimitive.content.toBoolean())
         assertEquals("block", route["final"]!!.jsonPrimitive.content)
     }
 
     @Test
-    fun `kill switch preference creates a local firewall guard mode`() {
+    fun `kill switch preference does not create a local guard mode`() {
         assertEquals(
-            LocalGuardMode.FIREWALL,
+            null,
             Settings(expert = ExpertSettings(killSwitchEnabled = true)).localGuardModeOrNull(),
         )
         assertEquals(
-            LocalGuardMode.FIREWALL,
+            LocalGuardMode.JOURNAL,
             Settings(
                 expert =
                     ExpertSettings(

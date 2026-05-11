@@ -1,6 +1,7 @@
 package com.foxhole.beta.core.anomaly
 
 import com.foxhole.beta.core.model.AnomalySensitivity
+import com.foxhole.beta.core.model.AnomalySettings
 import com.foxhole.beta.core.model.AnomalySeverity
 import com.foxhole.beta.core.model.AnomalyType
 import com.foxhole.beta.core.model.AppTrafficWindow
@@ -14,6 +15,20 @@ import org.junit.Test
 
 class AnomalyEngineTest {
     private val engine = AnomalyEngine()
+    private val enabledSettings = AnomalySettings(enabled = true)
+
+    @Test
+    fun `disabled anomaly analysis stays silent`() {
+        val assessment =
+            engine.evaluate(
+                current = trafficWindow(rxBytes = 1_000_000, txBytes = 9_000_000),
+                appWindows = listOf(appWindow(packageName = "com.chat", txBytes = 8_500_000, foreground = true)),
+                history = AnomalyHistory(appWindowsByPackage = mapOf("com.chat" to appHistory(txBytes = 120_000))),
+            )
+
+        assertEquals(AnomalySeverity.SILENT, assessment.severity)
+        assertTrue(assessment.signals.isEmpty())
+    }
 
     @Test
     fun `does not alert during first learning period unless extreme anomaly`() {
@@ -22,6 +37,7 @@ class AnomalyEngineTest {
                 current = trafficWindow(txBytes = 18_000_000),
                 appWindows = listOf(appWindow(packageName = "com.test", txBytes = 17_000_000, foreground = false)),
                 history = AnomalyHistory(),
+                settings = enabledSettings,
             )
 
         assertEquals(AnomalySeverity.SILENT, assessment.severity)
@@ -36,6 +52,7 @@ class AnomalyEngineTest {
                 current = trafficWindow(rxBytes = 1_000_000, txBytes = 9_000_000),
                 appWindows = listOf(appWindow(packageName = "com.chat", txBytes = 8_500_000, foreground = true)),
                 history = AnomalyHistory(appWindowsByPackage = mapOf("com.chat" to history)),
+                settings = enabledSettings,
             )
 
         assertTrue(assessment.signals.any { it.type == AnomalyType.APP_UPLOAD_SPIKE })
@@ -48,6 +65,7 @@ class AnomalyEngineTest {
                 current = trafficWindow(rxBytes = 1_000_000, txBytes = 7_000_000),
                 appWindows = listOf(appWindow(packageName = "com.sync", rxBytes = 500_000, txBytes = 6_500_000, foreground = false)),
                 history = AnomalyHistory(appWindowsByPackage = mapOf("com.sync" to appHistory(txBytes = 200_000))),
+                settings = enabledSettings,
             )
 
         assertTrue(assessment.signals.any { it.type == AnomalyType.APP_BACKGROUND_TRAFFIC })
@@ -60,6 +78,7 @@ class AnomalyEngineTest {
                 current = trafficWindow(destinationCountries = mapOf("NL" to 64_000L)),
                 appWindows = emptyList(),
                 history = AnomalyHistory(trafficWindows = trafficHistory(country = "DE")),
+                settings = enabledSettings,
             )
 
         assertFalse(assessment.signals.any { it.type == AnomalyType.NEW_DESTINATION_COUNTRY })
@@ -73,6 +92,7 @@ class AnomalyEngineTest {
                 current = trafficWindow(rxBytes = 1_000_000, txBytes = 2_000_000, destinationCountries = mapOf("NL" to 2_200_000L)),
                 appWindows = emptyList(),
                 history = AnomalyHistory(trafficWindows = trafficHistory(country = "DE")),
+                settings = enabledSettings,
             )
 
         assertTrue(assessment.signals.any { it.type == AnomalyType.NEW_DESTINATION_COUNTRY })
@@ -95,12 +115,14 @@ class AnomalyEngineTest {
                 current = trafficWindow(rxBytes = 2_000_000, txBytes = 8_000_000),
                 appWindows = listOf(appWindow(packageName = "com.cloud", txBytes = 8_000_000)),
                 history = AnomalyHistory(appWindowsByPackage = mapOf("com.cloud" to baselineOnlyHistory)),
+                settings = enabledSettings,
             )
         val contaminated =
             engine.evaluate(
                 current = trafficWindow(rxBytes = 2_000_000, txBytes = 8_000_000),
                 appWindows = listOf(appWindow(packageName = "com.cloud", txBytes = 8_000_000)),
                 history = AnomalyHistory(appWindowsByPackage = mapOf("com.cloud" to contaminatedHistory)),
+                settings = enabledSettings,
             )
 
         assertTrue(clean.score >= contaminated.score)

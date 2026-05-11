@@ -3,21 +3,6 @@
 package com.foxhole.beta.ui
 
 import android.text.format.Formatter
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.StartOffset
-import androidx.compose.animation.core.StartOffsetType
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.keyframes
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
@@ -82,7 +67,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
@@ -463,7 +447,7 @@ fun HomeScreen(
                                         } else {
                                             HomeStatusBadge(
                                                 state = topStatusState,
-                                                label = homeStatusLabel(topStatusState),
+                                                label = homeStatusLabel(state, topStatusState),
                                                 textStyle = MaterialTheme.typography.titleMedium,
                                                 accentColor = statusTone,
                                                 smartMarker =

@@ -32,6 +32,7 @@ import com.foxhole.beta.core.smart.AdaptiveProtocolCandidateScore
 import com.foxhole.beta.core.smart.AdaptiveProtocolRanker
 import com.foxhole.beta.core.smart.SmartStartController
 import com.foxhole.beta.core.smart.SmartStartReplayEvent
+import com.foxhole.beta.vpn.FoxholeVpnService
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
@@ -177,6 +178,7 @@ internal fun HomeViewModel.startAutoConnectInternal(profileId: Long) {
                 )
                 emitError(getApplication<Application>().getString(R.string.auto_connect_failed))
             } finally {
+                container.connectionController.clearSmartStartAnalysisStatus()
                 autoConnectJob = null
                 delay(HomeViewModel.AUTO_CONNECT_RESULT_SETTLE_MS)
                 clearAutoConnectUiState()
@@ -1237,6 +1239,7 @@ internal suspend fun HomeViewModel.awaitDisconnectedForAutoConnectInternal(
         if (
             isAutoConnectDisconnectSettled(
                 connectionState = snapshot.state,
+                profileId = snapshot.profileId,
                 currentVpnNetworkHandle = currentVpnNetworkHandle,
                 previousVpnNetworkHandle = expectedPreviousVpnNetworkHandle,
             )
@@ -1846,8 +1849,12 @@ internal fun HomeViewModel.logAdaptiveAutoConnectRanking(
 
 internal fun isAutoConnectDisconnectSettled(
     connectionState: ConnectionState,
+    profileId: Long?,
     currentVpnNetworkHandle: Long?,
     previousVpnNetworkHandle: Long?,
 ): Boolean =
-    connectionState in setOf(ConnectionState.IDLE, ConnectionState.ERROR) &&
+    (
+        connectionState in setOf(ConnectionState.IDLE, ConnectionState.ERROR) ||
+            (connectionState == ConnectionState.CONNECTED && profileId == FoxholeVpnService.LOCAL_GUARD_PROFILE_ID)
+    ) &&
         (previousVpnNetworkHandle == null || currentVpnNetworkHandle != previousVpnNetworkHandle)

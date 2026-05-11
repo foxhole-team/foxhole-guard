@@ -247,6 +247,7 @@ data class UiSettings(
     val networkCardEnabled: Boolean = true,
     val trafficCardEnabled: Boolean = true,
     val trafficMapEnabled: Boolean = true,
+    val showFirewallStatus: Boolean = false,
     val showTorQuickLaunch: Boolean = false,
     val dashboardCardOrder: List<DashboardCard> = DashboardCard.entries,
 )

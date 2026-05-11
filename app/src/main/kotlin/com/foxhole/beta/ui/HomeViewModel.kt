@@ -968,6 +968,8 @@ class HomeViewModel(
 
     fun onShowTorQuickLaunchChanged(value: Boolean) = onShowTorQuickLaunchChangedInternal(value)
 
+    fun onShowFirewallStatusChanged(value: Boolean) = onShowFirewallStatusChangedInternal(value)
+
     fun onDashboardCardOrderChanged(value: List<com.foxhole.beta.core.model.DashboardCard>) =
         onDashboardCardOrderChangedInternal(value)
 
@@ -984,6 +986,8 @@ class HomeViewModel(
     fun onDiagnosticsRetentionSelected(value: DiagnosticsRetention) = onDiagnosticsRetentionSelectedInternal(value)
 
     fun onNotifyUnusualTrafficChanged(value: Boolean) = onNotifyUnusualTrafficChangedInternal(value)
+
+    fun onAnomalyEnabledChanged(value: Boolean) = onAnomalyEnabledChangedInternal(value)
 
     fun onAnomalySensitivitySelected(value: AnomalySensitivity) = onAnomalySensitivitySelectedInternal(value)
 
@@ -1398,8 +1402,7 @@ class HomeViewModel(
     ): Boolean =
         settings.statistics.enabled &&
             settings.statistics.appTrafficEnabled &&
-            settings.appTrafficStatsEnabled &&
-            settings.expert.firewallEnabled
+            settings.appTrafficStatsEnabled
 
     internal fun ClipData.firstTextItem(): String? =
         if (itemCount > 0) {

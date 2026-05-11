@@ -494,6 +494,7 @@ fun FoxholeApp(
                         snackbarHostState = snackbarHostState,
                         onNavigateUp = navController::navigateUp,
                         onFirewallEnabledChanged = viewModel::onFirewallEnabledChanged,
+                        onAnomalyEnabledChanged = viewModel::onAnomalyEnabledChanged,
                         onNotifyUnusualTrafficChanged = viewModel::onNotifyUnusualTrafficChanged,
                         onAnomalySensitivitySelected = viewModel::onAnomalySensitivitySelected,
                         onAnalyzeBackgroundTrafficChanged = viewModel::onAnalyzeBackgroundTrafficChanged,
@@ -631,6 +632,7 @@ fun FoxholeApp(
                         onNetworkCardEnabledChanged = viewModel::onNetworkCardEnabledChanged,
                         onTrafficCardEnabledChanged = viewModel::onTrafficCardEnabledChanged,
                         onTrafficMapEnabledChanged = viewModel::onTrafficMapEnabledChanged,
+                        onShowFirewallStatusChanged = viewModel::onShowFirewallStatusChanged,
                         onShowTorQuickLaunchChanged = viewModel::onShowTorQuickLaunchChanged,
                     )
                 }

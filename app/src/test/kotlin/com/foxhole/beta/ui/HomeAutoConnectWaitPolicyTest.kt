@@ -48,6 +48,7 @@ class HomeAutoConnectWaitPolicyTest {
         assertFalse(
             isAutoConnectDisconnectSettled(
                 connectionState = ConnectionState.IDLE,
+                profileId = null,
                 currentVpnNetworkHandle = 42L,
                 previousVpnNetworkHandle = 42L,
             ),
@@ -55,6 +56,19 @@ class HomeAutoConnectWaitPolicyTest {
         assertTrue(
             isAutoConnectDisconnectSettled(
                 connectionState = ConnectionState.IDLE,
+                profileId = null,
+                currentVpnNetworkHandle = 84L,
+                previousVpnNetworkHandle = 42L,
+            ),
+        )
+    }
+
+    @Test
+    fun `disconnect settle accepts replacement local guard vpn during smart start`() {
+        assertTrue(
+            isAutoConnectDisconnectSettled(
+                connectionState = ConnectionState.CONNECTED,
+                profileId = FoxholeVpnService.LOCAL_GUARD_PROFILE_ID,
                 currentVpnNetworkHandle = 84L,
                 previousVpnNetworkHandle = 42L,
             ),

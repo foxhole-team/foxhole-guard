@@ -311,6 +311,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
                     return
                 }
         currentCoroutineContext().ensureActive()
+        stopActiveLocalGuardBeforeTunnelConnect()
         activeSession = session
         activeLocalGuardMode = null
         container.diagnosticsLogger.recordStructured(
@@ -377,6 +378,24 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         }
     }
 
+    private suspend fun stopActiveLocalGuardBeforeTunnelConnect() {
+        val localGuardMode = activeLocalGuardMode ?: return
+        container.diagnosticsLogger.record(
+            "connection",
+            "local guard handoff to tunnel mode=${localGuardMode.name.lowercase()}",
+        )
+        stopTrafficUpdates()
+        stopAppTrafficStatsUpdates()
+        stopGeoRefresh()
+        stopNotificationHealthMonitoring()
+        validationJob?.cancel()
+        validationJob = null
+        runtime.stop()
+        releaseRuntimeWakeLock()
+        activeLocalGuardMode = null
+        FoxholeVpnRuntimeBridge.updateTraffic(trafficSampler.reset())
+    }
+
     internal suspend fun disconnect(
         message: String? = null,
         commandStartId: Int? = null,
@@ -385,6 +404,12 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
     ) {
         val session = activeSession
         val localGuardMode = activeLocalGuardMode
+        val previousSnapshot = FoxholeVpnRuntimeBridge.snapshot.value
+        val analysisStatus = getString(R.string.notification_status_analysis)
+        val preserveSmartStartAnalysis =
+            message == null &&
+                previousSnapshot.isSmartStartConnection &&
+                previousSnapshot.message == analysisStatus
         val finalTraffic =
             if (session != null) {
                 trafficSampler.sample()
@@ -427,8 +452,9 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
             ConnectionSnapshot(
                 state = if (message == null) ConnectionState.IDLE else ConnectionState.ERROR,
                 trafficMode = container.settingsRepository.current().traffic.mode,
-                message = message,
+                message = message ?: analysisStatus.takeIf { preserveSmartStartAnalysis },
                 reasonCode = reasonCode,
+                isSmartStartConnection = preserveSmartStartAnalysis,
             ),
         )
         updateNotification()
@@ -489,6 +515,11 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
                 configJson = container.runtimeConfigAssembler.assembleLocalGuard(settings, mode),
                 correlationId = "local-guard-${System.currentTimeMillis()}",
             )
+        val previousSnapshot = FoxholeVpnRuntimeBridge.snapshot.value
+        val analysisStatus = getString(R.string.notification_status_analysis)
+        val analysisMessage =
+            previousSnapshot.message
+                .takeIf { previousSnapshot.isSmartStartConnection && it == analysisStatus }
         activeSession = null
         activeLocalGuardMode = mode
         FoxholeVpnRuntimeBridge.clearTransientState(clearIpInfo = false)
@@ -499,6 +530,8 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
                 profileId = LOCAL_GUARD_PROFILE_ID,
                 profileName = mode.runtimeProfileName(),
                 protocolHint = com.foxhole.beta.core.model.ProtocolHint.SING_BOX,
+                message = analysisMessage,
+                isSmartStartConnection = analysisMessage != null,
             ),
         )
         acquireRuntimeWakeLock()
@@ -514,6 +547,8 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
                     profileId = LOCAL_GUARD_PROFILE_ID,
                     profileName = mode.runtimeProfileName(),
                     protocolHint = com.foxhole.beta.core.model.ProtocolHint.SING_BOX,
+                    message = analysisMessage,
+                    isSmartStartConnection = analysisMessage != null,
                 ),
             )
             container.diagnosticsLogger.record("connection", "local guard started mode=${mode.name.lowercase()}")
@@ -1110,8 +1145,7 @@ private fun FoxholeVpnService.notificationTorRouteActive(): Boolean {
 private fun Settings.appTrafficStatsRuntimeEnabled(): Boolean =
     statistics.enabled &&
         statistics.appTrafficEnabled &&
-        appTrafficStatsEnabled &&
-        expert.firewallEnabled
+        appTrafficStatsEnabled
 
 internal interface VpnCoreRuntime {
     suspend fun start(session: VpnSession, host: RuntimeServiceHost): Result<Unit>

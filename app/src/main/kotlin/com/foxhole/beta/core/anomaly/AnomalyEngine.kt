@@ -39,6 +39,13 @@ class AnomalyEngine(
         history: AnomalyHistory,
         settings: AnomalySettings = AnomalySettings(),
     ): AnomalyAssessment {
+        if (!settings.enabled) {
+            return AnomalyAssessment(
+                signals = emptyList(),
+                score = 0,
+                severity = AnomalySeverity.SILENT,
+            )
+        }
         val context =
             AnomalyDetectionContext(
                 current = current,
