@@ -1,6 +1,7 @@
 package com.foxhole.beta.core.traffic
 
 import android.content.Context
+import com.foxhole.beta.core.anomaly.DnsRuntimeStats
 import io.nekohasekai.libbox.CommandClientHandler
 import io.nekohasekai.libbox.CommandClientOptions
 import io.nekohasekai.libbox.Connection
@@ -127,6 +128,11 @@ private fun Connections.toTrafficMapSamples(countryResolver: TorGeoIpCountryReso
     iterator()
         .toConnectionList()
         .asSequence()
+        .onEach { connection ->
+            if (connection.outboundType.equals(DNS_OUTBOUND_TYPE, ignoreCase = true)) {
+                DnsRuntimeStats.recordDnsConnection(connection.stableTrafficMapConnectionId())
+            }
+        }
         .filterNot { connection -> connection.outboundType.equals(DNS_OUTBOUND_TYPE, ignoreCase = true) }
         .mapNotNull { connection -> connection.toTrafficMapSample(countryResolver) }
         .toList()

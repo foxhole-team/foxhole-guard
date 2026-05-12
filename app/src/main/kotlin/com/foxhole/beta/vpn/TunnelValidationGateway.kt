@@ -30,15 +30,51 @@ internal class TunnelValidationGateway(
     suspend fun refreshIpInfo(fetchMode: IpInfoFetchMode): IpInfo {
         val settings = settingsRepository.current()
         val endpoint = settings.connection.ipInfoEndpoint
+        val currentSnapshot = snapshot.value
         val trafficMode =
-            snapshot.value.state
+            currentSnapshot.state
                 .takeIf { it in ACTIVE_CONNECTION_STATES }
-                ?.let { snapshot.value.trafficMode }
+                ?.let { currentSnapshot.trafficMode }
                 ?: TrafficMode.TUNNEL
+        val tunnelConnected = trafficMode == TrafficMode.TUNNEL && currentSnapshot.state in ACTIVE_CONNECTION_STATES
+        val localGuardActive = tunnelConnected && currentSnapshot.profileId == FoxholeVpnService.LOCAL_GUARD_PROFILE_ID
+        val activeTunnelConnected = tunnelConnected && !localGuardActive
+        val session =
+            currentSnapshot.profileId
+                ?.let { profileId ->
+                    runCatching { profileRepository.getSession(profileId) }.getOrNull()
+                }
+        val remoteDnsServers = session?.configJson?.let(VpnDnsServerSelector::remoteDnsServerAddresses).orEmpty()
+        if (activeTunnelConnected) {
+            val vpnNetwork = currentVpnNetwork() ?: error("vpn network unavailable")
+            val requestNetwork = tunnelValidationRequestNetwork(vpnNetwork)
+            val resolverNetwork = currentUpstreamNetwork()
+            val preferIpv4Validation = shouldPreferIpv4TunnelValidation(currentSnapshot.protocolHint, session?.configJson)
+            val info =
+                if (preferIpv4Validation) {
+                    ipInfoRepository.fetchIpv4(
+                        endpoint = endpoint,
+                        callTimeoutMs = FoxholeVpnService.CONNECTIVITY_PROBE_CALL_TIMEOUT_MS,
+                        network = requestNetwork,
+                        resolverNetwork = resolverNetwork,
+                    ) ?: error("vpn ipv4 refresh failed")
+                } else {
+                    ipInfoRepository.fetch(
+                        endpoint = endpoint,
+                        callTimeoutMs = FoxholeVpnService.CONNECTIVITY_PROBE_CALL_TIMEOUT_MS,
+                        network = requestNetwork,
+                        resolverNetwork = resolverNetwork,
+                        mode = fetchMode,
+                    )
+                }
+            return info.withDnsServers(
+                localDnsServers = connectivityManager.dnsServerAddresses(vpnNetwork),
+                remoteDnsServers = remoteDnsServers,
+            )
+        }
         val proxyAccess = if (trafficMode == TrafficMode.PROXY) settings.preferredAppProxyAccess() else null
-        val tunnelConnected = trafficMode == TrafficMode.TUNNEL && snapshot.value.state in ACTIVE_CONNECTION_STATES
         val upstreamNetwork = currentUpstreamNetwork()
-        val localGuardActive = !tunnelConnected && settings.localGuardModeOrNull() != null
+        val localGuardRuntimeActive = localGuardActive || (!tunnelConnected && settings.localGuardModeOrNull() != null)
         val dnsNetwork =
             when {
                 trafficMode != TrafficMode.TUNNEL -> null
@@ -49,18 +85,11 @@ internal class TunnelValidationGateway(
                 trafficMode != TrafficMode.TUNNEL -> null
                 else -> upstreamNetwork
             }
-        val remoteDnsServers =
-            snapshot.value.profileId
-                ?.let { profileId ->
-                    runCatching {
-                        VpnDnsServerSelector.remoteDnsServerAddresses(profileRepository.getSession(profileId).configJson)
-                    }.getOrDefault(emptyList())
-                }.orEmpty()
         return fetchDeviceIpInfo(
             endpoint = endpoint,
             fetchMode = fetchMode,
             requestNetwork = requestNetwork,
-            requireRequestNetwork = localGuardActive || tunnelConnected,
+            requireRequestNetwork = localGuardRuntimeActive,
             proxy = proxyAccess,
         ).withDnsServers(
             localDnsServers = connectivityManager.dnsServerAddresses(dnsNetwork),

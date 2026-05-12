@@ -18,6 +18,7 @@ import com.foxhole.beta.FoxholeApplication
 import com.foxhole.beta.FoxholeRuntimeDependencies
 import com.foxhole.beta.R
 import com.foxhole.beta.core.anomaly.AndroidNetworkTypeProvider
+import com.foxhole.beta.core.anomaly.DnsRuntimeStats
 import com.foxhole.beta.core.anomaly.TrafficAggregationContext
 import com.foxhole.beta.core.anomaly.TrafficWindowAggregator
 import com.foxhole.beta.core.model.AutoConnectReasonCode
@@ -784,6 +785,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
 
     internal fun startTrafficUpdates() {
         stopTrafficUpdates()
+        DnsRuntimeStats.reset()
         FoxholeVpnRuntimeBridge.updateTraffic(trafficSampler.sample(resetRateBaseline = true))
         immediateTrafficSampleJob =
             scope.launch(Dispatchers.Default) {
@@ -814,6 +816,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         trafficJob?.cancel()
         trafficJob = null
         anomalyTrafficAggregator.reset()
+        DnsRuntimeStats.reset()
     }
 
     internal fun startAppTrafficStatsUpdates() {
@@ -844,18 +847,22 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
     internal fun recordAnomalyTrafficWindow(sample: TrafficSnapshot) {
         val connection = FoxholeVpnRuntimeBridge.snapshot.value
         val settings = container.settingsRepository.settings.value
+        val dnsDelta = DnsRuntimeStats.snapshot()
         val aggregationContext =
             TrafficAggregationContext(
                 connection = connection,
                 settings = settings,
                 networkType = anomalyNetworkTypeProvider.current(),
                 destinationCountries = container.trafficMapRepository.currentDestinationCountryBytes(),
+                blockedDns = dnsDelta.blocked,
+                allowedDns = dnsDelta.allowed,
             )
         val window =
             anomalyTrafficAggregator.aggregate(
                 snapshot = sample,
                 context = aggregationContext,
             ) ?: return
+        DnsRuntimeStats.drain()
         scope.launch(Dispatchers.IO) {
             val appWindows =
                 if (settings.appTrafficStatsRuntimeEnabled()) {
@@ -890,7 +897,10 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
                             )
                         }
                             .onSuccess {
-                                FoxholeVpnRuntimeBridge.updateIpInfo(it)
+                                FoxholeVpnRuntimeBridge.updateDeviceIpInfo(it)
+                                if (shouldPublishAppOwnedIpInfo()) {
+                                    FoxholeVpnRuntimeBridge.updateIpInfo(it)
+                                }
                                 container.diagnosticsLogger.record("ip", "geo refreshed")
                                 launch(Dispatchers.Main.immediate) { updateNotification() }
                                 startIpv4EnrichmentIfNeeded(
@@ -937,8 +947,16 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
                             network = network,
                         )
                     }.getOrNull() ?: return@launch
-                val merged = mergeIpInfo(primary = FoxholeVpnRuntimeBridge.ipInfo.value ?: info, ipv4 = ipv4Info, ipv6 = null)
-                FoxholeVpnRuntimeBridge.updateIpInfo(merged)
+                val merged =
+                    mergeIpInfo(
+                        primary = FoxholeVpnRuntimeBridge.deviceIpInfo.value ?: info,
+                        ipv4 = ipv4Info,
+                        ipv6 = null,
+                    )
+                FoxholeVpnRuntimeBridge.updateDeviceIpInfo(merged)
+                if (shouldPublishAppOwnedIpInfo()) {
+                    FoxholeVpnRuntimeBridge.updateIpInfo(merged)
+                }
                 container.diagnosticsLogger.record("ip", "ipv4 enriched")
                 launch(Dispatchers.Main.immediate) { updateNotification() }
             }
@@ -1104,6 +1122,13 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
 
     internal fun currentUpstreamNetworkOrNull(): Network? =
         currentUpstreamNetworkOrNullInternal()
+
+    internal fun shouldPublishAppOwnedIpInfo(): Boolean {
+        val snapshot = FoxholeVpnRuntimeBridge.snapshot.value
+        return snapshot.state !in ACTIVE_CONNECTION_STATES ||
+            snapshot.trafficMode != TrafficMode.TUNNEL ||
+            snapshot.profileId == LOCAL_GUARD_PROFILE_ID
+    }
 
     internal fun isVpnNetworkValidated(network: Network): Boolean = isVpnNetworkValidatedInternal(network)
 

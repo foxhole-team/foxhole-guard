@@ -288,6 +288,7 @@ private fun LazyListScope.settingsHomeNavigationItems(
             modifier = Modifier.testTag("settings_security_action"),
             icon = Icons.Outlined.Lock,
             title = stringResource(R.string.security_settings_title),
+            titleTrailingContent = { ExperimentalBadge() },
             summary = stringResource(R.string.security_settings_summary),
             onClick = onOpenSecurity,
         )

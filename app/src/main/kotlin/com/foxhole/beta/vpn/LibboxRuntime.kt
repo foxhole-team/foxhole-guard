@@ -20,6 +20,7 @@ import androidx.core.content.getSystemService
 import com.foxhole.beta.BuildConfig
 import com.foxhole.beta.core.diagnostics.DiagnosticSanitizer
 import com.foxhole.beta.core.diagnostics.DiagnosticsLogger
+import com.foxhole.beta.core.anomaly.DnsRuntimeStats
 import com.foxhole.beta.core.model.VpnSession
 import java.net.InetAddress
 import java.net.NetworkInterface
@@ -93,7 +94,10 @@ private class ReflectiveLibboxRuntime(
                         message
                             .trim()
                             .takeIf(String::isNotBlank)
-                            ?.let { diagnosticsLogger.record("libbox", it) }
+                            ?.let {
+                                DnsRuntimeStats.recordLogMessage(it)
+                                diagnosticsLogger.record("libbox", it)
+                            }
                     },
                 )
             val server = reflection.newCommandServer(handler, platform)

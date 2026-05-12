@@ -55,7 +55,7 @@ class AnomalyRepository(
     val recentTrafficWindows: Flow<List<TrafficWindow>> =
         settingsRepository.settings
             .flatMapLatest { settings ->
-                if (!settings.statistics.enabled || !settings.statistics.countryTrafficEnabled || !settings.expert.firewallEnabled) {
+                if (!settings.trafficWindowStatsRuntimeEnabled()) {
                     flowOf(emptyList())
                 } else {
                     dao.observeRecentTrafficWindows(cutoff = statisticsCutoff(settings.statistics.retention))
@@ -230,3 +230,11 @@ private fun Settings.appTrafficStatsRuntimeEnabled(): Boolean =
     statistics.enabled &&
         statistics.appTrafficEnabled &&
         appTrafficStatsEnabled
+
+private fun Settings.trafficWindowStatsRuntimeEnabled(): Boolean =
+    statistics.enabled &&
+        (
+            statistics.dnsFilteringEnabled ||
+                statistics.anomalyMetricsEnabled ||
+                (statistics.countryTrafficEnabled && expert.firewallEnabled)
+            )

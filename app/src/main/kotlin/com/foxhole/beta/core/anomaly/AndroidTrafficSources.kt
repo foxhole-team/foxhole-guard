@@ -91,6 +91,10 @@ class AppTrafficSampler(
                 return@withContext emptyList()
             }
             val manager = networkStatsManager
+            val usageSummaryByUid =
+                manager
+                    ?.queryUidUsageSummary(startAt, now)
+                    .orEmpty()
             val networkType = networkTypeProvider.current()
             val windows =
                 cachedInstalledApplications(now)
@@ -98,10 +102,11 @@ class AppTrafficSampler(
                     .filterNot { app -> app.packageName == appContext.packageName }
                     .mapNotNull { app ->
                         val usage =
-                            manager
-                                ?.queryUidUsage(app.uid, startAt, now)
-                                ?.takeIf(UidTrafficUsage::hasTraffic)
-                                ?: uidTrafficStatsDelta(app.uid)
+                            uidTrafficStatsDelta(app.uid)
+                                .takeIf(UidTrafficUsage::hasTraffic)
+                                ?: usageSummaryByUid[app.uid]
+                                    ?.takeIf(UidTrafficUsage::hasTraffic)
+                                ?: UidTrafficUsage()
                         if (usage.rxBytes <= 0L && usage.txBytes <= 0L) {
                             null
                         } else {
@@ -153,6 +158,36 @@ class AppTrafficSampler(
         val wifi = runCatching { queryUidUsageForNetwork(ConnectivityManager.TYPE_WIFI, uid, startAt, endAt) }.getOrDefault(UidTrafficUsage())
         val mobile = runCatching { queryUidUsageForNetwork(ConnectivityManager.TYPE_MOBILE, uid, startAt, endAt) }.getOrDefault(UidTrafficUsage())
         return wifi + mobile
+    }
+
+    private fun NetworkStatsManager.queryUidUsageSummary(
+        startAt: Long,
+        endAt: Long,
+    ): Map<Int, UidTrafficUsage> {
+        val totals = mutableMapOf<Int, UidTrafficUsage>()
+        listOf(ConnectivityManager.TYPE_WIFI, ConnectivityManager.TYPE_MOBILE).forEach { networkType ->
+            runCatching {
+                val bucket = NetworkStats.Bucket()
+                querySummary(networkType, null, startAt, endAt).use { stats ->
+                    while (stats.hasNextBucket()) {
+                        stats.getNextBucket(bucket)
+                        val uid = bucket.uid
+                        val rx = bucket.rxBytes.coerceAtLeast(0L)
+                        val tx = bucket.txBytes.coerceAtLeast(0L)
+                        if (uid > 0 && (rx > 0L || tx > 0L)) {
+                            val foreground =
+                                when (bucket.state) {
+                                    NetworkStats.Bucket.STATE_FOREGROUND -> true
+                                    else -> false
+                                }
+                            val previous = totals[uid] ?: UidTrafficUsage()
+                            totals[uid] = previous + UidTrafficUsage(rxBytes = rx, txBytes = tx, foreground = foreground)
+                        }
+                    }
+                }
+            }
+        }
+        return totals
     }
 
     private fun uidTrafficStatsDelta(uid: Int): UidTrafficUsage {

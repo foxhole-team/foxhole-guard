@@ -51,6 +51,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.SnackbarHostState
@@ -227,23 +228,32 @@ fun HomeScreen(
     val dashboardConnectionDetailsReady = dashboardProtocolModel.connectionDetailsReady
     val dashboardConnectionMetricsLoading = dashboardProtocolModel.connectionMetricsLoading
     var activeReorderCard by rememberSaveable { mutableStateOf<DashboardCard?>(null) }
-    val dashboardCardOrder =
-        remember(state.settings.ui.dashboardCardOrder) {
-            normalizedDashboardCardOrder(state.settings.ui.dashboardCardOrder)
+    var dashboardCardOrder by remember {
+        mutableStateOf(normalizedDashboardCardOrder(state.settings.ui.dashboardCardOrder))
+    }
+
+    LaunchedEffect(state.settings.ui.dashboardCardOrder, activeReorderCard) {
+        if (activeReorderCard == null) {
+            dashboardCardOrder = normalizedDashboardCardOrder(state.settings.ui.dashboardCardOrder)
         }
+    }
 
     fun moveDashboardCard(
         card: DashboardCard,
-        direction: Int,
+        steps: Int,
     ) {
-        val current = normalizedDashboardCardOrder(state.settings.ui.dashboardCardOrder).toMutableList()
+        if (steps == 0) {
+            return
+        }
+        val current = dashboardCardOrder.toMutableList()
         val from = current.indexOf(card)
-        val to = (from + direction).coerceIn(0, current.lastIndex)
+        val to = (from + steps).coerceIn(0, current.lastIndex)
         if (from < 0 || from == to) {
             return
         }
         current.removeAt(from)
         current.add(to, card)
+        dashboardCardOrder = current
         onDashboardCardOrderChanged(current)
     }
     val deviceInternetAvailable by rememberDefaultInternetAvailability()
@@ -256,13 +266,13 @@ fun HomeScreen(
                 ConnectionState.RECONNECTING,
             )
         }
-    LaunchedEffect(state.autoConnect.running, state.ipInfo, state.connection.state) {
+    val networkInfoPinnedForProtocolSearch = state.autoConnect.running || state.protocolMetricsRefreshing
+    LaunchedEffect(networkInfoPinnedForProtocolSearch, state.ipInfo, state.connection.state) {
         when {
-            state.autoConnect.running -> {
+            networkInfoPinnedForProtocolSearch -> {
                 if (!keepPinnedNetworkInfo) {
-                    pinnedIpInfo = state.ipInfo ?: pinnedIpInfo
+                    keepPinnedNetworkInfo = true
                 }
-                keepPinnedNetworkInfo = pinnedIpInfo != null
             }
             state.connection.state in pinnedConnectionStates && state.ipInfo == null && pinnedIpInfo != null -> {
                 keepPinnedNetworkInfo = true
@@ -288,6 +298,7 @@ fun HomeScreen(
         }
     val visibleNetworkIpInfo = networkModel.visibleIpInfo
     val showNetworkLoading = networkModel.showLoading
+    val showNetworkRefreshProgress = networkModel.showRefreshProgress
     val showNetworkConnectionStatus = networkModel.showConnectionStatus
     val showNetworkRouteDetails = showNetworkConnectionStatus
     val networkInfoTitleRes = networkModel.titleRes
@@ -799,6 +810,17 @@ fun HomeScreen(
                                 )
                             },
                         )
+                        if (showNetworkRefreshProgress) {
+                            LinearProgressIndicator(
+                                modifier =
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .height(2.dp)
+                                        .testTag("home_network_refresh_progress"),
+                                color = autoTone,
+                                trackColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.44f),
+                            )
+                        }
                         Box(
                             modifier = Modifier.fillMaxWidth().heightIn(min = HomeNetworkContentHeight),
                             contentAlignment = Alignment.TopStart,
@@ -906,17 +928,16 @@ fun HomeScreen(
                                                 when {
                                                     !connectionMetricsAvailable ->
                                                         stringResource(R.string.smart_start_protocol_status_no_data)
-                                                    remoteDnsServer != null ->
-                                                        stringResource(
-                                                            R.string.home_network_dns_through_vpn,
-                                                            remoteDnsServer,
+                                                    remoteDnsServer != null || localDnsServer != null || networkIpInfo != null ->
+                                                        dashboardDnsModeLine(
+                                                            ipInfo = networkIpInfo,
+                                                            secureMode = state.settings.dns.secureMode,
                                                         )
-                                                    localDnsServer != null ->
-                                                        stringResource(
-                                                            R.string.home_network_dns_local,
-                                                            localDnsServer,
+                                                    else ->
+                                                        dashboardDnsModeLine(
+                                                            ipInfo = null,
+                                                            secureMode = state.settings.dns.secureMode,
                                                         )
-                                                    else -> stringResource(R.string.home_network_dns_waiting)
                                                 }
                                             val transportTypeText = dashboardTransportTypeLabel(dashboardProtocolPresentation.protocolHint)
                                             HomeNetworkColumnTitle(stringResource(R.string.home_network_profile_info_title))
@@ -1205,9 +1226,9 @@ private fun DashboardCardDragContainer(
                             change.consume()
                             dragOffset += dragAmount.y
                             while (abs(dragOffset) >= dragThresholdPx) {
-                                val direction = if (dragOffset > 0f) 1 else -1
-                                onMove(card, direction)
-                                dragOffset -= dragThresholdPx * direction
+                                val steps = (dragOffset / dragThresholdPx).toInt()
+                                onMove(card, steps)
+                                dragOffset -= dragThresholdPx * steps
                                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                             }
                         },

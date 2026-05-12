@@ -16,8 +16,10 @@ import com.foxhole.beta.core.model.PrivacyRouteMode
 import com.foxhole.beta.core.model.Profile
 import com.foxhole.beta.core.model.RoutingPresetSource
 import com.foxhole.beta.core.model.RoutingRuleAction
+import com.foxhole.beta.core.model.TrafficMode
 import com.foxhole.beta.core.model.isUdpTransport
 import com.foxhole.beta.core.network.IpInfoFetchMode
+import com.foxhole.beta.vpn.FoxholeVpnService
 import com.foxhole.beta.vpn.FoxholeVpnRuntimeBridge
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -83,6 +85,9 @@ internal fun HomeViewModel.refreshIpInfoInternalInternal(
                 runCatching { container.connectionController.refreshIpInfo(fetchMode = fetchMode) }
                     .onSuccess { info ->
                         if (ipInfoRefreshToken == refreshToken) {
+                            if (container.connectionController.snapshot.value.shouldPublishDeviceIpInfoFromDashboardRefresh()) {
+                                FoxholeVpnRuntimeBridge.updateDeviceIpInfo(info)
+                            }
                             FoxholeVpnRuntimeBridge.updateIpInfo(info)
                             container.diagnosticsLogger.record("ip", "geo refreshed")
                         }
@@ -117,6 +122,11 @@ internal fun HomeViewModel.refreshIpInfoInternalInternal(
             }
         }
 }
+
+private fun com.foxhole.beta.core.model.ConnectionSnapshot.shouldPublishDeviceIpInfoFromDashboardRefresh(): Boolean =
+    state !in HomeViewModel.ACTIVE_CONNECTION_STATES ||
+        trafficMode != TrafficMode.TUNNEL ||
+        profileId == FoxholeVpnService.LOCAL_GUARD_PROFILE_ID
 
 internal suspend fun HomeViewModel.getResolvedConfigInternal(
     profileId: Long,

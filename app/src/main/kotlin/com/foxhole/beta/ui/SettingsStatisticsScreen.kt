@@ -5,6 +5,7 @@ package com.foxhole.beta.ui
 import android.content.Intent
 import android.provider.Settings
 import android.text.format.DateUtils
+import android.content.Context
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -45,7 +46,6 @@ import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -55,6 +55,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -109,6 +110,9 @@ import com.foxhole.beta.core.model.TransportProtocol
 import com.foxhole.beta.core.model.TransportStatisticsUiItem
 import com.foxhole.beta.core.model.TrafficWindow
 import com.foxhole.beta.ui.theme.LocalFoxholeSemanticColors
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import java.util.Locale
 import kotlin.math.ceil
 import kotlin.math.max
@@ -137,6 +141,7 @@ fun StatisticsScreen(
     var selectedApp by rememberSaveable { mutableStateOf<String?>(null) }
     var selectedProfileId by rememberSaveable { mutableStateOf<Long?>(null) }
     var clearConfirmVisible by rememberSaveable { mutableStateOf(false) }
+    var appStatsEnablePendingUsageAccess by rememberSaveable { mutableStateOf(false) }
     val statisticsSettings = state.settings.statistics
     val context = LocalContext.current
     val retention = state.settings.statistics.retention
@@ -178,7 +183,13 @@ fun StatisticsScreen(
             )
         }
     val appStatsSwitchChecked = state.settings.appTrafficStatsEnabled
-    val usageAccessGranted = UsageStatsAccess.isGranted(context)
+    val usageAccessGranted = rememberUsageAccessGranted()
+    LaunchedEffect(usageAccessGranted, appStatsEnablePendingUsageAccess) {
+        if (usageAccessGranted && appStatsEnablePendingUsageAccess) {
+            appStatsEnablePendingUsageAccess = false
+            onAppTrafficStatsEnabledChanged(true)
+        }
+    }
     val firewallEnabled = state.settings.expert.firewallEnabled
     val dnsFilteringAvailable = state.settings.dns.adGuardFilteringEnabled()
     val appStatsEnabled =
@@ -235,7 +246,7 @@ fun StatisticsScreen(
                     TransportStatisticsSection(items = statistics.transports)
                 }
             }
-            if (statisticsSettings.dnsFilteringEnabled && dnsFilteringAvailable && dnsSummary.totalQueries > 0) {
+            if (statisticsSettings.dnsFilteringEnabled && dnsFilteringAvailable) {
                 item(key = "dns-protection") {
                     DnsProtectionCard(summary = dnsSummary)
                 }
@@ -259,7 +270,7 @@ fun StatisticsScreen(
                         allRowsCount = appRows.size,
                         enabled = appStatsEnabled,
                         usageAccessGranted = usageAccessGranted,
-                        onOpenUsageAccess = { context.startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)) },
+                        onOpenUsageAccess = { openUsageAccessSettings(context) },
                         onShowAll = { allAppsVisible = true },
                         onRowClick = { row -> selectedApp = row.packageName },
                     )
@@ -331,7 +342,15 @@ fun StatisticsScreen(
                             checked = appStatsSwitchChecked,
                             summary = stringResource(R.string.app_statistics_enabled_summary),
                             leadingIcon = Icons.Outlined.Apps,
-                            onCheckedChange = onAppTrafficStatsEnabledChanged,
+                            onCheckedChange = { enabled ->
+                                if (enabled && !usageAccessGranted) {
+                                    appStatsEnablePendingUsageAccess = true
+                                    openUsageAccessSettings(context)
+                                } else {
+                                    appStatsEnablePendingUsageAccess = false
+                                    onAppTrafficStatsEnabledChanged(enabled)
+                                }
+                            },
                             enabled = statisticsSettings.enabled,
                             grouped = true,
                         )
@@ -374,7 +393,13 @@ fun StatisticsScreen(
                             checked = statisticsSettings.appTrafficEnabled,
                             title = stringResource(R.string.statistics_metric_apps),
                             enabled = statisticsSettings.enabled,
-                            onMetricChanged = onStatisticsMetricEnabledChanged,
+                            onMetricChanged = { metric, enabled ->
+                                if (enabled && appStatsSwitchChecked && !usageAccessGranted) {
+                                    appStatsEnablePendingUsageAccess = true
+                                    openUsageAccessSettings(context)
+                                }
+                                onStatisticsMetricEnabledChanged(metric, enabled)
+                            },
                         )
                         SettingsControlGroupDivider()
                         StatisticsMetricSwitch(
@@ -679,16 +704,7 @@ private fun CountryTrafficCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             } else if (rows.isEmpty()) {
-                LoadingStatisticsBlock(
-                    text =
-                        stringResource(
-                            if (state.isAvailable) {
-                                R.string.statistics_loading
-                            } else {
-                                R.string.traffic_map_waiting_connections
-                            },
-                        ),
-                )
+                EmptySectionText(text = stringResource(R.string.traffic_map_waiting_connections))
             } else {
                 Row(
                     modifier = Modifier
@@ -820,24 +836,6 @@ private fun CountryTrafficRow(row: CountryTrafficUiRow) {
             style = MaterialTheme.typography.labelMedium,
             fontWeight = FontWeight.SemiBold,
             textAlign = TextAlign.End,
-        )
-    }
-}
-
-@Composable
-private fun LoadingStatisticsBlock(text: String) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .heightIn(min = 72.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
-        Text(
-            text = text,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
 }
@@ -1581,6 +1579,35 @@ private fun InstalledAppChangeRow(change: InstalledAppInventoryChange) {
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun rememberUsageAccessGranted(): Boolean {
+    val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var granted by remember(context) { mutableStateOf(UsageStatsAccess.isGranted(context)) }
+    DisposableEffect(context, lifecycleOwner) {
+        val observer =
+            LifecycleEventObserver { _, event ->
+                if (event == Lifecycle.Event.ON_RESUME) {
+                    granted = UsageStatsAccess.isGranted(context)
+                }
+            }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        granted = UsageStatsAccess.isGranted(context)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
+    return granted
+}
+
+private fun openUsageAccessSettings(context: Context) {
+    runCatching {
+        context.startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
+    }.recoverCatching {
+        context.startActivity(Intent(Settings.ACTION_SETTINGS))
     }
 }
 
