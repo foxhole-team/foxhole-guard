@@ -51,7 +51,6 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.SnackbarHostState
@@ -114,6 +113,7 @@ import com.foxhole.beta.ui.FoxholeScaffold
 import com.foxhole.beta.ui.ScreenHorizontalPadding
 import com.foxhole.beta.ui.ScreenSectionSpacing
 import com.foxhole.beta.ui.ScreenVerticalPadding
+import com.foxhole.beta.vpn.ACTIVE_CONNECTION_STATES
 import kotlinx.coroutines.delay
 import kotlin.math.abs
 
@@ -298,7 +298,6 @@ fun HomeScreen(
         }
     val visibleNetworkIpInfo = networkModel.visibleIpInfo
     val showNetworkLoading = networkModel.showLoading
-    val showNetworkRefreshProgress = networkModel.showRefreshProgress
     val showNetworkConnectionStatus = networkModel.showConnectionStatus
     val showNetworkRouteDetails = showNetworkConnectionStatus
     val networkInfoTitleRes = networkModel.titleRes
@@ -810,17 +809,6 @@ fun HomeScreen(
                                 )
                             },
                         )
-                        if (showNetworkRefreshProgress) {
-                            LinearProgressIndicator(
-                                modifier =
-                                    Modifier
-                                        .fillMaxWidth()
-                                        .height(2.dp)
-                                        .testTag("home_network_refresh_progress"),
-                                color = autoTone,
-                                trackColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.44f),
-                            )
-                        }
                         Box(
                             modifier = Modifier.fillMaxWidth().heightIn(min = HomeNetworkContentHeight),
                             contentAlignment = Alignment.TopStart,
@@ -836,7 +824,6 @@ fun HomeScreen(
                                         labels =
                                             listOf(
                                                 stringResource(R.string.home_network_country_label),
-                                                stringResource(R.string.home_network_city_label),
                                                 stringResource(R.string.home_network_ip_label),
                                                 stringResource(R.string.home_network_provider_label),
                                             ),
@@ -871,7 +858,6 @@ fun HomeScreen(
                                             stringResource(R.string.home_network_unavailable)
                                         }
                                     val ipText = if (networkIpInfo != null) primaryVisibleIp(networkIpInfo) else "-"
-                                    val cityText = networkIpInfo?.let(::buildCityLine) ?: "-"
                                     val providerText = networkIpInfo?.isp?.takeIf { it.isNotBlank() } ?: "-"
                                     Column(
                                         modifier = Modifier.weight(1f),
@@ -882,12 +868,6 @@ fun HomeScreen(
                                             label = stringResource(R.string.home_network_country_label),
                                             value = countryText,
                                             modifier = Modifier.testTag("home_network_country"),
-                                        )
-                                        HomeNetworkSubtleDivider()
-                                        HomeNetworkDetailLine(
-                                            label = stringResource(R.string.home_network_city_label),
-                                            value = cityText,
-                                            modifier = Modifier.testTag("home_network_city"),
                                         )
                                         HomeNetworkSubtleDivider()
                                         HomeNetworkDetailLine(
@@ -987,6 +967,10 @@ fun HomeScreen(
                                     onMove = ::moveDashboardCard,
                                 ) {
                 val trafficModel = resolveHomeDashboardTrafficModel(state, System.currentTimeMillis())
+                val trafficLoading =
+                    state.connection.state in ACTIVE_CONNECTION_STATES &&
+                        !state.traffic.available &&
+                        state.traffic.sampledAt == 0L
                 val totalTrafficText =
                     buildAnnotatedString {
                         append(stringResource(R.string.home_total_traffic_title))
@@ -1072,6 +1056,7 @@ fun HomeScreen(
                                         valueTag = "home_traffic_rx_value",
                                         secondaryTag = "home_traffic_rx_rate",
                                         horizontalAlignment = Alignment.CenterHorizontally,
+                                        loading = trafficLoading,
                                     )
                                     TrafficStatBlock(
                                         modifier = Modifier.weight(1f),
@@ -1084,6 +1069,7 @@ fun HomeScreen(
                                         valueTag = "home_traffic_tx_value",
                                         secondaryTag = "home_traffic_tx_rate",
                                         horizontalAlignment = Alignment.CenterHorizontally,
+                                        loading = trafficLoading,
                                     )
                                     TrafficStatBlock(
                                         modifier = Modifier.weight(1f),
@@ -1108,6 +1094,7 @@ fun HomeScreen(
                                         valueTag = "home_traffic_total_value",
                                         secondaryTag = "home_traffic_total_rate",
                                         horizontalAlignment = Alignment.CenterHorizontally,
+                                        loading = trafficLoading,
                                     )
                                 }
                             }

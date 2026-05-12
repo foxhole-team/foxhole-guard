@@ -1170,9 +1170,9 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         internal const val GEO_REFRESH_INITIAL_DELAY_MS = 0L
         internal const val GEO_REFRESH_RETRY_DELAY_MS = 2_000L
         internal const val GEO_REFRESH_CALL_TIMEOUT_MS = 5_000L
-        internal const val VPN_NETWORK_WAIT_TIMEOUT_MS = 5_000L
-        internal const val CONNECTIVITY_PROBE_NETWORK_WAIT_TIMEOUT_MS = 5_000L
-        internal const val VPN_NETWORK_WAIT_POLL_DELAY_MS = 150L
+        internal const val VPN_NETWORK_WAIT_TIMEOUT_MS = 3_000L
+        internal const val CONNECTIVITY_PROBE_NETWORK_WAIT_TIMEOUT_MS = 3_000L
+        internal const val VPN_NETWORK_WAIT_POLL_DELAY_MS = 100L
         internal const val IPV4_ENRICHMENT_CALL_TIMEOUT_MS = 4_000L
         internal val CONNECTIVITY_PROBE_ENDPOINTS =
             listOf(
@@ -1192,17 +1192,17 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
                 ConnectionState.RECONNECTING,
             )
         internal const val NOTIFICATION_HEALTH_PROBE_TIMEOUT_MS = 1_000L
-        internal const val NOTIFICATION_HEALTH_FAILURE_THRESHOLD = 3
+        internal const val NOTIFICATION_HEALTH_FAILURE_THRESHOLD = 5
         internal val UDP_HEALTH_PROBE_PAYLOAD = byteArrayOf(0x66)
-        internal const val CONNECTIVITY_PROBE_ATTEMPTS = 8
-        internal const val CONNECTIVITY_PROBE_INITIAL_DELAY_MS = 300L
-        internal const val CONNECTIVITY_PROBE_RETRY_DELAY_MS = 1_000L
-        internal const val CONNECTIVITY_PROBE_CALL_TIMEOUT_MS = 4_000L
-        internal const val CONNECTIVITY_PROBE_TOTAL_TIMEOUT_MS = 24_000L
+        internal const val CONNECTIVITY_PROBE_ATTEMPTS = 4
+        internal const val CONNECTIVITY_PROBE_INITIAL_DELAY_MS = 150L
+        internal const val CONNECTIVITY_PROBE_RETRY_DELAY_MS = 500L
+        internal const val CONNECTIVITY_PROBE_CALL_TIMEOUT_MS = 2_500L
+        internal const val CONNECTIVITY_PROBE_TOTAL_TIMEOUT_MS = 10_000L
         internal const val CONNECTIVITY_PROBE_GRACE_MAX_TIMEOUT_MS = com.foxhole.beta.vpn.CONNECTIVITY_PROBE_GRACE_MAX_TIMEOUT_MS
-        internal const val CONNECTIVITY_LITERAL_PROBE_EARLY_WINDOW_MS = 1_200L
-        internal const val CONNECTIVITY_LITERAL_PROBE_POLL_MS = 150L
-        internal const val CONNECTIVITY_LITERAL_PROBE_CALL_TIMEOUT_MS = 2_000L
+        internal const val CONNECTIVITY_LITERAL_PROBE_EARLY_WINDOW_MS = 900L
+        internal const val CONNECTIVITY_LITERAL_PROBE_POLL_MS = 100L
+        internal const val CONNECTIVITY_LITERAL_PROBE_CALL_TIMEOUT_MS = 1_200L
         internal const val LOCAL_GUARD_PROFILE_ID = -10L
         internal const val APP_TRAFFIC_SAMPLE_INTERVAL_MS = 60_000L
         internal const val APP_TRAFFIC_SAMPLE_CACHE_MAX_AGE_MS = 15_000L

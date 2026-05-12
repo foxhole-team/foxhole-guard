@@ -281,7 +281,7 @@ private suspend fun FoxholeVpnService.smartStartFailoverOptionId(
     return orderedIds.firstOrNull { optionId -> optionId in fallbackIds }
 }
 
-private const val SMART_START_FAILOVER_MIN_DOWN_MS = 60L * 1000L
+private const val SMART_START_FAILOVER_MIN_DOWN_MS = 3_000L
 
 private suspend fun FoxholeVpnService.stopActiveRuntimeForReconnect(
     session: VpnSession,

@@ -1663,13 +1663,20 @@ class RuntimeConfigAssemblerTest {
                     baseConfigWithRules("profile.example"),
                     Settings(dns = DnsSettings(filteringEnabled = true)),
                     null,
-                    dnsFilterRuntimePaths = DnsFilterRuntimePaths(adGuardDnsFilterPath = filterPath),
+                    dnsFilterRuntimePaths =
+                        DnsFilterRuntimePaths(
+                            adGuardDnsFilterPath = filterPath,
+                            adGuardVpnCompatibilityDomains = listOf("adguard-vpn.com"),
+                        ),
                 ),
             )
         val dnsRules = config["dns"]!!.jsonObject["rules"]!!.jsonArray.map { it.jsonObject }
         val adGuardRule = dnsRules.single { rule -> rule.stringArray("rule_set").contains("foxhole-adguard-dns-filter") }
+        val compatibilityRule = dnsRules.single { rule -> rule.stringArray("domain_suffix").contains("adguard-vpn.com") }
         val ruleSet = config["route"]!!.jsonObject["rule_set"]!!.jsonArray.single().jsonObject
 
+        assertTrue(dnsRules.indexOf(compatibilityRule) < dnsRules.indexOf(adGuardRule))
+        assertEquals("dns-remote", compatibilityRule["server"]!!.jsonPrimitive.content)
         assertEquals("predefined", adGuardRule["action"]!!.jsonPrimitive.content)
         assertEquals("NXDOMAIN", adGuardRule["rcode"]!!.jsonPrimitive.content)
         assertEquals("local", ruleSet["type"]!!.jsonPrimitive.content)

@@ -1034,7 +1034,6 @@ internal suspend fun HomeViewModel.probeAutoConnectCandidateInternal(
             traffic = container.connectionController.traffic.value,
             fallbackAt = outcomeRecordedAt,
         )
-    measureAndCacheProtocolServerPing(profileId, candidate.optionId, candidate.protocolHint, networkFingerprint)
     val measuredLatency =
         runCatching { measureAutoConnectCandidateLatency() }
             .onFailure { probeError ->
@@ -1070,6 +1069,7 @@ internal suspend fun HomeViewModel.probeAutoConnectCandidateInternal(
         optionId = candidate.optionId,
         latencyMs = measuredLatency,
     )
+    measureAndCacheProtocolServerPing(profileId, candidate.optionId, candidate.protocolHint, networkFingerprint)
     return AutoConnectProbeResult(
         candidate = candidate,
         success = true,

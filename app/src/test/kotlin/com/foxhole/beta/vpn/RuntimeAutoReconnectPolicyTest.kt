@@ -20,10 +20,10 @@ class RuntimeAutoReconnectPolicyTest {
     @Test
     fun `uses bounded reconnect backoff`() {
         assertEquals(0L, RuntimeAutoReconnectPolicy.backoffDelayMs(1))
-        assertEquals(2_000L, RuntimeAutoReconnectPolicy.backoffDelayMs(2))
-        assertEquals(5_000L, RuntimeAutoReconnectPolicy.backoffDelayMs(3))
-        assertEquals(15_000L, RuntimeAutoReconnectPolicy.backoffDelayMs(4))
-        assertEquals(15_000L, RuntimeAutoReconnectPolicy.backoffDelayMs(20))
+        assertEquals(1_000L, RuntimeAutoReconnectPolicy.backoffDelayMs(2))
+        assertEquals(2_000L, RuntimeAutoReconnectPolicy.backoffDelayMs(3))
+        assertEquals(5_000L, RuntimeAutoReconnectPolicy.backoffDelayMs(4))
+        assertEquals(5_000L, RuntimeAutoReconnectPolicy.backoffDelayMs(20))
         assertEquals(0L, RuntimeAutoReconnectPolicy.backoffDelayMs(1, retryDelaySeconds = 5))
         assertEquals(5_000L, RuntimeAutoReconnectPolicy.backoffDelayMs(2, retryDelaySeconds = 5))
     }

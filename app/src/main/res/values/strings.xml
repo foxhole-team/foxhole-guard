@@ -78,6 +78,9 @@
     <string name="home_network_current_ip_title">Current IP address</string>
     <string name="home_network_profile_info_title">Connection status</string>
     <string name="home_network_country_label">Country:</string>
+    <string name="home_network_local_network">Local network</string>
+    <string name="home_network_wifi_provider">Wi-Fi</string>
+    <string name="home_network_cellular_provider">Cellular</string>
     <string name="home_network_city_label">City:</string>
     <string name="home_network_ip_label">IP:</string>
     <string name="home_network_provider_label">Provider:</string>

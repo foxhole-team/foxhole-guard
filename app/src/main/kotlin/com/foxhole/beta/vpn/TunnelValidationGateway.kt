@@ -3,7 +3,9 @@ package com.foxhole.beta.vpn
 import android.content.Context
 import android.net.ConnectivityManager
 import android.net.Network
+import android.net.NetworkCapabilities
 import androidx.core.content.getSystemService
+import com.foxhole.beta.R
 import com.foxhole.beta.core.data.ProfileRepository
 import com.foxhole.beta.core.diagnostics.DiagnosticsLogger
 import com.foxhole.beta.core.model.ConnectionSnapshot
@@ -25,6 +27,7 @@ internal class TunnelValidationGateway(
     private val currentVpnNetwork: () -> Network?,
     private val currentUpstreamNetwork: () -> Network?,
 ) {
+    private val appContext = context.applicationContext
     private val connectivityManager by lazy { context.getSystemService<ConnectivityManager>()!! }
 
     suspend fun refreshIpInfo(fetchMode: IpInfoFetchMode): IpInfo {
@@ -103,39 +106,94 @@ internal class TunnelValidationGateway(
         requestNetwork: Network?,
         requireRequestNetwork: Boolean,
         proxy: HttpProxyAccess?,
-    ): IpInfo =
+    ): IpInfo {
         if (proxy != null) {
-            ipInfoRepository.fetch(
+            return ipInfoRepository.fetch(
                 endpoint = endpoint,
                 proxy = proxy,
                 mode = fetchMode,
             )
-        } else if (requestNetwork != null) {
-            ipInfoRepository.fetch(
-                endpoint = endpoint,
-                network = requestNetwork,
-                mode = fetchMode,
-            )
-        } else if (requireRequestNetwork) {
-            error("upstream network unavailable")
-        } else {
-            runCatching {
+        }
+        if (requestNetwork != null) {
+            return runCatching {
                 ipInfoRepository.fetch(
                     endpoint = endpoint,
+                    network = requestNetwork,
                     mode = fetchMode,
                 )
             }.getOrElse { error ->
-                val upstreamNetwork = requestNetwork ?: throw error
-                diagnosticsLogger.record(
-                    "ip",
-                    "device ip refresh failed on default path, retrying explicit upstream network",
-                )
-                ipInfoRepository.fetch(
-                    endpoint = endpoint,
-                    network = upstreamNetwork,
-                    mode = fetchMode,
-                )
+                localDeviceIpInfo(requestNetwork)
+                    ?.also {
+                        diagnosticsLogger.record(
+                            "ip",
+                            "device ip refresh used local network fallback after ${error.javaClass.simpleName}",
+                        )
+                    }
+                    ?: throw error
             }
         }
+        if (requireRequestNetwork) {
+            error("upstream network unavailable")
+        }
+        return runCatching {
+            ipInfoRepository.fetch(
+                endpoint = endpoint,
+                mode = fetchMode,
+            )
+        }.recoverCatching { error ->
+            val upstreamNetwork = currentUpstreamNetwork() ?: throw error
+            diagnosticsLogger.record(
+                "ip",
+                "device ip refresh failed on default path, retrying explicit upstream network",
+            )
+            ipInfoRepository.fetch(
+                endpoint = endpoint,
+                network = upstreamNetwork,
+                mode = fetchMode,
+            )
+        }.getOrElse { error ->
+            localDeviceIpInfo(connectivityManager.activeNetwork)
+                ?.also {
+                    diagnosticsLogger.record(
+                        "ip",
+                        "device ip refresh used local network fallback after ${error.javaClass.simpleName}",
+                    )
+                }
+                ?: throw error
+        }
+    }
 
+    private fun localDeviceIpInfo(network: Network?): IpInfo? {
+        val address =
+            network
+                ?.let(connectivityManager::getLinkProperties)
+                ?.linkAddresses
+                .orEmpty()
+                .mapNotNull { linkAddress -> linkAddress.address.hostAddress?.substringBefore('%') }
+                .filterNot { value -> value.isBlank() || value.startsWith("127.") || value.equals("::1", ignoreCase = true) }
+                .filterNot { value -> value.startsWith("fe80:", ignoreCase = true) || value.startsWith("169.254.") }
+                .sortedBy { value -> if (value.contains('.')) 0 else 1 }
+                .firstOrNull()
+                ?: return null
+        val capabilities = network?.let(connectivityManager::getNetworkCapabilities)
+        return IpInfo(
+            ip = address,
+            ipv4 = address.takeIf { it.contains('.') },
+            ipv6 = address.takeIf { it.contains(':') },
+            countryCode = null,
+            countryName = appContext.getString(R.string.home_network_local_network),
+            city = null,
+            isp = capabilities.localNetworkProviderLabel(),
+            fetchedAt = System.currentTimeMillis(),
+        )
+    }
+
+    private fun NetworkCapabilities?.localNetworkProviderLabel(): String =
+        when {
+            this?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true ->
+                appContext.getString(R.string.home_network_wifi_provider)
+            this?.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) == true ->
+                appContext.getString(R.string.home_network_cellular_provider)
+            else -> appContext.getString(R.string.home_network_local_network)
+        }
 }

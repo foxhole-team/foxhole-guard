@@ -23,8 +23,8 @@ internal object RuntimeAutoReconnectPolicy {
                 }
             } ?: when (attempt.coerceAtLeast(1)) {
                 1 -> 0L
-                2 -> 2_000L
-                3 -> 5_000L
-                else -> 15_000L
+                2 -> 1_000L
+                3 -> 2_000L
+                else -> 5_000L
             }
 }

@@ -80,7 +80,7 @@ class TrafficMapRepository(
             originLon = origin.lon,
             originCountryCode = originInfo?.countryCode,
             originCountryName = originInfo?.countryName,
-            originCity = originInfo?.city,
+            originCity = null,
             isAvailable = runtimeAvailable,
             destinations = visibleDestinations,
             edges = visibleDestinations.map { point ->
@@ -92,7 +92,10 @@ class TrafficMapRepository(
                     bytes = point.bytes,
                 )
             },
-            highlightedCountries = emptySet(),
+            highlightedCountries =
+                (visibleDestinations.map(TrafficMapPoint::countryCode) + listOfNotNull(originInfo?.countryCode))
+                    .map { countryCode -> countryCode.uppercase(Locale.US) }
+                    .toSet(),
         )
     }
 

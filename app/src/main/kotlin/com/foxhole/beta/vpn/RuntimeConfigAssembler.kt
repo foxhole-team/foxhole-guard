@@ -1253,6 +1253,22 @@ class RuntimeConfigAssembler(
                     },
                 )
             }
+            val adGuardVpnCompatibilityDomains =
+                dnsFilterRuntimePaths
+                    ?.adGuardVpnCompatibilityDomains
+                    .orEmpty()
+                    .filter(String::isNotBlank)
+            if (adGuardVpnCompatibilityDomains.isNotEmpty()) {
+                add(
+                    buildJsonObject {
+                        putJsonArray("domain_suffix") {
+                            adGuardVpnCompatibilityDomains.forEach { add(JsonPrimitive(it)) }
+                        }
+                        put("action", "route")
+                        put("server", DNS_REMOTE_TAG)
+                    },
+                )
+            }
             if (dnsSettings.bundledAdGuardFilterEnabled() && dnsFilterRuntimePaths != null) {
                 add(
                     buildJsonObject {

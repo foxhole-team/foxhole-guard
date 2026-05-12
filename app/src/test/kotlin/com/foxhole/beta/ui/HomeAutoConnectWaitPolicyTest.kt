@@ -144,14 +144,14 @@ class HomeAutoConnectWaitPolicyTest {
             HomeViewModel.AUTO_CONNECT_VALIDATION_GRACE_TIMEOUT_MS,
         )
         assertEquals(3, HomeViewModel.AUTO_CONNECT_MAX_ATTEMPTS)
-        assertEquals(60_000L, HomeViewModel.AUTO_CONNECT_TOTAL_TIMEOUT_MS)
+        assertEquals(35_000L, HomeViewModel.AUTO_CONNECT_TOTAL_TIMEOUT_MS)
     }
 
     @Test
     fun `candidate probe timeout uses smart start setting defaults`() {
-        assertEquals(15_000L, autoConnectCandidateProbeTimeoutMs())
-        assertEquals(20_000L, protocolMetricsCandidateProbeTimeoutMs())
-        assertEquals(10_000L, autoConnectCandidateProbeTimeoutMs(timeoutSeconds = 3))
+        assertEquals(10_000L, autoConnectCandidateProbeTimeoutMs())
+        assertEquals(15_000L, protocolMetricsCandidateProbeTimeoutMs())
+        assertEquals(5_000L, autoConnectCandidateProbeTimeoutMs(timeoutSeconds = 3))
         assertEquals(60_000L, protocolMetricsCandidateProbeTimeoutMs(timeoutSeconds = 99))
         assertTrue(protocolMetricsCandidateProbeTimeoutMs() > autoConnectCandidateProbeTimeoutMs())
         assertTrue(autoConnectCandidateProbeTimeoutMs() < HomeViewModel.AUTO_CONNECT_TOTAL_TIMEOUT_MS)
@@ -233,8 +233,8 @@ class HomeAutoConnectWaitPolicyTest {
 
     @Test
     fun `auto connect retries high warmup latency before recording display latency`() {
-        assertFalse(shouldRetryAutoConnectLatencyMeasurement(999L))
-        assertTrue(shouldRetryAutoConnectLatencyMeasurement(1_000L))
+        assertFalse(shouldRetryAutoConnectLatencyMeasurement(899L))
+        assertTrue(shouldRetryAutoConnectLatencyMeasurement(900L))
         assertEquals(
             430L,
             resolveAutoConnectLatencyMeasurementResult(

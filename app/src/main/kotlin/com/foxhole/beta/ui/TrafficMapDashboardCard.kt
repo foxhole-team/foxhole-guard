@@ -117,6 +117,7 @@ private fun TrafficMapCanvas(
     val latestState = rememberUpdatedState(state)
     val mapBackgroundColor = TrafficMapFlatBackground
     val baseCountryColor = TrafficMapCountryFill
+    val activeCountryColor = TrafficMapActiveCountryFill
     val borderColor = TrafficMapCountryBorder
     val lineColor = TrafficMapLineColor
     val originColor = FoxholePositiveAccent
@@ -146,10 +147,23 @@ private fun TrafficMapCanvas(
                         cornerRadius = CornerRadius(0f, 0f),
                     )
                     val mapState = latestState.value
+                    val activeCountries =
+                        (
+                            mapState.highlightedCountries +
+                                mapState.destinations.map(TrafficMapPoint::countryCode) +
+                                listOfNotNull(mapState.originCountryCode)
+                            )
+                            .map { countryCode -> countryCode.uppercase(Locale.US) }
+                            .toSet()
                     countryPaths.forEach { country ->
                         drawPath(
                             path = country.path,
-                            color = baseCountryColor,
+                            color =
+                                if (country.countryCode.uppercase(Locale.US) in activeCountries) {
+                                    activeCountryColor
+                                } else {
+                                    baseCountryColor
+                                },
                         )
                     }
                     countryPaths.forEach { country ->
@@ -168,7 +182,7 @@ private fun TrafficMapCanvas(
                         val to = project(edge.toLat, edge.toLon, viewport)
                         val weight = edge.bytes.toFloat() / maxBytes.toFloat()
                         drawLine(
-                            color = lineColor.copy(alpha = 0.22f + (0.28f * weight)),
+                            color = lineColor.copy(alpha = 0.38f + (0.32f * weight)),
                             start = from,
                             end = to,
                             strokeWidth = minLineStroke + ((maxLineStroke - minLineStroke) * weight),
@@ -303,7 +317,6 @@ private fun TrafficMapOriginRow(
 
 private fun TrafficMapUiState.originLocationLabel(): String =
     listOfNotNull(
-        originCity,
         originCountryName?.let { countryName -> "${countryEmoji(originCountryCode)} $countryName" }
             ?: originCountryCode?.let(::countryEmoji),
     )
@@ -370,7 +383,11 @@ private fun TrafficMapLegendDestinationRow(
                 ) {}
             }
             TrafficMapLegendCell(
-                text = "${countryEmoji(point.countryCode)} ${point.countryCode.uppercase(Locale.US)}",
+                text =
+                    listOf(
+                        countryEmoji(point.countryCode),
+                        point.label.takeIf(String::isNotBlank) ?: point.countryCode.uppercase(Locale.US),
+                    ).joinToString(" "),
                 modifier = Modifier.weight(1f),
                 textAlign = TextAlign.Start,
             )
@@ -557,9 +574,10 @@ private data class ProjectedTrafficMapCountry(
 
 private val TrafficMapFlatBackground = Color(0xFF25272B)
 private val TrafficMapCountryFill = Color(0xFF555B62)
+private val TrafficMapActiveCountryFill = Color(0xFF327B58)
 private val TrafficMapCountryBorder = Color(0xFF727982).copy(alpha = 0.42f)
-private val TrafficMapLineColor = Color(0xFFD8DEE6)
-private val TrafficMapDestinationColor = Color(0xFFE1E5EA)
+private val TrafficMapLineColor = Color(0xFF111318)
+private val TrafficMapDestinationColor = FoxholePositiveAccent
 private val TrafficMapPhoneScreenColor = Color(0xFF1E2024)
 private val TRAFFIC_MAP_CARD_TOTAL_HEIGHT = 184.dp
 private const val TRAFFIC_MAP_WEIGHT = 0.70f

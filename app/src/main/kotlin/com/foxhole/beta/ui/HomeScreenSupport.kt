@@ -101,7 +101,7 @@ internal val HomePrimaryActionHeight = 52.dp
 internal val HomeTriangleIndicatorSize = 15.dp
 internal val HomeDashboardBannerTopPadding = 74.dp
 internal val HomeConnectingStatusSignalOffset = 3.dp
-internal val HomeNetworkContentHeight = 90.dp
+internal val HomeNetworkContentHeight = 72.dp
 internal val HomeDashboardProfileContentHeight = 62.dp
 private val HomeNetworkValueLoadingWidth = 68.dp
 private val HomeNetworkMetricValueLoadingWidth = 54.dp
@@ -879,6 +879,7 @@ internal fun TrafficStatBlock(
     valueTag: String? = null,
     secondaryTag: String? = null,
     horizontalAlignment: Alignment.Horizontal = Alignment.Start,
+    loading: Boolean = false,
 ) {
     val textAlign =
         when (horizontalAlignment) {
@@ -928,28 +929,45 @@ internal fun TrafficStatBlock(
                     textAlign = textAlign,
                 )
             }
-            Text(
-                text = value,
-                modifier =
-                    (valueTag?.let(Modifier::testTag) ?: Modifier)
-                        .fillMaxWidth(),
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.SemiBold,
-                textAlign = textAlign,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                text = secondary,
-                modifier =
-                    (secondaryTag?.let(Modifier::testTag) ?: Modifier)
-                        .fillMaxWidth(),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = textAlign,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
+            if (loading) {
+                FoxholeSkeletonBlock(
+                    modifier =
+                        (valueTag?.let(Modifier::testTag) ?: Modifier)
+                            .fillMaxWidth(0.72f)
+                            .height(15.dp),
+                    color = labelColor,
+                )
+                FoxholeSkeletonBlock(
+                    modifier =
+                        (secondaryTag?.let(Modifier::testTag) ?: Modifier)
+                            .fillMaxWidth(0.56f)
+                            .height(10.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                )
+            } else {
+                Text(
+                    text = value,
+                    modifier =
+                        (valueTag?.let(Modifier::testTag) ?: Modifier)
+                            .fillMaxWidth(),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    textAlign = textAlign,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = secondary,
+                    modifier =
+                        (secondaryTag?.let(Modifier::testTag) ?: Modifier)
+                            .fillMaxWidth(),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = textAlign,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
         }
     }
 }

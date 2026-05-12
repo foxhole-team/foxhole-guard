@@ -8,6 +8,7 @@ import java.security.MessageDigest
 
 data class DnsFilterRuntimePaths(
     val adGuardDnsFilterPath: String,
+    val adGuardVpnCompatibilityDomains: List<String> = emptyList(),
 )
 
 class DnsFilterAssetInstaller(
@@ -23,7 +24,10 @@ class DnsFilterAssetInstaller(
                 }
             }
             require(target.isValidAdGuardDnsFilter()) { "bundled AdGuard DNS filter checksum mismatch" }
-            DnsFilterRuntimePaths(adGuardDnsFilterPath = target.absolutePath)
+            DnsFilterRuntimePaths(
+                adGuardDnsFilterPath = target.absolutePath,
+                adGuardVpnCompatibilityDomains = loadAdGuardVpnCompatibilityDomains(),
+            )
         }
 
     private fun File.isValidAdGuardDnsFilter(): Boolean =
@@ -46,10 +50,25 @@ class DnsFilterAssetInstaller(
         return digest.digest().joinToString(separator = "") { byte -> "%02x".format(byte) }
     }
 
+    private fun loadAdGuardVpnCompatibilityDomains(): List<String> =
+        runCatching {
+            appContext.assets.open(ADGUARD_VPN_COMPATIBILITY_ASSET_PATH)
+                .bufferedReader()
+                .useLines { lines ->
+                    lines
+                        .map(String::trim)
+                        .filter { line -> line.isNotBlank() && !line.startsWith("#") }
+                        .map { line -> line.removePrefix("*.").removePrefix(".").lowercase() }
+                        .distinct()
+                        .toList()
+                }
+        }.getOrDefault(emptyList())
+
     private companion object {
         const val TARGET_DIR_NAME = "dns-rule-sets"
         const val ADGUARD_DNS_FILTER_FILE_NAME = "adguard-dns-filter.srs"
         const val ADGUARD_DNS_FILTER_ASSET_PATH = "rule-sets/$ADGUARD_DNS_FILTER_FILE_NAME"
+        const val ADGUARD_VPN_COMPATIBILITY_ASSET_PATH = "rule-sets/adguard-vpn-compatibility-allowlist.txt"
         const val ADGUARD_DNS_FILTER_SIZE_BYTES = 1_450_468L
         const val ADGUARD_DNS_FILTER_SHA256 = "ccb39947545fbdc4dc3d0660e532f28daf3029c91891fe573c92c0b1caaf951f"
     }

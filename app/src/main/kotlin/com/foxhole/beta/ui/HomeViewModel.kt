@@ -600,10 +600,10 @@ class HomeViewModel(
                 } else if (shouldRefreshIdleIp && !autoConnectUiStateMutable.value.running) {
                     startIpInfoRefresh(
                         reportFailures = false,
-                        showLoading = false,
+                        showLoading = true,
                         clearExistingIp = true,
                         fetchMode = IpInfoFetchMode.ENTRY_QUICK,
-                        minimumLoadingDurationMs = 0L,
+                        minimumLoadingDurationMs = AUTO_IP_REFRESH_MIN_LOADING_MS,
                     )
                 }
             }
@@ -628,10 +628,10 @@ class HomeViewModel(
         } else {
             startIpInfoRefresh(
                 reportFailures = false,
-                showLoading = false,
+                showLoading = true,
                 clearExistingIp = true,
                 fetchMode = IpInfoFetchMode.ENTRY_QUICK,
-                minimumLoadingDurationMs = 0L,
+                minimumLoadingDurationMs = AUTO_IP_REFRESH_MIN_LOADING_MS,
             )
         }
     }
@@ -1478,10 +1478,11 @@ class HomeViewModel(
     companion object {
         internal const val CONNECTED_IP_REFRESH_DELAY_MS = 5_000L
         internal const val MANUAL_IP_REFRESH_MIN_LOADING_MS = 666L
-        internal const val CONNECTED_LATENCY_FIRST_DELAY_MS = 2_000L
+        internal const val AUTO_IP_REFRESH_MIN_LOADING_MS = 450L
+        internal const val CONNECTED_LATENCY_FIRST_DELAY_MS = 350L
         internal const val CONNECTED_LATENCY_REFRESH_INTERVAL_MS = 15_000L
-        internal const val CONNECTED_LATENCY_TIMEOUT_MS = 4_000L
-        internal const val CONNECTED_SERVER_PING_TIMEOUT_MS = 2_500L
+        internal const val CONNECTED_LATENCY_TIMEOUT_MS = 2_500L
+        internal const val CONNECTED_SERVER_PING_TIMEOUT_MS = 1_200L
         internal const val PROFILE_RECONNECT_PROMPT_WINDOW_MS = 13_000L
         internal const val RUNTIME_RELOAD_PENDING_TIMEOUT_MS = 1_500L
         internal const val AUTO_CONNECT_CONNECTION_TIMEOUT_MS =
@@ -1494,11 +1495,11 @@ class HomeViewModel(
                 FoxholeVpnService.CONNECTIVITY_PROBE_NETWORK_WAIT_TIMEOUT_MS
         internal const val AUTO_CONNECT_DISCONNECT_POLL_DELAY_MS = FoxholeVpnService.VPN_NETWORK_WAIT_POLL_DELAY_MS
         internal const val AUTO_CONNECT_LATENCY_MEASUREMENT_SETTLE_MS = CONNECTED_LATENCY_FIRST_DELAY_MS
-        internal const val AUTO_CONNECT_LATENCY_MEASUREMENT_RETRY_THRESHOLD_MS = 1_000L
-        internal const val AUTO_CONNECT_LATENCY_MEASUREMENT_RETRY_DELAY_MS = 300L
-        internal const val AUTO_CONNECT_PROTOCOL_TRANSITION_SETTLE_MS = 220L
-        internal const val AUTO_CONNECT_RESULT_SETTLE_MS = 850L
-        internal const val AUTO_CONNECT_TOTAL_TIMEOUT_MS = 60_000L
+        internal const val AUTO_CONNECT_LATENCY_MEASUREMENT_RETRY_THRESHOLD_MS = 900L
+        internal const val AUTO_CONNECT_LATENCY_MEASUREMENT_RETRY_DELAY_MS = 160L
+        internal const val AUTO_CONNECT_PROTOCOL_TRANSITION_SETTLE_MS = 90L
+        internal const val AUTO_CONNECT_RESULT_SETTLE_MS = 500L
+        internal const val AUTO_CONNECT_TOTAL_TIMEOUT_MS = 35_000L
         internal const val AUTO_CONNECT_MAX_ATTEMPTS = SmartStartController.AUTO_CONNECT_MAX_ATTEMPTS
         internal const val PROTOCOL_METRICS_PROBE_TIMEOUT_MS = 12_000L
         internal const val APP_TRAFFIC_BACKGROUND_SAMPLE_INTERVAL_MS = 60_000L

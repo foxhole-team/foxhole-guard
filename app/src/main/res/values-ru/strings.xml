@@ -78,6 +78,9 @@
     <string name="home_network_current_ip_title">Текущий IP адрес</string>
     <string name="home_network_profile_info_title">Статус соединения</string>
     <string name="home_network_country_label">Страна:</string>
+    <string name="home_network_local_network">Локальная сеть</string>
+    <string name="home_network_wifi_provider">Wi-Fi</string>
+    <string name="home_network_cellular_provider">Сотовая сеть</string>
     <string name="home_network_city_label">Город:</string>
     <string name="home_network_ip_label">IP:</string>
     <string name="home_network_provider_label">Провайдер:</string>

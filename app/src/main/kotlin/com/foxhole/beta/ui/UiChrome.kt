@@ -92,9 +92,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.Shape
@@ -1519,22 +1521,43 @@ internal fun FoxholeSkeletonBlock(
     modifier: Modifier = Modifier,
     color: Color = MaterialTheme.colorScheme.surfaceVariant,
 ) {
-    val alpha =
+    val shimmerProgress =
         rememberInfiniteTransition(label = "foxhole_skeleton").animateFloat(
-            initialValue = 0.34f,
-            targetValue = 0.74f,
+            initialValue = 0f,
+            targetValue = 1f,
             animationSpec =
                 infiniteRepeatable(
-                    animation = tween(durationMillis = 900),
-                    repeatMode = RepeatMode.Reverse,
+                    animation = tween(durationMillis = 1_150, easing = LinearEasing),
+                    repeatMode = RepeatMode.Restart,
                 ),
-            label = "foxhole_skeleton_alpha",
+            label = "foxhole_skeleton_shimmer",
         ).value
+    val baseColor = color.copy(alpha = if (LocalFoxholeDarkTheme.current) 0.46f else 0.40f)
+    val highlightColor = Color.White.copy(alpha = if (LocalFoxholeDarkTheme.current) 0.16f else 0.30f)
     Box(
         modifier =
             modifier
                 .clip(MaterialTheme.shapes.medium)
-                .background(color.copy(alpha = alpha)),
+                .background(baseColor)
+                .drawWithCache {
+                    val travel = size.width * 2.4f
+                    val startX = -size.width + travel * shimmerProgress
+                    val shimmer =
+                        Brush.linearGradient(
+                            colors =
+                                listOf(
+                                    Color.Transparent,
+                                    highlightColor,
+                                    Color.Transparent,
+                                ),
+                            start = Offset(startX, 0f),
+                            end = Offset(startX + size.width, size.height),
+                        )
+                    onDrawWithContent {
+                        drawContent()
+                        drawRect(brush = shimmer)
+                    }
+                },
     )
 }
 
