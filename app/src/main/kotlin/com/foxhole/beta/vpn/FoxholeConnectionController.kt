@@ -35,6 +35,7 @@ class FoxholeConnectionController(
     private val connectivityManager by lazy { context.getSystemService<ConnectivityManager>()!! }
     val snapshot: StateFlow<ConnectionSnapshot> = FoxholeVpnRuntimeBridge.snapshot
     val ipInfo: StateFlow<IpInfo?> = FoxholeVpnRuntimeBridge.ipInfo
+    val deviceIpInfo: StateFlow<IpInfo?> = FoxholeVpnRuntimeBridge.deviceIpInfo
     val traffic: StateFlow<TrafficSnapshot> = FoxholeVpnRuntimeBridge.traffic
     private val appliedRuntimeSignatureMutable = MutableStateFlow<Int?>(null)
     val appliedRuntimeSignature: StateFlow<Int?> = appliedRuntimeSignatureMutable
@@ -361,12 +362,14 @@ internal fun IpInfo.withDnsServers(
 object FoxholeVpnRuntimeBridge {
     private val snapshotMutable = MutableStateFlow(ConnectionSnapshot())
     private val ipInfoMutable = MutableStateFlow<IpInfo?>(null)
+    private val deviceIpInfoMutable = MutableStateFlow<IpInfo?>(null)
     private val trafficMutable = MutableStateFlow(TrafficSnapshot())
     private val highFrequencyTrafficUpdatesMutable = MutableStateFlow(false)
     private val immediateTrafficSampleRequestsMutable = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
 
     val snapshot: StateFlow<ConnectionSnapshot> = snapshotMutable
     val ipInfo: StateFlow<IpInfo?> = ipInfoMutable
+    val deviceIpInfo: StateFlow<IpInfo?> = deviceIpInfoMutable
     val traffic: StateFlow<TrafficSnapshot> = trafficMutable
     val highFrequencyTrafficUpdates: StateFlow<Boolean> = highFrequencyTrafficUpdatesMutable
     val immediateTrafficSampleRequests: SharedFlow<Unit> = immediateTrafficSampleRequestsMutable
@@ -381,6 +384,20 @@ object FoxholeVpnRuntimeBridge {
                 null
             } else {
                 val previous = ipInfoMutable.value
+                value.copy(
+                    ipv4 = value.ipv4 ?: previous?.ipv4,
+                    localDnsServers = value.localDnsServers.ifEmpty { previous?.localDnsServers.orEmpty() },
+                    remoteDnsServers = value.remoteDnsServers.ifEmpty { previous?.remoteDnsServers.orEmpty() },
+                )
+            }
+    }
+
+    fun updateDeviceIpInfo(value: IpInfo?) {
+        deviceIpInfoMutable.value =
+            if (value == null) {
+                null
+            } else {
+                val previous = deviceIpInfoMutable.value
                 value.copy(
                     ipv4 = value.ipv4 ?: previous?.ipv4,
                     localDnsServers = value.localDnsServers.ifEmpty { previous?.localDnsServers.orEmpty() },

@@ -1,6 +1,11 @@
 package com.foxhole.beta.ui
 
 import android.content.Context
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,8 +20,10 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Apps
 import androidx.compose.material.icons.outlined.Map
 import androidx.compose.material.icons.outlined.PhoneAndroid
+import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -34,8 +41,10 @@ import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathFillType
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -49,6 +58,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.foxhole.beta.R
 import com.foxhole.beta.core.model.TrafficMapPoint
+import com.foxhole.beta.core.model.TrafficMapStyle
 import com.foxhole.beta.core.model.TrafficMapUiState
 import com.foxhole.beta.core.traffic.TrafficMapCountryGeoJsonParser
 import com.foxhole.beta.core.traffic.TrafficMapCountryShape
@@ -62,9 +72,16 @@ import kotlin.math.min
 @Composable
 internal fun TrafficMapDashboardCard(
     state: TrafficMapUiState,
+    style: TrafficMapStyle,
+    onStyleSelected: (TrafficMapStyle) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val countries by rememberTrafficMapCountries()
+    val nextStyle =
+        when (style) {
+            TrafficMapStyle.COUNTRIES -> TrafficMapStyle.DOTS
+            TrafficMapStyle.DOTS -> TrafficMapStyle.COUNTRIES
+        }
     FoxholeCard(
         modifier = modifier
             .fillMaxWidth()
@@ -86,9 +103,22 @@ internal fun TrafficMapDashboardCard(
                 HomeCardHeader(
                     icon = Icons.Outlined.Map,
                     title = stringResource(R.string.traffic_map_title),
+                    trailing = {
+                        HomeHeaderActionButton(
+                            icon =
+                                when (nextStyle) {
+                                    TrafficMapStyle.COUNTRIES -> Icons.Outlined.Public
+                                    TrafficMapStyle.DOTS -> Icons.Outlined.Apps
+                                },
+                            contentDescription = stringResource(R.string.traffic_map_style_title),
+                            onClick = { onStyleSelected(nextStyle) },
+                            modifier = Modifier.size(30.dp),
+                        )
+                    },
                 )
-                TrafficWorldMap(
+                TrafficMapCanvas(
                     state = state,
+                    style = style,
                     countries = countries.orEmpty(),
                     modifier = Modifier
                         .fillMaxWidth()
@@ -108,27 +138,35 @@ internal fun TrafficMapDashboardCard(
 
 @Composable
 @Suppress("LongMethod")
-private fun TrafficWorldMap(
+private fun TrafficMapCanvas(
     state: TrafficMapUiState,
+    style: TrafficMapStyle,
     countries: List<TrafficMapCountryShape>,
     modifier: Modifier = Modifier,
 ) {
     val latestState = rememberUpdatedState(state)
-    val colorScheme = MaterialTheme.colorScheme
-    val systemTone = foxholeSystemAwareAccentColor(fallback = colorScheme.primary)
-    val mapBackgroundColor = colorScheme.surfaceVariant.copy(alpha = 0.46f)
-    val baseCountryColor = colorScheme.onSurfaceVariant.copy(alpha = 0.18f)
-    val highlightedCountryColor = systemTone.copy(alpha = 0.36f)
-    val borderColor = colorScheme.outlineVariant.copy(alpha = 0.34f)
-    val lineColor = systemTone.copy(alpha = 0.46f)
-    val originColor = systemTone
-    val destinationColor = FoxholePositiveAccent
-    val phoneScreenColor = colorScheme.surface.copy(alpha = 0.88f)
+    val dashPhase by rememberInfiniteTransition(label = "traffic-map-dash")
+        .animateFloat(
+            initialValue = 0f,
+            targetValue = 20f,
+            animationSpec =
+                infiniteRepeatable(
+                    animation = tween(durationMillis = 650, easing = LinearEasing),
+                ),
+            label = "traffic-map-dash-phase",
+        )
+    val latestDashPhase = rememberUpdatedState(dashPhase)
+    val mapBackgroundColor = TrafficMapFlatBackground
+    val baseCountryColor = TrafficMapCountryFill
+    val borderColor = TrafficMapCountryBorder
+    val lineColor = TrafficMapLineColor
+    val originColor = FoxholePositiveAccent
+    val destinationColor = TrafficMapDestinationColor
+    val phoneScreenColor = TrafficMapPhoneScreenColor
     val countryShapes = remember(countries) { countries }
 
     Box(
         modifier = modifier
-            .clip(MaterialTheme.shapes.medium)
             .drawWithCache {
                 val viewport = trafficMapViewport(size)
                 val countryPaths = countryShapes.mapNotNull { shape -> shape.toProjectedPath(viewport) }
@@ -137,87 +175,128 @@ private fun TrafficWorldMap(
                 val minLineStroke = 0.65.dp.toPx()
                 val destinationRadius = 3.3.dp.toPx()
                 val glowRadius = 8.dp.toPx()
-                val cornerRadius = CornerRadius(10.dp.toPx(), 10.dp.toPx())
                 val phoneWidth = 8.dp.toPx()
                 val phoneHeight = 12.dp.toPx()
                 val phoneCorner = CornerRadius(2.2.dp.toPx(), 2.2.dp.toPx())
                 val phoneScreenInset = 1.4.dp.toPx()
                 val phoneHomeRadius = 0.65.dp.toPx()
+                val dashOn = 7.dp.toPx()
+                val dashOff = 6.dp.toPx()
+                val dotViewport = trafficMapDotViewport(size)
+                val dotRadius = (dotViewport.cellSize * 0.32f).coerceAtMost(2.0.dp.toPx())
+                val connectionDotRadius = (dotViewport.cellSize * 0.50f).coerceAtMost(3.4.dp.toPx())
+                val originDotRadius = (dotViewport.cellSize * 0.56f).coerceAtMost(3.8.dp.toPx())
 
                 onDrawBehind {
                     drawRoundRect(
                         color = mapBackgroundColor,
-                        cornerRadius = cornerRadius,
+                        cornerRadius = CornerRadius(0f, 0f),
                     )
                     val mapState = latestState.value
-                    countryPaths.forEach { country ->
-                        val fillColor =
-                            if (country.countryCode in mapState.highlightedCountries) {
-                                highlightedCountryColor
-                            } else {
-                                baseCountryColor
-                            }
-                        drawPath(
-                            path = country.path,
-                            color = fillColor,
-                        )
-                    }
-                    countryPaths.forEach { country ->
-                        drawPath(
-                            path = country.path,
-                            color = borderColor,
-                            style = borderStroke,
-                        )
+                    if (style == TrafficMapStyle.COUNTRIES) {
+                        countryPaths.forEach { country ->
+                            drawPath(
+                                path = country.path,
+                                color = baseCountryColor,
+                            )
+                        }
+                        countryPaths.forEach { country ->
+                            drawPath(
+                                path = country.path,
+                                color = borderColor,
+                                style = borderStroke,
+                            )
+                        }
+                    } else {
+                        TrafficMapDotCells.cells.forEach { cell ->
+                            drawCircle(
+                                color = TrafficMapDotLandColor,
+                                radius = dotRadius,
+                                center = dotCellCenter(cell, dotViewport),
+                            )
+                        }
                     }
 
                     val maxBytes = mapState.edges.maxOfOrNull { edge -> edge.bytes }?.coerceAtLeast(1L) ?: 1L
                     val edgeCount = min(mapState.edges.size, MAX_TRAFFIC_MAP_DRAW_EDGES)
                     for (index in 0 until edgeCount) {
                         val edge = mapState.edges[index]
-                        val from = project(edge.fromLat, edge.fromLon, viewport)
-                        val to = project(edge.toLat, edge.toLon, viewport)
+                        val from =
+                            if (style == TrafficMapStyle.COUNTRIES) {
+                                project(edge.fromLat, edge.fromLon, viewport)
+                            } else {
+                                project(edge.fromLat, edge.fromLon, dotViewport)
+                            }
+                        val to =
+                            if (style == TrafficMapStyle.COUNTRIES) {
+                                project(edge.toLat, edge.toLon, viewport)
+                            } else {
+                                project(edge.toLat, edge.toLon, dotViewport)
+                            }
                         val weight = edge.bytes.toFloat() / maxBytes.toFloat()
-                        drawLine(
+                        drawDashedTrafficLine(
                             color = lineColor.copy(alpha = 0.22f + (0.28f * weight)),
                             start = from,
                             end = to,
                             strokeWidth = minLineStroke + ((maxLineStroke - minLineStroke) * weight),
-                            cap = StrokeCap.Round,
+                            dashOn = dashOn,
+                            dashOff = dashOff,
+                            dashPhase = latestDashPhase.value,
                         )
                     }
 
                     val destinationCount = min(mapState.destinations.size, MAX_TRAFFIC_MAP_DRAW_DESTINATIONS)
                     for (index in 0 until destinationCount) {
                         val point = mapState.destinations[index]
-                        val offset = project(point.lat, point.lon, viewport)
+                        val offset =
+                            if (style == TrafficMapStyle.COUNTRIES) {
+                                project(point.lat, point.lon, viewport)
+                            } else {
+                                project(point.lat, point.lon, dotViewport)
+                            }
                         drawCircle(
                             color = destinationColor.copy(alpha = 0.16f),
-                            radius = glowRadius,
+                            radius = if (style == TrafficMapStyle.COUNTRIES) glowRadius else connectionDotRadius * 1.85f,
                             center = offset,
                         )
                         drawCircle(
                             color = destinationColor,
-                            radius = destinationRadius,
+                            radius = if (style == TrafficMapStyle.COUNTRIES) destinationRadius else connectionDotRadius,
                             center = offset,
                         )
                     }
 
-                    val origin = project(mapState.originLat, mapState.originLon, viewport)
-                    drawCircle(
-                        color = originColor.copy(alpha = 0.18f),
-                        radius = glowRadius,
-                        center = origin,
-                    )
-                    drawPhoneMarker(
-                        center = origin,
-                        bodyColor = originColor,
-                        screenColor = phoneScreenColor,
-                        width = phoneWidth,
-                        height = phoneHeight,
-                        cornerRadius = phoneCorner,
-                        screenInset = phoneScreenInset,
-                        homeRadius = phoneHomeRadius,
-                    )
+                    if (mapState.originCountryCode != null) {
+                        val origin =
+                            if (style == TrafficMapStyle.COUNTRIES) {
+                                project(mapState.originLat, mapState.originLon, viewport)
+                            } else {
+                                project(mapState.originLat, mapState.originLon, dotViewport)
+                            }
+                        drawCircle(
+                            color = originColor.copy(alpha = 0.18f),
+                            radius = if (style == TrafficMapStyle.COUNTRIES) glowRadius else originDotRadius * 1.9f,
+                            center = origin,
+                        )
+                        if (style == TrafficMapStyle.COUNTRIES) {
+                            drawPhoneMarker(
+                                center = origin,
+                                bodyColor = originColor,
+                                screenColor = phoneScreenColor,
+                                width = phoneWidth,
+                                height = phoneHeight,
+                                cornerRadius = phoneCorner,
+                                screenInset = phoneScreenInset,
+                                homeRadius = phoneHomeRadius,
+                            )
+                        } else {
+                            drawCircle(
+                                color = originColor,
+                                radius = originDotRadius,
+                                center = origin,
+                            )
+                        }
+                    }
                 }
             }
             .fillMaxSize(),
@@ -237,7 +316,10 @@ private fun TrafficMapLegend(
         modifier = modifier.fillMaxHeight(),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        TrafficMapOriginRow(originLabel = originLabel)
+        TrafficMapOriginRow(
+            originLabel = originLabel,
+            showIcon = state.originCountryCode != null,
+        )
         if (destinations.isEmpty()) {
             Text(
                 modifier = Modifier.weight(1f),
@@ -275,18 +357,23 @@ private fun TrafficMapLegend(
 }
 
 @Composable
-private fun TrafficMapOriginRow(originLabel: String) {
+private fun TrafficMapOriginRow(
+    originLabel: String,
+    showIcon: Boolean,
+) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(5.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(
-            imageVector = Icons.Outlined.PhoneAndroid,
-            contentDescription = stringResource(R.string.traffic_map_device_location_icon),
-            tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(16.dp),
-        )
+        if (showIcon) {
+            Icon(
+                imageVector = Icons.Outlined.PhoneAndroid,
+                contentDescription = stringResource(R.string.traffic_map_device_location_icon),
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(16.dp),
+            )
+        }
         Text(
             text = originLabel,
             style = MaterialTheme.typography.labelSmall.copy(
@@ -491,11 +578,49 @@ private fun project(
 private fun project(
     lat: Double,
     lon: Double,
+    viewport: TrafficMapDotViewport,
+): Offset {
+    val projected = project(lat = lat, lon = lon, size = viewport.size)
+    return Offset(
+        x = viewport.topLeft.x + projected.x,
+        y = viewport.topLeft.y + projected.y,
+    )
+}
+
+private fun project(
+    lat: Double,
+    lon: Double,
     size: Size,
 ): Offset {
     val x = ((lon + 180.0) / 360.0 * size.width).toFloat()
     val y = ((TRAFFIC_MAP_MAX_LAT - lat) / TRAFFIC_MAP_LAT_RANGE * size.height).toFloat()
     return Offset(x, y)
+}
+
+private fun DrawScope.drawDashedTrafficLine(
+    color: Color,
+    start: Offset,
+    end: Offset,
+    strokeWidth: Float,
+    dashOn: Float,
+    dashOff: Float,
+    dashPhase: Float,
+) {
+    val path =
+        Path().apply {
+            moveTo(start.x, start.y)
+            lineTo(end.x, end.y)
+        }
+    drawPath(
+        path = path,
+        color = color,
+        style =
+            Stroke(
+                width = strokeWidth,
+                cap = StrokeCap.Round,
+                pathEffect = PathEffect.dashPathEffect(floatArrayOf(dashOn, dashOff), dashPhase),
+            ),
+    )
 }
 
 private fun DrawScope.drawPhoneMarker(
@@ -550,11 +675,58 @@ private data class TrafficMapViewport(
     val size: Size,
 )
 
+private data class TrafficMapDotViewport(
+    val topLeft: Offset,
+    val size: Size,
+    val cellSize: Float,
+)
+
 private data class ProjectedTrafficMapCountry(
     val countryCode: String,
     val path: Path,
 )
 
+private fun trafficMapDotViewport(size: Size): TrafficMapDotViewport {
+    val cellSize =
+        min(
+            size.width / TrafficMapDotCells.Columns.toFloat(),
+            size.height / TrafficMapDotCells.Rows.toFloat(),
+        )
+    val mapSize =
+        Size(
+            width = cellSize * TrafficMapDotCells.Columns,
+            height = cellSize * TrafficMapDotCells.Rows,
+        )
+    return TrafficMapDotViewport(
+        topLeft =
+            Offset(
+                x = (size.width - mapSize.width) / 2f,
+                y = (size.height - mapSize.height) / 2f,
+            ),
+        size = mapSize,
+        cellSize = cellSize,
+    )
+}
+
+private fun dotCellCenter(
+    cell: Int,
+    viewport: TrafficMapDotViewport,
+): Offset {
+    val column = cell % TrafficMapDotCells.Columns
+    val row = cell / TrafficMapDotCells.Columns
+    return Offset(
+        x = viewport.topLeft.x + ((column + 0.5f) * viewport.cellSize),
+        y = viewport.topLeft.y + ((row + 0.5f) * viewport.cellSize),
+    )
+}
+
+private val TrafficMapFlatBackground = Color(0xFF25272B)
+private val TrafficMapCountryFill = Color(0xFF555B62)
+private val TrafficMapCountryBorder = Color(0xFF727982).copy(alpha = 0.42f)
+private val TrafficMapDotLandColor = Color(0xFF6B7179)
+private val TrafficMapLineColor = Color(0xFFD8DEE6)
+private val TrafficMapDestinationColor = Color(0xFFE1E5EA)
+private val TrafficMapPhoneScreenColor = Color(0xFF1E2024)
 private val TRAFFIC_MAP_CARD_TOTAL_HEIGHT = 184.dp
 private const val TRAFFIC_MAP_WEIGHT = 0.70f
 private const val TRAFFIC_MAP_LEGEND_WEIGHT = 0.30f

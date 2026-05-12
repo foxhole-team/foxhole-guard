@@ -289,6 +289,7 @@ fun FoxholeApp(
                         onResetUsageTracking = viewModel::resetUsageTracking,
                         onTrafficUiVisibilityChanged = viewModel::onTrafficUiVisibilityChanged,
                         onLocalProxyLanAccessChanged = viewModel::onLocalProxyLanAccessChanged,
+                        onTrafficMapStyleSelected = viewModel::onTrafficMapStyleSelected,
                         onDashboardCardOrderChanged = viewModel::onDashboardCardOrderChanged,
                     )
                 }
@@ -632,6 +633,7 @@ fun FoxholeApp(
                         onNetworkCardEnabledChanged = viewModel::onNetworkCardEnabledChanged,
                         onTrafficCardEnabledChanged = viewModel::onTrafficCardEnabledChanged,
                         onTrafficMapEnabledChanged = viewModel::onTrafficMapEnabledChanged,
+                        onTrafficMapStyleSelected = viewModel::onTrafficMapStyleSelected,
                         onShowFirewallStatusChanged = viewModel::onShowFirewallStatusChanged,
                         onShowTorQuickLaunchChanged = viewModel::onShowTorQuickLaunchChanged,
                     )

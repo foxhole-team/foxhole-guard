@@ -106,6 +106,7 @@ import com.foxhole.beta.core.model.SMART_START_TIMEOUT_STEP_SECONDS
 import com.foxhole.beta.core.model.SmartStartTransportPriority
 import com.foxhole.beta.core.model.SubscriptionRefreshInterval
 import com.foxhole.beta.core.model.ThemeMode
+import com.foxhole.beta.core.model.TrafficMapStyle
 import com.foxhole.beta.core.model.TrafficMode
 import com.foxhole.beta.core.model.TunStack
 import com.foxhole.beta.core.settings.SMART_START_SUBSCRIPTION_RETRY_ATTEMPT_OPTIONS
@@ -288,6 +289,7 @@ private fun LazyListScope.settingsHomeNavigationItems(
             modifier = Modifier.testTag("settings_security_action"),
             icon = Icons.Outlined.Lock,
             title = stringResource(R.string.security_settings_title),
+            titleTrailingContent = { ExperimentalBadge() },
             summary = stringResource(R.string.security_settings_summary),
             onClick = onOpenSecurity,
         )
@@ -1356,6 +1358,7 @@ fun ApplicationSettingsScreen(
     onNetworkCardEnabledChanged: (Boolean) -> Unit,
     onTrafficCardEnabledChanged: (Boolean) -> Unit,
     onTrafficMapEnabledChanged: (Boolean) -> Unit,
+    onTrafficMapStyleSelected: (TrafficMapStyle) -> Unit,
     onShowFirewallStatusChanged: (Boolean) -> Unit,
     onShowTorQuickLaunchChanged: (Boolean) -> Unit,
 ) {
@@ -1379,8 +1382,17 @@ fun ApplicationSettingsScreen(
             AppLocale.EN -> englishLocaleLabel
         }
     }
+    val countriesMapLabel = stringResource(R.string.traffic_map_style_countries)
+    val dotsMapLabel = stringResource(R.string.traffic_map_style_dots)
+    val trafficMapStyleLabel: (TrafficMapStyle) -> String = { value ->
+        when (value) {
+            TrafficMapStyle.COUNTRIES -> countriesMapLabel
+            TrafficMapStyle.DOTS -> dotsMapLabel
+        }
+    }
     var themeMenuExpanded by rememberSaveable { mutableStateOf(false) }
     var localeMenuExpanded by rememberSaveable { mutableStateOf(false) }
+    var trafficMapStyleExpanded by rememberSaveable { mutableStateOf(false) }
 
     SettingsScaffold(
         title = stringResource(R.string.app_settings),
@@ -1460,6 +1472,19 @@ fun ApplicationSettingsScreen(
                     leadingIcon = Icons.Outlined.Map,
                     onCheckedChange = onTrafficMapEnabledChanged,
                     summaryMaxLines = 2,
+                    grouped = true,
+                )
+                SettingsControlGroupDivider()
+                DropdownSettingRow(
+                    title = stringResource(R.string.traffic_map_style_title),
+                    value = trafficMapStyleLabel(state.settings.ui.trafficMapStyle),
+                    expanded = trafficMapStyleExpanded,
+                    onExpandedChange = { trafficMapStyleExpanded = it },
+                    values = TrafficMapStyle.entries,
+                    selected = state.settings.ui.trafficMapStyle,
+                    label = { trafficMapStyleLabel(it) },
+                    onSelect = onTrafficMapStyleSelected,
+                    leadingIcon = Icons.Outlined.Map,
                     grouped = true,
                 )
                 SettingsControlGroupDivider()

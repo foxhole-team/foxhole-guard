@@ -29,6 +29,7 @@ import com.foxhole.beta.core.model.SmartStartTransportPriority
 import com.foxhole.beta.core.model.SubscriptionRefreshInterval
 import com.foxhole.beta.core.model.ThemeMode
 import com.foxhole.beta.core.model.TrafficMode
+import com.foxhole.beta.core.model.TrafficMapStyle
 import com.foxhole.beta.core.model.TunStack
 import com.foxhole.beta.core.model.V2RayApiSettings
 import kotlinx.coroutines.launch
@@ -271,6 +272,12 @@ internal fun HomeViewModel.onBlockScreenshotsChangedInternal(value: Boolean) {
 internal fun HomeViewModel.onTrafficMapEnabledChangedInternal(value: Boolean) {
     viewModelScope.launch {
         container.settingsRepository.updateTrafficMapEnabled(value)
+    }
+}
+
+internal fun HomeViewModel.onTrafficMapStyleSelectedInternal(value: TrafficMapStyle) {
+    viewModelScope.launch {
+        container.settingsRepository.updateTrafficMapStyle(value)
     }
 }
 

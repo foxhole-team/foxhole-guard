@@ -890,7 +890,10 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
                             )
                         }
                             .onSuccess {
-                                FoxholeVpnRuntimeBridge.updateIpInfo(it)
+                                FoxholeVpnRuntimeBridge.updateDeviceIpInfo(it)
+                                if (shouldPublishAppOwnedIpInfo()) {
+                                    FoxholeVpnRuntimeBridge.updateIpInfo(it)
+                                }
                                 container.diagnosticsLogger.record("ip", "geo refreshed")
                                 launch(Dispatchers.Main.immediate) { updateNotification() }
                                 startIpv4EnrichmentIfNeeded(
@@ -937,8 +940,16 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
                             network = network,
                         )
                     }.getOrNull() ?: return@launch
-                val merged = mergeIpInfo(primary = FoxholeVpnRuntimeBridge.ipInfo.value ?: info, ipv4 = ipv4Info, ipv6 = null)
-                FoxholeVpnRuntimeBridge.updateIpInfo(merged)
+                val merged =
+                    mergeIpInfo(
+                        primary = FoxholeVpnRuntimeBridge.deviceIpInfo.value ?: info,
+                        ipv4 = ipv4Info,
+                        ipv6 = null,
+                    )
+                FoxholeVpnRuntimeBridge.updateDeviceIpInfo(merged)
+                if (shouldPublishAppOwnedIpInfo()) {
+                    FoxholeVpnRuntimeBridge.updateIpInfo(merged)
+                }
                 container.diagnosticsLogger.record("ip", "ipv4 enriched")
                 launch(Dispatchers.Main.immediate) { updateNotification() }
             }
@@ -1105,6 +1116,13 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
     internal fun currentUpstreamNetworkOrNull(): Network? =
         currentUpstreamNetworkOrNullInternal()
 
+    internal fun shouldPublishAppOwnedIpInfo(): Boolean {
+        val snapshot = FoxholeVpnRuntimeBridge.snapshot.value
+        return snapshot.state !in ACTIVE_CONNECTION_STATES ||
+            snapshot.trafficMode != TrafficMode.TUNNEL ||
+            snapshot.profileId == LOCAL_GUARD_PROFILE_ID
+    }
+
     internal fun isVpnNetworkValidated(network: Network): Boolean = isVpnNetworkValidatedInternal(network)
 
     internal suspend fun awaitVpnNetworkOrNull(
@@ -1169,14 +1187,14 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         internal const val NOTIFICATION_HEALTH_PROBE_TIMEOUT_MS = 1_000L
         internal const val NOTIFICATION_HEALTH_FAILURE_THRESHOLD = 3
         internal val UDP_HEALTH_PROBE_PAYLOAD = byteArrayOf(0x66)
-        internal const val CONNECTIVITY_PROBE_ATTEMPTS = 8
-        internal const val CONNECTIVITY_PROBE_INITIAL_DELAY_MS = 300L
-        internal const val CONNECTIVITY_PROBE_RETRY_DELAY_MS = 1_000L
-        internal const val CONNECTIVITY_PROBE_CALL_TIMEOUT_MS = 4_000L
-        internal const val CONNECTIVITY_PROBE_TOTAL_TIMEOUT_MS = 24_000L
+        internal const val CONNECTIVITY_PROBE_ATTEMPTS = 15
+        internal const val CONNECTIVITY_PROBE_INITIAL_DELAY_MS = 2_000L
+        internal const val CONNECTIVITY_PROBE_RETRY_DELAY_MS = 2_000L
+        internal const val CONNECTIVITY_PROBE_CALL_TIMEOUT_MS = 5_000L
+        internal const val CONNECTIVITY_PROBE_TOTAL_TIMEOUT_MS = 45_000L
         internal const val CONNECTIVITY_PROBE_GRACE_MAX_TIMEOUT_MS = com.foxhole.beta.vpn.CONNECTIVITY_PROBE_GRACE_MAX_TIMEOUT_MS
-        internal const val CONNECTIVITY_LITERAL_PROBE_EARLY_WINDOW_MS = 1_200L
-        internal const val CONNECTIVITY_LITERAL_PROBE_POLL_MS = 150L
+        internal const val CONNECTIVITY_LITERAL_PROBE_EARLY_WINDOW_MS = 8_000L
+        internal const val CONNECTIVITY_LITERAL_PROBE_POLL_MS = 500L
         internal const val CONNECTIVITY_LITERAL_PROBE_CALL_TIMEOUT_MS = 2_000L
         internal const val LOCAL_GUARD_PROFILE_ID = -10L
         internal const val APP_TRAFFIC_SAMPLE_INTERVAL_MS = 60_000L
