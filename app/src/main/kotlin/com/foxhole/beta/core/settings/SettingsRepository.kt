@@ -51,7 +51,6 @@ import com.foxhole.beta.core.model.StatisticsSettings
 import com.foxhole.beta.core.model.SubscriptionRefreshInterval
 import com.foxhole.beta.core.model.ThemeMode
 import com.foxhole.beta.core.model.TrafficMode
-import com.foxhole.beta.core.model.TrafficMapStyle
 import com.foxhole.beta.core.model.TrafficSettings
 import com.foxhole.beta.core.model.TunStack
 import com.foxhole.beta.core.model.UiSettings
@@ -767,9 +766,6 @@ class SettingsRepository(
 
     suspend fun updateTrafficMapEnabled(value: Boolean) =
         update { it.copy(ui = it.ui.copy(trafficMapEnabled = value)) }
-
-    suspend fun updateTrafficMapStyle(value: TrafficMapStyle) =
-        update { it.copy(ui = it.ui.copy(trafficMapStyle = value)) }
 
     suspend fun updateNetworkCardEnabled(value: Boolean) =
         update { it.copy(ui = it.ui.copy(networkCardEnabled = value)) }

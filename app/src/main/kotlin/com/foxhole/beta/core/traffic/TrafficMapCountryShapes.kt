@@ -95,7 +95,6 @@ class TrafficMapCountryGeoJsonParser(
 internal fun TrafficMapCountryShape.toTrafficMapVisualShape(
     minRelativeRingArea: Double = TrafficMapVisualMinRelativeRingArea,
     minAbsoluteRingArea: Double = TrafficMapVisualMinAbsoluteRingArea,
-    minShapeArea: Double = TrafficMapVisualMinShapeArea,
     maxPointsPerRing: Int = TrafficMapVisualMaxPointsPerRing,
 ): TrafficMapCountryShape? {
     val normalizedRings =
@@ -110,9 +109,6 @@ internal fun TrafficMapCountryShape.toTrafficMapVisualShape(
     }
     val areas = normalizedRings.map(::trafficMapRingArea)
     val largestArea = areas.maxOrNull() ?: return null
-    if (largestArea < minShapeArea) {
-        return null
-    }
     val largestIndex = areas.indexOf(largestArea)
     val areaThreshold = max(largestArea * minRelativeRingArea, minAbsoluteRingArea)
     val visualRings =
@@ -206,7 +202,6 @@ private fun normalizeTrafficMapLongitude(lon: Double): Double {
 private const val TrafficMapVisualMinRingPoints = 3
 private const val TrafficMapVisualMinRelativeRingArea = 0.02
 private const val TrafficMapVisualMinAbsoluteRingArea = 0.5
-private const val TrafficMapVisualMinShapeArea = 1.0
 private const val TrafficMapVisualMaxPointsPerRing = 220
 private const val TrafficMapVisualMinPointDeltaDegrees = 0.045
 private const val HalfLongitudeDegrees = 180.0

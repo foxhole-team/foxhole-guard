@@ -56,12 +56,6 @@ enum class DashboardCard {
 }
 
 @Serializable
-enum class TrafficMapStyle {
-    COUNTRIES,
-    DOTS,
-}
-
-@Serializable
 enum class ConnectionState {
     IDLE,
     CONNECTING,
@@ -255,7 +249,6 @@ data class UiSettings(
     val networkCardEnabled: Boolean = true,
     val trafficCardEnabled: Boolean = true,
     val trafficMapEnabled: Boolean = false,
-    val trafficMapStyle: TrafficMapStyle = TrafficMapStyle.COUNTRIES,
     val showFirewallStatus: Boolean = false,
     val showTorQuickLaunch: Boolean = false,
     val dashboardCardOrder: List<DashboardCard> = DashboardCard.entries,

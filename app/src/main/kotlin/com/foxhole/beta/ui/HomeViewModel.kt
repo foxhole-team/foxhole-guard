@@ -59,7 +59,6 @@ import com.foxhole.beta.core.model.StatisticsRefreshInterval
 import com.foxhole.beta.core.model.StatisticsRetention
 import com.foxhole.beta.core.model.SubscriptionRefreshInterval
 import com.foxhole.beta.core.model.ThemeMode
-import com.foxhole.beta.core.model.TrafficMapStyle
 import com.foxhole.beta.core.model.TrafficMode
 import com.foxhole.beta.core.model.TrafficSnapshot
 import com.foxhole.beta.core.model.TunStack
@@ -89,7 +88,6 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.runningFold
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -412,35 +410,16 @@ class HomeViewModel(
     private val initialTrafficMapOriginIpInfo =
         trafficMapOriginIpInfoCandidate(
             connection = container.connectionController.snapshot.value,
-            deviceIpInfo = container.connectionController.deviceIpInfo.value,
             ipInfo = container.connectionController.ipInfo.value,
-            protocolSearchRunning = false,
         )
 
     private val trafficMapOriginIpInfo: StateFlow<IpInfo?> =
         combine(
             container.connectionController.snapshot,
-            container.connectionController.deviceIpInfo,
             container.connectionController.ipInfo,
-            autoConnectUiStateMutable,
-            protocolMetricsRefreshingProfileIdsMutable,
-        ) { connection, deviceIpInfo, ipInfo, autoConnect, protocolMetricsRefreshingProfileIds ->
-            val protocolSearchRunning = autoConnect.running || protocolMetricsRefreshingProfileIds.isNotEmpty()
-            trafficMapOriginIpInfoCandidate(
-                connection = connection,
-                deviceIpInfo = deviceIpInfo,
-                ipInfo = ipInfo,
-                protocolSearchRunning = protocolSearchRunning,
-            ) to protocolSearchRunning
+        ) { connection, ipInfo ->
+            trafficMapOriginIpInfoCandidate(connection = connection, ipInfo = ipInfo)
         }
-            .runningFold(initialTrafficMapOriginIpInfo to false) { previous, next ->
-                if (next.second) {
-                    previous.first to true
-                } else {
-                    next
-                }
-            }
-            .map { (ipInfo, _) -> ipInfo }
             .distinctUntilChanged()
             .stateIn(
                 viewModelScope,
@@ -457,22 +436,13 @@ class HomeViewModel(
 
     private fun trafficMapOriginIpInfoCandidate(
         connection: ConnectionSnapshot,
-        deviceIpInfo: IpInfo?,
         ipInfo: IpInfo?,
-        protocolSearchRunning: Boolean,
     ): IpInfo? {
-        if (deviceIpInfo != null) {
-            return deviceIpInfo
-        }
-        val realTunnelActive =
-            connection.state in ACTIVE_CONNECTION_STATES &&
-                connection.profileId != FoxholeVpnService.LOCAL_GUARD_PROFILE_ID
-        val staleBeforeActiveTunnel =
+        val staleAfterRuntimeChange =
             ipInfo != null &&
-                !protocolSearchRunning &&
-                realTunnelActive &&
+                connection.state !in ACTIVE_CONNECTION_STATES &&
                 ipInfo.fetchedAt < connection.lastChangeAt
-        return if (realTunnelActive || staleBeforeActiveTunnel) {
+        return if (staleAfterRuntimeChange) {
             null
         } else {
             ipInfo
@@ -1002,8 +972,6 @@ class HomeViewModel(
     fun onBlockScreenshotsChanged(value: Boolean) = onBlockScreenshotsChangedInternal(value)
 
     fun onTrafficMapEnabledChanged(value: Boolean) = onTrafficMapEnabledChangedInternal(value)
-
-    fun onTrafficMapStyleSelected(value: TrafficMapStyle) = onTrafficMapStyleSelectedInternal(value)
 
     fun onNetworkCardEnabledChanged(value: Boolean) = onNetworkCardEnabledChangedInternal(value)
 

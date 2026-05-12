@@ -88,7 +88,6 @@
     <string name="home_network_dns_waiting">Checking</string>
     <string name="home_network_dns_through_vpn">VPN · %1$s</string>
     <string name="home_network_dns_local">Local · %1$s</string>
-    <string name="home_network_dns_default_mode">Default</string>
     <string name="home_network_connect_time_label">Time:</string>
     <string name="home_network_status_label">Status:</string>
     <string name="theme">Theme</string>
@@ -292,8 +291,6 @@
     <string name="security_firewall_title">Firewall</string>
     <string name="security_firewall_summary">Enables the local Firewall for logging, permanent blocking, and the live connections map.</string>
     <string name="security_firewall_info_body">When Firewall is enabled, Foxhole can keep a local VPN runtime for features that need honest access to network connections.</string>
-    <string name="security_development_warning_title">Security settings are experimental</string>
-    <string name="security_development_warning_body">This section is still in development. Extra traffic analysis and Firewall runtime can increase battery use and device temperature.</string>
     <string name="security_firewall_enable_action">Enable Firewall</string>
     <string name="anomaly_enabled_title">Anomaly analysis</string>
     <string name="anomaly_enabled_summary">Analyzes network traffic anomalies using algorithms: upload spike, background traffic, total traffic spike, new destination country, DNS block ratio, reconnect storm, latency shift, and privacy route mismatch.</string>
@@ -338,9 +335,6 @@
     <string name="traffic_card_setting_summary">Show live traffic totals on Dashboard.</string>
     <string name="traffic_map_setting_title">Traffic map</string>
     <string name="traffic_map_setting_summary">Show the lightweight map on Dashboard.</string>
-    <string name="traffic_map_style_title">Map view</string>
-    <string name="traffic_map_style_countries">Countries</string>
-    <string name="traffic_map_style_dots">Dots</string>
     <string name="show_tor_quick_launch_title">Show TOR</string>
     <string name="show_tor_quick_launch_summary">Show the TOR quick launch on Dashboard.</string>
     <string name="show_firewall_status_title">Show Firewall status</string>

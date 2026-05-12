@@ -88,7 +88,6 @@
     <string name="home_network_dns_waiting">Проверка</string>
     <string name="home_network_dns_through_vpn">VPN · %1$s</string>
     <string name="home_network_dns_local">Локально · %1$s</string>
-    <string name="home_network_dns_default_mode">Default (Стандарт)</string>
     <string name="home_network_connect_time_label">Время:</string>
     <string name="home_network_status_label">Статус:</string>
     <string name="theme">Тема</string>
@@ -296,8 +295,6 @@
     <string name="security_firewall_title">Firewall</string>
     <string name="security_firewall_summary">Включает локальный Firewall для журнала, постоянной блокировки и live-карты подключений.</string>
     <string name="security_firewall_info_body">Когда Firewall включен, Foxhole может держать локальный VPN runtime для функций, которым нужен честный доступ к сетевым подключениям.</string>
-    <string name="security_development_warning_title">Настройки безопасности экспериментальные</string>
-    <string name="security_development_warning_body">Раздел еще в разработке. Дополнительный анализ трафика и Firewall runtime могут сильнее расходовать батарею и нагревать устройство.</string>
     <string name="security_firewall_enable_action">Включить Firewall</string>
     <string name="anomaly_enabled_title">Анализ аномалий</string>
     <string name="anomaly_enabled_summary">Анализирует аномалии в сетевом трафике используя алгоритмы: скачок отправки, фоновый трафик, общий всплеск, новая страна, доля DNS-блокировок, частые переподключения, сдвиг задержки и маршрут privacy.</string>
@@ -342,9 +339,6 @@
     <string name="traffic_card_setting_summary">Показывать текущий трафик на Dashboard.</string>
     <string name="traffic_map_setting_title">Карта трафика</string>
     <string name="traffic_map_setting_summary">Показывать лёгкую карту на Dashboard.</string>
-    <string name="traffic_map_style_title">Вид карты</string>
-    <string name="traffic_map_style_countries">Страны</string>
-    <string name="traffic_map_style_dots">Точки</string>
     <string name="show_tor_quick_launch_title">Показ TOR</string>
     <string name="show_tor_quick_launch_summary">Отображать быстрый запуск TOR на Dashboard.</string>
     <string name="show_firewall_status_title">Показывать Firewall</string>

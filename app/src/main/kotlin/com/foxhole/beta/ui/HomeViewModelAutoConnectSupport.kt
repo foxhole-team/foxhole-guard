@@ -1267,9 +1267,9 @@ internal suspend fun HomeViewModel.awaitDisconnectedForAutoConnectInternal(
         if (SystemClock.elapsedRealtime() >= deadlineAt) {
             container.diagnosticsLogger.record(
                 "auto-connect",
-                "vpn network teardown timed out; continuing with previous handle excluded: previous=${expectedPreviousVpnNetworkHandle ?: "none"} current=${currentVpnNetworkHandle ?: "none"}",
+                "vpn network teardown timed out: previous=${expectedPreviousVpnNetworkHandle ?: "none"} current=${currentVpnNetworkHandle ?: "none"}",
             )
-            return expectedPreviousVpnNetworkHandle
+            error("vpn network teardown timed out")
         }
         delay(HomeViewModel.AUTO_CONNECT_DISCONNECT_POLL_DELAY_MS)
     }

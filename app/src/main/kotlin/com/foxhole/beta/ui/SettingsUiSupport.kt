@@ -101,7 +101,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.DialogProperties
 import androidx.core.content.getSystemService
 import com.foxhole.beta.R
@@ -153,7 +152,6 @@ internal fun SettingsNavigationRow(
     borderColor: Color = Color.Unspecified,
     leadingIconContainerColor: Color = Color.Unspecified,
     leadingIconTint: Color = MaterialTheme.colorScheme.onSurfaceVariant,
-    titleTrailingContent: (@Composable RowScope.() -> Unit)? = null,
     summaryMaxLines: Int = 1,
     grouped: Boolean = false,
     onClick: () -> Unit,
@@ -186,7 +184,6 @@ internal fun SettingsNavigationRow(
             leadingIcon = icon,
             leadingIconContainerColor = leadingIconContainerColor,
             leadingIconTint = leadingIconTint,
-            titleTrailingContent = titleTrailingContent,
             summaryMaxLines = summaryMaxLines,
             onClick = onClick,
             trailingContent = trailingContent,
@@ -204,32 +201,9 @@ internal fun SettingsNavigationRow(
         borderColor = borderColor,
         leadingIconContainerColor = leadingIconContainerColor,
         leadingIconTint = leadingIconTint,
-        titleTrailingContent = titleTrailingContent,
         summaryMaxLines = summaryMaxLines,
         trailingContent = trailingContent,
     )
-}
-
-@Composable
-internal fun ExperimentalBadge() {
-    val badgeColor = Color(0xFFF59E0B)
-    Surface(
-        shape = MaterialTheme.shapes.extraSmall,
-        color = badgeColor.copy(alpha = 0.16f),
-    ) {
-        Text(
-            text = stringResource(R.string.experimental_badge),
-            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
-            style =
-                MaterialTheme.typography.labelSmall.copy(
-                    fontSize = 8.sp,
-                    lineHeight = 8.sp,
-                    fontWeight = FontWeight.Black,
-                ),
-            color = badgeColor,
-            maxLines = 1,
-        )
-    }
 }
 
 private fun String.trimMenuSummary(): String = trimEnd().removeSuffix(".")
@@ -832,11 +806,10 @@ internal fun WarningBlock(
 internal fun InfoBlock(
     title: String,
     body: String,
-    toneColor: Color = MaterialTheme.colorScheme.primary,
 ) {
     Surface(
         shape = MaterialTheme.shapes.large,
-        color = toneColor.copy(alpha = 0.12f),
+        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
@@ -846,7 +819,7 @@ internal fun InfoBlock(
             Icon(
                 imageVector = Icons.Outlined.Info,
                 contentDescription = null,
-                tint = toneColor,
+                tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(18.dp),
             )
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
