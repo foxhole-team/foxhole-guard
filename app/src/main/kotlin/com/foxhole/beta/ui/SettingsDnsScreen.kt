@@ -25,7 +25,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -37,8 +36,7 @@ import com.foxhole.beta.core.model.DnsFilterMode
 import com.foxhole.beta.core.model.DnsSettings
 import com.foxhole.beta.core.model.DomainStrategy
 import com.foxhole.beta.core.model.SecureDnsMode
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
+import com.foxhole.beta.core.network.normalizeDnsDomainRules
 
 @Suppress("LongParameterList", "LongMethod")
 @Composable
@@ -53,14 +51,13 @@ fun DnsSettingsScreen(
     onDnsFilterManualRefresh: () -> Unit,
 ) {
     val dns = state.settings.dns
-    val scope = rememberCoroutineScope()
     var filterModeExpanded by rememberSaveable { mutableStateOf(false) }
     var secureModeExpanded by rememberSaveable { mutableStateOf(false) }
     var domainStrategyExpanded by rememberSaveable { mutableStateOf(false) }
     var serverDialog by rememberSaveable { mutableStateOf(false) }
     var domainBypassDialog by rememberSaveable { mutableStateOf(false) }
     var autoUpdateWarning by rememberSaveable { mutableStateOf(false) }
-    var refreshInProgress by rememberSaveable { mutableStateOf(false) }
+    val refreshInProgress = state.dnsFilterRefreshInProgress
 
     fun updateDns(next: DnsSettings) {
         onDnsSettingsChanged(next)
@@ -169,14 +166,7 @@ fun DnsSettingsScreen(
                         if (refreshInProgress) {
                             null
                         } else {
-                            {
-                                refreshInProgress = true
-                                scope.launch {
-                                    delay(650)
-                                    onDnsFilterManualRefresh()
-                                    refreshInProgress = false
-                                }
-                            }
+                            onDnsFilterManualRefresh
                         },
                     summaryMaxLines = 2,
                     grouped = true,
@@ -365,14 +355,6 @@ private fun DnsDomainBypassDialog(
         },
     )
 }
-
-private fun normalizeDnsDomainRules(raw: String): List<String> =
-    raw
-        .split('\n', ',', ';')
-        .map(String::trim)
-        .map { value -> value.removePrefix("*.").removePrefix(".").lowercase() }
-        .filter(String::isNotBlank)
-        .distinct()
 
 @Composable
 private fun dnsFilterModeLabel(value: DnsFilterMode): String =

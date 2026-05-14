@@ -436,6 +436,7 @@ internal suspend fun HomeViewModel.connectNowInternal(
     previousVpnNetworkHandle: Long? = null,
 ) {
     invalidateIpInfoRefreshes()
+    requestNotificationPermission.tryEmit(Unit)
     warnIfTorRouteCannotRunForProfile(profileId, protocolOptionId)
     container.connectionController.connect(
         profileId = profileId,

@@ -222,19 +222,27 @@ internal fun HomeViewModel.onDnsDomainBypassRulesChangedInternal(value: List<Str
 }
 
 internal fun HomeViewModel.onDnsFilterManualRefreshInternal() {
+    if (dnsFilterRefreshInProgressMutable.value) {
+        return
+    }
     viewModelScope.launch {
-        runCatching { container.profileRepository.verifyBundledDnsFilters() }
-            .onSuccess {
-                container.settingsRepository.markDnsFiltersUpdated()
-                emitSuccess(getApplication<Application>().getString(R.string.dns_filter_refresh_complete))
-            }
-            .onFailure { error ->
-                container.diagnosticsLogger.record(
-                    "dns",
-                    "bundled filter verification failed error=${error.javaClass.simpleName}",
-                )
-                emitError(getApplication<Application>().getString(R.string.dns_filter_refresh_failed))
-            }
+        dnsFilterRefreshInProgressMutable.value = true
+        try {
+            runCatching { container.profileRepository.verifyBundledDnsFilters() }
+                .onSuccess {
+                    container.settingsRepository.markDnsFiltersUpdated()
+                    emitSuccess(getApplication<Application>().getString(R.string.dns_filter_refresh_complete))
+                }
+                .onFailure { error ->
+                    container.diagnosticsLogger.record(
+                        "dns",
+                        "bundled filter verification failed error=${error.javaClass.simpleName}",
+                    )
+                    emitError(getApplication<Application>().getString(R.string.dns_filter_refresh_failed))
+                }
+        } finally {
+            dnsFilterRefreshInProgressMutable.value = false
+        }
     }
 }
 
@@ -318,6 +326,9 @@ internal fun HomeViewModel.onFirewallEnabledChangedInternal(value: Boolean) {
     viewModelScope.launch {
         container.settingsRepository.updateFirewallEnabled(value)
         container.settingsRepository.updateShowFirewallStatus(value)
+        if (value) {
+            requestNotificationPermission.tryEmit(Unit)
+        }
         if (value && android.net.VpnService.prepare(getApplication<Application>()) != null) {
             pendingConnectRequest =
                 PendingConnectRequest(

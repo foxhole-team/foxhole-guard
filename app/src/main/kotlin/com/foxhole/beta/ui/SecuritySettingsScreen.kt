@@ -5,13 +5,13 @@ package com.foxhole.beta.ui
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.QueryStats
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.vectorResource
@@ -44,7 +44,7 @@ fun SecuritySettingsScreen(
             InfoBlock(
                 title = stringResource(R.string.security_development_warning_title),
                 body = stringResource(R.string.security_development_warning_body),
-                toneColor = Color(0xFFF59E0B),
+                toneColor = MaterialTheme.colorScheme.primary,
             )
         }
         item {

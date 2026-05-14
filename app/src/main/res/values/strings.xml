@@ -295,8 +295,8 @@
     <string name="security_firewall_title">Firewall</string>
     <string name="security_firewall_summary">Enables the local Firewall for logging, permanent blocking, and the live connections map.</string>
     <string name="security_firewall_info_body">When Firewall is enabled, Foxhole can keep a local VPN runtime for features that need honest access to network connections.</string>
-    <string name="security_development_warning_title">Security settings are experimental</string>
-    <string name="security_development_warning_body">This section is still in development. Extra traffic analysis and Firewall runtime can increase battery use and device temperature.</string>
+    <string name="security_development_warning_title">Basic network protection</string>
+    <string name="security_development_warning_body">FoxHole can block known malicious domains, show unusual network activity, and block selected apps through VPN or local guard. It is not an antivirus: it does not scan files, inspect APKs, or remove malware.</string>
     <string name="security_firewall_enable_action">Enable Firewall</string>
     <string name="anomaly_enabled_title">Anomaly analysis</string>
     <string name="anomaly_enabled_summary">Analyzes network traffic anomalies using algorithms: upload spike, background traffic, total traffic spike, new destination country, DNS block ratio, reconnect storm, latency shift, and privacy route mismatch.</string>

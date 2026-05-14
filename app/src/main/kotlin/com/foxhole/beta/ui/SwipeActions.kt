@@ -3,7 +3,6 @@ package com.foxhole.beta.ui
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -35,6 +34,9 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import com.foxhole.beta.R
@@ -72,7 +74,18 @@ internal fun FoxholeSwipeActions(
         }
     }
     val haptic = LocalHapticFeedback.current
-    val actionWidth = (actions.size * 44).dp + 12.dp
+    val actionWidth = (actions.size * 48).dp + 12.dp
+    val defaultActionLabel = stringResource(R.string.action_label)
+    val accessibilityActions =
+        actions.map { action ->
+            CustomAccessibilityAction(
+                label = action.contentDescription.ifBlank { defaultActionLabel },
+            ) {
+                setRevealed(false)
+                action.onClick()
+                true
+            }
+        }
     val contentOffset by animateDpAsState(
         targetValue = if (isRevealed) -actionWidth else 0.dp,
         animationSpec =
@@ -107,7 +120,14 @@ internal fun FoxholeSwipeActions(
             positionalThreshold = { distance -> distance * 0.28f },
         )
 
-    Box(modifier = modifier.fillMaxWidth()) {
+    Box(
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .semantics {
+                    customActions = accessibilityActions
+                },
+    ) {
         SwipeActionsBackground(
             actions = actions,
             onAction = {},
@@ -186,9 +206,6 @@ private fun SwipeActionsDismissOverlay(
                         onDragCancel = { dragDistance = 0f },
                     )
                 }
-                .pointerInput(onDismiss) {
-                    detectTapGestures(onTap = { onDismiss() })
-                },
     )
 }
 
@@ -212,7 +229,7 @@ private fun SwipeActionsBackground(
                 },
                 modifier =
                     Modifier
-                        .size(40.dp)
+                        .size(48.dp)
                         .then(
                             if (exposeTestTags) {
                                 action.testTag?.let { Modifier.testTag(it) } ?: Modifier

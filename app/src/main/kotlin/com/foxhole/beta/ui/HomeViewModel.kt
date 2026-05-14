@@ -123,6 +123,7 @@ class HomeViewModel(
     internal val runtimeReloadPendingMutable = MutableStateFlow(false)
     internal val runtimeReconnectRequiredMutable = MutableStateFlow(false)
     internal val reconnectInProgressMutable = MutableStateFlow(false)
+    internal val dnsFilterRefreshInProgressMutable = MutableStateFlow(false)
     internal val profileReconnectPromptUntilMutable = MutableStateFlow(0L)
     internal val insecureTlsImportWarningMutable = MutableStateFlow<InsecureTlsImportWarningState?>(null)
     internal val catalogPresetPreviewsMutable = MutableStateFlow<Map<Long, List<RoutingRepository.RoutingCatalogPresetPreview>>>(emptyMap())
@@ -498,8 +499,12 @@ class HomeViewModel(
             )
 
     val settingsRouteState: StateFlow<SettingsRouteUiState> =
-        uiState
-            .map(HomeUiState::toSettingsRouteUiState)
+        combine(
+            uiState,
+            dnsFilterRefreshInProgressMutable,
+        ) { state, dnsFilterRefreshInProgress ->
+            state.toSettingsRouteUiState(dnsFilterRefreshInProgress = dnsFilterRefreshInProgress)
+        }
             .stateIn(
                 viewModelScope,
                 SharingStarted.WhileSubscribed(5_000),
@@ -526,6 +531,7 @@ class HomeViewModel(
 
     internal val snackbars = MutableSharedFlow<FoxholeBannerEvent>(extraBufferCapacity = 16)
     val requestVpnPermission = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    val requestNotificationPermission = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     internal var pendingConnectRequest: PendingConnectRequest? = null
     internal var ipInfoRefreshJob: Job? = null
     internal var ipInfoRefreshToken: Long = 0L

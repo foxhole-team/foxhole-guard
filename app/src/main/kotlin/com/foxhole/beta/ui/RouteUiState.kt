@@ -106,6 +106,7 @@ data class SettingsRouteUiState(
     val anomalyEvents: List<AnomalyEvent> = emptyList(),
     val appTrafficWindows: List<AppTrafficWindow> = emptyList(),
     val trafficWindows: List<TrafficWindow> = emptyList(),
+    val dnsFilterRefreshInProgress: Boolean = false,
 )
 
 data class RoutingRouteUiState(
@@ -215,7 +216,9 @@ internal fun HomeUiState.toProfilesRouteUiState(
         favoriteProtocolOptionByProfileId = favoriteProtocolOptionByProfileId,
     )
 
-internal fun HomeUiState.toSettingsRouteUiState(): SettingsRouteUiState =
+internal fun HomeUiState.toSettingsRouteUiState(
+    dnsFilterRefreshInProgress: Boolean = false,
+): SettingsRouteUiState =
     SettingsRouteUiState(
         settings = settings,
         appVersion = appVersion,
@@ -230,6 +233,7 @@ internal fun HomeUiState.toSettingsRouteUiState(): SettingsRouteUiState =
         anomalyEvents = anomalyEvents,
         appTrafficWindows = appTrafficWindows,
         trafficWindows = trafficWindows,
+        dnsFilterRefreshInProgress = dnsFilterRefreshInProgress,
     )
 
 internal fun HomeUiState.toRoutingRouteUiState(): RoutingRouteUiState =

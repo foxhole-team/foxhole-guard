@@ -81,10 +81,6 @@ class MainActivity : AppCompatActivity() {
             }
 
             LaunchedEffect(Unit) {
-                requestPostNotificationsIfNeeded()
-            }
-
-            LaunchedEffect(Unit) {
                 homeViewModel.requestVpnPermission.collect {
                     val intent = android.net.VpnService.prepare(this@MainActivity)
                     if (intent == null) {
@@ -92,6 +88,12 @@ class MainActivity : AppCompatActivity() {
                     } else {
                         vpnPermissionLauncher.launch(intent)
                     }
+                }
+            }
+
+            LaunchedEffect(Unit) {
+                homeViewModel.requestNotificationPermission.collect {
+                    requestPostNotificationsIfNeeded()
                 }
             }
 
