@@ -671,7 +671,7 @@ class HomeViewModel(
         if (protocolSearchRunning) {
             cancelAutoConnect(clearUiOnly = true)
             cancelSmartProfileMetricsRefreshInternal(restoreConnection = false)
-            container.connectionController.disconnect(suppressLocalGuard = true)
+            container.connectionController.disconnect(suppressLocalGuard = false)
             return
         }
         cancelAutoConnect(clearUiOnly = true)
@@ -680,7 +680,7 @@ class HomeViewModel(
             reconnectJob?.cancel()
             reconnectJob = null
             reconnectInProgressMutable.value = false
-            container.connectionController.disconnect(suppressLocalGuard = true)
+            container.connectionController.disconnect(suppressLocalGuard = false)
             return
         }
         val activeProfile = state.activeProfile
@@ -709,11 +709,11 @@ class HomeViewModel(
             return
         }
         val connectProfile = mobileNetworkProfileOverride(state) ?: activeProfile
-        if (state.connection.state in ACTIVE_CONNECTION_STATES) {
+        if (state.connection.isPrimaryConnectionRuntime()) {
             if (state.reconnectRequired) {
                 requestReconnect(activeProfile.id)
             } else {
-                container.connectionController.disconnect(suppressLocalGuard = true)
+                container.connectionController.disconnect(suppressLocalGuard = false)
             }
             return
         }

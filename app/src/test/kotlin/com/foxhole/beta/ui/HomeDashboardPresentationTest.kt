@@ -218,6 +218,29 @@ class HomeDashboardPresentationTest {
     }
 
     @Test
+    fun `network model shows loading for connected tunnel without resolved ip`() {
+        val model =
+            resolveHomeDashboardNetworkModel(
+                state =
+                    HomeRouteUiState(
+                        profilesLoaded = true,
+                        connection =
+                            ConnectionSnapshot(
+                                state = ConnectionState.CONNECTED,
+                                trafficMode = TrafficMode.TUNNEL,
+                                profileId = 42L,
+                                lastChangeAt = 1_000L,
+                            ),
+                    ),
+                visibleIpInfo = null,
+                deviceInternetAvailable = true,
+            )
+
+        assertTrue(model.showConnectionStatus)
+        assertTrue(model.showLoading)
+    }
+
+    @Test
     fun `network model shows loading during reconnect even with previous ip info`() {
         val ipInfo =
             IpInfo(
@@ -276,6 +299,37 @@ class HomeDashboardPresentationTest {
         assertEquals(R.string.home_network_current_ip_title, model.titleRes)
         assertFalse(model.showConnectionStatus)
         assertFalse(model.showLoading)
+    }
+
+    @Test
+    fun `local guard firewall runtime keeps dashboard primary action on start`() {
+        val state =
+            HomeRouteUiState(
+                settings = Settings(expert = ExpertSettings(firewallEnabled = true)),
+                connection =
+                    ConnectionSnapshot(
+                        state = ConnectionState.CONNECTED,
+                        profileId = FoxholeVpnService.LOCAL_GUARD_PROFILE_ID,
+                    ),
+            )
+
+        assertEquals(HomePrimaryAction.START, homePrimaryAction(state))
+        assertFalse(state.hasPrimaryConnectionRuntime())
+    }
+
+    @Test
+    fun `ordinary vpn runtime keeps dashboard primary action on stop`() {
+        val state =
+            HomeRouteUiState(
+                connection =
+                    ConnectionSnapshot(
+                        state = ConnectionState.CONNECTED,
+                        profileId = 42L,
+                    ),
+            )
+
+        assertEquals(HomePrimaryAction.STOP, homePrimaryAction(state))
+        assertTrue(state.hasPrimaryConnectionRuntime())
     }
 
     @Test

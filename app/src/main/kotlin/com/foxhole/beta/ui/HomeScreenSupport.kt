@@ -792,18 +792,24 @@ internal fun HomeConnectionFeatureDialog(
             )
         },
         text =
-            if (feature == HomeConnectionFeature.TOR) {
-                {
-                    HomeConnectionFeatureDialogContent(
-                        state = state,
-                        indicator = indicator,
-                        torSelectedProtocolIsUdp = torSelectedProtocolIsUdp,
-                        onRenewTorIp = onRenewTorIp,
-                        onDismiss = onDismiss,
-                    )
+            when (feature) {
+                HomeConnectionFeature.TOR -> {
+                    {
+                        HomeConnectionFeatureDialogContent(
+                            state = state,
+                            indicator = indicator,
+                            torSelectedProtocolIsUdp = torSelectedProtocolIsUdp,
+                            onRenewTorIp = onRenewTorIp,
+                            onDismiss = onDismiss,
+                        )
+                    }
                 }
-            } else {
-                null
+                HomeConnectionFeature.FIREWALL -> {
+                    {
+                        HomeFirewallFeatureDialogContent(state = state)
+                    }
+                }
+                else -> null
             },
         confirmButton = {
             FoxholeDialogConfirmButton(
@@ -936,6 +942,126 @@ private fun HomeTorConnectedTable(
             Icon(Icons.Outlined.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
             Spacer(modifier = Modifier.width(8.dp))
             Text(stringResource(R.string.privacy_route_modal_change_ip))
+        }
+    }
+}
+
+@Composable
+private fun HomeFirewallFeatureDialogContent(state: HomeRouteUiState) {
+    val blockedApps = remember(state.installedApps, state.settings.expert.blockedPackages) {
+        resolveSelectedApps(
+            installedApps = state.installedApps,
+            selectedPackages = state.settings.expert.blockedPackages,
+        )
+    }
+    val runtimeMode =
+        when {
+            !state.settings.expert.firewallEnabled -> stringResource(R.string.switch_state_off)
+            state.connection.profileId == FoxholeVpnService.LOCAL_GUARD_PROFILE_ID ->
+                stringResource(R.string.firewall_modal_mode_local_guard)
+            state.connection.state in ACTIVE_CONNECTION_STATES ->
+                stringResource(R.string.firewall_modal_mode_vpn)
+            else -> stringResource(R.string.firewall_modal_mode_waiting)
+        }
+    val blockedAppsEnabled =
+        state.settings.expert.firewallEnabled &&
+            state.settings.expert.blockedPackagesEnabled &&
+            blockedApps.isNotEmpty()
+    val blockedAppsText =
+        if (blockedAppsEnabled) {
+            pluralStringResource(
+                R.plurals.firewall_modal_blocked_apps_count,
+                blockedApps.size,
+                blockedApps.size,
+            )
+        } else {
+            stringResource(R.string.switch_state_off)
+        }
+    val persistentBlockText =
+        if (
+            state.settings.expert.firewallEnabled &&
+            state.settings.expert.blockAppsAlways &&
+            state.settings.expert.blockedPackagesEnabled &&
+            blockedApps.isNotEmpty()
+        ) {
+            stringResource(R.string.switch_state_on)
+        } else {
+            stringResource(R.string.switch_state_off)
+        }
+    val statisticsText =
+        if (
+            state.settings.statistics.enabled &&
+            state.settings.statistics.appTrafficEnabled &&
+            state.settings.appTrafficStatsEnabled
+        ) {
+            stringResource(R.string.firewall_modal_statistics_enabled)
+        } else {
+            stringResource(R.string.switch_state_off)
+        }
+    Surface(
+        shape = MaterialTheme.shapes.medium,
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.30f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)),
+    ) {
+        Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp)) {
+            HomeTorInfoRow(
+                label = stringResource(R.string.firewall_modal_mode),
+                value = runtimeMode,
+            )
+            HomeNetworkSubtleDivider()
+            HomeFirewallBlockedAppsRow(
+                value = blockedAppsText,
+                blockedApps = if (blockedAppsEnabled) blockedApps else emptyList(),
+            )
+            HomeNetworkSubtleDivider()
+            HomeTorInfoRow(
+                label = stringResource(R.string.firewall_modal_persistent_block),
+                value = persistentBlockText,
+            )
+            HomeNetworkSubtleDivider()
+            HomeTorInfoRow(
+                label = stringResource(R.string.firewall_modal_statistics),
+                value = statisticsText,
+            )
+        }
+    }
+}
+
+@Composable
+private fun HomeFirewallBlockedAppsRow(
+    value: String,
+    blockedApps: List<InstalledAppOption>,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 5.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = stringResource(R.string.firewall_modal_app_blocking),
+            modifier = Modifier.weight(1f),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Row(
+            modifier = Modifier.weight(1f),
+            horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.End),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            HomeTorRouteIcons(
+                scope = PrivacyRouteScope.SELECTED_APPS,
+                selectedApps = blockedApps,
+            )
+            Text(
+                text = value,
+                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                color = MaterialTheme.colorScheme.onSurface,
+                textAlign = TextAlign.End,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
         }
     }
 }
@@ -1514,10 +1640,10 @@ internal fun HomeConnectionActions(
             Text(
                 if (autoConnectRunning || protocolRefreshRunning || state.reconnectInProgress) {
                     stringResource(R.string.disconnect)
-                } else if (torOnlyStartAvailable && state.connection.state == ConnectionState.IDLE) {
+                } else if (torOnlyStartAvailable && !state.hasPrimaryConnectionRuntime()) {
                     stringResource(R.string.connect_tor)
                 } else {
-                    homeConnectionLabel(state.connection.state, state.reconnectRequired)
+                    homeConnectionLabel(state)
                 },
             )
         }
@@ -1548,10 +1674,10 @@ internal fun HomeConnectionActions(
             Text(
                 if (autoConnectRunning || protocolRefreshRunning || state.reconnectInProgress) {
                     stringResource(R.string.disconnect)
-                } else if (torOnlyStartAvailable && state.connection.state == ConnectionState.IDLE) {
+                } else if (torOnlyStartAvailable && !state.hasPrimaryConnectionRuntime()) {
                     stringResource(R.string.connect_tor)
                 } else {
-                    homeConnectionLabel(state.connection.state, state.reconnectRequired)
+                    homeConnectionLabel(state)
                 },
             )
         }

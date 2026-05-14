@@ -953,6 +953,18 @@
     <string name="exp_badge">EXP</string>
     <string name="tor_badge">TOR</string>
     <string name="home_connection_feature_firewall">Firewall</string>
+    <string name="firewall_modal_mode">Mode</string>
+    <string name="firewall_modal_mode_local_guard">Local guard</string>
+    <string name="firewall_modal_mode_vpn">Inside VPN</string>
+    <string name="firewall_modal_mode_waiting">Waiting</string>
+    <string name="firewall_modal_app_blocking">App blocking</string>
+    <plurals name="firewall_modal_blocked_apps_count">
+        <item quantity="one">%1$d app</item>
+        <item quantity="other">%1$d apps</item>
+    </plurals>
+    <string name="firewall_modal_persistent_block">Always block</string>
+    <string name="firewall_modal_statistics">Statistics</string>
+    <string name="firewall_modal_statistics_enabled">Apps, countries, anomalies</string>
     <string name="privacy_route_selected_apps_empty">No TOR apps selected</string>
     <string name="block_ads_title">Block ads</string>
     <string name="block_telemetry_title">Block telemetry</string>

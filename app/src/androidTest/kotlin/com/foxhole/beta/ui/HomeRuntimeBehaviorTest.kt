@@ -208,6 +208,9 @@ class HomeRuntimeBehaviorTest {
         }
 
         scrollToNetworkBlock()
+        composeRule.waitUntil(timeoutMillis = 3_000) {
+            composeRule.onAllNodesWithTag("home_network_loading").fetchSemanticsNodes().isNotEmpty()
+        }
         composeRule.onNodeWithTag("home_network_loading").assertIsDisplayed()
         composeRule
             .onAllNodesWithText(

@@ -765,7 +765,18 @@ private fun LocalSurfaceSettings.lanProxySurface(): HomeProxySurface =
         com.foxhole.beta.core.model.ProxySurfaceMode.ALL -> HomeProxySurface(label = "ALL", settings = mixed, lanOnly = true)
     }
 
-internal fun homePrimaryAction(state: HomeRouteUiState): HomePrimaryAction = homePrimaryAction(state.connection.state, state.reconnectRequired)
+internal fun ConnectionSnapshot.isPrimaryConnectionRuntime(): Boolean =
+    state in ACTIVE_CONNECTION_STATES &&
+        profileId != FoxholeVpnService.LOCAL_GUARD_PROFILE_ID
+
+internal fun HomeRouteUiState.hasPrimaryConnectionRuntime(): Boolean = connection.isPrimaryConnectionRuntime()
+
+internal fun homePrimaryAction(state: HomeRouteUiState): HomePrimaryAction =
+    if (state.hasPrimaryConnectionRuntime()) {
+        homePrimaryAction(state.connection.state, state.reconnectRequired)
+    } else {
+        HomePrimaryAction.START
+    }
 
 internal fun homePrimaryAction(
     state: ConnectionState,
@@ -785,6 +796,14 @@ internal fun homeConnectionLabel(
     reconnectRequired: Boolean,
 ): String =
     when (homePrimaryAction(state, reconnectRequired)) {
+        HomePrimaryAction.START -> stringResource(R.string.connect)
+        HomePrimaryAction.STOP -> stringResource(R.string.disconnect)
+        HomePrimaryAction.RECONNECT -> stringResource(R.string.reconnect)
+    }
+
+@Composable
+internal fun homeConnectionLabel(state: HomeRouteUiState): String =
+    when (homePrimaryAction(state)) {
         HomePrimaryAction.START -> stringResource(R.string.connect)
         HomePrimaryAction.STOP -> stringResource(R.string.disconnect)
         HomePrimaryAction.RECONNECT -> stringResource(R.string.reconnect)

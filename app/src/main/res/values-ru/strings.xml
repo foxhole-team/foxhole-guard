@@ -987,6 +987,20 @@
     <string name="exp_badge">EXP</string>
     <string name="tor_badge">TOR</string>
     <string name="home_connection_feature_firewall">Фаервол</string>
+    <string name="firewall_modal_mode">Режим</string>
+    <string name="firewall_modal_mode_local_guard">Локальная защита</string>
+    <string name="firewall_modal_mode_vpn">Внутри VPN</string>
+    <string name="firewall_modal_mode_waiting">Ожидание</string>
+    <string name="firewall_modal_app_blocking">Блокировка приложений</string>
+    <plurals name="firewall_modal_blocked_apps_count">
+        <item quantity="one">%1$d приложение</item>
+        <item quantity="few">%1$d приложения</item>
+        <item quantity="many">%1$d приложений</item>
+        <item quantity="other">%1$d приложения</item>
+    </plurals>
+    <string name="firewall_modal_persistent_block">Блокировать всегда</string>
+    <string name="firewall_modal_statistics">Сбор статистики</string>
+    <string name="firewall_modal_statistics_enabled">Приложения, страны, аномалии</string>
     <string name="privacy_route_selected_apps_empty">Приложения TOR не выбраны</string>
     <string name="block_ads_title">Block ads</string>
     <string name="block_telemetry_title">Block telemetry</string>
