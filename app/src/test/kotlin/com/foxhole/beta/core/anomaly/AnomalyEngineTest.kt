@@ -86,17 +86,33 @@ class AnomalyEngineTest {
     }
 
     @Test
-    fun `new country with high traffic notifies`() {
+    fun `new country with high traffic logs activity without notification`() {
         val assessment =
             engine.evaluate(
-                current = trafficWindow(rxBytes = 1_000_000, txBytes = 2_000_000, destinationCountries = mapOf("NL" to 2_200_000L)),
+                current = trafficWindow(rxBytes = 1_000_000, txBytes = 1_000_000, destinationCountries = mapOf("BR" to 800_000L)),
                 appWindows = emptyList(),
                 history = AnomalyHistory(trafficWindows = trafficHistory(country = "DE")),
                 settings = enabledSettings,
             )
 
         assertTrue(assessment.signals.any { it.type == AnomalyType.NEW_DESTINATION_COUNTRY })
-        assertTrue(assessment.severity == AnomalySeverity.ACTIVITY_LOG || assessment.shouldNotify)
+        assertEquals(AnomalySeverity.ACTIVITY_LOG, assessment.severity)
+        assertFalse(assessment.shouldNotify)
+    }
+
+    @Test
+    fun `privacy route country mismatch stays activity only`() {
+        val assessment =
+            engine.evaluate(
+                current = trafficWindow(rxBytes = 1_000_000, txBytes = 1_000_000, destinationCountries = mapOf("DE" to 1_100_000L)),
+                appWindows = emptyList(),
+                history = AnomalyHistory(trafficWindows = trafficHistory(country = "US")),
+                settings = enabledSettings.copy(analyzeDestinationCountries = false),
+            )
+
+        assertTrue(assessment.signals.any { it.type == AnomalyType.TOR_OR_I2P_ROUTE_MISMATCH })
+        assertEquals(AnomalySeverity.ACTIVITY_LOG, assessment.severity)
+        assertFalse(assessment.shouldNotify)
     }
 
     @Test

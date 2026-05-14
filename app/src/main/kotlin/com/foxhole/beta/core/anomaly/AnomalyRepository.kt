@@ -47,7 +47,9 @@ class AnomalyRepository(
                 if (!settings.appTrafficStatsRuntimeEnabled()) {
                     flowOf(emptyList())
                 } else {
-                    dao.observeRecentAppTrafficWindows(cutoff = statisticsCutoff(settings.statistics.retention))
+                    dao.observeRecentAppTrafficWindows(
+                        cutoff = statisticsRetentionCutoff(nowProvider(), settings.statistics.retention),
+                    )
                         .map { entities -> entities.map(AppTrafficWindowEntity::toDomain) }
                 }
             }
@@ -58,7 +60,9 @@ class AnomalyRepository(
                 if (!settings.trafficWindowStatsRuntimeEnabled()) {
                     flowOf(emptyList())
                 } else {
-                    dao.observeRecentTrafficWindows(cutoff = statisticsCutoff(settings.statistics.retention))
+                    dao.observeRecentTrafficWindows(
+                        cutoff = statisticsRetentionCutoff(nowProvider(), settings.statistics.retention),
+                    )
                         .map { entities -> entities.map(TrafficWindowEntity::toDomain) }
                 }
             }
@@ -115,7 +119,7 @@ class AnomalyRepository(
                 historyBeforeCurrent = appHistories[appWindow.packageName].orEmpty(),
             )
         }
-        cleanupExpired(settings.anomaly)
+        cleanupExpired(settings)
     }
 
     suspend fun recordAppTrafficWindows(windows: List<AppTrafficWindow>) {
@@ -123,7 +127,7 @@ class AnomalyRepository(
             return
         }
         dao.insertAppTrafficWindows(windows.map(AppTrafficWindowEntity::from))
-        cleanupExpired(settingsRepository.current().anomaly)
+        cleanupExpired(settingsRepository.current())
     }
 
     suspend fun clearTrafficStatistics() {
@@ -203,11 +207,13 @@ class AnomalyRepository(
         ) == 0
     }
 
-    private suspend fun cleanupExpired(settings: AnomalySettings) {
-        val cutoff = nowProvider() - settings.historyRetention.retentionHours * HOUR_MS
-        dao.deleteAnomalyEventsBefore(cutoff)
-        dao.deleteTrafficWindowsBefore(cutoff)
-        dao.deleteAppTrafficWindowsBefore(cutoff)
+    private suspend fun cleanupExpired(settings: Settings) {
+        val now = nowProvider()
+        val anomalyCutoff = now - settings.anomaly.historyRetention.retentionHours * HOUR_MS
+        val statisticsCutoff = statisticsRetentionCutoff(now, settings.statistics.retention)
+        dao.deleteAnomalyEventsBefore(anomalyCutoff)
+        dao.deleteTrafficWindowsBefore(statisticsCutoff)
+        dao.deleteAppTrafficWindowsBefore(statisticsCutoff)
     }
 
     companion object {
@@ -218,11 +224,14 @@ class AnomalyRepository(
     }
 }
 
-private fun statisticsCutoff(retention: StatisticsRetention): Long =
+internal fun statisticsRetentionCutoff(
+    nowMs: Long,
+    retention: StatisticsRetention,
+): Long =
     when (retention) {
-        StatisticsRetention.WEEK -> System.currentTimeMillis() - 7L * 24L * 60L * 60L * 1000L
-        StatisticsRetention.MONTH -> System.currentTimeMillis() - 31L * 24L * 60L * 60L * 1000L
-        StatisticsRetention.MONTHS_3 -> System.currentTimeMillis() - 93L * 24L * 60L * 60L * 1000L
+        StatisticsRetention.WEEK -> nowMs - 7L * 24L * 60L * 60L * 1000L
+        StatisticsRetention.MONTH -> nowMs - 31L * 24L * 60L * 60L * 1000L
+        StatisticsRetention.MONTHS_3 -> nowMs - 93L * 24L * 60L * 60L * 1000L
         StatisticsRetention.FOREVER -> 0L
     }
 

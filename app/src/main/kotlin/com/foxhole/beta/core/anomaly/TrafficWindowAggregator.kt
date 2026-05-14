@@ -26,11 +26,13 @@ class TrafficWindowAggregator(
 ) {
     private var lastSnapshot: TrafficSnapshot? = null
     private var lastConnectionState: ConnectionState? = null
+    private var lastDestinationCountries: Map<String, Long>? = null
     private var reconnectsInWindow: Int = 0
 
     fun reset() {
         lastSnapshot = null
         lastConnectionState = null
+        lastDestinationCountries = null
         reconnectsInWindow = 0
     }
 
@@ -50,6 +52,7 @@ class TrafficWindowAggregator(
         val previous = lastSnapshot
         if (previous == null || snapshot.rxTotalBytes < previous.rxTotalBytes || snapshot.txTotalBytes < previous.txTotalBytes) {
             lastSnapshot = snapshot
+            lastDestinationCountries = context.destinationCountries.sanitizedCountryBytes()
             return null
         }
         val elapsedMs = snapshot.sampledAt - previous.sampledAt
@@ -57,6 +60,9 @@ class TrafficWindowAggregator(
             return null
         }
         lastSnapshot = snapshot
+        val currentDestinationCountries = context.destinationCountries.sanitizedCountryBytes()
+        val destinationCountryDeltas = countryByteDeltas(lastDestinationCountries, currentDestinationCountries)
+        lastDestinationCountries = currentDestinationCountries
         val durationSec = (elapsedMs / 1000L).toInt().coerceAtLeast(1)
         val window =
             TrafficWindow(
@@ -72,7 +78,7 @@ class TrafficWindowAggregator(
                 allowedDns = context.allowedDns.coerceAtLeast(0),
                 reconnects = reconnectsInWindow.coerceAtLeast(context.reconnects),
                 latencyMs = context.latencyMs?.takeIf { it > 0 },
-                destinationCountries = context.destinationCountries.sanitizedCountryBytes(),
+                destinationCountries = destinationCountryDeltas,
             )
         reconnectsInWindow = 0
         return window
@@ -103,3 +109,11 @@ private fun Map<String, Long>.sanitizedCountryBytes(): Map<String, Long> =
         }
         .groupBy({ it.first }, { it.second })
         .mapValues { (_, values) -> values.sum() }
+
+internal fun countryByteDeltas(
+    previous: Map<String, Long>?,
+    current: Map<String, Long>,
+): Map<String, Long> =
+    current
+        .mapValues { (country, bytes) -> bytes - (previous?.get(country) ?: 0L) }
+        .filterValues { bytes -> bytes > 0L }

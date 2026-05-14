@@ -10,7 +10,9 @@ import com.foxhole.beta.core.model.InstalledAppChangeType
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeout
 
 class InstalledAppChangeReceiver : BroadcastReceiver() {
     override fun onReceive(
@@ -27,20 +29,56 @@ class InstalledAppChangeReceiver : BroadcastReceiver() {
                 Intent.ACTION_PACKAGE_ADDED -> InstalledAppChangeType.INSTALLED
                 Intent.ACTION_PACKAGE_REMOVED -> InstalledAppChangeType.REMOVED
                 else -> return
-            }
+        }
         val pendingResult = goAsync()
         CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
-            runCatching {
-                val packageInfo = app.packageInventoryInfo(packageName, changeType)
-                app.container.settingsRepository.recordInstalledAppChange(
-                    packageName = packageName,
-                    label = packageInfo.label,
-                    isSystemApp = packageInfo.isSystemApp,
-                    type = changeType,
-                )
+            finishPendingBroadcast(
+                timeoutMs = PACKAGE_CHANGE_TIMEOUT_MS,
+                finish = pendingResult::finish,
+                onTimeout = {
+                    app.container.diagnosticsLogger.record(
+                        "app-inventory",
+                        "package change receiver timed out package=$packageName",
+                    )
+                },
+            ) {
+                runCatching {
+                    val packageInfo = app.packageInventoryInfo(packageName, changeType)
+                    app.container.settingsRepository.recordInstalledAppChange(
+                        packageName = packageName,
+                        label = packageInfo.label,
+                        isSystemApp = packageInfo.isSystemApp,
+                        type = changeType,
+                    )
+                }.onFailure { error ->
+                    app.container.diagnosticsLogger.record(
+                        "app-inventory",
+                        "package change record failed: ${error.javaClass.simpleName}",
+                    )
+                }
             }
-            pendingResult.finish()
         }
+    }
+
+    private companion object {
+        const val PACKAGE_CHANGE_TIMEOUT_MS = 8_000L
+    }
+}
+
+internal suspend fun finishPendingBroadcast(
+    timeoutMs: Long,
+    finish: () -> Unit,
+    onTimeout: () -> Unit = {},
+    block: suspend () -> Unit,
+) {
+    try {
+        withTimeout(timeoutMs) {
+            block()
+        }
+    } catch (_: TimeoutCancellationException) {
+        onTimeout()
+    } finally {
+        finish()
     }
 }
 

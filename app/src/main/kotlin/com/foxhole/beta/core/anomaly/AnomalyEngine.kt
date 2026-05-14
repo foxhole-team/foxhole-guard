@@ -247,9 +247,9 @@ class NewDestinationCountryDetector : AnomalyDetector {
             val share = bytes.toDouble() / totalBytes.toDouble()
             val severity =
                 when {
-                    share >= 0.35 -> 0.74
-                    share >= 0.18 -> 0.52
-                    share >= 0.08 -> 0.34
+                    share >= 0.35 -> 0.45
+                    share >= 0.18 -> 0.38
+                    share >= 0.08 -> 0.30
                     else -> 0.0
                 }
             severity
@@ -378,7 +378,7 @@ class TorI2pRouteMismatchDetector : AnomalyDetector {
         return listOf(
             AnomalySignal(
                 type = AnomalyType.TOR_OR_I2P_ROUTE_MISMATCH,
-                severity = suspiciousShare.coerceIn(0.0, 0.78),
+                severity = suspiciousShare.coerceIn(0.0, 0.45),
                 reason = "Traffic route changed while privacy routing is off",
                 evidence = mapOf("route_share" to "%.2f".format(Locale.US, suspiciousShare)),
             ),
