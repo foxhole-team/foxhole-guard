@@ -23,6 +23,7 @@
     <string name="traffic_map_country_header">Country</string>
     <string name="traffic_map_sessions_header">Sessions</string>
     <string name="traffic_map_total_header">Total</string>
+    <string name="traffic_map_power_save_disabled">Map is off to reduce power use.</string>
     <string name="home_mode_split_tunnel">Split tunnel</string>
     <string name="connect">Start</string>
     <string name="disconnect">Stop</string>
@@ -562,8 +563,8 @@
     <string name="dns_intercept_requests_summary">Capture port 53 and DNS-protocol traffic inside the tunnel.</string>
     <string name="dns_server_title">DNS server</string>
     <string name="dns_secure_mode_title">Protected DNS</string>
-    <string name="dns_secure_mode_doh">DoH</string>
-    <string name="dns_secure_mode_dot">DoT</string>
+    <string name="dns_secure_mode_doh">DOH</string>
+    <string name="dns_secure_mode_dot">DOT</string>
     <string name="dns_secure_mode_plain">Plain</string>
     <string name="dns_per_app_bypass_title">Per-app bypass</string>
     <string name="dns_per_app_bypass_summary">Selected apps skip DNS filtering only.</string>
@@ -926,6 +927,8 @@
     <string name="privacy_route_info_body">TOR protects only apps whose traffic is routed through TOR. In selected-apps mode, Foxhole does not claim whole-device TOR routing. Supported TCP traffic goes through TOR inside the active VPN; UDP is blocked for TOR routes.</string>
     <string name="privacy_route_mode_off">Off</string>
     <string name="privacy_route_mode_tor_over_vpn">TOR over current VPN</string>
+    <string name="privacy_route_bypass_vpn_title">Bypass VPN tunnel</string>
+    <string name="privacy_route_bypass_vpn_summary">Route TOR outside the VPN tunnel. TOR can start even when no VPN profile is selected.</string>
     <string name="privacy_route_scope_title">Scope</string>
     <string name="privacy_route_scope_selected_apps">Selected apps</string>
     <string name="privacy_route_scope_all_apps">All apps</string>
@@ -933,7 +936,20 @@
     <string name="privacy_route_selected_apps_summary">Choose apps whose TCP traffic should use TOR over the active VPN.</string>
     <string name="privacy_route_all_apps_warning_title">Route all device traffic through Tor?</string>
     <string name="privacy_route_all_apps_warning_body">TOR mode routes supported TCP traffic through TOR. Some apps, UDP traffic, push services, streaming, and banking apps may fail or become slower.</string>
-    <string name="privacy_route_udp_warning">TOR will not run for the selected UDP VPN protocol. Only TCP VPN profiles can carry TOR-over-VPN.</string>
+    <string name="privacy_route_udp_warning">To route apps through TOR, select a TCP VPN protocol first. UDP VPN protocols cannot carry TOR-over-VPN routes.</string>
+    <string name="privacy_route_udp_modal_body">To enable routing into the TOR network, switch the active VPN protocol to TCP first. UDP protocols such as Hysteria2 or WireGuard cannot carry TOR-over-VPN routes.</string>
+    <string name="privacy_route_modal_ready_body">TOR routing will start inside the active VPN after the route is enabled and the connection is refreshed.</string>
+    <string name="privacy_route_modal_current_ip">Current TOR IP</string>
+    <string name="privacy_route_modal_connection_time">Connection time</string>
+    <string name="privacy_route_modal_routing">Routing to TOR</string>
+    <string name="privacy_route_modal_route_all">All apps</string>
+    <plurals name="privacy_route_modal_route_selected">
+        <item quantity="one">%1$d app</item>
+        <item quantity="other">%1$d apps</item>
+    </plurals>
+    <string name="privacy_route_modal_change_ip">Change TOR IP address</string>
+    <string name="connect_tor">Start TOR</string>
+    <string name="home_network_tor_title">TOR network</string>
     <string name="exp_badge">EXP</string>
     <string name="tor_badge">TOR</string>
     <string name="home_connection_feature_firewall">Firewall</string>

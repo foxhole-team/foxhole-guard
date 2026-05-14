@@ -95,6 +95,7 @@ internal fun buildHomeRouteUiState(
                     .smartProfilePreference(activeProfile.id)
                     ?.rememberedSmartStartLatencyByOptionId(currentNetworkFingerprintKey)
             }.orEmpty()
+    val activeKnownLatenciesByOptionId = smartStartRememberedLatenciesByOptionId + activeProfileLatencies
     val activeRecommendedProtocolOptionIds =
         state.activeProfile
             ?.let { activeProfile ->
@@ -112,9 +113,10 @@ internal fun buildHomeRouteUiState(
     val activeFavoriteProtocolOptionId =
         state.activeProfile
             ?.let { activeProfile ->
-                state.settings
-                    .smartProfilePreference(activeProfile.id)
-                    ?.preferredLastKnownGoodOptionId(currentNetworkFingerprintKey)
+                fastestProtocolOptionId(activeKnownLatenciesByOptionId)
+                    ?: state.settings
+                        .smartProfilePreference(activeProfile.id)
+                        ?.preferredLastKnownGoodOptionId(currentNetworkFingerprintKey)
             }
     val autoConnectRefreshingActiveProfile = autoConnect.running && state.activeProfile != null
     return state.toHomeRouteUiState(
@@ -213,11 +215,12 @@ internal fun buildProfilesRouteUiState(
                 protocolMetrics.refreshingOptionIdByProfileId.filterKeys(refreshingProfileIds::contains)
         )
             .filterKeys(refreshingProfileIds::contains)
+    val rememberedLatenciesByProfileId =
+        state.settings.rememberedSmartStartLatencyByProfileId(
+            networkFingerprint = networkFingerprintKey,
+        )
     return state.toProfilesRouteUiState(
-        smartStartRememberedLatenciesByProfileId =
-            state.settings.rememberedSmartStartLatencyByProfileId(
-                networkFingerprint = networkFingerprintKey,
-            ),
+        smartStartRememberedLatenciesByProfileId = rememberedLatenciesByProfileId,
         smartProfileDownOptionIdsByProfileId = downOptionIdsByProfileId,
         smartProfileServerPingsByProfileId = mergedServerPingsByProfileId,
         smartProfileServerPingUnavailableByProfileId =
@@ -252,12 +255,24 @@ internal fun buildProfilesRouteUiState(
         favoriteProtocolOptionByProfileId =
             state.settings.smartProfilePreferences
                 .mapNotNull { preference ->
-                    preference.preferredLastKnownGoodOptionId(networkFingerprintKey)?.let { optionId ->
+                    (
+                        fastestProtocolOptionId(rememberedLatenciesByProfileId[preference.profileId].orEmpty())
+                            ?: preference.preferredLastKnownGoodOptionId(networkFingerprintKey)
+                    )?.let { optionId ->
                         preference.profileId to optionId
                     }
                 }.toMap(),
     )
 }
+
+private fun fastestProtocolOptionId(latenciesByOptionId: Map<String, Long>): String? =
+    latenciesByOptionId
+        .asSequence()
+        .filter { (_, latencyMs) -> latencyMs > 0L }
+        .minWithOrNull(
+            compareBy<Map.Entry<String, Long>> { (_, latencyMs) -> latencyMs }
+                .thenBy { (optionId, _) -> optionId },
+        )?.key
 
 private fun fullSmartRefreshUpdatedAtByOptionId(
     profile: Profile,

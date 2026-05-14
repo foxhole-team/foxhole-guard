@@ -28,6 +28,7 @@ import com.foxhole.beta.core.model.IpInfo
 import com.foxhole.beta.core.model.LocalSurfaceSettings
 import com.foxhole.beta.core.model.PerAppRoutingMode
 import com.foxhole.beta.core.model.Profile
+import com.foxhole.beta.core.model.ProfileTrafficTotal
 import com.foxhole.beta.core.model.ProfileProtocolOption
 import com.foxhole.beta.core.model.ProfileSourceType
 import com.foxhole.beta.core.model.ProtocolHint
@@ -43,7 +44,6 @@ import com.foxhole.beta.core.settings.smartStartEnabledProtocolSetHash
 import com.foxhole.beta.vpn.ACTIVE_CONNECTION_STATES
 import com.foxhole.beta.vpn.FoxholeVpnService
 import com.foxhole.beta.vpn.localGuardModeOrNull
-import java.util.Locale
 
 internal data class HomeProxySurface(
     val label: String,
@@ -116,6 +116,8 @@ internal data class HomeDashboardTrafficModel(
     val totalDays: Long,
     val hasIncomingTraffic: Boolean,
     val hasOutgoingTraffic: Boolean,
+    val selectedProtocolTotalBytes: Long? = null,
+    val selectedProtocolHint: ProtocolHint? = null,
 )
 
 internal enum class HomePrimaryAction {
@@ -152,7 +154,6 @@ internal fun shouldShowPendingNetworkLoading(
         explicitLoading -> true
         deviceInternetAvailable == false -> false
         autoConnectRunning || connectionState in setOf(ConnectionState.CONNECTING, ConnectionState.RECONNECTING) -> false
-        !appLoaded && connectionState == ConnectionState.IDLE -> true
         else -> false
     }
 
@@ -343,9 +344,21 @@ internal fun resolveHomeDashboardNetworkModel(
     val showConnectionStatus = state.hasRealTunnelConnectionStatus()
     val dashboardIpInfo = state.dashboardVisibleIpInfo(visibleIpInfo)
     val protocolSearchRunning = state.autoConnect.running || state.protocolMetricsRefreshing
+    val vpnTransitionLoading =
+        !protocolSearchRunning &&
+            state.connection.state in setOf(ConnectionState.CONNECTING, ConnectionState.RECONNECTING) &&
+            state.connection.trafficMode == TrafficMode.TUNNEL &&
+            state.connection.profileId != FoxholeVpnService.LOCAL_GUARD_PROFILE_ID
+    val connectedTunnelLoading =
+        !protocolSearchRunning &&
+            state.connection.state == ConnectionState.CONNECTED &&
+            state.connection.trafficMode == TrafficMode.TUNNEL &&
+            state.connection.profileId != FoxholeVpnService.LOCAL_GUARD_PROFILE_ID &&
+            dashboardIpInfo == null
     val contentLoading =
         state.reconnectInProgress ||
-            (protocolSearchRunning && dashboardIpInfo == null) ||
+            vpnTransitionLoading ||
+            connectedTunnelLoading ||
             shouldShowDashboardNetworkLoading(
                 visibleIpInfo = dashboardIpInfo,
                 explicitLoading = state.ipInfoLoading,
@@ -361,7 +374,9 @@ internal fun resolveHomeDashboardNetworkModel(
         showRefreshProgress = protocolSearchRunning || (state.ipInfoLoading && dashboardIpInfo != null),
         showConnectionStatus = showConnectionStatus,
         titleRes =
-            if (showConnectionStatus) {
+            if (state.connection.profileId == FoxholeVpnService.TOR_ONLY_PROFILE_ID) {
+                R.string.home_network_tor_title
+            } else if (showConnectionStatus) {
                 R.string.home_network_connection_info_title
             } else {
                 R.string.home_network_current_ip_title
@@ -373,6 +388,7 @@ private fun HomeRouteUiState.hasRealTunnelConnectionStatus(): Boolean =
     reconnectInProgress ||
         (
             connection.state == ConnectionState.CONNECTED &&
+                connection.trafficMode == TrafficMode.TUNNEL &&
                 connection.profileId != FoxholeVpnService.LOCAL_GUARD_PROFILE_ID
         )
 
@@ -383,6 +399,7 @@ private fun HomeRouteUiState.dashboardVisibleIpInfo(visibleIpInfo: IpInfo?): IpI
     val protocolSearchRunning = autoConnect.running || protocolMetricsRefreshing
     val realTunnelActive =
         (reconnectInProgress || connection.state in ACTIVE_CONNECTION_STATES) &&
+            connection.trafficMode == TrafficMode.TUNNEL &&
             connection.profileId != FoxholeVpnService.LOCAL_GUARD_PROFILE_ID
     if (realTunnelActive) {
         return visibleIpInfo.takeIf { info ->
@@ -391,7 +408,7 @@ private fun HomeRouteUiState.dashboardVisibleIpInfo(visibleIpInfo: IpInfo?): IpI
                 info.fetchedAt >= connection.lastChangeAt
         }
     }
-    return visibleIpInfo.takeIf { info -> info.fetchedAt >= connection.lastChangeAt }
+    return visibleIpInfo
 }
 
 internal fun resolveHomeDashboardTrafficModel(
@@ -401,12 +418,36 @@ internal fun resolveHomeDashboardTrafficModel(
     val totals = visibleProfileTrafficTotals(state)
     val totalBytes = totals.sumOf { total -> total.rxTotalBytes + total.txTotalBytes }
     val totalDays = ((now - state.settings.usageTrackingStartedAt).coerceAtLeast(0L) / 86_400_000L) + 1L
+    val selectedProtocolTotal = selectedSmartProtocolTrafficTotal(state.activeProfile, totals)
     return HomeDashboardTrafficModel(
         totalBytes = totalBytes,
         totalDays = totalDays,
         hasIncomingTraffic = state.traffic.rxBytesPerSec > 0L,
         hasOutgoingTraffic = state.traffic.txBytesPerSec > 0L,
+        selectedProtocolTotalBytes = selectedProtocolTotal?.let { total -> total.rxTotalBytes + total.txTotalBytes },
+        selectedProtocolHint = selectedProtocolTotal?.protocolHint,
     )
+}
+
+private fun selectedSmartProtocolTrafficTotal(
+    activeProfile: Profile?,
+    totals: List<ProfileTrafficTotal>,
+): ProfileTrafficTotal? {
+    if (activeProfile == null || !MultiProtocolProfileSupport.hasMultipleSupportedOptions(activeProfile)) {
+        return null
+    }
+    val selectedOption = MultiProtocolProfileSupport.selectedOption(activeProfile) ?: return null
+    return totals
+        .firstOrNull { total ->
+            total.profileId == activeProfile.id &&
+                total.protocolOptionId == selectedOption.id
+        }
+            ?: ProfileTrafficTotal(
+                profileId = activeProfile.id,
+                profileName = activeProfile.name,
+                protocolHint = selectedOption.protocolHint,
+                protocolOptionId = selectedOption.id,
+            )
 }
 
 @Composable
@@ -659,7 +700,7 @@ internal fun shouldRenderDashboardConnectionDetails(
     selectedServerPingUnsupported: Boolean,
 ): Boolean {
     if (connectionState != ConnectionState.CONNECTED || activeProfile == null) {
-        return true
+        return false
     }
     val latencyReady = selectedLatencyMs != null || selectedLatencyDown || selectedLatencyUnavailable
     val serverPingReady = selectedServerPingMs != null || selectedServerPingUnavailable || selectedServerPingUnsupported
@@ -847,22 +888,20 @@ internal fun buildCityLine(ipInfo: IpInfo): String = ipInfo.city?.takeIf { it.is
 
 internal fun primaryVisibleIp(ipInfo: IpInfo): String = ipInfo.ipv4 ?: ipInfo.ip
 
+@Suppress("UNUSED_PARAMETER")
 @Composable
 internal fun dashboardDnsModeLine(
     ipInfo: IpInfo?,
     secureMode: SecureDnsMode,
+): String = dashboardDnsModeLabel(secureMode)
+
+internal fun dashboardDnsModeLabel(
+    secureMode: SecureDnsMode,
 ): String {
-    val mode =
-        when (secureMode) {
-            SecureDnsMode.DOH -> stringResource(R.string.dns_secure_mode_doh)
-            SecureDnsMode.DOT -> stringResource(R.string.dns_secure_mode_dot)
-            SecureDnsMode.PLAIN -> stringResource(R.string.home_network_dns_default_mode)
-        }
-    val countryCode = ipInfo?.countryCode?.trim()?.uppercase(Locale.US)?.takeIf { it.length == 2 }
-    return if (countryCode != null) {
-        "${countryEmoji(countryCode)} $countryCode · $mode"
-    } else {
-        mode
+    return when (secureMode) {
+        SecureDnsMode.DOH -> "DOH"
+        SecureDnsMode.DOT -> "DOT"
+        SecureDnsMode.PLAIN -> "Default"
     }
 }
 

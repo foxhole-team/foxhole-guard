@@ -1017,6 +1017,7 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
             profileId = session.profileId,
             profileName = session.profileName,
             protocolHint = session.protocolHint,
+            protocolOptionId = session.protocolOptionId,
             rxBytes = traffic.rxTotalBytes,
             txBytes = traffic.txTotalBytes,
             updatedAt = System.currentTimeMillis(),

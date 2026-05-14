@@ -353,7 +353,12 @@ private fun ProtocolMarkOrSelector(
         )
     val selectorShape = MaterialTheme.shapes.large
     val selectorPalette = LocalFoxholeUiPalette.current
-    val selectorContainerColor = selectorPalette.valuePillContainerColor
+    val selectorContainerColor =
+        if (highlightSelectedOption) {
+            selectorPalette.valuePillContainerColor
+        } else {
+            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.56f)
+        }
     val selectorResolvedBorderColor =
         selectorBorderColor
             ?: selectorPalette.valuePillBorderColor.takeUnless { it == Color.Transparent }

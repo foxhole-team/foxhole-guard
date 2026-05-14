@@ -90,21 +90,33 @@ internal fun visibleProfileTrafficTotals(state: HomeRouteUiState): List<ProfileT
         settings = state.settings,
         activeProfile = state.activeProfile,
         traffic = state.traffic,
+        currentProtocolOptionId = state.connection.protocolOptionId,
+        currentProtocolHint = state.connection.protocolHint,
     )
 
 private fun visibleProfileTrafficTotals(
     settings: FoxholeSettings,
     activeProfile: Profile?,
     traffic: TrafficSnapshot,
+    currentProtocolOptionId: String? = null,
+    currentProtocolHint: com.foxhole.beta.core.model.ProtocolHint? = null,
 ): List<ProfileTrafficTotal> {
-    val totals = settings.profileTrafficTotals.associateBy(ProfileTrafficTotal::profileId).toMutableMap()
+    val totals = settings.profileTrafficTotals.associateBy(ProfileTrafficTotal::trafficKey).toMutableMap()
     if (activeProfile != null && (traffic.rxTotalBytes > 0L || traffic.txTotalBytes > 0L)) {
-        val stored = totals[activeProfile.id]
-        totals[activeProfile.id] =
+        val activeOptionId =
+            currentProtocolOptionId
+                ?.takeIf(String::isNotBlank)
+                ?.takeIf { optionId -> activeProfile.protocolOptions.any { option -> option.id == optionId } }
+                ?: activeProfile.selectedProtocolOptionId?.takeIf(String::isNotBlank)
+        val activeOption = activeProfile.protocolOptions.firstOrNull { option -> option.id == activeOptionId }
+        val trafficKey = ProfileTrafficKey(activeProfile.id, activeOptionId)
+        val stored = totals[trafficKey]
+        totals[trafficKey] =
             ProfileTrafficTotal(
                 profileId = activeProfile.id,
                 profileName = activeProfile.name,
-                protocolHint = activeProfile.protocolHint,
+                protocolHint = activeOption?.protocolHint ?: currentProtocolHint ?: activeProfile.protocolHint,
+                protocolOptionId = activeOptionId,
                 rxTotalBytes = (stored?.rxTotalBytes ?: 0L) + traffic.rxTotalBytes,
                 txTotalBytes = (stored?.txTotalBytes ?: 0L) + traffic.txTotalBytes,
                 updatedAt = maxOf(stored?.updatedAt ?: 0L, traffic.sampledAt),
@@ -112,6 +124,14 @@ private fun visibleProfileTrafficTotals(
     }
     return totals.values.sortedByDescending(ProfileTrafficTotal::updatedAt)
 }
+
+private data class ProfileTrafficKey(
+    val profileId: Long,
+    val protocolOptionId: String?,
+)
+
+private val ProfileTrafficTotal.trafficKey: ProfileTrafficKey
+    get() = ProfileTrafficKey(profileId, protocolOptionId?.takeIf(String::isNotBlank))
 
 @Composable
 private fun UsageTotalRow(

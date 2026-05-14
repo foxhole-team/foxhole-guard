@@ -7,6 +7,7 @@ import com.foxhole.beta.core.model.ExpertSettings
 import com.foxhole.beta.core.model.IpInfo
 import com.foxhole.beta.core.model.LocalSurfaceSettings
 import com.foxhole.beta.core.model.PrivacyRouteMode
+import com.foxhole.beta.core.model.PrivacyRouteScope
 import com.foxhole.beta.core.model.PrivacyRouteSettings
 import com.foxhole.beta.core.model.Profile
 import com.foxhole.beta.core.model.ProfileProtocolOption
@@ -87,6 +88,48 @@ class HomeDashboardPresentationTest {
             )
 
         assertTrue(model.connectionMetricsLoading)
+    }
+
+    @Test
+    fun `tor feature stays pending and reports udp when selected vpn protocol is udp`() {
+        val state =
+            HomeRouteUiState(
+                activeProfile = smartProfile().copy(selectedProtocolOptionId = "wg"),
+                connection = ConnectionSnapshot(state = ConnectionState.CONNECTED),
+                settings =
+                    Settings(
+                        traffic = TrafficSettings(mode = TrafficMode.TUNNEL),
+                        privacyRoute =
+                            PrivacyRouteSettings(
+                                mode = PrivacyRouteMode.TOR_OVER_VPN,
+                                scope = PrivacyRouteScope.ALL_APPS,
+                            ),
+                    ),
+            )
+
+        assertTrue(homeTorSelectedProtocolIsUdp(state))
+        assertEquals(HomeConnectionFeatureStatus.PENDING, homeTorFeatureStatus(state))
+    }
+
+    @Test
+    fun `tor feature is on for connected tunnel with tcp selected protocol`() {
+        val state =
+            HomeRouteUiState(
+                activeProfile = smartProfile().copy(selectedProtocolOptionId = "vless"),
+                connection = ConnectionSnapshot(state = ConnectionState.CONNECTED),
+                settings =
+                    Settings(
+                        traffic = TrafficSettings(mode = TrafficMode.TUNNEL),
+                        privacyRoute =
+                            PrivacyRouteSettings(
+                                mode = PrivacyRouteMode.TOR_OVER_VPN,
+                                scope = PrivacyRouteScope.ALL_APPS,
+                            ),
+                    ),
+            )
+
+        assertFalse(homeTorSelectedProtocolIsUdp(state))
+        assertEquals(HomeConnectionFeatureStatus.ON, homeTorFeatureStatus(state))
     }
 
     @Test
@@ -236,7 +279,7 @@ class HomeDashboardPresentationTest {
     }
 
     @Test
-    fun `network model hides stale tunnel ip while local guard is idle`() {
+    fun `network model keeps previous tunnel ip while local guard is idle`() {
         val staleTunnelIp =
             IpInfo(
                 ip = "203.0.113.10",
@@ -258,14 +301,14 @@ class HomeDashboardPresentationTest {
                 deviceInternetAvailable = true,
             )
 
-        assertEquals(null, model.visibleIpInfo)
+        assertEquals(staleTunnelIp, model.visibleIpInfo)
         assertEquals(R.string.home_network_current_ip_title, model.titleRes)
         assertFalse(model.showConnectionStatus)
         assertFalse(model.showLoading)
     }
 
     @Test
-    fun `network model hides stale tunnel ip after ordinary vpn disconnect`() {
+    fun `network model keeps previous tunnel ip after ordinary vpn disconnect`() {
         val staleTunnelIp =
             IpInfo(
                 ip = "203.0.113.10",
@@ -286,7 +329,7 @@ class HomeDashboardPresentationTest {
                 deviceInternetAvailable = true,
             )
 
-        assertEquals(null, model.visibleIpInfo)
+        assertEquals(staleTunnelIp, model.visibleIpInfo)
         assertEquals(R.string.home_network_current_ip_title, model.titleRes)
         assertFalse(model.showConnectionStatus)
         assertFalse(model.showLoading)
@@ -405,7 +448,11 @@ class HomeDashboardPresentationTest {
                         showFirewallStatus = true,
                         showTorQuickLaunch = true,
                     ),
-                privacyRoute = PrivacyRouteSettings(mode = PrivacyRouteMode.TOR_OVER_VPN),
+                privacyRoute =
+                    PrivacyRouteSettings(
+                        mode = PrivacyRouteMode.TOR_OVER_VPN,
+                        scope = PrivacyRouteScope.ALL_APPS,
+                    ),
                 expert =
                     ExpertSettings(
                         killSwitchEnabled = true,
@@ -544,6 +591,43 @@ class HomeDashboardPresentationTest {
         assertEquals(2L, model.totalDays)
         assertTrue(model.hasIncomingTraffic)
         assertFalse(model.hasOutgoingTraffic)
+    }
+
+    @Test
+    fun `traffic model exposes only selected smart protocol total`() {
+        val model =
+            resolveHomeDashboardTrafficModel(
+                state =
+                    HomeRouteUiState(
+                        activeProfile = smartProfile().copy(selectedProtocolOptionId = "trojan"),
+                        settings =
+                            Settings(
+                                profileTrafficTotals =
+                                    listOf(
+                                        ProfileTrafficTotal(
+                                            profileId = 1L,
+                                            profileName = "Smart",
+                                            protocolHint = ProtocolHint.VLESS,
+                                            protocolOptionId = "vless",
+                                            rxTotalBytes = 100L,
+                                            txTotalBytes = 50L,
+                                        ),
+                                        ProfileTrafficTotal(
+                                            profileId = 1L,
+                                            profileName = "Smart",
+                                            protocolHint = ProtocolHint.TROJAN,
+                                            protocolOptionId = "trojan",
+                                            rxTotalBytes = 300L,
+                                            txTotalBytes = 40L,
+                                        ),
+                                    ),
+                            ),
+                    ),
+                now = 1_000L,
+            )
+
+        assertEquals(340L, model.selectedProtocolTotalBytes)
+        assertEquals(ProtocolHint.TROJAN, model.selectedProtocolHint)
     }
 
     private fun smartProfile(): Profile =

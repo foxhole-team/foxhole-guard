@@ -15,6 +15,7 @@ import com.foxhole.beta.core.model.ParsedSubscriptionProfile
 import com.foxhole.beta.core.model.Profile
 import com.foxhole.beta.core.model.ProfileProtocolOption
 import com.foxhole.beta.core.model.ProfileSourceType
+import com.foxhole.beta.core.model.ProtocolHint
 import com.foxhole.beta.core.model.Settings
 import com.foxhole.beta.core.model.StoredProfileProtocolOption
 import com.foxhole.beta.core.model.StoredProfileSecret
@@ -24,6 +25,7 @@ import com.foxhole.beta.core.network.ensurePublicUrl
 import com.foxhole.beta.core.network.requirePublicUrl
 import com.foxhole.beta.core.settings.SettingsRepository
 import com.foxhole.beta.vpn.DnsFilterAssetInstaller
+import com.foxhole.beta.vpn.FoxholeVpnService
 import com.foxhole.beta.vpn.PrivateDnsMode
 import com.foxhole.beta.vpn.RuntimeConfigAssembler
 import com.foxhole.beta.vpn.TorRuntimeInstaller
@@ -663,7 +665,7 @@ class ProfileRepository(
             if (
                 settings.privacyRoute.enabled &&
                 settings.traffic.mode == com.foxhole.beta.core.model.TrafficMode.TUNNEL &&
-                !selectedProtocolHint.isUdpTransport()
+                (settings.privacyRoute.bypassVpnTunnel || !selectedProtocolHint.isUdpTransport())
             ) {
                 torRuntimeInstaller.prepare()
             } else {
@@ -697,6 +699,46 @@ class ProfileRepository(
             profileName = profile.name,
             protocolHint = selectedProtocolHint,
             protocolOptionId = selectedOption?.id,
+            configJson = assembled,
+            correlationId = correlationId,
+        )
+    }
+
+    suspend fun getTorOnlySession(privateDnsMode: PrivateDnsMode? = null): VpnSession {
+        val settings = settingsRepository.current()
+        require(settings.privacyRoute.directTorEnabled) { "direct TOR route is disabled" }
+        val correlationId = newRuntimeCorrelationId()
+        val dnsFilterRuntimePaths =
+            if (settings.dns.bundledAdGuardFilterEnabled()) {
+                dnsFilterAssetInstaller.prepare()
+            } else {
+                null
+            }
+        val assembled =
+            runCatching {
+                runtimeConfigAssembler.assembleTorOnly(
+                    settings = settings,
+                    activePreset = routingRepository.currentPresetForRuntime(),
+                    privateDnsMode = privateDnsMode,
+                    torRuntimePaths = torRuntimeInstaller.prepare(),
+                    dnsFilterRuntimePaths = dnsFilterRuntimePaths,
+                )
+            }.onFailure { error ->
+                diagnosticsLogger.record(
+                    "profile",
+                    "tor-only session build failed sessionId=$correlationId error=${error.javaClass.simpleName}: ${error.message.orEmpty()}",
+                )
+                val logMessage = "tor-only session build failed sessionId=$correlationId error=${error.javaClass.simpleName}"
+                if (BuildConfig.DEBUG) {
+                    Log.e(LOG_TAG, logMessage, error)
+                } else {
+                    Log.e(LOG_TAG, DiagnosticSanitizer.sanitizeForExport(logMessage))
+                }
+            }.getOrThrow()
+        return VpnSession(
+            profileId = FoxholeVpnService.TOR_ONLY_PROFILE_ID,
+            profileName = "TOR",
+            protocolHint = ProtocolHint.SING_BOX,
             configJson = assembled,
             correlationId = correlationId,
         )

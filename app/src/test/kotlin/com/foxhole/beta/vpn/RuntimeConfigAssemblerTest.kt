@@ -262,6 +262,65 @@ class RuntimeConfigAssemblerTest {
     }
 
     @Test
+    fun `tor privacy route can bypass vpn tunnel for udp vpn protocols`() {
+        val config =
+            parse(
+                assembler.assemble(
+                    baseConfigJson = baseConfigWithRules("profile.example"),
+                    settings =
+                        Settings(
+                            privacyRoute =
+                                com.foxhole.beta.core.model.PrivacyRouteSettings(
+                                    mode = PrivacyRouteMode.TOR_OVER_VPN,
+                                    scope = PrivacyRouteScope.ALL_APPS,
+                                    bypassVpnTunnel = true,
+                                ),
+                        ),
+                    activePreset = null,
+                    torRuntimePaths = TorRuntimePaths(executablePath = "/tor", dataDirectory = "/tor-data"),
+                    vpnProtocolHint = ProtocolHint.HYSTERIA2,
+                ),
+            )
+
+        val tor = config["outbounds"]!!.jsonArray.map { it.jsonObject }
+            .single { it["tag"]!!.jsonPrimitive.content == "tor-over-vpn" }
+
+        assertEquals("tor", tor["type"]!!.jsonPrimitive.content)
+        assertFalse(tor.containsKey("detour"))
+        assertEquals("tor-over-vpn", config["route"]!!.jsonObject["final"]!!.jsonPrimitive.content)
+    }
+
+    @Test
+    fun `tor only config exposes tor as proxy outbound without vpn profile`() {
+        val config =
+            parse(
+                assembler.assembleTorOnly(
+                    settings =
+                        Settings(
+                            privacyRoute =
+                                com.foxhole.beta.core.model.PrivacyRouteSettings(
+                                    mode = PrivacyRouteMode.TOR_OVER_VPN,
+                                    scope = PrivacyRouteScope.ALL_APPS,
+                                    bypassVpnTunnel = true,
+                                ),
+                        ),
+                    activePreset = null,
+                    torRuntimePaths = TorRuntimePaths(executablePath = "/tor", dataDirectory = "/tor-data"),
+                ),
+            )
+
+        val tor = config["outbounds"]!!.jsonArray.map { it.jsonObject }
+            .single { it["tag"]!!.jsonPrimitive.content == "proxy" }
+        val route = config["route"]!!.jsonObject
+
+        assertEquals("tor", tor["type"]!!.jsonPrimitive.content)
+        assertFalse(tor.containsKey("detour"))
+        assertEquals("proxy", route["final"]!!.jsonPrimitive.content)
+        assertEquals("tun", config["inbounds"]!!.jsonArray.first().jsonObject["type"]!!.jsonPrimitive.content)
+        assertTrue(route["rules"]!!.jsonArray.map { it.jsonObject }.any { it["outbound"]?.jsonPrimitive?.content == "block" })
+    }
+
+    @Test
     fun `default settings expose loopback proxy for runtime owned refresh only`() {
         val config = parse(assembler.assemble(baseConfigWithRules("profile.example"), Settings(), null))
         val inbounds = config["inbounds"]!!.jsonArray.map { it.jsonObject }

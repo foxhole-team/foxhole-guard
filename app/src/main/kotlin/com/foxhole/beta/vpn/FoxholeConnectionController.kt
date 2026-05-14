@@ -87,6 +87,8 @@ class FoxholeConnectionController(
         previousVpnNetworkHandle = previousVpnNetworkHandle,
     )
 
+    suspend fun connectTorOnly(statusMessage: String? = null) = lifecycle.connectTorOnly(statusMessage)
+
     fun disconnect(
         suppressLocalGuard: Boolean = false,
         preserveSmartStartAnalysis: Boolean = false,

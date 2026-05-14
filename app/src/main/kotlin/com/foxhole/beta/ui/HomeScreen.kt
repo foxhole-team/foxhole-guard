@@ -19,7 +19,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -73,6 +72,7 @@ import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -101,7 +101,6 @@ import com.foxhole.beta.core.model.PerAppRoutingMode
 import com.foxhole.beta.core.model.PrivacyRouteMode
 import com.foxhole.beta.core.model.PrivacyRouteScope
 import com.foxhole.beta.core.model.Profile
-import com.foxhole.beta.core.model.ProfileProtocolOption
 import com.foxhole.beta.core.model.ProfileSourceType
 import com.foxhole.beta.core.model.ProtocolHint
 import com.foxhole.beta.core.model.ProxyInboundSettings
@@ -113,9 +112,7 @@ import com.foxhole.beta.ui.FoxholeScaffold
 import com.foxhole.beta.ui.ScreenHorizontalPadding
 import com.foxhole.beta.ui.ScreenSectionSpacing
 import com.foxhole.beta.ui.ScreenVerticalPadding
-import com.foxhole.beta.vpn.ACTIVE_CONNECTION_STATES
 import kotlinx.coroutines.delay
-import kotlin.math.abs
 
 @Composable
 @Suppress("LongParameterList")
@@ -143,6 +140,7 @@ fun HomeScreen(
     onResetUsageTracking: () -> Unit,
     onTrafficUiVisibilityChanged: (Boolean) -> Unit,
     onLocalProxyLanAccessChanged: (Boolean) -> Unit,
+    onRenewTorIp: () -> Unit,
     onDashboardCardOrderChanged: (List<DashboardCard>) -> Unit,
 ) {
     val context = LocalContext.current
@@ -241,20 +239,21 @@ fun HomeScreen(
     fun moveDashboardCard(
         card: DashboardCard,
         steps: Int,
-    ) {
+    ): Boolean {
         if (steps == 0) {
-            return
+            return false
         }
         val current = dashboardCardOrder.toMutableList()
         val from = current.indexOf(card)
         val to = (from + steps).coerceIn(0, current.lastIndex)
         if (from < 0 || from == to) {
-            return
+            return false
         }
         current.removeAt(from)
         current.add(to, card)
         dashboardCardOrder = current
         onDashboardCardOrderChanged(current)
+        return true
     }
     val deviceInternetAvailable by rememberDefaultInternetAvailability()
     var pinnedIpInfo by remember { mutableStateOf(state.ipInfo) }
@@ -299,7 +298,7 @@ fun HomeScreen(
     val visibleNetworkIpInfo = networkModel.visibleIpInfo
     val showNetworkLoading = networkModel.showLoading
     val showNetworkConnectionStatus = networkModel.showConnectionStatus
-    val showNetworkRouteDetails = showNetworkConnectionStatus
+    val showNetworkRouteDetails = showNetworkConnectionStatus && (showNetworkLoading || dashboardConnectionDetailsReady)
     val networkInfoTitleRes = networkModel.titleRes
     val profileModel = remember(state) { resolveHomeDashboardProfileModel(state = state) }
     val isSmartDashboardProfile = profileModel.isSmartDashboardProfile
@@ -460,6 +459,7 @@ fun HomeScreen(
                                                 label = homeStatusLabel(state, topStatusState),
                                                 textStyle = MaterialTheme.typography.titleMedium,
                                                 accentColor = statusTone,
+                                                loading = topStatusState == ConnectionState.RECONNECTING,
                                                 smartMarker =
                                                     state.connection.isSmartStartConnection &&
                                                         topStatusState in setOf(
@@ -483,10 +483,10 @@ fun HomeScreen(
                                                     currentPerAppRoutingMode = state.settings.expert.perAppRoutingMode,
                                                 )
                                             },
-                                        )
-                                    }
-                                }
-                            }
+	                                    )
+	                                }
+		                            }
+	                        }
                         }
                         HomeConnectionFeatureIndicators(
                             indicators = connectionFeatureIndicators,
@@ -504,7 +504,16 @@ fun HomeScreen(
                         if (state.settings.ui.trafficMapEnabled) {
                             item(key = DashboardCard.TRAFFIC_MAP) {
                                 DashboardCardDragContainer(
-                                    modifier = Modifier.animateItem(),
+                                    modifier =
+                                        Modifier
+                                            .then(
+                                                if (activeReorderCard == DashboardCard.TRAFFIC_MAP) {
+                                                    Modifier
+                                                } else {
+                                                    Modifier.animateItem()
+                                                },
+                                            )
+                                            .zIndex(activeDashboardCardZIndex(activeReorderCard, DashboardCard.TRAFFIC_MAP)),
                                     card = DashboardCard.TRAFFIC_MAP,
                                     activeCard = activeReorderCard,
                                     onActiveCardChange = { activeReorderCard = it },
@@ -519,7 +528,16 @@ fun HomeScreen(
                     DashboardCard.PROFILES -> {
                         item(key = DashboardCard.PROFILES) {
                             DashboardCardDragContainer(
-                                modifier = Modifier.animateItem(),
+                                    modifier =
+                                        Modifier
+                                            .then(
+                                                if (activeReorderCard == DashboardCard.PROFILES) {
+                                                    Modifier
+                                                } else {
+                                                    Modifier.animateItem()
+                                                },
+                                            )
+                                            .zIndex(activeDashboardCardZIndex(activeReorderCard, DashboardCard.PROFILES)),
                                 card = DashboardCard.PROFILES,
                                 activeCard = activeReorderCard,
                                 onActiveCardChange = { activeReorderCard = it },
@@ -548,9 +566,9 @@ fun HomeScreen(
                         )
                         Column(
                             modifier =
-                                Modifier
-                                    .fillMaxWidth()
-                                    .heightIn(min = HomeDashboardProfileContentHeight),
+	                                Modifier
+	                                    .fillMaxWidth()
+	                                    .height(HomeDashboardProfileContentHeight),
                             verticalArrangement = Arrangement.spacedBy(3.dp),
                         ) {
                             if (state.activeProfile == null && !state.profilesLoaded) {
@@ -669,7 +687,16 @@ fun HomeScreen(
                     DashboardCard.ACTIONS -> {
                         item(key = DashboardCard.ACTIONS) {
                             DashboardCardDragContainer(
-                                modifier = Modifier.animateItem(),
+                                    modifier =
+                                        Modifier
+                                            .then(
+                                                if (activeReorderCard == DashboardCard.ACTIONS) {
+                                                    Modifier
+                                                } else {
+                                                    Modifier.animateItem()
+                                                },
+                                            )
+                                            .zIndex(activeDashboardCardZIndex(activeReorderCard, DashboardCard.ACTIONS)),
                                 card = DashboardCard.ACTIONS,
                                 activeCard = activeReorderCard,
                                 onActiveCardChange = { activeReorderCard = it },
@@ -787,7 +814,16 @@ fun HomeScreen(
                         if (state.settings.ui.networkCardEnabled) {
                             item(key = DashboardCard.NETWORK) {
                                 DashboardCardDragContainer(
-                                    modifier = Modifier.animateItem(),
+                                    modifier =
+                                        Modifier
+                                            .then(
+                                                if (activeReorderCard == DashboardCard.NETWORK) {
+                                                    Modifier
+                                                } else {
+                                                    Modifier.animateItem()
+                                                },
+                                            )
+                                            .zIndex(activeDashboardCardZIndex(activeReorderCard, DashboardCard.NETWORK)),
                                     card = DashboardCard.NETWORK,
                                     activeCard = activeReorderCard,
                                     onActiveCardChange = { activeReorderCard = it },
@@ -810,7 +846,7 @@ fun HomeScreen(
                             },
                         )
                         Box(
-                            modifier = Modifier.fillMaxWidth().heightIn(min = HomeNetworkContentHeight),
+                            modifier = Modifier.fillMaxWidth().height(HomeNetworkContentHeight),
                             contentAlignment = Alignment.TopStart,
                         ) {
                             if (showNetworkLoading) {
@@ -824,6 +860,7 @@ fun HomeScreen(
                                         labels =
                                             listOf(
                                                 stringResource(R.string.home_network_country_label),
+                                                stringResource(R.string.home_network_city_label),
                                                 stringResource(R.string.home_network_ip_label),
                                                 stringResource(R.string.home_network_provider_label),
                                             ),
@@ -855,8 +892,9 @@ fun HomeScreen(
                                         if (networkIpInfo != null) {
                                             buildCountryLine(networkIpInfo)
                                         } else {
-                                            stringResource(R.string.home_network_unavailable)
+                                            "-"
                                         }
+                                    val cityText = networkIpInfo?.let(::buildCityLine) ?: "-"
                                     val ipText = if (networkIpInfo != null) primaryVisibleIp(networkIpInfo) else "-"
                                     val providerText = networkIpInfo?.isp?.takeIf { it.isNotBlank() } ?: "-"
                                     Column(
@@ -868,6 +906,12 @@ fun HomeScreen(
                                             label = stringResource(R.string.home_network_country_label),
                                             value = countryText,
                                             modifier = Modifier.testTag("home_network_country"),
+                                        )
+                                        HomeNetworkSubtleDivider()
+                                        HomeNetworkDetailLine(
+                                            label = stringResource(R.string.home_network_city_label),
+                                            value = cityText,
+                                            modifier = Modifier.testTag("home_network_city"),
                                         )
                                         HomeNetworkSubtleDivider()
                                         HomeNetworkDetailLine(
@@ -960,26 +1004,33 @@ fun HomeScreen(
                         if (state.settings.ui.trafficCardEnabled) {
                             item(key = DashboardCard.TRAFFIC) {
                                 DashboardCardDragContainer(
-                                    modifier = Modifier.animateItem(),
+                                    modifier =
+                                        Modifier
+                                            .then(
+                                                if (activeReorderCard == DashboardCard.TRAFFIC) {
+                                                    Modifier
+                                                } else {
+                                                    Modifier.animateItem()
+                                                },
+                                            )
+                                            .zIndex(activeDashboardCardZIndex(activeReorderCard, DashboardCard.TRAFFIC)),
                                     card = DashboardCard.TRAFFIC,
                                     activeCard = activeReorderCard,
                                     onActiveCardChange = { activeReorderCard = it },
                                     onMove = ::moveDashboardCard,
                                 ) {
-                val trafficModel = resolveHomeDashboardTrafficModel(state, System.currentTimeMillis())
-                val trafficLoading =
-                    state.connection.state in ACTIVE_CONNECTION_STATES &&
-                        !state.traffic.available &&
-                        state.traffic.sampledAt == 0L
+	                val trafficModel = resolveHomeDashboardTrafficModel(state, System.currentTimeMillis())
+	                val trafficLoading = false
                 val totalTrafficText =
                     buildAnnotatedString {
+                        val periodBytes = trafficModel.selectedProtocolTotalBytes ?: trafficModel.totalBytes
                         append(stringResource(R.string.home_total_traffic_title))
                         append(" ")
                         withStyle(SpanStyle(color = MaterialTheme.colorScheme.onSurfaceVariant)) {
                             append(stringResource(R.string.home_total_traffic_days, trafficModel.totalDays))
                         }
                         append(" ")
-                        append(formatBytes(context, trafficModel.totalBytes))
+                        append(formatBytes(context, periodBytes))
                     }
                     FoxholeCard {
                         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -1091,14 +1142,14 @@ fun HomeScreen(
                                         label = stringResource(R.string.home_total_label),
                                         value = formatBytes(context, state.traffic.rxTotalBytes + state.traffic.txTotalBytes),
                                         secondary = formatRate(context, state.traffic.rxBytesPerSec + state.traffic.txBytesPerSec),
-                                        valueTag = "home_traffic_total_value",
-                                        secondaryTag = "home_traffic_total_rate",
-                                        horizontalAlignment = Alignment.CenterHorizontally,
-                                        loading = trafficLoading,
-                                    )
-                                }
-                            }
-                        }
+	                                        valueTag = "home_traffic_total_value",
+	                                        secondaryTag = "home_traffic_total_rate",
+	                                        horizontalAlignment = Alignment.CenterHorizontally,
+	                                        loading = trafficLoading,
+	                                    )
+	                                }
+	                            }
+	                        }
                         }
                                 }
                             }
@@ -1161,6 +1212,7 @@ fun HomeScreen(
             onFirewallEnabledChanged = onFirewallEnabledChanged,
             onPrivacyRouteModeSelected = onPrivacyRouteModeSelected,
             onLocalProxyLanAccessChanged = onLocalProxyLanAccessChanged,
+            onRenewTorIp = onRenewTorIp,
             onRestart = onToggleConnection,
         )
     }
@@ -1173,28 +1225,37 @@ private fun DashboardCardDragContainer(
     card: DashboardCard,
     activeCard: DashboardCard?,
     onActiveCardChange: (DashboardCard?) -> Unit,
-    onMove: (DashboardCard, Int) -> Unit,
+    onMove: (DashboardCard, Int) -> Boolean,
     content: @Composable () -> Unit,
 ) {
     val haptic = LocalHapticFeedback.current
     val density = LocalDensity.current
-    val dragThresholdPx = with(density) { DashboardCardReorderDragThreshold.toPx() }
+    val fallbackMoveDistancePx = with(density) { DashboardCardReorderFallbackMoveDistance.toPx() }
     var dragOffset by remember(card) { mutableStateOf(0f) }
+    var cardHeightPx by remember(card) { mutableStateOf(0f) }
     val active = activeCard == card
+    val dragShape = MaterialTheme.shapes.large
+    val moveDistancePx = cardHeightPx.takeIf { it > 0f } ?: fallbackMoveDistancePx
+    val moveThresholdPx = (moveDistancePx * DashboardCardReorderThresholdFraction).coerceAtLeast(fallbackMoveDistancePx)
 
     Box(
         modifier =
             modifier
                 .fillMaxWidth()
-                .zIndex(if (active) 1f else 0f)
+                .onGloballyPositioned { coordinates ->
+                    cardHeightPx = coordinates.size.height.toFloat()
+                }
                 .graphicsLayer {
+                    translationY = if (active) dragOffset else 0f
                     val scale = if (active) 1.018f else 1f
                     scaleX = scale
                     scaleY = scale
-                    translationY = if (active) dragOffset else 0f
+                    shape = dragShape
+                    clip = active
                     shadowElevation = if (active) 8f else 0f
                 }
-                .pointerInput(card, dragThresholdPx) {
+                .zIndex(if (active) DashboardCardActiveZIndex else 0f)
+                .pointerInput(card, moveDistancePx, moveThresholdPx) {
                     detectDragGesturesAfterLongPress(
                         onDragStart = {
                             dragOffset = 0f
@@ -1212,10 +1273,20 @@ private fun DashboardCardDragContainer(
                         onDrag = { change, dragAmount ->
                             change.consume()
                             dragOffset += dragAmount.y
-                            while (abs(dragOffset) >= dragThresholdPx) {
-                                val steps = (dragOffset / dragThresholdPx).toInt()
-                                onMove(card, steps)
-                                dragOffset -= dragThresholdPx * steps
+                            while (dragOffset > moveThresholdPx) {
+                                if (!onMove(card, 1)) {
+                                    dragOffset = moveThresholdPx
+                                    break
+                                }
+                                dragOffset -= moveDistancePx
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            }
+                            while (dragOffset < -moveThresholdPx) {
+                                if (!onMove(card, -1)) {
+                                    dragOffset = -moveThresholdPx
+                                    break
+                                }
+                                dragOffset += moveDistancePx
                                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                             }
                         },
@@ -1275,7 +1346,15 @@ private fun normalizedDashboardCardOrder(order: List<DashboardCard>): List<Dashb
         .distinct()
         .filter { card -> card in DashboardCard.entries }
 
-private val DashboardCardReorderDragThreshold = 48.dp
+private fun activeDashboardCardZIndex(
+    activeCard: DashboardCard?,
+    card: DashboardCard,
+): Float =
+    if (activeCard == card) DashboardCardActiveZIndex else 0f
+
+private const val DashboardCardActiveZIndex = 100f
+private const val DashboardCardReorderThresholdFraction = 0.5f
+private val DashboardCardReorderFallbackMoveDistance = 96.dp
 private val ImportMenuWidthChrome = 62.dp
 private val ImportMenuMinWidth = 188.dp
 private val ImportMenuMaxWidth = 392.dp

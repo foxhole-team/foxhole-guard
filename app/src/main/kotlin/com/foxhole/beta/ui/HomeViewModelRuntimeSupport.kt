@@ -301,7 +301,7 @@ internal fun HomeViewModel.updateRuntimeSettingAndMaybeReloadInternal(
 ) {
     viewModelScope.launch {
         val shouldSuppressReconnectWarning =
-            uiState.value.activeProfile != null &&
+            activeRuntimeProfileIdForReload() != null &&
                 container.connectionController.snapshot.value.state in HomeViewModel.ACTIVE_CONNECTION_STATES
         if (shouldSuppressReconnectWarning) {
             markRuntimeReloadPending()
@@ -318,7 +318,7 @@ internal suspend fun HomeViewModel.maybeReloadActiveRuntimeInternal(): Boolean {
     if (runtimeReconnectRequiredMutable.value) {
         return false
     }
-    val targetProfileId = uiState.value.activeProfile?.id ?: return false
+    val targetProfileId = activeRuntimeProfileIdForReload() ?: return false
     val connectionState = container.connectionController.snapshot.value.state
     if (connectionState !in HomeViewModel.ACTIVE_CONNECTION_STATES) {
         return false
@@ -332,6 +332,16 @@ internal suspend fun HomeViewModel.maybeReloadActiveRuntimeInternal(): Boolean {
         return true
     }
     return false
+}
+
+internal fun HomeViewModel.activeRuntimeProfileIdForReload(): Long? {
+    val snapshot = container.connectionController.snapshot.value
+    snapshot.profileId
+        ?.takeIf { profileId ->
+            profileId == FoxholeVpnService.TOR_ONLY_PROFILE_ID &&
+                snapshot.state in HomeViewModel.ACTIVE_CONNECTION_STATES
+        }?.let { return it }
+    return uiState.value.activeProfile?.id
 }
 
 internal fun HomeViewModel.connectInternal(profileId: Long) {
@@ -437,6 +447,10 @@ internal suspend fun HomeViewModel.connectNowInternal(
 ) {
     invalidateIpInfoRefreshes()
     requestNotificationPermission.tryEmit(Unit)
+    if (profileId == FoxholeVpnService.TOR_ONLY_PROFILE_ID) {
+        container.connectionController.connectTorOnly(statusMessage = statusMessage)
+        return
+    }
     warnIfTorRouteCannotRunForProfile(profileId, protocolOptionId)
     container.connectionController.connect(
         profileId = profileId,
@@ -452,7 +466,7 @@ private suspend fun HomeViewModel.warnIfTorRouteCannotRunForProfile(
     protocolOptionId: String?,
 ) {
     val settings = container.settingsRepository.current()
-    if (settings.privacyRoute.mode != PrivacyRouteMode.TOR_OVER_VPN) {
+    if (settings.privacyRoute.mode != PrivacyRouteMode.TOR_OVER_VPN || settings.privacyRoute.bypassVpnTunnel) {
         return
     }
     val profile = container.profileRepository.getProfile(profileId) ?: return

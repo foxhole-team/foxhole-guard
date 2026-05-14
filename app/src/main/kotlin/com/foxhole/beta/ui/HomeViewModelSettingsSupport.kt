@@ -488,6 +488,12 @@ internal fun HomeViewModel.onPrivacyRouteScopeSelectedInternal(value: PrivacyRou
     }
 }
 
+internal fun HomeViewModel.onPrivacyRouteBypassVpnTunnelChangedInternal(value: Boolean) {
+    updateRuntimeSettingAndMaybeReload {
+        container.settingsRepository.updatePrivacyRouteBypassVpnTunnel(value)
+    }
+}
+
 internal fun HomeViewModel.onPrivacyRouteSelectedPackagesChangedInternal(value: List<String>) {
     updateRuntimeSettingAndMaybeReload {
         container.settingsRepository.updatePrivacyRouteSelectedPackages(
@@ -528,10 +534,13 @@ private fun HomeViewModel.updateAppRoutingSettingAndPromptReconnect(
 ) {
     viewModelScope.launch {
         val previousMode = uiState.value.settings.expert.perAppRoutingMode
+        val targetProfileId = activeRuntimeProfileIdForReload()
         val activeRuntime =
-            uiState.value.activeProfile != null &&
+            targetProfileId != null &&
                 container.connectionController.snapshot.value.state in HomeViewModel.ACTIVE_CONNECTION_STATES
-        val reconnectAlreadyRequired = runtimeReconnectRequiredMutable.value
+        if (activeRuntime) {
+            markRuntimeReloadPending()
+        }
         updateAction()
         val updatedMode = container.settingsRepository.current().expert.perAppRoutingMode
         val splitRulesAffectRuntime =
@@ -540,17 +549,22 @@ private fun HomeViewModel.updateAppRoutingSettingAndPromptReconnect(
                 updatedMode != PerAppRoutingMode.FULL_TUNNEL
         if (!activeRuntime || !splitRulesAffectRuntime) {
             clearRuntimeReconnectRequired()
+            clearRuntimeReloadPending()
             return@launch
         }
         val appliedFingerprint = container.connectionController.appliedRuntimeSignature.value
         val currentFingerprint = container.connectionController.currentRuntimeFingerprint()
         if (appliedFingerprint != currentFingerprint) {
-            markRuntimeReconnectRequired()
-            if (!reconnectAlreadyRequired) {
+            clearRuntimeReconnectRequired()
+            val reloadRequested = targetProfileId?.let { container.connectionController.reload(it) } == true
+            if (!reloadRequested) {
+                markRuntimeReconnectRequired()
+                clearRuntimeReloadPending()
                 snackbars.emit(infoBanner(R.string.split_tunnel_reconnect_required))
             }
         } else {
             clearRuntimeReconnectRequired()
+            clearRuntimeReloadPending()
         }
     }
 }

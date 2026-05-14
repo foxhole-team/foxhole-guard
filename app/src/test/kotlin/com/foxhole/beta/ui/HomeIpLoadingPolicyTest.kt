@@ -172,8 +172,8 @@ class HomeIpLoadingPolicyTest {
     }
 
     @Test
-    fun `shows pending network loading while app is still loading and ip is empty`() {
-        assertTrue(
+    fun `does not show pending network loading while disconnected app is still loading and ip is empty`() {
+        assertFalse(
             shouldShowPendingNetworkLoading(
                 visibleIpInfo = null,
                 explicitLoading = false,

@@ -4,6 +4,7 @@ import com.foxhole.beta.BuildConfig
 import com.foxhole.beta.core.model.AppLocale
 import com.foxhole.beta.core.model.AutoConnectReasonCode
 import com.foxhole.beta.core.model.ConnectionSettings
+import com.foxhole.beta.core.model.DashboardCard
 import com.foxhole.beta.core.model.DiagnosticsRetention
 import com.foxhole.beta.core.model.ExpertSettings
 import com.foxhole.beta.core.model.LatencyProbeMethod
@@ -93,6 +94,38 @@ class SettingsRepositoryTest {
         assertNull(parseOptionalStoredThemeMode(" "))
         assertNull(parseOptionalStoredThemeMode("BROKEN_THEME"))
         assertEquals(ThemeMode.DARK, parseOptionalStoredThemeMode("DARK"))
+    }
+
+    @Test
+    fun `fast dashboard card order cache preserves stored order and appends missing cards`() {
+        assertEquals(
+            listOf(
+                DashboardCard.NETWORK,
+                DashboardCard.PROFILES,
+                DashboardCard.TRAFFIC_MAP,
+                DashboardCard.ACTIONS,
+                DashboardCard.TRAFFIC,
+            ),
+            parseFastDashboardCardOrder("NETWORK,PROFILES"),
+        )
+        assertNull(parseFastDashboardCardOrder("BROKEN"))
+    }
+
+    @Test
+    fun `fast dashboard card order encoder normalizes duplicates`() {
+        assertEquals(
+            "TRAFFIC,NETWORK,TRAFFIC_MAP,PROFILES,ACTIONS",
+            encodeFastDashboardCardOrder(
+                listOf(
+                    DashboardCard.TRAFFIC,
+                    DashboardCard.NETWORK,
+                    DashboardCard.TRAFFIC,
+                    DashboardCard.TRAFFIC_MAP,
+                    DashboardCard.PROFILES,
+                    DashboardCard.ACTIONS,
+                ),
+            ),
+        )
     }
 
     @Test

@@ -1,6 +1,7 @@
 package com.foxhole.beta.ui
 
 import com.foxhole.beta.core.model.IpInfo
+import com.foxhole.beta.core.model.SecureDnsMode
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -47,5 +48,12 @@ class HomeDashboardTextPolicyTest {
             )
 
         assertEquals("-", buildCityLine(ipInfo))
+    }
+
+    @Test
+    fun `dashboard dns mode line keeps only selected mode`() {
+        assertEquals("Default", dashboardDnsModeLabel(SecureDnsMode.PLAIN))
+        assertEquals("DOH", dashboardDnsModeLabel(SecureDnsMode.DOH))
+        assertEquals("DOT", dashboardDnsModeLabel(SecureDnsMode.DOT))
     }
 }

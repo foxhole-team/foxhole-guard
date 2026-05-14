@@ -1260,6 +1260,7 @@ fun PrivacyRouteSettingsScreen(
     onNavigateUp: () -> Unit,
     onPrivacyRouteModeSelected: (PrivacyRouteMode) -> Unit,
     onPrivacyRouteScopeSelected: (PrivacyRouteScope) -> Unit,
+    onPrivacyRouteBypassVpnTunnelChanged: (Boolean) -> Unit,
     onOpenPrivacyRouteApps: () -> Unit,
     onPrivacyRouteSelectedPackagesChanged: (List<String>) -> Unit,
 ) {
@@ -1293,6 +1294,17 @@ fun PrivacyRouteSettingsScreen(
                     summary = stringResource(R.string.privacy_route_summary),
                     infoBody = stringResource(R.string.privacy_route_info_body),
                     leadingIcon = ImageVector.vectorResource(R.drawable.ic_tor_route),
+                    summaryMaxLines = 3,
+                    grouped = true,
+                )
+                SettingsControlGroupDivider()
+                SettingSwitchRow(
+                    title = stringResource(R.string.privacy_route_bypass_vpn_title),
+                    checked = state.settings.privacyRoute.bypassVpnTunnel,
+                    enabled = state.settings.privacyRoute.enabled,
+                    onCheckedChange = onPrivacyRouteBypassVpnTunnelChanged,
+                    summary = stringResource(R.string.privacy_route_bypass_vpn_summary),
+                    leadingIcon = Icons.Outlined.Public,
                     summaryMaxLines = 3,
                     grouped = true,
                 )

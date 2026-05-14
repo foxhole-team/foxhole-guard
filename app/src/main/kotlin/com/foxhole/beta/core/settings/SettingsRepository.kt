@@ -123,8 +123,7 @@ class SettingsRepository(
             initializationResult = Result.success(normalized)
             settingsMutable.value = normalized
             themeModeMutable.value = normalized.ui.themeMode
-            writeFastThemeMode(normalized.ui.themeMode)
-            writeFastLocale(normalized.ui.locale)
+            writeFastUiSnapshot(normalized.ui)
         }
     }
 
@@ -461,6 +460,7 @@ class SettingsRepository(
         profileId: Long,
         profileName: String,
         protocolHint: ProtocolHint,
+        protocolOptionId: String? = null,
         rxBytes: Long,
         txBytes: Long,
         updatedAt: Long = System.currentTimeMillis(),
@@ -468,13 +468,16 @@ class SettingsRepository(
         if (!current.statistics.enabled || !current.statistics.profileTrafficEnabled || (rxBytes <= 0L && txBytes <= 0L)) {
             current
         } else {
-            val existing = current.profileTrafficTotals.associateBy(ProfileTrafficTotal::profileId).toMutableMap()
-            val previous = existing[profileId]
-            existing[profileId] =
+            val normalizedProtocolOptionId = protocolOptionId.normalizedProfileTrafficProtocolOptionId()
+            val trafficKey = ProfileTrafficKey(profileId, normalizedProtocolOptionId)
+            val existing = current.profileTrafficTotals.associateBy(ProfileTrafficTotal::trafficKey).toMutableMap()
+            val previous = existing[trafficKey]
+            existing[trafficKey] =
                 ProfileTrafficTotal(
                     profileId = profileId,
                     profileName = profileName,
                     protocolHint = protocolHint,
+                    protocolOptionId = normalizedProtocolOptionId,
                     rxTotalBytes = (previous?.rxTotalBytes ?: 0L) + rxBytes.coerceAtLeast(0L),
                     txTotalBytes = (previous?.txTotalBytes ?: 0L) + txBytes.coerceAtLeast(0L),
                     updatedAt = updatedAt,
@@ -688,6 +691,33 @@ class SettingsRepository(
         update { current ->
             current.copy(
                 privacyRoute = current.privacyRoute.copy(scope = value),
+            )
+        }
+
+    suspend fun updatePrivacyRouteBypassVpnTunnel(value: Boolean) =
+        update { current ->
+            current.copy(
+                traffic =
+                    if (value && current.privacyRoute.enabled) {
+                        current.traffic.copy(mode = TrafficMode.TUNNEL)
+                    } else {
+                        current.traffic
+                    },
+                privacyRoute =
+                    current.privacyRoute.copy(
+                        bypassVpnTunnel = value,
+                        scope =
+                            if (
+                                value &&
+                                current.privacyRoute.enabled &&
+                                current.privacyRoute.scope == PrivacyRouteScope.SELECTED_APPS &&
+                                current.privacyRoute.selectedPackages.isEmpty()
+                            ) {
+                                PrivacyRouteScope.ALL_APPS
+                            } else {
+                                current.privacyRoute.scope
+                            },
+                    ),
             )
         }
 
@@ -1136,6 +1166,7 @@ class SettingsRepository(
         if (fastLocale == null) {
             writeFastLocale(effectiveSettings.ui.locale)
         }
+        writeFastDashboardUi(effectiveSettings.ui)
         if (effectiveSettings != encryptedSettings) {
             withContext(Dispatchers.IO) {
                 writeEncrypted(effectiveSettings)
@@ -1207,7 +1238,7 @@ class SettingsRepository(
             initializationResult = Result.success(next)
             settingsMutable.value = next
             themeModeMutable.value = next.ui.themeMode
-            writeFastLocale(next.ui.locale)
+            writeFastUiSnapshot(next.ui)
         }
     }
 
@@ -1254,6 +1285,62 @@ class SettingsRepository(
     private fun readFastLocale(): AppLocale? =
         parseOptionalStoredAppLocale(fastUiPreferences.getString(FAST_LOCALE_KEY, null))
 
+    private fun hasFastDashboardUi(): Boolean =
+        fastUiPreferences.contains(FAST_DASHBOARD_CARD_ORDER_KEY) ||
+            fastUiPreferences.contains(FAST_NETWORK_CARD_ENABLED_KEY) ||
+            fastUiPreferences.contains(FAST_TRAFFIC_CARD_ENABLED_KEY) ||
+            fastUiPreferences.contains(FAST_TRAFFIC_MAP_ENABLED_KEY) ||
+            fastUiPreferences.contains(FAST_SHOW_FIREWALL_STATUS_KEY) ||
+            fastUiPreferences.contains(FAST_SHOW_TOR_QUICK_LAUNCH_KEY)
+
+    private fun readBootstrapDashboardUi(defaults: UiSettings): UiSettings {
+        if (hasFastDashboardUi()) {
+            return readFastDashboardUi(defaults)
+        }
+        val storedUi =
+            runCatching {
+                when (val result = readEncryptedResult()) {
+                    is EncryptedSettingsLoadResult.Loaded -> result.settings.ui
+                    EncryptedSettingsLoadResult.Missing,
+                    is EncryptedSettingsLoadResult.Corrupt,
+                    -> defaults
+                }
+            }.getOrDefault(defaults)
+        return readFastDashboardUi(storedUi)
+    }
+
+    private fun readFastDashboardUi(fallback: UiSettings): UiSettings =
+        fallback.copy(
+            networkCardEnabled =
+                fastUiPreferences.getBoolean(
+                    FAST_NETWORK_CARD_ENABLED_KEY,
+                    fallback.networkCardEnabled,
+                ),
+            trafficCardEnabled =
+                fastUiPreferences.getBoolean(
+                    FAST_TRAFFIC_CARD_ENABLED_KEY,
+                    fallback.trafficCardEnabled,
+                ),
+            trafficMapEnabled =
+                fastUiPreferences.getBoolean(
+                    FAST_TRAFFIC_MAP_ENABLED_KEY,
+                    fallback.trafficMapEnabled,
+                ),
+            showFirewallStatus =
+                fastUiPreferences.getBoolean(
+                    FAST_SHOW_FIREWALL_STATUS_KEY,
+                    fallback.showFirewallStatus,
+                ),
+            showTorQuickLaunch =
+                fastUiPreferences.getBoolean(
+                    FAST_SHOW_TOR_QUICK_LAUNCH_KEY,
+                    fallback.showTorQuickLaunch,
+                ),
+            dashboardCardOrder =
+                parseFastDashboardCardOrder(fastUiPreferences.getString(FAST_DASHBOARD_CARD_ORDER_KEY, null))
+                    ?: fallback.dashboardCardOrder,
+        )
+
     private fun writeFastThemeMode(value: ThemeMode) {
         fastUiPreferences.edit {
             putString(FAST_THEME_MODE_KEY, value.name)
@@ -1266,6 +1353,30 @@ class SettingsRepository(
         }
     }
 
+    private fun writeFastUiSnapshot(value: UiSettings) {
+        fastUiPreferences.edit {
+            putString(FAST_THEME_MODE_KEY, value.themeMode.name)
+            putString(FAST_LOCALE_KEY, value.locale.name)
+            putBoolean(FAST_NETWORK_CARD_ENABLED_KEY, value.networkCardEnabled)
+            putBoolean(FAST_TRAFFIC_CARD_ENABLED_KEY, value.trafficCardEnabled)
+            putBoolean(FAST_TRAFFIC_MAP_ENABLED_KEY, value.trafficMapEnabled)
+            putBoolean(FAST_SHOW_FIREWALL_STATUS_KEY, value.showFirewallStatus)
+            putBoolean(FAST_SHOW_TOR_QUICK_LAUNCH_KEY, value.showTorQuickLaunch)
+            putString(FAST_DASHBOARD_CARD_ORDER_KEY, encodeFastDashboardCardOrder(value.dashboardCardOrder))
+        }
+    }
+
+    private fun writeFastDashboardUi(value: UiSettings) {
+        fastUiPreferences.edit {
+            putBoolean(FAST_NETWORK_CARD_ENABLED_KEY, value.networkCardEnabled)
+            putBoolean(FAST_TRAFFIC_CARD_ENABLED_KEY, value.trafficCardEnabled)
+            putBoolean(FAST_TRAFFIC_MAP_ENABLED_KEY, value.trafficMapEnabled)
+            putBoolean(FAST_SHOW_FIREWALL_STATUS_KEY, value.showFirewallStatus)
+            putBoolean(FAST_SHOW_TOR_QUICK_LAUNCH_KEY, value.showTorQuickLaunch)
+            putString(FAST_DASHBOARD_CARD_ORDER_KEY, encodeFastDashboardCardOrder(value.dashboardCardOrder))
+        }
+    }
+
     private fun deleteLegacySettings() {
         legacySettingsFile.delete()
         File("${legacySettingsFile.absolutePath}.crc").delete()
@@ -1275,7 +1386,7 @@ class SettingsRepository(
         val defaults = defaultSettings()
         return defaults.copy(
             ui =
-                defaults.ui.copy(
+                readBootstrapDashboardUi(defaults.ui).copy(
                     themeMode = readFastThemeMode() ?: ThemeMode.SYSTEM,
                     locale = readFastLocale() ?: AppLocale.SYSTEM,
                 ),
@@ -1344,7 +1455,7 @@ class SettingsRepository(
                 smartProfilePreferences = normalizeSmartProfilePreferences(smartProfilePreferences),
                 profileTrafficTotals =
                     profileTrafficTotals
-                        .groupBy(ProfileTrafficTotal::profileId)
+                        .groupBy(ProfileTrafficTotal::trafficKey)
                         .values
                         .mapNotNull { items -> items.maxByOrNull(ProfileTrafficTotal::updatedAt) }
                         .sortedByDescending(ProfileTrafficTotal::updatedAt),
@@ -1449,6 +1560,7 @@ class SettingsRepository(
 
     private fun PrivacyRouteSettings.normalized(): PrivacyRouteSettings =
         copy(
+            bypassVpnTunnel = bypassVpnTunnel && enabled,
             selectedPackages =
                 selectedPackages
                     .filterNot { packageName -> packageName == BuildConfig.APPLICATION_ID }
@@ -1919,6 +2031,20 @@ private fun SmartProfileProtocolMemory?.freshRememberedMetricsUpdatedAt(
         ).maxOrNull() ?: return null
     return if (now - updatedAt <= retentionMs) updatedAt else null
 }
+
+private data class ProfileTrafficKey(
+    val profileId: Long,
+    val protocolOptionId: String?,
+)
+
+private fun ProfileTrafficTotal.trafficKey(): ProfileTrafficKey =
+    ProfileTrafficKey(
+        profileId = profileId,
+        protocolOptionId = protocolOptionId.normalizedProfileTrafficProtocolOptionId(),
+    )
+
+private fun String?.normalizedProfileTrafficProtocolOptionId(): String? =
+    this?.trim()?.takeIf(String::isNotBlank)
 
 internal fun normalizeSmartProfilePreferences(
     preferences: List<SmartProfilePreference>,

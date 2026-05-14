@@ -327,7 +327,7 @@ class HomeViewModel(
         }.stateIn(
             viewModelScope,
             SharingStarted.WhileSubscribed(5_000),
-            HomeUiState(),
+            HomeUiState(settings = initialSettings),
         )
 
     val themeMode: StateFlow<ThemeMode> = container.settingsRepository.themeMode
@@ -394,7 +394,7 @@ class HomeViewModel(
             .stateIn(
                 viewModelScope,
                 SharingStarted.WhileSubscribed(5_000),
-                HomeRouteUiState(),
+                HomeRouteUiState(settings = initialSettings),
             )
 
     private val trafficMapRuntimeAvailable =
@@ -606,10 +606,10 @@ class HomeViewModel(
                 } else if (shouldRefreshIdleIp && !autoConnectUiStateMutable.value.running) {
                     startIpInfoRefresh(
                         reportFailures = false,
-                        showLoading = true,
-                        clearExistingIp = true,
+                        showLoading = false,
+                        clearExistingIp = false,
                         fetchMode = IpInfoFetchMode.ENTRY_QUICK,
-                        minimumLoadingDurationMs = AUTO_IP_REFRESH_MIN_LOADING_MS,
+                        minimumLoadingDurationMs = 0L,
                     )
                 }
             }
@@ -634,10 +634,10 @@ class HomeViewModel(
         } else {
             startIpInfoRefresh(
                 reportFailures = false,
-                showLoading = true,
-                clearExistingIp = true,
+                showLoading = false,
+                clearExistingIp = false,
                 fetchMode = IpInfoFetchMode.ENTRY_QUICK,
-                minimumLoadingDurationMs = AUTO_IP_REFRESH_MIN_LOADING_MS,
+                minimumLoadingDurationMs = 0L,
             )
         }
     }
@@ -685,7 +685,27 @@ class HomeViewModel(
         }
         val activeProfile = state.activeProfile
         if (activeProfile == null) {
-            snackbars.tryEmit(errorBanner(R.string.error_profile_missing))
+            val torOnlyRouteReady =
+                state.settings.privacyRoute.directTorEnabled &&
+                    (
+                        state.settings.privacyRoute.scope == PrivacyRouteScope.ALL_APPS ||
+                            state.settings.privacyRoute.selectedPackages.any(String::isNotBlank)
+                    )
+            if (torOnlyRouteReady) {
+                val prepareIntent = android.net.VpnService.prepare(getApplication())
+                if (prepareIntent != null) {
+                    pendingConnectRequest =
+                        PendingConnectRequest(
+                            profileId = FoxholeVpnService.TOR_ONLY_PROFILE_ID,
+                            action = PendingConnectAction.MANUAL,
+                        )
+                    requestVpnPermission.tryEmit(Unit)
+                } else {
+                    connect(FoxholeVpnService.TOR_ONLY_PROFILE_ID)
+                }
+            } else {
+                snackbars.tryEmit(errorBanner(R.string.error_profile_missing))
+            }
             return
         }
         val connectProfile = mobileNetworkProfileOverride(state) ?: activeProfile
@@ -881,8 +901,10 @@ class HomeViewModel(
     internal fun initializeAutoConnectUi(candidates: List<AutoConnectProbeCandidate>) =
         initializeAutoConnectUiInternal(candidates)
 
-    internal fun markAutoConnectCandidateTesting(candidate: AutoConnectProbeCandidate) =
-        markAutoConnectCandidateTestingInternal(candidate)
+    internal fun markAutoConnectCandidateTesting(
+        profileId: Long,
+        candidate: AutoConnectProbeCandidate,
+    ) = markAutoConnectCandidateTestingInternal(profileId, candidate)
 
     internal fun markAutoConnectCandidateFinished(result: AutoConnectProbeResult) =
         markAutoConnectCandidateFinishedInternal(result)
@@ -1063,7 +1085,24 @@ class HomeViewModel(
 
     fun onPrivacyRouteScopeSelected(value: PrivacyRouteScope) = onPrivacyRouteScopeSelectedInternal(value)
 
+    fun onPrivacyRouteBypassVpnTunnelChanged(value: Boolean) = onPrivacyRouteBypassVpnTunnelChangedInternal(value)
+
     fun onPrivacyRouteSelectedPackagesChanged(value: List<String>) = onPrivacyRouteSelectedPackagesChangedInternal(value)
+
+    fun onRenewTorIp() {
+        val state = uiState.value
+        val profileId =
+            state.connection.profileId?.takeIf { it == FoxholeVpnService.TOR_ONLY_PROFILE_ID }
+                ?: state.activeProfile?.id
+                ?: return
+        if (state.connection.state in ACTIVE_CONNECTION_STATES && !state.reconnectInProgress) {
+            clearRuntimeReconnectRequired()
+            markRuntimeReloadPending()
+            if (!container.connectionController.reload(profileId)) {
+                clearRuntimeReloadPending()
+            }
+        }
+    }
 
     fun onBlockedPackagesChanged(value: List<String>) = onBlockedPackagesChangedInternal(value)
 

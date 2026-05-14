@@ -2546,12 +2546,13 @@ private fun profileStatisticsDetail(
     )
 }
 
-private fun statisticsUiState(
+internal fun statisticsUiState(
     state: SettingsRouteUiState,
     retention: StatisticsRetention,
 ): StatisticsUiState {
     val profileTraffic = profileTrafficItems(state)
-    val protocolStats = protocolStatistics(state, profileTraffic)
+    val protocolTraffic = protocolTrafficItems(state)
+    val protocolStats = protocolStatistics(state, protocolTraffic)
     val total = overallStatistics(profileTraffic, protocolStats, state)
     return StatisticsUiState(
         range = retention.toStatisticsRange(),
@@ -2562,16 +2563,14 @@ private fun statisticsUiState(
         profileTraffic = profileTraffic,
         total = total,
         vpnProtocols = protocolStats,
-        profileComparisons = profileComparisons(state, profileTraffic),
+        profileComparisons = profileComparisons(state, protocolTraffic),
         transports = transportStatistics(state.profiles, protocolStats),
     )
 }
 
-private fun profileTrafficItems(state: SettingsRouteUiState): List<ProfileTrafficUiItem> {
-    val totals =
-        state.settings.profileTrafficTotals
-            .associateBy { total -> total.profileId }
-            .mapValues { (_, total) ->
+private fun protocolTrafficItems(state: SettingsRouteUiState): List<ProfileTrafficUiItem> {
+    val items =
+        state.settings.profileTrafficTotals.map { total ->
                 ProfileTrafficUiItem(
                     profileId = total.profileId,
                     profileName = total.profileName,
@@ -2581,23 +2580,38 @@ private fun profileTrafficItems(state: SettingsRouteUiState): List<ProfileTraffi
                     updatedAt = total.updatedAt,
                 )
             }
-            .toMutableMap()
+            .toMutableList()
     val activeProfile = state.activeProfile
     val liveTraffic = state.traffic
     if (activeProfile != null && (liveTraffic.rxTotalBytes > 0L || liveTraffic.txTotalBytes > 0L)) {
-        val stored = totals[activeProfile.id]
-        totals[activeProfile.id] =
+        items +=
             ProfileTrafficUiItem(
                 profileId = activeProfile.id,
                 profileName = activeProfile.name,
                 protocolHint = activeProfile.runtimeProtocolHint(),
-                rxBytes = (stored?.rxBytes ?: 0L) + liveTraffic.rxTotalBytes,
-                txBytes = (stored?.txBytes ?: 0L) + liveTraffic.txTotalBytes,
-                updatedAt = maxOf(stored?.updatedAt ?: 0L, liveTraffic.sampledAt),
+                rxBytes = liveTraffic.rxTotalBytes,
+                txBytes = liveTraffic.txTotalBytes,
+                updatedAt = liveTraffic.sampledAt,
             )
     }
-    return totals.values.sortedByDescending(ProfileTrafficUiItem::updatedAt)
+    return items.sortedByDescending(ProfileTrafficUiItem::updatedAt)
 }
+
+private fun profileTrafficItems(state: SettingsRouteUiState): List<ProfileTrafficUiItem> =
+    protocolTrafficItems(state)
+        .groupBy(ProfileTrafficUiItem::profileId)
+        .values
+        .map { items ->
+            val latest = items.maxBy(ProfileTrafficUiItem::updatedAt)
+            ProfileTrafficUiItem(
+                profileId = latest.profileId,
+                profileName = latest.profileName,
+                protocolHint = latest.protocolHint,
+                rxBytes = items.sumOf(ProfileTrafficUiItem::rxBytes),
+                txBytes = items.sumOf(ProfileTrafficUiItem::txBytes),
+                updatedAt = latest.updatedAt,
+            )
+        }.sortedByDescending(ProfileTrafficUiItem::updatedAt)
 
 private fun protocolStatistics(
     state: SettingsRouteUiState,
@@ -2668,7 +2682,6 @@ private fun profileComparisons(
     state: SettingsRouteUiState,
     profileTraffic: List<ProfileTrafficUiItem>,
 ): List<ProfileComparisonUiItem> {
-    val trafficByProfileId = profileTraffic.associateBy(ProfileTrafficUiItem::profileId)
     val comparisonByProtocol = linkedMapOf<ProtocolHint, MutableMap<Long, ComparisonAccumulator>>()
     val profileById = state.profiles.associateBy(Profile::id)
     state.settings.smartProfilePreferences.forEach { preference ->
@@ -2685,12 +2698,11 @@ private fun profileComparisons(
                 .addMemory(memory)
         }
     }
-    state.profiles.forEach { profile ->
-        val traffic = trafficByProfileId[profile.id] ?: return@forEach
+    profileTraffic.forEach { traffic ->
         val protocol = traffic.protocolHint.takeIf { hint -> hint != ProtocolHint.UNKNOWN } ?: return@forEach
         comparisonByProtocol
             .getOrPut(protocol) { linkedMapOf() }
-            .getOrPut(profile.id) { ComparisonAccumulator(profile.id, profile.name) }
+            .getOrPut(traffic.profileId) { ComparisonAccumulator(traffic.profileId, traffic.profileName) }
             .addTraffic(traffic)
     }
     return comparisonByProtocol.mapNotNull { (protocol, profileMap) ->
@@ -3102,7 +3114,14 @@ private fun List<Profile>.transportForProtocol(protocol: ProtocolHint): Transpor
         }
         .filterNot { transport -> transport == TransportProtocol.UNKNOWN }
         .distinct()
-    return if (explicitTransports.size == 1) explicitTransports.first() else TransportProtocol.UNKNOWN
+    if (explicitTransports.size == 1) {
+        return explicitTransports.first()
+    }
+    return if (protocol in setOf(ProtocolHint.VLESS, ProtocolHint.TROJAN, ProtocolHint.VMESS, ProtocolHint.SHADOWSOCKS, ProtocolHint.OUTLINE)) {
+        TransportProtocol.TCP
+    } else {
+        TransportProtocol.UNKNOWN
+    }
 }
 
 private fun ProfileProtocolOption.inferredTransport(): TransportProtocol {

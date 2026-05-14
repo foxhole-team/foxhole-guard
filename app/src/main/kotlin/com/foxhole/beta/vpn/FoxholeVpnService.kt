@@ -283,12 +283,13 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         protocolOptionIdOverride: String? = null,
         previousVpnNetworkHandle: Long? = null,
     ) {
-        if (profileId <= 0) {
+        val torOnlyConnect = profileId == TOR_ONLY_PROFILE_ID
+        if (profileId <= 0 && !torOnlyConnect) {
             disconnect(message = getString(R.string.error_profile_missing), commandStartId = commandStartId)
             return
         }
         val settings = container.settingsRepository.current()
-        val trafficMode = settings.traffic.mode
+        val trafficMode = if (torOnlyConnect) TrafficMode.TUNNEL else settings.traffic.mode
         if (trafficMode != TrafficMode.TUNNEL) {
             FoxholeConnectionServiceContract.startForegroundService(
                 context = this,
@@ -318,7 +319,13 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         }
         FoxholeConnectionServiceContract.stopInactiveServices(context = this, activeMode = trafficMode)
         val session =
-            runCatching { container.profileRepository.getSession(profileId, protocolOptionIdOverride, privateDnsMode) }
+            runCatching {
+                if (torOnlyConnect) {
+                    container.profileRepository.getTorOnlySession(privateDnsMode)
+                } else {
+                    container.profileRepository.getSession(profileId, protocolOptionIdOverride, privateDnsMode)
+                }
+            }
                 .getOrElse {
                     fail(it.message ?: getString(R.string.error_profile_invalid), commandStartId)
                     return
@@ -667,13 +674,22 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
     }
 
     internal suspend fun reload(profileIdHint: Long) {
-        val targetProfileId = activeSession?.profileId ?: profileIdHint.takeIf { it > 0L } ?: return
+        val targetProfileId =
+            activeSession?.profileId
+                ?: profileIdHint.takeIf { it > 0L || it == TOR_ONLY_PROFILE_ID }
+                ?: return
         val snapshot = FoxholeVpnRuntimeBridge.snapshot.value
         if (snapshot.state !in setOf(ConnectionState.CONNECTING, ConnectionState.CONNECTED, ConnectionState.RECONNECTING)) {
             return
         }
         val session =
-            runCatching { container.profileRepository.getSession(targetProfileId) }
+            runCatching {
+                if (targetProfileId == TOR_ONLY_PROFILE_ID) {
+                    container.profileRepository.getTorOnlySession(PrivateDnsSettings.current(this))
+                } else {
+                    container.profileRepository.getSession(targetProfileId)
+                }
+            }
                 .getOrElse {
                     container.diagnosticsLogger.record("connection", "runtime reload session failed: ${it.message.orEmpty()}")
                     fail(it.message ?: getString(R.string.error_profile_invalid))
@@ -1220,6 +1236,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         internal const val CONNECTIVITY_LITERAL_PROBE_POLL_MS = 100L
         internal const val CONNECTIVITY_LITERAL_PROBE_CALL_TIMEOUT_MS = 1_200L
         internal const val LOCAL_GUARD_PROFILE_ID = -10L
+        internal const val TOR_ONLY_PROFILE_ID = -20L
         internal const val APP_TRAFFIC_SAMPLE_INTERVAL_MS = 60_000L
         internal const val APP_TRAFFIC_SAMPLE_CACHE_MAX_AGE_MS = 15_000L
         private const val ACTION_NATIVE_RUNTIME_STOP = "libbox_service_stop"
@@ -1236,9 +1253,10 @@ private fun FoxholeVpnService.notificationSmallIconRes(snapshot: NotificationSna
 
 private fun FoxholeVpnService.notificationTorRouteActive(): Boolean {
     val settings = container.settingsRepository.settings.value
-    return settings.privacyRoute.mode == PrivacyRouteMode.TOR_OVER_VPN &&
+    return activeSession?.profileId == FoxholeVpnService.TOR_ONLY_PROFILE_ID ||
+        settings.privacyRoute.mode == PrivacyRouteMode.TOR_OVER_VPN &&
         settings.traffic.mode == TrafficMode.TUNNEL &&
-        activeSession?.protocolHint?.isUdpTransport() != true
+        (settings.privacyRoute.bypassVpnTunnel || activeSession?.protocolHint?.isUdpTransport() != true)
 }
 
 private fun Settings.appTrafficStatsRuntimeEnabled(): Boolean =

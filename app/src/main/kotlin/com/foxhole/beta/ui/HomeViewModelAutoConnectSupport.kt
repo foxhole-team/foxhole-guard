@@ -286,7 +286,7 @@ private suspend fun HomeViewModel.runColdSmartStartScan(
     var previousVpnNetworkHandle = awaitDisconnectedForAutoConnect()
     val results = mutableListOf<AutoConnectProbeResult>()
     candidates.forEachIndexed { index, candidate ->
-        markAutoConnectCandidateTesting(candidate)
+        markAutoConnectCandidateTesting(profileId, candidate)
         delay(HomeViewModel.AUTO_CONNECT_PROTOCOL_TRANSITION_SETTLE_MS)
         val result =
             probeAutoConnectCandidateForMetricsRefresh(
@@ -324,17 +324,20 @@ private suspend fun HomeViewModel.runColdSmartStartScan(
     val winner = MultiProtocolProfileSupport.fastestSuccessfulProbe(results)
     if (winner != null) {
         val recommendedIds =
-            recomputeRecommendedProtocolIds(
-                profileId = profileId,
-                candidates = candidates,
-                networkFingerprint = networkFingerprint,
-                excludeOptionIds =
-                    results
-                        .asSequence()
-                        .filterNot(AutoConnectProbeResult::success)
-                        .map { result -> result.candidate.optionId }
-                        .toSet(),
-            ).ifEmpty { listOf(winner.candidate.optionId) }
+            recommendedProtocolIdsFromProbeResults(results)
+                .ifEmpty {
+                    recomputeRecommendedProtocolIds(
+                        profileId = profileId,
+                        candidates = candidates,
+                        networkFingerprint = networkFingerprint,
+                        excludeOptionIds =
+                            results
+                                .asSequence()
+                                .filterNot(AutoConnectProbeResult::success)
+                                .map { result -> result.candidate.optionId }
+                                .toSet(),
+                    )
+                }.ifEmpty { listOf(winner.candidate.optionId) }
         container.settingsRepository.recordSmartProfileBaseline(
             profileId = profileId,
             recommendedProtocolIds = recommendedIds,
@@ -376,7 +379,7 @@ private suspend fun HomeViewModel.probeSmartStartCandidateWithinBudget(
     previousVpnNetworkHandle: Long?,
     autoConnectStartedAt: Long,
 ): BudgetedAutoConnectProbe {
-    markAutoConnectCandidateTesting(candidate)
+    markAutoConnectCandidateTesting(profileId, candidate)
     delay(HomeViewModel.AUTO_CONNECT_PROTOCOL_TRANSITION_SETTLE_MS)
     val probeStartedAt = SystemClock.elapsedRealtime()
     val probeBudgetMs =
@@ -546,6 +549,19 @@ private suspend fun HomeViewModel.recomputeRecommendedProtocolIds(
     )
 }
 
+private fun recommendedProtocolIdsFromProbeResults(results: List<AutoConnectProbeResult>): List<String> =
+    results
+        .asSequence()
+        .filter(AutoConnectProbeResult::success)
+        .sortedWith(
+            compareBy<AutoConnectProbeResult> { result -> result.displayLatencyMs ?: result.rankingLatencyMs }
+                .thenBy { result -> result.candidate.optionId },
+        )
+        .map { result -> result.candidate.optionId }
+        .distinct()
+        .take(HomeViewModel.AUTO_CONNECT_MAX_ATTEMPTS)
+        .toList()
+
 private fun HomeViewModel.updateRecommendedProtocolUi(
     profileId: Long,
     profile: Profile,
@@ -619,7 +635,7 @@ internal fun HomeViewModel.refreshSmartProfileMetricsInternal(profileId: Long) {
                 candidates.forEachIndexed { index, candidate ->
                     protocolMetricsRefreshingOptionIdByProfileIdMutable.value =
                         protocolMetricsRefreshingOptionIdByProfileIdMutable.value + (profileId to candidate.optionId)
-                    markAutoConnectCandidateTesting(candidate)
+                    markAutoConnectCandidateTesting(profileId, candidate)
                     delay(HomeViewModel.AUTO_CONNECT_PROTOCOL_TRANSITION_SETTLE_MS)
                     val result =
                         probeAutoConnectCandidateForMetricsRefresh(
@@ -638,7 +654,13 @@ internal fun HomeViewModel.refreshSmartProfileMetricsInternal(profileId: Long) {
                         affectsFailureRankingMemory = false,
                     )
                     if (result.success) {
-                        if (result.displayLatencyMs == null) {
+                        if (result.displayLatencyMs != null) {
+                            cacheProtocolLatency(
+                                profileId = profileId,
+                                optionId = result.candidate.optionId,
+                                latencyMs = result.displayLatencyMs,
+                            )
+                        } else {
                             markProtocolLatencyUnavailable(
                                 profileId = profileId,
                                 optionId = result.candidate.optionId,
@@ -656,17 +678,20 @@ internal fun HomeViewModel.refreshSmartProfileMetricsInternal(profileId: Long) {
                     }
                 }
                 val recommendedIds =
-                    recomputeRecommendedProtocolIds(
-                        profileId = profileId,
-                        candidates = candidates,
-                        networkFingerprint = networkFingerprint,
-                        excludeOptionIds =
-                            results
-                                .asSequence()
-                                .filterNot(AutoConnectProbeResult::success)
-                                .map { result -> result.candidate.optionId }
-                                .toSet(),
-                    )
+                    recommendedProtocolIdsFromProbeResults(results)
+                        .ifEmpty {
+                            recomputeRecommendedProtocolIds(
+                                profileId = profileId,
+                                candidates = candidates,
+                                networkFingerprint = networkFingerprint,
+                                excludeOptionIds =
+                                    results
+                                        .asSequence()
+                                        .filterNot(AutoConnectProbeResult::success)
+                                        .map { result -> result.candidate.optionId }
+                                        .toSet(),
+                            )
+                        }
                 if (recommendedIds.isNotEmpty()) {
                     container.settingsRepository.recordSmartProfileBaseline(
                         profileId = profileId,
@@ -1293,7 +1318,11 @@ internal fun HomeViewModel.initializeAutoConnectUiInternal(candidates: List<Auto
         )
 }
 
-internal fun HomeViewModel.markAutoConnectCandidateTestingInternal(candidate: AutoConnectProbeCandidate) {
+internal fun HomeViewModel.markAutoConnectCandidateTestingInternal(
+    profileId: Long,
+    candidate: AutoConnectProbeCandidate,
+) {
+    clearProtocolProbeStatus(profileId = profileId, optionId = candidate.optionId)
     autoConnectUiStateMutable.value =
         autoConnectUiStateMutable.value.copy(
             running = true,
@@ -1313,6 +1342,17 @@ internal fun HomeViewModel.markAutoConnectCandidateTestingInternal(candidate: Au
                     }
                 },
         )
+}
+
+private fun HomeViewModel.clearProtocolProbeStatus(
+    profileId: Long,
+    optionId: String,
+) {
+    val key = ProfileOptionLatencyKey(profileId, optionId)
+    profileOptionDownMutable.value =
+        profileOptionDownMutable.value - key
+    profileOptionLatencyUnavailableMutable.value =
+        profileOptionLatencyUnavailableMutable.value - key
 }
 
 internal fun HomeViewModel.markAutoConnectCandidateFinishedInternal(result: AutoConnectProbeResult) {

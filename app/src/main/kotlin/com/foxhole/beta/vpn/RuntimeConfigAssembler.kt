@@ -130,6 +130,56 @@ class RuntimeConfigAssembler(
         )
     }
 
+    internal fun assembleTorOnly(
+        settings: Settings,
+        activePreset: RoutingPreset?,
+        privateDnsMode: PrivateDnsMode? = null,
+        torRuntimePaths: TorRuntimePaths,
+        dnsFilterRuntimePaths: DnsFilterRuntimePaths? = null,
+    ): String {
+        validate(settings.expert)
+        require(settings.privacyRoute.directTorEnabled) { "direct TOR route is disabled" }
+        require(
+            settings.privacyRoute.scope == PrivacyRouteScope.ALL_APPS ||
+                settings.privacyRoute.selectedPackages.any(String::isNotBlank),
+        ) { "direct TOR route has no selected apps" }
+        val dns =
+            buildFoxholeDnsConfig(
+                strategy = settings.traffic.domainStrategy.configValue,
+                dnsSettings = settings.dns,
+                privateDnsMode = privateDnsMode,
+                dnsFilterRuntimePaths = dnsFilterRuntimePaths,
+            )
+        val route =
+            patchTorOnlyRoute(
+                dns = dns,
+                activePreset = activePreset,
+                settings = settings,
+                dnsFilterRuntimePaths = dnsFilterRuntimePaths,
+            )
+        return json.encodeToString(
+            JsonObject.serializer(),
+            buildJsonObject {
+                putJsonArray("inbounds") {
+                    add(torOnlyTunInbound(settings))
+                    add(runtimeLoopbackProxyInbound(settings.expert.localSurfaces))
+                    buildLocalSurfaceInbounds(settings.expert.localSurfaces, includeLocalProxy = false).forEach(::add)
+                }
+                putJsonArray("outbounds") {
+                    add(torDirectProxyOutbound(torRuntimePaths))
+                    add(buildJsonObject { put("type", "direct"); put("tag", "direct") })
+                    add(buildJsonObject { put("type", "block"); put("tag", "block") })
+                }
+                put("dns", dns)
+                put("route", route)
+                putJsonObject("log") {
+                    put("level", FOXHOLE_RUNTIME_LOG_LEVEL)
+                    put("timestamp", true)
+                }
+            },
+        )
+    }
+
     private fun assembleTunnel(
         base: JsonObject,
         settings: Settings,
@@ -145,7 +195,10 @@ class RuntimeConfigAssembler(
         val runtimeBase =
             base
                 .withTcpReliabilityOutbounds()
-                .withTorPrivacyRouteOutbound(torRuntimePaths.takeIf { privacyRouteActive })
+                .withTorPrivacyRouteOutbound(
+                    paths = torRuntimePaths.takeIf { privacyRouteActive },
+                    detourThroughVpn = !settings.privacyRoute.bypassVpnTunnel,
+                )
         val patchedTun =
             patchTunInbound(
                 tunInbound = tunInbound,
@@ -454,6 +507,39 @@ class RuntimeConfigAssembler(
             }
         }
 
+    private fun torOnlyTunInbound(settings: Settings): JsonObject =
+        buildJsonObject {
+            put("type", "tun")
+            put("tag", "tun-in")
+            put("interface_name", "foxhole")
+            put("mtu", settings.traffic.mtu)
+            put("auto_route", true)
+            put("strict_route", settings.expert.strictRoute || settings.dns.blockOutsideTunnel)
+            put("stack", settings.traffic.tunStack.configValue)
+            putJsonArray("address") {
+                add(JsonPrimitive("172.19.0.1/30"))
+                add(JsonPrimitive("fdfe:dcba:9876::1/126"))
+            }
+            val torPackages =
+                if (settings.privacyRoute.scope == PrivacyRouteScope.SELECTED_APPS) {
+                    normalizedRuntimePackages(settings.privacyRoute.selectedPackages)
+                } else {
+                    emptyList()
+                }
+            val includePackages = torPackages.ifEmpty { settings.expert.vpnIncludedPackages() }
+            val excludePackages = if (torPackages.isEmpty()) settings.expert.vpnExcludedPackages() else emptyList()
+            when {
+                includePackages.isNotEmpty() ->
+                    putJsonArray("include_package") {
+                        includePackages.forEach { add(JsonPrimitive(it)) }
+                    }
+                excludePackages.isNotEmpty() ->
+                    putJsonArray("exclude_package") {
+                        excludePackages.forEach { add(JsonPrimitive(it)) }
+                    }
+            }
+        }
+
     private fun JsonObject.withTcpReliabilityOutbounds(): JsonObject {
         val patchedOutbounds = patchTcpReliabilityOutbounds(this["outbounds"]?.jsonArray) ?: return this
         return buildJsonObject {
@@ -467,7 +553,10 @@ class RuntimeConfigAssembler(
         }
     }
 
-    private fun JsonObject.withTorPrivacyRouteOutbound(paths: TorRuntimePaths?): JsonObject {
+    private fun JsonObject.withTorPrivacyRouteOutbound(
+        paths: TorRuntimePaths?,
+        detourThroughVpn: Boolean,
+    ): JsonObject {
         paths ?: return this
         val patchedOutbounds =
             buildJsonArray {
@@ -477,7 +566,7 @@ class RuntimeConfigAssembler(
                     .map { it.jsonObject }
                     .filterNot { outbound -> outbound["tag"]?.jsonPrimitive?.contentOrNull == TOR_OVER_VPN_OUTBOUND_TAG }
                     .forEach(::add)
-                add(torOverVpnOutbound(paths))
+                add(torOverVpnOutbound(paths, detourThroughVpn))
             }
         return buildJsonObject {
             this@withTorPrivacyRouteOutbound.forEach { (key, value) ->
@@ -493,7 +582,10 @@ class RuntimeConfigAssembler(
         }
     }
 
-    private fun torOverVpnOutbound(paths: TorRuntimePaths): JsonObject =
+    private fun torOverVpnOutbound(
+        paths: TorRuntimePaths,
+        detourThroughVpn: Boolean,
+    ): JsonObject =
         buildJsonObject {
             put("type", "tor")
             put("tag", TOR_OVER_VPN_OUTBOUND_TAG)
@@ -511,7 +603,29 @@ class RuntimeConfigAssembler(
                 paths.geoIpFilePath?.let { put("GeoIPFile", it) }
                 paths.geoIpv6FilePath?.let { put("GeoIPv6File", it) }
             }
-            put("detour", "proxy")
+            if (detourThroughVpn) {
+                put("detour", "proxy")
+            }
+        }
+
+    private fun torDirectProxyOutbound(paths: TorRuntimePaths): JsonObject =
+        buildJsonObject {
+            put("type", "tor")
+            put("tag", "proxy")
+            put("executable_path", paths.executablePath)
+            paths.torrcDefaultsFilePath?.let { defaultsPath ->
+                putJsonArray("extra_args") {
+                    add(JsonPrimitive("--defaults-torrc"))
+                    add(JsonPrimitive(defaultsPath))
+                }
+            }
+            put("data_directory", paths.dataDirectory)
+            putJsonObject("torrc") {
+                put("ClientOnly", "1")
+                put("AvoidDiskWrites", "1")
+                paths.geoIpFilePath?.let { put("GeoIPFile", it) }
+                paths.geoIpv6FilePath?.let { put("GeoIPv6File", it) }
+            }
         }
 
     private fun patchTcpReliabilityOutbounds(outbounds: JsonArray?): JsonArray? =
@@ -689,11 +803,55 @@ class RuntimeConfigAssembler(
     private fun Settings.isTorPrivacyRouteActive(vpnProtocolHint: ProtocolHint?): Boolean =
         privacyRoute.mode == PrivacyRouteMode.TOR_OVER_VPN &&
             traffic.mode == TrafficMode.TUNNEL &&
-            vpnProtocolHint?.isUdpTransport() != true &&
+            (privacyRoute.bypassVpnTunnel || vpnProtocolHint?.isUdpTransport() != true) &&
             when (privacyRoute.scope) {
                 PrivacyRouteScope.ALL_APPS -> true
                 PrivacyRouteScope.SELECTED_APPS -> privacyRoute.selectedPackages.any(String::isNotBlank)
             }
+
+    private fun patchTorOnlyRoute(
+        dns: JsonObject,
+        activePreset: RoutingPreset?,
+        settings: Settings,
+        dnsFilterRuntimePaths: DnsFilterRuntimePaths?,
+    ): JsonObject {
+        val expert = settings.expert
+        val presetRules =
+            activePreset
+                ?.takeIf { it.enabled }
+                ?.rules
+                ?.filter { it.enabled }
+                ?.map { rule -> toRouteRule(rule, expert.siteRoutingAction) }
+                .orEmpty()
+        val combinedRules =
+            buildJsonArray {
+                buildAppRouteRules(expert).forEach(::add)
+                if (expert.sniff) {
+                    add(sniffRule())
+                }
+                if (settings.dns.interceptDnsRequests) {
+                    hijackDnsRules().forEach(::add)
+                }
+                if (expert.bypassLan) {
+                    add(bypassLanRule())
+                }
+                buildTorPrivacyRouteRules(settings).forEach(::add)
+                presetRules.forEach(::add)
+            }
+        val ruleSets =
+            mergedRouteRuleSets(
+                source = buildJsonObject {},
+                dnsSettings = settings.dns,
+                dnsFilterRuntimePaths = dnsFilterRuntimePaths,
+            )
+        return buildJsonObject {
+            put("rules", combinedRules)
+            ruleSets?.let { put("rule_set", it) }
+            put("final", "proxy")
+            resolverForRoute(dns, buildJsonObject {})?.let { put("default_domain_resolver", it) }
+            put("auto_detect_interface", true)
+        }
+    }
 
     private fun buildTorPrivacyRouteRules(settings: Settings): List<JsonObject> =
         when (settings.privacyRoute.scope) {

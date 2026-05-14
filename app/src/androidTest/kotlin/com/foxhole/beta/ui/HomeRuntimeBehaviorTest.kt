@@ -104,13 +104,14 @@ class HomeRuntimeBehaviorTest {
                 it.tag == "ip" &&
                     it.message.contains("mode=entry_quick") &&
                     it.message.contains("showLoading=false") &&
-                    it.message.contains("clearExistingIp=true")
+                    it.message.contains("clearExistingIp=false")
             },
         )
         composeRule.onNodeWithTag("home_network_primary_ip", useUnmergedTree = true).assertTextEquals("-")
-        composeRule.onNodeWithText(
-            InstrumentationRegistry.getInstrumentation().targetContext.getString(R.string.home_network_unavailable),
-        ).assertIsDisplayed()
+        composeRule
+            .onAllNodesWithText(
+                InstrumentationRegistry.getInstrumentation().targetContext.getString(R.string.home_network_unavailable),
+            ).assertCountEquals(0)
     }
 
     @Test
@@ -191,7 +192,7 @@ class HomeRuntimeBehaviorTest {
     }
 
     @Test
-    fun connectedWithoutResolvedIpShowsUnavailableAfterRefreshFailed() {
+    fun connectedWithoutResolvedIpKeepsNetworkLoadingUntilVpnIpResolves() {
         waitUntilNetworkBlockSettles()
 
         composeRule.runOnUiThread {
@@ -207,18 +208,15 @@ class HomeRuntimeBehaviorTest {
         }
 
         scrollToNetworkBlock()
-        composeRule.waitUntil(timeoutMillis = 10_000) {
-            textOfOrNull("home_network_primary_ip") == "-"
-        }
-
-        composeRule.onAllNodesWithTag("home_network_loading").assertCountEquals(0)
-        composeRule.onNodeWithText(
-            InstrumentationRegistry.getInstrumentation().targetContext.getString(R.string.home_network_unavailable),
-        ).assertIsDisplayed()
+        composeRule.onNodeWithTag("home_network_loading").assertIsDisplayed()
+        composeRule
+            .onAllNodesWithText(
+                InstrumentationRegistry.getInstrumentation().targetContext.getString(R.string.home_network_unavailable),
+            ).assertCountEquals(0)
     }
 
     @Test
-    fun connectingKeepsPreviouslyResolvedIpPinnedInsteadOfSwitchingToUnavailableState() {
+    fun connectingShowsNetworkLoadingInsteadOfSwitchingToUnavailableState() {
         waitUntilNetworkBlockSettles()
 
         val previousIp = "198.51.100.42"
@@ -257,8 +255,7 @@ class HomeRuntimeBehaviorTest {
         }
 
         composeRule.waitForIdle()
-        composeRule.onNodeWithTag("home_network_primary_ip", useUnmergedTree = true).assertTextEquals(previousIp)
-        composeRule.onAllNodesWithTag("home_network_loading").assertCountEquals(0)
+        composeRule.onNodeWithTag("home_network_loading").assertIsDisplayed()
         composeRule
             .onAllNodesWithText(
                 InstrumentationRegistry.getInstrumentation().targetContext.getString(R.string.home_network_unavailable),

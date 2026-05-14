@@ -324,9 +324,13 @@ data class PrivacyRouteSettings(
     val mode: PrivacyRouteMode = PrivacyRouteMode.OFF,
     val scope: PrivacyRouteScope = PrivacyRouteScope.SELECTED_APPS,
     val selectedPackages: List<String> = emptyList(),
+    val bypassVpnTunnel: Boolean = false,
 ) {
     val enabled: Boolean
         get() = mode == PrivacyRouteMode.TOR_OVER_VPN
+
+    val directTorEnabled: Boolean
+        get() = enabled && bypassVpnTunnel
 }
 
 @Serializable
@@ -595,6 +599,7 @@ data class ProfileTrafficTotal(
     val profileId: Long,
     val profileName: String,
     val protocolHint: ProtocolHint,
+    val protocolOptionId: String? = null,
     val rxTotalBytes: Long = 0,
     val txTotalBytes: Long = 0,
     val updatedAt: Long = 0,

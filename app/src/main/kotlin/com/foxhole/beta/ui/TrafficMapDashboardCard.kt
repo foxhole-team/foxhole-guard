@@ -1,6 +1,11 @@
 package com.foxhole.beta.ui
 
 import android.content.Context
+import android.content.BroadcastReceiver
+import android.content.Intent
+import android.content.IntentFilter
+import android.os.BatteryManager
+import android.os.PowerManager
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,17 +22,23 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Map
 import androidx.compose.material.icons.outlined.PhoneAndroid
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -49,6 +60,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
+import androidx.core.content.getSystemService
 import com.foxhole.beta.R
 import com.foxhole.beta.core.model.TrafficMapPoint
 import com.foxhole.beta.core.model.TrafficMapUiState
@@ -69,6 +82,9 @@ internal fun TrafficMapDashboardCard(
     modifier: Modifier = Modifier,
 ) {
     val countries by rememberTrafficMapCountries()
+    val powerState = rememberTrafficMapPowerState()
+    var forceMapEnabled by rememberSaveable { mutableStateOf(false) }
+    val mapDisabledForPower = powerState.mapDisabled && !forceMapEnabled
     FoxholeCard(
         modifier = modifier
             .fillMaxWidth()
@@ -91,20 +107,65 @@ internal fun TrafficMapDashboardCard(
                     icon = Icons.Outlined.Map,
                     title = stringResource(R.string.traffic_map_title),
                 )
-                TrafficMapCanvas(
+                if (mapDisabledForPower) {
+                    TrafficMapPowerSaveBlock(
+                        onEnable = { forceMapEnabled = true },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f),
+                    )
+                } else {
+                    TrafficMapCanvas(
+                        state = state,
+                        countries = countries.orEmpty(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f)
+                            .testTag("home_traffic_world_map"),
+                    )
+                }
+            }
+            if (!mapDisabledForPower) {
+                TrafficMapLegend(
                     state = state,
-                    countries = countries.orEmpty(),
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f)
-                        .testTag("home_traffic_world_map"),
+                        .weight(TRAFFIC_MAP_LEGEND_WEIGHT)
+                        .fillMaxHeight(),
                 )
             }
-            TrafficMapLegend(
-                state = state,
-                modifier = Modifier
-                    .weight(TRAFFIC_MAP_LEGEND_WEIGHT)
-                    .fillMaxHeight(),
+        }
+    }
+}
+
+@Composable
+private fun TrafficMapPowerSaveBlock(
+    onEnable: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val tone = FoxholePositiveAccent
+    Column(
+        modifier = modifier.padding(top = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterVertically),
+        horizontalAlignment = Alignment.Start,
+    ) {
+        Text(
+            text = stringResource(R.string.traffic_map_power_save_disabled),
+            style = MaterialTheme.typography.labelSmall.copy(
+                fontSize = 10.sp,
+                lineHeight = 12.sp,
+            ),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 4,
+            overflow = TextOverflow.Ellipsis,
+        )
+        OutlinedButton(
+            onClick = onEnable,
+            colors = ButtonDefaults.outlinedButtonColors(contentColor = tone),
+        ) {
+            Text(
+                text = stringResource(R.string.enable_label),
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.SemiBold,
             )
         }
     }
@@ -139,23 +200,10 @@ private fun TrafficMapCanvas(
 
                 onDrawBehind {
                     val mapState = latestState.value
-                    val activeCountries =
-                        (
-                            mapState.highlightedCountries +
-                                mapState.destinations.map(TrafficMapPoint::countryCode) +
-                                listOfNotNull(mapState.originCountryCode)
-                            )
-                            .map { countryCode -> countryCode.uppercase(Locale.US) }
-                            .toSet()
                     countryPaths.forEach { country ->
                         drawPath(
                             path = country.path,
-                            color =
-                                if (country.countryCode.uppercase(Locale.US) in activeCountries) {
-                                    colors.activeCountryFill
-                                } else {
-                                    colors.countryFill
-                                },
+                            color = colors.countryFill,
                         )
                     }
                     countryPaths.forEach { country ->
@@ -174,7 +222,7 @@ private fun TrafficMapCanvas(
                         val to = project(edge.toLat, edge.toLon, viewport)
                         val weight = sqrt(edge.bytes.toDouble() / maxBytes.toDouble()).toFloat()
                         drawLine(
-                            color = colors.routeLine.copy(alpha = 0.54f + (0.34f * weight)),
+                            color = colors.routeLine.copy(alpha = 0.22f + (0.24f * weight)),
                             start = from,
                             end = to,
                             strokeWidth = minLineStroke + ((maxLineStroke - minLineStroke) * weight),
@@ -312,6 +360,7 @@ private fun TrafficMapUiState.originLocationLabel(): String =
     listOfNotNull(
         originCountryName?.let { countryName -> "${countryEmoji(originCountryCode)} $countryName" }
             ?: originCountryCode?.let(::countryEmoji),
+        originCity?.takeIf(String::isNotBlank),
     )
         .joinToString(separator = "\n")
         .ifBlank { "IP" }
@@ -325,21 +374,21 @@ private fun TrafficMapLegendHeader() {
     ) {
         TrafficMapLegendCell(
             text = stringResource(R.string.traffic_map_country_header),
-            modifier = Modifier.weight(1.15f),
+            modifier = Modifier.weight(0.58f),
             textAlign = TextAlign.Start,
             fontWeight = FontWeight.SemiBold,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         TrafficMapLegendCell(
             text = stringResource(R.string.traffic_map_sessions_header),
-            modifier = Modifier.weight(0.72f),
+            modifier = Modifier.weight(0.62f),
             textAlign = TextAlign.End,
             fontWeight = FontWeight.SemiBold,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         TrafficMapLegendCell(
             text = stringResource(R.string.traffic_map_total_header),
-            modifier = Modifier.weight(0.78f),
+            modifier = Modifier.weight(0.82f),
             textAlign = TextAlign.End,
             fontWeight = FontWeight.SemiBold,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -359,7 +408,7 @@ private fun TrafficMapLegendDestinationRow(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Row(
-            modifier = Modifier.weight(1.15f),
+            modifier = Modifier.weight(0.58f),
             horizontalArrangement = Arrangement.spacedBy(4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -377,23 +426,19 @@ private fun TrafficMapLegendDestinationRow(
                 ) {}
             }
             TrafficMapLegendCell(
-                text =
-                    listOf(
-                        countryEmoji(point.countryCode),
-                        point.label.takeIf(String::isNotBlank) ?: point.countryCode.uppercase(Locale.US),
-                    ).joinToString(" "),
+                text = point.countryCode.uppercase(Locale.US),
                 modifier = Modifier.weight(1f),
                 textAlign = TextAlign.Start,
             )
         }
         TrafficMapLegendCell(
             text = point.connections.toString(),
-            modifier = Modifier.weight(0.72f),
+            modifier = Modifier.weight(0.62f),
             textAlign = TextAlign.End,
         )
         TrafficMapLegendCell(
             text = formatBytes(context, point.bytes),
-            modifier = Modifier.weight(0.78f),
+            modifier = Modifier.weight(0.82f),
             textAlign = TextAlign.End,
         )
     }
@@ -447,7 +492,6 @@ private object TrafficMapCountryShapeCache {
 }
 
 private fun loadTrafficMapCountries(context: Context): List<TrafficMapCountryShape> {
-    // Later: if 50m is too heavy on low-end devices, add a 110m asset and switch this path.
     val raw =
         context.assets.open(TRAFFIC_MAP_COUNTRIES_ASSET).bufferedReader().use { reader ->
             reader.readText()
@@ -455,6 +499,60 @@ private fun loadTrafficMapCountries(context: Context): List<TrafficMapCountrySha
     return TrafficMapCountryGeoJsonParser().parse(raw)
         .filterNot { country -> country.countryCode == TRAFFIC_MAP_ANTARCTICA_COUNTRY_CODE }
         .mapNotNull(TrafficMapCountryShape::toTrafficMapVisualShape)
+}
+
+@Composable
+private fun rememberTrafficMapPowerState(): TrafficMapPowerState {
+    val appContext = LocalContext.current.applicationContext
+    val powerManager = remember(appContext) { appContext.getSystemService<PowerManager>() }
+    var state by remember(appContext, powerManager) {
+        mutableStateOf(resolveTrafficMapPowerState(appContext, powerManager))
+    }
+    DisposableEffect(appContext, powerManager) {
+        val receiver =
+            object : BroadcastReceiver() {
+                override fun onReceive(
+                    context: Context?,
+                    intent: Intent?,
+                ) {
+                    state = resolveTrafficMapPowerState(appContext, powerManager, intent)
+                }
+            }
+        val filter =
+            IntentFilter().apply {
+                addAction(Intent.ACTION_BATTERY_CHANGED)
+                addAction(PowerManager.ACTION_POWER_SAVE_MODE_CHANGED)
+            }
+        val stickyIntent =
+            ContextCompat.registerReceiver(
+                appContext,
+                receiver,
+                filter,
+                ContextCompat.RECEIVER_NOT_EXPORTED,
+            )
+        state = resolveTrafficMapPowerState(appContext, powerManager, stickyIntent)
+        onDispose { runCatching { appContext.unregisterReceiver(receiver) } }
+    }
+    return state
+}
+
+private fun resolveTrafficMapPowerState(
+    context: Context,
+    powerManager: PowerManager?,
+    batteryIntent: Intent? = context.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED)),
+): TrafficMapPowerState =
+    TrafficMapPowerState(
+        powerSaveMode = powerManager?.isPowerSaveMode == true,
+        batteryPercent = batteryIntent?.batteryPercent(),
+    )
+
+private fun Intent.batteryPercent(): Int? {
+    val level = getIntExtra(BatteryManager.EXTRA_LEVEL, -1)
+    val scale = getIntExtra(BatteryManager.EXTRA_SCALE, -1)
+    if (level < 0 || scale <= 0) {
+        return null
+    }
+    return ((level * 100f) / scale).toInt()
 }
 
 private fun TrafficMapCountryShape.toProjectedPath(viewport: TrafficMapViewport): ProjectedTrafficMapCountry? {
@@ -542,7 +640,6 @@ private fun DrawScope.drawPhoneMarker(
 @Immutable
 private data class TrafficMapColors(
     val countryFill: Color,
-    val activeCountryFill: Color,
     val countryBorder: Color,
     val routeLine: Color,
     val destination: Color,
@@ -556,20 +653,18 @@ private fun trafficMapColors(): TrafficMapColors {
     return if (LocalFoxholeDarkTheme.current) {
         TrafficMapColors(
             countryFill = colorScheme.onSurfaceVariant.copy(alpha = 0.22f),
-            activeCountryFill = FoxholePositiveAccent.copy(alpha = 0.54f),
             countryBorder = colorScheme.outline.copy(alpha = 0.46f),
-            routeLine = Color(0xFF7EC8FF),
-            destination = Color(0xFFFFD166),
+            routeLine = FoxholePositiveAccent,
+            destination = FoxholePositiveAccent,
             origin = FoxholePositiveAccent,
             phoneScreen = colorScheme.surface.copy(alpha = 0.92f),
         )
     } else {
         TrafficMapColors(
             countryFill = Color(0xFFC7D1D8),
-            activeCountryFill = Color(0xFF5EAF82),
             countryBorder = Color(0xFF95A2AC).copy(alpha = 0.88f),
-            routeLine = Color(0xFF2269A8),
-            destination = Color(0xFFC46D10),
+            routeLine = Color(0xFF278A5B),
+            destination = Color(0xFF278A5B),
             origin = Color(0xFF278A5B),
             phoneScreen = colorScheme.surface.copy(alpha = 0.94f),
         )
@@ -603,9 +698,18 @@ private data class ProjectedTrafficMapCountry(
     val path: Path,
 )
 
+@Immutable
+private data class TrafficMapPowerState(
+    val powerSaveMode: Boolean,
+    val batteryPercent: Int?,
+) {
+    val mapDisabled: Boolean
+        get() = powerSaveMode || (batteryPercent != null && batteryPercent < TRAFFIC_MAP_LOW_BATTERY_PERCENT)
+}
+
 private val TRAFFIC_MAP_CARD_TOTAL_HEIGHT = 184.dp
-private const val TRAFFIC_MAP_WEIGHT = 0.70f
-private const val TRAFFIC_MAP_LEGEND_WEIGHT = 0.30f
+private const val TRAFFIC_MAP_WEIGHT = 0.74f
+private const val TRAFFIC_MAP_LEGEND_WEIGHT = 0.26f
 private const val TRAFFIC_MAP_WORLD_ASPECT_RATIO = 2f
 private const val TRAFFIC_MAP_MIN_LAT = -55.0
 private const val TRAFFIC_MAP_MAX_LAT = 85.0
@@ -613,5 +717,6 @@ private const val TRAFFIC_MAP_LAT_RANGE = TRAFFIC_MAP_MAX_LAT - TRAFFIC_MAP_MIN_
 private const val MAX_TRAFFIC_MAP_DRAW_EDGES = 60
 private const val MAX_TRAFFIC_MAP_DRAW_DESTINATIONS = 60
 private const val MIN_TRAFFIC_MAP_RING_POINTS = 3
-private const val TRAFFIC_MAP_COUNTRIES_ASSET = "maps/ne_50m_admin_0_countries.geojson"
+private const val TRAFFIC_MAP_COUNTRIES_ASSET = "maps/ne_110m_admin_0_countries.geojson"
 private const val TRAFFIC_MAP_ANTARCTICA_COUNTRY_CODE = "AQ"
+private const val TRAFFIC_MAP_LOW_BATTERY_PERCENT = 10

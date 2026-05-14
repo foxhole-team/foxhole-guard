@@ -291,6 +291,7 @@ fun FoxholeApp(
                         onResetUsageTracking = viewModel::resetUsageTracking,
                         onTrafficUiVisibilityChanged = viewModel::onTrafficUiVisibilityChanged,
                         onLocalProxyLanAccessChanged = viewModel::onLocalProxyLanAccessChanged,
+                        onRenewTorIp = viewModel::onRenewTorIp,
                         onDashboardCardOrderChanged = viewModel::onDashboardCardOrderChanged,
                     )
                 }
@@ -524,6 +525,7 @@ fun FoxholeApp(
                         onNavigateUp = navController::navigateUp,
                         onPrivacyRouteModeSelected = viewModel::onPrivacyRouteModeSelected,
                         onPrivacyRouteScopeSelected = viewModel::onPrivacyRouteScopeSelected,
+                        onPrivacyRouteBypassVpnTunnelChanged = viewModel::onPrivacyRouteBypassVpnTunnelChanged,
                         onOpenPrivacyRouteApps = { navController.navigate(AppRoute.PRIVACY_ROUTE_APPS_PICKER) },
                         onPrivacyRouteSelectedPackagesChanged = viewModel::onPrivacyRouteSelectedPackagesChanged,
                     )
