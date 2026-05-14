@@ -4,7 +4,7 @@ import com.foxhole.beta.core.model.ConnectivityHealthState
 
 internal object RuntimeUpdatePolicy {
     private const val TRAFFIC_UPDATE_UI_ACTIVE_MS = 1_000L
-    private const val TRAFFIC_UPDATE_BACKGROUND_MS = 10_000L
+    private const val TRAFFIC_UPDATE_BACKGROUND_MS = 30_000L
     private const val HEALTH_PROBE_ACTIVE_MS = 10_000L
     private const val HEALTH_PROBE_STABLE_ONLINE_MS = 60_000L
 

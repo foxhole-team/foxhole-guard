@@ -5,6 +5,11 @@ import org.junit.Test
 
 class TrafficMapRepositoryTest {
     @Test
+    fun `dashboard map caps retained visible destinations for battery budget`() {
+        assertEquals(30, TrafficMapRepository.MaxTrafficMapDestinations)
+    }
+
+    @Test
     fun `aggregates live traffic by country code before UI mapping`() {
         val aggregates =
             aggregateTrafficMapSamples(

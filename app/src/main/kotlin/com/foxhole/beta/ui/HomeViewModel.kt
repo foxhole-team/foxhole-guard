@@ -444,7 +444,7 @@ class HomeViewModel(
             .distinctUntilChanged()
             .stateIn(
                 viewModelScope,
-                SharingStarted.Eagerly,
+                SharingStarted.WhileSubscribed(5_000),
                 initialTrafficMapOriginIpInfo,
             )
 

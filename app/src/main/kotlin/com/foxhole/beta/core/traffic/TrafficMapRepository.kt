@@ -57,7 +57,7 @@ class TrafficMapRepository(
             .onEach { state -> retainedUiState = state }
             .stateIn(
                 scope = scope,
-                started = SharingStarted.Eagerly,
+                started = SharingStarted.WhileSubscribed(5_000),
                 initialValue = TrafficMapUiState(),
             )
 
@@ -120,7 +120,7 @@ class TrafficMapRepository(
     }
 
     internal companion object {
-        const val MaxTrafficMapDestinations = 60
+        const val MaxTrafficMapDestinations = 30
         const val IsoCountryCodeLength = 2
         const val MaxRetainedConnectionSamples = 2_000
 
