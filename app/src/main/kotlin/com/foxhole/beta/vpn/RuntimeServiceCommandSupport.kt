@@ -19,7 +19,11 @@ internal fun handleRuntimeServiceCommand(
         protocolOptionId: String?,
         previousVpnNetworkHandle: Long?,
     ) -> Unit,
-    disconnect: suspend (commandStartId: Int?, suppressLocalGuard: Boolean, preserveSmartStartAnalysis: Boolean) -> Unit,
+    disconnect: suspend (
+        commandStartId: Int?,
+        suppressLocalGuard: Boolean,
+        preserveSmartStartAnalysis: Boolean,
+    ) -> Unit,
     reload: suspend (profileIdHint: Long) -> Unit,
     startLocalGuard: suspend (LocalGuardMode, Int) -> Unit,
 ) {
@@ -51,7 +55,9 @@ internal fun handleRuntimeServiceCommand(
                     container = container,
                     startId = startId,
                     connect = connect,
-                    disconnect = { commandStartId, suppressLocalGuard -> disconnect(commandStartId, suppressLocalGuard, false) },
+                    disconnect = { commandStartId, suppressLocalGuard ->
+                        disconnect(commandStartId, suppressLocalGuard, false)
+                    },
                     startLocalGuard = startLocalGuard,
                 )
             }

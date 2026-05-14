@@ -754,6 +754,7 @@ private fun shouldUseSettingsInfoSheet(body: String): Boolean {
     return nonBlankLineCount > 3 || body.length > SettingsInfoSheetMinChars
 }
 
+@Suppress("TopLevelPropertyNaming")
 private const val SettingsInfoSheetMinChars = 180
 
 @Composable

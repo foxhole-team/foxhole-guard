@@ -32,7 +32,7 @@ internal class RuntimeWakeLock(
                         "power",
                         "partial wake lock acquire failed: ${it.javaClass.simpleName}",
                     )
-            }
+                }
         }
     }
 

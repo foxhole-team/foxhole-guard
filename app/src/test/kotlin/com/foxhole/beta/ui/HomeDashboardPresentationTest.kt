@@ -315,7 +315,11 @@ class HomeDashboardPresentationTest {
                         state = ConnectionState.CONNECTED,
                         profileId = FoxholeVpnService.LOCAL_GUARD_PROFILE_ID,
                     ),
-                settings = Settings(ui = UiSettings(trafficMapEnabled = true), expert = ExpertSettings(firewallEnabled = true)),
+                settings =
+                    Settings(
+                        ui = UiSettings(trafficMapEnabled = true),
+                        expert = ExpertSettings(firewallEnabled = true),
+                    ),
                 activeVpnNetworkAvailable = true,
             ),
         )
@@ -326,7 +330,11 @@ class HomeDashboardPresentationTest {
                         state = ConnectionState.CONNECTED,
                         profileId = FoxholeVpnService.LOCAL_GUARD_PROFILE_ID,
                     ),
-                settings = Settings(ui = UiSettings(trafficMapEnabled = true), expert = ExpertSettings(firewallEnabled = true)),
+                settings =
+                    Settings(
+                        ui = UiSettings(trafficMapEnabled = true),
+                        expert = ExpertSettings(firewallEnabled = true),
+                    ),
                 activeVpnNetworkAvailable = false,
             ),
         )
@@ -337,7 +345,11 @@ class HomeDashboardPresentationTest {
                         state = ConnectionState.IDLE,
                         profileId = FoxholeVpnService.LOCAL_GUARD_PROFILE_ID,
                     ),
-                settings = Settings(ui = UiSettings(trafficMapEnabled = true), expert = ExpertSettings(firewallEnabled = true)),
+                settings =
+                    Settings(
+                        ui = UiSettings(trafficMapEnabled = true),
+                        expert = ExpertSettings(firewallEnabled = true),
+                    ),
                 activeVpnNetworkAvailable = false,
             ),
         )

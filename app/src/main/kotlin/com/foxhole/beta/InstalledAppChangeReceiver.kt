@@ -19,17 +19,8 @@ class InstalledAppChangeReceiver : BroadcastReceiver() {
         context: Context,
         intent: Intent,
     ) {
-        if (intent.getBooleanExtra(Intent.EXTRA_REPLACING, false)) {
-            return
-        }
-        val packageName = intent.data?.schemeSpecificPart?.takeIf(String::isNotBlank) ?: return
         val app = context.applicationContext as? FoxholeApplication ?: return
-        val changeType =
-            when (intent.action) {
-                Intent.ACTION_PACKAGE_ADDED -> InstalledAppChangeType.INSTALLED
-                Intent.ACTION_PACKAGE_REMOVED -> InstalledAppChangeType.REMOVED
-                else -> return
-        }
+        val packageChange = intent.packageInventoryChangeOrNull() ?: return
         val pendingResult = goAsync()
         CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
             finishPendingBroadcast(
@@ -38,17 +29,17 @@ class InstalledAppChangeReceiver : BroadcastReceiver() {
                 onTimeout = {
                     app.container.diagnosticsLogger.record(
                         "app-inventory",
-                        "package change receiver timed out package=$packageName",
+                        "package change receiver timed out package=${packageChange.packageName}",
                     )
                 },
             ) {
                 runCatching {
-                    val packageInfo = app.packageInventoryInfo(packageName, changeType)
+                    val packageInfo = app.packageInventoryInfo(packageChange.packageName, packageChange.type)
                     app.container.settingsRepository.recordInstalledAppChange(
-                        packageName = packageName,
+                        packageName = packageChange.packageName,
                         label = packageInfo.label,
                         isSystemApp = packageInfo.isSystemApp,
-                        type = changeType,
+                        type = packageChange.type,
                     )
                 }.onFailure { error ->
                     app.container.diagnosticsLogger.record(
@@ -63,6 +54,24 @@ class InstalledAppChangeReceiver : BroadcastReceiver() {
     private companion object {
         const val PACKAGE_CHANGE_TIMEOUT_MS = 8_000L
     }
+}
+
+private data class PackageInventoryChange(
+    val packageName: String,
+    val type: InstalledAppChangeType,
+)
+
+private fun Intent.packageInventoryChangeOrNull(): PackageInventoryChange? {
+    val packageName = data?.schemeSpecificPart?.takeIf(String::isNotBlank)
+    val changeType =
+        when (action) {
+            Intent.ACTION_PACKAGE_ADDED -> InstalledAppChangeType.INSTALLED
+            Intent.ACTION_PACKAGE_REMOVED -> InstalledAppChangeType.REMOVED
+            else -> null
+        }
+    return changeType
+        ?.takeUnless { getBooleanExtra(Intent.EXTRA_REPLACING, false) }
+        ?.let { type -> packageName?.let { name -> PackageInventoryChange(name, type) } }
 }
 
 internal suspend fun finishPendingBroadcast(

@@ -52,7 +52,11 @@ internal class TunnelValidationGateway(
             val vpnNetwork = currentVpnNetwork() ?: error("vpn network unavailable")
             val requestNetwork = tunnelValidationRequestNetwork(vpnNetwork)
             val resolverNetwork = currentUpstreamNetwork()
-            val preferIpv4Validation = shouldPreferIpv4TunnelValidation(currentSnapshot.protocolHint, session?.configJson)
+            val preferIpv4Validation =
+                shouldPreferIpv4TunnelValidation(
+                    currentSnapshot.protocolHint,
+                    session?.configJson,
+                )
             val info =
                 if (preferIpv4Validation) {
                     ipInfoRepository.fetchIpv4(
@@ -106,36 +110,46 @@ internal class TunnelValidationGateway(
         requestNetwork: Network?,
         requireRequestNetwork: Boolean,
         proxy: HttpProxyAccess?,
-    ): IpInfo {
-        if (proxy != null) {
-            return ipInfoRepository.fetch(
-                endpoint = endpoint,
-                proxy = proxy,
-                mode = fetchMode,
-            )
-        }
-        if (requestNetwork != null) {
-            return runCatching {
+    ): IpInfo =
+        when {
+            proxy != null ->
                 ipInfoRepository.fetch(
                     endpoint = endpoint,
-                    network = requestNetwork,
+                    proxy = proxy,
                     mode = fetchMode,
                 )
-            }.getOrElse { error ->
-                localDeviceIpInfo(requestNetwork)
-                    ?.also {
-                        diagnosticsLogger.record(
-                            "ip",
-                            "device ip refresh used local network fallback after ${error.javaClass.simpleName}",
-                        )
-                    }
-                    ?: throw error
-            }
+            requestNetwork != null -> fetchDeviceIpInfoFromNetwork(endpoint, fetchMode, requestNetwork)
+            requireRequestNetwork -> error("upstream network unavailable")
+            else -> fetchDeviceIpInfoFromDefaultNetwork(endpoint, fetchMode)
         }
-        if (requireRequestNetwork) {
-            error("upstream network unavailable")
+
+    private suspend fun fetchDeviceIpInfoFromNetwork(
+        endpoint: String,
+        fetchMode: IpInfoFetchMode,
+        requestNetwork: Network,
+    ): IpInfo =
+        runCatching {
+            ipInfoRepository.fetch(
+                endpoint = endpoint,
+                network = requestNetwork,
+                mode = fetchMode,
+            )
+        }.getOrElse { error ->
+            localDeviceIpInfo(requestNetwork)
+                ?.also {
+                    diagnosticsLogger.record(
+                        "ip",
+                        "device ip refresh used local network fallback after ${error.javaClass.simpleName}",
+                    )
+                }
+                ?: throw error
         }
-        return runCatching {
+
+    private suspend fun fetchDeviceIpInfoFromDefaultNetwork(
+        endpoint: String,
+        fetchMode: IpInfoFetchMode,
+    ): IpInfo =
+        runCatching {
             ipInfoRepository.fetch(
                 endpoint = endpoint,
                 mode = fetchMode,
@@ -161,7 +175,6 @@ internal class TunnelValidationGateway(
                 }
                 ?: throw error
         }
-    }
 
     private fun localDeviceIpInfo(network: Network?): IpInfo? {
         val address =

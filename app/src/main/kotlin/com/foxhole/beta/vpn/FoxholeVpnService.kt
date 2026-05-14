@@ -46,6 +46,7 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -90,6 +91,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
     internal var activeSession: VpnSession? = null
     internal var activeLocalGuardMode: LocalGuardMode? = null
     internal var trafficJob: Job? = null
+    internal var trafficMapCountryTrackingJob: Job? = null
     internal var immediateTrafficSampleJob: Job? = null
     internal var geoRefreshJob: Job? = null
     internal var ipv4EnrichmentJob: Job? = null
@@ -407,6 +409,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         FoxholeVpnRuntimeBridge.updateTraffic(trafficSampler.reset())
     }
 
+    @Suppress("CyclomaticComplexMethod")
     internal suspend fun disconnect(
         message: String? = null,
         commandStartId: Int? = null,
@@ -790,6 +793,11 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
     internal fun startTrafficUpdates() {
         stopTrafficUpdates()
         DnsRuntimeStats.reset()
+        trafficMapCountryTrackingJob =
+            container.trafficMapRepository.startDestinationCountryTracking(
+                scope = scope,
+                runtimeAvailable = flowOf(true),
+            )
         FoxholeVpnRuntimeBridge.updateTraffic(trafficSampler.sample(resetRateBaseline = true))
         immediateTrafficSampleJob =
             scope.launch(Dispatchers.Default) {
@@ -819,6 +827,9 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         immediateTrafficSampleJob = null
         trafficJob?.cancel()
         trafficJob = null
+        trafficMapCountryTrackingJob?.cancel()
+        trafficMapCountryTrackingJob = null
+        container.trafficMapRepository.clearDestinationCountryBytes()
         anomalyTrafficAggregator.reset()
         DnsRuntimeStats.reset()
     }
@@ -884,6 +895,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         }
     }
 
+    @Suppress("UnusedParameter")
     internal fun startGeoRefresh(initialNetwork: Network? = null) {
         stopGeoRefresh()
         geoRefreshJob =

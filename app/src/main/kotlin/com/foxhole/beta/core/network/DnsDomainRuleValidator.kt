@@ -16,14 +16,12 @@ fun normalizeDnsDomainRule(raw: String): String? {
             .removePrefix(".")
             .removeSuffix(".")
             .lowercase(Locale.US)
-    if (normalized.isBlank() || normalized.length > MAX_DOMAIN_LENGTH) {
-        return null
-    }
     val labels = normalized.split('.')
-    if (labels.any { label -> !label.isValidDnsLabel() }) {
-        return null
+    return normalized.takeIf {
+        normalized.isNotBlank() &&
+            normalized.length <= MAX_DOMAIN_LENGTH &&
+            labels.all { label -> label.isValidDnsLabel() }
     }
-    return normalized
 }
 
 private fun String.isValidDnsLabel(): Boolean =

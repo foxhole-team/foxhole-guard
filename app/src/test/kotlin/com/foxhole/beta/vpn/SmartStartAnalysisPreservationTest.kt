@@ -14,11 +14,11 @@ class SmartStartAnalysisPreservationTest {
         val resolved =
             resolveSmartStartAnalysisPreservation(
                 previousSnapshot =
-                    ConnectionSnapshot(
-                        state = ConnectionState.CONNECTED,
-                        message = "Analysis",
-                        isSmartStartConnection = true,
-                    ),
+                ConnectionSnapshot(
+                    state = ConnectionState.CONNECTED,
+                    message = "Analysis",
+                    isSmartStartConnection = true,
+                ),
                 analysisStatus = "Analysis",
                 disconnectMessage = null,
                 preserveSmartStartAnalysis = true,

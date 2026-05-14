@@ -31,6 +31,24 @@ class TrafficMapRepositoryTest {
     }
 
     @Test
+    fun `country byte snapshot follows visible dashboard map budget`() {
+        val aggregates =
+            TrafficMapRepository.TrafficMapCountryCoordinates.keys
+                .mapIndexed { index, countryCode ->
+                    countryCode to TrafficMapAggregate(countryCode = countryCode, bytes = index.toLong(), connections = 1)
+                }
+                .toMap()
+
+        val countryBytes =
+            trafficMapCountryBytesFromAggregates(
+                aggregates = aggregates,
+                limit = TrafficMapRepository.MaxTrafficMapDestinations,
+            )
+
+        assertEquals(TrafficMapRepository.MaxTrafficMapDestinations, countryBytes.size)
+    }
+
+    @Test
     fun `accumulator keeps latest bytes per live connection id`() {
         val accumulator =
             TrafficMapConnectionAccumulator()

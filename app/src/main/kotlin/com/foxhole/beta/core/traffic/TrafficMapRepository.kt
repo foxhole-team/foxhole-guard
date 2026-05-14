@@ -5,11 +5,13 @@ import com.foxhole.beta.core.model.TrafficMapEdge
 import com.foxhole.beta.core.model.TrafficMapPoint
 import com.foxhole.beta.core.model.TrafficMapUiState
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.runningFold
@@ -25,34 +27,17 @@ class TrafficMapRepository(
     @Volatile
     private var retainedUiState: TrafficMapUiState? = null
 
+    @Volatile
+    private var retainedDestinationCountryBytes: Map<String, Long> = emptyMap()
+
     fun trafficMapState(
         scope: CoroutineScope,
         originIpInfo: Flow<IpInfo?>,
         runtimeAvailable: Flow<Boolean>,
     ): StateFlow<TrafficMapUiState> =
-        combine(
-            originIpInfo
-                .map(::trafficMapOriginInfo)
-                .distinctUntilChanged(),
-            runtimeAvailable
-                .distinctUntilChanged()
-                .runningFold(null as Boolean?) { _, next -> next }
-                .map { available -> available == true },
-            connectionSource
-                .connectionSamples(runtimeAvailable.distinctUntilChanged())
-                .combine(runtimeAvailable.distinctUntilChanged()) { samples, available ->
-                    TrafficMapSampleBatch(samples = samples, runtimeAvailable = available)
-                }
-                .runningFold(TrafficMapConnectionAccumulator()) { accumulator, batch ->
-                    accumulator.updatedForBatch(batch).also { retainedConnectionAccumulator = it }
-                }
-                .map { accumulator ->
-                    trafficMapPointsFromAggregates(
-                        aggregates = accumulator.countryAggregates(),
-                        limit = MaxTrafficMapDestinations,
-                    )
-                },
-            ::buildTrafficMapUiState,
+        trafficMapUiStateFlow(
+            originIpInfo = originIpInfo,
+            runtimeAvailable = runtimeAvailable,
         )
             .onEach { state -> retainedUiState = state }
             .stateIn(
@@ -61,12 +46,49 @@ class TrafficMapRepository(
                 initialValue = TrafficMapUiState(),
             )
 
-    fun currentDestinationCountryBytes(): Map<String, Long> =
-        retainedUiState
-            ?.takeIf(TrafficMapUiState::isAvailable)
-            ?.destinations
-            .orEmpty()
-            .associate { point -> point.countryCode to point.bytes }
+    fun startDestinationCountryTracking(
+        scope: CoroutineScope,
+        runtimeAvailable: Flow<Boolean>,
+    ): Job =
+        connectionAccumulatorFlow(runtimeAvailable)
+            .map { accumulator ->
+                trafficMapCountryBytesFromAggregates(
+                    aggregates = accumulator.countryAggregates(),
+                    limit = MaxTrafficMapDestinations,
+                )
+            }
+            .onEach { countryBytes -> retainedDestinationCountryBytes = countryBytes }
+            .launchIn(scope)
+
+    fun clearDestinationCountryBytes() {
+        retainedConnectionAccumulator = TrafficMapConnectionAccumulator()
+        retainedDestinationCountryBytes = emptyMap()
+        retainedUiState = null
+    }
+
+    fun currentDestinationCountryBytes(): Map<String, Long> = retainedDestinationCountryBytes
+
+    private fun trafficMapUiStateFlow(
+        originIpInfo: Flow<IpInfo?>,
+        runtimeAvailable: Flow<Boolean>,
+    ): Flow<TrafficMapUiState> =
+        combine(
+            originIpInfo
+                .map(::trafficMapOriginInfo)
+                .distinctUntilChanged(),
+            runtimeAvailable
+                .distinctUntilChanged()
+                .runningFold(null as Boolean?) { _, next -> next }
+                .map { available -> available == true },
+            connectionAccumulatorFlow(runtimeAvailable)
+                .map { accumulator ->
+                    trafficMapPointsFromAggregates(
+                        aggregates = accumulator.countryAggregates(),
+                        limit = MaxTrafficMapDestinations,
+                    )
+                },
+            ::buildTrafficMapUiState,
+        )
 
     private fun buildTrafficMapUiState(
         originInfo: TrafficMapOriginInfo?,
@@ -75,6 +97,10 @@ class TrafficMapRepository(
     ): TrafficMapUiState {
         val origin = trafficMapOrigin(originInfo?.countryCode)
         val visibleDestinations = destinations.take(MaxTrafficMapDestinations)
+        val highlightedCountries =
+            (visibleDestinations.map(TrafficMapPoint::countryCode) + listOfNotNull(originInfo?.countryCode))
+                .map { countryCode -> countryCode.uppercase(Locale.US) }
+                .toSet()
         return TrafficMapUiState(
             originLat = origin.lat,
             originLon = origin.lon,
@@ -92,11 +118,20 @@ class TrafficMapRepository(
                     bytes = point.bytes,
                 )
             },
-            highlightedCountries =
-                (visibleDestinations.map(TrafficMapPoint::countryCode) + listOfNotNull(originInfo?.countryCode))
-                    .map { countryCode -> countryCode.uppercase(Locale.US) }
-                    .toSet(),
+            highlightedCountries = highlightedCountries,
         )
+    }
+
+    private fun connectionAccumulatorFlow(runtimeAvailable: Flow<Boolean>): Flow<TrafficMapConnectionAccumulator> {
+        val runtime = runtimeAvailable.distinctUntilChanged()
+        return connectionSource
+            .connectionSamples(runtime)
+            .combine(runtime) { samples, available ->
+                TrafficMapSampleBatch(samples = samples, runtimeAvailable = available)
+            }
+            .runningFold(TrafficMapConnectionAccumulator()) { accumulator, batch ->
+                accumulator.updatedForBatch(batch).also { retainedConnectionAccumulator = it }
+            }
     }
 
     private fun trafficMapOrigin(countryCode: String?): TrafficMapCountryCoordinate =
@@ -268,3 +303,10 @@ internal fun trafficMapPointsFromAggregates(
             }
         }
         .take(limit.coerceAtLeast(0))
+
+internal fun trafficMapCountryBytesFromAggregates(
+    aggregates: Map<String, TrafficMapAggregate>,
+    limit: Int,
+): Map<String, Long> =
+    trafficMapPointsFromAggregates(aggregates, limit)
+        .associate { point -> point.countryCode to point.bytes }

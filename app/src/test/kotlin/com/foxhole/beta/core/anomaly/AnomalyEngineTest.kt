@@ -89,7 +89,12 @@ class AnomalyEngineTest {
     fun `new country with high traffic logs activity without notification`() {
         val assessment =
             engine.evaluate(
-                current = trafficWindow(rxBytes = 1_000_000, txBytes = 1_000_000, destinationCountries = mapOf("BR" to 800_000L)),
+                current =
+                trafficWindow(
+                    rxBytes = 1_000_000,
+                    txBytes = 1_000_000,
+                    destinationCountries = mapOf("BR" to 800_000L),
+                ),
                 appWindows = emptyList(),
                 history = AnomalyHistory(trafficWindows = trafficHistory(country = "DE")),
                 settings = enabledSettings,
@@ -104,7 +109,12 @@ class AnomalyEngineTest {
     fun `privacy route country mismatch stays activity only`() {
         val assessment =
             engine.evaluate(
-                current = trafficWindow(rxBytes = 1_000_000, txBytes = 1_000_000, destinationCountries = mapOf("DE" to 1_100_000L)),
+                current =
+                trafficWindow(
+                    rxBytes = 1_000_000,
+                    txBytes = 1_000_000,
+                    destinationCountries = mapOf("DE" to 1_100_000L),
+                ),
                 appWindows = emptyList(),
                 history = AnomalyHistory(trafficWindows = trafficHistory(country = "US")),
                 settings = enabledSettings.copy(analyzeDestinationCountries = false),

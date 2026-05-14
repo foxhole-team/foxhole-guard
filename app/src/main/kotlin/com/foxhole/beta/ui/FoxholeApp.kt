@@ -157,6 +157,8 @@ fun FoxholeApp(
     val settingsBackSwipeEnabled = navBackStackEntry?.destination?.settingsBackSwipeEnabled() == true
     var qrScannerVisible by rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
     val insecureTlsImportWarning by viewModel.insecureTlsImportWarning.collectAsStateWithLifecycle()
+    val profileImportTooLargeMessage = stringResource(R.string.profile_import_too_large)
+    val profileImportFailedMessage = stringResource(R.string.profile_import_failed)
     val importProfileLauncher =
         rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
             if (uri == null) {
@@ -171,9 +173,9 @@ fun FoxholeApp(
                     viewModel.importProfileRaw(raw)
                 }.onFailure { error ->
                     if (error is ProfileImportPayloadTooLargeException) {
-                        snackbarHostState.showSnackbar(context.getString(R.string.profile_import_too_large))
+                        snackbarHostState.showSnackbar(profileImportTooLargeMessage)
                     } else {
-                        snackbarHostState.showSnackbar(context.getString(R.string.profile_import_failed))
+                        snackbarHostState.showSnackbar(profileImportFailedMessage)
                     }
                 }
             }

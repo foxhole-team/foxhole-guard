@@ -1671,8 +1671,10 @@ class RuntimeConfigAssemblerTest {
                 ),
             )
         val dnsRules = config["dns"]!!.jsonObject["rules"]!!.jsonArray.map { it.jsonObject }
-        val adGuardRule = dnsRules.single { rule -> rule.stringArray("rule_set").contains("foxhole-adguard-dns-filter") }
-        val compatibilityRule = dnsRules.single { rule -> rule.stringArray("domain_suffix").contains("adguard-vpn.com") }
+        val adGuardRule =
+            dnsRules.single { rule -> rule.stringArray("rule_set").contains("foxhole-adguard-dns-filter") }
+        val compatibilityRule =
+            dnsRules.single { rule -> rule.stringArray("domain_suffix").contains("adguard-vpn.com") }
         val ruleSet = config["route"]!!.jsonObject["rule_set"]!!.jsonArray.single().jsonObject
 
         assertTrue(dnsRules.indexOf(compatibilityRule) < dnsRules.indexOf(adGuardRule))

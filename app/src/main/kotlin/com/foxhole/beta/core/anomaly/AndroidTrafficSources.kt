@@ -147,19 +147,6 @@ class AppTrafficSampler(
             packageManager.getInstalledApplications(0)
         }
 
-    private fun NetworkStatsManager.queryUidUsage(
-        uid: Int,
-        startAt: Long,
-        endAt: Long,
-    ): UidTrafficUsage {
-        if (uid <= 0) {
-            return UidTrafficUsage()
-        }
-        val wifi = runCatching { queryUidUsageForNetwork(ConnectivityManager.TYPE_WIFI, uid, startAt, endAt) }.getOrDefault(UidTrafficUsage())
-        val mobile = runCatching { queryUidUsageForNetwork(ConnectivityManager.TYPE_MOBILE, uid, startAt, endAt) }.getOrDefault(UidTrafficUsage())
-        return wifi + mobile
-    }
-
     private fun NetworkStatsManager.queryUidUsageSummary(
         startAt: Long,
         endAt: Long,
@@ -191,14 +178,11 @@ class AppTrafficSampler(
     }
 
     private fun uidTrafficStatsDelta(uid: Int): UidTrafficUsage {
-        if (uid <= 0) {
-            return UidTrafficUsage()
-        }
+        val validUid = uid > 0
         val rx = TrafficStats.getUidRxBytes(uid)
         val tx = TrafficStats.getUidTxBytes(uid)
-        if (rx == TrafficStats.UNSUPPORTED.toLong() && tx == TrafficStats.UNSUPPORTED.toLong()) {
-            return UidTrafficUsage()
-        }
+        val supported = rx != TrafficStats.UNSUPPORTED.toLong() || tx != TrafficStats.UNSUPPORTED.toLong()
+        if (!validUid || !supported) return UidTrafficUsage()
         val current =
             UidTrafficUsage(
                 rxBytes = rx.coerceAtLeast(0L),
@@ -215,41 +199,6 @@ class AppTrafficSampler(
                 )
             }
         }
-    }
-
-    private fun NetworkStatsManager.queryUidUsageForNetwork(
-        networkType: Int,
-        uid: Int,
-        startAt: Long,
-        endAt: Long,
-    ): UidTrafficUsage {
-        val bucket = NetworkStats.Bucket()
-        var rx = 0L
-        var tx = 0L
-        var foregroundBytes = 0L
-        var backgroundBytes = 0L
-        queryDetailsForUid(networkType, null, startAt, endAt, uid).use { stats ->
-            while (stats.hasNextBucket()) {
-                stats.getNextBucket(bucket)
-                val bucketRx = bucket.rxBytes.coerceAtLeast(0L)
-                val bucketTx = bucket.txBytes.coerceAtLeast(0L)
-                rx += bucketRx
-                tx += bucketTx
-                val bucketTotal = bucketRx + bucketTx
-                if (bucket.state == NetworkStats.Bucket.STATE_FOREGROUND) {
-                    foregroundBytes += bucketTotal
-                } else {
-                    backgroundBytes += bucketTotal
-                }
-            }
-        }
-        val foreground =
-            when {
-                foregroundBytes <= 0L && backgroundBytes <= 0L -> null
-                foregroundBytes >= backgroundBytes -> true
-                else -> false
-            }
-        return UidTrafficUsage(rxBytes = rx, txBytes = tx, foreground = foreground)
     }
 
     companion object {

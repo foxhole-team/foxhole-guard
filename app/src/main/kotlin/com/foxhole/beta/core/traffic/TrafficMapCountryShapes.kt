@@ -105,21 +105,19 @@ internal fun TrafficMapCountryShape.toTrafficMapVisualShape(
             .map { ring -> simplifyTrafficMapRing(ring, maxPointsPerRing) }
             .filter { ring -> ring.size >= TrafficMapVisualMinRingPoints }
             .toList()
-    if (normalizedRings.isEmpty()) {
-        return null
-    }
     val areas = normalizedRings.map(::trafficMapRingArea)
-    val largestArea = areas.maxOrNull() ?: return null
-    if (largestArea < minShapeArea) {
-        return null
-    }
+    val largestArea = areas.maxOrNull() ?: 0.0
     val largestIndex = areas.indexOf(largestArea)
     val areaThreshold = max(largestArea * minRelativeRingArea, minAbsoluteRingArea)
     val visualRings =
         normalizedRings.filterIndexed { index, _ ->
             index == largestIndex || areas[index] >= areaThreshold
         }
-    return copy(rings = visualRings).takeIf { shape -> shape.rings.isNotEmpty() }
+    return copy(rings = visualRings).takeIf {
+        normalizedRings.isNotEmpty() &&
+            largestArea >= minShapeArea &&
+            it.rings.isNotEmpty()
+    }
 }
 
 internal fun normalizeTrafficMapRingLongitudes(ring: List<TrafficMapGeoPoint>): List<TrafficMapGeoPoint> {
@@ -206,7 +204,10 @@ private fun normalizeTrafficMapLongitude(lon: Double): Double {
 private const val TrafficMapVisualMinRingPoints = 3
 private const val TrafficMapVisualMinRelativeRingArea = 0.02
 private const val TrafficMapVisualMinAbsoluteRingArea = 0.5
+
+@Suppress("TopLevelPropertyNaming")
 private const val TrafficMapVisualMinShapeArea = 1.0
+
 private const val TrafficMapVisualMaxPointsPerRing = 220
 private const val TrafficMapVisualMinPointDeltaDegrees = 0.045
 private const val HalfLongitudeDegrees = 180.0

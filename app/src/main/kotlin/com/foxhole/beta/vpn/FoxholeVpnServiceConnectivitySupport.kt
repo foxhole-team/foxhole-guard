@@ -381,7 +381,7 @@ internal suspend fun FoxholeVpnService.validateTunnelConnectivityInternal(
                             localDnsServers = connectivityManager.dnsServerAddresses(vpnNetwork),
                             remoteDnsServers = remoteDnsServers,
                         )
-                }
+                    }
                 if (ipRefresh.isSuccess) {
                     FoxholeVpnRuntimeBridge.updateIpInfo(ipRefresh.getOrThrow())
                     container.diagnosticsLogger.record("dns", "vpn network passed in-process ip refresh")
@@ -1356,23 +1356,23 @@ private fun FoxholeVpnService.notificationBodyRes(snapshot: NotificationSnapshot
         R.string.notification_body_validating
     } else {
         localGuardNotificationBodyRes() ?: when (snapshot.state) {
-        ConnectionState.CONNECTED ->
-            when (snapshot.connectivityHealthState) {
-                ConnectivityHealthState.CHECKING -> R.string.notification_body_validating
-                ConnectivityHealthState.ONLINE -> R.string.notification_body_connected
-                ConnectivityHealthState.OFFLINE -> R.string.notification_body_waiting
-            }
-        ConnectionState.CONNECTING ->
-            R.string.notification_body_waiting
-        ConnectionState.RECONNECTING ->
-            if (snapshot.statusMessage == getString(R.string.status_smart_start_reconnecting)) {
-                R.string.notification_body_smart_start_reconnecting
-            } else {
-                R.string.notification_body_reconnecting
-            }
-        ConnectionState.IDLE,
-        ConnectionState.ERROR,
-        -> null
+            ConnectionState.CONNECTED ->
+                when (snapshot.connectivityHealthState) {
+                    ConnectivityHealthState.CHECKING -> R.string.notification_body_validating
+                    ConnectivityHealthState.ONLINE -> R.string.notification_body_connected
+                    ConnectivityHealthState.OFFLINE -> R.string.notification_body_waiting
+                }
+            ConnectionState.CONNECTING ->
+                R.string.notification_body_waiting
+            ConnectionState.RECONNECTING ->
+                if (snapshot.statusMessage == getString(R.string.status_smart_start_reconnecting)) {
+                    R.string.notification_body_smart_start_reconnecting
+                } else {
+                    R.string.notification_body_reconnecting
+                }
+            ConnectionState.IDLE,
+            ConnectionState.ERROR,
+            -> null
         }
     }
 

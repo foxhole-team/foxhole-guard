@@ -119,7 +119,7 @@ import kotlin.math.max
 import kotlin.math.roundToInt
 
 @Composable
-@Suppress("CyclomaticComplexMethod", "LongMethod")
+@Suppress("ComplexCondition", "CyclomaticComplexMethod", "LongMethod", "UnusedParameter")
 fun StatisticsScreen(
     state: SettingsRouteUiState,
     trafficMapState: TrafficMapUiState,
@@ -549,7 +549,6 @@ fun StatisticsScreen(
             },
         )
     }
-
 }
 
 @Composable
@@ -677,6 +676,7 @@ private fun ProfileTrafficList(
 }
 
 @Composable
+@Suppress("UnusedParameter")
 private fun CountryTrafficCard(
     state: TrafficMapUiState,
     rows: List<CountryTrafficUiRow>,
@@ -2415,6 +2415,7 @@ private data class ComparisonAccumulator(
     }
 }
 
+@Suppress("ComplexCondition", "CyclomaticComplexMethod", "LongMethod")
 private fun profileStatisticsDetail(
     state: SettingsRouteUiState,
     item: ProfileTrafficUiItem,

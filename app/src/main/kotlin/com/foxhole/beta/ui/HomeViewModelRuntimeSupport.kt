@@ -19,8 +19,8 @@ import com.foxhole.beta.core.model.RoutingRuleAction
 import com.foxhole.beta.core.model.TrafficMode
 import com.foxhole.beta.core.model.isUdpTransport
 import com.foxhole.beta.core.network.IpInfoFetchMode
-import com.foxhole.beta.vpn.FoxholeVpnService
 import com.foxhole.beta.vpn.FoxholeVpnRuntimeBridge
+import com.foxhole.beta.vpn.FoxholeVpnService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first

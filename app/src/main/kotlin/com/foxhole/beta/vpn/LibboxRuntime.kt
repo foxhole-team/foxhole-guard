@@ -18,9 +18,9 @@ import android.util.Log
 import androidx.annotation.RequiresApi
 import androidx.core.content.getSystemService
 import com.foxhole.beta.BuildConfig
+import com.foxhole.beta.core.anomaly.DnsRuntimeStats
 import com.foxhole.beta.core.diagnostics.DiagnosticSanitizer
 import com.foxhole.beta.core.diagnostics.DiagnosticsLogger
-import com.foxhole.beta.core.anomaly.DnsRuntimeStats
 import com.foxhole.beta.core.model.VpnSession
 import java.net.InetAddress
 import java.net.NetworkInterface
@@ -463,9 +463,9 @@ internal class DefaultNetworkMonitor(
     }
 
     fun isCurrentNetworkMetered(): Boolean {
-        val network = currentNetwork ?: preferredNetwork() ?: return true
-        val capabilities = connectivity.getNetworkCapabilities(network) ?: return true
-        return !capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED)
+        val network = currentNetwork ?: preferredNetwork()
+        val capabilities = network?.let(connectivity::getNetworkCapabilities)
+        return capabilities?.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED) != true
     }
 
     fun bindSocketToDefaultNetwork(fd: Int) {
