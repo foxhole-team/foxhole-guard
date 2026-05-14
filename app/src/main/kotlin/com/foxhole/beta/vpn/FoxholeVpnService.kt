@@ -562,9 +562,13 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         acquireRuntimeWakeLock()
         val result = runtime.start(session, this)
         if (result.isSuccess) {
-            trafficSampler.start()
-            startTrafficUpdates()
-            startAppTrafficStatsUpdates()
+            if (mode == LocalGuardMode.DNS) {
+                FoxholeVpnRuntimeBridge.updateTraffic(TrafficSnapshot())
+            } else {
+                trafficSampler.start()
+                startTrafficUpdates()
+                startAppTrafficStatsUpdates()
+            }
             FoxholeVpnRuntimeBridge.update(
                 ConnectionSnapshot(
                     state = ConnectionState.CONNECTED,

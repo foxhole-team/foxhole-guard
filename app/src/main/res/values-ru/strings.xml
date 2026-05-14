@@ -164,6 +164,7 @@
     <string name="notification_action_auto_connect">Автоподключение</string>
     <string name="notification_status_firewall">Фаервол активен</string>
     <string name="notification_status_journal">Журнал сети</string>
+    <string name="notification_status_dns_guard">Защита DNS активна</string>
     <string name="notification_body_connected">Tunnel активен</string>
     <string name="notification_body_validating">Проверка Tunnel…</string>
     <string name="notification_body_waiting">Ожидание подключения</string>
@@ -171,6 +172,7 @@
     <string name="notification_body_smart_start_reconnecting">Смарт старт проверяет другой протокол VPN</string>
     <string name="notification_body_firewall">Локальный Firewall работает.</string>
     <string name="notification_body_journal">Сетевая активность пишется локально.</string>
+    <string name="notification_body_dns_guard">Системные DNS направлены через AdGuard DNS.</string>
     <string name="unknown_country">Местоположение не определено</string>
     <string name="expert_warning_body">Эти настройки меняют маршрутизацию и локальные интерфейсы. Включайте их только если понимаете последствия.</string>
     <string name="block_screenshots_title">Запретить скриншоты</string>
@@ -300,6 +302,8 @@
     <string name="security_firewall_title">Firewall</string>
     <string name="security_firewall_summary">Включает локальный Firewall для журнала, постоянной блокировки и live-карты подключений.</string>
     <string name="security_firewall_info_body">Когда Firewall включен, Foxhole может держать локальный VPN runtime для функций, которым нужен честный доступ к сетевым подключениям.</string>
+    <string name="security_system_dns_protection_title">Защита системных DNS</string>
+    <string name="security_system_dns_protection_summary">Заменяет системные DNS на AdGuard DNS через легкий локальный guard. Работает с Firewall и без него.</string>
     <string name="security_development_warning_title">Базовая защита сети</string>
     <string name="security_development_warning_body">FoxHole может блокировать известные вредоносные домены, показывать необычную сетевую активность и блокировать выбранные приложения через VPN или local guard. Это не антивирус: приложение не сканирует файлы, не проверяет APK и не удаляет вредоносные программы.</string>
     <string name="security_firewall_enable_action">Включить Firewall</string>

@@ -3,6 +3,7 @@
 package com.foxhole.beta.ui
 
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Dns
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.QueryStats
 import androidx.compose.material3.MaterialTheme
@@ -25,6 +26,7 @@ fun SecuritySettingsScreen(
     snackbarHostState: SnackbarHostState,
     onNavigateUp: () -> Unit,
     onFirewallEnabledChanged: (Boolean) -> Unit,
+    onSystemDnsProtectionChanged: (Boolean) -> Unit,
     onAnomalyEnabledChanged: (Boolean) -> Unit,
     onNotifyUnusualTrafficChanged: (Boolean) -> Unit,
     onAnomalySensitivitySelected: (AnomalySensitivity) -> Unit,
@@ -55,6 +57,16 @@ fun SecuritySettingsScreen(
                     summary = stringResource(R.string.security_firewall_summary),
                     leadingIcon = ImageVector.vectorResource(R.drawable.ic_firewall_shield_key),
                     onCheckedChange = onFirewallEnabledChanged,
+                    summaryMaxLines = 3,
+                    grouped = true,
+                )
+                SettingsControlGroupDivider()
+                SettingSwitchRow(
+                    title = stringResource(R.string.security_system_dns_protection_title),
+                    checked = state.settings.expert.systemDnsProtectionEnabled,
+                    summary = stringResource(R.string.security_system_dns_protection_summary),
+                    leadingIcon = Icons.Outlined.Dns,
+                    onCheckedChange = onSystemDnsProtectionChanged,
                     summaryMaxLines = 3,
                     grouped = true,
                 )

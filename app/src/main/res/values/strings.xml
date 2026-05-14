@@ -164,6 +164,7 @@
     <string name="notification_action_auto_connect">Auto-connect</string>
     <string name="notification_status_firewall">Firewall active</string>
     <string name="notification_status_journal">Network journal</string>
+    <string name="notification_status_dns_guard">DNS protection active</string>
     <string name="notification_body_connected">Tunnel is active</string>
     <string name="notification_body_validating">Validating tunnel…</string>
     <string name="notification_body_waiting">Waiting for connection</string>
@@ -171,6 +172,7 @@
     <string name="notification_body_smart_start_reconnecting">Smart start is checking another VPN protocol</string>
     <string name="notification_body_firewall">Local Firewall is running.</string>
     <string name="notification_body_journal">Network activity is logged locally.</string>
+    <string name="notification_body_dns_guard">System DNS is routed through AdGuard DNS.</string>
     <string name="unknown_country">Unknown location</string>
     <string name="expert_warning_body">These settings change routing and local control surfaces. Enable them only if you understand the impact.</string>
     <string name="block_screenshots_title">Block screenshots</string>
@@ -296,6 +298,8 @@
     <string name="security_firewall_title">Firewall</string>
     <string name="security_firewall_summary">Enables the local Firewall for logging, permanent blocking, and the live connections map.</string>
     <string name="security_firewall_info_body">When Firewall is enabled, Foxhole can keep a local VPN runtime for features that need honest access to network connections.</string>
+    <string name="security_system_dns_protection_title">System DNS protection</string>
+    <string name="security_system_dns_protection_summary">Replaces system DNS with AdGuard DNS through a lightweight local guard. Works with or without Firewall.</string>
     <string name="security_development_warning_title">Basic network protection</string>
     <string name="security_development_warning_body">FoxHole can block known malicious domains, show unusual network activity, and block selected apps through VPN or local guard. It is not an antivirus: it does not scan files, inspect APKs, or remove malware.</string>
     <string name="security_firewall_enable_action">Enable Firewall</string>

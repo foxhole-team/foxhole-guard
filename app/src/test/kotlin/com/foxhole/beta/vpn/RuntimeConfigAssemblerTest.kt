@@ -21,9 +21,11 @@ import com.foxhole.beta.core.model.RoutingRule
 import com.foxhole.beta.core.model.RoutingRuleAction
 import com.foxhole.beta.core.model.SecureDnsMode
 import com.foxhole.beta.core.model.Settings
+import com.foxhole.beta.core.model.StatisticsSettings
 import com.foxhole.beta.core.model.TrafficSettings
 import com.foxhole.beta.core.model.TrafficMode
 import com.foxhole.beta.core.model.TunStack
+import com.foxhole.beta.core.model.UiSettings
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -521,12 +523,23 @@ class RuntimeConfigAssemblerTest {
             Settings(expert = ExpertSettings(killSwitchEnabled = true)).localGuardModeOrNull(),
         )
         assertEquals(
+            null,
+            Settings(
+                expert =
+                    ExpertSettings(
+                        killSwitchEnabled = true,
+                        firewallEnabled = true,
+                    ),
+            ).localGuardModeOrNull(),
+        )
+        assertEquals(
             LocalGuardMode.JOURNAL,
             Settings(
                 expert =
                     ExpertSettings(
                         killSwitchEnabled = true,
                         firewallEnabled = true,
+                        networkActivityPersistentLogging = true,
                     ),
             ).localGuardModeOrNull(),
         )
@@ -559,7 +572,7 @@ class RuntimeConfigAssemblerTest {
             Settings(expert = blockedApps).localGuardModeOrNull(),
         )
         assertEquals(
-            LocalGuardMode.JOURNAL,
+            null,
             Settings(
                 expert =
                     blockedApps.copy(
@@ -585,6 +598,103 @@ class RuntimeConfigAssemblerTest {
                         firewallEnabled = false,
                     ),
             ).localGuardModeOrNull(),
+        )
+    }
+
+    @Test
+    fun `firewall only starts journal guard when live traffic features need it`() {
+        val firewall = ExpertSettings(firewallEnabled = true)
+
+        assertEquals(null, Settings(expert = firewall).localGuardModeOrNull())
+        assertEquals(
+            LocalGuardMode.JOURNAL,
+            Settings(
+                expert = firewall.copy(networkActivityPersistentLogging = true),
+            ).localGuardModeOrNull(),
+        )
+        assertEquals(
+            LocalGuardMode.JOURNAL,
+            Settings(
+                ui = UiSettings(trafficMapEnabled = true),
+                expert = firewall,
+            ).localGuardModeOrNull(),
+        )
+        assertEquals(
+            LocalGuardMode.JOURNAL,
+            Settings(
+                expert = firewall,
+                statistics = StatisticsSettings(enabled = true, countryTrafficEnabled = true),
+            ).localGuardModeOrNull(),
+        )
+    }
+
+    @Test
+    fun `system dns protection uses lightweight dns local guard`() {
+        val settings =
+            Settings(
+                expert =
+                    ExpertSettings(
+                        systemDnsProtectionEnabled = true,
+                    ),
+            )
+
+        assertEquals(LocalGuardMode.DNS, settings.localGuardModeOrNull())
+
+        val config = parse(assembler.assembleLocalGuard(settings, LocalGuardMode.DNS))
+        val dns = config["dns"]!!.jsonObject
+        val route = config["route"]!!.jsonObject
+        val rules = route["rules"]!!.jsonArray.map { it.jsonObject }
+        val dnsServers = dns["servers"]!!.jsonArray.map { it.jsonObject }
+        val tunInbound = config["inbounds"]!!.jsonArray.single().jsonObject
+
+        assertEquals("dns-remote", dns["final"]!!.jsonPrimitive.content)
+        assertEquals("dns-remote", route["default_domain_resolver"]!!.jsonPrimitive.content)
+        assertEquals("direct", route["final"]!!.jsonPrimitive.content)
+        assertTrue(rules.any { rule -> rule["action"]?.jsonPrimitive?.content == "hijack-dns" })
+        assertFalse(tunInbound.containsKey("include_package"))
+        assertEquals(
+            listOf("94.140.14.14/32", "94.140.15.15/32"),
+            tunInbound["route_address"]!!.jsonArray.map { it.jsonPrimitive.content },
+        )
+
+        val adGuardServer =
+            dnsServers.single { server -> server["tag"]!!.jsonPrimitive.content == "dns-remote" }
+        assertEquals("94.140.14.14", adGuardServer["server"]!!.jsonPrimitive.content)
+        assertEquals("udp", adGuardServer["type"]!!.jsonPrimitive.content)
+        assertFalse(adGuardServer.containsKey("detour"))
+    }
+
+    @Test
+    fun `system dns protection combines with permanent firewall app blocking`() {
+        val settings =
+            Settings(
+                expert =
+                    ExpertSettings(
+                        firewallEnabled = true,
+                        systemDnsProtectionEnabled = true,
+                        blockedPackagesEnabled = true,
+                        blockedPackages = listOf("org.mozilla.firefox"),
+                        blockAppsAlways = true,
+                    ),
+            )
+
+        assertEquals(LocalGuardMode.JOURNAL, settings.localGuardModeOrNull())
+
+        val config = parse(assembler.assembleLocalGuard(settings, LocalGuardMode.JOURNAL))
+        val dns = config["dns"]!!.jsonObject
+        val route = config["route"]!!.jsonObject
+        val rules = route["rules"]!!.jsonArray.map { it.jsonObject }
+        val tunInbound = config["inbounds"]!!.jsonArray.single().jsonObject
+
+        assertEquals("dns-remote", dns["final"]!!.jsonPrimitive.content)
+        assertEquals("dns-remote", route["default_domain_resolver"]!!.jsonPrimitive.content)
+        assertEquals("direct", route["final"]!!.jsonPrimitive.content)
+        assertFalse(tunInbound.containsKey("include_package"))
+        assertTrue(rules.any { rule -> rule["action"]?.jsonPrimitive?.content == "hijack-dns" })
+        assertTrue(
+            rules.any { rule ->
+                rule["package_name"]?.jsonArray?.single()?.jsonPrimitive?.content == "org.mozilla.firefox"
+            },
         )
     }
 

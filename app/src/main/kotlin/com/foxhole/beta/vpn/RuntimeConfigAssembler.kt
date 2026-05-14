@@ -84,30 +84,48 @@ class RuntimeConfigAssembler(
         settings: Settings,
         mode: LocalGuardMode,
     ): String {
+        val dnsSettings =
+            if (settings.expert.systemDnsProtectionEnabled) {
+                settings.dns.systemDnsProtectionSettings()
+            } else {
+                settings.dns
+            }
         val dns =
             buildFoxholeDnsConfig(
                 strategy = settings.traffic.domainStrategy.configValue,
-                dnsSettings = settings.dns,
+                dnsSettings = dnsSettings,
                 privateDnsMode = null,
-                finalTag = DNS_DIRECT_TAG,
-                includeRemote = false,
+                finalTag =
+                    if (settings.expert.systemDnsProtectionEnabled) {
+                        DNS_REMOTE_TAG
+                    } else {
+                        DNS_DIRECT_TAG
+                    },
+                includeRemote = settings.expert.systemDnsProtectionEnabled,
+                remoteDetourTag = "direct",
             )
         val route =
             buildJsonObject {
                 val rules =
                     buildJsonArray {
+                        if (settings.expert.systemDnsProtectionEnabled || mode == LocalGuardMode.JOURNAL) {
+                            hijackDnsRules().forEach(::add)
+                        }
                         if (mode == LocalGuardMode.JOURNAL) {
                             if (settings.expert.blockAppsAlways) {
                                 buildAppRouteRules(settings.expert).forEach(::add)
-                            }
-                            if (settings.dns.interceptDnsRequests) {
-                                hijackDnsRules().forEach(::add)
                             }
                         }
                     }
                 put("rules", rules)
                 put("final", if (mode == LocalGuardMode.FIREWALL) "block" else "direct")
-                resolverForRoute(dns, buildJsonObject {})?.let { put("default_domain_resolver", it) }
+                val defaultResolver =
+                    if (settings.expert.systemDnsProtectionEnabled) {
+                        DNS_REMOTE_TAG
+                    } else {
+                        resolverForRoute(dns, buildJsonObject {})
+                    }
+                defaultResolver?.let { put("default_domain_resolver", it) }
                 put("auto_detect_interface", true)
             }
         return json.encodeToString(
@@ -493,6 +511,12 @@ class RuntimeConfigAssembler(
             put("auto_route", true)
             put("strict_route", false)
             put("stack", settings.traffic.tunStack.configValue)
+            if (mode == LocalGuardMode.DNS) {
+                putJsonArray("route_address") {
+                    add(JsonPrimitive("$ADGUARD_DNS_PRIMARY/32"))
+                    add(JsonPrimitive("$ADGUARD_DNS_SECONDARY/32"))
+                }
+            }
             putJsonArray("address") {
                 add(JsonPrimitive("172.19.0.1/30"))
                 add(JsonPrimitive("fdfe:dcba:9876::1/126"))
@@ -1356,6 +1380,14 @@ class RuntimeConfigAssembler(
             put("type", "local")
         }
 
+    private fun DnsSettings.systemDnsProtectionSettings(): DnsSettings =
+        copy(
+            server = ADGUARD_DNS_PRIMARY,
+            secureMode = SecureDnsMode.PLAIN,
+            dnsThroughVpn = false,
+            filteringEnabled = false,
+        )
+
     private fun foxholeRemoteDnsServer(
         dnsSettings: DnsSettings,
         _privateDnsMode: PrivateDnsMode?,
@@ -1617,6 +1649,8 @@ class RuntimeConfigAssembler(
         const val TOR_OVER_VPN_OUTBOUND_TAG = "tor-over-vpn"
         const val FOXHOLE_REMOTE_DNS_SERVER = "1.1.1.1"
         const val FOXHOLE_DOH_ADDRESS = "https://1.1.1.1/dns-query"
+        const val ADGUARD_DNS_PRIMARY = "94.140.14.14"
+        const val ADGUARD_DNS_SECONDARY = "94.140.15.15"
         const val MOBILE_TCP_KEEP_ALIVE = "30s"
         const val MOBILE_TCP_KEEP_ALIVE_INTERVAL = "15s"
         const val SITE_KEYWORD_PREFIX = "kw:"

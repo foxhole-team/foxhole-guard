@@ -497,6 +497,7 @@ fun FoxholeApp(
                         snackbarHostState = snackbarHostState,
                         onNavigateUp = navController::navigateUp,
                         onFirewallEnabledChanged = viewModel::onFirewallEnabledChanged,
+                        onSystemDnsProtectionChanged = viewModel::onSystemDnsProtectionChanged,
                         onAnomalyEnabledChanged = viewModel::onAnomalyEnabledChanged,
                         onNotifyUnusualTrafficChanged = viewModel::onNotifyUnusualTrafficChanged,
                         onAnomalySensitivitySelected = viewModel::onAnomalySensitivitySelected,

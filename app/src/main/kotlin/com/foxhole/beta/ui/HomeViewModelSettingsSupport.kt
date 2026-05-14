@@ -31,6 +31,7 @@ import com.foxhole.beta.core.model.ThemeMode
 import com.foxhole.beta.core.model.TrafficMode
 import com.foxhole.beta.core.model.TunStack
 import com.foxhole.beta.core.model.V2RayApiSettings
+import com.foxhole.beta.vpn.localGuardModeOrNull
 import kotlinx.coroutines.launch
 import android.provider.Settings as AndroidSettings
 
@@ -279,6 +280,7 @@ internal fun HomeViewModel.onBlockScreenshotsChangedInternal(value: Boolean) {
 internal fun HomeViewModel.onTrafficMapEnabledChangedInternal(value: Boolean) {
     viewModelScope.launch {
         container.settingsRepository.updateTrafficMapEnabled(value)
+        syncLocalGuardWithPermissionRequest()
     }
 }
 
@@ -326,18 +328,20 @@ internal fun HomeViewModel.onFirewallEnabledChangedInternal(value: Boolean) {
     viewModelScope.launch {
         container.settingsRepository.updateFirewallEnabled(value)
         container.settingsRepository.updateShowFirewallStatus(value)
+        if (value || container.settingsRepository.current().expert.systemDnsProtectionEnabled) {
+            requestNotificationPermission.tryEmit(Unit)
+        }
+        syncLocalGuardWithPermissionRequest()
+    }
+}
+
+internal fun HomeViewModel.onSystemDnsProtectionChangedInternal(value: Boolean) {
+    viewModelScope.launch {
+        container.settingsRepository.updateSystemDnsProtectionEnabled(value)
         if (value) {
             requestNotificationPermission.tryEmit(Unit)
         }
-        if (value && android.net.VpnService.prepare(getApplication<Application>()) != null) {
-            pendingConnectRequest =
-                PendingConnectRequest(
-                    action = PendingConnectAction.LOCAL_GUARD,
-                )
-            requestVpnPermission.tryEmit(Unit)
-            return@launch
-        }
-        container.connectionController.syncLocalGuard()
+        syncLocalGuardWithPermissionRequest()
     }
 }
 
@@ -363,8 +367,21 @@ internal fun HomeViewModel.onNetworkActivityPersistentLoggingChangedInternal(val
             container.settingsRepository.updateNetworkActivityLogging(true)
         }
         container.settingsRepository.updateNetworkActivityPersistentLogging(value)
-        container.connectionController.syncLocalGuard()
+        syncLocalGuardWithPermissionRequest()
     }
+}
+
+internal suspend fun HomeViewModel.syncLocalGuardWithPermissionRequest() {
+    val mode = container.settingsRepository.current().localGuardModeOrNull()
+    if (mode != null && android.net.VpnService.prepare(getApplication<Application>()) != null) {
+        pendingConnectRequest =
+            PendingConnectRequest(
+                action = PendingConnectAction.LOCAL_GUARD,
+            )
+        requestVpnPermission.tryEmit(Unit)
+        return
+    }
+    container.connectionController.syncLocalGuard()
 }
 
 internal fun HomeViewModel.onSmartStartReplayLoggingChangedInternal(value: Boolean) {

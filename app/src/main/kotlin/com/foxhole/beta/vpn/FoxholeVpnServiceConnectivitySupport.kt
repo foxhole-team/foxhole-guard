@@ -1312,6 +1312,7 @@ internal fun FoxholeVpnService.notificationStateLabelInternal(snapshot: Notifica
             getString(R.string.notification_status_analysis)
         localGuardFirewallNotificationActive() -> getString(R.string.notification_status_firewall)
         activeLocalGuardMode == LocalGuardMode.JOURNAL -> getString(R.string.notification_status_journal)
+        activeLocalGuardMode == LocalGuardMode.DNS -> getString(R.string.notification_status_dns_guard)
         snapshot.state == ConnectionState.CONNECTED ->
             if (snapshot.isSmartStartConnection) {
                 getString(R.string.notification_status_connected_smart)
@@ -1349,6 +1350,7 @@ private fun FoxholeVpnService.localGuardNotificationBodyRes(): Int? =
     when {
         localGuardFirewallNotificationActive() -> R.string.notification_body_firewall
         activeLocalGuardMode == LocalGuardMode.JOURNAL -> R.string.notification_body_journal
+        activeLocalGuardMode == LocalGuardMode.DNS -> R.string.notification_body_dns_guard
         else -> null
     }
 

@@ -1045,6 +1045,8 @@ class HomeViewModel(
 
     fun onFirewallEnabledChanged(value: Boolean) = onFirewallEnabledChangedInternal(value)
 
+    fun onSystemDnsProtectionChanged(value: Boolean) = onSystemDnsProtectionChangedInternal(value)
+
     fun onNetworkActivityLoggingChanged(value: Boolean) = onNetworkActivityLoggingChangedInternal(value)
 
     fun onNetworkActivityPersistentLoggingChanged(value: Boolean) = onNetworkActivityPersistentLoggingChangedInternal(value)
@@ -1404,6 +1406,7 @@ class HomeViewModel(
             if (value && container.settingsRepository.settings.value.statistics.appChangesEnabled) {
                 recordInstalledAppInventoryFromLoadedApps()
             }
+            syncLocalGuardWithPermissionRequest()
         }
     }
 
@@ -1441,6 +1444,9 @@ class HomeViewModel(
             }
             if (value && metric == StatisticsMetric.APP_CHANGES) {
                 recordInstalledAppInventoryFromLoadedApps()
+            }
+            if (metric == StatisticsMetric.COUNTRY_TRAFFIC) {
+                syncLocalGuardWithPermissionRequest()
             }
         }
     }

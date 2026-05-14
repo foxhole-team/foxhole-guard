@@ -829,6 +829,9 @@ class SettingsRepository(
     suspend fun updateFirewallEnabled(value: Boolean) =
         update { it.copy(expert = it.expert.copy(firewallEnabled = value)) }
 
+    suspend fun updateSystemDnsProtectionEnabled(value: Boolean) =
+        update { it.copy(expert = it.expert.copy(systemDnsProtectionEnabled = value)) }
+
     suspend fun updateNetworkActivityLogging(value: Boolean) =
         update { it.copy(expert = it.expert.copy(networkActivityLogging = value)) }
 
@@ -1488,6 +1491,7 @@ class SettingsRepository(
                 siteRoutingAction = siteRoutingAction.coerceSiteRoutingAction(),
                 blockScreenshots = if (resetScreenshotBlocking) false else blockScreenshots,
                 firewallEnabled = firewallEnabled,
+                systemDnsProtectionEnabled = systemDnsProtectionEnabled,
                 smartStartReplayLogging = smartStartReplayLogging && BuildConfig.DEBUG,
                 localSurfaces = localSurfaces.normalized().migratedProxySurfaceModesIfNeeded(storedSchemaVersion),
                 routeOnly = routeOnly && sniff,
@@ -1501,6 +1505,7 @@ class SettingsRepository(
                 blockScreenshots = normalized.blockScreenshots,
                 killSwitchEnabled = normalized.killSwitchEnabled,
                 firewallEnabled = normalized.firewallEnabled,
+                systemDnsProtectionEnabled = normalized.systemDnsProtectionEnabled,
                 networkActivityLogging = normalized.networkActivityLogging,
                 networkActivityPersistentLogging = normalized.networkActivityPersistentLogging,
                 diagnosticsRetention = normalized.diagnosticsRetention,
