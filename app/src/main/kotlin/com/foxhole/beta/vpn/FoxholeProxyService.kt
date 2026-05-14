@@ -150,7 +150,11 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
         stopGeoRefresh()
         stopNotificationHealthMonitoring()
         cancelScheduledAutoReconnect(resetAttempts = true)
-        runCatching { kotlinx.coroutines.runBlocking { runtime.stop() } }
+        stopRuntimeAfterServiceDestroy(
+            runtime = runtime,
+            diagnosticsLogger = container.diagnosticsLogger,
+            owner = "proxy",
+        )
         runtimeWakeLock.release()
         if (hadActiveRuntime) {
             container.diagnosticsLogger.record(
@@ -471,7 +475,7 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
         nextAttempt: Int,
     ) {
         autoReconnectAttempts = nextAttempt
-        val delayMs = RuntimeAutoReconnectPolicy.backoffDelayMs(nextAttempt)
+        val delayMs = RuntimeAutoReconnectPolicy.jitteredBackoffDelayMs(nextAttempt)
         container.diagnosticsLogger.recordStructured(
             "connection",
             "proxy auto reconnect scheduled",

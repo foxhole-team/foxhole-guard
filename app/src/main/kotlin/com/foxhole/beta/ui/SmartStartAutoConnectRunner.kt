@@ -28,7 +28,7 @@ internal object SmartStartAutoConnectRunner {
     ): SmartStartAutoConnectState {
         if (preference?.needsSmartStartColdScan(enabledProtocolSetHash) != false) {
             return SmartStartAutoConnectState.ColdScan(
-                candidates = fullScanCandidates,
+                candidates = coldScanCandidates(fullScanCandidates, rankedCandidates),
                 enabledProtocolSetHash = enabledProtocolSetHash,
             )
         }
@@ -59,4 +59,14 @@ internal object SmartStartAutoConnectRunner {
             .distinctBy { score -> score.candidate.optionId }
             .take(HomeViewModel.AUTO_CONNECT_MAX_ATTEMPTS)
     }
+
+    private fun coldScanCandidates(
+        fullScanCandidates: List<AutoConnectProbeCandidate>,
+        rankedCandidates: List<AdaptiveProtocolCandidateScore>,
+    ): List<AutoConnectProbeCandidate> =
+        rankedCandidates
+            .map(AdaptiveProtocolCandidateScore::candidate)
+            .ifEmpty { fullScanCandidates }
+            .distinctBy(AutoConnectProbeCandidate::optionId)
+            .take(HomeViewModel.AUTO_CONNECT_MAX_ATTEMPTS)
 }

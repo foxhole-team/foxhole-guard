@@ -67,8 +67,9 @@ private class ReflectiveLibboxRuntime(
     private var currentHost: RuntimeServiceHost? = null
     private var currentDnsServerAddress: String? = null
 
-    override suspend fun start(session: VpnSession, host: RuntimeServiceHost): Result<Unit> =
-        try {
+    override suspend fun start(session: VpnSession, host: RuntimeServiceHost): Result<Unit> {
+        var newServer: Any? = null
+        return try {
             if (!reflection.isAvailable()) {
                 error(host.runtimeContext.getString(com.foxhole.beta.R.string.error_runtime_missing))
             }
@@ -100,19 +101,22 @@ private class ReflectiveLibboxRuntime(
                             }
                     },
                 )
-            val server = reflection.newCommandServer(handler, platform)
-            reflection.startServer(server)
-            reflection.checkConfig(server, session.configJson)
-            reflection.startOrReloadService(server, session.configJson)
-            commandServer = server
+            newServer = reflection.newCommandServer(handler, platform)
+            reflection.startServer(newServer)
+            reflection.checkConfig(newServer, session.configJson)
+            reflection.startOrReloadService(newServer, session.configJson)
+            commandServer = newServer
+            newServer = null
             diagnosticsLogger.record("libbox", "runtime started")
             Result.success(Unit)
         } catch (error: Throwable) {
+            cleanupFailedStart(newServer)
             val normalized = unwrapVpnRuntimeFailure(error)
             diagnosticsLogger.record("runtime", "start failed: ${describeVpnRuntimeFailure(normalized)}")
             logRuntimeFailure("libbox start failed", normalized)
             Result.failure(normalized)
         }
+    }
 
     override suspend fun reload(session: VpnSession, host: RuntimeServiceHost): Result<Unit> =
         try {
@@ -180,7 +184,7 @@ private class ReflectiveLibboxRuntime(
                 .setMtu(reflection.callInt(tunOptions, "getMTU"))
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            builder.setMetered(false)
+            builder.setMetered(defaultNetworkMonitor.isCurrentNetworkMetered())
         }
         runCatching {
             builder.setUnderlyingNetworks(arrayOf(defaultNetworkMonitor.requireNetwork()))
@@ -353,6 +357,24 @@ private class ReflectiveLibboxRuntime(
         }
     }
 
+    private fun cleanupFailedStart(newServer: Any?) {
+        runCatching {
+            newServer?.let { server ->
+                runCatching { reflection.closeService(server) }
+                reflection.closeServer(server)
+            }
+        }.onFailure {
+            diagnosticsLogger.record("libbox", "failed-start server cleanup failed")
+        }
+        runCatching { fileDescriptor?.close() }
+            .onFailure { diagnosticsLogger.record("libbox", "failed-start tun cleanup failed") }
+        fileDescriptor = null
+        currentConfig = null
+        currentHost = null
+        currentDnsServerAddress = null
+        defaultNetworkMonitor.stop()
+    }
+
 }
 
 internal class DefaultNetworkMonitor(
@@ -367,6 +389,7 @@ internal class DefaultNetworkMonitor(
         NetworkRequest.Builder()
             .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
             .addCapability(NetworkCapabilities.NET_CAPABILITY_NOT_RESTRICTED)
+            .addCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN)
             .build()
     @Volatile
     private var currentNetwork: Network? = null
@@ -437,6 +460,12 @@ internal class DefaultNetworkMonitor(
     fun requireNetwork(): Network {
         currentNetwork?.let { return it }
         return preferredNetwork() ?: error("android: missing default network")
+    }
+
+    fun isCurrentNetworkMetered(): Boolean {
+        val network = currentNetwork ?: preferredNetwork() ?: return true
+        val capabilities = connectivity.getNetworkCapabilities(network) ?: return true
+        return !capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED)
     }
 
     fun bindSocketToDefaultNetwork(fd: Int) {
@@ -520,8 +549,7 @@ internal class DefaultNetworkMonitor(
         runCatching {
             when {
                 Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> connectivity.registerBestMatchingNetworkCallback(request, callback, mainHandler)
-                Build.VERSION.SDK_INT >= Build.VERSION_CODES.P -> connectivity.requestNetwork(request, callback, mainHandler)
-                else -> connectivity.registerDefaultNetworkCallback(callback, mainHandler)
+                else -> connectivity.registerNetworkCallback(request, callback, mainHandler)
             }
         }.onFailure { error ->
             diagnosticsLogger.record("libbox", "default network monitor registration failed: ${error.javaClass.simpleName}")

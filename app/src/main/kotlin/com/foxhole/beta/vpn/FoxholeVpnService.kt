@@ -227,7 +227,11 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         cancelScheduledAutoReconnect(resetAttempts = true)
         validationJob?.cancel()
         validationJob = null
-        runCatching { kotlinx.coroutines.runBlocking { runtime.stop() } }
+        stopRuntimeAfterServiceDestroy(
+            runtime = runtime,
+            diagnosticsLogger = container.diagnosticsLogger,
+            owner = "vpn",
+        )
         releaseRuntimeWakeLock()
         if (hadActiveRuntime) {
             container.diagnosticsLogger.record(
@@ -757,7 +761,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
                     Build.VERSION.SDK_INT >= Build.VERSION_CODES.S ->
                         connectivityManager.registerBestMatchingNetworkCallback(trackedNetworkRequest, networkCallback, mainHandler)
                     Build.VERSION.SDK_INT >= Build.VERSION_CODES.P ->
-                        connectivityManager.requestNetwork(trackedNetworkRequest, networkCallback, mainHandler)
+                        connectivityManager.registerNetworkCallback(trackedNetworkRequest, networkCallback, mainHandler)
                     else -> connectivityManager.registerDefaultNetworkCallback(networkCallback, mainHandler)
                 }
             }.recoverCatching {

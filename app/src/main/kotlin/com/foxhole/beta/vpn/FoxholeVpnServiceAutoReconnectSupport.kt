@@ -72,7 +72,7 @@ private fun FoxholeVpnService.scheduleAutoReconnectAttempt(
     retryDelaySeconds: Int?,
 ) {
     reconnectState.attempts = nextAttempt
-    val delayMs = RuntimeAutoReconnectPolicy.backoffDelayMs(nextAttempt, retryDelaySeconds)
+    val delayMs = RuntimeAutoReconnectPolicy.jitteredBackoffDelayMs(nextAttempt, retryDelaySeconds)
     container.diagnosticsLogger.recordStructured(
         "connection",
         "auto reconnect scheduled",

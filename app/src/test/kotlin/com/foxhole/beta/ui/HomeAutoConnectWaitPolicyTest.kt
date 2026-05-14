@@ -270,7 +270,7 @@ class HomeAutoConnectWaitPolicyTest {
     }
 
     @Test
-    fun `runner keeps every cold scan candidate for first analysis`() {
+    fun `runner caps cold scan candidates for first analysis`() {
         val state =
             SmartStartAutoConnectRunner.resolveState(
                 fullScanCandidates =
@@ -286,7 +286,27 @@ class HomeAutoConnectWaitPolicyTest {
             )
 
         assertEquals(
-            listOf("vless", "trojan", "hysteria", "wireguard"),
+            listOf("vless", "trojan", "hysteria"),
+            state.candidates.map(AutoConnectProbeCandidate::optionId),
+        )
+    }
+
+    @Test
+    fun `runner uses ranked order for capped cold scan candidates`() {
+        val vless = candidate("vless")
+        val trojan = candidate("trojan")
+        val hysteria = candidate("hysteria")
+        val wireguard = candidate("wireguard")
+        val state =
+            SmartStartAutoConnectRunner.resolveState(
+                fullScanCandidates = listOf(vless, trojan, hysteria, wireguard),
+                enabledProtocolSetHash = "hash",
+                preference = SmartProfilePreference(profileId = 1L),
+                rankedCandidates = listOf(score(wireguard), score(trojan), score(vless), score(hysteria)),
+            )
+
+        assertEquals(
+            listOf("wireguard", "trojan", "vless"),
             state.candidates.map(AutoConnectProbeCandidate::optionId),
         )
     }

@@ -12,7 +12,7 @@ internal class RuntimeWakeLock(
 ) {
     private var wakeLock: PowerManager.WakeLock? = null
 
-    fun acquire() {
+    fun acquire(timeoutMs: Long = DEFAULT_RUNTIME_WAKE_LOCK_TIMEOUT_MS) {
         val lock =
             wakeLock ?: context
                 .getSystemService<PowerManager>()
@@ -24,14 +24,15 @@ internal class RuntimeWakeLock(
                     return
                 }
         if (!lock.isHeld) {
-            runCatching { lock.acquire() }
-                .onSuccess { diagnosticsLogger.record("power", "partial wake lock acquired") }
+            val leaseMs = timeoutMs.coerceAtLeast(MIN_RUNTIME_WAKE_LOCK_TIMEOUT_MS)
+            runCatching { lock.acquire(leaseMs) }
+                .onSuccess { diagnosticsLogger.record("power", "partial wake lock acquired lease_ms=$leaseMs") }
                 .onFailure {
                     diagnosticsLogger.record(
                         "power",
                         "partial wake lock acquire failed: ${it.javaClass.simpleName}",
                     )
-                }
+            }
         }
     }
 
@@ -47,5 +48,10 @@ internal class RuntimeWakeLock(
                     )
                 }
         }
+    }
+
+    private companion object {
+        const val MIN_RUNTIME_WAKE_LOCK_TIMEOUT_MS = 30_000L
+        const val DEFAULT_RUNTIME_WAKE_LOCK_TIMEOUT_MS = 10 * 60_000L
     }
 }
