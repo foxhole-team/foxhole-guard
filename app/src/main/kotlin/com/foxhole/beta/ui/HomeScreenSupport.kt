@@ -674,7 +674,8 @@ private fun HomeConnectionFeatureIndicatorItem(
     onClick: () -> Unit,
 ) {
     val icon = homeConnectionFeatureIcon(indicator.feature)
-    val statusColor = homeConnectionFeatureStatusColor(indicator.status)
+    val iconEnabled = indicator.status != HomeConnectionFeatureStatus.OFF
+    val iconColor = if (iconEnabled) homeConnectionFeatureStatusColor(HomeConnectionFeatureStatus.ON) else null
     val neutralIconColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.82f)
     val shape = RoundedCornerShape(999.dp)
     Row(
@@ -684,43 +685,30 @@ private fun HomeConnectionFeatureIndicatorItem(
                 .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.50f))
                 .border(BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.38f)), shape)
                 .clickable(onClick = onClick)
-                .heightIn(min = HomePrimaryActionHeight)
-                .padding(horizontal = 14.dp, vertical = 9.dp)
+                .heightIn(min = 32.dp)
+                .padding(horizontal = 12.dp, vertical = 6.dp)
                 .testTag("home_connection_feature_indicator_${indicator.feature.name.lowercase(Locale.US)}"),
-        horizontalArrangement = Arrangement.spacedBy(9.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(
             imageVector = icon,
             contentDescription = null,
-            modifier = Modifier.size(24.dp),
-            tint = if (indicator.status == HomeConnectionFeatureStatus.OFF) neutralIconColor else statusColor,
+            modifier = Modifier.size(18.dp),
+            tint = iconColor ?: neutralIconColor,
         )
-        Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
-            Text(
-                text = stringResource(indicator.titleRes),
-                style =
-                    MaterialTheme.typography.labelMedium.copy(
-                        fontSize = 13.sp,
-                        lineHeight = 15.sp,
-                        fontWeight = FontWeight.SemiBold,
-                    ),
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                text = indicator.status.label,
-                style =
-                    MaterialTheme.typography.labelSmall.copy(
-                        fontSize = 11.sp,
-                        lineHeight = 13.sp,
-                        fontWeight = FontWeight.Bold,
-                    ),
-                color = statusColor,
-                maxLines = 1,
-            )
-        }
+        Text(
+            text = stringResource(indicator.titleRes),
+            style =
+                MaterialTheme.typography.labelMedium.copy(
+                    fontSize = 13.sp,
+                    lineHeight = 15.sp,
+                    fontWeight = FontWeight.SemiBold,
+                ),
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 
