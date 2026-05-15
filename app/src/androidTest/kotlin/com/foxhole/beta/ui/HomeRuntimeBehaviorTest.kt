@@ -172,6 +172,7 @@ class HomeRuntimeBehaviorTest {
         composeRule.waitUntil(timeoutMillis = 10_000) {
             app().container.diagnosticsLogger.entries.value.any {
                 it.tag == "ip" &&
+                    it.message.contains("reason=foreground") &&
                     it.message.contains("mode=full") &&
                     it.message.contains("showLoading=false") &&
                     it.message.contains("clearExistingIp=false")

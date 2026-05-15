@@ -647,7 +647,7 @@ class HomeViewModel(
         viewModelScope.launch {
             val reconciledActiveVpn = container.connectionController.reconcileActiveVpnNetworkIfNeeded()
             if (reconciledActiveVpn) {
-                scheduleConnectedIpRefresh()
+                scheduleConnectedIpRefresh(reason = IpInfoRefreshReason.RESTORED_VPN, clearExistingIp = true)
             } else {
                 container.connectionController.syncLocalGuard()
             }
@@ -657,7 +657,7 @@ class HomeViewModel(
             return
         }
         if (runtimeState == ConnectionState.CONNECTED) {
-            scheduleConnectedIpRefresh()
+            scheduleConnectedIpRefresh(reason = IpInfoRefreshReason.FOREGROUND, clearExistingIp = false)
         } else {
             startIpInfoRefresh(
                 reportFailures = false,
@@ -1437,7 +1437,10 @@ class HomeViewModel(
 
     internal fun invalidateIpInfoRefreshes(): Long = invalidateIpInfoRefreshesInternal()
 
-    internal fun scheduleConnectedIpRefresh() = scheduleConnectedIpRefreshInternal()
+    internal fun scheduleConnectedIpRefresh(
+        reason: IpInfoRefreshReason = IpInfoRefreshReason.POST_CONNECT,
+        clearExistingIp: Boolean = true,
+    ) = scheduleConnectedIpRefreshInternal(reason = reason, clearExistingIp = clearExistingIp)
 
     internal fun markRuntimeReloadPending() = markRuntimeReloadPendingInternal()
 
@@ -1468,7 +1471,7 @@ class HomeViewModel(
         if (visible) {
             startPendingProfileReconnectPromptIfNeeded()
             if (container.connectionController.snapshot.value.state == ConnectionState.CONNECTED && !autoConnectUiStateMutable.value.running) {
-                scheduleConnectedIpRefresh()
+                scheduleConnectedIpRefresh(reason = IpInfoRefreshReason.FOREGROUND, clearExistingIp = false)
                 scheduleActiveProfileLatencyRefresh()
             }
         } else {

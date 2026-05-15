@@ -582,7 +582,10 @@ internal fun HomeViewModel.invalidateIpInfoRefreshesInternal(): Long {
     return ipInfoRefreshToken
 }
 
-internal fun HomeViewModel.scheduleConnectedIpRefreshInternal() {
+internal fun HomeViewModel.scheduleConnectedIpRefreshInternal(
+    reason: IpInfoRefreshReason = IpInfoRefreshReason.POST_CONNECT,
+    clearExistingIp: Boolean = true,
+) {
     connectedIpRefreshJob?.cancel()
     connectedIpRefreshJob =
         viewModelScope.launch {
@@ -601,10 +604,10 @@ internal fun HomeViewModel.scheduleConnectedIpRefreshInternal() {
             startIpInfoRefresh(
                 reportFailures = true,
                 showLoading = false,
-                clearExistingIp = true,
+                clearExistingIp = clearExistingIp,
                 fetchMode = IpInfoFetchMode.FULL,
                 minimumLoadingDurationMs = 0L,
-                reason = IpInfoRefreshReason.POST_CONNECT,
+                reason = reason,
             )
         }
 }
@@ -710,7 +713,7 @@ internal fun HomeViewModel.onTrafficUiVisibilityChangedInternal(visible: Boolean
         val connectionState = container.connectionController.snapshot.value.state
         if (connectionState == ConnectionState.CONNECTED && !autoConnectUiStateMutable.value.running) {
             scheduleActiveProfileLatencyRefresh()
-            scheduleConnectedIpRefresh()
+            scheduleConnectedIpRefresh(reason = IpInfoRefreshReason.FOREGROUND, clearExistingIp = false)
         }
     } else {
         clearProfileLatencyRefresh()

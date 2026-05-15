@@ -4,7 +4,13 @@ title = "Foxhole gitleaks config"
 useDefault = true
 
 [allowlist]
-description = "vendored sing-box examples and docs"
+description = "vendored/generated files and deterministic non-secret fixtures"
 paths = [
+  '''(?:^|/)\.idea(?:/.*)?$''',
   '''(?:^|/)third_party/sing-box(?:/.*)?$''',
+  '''(?:^|/)build(?:/.*)?$''',
+  '''(?:^|/)app/build(?:/.*)?$''',
+]
+regexes = [
+  '''abcdefghijklmnopqrstuvwxyz0123456789''',
 ]
