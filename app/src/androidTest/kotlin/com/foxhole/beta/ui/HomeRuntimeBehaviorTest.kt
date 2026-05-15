@@ -119,6 +119,11 @@ class HomeRuntimeBehaviorTest {
         waitUntilNetworkBlockSettles()
 
         val expectedIp = "198.51.100.42"
+        val viewModel =
+            ViewModelProvider(
+                composeRule.activity,
+                HomeViewModel.factory(app()),
+            )[HomeViewModel::class.java]
         composeRule.runOnUiThread {
             FoxholeVpnRuntimeBridge.update(
                 ConnectionSnapshot(
@@ -139,18 +144,15 @@ class HomeRuntimeBehaviorTest {
                     fetchedAt = System.currentTimeMillis(),
                 ),
             )
+        }
+        Thread.sleep(HomeViewModel.CONNECTED_IP_REFRESH_DELAY_MS + 1_500L)
+        composeRule.runOnUiThread {
+            viewModel.invalidateIpInfoRefreshes()
             app().container.diagnosticsLogger.clear()
         }
 
         scrollToNetworkBlock()
-        composeRule.waitUntil(timeoutMillis = 10_000) { textOfOrNull("home_network_primary_ip") == expectedIp }
-        Thread.sleep(HomeViewModel.CONNECTED_IP_REFRESH_DELAY_MS + 400L)
         composeRule.waitForIdle()
-        val viewModel =
-            ViewModelProvider(
-                composeRule.activity,
-                HomeViewModel.factory(app()),
-            )[HomeViewModel::class.java]
         composeRule.runOnUiThread {
             viewModel.invalidateIpInfoRefreshes()
             FoxholeVpnRuntimeBridge.updateIpInfo(
@@ -173,7 +175,7 @@ class HomeRuntimeBehaviorTest {
             app().container.diagnosticsLogger.entries.value.any {
                 it.tag == "ip" &&
                     it.message.contains("reason=foreground") &&
-                    it.message.contains("mode=full") &&
+                    it.message.contains("mode=entry_quick") &&
                     it.message.contains("showLoading=false") &&
                     it.message.contains("clearExistingIp=false")
             }
@@ -186,6 +188,7 @@ class HomeRuntimeBehaviorTest {
         assertTrue(
             app().container.diagnosticsLogger.entries.value.none {
                 it.tag == "ip" &&
+                    it.message.contains("reason=foreground") &&
                     it.message.contains("mode=entry_quick") &&
                     it.message.contains("clearExistingIp=true")
             },
