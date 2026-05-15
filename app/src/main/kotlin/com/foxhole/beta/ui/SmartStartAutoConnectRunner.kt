@@ -2,8 +2,8 @@ package com.foxhole.beta.ui
 
 import com.foxhole.beta.core.model.SmartProfilePreference
 import com.foxhole.beta.core.profile.AutoConnectProbeCandidate
-import com.foxhole.beta.core.smart.AdaptiveProtocolCandidateScore
 import com.foxhole.beta.core.settings.needsSmartStartColdScan
+import com.foxhole.beta.core.smart.AdaptiveProtocolCandidateScore
 
 internal sealed interface SmartStartAutoConnectState {
     val candidates: List<AutoConnectProbeCandidate>
@@ -28,16 +28,16 @@ internal object SmartStartAutoConnectRunner {
     ): SmartStartAutoConnectState {
         if (preference?.needsSmartStartColdScan(enabledProtocolSetHash) != false) {
             return SmartStartAutoConnectState.ColdScan(
-                candidates = coldScanCandidates(fullScanCandidates, rankedCandidates),
+                candidates = coldScanCandidates(fullScanCandidates),
                 enabledProtocolSetHash = enabledProtocolSetHash,
             )
         }
         return SmartStartAutoConnectState.FastAttempts(
             candidates =
-                attemptCandidates(
-                    rankedCandidates = rankedCandidates,
-                    recommendedIds = preference.recommendedProtocolIds,
-                ).map(AdaptiveProtocolCandidateScore::candidate),
+            attemptCandidates(
+                rankedCandidates = rankedCandidates,
+                recommendedIds = preference.recommendedProtocolIds,
+            ).map(AdaptiveProtocolCandidateScore::candidate),
             rankedCandidates = rankedCandidates,
         )
     }
@@ -60,13 +60,7 @@ internal object SmartStartAutoConnectRunner {
             .take(HomeViewModel.AUTO_CONNECT_MAX_ATTEMPTS)
     }
 
-    private fun coldScanCandidates(
-        fullScanCandidates: List<AutoConnectProbeCandidate>,
-        rankedCandidates: List<AdaptiveProtocolCandidateScore>,
-    ): List<AutoConnectProbeCandidate> =
-        rankedCandidates
-            .map(AdaptiveProtocolCandidateScore::candidate)
-            .ifEmpty { fullScanCandidates }
+    private fun coldScanCandidates(fullScanCandidates: List<AutoConnectProbeCandidate>): List<AutoConnectProbeCandidate> =
+        fullScanCandidates
             .distinctBy(AutoConnectProbeCandidate::optionId)
-            .take(HomeViewModel.AUTO_CONNECT_MAX_ATTEMPTS)
 }

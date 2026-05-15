@@ -19,10 +19,9 @@ fun HeatmapChart(
     val heatColor = firstSeries?.let { series -> chartColor(series.colorToken) }
     ChartScaffold(model = model, modifier = modifier) {
         Canvas(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .height(120.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(120.dp),
         ) {
             val points = firstSeries?.points.orEmpty()
             val columns = points.size.coerceAtLeast(1)

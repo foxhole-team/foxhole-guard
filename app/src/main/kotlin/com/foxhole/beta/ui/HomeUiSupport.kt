@@ -217,13 +217,42 @@ internal fun shouldAutoRefreshIpAfterDisconnect(
     previousState in ACTIVE_CONNECTION_STATES &&
         currentState !in ACTIVE_CONNECTION_STATES
 
+internal enum class IpInfoRefreshReason {
+    MANUAL,
+    FOREGROUND,
+    POST_CONNECT,
+    POST_UPDATE,
+    RESTORED_VPN,
+}
+
+internal enum class IpInfoRefreshTarget {
+    VPN_BOUND,
+    UPSTREAM,
+    PROXY,
+    LOCAL_GUARD,
+}
+
+internal fun ipInfoRefreshTargetForSnapshot(snapshot: ConnectionSnapshot): IpInfoRefreshTarget =
+    when {
+        snapshot.state == ConnectionState.CONNECTED &&
+            snapshot.trafficMode == TrafficMode.TUNNEL &&
+            snapshot.profileId != FoxholeVpnService.LOCAL_GUARD_PROFILE_ID -> IpInfoRefreshTarget.VPN_BOUND
+        snapshot.state == ConnectionState.CONNECTED && snapshot.trafficMode == TrafficMode.PROXY -> IpInfoRefreshTarget.PROXY
+        snapshot.profileId == FoxholeVpnService.LOCAL_GUARD_PROFILE_ID -> IpInfoRefreshTarget.LOCAL_GUARD
+        else -> IpInfoRefreshTarget.UPSTREAM
+    }
+
+internal fun shouldSupersedeIpRefreshForConnect(activeReason: IpInfoRefreshReason?): Boolean =
+    activeReason == IpInfoRefreshReason.MANUAL ||
+        activeReason == IpInfoRefreshReason.FOREGROUND
+
 internal fun shouldShowAutoConnectAction(activeProfile: Profile?): Boolean =
     activeProfile?.let { profile ->
         MultiProtocolProfileSupport.hasMultipleSupportedOptions(profile) ||
             (
                 profile.sourceType == ProfileSourceType.SUBSCRIPTION_URL &&
                     MultiProtocolProfileSupport.smartStartFullScanCandidates(profile).isNotEmpty()
-            )
+                )
     } == true
 
 internal fun shouldShowSmartStartFirstAnalysisInfo(state: HomeRouteUiState): Boolean {
@@ -311,22 +340,22 @@ internal fun resolveHomeDashboardProtocolModel(state: HomeRouteUiState): HomeDas
         downOptionIds = downOptionIds,
         latencyUnavailableOptionIds = latencyUnavailableOptionIds,
         showSmartStartLatency =
-            latenciesByOptionId.isNotEmpty() ||
-                downOptionIds.isNotEmpty() ||
-                latencyUnavailableOptionIds.isNotEmpty(),
+        latenciesByOptionId.isNotEmpty() ||
+            downOptionIds.isNotEmpty() ||
+            latencyUnavailableOptionIds.isNotEmpty(),
         selectedServerPingMs = selectedServerPingMs,
         selectedServerPingUnavailable = selectedServerPingUnavailable,
         connectionDetailsReady =
-            shouldRenderDashboardConnectionDetails(
-                connectionState = state.connection.state,
-                activeProfile = state.activeProfile,
-                selectedLatencyMs = latencyPresentation.latencyMs,
-                selectedLatencyDown = latencyPresentation.isDown,
-                selectedLatencyUnavailable = latencyPresentation.isUnavailable,
-                selectedServerPingMs = selectedServerPingMs,
-                selectedServerPingUnavailable = selectedServerPingUnavailable,
-                selectedServerPingUnsupported = protocolPresentation.protocolHint.isUdpTransport(),
-            ),
+        shouldRenderDashboardConnectionDetails(
+            connectionState = state.connection.state,
+            activeProfile = state.activeProfile,
+            selectedLatencyMs = latencyPresentation.latencyMs,
+            selectedLatencyDown = latencyPresentation.isDown,
+            selectedLatencyUnavailable = latencyPresentation.isUnavailable,
+            selectedServerPingMs = selectedServerPingMs,
+            selectedServerPingUnavailable = selectedServerPingUnavailable,
+            selectedServerPingUnsupported = protocolPresentation.protocolHint.isUdpTransport(),
+        ),
         connectionMetricsLoading = connectionMetricsLoading,
     )
 }
@@ -420,7 +449,7 @@ private fun HomeRouteUiState.hasRealTunnelConnectionStatus(): Boolean =
         (
             connection.state == ConnectionState.CONNECTED &&
                 hasDashboardTunnelProfile()
-        )
+            )
 
 private fun HomeRouteUiState.dashboardVisibleIpInfo(visibleIpInfo: IpInfo?): IpInfo? {
     if (visibleIpInfo == null) {
@@ -795,9 +824,21 @@ private fun LocalSurfaceSettings.proxySurface(): HomeProxySurface =
 
 private fun LocalSurfaceSettings.lanProxySurface(): HomeProxySurface =
     when (lanProxyMode) {
-        com.foxhole.beta.core.model.ProxySurfaceMode.SOCKS5 -> HomeProxySurface(label = "SOCKS5", settings = socks, lanOnly = true)
-        com.foxhole.beta.core.model.ProxySurfaceMode.HTTP -> HomeProxySurface(label = "HTTP", settings = http, lanOnly = true)
-        com.foxhole.beta.core.model.ProxySurfaceMode.ALL -> HomeProxySurface(label = "ALL", settings = mixed, lanOnly = true)
+        com.foxhole.beta.core.model.ProxySurfaceMode.SOCKS5 -> HomeProxySurface(
+            label = "SOCKS5",
+            settings = socks,
+            lanOnly = true
+        )
+        com.foxhole.beta.core.model.ProxySurfaceMode.HTTP -> HomeProxySurface(
+            label = "HTTP",
+            settings = http,
+            lanOnly = true
+        )
+        com.foxhole.beta.core.model.ProxySurfaceMode.ALL -> HomeProxySurface(
+            label = "ALL",
+            settings = mixed,
+            lanOnly = true
+        )
     }
 
 internal fun ConnectionSnapshot.isPrimaryConnectionRuntime(): Boolean =
@@ -963,7 +1004,9 @@ internal fun secondaryVisibleIp(ipInfo: IpInfo): String? {
     return ipInfo.ipv6?.takeIf { it != primary }
 }
 
-internal fun remoteVisibleDnsServers(ipInfo: IpInfo?): List<String> = visibleDnsServers(ipInfo?.remoteDnsServers.orEmpty())
+internal fun remoteVisibleDnsServers(ipInfo: IpInfo?): List<String> = visibleDnsServers(
+    ipInfo?.remoteDnsServers.orEmpty()
+)
 
 private fun visibleDnsServers(addresses: List<String>): List<String> =
     addresses

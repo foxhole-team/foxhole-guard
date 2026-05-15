@@ -526,6 +526,8 @@
     <string name="statistics_dns_block_ratio">Доля блокировок</string>
     <string name="statistics_chart_axes_dns">X: топ приложений. Y: заблокированные DNS-запросы, разбитые по категориям.</string>
     <string name="statistics_dns_categories_title">Категории DNS</string>
+    <string name="statistics_dns_categories_estimated">Разбивка категорий рассчитана по включённым фильтрам</string>
+    <string name="statistics_dns_real_summary">Разрешённые и заблокированные DNS — реальные счётчики; категории и приложения подписаны, если это оценка.</string>
     <string name="statistics_dns_category_ads">Реклама</string>
     <string name="statistics_dns_category_trackers">Трекеры</string>
     <string name="statistics_dns_category_telemetry">Телеметрия</string>

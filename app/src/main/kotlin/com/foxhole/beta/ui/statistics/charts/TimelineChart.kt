@@ -35,10 +35,9 @@ fun TimelineChart(
     val colorsBySeries = model.series.associate { series -> series.id to chartColor(series.colorToken) }
     ChartScaffold(model = model, modifier = modifier) {
         Canvas(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .height(170.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(170.dp),
         ) {
             val left = 2.dp.toPx()
             val right = size.width - 2.dp.toPx()
@@ -71,13 +70,13 @@ fun TimelineChart(
                             series.points.map { point ->
                                 Offset(
                                     x =
-                                        timestampToChartX(
-                                            timestampMs = point.x,
-                                            rangeStartMs = model.xAxis.min.toLong(),
-                                            rangeEndMs = model.xAxis.max.toLong(),
-                                            left = left,
-                                            right = right,
-                                        ),
+                                    timestampToChartX(
+                                        timestampMs = point.x,
+                                        rangeStartMs = model.xAxis.min.toLong(),
+                                        rangeEndMs = model.xAxis.max.toLong(),
+                                        left = left,
+                                        right = right,
+                                    ),
                                     y = bottom - chartHeight * (point.y / yMax).toFloat().coerceIn(0f, 1f),
                                 )
                             }
@@ -89,9 +88,6 @@ fun TimelineChart(
                                 strokeWidth = 2.dp.toPx(),
                                 cap = StrokeCap.Round,
                             )
-                        }
-                        offsets.forEach { offset ->
-                            drawCircle(color = color, radius = 3.dp.toPx(), center = offset)
                         }
                     }
 
@@ -127,17 +123,17 @@ fun TimelineChart(
                                 color = color,
                                 radius = 4.dp.toPx(),
                                 center =
-                                    Offset(
-                                        x =
-                                            timestampToChartX(
-                                                timestampMs = point.x,
-                                                rangeStartMs = model.xAxis.min.toLong(),
-                                                rangeEndMs = model.xAxis.max.toLong(),
-                                                left = left,
-                                                right = right,
-                                            ),
-                                        y = bottom - chartHeight * (point.y / yMax).toFloat().coerceIn(0f, 1f),
+                                Offset(
+                                    x =
+                                    timestampToChartX(
+                                        timestampMs = point.x,
+                                        rangeStartMs = model.xAxis.min.toLong(),
+                                        rangeEndMs = model.xAxis.max.toLong(),
+                                        left = left,
+                                        right = right,
                                     ),
+                                    y = bottom - chartHeight * (point.y / yMax).toFloat().coerceIn(0f, 1f),
+                                ),
                             )
                         }
                     }

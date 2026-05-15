@@ -270,29 +270,29 @@ class HomeAutoConnectWaitPolicyTest {
     }
 
     @Test
-    fun `runner caps cold scan candidates for first analysis`() {
+    fun `runner keeps full cold scan candidates for first analysis`() {
         val state =
             SmartStartAutoConnectRunner.resolveState(
                 fullScanCandidates =
-                    listOf(
-                        candidate("vless"),
-                        candidate("trojan"),
-                        candidate("hysteria"),
-                        candidate("wireguard"),
-                    ),
+                listOf(
+                    candidate("vless"),
+                    candidate("trojan"),
+                    candidate("hysteria"),
+                    candidate("wireguard"),
+                ),
                 enabledProtocolSetHash = "hash",
                 preference = SmartProfilePreference(profileId = 1L),
                 rankedCandidates = emptyList(),
             )
 
         assertEquals(
-            listOf("vless", "trojan", "hysteria"),
+            listOf("vless", "trojan", "hysteria", "wireguard"),
             state.candidates.map(AutoConnectProbeCandidate::optionId),
         )
     }
 
     @Test
-    fun `runner uses ranked order for capped cold scan candidates`() {
+    fun `runner ignores stale ranked order for cold scan candidates`() {
         val vless = candidate("vless")
         val trojan = candidate("trojan")
         val hysteria = candidate("hysteria")
@@ -306,7 +306,7 @@ class HomeAutoConnectWaitPolicyTest {
             )
 
         assertEquals(
-            listOf("wireguard", "trojan", "vless"),
+            listOf("vless", "trojan", "hysteria", "wireguard"),
             state.candidates.map(AutoConnectProbeCandidate::optionId),
         )
     }
@@ -321,12 +321,12 @@ class HomeAutoConnectWaitPolicyTest {
                 fullScanCandidates = listOf(vless, trojan, hysteria),
                 enabledProtocolSetHash = "hash",
                 preference =
-                    SmartProfilePreference(
-                        profileId = 1L,
-                        smartStartBaselineReady = true,
-                        recommendedProtocolIds = listOf("trojan"),
-                        enabledProtocolSetHash = "hash",
-                    ),
+                SmartProfilePreference(
+                    profileId = 1L,
+                    smartStartBaselineReady = true,
+                    recommendedProtocolIds = listOf("trojan"),
+                    enabledProtocolSetHash = "hash",
+                ),
                 rankedCandidates = listOf(score(vless), score(trojan), score(hysteria)),
             )
 

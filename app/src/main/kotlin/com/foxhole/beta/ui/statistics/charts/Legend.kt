@@ -25,6 +25,12 @@ fun ChartLegend(
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         legend.items.forEach { item ->
+            val label =
+                buildString {
+                    append(item.label)
+                    item.value?.let { value -> append(": ").append(value) }
+                    item.description?.let { description -> append(" ").append(description) }
+                }
             Row(
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -34,12 +40,7 @@ fun ChartLegend(
                     drawCircle(color)
                 }
                 Text(
-                    text =
-                        buildString {
-                            append(item.label)
-                            item.value?.let { value -> append(": ").append(value) }
-                            item.description?.let { description -> append(" ").append(description) }
-                        },
+                    text = label,
                     modifier = Modifier.padding(end = 2.dp),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurface,

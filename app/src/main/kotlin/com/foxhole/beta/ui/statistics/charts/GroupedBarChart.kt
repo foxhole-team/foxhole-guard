@@ -22,10 +22,9 @@ fun GroupedBarChart(
     val colorsBySeries = model.series.associate { series -> series.id to chartColor(series.colorToken) }
     ChartScaffold(model = model, modifier = modifier) {
         Canvas(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .height(170.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(170.dp),
         ) {
             val top = 10.dp.toPx()
             val bottom = size.height - 18.dp.toPx()

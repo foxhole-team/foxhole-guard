@@ -11,19 +11,25 @@ import com.foxhole.beta.core.statistics.ChartModel
 
 @Composable
 fun ChartAxisLabels(model: ChartModel) {
+    val ticks = model.xAxis.ticks.filter { tick -> tick.label.isNotBlank() }
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-        Text(
-            text = "X: ${model.xAxis.label}",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Text(
-            text = "Y: ${model.yAxis.label}",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        if (ticks.isEmpty()) {
+            Text(
+                text = model.xAxis.label,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        } else {
+            ticks.take(6).forEach { tick ->
+                Text(
+                    text = tick.label,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
     }
 }

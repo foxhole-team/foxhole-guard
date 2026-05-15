@@ -55,11 +55,6 @@ fun ChartScaffold(
             ChartScope(model).content()
             ChartAxisLabels(model)
             ChartLegend(legend = model.legend)
-            Text(
-                text = "Updated ${model.updatedAtMs}",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
         }
     }
 }

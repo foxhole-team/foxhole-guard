@@ -1,7 +1,11 @@
 package com.foxhole.beta.ui
 
+import com.foxhole.beta.core.model.ConnectionSnapshot
 import com.foxhole.beta.core.model.ConnectionState
 import com.foxhole.beta.core.model.IpInfo
+import com.foxhole.beta.core.model.TrafficMode
+import com.foxhole.beta.vpn.FoxholeVpnService
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -34,14 +38,14 @@ class HomeIpLoadingPolicyTest {
         assertTrue(
             shouldShowIpInfoLoading(
                 currentIpInfo =
-                    IpInfo(
-                        ip = "1.1.1.1",
-                        countryCode = null,
-                        countryName = null,
-                        city = null,
-                        isp = null,
-                        fetchedAt = 1L,
-                    ),
+                IpInfo(
+                    ip = "1.1.1.1",
+                    countryCode = null,
+                    countryName = null,
+                    city = null,
+                    isp = null,
+                    fetchedAt = 1L,
+                ),
                 explicitLoading = true,
                 connectionState = ConnectionState.CONNECTED,
             ),
@@ -92,6 +96,38 @@ class HomeIpLoadingPolicyTest {
             shouldAutoRefreshIpAfterDisconnect(
                 previousState = ConnectionState.CONNECTED,
                 currentState = ConnectionState.RECONNECTING,
+            ),
+        )
+    }
+
+    @Test
+    fun `manual and foreground ip refreshes are superseded by connect`() {
+        assertTrue(shouldSupersedeIpRefreshForConnect(IpInfoRefreshReason.MANUAL))
+        assertTrue(shouldSupersedeIpRefreshForConnect(IpInfoRefreshReason.FOREGROUND))
+        assertFalse(shouldSupersedeIpRefreshForConnect(IpInfoRefreshReason.POST_CONNECT))
+        assertFalse(shouldSupersedeIpRefreshForConnect(null))
+    }
+
+    @Test
+    fun `connected tunnel refresh targets vpn bound network`() {
+        assertEquals(
+            IpInfoRefreshTarget.VPN_BOUND,
+            ipInfoRefreshTargetForSnapshot(
+                ConnectionSnapshot(
+                    state = ConnectionState.CONNECTED,
+                    trafficMode = TrafficMode.TUNNEL,
+                    profileId = 7L,
+                ),
+            ),
+        )
+        assertEquals(
+            IpInfoRefreshTarget.LOCAL_GUARD,
+            ipInfoRefreshTargetForSnapshot(
+                ConnectionSnapshot(
+                    state = ConnectionState.CONNECTED,
+                    trafficMode = TrafficMode.TUNNEL,
+                    profileId = FoxholeVpnService.LOCAL_GUARD_PROFILE_ID,
+                ),
             ),
         )
     }
@@ -154,14 +190,14 @@ class HomeIpLoadingPolicyTest {
         assertFalse(
             shouldShowPendingNetworkLoading(
                 visibleIpInfo =
-                    IpInfo(
-                        ip = "203.0.113.7",
-                        countryCode = null,
-                        countryName = null,
-                        city = null,
-                        isp = null,
-                        fetchedAt = 1L,
-                    ),
+                IpInfo(
+                    ip = "203.0.113.7",
+                    countryCode = null,
+                    countryName = null,
+                    city = null,
+                    isp = null,
+                    fetchedAt = 1L,
+                ),
                 explicitLoading = true,
                 connectionState = ConnectionState.CONNECTING,
                 autoConnectRunning = true,
@@ -204,14 +240,14 @@ class HomeIpLoadingPolicyTest {
         assertTrue(
             shouldShowDashboardNetworkLoading(
                 visibleIpInfo =
-                    IpInfo(
-                        ip = "203.0.113.7",
-                        countryCode = null,
-                        countryName = null,
-                        city = null,
-                        isp = null,
-                        fetchedAt = 1L,
-                    ),
+                IpInfo(
+                    ip = "203.0.113.7",
+                    countryCode = null,
+                    countryName = null,
+                    city = null,
+                    isp = null,
+                    fetchedAt = 1L,
+                ),
                 explicitLoading = true,
                 connectionState = ConnectionState.CONNECTED,
                 autoConnectRunning = false,

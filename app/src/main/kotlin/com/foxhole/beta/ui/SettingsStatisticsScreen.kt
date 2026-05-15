@@ -6,8 +6,6 @@ import android.content.Intent
 import android.provider.Settings
 import android.text.format.DateUtils
 import android.content.Context
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -20,6 +18,7 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -67,7 +66,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
@@ -120,7 +118,6 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import kotlin.math.ceil
 import kotlin.math.max
 import kotlin.math.roundToInt
 import kotlin.math.roundToLong
@@ -160,7 +157,13 @@ fun StatisticsScreen(
     val appRows = state.statisticsDashboard.appRows
     val topApps = appRows.take(STATISTICS_TOP_PREVIEW_LIMIT)
     val countryRows = state.statisticsDashboard.countryRows
-    val topCountryRows = countryRows.take(if (countryRows.size > STATISTICS_TOP_PREVIEW_LIMIT) STATISTICS_TOP_PREVIEW_LIMIT + 1 else STATISTICS_TOP_PREVIEW_LIMIT)
+    val topCountryLimit =
+        if (countryRows.size > STATISTICS_TOP_PREVIEW_LIMIT) {
+            STATISTICS_TOP_PREVIEW_LIMIT + 1
+        } else {
+            STATISTICS_TOP_PREVIEW_LIMIT
+        }
+    val topCountryRows = countryRows.take(topCountryLimit)
     val appChanges = state.statisticsDashboard.appChanges
     val dnsSummary =
         dnsProtectionSummary(
@@ -412,11 +415,11 @@ fun StatisticsScreen(
                             checked = statisticsSettings.dnsFilteringEnabled,
                             title = stringResource(R.string.statistics_metric_dns_filtering),
                             summary =
-                                if (dnsFilteringAvailable) {
-                                    null
-                                } else {
-                                    stringResource(R.string.statistics_metric_dns_filtering_summary)
-                                },
+                            if (dnsFilteringAvailable) {
+                                null
+                            } else {
+                                stringResource(R.string.statistics_metric_dns_filtering_summary)
+                            },
                             enabled = statisticsSettings.enabled && dnsFilteringAvailable,
                             onMetricChanged = onStatisticsMetricEnabledChanged,
                         )
@@ -426,11 +429,11 @@ fun StatisticsScreen(
                             checked = statisticsSettings.countryTrafficEnabled,
                             title = stringResource(R.string.statistics_metric_countries),
                             summary =
-                                if (state.settings.expert.firewallEnabled) {
-                                    null
-                                } else {
-                                    stringResource(R.string.statistics_metric_countries_firewall_summary)
-                                },
+                            if (state.settings.expert.firewallEnabled) {
+                                null
+                            } else {
+                                stringResource(R.string.statistics_metric_countries_firewall_summary)
+                            },
                             enabled = statisticsSettings.enabled && state.settings.expert.firewallEnabled,
                             onMetricChanged = onStatisticsMetricEnabledChanged,
                         )
@@ -720,7 +723,7 @@ private fun CountryTrafficCard(
             modifier = Modifier.padding(CardInnerPadding),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            SectionTitle(
+            SectionHeader(
                 icon = Icons.Outlined.Public,
                 title = stringResource(R.string.statistics_country_traffic_top_title),
             )
@@ -789,9 +792,9 @@ private fun CountryVerticalBarChart(
         )
         Canvas(
             modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .weight(1f),
+            Modifier
+                .fillMaxWidth()
+                .weight(1f),
         ) {
             val chartTop = 8.dp.toPx()
             val chartBottom = size.height - 4.dp.toPx()
@@ -1017,11 +1020,11 @@ private fun ProtocolStatCard(
             )
             Text(
                 text =
-                    stringResource(
-                        R.string.statistics_protocol_footer,
-                        formatBytes(context, item.totalBytes),
-                        item.totalAttempts,
-                    ),
+                stringResource(
+                    R.string.statistics_protocol_footer,
+                    formatBytes(context, item.totalBytes),
+                    item.totalAttempts,
+                ),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
@@ -1152,25 +1155,25 @@ private fun ComparisonSide(
             )
             Text(
                 text =
-                    if (stable) {
-                        stringResource(R.string.statistics_more_stable)
-                    } else if (problematic) {
-                        stringResource(R.string.statistics_more_errors)
-                    } else {
-                        stringResource(R.string.statistics_even)
-                    },
+                if (stable) {
+                    stringResource(R.string.statistics_more_stable)
+                } else if (problematic) {
+                    stringResource(R.string.statistics_more_errors)
+                } else {
+                    stringResource(R.string.statistics_even)
+                },
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Text(
                 text =
-                    stringResource(
-                        R.string.statistics_comparison_metrics,
-                        formatPercent(side.stability),
-                        formatPercent(side.errorRate),
-                        side.totalAttempts,
-                        side.avgLatencyMs.formatLatency(),
-                    ),
+                stringResource(
+                    R.string.statistics_comparison_metrics,
+                    formatPercent(side.stability),
+                    formatPercent(side.errorRate),
+                    side.totalAttempts,
+                    side.avgLatencyMs.formatLatency(),
+                ),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -1258,13 +1261,15 @@ private fun DnsProtectionCard(
     StatisticsSectionCard(
         icon = Icons.Outlined.Public,
         title = stringResource(R.string.statistics_dns_filtering_title),
+        trailing = {
+            StatisticsRangePillDropdown(
+                value = range,
+                expanded = rangeExpanded,
+                onExpandedChange = { rangeExpanded = it },
+                onSelect = onRangeSelected,
+            )
+        },
     ) {
-        StatisticsRangeDropdown(
-            value = range,
-            expanded = rangeExpanded,
-            onExpandedChange = { rangeExpanded = it },
-            onSelect = onRangeSelected,
-        )
         Text(
             text = stringResource(R.string.statistics_chart_axes_dns),
             style = MaterialTheme.typography.labelSmall,
@@ -1277,17 +1282,17 @@ private fun DnsProtectionCard(
         )
         DetailMetricGrid(
             metrics =
-                listOfNotNull(
-                    metricIfPositive(
-                        stringResource(R.string.statistics_dns_blocked_queries),
-                        summary.blockedQueries,
-                    ),
-                    metricIfPositive(
-                        stringResource(R.string.statistics_dns_allowed_queries),
-                        summary.allowedQueries,
-                    ),
-                    stringResource(R.string.statistics_dns_block_ratio) to formatPercent(summary.blockRatio),
+            listOfNotNull(
+                metricIfPositive(
+                    stringResource(R.string.statistics_dns_blocked_queries),
+                    summary.blockedQueries,
                 ),
+                metricIfPositive(
+                    stringResource(R.string.statistics_dns_allowed_queries),
+                    summary.allowedQueries,
+                ),
+                stringResource(R.string.statistics_dns_block_ratio) to formatPercent(summary.blockRatio),
+            ),
         )
         if (summary.categoryRows.isNotEmpty()) {
             Text(
@@ -1332,9 +1337,9 @@ private fun DnsProtectionChart(rows: List<DnsProtectionAppRow>) {
     val categoryColors = dnsCategoryColorMap()
     Canvas(
         modifier =
-            Modifier
-                .fillMaxWidth()
-                .height(132.dp),
+        Modifier
+            .fillMaxWidth()
+            .height(132.dp),
     ) {
         val chartTop = 12.dp.toPx()
         val chartBottom = size.height - 22.dp.toPx()
@@ -1501,11 +1506,11 @@ private fun DnsProtectionAppRowView(
             )
             Text(
                 text =
-                    stringResource(
-                        R.string.statistics_dns_blocked_app_value,
-                        row.estimatedBlockedQueries,
-                        totalBytesText,
-                    ),
+                stringResource(
+                    R.string.statistics_dns_blocked_app_value,
+                    row.estimatedBlockedQueries,
+                    totalBytesText,
+                ),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.End,
@@ -1540,24 +1545,59 @@ private fun DnsAppDropStack(row: DnsProtectionAppRow) {
 }
 
 @Composable
-private fun StatisticsRangeDropdown(
+private fun StatisticsRangePillDropdown(
     value: StatisticsDisplayRange,
     expanded: Boolean,
     onExpandedChange: (Boolean) -> Unit,
     onSelect: (StatisticsDisplayRange) -> Unit,
 ) {
-    DropdownSettingRow(
-        title = stringResource(R.string.statistics_range_title),
-        value = statisticsDisplayRangeLabel(value),
-        expanded = expanded,
-        onExpandedChange = onExpandedChange,
-        values = StatisticsDisplayRange.entries,
-        selected = value,
-        label = { range -> statisticsDisplayRangeLabel(range) },
-        onSelect = onSelect,
-        leadingIcon = Icons.Outlined.Tune,
-        grouped = false,
-    )
+    val triggerWidth = 112.dp
+    val menuWidth = 132.dp
+    Box(
+        modifier = Modifier.width(triggerWidth),
+        contentAlignment = Alignment.TopEnd,
+    ) {
+        FoxholeValuePill(
+            value = statisticsDisplayRangeLabel(value),
+            modifier = Modifier.fillMaxWidth(),
+            expanded = expanded,
+            onClick = { onExpandedChange(!expanded) },
+            fillContent = true,
+        )
+        FoxholeDropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { onExpandedChange(false) },
+            modifier = Modifier.width(menuWidth),
+            popupGap = 0.dp,
+            horizontalAlignment = FoxholeDropdownHorizontalAlignment.AnchorEnd,
+        ) {
+            DASHBOARD_DISPLAY_RANGES.forEach { range ->
+                val selected = range == value
+                FoxholeDropdownItem(
+                    onClick = {
+                        onSelect(range)
+                        onExpandedChange(false)
+                    },
+                    selected = selected,
+                    highlightSelected = false,
+                ) {
+                    Text(
+                        text = statisticsDisplayRangeLabel(range),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color =
+                        if (selected) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.onSurface
+                        },
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Clip,
+                    )
+                }
+            }
+        }
+    }
 }
 
 @Composable
@@ -1617,43 +1657,45 @@ private fun AnomalyStatisticsCard(
             modifier = Modifier.padding(CardInnerPadding),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            SectionTitle(
+            SectionHeader(
                 icon = Icons.Outlined.WarningAmber,
                 title = stringResource(R.string.statistics_anomaly_summary_title),
-            )
-            StatisticsRangeDropdown(
-                value = range,
-                expanded = rangeExpanded,
-                onExpandedChange = { rangeExpanded = it },
-                onSelect = onRangeSelected,
+                trailing = {
+                    StatisticsRangePillDropdown(
+                        value = range,
+                        expanded = rangeExpanded,
+                        onExpandedChange = { rangeExpanded = it },
+                        onSelect = onRangeSelected,
+                    )
+                },
             )
             if (recentEvents.isEmpty() && appChanges.isEmpty()) {
                 EmptySectionText(text = stringResource(R.string.statistics_anomaly_empty))
             } else {
                 DetailMetricGrid(
                     metrics =
-                        listOfNotNull(
-                            metricIfPositive(
-                                stringResource(R.string.statistics_anomaly_events),
-                                recentEvents.size,
-                            ),
-                            metricIfPositive(
-                                stringResource(R.string.statistics_anomaly_high_events),
-                                recentEvents.count { event -> event.severity == AnomalySeverity.HIGH },
-                            ),
-                            metricIfPositive(
-                                stringResource(R.string.statistics_anomaly_notified_events),
-                                recentEvents.count(AnomalyEvent::notificationShown),
-                            ),
-                            metricIfPositive(
-                                stringResource(R.string.statistics_anomaly_apps),
-                                appsCount,
-                            ),
-                            metricIfPositive(
-                                stringResource(R.string.statistics_app_changes),
-                                appChanges.size,
-                            ),
+                    listOfNotNull(
+                        metricIfPositive(
+                            stringResource(R.string.statistics_anomaly_events),
+                            recentEvents.size,
                         ),
+                        metricIfPositive(
+                            stringResource(R.string.statistics_anomaly_high_events),
+                            recentEvents.count { event -> event.severity == AnomalySeverity.HIGH },
+                        ),
+                        metricIfPositive(
+                            stringResource(R.string.statistics_anomaly_notified_events),
+                            recentEvents.count(AnomalyEvent::notificationShown),
+                        ),
+                        metricIfPositive(
+                            stringResource(R.string.statistics_anomaly_apps),
+                            appsCount,
+                        ),
+                        metricIfPositive(
+                            stringResource(R.string.statistics_app_changes),
+                            appChanges.size,
+                        ),
+                    ),
                 )
                 if (recentEvents.isNotEmpty()) {
                     Text(
@@ -1697,24 +1739,6 @@ private fun AnomalyStatisticsCard(
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun AnomalyScoreLegend() {
-    Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-        LegendItem(
-            color = LocalFoxholeSemanticColors.current.success,
-            text = stringResource(R.string.statistics_anomaly_score_low),
-        )
-        LegendItem(
-            color = LocalFoxholeSemanticColors.current.warning,
-            text = stringResource(R.string.statistics_anomaly_score_medium),
-        )
-        LegendItem(
-            color = MaterialTheme.colorScheme.error,
-            text = stringResource(R.string.statistics_anomaly_score_high),
-        )
     }
 }
 
@@ -1857,14 +1881,14 @@ private fun InstalledAppChangeRow(change: InstalledAppInventoryChange) {
                 )
                 Text(
                     text =
-                        stringResource(
-                            when (change.type) {
-                                InstalledAppChangeType.INSTALLED -> R.string.statistics_app_change_installed
-                                InstalledAppChangeType.REMOVED -> R.string.statistics_app_change_removed
-                            },
-                            change.packageName,
-                            change.detectedAt.formatLastActivity(),
-                        ),
+                    stringResource(
+                        when (change.type) {
+                            InstalledAppChangeType.INSTALLED -> R.string.statistics_app_change_installed
+                            InstalledAppChangeType.REMOVED -> R.string.statistics_app_change_removed
+                        },
+                        change.packageName,
+                        change.detectedAt.formatLastActivity(),
+                    ),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 2,
@@ -1872,11 +1896,11 @@ private fun InstalledAppChangeRow(change: InstalledAppInventoryChange) {
                 )
                 Text(
                     text =
-                        stringResource(
-                            R.string.statistics_app_change_security_summary,
-                            source,
-                            stringResource(change.riskLevel.labelRes()),
-                        ),
+                    stringResource(
+                        R.string.statistics_app_change_security_summary,
+                        source,
+                        stringResource(change.riskLevel.labelRes()),
+                    ),
                     style = MaterialTheme.typography.labelSmall,
                     color = riskColor,
                     maxLines = 2,
@@ -1946,15 +1970,17 @@ private fun AppTrafficStatisticsCard(
             modifier = Modifier.padding(CardInnerPadding),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            SectionTitle(
+            SectionHeader(
                 icon = Icons.Outlined.Apps,
                 title = stringResource(R.string.statistics_apps_top_title),
-            )
-            StatisticsRangeDropdown(
-                value = range,
-                expanded = rangeExpanded,
-                onExpandedChange = { rangeExpanded = it },
-                onSelect = onRangeSelected,
+                trailing = {
+                    StatisticsRangePillDropdown(
+                        value = range,
+                        expanded = rangeExpanded,
+                        onExpandedChange = { rangeExpanded = it },
+                        onSelect = onRangeSelected,
+                    )
+                },
             )
             if (!usageAccessGranted) {
                 Text(
@@ -1974,13 +2000,6 @@ private fun AppTrafficStatisticsCard(
             } else if (rows.isEmpty()) {
                 EmptySectionText(text = stringResource(R.string.app_statistics_empty))
             } else {
-                Text(
-                    text = stringResource(R.string.statistics_chart_axes_app_timeline),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                AppTrafficTimelineChart(samples = samples, range = range)
-                TrafficBarChart(rows = rows)
                 AppTrafficTable(
                     rows = rows,
                     emptyText = stringResource(R.string.app_statistics_empty),
@@ -1991,91 +2010,10 @@ private fun AppTrafficStatisticsCard(
                         Text(stringResource(R.string.show_all_label))
                     }
                 }
+                AppTrafficTimelineChart(samples = samples, range = range)
             }
         }
     }
-}
-
-@Composable
-private fun TrafficBarChart(rows: List<AppTrafficRow>) {
-    val context = LocalContext.current
-    val maxBytes = rows.maxOfOrNull { max(it.txBytes, it.rxBytes) }?.coerceAtLeast(1L) ?: 1L
-    val yMax = niceTrafficScale(maxBytes)
-    val visibleRows = rows.take(STATISTICS_TOP_PREVIEW_LIMIT)
-    val model =
-        com.foxhole.beta.core.statistics.ChartModel(
-            id = "app-top-bars",
-            title = stringResource(R.string.statistics_apps_top_title),
-            subtitle = stringResource(R.string.statistics_axis_y_bytes, formatBytes(context, yMax)),
-            range = com.foxhole.beta.core.statistics.StatsRange.HOURS_24,
-            xAxis =
-                com.foxhole.beta.core.statistics.ChartAxis(
-                    label = stringResource(R.string.statistics_apps_title),
-                    min = 0.0,
-                    max = visibleRows.size.toDouble(),
-                    ticks =
-                        visibleRows.mapIndexed { index, row ->
-                            com.foxhole.beta.core.statistics.ChartTick(index.toDouble(), row.label)
-                        },
-                    formatter = com.foxhole.beta.core.statistics.ChartValueFormatter.TEXT,
-                ),
-            yAxis =
-                com.foxhole.beta.core.statistics.ChartAxis(
-                    label = stringResource(R.string.statistics_axis_y_bytes, formatBytes(context, yMax)),
-                    min = 0.0,
-                    max = yMax.toDouble(),
-                    ticks =
-                        listOf(
-                            com.foxhole.beta.core.statistics.ChartTick(0.0, "0"),
-                            com.foxhole.beta.core.statistics.ChartTick(yMax.toDouble(), formatBytes(context, yMax)),
-                        ),
-                    formatter = com.foxhole.beta.core.statistics.ChartValueFormatter.BYTES,
-                ),
-            series =
-                listOf(
-                    com.foxhole.beta.core.statistics.ChartSeries(
-                        id = "tx",
-                        label = stringResource(R.string.traffic_sent),
-                        kind = com.foxhole.beta.core.statistics.ChartSeriesKind.BAR,
-                        colorToken = com.foxhole.beta.core.statistics.ChartColorToken.TX,
-                        points =
-                            visibleRows.mapIndexed { index, row ->
-                                com.foxhole.beta.core.statistics.ChartPoint(
-                                    x = index.toLong(),
-                                    y = row.txBytes.toDouble(),
-                                    label = row.label,
-                                    metadata = mapOf("total" to formatBytes(context, row.totalBytes)),
-                                )
-                            },
-                    ),
-                    com.foxhole.beta.core.statistics.ChartSeries(
-                        id = "rx",
-                        label = stringResource(R.string.traffic_received),
-                        kind = com.foxhole.beta.core.statistics.ChartSeriesKind.BAR,
-                        colorToken = com.foxhole.beta.core.statistics.ChartColorToken.RX,
-                        points =
-                            visibleRows.mapIndexed { index, row ->
-                                com.foxhole.beta.core.statistics.ChartPoint(
-                                    x = index.toLong(),
-                                    y = row.rxBytes.toDouble(),
-                                    label = row.label,
-                                    metadata = mapOf("total" to formatBytes(context, row.totalBytes)),
-                                )
-                            },
-                    ),
-                ),
-            legend =
-                com.foxhole.beta.core.statistics.ChartLegendModel(
-                    items =
-                        listOf(
-                            com.foxhole.beta.core.statistics.ChartLegendItem("tx", stringResource(R.string.traffic_sent), com.foxhole.beta.core.statistics.ChartColorToken.TX),
-                            com.foxhole.beta.core.statistics.ChartLegendItem("rx", stringResource(R.string.traffic_received), com.foxhole.beta.core.statistics.ChartColorToken.RX),
-                        ),
-                ),
-            emptyState = com.foxhole.beta.core.statistics.ChartEmptyState(stringResource(R.string.app_statistics_empty)),
-            updatedAtMs = System.currentTimeMillis(),
-        )
-    com.foxhole.beta.ui.statistics.charts.GroupedBarChart(model = model)
 }
 
 @Composable
@@ -2092,7 +2030,8 @@ private fun AppTrafficTimelineChart(
             ?: 1L
     val yMax = niceTimelineTrafficScale(maxBytes)
     val rangeStart = buckets.firstOrNull()?.startedAtMs ?: System.currentTimeMillis()
-    val rangeEnd = (buckets.lastOrNull()?.startedAtMs ?: rangeStart) + range.timelineBucketMs()
+    val rangeEnd = (buckets.lastOrNull()?.startedAtMs ?: rangeStart) + range.policy(rangeStart).bucketSizeMs
+    val updatedAtMs = samples.maxOfOrNull(AppTrafficWindow::startedAtMs) ?: rangeEnd
     val model =
         com.foxhole.beta.core.statistics.ChartModel(
             id = "app-traffic-timeline",
@@ -2100,56 +2039,81 @@ private fun AppTrafficTimelineChart(
             subtitle = stringResource(R.string.statistics_axis_y_bytes, formatBytes(context, yMax)),
             range = range.toStatsRange(),
             xAxis =
-                com.foxhole.beta.core.statistics.ChartAxis(
-                    label = stringResource(R.string.statistics_axis_x_time),
-                    min = rangeStart.toDouble(),
-                    max = rangeEnd.toDouble(),
-                    ticks =
-                        listOf(
-                            com.foxhole.beta.core.statistics.ChartTick(rangeStart.toDouble(), rangeStartLabel(range)),
-                            com.foxhole.beta.core.statistics.ChartTick(rangeEnd.toDouble(), stringResource(R.string.statistics_range_now)),
-                        ),
-                    formatter = com.foxhole.beta.core.statistics.ChartValueFormatter.TIME,
+            com.foxhole.beta.core.statistics.ChartAxis(
+                label = stringResource(R.string.statistics_axis_x_time),
+                min = rangeStart.toDouble(),
+                max = rangeEnd.toDouble(),
+                ticks =
+                timelineTicks(
+                    range = range,
+                    rangeStart = rangeStart,
+                    rangeEnd = rangeEnd,
+                    nowLabel = stringResource(R.string.statistics_range_now),
                 ),
+                formatter = com.foxhole.beta.core.statistics.ChartValueFormatter.TIME,
+            ),
             yAxis =
-                com.foxhole.beta.core.statistics.ChartAxis(
-                    label = stringResource(R.string.statistics_axis_y_bytes, formatBytes(context, yMax)),
-                    min = 0.0,
-                    max = yMax.toDouble(),
-                    ticks =
-                        listOf(
-                            com.foxhole.beta.core.statistics.ChartTick(0.0, "0"),
-                            com.foxhole.beta.core.statistics.ChartTick(yMax.toDouble(), formatBytes(context, yMax)),
-                        ),
-                    formatter = com.foxhole.beta.core.statistics.ChartValueFormatter.BYTES,
-                ),
-            series =
+            com.foxhole.beta.core.statistics.ChartAxis(
+                label = stringResource(R.string.statistics_axis_y_bytes, formatBytes(context, yMax)),
+                min = 0.0,
+                max = yMax.toDouble(),
+                ticks =
                 listOf(
-                    com.foxhole.beta.core.statistics.ChartSeries(
-                        id = "tx",
-                        label = stringResource(R.string.traffic_sent),
-                        kind = com.foxhole.beta.core.statistics.ChartSeriesKind.LINE,
-                        colorToken = com.foxhole.beta.core.statistics.ChartColorToken.TX,
-                        points = buckets.map { bucket -> com.foxhole.beta.core.statistics.ChartPoint(bucket.startedAtMs, bucket.txBytes.toDouble()) },
-                    ),
-                    com.foxhole.beta.core.statistics.ChartSeries(
-                        id = "rx",
-                        label = stringResource(R.string.traffic_received),
-                        kind = com.foxhole.beta.core.statistics.ChartSeriesKind.LINE,
-                        colorToken = com.foxhole.beta.core.statistics.ChartColorToken.RX,
-                        points = buckets.map { bucket -> com.foxhole.beta.core.statistics.ChartPoint(bucket.startedAtMs, bucket.rxBytes.toDouble()) },
-                    ),
+                    com.foxhole.beta.core.statistics.ChartTick(0.0, "0"),
+                    com.foxhole.beta.core.statistics.ChartTick(yMax.toDouble(), formatBytes(context, yMax)),
                 ),
+                formatter = com.foxhole.beta.core.statistics.ChartValueFormatter.BYTES,
+            ),
+            series =
+            listOf(
+                com.foxhole.beta.core.statistics.ChartSeries(
+                    id = "tx",
+                    label = stringResource(R.string.traffic_sent),
+                    kind = com.foxhole.beta.core.statistics.ChartSeriesKind.LINE,
+                    colorToken = com.foxhole.beta.core.statistics.ChartColorToken.TX,
+                    points =
+                    buckets.map { bucket ->
+                        com.foxhole.beta.core.statistics.ChartPoint(
+                            bucket.startedAtMs,
+                            bucket.txBytes.toDouble(),
+                        )
+                    },
+                ),
+                com.foxhole.beta.core.statistics.ChartSeries(
+                    id = "rx",
+                    label = stringResource(R.string.traffic_received),
+                    kind = com.foxhole.beta.core.statistics.ChartSeriesKind.LINE,
+                    colorToken = com.foxhole.beta.core.statistics.ChartColorToken.RX,
+                    points =
+                    buckets.map { bucket ->
+                        com.foxhole.beta.core.statistics.ChartPoint(
+                            bucket.startedAtMs,
+                            bucket.rxBytes.toDouble(),
+                        )
+                    },
+                ),
+            ),
             legend =
-                com.foxhole.beta.core.statistics.ChartLegendModel(
-                    items =
-                        listOf(
-                            com.foxhole.beta.core.statistics.ChartLegendItem("tx", stringResource(R.string.traffic_sent), com.foxhole.beta.core.statistics.ChartColorToken.TX),
-                            com.foxhole.beta.core.statistics.ChartLegendItem("rx", stringResource(R.string.traffic_received), com.foxhole.beta.core.statistics.ChartColorToken.RX),
-                        ),
+            com.foxhole.beta.core.statistics.ChartLegendModel(
+                items =
+                listOf(
+                    com.foxhole.beta.core.statistics.ChartLegendItem(
+                        "tx",
+                        stringResource(R.string.traffic_sent),
+                        com.foxhole.beta.core.statistics.ChartColorToken.TX,
+                    ),
+                    com.foxhole.beta.core.statistics.ChartLegendItem(
+                        "rx",
+                        stringResource(R.string.traffic_received),
+                        com.foxhole.beta.core.statistics.ChartColorToken.RX,
+                    ),
                 ),
-            emptyState = com.foxhole.beta.core.statistics.ChartEmptyState(stringResource(R.string.app_statistics_empty)),
-            updatedAtMs = System.currentTimeMillis(),
+            ),
+            emptyState =
+            com.foxhole.beta.core.statistics.ChartEmptyState(
+                stringResource(R.string.app_statistics_empty),
+            ),
+            updatedAtMs = updatedAtMs,
         )
     com.foxhole.beta.ui.statistics.charts.TimelineChart(model = model)
 }
@@ -2284,10 +2248,18 @@ private fun TrafficCells(tx: Long, rx: Long) {
     val semanticColors = LocalFoxholeSemanticColors.current
     Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(horizontalAlignment = Alignment.End) {
-            Text(formatBytes(context, tx), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+            Text(
+                formatBytes(context, tx),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.primary
+            )
             Text(formatBytes(context, rx), style = MaterialTheme.typography.labelMedium, color = semanticColors.success)
         }
-        Text(formatBytes(context, tx + rx), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
+        Text(
+            formatBytes(context, tx + rx),
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.SemiBold
+        )
     }
 }
 
@@ -2295,6 +2267,7 @@ private fun TrafficCells(tx: Long, rx: Long) {
 private fun StatisticsSectionCard(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     title: String,
+    trailing: @Composable RowScope.() -> Unit = {},
     content: @Composable ColumnScope.() -> Unit,
 ) {
     Card(
@@ -2306,32 +2279,41 @@ private fun StatisticsSectionCard(
             modifier = Modifier.padding(CardInnerPadding),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            SectionTitle(icon = icon, title = title)
+            SectionHeader(icon = icon, title = title, trailing = trailing)
             content()
         }
     }
 }
 
 @Composable
-private fun SectionTitle(
+private fun SectionHeader(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     title: String,
+    trailing: @Composable RowScope.() -> Unit = {},
 ) {
     Row(
+        modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(18.dp),
-        )
-        Text(
-            text = title,
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.SemiBold,
-        )
+        Row(
+            modifier = Modifier.weight(1f),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(18.dp),
+            )
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+            )
+        }
+        trailing()
     }
 }
 
@@ -2382,20 +2364,20 @@ private fun ProfileStatisticsDetail(
     ) {
         DetailMetricGrid(
             metrics =
-                listOfNotNull(
-                    metricIfPositive(
-                        stringResource(R.string.statistics_total_traffic),
-                        detail.totalBytes,
-                        formatBytes(context, detail.totalBytes),
-                    ),
-                    metricIfPositive(stringResource(R.string.statistics_vpn_sessions), detail.totalAttempts),
-                    metricIfPositive(stringResource(R.string.statistics_successful_connections), detail.successCount),
-                    metricIfPositive(stringResource(R.string.statistics_errors), detail.failureCount),
-                    detail.avgLatencyMs?.let { stringResource(R.string.statistics_average_latency) to it.formatLatency() },
-                    detail.minLatencyMs?.let { stringResource(R.string.statistics_min_latency) to it.formatLatency() },
-                    detail.maxLatencyMs?.let { stringResource(R.string.statistics_max_latency) to it.formatLatency() },
-                    detail.lastActivityAt?.let { stringResource(R.string.statistics_last_activity) to it.formatLastActivity() },
+            listOfNotNull(
+                metricIfPositive(
+                    stringResource(R.string.statistics_total_traffic),
+                    detail.totalBytes,
+                    formatBytes(context, detail.totalBytes),
                 ),
+                metricIfPositive(stringResource(R.string.statistics_vpn_sessions), detail.totalAttempts),
+                metricIfPositive(stringResource(R.string.statistics_successful_connections), detail.successCount),
+                metricIfPositive(stringResource(R.string.statistics_errors), detail.failureCount),
+                detail.avgLatencyMs?.let { stringResource(R.string.statistics_average_latency) to it.formatLatency() },
+                detail.minLatencyMs?.let { stringResource(R.string.statistics_min_latency) to it.formatLatency() },
+                detail.maxLatencyMs?.let { stringResource(R.string.statistics_max_latency) to it.formatLatency() },
+                detail.lastActivityAt?.let { stringResource(R.string.statistics_last_activity) to it.formatLastActivity() },
+            ),
         )
         if (detail.protocols.isNotEmpty()) {
             val connectedProtocols =
@@ -2433,23 +2415,23 @@ private fun ProfileStatisticsDetail(
                                 modifier = Modifier.weight(1f).heightIn(min = 42.dp),
                                 shape = MaterialTheme.shapes.small,
                                 color =
-                                    if (selected) {
-                                        MaterialTheme.colorScheme.primaryContainer
-                                    } else {
-                                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.48f)
-                                    },
+                                if (selected) {
+                                    MaterialTheme.colorScheme.primaryContainer
+                                } else {
+                                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.48f)
+                                },
                                 border =
-                                    BorderStroke(
-                                        1.dp,
-                                        if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
-                                    ),
+                                BorderStroke(
+                                    1.dp,
+                                    if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
+                                ),
                             ) {
                                 Box(
                                     modifier =
-                                        Modifier
-                                            .fillMaxWidth()
-                                            .clickable { selectedProtocolLabel = protocol.label }
-                                            .padding(horizontal = 8.dp, vertical = 8.dp),
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .clickable { selectedProtocolLabel = protocol.label }
+                                        .padding(horizontal = 8.dp, vertical = 8.dp),
                                     contentAlignment = Alignment.Center,
                                 ) {
                                     Text(
@@ -2503,13 +2485,13 @@ private fun ProfileProtocolDetailPanel(protocol: ProfileProtocolDetail) {
             )
             DetailMetricGrid(
                 metrics =
-                    listOfNotNull(
-                        stringResource(R.string.statistics_total_traffic) to formatBytes(context, protocol.totalBytes),
-                        stringResource(R.string.statistics_success_rate) to formatPercent(protocol.successRate),
-                        stringResource(R.string.statistics_error_rate) to formatPercent(protocol.errorRate),
-                        protocol.avgLatencyMs?.let { stringResource(R.string.statistics_average_latency) to it.formatLatency() },
-                        protocol.lastUsedAt?.let { stringResource(R.string.statistics_last_activity) to it.formatLastActivity() },
-                    ),
+                listOfNotNull(
+                    stringResource(R.string.statistics_total_traffic) to formatBytes(context, protocol.totalBytes),
+                    stringResource(R.string.statistics_success_rate) to formatPercent(protocol.successRate),
+                    stringResource(R.string.statistics_error_rate) to formatPercent(protocol.errorRate),
+                    protocol.avgLatencyMs?.let { stringResource(R.string.statistics_average_latency) to it.formatLatency() },
+                    protocol.lastUsedAt?.let { stringResource(R.string.statistics_last_activity) to it.formatLastActivity() },
+                ),
             )
         }
     }
@@ -2564,26 +2546,26 @@ private fun AppTrafficDetail(
     ) {
         DetailMetricGrid(
             metrics =
-                listOfNotNull(
-                    metricIfPositive(
-                        stringResource(R.string.home_total_label),
-                        row.totalBytes,
-                        formatBytes(context, row.totalBytes),
-                    ),
-                    metricIfPositive(
-                        stringResource(R.string.traffic_received),
-                        row.rxBytes,
-                        formatBytes(context, row.rxBytes),
-                    ),
-                    metricIfPositive(
-                        stringResource(R.string.traffic_sent),
-                        row.txBytes,
-                        formatBytes(context, row.txBytes),
-                    ),
-                    metricIfPositive(stringResource(R.string.statistics_app_samples), appSamples.size),
-                    appSamples.maxOfOrNull(AppTrafficWindow::startedAtMs)
-                        ?.let { stringResource(R.string.statistics_last_activity) to it.formatLastActivity() },
+            listOfNotNull(
+                metricIfPositive(
+                    stringResource(R.string.home_total_label),
+                    row.totalBytes,
+                    formatBytes(context, row.totalBytes),
                 ),
+                metricIfPositive(
+                    stringResource(R.string.traffic_received),
+                    row.rxBytes,
+                    formatBytes(context, row.rxBytes),
+                ),
+                metricIfPositive(
+                    stringResource(R.string.traffic_sent),
+                    row.txBytes,
+                    formatBytes(context, row.txBytes),
+                ),
+                metricIfPositive(stringResource(R.string.statistics_app_samples), appSamples.size),
+                appSamples.maxOfOrNull(AppTrafficWindow::startedAtMs)
+                    ?.let { stringResource(R.string.statistics_last_activity) to it.formatLastActivity() },
+            ),
         )
         if (appSamples.isNotEmpty()) {
             Text(
@@ -2647,13 +2629,13 @@ private fun AppConnectionRowView(connection: AppConnectionRow) {
             )
             Text(
                 text =
-                    listOfNotNull(
-                        connection.countryName,
-                        connection.city ?: stringResource(R.string.statistics_app_detail_city_unknown),
-                        connection.protocol,
-                        stringResource(R.string.statistics_app_detail_connection_count, connection.count),
-                        connection.lastSeenAt.formatLastActivity(),
-                    ).joinToString(" • "),
+                listOfNotNull(
+                    connection.countryName,
+                    connection.city ?: stringResource(R.string.statistics_app_detail_city_unknown),
+                    connection.protocol,
+                    stringResource(R.string.statistics_app_detail_connection_count, connection.count),
+                    connection.lastSeenAt.formatLastActivity(),
+                ).joinToString(" • "),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 2,
@@ -2679,9 +2661,9 @@ private fun DetailMetricGrid(metrics: List<Pair<String, String>>) {
         metrics.forEachIndexed { index, (label, value) ->
             Row(
                 modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 7.dp),
+                Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 7.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -2725,12 +2707,6 @@ private data class TrafficTimelineBucket(
     val startedAtMs: Long,
     val rxBytes: Long,
     val txBytes: Long,
-)
-
-private data class AnomalyChartPoint(
-    val bucketStartAt: Long,
-    val score: Int,
-    val high: Boolean,
 )
 
 private data class ProfileStatisticsDetailModel(
@@ -2960,10 +2936,10 @@ private fun profileStatisticsDetail(
         minLatencyMs = latencies.minOrNull(),
         maxLatencyMs = latencies.maxOrNull(),
         lastActivityAt =
-            maxOfNotNull(
-                item.updatedAt.takeIf { updatedAt -> updatedAt > 0L },
-                visibleProtocolDetails.mapNotNull(ProfileProtocolDetail::lastUsedAt).maxOrNull(),
-            ),
+        maxOfNotNull(
+            item.updatedAt.takeIf { updatedAt -> updatedAt > 0L },
+            visibleProtocolDetails.mapNotNull(ProfileProtocolDetail::lastUsedAt).maxOrNull(),
+        ),
         lastProtocolHint = lastProtocol,
         protocols = visibleProtocolDetails,
     )
@@ -2980,9 +2956,9 @@ internal fun statisticsUiState(
     return StatisticsUiState(
         range = retention.toStatisticsRange(),
         extendedMode =
-            state.settings.statistics.enabled &&
-                state.settings.statistics.appTrafficEnabled &&
-                state.settings.appTrafficStatsEnabled,
+        state.settings.statistics.enabled &&
+            state.settings.statistics.appTrafficEnabled &&
+            state.settings.appTrafficStatsEnabled,
         profileTraffic = profileTraffic,
         total = total,
         vpnProtocols = protocolStats,
@@ -2994,15 +2970,15 @@ internal fun statisticsUiState(
 private fun protocolTrafficItems(state: SettingsRouteUiState): List<ProfileTrafficUiItem> {
     val items =
         state.settings.profileTrafficTotals.map { total ->
-                ProfileTrafficUiItem(
-                    profileId = total.profileId,
-                    profileName = total.profileName,
-                    protocolHint = total.protocolHint,
-                    rxBytes = total.rxTotalBytes,
-                    txBytes = total.txTotalBytes,
-                    updatedAt = total.updatedAt,
-                )
-            }
+            ProfileTrafficUiItem(
+                profileId = total.profileId,
+                profileName = total.profileName,
+                protocolHint = total.protocolHint,
+                rxBytes = total.rxTotalBytes,
+                txBytes = total.txTotalBytes,
+                updatedAt = total.updatedAt,
+            )
+        }
             .toMutableList()
     val activeProfile = state.activeProfile
     val liveTraffic = state.traffic
@@ -3255,28 +3231,6 @@ private fun normalizedCountryCode(countryCode: String?): String? =
 private fun countryDisplayName(countryCode: String): String =
     com.foxhole.beta.core.statistics.countryDisplayName(countryCode)
 
-private fun anomalyBadgesFor(events: List<AnomalyEvent>): Set<AppAnomalyBadge> {
-    val badges =
-        events
-            .flatMap { event ->
-                when (event.type) {
-                    AnomalyType.APP_UPLOAD_SPIKE -> listOf(AppAnomalyBadge.HIGH_UPLOAD)
-                    AnomalyType.APP_BACKGROUND_TRAFFIC -> listOf(AppAnomalyBadge.BACKGROUND)
-                    AnomalyType.NEW_DESTINATION_COUNTRY,
-                    AnomalyType.TOR_OR_I2P_ROUTE_MISMATCH,
-                    -> listOf(AppAnomalyBadge.NEW_ROUTE)
-                    else -> listOf(AppAnomalyBadge.UNUSUAL)
-                } +
-                    if (event.severity == AnomalySeverity.HIGH) {
-                        listOf(AppAnomalyBadge.UNUSUAL)
-                    } else {
-                        emptyList()
-                    }
-            }
-            .toSet()
-    return badges.ifEmpty { setOf(AppAnomalyBadge.NORMAL) }
-}
-
 @Composable
 private fun anomalyReasonText(
     event: AnomalyEvent,
@@ -3353,34 +3307,6 @@ private fun metricIfPositive(
     value: Long,
     displayValue: String = value.toString(),
 ): Pair<String, String>? = value.takeIf { it > 0L }?.let { label to displayValue }
-
-private fun anomalyChartPoints(
-    events: List<AnomalyEvent>,
-    range: StatisticsDisplayRange,
-): List<AnomalyChartPoint> {
-    val now = System.currentTimeMillis()
-    val bucketSizeMs = range.anomalyBucketMs()
-    val firstAt =
-        range.durationMs
-            ?.let { duration -> now - duration }
-            ?: events.minOfOrNull(AnomalyEvent::createdAtMs)
-            ?: now
-    return com.foxhole.beta.core.statistics.anomalyTimelineBuckets(
-        events = events,
-        startMs = firstAt,
-        endMs = now + 1L,
-        bucketSizeMs = bucketSizeMs,
-        fillEmpty = true,
-    )
-        .takeLast(range.anomalyBucketLimit())
-        .map { point ->
-            AnomalyChartPoint(
-                bucketStartAt = point.bucketStartAt,
-                score = point.score,
-                high = point.high,
-            )
-        }
-}
 
 private fun appConnectionRows(
     packageName: String,
@@ -3475,10 +3401,15 @@ private fun trafficTimelineBuckets(
     range: StatisticsDisplayRange,
 ): List<TrafficTimelineBucket> {
     val now = System.currentTimeMillis()
-    val bucketMs = range.timelineBucketMs()
-    val durationMs = range.durationMs ?: samples.durationForAllRange(now, bucketMs)
+    val policy =
+        range.policy(
+            firstAtMs = samples.minOfOrNull(AppTrafficWindow::startedAtMs) ?: now,
+            nowMs = now,
+        )
+    val bucketMs = policy.bucketSizeMs
+    val durationMs = range.durationMs ?: samples.durationForAllRange(now, bucketMs, policy.maxBuckets)
     val startAt = now - durationMs
-    val bucketCount = (durationMs / bucketMs).toInt().coerceIn(1, TIMELINE_MAX_BUCKETS)
+    val bucketCount = (durationMs / bucketMs).toInt().coerceIn(1, policy.maxBuckets)
     val buckets =
         (0 until bucketCount).associate { index ->
             val startedAt = startAt + index * bucketMs
@@ -3533,6 +3464,16 @@ private fun StatisticsDisplayRange.toStatsRange(): com.foxhole.beta.core.statist
         StatisticsDisplayRange.ALL -> com.foxhole.beta.core.statistics.StatsRange.ALL
     }
 
+private fun StatisticsDisplayRange.policy(
+    firstAtMs: Long? = null,
+    nowMs: Long = System.currentTimeMillis(),
+): com.foxhole.beta.core.statistics.StatsRangePolicy =
+    com.foxhole.beta.core.statistics.statsRangePolicy(
+        range = toStatsRange(),
+        firstAtMs = firstAtMs,
+        nowMs = nowMs,
+    )
+
 private fun <T> List<T>.filterForDisplayRange(
     range: StatisticsDisplayRange,
     timestamp: (T) -> Long,
@@ -3541,21 +3482,38 @@ private fun <T> List<T>.filterForDisplayRange(
     return filter { item -> timestamp(item) >= cutoff }
 }
 
-private fun StatisticsDisplayRange.timelineBucketMs(): Long =
-    when (this) {
-        StatisticsDisplayRange.HOURS_24 -> TRAFFIC_TIMELINE_BUCKET_MS
-        StatisticsDisplayRange.WEEK -> 3L * 60L * 60L * 1000L
-        StatisticsDisplayRange.MONTH -> 12L * 60L * 60L * 1000L
-        StatisticsDisplayRange.ALL -> 24L * 60L * 60L * 1000L
+private fun timelineTicks(
+    range: StatisticsDisplayRange,
+    rangeStart: Long,
+    rangeEnd: Long,
+    nowLabel: String,
+): List<com.foxhole.beta.core.statistics.ChartTick> {
+    val tickCount = range.policy(rangeStart, rangeEnd).majorTickCount.coerceAtLeast(2)
+    val duration = (rangeEnd - rangeStart).coerceAtLeast(1L)
+    val formatter =
+        when (range) {
+            StatisticsDisplayRange.HOURS_24 -> null
+            StatisticsDisplayRange.WEEK -> SimpleDateFormat("EEE", Locale.getDefault())
+            StatisticsDisplayRange.MONTH,
+            StatisticsDisplayRange.ALL,
+            -> SimpleDateFormat("MMM d", Locale.getDefault())
+        }
+    return (0 until tickCount).map { index ->
+        val timestamp =
+            if (index == tickCount - 1) {
+                rangeEnd
+            } else {
+                rangeStart + duration * index / (tickCount - 1)
+            }
+        val label =
+            when {
+                index == tickCount - 1 -> nowLabel
+                range == StatisticsDisplayRange.HOURS_24 -> "-${24 - (24 * index / (tickCount - 1))}h"
+                else -> formatter?.format(Date(timestamp)).orEmpty()
+            }
+        com.foxhole.beta.core.statistics.ChartTick(timestamp.toDouble(), label)
     }
-
-private fun StatisticsDisplayRange.timelineGridEveryBuckets(): Int =
-    when (this) {
-        StatisticsDisplayRange.HOURS_24 -> 3
-        StatisticsDisplayRange.WEEK -> 8
-        StatisticsDisplayRange.MONTH -> 4
-        StatisticsDisplayRange.ALL -> 7
-    }
+}
 
 private fun StatisticsDisplayRange.anomalyBucketMs(): Long =
     when (this) {
@@ -3565,22 +3523,15 @@ private fun StatisticsDisplayRange.anomalyBucketMs(): Long =
         StatisticsDisplayRange.ALL -> 7L * 24L * 60L * 60L * 1000L
     }
 
-private fun StatisticsDisplayRange.anomalyBucketLimit(): Int =
-    when (this) {
-        StatisticsDisplayRange.HOURS_24 -> 48
-        StatisticsDisplayRange.WEEK -> 28
-        StatisticsDisplayRange.MONTH -> 31
-        StatisticsDisplayRange.ALL -> 52
-    }
-
 private fun List<AppTrafficWindow>.durationForAllRange(
     now: Long,
     bucketMs: Long,
+    maxBuckets: Int,
 ): Long {
     val first = minOfOrNull(AppTrafficWindow::startedAtMs) ?: return 24L * 60L * 60L * 1000L
     return (now - first)
         .coerceAtLeast(bucketMs)
-        .coerceAtMost(bucketMs * TIMELINE_MAX_BUCKETS)
+        .coerceAtMost(bucketMs * maxBuckets)
 }
 
 private fun String.connectionHost(): String {
@@ -3607,15 +3558,6 @@ private fun String.countryFlagEmoji(): String {
 private fun niceTimelineTrafficScale(maxBytes: Long): Long =
     niceTrafficScale(maxBytes)
 
-@Composable
-private fun rangeStartLabel(range: StatisticsDisplayRange): String =
-    when (range) {
-        StatisticsDisplayRange.HOURS_24 -> stringResource(R.string.statistics_range_24h_short)
-        StatisticsDisplayRange.WEEK -> stringResource(R.string.statistics_range_week_short)
-        StatisticsDisplayRange.MONTH -> stringResource(R.string.statistics_range_month_short)
-        StatisticsDisplayRange.ALL -> stringResource(R.string.statistics_range_all_short)
-    }
-
 private fun Profile.statisticsProtocolHints(): List<ProtocolHint> {
     val optionHints = protocolOptions.map(ProfileProtocolOption::protocolHint)
     return (optionHints + protocolHint).distinct()
@@ -3640,8 +3582,8 @@ private fun List<Profile>.transportForProtocol(protocol: ProtocolHint): Transpor
                 .filter { option -> option.protocolHint == protocol }
                 .map { option -> option.inferredTransport() }
         }
-        .filterNot { transport -> transport == TransportProtocol.UNKNOWN }
-        .distinct()
+            .filterNot { transport -> transport == TransportProtocol.UNKNOWN }
+            .distinct()
     return when {
         protocol == ProtocolHint.HYSTERIA2 || protocol == ProtocolHint.WIREGUARD -> TransportProtocol.UDP
         explicitTransports.size == 1 -> explicitTransports.first()
@@ -3764,7 +3706,11 @@ private val COMPACT_PROTOCOL_GRID_WIDTH = 360.dp
 private const val DONUT_ANIMATION_DURATION_MS = 700
 private const val PROFILE_TRAFFIC_PREVIEW_LIMIT = 6
 private const val STATISTICS_TOP_PREVIEW_LIMIT = 5
+private val DASHBOARD_DISPLAY_RANGES =
+    listOf(
+        StatisticsDisplayRange.HOURS_24,
+        StatisticsDisplayRange.WEEK,
+        StatisticsDisplayRange.MONTH,
+    )
+internal fun dashboardStatisticsDisplayRanges(): List<StatisticsDisplayRange> = DASHBOARD_DISPLAY_RANGES
 private const val PROFILE_COMPARISON_MIN_ATTEMPTS = 2
-private const val ANOMALY_SCORE_MAX = 100
-private const val TRAFFIC_TIMELINE_BUCKET_MS = 10L * 60L * 1000L
-private const val TIMELINE_MAX_BUCKETS = 144

@@ -5,23 +5,16 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
-import android.content.pm.ApplicationInfo
-import android.content.pm.PackageManager
-import android.os.Build
 import android.os.SystemClock
-import androidx.core.content.FileProvider
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import com.foxhole.beta.BuildConfig
 import com.foxhole.beta.FoxholeApplication
 import com.foxhole.beta.FoxholeHomeDependencies
 import com.foxhole.beta.R
-import com.foxhole.beta.applyAppLocale
 import com.foxhole.beta.core.data.ProfileImportPayloadTooLargeException
 import com.foxhole.beta.core.data.RoutingRepository
 import com.foxhole.beta.core.data.requireLocalProfileImportWithinLimit
-import com.foxhole.beta.core.diagnostics.DiagnosticEntry
 import com.foxhole.beta.core.model.AnomalyHistoryRetention
 import com.foxhole.beta.core.model.AnomalySensitivity
 import com.foxhole.beta.core.model.AppLocale
@@ -33,7 +26,6 @@ import com.foxhole.beta.core.model.ConnectionState
 import com.foxhole.beta.core.model.DiagnosticsRetention
 import com.foxhole.beta.core.model.DnsSettings
 import com.foxhole.beta.core.model.DomainStrategy
-import com.foxhole.beta.core.model.ExpertSettings
 import com.foxhole.beta.core.model.InstalledAppOption
 import com.foxhole.beta.core.model.IpInfo
 import com.foxhole.beta.core.model.LatencyProbeMethod
@@ -46,11 +38,8 @@ import com.foxhole.beta.core.model.Profile
 import com.foxhole.beta.core.model.ProfileSourceType
 import com.foxhole.beta.core.model.ProxyInboundSettings
 import com.foxhole.beta.core.model.ProxySurfaceMode
-import com.foxhole.beta.core.model.RoutingCatalog
-import com.foxhole.beta.core.model.RoutingPreset
 import com.foxhole.beta.core.model.RoutingPresetOverrideMode
 import com.foxhole.beta.core.model.RoutingPresetSource
-import com.foxhole.beta.core.model.RoutingRule
 import com.foxhole.beta.core.model.RoutingRuleAction
 import com.foxhole.beta.core.model.Settings
 import com.foxhole.beta.core.model.SmartStartTransportPriority
@@ -60,22 +49,17 @@ import com.foxhole.beta.core.model.StatisticsRetention
 import com.foxhole.beta.core.model.SubscriptionRefreshInterval
 import com.foxhole.beta.core.model.ThemeMode
 import com.foxhole.beta.core.model.TrafficMode
-import com.foxhole.beta.core.model.TrafficSnapshot
 import com.foxhole.beta.core.model.TunStack
 import com.foxhole.beta.core.model.V2RayApiSettings
 import com.foxhole.beta.core.network.IpInfoFetchMode
 import com.foxhole.beta.core.network.NetworkFingerprint
 import com.foxhole.beta.core.profile.AutoConnectProbeCandidate
 import com.foxhole.beta.core.profile.AutoConnectProbeResult
-import com.foxhole.beta.core.profile.MultiProtocolProfileSupport
 import com.foxhole.beta.core.profile.PreparedProfileExport
 import com.foxhole.beta.core.profile.ProfileExportRequest
-import com.foxhole.beta.core.profile.classifyAutoConnectProbeFailure
 import com.foxhole.beta.core.settings.AppTrafficStatsRecorder
 import com.foxhole.beta.core.smart.SmartStartController
-import com.foxhole.beta.vpn.FoxholeVpnRuntimeBridge
 import com.foxhole.beta.vpn.FoxholeVpnService
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -92,8 +76,6 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.runningFold
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
 
 class HomeViewModel(
@@ -116,7 +98,10 @@ class HomeViewModel(
     internal val profileOptionLatenciesMutable = MutableStateFlow<Map<ProfileOptionLatencyKey, Long>>(emptyMap())
     internal val profileOptionDownMutable = MutableStateFlow<Set<ProfileOptionLatencyKey>>(emptySet())
     internal val profileOptionLatencyUnavailableMutable = MutableStateFlow<Set<ProfileOptionLatencyKey>>(emptySet())
-    internal val profileOptionServerPingsMutable = MutableStateFlow<Map<ProfileOptionLatencyKey, ProfileOptionServerPingState>>(emptyMap())
+    internal val profileOptionServerPingsMutable =
+        MutableStateFlow<Map<ProfileOptionLatencyKey, ProfileOptionServerPingState>>(
+            emptyMap()
+        )
     internal val profileOptionMetricsUpdatedAtMutable = MutableStateFlow<Map<ProfileOptionLatencyKey, Long>>(emptyMap())
     internal val protocolMetricsRefreshingProfileIdsMutable = MutableStateFlow<Set<Long>>(emptySet())
     internal val protocolMetricsRefreshingOptionIdByProfileIdMutable = MutableStateFlow<Map<Long, String>>(emptyMap())
@@ -128,7 +113,10 @@ class HomeViewModel(
     internal val dnsFilterRefreshInProgressMutable = MutableStateFlow(false)
     internal val profileReconnectPromptUntilMutable = MutableStateFlow(0L)
     internal val insecureTlsImportWarningMutable = MutableStateFlow<InsecureTlsImportWarningState?>(null)
-    internal val catalogPresetPreviewsMutable = MutableStateFlow<Map<Long, List<RoutingRepository.RoutingCatalogPresetPreview>>>(emptyMap())
+    internal val catalogPresetPreviewsMutable =
+        MutableStateFlow<Map<Long, List<RoutingRepository.RoutingCatalogPresetPreview>>>(
+            emptyMap()
+        )
     internal val startupActiveProfileMutable =
         MutableStateFlow(container.settingsRepository.settings.value.lastActiveProfile?.toStartupProfile())
 
@@ -226,18 +214,18 @@ class HomeViewModel(
         ) { installedAppsStreams, trailingState ->
             HomeLocalState(
                 streams =
-                    HomeLocalStreams(
-                        profilesLoaded = installedAppsStreams.profilesLoaded,
-                        installedApps = installedAppsStreams.installedApps,
-                        installedAppsLoading = installedAppsStreams.installedAppsLoading,
-                        installedAppsLoaded = installedAppsStreams.installedAppsLoaded,
-                        ipInfoLoading = installedAppsStreams.ipInfoLoading,
-                        dashboardConnectionMetricsLoading = trailingState.dashboardConnectionMetricsLoading,
-                        runtimeReloadPending = trailingState.runtimeReloadPending,
-                        torOperation = trailingState.torOperation,
-                        catalogPresetPreviews = trailingState.catalogPresetPreviews,
-                        appliedRuntimeSignature = trailingState.appliedRuntimeSignature,
-                    ),
+                HomeLocalStreams(
+                    profilesLoaded = installedAppsStreams.profilesLoaded,
+                    installedApps = installedAppsStreams.installedApps,
+                    installedAppsLoading = installedAppsStreams.installedAppsLoading,
+                    installedAppsLoaded = installedAppsStreams.installedAppsLoaded,
+                    ipInfoLoading = installedAppsStreams.ipInfoLoading,
+                    dashboardConnectionMetricsLoading = trailingState.dashboardConnectionMetricsLoading,
+                    runtimeReloadPending = trailingState.runtimeReloadPending,
+                    torOperation = trailingState.torOperation,
+                    catalogPresetPreviews = trailingState.catalogPresetPreviews,
+                    appliedRuntimeSignature = trailingState.appliedRuntimeSignature,
+                ),
                 startupActiveProfile = trailingState.startupActiveProfile,
             )
         }
@@ -305,11 +293,11 @@ class HomeViewModel(
                 connection = connectionStreams.connection,
                 ipInfo = connectionStreams.ipInfo,
                 ipInfoLoading =
-                    shouldShowIpInfoLoading(
-                        currentIpInfo = connectionStreams.ipInfo,
-                        explicitLoading = localStreams.ipInfoLoading,
-                        connectionState = connectionStreams.connection.state,
-                    ),
+                shouldShowIpInfoLoading(
+                    currentIpInfo = connectionStreams.ipInfo,
+                    explicitLoading = localStreams.ipInfoLoading,
+                    connectionState = connectionStreams.connection.state,
+                ),
                 dashboardConnectionMetricsLoading = localStreams.dashboardConnectionMetricsLoading,
                 traffic = connectionStreams.traffic,
                 presets = routingStreams.presets,
@@ -322,10 +310,10 @@ class HomeViewModel(
                 reconnectInProgress = reconnectState.inProgress,
                 torOperation = localStreams.torOperation,
                 profileReconnectPromptUntilElapsedMs =
-                    if (profileReconnectRequired) {
-                        reconnectState.promptUntilElapsedMs
-                    } else {
-                        0L
+                if (profileReconnectRequired) {
+                    reconnectState.promptUntilElapsedMs
+                } else {
+                    0L
                 },
                 diagnosticEntries = activityStreams.diagnosticEntries,
                 anomalyEvents = activityStreams.anomalyEvents,
@@ -516,10 +504,10 @@ class HomeViewModel(
             val routeState = state.toSettingsRouteUiState(dnsFilterRefreshInProgress = dnsFilterRefreshInProgress)
             routeState.copy(
                 statisticsDashboard =
-                    buildStatisticsDashboardUiState(
-                        state = routeState,
-                        trafficMapState = trafficMapState,
-                    ),
+                buildStatisticsDashboardUiState(
+                    state = routeState,
+                    trafficMapState = trafficMapState,
+                ),
             )
         }
             .flowOn(Dispatchers.Default)
@@ -553,6 +541,8 @@ class HomeViewModel(
     internal var pendingConnectRequest: PendingConnectRequest? = null
     internal var ipInfoRefreshJob: Job? = null
     internal var ipInfoRefreshToken: Long = 0L
+    internal var activeIpInfoRefreshReason: IpInfoRefreshReason? = null
+    internal var pendingPostConnectIpRefresh: Boolean = false
     internal var connectedIpRefreshJob: Job? = null
     internal var profileLatencyRefreshJob: Job? = null
     internal var runtimeReloadPendingJob: Job? = null
@@ -763,7 +753,7 @@ class HomeViewModel(
             (
                 settings.privacyRoute.scope == PrivacyRouteScope.ALL_APPS ||
                     settings.privacyRoute.selectedPackages.any(String::isNotBlank)
-            )
+                )
 
     private fun togglePrimaryRuntimeConnection(
         state: HomeUiState,
@@ -1047,15 +1037,21 @@ class HomeViewModel(
 
     fun onAutoRefreshSubscriptionsChanged(value: Boolean) = onAutoRefreshSubscriptionsChangedInternal(value)
 
-    fun onSubscriptionRefreshIntervalSelected(value: SubscriptionRefreshInterval) = onSubscriptionRefreshIntervalSelectedInternal(value)
+    fun onSubscriptionRefreshIntervalSelected(value: SubscriptionRefreshInterval) = onSubscriptionRefreshIntervalSelectedInternal(
+        value
+    )
 
     fun onIpInfoEndpointChanged(value: String) = onIpInfoEndpointChangedInternal(value)
 
     fun onLatencyProbeMethodSelected(value: LatencyProbeMethod) = onLatencyProbeMethodSelectedInternal(value)
 
-    fun onSmartStartProtocolSelectionTimeoutChanged(value: Int) = onSmartStartProtocolSelectionTimeoutChangedInternal(value)
+    fun onSmartStartProtocolSelectionTimeoutChanged(value: Int) = onSmartStartProtocolSelectionTimeoutChangedInternal(
+        value
+    )
 
-    fun onSmartStartRefreshSelectionTimeoutChanged(value: Int) = onSmartStartRefreshSelectionTimeoutChangedInternal(value)
+    fun onSmartStartRefreshSelectionTimeoutChanged(value: Int) = onSmartStartRefreshSelectionTimeoutChangedInternal(
+        value
+    )
 
     fun onSmartStartTransportPrioritySelected(value: SmartStartTransportPriority) =
         onSmartStartTransportPrioritySelectedInternal(value)
@@ -1134,7 +1130,9 @@ class HomeViewModel(
 
     fun onNetworkActivityLoggingChanged(value: Boolean) = onNetworkActivityLoggingChangedInternal(value)
 
-    fun onNetworkActivityPersistentLoggingChanged(value: Boolean) = onNetworkActivityPersistentLoggingChangedInternal(value)
+    fun onNetworkActivityPersistentLoggingChanged(value: Boolean) = onNetworkActivityPersistentLoggingChangedInternal(
+        value
+    )
 
     fun onSmartStartReplayLoggingChanged(value: Boolean) = onSmartStartReplayLoggingChangedInternal(value)
 
@@ -1150,7 +1148,9 @@ class HomeViewModel(
 
     fun onAnalyzeDestinationCountriesChanged(value: Boolean) = onAnalyzeDestinationCountriesChangedInternal(value)
 
-    fun onAnomalyHistoryRetentionSelected(value: AnomalyHistoryRetention) = onAnomalyHistoryRetentionSelectedInternal(value)
+    fun onAnomalyHistoryRetentionSelected(value: AnomalyHistoryRetention) = onAnomalyHistoryRetentionSelectedInternal(
+        value
+    )
 
     fun onAllowInsecureTlsChanged(value: Boolean) = onAllowInsecureTlsChangedInternal(value)
 
@@ -1174,7 +1174,9 @@ class HomeViewModel(
 
     fun onPrivacyRouteBypassVpnTunnelChanged(value: Boolean) = onPrivacyRouteBypassVpnTunnelChangedInternal(value)
 
-    fun onPrivacyRouteSelectedPackagesChanged(value: List<String>) = onPrivacyRouteSelectedPackagesChangedInternal(value)
+    fun onPrivacyRouteSelectedPackagesChanged(value: List<String>) = onPrivacyRouteSelectedPackagesChangedInternal(
+        value
+    )
 
     fun onRenewTorIp() {
         val state = uiState.value
@@ -1307,12 +1309,14 @@ class HomeViewModel(
         clearExistingIp: Boolean,
         fetchMode: IpInfoFetchMode,
         minimumLoadingDurationMs: Long,
+        reason: IpInfoRefreshReason = IpInfoRefreshReason.FOREGROUND,
     ) = refreshIpInfoInternalInternal(
         reportFailures = reportFailures,
         showLoading = showLoading,
         clearExistingIp = clearExistingIp,
         fetchMode = fetchMode,
         minimumLoadingDurationMs = minimumLoadingDurationMs,
+        reason = reason,
     )
 
     suspend fun getResolvedConfig(
@@ -1648,6 +1652,7 @@ class HomeViewModel(
         internal const val AUTO_CONNECT_DISCONNECT_TIMEOUT_MS =
             FoxholeVpnService.VPN_NETWORK_WAIT_TIMEOUT_MS +
                 FoxholeVpnService.CONNECTIVITY_PROBE_NETWORK_WAIT_TIMEOUT_MS
+        internal const val AUTO_CONNECT_DISCONNECT_FORCE_STABILIZE_TIMEOUT_MS = 3_000L
         internal const val AUTO_CONNECT_DISCONNECT_POLL_DELAY_MS = FoxholeVpnService.VPN_NETWORK_WAIT_POLL_DELAY_MS
         internal const val AUTO_CONNECT_LATENCY_MEASUREMENT_SETTLE_MS = CONNECTED_LATENCY_FIRST_DELAY_MS
         internal const val AUTO_CONNECT_LATENCY_MEASUREMENT_RETRY_THRESHOLD_MS = 900L

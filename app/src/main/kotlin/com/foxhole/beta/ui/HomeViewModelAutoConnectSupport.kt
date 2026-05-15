@@ -32,6 +32,7 @@ import com.foxhole.beta.core.smart.AdaptiveProtocolCandidateScore
 import com.foxhole.beta.core.smart.AdaptiveProtocolRanker
 import com.foxhole.beta.core.smart.SmartStartController
 import com.foxhole.beta.core.smart.SmartStartReplayEvent
+import com.foxhole.beta.vpn.FoxholeConnectionServiceContract
 import com.foxhole.beta.vpn.FoxholeVpnService
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
@@ -132,7 +133,8 @@ internal fun HomeViewModel.startAutoConnectInternal(profileId: Long) {
                 require(canStartAutoConnect(fullScanCandidates)) {
                     getApplication<Application>().getString(R.string.auto_connect_requires_supported_profile)
                 }
-                val enabledProtocolSetHash = smartStartEnabledProtocolSetHash(fullScanCandidates.map(AutoConnectProbeCandidate::optionId))
+                val enabledProtocolSetHash =
+                    smartStartEnabledProtocolSetHash(fullScanCandidates.map(AutoConnectProbeCandidate::optionId))
                 val rankedCandidates =
                     scoredAutoConnectCandidatesInternal(profileId, profile, autoConnectNetworkFingerprint)
                 when (
@@ -248,11 +250,11 @@ private suspend fun HomeViewModel.runFastSmartStartAttempts(
                     success = probe.result.success,
                     timedOut = probe.timedOut,
                     remainingBudgetMs =
-                        remainingAutoConnectBudgetMs(
-                            startedAtElapsedMs = autoConnectStartedAt,
-                            nowElapsedMs = SystemClock.elapsedRealtime(),
-                            totalTimeoutMs = HomeViewModel.AUTO_CONNECT_TOTAL_TIMEOUT_MS,
-                        ),
+                    remainingAutoConnectBudgetMs(
+                        startedAtElapsedMs = autoConnectStartedAt,
+                        nowElapsedMs = SystemClock.elapsedRealtime(),
+                        totalTimeoutMs = HomeViewModel.AUTO_CONNECT_TOTAL_TIMEOUT_MS,
+                    ),
                 )
             ) {
                 continue
@@ -331,11 +333,11 @@ private suspend fun HomeViewModel.runColdSmartStartScan(
                         candidates = candidates,
                         networkFingerprint = networkFingerprint,
                         excludeOptionIds =
-                            results
-                                .asSequence()
-                                .filterNot(AutoConnectProbeResult::success)
-                                .map { result -> result.candidate.optionId }
-                                .toSet(),
+                        results
+                            .asSequence()
+                            .filterNot(AutoConnectProbeResult::success)
+                            .map { result -> result.candidate.optionId }
+                            .toSet(),
                     )
                 }.ifEmpty { listOf(winner.candidate.optionId) }
         container.settingsRepository.recordSmartProfileBaseline(
@@ -402,11 +404,11 @@ private suspend fun HomeViewModel.probeSmartStartCandidateWithinBudget(
         }
         return BudgetedAutoConnectProbe(
             result =
-                autoConnectWallClockTimeoutResult(
-                    candidate = candidate,
-                    startedAtElapsedMs = probeStartedAt,
-                    timeoutMs = probeBudgetMs,
-                ),
+            autoConnectWallClockTimeoutResult(
+                candidate = candidate,
+                startedAtElapsedMs = probeStartedAt,
+                timeoutMs = probeBudgetMs,
+            ),
             timedOut = true,
         )
     }
@@ -436,11 +438,11 @@ private suspend fun HomeViewModel.probeSmartStartCandidateWithinBudget(
             }
             return BudgetedAutoConnectProbe(
                 result =
-                    autoConnectWallClockTimeoutResult(
-                        candidate = candidate,
-                        startedAtElapsedMs = probeStartedAt,
-                        timeoutMs = probeBudgetMs,
-                    ),
+                autoConnectWallClockTimeoutResult(
+                    candidate = candidate,
+                    startedAtElapsedMs = probeStartedAt,
+                    timeoutMs = probeBudgetMs,
+                ),
                 timedOut = true,
             )
         }
@@ -473,14 +475,14 @@ private suspend fun HomeViewModel.commitAutoConnectWinner(
     recordAutoConnectCandidateOutcome(
         profileId = profileId,
         result =
-            result.copy(
-                validatedAt = committedAt,
-                trafficObservedAt =
-                    currentTrafficObservedAt(
-                        traffic = container.connectionController.traffic.value,
-                        fallbackAt = committedAt,
-                    ) ?: result.trafficObservedAt,
-            ),
+        result.copy(
+            validatedAt = committedAt,
+            trafficObservedAt =
+            currentTrafficObservedAt(
+                traffic = container.connectionController.traffic.value,
+                fallbackAt = committedAt,
+            ) ?: result.trafficObservedAt,
+        ),
         networkFingerprint = networkFingerprint,
         headline = "winner committed",
         markAsLastKnownGood = true,
@@ -621,7 +623,8 @@ internal fun HomeViewModel.refreshSmartProfileMetricsInternal(profileId: Long) {
                 require(canStartAutoConnect(candidates)) {
                     getApplication<Application>().getString(R.string.auto_connect_requires_supported_profile)
                 }
-                val enabledProtocolSetHash = smartStartEnabledProtocolSetHash(candidates.map(AutoConnectProbeCandidate::optionId))
+                val enabledProtocolSetHash =
+                    smartStartEnabledProtocolSetHash(candidates.map(AutoConnectProbeCandidate::optionId))
                 selectedOptionId = resolveDashboardLatencyOptionId(profile)
                 recommendedProtocolMutable.value = null
                 protocolMetricsRefreshingOptionIdByProfileIdMutable.value =
@@ -674,7 +677,7 @@ internal fun HomeViewModel.refreshSmartProfileMetricsInternal(profileId: Long) {
                         previousVpnNetworkHandle =
                             awaitDisconnectedForAutoConnect(
                                 container.connectionController.currentVpnNetworkHandle(),
-                        )
+                            )
                     }
                 }
                 val recommendedIds =
@@ -685,11 +688,11 @@ internal fun HomeViewModel.refreshSmartProfileMetricsInternal(profileId: Long) {
                                 candidates = candidates,
                                 networkFingerprint = networkFingerprint,
                                 excludeOptionIds =
-                                    results
-                                        .asSequence()
-                                        .filterNot(AutoConnectProbeResult::success)
-                                        .map { result -> result.candidate.optionId }
-                                        .toSet(),
+                                results
+                                    .asSequence()
+                                    .filterNot(AutoConnectProbeResult::success)
+                                    .map { result -> result.candidate.optionId }
+                                    .toSet(),
                             )
                         }
                 if (recommendedIds.isNotEmpty()) {
@@ -724,10 +727,10 @@ internal fun HomeViewModel.refreshSmartProfileMetricsInternal(profileId: Long) {
                     snackbars.emit(
                         FoxholeBannerEvent(
                             message =
-                                getApplication<Application>().getString(
-                                    R.string.protocol_metrics_recommendation,
-                                    winner.candidate.displayName,
-                                ),
+                            getApplication<Application>().getString(
+                                R.string.protocol_metrics_recommendation,
+                                winner.candidate.displayName,
+                            ),
                             tone = FoxholeBannerTone.INFO,
                             actionLabel = getApplication<Application>().getString(R.string.connect),
                             action = FoxholeBannerAction.ACCEPT_PROTOCOL_RECOMMENDATION,
@@ -967,21 +970,21 @@ private fun HomeViewModel.buildConnectedAutoConnectFallbackResult(
         success = true,
         latencyMs = elapsedMs,
         rankingLatencyMs =
-            resolveAutoConnectFallbackRankingLatency(
-                validatedConnectDurationMs = elapsedMs,
-                rememberedLatencyMs = rememberedLatencyMs,
-                penaltyMs = HomeViewModel.AUTO_CONNECT_LATENCY_FALLBACK_PENALTY_MS,
-                protocolHint = candidate.protocolHint,
-                latencyProbeMethod = uiState.value.settings.connection.latencyProbeMethod,
-            ),
+        resolveAutoConnectFallbackRankingLatency(
+            validatedConnectDurationMs = elapsedMs,
+            rememberedLatencyMs = rememberedLatencyMs,
+            penaltyMs = HomeViewModel.AUTO_CONNECT_LATENCY_FALLBACK_PENALTY_MS,
+            protocolHint = candidate.protocolHint,
+            latencyProbeMethod = uiState.value.settings.connection.latencyProbeMethod,
+        ),
         displayLatencyMs = null,
         connectDurationMs = elapsedMs,
         validatedAt = outcomeRecordedAt,
         trafficObservedAt =
-            currentTrafficObservedAt(
-                traffic = container.connectionController.traffic.value,
-                fallbackAt = outcomeRecordedAt,
-            ),
+        currentTrafficObservedAt(
+            traffic = container.connectionController.traffic.value,
+            fallbackAt = outcomeRecordedAt,
+        ),
         reasonCode = AutoConnectReasonCode.LATENCY_ENDPOINT_BLOCKED,
     )
 }
@@ -1062,7 +1065,10 @@ internal suspend fun HomeViewModel.probeAutoConnectCandidateInternal(
     val measuredLatency =
         runCatching { measureAutoConnectCandidateLatency() }
             .onFailure { probeError ->
-                container.diagnosticsLogger.record("auto-connect", "latency probe failed: ${probeError.message.orEmpty()}")
+                container.diagnosticsLogger.record(
+                    "auto-connect",
+                    "latency probe failed: ${probeError.message.orEmpty()}"
+                )
             }.getOrElse { error ->
                 val rememberedLatencyMs =
                     rememberedAutoConnectLatency(
@@ -1075,13 +1081,13 @@ internal suspend fun HomeViewModel.probeAutoConnectCandidateInternal(
                     success = true,
                     latencyMs = validatedConnectDurationMs,
                     rankingLatencyMs =
-                        resolveAutoConnectFallbackRankingLatency(
-                            validatedConnectDurationMs = validatedConnectDurationMs,
-                            rememberedLatencyMs = rememberedLatencyMs,
-                            penaltyMs = HomeViewModel.AUTO_CONNECT_LATENCY_FALLBACK_PENALTY_MS,
-                            protocolHint = candidate.protocolHint,
-                            latencyProbeMethod = uiState.value.settings.connection.latencyProbeMethod,
-                        ),
+                    resolveAutoConnectFallbackRankingLatency(
+                        validatedConnectDurationMs = validatedConnectDurationMs,
+                        rememberedLatencyMs = rememberedLatencyMs,
+                        penaltyMs = HomeViewModel.AUTO_CONNECT_LATENCY_FALLBACK_PENALTY_MS,
+                        protocolHint = candidate.protocolHint,
+                        latencyProbeMethod = uiState.value.settings.connection.latencyProbeMethod,
+                    ),
                     displayLatencyMs = null,
                     connectDurationMs = validatedConnectDurationMs,
                     validatedAt = outcomeRecordedAt,
@@ -1151,7 +1157,10 @@ internal suspend fun HomeViewModel.measureAutoConnectCandidateLatency(): Long {
     val settledLatencyMs =
         runCatching { container.connectionController.measureCurrentConnectionLatency() }
             .onFailure { error ->
-                container.diagnosticsLogger.record("auto-connect", "latency settled retry failed: ${error.message.orEmpty()}")
+                container.diagnosticsLogger.record(
+                    "auto-connect",
+                    "latency settled retry failed: ${error.message.orEmpty()}"
+                )
             }.getOrNull()
     val resolvedLatencyMs = resolveAutoConnectLatencyMeasurementResult(warmupLatencyMs, settledLatencyMs)
     container.diagnosticsLogger.record(
@@ -1224,17 +1233,17 @@ internal suspend fun HomeViewModel.recordAutoConnectCandidateOutcomeInternal(
     )
     container.diagnosticsLogger.recordSmartStartReplay(
         event =
-            SmartStartReplayEvent(
-                timestamp = System.currentTimeMillis(),
-                profileId = profileId,
-                optionId = result.candidate.optionId,
-                protocol = result.candidate.protocolHint.name.lowercase(),
-                outcome = if (result.success) "ok" else "down",
-                rankingLatencyMs = result.rankingLatencyMs,
-                connectDurationMs = result.connectDurationMs,
-                reasonCode = result.reasonCode?.wireCode,
-                networkFingerprintPrefix = networkFingerprint?.take(12),
-            ),
+        SmartStartReplayEvent(
+            timestamp = System.currentTimeMillis(),
+            profileId = profileId,
+            optionId = result.candidate.optionId,
+            protocol = result.candidate.protocolHint.name.lowercase(),
+            outcome = if (result.success) "ok" else "down",
+            rankingLatencyMs = result.rankingLatencyMs,
+            connectDurationMs = result.connectDurationMs,
+            reasonCode = result.reasonCode?.wireCode,
+            networkFingerprintPrefix = networkFingerprint?.take(12),
+        ),
         enabled = uiState.value.settings.expert.smartStartReplayLogging,
     )
 }
@@ -1292,12 +1301,53 @@ internal suspend fun HomeViewModel.awaitDisconnectedForAutoConnectInternal(
         if (SystemClock.elapsedRealtime() >= deadlineAt) {
             container.diagnosticsLogger.record(
                 "auto-connect",
-                "vpn network teardown timed out; continuing with previous handle excluded: previous=${expectedPreviousVpnNetworkHandle ?: "none"} current=${currentVpnNetworkHandle ?: "none"}",
+                "vpn network teardown timed out; force stabilizing before next candidate: previous=${expectedPreviousVpnNetworkHandle ?: "none"} current=${currentVpnNetworkHandle ?: "none"}",
             )
+            forceStabilizeAutoConnectDisconnect(expectedPreviousVpnNetworkHandle)
             return expectedPreviousVpnNetworkHandle
         }
         delay(HomeViewModel.AUTO_CONNECT_DISCONNECT_POLL_DELAY_MS)
     }
+}
+
+private suspend fun HomeViewModel.forceStabilizeAutoConnectDisconnect(previousVpnNetworkHandle: Long?) {
+    val app = getApplication<Application>()
+    val mode =
+        FoxholeConnectionServiceContract.serviceMode(
+            snapshot = container.connectionController.snapshot.value,
+            fallbackMode = container.settingsRepository.current().traffic.mode,
+        )
+    FoxholeConnectionServiceContract.startForegroundService(
+        context = app,
+        mode = mode,
+        action = FoxholeConnectionServiceContract.ACTION_DISCONNECT,
+        suppressLocalGuard = true,
+        preserveSmartStartAnalysis = true,
+    )
+    val deadlineAt = SystemClock.elapsedRealtime() + HomeViewModel.AUTO_CONNECT_DISCONNECT_FORCE_STABILIZE_TIMEOUT_MS
+    while (SystemClock.elapsedRealtime() < deadlineAt) {
+        val snapshot = container.connectionController.snapshot.value
+        val currentVpnNetworkHandle = container.connectionController.currentVpnNetworkHandle()
+        if (
+            isAutoConnectDisconnectSettled(
+                connectionState = snapshot.state,
+                profileId = snapshot.profileId,
+                currentVpnNetworkHandle = currentVpnNetworkHandle,
+                previousVpnNetworkHandle = previousVpnNetworkHandle,
+            )
+        ) {
+            container.diagnosticsLogger.record(
+                "auto-connect",
+                "vpn network teardown stabilized after forced disconnect",
+            )
+            return
+        }
+        delay(HomeViewModel.AUTO_CONNECT_DISCONNECT_POLL_DELAY_MS)
+    }
+    container.diagnosticsLogger.record(
+        "auto-connect",
+        "vpn network teardown still not settled after forced disconnect; next candidate will exclude stale handle",
+    )
 }
 
 internal fun HomeViewModel.initializeAutoConnectUiInternal(candidates: List<AutoConnectProbeCandidate>) {
@@ -1308,13 +1358,13 @@ internal fun HomeViewModel.initializeAutoConnectUiInternal(candidates: List<Auto
             currentProtocolHint = candidates.firstOrNull()?.protocolHint,
             currentDisplayName = candidates.firstOrNull()?.displayName,
             options =
-                candidates.map { candidate ->
-                    AutoConnectProbeOptionUiState(
-                        optionId = candidate.optionId,
-                        displayName = candidate.displayName,
-                        protocolHint = candidate.protocolHint,
-                    )
-                },
+            candidates.map { candidate ->
+                AutoConnectProbeOptionUiState(
+                    optionId = candidate.optionId,
+                    displayName = candidate.displayName,
+                    protocolHint = candidate.protocolHint,
+                )
+            },
         )
 }
 
@@ -1330,17 +1380,17 @@ internal fun HomeViewModel.markAutoConnectCandidateTestingInternal(
             currentProtocolHint = candidate.protocolHint,
             currentDisplayName = candidate.displayName,
             options =
-                autoConnectUiStateMutable.value.options.map { option ->
-                    if (option.optionId == candidate.optionId) {
-                        option.copy(
-                            status = AutoConnectProbeStatus.TESTING,
-                            latencyMs = null,
-                            latencyUnavailable = false,
-                        )
-                    } else {
-                        option
-                    }
-                },
+            autoConnectUiStateMutable.value.options.map { option ->
+                if (option.optionId == candidate.optionId) {
+                    option.copy(
+                        status = AutoConnectProbeStatus.TESTING,
+                        latencyMs = null,
+                        latencyUnavailable = false,
+                    )
+                } else {
+                    option
+                }
+            },
         )
 }
 
@@ -1359,22 +1409,22 @@ internal fun HomeViewModel.markAutoConnectCandidateFinishedInternal(result: Auto
     autoConnectUiStateMutable.value =
         autoConnectUiStateMutable.value.copy(
             options =
-                autoConnectUiStateMutable.value.options.map { option ->
-                    if (option.optionId == result.candidate.optionId) {
-                        option.copy(
-                            status =
-                                if (result.success) {
-                                    AutoConnectProbeStatus.SUCCESS
-                                } else {
-                                    AutoConnectProbeStatus.FAILED
-                                },
-                            latencyMs = result.displayLatencyMs,
-                            latencyUnavailable = result.success && result.displayLatencyMs == null,
-                        )
-                    } else {
-                        option
-                    }
-                },
+            autoConnectUiStateMutable.value.options.map { option ->
+                if (option.optionId == result.candidate.optionId) {
+                    option.copy(
+                        status =
+                        if (result.success) {
+                            AutoConnectProbeStatus.SUCCESS
+                        } else {
+                            AutoConnectProbeStatus.FAILED
+                        },
+                        latencyMs = result.displayLatencyMs,
+                        latencyUnavailable = result.success && result.displayLatencyMs == null,
+                    )
+                } else {
+                    option
+                }
+            },
         )
 }
 
@@ -1386,17 +1436,17 @@ internal fun HomeViewModel.markAutoConnectWinnerInternal(result: AutoConnectProb
             currentProtocolHint = result.candidate.protocolHint,
             currentDisplayName = result.candidate.displayName,
             options =
-                autoConnectUiStateMutable.value.options.map { option ->
-                    if (option.optionId == result.candidate.optionId) {
-                        option.copy(
-                            status = AutoConnectProbeStatus.WINNER,
-                            latencyMs = result.displayLatencyMs,
-                            latencyUnavailable = result.success && result.displayLatencyMs == null,
-                        )
-                    } else {
-                        option
-                    }
-                },
+            autoConnectUiStateMutable.value.options.map { option ->
+                if (option.optionId == result.candidate.optionId) {
+                    option.copy(
+                        status = AutoConnectProbeStatus.WINNER,
+                        latencyMs = result.displayLatencyMs,
+                        latencyUnavailable = result.success && result.displayLatencyMs == null,
+                    )
+                } else {
+                    option
+                }
+            },
         )
 }
 
@@ -1417,7 +1467,11 @@ internal fun HomeViewModel.availableAutoConnectCandidatesInternal(
     profile: Profile,
     networkFingerprint: NetworkFingerprint?,
 ): List<AutoConnectProbeCandidate> {
-    return scoredAutoConnectCandidatesInternal(profileId, profile, networkFingerprint).map(AdaptiveProtocolCandidateScore::candidate)
+    return scoredAutoConnectCandidatesInternal(
+        profileId,
+        profile,
+        networkFingerprint
+    ).map(AdaptiveProtocolCandidateScore::candidate)
 }
 
 internal fun HomeViewModel.scoredAutoConnectCandidatesInternal(
@@ -1496,7 +1550,7 @@ internal fun HomeViewModel.cacheProtocolServerPingInternal(
     val key = ProfileOptionLatencyKey(profileId, optionId)
     profileOptionServerPingsMutable.value =
         profileOptionServerPingsMutable.value +
-            (key to ProfileOptionServerPingState(pingMs = pingMs.coerceAtLeast(1L)))
+        (key to ProfileOptionServerPingState(pingMs = pingMs.coerceAtLeast(1L)))
     markProtocolMetricsUpdated(profileId, optionId)
 }
 
@@ -1507,7 +1561,7 @@ internal fun HomeViewModel.markProtocolServerPingUnavailableInternal(
     val key = ProfileOptionLatencyKey(profileId, optionId)
     profileOptionServerPingsMutable.value =
         profileOptionServerPingsMutable.value +
-            (key to ProfileOptionServerPingState(unavailable = true))
+        (key to ProfileOptionServerPingState(unavailable = true))
     markProtocolMetricsUpdated(profileId, optionId)
 }
 
@@ -1699,10 +1753,10 @@ private suspend fun HomeViewModel.recordConnectedProtocolSmartStartMemory(
         networkFingerprint = networkFingerprint?.key,
         validatedAt = recordedAt,
         trafficObservedAt =
-            currentTrafficObservedAt(
-                traffic = container.connectionController.traffic.value,
-                fallbackAt = recordedAt,
-            ),
+        currentTrafficObservedAt(
+            traffic = container.connectionController.traffic.value,
+            fallbackAt = recordedAt,
+        ),
         countTowardOutcomeHistory = countTowardOutcomeHistory,
     )
     val candidates = fullScanAutoConnectCandidates(profile.id, profile)
@@ -1719,7 +1773,9 @@ private suspend fun HomeViewModel.recordConnectedProtocolSmartStartMemory(
         container.settingsRepository.recordSmartProfileBaseline(
             profileId = profile.id,
             recommendedProtocolIds = recommendedIds,
-            enabledProtocolSetHash = smartStartEnabledProtocolSetHash(candidates.map(AutoConnectProbeCandidate::optionId)),
+            enabledProtocolSetHash = smartStartEnabledProtocolSetHash(
+                candidates.map(AutoConnectProbeCandidate::optionId)
+            ),
         )
     }
 }
@@ -1760,10 +1816,10 @@ private fun HomeViewModel.activeDashboardLatencyTarget(
             profile = targetProfile,
             optionId = selectedOptionId,
             protocolHint =
-                targetProfile.protocolOptions
-                    .firstOrNull { option -> option.id == selectedOptionId }
-                    ?.protocolHint
-                    ?: fallbackProtocolHint,
+            targetProfile.protocolOptions
+                .firstOrNull { option -> option.id == selectedOptionId }
+                ?.protocolHint
+                ?: fallbackProtocolHint,
         )
     } else {
         null
@@ -1806,7 +1862,9 @@ internal fun resolveAutoConnectFallbackRankingLatency(
         } else {
             penaltyMs.coerceAtLeast(0L)
         }
-    return ((rememberedLatencyMs ?: validatedConnectDurationMs).coerceAtLeast(1L) + transportPenaltyMs).coerceAtLeast(1L)
+    return ((rememberedLatencyMs ?: validatedConnectDurationMs).coerceAtLeast(1L) + transportPenaltyMs).coerceAtLeast(
+        1L
+    )
 }
 
 internal fun shouldRetryAutoConnectLatencyMeasurement(warmupLatencyMs: Long): Boolean =
@@ -1914,5 +1972,5 @@ internal fun isAutoConnectDisconnectSettled(
     (
         connectionState in setOf(ConnectionState.IDLE, ConnectionState.ERROR) ||
             (connectionState == ConnectionState.CONNECTED && profileId == FoxholeVpnService.LOCAL_GUARD_PROFILE_ID)
-    ) &&
+        ) &&
         (previousVpnNetworkHandle == null || currentVpnNetworkHandle != previousVpnNetworkHandle)

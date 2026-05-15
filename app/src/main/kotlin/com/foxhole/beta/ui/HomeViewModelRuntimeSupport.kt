@@ -1,7 +1,6 @@
 package com.foxhole.beta.ui
 
 import android.app.Application
-import android.content.ClipData
 import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
@@ -38,7 +37,11 @@ internal fun HomeViewModel.importPresetTextInternal(
     viewModelScope.launch {
         runCatching { container.routingRepository.importPresetDocument(raw, source) }
             .onSuccess { emitSuccess(getApplication<Application>().getString(R.string.routing_preset_imported)) }
-            .onFailure { emitError(it.message ?: getApplication<Application>().getString(R.string.routing_preset_import_failed)) }
+            .onFailure {
+                emitError(
+                    it.message ?: getApplication<Application>().getString(R.string.routing_preset_import_failed)
+                )
+            }
     }
 }
 
@@ -49,6 +52,7 @@ internal fun HomeViewModel.refreshIpInfoInternal() {
         clearExistingIp = false,
         fetchMode = IpInfoFetchMode.FULL,
         minimumLoadingDurationMs = HomeViewModel.MANUAL_IP_REFRESH_MIN_LOADING_MS,
+        reason = IpInfoRefreshReason.MANUAL,
     )
 }
 
@@ -59,6 +63,7 @@ internal fun HomeViewModel.refreshIpInfoSilentlyInternal() {
         clearExistingIp = false,
         fetchMode = IpInfoFetchMode.FULL,
         minimumLoadingDurationMs = 0L,
+        reason = IpInfoRefreshReason.FOREGROUND,
     )
 }
 
@@ -68,13 +73,16 @@ internal fun HomeViewModel.refreshIpInfoInternalInternal(
     clearExistingIp: Boolean,
     fetchMode: IpInfoFetchMode,
     minimumLoadingDurationMs: Long = 0L,
+    reason: IpInfoRefreshReason = IpInfoRefreshReason.FOREGROUND,
 ) {
     val refreshToken = invalidateIpInfoRefreshes()
     ipInfoRefreshJob =
         viewModelScope.launch {
+            val target = ipInfoRefreshTargetForSnapshot(container.connectionController.snapshot.value)
+            activeIpInfoRefreshReason = reason
             container.diagnosticsLogger.record(
                 "ip",
-                "dashboard refresh started mode=${fetchMode.name.lowercase()} showLoading=$showLoading clearExistingIp=$clearExistingIp",
+                "dashboard refresh started id=$refreshToken reason=${reason.name.lowercase()} mode=${fetchMode.name.lowercase()} target=${target.name.lowercase()} showLoading=$showLoading clearExistingIp=$clearExistingIp",
             )
             if (showLoading) {
                 ipInfoLoadingMutable.value = true
@@ -91,7 +99,10 @@ internal fun HomeViewModel.refreshIpInfoInternalInternal(
                                 FoxholeVpnRuntimeBridge.updateDeviceIpInfo(info)
                             }
                             FoxholeVpnRuntimeBridge.updateIpInfo(info)
-                            container.diagnosticsLogger.record("ip", "geo refreshed")
+                            container.diagnosticsLogger.record(
+                                "ip",
+                                "geo refreshed id=$refreshToken reason=${reason.name.lowercase()} target=${target.name.lowercase()}",
+                            )
                         }
                     }
                     .onFailure {
@@ -99,6 +110,9 @@ internal fun HomeViewModel.refreshIpInfoInternalInternal(
                             "ip",
                             "geo refresh failed: ${it.javaClass.simpleName}: ${it.message.orEmpty()}",
                         )
+                        if (reason == IpInfoRefreshReason.POST_CONNECT && target == IpInfoRefreshTarget.VPN_BOUND) {
+                            FoxholeVpnRuntimeBridge.updateIpInfo(null)
+                        }
                         if (reportFailures) {
                             emitError(getApplication<Application>().getString(R.string.ip_info_failed))
                         }
@@ -116,10 +130,11 @@ internal fun HomeViewModel.refreshIpInfoInternalInternal(
                 }
                 container.diagnosticsLogger.record(
                     "ip",
-                    "dashboard refresh finished loading=${ipInfoLoadingMutable.value}",
+                    "dashboard refresh finished id=$refreshToken reason=${reason.name.lowercase()} loading=${ipInfoLoadingMutable.value}",
                 )
                 if (ipInfoRefreshToken == refreshToken) {
                     ipInfoRefreshJob = null
+                    activeIpInfoRefreshReason = null
                 }
             }
         }
@@ -266,7 +281,10 @@ internal fun HomeViewModel.exportDiagnosticsInternal(file: File = createDiagnost
     return Intent(Intent.ACTION_SEND).apply {
         type = "application/gzip"
         putExtra(Intent.EXTRA_STREAM, uri)
-        putExtra(Intent.EXTRA_SUBJECT, getApplication<Application>().getString(R.string.export_diagnostics_share_subject))
+        putExtra(
+            Intent.EXTRA_SUBJECT,
+            getApplication<Application>().getString(R.string.export_diagnostics_share_subject)
+        )
         putExtra(Intent.EXTRA_TEXT, getApplication<Application>().getString(R.string.export_diagnostics_share_text))
         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
     }
@@ -500,7 +518,7 @@ internal suspend fun HomeViewModel.connectNowInternal(
     isSmartStartConnection: Boolean = false,
     previousVpnNetworkHandle: Long? = null,
 ) {
-    invalidateIpInfoRefreshes()
+    supersedeIpInfoRefreshesForConnect()
     requestNotificationPermission.tryEmit(Unit)
     if (profileId == FoxholeVpnService.TOR_ONLY_PROFILE_ID) {
         container.connectionController.connectTorOnly(statusMessage = statusMessage)
@@ -514,6 +532,17 @@ internal suspend fun HomeViewModel.connectNowInternal(
         isSmartStartConnection = isSmartStartConnection,
         previousVpnNetworkHandle = previousVpnNetworkHandle,
     )
+}
+
+private fun HomeViewModel.supersedeIpInfoRefreshesForConnect() {
+    if (shouldSupersedeIpRefreshForConnect(activeIpInfoRefreshReason)) {
+        pendingPostConnectIpRefresh = true
+        container.diagnosticsLogger.record(
+            "ip",
+            "dashboard refresh superseded by connect reason=${activeIpInfoRefreshReason?.name?.lowercase().orEmpty()}",
+        )
+    }
+    invalidateIpInfoRefreshes()
 }
 
 private suspend fun HomeViewModel.warnIfTorRouteCannotRunForProfile(
@@ -540,13 +569,14 @@ private fun Profile.runtimeProtocolHint(protocolOptionId: String?) =
                 ?.takeIf(String::isNotBlank)
                 ?.let { selectedId -> protocolOptions.firstOrNull { option -> option.id == selectedId } }
             ?: protocolOptions.firstOrNull()
-    )?.protocolHint ?: protocolHint
+        )?.protocolHint ?: protocolHint
 
 internal fun HomeViewModel.invalidateIpInfoRefreshesInternal(): Long {
     connectedIpRefreshJob?.cancel()
     connectedIpRefreshJob = null
     ipInfoRefreshJob?.cancel()
     ipInfoRefreshJob = null
+    activeIpInfoRefreshReason = null
     ipInfoLoadingMutable.value = false
     ipInfoRefreshToken += 1
     return ipInfoRefreshToken
@@ -557,18 +587,24 @@ internal fun HomeViewModel.scheduleConnectedIpRefreshInternal() {
     connectedIpRefreshJob =
         viewModelScope.launch {
             delay(HomeViewModel.CONNECTED_IP_REFRESH_DELAY_MS)
-            if (
-                container.connectionController.snapshot.value.state != ConnectionState.CONNECTED ||
-                ipInfoRefreshJob != null
-            ) {
+            if (container.connectionController.snapshot.value.state != ConnectionState.CONNECTED) {
                 return@launch
             }
+            if (ipInfoRefreshJob != null) {
+                container.diagnosticsLogger.record(
+                    "ip",
+                    "post-connect refresh replacing active refresh reason=${activeIpInfoRefreshReason?.name?.lowercase().orEmpty()}",
+                )
+                invalidateIpInfoRefreshes()
+            }
+            pendingPostConnectIpRefresh = false
             startIpInfoRefresh(
                 reportFailures = true,
                 showLoading = false,
-                clearExistingIp = false,
+                clearExistingIp = true,
                 fetchMode = IpInfoFetchMode.FULL,
                 minimumLoadingDurationMs = 0L,
+                reason = IpInfoRefreshReason.POST_CONNECT,
             )
         }
 }
@@ -634,7 +670,9 @@ internal fun HomeViewModel.loadInstalledAppsInternal() {
                                     flags and ApplicationInfo.FLAG_UPDATED_SYSTEM_APP != 0
                             InstalledAppOption(
                                 packageName = packageName,
-                                label = applicationInfo.loadLabel(packageManager)?.toString().orEmpty().ifBlank { packageName },
+                                label = applicationInfo.loadLabel(
+                                    packageManager
+                                )?.toString().orEmpty().ifBlank { packageName },
                                 isSystemApp = isSystemApp,
                             )
                         }.sortedWith(
@@ -644,7 +682,7 @@ internal fun HomeViewModel.loadInstalledAppsInternal() {
                                 { it.packageName.lowercase() },
                             ),
                         )
-            }
+                }
             installedAppsMutable.value = installed
             installedAppsLoadedMutable.value = true
             container.settingsRepository.recordInstalledAppInventory(installed)

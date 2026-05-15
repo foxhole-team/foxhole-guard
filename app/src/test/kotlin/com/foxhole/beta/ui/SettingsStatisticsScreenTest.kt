@@ -87,4 +87,16 @@ class SettingsStatisticsScreenTest {
             statistics.transports.single { item -> item.transport == TransportProtocol.UDP }.totalBytes,
         )
     }
+
+    @Test
+    fun `dashboard statistics range excludes all`() {
+        assertEquals(
+            listOf(
+                StatisticsDisplayRange.HOURS_24,
+                StatisticsDisplayRange.WEEK,
+                StatisticsDisplayRange.MONTH,
+            ),
+            dashboardStatisticsDisplayRanges(),
+        )
+    }
 }
