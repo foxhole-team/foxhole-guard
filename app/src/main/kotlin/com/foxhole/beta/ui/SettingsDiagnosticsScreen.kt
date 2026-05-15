@@ -3,13 +3,31 @@ package com.foxhole.beta.ui
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.text.format.DateUtils
 import androidx.activity.compose.ManagedActivityResultLauncher
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Apps
 import androidx.compose.material.icons.outlined.FileUpload
 import androidx.compose.material.icons.outlined.Public
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -17,15 +35,26 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.vectorResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import com.foxhole.beta.R
 import com.foxhole.beta.core.diagnostics.DiagnosticEntry
 import com.foxhole.beta.core.diagnostics.DiagnosticSanitizer
 import com.foxhole.beta.core.model.DiagnosticsRetention
+import com.foxhole.beta.core.model.InstalledAppChangeType
+import com.foxhole.beta.core.model.InstalledAppInventoryChange
+import com.foxhole.beta.core.model.InstalledAppRiskLevel
+import com.foxhole.beta.core.model.StatisticsMetric
+import com.foxhole.beta.core.security.labelRes
+import com.foxhole.beta.ui.theme.LocalFoxholeSemanticColors
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -45,11 +74,15 @@ fun DiagnosticsScreen(
     onNetworkActivityPersistentLoggingChanged: (Boolean) -> Unit,
     onFirewallEnabledChanged: (Boolean) -> Unit,
     onDiagnosticsRetentionSelected: (DiagnosticsRetention) -> Unit,
+    onStatisticsMetricEnabledChanged: (StatisticsMetric, Boolean) -> Unit,
+    onOpenSecurityAppMonitorSettings: () -> Unit,
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     var networkLogVisible by rememberSaveable { mutableStateOf(false) }
     var foxholeLogVisible by rememberSaveable { mutableStateOf(false) }
+    var appChangesLogVisible by rememberSaveable { mutableStateOf(false) }
+    var appChangesEnableVisible by rememberSaveable { mutableStateOf(false) }
     var retentionMenuExpanded by rememberSaveable { mutableStateOf(false) }
     var pendingSavedLog by remember { mutableStateOf<SavedLogPayload?>(null) }
     val saveStrings =
@@ -87,6 +120,13 @@ fun DiagnosticsScreen(
         onDiagnosticsRetentionSelected = onDiagnosticsRetentionSelected,
         onOpenNetworkLog = { networkLogVisible = true },
         onOpenFoxholeLog = { foxholeLogVisible = true },
+        onOpenAppChangesLog = {
+            if (state.settings.statistics.appChangesEnabled) {
+                appChangesLogVisible = true
+            } else {
+                appChangesEnableVisible = true
+            }
+        },
     )
 
     if (networkLogVisible) {
@@ -138,6 +178,40 @@ fun DiagnosticsScreen(
             },
         )
     }
+
+    if (appChangesLogVisible) {
+        InstalledAppChangesJournalDialog(
+            changes = state.settings.installedAppInventoryAudit.recentChanges,
+            onDismiss = { appChangesLogVisible = false },
+        )
+    }
+
+    if (appChangesEnableVisible) {
+        AppChangesJournalEnableDialog(
+            onDismiss = { appChangesEnableVisible = false },
+            onConfirm = {
+                appChangesEnableVisible = false
+                onStatisticsMetricEnabledChanged(StatisticsMetric.APP_CHANGES, true)
+                onOpenSecurityAppMonitorSettings()
+            },
+        )
+    }
+}
+
+@Composable
+private fun AppChangesJournalEnableDialog(
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit,
+) {
+    ConfirmDialog(
+        title = stringResource(R.string.app_changes_journal_enable_title),
+        body = stringResource(R.string.app_changes_journal_enable_body),
+        confirmLabel = stringResource(R.string.app_changes_journal_go_to_security),
+        dismissLabel = stringResource(R.string.cancel),
+        icon = Icons.Outlined.Apps,
+        onDismiss = onDismiss,
+        onConfirm = onConfirm,
+    )
 }
 
 @Composable
@@ -153,6 +227,7 @@ private fun DiagnosticsScreenContent(
     onDiagnosticsRetentionSelected: (DiagnosticsRetention) -> Unit,
     onOpenNetworkLog: () -> Unit,
     onOpenFoxholeLog: () -> Unit,
+    onOpenAppChangesLog: () -> Unit,
 ) {
     var persistentLoggingWarningVisible by rememberSaveable { mutableStateOf(false) }
     SettingsScaffold(
@@ -222,6 +297,20 @@ private fun DiagnosticsScreenContent(
                     grouped = true,
                     onClick = onOpenFoxholeLog,
                 )
+                SettingsControlGroupDivider()
+                SettingsNavigationRow(
+                    icon = Icons.Outlined.Apps,
+                    title = stringResource(R.string.app_changes_journal_title),
+                    summary =
+                    if (state.settings.statistics.appChangesEnabled) {
+                        stringResource(R.string.app_changes_journal_summary)
+                    } else {
+                        stringResource(R.string.app_changes_journal_disabled_summary)
+                    },
+                    showAlertDot = state.settings.installedAppInventoryAudit.recentChanges.isNotEmpty(),
+                    grouped = true,
+                    onClick = onOpenAppChangesLog,
+                )
             }
         }
     }
@@ -242,6 +331,134 @@ private fun DiagnosticsScreenContent(
         )
     }
 }
+
+@Composable
+private fun InstalledAppChangesJournalDialog(
+    changes: List<InstalledAppInventoryChange>,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.app_changes_journal_title)) },
+        text = {
+            if (changes.isEmpty()) {
+                Text(
+                    text = stringResource(R.string.app_changes_journal_empty),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            } else {
+                LazyColumn(modifier = Modifier.heightIn(max = 520.dp)) {
+                    items(
+                        changes,
+                        key = { change -> "${change.packageName}-${change.type}-${change.detectedAt}" },
+                    ) { change ->
+                        InstalledAppChangeJournalRow(change = change)
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.32f))
+                    }
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.close))
+            }
+        },
+    )
+}
+
+@Composable
+private fun InstalledAppChangeJournalRow(change: InstalledAppInventoryChange) {
+    val semanticColors = LocalFoxholeSemanticColors.current
+    val changeColor =
+        when (change.type) {
+            InstalledAppChangeType.INSTALLED -> semanticColors.warning
+            InstalledAppChangeType.REMOVED -> MaterialTheme.colorScheme.error
+        }
+    val riskColor =
+        when (change.riskLevel) {
+            InstalledAppRiskLevel.LOW -> MaterialTheme.colorScheme.onSurfaceVariant
+            InstalledAppRiskLevel.MEDIUM -> semanticColors.warning
+            InstalledAppRiskLevel.HIGH -> MaterialTheme.colorScheme.error
+        }
+    val source = change.installerPackageName ?: stringResource(R.string.installed_app_source_unknown)
+    val signalLabels = change.riskSignals.map { signal -> stringResource(signal.labelRes()) }
+    val signals =
+        signalLabels
+            .joinToString(" • ")
+            .ifBlank { stringResource(R.string.installed_app_risk_signals_none) }
+    Surface(color = MaterialTheme.colorScheme.surface.copy(alpha = 0f)) {
+        Row(
+            modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(vertical = 9.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.Top,
+        ) {
+            Canvas(modifier = Modifier.padding(top = 5.dp).size(10.dp)) {
+                drawCircle(changeColor)
+            }
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Text(
+                    text = change.label,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text =
+                    stringResource(
+                        when (change.type) {
+                            InstalledAppChangeType.INSTALLED -> R.string.statistics_app_change_installed
+                            InstalledAppChangeType.REMOVED -> R.string.statistics_app_change_removed
+                        },
+                        change.packageName,
+                        formatJournalRelativeTime(change.detectedAt),
+                    ),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text =
+                    stringResource(
+                        R.string.statistics_app_change_security_summary,
+                        source,
+                        stringResource(change.riskLevel.labelRes()),
+                    ),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = riskColor,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = signals,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 3,
+                    overflow = TextOverflow.Clip,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun formatJournalRelativeTime(timestampMs: Long): String =
+    timestampMs
+        .takeIf { timestamp -> timestamp > 0L }
+        ?.let { timestamp ->
+            DateUtils.getRelativeTimeSpanString(
+                timestamp,
+                System.currentTimeMillis(),
+                DateUtils.MINUTE_IN_MILLIS,
+            ).toString()
+        }
+        ?: stringResource(R.string.statistics_no_data)
 
 @Composable
 private fun rememberTextLogSaver(

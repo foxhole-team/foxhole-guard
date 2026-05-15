@@ -82,6 +82,9 @@ jobs:
       - name: build release
         run: ./gradlew --no-daemon --console=plain --stacktrace -Pfoxhole.splitApks=true validateSigningRelease assembleRelease
 
+      - name: verify AdGuard DNS assets in release APKs
+        run: scripts/verify-adguard-dns-assets.sh app/build/outputs/apk/release/*.apk
+
       - name: generate sbom
         run: ./gradlew --no-daemon --console=plain --stacktrace cyclonedxBom
 

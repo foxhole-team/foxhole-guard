@@ -87,9 +87,7 @@ import com.foxhole.beta.core.model.AnomalyType
 import com.foxhole.beta.core.model.AppTrafficWindow
 import com.foxhole.beta.core.model.DnsSettings
 import com.foxhole.beta.core.model.InstalledAppOption
-import com.foxhole.beta.core.model.InstalledAppChangeType
 import com.foxhole.beta.core.model.InstalledAppInventoryChange
-import com.foxhole.beta.core.model.InstalledAppRiskLevel
 import com.foxhole.beta.core.model.OverallStatisticsUiItem
 import com.foxhole.beta.core.model.Profile
 import com.foxhole.beta.core.model.ProfileComparisonSideUiItem
@@ -109,7 +107,6 @@ import com.foxhole.beta.core.model.TrafficMapUiState
 import com.foxhole.beta.core.model.TransportProtocol
 import com.foxhole.beta.core.model.TransportStatisticsUiItem
 import com.foxhole.beta.core.model.TrafficWindow
-import com.foxhole.beta.core.security.labelRes
 import com.foxhole.beta.core.traffic.TorGeoIpCountryResolver
 import com.foxhole.beta.ui.theme.LocalFoxholeSemanticColors
 import androidx.lifecycle.Lifecycle
@@ -155,7 +152,7 @@ fun StatisticsScreen(
     val retention = state.settings.statistics.retention
     val statistics = state.statisticsDashboard.statistics
     val appRows = state.statisticsDashboard.appRows
-    val topApps = appRows.take(STATISTICS_TOP_PREVIEW_LIMIT)
+    val topApps = appRows.take(APP_TRAFFIC_CHART_LIMIT)
     val countryRows = state.statisticsDashboard.countryRows
     val topCountryLimit =
         if (countryRows.size > STATISTICS_TOP_PREVIEW_LIMIT) {
@@ -164,7 +161,6 @@ fun StatisticsScreen(
             STATISTICS_TOP_PREVIEW_LIMIT
         }
     val topCountryRows = countryRows.take(topCountryLimit)
-    val appChanges = state.statisticsDashboard.appChanges
     val dnsSummary =
         dnsProtectionSummary(
             trafficWindows = state.trafficWindows,
@@ -252,15 +248,11 @@ fun StatisticsScreen(
                     )
                 }
             }
-            if (
-                (statisticsSettings.anomalyMetricsEnabled && anomalyEventsForRange.isNotEmpty()) ||
-                (statisticsSettings.appChangesEnabled && appChanges.isNotEmpty())
-            ) {
+            if (statisticsSettings.anomalyMetricsEnabled && anomalyEventsForRange.isNotEmpty()) {
                 item(key = "anomalies") {
                     AnomalyStatisticsCard(
-                        events = if (statisticsSettings.anomalyMetricsEnabled) anomalyEventsForRange else emptyList(),
+                        events = anomalyEventsForRange,
                         totalEventsCount = state.anomalyEvents.size,
-                        appChanges = if (statisticsSettings.appChangesEnabled) appChanges else emptyList(),
                         installedApps = state.installedApps,
                         range = anomalyRange,
                         onRangeSelected = { anomalyRange = it },
@@ -442,15 +434,6 @@ fun StatisticsScreen(
                             metric = StatisticsMetric.ANOMALIES,
                             checked = statisticsSettings.anomalyMetricsEnabled,
                             title = stringResource(R.string.statistics_metric_anomalies),
-                            enabled = statisticsSettings.enabled,
-                            onMetricChanged = onStatisticsMetricEnabledChanged,
-                        )
-                        SettingsControlGroupDivider()
-                        StatisticsMetricSwitch(
-                            metric = StatisticsMetric.APP_CHANGES,
-                            checked = statisticsSettings.appChangesEnabled,
-                            title = stringResource(R.string.statistics_metric_app_changes),
-                            summary = stringResource(R.string.statistics_metric_app_changes_summary),
                             enabled = statisticsSettings.enabled,
                             onMetricChanged = onStatisticsMetricEnabledChanged,
                         )
@@ -1271,11 +1254,6 @@ private fun DnsProtectionCard(
         },
     ) {
         Text(
-            text = stringResource(R.string.statistics_chart_axes_dns),
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Text(
             text = stringResource(R.string.statistics_dns_real_summary),
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -1332,51 +1310,71 @@ private fun DnsProtectionCard(
 @Composable
 private fun DnsProtectionChart(rows: List<DnsProtectionAppRow>) {
     val maxBlocked = rows.maxOfOrNull(DnsProtectionAppRow::estimatedBlockedQueries)?.coerceAtLeast(1) ?: 1
-    val gridColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.52f)
-    val axisColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f)
     val categoryColors = dnsCategoryColorMap()
-    Canvas(
-        modifier =
-        Modifier
-            .fillMaxWidth()
-            .height(132.dp),
-    ) {
-        val chartTop = 12.dp.toPx()
-        val chartBottom = size.height - 22.dp.toPx()
-        val chartHeight = (chartBottom - chartTop).coerceAtLeast(1f)
-        drawLine(
-            color = axisColor,
-            start = Offset(0f, chartBottom),
-            end = Offset(size.width, chartBottom),
-            strokeWidth = 1.dp.toPx(),
-        )
-        drawLine(
-            color = gridColor,
-            start = Offset(0f, chartTop),
-            end = Offset(size.width, chartTop),
-            pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 8f)),
-        )
-        val slotWidth = size.width / rows.size.coerceAtLeast(1).toFloat()
-        val barWidth = (slotWidth * 0.54f).coerceAtMost(24.dp.toPx())
+    val trackColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         rows.forEachIndexed { index, row ->
-            var top = chartBottom
-            row.categoryRatios.entries.forEach { (category, ratio) ->
-                val categoryShareOfBlocked =
-                    if (row.blockRatio > 0f) {
-                        (ratio / row.blockRatio).coerceIn(0f, 1f)
-                    } else {
-                        0f
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = (index + 1).toString(),
+                    modifier = Modifier.width(20.dp),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.End,
+                )
+                AppIcon(packageName = row.packageName, modifier = Modifier.size(26.dp))
+                Text(
+                    text = row.label,
+                    modifier = Modifier.widthIn(min = 70.dp, max = 112.dp),
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Canvas(
+                    modifier =
+                    Modifier
+                        .weight(1f)
+                        .height(14.dp),
+                ) {
+                    val radius = CornerRadius(5.dp.toPx(), 5.dp.toPx())
+                    drawRoundRect(color = trackColor, size = size, cornerRadius = radius)
+                    val scaledWidth =
+                        size.width *
+                            (row.estimatedBlockedQueries.toFloat() / maxBlocked.toFloat()).coerceIn(0f, 1f)
+                    var left = 0f
+                    row.categoryRatios.entries.forEach { (category, ratio) ->
+                        val categoryShareOfBlocked =
+                            if (row.blockRatio > 0f) {
+                                (ratio / row.blockRatio).coerceIn(0f, 1f)
+                            } else {
+                                0f
+                            }
+                        val width =
+                            (scaledWidth * categoryShareOfBlocked)
+                                .coerceAtLeast(if (row.estimatedBlockedQueries > 0) 1.5f else 0f)
+                                .coerceAtMost((scaledWidth - left).coerceAtLeast(0f))
+                        if (width > 0f) {
+                            drawRoundRect(
+                                color = categoryColors.getValue(category),
+                                topLeft = Offset(left, 0f),
+                                size = Size(width, size.height),
+                                cornerRadius = radius,
+                            )
+                            left += width
+                        }
                     }
-                val segmentHeight =
-                    (chartHeight * (row.estimatedBlockedQueries.toFloat() / maxBlocked.toFloat()) * categoryShareOfBlocked)
-                        .coerceAtLeast(if (row.estimatedBlockedQueries > 0) 1.5f else 0f)
-                val center = slotWidth * index + slotWidth / 2f
-                top -= segmentHeight
-                drawRoundRect(
-                    color = categoryColors.getValue(category),
-                    topLeft = Offset(center - barWidth / 2f, top),
-                    size = Size(barWidth, segmentHeight),
-                    cornerRadius = CornerRadius(5.dp.toPx(), 5.dp.toPx()),
+                }
+                Text(
+                    text = row.estimatedBlockedQueries.toString(),
+                    modifier = Modifier.widthIn(min = 34.dp),
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    textAlign = TextAlign.End,
                 )
             }
         }
@@ -1393,50 +1391,62 @@ private fun DnsCategoryDonutChart(summary: DnsProtectionSummary) {
         animationSpec = tween(durationMillis = DONUT_ANIMATION_DURATION_MS, easing = FastOutSlowInEasing),
         label = "dns-category-donut",
     )
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(18.dp),
-        verticalAlignment = Alignment.CenterVertically,
+    Surface(
+        shape = MaterialTheme.shapes.small,
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.26f),
     ) {
-        Box(contentAlignment = Alignment.Center) {
-            Canvas(modifier = Modifier.size(96.dp)) {
-                val total = summary.categoryRows.sumOf(DnsProtectionCategoryRow::blockedQueries).coerceAtLeast(1)
-                val stroke = Stroke(width = 16.dp.toPx(), cap = StrokeCap.Round)
-                var start = -90f
-                drawArc(
-                    color = trackColor,
-                    startAngle = -90f,
-                    sweepAngle = 360f,
-                    useCenter = false,
-                    style = stroke,
-                )
-                summary.categoryRows.forEach { row ->
-                    val sweep = 360f * (row.blockedQueries.toFloat() / total.toFloat()) * progress
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(18.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Canvas(modifier = Modifier.size(118.dp)) {
+                    val total = summary.categoryRows.sumOf(DnsProtectionCategoryRow::blockedQueries).coerceAtLeast(1)
+                    val stroke = Stroke(width = 18.dp.toPx(), cap = StrokeCap.Round)
+                    var start = -90f
                     drawArc(
-                        color = categoryColors.getValue(row.category),
-                        startAngle = start,
-                        sweepAngle = sweep,
+                        color = trackColor,
+                        startAngle = -90f,
+                        sweepAngle = 360f,
                         useCenter = false,
                         style = stroke,
                     )
-                    start += sweep
+                    summary.categoryRows.forEach { row ->
+                        val sweep = 360f * (row.blockedQueries.toFloat() / total.toFloat()) * progress
+                        drawArc(
+                            color = categoryColors.getValue(row.category),
+                            startAngle = start,
+                            sweepAngle = sweep,
+                            useCenter = false,
+                            style = stroke,
+                        )
+                        start += sweep
+                    }
+                }
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        text = formatPercent(summary.blockRatio),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Text(
+                        text = summary.blockedQueries.toString(),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
             }
-            Text(
-                text = formatPercent(summary.blockRatio),
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-            )
-        }
-        Column(
-            modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            summary.categoryRows.forEach { row ->
-                LegendItem(
-                    color = dnsCategoryColor(row.category),
-                    text = "${stringResource(dnsCategoryLabel(row.category))}: ${row.blockedQueries}",
-                )
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                summary.categoryRows.forEach { row ->
+                    LegendItem(
+                        color = dnsCategoryColor(row.category),
+                        text = "${stringResource(dnsCategoryLabel(row.category))}: ${row.blockedQueries}",
+                    )
+                }
             }
         }
     }
@@ -1636,7 +1646,6 @@ private fun dnsCategoryColorMap(): Map<DnsProtectionCategory, Color> =
 private fun AnomalyStatisticsCard(
     events: List<AnomalyEvent>,
     totalEventsCount: Int,
-    appChanges: List<InstalledAppInventoryChange>,
     installedApps: List<InstalledAppOption>,
     range: StatisticsDisplayRange,
     onRangeSelected: (StatisticsDisplayRange) -> Unit,
@@ -1669,7 +1678,7 @@ private fun AnomalyStatisticsCard(
                     )
                 },
             )
-            if (recentEvents.isEmpty() && appChanges.isEmpty()) {
+            if (recentEvents.isEmpty()) {
                 EmptySectionText(text = stringResource(R.string.statistics_anomaly_empty))
             } else {
                 DetailMetricGrid(
@@ -1691,24 +1700,9 @@ private fun AnomalyStatisticsCard(
                             stringResource(R.string.statistics_anomaly_apps),
                             appsCount,
                         ),
-                        metricIfPositive(
-                            stringResource(R.string.statistics_app_changes),
-                            appChanges.size,
-                        ),
                     ),
                 )
                 if (recentEvents.isNotEmpty()) {
-                    Text(
-                        text = stringResource(R.string.statistics_anomaly_score_trend),
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                    Text(
-                        text = stringResource(R.string.statistics_chart_axes_anomaly),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    AnomalyScoreChart(events = recentEvents, range = range)
                     Text(
                         text = stringResource(R.string.statistics_anomaly_recent_events),
                         style = MaterialTheme.typography.titleSmall,
@@ -1725,48 +1719,9 @@ private fun AnomalyStatisticsCard(
                         }
                     }
                 }
-                if (appChanges.isNotEmpty()) {
-                    Text(
-                        text = stringResource(R.string.statistics_recent_app_changes),
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        appChanges.take(STATISTICS_TOP_PREVIEW_LIMIT).forEach { change ->
-                            InstalledAppChangeRow(change = change)
-                        }
-                    }
-                }
             }
         }
     }
-}
-
-@Composable
-private fun AnomalyScoreChart(
-    events: List<AnomalyEvent>,
-    range: StatisticsDisplayRange,
-) {
-    val now = remember(events, range) { System.currentTimeMillis() }
-    val start =
-        remember(events, range, now) {
-            range.durationMs
-                ?.let { duration -> now - duration }
-                ?: events.minOfOrNull(AnomalyEvent::createdAtMs)
-                ?: now
-        }
-    val model =
-        remember(events, range, now, start) {
-            com.foxhole.beta.core.statistics.anomalyScoreChartModel(
-                events = events,
-                range = range.toStatsRange(),
-                startMs = start,
-                endMs = now + 1L,
-                bucketSizeMs = range.anomalyBucketMs(),
-                updatedAtMs = now,
-            )
-        }
-    com.foxhole.beta.ui.statistics.charts.TimelineChart(model = model)
 }
 
 @Composable
@@ -1829,91 +1784,6 @@ private fun AnomalyEventRow(
                 fontWeight = FontWeight.SemiBold,
                 color = eventColor,
             )
-        }
-    }
-}
-
-@Composable
-private fun InstalledAppChangeRow(change: InstalledAppInventoryChange) {
-    val color =
-        when (change.type) {
-            InstalledAppChangeType.INSTALLED -> LocalFoxholeSemanticColors.current.warning
-            InstalledAppChangeType.REMOVED -> MaterialTheme.colorScheme.error
-        }
-    val riskColor =
-        when (change.riskLevel) {
-            InstalledAppRiskLevel.LOW -> MaterialTheme.colorScheme.onSurfaceVariant
-            InstalledAppRiskLevel.MEDIUM -> LocalFoxholeSemanticColors.current.warning
-            InstalledAppRiskLevel.HIGH -> MaterialTheme.colorScheme.error
-        }
-    val source = change.installerPackageName ?: stringResource(R.string.installed_app_source_unknown)
-    val signalLabels =
-        buildList {
-            change.riskSignals.forEach { signal ->
-                add(stringResource(signal.labelRes()))
-            }
-        }
-    val signals =
-        signalLabels
-            .joinToString(" • ")
-            .ifBlank { stringResource(R.string.installed_app_risk_signals_none) }
-    Surface(
-        shape = MaterialTheme.shapes.small,
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.34f),
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(10.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Canvas(modifier = Modifier.size(10.dp)) {
-                drawCircle(color)
-            }
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = change.label,
-                    style = MaterialTheme.typography.bodySmall,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Text(
-                    text =
-                    stringResource(
-                        when (change.type) {
-                            InstalledAppChangeType.INSTALLED -> R.string.statistics_app_change_installed
-                            InstalledAppChangeType.REMOVED -> R.string.statistics_app_change_removed
-                        },
-                        change.packageName,
-                        change.detectedAt.formatLastActivity(),
-                    ),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Text(
-                    text =
-                    stringResource(
-                        R.string.statistics_app_change_security_summary,
-                        source,
-                        stringResource(change.riskLevel.labelRes()),
-                    ),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = riskColor,
-                    maxLines = 2,
-                    overflow = TextOverflow.Clip,
-                )
-                Text(
-                    text = signals,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 3,
-                    overflow = TextOverflow.Clip,
-                )
-            }
         }
     }
 }
@@ -2000,9 +1870,8 @@ private fun AppTrafficStatisticsCard(
             } else if (rows.isEmpty()) {
                 EmptySectionText(text = stringResource(R.string.app_statistics_empty))
             } else {
-                AppTrafficTable(
+                AppTrafficTopStackedChart(
                     rows = rows,
-                    emptyText = stringResource(R.string.app_statistics_empty),
                     onRowClick = onRowClick,
                 )
                 if (allRowsCount > rows.size) {
@@ -2119,6 +1988,133 @@ private fun AppTrafficTimelineChart(
 }
 
 @Composable
+private fun AppTrafficTopStackedChart(
+    rows: List<AppTrafficRow>,
+    onRowClick: (AppTrafficRow) -> Unit,
+) {
+    val maxTotal = rows.maxOfOrNull(AppTrafficRow::totalBytes)?.coerceAtLeast(1L) ?: 1L
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        ChartLegend()
+        rows.forEachIndexed { index, row ->
+            AppTrafficStackedBarRow(
+                index = index,
+                row = row,
+                maxTotal = maxTotal,
+                onClick = { onRowClick(row) },
+            )
+        }
+    }
+}
+
+@Composable
+private fun AppTrafficStackedBarRow(
+    index: Int,
+    row: AppTrafficRow,
+    maxTotal: Long,
+    onClick: () -> Unit,
+) {
+    val context = LocalContext.current
+    val semanticColors = LocalFoxholeSemanticColors.current
+    val sentColor = MaterialTheme.colorScheme.primary
+    val receivedColor = semanticColors.success
+    val trackColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+    Row(
+        modifier =
+        Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = (index + 1).toString(),
+            modifier = Modifier.width(22.dp),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.End,
+        )
+        AppIcon(packageName = row.packageName, modifier = Modifier.size(32.dp))
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(5.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = row.label,
+                    modifier = Modifier.weight(1f),
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = formatBytes(context, row.totalBytes),
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                )
+            }
+            Canvas(
+                modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .height(16.dp),
+            ) {
+                val radius = CornerRadius(5.dp.toPx(), 5.dp.toPx())
+                drawRoundRect(color = trackColor, size = size, cornerRadius = radius)
+                val scaledWidth = size.width * (row.totalBytes.toFloat() / maxTotal.toFloat()).coerceIn(0f, 1f)
+                if (scaledWidth <= 0f) {
+                    return@Canvas
+                }
+                val total = row.totalBytes.coerceAtLeast(1L).toFloat()
+                val sentWidth = (scaledWidth * (row.txBytes.coerceAtLeast(0L).toFloat() / total)).coerceAtLeast(
+                    if (row.txBytes > 0L) 2.dp.toPx() else 0f,
+                )
+                val receivedWidth = (scaledWidth - sentWidth).coerceAtLeast(
+                    if (row.rxBytes > 0L) 2.dp.toPx() else 0f,
+                ).coerceAtMost((scaledWidth - sentWidth).coerceAtLeast(0f))
+                if (sentWidth > 0f) {
+                    drawRoundRect(
+                        color = sentColor,
+                        size = Size(sentWidth.coerceAtMost(scaledWidth), size.height),
+                        cornerRadius = radius,
+                    )
+                }
+                if (receivedWidth > 0f) {
+                    drawRoundRect(
+                        color = receivedColor,
+                        topLeft = Offset(sentWidth.coerceAtMost(scaledWidth), 0f),
+                        size = Size(receivedWidth, size.height),
+                        cornerRadius = radius,
+                    )
+                }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(
+                    text = "${stringResource(R.string.traffic_sent)} ${formatBytes(context, row.txBytes)}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = sentColor,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = "${stringResource(R.string.traffic_received)} ${formatBytes(context, row.rxBytes)}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = receivedColor,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+    }
+}
+
+@Composable
 private fun ChartLegend() {
     val semanticColors = LocalFoxholeSemanticColors.current
     Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -2134,26 +2130,6 @@ private fun LegendItem(color: Color, text: String) {
             Canvas(modifier = Modifier.size(8.dp)) { drawCircle(color) }
         }
         Text(text = text, style = MaterialTheme.typography.labelMedium)
-    }
-}
-
-@Composable
-private fun AppTrafficTable(
-    rows: List<AppTrafficRow>,
-    emptyText: String,
-    onRowClick: (AppTrafficRow) -> Unit,
-) {
-    if (rows.isEmpty()) {
-        Text(text = emptyText, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        return
-    }
-    Column {
-        rows.forEachIndexed { index, row ->
-            AppTrafficRowView(row = row, onClick = { onRowClick(row) })
-            if (index != rows.lastIndex) {
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
-            }
-        }
     }
 }
 
@@ -2396,58 +2372,26 @@ private fun ProfileStatisticsDetail(
             val selectedProtocol =
                 connectedProtocols.firstOrNull { protocol -> protocol.label == selectedProtocolLabel }
                     ?: connectedProtocols.firstOrNull()
-            Text(
-                text = stringResource(R.string.statistics_profile_protocols_title),
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.SemiBold,
-            )
             if (connectedProtocols.isEmpty()) {
                 EmptySectionText(text = stringResource(R.string.statistics_protocols_empty))
             } else {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    ) {
-                        connectedProtocols.take(4).forEach { protocol ->
-                            val selected = protocol.label == selectedProtocol?.label
-                            Surface(
-                                modifier = Modifier.weight(1f).heightIn(min = 42.dp),
-                                shape = MaterialTheme.shapes.small,
-                                color =
-                                if (selected) {
-                                    MaterialTheme.colorScheme.primaryContainer
-                                } else {
-                                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.48f)
-                                },
-                                border =
-                                BorderStroke(
-                                    1.dp,
-                                    if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
-                                ),
-                            ) {
-                                Box(
-                                    modifier =
-                                    Modifier
-                                        .fillMaxWidth()
-                                        .clickable { selectedProtocolLabel = protocol.label }
-                                        .padding(horizontal = 8.dp, vertical = 8.dp),
-                                    contentAlignment = Alignment.Center,
-                                ) {
-                                    Text(
-                                        text = protocol.label,
-                                        style = MaterialTheme.typography.labelMedium,
-                                        fontWeight = FontWeight.SemiBold,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                        textAlign = TextAlign.Center,
-                                    )
-                                }
-                            }
-                        }
-                    }
                     if (selectedProtocol != null) {
                         ProfileProtocolDetailPanel(protocol = selectedProtocol)
+                    }
+                    Text(
+                        text = stringResource(R.string.statistics_profile_protocols_title),
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        connectedProtocols.forEach { protocol ->
+                            ProfileProtocolUsageRow(
+                                protocol = protocol,
+                                selected = protocol.label == selectedProtocol?.label,
+                                onClick = { selectedProtocolLabel = protocol.label },
+                            )
+                        }
                     }
                 }
             }
@@ -2463,6 +2407,71 @@ private fun ProfileStatisticsDetail(
                 fontWeight = FontWeight.SemiBold,
             )
             comparisons.forEach { comparison -> ProfileComparisonCard(item = comparison) }
+        }
+    }
+}
+
+@Composable
+private fun ProfileProtocolUsageRow(
+    protocol: ProfileProtocolDetail,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    val context = LocalContext.current
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.small,
+        color =
+        if (selected) {
+            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.78f)
+        } else {
+            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.34f)
+        },
+        border =
+        BorderStroke(
+            1.dp,
+            if (selected) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)
+            },
+        ),
+    ) {
+        Row(
+            modifier =
+            Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onClick)
+                .padding(horizontal = 10.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                    text = protocol.label,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text =
+                    listOfNotNull(
+                        protocol.lastUsedAt?.let { stringResource(R.string.statistics_last_activity) to it.formatLastActivity() },
+                        stringResource(R.string.statistics_success_rate) to formatPercent(protocol.successRate),
+                    ).joinToString(" • ") { (label, value) -> "$label: $value" },
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            Text(
+                text = formatBytes(context, protocol.totalBytes),
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.SemiBold,
+                textAlign = TextAlign.End,
+            )
         }
     }
 }
@@ -3515,14 +3524,6 @@ private fun timelineTicks(
     }
 }
 
-private fun StatisticsDisplayRange.anomalyBucketMs(): Long =
-    when (this) {
-        StatisticsDisplayRange.HOURS_24 -> 30L * 60L * 1000L
-        StatisticsDisplayRange.WEEK -> 6L * 60L * 60L * 1000L
-        StatisticsDisplayRange.MONTH -> 24L * 60L * 60L * 1000L
-        StatisticsDisplayRange.ALL -> 7L * 24L * 60L * 60L * 1000L
-    }
-
 private fun List<AppTrafficWindow>.durationForAllRange(
     now: Long,
     bucketMs: Long,
@@ -3706,6 +3707,7 @@ private val COMPACT_PROTOCOL_GRID_WIDTH = 360.dp
 private const val DONUT_ANIMATION_DURATION_MS = 700
 private const val PROFILE_TRAFFIC_PREVIEW_LIMIT = 6
 private const val STATISTICS_TOP_PREVIEW_LIMIT = 5
+private const val APP_TRAFFIC_CHART_LIMIT = 10
 private val DASHBOARD_DISPLAY_RANGES =
     listOf(
         StatisticsDisplayRange.HOURS_24,

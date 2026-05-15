@@ -379,6 +379,13 @@
     <string name="diagnostics_usage_summary">Статистика обновляется после каждой сессии.</string>
     <string name="diagnostics_usage_empty">Общая статистика появится после первой успешной сессии.</string>
     <string name="diagnostics_usage_breakdown">RX %1$s • TX %2$s</string>
+    <string name="app_changes_journal_title">Установки и удаления приложений</string>
+    <string name="app_changes_journal_summary">Открыть локальный журнал установок и удалений.</string>
+    <string name="app_changes_journal_disabled_summary">Включите контроль приложений, чтобы открыть этот журнал.</string>
+    <string name="app_changes_journal_enable_title">Включить журнал изменений приложений?</string>
+    <string name="app_changes_journal_enable_body">FoxHole может хранить зашифрованный локальный снимок списка приложений и показывать установки, удаления, источник, риск и признаки безопасности в Журналах.</string>
+    <string name="app_changes_journal_go_to_security">Перейти в безопасность</string>
+    <string name="app_changes_journal_empty">Установки и удаления приложений пока не записаны.</string>
     <string name="clear_usage_title">Очистить статистику</string>
     <string name="statistics_title">Статистика</string>
     <string name="settings_home_statistics_summary">Статистика использования сети</string>
@@ -476,10 +483,10 @@
     <string name="statistics_range_month_short">31 д назад</string>
     <string name="statistics_range_all_short">Старт</string>
     <string name="statistics_range_now">Сейчас</string>
-    <string name="statistics_axis_x_time">X: время</string>
-    <string name="statistics_axis_y_bytes">Y: до %1$s за интервал</string>
+    <string name="statistics_axis_x_time">Время</string>
+    <string name="statistics_axis_y_bytes">До %1$s за интервал</string>
     <string name="statistics_axis_score_100">100 score</string>
-    <string name="statistics_chart_axes_app_timeline">X: таймлайн, интервалы по выбранному периоду. Y: передано байт. Синий — отправлено, зеленый — получено.</string>
+    <string name="statistics_chart_axes_app_timeline">Интервалы по выбранному периоду. Синий — отправлено, зеленый — получено.</string>
     <string name="statistics_anomaly_summary_title">Метрики аномалий</string>
     <string name="statistics_anomaly_events">События</string>
     <string name="statistics_anomaly_high_events">Высокие</string>
@@ -487,7 +494,7 @@
     <string name="statistics_anomaly_apps">Приложения</string>
     <string name="statistics_app_changes">Изменения приложений</string>
     <string name="statistics_anomaly_score_trend">Таймлайн score аномалий</string>
-    <string name="statistics_chart_axes_anomaly">X: время. Y: score аномалии от 0 до 100; шкала справа идет от зеленого к красному.</string>
+    <string name="statistics_chart_axes_anomaly">Score аномалии от 0 до 100; шкала идет от зеленого к красному.</string>
     <string name="statistics_anomaly_score_low">Низкий</string>
     <string name="statistics_anomaly_score_medium">Средний</string>
     <string name="statistics_anomaly_score_high">Высокий</string>
@@ -524,7 +531,7 @@
     <string name="statistics_dns_blocked_queries">DNS заблокировано</string>
     <string name="statistics_dns_allowed_queries">DNS разрешено</string>
     <string name="statistics_dns_block_ratio">Доля блокировок</string>
-    <string name="statistics_chart_axes_dns">X: топ приложений. Y: заблокированные DNS-запросы, разбитые по категориям.</string>
+    <string name="statistics_chart_axes_dns">Топ приложений по заблокированным DNS-запросам с разбивкой по категориям.</string>
     <string name="statistics_dns_categories_title">Категории DNS</string>
     <string name="statistics_dns_categories_estimated">Разбивка категорий рассчитана по включённым фильтрам</string>
     <string name="statistics_dns_real_summary">Разрешённые и заблокированные DNS — реальные счётчики; категории и приложения подписаны, если это оценка.</string>

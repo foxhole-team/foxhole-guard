@@ -1900,7 +1900,7 @@ internal fun autoConnectCandidateProbeTimeoutMs(
     smartStartTimeoutMs(
         timeoutSeconds = timeoutSeconds,
         minSeconds = SMART_START_PROTOCOL_TIMEOUT_MIN_SECONDS,
-    )
+    ).coerceAtLeast(minimumAutoConnectCandidateProbeBudgetMs())
 
 internal fun protocolMetricsCandidateProbeTimeoutMs(
     timeoutSeconds: Int = SMART_START_REFRESH_TIMEOUT_DEFAULT_SECONDS,
@@ -1908,7 +1908,16 @@ internal fun protocolMetricsCandidateProbeTimeoutMs(
     smartStartTimeoutMs(
         timeoutSeconds = timeoutSeconds,
         minSeconds = SMART_START_REFRESH_TIMEOUT_MIN_SECONDS,
-    )
+    ).coerceAtLeast(minimumAutoConnectCandidateProbeBudgetMs())
+
+internal fun minimumAutoConnectCandidateProbeBudgetMs(): Long =
+    HomeViewModel.AUTO_CONNECT_CONNECTION_TIMEOUT_MS +
+        HomeViewModel.AUTO_CONNECT_VALIDATION_GRACE_TIMEOUT_MS +
+        HomeViewModel.AUTO_CONNECT_LATENCY_MEASUREMENT_SETTLE_MS +
+        HomeViewModel.CONNECTED_LATENCY_TIMEOUT_MS * 2L +
+        HomeViewModel.AUTO_CONNECT_LATENCY_MEASUREMENT_RETRY_DELAY_MS +
+        HomeViewModel.CONNECTED_SERVER_PING_TIMEOUT_MS +
+        1_000L
 
 private fun smartStartTimeoutMs(
     timeoutSeconds: Int,

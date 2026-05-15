@@ -717,8 +717,9 @@ internal suspend fun FoxholeVpnService.refreshValidatedTunnelIpInfoBestEffortInt
             remoteDnsServers = remoteDnsServers,
         )
     }
-        .onSuccess {
-            container.diagnosticsLogger.record("ip", "validated tunnel ip refresh kept as validation-only")
+        .onSuccess { info ->
+            FoxholeVpnRuntimeBridge.updateIpInfo(info)
+            container.diagnosticsLogger.record("ip", "validated tunnel ip refresh published to dashboard")
         }
         .onFailure { error ->
             container.diagnosticsLogger.record(

@@ -37,6 +37,7 @@ import com.foxhole.beta.core.model.SecureDnsMode
 import com.foxhole.beta.core.model.Settings
 import com.foxhole.beta.core.model.TrafficMode
 import com.foxhole.beta.core.model.isUdpTransport
+import com.foxhole.beta.core.network.IpInfoFetchMode
 import com.foxhole.beta.core.profile.MultiProtocolProfileSupport
 import com.foxhole.beta.core.settings.needsSmartStartColdScan
 import com.foxhole.beta.core.settings.smartProfilePreference
@@ -245,6 +246,16 @@ internal fun ipInfoRefreshTargetForSnapshot(snapshot: ConnectionSnapshot): IpInf
 internal fun shouldSupersedeIpRefreshForConnect(activeReason: IpInfoRefreshReason?): Boolean =
     activeReason == IpInfoRefreshReason.MANUAL ||
         activeReason == IpInfoRefreshReason.FOREGROUND
+
+internal fun ipInfoFetchModeForRefreshReason(reason: IpInfoRefreshReason): IpInfoFetchMode =
+    when (reason) {
+        IpInfoRefreshReason.MANUAL -> IpInfoFetchMode.FULL
+        IpInfoRefreshReason.FOREGROUND,
+        IpInfoRefreshReason.POST_CONNECT,
+        IpInfoRefreshReason.POST_UPDATE,
+        IpInfoRefreshReason.RESTORED_VPN,
+        -> IpInfoFetchMode.ENTRY_QUICK
+    }
 
 internal fun shouldShowAutoConnectAction(activeProfile: Profile?): Boolean =
     activeProfile?.let { profile ->

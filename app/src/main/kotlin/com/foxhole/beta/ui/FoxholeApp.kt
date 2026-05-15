@@ -101,6 +101,7 @@ private object AppRoute {
     const val DNS_APPS_PICKER = "settings/dns/apps-picker"
     const val NETWORK_RULES = "settings/network-rules"
     const val SECURITY = "settings/security"
+    const val SECURITY_APP_MONITOR = "settings/security/app-monitor"
     const val PRIVACY_ROUTE = "settings/privacy-route"
     const val ROUTING_APPS = "settings/routing/apps"
     const val ROUTING_APPS_PICKER = "settings/routing/apps/picker"
@@ -506,6 +507,24 @@ fun FoxholeApp(
                         onAnomalyHistoryRetentionSelected = viewModel::onAnomalyHistoryRetentionSelected,
                     )
                 }
+                composable(AppRoute.SECURITY_APP_MONITOR) {
+                    val state by viewModel.settingsRouteState.collectAsStateWithLifecycle()
+                    SecuritySettingsScreen(
+                        state = state,
+                        snackbarHostState = snackbarHostState,
+                        onNavigateUp = navController::navigateUp,
+                        onFirewallEnabledChanged = viewModel::onFirewallEnabledChanged,
+                        onNewAppQuarantineChanged = viewModel::onNewAppQuarantineChanged,
+                        onSystemDnsProtectionChanged = viewModel::onSystemDnsProtectionChanged,
+                        onAnomalyEnabledChanged = viewModel::onAnomalyEnabledChanged,
+                        onNotifyUnusualTrafficChanged = viewModel::onNotifyUnusualTrafficChanged,
+                        onAnomalySensitivitySelected = viewModel::onAnomalySensitivitySelected,
+                        onAnalyzeBackgroundTrafficChanged = viewModel::onAnalyzeBackgroundTrafficChanged,
+                        onAnalyzeDestinationCountriesChanged = viewModel::onAnalyzeDestinationCountriesChanged,
+                        onAnomalyHistoryRetentionSelected = viewModel::onAnomalyHistoryRetentionSelected,
+                        highlightAppInstallMonitor = true,
+                    )
+                }
                 composable(AppRoute.NETWORK_RULES) {
                     val state by viewModel.settingsRouteState.collectAsStateWithLifecycle()
                     NetworkRulesSettingsScreen(
@@ -669,6 +688,8 @@ fun FoxholeApp(
                         onNetworkActivityPersistentLoggingChanged = viewModel::onNetworkActivityPersistentLoggingChanged,
                         onFirewallEnabledChanged = viewModel::onFirewallEnabledChanged,
                         onDiagnosticsRetentionSelected = viewModel::onDiagnosticsRetentionSelected,
+                        onStatisticsMetricEnabledChanged = viewModel::onStatisticsMetricEnabledChanged,
+                        onOpenSecurityAppMonitorSettings = { navController.navigate(AppRoute.SECURITY_APP_MONITOR) },
                     )
                 }
                 composable(AppRoute.STATISTICS) {

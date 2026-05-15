@@ -144,17 +144,21 @@ class HomeAutoConnectWaitPolicyTest {
             HomeViewModel.AUTO_CONNECT_VALIDATION_GRACE_TIMEOUT_MS,
         )
         assertEquals(3, HomeViewModel.AUTO_CONNECT_MAX_ATTEMPTS)
-        assertEquals(35_000L, HomeViewModel.AUTO_CONNECT_TOTAL_TIMEOUT_MS)
+        assertTrue(
+            HomeViewModel.AUTO_CONNECT_TOTAL_TIMEOUT_MS >=
+                HomeViewModel.AUTO_CONNECT_MAX_ATTEMPTS * minimumAutoConnectCandidateProbeBudgetMs(),
+        )
     }
 
     @Test
     fun `candidate probe timeout uses smart start setting defaults`() {
-        assertEquals(10_000L, autoConnectCandidateProbeTimeoutMs())
-        assertEquals(15_000L, protocolMetricsCandidateProbeTimeoutMs())
-        assertEquals(5_000L, autoConnectCandidateProbeTimeoutMs(timeoutSeconds = 3))
+        assertEquals(minimumAutoConnectCandidateProbeBudgetMs(), autoConnectCandidateProbeTimeoutMs())
+        assertEquals(minimumAutoConnectCandidateProbeBudgetMs(), protocolMetricsCandidateProbeTimeoutMs())
+        assertEquals(minimumAutoConnectCandidateProbeBudgetMs(), autoConnectCandidateProbeTimeoutMs(timeoutSeconds = 3))
         assertEquals(60_000L, protocolMetricsCandidateProbeTimeoutMs(timeoutSeconds = 99))
-        assertTrue(protocolMetricsCandidateProbeTimeoutMs() > autoConnectCandidateProbeTimeoutMs())
-        assertTrue(autoConnectCandidateProbeTimeoutMs() < HomeViewModel.AUTO_CONNECT_TOTAL_TIMEOUT_MS)
+        assertTrue(protocolMetricsCandidateProbeTimeoutMs(timeoutSeconds = 99) > autoConnectCandidateProbeTimeoutMs())
+        assertTrue(autoConnectCandidateProbeTimeoutMs() <= HomeViewModel.AUTO_CONNECT_TOTAL_TIMEOUT_MS)
+        assertTrue(autoConnectCandidateProbeTimeoutMs() >= HomeViewModel.AUTO_CONNECT_CONNECTION_TIMEOUT_MS)
     }
 
     @Test

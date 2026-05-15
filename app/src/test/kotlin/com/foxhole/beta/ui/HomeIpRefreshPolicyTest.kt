@@ -1,6 +1,8 @@
 package com.foxhole.beta.ui
 
 import com.foxhole.beta.core.model.ConnectionState
+import com.foxhole.beta.core.network.IpInfoFetchMode
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -44,5 +46,18 @@ class HomeIpRefreshPolicyTest {
                 currentState = ConnectionState.CONNECTED,
             ),
         )
+    }
+
+    @Test
+    fun `post connect refresh starts quickly`() {
+        assertTrue(HomeViewModel.CONNECTED_IP_REFRESH_DELAY_MS <= 500L)
+    }
+
+    @Test
+    fun `automatic dashboard refreshes use quick fetch mode`() {
+        assertEquals(IpInfoFetchMode.FULL, ipInfoFetchModeForRefreshReason(IpInfoRefreshReason.MANUAL))
+        assertEquals(IpInfoFetchMode.ENTRY_QUICK, ipInfoFetchModeForRefreshReason(IpInfoRefreshReason.POST_CONNECT))
+        assertEquals(IpInfoFetchMode.ENTRY_QUICK, ipInfoFetchModeForRefreshReason(IpInfoRefreshReason.FOREGROUND))
+        assertEquals(IpInfoFetchMode.ENTRY_QUICK, ipInfoFetchModeForRefreshReason(IpInfoRefreshReason.RESTORED_VPN))
     }
 }

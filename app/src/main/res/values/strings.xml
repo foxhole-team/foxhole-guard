@@ -373,6 +373,13 @@
     <string name="diagnostics_usage_summary">Statistics update after each session.</string>
     <string name="diagnostics_usage_empty">Cumulative usage appears after the first successful session.</string>
     <string name="diagnostics_usage_breakdown">RX %1$s • TX %2$s</string>
+    <string name="app_changes_journal_title">Installed and removed apps</string>
+    <string name="app_changes_journal_summary">Open the local install/remove journal.</string>
+    <string name="app_changes_journal_disabled_summary">Enable the app monitor before opening this journal.</string>
+    <string name="app_changes_journal_enable_title">Enable app change journal?</string>
+    <string name="app_changes_journal_enable_body">FoxHole can keep an encrypted local app inventory snapshot and show installs, removals, installer source, risk level, and security signals in Logs.</string>
+    <string name="app_changes_journal_go_to_security">Go to Security</string>
+    <string name="app_changes_journal_empty">No installed or removed apps have been recorded yet.</string>
     <string name="clear_usage_title">Clear statistics</string>
     <string name="statistics_title">Statistics</string>
     <string name="settings_home_statistics_summary">Network usage statistics</string>
@@ -468,10 +475,10 @@
     <string name="statistics_range_month_short">31 d ago</string>
     <string name="statistics_range_all_short">Start</string>
     <string name="statistics_range_now">Now</string>
-    <string name="statistics_axis_x_time">X: time</string>
-    <string name="statistics_axis_y_bytes">Y: up to %1$s per bucket</string>
+    <string name="statistics_axis_x_time">Time</string>
+    <string name="statistics_axis_y_bytes">Up to %1$s per bucket</string>
     <string name="statistics_axis_score_100">100 score</string>
-    <string name="statistics_chart_axes_app_timeline">X: timeline, buckets by period. Y: transferred bytes. Blue is sent, green is received.</string>
+    <string name="statistics_chart_axes_app_timeline">Buckets by selected period. Blue is sent, green is received.</string>
     <string name="statistics_anomaly_summary_title">Anomaly metrics</string>
     <string name="statistics_anomaly_events">Events</string>
     <string name="statistics_anomaly_high_events">High</string>
@@ -479,7 +486,7 @@
     <string name="statistics_anomaly_apps">Apps</string>
     <string name="statistics_app_changes">App changes</string>
     <string name="statistics_anomaly_score_trend">Anomaly score timeline</string>
-    <string name="statistics_chart_axes_anomaly">X: time. Y: anomaly score from 0 to 100; the right scale moves from green to red.</string>
+    <string name="statistics_chart_axes_anomaly">Anomaly score from 0 to 100; the scale moves from green to red.</string>
     <string name="statistics_anomaly_score_low">Low</string>
     <string name="statistics_anomaly_score_medium">Medium</string>
     <string name="statistics_anomaly_score_high">High</string>
@@ -516,7 +523,7 @@
     <string name="statistics_dns_blocked_queries">Blocked DNS</string>
     <string name="statistics_dns_allowed_queries">Allowed DNS</string>
     <string name="statistics_dns_block_ratio">Block ratio</string>
-    <string name="statistics_chart_axes_dns">X: top apps. Y: blocked DNS queries, split by category.</string>
+    <string name="statistics_chart_axes_dns">Top apps by blocked DNS queries, split by category.</string>
     <string name="statistics_dns_categories_title">DNS categories</string>
     <string name="statistics_dns_categories_estimated">Category split is estimated from enabled filters</string>
     <string name="statistics_dns_real_summary">Allowed and blocked totals are real; category and per-app splits are labeled when estimated.</string>
