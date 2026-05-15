@@ -14,7 +14,7 @@ readonly DEFAULT_REQUIRED_TEST_SPECS=(
   "com.foxhole.beta.ui.HomeScreenTest#legacySwipeZonesAreRemoved"
   "com.foxhole.beta.ui.HomeScreenTest#horizontalSwipesSwitchDashboardAndSettingsSections"
   "com.foxhole.beta.ui.HomeScreenTest#systemBackFromRoutingAppsReturnsSettingsHome"
-  "com.foxhole.beta.ui.HomeScreenTest#settingsTabAlwaysReturnsToSettingsRootAfterSwitchingSections"
+  "com.foxhole.beta.ui.HomeScreenTest#settingsDetailHidesBottomBarAndBackReturnsSettingsRoot"
   "com.foxhole.beta.ui.HomeScreenTest#rapidBottomNavigationTapsKeepUiResponsive"
   "com.foxhole.beta.ui.HomeScreenTest#opensProfilesFromHomeAction"
   "com.foxhole.beta.ui.HomeScreenTest#profilesExportActionSelectsInlineTargetsAndOpensDestinationDialog"
