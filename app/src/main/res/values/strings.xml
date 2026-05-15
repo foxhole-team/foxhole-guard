@@ -518,6 +518,8 @@
     <string name="statistics_dns_block_ratio">Block ratio</string>
     <string name="statistics_chart_axes_dns">X: top apps. Y: blocked DNS queries, split by category.</string>
     <string name="statistics_dns_categories_title">DNS categories</string>
+    <string name="statistics_dns_categories_estimated">Category split is estimated from enabled filters</string>
+    <string name="statistics_dns_real_summary">Allowed and blocked totals are real; category and per-app splits are labeled when estimated.</string>
     <string name="statistics_dns_category_ads">Ads</string>
     <string name="statistics_dns_category_trackers">Trackers</string>
     <string name="statistics_dns_category_telemetry">Telemetry</string>

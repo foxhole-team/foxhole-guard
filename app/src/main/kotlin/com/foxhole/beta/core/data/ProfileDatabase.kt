@@ -476,6 +476,78 @@ data class AnomalyEventEntity(
     }
 }
 
+@Entity(
+    tableName = "runtime_timeline_events",
+    indices = [
+        Index("timestampMs"),
+        Index("generationId"),
+        Index("sessionId"),
+        Index(value = ["owner", "stage", "status", "timestampMs"]),
+    ],
+)
+@TypeConverters(RoomValueConverters::class)
+data class RuntimeTimelineEventEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val timestampMs: Long,
+    val generationId: Long,
+    val sessionId: String?,
+    val owner: String,
+    val mode: String,
+    val stage: String,
+    val status: String,
+    val durationMs: Long?,
+    val profileId: Long?,
+    val protocol: String?,
+    val details: Map<String, String>,
+)
+
+@Entity(
+    tableName = "protocol_metric_events",
+    indices = [
+        Index("timestampMs"),
+        Index("profileId"),
+        Index(value = ["protocol", "event", "timestampMs"]),
+    ],
+)
+data class ProtocolMetricEventEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val timestampMs: Long,
+    val profileId: Long,
+    val optionId: String?,
+    val protocol: String,
+    val event: String,
+    val latencyMs: Long?,
+    val reasonCode: String?,
+)
+
+data class TrafficBucketEntity(
+    val bucketStartMs: Long,
+    val rxBytes: Long,
+    val txBytes: Long,
+    val blockedDns: Int,
+    val allowedDns: Int,
+    val reconnects: Int,
+    val avgLatencyMs: Double?,
+    val sampleCount: Int,
+)
+
+data class AppTrafficBucketEntity(
+    val bucketStartMs: Long,
+    val packageName: String,
+    val rxBytes: Long,
+    val txBytes: Long,
+    val sampleCount: Int,
+)
+
+data class AnomalyBucketEntity(
+    val bucketStartMs: Long,
+    val eventCount: Int,
+    val highCount: Int,
+    val notificationCount: Int,
+    val maxScore: Int,
+    val avgScore: Double?,
+)
+
 @Dao
 interface ProfileDao {
     @Query("select * from profiles order by isActive desc, id desc")
@@ -720,11 +792,105 @@ interface AnomalyDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAnomalyEvent(entity: AnomalyEventEntity): Long
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertRuntimeTimelineEvent(entity: RuntimeTimelineEventEntity): Long
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertProtocolMetricEvent(entity: ProtocolMetricEventEntity): Long
+
     @Query("select * from anomaly_events where createdAtMs >= :cutoff order by createdAtMs desc, id desc")
     fun observeAnomalyEvents(cutoff: Long): Flow<List<AnomalyEventEntity>>
 
     @Query("select * from anomaly_events where createdAtMs >= :cutoff order by createdAtMs desc, id desc")
     suspend fun getAnomalyEvents(cutoff: Long): List<AnomalyEventEntity>
+
+    @Query(
+        """
+        select
+            :startMs + ((startedAtMs - :startMs) / :bucketMs) * :bucketMs as bucketStartMs,
+            sum(rxBytes) as rxBytes,
+            sum(txBytes) as txBytes,
+            sum(blockedDns) as blockedDns,
+            sum(allowedDns) as allowedDns,
+            sum(reconnects) as reconnects,
+            avg(latencyMs) as avgLatencyMs,
+            count(*) as sampleCount
+        from traffic_windows
+        where startedAtMs >= :startMs
+            and startedAtMs < :endMs
+            and (:profileId is null or profileId = :profileId)
+            and (:protocol is null or protocol = :protocol)
+            and (:networkType is null or networkType = :networkType)
+        group by bucketStartMs
+        order by bucketStartMs asc
+        """,
+    )
+    fun observeTrafficBuckets(
+        startMs: Long,
+        endMs: Long,
+        bucketMs: Long,
+        profileId: String?,
+        protocol: String?,
+        networkType: String?,
+    ): Flow<List<TrafficBucketEntity>>
+
+    @Query(
+        """
+        select
+            :startMs + ((startedAtMs - :startMs) / :bucketMs) * :bucketMs as bucketStartMs,
+            packageName,
+            sum(rxBytes) as rxBytes,
+            sum(txBytes) as txBytes,
+            count(*) as sampleCount
+        from app_traffic_windows
+        where startedAtMs >= :startMs
+            and startedAtMs < :endMs
+            and (:packageName is null or packageName = :packageName)
+            and (:networkType is null or networkType = :networkType)
+        group by bucketStartMs, packageName
+        order by bucketStartMs asc, packageName asc
+        """,
+    )
+    fun observeAppTrafficBuckets(
+        startMs: Long,
+        endMs: Long,
+        bucketMs: Long,
+        packageName: String?,
+        networkType: String?,
+    ): Flow<List<AppTrafficBucketEntity>>
+
+    @Query(
+        """
+        select
+            :startMs + ((createdAtMs - :startMs) / :bucketMs) * :bucketMs as bucketStartMs,
+            count(*) as eventCount,
+            sum(case when severity = 'HIGH' then 1 else 0 end) as highCount,
+            sum(case when notificationShown = 1 then 1 else 0 end) as notificationCount,
+            max(score) as maxScore,
+            avg(score) as avgScore
+        from anomaly_events
+        where createdAtMs >= :startMs and createdAtMs < :endMs
+        group by bucketStartMs
+        order by bucketStartMs asc
+        """,
+    )
+    fun observeAnomalyBuckets(
+        startMs: Long,
+        endMs: Long,
+        bucketMs: Long,
+    ): Flow<List<AnomalyBucketEntity>>
+
+    @Query("select * from runtime_timeline_events where timestampMs >= :startMs and timestampMs < :endMs order by timestampMs asc, id asc")
+    fun observeRuntimeTimelineEvents(
+        startMs: Long,
+        endMs: Long,
+    ): Flow<List<RuntimeTimelineEventEntity>>
+
+    @Query("select * from protocol_metric_events where timestampMs >= :startMs and timestampMs < :endMs order by timestampMs asc, id asc")
+    fun observeProtocolMetricEvents(
+        startMs: Long,
+        endMs: Long,
+    ): Flow<List<ProtocolMetricEventEntity>>
 
     @Query(
         """
@@ -889,8 +1055,10 @@ class RoomValueConverters {
         TrafficBaselineEntity::class,
         AppBaselineEntity::class,
         AnomalyEventEntity::class,
+        RuntimeTimelineEventEntity::class,
+        ProtocolMetricEventEntity::class,
     ],
-    version = 3,
+    version = 4,
     exportSchema = true,
 )
 @TypeConverters(RoomValueConverters::class)
@@ -1084,6 +1252,51 @@ abstract class ProfileDatabase : RoomDatabase() {
                 }
             }
 
+        private val MIGRATION_3_4 =
+            object : Migration(3, 4) {
+                override fun migrate(db: SupportSQLiteDatabase) {
+                    db.execSQL(
+                        """
+                        create table if not exists `runtime_timeline_events` (
+                            `id` integer primary key autoincrement not null,
+                            `timestampMs` integer not null,
+                            `generationId` integer not null,
+                            `sessionId` text,
+                            `owner` text not null,
+                            `mode` text not null,
+                            `stage` text not null,
+                            `status` text not null,
+                            `durationMs` integer,
+                            `profileId` integer,
+                            `protocol` text,
+                            `details` text not null
+                        )
+                        """.trimIndent(),
+                    )
+                    db.execSQL("create index if not exists `index_runtime_timeline_events_timestampMs` on `runtime_timeline_events` (`timestampMs`)")
+                    db.execSQL("create index if not exists `index_runtime_timeline_events_generationId` on `runtime_timeline_events` (`generationId`)")
+                    db.execSQL("create index if not exists `index_runtime_timeline_events_sessionId` on `runtime_timeline_events` (`sessionId`)")
+                    db.execSQL("create index if not exists `index_runtime_timeline_events_owner_stage_status_timestampMs` on `runtime_timeline_events` (`owner`, `stage`, `status`, `timestampMs`)")
+                    db.execSQL(
+                        """
+                        create table if not exists `protocol_metric_events` (
+                            `id` integer primary key autoincrement not null,
+                            `timestampMs` integer not null,
+                            `profileId` integer not null,
+                            `optionId` text,
+                            `protocol` text not null,
+                            `event` text not null,
+                            `latencyMs` integer,
+                            `reasonCode` text
+                        )
+                        """.trimIndent(),
+                    )
+                    db.execSQL("create index if not exists `index_protocol_metric_events_timestampMs` on `protocol_metric_events` (`timestampMs`)")
+                    db.execSQL("create index if not exists `index_protocol_metric_events_profileId` on `protocol_metric_events` (`profileId`)")
+                    db.execSQL("create index if not exists `index_protocol_metric_events_protocol_event_timestampMs` on `protocol_metric_events` (`protocol`, `event`, `timestampMs`)")
+                }
+            }
+
         fun create(context: Context): ProfileDatabase {
             val appContext = context.applicationContext
             val passphrase = DatabasePassphraseStore(appContext).readOrCreate()
@@ -1097,6 +1310,7 @@ abstract class ProfileDatabase : RoomDatabase() {
                 ).addMigrations(
                     MIGRATION_1_2,
                     MIGRATION_2_3,
+                    MIGRATION_3_4,
                 ).fallbackToDestructiveMigration(false).build()
             migrateLegacyPlaintextDatabase(appContext, database)
             return database

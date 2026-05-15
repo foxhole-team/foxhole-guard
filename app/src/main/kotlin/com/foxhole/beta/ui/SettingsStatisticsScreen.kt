@@ -160,7 +160,7 @@ fun StatisticsScreen(
     val appRows = state.statisticsDashboard.appRows
     val topApps = appRows.take(STATISTICS_TOP_PREVIEW_LIMIT)
     val countryRows = state.statisticsDashboard.countryRows
-    val topCountryRows = countryRows.take(STATISTICS_TOP_PREVIEW_LIMIT)
+    val topCountryRows = countryRows.take(if (countryRows.size > STATISTICS_TOP_PREVIEW_LIMIT) STATISTICS_TOP_PREVIEW_LIMIT + 1 else STATISTICS_TOP_PREVIEW_LIMIT)
     val appChanges = state.statisticsDashboard.appChanges
     val dnsSummary =
         dnsProtectionSummary(
@@ -1270,6 +1270,11 @@ private fun DnsProtectionCard(
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+        Text(
+            text = stringResource(R.string.statistics_dns_real_summary),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
         DetailMetricGrid(
             metrics =
                 listOfNotNull(
@@ -1289,6 +1294,11 @@ private fun DnsProtectionCard(
                 text = stringResource(R.string.statistics_dns_categories_title),
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.SemiBold,
+            )
+            Text(
+                text = stringResource(R.string.statistics_dns_categories_estimated),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             DnsCategoryDonutChart(summary = summary)
             DnsCategoryTable(rows = summary.categoryRows)
@@ -1657,7 +1667,6 @@ private fun AnomalyStatisticsCard(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     AnomalyScoreChart(events = recentEvents, range = range)
-                    AnomalyScoreLegend()
                     Text(
                         text = stringResource(R.string.statistics_anomaly_recent_events),
                         style = MaterialTheme.typography.titleSmall,
@@ -1714,101 +1723,26 @@ private fun AnomalyScoreChart(
     events: List<AnomalyEvent>,
     range: StatisticsDisplayRange,
 ) {
-    val semanticColors = LocalFoxholeSemanticColors.current
-    val gridColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-    val lineColor = MaterialTheme.colorScheme.primary
-    val highColor = MaterialTheme.colorScheme.error
-    val points = remember(events, range) { anomalyChartPoints(events, range) }
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Canvas(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .height(150.dp),
-        ) {
-        val left = 4.dp.toPx()
-        val right = size.width - 18.dp.toPx()
-        val top = 10.dp.toPx()
-        val bottom = size.height - 24.dp.toPx()
-        val height = (bottom - top).coerceAtLeast(1f)
-        listOf(0f, 0.5f, 1f).forEach { ratio ->
-            val y = bottom - height * ratio
-            drawLine(
-                color = gridColor,
-                start = Offset(left, y),
-                end = Offset(right, y),
-                pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 8f)),
+    val now = remember(events, range) { System.currentTimeMillis() }
+    val start =
+        remember(events, range, now) {
+            range.durationMs
+                ?.let { duration -> now - duration }
+                ?: events.minOfOrNull(AnomalyEvent::createdAtMs)
+                ?: now
+        }
+    val model =
+        remember(events, range, now, start) {
+            com.foxhole.beta.core.statistics.anomalyScoreChartModel(
+                events = events,
+                range = range.toStatsRange(),
+                startMs = start,
+                endMs = now + 1L,
+                bucketSizeMs = range.anomalyBucketMs(),
+                updatedAtMs = now,
             )
         }
-        drawRect(
-            brush =
-                Brush.verticalGradient(
-                    colors = listOf(highColor, semanticColors.warning, Color(0xFFFFD54F), semanticColors.success),
-                    startY = top,
-                    endY = bottom,
-                ),
-            topLeft = Offset(right + 6.dp.toPx(), top),
-            size = Size(6.dp.toPx(), height),
-        )
-        if (points.size == 1) {
-            val radius = 4.dp.toPx()
-            drawCircle(
-                color = if (points.first().high) highColor else semanticColors.success,
-                radius = radius,
-                center =
-                    Offset(
-                        left + (right - left) / 2f,
-                        bottom - height * (points.first().score.toFloat() / ANOMALY_SCORE_MAX.toFloat()),
-                    ),
-            )
-            return@Canvas
-        }
-        val step = (right - left) / (points.size - 1).coerceAtLeast(1).toFloat()
-        fun point(index: Int): Offset {
-            val ratio = points[index].score.toFloat() / ANOMALY_SCORE_MAX.toFloat()
-            return Offset(
-                x = left + index * step,
-                y = bottom - height * ratio.coerceIn(0f, 1f),
-            )
-        }
-        points.indices.zipWithNext().forEach { (left, right) ->
-            drawLine(
-                color = lineColor,
-                start = point(left),
-                end = point(right),
-                strokeWidth = 2.dp.toPx(),
-                cap = StrokeCap.Round,
-            )
-        }
-        points.forEachIndexed { index, chartPoint ->
-            drawCircle(
-                color = if (chartPoint.high) highColor else semanticColors.success,
-                radius = 3.5.dp.toPx(),
-                center = point(index),
-            )
-        }
-        }
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Text(
-                text = rangeStartLabel(range),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Text(
-                text = stringResource(R.string.statistics_axis_score_100),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Text(
-                text = stringResource(R.string.statistics_range_now),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-    }
+    com.foxhole.beta.ui.statistics.charts.TimelineChart(model = model)
 }
 
 @Composable
@@ -2046,9 +1980,7 @@ private fun AppTrafficStatisticsCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 AppTrafficTimelineChart(samples = samples, range = range)
-                ChartLegend()
                 TrafficBarChart(rows = rows)
-                ChartLegend()
                 AppTrafficTable(
                     rows = rows,
                     emptyText = stringResource(R.string.app_statistics_empty),
@@ -2066,62 +1998,84 @@ private fun AppTrafficStatisticsCard(
 
 @Composable
 private fun TrafficBarChart(rows: List<AppTrafficRow>) {
-    val semanticColors = LocalFoxholeSemanticColors.current
-    val txColor = MaterialTheme.colorScheme.primary
-    val rxColor = semanticColors.success
     val context = LocalContext.current
-    val maxBytes = rows.maxOfOrNull { max(it.txBytes, it.rxBytes) }?.coerceAtLeast(100L * 1024L * 1024L) ?: (100L * 1024L * 1024L)
+    val maxBytes = rows.maxOfOrNull { max(it.txBytes, it.rxBytes) }?.coerceAtLeast(1L) ?: 1L
     val yMax = niceTrafficScale(maxBytes)
-    val gridColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f)
-    val labelColor = MaterialTheme.colorScheme.onSurfaceVariant
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(
-            text = formatBytes(context, yMax),
-            style = MaterialTheme.typography.labelSmall,
-            color = labelColor,
+    val visibleRows = rows.take(STATISTICS_TOP_PREVIEW_LIMIT)
+    val model =
+        com.foxhole.beta.core.statistics.ChartModel(
+            id = "app-top-bars",
+            title = stringResource(R.string.statistics_apps_top_title),
+            subtitle = stringResource(R.string.statistics_axis_y_bytes, formatBytes(context, yMax)),
+            range = com.foxhole.beta.core.statistics.StatsRange.HOURS_24,
+            xAxis =
+                com.foxhole.beta.core.statistics.ChartAxis(
+                    label = stringResource(R.string.statistics_apps_title),
+                    min = 0.0,
+                    max = visibleRows.size.toDouble(),
+                    ticks =
+                        visibleRows.mapIndexed { index, row ->
+                            com.foxhole.beta.core.statistics.ChartTick(index.toDouble(), row.label)
+                        },
+                    formatter = com.foxhole.beta.core.statistics.ChartValueFormatter.TEXT,
+                ),
+            yAxis =
+                com.foxhole.beta.core.statistics.ChartAxis(
+                    label = stringResource(R.string.statistics_axis_y_bytes, formatBytes(context, yMax)),
+                    min = 0.0,
+                    max = yMax.toDouble(),
+                    ticks =
+                        listOf(
+                            com.foxhole.beta.core.statistics.ChartTick(0.0, "0"),
+                            com.foxhole.beta.core.statistics.ChartTick(yMax.toDouble(), formatBytes(context, yMax)),
+                        ),
+                    formatter = com.foxhole.beta.core.statistics.ChartValueFormatter.BYTES,
+                ),
+            series =
+                listOf(
+                    com.foxhole.beta.core.statistics.ChartSeries(
+                        id = "tx",
+                        label = stringResource(R.string.traffic_sent),
+                        kind = com.foxhole.beta.core.statistics.ChartSeriesKind.BAR,
+                        colorToken = com.foxhole.beta.core.statistics.ChartColorToken.TX,
+                        points =
+                            visibleRows.mapIndexed { index, row ->
+                                com.foxhole.beta.core.statistics.ChartPoint(
+                                    x = index.toLong(),
+                                    y = row.txBytes.toDouble(),
+                                    label = row.label,
+                                    metadata = mapOf("total" to formatBytes(context, row.totalBytes)),
+                                )
+                            },
+                    ),
+                    com.foxhole.beta.core.statistics.ChartSeries(
+                        id = "rx",
+                        label = stringResource(R.string.traffic_received),
+                        kind = com.foxhole.beta.core.statistics.ChartSeriesKind.BAR,
+                        colorToken = com.foxhole.beta.core.statistics.ChartColorToken.RX,
+                        points =
+                            visibleRows.mapIndexed { index, row ->
+                                com.foxhole.beta.core.statistics.ChartPoint(
+                                    x = index.toLong(),
+                                    y = row.rxBytes.toDouble(),
+                                    label = row.label,
+                                    metadata = mapOf("total" to formatBytes(context, row.totalBytes)),
+                                )
+                            },
+                    ),
+                ),
+            legend =
+                com.foxhole.beta.core.statistics.ChartLegendModel(
+                    items =
+                        listOf(
+                            com.foxhole.beta.core.statistics.ChartLegendItem("tx", stringResource(R.string.traffic_sent), com.foxhole.beta.core.statistics.ChartColorToken.TX),
+                            com.foxhole.beta.core.statistics.ChartLegendItem("rx", stringResource(R.string.traffic_received), com.foxhole.beta.core.statistics.ChartColorToken.RX),
+                        ),
+                ),
+            emptyState = com.foxhole.beta.core.statistics.ChartEmptyState(stringResource(R.string.app_statistics_empty)),
+            updatedAtMs = System.currentTimeMillis(),
         )
-        Canvas(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .height(180.dp),
-        ) {
-            val chartTop = 8.dp.toPx()
-            val chartBottom = size.height - 20.dp.toPx()
-            drawLine(
-                color = gridColor,
-                start = Offset(0f, chartTop),
-                end = Offset(size.width, chartTop),
-                pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 8f)),
-            )
-            val visibleRows = rows.take(STATISTICS_TOP_PREVIEW_LIMIT)
-            val slotWidth = size.width / visibleRows.size.coerceAtLeast(1).toFloat()
-            val barWidth = (slotWidth * 0.24f).coerceAtMost(12.dp.toPx())
-            visibleRows.forEachIndexed { index, row ->
-                val center = slotWidth * index + slotWidth / 2f
-                fun drawBar(value: Long, color: Color, xOffset: Float) {
-                    val height = ((chartBottom - chartTop) * (value.toFloat() / yMax.toFloat())).coerceAtLeast(if (value > 0) 2f else 0f)
-                    drawRoundRect(
-                        color = color,
-                        topLeft = Offset(center + xOffset - barWidth / 2f, chartBottom - height),
-                        size = Size(barWidth, height),
-                        cornerRadius = CornerRadius(4.dp.toPx(), 4.dp.toPx()),
-                    )
-                }
-                drawBar(row.txBytes, txColor, -barWidth * 0.65f)
-                drawBar(row.rxBytes, rxColor, barWidth * 0.65f)
-            }
-        }
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceEvenly,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            rows.take(STATISTICS_TOP_PREVIEW_LIMIT).forEach { row ->
-                AppIcon(packageName = row.packageName, modifier = Modifier.size(22.dp))
-            }
-        }
-    }
+    com.foxhole.beta.ui.statistics.charts.GroupedBarChart(model = model)
 }
 
 @Composable
@@ -2130,9 +2084,6 @@ private fun AppTrafficTimelineChart(
     range: StatisticsDisplayRange,
 ) {
     val context = LocalContext.current
-    val semanticColors = LocalFoxholeSemanticColors.current
-    val txColor = MaterialTheme.colorScheme.primary
-    val rxColor = semanticColors.success
     val buckets = remember(samples, range) { trafficTimelineBuckets(samples, range) }
     val maxBytes =
         buckets
@@ -2140,93 +2091,67 @@ private fun AppTrafficTimelineChart(
             ?.coerceAtLeast(1L)
             ?: 1L
     val yMax = niceTimelineTrafficScale(maxBytes)
-    val gridColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)
-    val axisColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text(
-            text = stringResource(R.string.statistics_axis_y_bytes, formatBytes(context, yMax)),
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+    val rangeStart = buckets.firstOrNull()?.startedAtMs ?: System.currentTimeMillis()
+    val rangeEnd = (buckets.lastOrNull()?.startedAtMs ?: rangeStart) + range.timelineBucketMs()
+    val model =
+        com.foxhole.beta.core.statistics.ChartModel(
+            id = "app-traffic-timeline",
+            title = stringResource(R.string.statistics_apps_title),
+            subtitle = stringResource(R.string.statistics_axis_y_bytes, formatBytes(context, yMax)),
+            range = range.toStatsRange(),
+            xAxis =
+                com.foxhole.beta.core.statistics.ChartAxis(
+                    label = stringResource(R.string.statistics_axis_x_time),
+                    min = rangeStart.toDouble(),
+                    max = rangeEnd.toDouble(),
+                    ticks =
+                        listOf(
+                            com.foxhole.beta.core.statistics.ChartTick(rangeStart.toDouble(), rangeStartLabel(range)),
+                            com.foxhole.beta.core.statistics.ChartTick(rangeEnd.toDouble(), stringResource(R.string.statistics_range_now)),
+                        ),
+                    formatter = com.foxhole.beta.core.statistics.ChartValueFormatter.TIME,
+                ),
+            yAxis =
+                com.foxhole.beta.core.statistics.ChartAxis(
+                    label = stringResource(R.string.statistics_axis_y_bytes, formatBytes(context, yMax)),
+                    min = 0.0,
+                    max = yMax.toDouble(),
+                    ticks =
+                        listOf(
+                            com.foxhole.beta.core.statistics.ChartTick(0.0, "0"),
+                            com.foxhole.beta.core.statistics.ChartTick(yMax.toDouble(), formatBytes(context, yMax)),
+                        ),
+                    formatter = com.foxhole.beta.core.statistics.ChartValueFormatter.BYTES,
+                ),
+            series =
+                listOf(
+                    com.foxhole.beta.core.statistics.ChartSeries(
+                        id = "tx",
+                        label = stringResource(R.string.traffic_sent),
+                        kind = com.foxhole.beta.core.statistics.ChartSeriesKind.LINE,
+                        colorToken = com.foxhole.beta.core.statistics.ChartColorToken.TX,
+                        points = buckets.map { bucket -> com.foxhole.beta.core.statistics.ChartPoint(bucket.startedAtMs, bucket.txBytes.toDouble()) },
+                    ),
+                    com.foxhole.beta.core.statistics.ChartSeries(
+                        id = "rx",
+                        label = stringResource(R.string.traffic_received),
+                        kind = com.foxhole.beta.core.statistics.ChartSeriesKind.LINE,
+                        colorToken = com.foxhole.beta.core.statistics.ChartColorToken.RX,
+                        points = buckets.map { bucket -> com.foxhole.beta.core.statistics.ChartPoint(bucket.startedAtMs, bucket.rxBytes.toDouble()) },
+                    ),
+                ),
+            legend =
+                com.foxhole.beta.core.statistics.ChartLegendModel(
+                    items =
+                        listOf(
+                            com.foxhole.beta.core.statistics.ChartLegendItem("tx", stringResource(R.string.traffic_sent), com.foxhole.beta.core.statistics.ChartColorToken.TX),
+                            com.foxhole.beta.core.statistics.ChartLegendItem("rx", stringResource(R.string.traffic_received), com.foxhole.beta.core.statistics.ChartColorToken.RX),
+                        ),
+                ),
+            emptyState = com.foxhole.beta.core.statistics.ChartEmptyState(stringResource(R.string.app_statistics_empty)),
+            updatedAtMs = System.currentTimeMillis(),
         )
-        Canvas(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .height(170.dp),
-        ) {
-            val left = 2.dp.toPx()
-            val right = size.width - 2.dp.toPx()
-            val top = 10.dp.toPx()
-            val bottom = size.height - 24.dp.toPx()
-            val chartWidth = (right - left).coerceAtLeast(1f)
-            val chartHeight = (bottom - top).coerceAtLeast(1f)
-            listOf(0f, 0.5f, 1f).forEach { ratio ->
-                val y = bottom - chartHeight * ratio
-                drawLine(
-                    color = gridColor,
-                    start = Offset(left, y),
-                    end = Offset(right, y),
-                    pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 8f)),
-                )
-            }
-            val gridEvery = range.timelineGridEveryBuckets()
-            buckets.forEachIndexed { index, _ ->
-                if (index % gridEvery == 0) {
-                    val x = left + chartWidth * (index.toFloat() / buckets.size.coerceAtLeast(1).toFloat())
-                    drawLine(
-                        color = gridColor.copy(alpha = 0.32f),
-                        start = Offset(x, top),
-                        end = Offset(x, bottom),
-                        strokeWidth = 1.dp.toPx(),
-                    )
-                }
-            }
-            drawLine(
-                color = axisColor,
-                start = Offset(left, bottom),
-                end = Offset(right, bottom),
-                strokeWidth = 1.dp.toPx(),
-            )
-            val slot = chartWidth / buckets.size.coerceAtLeast(1).toFloat()
-            val barWidth = (slot * 0.32f).coerceAtLeast(1.dp.toPx()).coerceAtMost(5.dp.toPx())
-            buckets.forEachIndexed { index, bucket ->
-                val center = left + slot * index + slot / 2f
-                fun drawTimelineBar(value: Long, color: Color, offset: Float) {
-                    val height =
-                        (chartHeight * (value.toFloat() / yMax.toFloat()))
-                            .coerceAtLeast(if (value > 0L) 1.5f else 0f)
-                    drawRoundRect(
-                        color = color,
-                        topLeft = Offset(center + offset - barWidth / 2f, bottom - height),
-                        size = Size(barWidth, height),
-                        cornerRadius = CornerRadius(2.dp.toPx(), 2.dp.toPx()),
-                    )
-                }
-                drawTimelineBar(bucket.txBytes, txColor, -barWidth * 0.68f)
-                drawTimelineBar(bucket.rxBytes, rxColor, barWidth * 0.68f)
-            }
-        }
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Text(
-                text = rangeStartLabel(range),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Text(
-                text = stringResource(R.string.statistics_axis_x_time),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Text(
-                text = stringResource(R.string.statistics_range_now),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-    }
+    com.foxhole.beta.ui.statistics.charts.TimelineChart(model = model)
 }
 
 @Composable
@@ -2784,69 +2709,6 @@ private fun DetailMetricGrid(metrics: List<Pair<String, String>>) {
     }
 }
 
-data class AppTrafficRow(
-    val packageName: String,
-    val label: String,
-    val txBytes: Long,
-    val rxBytes: Long,
-    val badges: Set<AppAnomalyBadge>,
-) {
-    val totalBytes: Long get() = txBytes + rxBytes
-}
-
-data class CountryTrafficUiRow(
-    val countryCode: String,
-    val label: String,
-    val bytes: Long,
-    val sessions: Int,
-)
-
-data class DnsProtectionSummary(
-    val blockedQueries: Int,
-    val allowedQueries: Int,
-    val categoryRows: List<DnsProtectionCategoryRow>,
-    val appRows: List<DnsProtectionAppRow>,
-) {
-    val totalQueries: Int get() = blockedQueries + allowedQueries
-    val blockRatio: Float get() = if (totalQueries == 0) 0f else blockedQueries.toFloat() / totalQueries.toFloat()
-}
-
-data class DnsProtectionAppRow(
-    val packageName: String,
-    val label: String,
-    val totalBytes: Long,
-    val estimatedBlockedQueries: Int,
-    val blockRatio: Float,
-    val categoryRatios: Map<DnsProtectionCategory, Float>,
-)
-
-data class DnsProtectionCategoryRow(
-    val category: DnsProtectionCategory,
-    val blockedQueries: Int,
-)
-
-enum class DnsProtectionCategory {
-    ADS,
-    TRACKERS,
-    TELEMETRY,
-    MALICIOUS,
-}
-
-enum class StatisticsDisplayRange {
-    HOURS_24,
-    WEEK,
-    MONTH,
-    ALL,
-}
-
-enum class AppAnomalyBadge {
-    NORMAL,
-    UNUSUAL,
-    HIGH_UPLOAD,
-    NEW_ROUTE,
-    BACKGROUND,
-}
-
 private data class AppConnectionRow(
     val remote: String,
     val ipAddress: String,
@@ -3331,29 +3193,12 @@ internal fun appTrafficRows(
 ): List<AppTrafficRow> {
     val labels = installedApps.associate { it.packageName to it.label }
     val cutoff = retention.durationMs?.let { System.currentTimeMillis() - it }
-    val badgesByPackage =
-        anomalyEvents
-            .groupBy { event -> event.packageName }
-            .mapNotNull { (packageName, events) -> packageName?.let { it to anomalyBadgesFor(events) } }
-            .toMap()
-    return samples
-        .asSequence()
-        .filter { sample -> cutoff == null || sample.startedAtMs >= cutoff }
-        .groupBy(AppTrafficWindow::packageName)
-        .map { (packageName, packageSamples) ->
-            AppTrafficRow(
-                packageName = packageName,
-                label = labels[packageName] ?: packageName,
-                txBytes = packageSamples.sumOf(AppTrafficWindow::txBytes),
-                rxBytes = packageSamples.sumOf(AppTrafficWindow::rxBytes),
-                badges = badgesByPackage[packageName] ?: setOf(AppAnomalyBadge.NORMAL),
-            )
-        }
-        .filter { row -> row.totalBytes > 0L }
-        .sortedWith(
-            compareByDescending<AppTrafficRow> { it.totalBytes }
-                .thenBy { it.label.lowercase(Locale.getDefault()) },
-        )
+    return com.foxhole.beta.core.statistics.appTrafficRows(
+        windows = samples.filter { sample -> cutoff == null || sample.startedAtMs >= cutoff },
+        labelsByPackage = labels,
+        anomalyEvents = anomalyEvents,
+        includeOther = false,
+    )
 }
 
 internal fun dnsProtectionSummary(
@@ -3366,80 +3211,21 @@ internal fun dnsProtectionSummary(
     val cutoff = (displayRange?.durationMs ?: retention.durationMs)?.let { System.currentTimeMillis() - it }
     val windows =
         trafficWindows.filter { window -> cutoff == null || window.startedAtMs >= cutoff }
-    val blocked = windows.sumOf(TrafficWindow::blockedDns).coerceAtLeast(0)
-    val allowed = windows.sumOf(TrafficWindow::allowedDns).coerceAtLeast(0)
-    val categories = enabledDnsProtectionCategories(dnsSettings)
-    val categoryRows = splitDnsBlockedByCategory(blocked, categories)
-    val totalAppBytes = appRows.sumOf(AppTrafficRow::totalBytes).coerceAtLeast(1L)
-    val totalQueries = (blocked + allowed).coerceAtLeast(1)
-    val appDnsRows =
-        if (blocked <= 0 || appRows.isEmpty()) {
-            emptyList()
-        } else {
-            appRows
-                .mapNotNull { row ->
-                    val estimatedBlocked = ((blocked.toDouble() * row.totalBytes.toDouble()) / totalAppBytes.toDouble()).roundToInt()
-                    val estimatedAllowed = ((allowed.toDouble() * row.totalBytes.toDouble()) / totalAppBytes.toDouble()).roundToInt()
-                    val rowQueries = (estimatedBlocked + estimatedAllowed).coerceAtLeast(1)
-                    val blockRatio = estimatedBlocked.toFloat() / rowQueries.toFloat()
-                    estimatedBlocked
-                        .takeIf { it > 0 }
-                        ?.let {
-                            DnsProtectionAppRow(
-                                packageName = row.packageName,
-                                label = row.label,
-                                totalBytes = row.totalBytes,
-                                estimatedBlockedQueries = it,
-                                blockRatio = blockRatio,
-                                    categoryRatios =
-                                        categoryRows.associate { category ->
-                                            val blockedShare =
-                                                if (blocked <= 0) {
-                                                    0f
-                                                } else {
-                                                    category.blockedQueries.toFloat() / blocked.toFloat()
-                                                }
-                                            category.category to
-                                                (blockedShare * blockRatio).coerceIn(0f, 1f)
-                                        },
-                            )
-                        }
-                }
-                .sortedByDescending(DnsProtectionAppRow::estimatedBlockedQueries)
-        }
-    return DnsProtectionSummary(
-        blockedQueries = blocked,
-        allowedQueries = allowed,
-        categoryRows = categoryRows,
-        appRows = appDnsRows,
+    return com.foxhole.beta.core.statistics.dnsProtectionSummary(
+        trafficWindows = windows,
+        appRows = appRows,
+        dnsSettings = dnsSettings,
     )
 }
 
 private fun enabledDnsProtectionCategories(settings: DnsSettings): List<DnsProtectionCategory> =
-    buildList {
-        if (settings.blockAds) add(DnsProtectionCategory.ADS)
-        if (settings.blockTrackers) add(DnsProtectionCategory.TRACKERS)
-        if (settings.blockAppTelemetry) add(DnsProtectionCategory.TELEMETRY)
-        if (settings.blockMaliciousDomains) add(DnsProtectionCategory.MALICIOUS)
-    }.ifEmpty {
-        DnsProtectionCategory.entries
-    }
+    com.foxhole.beta.core.statistics.enabledDnsProtectionCategories(settings)
 
 private fun splitDnsBlockedByCategory(
     blocked: Int,
     categories: List<DnsProtectionCategory>,
 ): List<DnsProtectionCategoryRow> {
-    if (blocked <= 0 || categories.isEmpty()) {
-        return categories.map { category -> DnsProtectionCategoryRow(category = category, blockedQueries = 0) }
-    }
-    val base = blocked / categories.size
-    val remainder = blocked % categories.size
-    return categories.mapIndexed { index, category ->
-        DnsProtectionCategoryRow(
-            category = category,
-            blockedQueries = base + if (index < remainder) 1 else 0,
-        )
-    }
+    return com.foxhole.beta.core.statistics.splitDnsBlockedByCategory(blocked, categories)
 }
 
 internal fun installedAppChangesForRetention(
@@ -3457,59 +3243,17 @@ internal fun installedAppChangesForRetention(
 internal fun countryTrafficRows(
     trafficWindows: List<TrafficWindow>,
     liveDestinations: List<TrafficMapPoint>,
-): List<CountryTrafficUiRow> {
-    val bytesByCountry = linkedMapOf<String, Long>()
-    val sessionsByCountry = linkedMapOf<String, Int>()
-    trafficWindows.forEach { window ->
-        window.destinationCountries.forEach { (countryCode, bytes) ->
-            val normalized = normalizedCountryCode(countryCode) ?: return@forEach
-            bytesByCountry[normalized] = (bytesByCountry[normalized] ?: 0L) + bytes.coerceAtLeast(0L)
-            if (bytes > 0L) {
-                sessionsByCountry[normalized] = (sessionsByCountry[normalized] ?: 0) + 1
-            }
-        }
-    }
-    if (bytesByCountry.isEmpty()) {
-        liveDestinations.forEach { point ->
-            val normalized = normalizedCountryCode(point.countryCode) ?: return@forEach
-            bytesByCountry[normalized] = (bytesByCountry[normalized] ?: 0L) + point.bytes.coerceAtLeast(0L)
-            sessionsByCountry[normalized] = (sessionsByCountry[normalized] ?: 0) + point.connections.coerceAtLeast(0)
-        }
-    }
-    val labelsByCountry =
-        liveDestinations.associate { point ->
-            point.countryCode.uppercase(Locale.US) to point.label
-        }
-    return bytesByCountry
-        .map { (countryCode, bytes) ->
-            CountryTrafficUiRow(
-                countryCode = countryCode,
-                label = labelsByCountry[countryCode] ?: countryDisplayName(countryCode),
-                bytes = bytes,
-                sessions = sessionsByCountry[countryCode]?.coerceAtLeast(1) ?: 1,
-            )
-        }
-        .filter { row -> row.bytes > 0L }
-        .sortedWith(
-            compareByDescending<CountryTrafficUiRow> { row -> row.bytes }
-                .thenByDescending { row -> row.sessions }
-                .thenBy { row -> row.countryCode },
-        )
-}
+): List<CountryTrafficUiRow> =
+    com.foxhole.beta.core.statistics.countryTrafficRows(
+        trafficWindows = trafficWindows,
+        liveDestinations = liveDestinations,
+    )
 
 private fun normalizedCountryCode(countryCode: String?): String? =
-    countryCode
-        ?.trim()
-        ?.uppercase(Locale.US)
-        ?.takeIf { code -> code.length == 2 && code.all { character -> character in 'A'..'Z' } }
+    com.foxhole.beta.core.statistics.normalizedCountryCode(countryCode)
 
 private fun countryDisplayName(countryCode: String): String =
-    Locale.Builder()
-        .setRegion(countryCode)
-        .build()
-        .displayCountry
-        .takeIf(String::isNotBlank)
-        ?: countryCode
+    com.foxhole.beta.core.statistics.countryDisplayName(countryCode)
 
 private fun anomalyBadgesFor(events: List<AnomalyEvent>): Set<AppAnomalyBadge> {
     val badges =
@@ -3614,29 +3358,28 @@ private fun anomalyChartPoints(
     events: List<AnomalyEvent>,
     range: StatisticsDisplayRange,
 ): List<AnomalyChartPoint> {
-    if (events.isEmpty()) {
-        return emptyList()
-    }
     val now = System.currentTimeMillis()
     val bucketSizeMs = range.anomalyBucketMs()
     val firstAt =
         range.durationMs
             ?.let { duration -> now - duration }
-            ?: events.minOf(AnomalyEvent::createdAtMs)
-    val ordered = events.filter { event -> event.createdAtMs >= firstAt }.sortedBy(AnomalyEvent::createdAtMs)
-    return ordered
-        .groupBy { event ->
-            firstAt + ((event.createdAtMs - firstAt) / bucketSizeMs) * bucketSizeMs
-        }
-        .toSortedMap()
-        .map { (bucketStartAt, bucketEvents) ->
+            ?: events.minOfOrNull(AnomalyEvent::createdAtMs)
+            ?: now
+    return com.foxhole.beta.core.statistics.anomalyTimelineBuckets(
+        events = events,
+        startMs = firstAt,
+        endMs = now + 1L,
+        bucketSizeMs = bucketSizeMs,
+        fillEmpty = true,
+    )
+        .takeLast(range.anomalyBucketLimit())
+        .map { point ->
             AnomalyChartPoint(
-                bucketStartAt = bucketStartAt,
-                score = bucketEvents.maxOf(AnomalyEvent::score).coerceIn(0, ANOMALY_SCORE_MAX),
-                high = bucketEvents.any { event -> event.severity == AnomalySeverity.HIGH },
+                bucketStartAt = point.bucketStartAt,
+                score = point.score,
+                high = point.high,
             )
         }
-        .takeLast(range.anomalyBucketLimit())
 }
 
 private fun appConnectionRows(
@@ -3782,6 +3525,14 @@ private fun StatisticsDisplayRange.toStatisticsRetention(): StatisticsRetention 
         StatisticsDisplayRange.ALL -> StatisticsRetention.FOREVER
     }
 
+private fun StatisticsDisplayRange.toStatsRange(): com.foxhole.beta.core.statistics.StatsRange =
+    when (this) {
+        StatisticsDisplayRange.HOURS_24 -> com.foxhole.beta.core.statistics.StatsRange.HOURS_24
+        StatisticsDisplayRange.WEEK -> com.foxhole.beta.core.statistics.StatsRange.DAYS_7
+        StatisticsDisplayRange.MONTH -> com.foxhole.beta.core.statistics.StatsRange.DAYS_31
+        StatisticsDisplayRange.ALL -> com.foxhole.beta.core.statistics.StatsRange.ALL
+    }
+
 private fun <T> List<T>.filterForDisplayRange(
     range: StatisticsDisplayRange,
     timestamp: (T) -> Long,
@@ -3854,12 +3605,7 @@ private fun String.countryFlagEmoji(): String {
 }
 
 private fun niceTimelineTrafficScale(maxBytes: Long): Long =
-    when {
-        maxBytes <= 64L * 1024L -> 64L * 1024L
-        maxBytes <= 1024L * 1024L -> 1024L * 1024L
-        maxBytes <= 16L * 1024L * 1024L -> 16L * 1024L * 1024L
-        else -> niceTrafficScale(maxBytes)
-    }
+    niceTrafficScale(maxBytes)
 
 @Composable
 private fun rangeStartLabel(range: StatisticsDisplayRange): String =
@@ -3937,14 +3683,15 @@ private fun statisticsCountryChartColors(): List<Color> {
     return listOf(
         MaterialTheme.colorScheme.primary,
         semanticColors.success,
+        MaterialTheme.colorScheme.tertiary,
+        semanticColors.warning,
+        Color(0xFF64B5F6),
+        MaterialTheme.colorScheme.outline,
     )
 }
 
 private fun niceTrafficScale(maxBytes: Long): Long {
-    val hundredMb = 100L * 1024L * 1024L
-    if (maxBytes <= hundredMb) return hundredMb
-    val gb = 1024L * 1024L * 1024L
-    return (ceil(maxBytes.toDouble() / gb.toDouble()).toLong().coerceAtLeast(1L)) * gb
+    return com.foxhole.beta.core.statistics.niceBytesScale(maxBytes)
 }
 
 @Composable
