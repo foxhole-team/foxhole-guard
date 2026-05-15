@@ -348,53 +348,78 @@ internal fun resolveHomeDashboardNetworkModel(
 ): HomeDashboardNetworkModel {
     val showConnectionStatus = state.hasRealTunnelConnectionStatus()
     val dashboardIpInfo = state.dashboardVisibleIpInfo(visibleIpInfo)
-    val protocolSearchRunning = state.autoConnect.running || state.protocolMetricsRefreshing
-    val vpnTransitionLoading =
-        !protocolSearchRunning &&
-            state.connection.state in setOf(ConnectionState.CONNECTING, ConnectionState.RECONNECTING) &&
-            state.connection.trafficMode == TrafficMode.TUNNEL &&
-            state.connection.profileId != FoxholeVpnService.LOCAL_GUARD_PROFILE_ID
-    val connectedTunnelLoading =
-        !protocolSearchRunning &&
-            state.connection.state == ConnectionState.CONNECTED &&
-            state.connection.trafficMode == TrafficMode.TUNNEL &&
-            state.connection.profileId != FoxholeVpnService.LOCAL_GUARD_PROFILE_ID &&
-            dashboardIpInfo == null
+    val protocolSearchRunning = state.homeProtocolSearchRunning()
     val contentLoading =
-        state.reconnectInProgress ||
-            vpnTransitionLoading ||
-            connectedTunnelLoading ||
-            shouldShowDashboardNetworkLoading(
-                visibleIpInfo = dashboardIpInfo,
-                explicitLoading = state.ipInfoLoading,
-                connectionState = state.connection.state,
-                autoConnectRunning = state.autoConnect.running,
-                deviceInternetAvailable = deviceInternetAvailable,
-                appLoaded = state.profilesLoaded,
-            ) ||
-            (showConnectionStatus && state.dashboardConnectionMetricsLoading && !protocolSearchRunning)
+        state.shouldShowHomeNetworkContentLoading(
+            dashboardIpInfo = dashboardIpInfo,
+            showConnectionStatus = showConnectionStatus,
+            protocolSearchRunning = protocolSearchRunning,
+            deviceInternetAvailable = deviceInternetAvailable,
+        )
     return HomeDashboardNetworkModel(
         visibleIpInfo = dashboardIpInfo,
         showLoading = contentLoading,
         showRefreshProgress = protocolSearchRunning || (state.ipInfoLoading && dashboardIpInfo != null),
         showConnectionStatus = showConnectionStatus,
-        titleRes =
-            if (state.connection.profileId == FoxholeVpnService.TOR_ONLY_PROFILE_ID) {
-                R.string.home_network_tor_title
-            } else if (showConnectionStatus && !protocolSearchRunning) {
-                R.string.home_network_connection_info_title
-            } else {
-                R.string.home_network_current_ip_title
-            },
+        titleRes = state.homeNetworkTitleRes(showConnectionStatus, protocolSearchRunning),
     )
 }
+
+private fun HomeRouteUiState.homeProtocolSearchRunning(): Boolean =
+    autoConnect.running || protocolMetricsRefreshing
+
+private fun HomeRouteUiState.shouldShowHomeNetworkContentLoading(
+    dashboardIpInfo: IpInfo?,
+    showConnectionStatus: Boolean,
+    protocolSearchRunning: Boolean,
+    deviceInternetAvailable: Boolean?,
+): Boolean =
+    reconnectInProgress ||
+        shouldShowVpnTransitionLoading(protocolSearchRunning) ||
+        shouldShowConnectedTunnelLoading(protocolSearchRunning, dashboardIpInfo) ||
+        shouldShowDashboardNetworkLoading(
+            visibleIpInfo = dashboardIpInfo,
+            explicitLoading = ipInfoLoading,
+            connectionState = connection.state,
+            autoConnectRunning = autoConnect.running,
+            deviceInternetAvailable = deviceInternetAvailable,
+            appLoaded = profilesLoaded,
+        ) ||
+        (showConnectionStatus && dashboardConnectionMetricsLoading && !protocolSearchRunning)
+
+private fun HomeRouteUiState.shouldShowVpnTransitionLoading(protocolSearchRunning: Boolean): Boolean =
+    !protocolSearchRunning &&
+        connection.state in setOf(ConnectionState.CONNECTING, ConnectionState.RECONNECTING) &&
+        hasDashboardTunnelProfile()
+
+private fun HomeRouteUiState.shouldShowConnectedTunnelLoading(
+    protocolSearchRunning: Boolean,
+    dashboardIpInfo: IpInfo?,
+): Boolean =
+    !protocolSearchRunning &&
+        connection.state == ConnectionState.CONNECTED &&
+        hasDashboardTunnelProfile() &&
+        dashboardIpInfo == null
+
+private fun HomeRouteUiState.hasDashboardTunnelProfile(): Boolean =
+    connection.trafficMode == TrafficMode.TUNNEL &&
+        connection.profileId != FoxholeVpnService.LOCAL_GUARD_PROFILE_ID
+
+private fun HomeRouteUiState.homeNetworkTitleRes(
+    showConnectionStatus: Boolean,
+    protocolSearchRunning: Boolean,
+): Int =
+    when {
+        connection.profileId == FoxholeVpnService.TOR_ONLY_PROFILE_ID -> R.string.home_network_tor_title
+        showConnectionStatus && !protocolSearchRunning -> R.string.home_network_connection_info_title
+        else -> R.string.home_network_current_ip_title
+    }
 
 private fun HomeRouteUiState.hasRealTunnelConnectionStatus(): Boolean =
     reconnectInProgress ||
         (
             connection.state == ConnectionState.CONNECTED &&
-                connection.trafficMode == TrafficMode.TUNNEL &&
-                connection.profileId != FoxholeVpnService.LOCAL_GUARD_PROFILE_ID
+                hasDashboardTunnelProfile()
         )
 
 private fun HomeRouteUiState.dashboardVisibleIpInfo(visibleIpInfo: IpInfo?): IpInfo? {
@@ -438,21 +463,23 @@ private fun selectedSmartProtocolTrafficTotal(
     activeProfile: Profile?,
     totals: List<ProfileTrafficTotal>,
 ): ProfileTrafficTotal? {
-    if (activeProfile == null || !MultiProtocolProfileSupport.hasMultipleSupportedOptions(activeProfile)) {
-        return null
-    }
-    val selectedOption = MultiProtocolProfileSupport.selectedOption(activeProfile) ?: return null
-    return totals
-        .firstOrNull { total ->
-            total.profileId == activeProfile.id &&
-                total.protocolOptionId == selectedOption.id
-        }
+    val selectedProfile = activeProfile?.takeIf(MultiProtocolProfileSupport::hasMultipleSupportedOptions)
+    val selectedOption = selectedProfile?.let(MultiProtocolProfileSupport::selectedOption)
+    return if (selectedProfile == null || selectedOption == null) {
+        null
+    } else {
+        totals
+            .firstOrNull { total ->
+                total.profileId == selectedProfile.id &&
+                    total.protocolOptionId == selectedOption.id
+            }
             ?: ProfileTrafficTotal(
-                profileId = activeProfile.id,
-                profileName = activeProfile.name,
+                profileId = selectedProfile.id,
+                profileName = selectedProfile.name,
                 protocolHint = selectedOption.protocolHint,
                 protocolOptionId = selectedOption.id,
             )
+    }
 }
 
 @Composable

@@ -19,6 +19,7 @@ import com.foxhole.beta.core.model.ProtocolHint
 import com.foxhole.beta.core.model.Settings
 import com.foxhole.beta.core.model.StoredProfileProtocolOption
 import com.foxhole.beta.core.model.StoredProfileSecret
+import com.foxhole.beta.core.model.TrafficMode
 import com.foxhole.beta.core.model.VpnSession
 import com.foxhole.beta.core.model.isUdpTransport
 import com.foxhole.beta.core.network.ensurePublicUrl
@@ -662,11 +663,7 @@ class ProfileRepository(
                 null
             }
         val torRuntimePaths =
-            if (
-                settings.privacyRoute.enabled &&
-                settings.traffic.mode == com.foxhole.beta.core.model.TrafficMode.TUNNEL &&
-                (settings.privacyRoute.bypassVpnTunnel || !selectedProtocolHint.isUdpTransport())
-            ) {
+            if (settings.shouldPrepareTorRuntime(selectedProtocolHint)) {
                 torRuntimeInstaller.prepare()
             } else {
                 null
@@ -703,6 +700,11 @@ class ProfileRepository(
             correlationId = correlationId,
         )
     }
+
+    private fun Settings.shouldPrepareTorRuntime(selectedProtocolHint: ProtocolHint): Boolean =
+        privacyRoute.enabled &&
+            traffic.mode == TrafficMode.TUNNEL &&
+            (privacyRoute.bypassVpnTunnel || !selectedProtocolHint.isUdpTransport())
 
     suspend fun getTorOnlySession(privateDnsMode: PrivateDnsMode? = null): VpnSession {
         val settings = settingsRepository.current()

@@ -609,11 +609,13 @@ internal fun homeTorFeatureStatus(state: HomeRouteUiState): HomeConnectionFeatur
 }
 
 internal fun homeTorSelectedProtocolIsUdp(state: HomeRouteUiState): Boolean {
-    if (state.settings.privacyRoute.bypassVpnTunnel) {
-        return false
-    }
-    val profile = state.activeProfile ?: return false
-    val protocolHint = state.connection.protocolHint ?: profile.selectedRuntimeProtocolHint()
+    val profile = state.activeProfile
+    val protocolHint =
+        if (state.settings.privacyRoute.bypassVpnTunnel || profile == null) {
+            null
+        } else {
+            state.connection.protocolHint ?: profile.selectedRuntimeProtocolHint()
+        }
     return protocolHint?.isUdpTransport() == true
 }
 
@@ -745,37 +747,12 @@ internal fun HomeConnectionFeatureDialog(
     val indicator = homeConnectionFeatureIndicator(feature, state) ?: return
     val title = "${stringResource(indicator.titleRes)}: ${indicator.status.label}"
     val icon = homeConnectionFeatureIcon(feature)
-    val connectionActive =
-        state.connection.state in setOf(
-            ConnectionState.CONNECTED,
-            ConnectionState.CONNECTING,
-            ConnectionState.RECONNECTING,
-        )
-    val restartAvailable = state.reconnectRequired && connectionActive
-    val enabled =
-        when (feature) {
-            HomeConnectionFeature.KILL_SWITCH -> state.settings.expert.killSwitchEnabled
-            HomeConnectionFeature.FIREWALL -> state.settings.expert.firewallEnabled
-            HomeConnectionFeature.TOR -> state.settings.privacyRoute.enabled
-            HomeConnectionFeature.LAN_PROXY -> state.settings.expert.localSurfaces.allowLanAccess
-        }
+    val restartAvailable = state.homeConnectionFeatureRestartAvailable()
+    val enabled = feature.enabledIn(state)
     val torSelectedProtocolIsUdp = feature == HomeConnectionFeature.TOR && homeTorSelectedProtocolIsUdp(state)
     val confirmEnabled = !(feature == HomeConnectionFeature.TOR && torSelectedProtocolIsUdp && !enabled)
     val torOperationActive = feature == HomeConnectionFeature.TOR && state.torOperation.active
-    val confirmLabel =
-        if (torOperationActive && enabled) {
-            stringResource(R.string.cancel)
-        } else if (restartAvailable) {
-            stringResource(R.string.reconnect)
-        } else {
-            stringResource(
-                if (enabled) {
-                    R.string.home_feature_turn_off
-                } else {
-                    R.string.home_feature_turn_on
-                },
-            )
-        }
+    val confirmLabel = homeConnectionFeatureConfirmLabel(torOperationActive, enabled, restartAvailable)
     AlertDialog(
         onDismissRequest = onDismiss,
         modifier = Modifier.foxholeDialogChrome(),
@@ -788,49 +765,27 @@ internal fun HomeConnectionFeatureDialog(
             )
         },
         text =
-            when (feature) {
-                HomeConnectionFeature.TOR -> {
-                    {
-                        HomeConnectionFeatureDialogContent(
-                            state = state,
-                            indicator = indicator,
-                            torSelectedProtocolIsUdp = torSelectedProtocolIsUdp,
-                            onRenewTorIp = onRenewTorIp,
-                        )
-                    }
-                }
-                HomeConnectionFeature.FIREWALL -> {
-                    {
-                        HomeFirewallFeatureDialogContent(state = state)
-                    }
-                }
-                else -> null
-            },
+            homeConnectionFeatureDialogContent(
+                feature = feature,
+                state = state,
+                indicator = indicator,
+                torSelectedProtocolIsUdp = torSelectedProtocolIsUdp,
+                onRenewTorIp = onRenewTorIp,
+            ),
         confirmButton = {
             FoxholeDialogConfirmButton(
                 onClick = {
-                    if (feature == HomeConnectionFeature.TOR) {
-                        onPrivacyRouteModeSelected(
-                            if (torOperationActive && enabled) {
-                                PrivacyRouteMode.OFF
-                            } else if (enabled) {
-                                PrivacyRouteMode.OFF
-                            } else {
-                                PrivacyRouteMode.TOR_OVER_VPN
-                            },
-                        )
-                    } else if (restartAvailable) {
-                        onRestart()
-                        onDismiss()
-                    } else {
-                        when (feature) {
-                            HomeConnectionFeature.KILL_SWITCH -> onKillSwitchChanged(!enabled)
-                            HomeConnectionFeature.FIREWALL -> onFirewallEnabledChanged(!enabled)
-                            HomeConnectionFeature.TOR -> Unit
-                            HomeConnectionFeature.LAN_PROXY -> onLocalProxyLanAccessChanged(!enabled)
-                        }
-                        onDismiss()
-                    }
+                    handleHomeConnectionFeatureConfirm(
+                        feature = feature,
+                        enabled = enabled,
+                        restartAvailable = restartAvailable,
+                        onKillSwitchChanged = onKillSwitchChanged,
+                        onFirewallEnabledChanged = onFirewallEnabledChanged,
+                        onPrivacyRouteModeSelected = onPrivacyRouteModeSelected,
+                        onLocalProxyLanAccessChanged = onLocalProxyLanAccessChanged,
+                        onRestart = onRestart,
+                        onDismiss = onDismiss,
+                    )
                 },
                 enabled = confirmEnabled,
                 label = confirmLabel,
@@ -843,6 +798,124 @@ internal fun HomeConnectionFeatureDialog(
             )
         },
     )
+}
+
+private fun HomeRouteUiState.homeConnectionFeatureRestartAvailable(): Boolean {
+    val connectionActive =
+        connection.state in setOf(
+            ConnectionState.CONNECTED,
+            ConnectionState.CONNECTING,
+            ConnectionState.RECONNECTING,
+        )
+    return reconnectRequired && connectionActive
+}
+
+private fun HomeConnectionFeature.enabledIn(state: HomeRouteUiState): Boolean =
+    when (this) {
+        HomeConnectionFeature.KILL_SWITCH -> state.settings.expert.killSwitchEnabled
+        HomeConnectionFeature.FIREWALL -> state.settings.expert.firewallEnabled
+        HomeConnectionFeature.TOR -> state.settings.privacyRoute.enabled
+        HomeConnectionFeature.LAN_PROXY -> state.settings.expert.localSurfaces.allowLanAccess
+    }
+
+@Composable
+private fun homeConnectionFeatureConfirmLabel(
+    torOperationActive: Boolean,
+    enabled: Boolean,
+    restartAvailable: Boolean,
+): String =
+    if (torOperationActive && enabled) {
+        stringResource(R.string.cancel)
+    } else if (restartAvailable) {
+        stringResource(R.string.reconnect)
+    } else {
+        stringResource(
+            if (enabled) {
+                R.string.home_feature_turn_off
+            } else {
+                R.string.home_feature_turn_on
+            },
+        )
+    }
+
+@Composable
+private fun homeConnectionFeatureDialogContent(
+    feature: HomeConnectionFeature,
+    state: HomeRouteUiState,
+    indicator: HomeConnectionFeatureIndicator,
+    torSelectedProtocolIsUdp: Boolean,
+    onRenewTorIp: () -> Unit,
+): (@Composable () -> Unit)? =
+    when (feature) {
+        HomeConnectionFeature.TOR -> {
+            {
+                HomeConnectionFeatureDialogContent(
+                    state = state,
+                    indicator = indicator,
+                    torSelectedProtocolIsUdp = torSelectedProtocolIsUdp,
+                    onRenewTorIp = onRenewTorIp,
+                )
+            }
+        }
+        HomeConnectionFeature.FIREWALL -> {
+            {
+                HomeFirewallFeatureDialogContent(state = state)
+            }
+        }
+        else -> null
+    }
+
+private fun handleHomeConnectionFeatureConfirm(
+    feature: HomeConnectionFeature,
+    enabled: Boolean,
+    restartAvailable: Boolean,
+    onKillSwitchChanged: (Boolean) -> Unit,
+    onFirewallEnabledChanged: (Boolean) -> Unit,
+    onPrivacyRouteModeSelected: (PrivacyRouteMode) -> Unit,
+    onLocalProxyLanAccessChanged: (Boolean) -> Unit,
+    onRestart: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    when {
+        feature == HomeConnectionFeature.TOR -> {
+            onPrivacyRouteModeSelected(
+                if (enabled) {
+                    PrivacyRouteMode.OFF
+                } else {
+                    PrivacyRouteMode.TOR_OVER_VPN
+                },
+            )
+        }
+        restartAvailable -> {
+            onRestart()
+            onDismiss()
+        }
+        else -> {
+            toggleHomeConnectionFeature(
+                feature = feature,
+                enabled = enabled,
+                onKillSwitchChanged = onKillSwitchChanged,
+                onFirewallEnabledChanged = onFirewallEnabledChanged,
+                onLocalProxyLanAccessChanged = onLocalProxyLanAccessChanged,
+            )
+            onDismiss()
+        }
+    }
+}
+
+private fun toggleHomeConnectionFeature(
+    feature: HomeConnectionFeature,
+    enabled: Boolean,
+    onKillSwitchChanged: (Boolean) -> Unit,
+    onFirewallEnabledChanged: (Boolean) -> Unit,
+    onLocalProxyLanAccessChanged: (Boolean) -> Unit,
+) {
+    when (feature) {
+        HomeConnectionFeature.KILL_SWITCH -> onKillSwitchChanged(!enabled)
+        HomeConnectionFeature.FIREWALL -> onFirewallEnabledChanged(!enabled)
+        HomeConnectionFeature.TOR -> Unit
+        HomeConnectionFeature.LAN_PROXY -> onLocalProxyLanAccessChanged(!enabled)
+    }
 }
 
 @Composable
@@ -1038,62 +1111,13 @@ private fun HomeFirewallFeatureDialogContent(state: HomeRouteUiState) {
             selectedPackages = state.settings.expert.blockedPackages,
         )
     }
-    val runtimeMode =
-        when {
-            !state.settings.expert.firewallEnabled -> stringResource(R.string.switch_state_off)
-            state.connection.profileId == FoxholeVpnService.LOCAL_GUARD_PROFILE_ID ->
-                stringResource(R.string.firewall_modal_mode_local_guard)
-            state.connection.state in ACTIVE_CONNECTION_STATES ->
-                stringResource(R.string.firewall_modal_mode_vpn)
-            else -> stringResource(R.string.firewall_modal_mode_waiting)
-        }
-    val blockedAppsEnabled =
-        state.settings.expert.firewallEnabled &&
-            state.settings.expert.blockedPackagesEnabled &&
-            blockedApps.isNotEmpty()
-    val blockedAppsText =
-        if (blockedAppsEnabled) {
-            pluralStringResource(
-                R.plurals.firewall_modal_blocked_apps_count,
-                blockedApps.size,
-                blockedApps.size,
-            )
-        } else {
-            stringResource(R.string.switch_state_off)
-        }
-    val persistentBlockText =
-        if (
-            state.settings.expert.firewallEnabled &&
-            state.settings.expert.blockAppsAlways &&
-            state.settings.expert.blockedPackagesEnabled &&
-            blockedApps.isNotEmpty()
-        ) {
-            stringResource(R.string.switch_state_on)
-        } else {
-            stringResource(R.string.switch_state_off)
-        }
-    val appStatisticsText =
-        if (
-            state.settings.statistics.enabled &&
-            state.settings.statistics.appTrafficEnabled &&
-            state.settings.appTrafficStatsEnabled
-        ) {
-            stringResource(R.string.switch_state_on)
-        } else {
-            stringResource(R.string.switch_state_off)
-        }
-    val countryStatisticsText =
-        if (state.settings.statistics.enabled && state.settings.statistics.countryTrafficEnabled) {
-            stringResource(R.string.switch_state_on)
-        } else {
-            stringResource(R.string.switch_state_off)
-        }
-    val anomalyStatisticsText =
-        if (state.settings.statistics.enabled && state.settings.statistics.anomalyMetricsEnabled) {
-            stringResource(R.string.switch_state_on)
-        } else {
-            stringResource(R.string.switch_state_off)
-        }
+    val blockedAppsEnabled = state.firewallBlockedAppsEnabled(blockedApps)
+    val runtimeMode = homeFirewallRuntimeMode(state)
+    val blockedAppsText = homeFirewallBlockedAppsText(blockedAppsEnabled, blockedApps.size)
+    val persistentBlockText = switchStateLabel(state.firewallPersistentBlockEnabled(blockedApps))
+    val appStatisticsText = switchStateLabel(state.firewallAppStatisticsEnabled())
+    val countryStatisticsText = switchStateLabel(state.firewallCountryStatisticsEnabled())
+    val anomalyStatisticsText = switchStateLabel(state.firewallAnomalyStatisticsEnabled())
     Surface(
         shape = MaterialTheme.shapes.medium,
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.30f),
@@ -1132,6 +1156,64 @@ private fun HomeFirewallFeatureDialogContent(state: HomeRouteUiState) {
         }
     }
 }
+
+@Composable
+private fun homeFirewallRuntimeMode(state: HomeRouteUiState): String =
+    when {
+        !state.settings.expert.firewallEnabled -> stringResource(R.string.switch_state_off)
+        state.connection.profileId == FoxholeVpnService.LOCAL_GUARD_PROFILE_ID ->
+            stringResource(R.string.firewall_modal_mode_local_guard)
+        state.connection.state in ACTIVE_CONNECTION_STATES ->
+            stringResource(R.string.firewall_modal_mode_vpn)
+        else -> stringResource(R.string.firewall_modal_mode_waiting)
+    }
+
+@Composable
+private fun homeFirewallBlockedAppsText(
+    blockedAppsEnabled: Boolean,
+    blockedAppsCount: Int,
+): String =
+    if (blockedAppsEnabled) {
+        pluralStringResource(
+            R.plurals.firewall_modal_blocked_apps_count,
+            blockedAppsCount,
+            blockedAppsCount,
+        )
+    } else {
+        stringResource(R.string.switch_state_off)
+    }
+
+@Composable
+private fun switchStateLabel(enabled: Boolean): String =
+    stringResource(
+        if (enabled) {
+            R.string.switch_state_on
+        } else {
+            R.string.switch_state_off
+        },
+    )
+
+private fun HomeRouteUiState.firewallBlockedAppsEnabled(blockedApps: List<InstalledAppOption>): Boolean =
+    settings.expert.firewallEnabled &&
+        settings.expert.blockedPackagesEnabled &&
+        blockedApps.isNotEmpty()
+
+private fun HomeRouteUiState.firewallPersistentBlockEnabled(blockedApps: List<InstalledAppOption>): Boolean =
+    settings.expert.firewallEnabled &&
+        settings.expert.blockAppsAlways &&
+        settings.expert.blockedPackagesEnabled &&
+        blockedApps.isNotEmpty()
+
+private fun HomeRouteUiState.firewallAppStatisticsEnabled(): Boolean =
+    settings.statistics.enabled &&
+        settings.statistics.appTrafficEnabled &&
+        settings.appTrafficStatsEnabled
+
+private fun HomeRouteUiState.firewallCountryStatisticsEnabled(): Boolean =
+    settings.statistics.enabled && settings.statistics.countryTrafficEnabled
+
+private fun HomeRouteUiState.firewallAnomalyStatisticsEnabled(): Boolean =
+    settings.statistics.enabled && settings.statistics.anomalyMetricsEnabled
 
 @Composable
 private fun HomeFirewallBlockedAppsRow(

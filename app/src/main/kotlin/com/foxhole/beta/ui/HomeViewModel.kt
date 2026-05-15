@@ -704,74 +704,104 @@ class HomeViewModel(
     }
 
     fun onToggleConnection() {
-        val protocolSearchRunning = autoConnectUiStateMutable.value.running || protocolMetricsRefreshJob != null
-        if (protocolSearchRunning) {
-            cancelAutoConnect(clearUiOnly = true)
-            cancelSmartProfileMetricsRefreshInternal(restoreConnection = false)
-            container.connectionController.disconnect(suppressLocalGuard = false)
+        if (cancelProtocolSearchConnection()) {
             return
         }
         cancelAutoConnect(clearUiOnly = true)
         val state = uiState.value
-        if (state.reconnectInProgress) {
-            reconnectJob?.cancel()
-            reconnectJob = null
-            reconnectInProgressMutable.value = false
-            container.connectionController.disconnect(suppressLocalGuard = false)
+        if (cancelReconnectConnection(state)) {
             return
         }
         val activeProfile = state.activeProfile
         if (activeProfile == null) {
-            val torOnlyRouteReady =
-                state.settings.privacyRoute.directTorEnabled &&
-                    (
-                        state.settings.privacyRoute.scope == PrivacyRouteScope.ALL_APPS ||
-                            state.settings.privacyRoute.selectedPackages.any(String::isNotBlank)
-                    )
-            if (torOnlyRouteReady) {
-                if (state.settings.privacyRoute.scope == PrivacyRouteScope.ALL_APPS) {
-                    snackbars.tryEmit(infoBanner(R.string.privacy_route_all_apps_start_warning))
-                }
-                markTorOperation(HomeTorOperationKind.CONNECTING)
-                val prepareIntent = android.net.VpnService.prepare(getApplication())
-                if (prepareIntent != null) {
-                    pendingConnectRequest =
-                        PendingConnectRequest(
-                            profileId = FoxholeVpnService.TOR_ONLY_PROFILE_ID,
-                            action = PendingConnectAction.MANUAL,
-                        )
-                    requestVpnPermission.tryEmit(Unit)
-                } else {
-                    connect(FoxholeVpnService.TOR_ONLY_PROFILE_ID)
-                }
-            } else {
-                snackbars.tryEmit(errorBanner(R.string.error_profile_missing))
-            }
+            handleToggleWithoutActiveProfile(state)
             return
         }
         val connectProfile = mobileNetworkProfileOverride(state) ?: activeProfile
-        if (state.connection.isPrimaryConnectionRuntime()) {
-            if (state.reconnectRequired) {
-                requestReconnect(activeProfile.id)
-            } else {
-                container.connectionController.disconnect(suppressLocalGuard = false)
-            }
+        if (togglePrimaryRuntimeConnection(state, activeProfile)) {
             return
         }
+        connectSelectedProfile(state, connectProfile)
+    }
+
+    private fun cancelProtocolSearchConnection(): Boolean {
+        val protocolSearchRunning = autoConnectUiStateMutable.value.running || protocolMetricsRefreshJob != null
+        if (!protocolSearchRunning) {
+            return false
+        }
+        cancelAutoConnect(clearUiOnly = true)
+        cancelSmartProfileMetricsRefreshInternal(restoreConnection = false)
+        container.connectionController.disconnect(suppressLocalGuard = false)
+        return true
+    }
+
+    private fun cancelReconnectConnection(state: HomeUiState): Boolean {
+        if (!state.reconnectInProgress) {
+            return false
+        }
+        reconnectJob?.cancel()
+        reconnectJob = null
+        reconnectInProgressMutable.value = false
+        container.connectionController.disconnect(suppressLocalGuard = false)
+        return true
+    }
+
+    private fun handleToggleWithoutActiveProfile(state: HomeUiState) {
+        if (!state.torOnlyRouteReady()) {
+            snackbars.tryEmit(errorBanner(R.string.error_profile_missing))
+            return
+        }
+        if (state.settings.privacyRoute.scope == PrivacyRouteScope.ALL_APPS) {
+            snackbars.tryEmit(infoBanner(R.string.privacy_route_all_apps_start_warning))
+        }
+        markTorOperation(HomeTorOperationKind.CONNECTING)
+        requestManualConnectPermissionOrConnect(FoxholeVpnService.TOR_ONLY_PROFILE_ID)
+    }
+
+    private fun HomeUiState.torOnlyRouteReady(): Boolean =
+        settings.privacyRoute.directTorEnabled &&
+            (
+                settings.privacyRoute.scope == PrivacyRouteScope.ALL_APPS ||
+                    settings.privacyRoute.selectedPackages.any(String::isNotBlank)
+            )
+
+    private fun togglePrimaryRuntimeConnection(
+        state: HomeUiState,
+        activeProfile: Profile,
+    ): Boolean {
+        if (!state.connection.isPrimaryConnectionRuntime()) {
+            return false
+        }
+        if (state.reconnectRequired) {
+            requestReconnect(activeProfile.id)
+        } else {
+            container.connectionController.disconnect(suppressLocalGuard = false)
+        }
+        return true
+    }
+
+    private fun connectSelectedProfile(
+        state: HomeUiState,
+        connectProfile: Profile,
+    ) {
         if (state.settings.traffic.mode == TrafficMode.PROXY) {
             connect(connectProfile.id)
         } else {
-            val prepareIntent = android.net.VpnService.prepare(getApplication())
-            if (prepareIntent != null) {
-                pendingConnectRequest =
-                    PendingConnectRequest(
-                        profileId = connectProfile.id,
-                        action = PendingConnectAction.MANUAL,
-                    )
-                requestVpnPermission.tryEmit(Unit)
-            } else {
-                connect(connectProfile.id)
-            }
+            requestManualConnectPermissionOrConnect(connectProfile.id)
+        }
+    }
+
+    private fun requestManualConnectPermissionOrConnect(profileId: Long) {
+        val prepareIntent = android.net.VpnService.prepare(getApplication())
+        if (prepareIntent != null) {
+            pendingConnectRequest =
+                PendingConnectRequest(
+                    profileId = profileId,
+                    action = PendingConnectAction.MANUAL,
+                )
+            requestVpnPermission.tryEmit(Unit)
+        } else {
+            connect(profileId)
         }
     }
 

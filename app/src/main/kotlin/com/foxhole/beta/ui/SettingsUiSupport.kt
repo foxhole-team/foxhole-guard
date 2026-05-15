@@ -250,7 +250,7 @@ internal fun SettingValueRow(
         SettingsControlRow(
             title = title,
             summary = summary,
-            infoBody = null,
+            infoBody = infoBody,
             leadingIcon = leadingIcon,
             onClick = onClick,
             summaryMaxLines = summaryMaxLines,
@@ -264,7 +264,7 @@ internal fun SettingValueRow(
     FoxholePreferenceCard(
         title = title,
         summary = summary,
-        infoBody = null,
+        infoBody = infoBody,
         leadingIcon = leadingIcon,
         onClick = onClick,
         summaryMaxLines = summaryMaxLines,
@@ -458,7 +458,7 @@ internal fun SettingSwitchRow(
             summary = summary,
             inlineSummary = inlineSummary,
             summaryColor = summaryColor,
-            infoBody = null,
+            infoBody = infoBody,
             leadingIcon = leadingIcon,
             leadingIconContainerColor = leadingIconContainerColor,
             titleTrailingContent = titleTrailingContent,
@@ -472,7 +472,7 @@ internal fun SettingSwitchRow(
         modifier = rowModifier,
         title = title,
         summary = summary,
-        infoBody = null,
+        infoBody = infoBody,
         leadingIcon = leadingIcon,
         leadingIconContainerColor = leadingIconContainerColor,
         titleTrailingContent = titleTrailingContent,
@@ -531,6 +531,7 @@ private fun SettingsControlRow(
     trailingContent: (@Composable RowScope.() -> Unit)? = null,
 ) {
     val summaryText = inlineSummary?.takeIf(String::isNotBlank) ?: summary?.takeIf(String::isNotBlank)
+    val rowInfoBody = infoBody?.takeIf(String::isNotBlank)
     Row(
         modifier =
             modifier
@@ -583,6 +584,12 @@ private fun SettingsControlRow(
                     overflow = TextOverflow.Ellipsis,
                 )
                 titleTrailingContent?.invoke(this)
+                rowInfoBody?.let { body ->
+                    SettingsHelpAction(
+                        title = title,
+                        body = body,
+                    )
+                }
             }
             summaryText?.let { text ->
                 Text(

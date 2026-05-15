@@ -115,7 +115,7 @@ import com.foxhole.beta.ui.ScreenVerticalPadding
 import kotlinx.coroutines.delay
 
 @Composable
-@Suppress("LongParameterList")
+@Suppress("CyclomaticComplexMethod", "LongMethod", "LongParameterList")
 fun HomeScreen(
     state: HomeRouteUiState,
     trafficMapState: TrafficMapUiState,

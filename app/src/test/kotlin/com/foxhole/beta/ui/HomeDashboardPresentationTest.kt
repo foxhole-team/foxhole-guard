@@ -28,6 +28,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
+@Suppress("LargeClass")
 class HomeDashboardPresentationTest {
     @Test
     fun `protocol model merges remembered current and running smart start metrics`() {

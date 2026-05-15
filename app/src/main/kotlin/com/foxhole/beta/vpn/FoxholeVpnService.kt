@@ -293,6 +293,71 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         return result
     }
 
+    private fun delegateConnectToForegroundService(
+        profileId: Long,
+        trafficMode: TrafficMode,
+        commandStartId: Int,
+        protocolOptionIdOverride: String?,
+        previousVpnNetworkHandle: Long?,
+    ) {
+        FoxholeConnectionServiceContract.startForegroundService(
+            context = this,
+            mode = trafficMode,
+            action = FoxholeConnectionServiceContract.ACTION_CONNECT,
+            profileId = profileId,
+            protocolOptionId = protocolOptionIdOverride,
+            previousVpnNetworkHandle = previousVpnNetworkHandle,
+        )
+        stopForeground(STOP_FOREGROUND_REMOVE)
+        stopService(commandStartId)
+    }
+
+    private suspend fun validatePrivateDnsMode(
+        privateDnsMode: PrivateDnsMode?,
+        commandStartId: Int,
+    ): Boolean {
+        val supported = privateDnsMode?.isSupportedForTunnelMode() != false
+        if (!supported) {
+            container.diagnosticsLogger.record("dns", "unsupported android private dns mode: $privateDnsMode")
+            fail(getString(R.string.error_private_dns_strict_unsupported), commandStartId)
+        } else if (privateDnsMode != null) {
+            container.diagnosticsLogger.record("dns", "android private dns mode: $privateDnsMode")
+        }
+        return supported
+    }
+
+    private suspend fun handleRuntimeStartResult(
+        result: Result<Unit>,
+        session: VpnSession,
+        trafficMode: TrafficMode,
+        tcpReadinessTarget: VpnHealthProbeTarget?,
+        previousVpnNetworkHandle: Long?,
+        commandStartId: Int,
+    ) {
+        if (result.isSuccess) {
+            container.connectionController.markCurrentRuntimeApplied()
+            requestTcpRuntimeNetworkReset(tcpReadinessTarget)
+            when (trafficMode) {
+                TrafficMode.TUNNEL -> {
+                    container.diagnosticsLogger.record("connection", "runtime started, tunnel validation required")
+                    scheduleValidation(
+                        session = session,
+                        failOnFailure = true,
+                        expectedFreshVpnNetworkHandle = previousVpnNetworkHandle,
+                        onSuccess = { vpnNetwork -> onTunnelValidated(session, vpnNetwork) },
+                    )
+                }
+                TrafficMode.PROXY -> {
+                    container.diagnosticsLogger.record("connection", "proxy runtime started")
+                    onConnectionStarted(session, trafficMode)
+                }
+            }
+        } else {
+            val error = result.exceptionOrNull()
+            fail(error?.let { describeVpnRuntimeFailure(it) } ?: getString(R.string.error_runtime_missing), commandStartId)
+        }
+    }
+
     internal suspend fun connect(
         profileId: Long,
         commandStartId: Int,
@@ -307,16 +372,13 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         val settings = container.settingsRepository.current()
         val trafficMode = if (torOnlyConnect) TrafficMode.TUNNEL else settings.traffic.mode
         if (trafficMode != TrafficMode.TUNNEL) {
-            FoxholeConnectionServiceContract.startForegroundService(
-                context = this,
-                mode = trafficMode,
-                action = FoxholeConnectionServiceContract.ACTION_CONNECT,
+            delegateConnectToForegroundService(
                 profileId = profileId,
-                protocolOptionId = protocolOptionIdOverride,
+                trafficMode = trafficMode,
+                commandStartId = commandStartId,
+                protocolOptionIdOverride = protocolOptionIdOverride,
                 previousVpnNetworkHandle = previousVpnNetworkHandle,
             )
-            stopForeground(STOP_FOREGROUND_REMOVE)
-            stopService(commandStartId)
             return
         }
         val privateDnsMode =
@@ -325,13 +387,8 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
             } else {
                 null
             }
-        if (privateDnsMode != null) {
-            if (!privateDnsMode.isSupportedForTunnelMode()) {
-                container.diagnosticsLogger.record("dns", "unsupported android private dns mode: $privateDnsMode")
-                fail(getString(R.string.error_private_dns_strict_unsupported))
-                return
-            }
-            container.diagnosticsLogger.record("dns", "android private dns mode: $privateDnsMode")
+        if (!validatePrivateDnsMode(privateDnsMode, commandStartId)) {
+            return
         }
         FoxholeConnectionServiceContract.stopInactiveServices(context = this, activeMode = trafficMode)
         val session =
@@ -390,28 +447,14 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
             }
             return
         }
-        if (result.isSuccess) {
-            container.connectionController.markCurrentRuntimeApplied()
-            requestTcpRuntimeNetworkReset(tcpReadinessTarget)
-            when (trafficMode) {
-                TrafficMode.TUNNEL -> {
-                    container.diagnosticsLogger.record("connection", "runtime started, tunnel validation required")
-                    scheduleValidation(
-                        session = session,
-                        failOnFailure = true,
-                        expectedFreshVpnNetworkHandle = previousVpnNetworkHandle,
-                        onSuccess = { vpnNetwork -> onTunnelValidated(session, vpnNetwork) },
-                    )
-                }
-                TrafficMode.PROXY -> {
-                    container.diagnosticsLogger.record("connection", "proxy runtime started")
-                    onConnectionStarted(session, trafficMode)
-                }
-            }
-        } else {
-            val error = result.exceptionOrNull()
-            fail(error?.let { describeVpnRuntimeFailure(it) } ?: getString(R.string.error_runtime_missing), commandStartId)
-        }
+        handleRuntimeStartResult(
+            result = result,
+            session = session,
+            trafficMode = trafficMode,
+            tcpReadinessTarget = tcpReadinessTarget,
+            previousVpnNetworkHandle = previousVpnNetworkHandle,
+            commandStartId = commandStartId,
+        )
     }
 
     private suspend fun stopActiveLocalGuardBeforeTunnelConnect() {

@@ -1208,6 +1208,7 @@ internal fun FoxholePreferenceCard(
     summaryMaxLines: Int = 3,
 ) {
     val uiPalette = LocalFoxholeUiPalette.current
+    val cardInfoBody = infoBody?.takeIf(String::isNotBlank)
     FoxholeCard(
         modifier = modifier,
         onClick = onClick,
@@ -1261,6 +1262,12 @@ internal fun FoxholePreferenceCard(
                         overflow = TextOverflow.Ellipsis,
                     )
                     titleTrailingContent?.invoke(this)
+                    cardInfoBody?.let { body ->
+                        SettingsHelpAction(
+                            title = title,
+                            body = body,
+                        )
+                    }
                 }
                 summary?.takeIf(String::isNotBlank)?.let {
                     Text(
