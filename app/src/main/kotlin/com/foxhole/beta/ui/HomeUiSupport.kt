@@ -89,8 +89,13 @@ internal fun isTrafficMapRuntimeAvailable(
     val connected = connection.state == ConnectionState.CONNECTED
     val localGuardConnected = connected && connection.profileId == FoxholeVpnService.LOCAL_GUARD_PROFILE_ID
     val tunnelConnected = connected && connection.profileId != FoxholeVpnService.LOCAL_GUARD_PROFILE_ID
+    val countryTrafficLocalGuardEnabled =
+        settings.expert.firewallEnabled &&
+            settings.statistics.enabled &&
+            settings.statistics.countryTrafficEnabled
     val localGuardAvailable =
-        settings.localGuardModeOrNull() != null &&
+        countryTrafficLocalGuardEnabled &&
+            settings.localGuardModeOrNull() != null &&
             (activeVpnNetworkAvailable || localGuardConnected)
     return settings.ui.trafficMapEnabled && (tunnelConnected || localGuardAvailable)
 }

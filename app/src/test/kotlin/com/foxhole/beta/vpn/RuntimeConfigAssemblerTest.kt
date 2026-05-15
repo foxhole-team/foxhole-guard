@@ -614,7 +614,7 @@ class RuntimeConfigAssemblerTest {
     }
 
     @Test
-    fun `firewall only starts journal guard when live traffic features need it`() {
+    fun `firewall only starts journal guard for persistent logging or country traffic stats`() {
         val firewall = ExpertSettings(firewallEnabled = true)
 
         assertEquals(null, Settings(expert = firewall).localGuardModeOrNull())
@@ -625,7 +625,7 @@ class RuntimeConfigAssemblerTest {
             ).localGuardModeOrNull(),
         )
         assertEquals(
-            LocalGuardMode.JOURNAL,
+            null,
             Settings(
                 ui = UiSettings(trafficMapEnabled = true),
                 expert = firewall,
@@ -1021,7 +1021,7 @@ class RuntimeConfigAssemblerTest {
     }
 
     @Test
-    fun `non wireguard selected keeps proxied doh final with imported wireguard dns present`() {
+    fun `non wireguard selected keeps direct plain final with imported wireguard dns present`() {
         val config =
             parse(
                 assembler.assemble(
@@ -1033,7 +1033,7 @@ class RuntimeConfigAssemblerTest {
         val dns = config["dns"]!!.jsonObject
         val servers = dns["servers"]!!.jsonArray.map { it.jsonObject["tag"]!!.jsonPrimitive.content }
 
-        assertEquals("dns-remote", dns["final"]!!.jsonPrimitive.content)
+        assertEquals("dns-direct", dns["final"]!!.jsonPrimitive.content)
         assertTrue(servers.contains("dns-wireguard"))
     }
 
@@ -1635,13 +1635,13 @@ class RuntimeConfigAssemblerTest {
     }
 
     @Test
-    fun `foxhole dns defaults use local bootstrap and proxied plain final resolver`() {
+    fun `foxhole dns defaults use local bootstrap and direct plain final resolver`() {
         val config = parse(assembler.assemble(baseConfigWithLegacyFoxholeDns(), Settings(), null))
         val dns = config["dns"]!!.jsonObject
         val route = config["route"]!!.jsonObject
         val servers = dns["servers"]!!.jsonArray
 
-        assertEquals("dns-remote", dns["final"]!!.jsonPrimitive.content)
+        assertEquals("dns-direct", dns["final"]!!.jsonPrimitive.content)
         assertEquals("dns-local", servers[0].jsonObject["tag"]!!.jsonPrimitive.content)
         assertEquals("local", servers[0].jsonObject["type"]!!.jsonPrimitive.content)
         assertFalse(servers[0].jsonObject.containsKey("detour"))
@@ -1651,17 +1651,12 @@ class RuntimeConfigAssemblerTest {
         assertFalse(servers[1].jsonObject.containsKey("server_port"))
         assertFalse(servers[1].jsonObject.containsKey("path"))
         assertFalse(servers[1].jsonObject.containsKey("detour"))
-        assertEquals("dns-remote", servers[2].jsonObject["tag"]!!.jsonPrimitive.content)
-        assertEquals("udp", servers[2].jsonObject["type"]!!.jsonPrimitive.content)
-        assertEquals("1.1.1.1", servers[2].jsonObject["server"]!!.jsonPrimitive.content)
-        assertEquals("53", servers[2].jsonObject["server_port"]!!.jsonPrimitive.content)
-        assertFalse(servers[2].jsonObject.containsKey("path"))
-        assertEquals("proxy", servers[2].jsonObject["detour"]!!.jsonPrimitive.content)
+        assertTrue(servers.none { it.jsonObject["tag"]!!.jsonPrimitive.content == "dns-remote" })
         assertEquals("true", route["auto_detect_interface"]!!.jsonPrimitive.content)
     }
 
     @Test
-    fun `foxhole dns keeps proxied plain final resolver when private dns is off`() {
+    fun `foxhole dns keeps direct plain final resolver when private dns is off`() {
         val config =
             parse(
                 assembler.assemble(
@@ -1674,13 +1669,8 @@ class RuntimeConfigAssemblerTest {
         val dns = config["dns"]!!.jsonObject
         val servers = dns["servers"]!!.jsonArray
 
-        assertEquals("dns-remote", dns["final"]!!.jsonPrimitive.content)
-        assertEquals("dns-remote", servers[2].jsonObject["tag"]!!.jsonPrimitive.content)
-        assertEquals("udp", servers[2].jsonObject["type"]!!.jsonPrimitive.content)
-        assertEquals("1.1.1.1", servers[2].jsonObject["server"]!!.jsonPrimitive.content)
-        assertEquals("53", servers[2].jsonObject["server_port"]!!.jsonPrimitive.content)
-        assertFalse(servers[2].jsonObject.containsKey("path"))
-        assertEquals("proxy", servers[2].jsonObject["detour"]!!.jsonPrimitive.content)
+        assertEquals("dns-direct", dns["final"]!!.jsonPrimitive.content)
+        assertTrue(servers.none { it.jsonObject["tag"]!!.jsonPrimitive.content == "dns-remote" })
     }
 
     @Test
@@ -1698,7 +1688,7 @@ class RuntimeConfigAssemblerTest {
         val route = config["route"]!!.jsonObject
         val servers = dns["servers"]!!.jsonArray
 
-        assertEquals("dns-remote", dns["final"]!!.jsonPrimitive.content)
+        assertEquals("dns-direct", dns["final"]!!.jsonPrimitive.content)
         assertEquals("dns-direct", route["default_domain_resolver"]!!.jsonPrimitive.content)
         assertEquals("dns-direct", servers[1].jsonObject["tag"]!!.jsonPrimitive.content)
         assertEquals("local", servers[1].jsonObject["type"]!!.jsonPrimitive.content)
@@ -1706,9 +1696,7 @@ class RuntimeConfigAssemblerTest {
         assertFalse(servers[1].jsonObject.containsKey("server_port"))
         assertFalse(servers[1].jsonObject.containsKey("path"))
         assertFalse(servers[1].jsonObject.containsKey("detour"))
-        assertEquals("dns-remote", servers[2].jsonObject["tag"]!!.jsonPrimitive.content)
-        assertEquals("udp", servers[2].jsonObject["type"]!!.jsonPrimitive.content)
-        assertEquals("proxy", servers[2].jsonObject["detour"]!!.jsonPrimitive.content)
+        assertTrue(servers.none { it.jsonObject["tag"]!!.jsonPrimitive.content == "dns-remote" })
     }
 
     @Test
@@ -1722,8 +1710,7 @@ class RuntimeConfigAssemblerTest {
         assertFalse(servers[1].jsonObject.containsKey("server_port"))
         assertFalse(servers[1].jsonObject.containsKey("path"))
         assertFalse(servers[1].jsonObject.containsKey("detour"))
-        assertEquals("dns-remote", servers[2].jsonObject["tag"]!!.jsonPrimitive.content)
-        assertEquals("proxy", servers[2].jsonObject["detour"]!!.jsonPrimitive.content)
+        assertTrue(servers.none { it.jsonObject["tag"]!!.jsonPrimitive.content == "dns-remote" })
     }
 
     @Test
@@ -1787,6 +1774,7 @@ class RuntimeConfigAssemblerTest {
             Settings(
                 dns =
                     DnsSettings(
+                        dnsThroughVpn = false,
                         server = "9.9.9.9",
                         secureMode = SecureDnsMode.PLAIN,
                     ),
@@ -1800,7 +1788,7 @@ class RuntimeConfigAssemblerTest {
         assertEquals("53", remote["server_port"]!!.jsonPrimitive.content)
         assertFalse(remote.containsKey("path"))
         assertFalse(remote.containsKey("domain_resolver"))
-        assertEquals("proxy", remote["detour"]!!.jsonPrimitive.content)
+        assertFalse(remote.containsKey("detour"))
     }
 
     @Test

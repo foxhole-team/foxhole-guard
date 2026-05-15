@@ -154,11 +154,10 @@ internal fun SettingsNavigationRow(
     leadingIconContainerColor: Color = Color.Unspecified,
     leadingIconTint: Color = MaterialTheme.colorScheme.onSurfaceVariant,
     titleTrailingContent: (@Composable RowScope.() -> Unit)? = null,
-    summaryMaxLines: Int = 1,
+    summaryMaxLines: Int = 3,
     grouped: Boolean = false,
     onClick: () -> Unit,
 ) {
-    val infoBody = settingsInfoBodyOrNull(summary)
     val trailingContent: @Composable RowScope.() -> Unit = {
         if (showAlertDot) {
             Box(
@@ -182,7 +181,7 @@ internal fun SettingsNavigationRow(
             modifier = modifier,
             title = title,
             summary = summary,
-            infoBody = infoBody,
+            infoBody = null,
             leadingIcon = icon,
             leadingIconContainerColor = leadingIconContainerColor,
             leadingIconTint = leadingIconTint,
@@ -197,7 +196,7 @@ internal fun SettingsNavigationRow(
         modifier = modifier,
         title = title,
         summary = summary,
-        infoBody = infoBody,
+        infoBody = null,
         leadingIcon = icon,
         onClick = onClick,
         containerColor = containerColor,
@@ -244,15 +243,14 @@ internal fun SettingValueRow(
     onClick: (() -> Unit)?,
     trailingContent: (@Composable RowScope.() -> Unit)? = null,
     actionIcon: ImageVector = Icons.Outlined.Edit,
-    summaryMaxLines: Int = 1,
+    summaryMaxLines: Int = 3,
     grouped: Boolean = false,
 ) {
-    val resolvedInfoBody = settingsInfoBodyOrNull(infoBody) ?: settingsInfoBodyOrNull(summary)
     if (grouped) {
         SettingsControlRow(
             title = title,
             summary = summary,
-            infoBody = resolvedInfoBody,
+            infoBody = null,
             leadingIcon = leadingIcon,
             onClick = onClick,
             summaryMaxLines = summaryMaxLines,
@@ -266,7 +264,7 @@ internal fun SettingValueRow(
     FoxholePreferenceCard(
         title = title,
         summary = summary,
-        infoBody = resolvedInfoBody,
+        infoBody = null,
         leadingIcon = leadingIcon,
         onClick = onClick,
         summaryMaxLines = summaryMaxLines,
@@ -292,7 +290,7 @@ internal fun <T> DropdownSettingRow(
     leadingIcon: ImageVector? = null,
     optionIcon: ((T) -> ImageVector)? = null,
     enabled: Boolean = true,
-    summaryMaxLines: Int = 1,
+    summaryMaxLines: Int = 3,
     grouped: Boolean = false,
 ) {
     val optionLabels = values.map { option -> label(option) }
@@ -419,10 +417,9 @@ internal fun SettingSwitchRow(
     leadingIconContainerColor: Color = Color.Unspecified,
     titleTrailingContent: (@Composable RowScope.() -> Unit)? = null,
     enabled: Boolean = true,
-    summaryMaxLines: Int = 1,
+    summaryMaxLines: Int = 3,
     grouped: Boolean = false,
 ) {
-    val resolvedInfoBody = settingsInfoBodyOrNull(infoBody) ?: settingsInfoBodyOrNull(summary)
     val switchStateDescription =
         stringResource(
             if (checked) {
@@ -461,7 +458,7 @@ internal fun SettingSwitchRow(
             summary = summary,
             inlineSummary = inlineSummary,
             summaryColor = summaryColor,
-            infoBody = resolvedInfoBody,
+            infoBody = null,
             leadingIcon = leadingIcon,
             leadingIconContainerColor = leadingIconContainerColor,
             titleTrailingContent = titleTrailingContent,
@@ -475,7 +472,7 @@ internal fun SettingSwitchRow(
         modifier = rowModifier,
         title = title,
         summary = summary,
-        infoBody = resolvedInfoBody,
+        infoBody = null,
         leadingIcon = leadingIcon,
         leadingIconContainerColor = leadingIconContainerColor,
         titleTrailingContent = titleTrailingContent,
@@ -529,12 +526,11 @@ private fun SettingsControlRow(
     leadingIconContainerColor: Color = Color.Unspecified,
     leadingIconTint: Color = MaterialTheme.colorScheme.onSurfaceVariant,
     titleTrailingContent: (@Composable RowScope.() -> Unit)? = null,
-    summaryMaxLines: Int = 1,
+    summaryMaxLines: Int = 3,
     onClick: (() -> Unit)?,
     trailingContent: (@Composable RowScope.() -> Unit)? = null,
 ) {
     val summaryText = inlineSummary?.takeIf(String::isNotBlank) ?: summary?.takeIf(String::isNotBlank)
-    val infoText = settingsInfoBodyOrNull(infoBody)
     Row(
         modifier =
             modifier
@@ -587,12 +583,6 @@ private fun SettingsControlRow(
                     overflow = TextOverflow.Ellipsis,
                 )
                 titleTrailingContent?.invoke(this)
-                infoText?.let {
-                    SettingsInfoAnchor(
-                        title = title,
-                        body = it,
-                    )
-                }
             }
             summaryText?.let { text ->
                 Text(
@@ -600,7 +590,7 @@ private fun SettingsControlRow(
                     style = MaterialTheme.typography.bodySmall,
                     color = summaryColor ?: MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = summaryMaxLines,
-                    overflow = TextOverflow.Ellipsis,
+                    overflow = TextOverflow.Clip,
                 )
             }
         }
@@ -611,39 +601,6 @@ private fun SettingsControlRow(
         ) {
             trailingContent?.invoke(this)
         }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-internal fun SettingsInfoAnchor(
-    title: String,
-    body: String,
-) {
-    var sheetVisible by rememberSaveable(title, body) { mutableStateOf(false) }
-    SettingsInfoIconButton(onClick = { sheetVisible = true })
-    if (sheetVisible) {
-        SettingsInfoBottomSheet(
-            title = title,
-            body = body,
-            icon = Icons.Outlined.Info,
-            onDismiss = { sheetVisible = false },
-        )
-    }
-}
-
-@Composable
-private fun SettingsInfoIconButton(onClick: () -> Unit) {
-    IconButton(
-        onClick = onClick,
-        modifier = Modifier.size(32.dp),
-    ) {
-        Icon(
-            imageVector = Icons.Outlined.Info,
-            contentDescription = stringResource(R.string.information_title),
-            tint = LocalContentColor.current.copy(alpha = 0.76f),
-            modifier = Modifier.size(20.dp),
-        )
     }
 }
 
@@ -743,19 +700,6 @@ private fun SettingsInfoBottomSheet(
         }
     }
 }
-
-private fun settingsInfoBodyOrNull(body: String?): String? {
-    val normalized = body?.trimMenuSummary()?.takeIf(String::isNotBlank) ?: return null
-    return normalized.takeIf(::shouldUseSettingsInfoSheet)
-}
-
-private fun shouldUseSettingsInfoSheet(body: String): Boolean {
-    val nonBlankLineCount = body.lines().count { line -> line.isNotBlank() }
-    return nonBlankLineCount > 3 || body.length > SettingsInfoSheetMinChars
-}
-
-@Suppress("TopLevelPropertyNaming")
-private const val SettingsInfoSheetMinChars = 180
 
 @Composable
 internal fun rememberWifiLanAddress(): State<String?> {

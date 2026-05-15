@@ -217,7 +217,7 @@ fun RoutingAppsScreen(
                     leadingIcon = Icons.Outlined.Block,
                     summary = stringResource(R.string.block_apps_always_summary),
                     infoBody = stringResource(R.string.block_apps_always_warning_body),
-                    summaryMaxLines = 2,
+                    summaryMaxLines = Int.MAX_VALUE,
                     onCheckedChange = { enabled ->
                         if (enabled && !state.settings.expert.firewallEnabled) {
                             blockAlwaysWarningVisible = true
@@ -317,23 +317,24 @@ internal fun AppGridSectionContent(
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            Row(
+            Column(
                 modifier = Modifier.weight(1f),
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                verticalAlignment = Alignment.CenterVertically,
+                verticalArrangement = Arrangement.spacedBy(2.dp),
             ) {
                 Text(
                     text = title,
-                    modifier = Modifier.weight(1f, fill = false),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
                 subtitle?.takeIf(String::isNotBlank)?.let { text ->
-                    SettingsInfoAnchor(
-                        title = title,
-                        body = text,
+                    Text(
+                        text = text,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 3,
+                        overflow = TextOverflow.Clip,
                     )
                 }
             }

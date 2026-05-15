@@ -7,6 +7,10 @@ import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.os.Build
 import com.foxhole.beta.core.model.InstalledAppChangeType
+import com.foxhole.beta.core.model.InstalledAppRiskLevel
+import com.foxhole.beta.core.model.InstalledAppRiskSignal
+import com.foxhole.beta.core.security.InstalledAppSecurityAnalyzer
+import com.foxhole.beta.core.security.InstalledAppSecurityNotifier
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -35,12 +39,28 @@ class InstalledAppChangeReceiver : BroadcastReceiver() {
             ) {
                 runCatching {
                     val packageInfo = app.packageInventoryInfo(packageChange.packageName, packageChange.type)
+                    val securitySummary =
+                        if (packageChange.type == InstalledAppChangeType.INSTALLED) {
+                            InstalledAppSecurityAnalyzer(app).analyzePackage(
+                                packageName = packageChange.packageName,
+                                fallbackLabel = packageInfo.label,
+                                fallbackIsSystemApp = packageInfo.isSystemApp,
+                            )
+                        } else {
+                            null
+                        }
                     app.container.settingsRepository.recordInstalledAppChange(
                         packageName = packageChange.packageName,
-                        label = packageInfo.label,
-                        isSystemApp = packageInfo.isSystemApp,
+                        label = securitySummary?.label ?: packageInfo.label,
+                        isSystemApp = securitySummary?.isSystemApp ?: packageInfo.isSystemApp,
                         type = packageChange.type,
+                        installerPackageName = securitySummary?.installerPackageName ?: packageInfo.installerPackageName,
+                        riskLevel = securitySummary?.riskLevel ?: packageInfo.riskLevel,
+                        riskSignals = securitySummary?.riskSignals ?: packageInfo.riskSignals,
                     )
+                    if (securitySummary != null) {
+                        InstalledAppSecurityNotifier(app).notifyInstalledApp(securitySummary)
+                    }
                 }.onFailure { error ->
                     app.container.diagnosticsLogger.record(
                         "app-inventory",
@@ -94,6 +114,9 @@ internal suspend fun finishPendingBroadcast(
 private data class PackageInventoryInfo(
     val label: String,
     val isSystemApp: Boolean,
+    val installerPackageName: String? = null,
+    val riskLevel: InstalledAppRiskLevel = InstalledAppRiskLevel.LOW,
+    val riskSignals: List<InstalledAppRiskSignal> = emptyList(),
 )
 
 private fun Context.packageInventoryInfo(
@@ -128,6 +151,9 @@ private fun Context.packageInventoryInfo(
             ?: previous?.label
             ?: packageName,
         isSystemApp = appInfo?.isSystemApp() ?: previous?.isSystemApp ?: false,
+        installerPackageName = previous?.installerPackageName,
+        riskLevel = previous?.riskLevel ?: InstalledAppRiskLevel.LOW,
+        riskSignals = previous?.riskSignals.orEmpty(),
     )
 }
 

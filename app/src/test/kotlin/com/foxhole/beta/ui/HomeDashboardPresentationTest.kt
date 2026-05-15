@@ -17,6 +17,7 @@ import com.foxhole.beta.core.model.ProtocolHint
 import com.foxhole.beta.core.model.ProxyInboundSettings
 import com.foxhole.beta.core.model.ProxySurfaceMode
 import com.foxhole.beta.core.model.Settings
+import com.foxhole.beta.core.model.StatisticsSettings
 import com.foxhole.beta.core.model.TrafficMode
 import com.foxhole.beta.core.model.TrafficSettings
 import com.foxhole.beta.core.model.TrafficSnapshot
@@ -416,11 +417,28 @@ class HomeDashboardPresentationTest {
                     Settings(
                         ui = UiSettings(trafficMapEnabled = true),
                         expert = ExpertSettings(firewallEnabled = true),
+                        statistics = StatisticsSettings(enabled = true, countryTrafficEnabled = true),
                     ),
                 activeVpnNetworkAvailable = true,
             ),
         )
         assertTrue(
+            isTrafficMapRuntimeAvailable(
+                connection =
+                    ConnectionSnapshot(
+                        state = ConnectionState.CONNECTED,
+                        profileId = FoxholeVpnService.LOCAL_GUARD_PROFILE_ID,
+                    ),
+                settings =
+                    Settings(
+                        ui = UiSettings(trafficMapEnabled = true),
+                        expert = ExpertSettings(firewallEnabled = true),
+                        statistics = StatisticsSettings(enabled = true, countryTrafficEnabled = true),
+                    ),
+                activeVpnNetworkAvailable = false,
+            ),
+        )
+        assertFalse(
             isTrafficMapRuntimeAvailable(
                 connection =
                     ConnectionSnapshot(

@@ -708,20 +708,15 @@ class RuntimeConfigAssembler(
         }
         if (existing == null || !existing.hasDnsServers() || isFoxholeManagedDns(existing)) {
             val wireGuardDnsServers = wireGuardDnsServers(existing)
+            val dnsRoute = managedDnsRoute(base, dnsSettings, privacyRouteActive)
             return buildFoxholeDnsConfig(
                 strategy = effectiveStrategy.configValue,
                 dnsSettings = dnsSettings,
                 privateDnsMode = privateDnsMode,
                 dnsFilterRuntimePaths = dnsFilterRuntimePaths,
                 extraServers = wireGuardDnsServers,
-                finalTag =
-                    if (privacyRouteActive) {
-                        DNS_REMOTE_TAG
-                    } else if (selectedProxyEndpointType(base).equals("wireguard", ignoreCase = true)) {
-                        DNS_DIRECT_TAG
-                    } else {
-                        DNS_REMOTE_TAG
-                    },
+                finalTag = dnsRoute.finalTag,
+                includeRemote = dnsRoute.includeRemote,
                 remoteDetourTag = if (privacyRouteActive) TOR_OVER_VPN_OUTBOUND_TAG else "proxy",
             )
         }
@@ -1346,6 +1341,33 @@ class RuntimeConfigAssembler(
             ?.map { it.jsonObject }
             ?.filter { server -> server["tag"]?.jsonPrimitive?.contentOrNull == WIREGUARD_DNS_TAG }
             .orEmpty()
+
+    private data class ManagedDnsRoute(
+        val finalTag: String,
+        val includeRemote: Boolean,
+    )
+
+    private fun managedDnsRoute(
+        base: JsonObject,
+        dnsSettings: DnsSettings,
+        privacyRouteActive: Boolean,
+    ): ManagedDnsRoute {
+        val wireGuardSelected = selectedProxyEndpointType(base).equals("wireguard", ignoreCase = true)
+        val proxiedPlainDns = dnsSettings.secureMode == SecureDnsMode.PLAIN && dnsSettings.dnsThroughVpn
+        val finalTag =
+            when {
+                privacyRouteActive -> DNS_REMOTE_TAG
+                wireGuardSelected || proxiedPlainDns -> DNS_DIRECT_TAG
+                else -> DNS_REMOTE_TAG
+            }
+        val includeRemote =
+            when {
+                privacyRouteActive -> true
+                proxiedPlainDns -> dnsSettings.filteringEnabled
+                else -> true
+            }
+        return ManagedDnsRoute(finalTag = finalTag, includeRemote = includeRemote)
+    }
 
     private fun selectedProxyEndpointType(base: JsonObject): String? {
         val selectedTag = selectedProxyTag(base) ?: return null

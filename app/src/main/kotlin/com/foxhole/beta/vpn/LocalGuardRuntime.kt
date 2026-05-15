@@ -25,7 +25,6 @@ internal fun Settings.localGuardModeOrNull(): LocalGuardMode? {
         expert.firewallEnabled &&
             (
                 expert.networkActivityPersistentLogging ||
-                    ui.trafficMapEnabled ||
                     (statistics.enabled && statistics.countryTrafficEnabled)
             )
     return when {

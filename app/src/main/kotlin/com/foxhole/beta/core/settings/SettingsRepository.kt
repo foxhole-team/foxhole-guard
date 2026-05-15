@@ -22,6 +22,8 @@ import com.foxhole.beta.core.model.InstalledAppInventoryAudit
 import com.foxhole.beta.core.model.InstalledAppInventoryChange
 import com.foxhole.beta.core.model.InstalledAppInventoryEntry
 import com.foxhole.beta.core.model.InstalledAppOption
+import com.foxhole.beta.core.model.InstalledAppRiskLevel
+import com.foxhole.beta.core.model.InstalledAppRiskSignal
 import com.foxhole.beta.core.model.LatencyProbeMethod
 import com.foxhole.beta.core.model.LocalAuthSettings
 import com.foxhole.beta.core.model.LocalSurfaceSettings
@@ -57,6 +59,7 @@ import com.foxhole.beta.core.model.UiSettings
 import com.foxhole.beta.core.model.V2RayApiSettings
 import com.foxhole.beta.core.network.ensurePublicHttpsUrl
 import com.foxhole.beta.core.security.AndroidKeystoreFileCipher
+import com.foxhole.beta.core.security.InstalledAppSecurityAnalyzer
 import com.foxhole.beta.core.security.readBytesMigratingLegacy
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -76,6 +79,7 @@ class SettingsRepository(
     context: Context,
 ) {
     private val appContext = context.applicationContext
+    private val installedAppSecurityAnalyzer by lazy { InstalledAppSecurityAnalyzer(appContext) }
     private val json =
         Json {
             ignoreUnknownKeys = true
@@ -541,10 +545,19 @@ class SettingsRepository(
                 .asSequence()
                 .filterNot { app -> app.packageName == BuildConfig.APPLICATION_ID }
                 .map { app ->
+                    val security =
+                        installedAppSecurityAnalyzer.analyzePackage(
+                            packageName = app.packageName,
+                            fallbackLabel = app.label,
+                            fallbackIsSystemApp = app.isSystemApp,
+                        )
                     InstalledAppInventoryEntry(
                         packageName = app.packageName,
-                        label = app.label.takeIf(String::isNotBlank) ?: app.packageName,
-                        isSystemApp = app.isSystemApp,
+                        label = security.label.takeIf(String::isNotBlank) ?: app.label.takeIf(String::isNotBlank) ?: app.packageName,
+                        isSystemApp = security.isSystemApp,
+                        installerPackageName = security.installerPackageName,
+                        riskLevel = security.riskLevel,
+                        riskSignals = security.riskSignals,
                     )
                 }
                 .distinctBy(InstalledAppInventoryEntry::packageName)
@@ -568,6 +581,9 @@ class SettingsRepository(
                                     isSystemApp = app.isSystemApp,
                                     type = InstalledAppChangeType.INSTALLED,
                                     detectedAt = detectedAt,
+                                    installerPackageName = app.installerPackageName,
+                                    riskLevel = app.riskLevel,
+                                    riskSignals = app.riskSignals,
                                 ),
                             )
                         }
@@ -581,6 +597,9 @@ class SettingsRepository(
                                     isSystemApp = app.isSystemApp,
                                     type = InstalledAppChangeType.REMOVED,
                                     detectedAt = detectedAt,
+                                    installerPackageName = app.installerPackageName,
+                                    riskLevel = app.riskLevel,
+                                    riskSignals = app.riskSignals,
                                 ),
                             )
                         }
@@ -606,6 +625,9 @@ class SettingsRepository(
         isSystemApp: Boolean,
         type: InstalledAppChangeType,
         detectedAt: Long = System.currentTimeMillis(),
+        installerPackageName: String? = null,
+        riskLevel: InstalledAppRiskLevel = InstalledAppRiskLevel.LOW,
+        riskSignals: List<InstalledAppRiskSignal> = emptyList(),
     ) = update { current ->
         if (!current.statistics.enabled || !current.statistics.appChangesEnabled || packageName == BuildConfig.APPLICATION_ID) {
             return@update current
@@ -617,6 +639,9 @@ class SettingsRepository(
                 packageName = normalizedPackageName,
                 label = normalizedLabel,
                 isSystemApp = isSystemApp,
+                installerPackageName = installerPackageName?.trim()?.takeIf(String::isNotBlank),
+                riskLevel = riskLevel,
+                riskSignals = riskSignals.distinct(),
             )
         val updatedPackages =
             when (type) {
@@ -634,6 +659,9 @@ class SettingsRepository(
                 isSystemApp = isSystemApp,
                 type = type,
                 detectedAt = detectedAt,
+                installerPackageName = packageEntry.installerPackageName,
+                riskLevel = packageEntry.riskLevel,
+                riskSignals = packageEntry.riskSignals,
             )
         current.copy(
             installedAppInventoryAudit =

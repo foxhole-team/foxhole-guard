@@ -428,10 +428,33 @@ enum class InstalledAppChangeType {
 }
 
 @Serializable
+enum class InstalledAppRiskLevel {
+    LOW,
+    MEDIUM,
+    HIGH,
+}
+
+@Serializable
+enum class InstalledAppRiskSignal {
+    ACCESSIBILITY_SERVICE,
+    NOTIFICATION_LISTENER,
+    DEVICE_ADMIN,
+    VPN_SERVICE,
+    OVERLAY_PERMISSION,
+    BATTERY_OPTIMIZATION_IGNORE,
+    AUTOSTART,
+    UNKNOWN_INSTALLER,
+    SYSTEM_LIKE_NAME,
+}
+
+@Serializable
 data class InstalledAppInventoryEntry(
     val packageName: String,
     val label: String,
     val isSystemApp: Boolean = false,
+    val installerPackageName: String? = null,
+    val riskLevel: InstalledAppRiskLevel = InstalledAppRiskLevel.LOW,
+    val riskSignals: List<InstalledAppRiskSignal> = emptyList(),
 )
 
 @Serializable
@@ -441,6 +464,9 @@ data class InstalledAppInventoryChange(
     val isSystemApp: Boolean = false,
     val type: InstalledAppChangeType,
     val detectedAt: Long,
+    val installerPackageName: String? = null,
+    val riskLevel: InstalledAppRiskLevel = InstalledAppRiskLevel.LOW,
+    val riskSignals: List<InstalledAppRiskSignal> = emptyList(),
 )
 
 @Serializable
@@ -519,6 +545,9 @@ data class InstalledAppOption(
     val packageName: String,
     val label: String,
     val isSystemApp: Boolean,
+    val installerPackageName: String? = null,
+    val riskLevel: InstalledAppRiskLevel = InstalledAppRiskLevel.LOW,
+    val riskSignals: List<InstalledAppRiskSignal> = emptyList(),
 )
 
 data class Profile(

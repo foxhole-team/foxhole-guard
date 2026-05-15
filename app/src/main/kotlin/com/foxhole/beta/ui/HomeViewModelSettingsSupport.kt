@@ -203,13 +203,13 @@ internal fun HomeViewModel.onDomainStrategySelectedInternal(value: DomainStrateg
 }
 
 internal fun HomeViewModel.onDnsSettingsChangedInternal(value: DnsSettings) {
-    updateRuntimeSettingAndMaybeReload {
+    updateRuntimeSettingAndMaybeReconnect {
         container.settingsRepository.updateDnsSettings(value)
     }
 }
 
 internal fun HomeViewModel.onDnsBypassPackagesChangedInternal(value: List<String>) {
-    updateRuntimeSettingAndMaybeReload {
+    updateRuntimeSettingAndMaybeReconnect {
         container.settingsRepository.updateDnsBypassPackages(
             value.filterNot { it == getApplication<Application>().packageName },
         )
@@ -217,7 +217,7 @@ internal fun HomeViewModel.onDnsBypassPackagesChangedInternal(value: List<String
 }
 
 internal fun HomeViewModel.onDnsDomainBypassRulesChangedInternal(value: List<String>) {
-    updateRuntimeSettingAndMaybeReload {
+    updateRuntimeSettingAndMaybeReconnect {
         container.settingsRepository.updateDnsDomainBypassRules(value)
     }
 }

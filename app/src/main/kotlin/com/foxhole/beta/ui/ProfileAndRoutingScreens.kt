@@ -1326,7 +1326,7 @@ fun ProfileDetailScreen(
                     icon = Icons.Outlined.Refresh,
                     title = stringResource(R.string.refresh),
                     summary = stringResource(R.string.profile_refresh_summary),
-                    summaryMaxLines = 2,
+                    summaryMaxLines = Int.MAX_VALUE,
                     onClick = { showRefreshDialog = true },
                 )
             }

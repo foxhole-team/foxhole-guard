@@ -90,6 +90,7 @@ import com.foxhole.beta.core.model.DnsSettings
 import com.foxhole.beta.core.model.InstalledAppOption
 import com.foxhole.beta.core.model.InstalledAppChangeType
 import com.foxhole.beta.core.model.InstalledAppInventoryChange
+import com.foxhole.beta.core.model.InstalledAppRiskLevel
 import com.foxhole.beta.core.model.OverallStatisticsUiItem
 import com.foxhole.beta.core.model.Profile
 import com.foxhole.beta.core.model.ProfileComparisonSideUiItem
@@ -109,6 +110,7 @@ import com.foxhole.beta.core.model.TrafficMapUiState
 import com.foxhole.beta.core.model.TransportProtocol
 import com.foxhole.beta.core.model.TransportStatisticsUiItem
 import com.foxhole.beta.core.model.TrafficWindow
+import com.foxhole.beta.core.security.labelRes
 import com.foxhole.beta.ui.theme.LocalFoxholeSemanticColors
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -1540,6 +1542,23 @@ private fun InstalledAppChangeRow(change: InstalledAppInventoryChange) {
             InstalledAppChangeType.INSTALLED -> LocalFoxholeSemanticColors.current.warning
             InstalledAppChangeType.REMOVED -> MaterialTheme.colorScheme.error
         }
+    val riskColor =
+        when (change.riskLevel) {
+            InstalledAppRiskLevel.LOW -> MaterialTheme.colorScheme.onSurfaceVariant
+            InstalledAppRiskLevel.MEDIUM -> LocalFoxholeSemanticColors.current.warning
+            InstalledAppRiskLevel.HIGH -> MaterialTheme.colorScheme.error
+        }
+    val source = change.installerPackageName ?: stringResource(R.string.installed_app_source_unknown)
+    val signalLabels =
+        buildList {
+            change.riskSignals.forEach { signal ->
+                add(stringResource(signal.labelRes()))
+            }
+        }
+    val signals =
+        signalLabels
+            .joinToString(" • ")
+            .ifBlank { stringResource(R.string.installed_app_risk_signals_none) }
     Surface(
         shape = MaterialTheme.shapes.small,
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.34f),
@@ -1576,6 +1595,25 @@ private fun InstalledAppChangeRow(change: InstalledAppInventoryChange) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text =
+                        stringResource(
+                            R.string.statistics_app_change_security_summary,
+                            source,
+                            stringResource(change.riskLevel.labelRes()),
+                        ),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = riskColor,
+                    maxLines = 2,
+                    overflow = TextOverflow.Clip,
+                )
+                Text(
+                    text = signals,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 3,
+                    overflow = TextOverflow.Clip,
                 )
             }
         }
@@ -1927,7 +1965,7 @@ private fun StatisticsMetricSwitch(
         enabled = enabled,
         onCheckedChange = { value -> onMetricChanged(metric, value) },
         grouped = true,
-        summaryMaxLines = 2,
+        summaryMaxLines = Int.MAX_VALUE,
     )
 }
 

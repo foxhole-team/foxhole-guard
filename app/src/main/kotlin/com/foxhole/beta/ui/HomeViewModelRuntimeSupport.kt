@@ -22,11 +22,13 @@ import com.foxhole.beta.core.model.isUdpTransport
 import com.foxhole.beta.core.network.IpInfoFetchMode
 import com.foxhole.beta.vpn.FoxholeVpnRuntimeBridge
 import com.foxhole.beta.vpn.FoxholeVpnService
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
 import java.util.Locale
 
@@ -286,15 +288,49 @@ internal suspend fun HomeViewModel.reconnectProfileIfRequestedInternal(
     return runCatching {
         dashboardConnectionMetricsLoadingMutable.value = true
         container.connectionController.disconnect(suppressLocalGuard = true)
-        container.connectionController.snapshot.first { snapshot ->
-            snapshot.state == ConnectionState.IDLE || snapshot.state == ConnectionState.ERROR
-        }
+        waitForRuntimeDisconnect()
         connectNow(profileId)
         true
     }.onFailure {
         dashboardConnectionMetricsLoadingMutable.value = false
-        emitError(runtimeConnectionFailureMessage(it))
+        if (it is CancellationException) {
+            container.diagnosticsLogger.record("connection", "profile reconnect cancelled")
+        } else {
+            emitError(runtimeConnectionFailureMessage(it))
+        }
     }.getOrDefault(false)
+}
+
+internal fun HomeViewModel.updateRuntimeSettingAndMaybeReconnectInternal(
+    updateAction: suspend () -> Unit,
+) {
+    viewModelScope.launch {
+        val reconnectProfileId =
+            activeRuntimeProfileIdForReload()
+                ?.takeIf {
+                    container.connectionController.snapshot.value.state in HomeViewModel.ACTIVE_CONNECTION_STATES
+                }
+        if (reconnectProfileId != null) {
+            markRuntimeReloadPending()
+        }
+        runCatching {
+            updateAction()
+            if (reconnectProfileId != null) {
+                dashboardConnectionMetricsLoadingMutable.value = true
+                container.connectionController.disconnect(suppressLocalGuard = true)
+                waitForRuntimeDisconnect()
+                connectNow(reconnectProfileId)
+            }
+        }.onFailure {
+            dashboardConnectionMetricsLoadingMutable.value = false
+            clearRuntimeReloadPending()
+            if (it is CancellationException) {
+                container.diagnosticsLogger.record("connection", "runtime setting reconnect cancelled")
+            } else {
+                emitError(runtimeConnectionFailureMessage(it))
+            }
+        }
+    }
 }
 
 internal fun HomeViewModel.updateRuntimeSettingAndMaybeReloadInternal(
@@ -358,8 +394,25 @@ internal fun HomeViewModel.connectInternal(profileId: Long) {
         }
             .onFailure {
                 dashboardConnectionMetricsLoadingMutable.value = false
-                emitError(runtimeConnectionFailureMessage(it))
+                if (it is CancellationException) {
+                    container.diagnosticsLogger.record("connection", "connect cancelled")
+                } else {
+                    emitError(runtimeConnectionFailureMessage(it))
+                }
             }
+    }
+}
+
+private suspend fun HomeViewModel.waitForRuntimeDisconnect() {
+    val stopped =
+        withTimeoutOrNull(RUNTIME_RECONNECT_DISCONNECT_TIMEOUT_MS) {
+            container.connectionController.snapshot.first { snapshot ->
+                snapshot.state == ConnectionState.IDLE || snapshot.state == ConnectionState.ERROR
+            }
+            true
+        } == true
+    if (!stopped) {
+        error(getApplication<Application>().getString(R.string.error_runtime_stopped))
     }
 }
 
@@ -429,6 +482,8 @@ internal suspend fun HomeViewModel.emitSuccessInternal(message: String) {
         ),
     )
 }
+
+private const val RUNTIME_RECONNECT_DISCONNECT_TIMEOUT_MS = 12_000L
 
 internal suspend fun HomeViewModel.emitErrorInternal(message: String) {
     snackbars.emit(

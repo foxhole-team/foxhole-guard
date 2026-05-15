@@ -221,12 +221,14 @@ private fun TrafficMapCanvas(
                         val from = project(edge.fromLat, edge.fromLon, viewport)
                         val to = project(edge.toLat, edge.toLon, viewport)
                         val weight = sqrt(edge.bytes.toDouble() / maxBytes.toDouble()).toFloat()
-                        drawLine(
+                        drawPath(
+                            path = curvedTrafficRoutePath(from = from, to = to, index = index),
                             color = colors.routeLine.copy(alpha = 0.22f + (0.24f * weight)),
-                            start = from,
-                            end = to,
-                            strokeWidth = minLineStroke + ((maxLineStroke - minLineStroke) * weight),
-                            cap = StrokeCap.Round,
+                            style =
+                                Stroke(
+                                    width = minLineStroke + ((maxLineStroke - minLineStroke) * weight),
+                                    cap = StrokeCap.Round,
+                                ),
                         )
                     }
 
@@ -353,6 +355,30 @@ private fun TrafficMapOriginRow(
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
         )
+    }
+}
+
+private fun curvedTrafficRoutePath(
+    from: Offset,
+    to: Offset,
+    index: Int,
+): Path {
+    val dx = to.x - from.x
+    val dy = to.y - from.y
+    val distance = sqrt((dx * dx) + (dy * dy))
+    return Path().apply {
+        moveTo(from.x, from.y)
+        if (distance < 1f) {
+            lineTo(to.x, to.y)
+            return@apply
+        }
+        val bendDirection = if (index % 2 == 0) 1f else -1f
+        val bend = min(distance * 0.22f, 46f) * bendDirection
+        val midX = (from.x + to.x) / 2f
+        val midY = (from.y + to.y) / 2f
+        val controlX = midX - (dy / distance * bend)
+        val controlY = midY + (dx / distance * bend)
+        quadraticTo(controlX, controlY, to.x, to.y)
     }
 }
 

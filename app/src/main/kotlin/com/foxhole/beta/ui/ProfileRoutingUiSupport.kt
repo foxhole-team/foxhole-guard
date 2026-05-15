@@ -654,7 +654,7 @@ private fun ProfileEditorPresetRow(
         leadingIcon = Icons.Outlined.Tune,
         optionIcon = { Icons.Outlined.Tune },
         enabled = editable,
-        summaryMaxLines = 2,
+        summaryMaxLines = Int.MAX_VALUE,
     )
 }
 

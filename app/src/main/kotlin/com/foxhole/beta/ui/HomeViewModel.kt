@@ -1347,6 +1347,10 @@ class HomeViewModel(
         updateAction: suspend () -> Unit,
     ) = updateRuntimeSettingAndMaybeReloadInternal(updateAction)
 
+    internal fun updateRuntimeSettingAndMaybeReconnect(
+        updateAction: suspend () -> Unit,
+    ) = updateRuntimeSettingAndMaybeReconnectInternal(updateAction)
+
     internal suspend fun maybeReloadActiveRuntime(): Boolean = maybeReloadActiveRuntimeInternal()
 
     internal fun connect(profileId: Long) = connectInternal(profileId)

@@ -3,6 +3,7 @@
 package com.foxhole.beta.ui
 
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Apps
 import androidx.compose.material.icons.outlined.Dns
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.QueryStats
@@ -14,6 +15,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.vectorResource
 import com.foxhole.beta.R
@@ -70,6 +72,21 @@ fun SecuritySettingsScreen(
                     summaryMaxLines = 3,
                     grouped = true,
                 )
+                SettingsControlGroupDivider()
+                SettingValueRow(
+                    title = stringResource(R.string.security_app_install_monitor_title),
+                    value =
+                        pluralStringResource(
+                            R.plurals.security_app_install_monitor_value,
+                            state.settings.installedAppInventoryAudit.recentChanges.size,
+                            state.settings.installedAppInventoryAudit.recentChanges.size,
+                        ),
+                    summary = stringResource(R.string.security_app_install_monitor_summary),
+                    leadingIcon = Icons.Outlined.Apps,
+                    onClick = null,
+                    summaryMaxLines = 5,
+                    grouped = true,
+                )
             }
         }
         item {
@@ -91,7 +108,7 @@ fun SecuritySettingsScreen(
                     leadingIcon = Icons.Outlined.Notifications,
                     onCheckedChange = onNotifyUnusualTrafficChanged,
                     enabled = state.settings.anomaly.enabled,
-                    summaryMaxLines = 2,
+                    summaryMaxLines = Int.MAX_VALUE,
                     grouped = true,
                 )
                 SettingsControlGroupDivider()
@@ -116,7 +133,7 @@ fun SecuritySettingsScreen(
                     leadingIcon = Icons.Outlined.QueryStats,
                     onCheckedChange = onAnalyzeBackgroundTrafficChanged,
                     enabled = state.settings.anomaly.enabled,
-                    summaryMaxLines = 2,
+                    summaryMaxLines = Int.MAX_VALUE,
                     grouped = true,
                 )
                 SettingsControlGroupDivider()
@@ -127,7 +144,7 @@ fun SecuritySettingsScreen(
                     leadingIcon = Icons.Outlined.QueryStats,
                     onCheckedChange = onAnalyzeDestinationCountriesChanged,
                     enabled = state.settings.anomaly.enabled,
-                    summaryMaxLines = 2,
+                    summaryMaxLines = Int.MAX_VALUE,
                     grouped = true,
                 )
                 SettingsControlGroupDivider()

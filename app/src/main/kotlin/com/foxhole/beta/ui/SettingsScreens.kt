@@ -278,7 +278,7 @@ private fun LazyListScope.settingsHomeNavigationItems(
                 icon = Icons.Outlined.Router,
                 title = stringResource(R.string.network_rules_settings_title),
                 summary = stringResource(R.string.network_rules_settings_summary),
-                summaryMaxLines = 2,
+                summaryMaxLines = Int.MAX_VALUE,
                 onClick = onOpenNetworkRules,
             )
         }
@@ -383,7 +383,7 @@ private fun SettingsRoutingNavigationGroup(
             icon = ImageVector.vectorResource(R.drawable.ic_tor_route),
             title = stringResource(R.string.privacy_route_title),
             summary = stringResource(R.string.privacy_route_summary),
-            summaryMaxLines = 2,
+            summaryMaxLines = Int.MAX_VALUE,
             onClick = onOpenPrivacyRoute,
         )
     }
@@ -417,12 +417,11 @@ private fun SettingsGroupedNavigationRow(
     icon: ImageVector,
     title: String,
     summary: String,
-    summaryMaxLines: Int = 1,
+    summaryMaxLines: Int = 3,
     enabled: Boolean = true,
     onClick: () -> Unit,
 ) {
     val contentAlpha = if (enabled) 1f else 0.52f
-    val infoBody = summary.trimEnd().removeSuffix(".").takeIf(String::isNotBlank)
     Row(
         modifier =
             Modifier
@@ -445,28 +444,25 @@ private fun SettingsGroupedNavigationRow(
                 tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = contentAlpha),
             )
         }
-        Row(
+        Column(
             modifier = Modifier.weight(1f),
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-            verticalAlignment = Alignment.CenterVertically,
+            verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
             Text(
                 text = title,
-                modifier = Modifier.weight(1f, fill = false),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = contentAlpha),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            if (enabled) {
-                infoBody?.let { body ->
-                    SettingsInfoAnchor(
-                        title = title,
-                        body = body,
-                    )
-                }
-            }
+            Text(
+                text = summary.trimEnd().removeSuffix("."),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = contentAlpha),
+                maxLines = summaryMaxLines,
+                overflow = TextOverflow.Clip,
+            )
         }
         Icon(
             imageVector = Icons.Outlined.ChevronRight,
@@ -541,7 +537,7 @@ fun SmartStartSettingsScreen(
                     summary = stringResource(R.string.auto_reconnect_summary),
                     leadingIcon = Icons.Outlined.Refresh,
                     onCheckedChange = onAutoReconnectChanged,
-                    summaryMaxLines = 2,
+                    summaryMaxLines = Int.MAX_VALUE,
                     grouped = true,
                 )
             }
@@ -1452,7 +1448,7 @@ fun ApplicationSettingsScreen(
                     summary = stringResource(R.string.network_card_setting_summary),
                     leadingIcon = Icons.Outlined.Public,
                     onCheckedChange = onNetworkCardEnabledChanged,
-                    summaryMaxLines = 2,
+                    summaryMaxLines = Int.MAX_VALUE,
                     grouped = true,
                 )
                 SettingsControlGroupDivider()
@@ -1462,7 +1458,7 @@ fun ApplicationSettingsScreen(
                     summary = stringResource(R.string.traffic_card_setting_summary),
                     leadingIcon = Icons.Outlined.SwapVert,
                     onCheckedChange = onTrafficCardEnabledChanged,
-                    summaryMaxLines = 2,
+                    summaryMaxLines = Int.MAX_VALUE,
                     grouped = true,
                 )
                 SettingsControlGroupDivider()
@@ -1472,7 +1468,7 @@ fun ApplicationSettingsScreen(
                     summary = stringResource(R.string.traffic_map_setting_summary),
                     leadingIcon = Icons.Outlined.Map,
                     onCheckedChange = onTrafficMapEnabledChanged,
-                    summaryMaxLines = 2,
+                    summaryMaxLines = Int.MAX_VALUE,
                     grouped = true,
                 )
                 SettingsControlGroupDivider()
@@ -1482,7 +1478,7 @@ fun ApplicationSettingsScreen(
                     summary = stringResource(R.string.show_tor_quick_launch_summary),
                     leadingIcon = ImageVector.vectorResource(R.drawable.ic_tor_route),
                     onCheckedChange = onShowTorQuickLaunchChanged,
-                    summaryMaxLines = 2,
+                    summaryMaxLines = Int.MAX_VALUE,
                     grouped = true,
                 )
                 SettingsControlGroupDivider()
@@ -1493,7 +1489,7 @@ fun ApplicationSettingsScreen(
                     leadingIcon = ImageVector.vectorResource(R.drawable.ic_firewall_shield_key),
                     onCheckedChange = onShowFirewallStatusChanged,
                     enabled = state.settings.expert.firewallEnabled,
-                    summaryMaxLines = 2,
+                    summaryMaxLines = Int.MAX_VALUE,
                     grouped = true,
                 )
             }

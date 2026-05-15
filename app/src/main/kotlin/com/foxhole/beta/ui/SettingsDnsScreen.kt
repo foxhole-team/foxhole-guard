@@ -77,7 +77,7 @@ fun DnsSettingsScreen(
                     summary = stringResource(R.string.dns_protection_summary),
                     leadingIcon = Icons.Outlined.Security,
                     onCheckedChange = { enabled -> updateDns(dns.copy(filteringEnabled = enabled)) },
-                    summaryMaxLines = 2,
+                    summaryMaxLines = Int.MAX_VALUE,
                     grouped = true,
                 )
                 SettingsControlGroupDivider()
@@ -168,7 +168,7 @@ fun DnsSettingsScreen(
                         } else {
                             onDnsFilterManualRefresh
                         },
-                    summaryMaxLines = 2,
+                    summaryMaxLines = Int.MAX_VALUE,
                     grouped = true,
                 )
                 if (refreshInProgress) {
@@ -184,7 +184,7 @@ fun DnsSettingsScreen(
                     summary = stringResource(R.string.dns_through_vpn_summary),
                     leadingIcon = Icons.Outlined.Shield,
                     onCheckedChange = { enabled -> updateDns(dns.copy(dnsThroughVpn = enabled)) },
-                    summaryMaxLines = 2,
+                    summaryMaxLines = Int.MAX_VALUE,
                     grouped = true,
                 )
                 SettingsControlGroupDivider()
@@ -194,7 +194,7 @@ fun DnsSettingsScreen(
                     summary = stringResource(R.string.dns_block_outside_tunnel_summary),
                     leadingIcon = Icons.Outlined.Security,
                     onCheckedChange = { enabled -> updateDns(dns.copy(blockOutsideTunnel = enabled)) },
-                    summaryMaxLines = 2,
+                    summaryMaxLines = Int.MAX_VALUE,
                     grouped = true,
                 )
                 SettingsControlGroupDivider()
@@ -204,7 +204,7 @@ fun DnsSettingsScreen(
                     summary = stringResource(R.string.dns_intercept_requests_summary),
                     leadingIcon = Icons.Outlined.Dns,
                     onCheckedChange = { enabled -> updateDns(dns.copy(interceptDnsRequests = enabled)) },
-                    summaryMaxLines = 2,
+                    summaryMaxLines = Int.MAX_VALUE,
                     grouped = true,
                 )
                 SettingsControlGroupDivider()
@@ -257,7 +257,7 @@ fun DnsSettingsScreen(
                     summary = stringResource(R.string.dns_per_app_bypass_summary),
                     leadingIcon = Icons.Outlined.Apps,
                     onClick = onOpenDnsBypassApps,
-                    summaryMaxLines = 2,
+                    summaryMaxLines = Int.MAX_VALUE,
                     grouped = true,
                 )
                 SettingsControlGroupDivider()
@@ -271,7 +271,7 @@ fun DnsSettingsScreen(
                     summary = stringResource(R.string.dns_domain_bypass_summary),
                     leadingIcon = Icons.Outlined.Language,
                     onClick = { domainBypassDialog = true },
-                    summaryMaxLines = 2,
+                    summaryMaxLines = Int.MAX_VALUE,
                     grouped = true,
                 )
             }

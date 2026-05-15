@@ -271,18 +271,12 @@ internal suspend fun FoxholeVpnService.validateTunnelConnectivityInternal(
                     ) ?: error("vpn network unavailable")
                 val requestNetwork = tunnelValidationRequestNetwork(vpnNetwork)
                 val resolverNetwork = currentUpstreamNetworkOrNull()
-                if (
-                    acceptsTunnelValidationProbe(
-                        TunnelValidationProbeKind.VPN_VALIDATION_ENDPOINT,
-                        validationPolicyContext,
-                    ) &&
-                    isVpnNetworkValidated(vpnNetwork)
-                ) {
-                    container.diagnosticsLogger.record("dns", "vpn network passed Android validation endpoint probe")
-                    scope.launch(Dispatchers.IO) {
-                        refreshValidatedTunnelIpInfoBestEffort(vpnNetwork)
-                    }
-                    return@run vpnNetwork
+                val androidValidatedEarly = isVpnNetworkValidated(vpnNetwork)
+                if (androidValidatedEarly) {
+                    container.diagnosticsLogger.record(
+                        "dns",
+                        "vpn network has Android validation; requiring vpn-bound probe before connected state",
+                    )
                 }
                 if (
                     activeProtocolHint?.isUdpTransport() == true &&
