@@ -51,6 +51,7 @@ enum class HomeTorOperationKind {
 data class HomeTorOperationUiState(
     val kind: HomeTorOperationKind = HomeTorOperationKind.NONE,
     val startedAt: Long = 0L,
+    val startedIpAddress: String? = null,
 ) {
     val active: Boolean
         get() = kind != HomeTorOperationKind.NONE

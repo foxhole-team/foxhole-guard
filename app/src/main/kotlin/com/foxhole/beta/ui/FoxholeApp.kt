@@ -450,7 +450,7 @@ fun FoxholeApp(
                         snackbarHostState = snackbarHostState,
                         onNavigateUp = navController::navigateUp,
                         onAcknowledgeUnsafeWarning = viewModel::acknowledgeUnsafeWarning,
-                        onKillSwitchChanged = viewModel::onKillSwitchChanged,
+                        onOpenSystemVpnSettings = viewModel::openSystemVpnSettings,
                         onTrafficModeSelected = viewModel::onTrafficModeSelected,
                         onPerAppRoutingModeSelected = viewModel::onPerAppRoutingModeSelected,
                         onOpenRoutingApps = { navController.navigate(AppRoute.ROUTING_APPS) },
@@ -639,6 +639,7 @@ fun FoxholeApp(
                         onTrafficMapEnabledChanged = viewModel::onTrafficMapEnabledChanged,
                         onShowFirewallStatusChanged = viewModel::onShowFirewallStatusChanged,
                         onShowTorQuickLaunchChanged = viewModel::onShowTorQuickLaunchChanged,
+                        onSmartStartDashboardControlsEnabledChanged = viewModel::onSmartStartDashboardControlsEnabledChanged,
                     )
                 }
                 composable(AppRoute.EXPERT) {

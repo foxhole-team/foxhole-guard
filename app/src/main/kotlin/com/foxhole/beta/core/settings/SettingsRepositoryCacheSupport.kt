@@ -12,6 +12,7 @@ internal const val FAST_TRAFFIC_CARD_ENABLED_KEY = "traffic_card_enabled"
 internal const val FAST_TRAFFIC_MAP_ENABLED_KEY = "traffic_map_enabled"
 internal const val FAST_SHOW_FIREWALL_STATUS_KEY = "show_firewall_status"
 internal const val FAST_SHOW_TOR_QUICK_LAUNCH_KEY = "show_tor_quick_launch"
+internal const val FAST_SMART_START_DASHBOARD_CONTROLS_ENABLED_KEY = "smart_start_dashboard_controls_enabled"
 internal const val FAST_DASHBOARD_CARD_ORDER_KEY = "dashboard_card_order"
 
 internal object LegacySettingsKeys {

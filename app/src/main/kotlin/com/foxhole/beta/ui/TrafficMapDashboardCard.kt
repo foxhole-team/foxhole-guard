@@ -200,6 +200,7 @@ private fun TrafficMapCanvas(
 
                 onDrawBehind {
                     val mapState = latestState.value
+                    val drawableDestinations = mapState.destinations.toDrawableTrafficMapDestinations()
                     countryPaths.forEach { country ->
                         drawPath(
                             path = country.path,
@@ -214,15 +215,15 @@ private fun TrafficMapCanvas(
                         )
                     }
 
-                    val maxBytes = mapState.edges.maxOfOrNull { edge -> edge.bytes }?.coerceAtLeast(1L) ?: 1L
-                    val edgeCount = min(mapState.edges.size, MAX_TRAFFIC_MAP_DRAW_EDGES)
+                    val origin = project(mapState.originLat, mapState.originLon, viewport)
+                    val maxBytes = drawableDestinations.maxOfOrNull { destination -> destination.bytes }?.coerceAtLeast(1L) ?: 1L
+                    val edgeCount = min(drawableDestinations.size, MAX_TRAFFIC_MAP_DRAW_EDGES)
                     for (index in 0 until edgeCount) {
-                        val edge = mapState.edges[index]
-                        val from = project(edge.fromLat, edge.fromLon, viewport)
-                        val to = project(edge.toLat, edge.toLon, viewport)
-                        val weight = sqrt(edge.bytes.toDouble() / maxBytes.toDouble()).toFloat()
+                        val destination = drawableDestinations[index]
+                        val to = project(destination.lat, destination.lon, viewport)
+                        val weight = sqrt(destination.bytes.toDouble() / maxBytes.toDouble()).toFloat()
                         drawPath(
-                            path = curvedTrafficRoutePath(from = from, to = to, index = index),
+                            path = curvedTrafficRoutePath(from = origin, to = to, index = destination.routeGroupIndex),
                             color = colors.routeLine.copy(alpha = 0.22f + (0.24f * weight)),
                             style =
                                 Stroke(
@@ -232,9 +233,9 @@ private fun TrafficMapCanvas(
                         )
                     }
 
-                    val destinationCount = min(mapState.destinations.size, MAX_TRAFFIC_MAP_DRAW_DESTINATIONS)
+                    val destinationCount = min(drawableDestinations.size, MAX_TRAFFIC_MAP_DRAW_DESTINATIONS)
                     for (index in 0 until destinationCount) {
-                        val point = mapState.destinations[index]
+                        val point = drawableDestinations[index]
                         val offset = project(point.lat, point.lon, viewport)
                         drawCircle(
                             color = colors.destination.copy(alpha = 0.18f),
@@ -271,6 +272,30 @@ private fun TrafficMapCanvas(
             .fillMaxSize(),
     )
 }
+
+private data class DrawableTrafficMapDestination(
+    val countryCode: String,
+    val lat: Double,
+    val lon: Double,
+    val bytes: Long,
+    val routeGroupIndex: Int,
+)
+
+private fun List<TrafficMapPoint>.toDrawableTrafficMapDestinations(): List<DrawableTrafficMapDestination> =
+    flatMapIndexed { index, point ->
+        val anchors = LargeCountryTrafficMapAnchors[point.countryCode.uppercase(Locale.US)]
+        val splitCount = anchors?.size ?: 1
+        val splitBytes = (point.bytes / splitCount.coerceAtLeast(1)).coerceAtLeast(1L)
+        (anchors ?: listOf(point.lat to point.lon)).map { (lat, lon) ->
+            DrawableTrafficMapDestination(
+                countryCode = point.countryCode,
+                lat = lat,
+                lon = lon,
+                bytes = splitBytes,
+                routeGroupIndex = index,
+            )
+        }
+    }
 
 @Composable
 private fun TrafficMapLegend(
@@ -746,3 +771,15 @@ private const val MIN_TRAFFIC_MAP_RING_POINTS = 3
 private const val TRAFFIC_MAP_COUNTRIES_ASSET = "maps/ne_110m_admin_0_countries.geojson"
 private const val TRAFFIC_MAP_ANTARCTICA_COUNTRY_CODE = "AQ"
 private const val TRAFFIC_MAP_LOW_BATTERY_PERCENT = 10
+
+private val LargeCountryTrafficMapAnchors =
+    mapOf(
+        "AU" to listOf(-31.8 to 115.9, -25.4 to 133.8, -27.5 to 153.0),
+        "BR" to listOf(-23.5 to -46.6, -10.0 to -55.0, -3.1 to -60.0),
+        "CA" to listOf(49.3 to -123.1, 56.0 to -106.3, 45.5 to -73.6),
+        "CN" to listOf(43.8 to 87.6, 34.3 to 108.9, 39.9 to 116.4),
+        "ID" to listOf(-6.2 to 106.8, -2.5 to 118.0, -4.4 to 137.1),
+        "IN" to listOf(19.1 to 72.9, 22.6 to 79.0, 26.1 to 91.7),
+        "RU" to listOf(55.8 to 37.6, 56.8 to 84.9, 61.0 to 129.7),
+        "US" to listOf(37.8 to -122.4, 39.1 to -98.6, 40.7 to -74.0),
+    )

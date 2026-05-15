@@ -302,6 +302,12 @@ internal fun HomeViewModel.onShowTorQuickLaunchChangedInternal(value: Boolean) {
     }
 }
 
+internal fun HomeViewModel.onSmartStartDashboardControlsEnabledChangedInternal(value: Boolean) {
+    viewModelScope.launch {
+        container.settingsRepository.updateSmartStartDashboardControlsEnabled(value)
+    }
+}
+
 internal fun HomeViewModel.onShowFirewallStatusChangedInternal(value: Boolean) {
     viewModelScope.launch {
         container.settingsRepository.updateShowFirewallStatus(value)
@@ -319,7 +325,7 @@ internal fun HomeViewModel.onKillSwitchChangedInternal(value: Boolean) {
         container.settingsRepository.updateKillSwitchEnabled(value)
         container.connectionController.syncLocalGuard()
         if (value) {
-            openSystemVpnSettings()
+            openSystemVpnSettingsInternal()
         }
     }
 }
@@ -485,21 +491,22 @@ internal fun HomeViewModel.onSelectedPackagesChangedInternal(value: List<String>
 }
 
 internal fun HomeViewModel.onPrivacyRouteModeSelectedInternal(value: PrivacyRouteMode) {
-    if (value == PrivacyRouteMode.TOR_OVER_VPN) {
+    val privacyRoute = container.settingsRepository.settings.value.privacyRoute
+    val routeScopeReady =
+        when (privacyRoute.scope) {
+            PrivacyRouteScope.ALL_APPS -> true
+            PrivacyRouteScope.SELECTED_APPS -> privacyRoute.selectedPackages.any(String::isNotBlank)
+        }
+    if (value == PrivacyRouteMode.TOR_OVER_VPN && routeScopeReady) {
         markTorOperation(HomeTorOperationKind.CONNECTING)
     } else {
         clearTorOperation()
     }
     updateRuntimeSettingAndMaybeReload {
         container.settingsRepository.updatePrivacyRouteMode(value)
-        if (value == PrivacyRouteMode.TOR_OVER_VPN) {
-            val settings = container.settingsRepository.settings.value
-            if (
-                settings.privacyRoute.scope == PrivacyRouteScope.SELECTED_APPS &&
-                settings.privacyRoute.selectedPackages.isEmpty()
-            ) {
-                container.settingsRepository.updatePrivacyRouteScope(PrivacyRouteScope.ALL_APPS)
-            }
+        val settings = container.settingsRepository.settings.value
+        if (value == PrivacyRouteMode.TOR_OVER_VPN && settings.privacyRoute.scope == PrivacyRouteScope.ALL_APPS) {
+            snackbars.tryEmit(infoBanner(R.string.privacy_route_all_apps_start_warning))
         }
     }
 }
@@ -697,7 +704,7 @@ internal fun HomeViewModel.resetUsageTrackingInternal() {
     }
 }
 
-private suspend fun HomeViewModel.openSystemVpnSettings() {
+internal suspend fun HomeViewModel.openSystemVpnSettingsInternal() {
     val app = getApplication<Application>()
     val vpnSettingsIntent =
         Intent(AndroidSettings.ACTION_VPN_SETTINGS)

@@ -357,6 +357,8 @@
     <string name="traffic_map_setting_summary">Show the lightweight map on Dashboard.</string>
     <string name="show_tor_quick_launch_title">Show TOR</string>
     <string name="show_tor_quick_launch_summary">Show the TOR quick launch on Dashboard.</string>
+    <string name="smart_start_dashboard_controls_title">Smart Start controls</string>
+    <string name="smart_start_dashboard_controls_summary">Show Smart Start and VPN protocol management buttons on Dashboard smart profiles.</string>
     <string name="show_firewall_status_title">Show Firewall status</string>
     <string name="show_firewall_status_summary">Show the Firewall status chip on Dashboard when Firewall is enabled.</string>
     <string name="app_settings">App settings</string>
@@ -971,6 +973,7 @@
     <string name="privacy_route_selected_apps_summary">Choose apps whose TCP traffic should use TOR over the active VPN.</string>
     <string name="privacy_route_all_apps_warning_title">Route all device traffic through Tor?</string>
     <string name="privacy_route_all_apps_warning_body">TOR mode routes supported TCP traffic through TOR. Some apps, UDP traffic, push services, streaming, and banking apps may fail or become slower.</string>
+    <string name="privacy_route_all_apps_start_warning">For TOR, selected apps are recommended. All-app routing can slow down the device and break services that do not expect TOR.</string>
     <string name="privacy_route_udp_warning">To route apps through TOR, select a TCP VPN protocol first. UDP VPN protocols cannot carry TOR-over-VPN routes.</string>
     <string name="privacy_route_udp_modal_body">To enable routing into the TOR network, switch the active VPN protocol to TCP first. UDP protocols such as Hysteria2 or WireGuard cannot carry TOR-over-VPN routes.</string>
     <string name="privacy_route_modal_ready_body">TOR routing will start inside the active VPN after the route is enabled and the connection is refreshed.</string>

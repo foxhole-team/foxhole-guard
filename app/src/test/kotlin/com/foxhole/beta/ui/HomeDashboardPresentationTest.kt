@@ -219,6 +219,39 @@ class HomeDashboardPresentationTest {
     }
 
     @Test
+    fun `network model keeps current ip title during smart protocol refresh`() {
+        val ipInfo =
+            IpInfo(
+                ip = "203.0.113.10",
+                countryCode = "NL",
+                countryName = "Netherlands",
+                city = "Amsterdam",
+                isp = "Example",
+                fetchedAt = 1_000L,
+            )
+        val model =
+            resolveHomeDashboardNetworkModel(
+                state =
+                    HomeRouteUiState(
+                        connection =
+                            ConnectionSnapshot(
+                                state = ConnectionState.CONNECTED,
+                                lastChangeAt = 500L,
+                            ),
+                        protocolMetricsRefreshing = true,
+                    ),
+                visibleIpInfo = ipInfo,
+                deviceInternetAvailable = true,
+            )
+
+        assertEquals(ipInfo, model.visibleIpInfo)
+        assertEquals(R.string.home_network_current_ip_title, model.titleRes)
+        assertTrue(model.showConnectionStatus)
+        assertFalse(model.showLoading)
+        assertTrue(model.showRefreshProgress)
+    }
+
+    @Test
     fun `network model shows loading for connected tunnel without resolved ip`() {
         val model =
             resolveHomeDashboardNetworkModel(
@@ -549,7 +582,6 @@ class HomeDashboardPresentationTest {
 
         assertEquals(
             listOf(
-                HomeConnectionFeature.KILL_SWITCH,
                 HomeConnectionFeature.FIREWALL,
                 HomeConnectionFeature.TOR,
                 HomeConnectionFeature.LAN_PROXY,
@@ -561,25 +593,12 @@ class HomeDashboardPresentationTest {
                 HomeConnectionFeatureStatus.ON,
                 HomeConnectionFeatureStatus.ON,
                 HomeConnectionFeatureStatus.ON,
-                HomeConnectionFeatureStatus.ON,
             ),
             indicators.map { it.status },
         )
+        assertTrue(homeConnectionFeatureIndicators(HomeRouteUiState(settings = Settings())).isEmpty())
         assertEquals(
             listOf(
-                HomeConnectionFeature.KILL_SWITCH,
-            ),
-            homeConnectionFeatureIndicators(HomeRouteUiState(settings = Settings())).map { it.feature },
-        )
-        assertEquals(
-            listOf(
-                HomeConnectionFeatureStatus.OFF,
-            ),
-            homeConnectionFeatureIndicators(HomeRouteUiState(settings = Settings())).map { it.status },
-        )
-        assertEquals(
-            listOf(
-                HomeConnectionFeature.KILL_SWITCH,
                 HomeConnectionFeature.TOR,
             ),
             homeConnectionFeatureIndicators(

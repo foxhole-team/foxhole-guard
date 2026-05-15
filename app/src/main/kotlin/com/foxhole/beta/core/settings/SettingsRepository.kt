@@ -734,17 +734,6 @@ class SettingsRepository(
                 privacyRoute =
                     current.privacyRoute.copy(
                         bypassVpnTunnel = value,
-                        scope =
-                            if (
-                                value &&
-                                current.privacyRoute.enabled &&
-                                current.privacyRoute.scope == PrivacyRouteScope.SELECTED_APPS &&
-                                current.privacyRoute.selectedPackages.isEmpty()
-                            ) {
-                                PrivacyRouteScope.ALL_APPS
-                            } else {
-                                current.privacyRoute.scope
-                            },
                     ),
             )
         }
@@ -833,6 +822,9 @@ class SettingsRepository(
 
     suspend fun updateShowTorQuickLaunch(value: Boolean) =
         update { it.copy(ui = it.ui.copy(showTorQuickLaunch = value)) }
+
+    suspend fun updateSmartStartDashboardControlsEnabled(value: Boolean) =
+        update { it.copy(ui = it.ui.copy(smartStartDashboardControlsEnabled = value)) }
 
     suspend fun updateShowFirewallStatus(value: Boolean) =
         update { it.copy(ui = it.ui.copy(showFirewallStatus = value)) }
@@ -1322,7 +1314,8 @@ class SettingsRepository(
             fastUiPreferences.contains(FAST_TRAFFIC_CARD_ENABLED_KEY) ||
             fastUiPreferences.contains(FAST_TRAFFIC_MAP_ENABLED_KEY) ||
             fastUiPreferences.contains(FAST_SHOW_FIREWALL_STATUS_KEY) ||
-            fastUiPreferences.contains(FAST_SHOW_TOR_QUICK_LAUNCH_KEY)
+            fastUiPreferences.contains(FAST_SHOW_TOR_QUICK_LAUNCH_KEY) ||
+            fastUiPreferences.contains(FAST_SMART_START_DASHBOARD_CONTROLS_ENABLED_KEY)
 
     private fun readBootstrapDashboardUi(defaults: UiSettings): UiSettings {
         if (hasFastDashboardUi()) {
@@ -1367,6 +1360,11 @@ class SettingsRepository(
                     FAST_SHOW_TOR_QUICK_LAUNCH_KEY,
                     fallback.showTorQuickLaunch,
                 ),
+            smartStartDashboardControlsEnabled =
+                fastUiPreferences.getBoolean(
+                    FAST_SMART_START_DASHBOARD_CONTROLS_ENABLED_KEY,
+                    fallback.smartStartDashboardControlsEnabled,
+                ),
             dashboardCardOrder =
                 parseFastDashboardCardOrder(fastUiPreferences.getString(FAST_DASHBOARD_CARD_ORDER_KEY, null))
                     ?: fallback.dashboardCardOrder,
@@ -1393,6 +1391,10 @@ class SettingsRepository(
             putBoolean(FAST_TRAFFIC_MAP_ENABLED_KEY, value.trafficMapEnabled)
             putBoolean(FAST_SHOW_FIREWALL_STATUS_KEY, value.showFirewallStatus)
             putBoolean(FAST_SHOW_TOR_QUICK_LAUNCH_KEY, value.showTorQuickLaunch)
+            putBoolean(
+                FAST_SMART_START_DASHBOARD_CONTROLS_ENABLED_KEY,
+                value.smartStartDashboardControlsEnabled,
+            )
             putString(FAST_DASHBOARD_CARD_ORDER_KEY, encodeFastDashboardCardOrder(value.dashboardCardOrder))
         }
     }
@@ -1404,6 +1406,10 @@ class SettingsRepository(
             putBoolean(FAST_TRAFFIC_MAP_ENABLED_KEY, value.trafficMapEnabled)
             putBoolean(FAST_SHOW_FIREWALL_STATUS_KEY, value.showFirewallStatus)
             putBoolean(FAST_SHOW_TOR_QUICK_LAUNCH_KEY, value.showTorQuickLaunch)
+            putBoolean(
+                FAST_SMART_START_DASHBOARD_CONTROLS_ENABLED_KEY,
+                value.smartStartDashboardControlsEnabled,
+            )
             putString(FAST_DASHBOARD_CARD_ORDER_KEY, encodeFastDashboardCardOrder(value.dashboardCardOrder))
         }
     }

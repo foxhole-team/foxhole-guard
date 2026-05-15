@@ -223,6 +223,7 @@ fun HomeScreen(
     val dashboardSelectedServerPingUnavailable = dashboardProtocolModel.selectedServerPingUnavailable
     val dashboardConnectionDetailsReady = dashboardProtocolModel.connectionDetailsReady
     val dashboardConnectionMetricsLoading = dashboardProtocolModel.connectionMetricsLoading
+    val smartStartDashboardControlsEnabled = state.settings.ui.smartStartDashboardControlsEnabled
     var activeReorderCard by rememberSaveable { mutableStateOf<DashboardCard?>(null) }
     var dashboardCardOrder by remember {
         mutableStateOf(normalizedDashboardCardOrder(state.settings.ui.dashboardCardOrder))
@@ -638,7 +639,7 @@ fun HomeScreen(
                                     highlightSelectedOption = false,
                                     showInsecureTlsBadge = false,
                                     leadingContent =
-                                        if (isSmartDashboardProfile) {
+                                        if (isSmartDashboardProfile && smartStartDashboardControlsEnabled) {
                                             {
                                                 SmartProfileAutoConnectMenu(
                                                     profile = state.activeProfile,
@@ -705,6 +706,7 @@ fun HomeScreen(
                         state = state,
                         onToggleConnection = onToggleConnection,
                         onAutoConnect = ::requestAutoConnect,
+                        smartStartControlsEnabled = smartStartDashboardControlsEnabled,
                     )
                     Row(
                         modifier = Modifier.fillMaxWidth(),

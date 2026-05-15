@@ -735,7 +735,7 @@ fun TrafficSettingsScreen(
     snackbarHostState: SnackbarHostState,
     onNavigateUp: () -> Unit,
     onAcknowledgeUnsafeWarning: () -> Unit,
-    onKillSwitchChanged: (Boolean) -> Unit,
+    onOpenSystemVpnSettings: () -> Unit,
     onTrafficModeSelected: (TrafficMode) -> Unit,
     onPerAppRoutingModeSelected: (PerAppRoutingMode) -> Unit,
     onOpenRoutingApps: () -> Unit,
@@ -801,14 +801,13 @@ fun TrafficSettingsScreen(
     ) {
         item {
             SettingsControlGroup {
-                SettingSwitchRow(
+                SettingsNavigationRow(
+                    icon = Icons.Outlined.Shield,
                     title = stringResource(R.string.kill_switch_title),
-                    checked = state.settings.expert.killSwitchEnabled,
                     summary = stringResource(R.string.kill_switch_summary),
-                    leadingIcon = Icons.Outlined.Shield,
-                    onCheckedChange = onKillSwitchChanged,
                     summaryMaxLines = 4,
                     grouped = true,
+                    onClick = onOpenSystemVpnSettings,
                 )
                 SettingsControlGroupDivider()
                 DropdownSettingRow(
@@ -1274,6 +1273,13 @@ fun PrivacyRouteSettingsScreen(
         tag = "privacy_route_settings_screen",
     ) {
         item {
+            InfoBlock(
+                title = stringResource(R.string.privacy_route_title),
+                body = stringResource(R.string.privacy_route_info_body),
+                toneColor = MaterialTheme.colorScheme.primary,
+            )
+        }
+        item {
             SettingsControlGroup {
                 SettingSwitchRow(
                     title = stringResource(R.string.privacy_route_title),
@@ -1288,7 +1294,6 @@ fun PrivacyRouteSettingsScreen(
                         )
                     },
                     summary = stringResource(R.string.privacy_route_summary),
-                    infoBody = stringResource(R.string.privacy_route_info_body),
                     leadingIcon = ImageVector.vectorResource(R.drawable.ic_tor_route),
                     summaryMaxLines = 3,
                     grouped = true,
@@ -1367,6 +1372,7 @@ fun ApplicationSettingsScreen(
     onTrafficMapEnabledChanged: (Boolean) -> Unit,
     onShowFirewallStatusChanged: (Boolean) -> Unit,
     onShowTorQuickLaunchChanged: (Boolean) -> Unit,
+    onSmartStartDashboardControlsEnabledChanged: (Boolean) -> Unit,
 ) {
     val systemThemeLabel = stringResource(R.string.theme_mode_system)
     val darkThemeLabel = stringResource(R.string.theme_mode_dark)
@@ -1478,6 +1484,16 @@ fun ApplicationSettingsScreen(
                     summary = stringResource(R.string.show_tor_quick_launch_summary),
                     leadingIcon = ImageVector.vectorResource(R.drawable.ic_tor_route),
                     onCheckedChange = onShowTorQuickLaunchChanged,
+                    summaryMaxLines = Int.MAX_VALUE,
+                    grouped = true,
+                )
+                SettingsControlGroupDivider()
+                SettingSwitchRow(
+                    title = stringResource(R.string.smart_start_dashboard_controls_title),
+                    checked = state.settings.ui.smartStartDashboardControlsEnabled,
+                    summary = stringResource(R.string.smart_start_dashboard_controls_summary),
+                    leadingIcon = Icons.Outlined.Speed,
+                    onCheckedChange = onSmartStartDashboardControlsEnabledChanged,
                     summaryMaxLines = Int.MAX_VALUE,
                     grouped = true,
                 )

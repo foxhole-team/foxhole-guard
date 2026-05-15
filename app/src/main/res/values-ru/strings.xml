@@ -363,6 +363,8 @@
     <string name="traffic_map_setting_summary">Показывать лёгкую карту на Dashboard.</string>
     <string name="show_tor_quick_launch_title">Показ TOR</string>
     <string name="show_tor_quick_launch_summary">Отображать быстрый запуск TOR на Dashboard.</string>
+    <string name="smart_start_dashboard_controls_title">Кнопки Smart Start</string>
+    <string name="smart_start_dashboard_controls_summary">Показывать кнопки Smart Start и управления протоколами VPN на Dashboard для smart-профилей.</string>
     <string name="show_firewall_status_title">Показывать Firewall</string>
     <string name="show_firewall_status_summary">Показывать статус Firewall на Dashboard, когда Firewall включен.</string>
     <string name="app_settings">Настройки приложения</string>
@@ -1005,6 +1007,7 @@
     <string name="privacy_route_selected_apps_summary">Выберите приложения, чей TCP-трафик должен идти через TOR поверх активного VPN.</string>
     <string name="privacy_route_all_apps_warning_title">Направить весь трафик устройства в Tor?</string>
     <string name="privacy_route_all_apps_warning_body">Режим TOR направляет поддерживаемый TCP-трафик через TOR. Некоторые приложения, UDP-трафик, push-сервисы, стриминг и банковские приложения могут не работать или стать медленнее.</string>
+    <string name="privacy_route_all_apps_start_warning">Для TOR лучше выбрать конкретные приложения. Маршрутизация всех приложений может замедлить устройство и ломать сервисы, которые не ждут TOR.</string>
     <string name="privacy_route_udp_warning">Чтобы направлять приложения через TOR, сначала выберите TCP-протокол VPN. UDP-протоколы VPN не переносят TOR-over-VPN маршруты.</string>
     <string name="privacy_route_udp_modal_body">Для включения маршрута в сеть TOR сначала переключите активный VPN-протокол на TCP. UDP-протоколы вроде Hysteria2 или WireGuard не переносят TOR-over-VPN маршруты.</string>
     <string name="privacy_route_modal_ready_body">Маршрутизация TOR запустится внутри активного VPN после включения маршрута и обновления соединения.</string>

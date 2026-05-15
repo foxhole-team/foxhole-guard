@@ -9,9 +9,11 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.keyframes
 import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -51,6 +53,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -547,18 +550,6 @@ internal data class HomeConnectionFeatureIndicator(
 
 internal fun homeConnectionFeatureIndicators(state: HomeRouteUiState): List<HomeConnectionFeatureIndicator> =
     buildList {
-        add(
-            HomeConnectionFeatureIndicator(
-                feature = HomeConnectionFeature.KILL_SWITCH,
-                titleRes = R.string.kill_switch_title,
-                status =
-                    if (state.settings.expert.killSwitchEnabled) {
-                        HomeConnectionFeatureStatus.ON
-                    } else {
-                        HomeConnectionFeatureStatus.OFF
-                    },
-            ),
-        )
         if (state.settings.expert.firewallEnabled && state.settings.ui.showFirewallStatus) {
             add(
                 HomeConnectionFeatureIndicator(
@@ -686,12 +677,14 @@ private fun HomeConnectionFeatureIndicatorItem(
     val icon = homeConnectionFeatureIcon(indicator.feature)
     val statusColor = homeConnectionFeatureStatusColor(indicator.status)
     val neutralIconColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.82f)
+    val shape = RoundedCornerShape(999.dp)
     Row(
         modifier =
             Modifier
-                .clip(RoundedCornerShape(999.dp))
-                .clickable(onClick = onClick)
+                .clip(shape)
                 .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.42f))
+                .border(BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.32f)), shape)
+                .clickable(onClick = onClick)
                 .padding(horizontal = 7.dp, vertical = 3.dp)
                 .testTag("home_connection_feature_indicator_${indicator.feature.name.lowercase(Locale.US)}"),
         horizontalArrangement = Arrangement.spacedBy(5.dp),
@@ -859,11 +852,15 @@ private fun HomeConnectionFeatureDialogContent(
     torSelectedProtocolIsUdp: Boolean,
     onRenewTorIp: () -> Unit,
 ) {
+    val torRouteRunnable = homeTorRouteHasRunnableScope(state)
+    val torRouteLoading =
+        state.torOperation.active ||
+            (state.settings.privacyRoute.enabled && torRouteRunnable && indicator.status != HomeConnectionFeatureStatus.ON)
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         if (torSelectedProtocolIsUdp) {
             HomeTorWarningBlock()
         }
-        if (state.settings.privacyRoute.enabled || state.torOperation.active || indicator.status == HomeConnectionFeatureStatus.ON) {
+        if (torRouteLoading || indicator.status == HomeConnectionFeatureStatus.ON) {
             HomeTorOperationLog(state)
         }
         if (indicator.status == HomeConnectionFeatureStatus.ON) {
@@ -873,11 +870,17 @@ private fun HomeConnectionFeatureDialogContent(
                 onRenewTorIp = onRenewTorIp,
             )
         } else if (!torSelectedProtocolIsUdp) {
-            if (state.settings.privacyRoute.enabled || state.torOperation.active) {
+            if (torRouteLoading) {
                 HomeTorConnectedTable(
                     state = state,
                     loading = true,
                     onRenewTorIp = onRenewTorIp,
+                )
+            } else if (state.settings.privacyRoute.enabled && !torRouteRunnable) {
+                Text(
+                    text = stringResource(R.string.privacy_route_selected_apps_summary),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             } else {
                 Text(
@@ -940,9 +943,10 @@ private fun HomeTorConnectedTable(
     val durationText = rememberConnectionDurationText(state.connection) ?: "-"
     val torIpText = state.ipInfo?.let(::primaryVisibleIp) ?: "-"
     val countryText =
-        state.ipInfo?.countryName
-            ?: state.ipInfo?.countryCode
-            ?: "-"
+        state.ipInfo?.let { ipInfo ->
+            val country = ipInfo.countryName ?: ipInfo.countryCode
+            country?.let { "${countryEmoji(ipInfo.countryCode)} $it" }
+        } ?: "-"
     val cityText = state.ipInfo?.city?.takeIf(String::isNotBlank) ?: "-"
     val selectedApps = remember(state.installedApps, state.settings.privacyRoute.selectedPackages) {
         resolveSelectedApps(
@@ -986,21 +990,35 @@ private fun HomeTorConnectedTable(
                 HomeTorRouteRow(state = state, selectedApps = selectedApps)
             }
         }
+        val changeIpInProgress = state.torOperation.kind == HomeTorOperationKind.CHANGING_LOCATION
+        val pulseAlpha by rememberTorActionButtonPulse(active = changeIpInProgress)
         OutlinedButton(
             onClick = onRenewTorIp,
             enabled = state.connection.state == ConnectionState.CONNECTED && !state.reconnectInProgress && !loading,
             modifier = Modifier.fillMaxWidth().testTag("home_tor_renew_ip_action"),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.34f)),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = if (changeIpInProgress) 0.58f else 0.34f)),
             colors =
                 ButtonDefaults.outlinedButtonColors(
                     contentColor = MaterialTheme.colorScheme.primary,
                     containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.06f),
+                    disabledContainerColor =
+                        if (changeIpInProgress) {
+                            MaterialTheme.colorScheme.primary.copy(alpha = pulseAlpha)
+                        } else {
+                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.18f)
+                        },
+                    disabledContentColor =
+                        if (changeIpInProgress) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
                 ),
         ) {
             Icon(Icons.Outlined.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
             Spacer(modifier = Modifier.width(8.dp))
-            if (state.torOperation.kind == HomeTorOperationKind.CHANGING_LOCATION) {
-                Text(rememberAnimatedEllipsisText(stringResource(R.string.privacy_route_modal_in_progress)))
+            if (changeIpInProgress) {
+                Text(stringResource(R.string.privacy_route_modal_in_progress))
             } else {
                 Text(stringResource(R.string.privacy_route_modal_change_ip))
             }
@@ -1200,18 +1218,6 @@ private fun HomeTorInfoRow(
 }
 
 @Composable
-private fun rememberAnimatedEllipsisText(base: String): String {
-    var dotCount by remember(base) { mutableStateOf(0) }
-    LaunchedEffect(base) {
-        while (isActive) {
-            delay(320)
-            dotCount = (dotCount + 1) % 4
-        }
-    }
-    return base + ".".repeat(dotCount)
-}
-
-@Composable
 private fun HomeTorRouteRow(
     state: HomeRouteUiState,
     selectedApps: List<InstalledAppOption>,
@@ -1220,11 +1226,11 @@ private fun HomeTorRouteRow(
         when (state.settings.privacyRoute.scope) {
             PrivacyRouteScope.ALL_APPS -> stringResource(R.string.privacy_route_modal_route_all)
             PrivacyRouteScope.SELECTED_APPS ->
-                pluralStringResource(
-                    R.plurals.privacy_route_modal_route_selected,
-                    selectedApps.size,
-                    selectedApps.size,
-                )
+                if (selectedApps.isEmpty()) {
+                    stringResource(R.string.privacy_route_selected_apps_empty)
+                } else {
+                    null
+                }
         }
     Row(
         modifier = Modifier.fillMaxWidth().padding(vertical = 5.dp),
@@ -1248,16 +1254,36 @@ private fun HomeTorRouteRow(
                 scope = state.settings.privacyRoute.scope,
                 selectedApps = selectedApps,
             )
-            Text(
-                text = routeText,
-                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
-                color = MaterialTheme.colorScheme.onSurface,
-                textAlign = TextAlign.End,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
+            routeText?.let { text ->
+                Text(
+                    text = text,
+                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    textAlign = TextAlign.End,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
         }
     }
+}
+
+@Composable
+private fun rememberTorActionButtonPulse(active: Boolean): State<Float> {
+    if (!active) {
+        return remember { mutableStateOf(0.06f) }
+    }
+    val transition = rememberInfiniteTransition(label = "tor_action_button_pulse")
+    return transition.animateFloat(
+        initialValue = 0.07f,
+        targetValue = 0.20f,
+        animationSpec =
+            infiniteRepeatable(
+                animation = tween(durationMillis = 900),
+                repeatMode = RepeatMode.Reverse,
+            ),
+        label = "tor_action_button_container_alpha",
+    )
 }
 
 @Composable
@@ -1659,13 +1685,14 @@ internal fun HomeConnectionActions(
     state: HomeRouteUiState,
     onToggleConnection: () -> Unit,
     onAutoConnect: () -> Unit,
+    smartStartControlsEnabled: Boolean = true,
 ) {
     val activeProfile = state.activeProfile
     val torOnlyStartAvailable =
         activeProfile == null &&
             state.settings.privacyRoute.directTorEnabled &&
             homeTorRouteHasRunnableScope(state)
-    val showAutoConnectAction = shouldShowAutoConnectAction(activeProfile)
+    val showAutoConnectAction = smartStartControlsEnabled && shouldShowAutoConnectAction(activeProfile)
     val autoConnectRunning = state.autoConnect.running
     val protocolRefreshRunning = state.protocolMetricsRefreshing
     val autoConnectEnabled =

@@ -381,7 +381,7 @@ internal fun resolveHomeDashboardNetworkModel(
         titleRes =
             if (state.connection.profileId == FoxholeVpnService.TOR_ONLY_PROFILE_ID) {
                 R.string.home_network_tor_title
-            } else if (showConnectionStatus) {
+            } else if (showConnectionStatus && !protocolSearchRunning) {
                 R.string.home_network_connection_info_title
             } else {
                 R.string.home_network_current_ip_title

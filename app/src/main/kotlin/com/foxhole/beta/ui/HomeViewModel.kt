@@ -635,11 +635,9 @@ class HomeViewModel(
                 if (
                     torOperation.active &&
                     snapshot.state == ConnectionState.CONNECTED &&
-                    ipInfo != null &&
-                    ipInfo.fetchedAt >= torOperation.startedAt
+                    ipInfo != null
                 ) {
-                    clearTorOperation()
-                    emitTorConnectedBanner(ipInfo)
+                    maybeFinishTorOperation(torOperation, ipInfo)
                 }
             }
         }
@@ -721,6 +719,9 @@ class HomeViewModel(
                             state.settings.privacyRoute.selectedPackages.any(String::isNotBlank)
                     )
             if (torOnlyRouteReady) {
+                if (state.settings.privacyRoute.scope == PrivacyRouteScope.ALL_APPS) {
+                    snackbars.tryEmit(infoBanner(R.string.privacy_route_all_apps_start_warning))
+                }
                 markTorOperation(HomeTorOperationKind.CONNECTING)
                 val prepareIntent = android.net.VpnService.prepare(getApplication())
                 if (prepareIntent != null) {
@@ -1069,12 +1070,21 @@ class HomeViewModel(
 
     fun onShowTorQuickLaunchChanged(value: Boolean) = onShowTorQuickLaunchChangedInternal(value)
 
+    fun onSmartStartDashboardControlsEnabledChanged(value: Boolean) =
+        onSmartStartDashboardControlsEnabledChangedInternal(value)
+
     fun onShowFirewallStatusChanged(value: Boolean) = onShowFirewallStatusChangedInternal(value)
 
     fun onDashboardCardOrderChanged(value: List<com.foxhole.beta.core.model.DashboardCard>) =
         onDashboardCardOrderChangedInternal(value)
 
     fun onKillSwitchChanged(value: Boolean) = onKillSwitchChangedInternal(value)
+
+    fun openSystemVpnSettings() {
+        viewModelScope.launch {
+            openSystemVpnSettingsInternal()
+        }
+    }
 
     fun onFirewallEnabledChanged(value: Boolean) = onFirewallEnabledChangedInternal(value)
 
@@ -1395,6 +1405,11 @@ class HomeViewModel(
 
     internal fun clearTorOperation() = clearTorOperationInternal()
 
+    internal suspend fun maybeFinishTorOperation(
+        torOperation: HomeTorOperationUiState,
+        ipInfo: IpInfo?,
+    ) = maybeFinishTorOperationInternal(torOperation, ipInfo)
+
     internal suspend fun emitTorConnectedBanner(ipInfo: IpInfo) = emitTorConnectedBannerInternal(ipInfo)
 
     internal fun loadInstalledApps() = loadInstalledAppsInternal()
@@ -1581,6 +1596,7 @@ class HomeViewModel(
         internal const val CONNECTED_SERVER_PING_TIMEOUT_MS = 1_200L
         internal const val PROFILE_RECONNECT_PROMPT_WINDOW_MS = 13_000L
         internal const val RUNTIME_RELOAD_PENDING_TIMEOUT_MS = 1_500L
+        internal const val TOR_OPERATION_MIN_VISIBLE_MS = 3_500L
         internal const val TOR_OPERATION_TIMEOUT_MS = 20_000L
         internal const val AUTO_CONNECT_CONNECTION_TIMEOUT_MS =
             FoxholeVpnService.CONNECTIVITY_PROBE_TOTAL_TIMEOUT_MS +
