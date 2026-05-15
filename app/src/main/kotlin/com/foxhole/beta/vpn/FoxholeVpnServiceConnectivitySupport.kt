@@ -496,6 +496,12 @@ internal suspend fun FoxholeVpnService.validateTunnelConnectivityInternal(
                 *runtimeValidationDiagnosticFields(currentSession),
                 "validation_result=success",
             )
+            RuntimeHealthMetrics.recordValidation(
+                owner = "vpn",
+                success = true,
+                elapsedMs = System.currentTimeMillis() - validationStartedAt,
+                diagnosticsLogger = container.diagnosticsLogger,
+            )
             container.diagnosticsLogger.record("dns", "vpn network passed tunnel validation")
             return@withContext result
         }
@@ -507,6 +513,12 @@ internal suspend fun FoxholeVpnService.validateTunnelConnectivityInternal(
             "validation_result=failure",
             "failure_class=${validationFailure?.javaClass?.simpleName ?: "unknown"}",
             "endpoint_refusal=${validationFailure.isEndpointConnectRefusal()}",
+        )
+        RuntimeHealthMetrics.recordValidation(
+            owner = "vpn",
+            success = false,
+            elapsedMs = System.currentTimeMillis() - validationStartedAt,
+            diagnosticsLogger = container.diagnosticsLogger,
         )
         Result.failure(IllegalStateException(getString(R.string.error_dns_probe_failed)))
     }

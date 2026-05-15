@@ -308,7 +308,7 @@ class SettingsRepositoryTest {
     }
 
     @Test
-    fun `hiding expert settings clears unlocked marker and keeps section closed`() {
+    fun `hiding expert settings keeps unlocked marker and closes section`() {
         val hidden =
             Settings(
                 ui = UiSettings(showExpertSettings = true),
@@ -316,7 +316,7 @@ class SettingsRepositoryTest {
             ).withExpertSettingsVisibility(visible = false)
 
         assertFalse(hidden.ui.showExpertSettings)
-        assertNull(hidden.expert.unlockedAt)
+        assertEquals(1234L, hidden.expert.unlockedAt)
     }
 
     @Test
@@ -339,7 +339,7 @@ class SettingsRepositoryTest {
             ).withExpertSettingsVisibility(visible = false)
 
         assertEquals(DiagnosticsRetention.DAYS_7, hidden.expert.diagnosticsRetention)
-        assertNull(hidden.expert.unlockedAt)
+        assertEquals(1234L, hidden.expert.unlockedAt)
     }
 
     @Test

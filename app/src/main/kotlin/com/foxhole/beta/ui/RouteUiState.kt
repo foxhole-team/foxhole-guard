@@ -7,15 +7,18 @@ import com.foxhole.beta.core.model.AppTrafficWindow
 import com.foxhole.beta.core.model.ConnectionSnapshot
 import com.foxhole.beta.core.model.IpInfo
 import com.foxhole.beta.core.model.InstalledAppOption
+import com.foxhole.beta.core.model.OverallStatisticsUiItem
 import com.foxhole.beta.core.model.Profile
 import com.foxhole.beta.core.model.ProfileSourceType
 import com.foxhole.beta.core.model.ProtocolHint
 import com.foxhole.beta.core.model.RoutingCatalog
 import com.foxhole.beta.core.model.RoutingPreset
+import com.foxhole.beta.core.model.Settings
+import com.foxhole.beta.core.model.StatisticsRange
+import com.foxhole.beta.core.model.StatisticsUiState
 import com.foxhole.beta.core.model.TrafficSnapshot
 import com.foxhole.beta.core.model.TrafficWindow
 import com.foxhole.beta.core.profile.MultiProtocolProfileSupport
-import com.foxhole.beta.core.model.Settings as FoxholeSettings
 
 enum class AutoConnectProbeStatus {
     PENDING,
@@ -61,7 +64,7 @@ data class HomeRouteUiState(
     val profilesLoaded: Boolean = false,
     val activeProfile: Profile? = null,
     val activeProfileExcludedOptionIds: Set<String> = emptySet(),
-    val settings: FoxholeSettings = FoxholeSettings(),
+    val settings: Settings = Settings(),
     val activePreset: RoutingPreset? = null,
     val connection: ConnectionSnapshot = ConnectionSnapshot(),
     val ipInfo: IpInfo? = null,
@@ -94,7 +97,7 @@ data class ProfilesRouteUiState(
     val profiles: List<Profile> = emptyList(),
     val profilesLoaded: Boolean = false,
     val activeProfileId: Long? = null,
-    val settings: FoxholeSettings = FoxholeSettings(),
+    val settings: Settings = Settings(),
     val smartProfileExcludedOptionIdsByProfileId: Map<Long, Set<String>> = emptyMap(),
     val smartStartRememberedLatenciesByProfileId: Map<Long, Map<String, Long>> = emptyMap(),
     val smartProfileDownOptionIdsByProfileId: Map<Long, Set<String>> = emptyMap(),
@@ -109,7 +112,7 @@ data class ProfilesRouteUiState(
 )
 
 data class SettingsRouteUiState(
-    val settings: FoxholeSettings = FoxholeSettings(),
+    val settings: Settings = Settings(),
     val appVersion: String = "",
     val reconnectRequired: Boolean = false,
     val hasSmartProfile: Boolean = false,
@@ -123,10 +126,42 @@ data class SettingsRouteUiState(
     val appTrafficWindows: List<AppTrafficWindow> = emptyList(),
     val trafficWindows: List<TrafficWindow> = emptyList(),
     val dnsFilterRefreshInProgress: Boolean = false,
+    val statisticsDashboard: StatisticsDashboardUiState = StatisticsDashboardUiState(),
 )
 
+data class StatisticsDashboardUiState(
+    val statistics: StatisticsUiState = emptyStatisticsUiState(),
+    val appRows: List<AppTrafficRow> = emptyList(),
+    val countryRows: List<CountryTrafficUiRow> = emptyList(),
+    val dnsSummary: DnsProtectionSummary = DnsProtectionSummary(
+        blockedQueries = 0,
+        allowedQueries = 0,
+        appRows = emptyList(),
+    ),
+    val appChanges: List<com.foxhole.beta.core.model.InstalledAppInventoryChange> = emptyList(),
+)
+
+private fun emptyStatisticsUiState(): StatisticsUiState =
+    StatisticsUiState(
+        range = StatisticsRange.FOREVER,
+        extendedMode = false,
+        profileTraffic = emptyList(),
+        total =
+            OverallStatisticsUiItem(
+                totalBytes = 0L,
+                vpnSessions = 0,
+                successCount = 0,
+                failureCount = 0,
+                avgLatencyMs = null,
+                lastActivityAt = null,
+            ),
+        vpnProtocols = emptyList(),
+        profileComparisons = emptyList(),
+        transports = emptyList(),
+    )
+
 data class RoutingRouteUiState(
-    val settings: FoxholeSettings = FoxholeSettings(),
+    val settings: Settings = Settings(),
     val presets: List<RoutingPreset> = emptyList(),
     val activePreset: RoutingPreset? = null,
     val catalogs: List<RoutingCatalog> = emptyList(),
@@ -137,7 +172,7 @@ data class RoutingRouteUiState(
 )
 
 data class DiagnosticsRouteUiState(
-    val settings: FoxholeSettings = FoxholeSettings(),
+    val settings: Settings = Settings(),
     val activeProfile: Profile? = null,
     val traffic: TrafficSnapshot = TrafficSnapshot(),
     val diagnosticEntries: List<DiagnosticEntry> = emptyList(),
@@ -235,6 +270,7 @@ internal fun HomeUiState.toProfilesRouteUiState(
 
 internal fun HomeUiState.toSettingsRouteUiState(
     dnsFilterRefreshInProgress: Boolean = false,
+    statisticsDashboard: StatisticsDashboardUiState = StatisticsDashboardUiState(),
 ): SettingsRouteUiState =
     SettingsRouteUiState(
         settings = settings,
@@ -251,6 +287,7 @@ internal fun HomeUiState.toSettingsRouteUiState(
         appTrafficWindows = appTrafficWindows,
         trafficWindows = trafficWindows,
         dnsFilterRefreshInProgress = dnsFilterRefreshInProgress,
+        statisticsDashboard = statisticsDashboard,
     )
 
 internal fun HomeUiState.toRoutingRouteUiState(): RoutingRouteUiState =

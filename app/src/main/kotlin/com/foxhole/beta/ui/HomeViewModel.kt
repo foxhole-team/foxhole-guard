@@ -87,6 +87,7 @@ import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.runningFold
 import kotlinx.coroutines.flow.stateIn
@@ -510,9 +511,18 @@ class HomeViewModel(
         combine(
             uiState,
             dnsFilterRefreshInProgressMutable,
-        ) { state, dnsFilterRefreshInProgress ->
-            state.toSettingsRouteUiState(dnsFilterRefreshInProgress = dnsFilterRefreshInProgress)
+            trafficMapUiState,
+        ) { state, dnsFilterRefreshInProgress, trafficMapState ->
+            val routeState = state.toSettingsRouteUiState(dnsFilterRefreshInProgress = dnsFilterRefreshInProgress)
+            routeState.copy(
+                statisticsDashboard =
+                    buildStatisticsDashboardUiState(
+                        state = routeState,
+                        trafficMapState = trafficMapState,
+                    ),
+            )
         }
+            .flowOn(Dispatchers.Default)
             .stateIn(
                 viewModelScope,
                 SharingStarted.WhileSubscribed(5_000),
@@ -1061,6 +1071,8 @@ class HomeViewModel(
     fun onShowExpertSettingsChanged(value: Boolean) = onShowExpertSettingsChangedInternal(value)
 
     fun onBlockScreenshotsChanged(value: Boolean) = onBlockScreenshotsChangedInternal(value)
+
+    fun onNewAppQuarantineChanged(value: Boolean) = onNewAppQuarantineChangedInternal(value)
 
     fun onTrafficMapEnabledChanged(value: Boolean) = onTrafficMapEnabledChangedInternal(value)
 

@@ -147,43 +147,13 @@ fun StatisticsScreen(
     val statisticsSettings = state.settings.statistics
     val context = LocalContext.current
     val retention = state.settings.statistics.retention
-    val statistics =
-        remember(state.settings, state.profiles, state.activeProfile, state.traffic, retention) {
-            statisticsUiState(state = state, retention = retention)
-        }
-    val appRows =
-        remember(state.appTrafficWindows, state.installedApps, state.anomalyEvents, retention) {
-            appTrafficRows(
-                samples = state.appTrafficWindows,
-                installedApps = state.installedApps,
-                anomalyEvents = state.anomalyEvents,
-                retention = retention,
-            )
-        }
+    val statistics = state.statisticsDashboard.statistics
+    val appRows = state.statisticsDashboard.appRows
     val topApps = appRows.take(10)
-    val countryRows =
-        remember(state.trafficWindows, trafficMapState.destinations) {
-            countryTrafficRows(
-                trafficWindows = state.trafficWindows,
-                liveDestinations = trafficMapState.destinations,
-            )
-        }
+    val countryRows = state.statisticsDashboard.countryRows
     val topCountryRows = countryRows.take(10)
-    val appChanges =
-        remember(state.settings.installedAppInventoryAudit.recentChanges, retention) {
-            installedAppChangesForRetention(
-                changes = state.settings.installedAppInventoryAudit.recentChanges,
-                retention = retention,
-            )
-        }
-    val dnsSummary =
-        remember(state.trafficWindows, appRows, retention) {
-            dnsProtectionSummary(
-                trafficWindows = state.trafficWindows,
-                appRows = appRows,
-                retention = retention,
-            )
-        }
+    val appChanges = state.statisticsDashboard.appChanges
+    val dnsSummary = state.statisticsDashboard.dnsSummary
     val appStatsSwitchChecked = state.settings.appTrafficStatsEnabled
     val usageAccessGranted = rememberUsageAccessGranted()
     LaunchedEffect(usageAccessGranted, appStatsEnablePendingUsageAccess) {
@@ -2294,7 +2264,7 @@ private fun DetailMetricGrid(metrics: List<Pair<String, String>>) {
     }
 }
 
-private data class AppTrafficRow(
+data class AppTrafficRow(
     val packageName: String,
     val label: String,
     val txBytes: Long,
@@ -2304,14 +2274,14 @@ private data class AppTrafficRow(
     val totalBytes: Long get() = txBytes + rxBytes
 }
 
-private data class CountryTrafficUiRow(
+data class CountryTrafficUiRow(
     val countryCode: String,
     val label: String,
     val bytes: Long,
     val sessions: Int,
 )
 
-private data class DnsProtectionSummary(
+data class DnsProtectionSummary(
     val blockedQueries: Int,
     val allowedQueries: Int,
     val appRows: List<DnsProtectionAppRow>,
@@ -2320,14 +2290,14 @@ private data class DnsProtectionSummary(
     val blockRatio: Float get() = if (totalQueries == 0) 0f else blockedQueries.toFloat() / totalQueries.toFloat()
 }
 
-private data class DnsProtectionAppRow(
+data class DnsProtectionAppRow(
     val packageName: String,
     val label: String,
     val totalBytes: Long,
     val estimatedBlockedQueries: Int,
 )
 
-private enum class AppAnomalyBadge {
+enum class AppAnomalyBadge {
     NORMAL,
     UNUSUAL,
     HIGH_UPLOAD,
@@ -2800,7 +2770,7 @@ private fun transportStatistics(
         )
 }
 
-private fun appTrafficRows(
+internal fun appTrafficRows(
     samples: List<AppTrafficWindow>,
     installedApps: List<InstalledAppOption>,
     anomalyEvents: List<AnomalyEvent>,
@@ -2833,7 +2803,7 @@ private fun appTrafficRows(
         )
 }
 
-private fun dnsProtectionSummary(
+internal fun dnsProtectionSummary(
     trafficWindows: List<TrafficWindow>,
     appRows: List<AppTrafficRow>,
     retention: StatisticsRetention,
@@ -2871,7 +2841,7 @@ private fun dnsProtectionSummary(
     )
 }
 
-private fun installedAppChangesForRetention(
+internal fun installedAppChangesForRetention(
     changes: List<InstalledAppInventoryChange>,
     retention: StatisticsRetention,
 ): List<InstalledAppInventoryChange> {
@@ -2883,7 +2853,7 @@ private fun installedAppChangesForRetention(
         .toList()
 }
 
-private fun countryTrafficRows(
+internal fun countryTrafficRows(
     trafficWindows: List<TrafficWindow>,
     liveDestinations: List<TrafficMapPoint>,
 ): List<CountryTrafficUiRow> {

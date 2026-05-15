@@ -185,6 +185,7 @@ class SettingsRepository(
                         warningAcknowledgedAt = current.expert.warningAcknowledgedAt,
                         blockScreenshots = current.expert.blockScreenshots,
                         killSwitchEnabled = current.expert.killSwitchEnabled,
+                        newAppQuarantineEnabled = current.expert.newAppQuarantineEnabled,
                         networkActivityLogging = current.expert.networkActivityLogging,
                         networkActivityPersistentLogging = current.expert.networkActivityPersistentLogging,
                         diagnosticsRetention = current.expert.diagnosticsRetention,
@@ -629,11 +630,29 @@ class SettingsRepository(
         riskLevel: InstalledAppRiskLevel = InstalledAppRiskLevel.LOW,
         riskSignals: List<InstalledAppRiskSignal> = emptyList(),
     ) = update { current ->
-        if (!current.statistics.enabled || !current.statistics.appChangesEnabled || packageName == BuildConfig.APPLICATION_ID) {
+        if (packageName == BuildConfig.APPLICATION_ID) {
             return@update current
         }
         val normalizedPackageName = packageName.trim().takeIf(String::isNotBlank) ?: return@update current
         val normalizedLabel = label.trim().takeIf(String::isNotBlank) ?: normalizedPackageName
+        val quarantineNewApp =
+            type == InstalledAppChangeType.INSTALLED &&
+                current.expert.newAppQuarantineEnabled &&
+                !isSystemApp
+        val updatedConnection =
+            current.connection.copy(safeModeEnabled = current.connection.safeModeEnabled && !quarantineNewApp)
+        val updatedExpert =
+            if (quarantineNewApp) {
+                current.expert.quarantinePackage(normalizedPackageName)
+            } else {
+                current.expert
+            }
+        if (!current.statistics.enabled || !current.statistics.appChangesEnabled) {
+            return@update current.copy(
+                connection = updatedConnection,
+                expert = updatedExpert,
+            )
+        }
         val packageEntry =
             InstalledAppInventoryEntry(
                 packageName = normalizedPackageName,
@@ -664,6 +683,8 @@ class SettingsRepository(
                 riskSignals = packageEntry.riskSignals,
             )
         current.copy(
+            connection = updatedConnection,
+            expert = updatedExpert,
             installedAppInventoryAudit =
                 current.installedAppInventoryAudit.copy(
                     capturedAt = detectedAt,
@@ -810,6 +831,20 @@ class SettingsRepository(
 
     suspend fun updateBlockScreenshots(value: Boolean) =
         update { it.copy(expert = it.expert.copy(blockScreenshots = value)) }
+
+    suspend fun updateNewAppQuarantineEnabled(value: Boolean) =
+        update {
+            it.copy(
+                connection = it.connection.copy(safeModeEnabled = it.connection.safeModeEnabled && !value),
+                expert =
+                    it.expert.copy(
+                        newAppQuarantineEnabled = value,
+                        firewallEnabled = it.expert.firewallEnabled || value,
+                        blockedPackagesEnabled = it.expert.blockedPackagesEnabled || (value && it.expert.blockedPackages.isNotEmpty()),
+                        blockAppsAlways = it.expert.blockAppsAlways || (value && it.expert.blockedPackages.isNotEmpty()),
+                    ),
+            )
+        }
 
     suspend fun updateTrafficMapEnabled(value: Boolean) =
         update { it.copy(ui = it.ui.copy(trafficMapEnabled = value)) }
@@ -1525,6 +1560,7 @@ class SettingsRepository(
                 siteRoutingAction = siteRoutingAction.coerceSiteRoutingAction(),
                 blockScreenshots = if (resetScreenshotBlocking) false else blockScreenshots,
                 firewallEnabled = firewallEnabled,
+                newAppQuarantineEnabled = newAppQuarantineEnabled && firewallEnabled,
                 systemDnsProtectionEnabled = systemDnsProtectionEnabled,
                 smartStartReplayLogging = smartStartReplayLogging && BuildConfig.DEBUG,
                 localSurfaces = localSurfaces.normalized().migratedProxySurfaceModesIfNeeded(storedSchemaVersion),
@@ -1539,6 +1575,7 @@ class SettingsRepository(
                 blockScreenshots = normalized.blockScreenshots,
                 killSwitchEnabled = normalized.killSwitchEnabled,
                 firewallEnabled = normalized.firewallEnabled,
+                newAppQuarantineEnabled = normalized.newAppQuarantineEnabled,
                 systemDnsProtectionEnabled = normalized.systemDnsProtectionEnabled,
                 networkActivityLogging = normalized.networkActivityLogging,
                 networkActivityPersistentLogging = normalized.networkActivityPersistentLogging,
@@ -1825,14 +1862,26 @@ internal fun Settings.resetApplicationSettingsToDefaults(): Settings =
 internal fun Settings.withExpertSettingsVisibility(visible: Boolean): Settings =
     if (visible) {
         copy(
-            ui = ui.copy(showExpertSettings = expert.unlockedAt != null),
+            ui = ui.copy(showExpertSettings = true),
+            expert = expert.copy(unlockedAt = expert.unlockedAt ?: System.currentTimeMillis()),
         )
     } else {
         copy(
             ui = ui.copy(showExpertSettings = false),
-            expert = expert.copy(unlockedAt = null),
         )
     }
+
+private fun ExpertSettings.quarantinePackage(packageName: String): ExpertSettings {
+    val normalizedPackageName = packageName.trim().takeIf(String::isNotBlank) ?: return this
+    val blocked = (blockedPackages + normalizedPackageName).distinct()
+    return copy(
+        firewallEnabled = true,
+        blockedPackages = blocked,
+        selectedPackages = selectedPackages.filterNot { selectedPackage -> selectedPackage in blocked },
+        blockedPackagesEnabled = true,
+        blockAppsAlways = true,
+    )
+}
 
 internal fun Settings.smartProfilePreference(profileId: Long): SmartProfilePreference? =
     smartProfilePreferences.firstOrNull { preference -> preference.profileId == profileId }

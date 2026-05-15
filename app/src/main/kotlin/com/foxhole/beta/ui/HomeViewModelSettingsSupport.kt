@@ -277,6 +277,17 @@ internal fun HomeViewModel.onBlockScreenshotsChangedInternal(value: Boolean) {
     }
 }
 
+internal fun HomeViewModel.onNewAppQuarantineChangedInternal(value: Boolean) {
+    viewModelScope.launch {
+        container.settingsRepository.updateNewAppQuarantineEnabled(value)
+        if (value) {
+            container.settingsRepository.updateShowFirewallStatus(true)
+            requestNotificationPermission.tryEmit(Unit)
+        }
+        syncLocalGuardWithPermissionRequest()
+    }
+}
+
 internal fun HomeViewModel.onTrafficMapEnabledChangedInternal(value: Boolean) {
     viewModelScope.launch {
         container.settingsRepository.updateTrafficMapEnabled(value)

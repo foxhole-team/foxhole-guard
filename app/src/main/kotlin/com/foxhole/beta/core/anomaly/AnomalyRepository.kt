@@ -82,15 +82,7 @@ class AnomalyRepository(
                 limit = HISTORY_LIMIT,
             ).map(TrafficWindowEntity::toDomain)
         val appHistories =
-            appWindows.associate { appWindow ->
-                appWindow.packageName to
-                    dao.recentAppTrafficWindows(
-                        packageName = appWindow.packageName,
-                        networkType = appWindow.networkType.name,
-                        hourBucket = anomalyHourBucket(appWindow.startedAtMs),
-                        limit = HISTORY_LIMIT,
-                    ).map(AppTrafficWindowEntity::toDomain)
-            }
+            batchedAppHistories(appWindows)
         val assessment =
             engine.evaluate(
                 current = window,
@@ -120,6 +112,33 @@ class AnomalyRepository(
             )
         }
         cleanupExpired(settings)
+    }
+
+    private suspend fun batchedAppHistories(
+        appWindows: List<AppTrafficWindow>,
+    ): Map<String, List<AppTrafficWindow>> {
+        if (appWindows.isEmpty()) {
+            return emptyMap()
+        }
+        return appWindows
+            .groupBy { appWindow -> appWindow.networkType.name to anomalyHourBucket(appWindow.startedAtMs) }
+            .flatMap { (bucket, bucketWindows) ->
+                val packageNames = bucketWindows.map(AppTrafficWindow::packageName).distinct()
+                dao.recentAppTrafficWindowsForPackages(
+                    packageNames = packageNames,
+                    networkType = bucket.first,
+                    hourBucket = bucket.second,
+                    limit = HISTORY_LIMIT,
+                )
+                    .groupBy(AppTrafficWindowEntity::packageName)
+                    .map { (packageName, entities) ->
+                        packageName to
+                            entities
+                                .take(HISTORY_LIMIT)
+                                .map(AppTrafficWindowEntity::toDomain)
+                    }
+            }
+            .toMap()
     }
 
     suspend fun recordAppTrafficWindows(windows: List<AppTrafficWindow>) {

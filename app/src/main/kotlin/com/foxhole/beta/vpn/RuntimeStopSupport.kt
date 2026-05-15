@@ -28,5 +28,10 @@ internal fun stopRuntimeAfterServiceDestroy(
                 "$owner runtime stop timed out after ${RUNTIME_STOP_TIMEOUT_MS}ms"
             },
         )
+        RuntimeHealthMetrics.recordStopAfterDestroy(
+            owner = owner,
+            stopped = stopped,
+            diagnosticsLogger = diagnosticsLogger,
+        )
     }
 }

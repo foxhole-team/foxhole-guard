@@ -558,7 +558,7 @@ fun HomeScreen(
                                     icon = Icons.AutoMirrored.Outlined.ArrowForward,
                                     contentDescription = null,
                                     onClick = onOpenProfiles,
-                                    modifier = Modifier.size(30.dp),
+                                    modifier = Modifier.size(40.dp),
                                     tint = autoTone,
                                 )
                             },
@@ -1059,7 +1059,7 @@ fun HomeScreen(
                                     icon = Icons.Outlined.DeleteSweep,
                                     contentDescription = stringResource(R.string.reset_usage_tracking),
                                     onClick = onResetUsageTracking,
-                                    modifier = Modifier.size(32.dp).testTag("home_reset_usage_button"),
+                                    modifier = Modifier.size(40.dp).testTag("home_reset_usage_button"),
                                     tint = autoTone,
                                 )
                             },

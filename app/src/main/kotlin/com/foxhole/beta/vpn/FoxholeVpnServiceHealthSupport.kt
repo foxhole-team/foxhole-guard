@@ -41,6 +41,11 @@ internal fun FoxholeVpnService.stopNotificationHealthMonitoring() {
 }
 
 private fun FoxholeVpnService.updateHealthAfterProbe(probeSucceeded: Boolean) {
+    RuntimeHealthMetrics.recordHealthProbe(
+        owner = "vpn",
+        success = probeSucceeded,
+        diagnosticsLogger = container.diagnosticsLogger,
+    )
     if (probeSucceeded) {
         updateNotificationConnectivityHealth(
             state = ConnectivityHealthState.ONLINE,

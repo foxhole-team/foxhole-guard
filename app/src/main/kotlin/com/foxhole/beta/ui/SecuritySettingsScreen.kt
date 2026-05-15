@@ -28,6 +28,7 @@ fun SecuritySettingsScreen(
     snackbarHostState: SnackbarHostState,
     onNavigateUp: () -> Unit,
     onFirewallEnabledChanged: (Boolean) -> Unit,
+    onNewAppQuarantineChanged: (Boolean) -> Unit,
     onSystemDnsProtectionChanged: (Boolean) -> Unit,
     onAnomalyEnabledChanged: (Boolean) -> Unit,
     onNotifyUnusualTrafficChanged: (Boolean) -> Unit,
@@ -38,6 +39,7 @@ fun SecuritySettingsScreen(
 ) {
     var sensitivityExpanded by rememberSaveable { mutableStateOf(false) }
     var retentionExpanded by rememberSaveable { mutableStateOf(false) }
+    val installedAppChangeCount = state.settings.installedAppInventoryAudit.recentChanges.size
     SettingsScaffold(
         title = stringResource(R.string.security_settings_title),
         snackbarHostState = snackbarHostState,
@@ -52,42 +54,13 @@ fun SecuritySettingsScreen(
             )
         }
         item {
-            SettingsControlGroup {
-                SettingSwitchRow(
-                    title = stringResource(R.string.security_firewall_title),
-                    checked = state.settings.expert.firewallEnabled,
-                    summary = stringResource(R.string.security_firewall_summary),
-                    leadingIcon = ImageVector.vectorResource(R.drawable.ic_firewall_shield_key),
-                    onCheckedChange = onFirewallEnabledChanged,
-                    summaryMaxLines = 3,
-                    grouped = true,
-                )
-                SettingsControlGroupDivider()
-                SettingSwitchRow(
-                    title = stringResource(R.string.security_system_dns_protection_title),
-                    checked = state.settings.expert.systemDnsProtectionEnabled,
-                    summary = stringResource(R.string.security_system_dns_protection_summary),
-                    leadingIcon = Icons.Outlined.Dns,
-                    onCheckedChange = onSystemDnsProtectionChanged,
-                    summaryMaxLines = 3,
-                    grouped = true,
-                )
-                SettingsControlGroupDivider()
-                SettingValueRow(
-                    title = stringResource(R.string.security_app_install_monitor_title),
-                    value =
-                        pluralStringResource(
-                            R.plurals.security_app_install_monitor_value,
-                            state.settings.installedAppInventoryAudit.recentChanges.size,
-                            state.settings.installedAppInventoryAudit.recentChanges.size,
-                        ),
-                    summary = stringResource(R.string.security_app_install_monitor_summary),
-                    leadingIcon = Icons.Outlined.Apps,
-                    onClick = null,
-                    summaryMaxLines = 5,
-                    grouped = true,
-                )
-            }
+            SecurityProtectionControlGroup(
+                state = state,
+                installedAppChangeCount = installedAppChangeCount,
+                onFirewallEnabledChanged = onFirewallEnabledChanged,
+                onSystemDnsProtectionChanged = onSystemDnsProtectionChanged,
+                onNewAppQuarantineChanged = onNewAppQuarantineChanged,
+            )
         }
         item {
             SettingsControlGroup {
@@ -163,6 +136,63 @@ fun SecuritySettingsScreen(
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun SecurityProtectionControlGroup(
+    state: SettingsRouteUiState,
+    installedAppChangeCount: Int,
+    onFirewallEnabledChanged: (Boolean) -> Unit,
+    onSystemDnsProtectionChanged: (Boolean) -> Unit,
+    onNewAppQuarantineChanged: (Boolean) -> Unit,
+) {
+    val installedAppMonitorValue =
+        pluralStringResource(
+            R.plurals.security_app_install_monitor_value,
+            installedAppChangeCount,
+            installedAppChangeCount,
+        )
+    SettingsControlGroup {
+        SettingSwitchRow(
+            title = stringResource(R.string.security_firewall_title),
+            checked = state.settings.expert.firewallEnabled,
+            summary = stringResource(R.string.security_firewall_summary),
+            leadingIcon = ImageVector.vectorResource(R.drawable.ic_firewall_shield_key),
+            onCheckedChange = onFirewallEnabledChanged,
+            summaryMaxLines = 3,
+            grouped = true,
+        )
+        SettingsControlGroupDivider()
+        SettingSwitchRow(
+            title = stringResource(R.string.security_system_dns_protection_title),
+            checked = state.settings.expert.systemDnsProtectionEnabled,
+            summary = stringResource(R.string.security_system_dns_protection_summary),
+            leadingIcon = Icons.Outlined.Dns,
+            onCheckedChange = onSystemDnsProtectionChanged,
+            summaryMaxLines = 3,
+            grouped = true,
+        )
+        SettingsControlGroupDivider()
+        SettingValueRow(
+            title = stringResource(R.string.security_app_install_monitor_title),
+            value = installedAppMonitorValue,
+            summary = stringResource(R.string.security_app_install_monitor_summary),
+            leadingIcon = Icons.Outlined.Apps,
+            onClick = null,
+            summaryMaxLines = 5,
+            grouped = true,
+        )
+        SettingsControlGroupDivider()
+        SettingSwitchRow(
+            title = stringResource(R.string.security_new_app_quarantine_title),
+            checked = state.settings.expert.newAppQuarantineEnabled,
+            summary = stringResource(R.string.security_new_app_quarantine_summary),
+            leadingIcon = Icons.Outlined.Apps,
+            onCheckedChange = onNewAppQuarantineChanged,
+            summaryMaxLines = Int.MAX_VALUE,
+            grouped = true,
+        )
     }
 }
 

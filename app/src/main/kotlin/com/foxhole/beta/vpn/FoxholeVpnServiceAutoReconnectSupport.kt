@@ -73,6 +73,11 @@ private fun FoxholeVpnService.scheduleAutoReconnectAttempt(
 ) {
     reconnectState.attempts = nextAttempt
     val delayMs = RuntimeAutoReconnectPolicy.jitteredBackoffDelayMs(nextAttempt, retryDelaySeconds)
+    RuntimeHealthMetrics.recordReconnectScheduled(
+        owner = "vpn",
+        attempt = nextAttempt,
+        diagnosticsLogger = container.diagnosticsLogger,
+    )
     container.diagnosticsLogger.recordStructured(
         "connection",
         "auto reconnect scheduled",

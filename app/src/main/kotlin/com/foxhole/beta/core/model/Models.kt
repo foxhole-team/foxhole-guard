@@ -386,6 +386,7 @@ data class ExpertSettings(
     val blockScreenshots: Boolean = false,
     val killSwitchEnabled: Boolean = false,
     val firewallEnabled: Boolean = false,
+    val newAppQuarantineEnabled: Boolean = false,
     val systemDnsProtectionEnabled: Boolean = false,
     val networkActivityLogging: Boolean = false,
     val networkActivityPersistentLogging: Boolean = false,

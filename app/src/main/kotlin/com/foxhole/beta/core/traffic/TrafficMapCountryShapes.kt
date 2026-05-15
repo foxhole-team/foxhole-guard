@@ -92,6 +92,59 @@ class TrafficMapCountryGeoJsonParser(
     }
 }
 
+class TrafficMapCountryShapeAssetParser(
+    private val json: Json =
+        Json {
+            ignoreUnknownKeys = true
+            explicitNulls = false
+        },
+) {
+    fun parse(raw: String): List<TrafficMapCountryShape> {
+        val root = json.parseToJsonElement(raw).jsonObject
+        val countries = root["countries"]?.jsonArray ?: return emptyList()
+        return countries.mapNotNull(::parseCountry)
+    }
+
+    private fun parseCountry(countryElement: JsonElement): TrafficMapCountryShape? =
+        runCatching {
+            val country = countryElement.jsonObject
+            val countryCode =
+                country["code"]
+                    ?.jsonPrimitive
+                    ?.contentOrNull
+                    ?.trim()
+                    ?.uppercase(Locale.US)
+                    ?.takeIf { code -> code.length == IsoCountryCodeLength && code.all { character -> character in 'A'..'Z' } }
+            val rings =
+                country["rings"]
+                    ?.jsonArray
+                    ?.mapNotNull(::parseRing)
+                    .orEmpty()
+            countryCode?.let { code ->
+                TrafficMapCountryShape(
+                    countryCode = code,
+                    rings = rings,
+                )
+            }?.takeIf { shape -> shape.rings.isNotEmpty() }
+        }.getOrNull()
+
+    private fun parseRing(ringElement: JsonElement): List<TrafficMapGeoPoint>? {
+        val ring =
+            ringElement.jsonArray.mapNotNull { pointElement ->
+                val point = pointElement.jsonArray
+                val lat = point.getOrNull(0)?.jsonPrimitive?.doubleOrNull ?: return@mapNotNull null
+                val lon = point.getOrNull(1)?.jsonPrimitive?.doubleOrNull ?: return@mapNotNull null
+                TrafficMapGeoPoint(lat = lat, lon = lon)
+            }
+        return ring.takeIf { points -> points.size >= MinPolygonRingPoints }
+    }
+
+    private companion object {
+        const val IsoCountryCodeLength = 2
+        const val MinPolygonRingPoints = 3
+    }
+}
+
 internal fun TrafficMapCountryShape.toTrafficMapVisualShape(
     minRelativeRingArea: Double = TrafficMapVisualMinRelativeRingArea,
     minAbsoluteRingArea: Double = TrafficMapVisualMinAbsoluteRingArea,

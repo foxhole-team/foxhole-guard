@@ -422,7 +422,6 @@ fun FoxholeApp(
                         onOpenExpert = { navController.navigate(AppRoute.EXPERT) },
                         onOpenDiagnostics = { navController.navigate(AppRoute.DIAGNOSTICS) },
                         onOpenStatistics = { navController.navigate(AppRoute.STATISTICS) },
-                        onUnlockExpertSettings = viewModel::unlockExpertSettings,
                     )
                 }
                 composable(AppRoute.SMART_START) {
@@ -497,6 +496,7 @@ fun FoxholeApp(
                         snackbarHostState = snackbarHostState,
                         onNavigateUp = navController::navigateUp,
                         onFirewallEnabledChanged = viewModel::onFirewallEnabledChanged,
+                        onNewAppQuarantineChanged = viewModel::onNewAppQuarantineChanged,
                         onSystemDnsProtectionChanged = viewModel::onSystemDnsProtectionChanged,
                         onAnomalyEnabledChanged = viewModel::onAnomalyEnabledChanged,
                         onNotifyUnusualTrafficChanged = viewModel::onNotifyUnusualTrafficChanged,
@@ -637,6 +637,7 @@ fun FoxholeApp(
                         onNetworkCardEnabledChanged = viewModel::onNetworkCardEnabledChanged,
                         onTrafficCardEnabledChanged = viewModel::onTrafficCardEnabledChanged,
                         onTrafficMapEnabledChanged = viewModel::onTrafficMapEnabledChanged,
+                        onShowExpertSettingsChanged = viewModel::onShowExpertSettingsChanged,
                         onShowFirewallStatusChanged = viewModel::onShowFirewallStatusChanged,
                         onShowTorQuickLaunchChanged = viewModel::onShowTorQuickLaunchChanged,
                         onSmartStartDashboardControlsEnabledChanged = viewModel::onSmartStartDashboardControlsEnabledChanged,
@@ -648,7 +649,6 @@ fun FoxholeApp(
                         state = state,
                         snackbarHostState = snackbarHostState,
                         onNavigateUp = navController::navigateUp,
-                        onShowExpertSettingsChanged = viewModel::onShowExpertSettingsChanged,
                         onAcknowledgeUnsafeWarning = viewModel::acknowledgeUnsafeWarning,
                         onRouteOnlyChanged = viewModel::onRouteOnlyChanged,
                         onStrictRouteChanged = viewModel::onStrictRouteChanged,

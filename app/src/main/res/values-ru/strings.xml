@@ -312,6 +312,8 @@
     <string name="security_firewall_enable_action">Включить Firewall</string>
     <string name="security_app_install_monitor_title">Контроль новых приложений</string>
     <string name="security_app_install_monitor_summary">Локально показывает источник установки, уровень риска, Accessibility, notification listener, device admin, VPN, overlay, игнор батареи, автозапуск, неизвестный installer и имена под системные приложения.</string>
+    <string name="security_new_app_quarantine_title">Карантин новых приложений</string>
+    <string name="security_new_app_quarantine_summary">Когда установлено новое не системное приложение, FoxHole добавит его в заблокированные и будет держать локальный Firewall, пока вы не разрешите доступ к сети.</string>
     <plurals name="security_app_install_monitor_value">
         <item quantity="one">%1$d изменение</item>
         <item quantity="few">%1$d изменения</item>
@@ -967,7 +969,7 @@
     <string name="support_channel_open_failed">Не удалось открыть Telegram Канал.</string>
     <string name="open_repository_failed">Нет браузера, чтобы открыть репозиторий.</string>
     <string name="show_advanced_settings_title">Включить экспертные настройки</string>
-    <string name="show_advanced_settings_summary">Если выключить этот пункт, раздел откроется 5 нажатиями по карточке версии сборки.</string>
+    <string name="show_advanced_settings_summary">Показывает раздел «Экспертные настройки» в настройках. Выключите, если сейчас не нужны внутренние настройки маршрутизации и runtime.</string>
     <string name="help_quick_start_title">Быстрый старт</string>
     <string name="help_quick_start_body">Импортируйте профиль из буфера обмена, файла или QR-кода, выберите его активным и нажмите Старт.\n\nURL-подписки поддерживаются для совместимых VPN-конфигураций, включая v2raytun-совместимые списки узлов и smart-профили.</string>
     <string name="help_profiles_subscriptions_title">Профили и подписки</string>
@@ -1055,7 +1057,7 @@
     <string name="block_telemetry_title">Block telemetry</string>
     <string name="help_diagnostics_support_title">Диагностика и поддержка</string>
     <string name="help_diagnostics_support_body">Диагностика показывает логи подключения, статистику трафика и локальный экспорт логов.\n\nФайлы, сохраненные в память устройства, являются сырыми локальными логами и могут содержать IP-адреса, хосты, имена профилей, package names и детали конфигурации. Используйте их только когда нужен полный локальный отчет на этом устройстве.\n\nЛоги, отправляемые через стандартное меню Android, сначала очищаются санитайзером. Санитайзер удаляет IP-адреса, хосты, идентификаторы профилей и детали конфигурации до отправки в поддержку.\n\nЖурнал сетевой активности остается отдельным, пока вы сами не откроете и не сохраните этот журнал.</string>
-    <string name="help_expert_full_body">Экспертные настройки меняют маршрутизацию, DNS, локальные интерфейсы, импортные ограничения и диагностику.\n\nОткрывайте их только если понимаете последствия или действуете по инструкции поддержки.\n\nЧтобы открыть раздел, нажмите карточку версии сборки 5 раз.</string>
+    <string name="help_expert_full_body">Экспертные настройки меняют маршрутизацию, DNS, локальные интерфейсы, импортные ограничения и диагностику.\n\nОткрывайте их только если понимаете последствия или действуете по инструкции поддержки.\n\nВключите раздел в настройках приложения, когда нужны эти элементы управления.</string>
     <string name="site_action_proxy">Proxy</string>
     <string name="site_action_direct">Direct</string>
     <string name="site_action_block">Блокировать</string>

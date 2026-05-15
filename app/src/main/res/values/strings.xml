@@ -308,6 +308,8 @@
     <string name="security_firewall_enable_action">Enable Firewall</string>
     <string name="security_app_install_monitor_title">New app monitor</string>
     <string name="security_app_install_monitor_summary">Uses local package visibility to show installer source, risk level, Accessibility, notification listener, device admin, VPN, overlay, battery-ignore, autostart, unknown installer, and system-like names.</string>
+    <string name="security_new_app_quarantine_title">Quarantine new apps</string>
+    <string name="security_new_app_quarantine_summary">When a new non-system app is installed, add it to blocked apps and keep the local Firewall active until you allow network access.</string>
     <plurals name="security_app_install_monitor_value">
         <item quantity="one">%1$d recent change</item>
         <item quantity="other">%1$d recent changes</item>
@@ -933,7 +935,7 @@
     <string name="support_channel_open_failed">Failed to open the Telegram channel.</string>
     <string name="open_repository_failed">No browser is available to open the repository.</string>
     <string name="show_advanced_settings_title">Enable expert settings</string>
-    <string name="show_advanced_settings_summary">If you turn this off, open the section with 5 taps on the build version card.</string>
+    <string name="show_advanced_settings_summary">Shows the Advanced section in Settings. Turn it off when you do not need routing and runtime internals.</string>
     <string name="help_quick_start_title">Quick start</string>
     <string name="help_quick_start_body">Import a profile from the clipboard, a file, or a QR code, select it as active, and tap Start.\n\nURL subscriptions are supported for compatible VPN configurations, including v2raytun-compatible node lists and smart profiles.</string>
     <string name="help_profiles_subscriptions_title">Profiles and subscriptions</string>
@@ -1017,7 +1019,7 @@
     <string name="block_telemetry_title">Block telemetry</string>
     <string name="help_diagnostics_support_title">Diagnostics and support</string>
     <string name="help_diagnostics_support_body">Diagnostics shows connection logs, traffic statistics, and local log export.\n\nFiles saved to device storage are raw local logs and can include IP addresses, hosts, profile names, package names, and configuration details. Use them only when you want a full local record on this device.\n\nLogs sent through the Android share sheet are sanitized first. The sanitizer removes IP addresses, hosts, profile identifiers, and configuration details before support sees the file.\n\nNetwork activity journal entries stay separate unless you open and save that journal yourself.</string>
-    <string name="help_expert_full_body">Expert settings change routing, DNS, local interfaces, import restrictions, and diagnostics.\n\nOpen them only if you understand the consequences or are following support instructions.\n\nTo open the section, tap the build version card 5 times.</string>
+    <string name="help_expert_full_body">Expert settings change routing, DNS, local interfaces, import restrictions, and diagnostics.\n\nOpen them only if you understand the consequences or are following support instructions.\n\nEnable the Advanced section from Application settings when you need these controls.</string>
     <string name="site_action_proxy">Proxy</string>
     <string name="site_action_direct">Direct</string>
     <string name="site_action_block">Block</string>

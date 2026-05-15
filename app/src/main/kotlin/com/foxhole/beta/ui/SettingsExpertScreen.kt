@@ -33,7 +33,6 @@ fun ExpertSettingsScreen(
     state: SettingsRouteUiState,
     snackbarHostState: SnackbarHostState,
     onNavigateUp: () -> Unit,
-    onShowExpertSettingsChanged: (Boolean) -> Unit,
     onAcknowledgeUnsafeWarning: () -> Unit,
     onRouteOnlyChanged: (Boolean) -> Unit,
     onStrictRouteChanged: (Boolean) -> Unit,
@@ -68,17 +67,6 @@ fun ExpertSettingsScreen(
             )
         },
     ) {
-        item {
-            SettingsControlGroup {
-                SettingSwitchRow(
-                    title = stringResource(R.string.show_advanced_settings_title),
-                    checked = state.settings.ui.showExpertSettings,
-                    leadingIcon = Icons.Outlined.Shield,
-                    onCheckedChange = onShowExpertSettingsChanged,
-                    grouped = true,
-                )
-            }
-        }
         item {
             SettingsControlGroup {
                 SettingSwitchRow(

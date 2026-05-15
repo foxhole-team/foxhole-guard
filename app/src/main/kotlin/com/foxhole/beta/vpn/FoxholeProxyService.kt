@@ -11,6 +11,7 @@ import android.net.NetworkCapabilities
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.os.SystemClock
 import androidx.core.content.getSystemService
 import com.foxhole.beta.FoxholeApplication
 import com.foxhole.beta.FoxholeRuntimeDependencies
@@ -59,6 +60,8 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
             context = applicationContext,
             diagnosticsLogger = container.diagnosticsLogger,
             tag = "Foxhole:ProxyRuntime",
+            scope = scope,
+            shouldRemainHeld = { activeSession != null },
         )
     }
     private val trafficSampler = TrafficStatsSampler()
@@ -229,7 +232,14 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
         registerDefaultNetworkCallbackIfNeeded()
         runtimeWakeLock.acquire()
         startNotificationHealthMonitoring()
+        val runtimeStartAtMs = SystemClock.elapsedRealtime()
         val result = runtime.start(session, this)
+        RuntimeHealthMetrics.recordStart(
+            owner = "proxy",
+            success = result.isSuccess,
+            elapsedMs = SystemClock.elapsedRealtime() - runtimeStartAtMs,
+            diagnosticsLogger = container.diagnosticsLogger,
+        )
         if (!currentCoroutineContext().isActive) {
             withContext(NonCancellable) {
                 container.diagnosticsLogger.record("connection", "runtime start cancelled after native return")
@@ -478,6 +488,11 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
     ) {
         autoReconnectAttempts = nextAttempt
         val delayMs = RuntimeAutoReconnectPolicy.jitteredBackoffDelayMs(nextAttempt)
+        RuntimeHealthMetrics.recordReconnectScheduled(
+            owner = "proxy",
+            attempt = nextAttempt,
+            diagnosticsLogger = container.diagnosticsLogger,
+        )
         container.diagnosticsLogger.recordStructured(
             "connection",
             "proxy auto reconnect scheduled",
@@ -673,13 +688,14 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
 
     private suspend fun validateProxyConnectivity(session: VpnSession): Result<Unit> =
         withContext(Dispatchers.IO) {
+            val validationStartedAtMs = System.currentTimeMillis()
             container.diagnosticsLogger.recordStructured(
                 "dns",
                 "Proxy validation started",
                 session.protocolHint.name.lowercase(),
                 "timeout_ms=$PROXY_VALIDATION_TOTAL_TIMEOUT_MS",
             )
-            TunnelConnectivityProbe.run(
+            val result = TunnelConnectivityProbe.run(
                 attempts = PROXY_VALIDATION_ATTEMPTS,
                 initialDelayMs = PROXY_VALIDATION_INITIAL_DELAY_MS,
                 retryDelayMs = PROXY_VALIDATION_RETRY_DELAY_MS,
@@ -698,6 +714,13 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
                 )
                 container.diagnosticsLogger.record("dns", "proxy passed local proxy connectivity validation")
             }
+            RuntimeHealthMetrics.recordValidation(
+                owner = "proxy",
+                success = result.isSuccess,
+                elapsedMs = System.currentTimeMillis() - validationStartedAtMs,
+                diagnosticsLogger = container.diagnosticsLogger,
+            )
+            result
         }
 
     private fun startIpv4EnrichmentIfNeeded(info: IpInfo) {
@@ -776,6 +799,11 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
                         continue
                     }
                     val probeSucceeded = runNotificationConnectivityProbe(session)
+                    RuntimeHealthMetrics.recordHealthProbe(
+                        owner = "proxy",
+                        success = probeSucceeded,
+                        diagnosticsLogger = container.diagnosticsLogger,
+                    )
                     if (probeSucceeded) {
                         updateNotificationConnectivityHealth(
                             state = ConnectivityHealthState.ONLINE,

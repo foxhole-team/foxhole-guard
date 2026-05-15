@@ -62,7 +62,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -139,14 +138,11 @@ fun SettingsHomeScreen(
     onOpenExpert: () -> Unit,
     onOpenDiagnostics: () -> Unit,
     onOpenStatistics: () -> Unit,
-    onUnlockExpertSettings: () -> Unit,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val repositoryOpenFailed = stringResource(R.string.open_repository_failed)
     val supportChannelOpenFailed = stringResource(R.string.support_channel_open_failed)
-    var unlockDialogVisible by rememberSaveable { mutableStateOf(false) }
-    var versionTapCount by rememberSaveable { mutableIntStateOf(0) }
     val expertVisible = state.settings.ui.showExpertSettings
     val onRepositoryClick = {
         if (!openFoxholeRepository(context)) {
@@ -168,20 +164,6 @@ fun SettingsHomeScreen(
             }
         }
     }
-    val onFooterClick = {
-        if (!unlockDialogVisible) {
-            if (expertVisible) {
-                versionTapCount = 0
-            } else {
-                val nextTapCount = versionTapCount + 1
-                versionTapCount = nextTapCount
-                if (nextTapCount >= 5) {
-                    unlockDialogVisible = true
-                }
-            }
-        }
-    }
-
     SettingsScaffold(
         title = stringResource(R.string.settings),
         snackbarHostState = snackbarHostState,
@@ -206,28 +188,7 @@ fun SettingsHomeScreen(
             appVersion = state.appVersion,
             onRepositoryClick = onRepositoryClick,
             onSupportBotClick = onSupportBotClick,
-            onClick = onFooterClick,
-        )
-    }
-
-    if (unlockDialogVisible) {
-        ConfirmDialog(
-            title = stringResource(R.string.expert_unlock_confirm_title),
-            body = stringResource(R.string.expert_unlock_confirm_body),
-            confirmLabel = stringResource(R.string.enable_label),
-            icon = Icons.Outlined.Shield,
-            dismissLabel = stringResource(R.string.cancel),
-            dismissOnBackPress = false,
-            dismissOnClickOutside = false,
-            onDismiss = {
-                unlockDialogVisible = false
-                versionTapCount = 0
-            },
-            onConfirm = {
-                onUnlockExpertSettings()
-                unlockDialogVisible = false
-                versionTapCount = 0
-            },
+            onClick = {},
         )
     }
 }
@@ -1370,6 +1331,7 @@ fun ApplicationSettingsScreen(
     onNetworkCardEnabledChanged: (Boolean) -> Unit,
     onTrafficCardEnabledChanged: (Boolean) -> Unit,
     onTrafficMapEnabledChanged: (Boolean) -> Unit,
+    onShowExpertSettingsChanged: (Boolean) -> Unit,
     onShowFirewallStatusChanged: (Boolean) -> Unit,
     onShowTorQuickLaunchChanged: (Boolean) -> Unit,
     onSmartStartDashboardControlsEnabledChanged: (Boolean) -> Unit,
@@ -1445,6 +1407,16 @@ fun ApplicationSettingsScreen(
                     checked = state.settings.expert.blockScreenshots,
                     leadingIcon = Icons.Outlined.Shield,
                     onCheckedChange = onBlockScreenshotsChanged,
+                    grouped = true,
+                )
+                SettingsControlGroupDivider()
+                SettingSwitchRow(
+                    title = stringResource(R.string.show_advanced_settings_title),
+                    checked = state.settings.ui.showExpertSettings,
+                    summary = stringResource(R.string.show_advanced_settings_summary),
+                    leadingIcon = Icons.Outlined.Tune,
+                    onCheckedChange = onShowExpertSettingsChanged,
+                    summaryMaxLines = Int.MAX_VALUE,
                     grouped = true,
                 )
                 SettingsControlGroupDivider()

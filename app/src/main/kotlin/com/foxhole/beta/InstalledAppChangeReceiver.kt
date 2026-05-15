@@ -49,15 +49,24 @@ class InstalledAppChangeReceiver : BroadcastReceiver() {
                         } else {
                             null
                         }
+                    val resolvedLabel = securitySummary?.label ?: packageInfo.label
+                    val resolvedIsSystemApp = securitySummary?.isSystemApp ?: packageInfo.isSystemApp
                     app.container.settingsRepository.recordInstalledAppChange(
                         packageName = packageChange.packageName,
-                        label = securitySummary?.label ?: packageInfo.label,
-                        isSystemApp = securitySummary?.isSystemApp ?: packageInfo.isSystemApp,
+                        label = resolvedLabel,
+                        isSystemApp = resolvedIsSystemApp,
                         type = packageChange.type,
                         installerPackageName = securitySummary?.installerPackageName ?: packageInfo.installerPackageName,
                         riskLevel = securitySummary?.riskLevel ?: packageInfo.riskLevel,
                         riskSignals = securitySummary?.riskSignals ?: packageInfo.riskSignals,
                     )
+                    if (
+                        packageChange.type == InstalledAppChangeType.INSTALLED &&
+                        !resolvedIsSystemApp &&
+                        app.container.settingsRepository.current().expert.newAppQuarantineEnabled
+                    ) {
+                        app.container.connectionController.syncLocalGuard()
+                    }
                     if (securitySummary != null) {
                         InstalledAppSecurityNotifier(app).notifyInstalledApp(securitySummary)
                     }

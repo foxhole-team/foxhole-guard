@@ -26,6 +26,7 @@ import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -550,24 +551,20 @@ internal data class HomeConnectionFeatureIndicator(
 
 internal fun homeConnectionFeatureIndicators(state: HomeRouteUiState): List<HomeConnectionFeatureIndicator> =
     buildList {
-        if (state.settings.expert.firewallEnabled && state.settings.ui.showFirewallStatus) {
-            add(
-                HomeConnectionFeatureIndicator(
-                    feature = HomeConnectionFeature.FIREWALL,
-                    titleRes = R.string.home_connection_feature_firewall,
-                    status = homeFirewallFeatureStatus(state),
-                ),
-            )
-        }
-        if (state.settings.ui.showTorQuickLaunch) {
-            add(
-                HomeConnectionFeatureIndicator(
-                    feature = HomeConnectionFeature.TOR,
-                    titleRes = R.string.tor_badge,
-                    status = homeTorFeatureStatus(state),
-                ),
-            )
-        }
+        add(
+            HomeConnectionFeatureIndicator(
+                feature = HomeConnectionFeature.FIREWALL,
+                titleRes = R.string.home_connection_feature_firewall,
+                status = homeFirewallFeatureStatus(state),
+            ),
+        )
+        add(
+            HomeConnectionFeatureIndicator(
+                feature = HomeConnectionFeature.TOR,
+                titleRes = R.string.tor_badge,
+                status = homeTorFeatureStatus(state),
+            ),
+        )
         if (state.settings.expert.localSurfaces.allowLanAccess) {
             add(
                 HomeConnectionFeatureIndicator(
@@ -682,43 +679,46 @@ private fun HomeConnectionFeatureIndicatorItem(
         modifier =
             Modifier
                 .clip(shape)
-                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.42f))
-                .border(BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.32f)), shape)
+                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.50f))
+                .border(BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.38f)), shape)
                 .clickable(onClick = onClick)
-                .padding(horizontal = 7.dp, vertical = 3.dp)
+                .heightIn(min = HomePrimaryActionHeight)
+                .padding(horizontal = 12.dp, vertical = 8.dp)
                 .testTag("home_connection_feature_indicator_${indicator.feature.name.lowercase(Locale.US)}"),
-        horizontalArrangement = Arrangement.spacedBy(5.dp),
+        horizontalArrangement = Arrangement.spacedBy(9.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(
             imageVector = icon,
             contentDescription = null,
-            modifier = Modifier.size(12.dp),
-            tint = neutralIconColor,
+            modifier = Modifier.size(22.dp),
+            tint = if (indicator.status == HomeConnectionFeatureStatus.OFF) neutralIconColor else statusColor,
         )
-        Text(
-            text = stringResource(indicator.titleRes),
-            style =
-                MaterialTheme.typography.labelSmall.copy(
-                    fontSize = 10.sp,
-                    lineHeight = 12.sp,
-                    fontWeight = FontWeight.SemiBold,
-                ),
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-        Text(
-            text = indicator.status.label,
-            style =
-                MaterialTheme.typography.labelSmall.copy(
-                    fontSize = 10.sp,
-                    lineHeight = 12.sp,
-                    fontWeight = FontWeight.Bold,
-                ),
-            color = statusColor,
-            maxLines = 1,
-        )
+        Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
+            Text(
+                text = stringResource(indicator.titleRes),
+                style =
+                    MaterialTheme.typography.labelMedium.copy(
+                        fontSize = 13.sp,
+                        lineHeight = 15.sp,
+                        fontWeight = FontWeight.SemiBold,
+                    ),
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = indicator.status.label,
+                style =
+                    MaterialTheme.typography.labelSmall.copy(
+                        fontSize = 11.sp,
+                        lineHeight = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                    ),
+                color = statusColor,
+                maxLines = 1,
+            )
+        }
     }
 }
 
@@ -996,7 +996,11 @@ private fun HomeTorConnectedTable(
             onClick = onRenewTorIp,
             enabled = state.connection.state == ConnectionState.CONNECTED && !state.reconnectInProgress && !loading,
             modifier = Modifier.fillMaxWidth().testTag("home_tor_renew_ip_action"),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = if (changeIpInProgress) 0.58f else 0.34f)),
+            border =
+                BorderStroke(
+                    width = 1.dp,
+                    color = MaterialTheme.colorScheme.primary.copy(alpha = if (changeIpInProgress) 0.58f else 0.34f),
+                ),
             colors =
                 ButtonDefaults.outlinedButtonColors(
                     contentColor = MaterialTheme.colorScheme.primary,

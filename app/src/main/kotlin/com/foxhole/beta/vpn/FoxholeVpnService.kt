@@ -13,6 +13,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.os.SystemClock
 import androidx.core.content.getSystemService
 import com.foxhole.beta.FoxholeApplication
 import com.foxhole.beta.FoxholeRuntimeDependencies
@@ -277,6 +278,21 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
 
     override fun createTunBuilder(): Builder = Builder()
 
+    private suspend fun startRuntimeWithHealthMetrics(
+        session: VpnSession,
+        owner: String,
+    ): Result<Unit> {
+        val runtimeStartAtMs = SystemClock.elapsedRealtime()
+        val result = runtime.start(session, this)
+        RuntimeHealthMetrics.recordStart(
+            owner = owner,
+            success = result.isSuccess,
+            elapsedMs = SystemClock.elapsedRealtime() - runtimeStartAtMs,
+            diagnosticsLogger = container.diagnosticsLogger,
+        )
+        return result
+    }
+
     internal suspend fun connect(
         profileId: Long,
         commandStartId: Int,
@@ -366,7 +382,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         registerDefaultNetworkCallbackIfNeeded()
         acquireRuntimeWakeLock()
         startNotificationHealthMonitoring()
-        val result = runtime.start(session, this)
+        val result = startRuntimeWithHealthMetrics(session = session, owner = "vpn")
         if (!currentCoroutineContext().isActive) {
             withContext(NonCancellable) {
                 container.diagnosticsLogger.record("connection", "runtime start cancelled after native return")
@@ -561,7 +577,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
             ),
         )
         acquireRuntimeWakeLock()
-        val result = runtime.start(session, this)
+        val result = startRuntimeWithHealthMetrics(session = session, owner = "local_guard")
         if (result.isSuccess) {
             if (mode == LocalGuardMode.DNS) {
                 FoxholeVpnRuntimeBridge.updateTraffic(TrafficSnapshot())

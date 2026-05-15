@@ -596,14 +596,19 @@ class HomeDashboardPresentationTest {
             ),
             indicators.map { it.status },
         )
-        assertTrue(homeConnectionFeatureIndicators(HomeRouteUiState(settings = Settings())).isEmpty())
         assertEquals(
             listOf(
+                HomeConnectionFeature.FIREWALL,
                 HomeConnectionFeature.TOR,
             ),
-            homeConnectionFeatureIndicators(
-                HomeRouteUiState(settings = Settings(ui = UiSettings(showTorQuickLaunch = true))),
-            ).map { it.feature },
+            homeConnectionFeatureIndicators(HomeRouteUiState(settings = Settings())).map { it.feature },
+        )
+        assertEquals(
+            listOf(
+                HomeConnectionFeatureStatus.OFF,
+                HomeConnectionFeatureStatus.OFF,
+            ),
+            homeConnectionFeatureIndicators(HomeRouteUiState(settings = Settings())).map { it.status },
         )
         assertEquals(
             HomeConnectionFeatureStatus.PENDING,

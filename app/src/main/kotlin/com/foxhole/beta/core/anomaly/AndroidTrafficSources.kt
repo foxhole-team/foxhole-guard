@@ -123,6 +123,11 @@ class AppTrafficSampler(
                         }
                     }
                     .distinctBy(AppTrafficWindow::packageName)
+                    .sortedWith(
+                        compareByDescending<AppTrafficWindow> { window -> window.rxBytes + window.txBytes }
+                            .thenBy(AppTrafficWindow::packageName),
+                    )
+                    .take(MAX_APP_TRAFFIC_WINDOWS_PER_SAMPLE)
                     .toList()
             windows
         }
@@ -203,6 +208,7 @@ class AppTrafficSampler(
 
     companion object {
         const val DEFAULT_SAMPLE_WINDOW_MS = 60_000L
+        const val MAX_APP_TRAFFIC_WINDOWS_PER_SAMPLE = 30
         const val INSTALLED_APPS_CACHE_TTL_MS = 5 * 60_000L
         private val SampleWatermarkLock = Any()
         private var lastSampleAt: Long = 0L

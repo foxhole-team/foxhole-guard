@@ -1,7 +1,7 @@
 package com.foxhole.beta.ui
 
-import android.content.Context
 import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.os.BatteryManager
@@ -67,12 +67,15 @@ import com.foxhole.beta.core.model.TrafficMapPoint
 import com.foxhole.beta.core.model.TrafficMapUiState
 import com.foxhole.beta.core.traffic.TrafficMapCountryGeoJsonParser
 import com.foxhole.beta.core.traffic.TrafficMapCountryShape
+import com.foxhole.beta.core.traffic.TrafficMapCountryShapeAssetParser
 import com.foxhole.beta.core.traffic.TrafficMapGeoPoint
 import com.foxhole.beta.core.traffic.toTrafficMapVisualShape
 import com.foxhole.beta.ui.theme.LocalFoxholeDarkTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.util.Locale
+import kotlin.math.atan2
+import kotlin.math.floor
 import kotlin.math.min
 import kotlin.math.sqrt
 
@@ -217,13 +220,19 @@ private fun TrafficMapCanvas(
 
                     val origin = project(mapState.originLat, mapState.originLon, viewport)
                     val maxBytes = drawableDestinations.maxOfOrNull { destination -> destination.bytes }?.coerceAtLeast(1L) ?: 1L
+                    val routeLanes = trafficRouteLanes(origin, drawableDestinations, viewport)
                     val edgeCount = min(drawableDestinations.size, MAX_TRAFFIC_MAP_DRAW_EDGES)
                     for (index in 0 until edgeCount) {
                         val destination = drawableDestinations[index]
                         val to = project(destination.lat, destination.lon, viewport)
                         val weight = sqrt(destination.bytes.toDouble() / maxBytes.toDouble()).toFloat()
                         drawPath(
-                            path = curvedTrafficRoutePath(from = origin, to = to, index = destination.routeGroupIndex),
+                            path =
+                                curvedTrafficRoutePath(
+                                    from = origin,
+                                    to = to,
+                                    lane = routeLanes[destination.countryCode] ?: 1,
+                                ),
                             color = colors.routeLine.copy(alpha = 0.22f + (0.24f * weight)),
                             style =
                                 Stroke(
@@ -278,23 +287,16 @@ private data class DrawableTrafficMapDestination(
     val lat: Double,
     val lon: Double,
     val bytes: Long,
-    val routeGroupIndex: Int,
 )
 
 private fun List<TrafficMapPoint>.toDrawableTrafficMapDestinations(): List<DrawableTrafficMapDestination> =
-    flatMapIndexed { index, point ->
-        val anchors = LargeCountryTrafficMapAnchors[point.countryCode.uppercase(Locale.US)]
-        val splitCount = anchors?.size ?: 1
-        val splitBytes = (point.bytes / splitCount.coerceAtLeast(1)).coerceAtLeast(1L)
-        (anchors ?: listOf(point.lat to point.lon)).map { (lat, lon) ->
-            DrawableTrafficMapDestination(
-                countryCode = point.countryCode,
-                lat = lat,
-                lon = lon,
-                bytes = splitBytes,
-                routeGroupIndex = index,
-            )
-        }
+    map { point ->
+        DrawableTrafficMapDestination(
+            countryCode = point.countryCode.uppercase(Locale.US),
+            lat = point.lat,
+            lon = point.lon,
+            bytes = point.bytes.coerceAtLeast(1L),
+        )
     }
 
 @Composable
@@ -386,7 +388,7 @@ private fun TrafficMapOriginRow(
 private fun curvedTrafficRoutePath(
     from: Offset,
     to: Offset,
-    index: Int,
+    lane: Int,
 ): Path {
     val dx = to.x - from.x
     val dy = to.y - from.y
@@ -397,8 +399,9 @@ private fun curvedTrafficRoutePath(
             lineTo(to.x, to.y)
             return@apply
         }
-        val bendDirection = if (index % 2 == 0) 1f else -1f
-        val bend = min(distance * 0.22f, 46f) * bendDirection
+        val bendLane = lane.takeIf { it != 0 } ?: 1
+        val bend = min(distance * (0.15f + (0.035f * (kotlin.math.abs(bendLane) - 1).coerceAtMost(3))), 58f) *
+            bendLane.signFloat()
         val midX = (from.x + to.x) / 2f
         val midY = (from.y + to.y) / 2f
         val controlX = midX - (dy / distance * bend)
@@ -406,6 +409,33 @@ private fun curvedTrafficRoutePath(
         quadraticTo(controlX, controlY, to.x, to.y)
     }
 }
+
+private fun trafficRouteLanes(
+    origin: Offset,
+    destinations: List<DrawableTrafficMapDestination>,
+    viewport: TrafficMapViewport,
+): Map<String, Int> {
+    val countsByBucket = mutableMapOf<Int, Int>()
+    return destinations.associate { destination ->
+        val point = project(destination.lat, destination.lon, viewport)
+        val angle = atan2(point.y - origin.y, point.x - origin.x)
+        val bucket = floor((angle + TRAFFIC_ROUTE_PI) / TRAFFIC_ROUTE_ANGLE_BUCKET_RADIANS).toInt()
+        val indexInBucket = countsByBucket[bucket] ?: 0
+        countsByBucket[bucket] = indexInBucket + 1
+        destination.countryCode to routeLane(bucket, indexInBucket)
+    }
+}
+
+private fun routeLane(
+    bucket: Int,
+    indexInBucket: Int,
+): Int {
+    val magnitude = (indexInBucket / 2) + 1
+    val sign = if ((bucket + indexInBucket) % 2 == 0) 1 else -1
+    return sign * magnitude
+}
+
+private fun Int.signFloat(): Float = if (this < 0) -1f else 1f
 
 private fun TrafficMapUiState.originLocationLabel(): String =
     listOfNotNull(
@@ -543,8 +573,25 @@ private object TrafficMapCountryShapeCache {
 }
 
 private fun loadTrafficMapCountries(context: Context): List<TrafficMapCountryShape> {
+    loadPreprocessedTrafficMapCountries(context)
+        .takeIf(List<TrafficMapCountryShape>::isNotEmpty)
+        ?.let { countries -> return countries }
+    return loadTrafficMapCountriesFromGeoJson(context)
+}
+
+private fun loadPreprocessedTrafficMapCountries(context: Context): List<TrafficMapCountryShape> =
+    runCatching {
+        val raw =
+            context.assets.open(TRAFFIC_MAP_PREPROCESSED_COUNTRIES_ASSET).bufferedReader().use { reader ->
+                reader.readText()
+            }
+        TrafficMapCountryShapeAssetParser().parse(raw)
+            .filterNot { country -> country.countryCode == TRAFFIC_MAP_ANTARCTICA_COUNTRY_CODE }
+    }.getOrDefault(emptyList())
+
+private fun loadTrafficMapCountriesFromGeoJson(context: Context): List<TrafficMapCountryShape> {
     val raw =
-        context.assets.open(TRAFFIC_MAP_COUNTRIES_ASSET).bufferedReader().use { reader ->
+        context.assets.open(TRAFFIC_MAP_COUNTRIES_GEOJSON_ASSET).bufferedReader().use { reader ->
             reader.readText()
         }
     return TrafficMapCountryGeoJsonParser().parse(raw)
@@ -768,18 +815,9 @@ private const val TRAFFIC_MAP_LAT_RANGE = TRAFFIC_MAP_MAX_LAT - TRAFFIC_MAP_MIN_
 private const val MAX_TRAFFIC_MAP_DRAW_EDGES = 60
 private const val MAX_TRAFFIC_MAP_DRAW_DESTINATIONS = 60
 private const val MIN_TRAFFIC_MAP_RING_POINTS = 3
-private const val TRAFFIC_MAP_COUNTRIES_ASSET = "maps/ne_110m_admin_0_countries.geojson"
+private const val TRAFFIC_MAP_PREPROCESSED_COUNTRIES_ASSET = "maps/ne_110m_admin_0_countries_preprocessed.json"
+private const val TRAFFIC_MAP_COUNTRIES_GEOJSON_ASSET = "maps/ne_110m_admin_0_countries.geojson"
 private const val TRAFFIC_MAP_ANTARCTICA_COUNTRY_CODE = "AQ"
 private const val TRAFFIC_MAP_LOW_BATTERY_PERCENT = 10
-
-private val LargeCountryTrafficMapAnchors =
-    mapOf(
-        "AU" to listOf(-31.8 to 115.9, -25.4 to 133.8, -27.5 to 153.0),
-        "BR" to listOf(-23.5 to -46.6, -10.0 to -55.0, -3.1 to -60.0),
-        "CA" to listOf(49.3 to -123.1, 56.0 to -106.3, 45.5 to -73.6),
-        "CN" to listOf(43.8 to 87.6, 34.3 to 108.9, 39.9 to 116.4),
-        "ID" to listOf(-6.2 to 106.8, -2.5 to 118.0, -4.4 to 137.1),
-        "IN" to listOf(19.1 to 72.9, 22.6 to 79.0, 26.1 to 91.7),
-        "RU" to listOf(55.8 to 37.6, 56.8 to 84.9, 61.0 to 129.7),
-        "US" to listOf(37.8 to -122.4, 39.1 to -98.6, 40.7 to -74.0),
-    )
+private const val TRAFFIC_ROUTE_PI = 3.141592653589793
+private const val TRAFFIC_ROUTE_ANGLE_BUCKET_RADIANS = 0.17453292519943295

@@ -19,6 +19,8 @@ private fun FoxholeVpnService.runtimeWakeLock(): RuntimeWakeLock =
                 context = applicationContext,
                 diagnosticsLogger = container.diagnosticsLogger,
                 tag = "Foxhole:VpnRuntime",
+                scope = scope,
+                shouldRemainHeld = { activeSession != null || activeLocalGuardMode != null },
             )
         }
     }
