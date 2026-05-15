@@ -423,6 +423,7 @@ fun FoxholeApp(
                         onOpenExpert = { navController.navigate(AppRoute.EXPERT) },
                         onOpenDiagnostics = { navController.navigate(AppRoute.DIAGNOSTICS) },
                         onOpenStatistics = { navController.navigate(AppRoute.STATISTICS) },
+                        onUnlockExpertSettings = viewModel::unlockExpertSettings,
                     )
                 }
                 composable(AppRoute.SMART_START) {

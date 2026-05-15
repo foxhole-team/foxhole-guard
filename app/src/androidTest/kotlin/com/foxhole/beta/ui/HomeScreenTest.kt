@@ -260,12 +260,9 @@ class HomeScreenTest {
         assertSettingsHomeExpertActionDisplayed()
 
         composeRule.onNodeWithTag("settings_expert_action").performClick()
-        clickShowAdvancedSettingsSwitch()
+        composeRule.activityRule.scenario.onActivity { activity -> activity.onBackPressedDispatcher.onBackPressed() }
 
-        composeRule.activityRule.scenario.onActivity { activity ->
-            activity.onBackPressedDispatcher.onBackPressed()
-        }
-
+        setExpertSettingsVisible(visible = false)
         composeRule.onAllNodesWithTag("settings_expert_action").assertCountEquals(0)
         tapFooterVersionCardUntilUnlockDialog()
         composeRule.onNodeWithTag("confirm_dialog_confirm_button").performClick()
@@ -374,15 +371,6 @@ class HomeScreenTest {
         waitForSettingsHomeExpertActionVisible()
         composeRule.onNodeWithTag("settings_screen").performScrollToNode(hasTestTag("settings_expert_action"))
         composeRule.onNodeWithTag("settings_expert_action").assertIsDisplayed()
-    }
-
-    private fun clickShowAdvancedSettingsSwitch() {
-        val context = InstrumentationRegistry.getInstrumentation().targetContext
-        val title = context.getString(R.string.show_advanced_settings_title)
-        composeRule.waitUntil(timeoutMillis = 5_000) {
-            composeRule.onAllNodesWithText(title).fetchSemanticsNodes().isNotEmpty()
-        }
-        composeRule.onNodeWithText(title).assertIsDisplayed().performClick()
     }
 
     private fun setBlockScreenshots(enabled: Boolean) {

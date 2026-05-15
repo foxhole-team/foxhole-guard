@@ -120,6 +120,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.Date
 
+private const val EXPERT_UNLOCK_TAP_COUNT = 5
+
 @Suppress("LongParameterList")
 @Composable
 fun SettingsHomeScreen(
@@ -138,12 +140,15 @@ fun SettingsHomeScreen(
     onOpenExpert: () -> Unit,
     onOpenDiagnostics: () -> Unit,
     onOpenStatistics: () -> Unit,
+    onUnlockExpertSettings: () -> Unit,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val repositoryOpenFailed = stringResource(R.string.open_repository_failed)
     val supportChannelOpenFailed = stringResource(R.string.support_channel_open_failed)
     val expertVisible = state.settings.ui.showExpertSettings
+    var expertUnlockClickCount by rememberSaveable(expertVisible) { mutableStateOf(0) }
+    var expertUnlockConfirmVisible by rememberSaveable { mutableStateOf(false) }
     val onRepositoryClick = {
         if (!openFoxholeRepository(context)) {
             scope.launch {
@@ -161,6 +166,15 @@ fun SettingsHomeScreen(
                     supportChannelOpenFailed,
                     FoxholeBannerTone.ERROR,
                 )
+            }
+        }
+    }
+    val onVersionClick = {
+        if (!expertVisible) {
+            expertUnlockClickCount += 1
+            if (expertUnlockClickCount >= EXPERT_UNLOCK_TAP_COUNT) {
+                expertUnlockClickCount = 0
+                expertUnlockConfirmVisible = true
             }
         }
     }
@@ -188,7 +202,22 @@ fun SettingsHomeScreen(
             appVersion = state.appVersion,
             onRepositoryClick = onRepositoryClick,
             onSupportBotClick = onSupportBotClick,
-            onClick = {},
+            onClick = onVersionClick,
+        )
+    }
+    if (expertUnlockConfirmVisible) {
+        ConfirmDialog(
+            title = stringResource(R.string.expert_unlock_confirm_title),
+            body = stringResource(R.string.expert_unlock_confirm_body),
+            confirmLabel = stringResource(R.string.enable_label),
+            dismissLabel = stringResource(R.string.cancel),
+            icon = Icons.Outlined.Shield,
+            iconTint = MaterialTheme.colorScheme.primary,
+            onDismiss = { expertUnlockConfirmVisible = false },
+            onConfirm = {
+                expertUnlockConfirmVisible = false
+                onUnlockExpertSettings()
+            },
         )
     }
 }
