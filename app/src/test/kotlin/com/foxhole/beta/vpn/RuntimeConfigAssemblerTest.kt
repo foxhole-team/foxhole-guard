@@ -96,7 +96,7 @@ class RuntimeConfigAssemblerTest {
     }
 
     @Test
-    fun `system tun stack falls back to gvisor for non wireguard tunnel protocols`() {
+    fun `system tun stack stays system for non wireguard tunnel protocols`() {
         val config =
             parse(
                 assembler.assemble(
@@ -109,7 +109,7 @@ class RuntimeConfigAssemblerTest {
 
         val tun = config["inbounds"]!!.jsonArray.first().jsonObject
 
-        assertEquals("gvisor", tun["stack"]!!.jsonPrimitive.content)
+        assertEquals("system", tun["stack"]!!.jsonPrimitive.content)
     }
 
     @Test
@@ -127,6 +127,23 @@ class RuntimeConfigAssemblerTest {
         val tun = config["inbounds"]!!.jsonArray.first().jsonObject
 
         assertEquals("system", tun["stack"]!!.jsonPrimitive.content)
+    }
+
+    @Test
+    fun `explicit gvisor tun stack is preserved for wireguard tunnel protocols`() {
+        val config =
+            parse(
+                assembler.assemble(
+                    baseConfigJson = baseConfigWithRules("profile.example"),
+                    settings = Settings(traffic = TrafficSettings(tunStack = TunStack.GVISOR)),
+                    activePreset = null,
+                    vpnProtocolHint = ProtocolHint.WIREGUARD,
+                ),
+            )
+
+        val tun = config["inbounds"]!!.jsonArray.first().jsonObject
+
+        assertEquals("gvisor", tun["stack"]!!.jsonPrimitive.content)
     }
 
     @Test
@@ -203,7 +220,13 @@ class RuntimeConfigAssemblerTest {
             )
 
         val route = config["route"]!!.jsonObject
+        val tunInbound = config["inbounds"]!!.jsonArray.first().jsonObject
         assertEquals("proxy", route["final"]!!.jsonPrimitive.content)
+        assertEquals(
+            listOf("org.mozilla.firefox"),
+            tunInbound["include_package"]!!.jsonArray.map { it.jsonPrimitive.content },
+        )
+        assertFalse(tunInbound.containsKey("exclude_package"))
         val packageRules = route["rules"]!!.jsonArray.map { it.jsonObject }
             .filter { it["package_name"] != null && it["network"] != null }
         assertEquals(2, packageRules.size)

@@ -38,8 +38,6 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 class FoxholeProxyService : Service(), RuntimeServiceHost {
@@ -53,6 +51,13 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
             context = applicationContext,
             diagnosticsLogger = container.diagnosticsLogger,
             isNetworkActivityLoggingEnabled = { container.settingsRepository.settings.value.expert.networkActivityLogging },
+        )
+    }
+    private val commandActor by lazy {
+        RuntimeCommandActor(
+            scope = scope,
+            diagnosticsLogger = container.diagnosticsLogger,
+            emergencyKill = runtime::forceKill,
         )
     }
     private val runtimeWakeLock by lazy {
@@ -76,8 +81,6 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
     private var consecutiveNotificationHealthFailures = 0
     private var defaultNetworkAvailable = true
     private var lastDefaultNetworkSummary: String? = null
-    private val commandMutex = Mutex()
-    private var commandJob: Job? = null
     private var autoReconnectJob: Job? = null
     private var autoReconnectAttempts = 0
 
@@ -153,6 +156,7 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
         stopGeoRefresh()
         stopNotificationHealthMonitoring()
         cancelScheduledAutoReconnect(resetAttempts = true)
+        commandActor.close()
         stopRuntimeAfterServiceDestroy(
             runtime = runtime,
             diagnosticsLogger = container.diagnosticsLogger,
@@ -446,21 +450,11 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
     private fun ensureNotificationChannel() = ensureConnectionNotificationChannel(notificationManager)
 
     private fun launchCommand(block: suspend () -> Unit) {
-        commandJob = scope.launch(Dispatchers.Default) {
-            commandMutex.withLock {
-                block()
-            }
-        }
+        commandActor.launch(RuntimeCommandPriority.NORMAL, reason = "service_command", block = block)
     }
 
     private fun launchPriorityCommand(block: suspend () -> Unit) {
-        commandJob?.cancel()
-        commandJob =
-            scope.launch(Dispatchers.Default) {
-                commandMutex.withLock {
-                    block()
-                }
-            }
+        commandActor.launch(RuntimeCommandPriority.STOP, reason = "priority_service_command", block = block)
     }
 
     private fun scheduleAutoReconnect(reason: String) {

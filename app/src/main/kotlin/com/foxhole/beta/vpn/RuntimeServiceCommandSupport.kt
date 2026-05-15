@@ -44,6 +44,18 @@ internal fun handleRuntimeServiceCommand(
             launchPriorityCommand { disconnect(startId, suppressLocalGuard, preserveSmartStartAnalysis) }
         }
 
+        FoxholeConnectionServiceContract.ACTION_KILL,
+        FoxholeConnectionServiceContract.ACTION_KILL_TOR,
+        -> {
+            launchPriorityCommand {
+                disconnect(
+                    startId,
+                    true,
+                    false,
+                )
+            }
+        }
+
         FoxholeConnectionServiceContract.ACTION_RELOAD -> {
             val profileId = intent.getLongExtra(FoxholeConnectionServiceContract.EXTRA_PROFILE_ID, -1L)
             launchCommand { reload(profileId) }
@@ -74,7 +86,9 @@ internal fun handleRuntimeServiceCommand(
 }
 
 internal fun isPriorityRuntimeServiceCommand(action: String?): Boolean =
-    action == FoxholeConnectionServiceContract.ACTION_DISCONNECT
+    action == FoxholeConnectionServiceContract.ACTION_DISCONNECT ||
+        action == FoxholeConnectionServiceContract.ACTION_KILL ||
+        action == FoxholeConnectionServiceContract.ACTION_KILL_TOR
 
 internal fun isFailClosedRuntimeServiceCommand(action: String?): Boolean =
     action !in KNOWN_RUNTIME_SERVICE_ACTIONS
@@ -145,6 +159,8 @@ private val KNOWN_RUNTIME_SERVICE_ACTIONS =
     setOf(
         FoxholeConnectionServiceContract.ACTION_CONNECT,
         FoxholeConnectionServiceContract.ACTION_DISCONNECT,
+        FoxholeConnectionServiceContract.ACTION_KILL,
+        FoxholeConnectionServiceContract.ACTION_KILL_TOR,
         FoxholeConnectionServiceContract.ACTION_RELOAD,
         FoxholeConnectionServiceContract.ACTION_RESTORE,
         FoxholeConnectionServiceContract.ACTION_START_LOCAL_GUARD,

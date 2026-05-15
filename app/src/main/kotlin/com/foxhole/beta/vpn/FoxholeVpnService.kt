@@ -50,8 +50,6 @@ import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import java.net.DatagramPacket
@@ -80,6 +78,13 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
             isNetworkActivityLoggingEnabled = { container.settingsRepository.settings.value.expert.networkActivityLogging },
         )
     }
+    internal val commandActor by lazy {
+        RuntimeCommandActor(
+            scope = scope,
+            diagnosticsLogger = container.diagnosticsLogger,
+            emergencyKill = runtime::forceKill,
+        )
+    }
     internal val trafficSampler = TrafficStatsSampler()
     internal val anomalyTrafficAggregator = TrafficWindowAggregator()
     internal val anomalyNetworkTypeProvider by lazy { AndroidNetworkTypeProvider(applicationContext) }
@@ -106,8 +111,6 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
     internal var defaultNetworkAvailable = true
     internal var lastDefaultNetworkSummary: String? = null
     internal val upstreamNetworkHandles = mutableSetOf<Long>()
-    internal val commandMutex = Mutex()
-    internal var commandJob: Job? = null
 
     internal val networkCallback =
         object : ConnectivityManager.NetworkCallback() {
@@ -230,6 +233,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         cancelScheduledAutoReconnect(resetAttempts = true)
         validationJob?.cancel()
         validationJob = null
+        commandActor.close()
         stopRuntimeAfterServiceDestroy(
             runtime = runtime,
             diagnosticsLogger = container.diagnosticsLogger,
@@ -794,21 +798,11 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
     internal fun ensureNotificationChannel() = ensureConnectionNotificationChannel(notificationManager)
 
     internal fun launchCommand(block: suspend () -> Unit) {
-        commandJob = scope.launch(Dispatchers.Default) {
-            commandMutex.withLock {
-                block()
-            }
-        }
+        commandActor.launch(RuntimeCommandPriority.NORMAL, reason = "service_command", block = block)
     }
 
     internal fun launchPriorityCommand(block: suspend () -> Unit) {
-        commandJob?.cancel()
-        commandJob =
-            scope.launch(Dispatchers.Default) {
-                commandMutex.withLock {
-                    block()
-                }
-            }
+        commandActor.launch(RuntimeCommandPriority.STOP, reason = "priority_service_command", block = block)
     }
 
     internal fun stopService(commandStartId: Int?) {
@@ -1335,7 +1329,23 @@ internal interface VpnCoreRuntime {
 
     suspend fun reload(session: VpnSession, host: RuntimeServiceHost): Result<Unit>
 
-    suspend fun stop()
+    suspend fun stop(policy: RuntimeStopPolicy = RuntimeStopPolicy()): RuntimeStopResult
+
+    fun forceKill(reason: String): RuntimeKillResult =
+        RuntimeKillResult(
+            reason = reason,
+            tunClosed = true,
+            serverDetached = false,
+        )
+
+    fun nativeSnapshot(): NativeRuntimeSnapshot =
+        NativeRuntimeSnapshot(
+            hasCommandServer = false,
+            hasTunFileDescriptor = false,
+            hasHost = false,
+            hasConfig = false,
+            dnsServerAddress = null,
+        )
 
     fun currentDnsServerAddress(): String? = null
 
@@ -1359,7 +1369,14 @@ internal class PlaceholderVpnRuntime(
         return Result.failure(IllegalStateException(host.runtimeContext.getString(R.string.error_runtime_missing)))
     }
 
-    override suspend fun stop() {
+    override suspend fun stop(policy: RuntimeStopPolicy): RuntimeStopResult {
         diagnosticsLogger.record("runtime", "stop requested")
+        return RuntimeStopResult(
+            closeServiceOk = true,
+            closeServerOk = true,
+            tunClosed = true,
+            escalatedToKill = false,
+            elapsedMs = 0L,
+        )
     }
 }

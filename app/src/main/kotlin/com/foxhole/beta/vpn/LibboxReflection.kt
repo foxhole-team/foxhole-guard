@@ -118,6 +118,7 @@ internal class LibboxReflection(
                         defaultNetworkMonitor.bindSocketToDefaultNetwork(fd)
                     } else {
                         diagnosticsLogger.record("libbox", "protect upstream socket failed")
+                        error("android: protect upstream socket failed")
                     }
                     Unit
                 }

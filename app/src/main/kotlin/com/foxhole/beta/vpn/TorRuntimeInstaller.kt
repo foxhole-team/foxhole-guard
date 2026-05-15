@@ -3,6 +3,8 @@ package com.foxhole.beta.vpn
 import android.content.Context
 import android.os.Build
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.io.File
 
@@ -20,39 +22,51 @@ class TorRuntimeInstaller(
     context: Context,
 ) {
     private val appContext = context.applicationContext
+    private val installMutex = Mutex()
+    private var cachedPaths: TorRuntimePaths? = null
+    private var cachedVersion: String? = null
 
     suspend fun prepare(): TorRuntimePaths =
-        withContext(Dispatchers.IO) {
-            val assetAbi =
-                Build.SUPPORTED_ABIS
-                    .firstOrNull { abi -> torExecutableAssetName("tor/$abi") != null }
-                    ?: throw TorRuntimeUnavailableException("Tor Expert Bundle asset is missing for this device ABI")
-            val assetRoot = "tor/$assetAbi"
-            val targetRoot = File(appContext.filesDir, "tor/$assetAbi")
-            val assetVersion = readAssetText("$assetRoot/.version").orEmpty()
-            val targetVersion = File(targetRoot, ".version").takeIf(File::isFile)?.readText().orEmpty()
-            if (assetVersion != targetVersion || !targetRoot.isDirectory) {
-                targetRoot.deleteRecursively()
-                copyAssetTree(assetRoot, targetRoot)
+        installMutex.withLock {
+            withContext(Dispatchers.IO) {
+                val assetAbi =
+                    Build.SUPPORTED_ABIS
+                        .firstOrNull { abi -> torExecutableAssetName("tor/$abi") != null }
+                        ?: throw TorRuntimeUnavailableException("Tor Expert Bundle asset is missing for this device ABI")
+                val assetRoot = "tor/$assetAbi"
+                val targetRoot = File(appContext.filesDir, "tor/$assetAbi")
+                val assetVersion = readAssetText("$assetRoot/.version").orEmpty()
+                val targetVersion = File(targetRoot, ".version").takeIf(File::isFile)?.readText().orEmpty()
+                cachedPaths
+                    ?.takeIf { cachedVersion == assetVersion && assetVersion == targetVersion }
+                    ?.takeIf { paths -> paths.filesReady() }
+                    ?.let { return@withContext it }
+                if (assetVersion != targetVersion || !targetRoot.isDirectory) {
+                    targetRoot.deleteRecursively()
+                    copyAssetTree(assetRoot, targetRoot)
+                    markTorBundleExecutables(targetRoot)
+                }
+                val executable =
+                    nativeTorExecutable()
+                        ?: throw TorRuntimeUnavailableException("Tor native executable is missing for this device ABI")
+                if (!executable.isFile || !executable.ensureExecutable()) {
+                    throw TorRuntimeUnavailableException("Tor executable could not be prepared")
+                }
+                val dataDirectory = File(appContext.filesDir, "tor-data/$assetAbi").apply { mkdirs() }
+                val geoIpFile = copyTorDataFile(targetRoot, dataDirectory, "geoip")
+                val geoIpv6File = copyTorDataFile(targetRoot, dataDirectory, "geoip6")
+                val torrcDefaultsFile = writeRuntimeTorrcDefaults(targetRoot, dataDirectory)
+                TorRuntimePaths(
+                    executablePath = executable.absolutePath,
+                    dataDirectory = dataDirectory.absolutePath,
+                    geoIpFilePath = geoIpFile?.absolutePath,
+                    geoIpv6FilePath = geoIpv6File?.absolutePath,
+                    torrcDefaultsFilePath = torrcDefaultsFile?.absolutePath,
+                ).also { paths ->
+                    cachedPaths = paths
+                    cachedVersion = assetVersion
+                }
             }
-            markTorBundleExecutables(targetRoot)
-            val executable =
-                nativeTorExecutable()
-                    ?: throw TorRuntimeUnavailableException("Tor native executable is missing for this device ABI")
-            if (!executable.isFile || !executable.ensureExecutable()) {
-                throw TorRuntimeUnavailableException("Tor executable could not be prepared")
-            }
-            val dataDirectory = File(appContext.filesDir, "tor-data/$assetAbi").apply { mkdirs() }
-            val geoIpFile = copyTorDataFile(targetRoot, dataDirectory, "geoip")
-            val geoIpv6File = copyTorDataFile(targetRoot, dataDirectory, "geoip6")
-            val torrcDefaultsFile = writeRuntimeTorrcDefaults(targetRoot, dataDirectory)
-            TorRuntimePaths(
-                executablePath = executable.absolutePath,
-                dataDirectory = dataDirectory.absolutePath,
-                geoIpFilePath = geoIpFile?.absolutePath,
-                geoIpv6FilePath = geoIpv6File?.absolutePath,
-                torrcDefaultsFilePath = torrcDefaultsFile?.absolutePath,
-            )
         }
 
     private fun torExecutableAssetName(assetRoot: String): String? =
@@ -64,6 +78,13 @@ class TorRuntimeInstaller(
 
     private fun File.ensureExecutable(): Boolean =
         canExecute() || setExecutable(true, true)
+
+    private fun TorRuntimePaths.filesReady(): Boolean =
+        File(executablePath).isFile &&
+            File(dataDirectory).isDirectory &&
+            geoIpFilePath?.let { File(it).isFile } != false &&
+            geoIpv6FilePath?.let { File(it).isFile } != false &&
+            torrcDefaultsFilePath?.let { File(it).isFile } != false
 
     private fun markTorBundleExecutables(targetRoot: File) {
         TOR_EXECUTABLE_ASSET_NAMES.forEach { name ->
@@ -81,7 +102,7 @@ class TorRuntimeInstaller(
     ): File? {
         val source = findTorDataFile(targetRoot, name) ?: return null
         return File(dataDirectory, name)
-            .also { target -> source.copyTo(target, overwrite = true) }
+            .also { target -> source.copyToIfChanged(target) }
     }
 
     private fun writeRuntimeTorrcDefaults(
@@ -96,7 +117,7 @@ class TorRuntimeInstaller(
                 .mapNotNull { line -> normalizedTorrcDefaultsLine(line, transportRoot) }
                 .joinToString(separator = "\n", postfix = "\n")
         return File(dataDirectory, TORRC_DEFAULTS_FILE_NAME)
-            .also { target -> target.writeText(content) }
+            .also { target -> target.writeTextIfChanged(content) }
     }
 
     private fun normalizedTorrcDefaultsLine(
@@ -160,6 +181,22 @@ class TorRuntimeInstaller(
         children.forEach { child ->
             copyAssetTree("$assetPath/$child", File(target, child))
         }
+    }
+
+    private fun File.copyToIfChanged(target: File) {
+        target.parentFile?.mkdirs()
+        if (target.isFile && readBytes().contentEquals(target.readBytes())) {
+            return
+        }
+        copyTo(target, overwrite = true)
+    }
+
+    private fun File.writeTextIfChanged(content: String) {
+        parentFile?.mkdirs()
+        if (isFile && readText() == content) {
+            return
+        }
+        writeText(content)
     }
 
     private companion object {

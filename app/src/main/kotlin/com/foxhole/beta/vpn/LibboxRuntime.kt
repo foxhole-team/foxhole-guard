@@ -14,6 +14,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.ParcelFileDescriptor
+import android.os.SystemClock
 import android.util.Log
 import androidx.annotation.RequiresApi
 import androidx.core.content.getSystemService
@@ -22,14 +23,22 @@ import com.foxhole.beta.core.anomaly.DnsRuntimeStats
 import com.foxhole.beta.core.diagnostics.DiagnosticSanitizer
 import com.foxhole.beta.core.diagnostics.DiagnosticsLogger
 import com.foxhole.beta.core.model.VpnSession
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.net.InetAddress
 import java.net.NetworkInterface
+import java.util.concurrent.atomic.AtomicReference
 
 internal fun createVpnRuntime(
     context: Context,
     diagnosticsLogger: DiagnosticsLogger,
     isNetworkActivityLoggingEnabled: () -> Boolean,
 ): VpnCoreRuntime = ReflectiveLibboxRuntime(context, diagnosticsLogger, isNetworkActivityLoggingEnabled)
+
+private const val ANDROID_ROUTE_EXCLUDE_LIMIT = 512
 
 private fun sanitizedConfigFingerprint(configJson: String): String {
     val dnsLocal = "\"dns-local\""
@@ -61,10 +70,16 @@ private class ReflectiveLibboxRuntime(
 ) : VpnCoreRuntime {
     private val reflection = LibboxReflection(context, diagnosticsLogger, isNetworkActivityLoggingEnabled)
     private val defaultNetworkMonitor by lazy { DefaultNetworkMonitor(context, reflection, diagnosticsLogger) }
-    private var commandServer: Any? = null
-    private var fileDescriptor: ParcelFileDescriptor? = null
+    private val commandServerRef = AtomicReference<Any?>(null)
+    private val fileDescriptorRef = AtomicReference<ParcelFileDescriptor?>(null)
+
+    @Volatile
     private var currentConfig: String? = null
+
+    @Volatile
     private var currentHost: RuntimeServiceHost? = null
+
+    @Volatile
     private var currentDnsServerAddress: String? = null
 
     override suspend fun start(session: VpnSession, host: RuntimeServiceHost): Result<Unit> {
@@ -73,41 +88,50 @@ private class ReflectiveLibboxRuntime(
             if (!reflection.isAvailable()) {
                 error(host.runtimeContext.getString(com.foxhole.beta.R.string.error_runtime_missing))
             }
-            stop()
-            reflection.setupIfNeeded()
-            defaultNetworkMonitor.start()
-            currentHost = host
-            currentConfig = session.configJson
-            diagnosticsLogger.record("runtime", sanitizedConfigFingerprint(session.configJson))
-            val platform = reflection.platformProxy(host, defaultNetworkMonitor, ::openTun)
-            val handler =
-                reflection.commandServerHandlerProxy(
-                    onReload = {
-                        val config = currentConfig ?: return@commandServerHandlerProxy
-                        val server = commandServer ?: return@commandServerHandlerProxy
-                        reflection.startOrReloadService(server, config)
-                    },
-                    onStop = {
-                        diagnosticsLogger.record("libbox", "service stop requested")
-                        currentHost?.stopRuntimeService()
-                    },
-                    onDebug = { message ->
-                        message
-                            .trim()
-                            .takeIf(String::isNotBlank)
-                            ?.let {
-                                DnsRuntimeStats.recordLogMessage(it)
-                                diagnosticsLogger.record("libbox", it)
-                            }
-                    },
+            withContext(Dispatchers.IO) {
+                stop(
+                    RuntimeStopPolicy(
+                        closeServiceTimeoutMs = 500L,
+                        closeServerTimeoutMs = 500L,
+                        totalGracefulTimeoutMs = 1_000L,
+                        forceKillAfterTimeout = true,
+                    ),
                 )
-            newServer = reflection.newCommandServer(handler, platform)
-            reflection.startServer(newServer)
-            reflection.checkConfig(newServer, session.configJson)
-            reflection.startOrReloadService(newServer, session.configJson)
-            commandServer = newServer
-            newServer = null
-            diagnosticsLogger.record("libbox", "runtime started")
+                reflection.setupIfNeeded()
+                defaultNetworkMonitor.start()
+                currentHost = host
+                currentConfig = session.configJson
+                diagnosticsLogger.record("runtime", sanitizedConfigFingerprint(session.configJson))
+                val platform = reflection.platformProxy(host, defaultNetworkMonitor, ::openTun)
+                val handler =
+                    reflection.commandServerHandlerProxy(
+                        onReload = {
+                            val config = currentConfig ?: return@commandServerHandlerProxy
+                            val server = commandServerRef.get() ?: return@commandServerHandlerProxy
+                            reflection.startOrReloadService(server, config)
+                        },
+                        onStop = {
+                            diagnosticsLogger.record("libbox", "service stop requested")
+                            currentHost?.stopRuntimeService()
+                        },
+                        onDebug = { message ->
+                            message
+                                .trim()
+                                .takeIf(String::isNotBlank)
+                                ?.let {
+                                    DnsRuntimeStats.recordLogMessage(it)
+                                    diagnosticsLogger.record("libbox", it)
+                                }
+                        },
+                    )
+                newServer = reflection.newCommandServer(handler, platform)
+                reflection.startServer(newServer)
+                reflection.checkConfig(newServer, session.configJson)
+                reflection.startOrReloadService(newServer, session.configJson)
+                commandServerRef.set(newServer)
+                newServer = null
+                diagnosticsLogger.record("libbox", "runtime started")
+            }
             Result.success(Unit)
         } catch (error: Throwable) {
             cleanupFailedStart(newServer)
@@ -123,12 +147,14 @@ private class ReflectiveLibboxRuntime(
             if (!reflection.isAvailable()) {
                 error(host.runtimeContext.getString(com.foxhole.beta.R.string.error_runtime_missing))
             }
-            val server = commandServer ?: error("android: runtime is not running")
-            currentHost = host
-            currentConfig = session.configJson
-            diagnosticsLogger.record("runtime", "reload ${sanitizedConfigFingerprint(session.configJson)}")
-            reflection.checkConfig(server, session.configJson)
-            reflection.startOrReloadService(server, session.configJson)
+            val server = commandServerRef.get() ?: error("android: runtime is not running")
+            withContext(Dispatchers.IO) {
+                currentHost = host
+                currentConfig = session.configJson
+                diagnosticsLogger.record("runtime", "reload ${sanitizedConfigFingerprint(session.configJson)}")
+                reflection.checkConfig(server, session.configJson)
+                reflection.startOrReloadService(server, session.configJson)
+            }
             diagnosticsLogger.record("libbox", "runtime reloaded")
             Result.success(Unit)
         } catch (error: Throwable) {
@@ -138,30 +164,117 @@ private class ReflectiveLibboxRuntime(
             Result.failure(normalized)
         }
 
-    override suspend fun stop() {
-        val server = commandServer
-        commandServer = null
+    override suspend fun stop(policy: RuntimeStopPolicy): RuntimeStopResult =
+        withContext(Dispatchers.IO) {
+            val startedAt = SystemClock.elapsedRealtime()
+            diagnosticsLogger.recordStructured(
+                "runtime",
+                "stop requested",
+                "close_tun_first=${policy.closeTunFdImmediately}",
+                "total_timeout_ms=${policy.totalGracefulTimeoutMs}",
+            )
+            val server = commandServerRef.getAndSet(null)
+            currentConfig = null
+            currentHost = null
+            currentDnsServerAddress = null
+            val tunClosed =
+                if (policy.closeTunFdImmediately) {
+                    closeTunFdNow()
+                } else {
+                    fileDescriptorRef.get() == null
+                }
+            defaultNetworkMonitor.stop()
+
+            val closeServiceOk =
+                if (server == null) {
+                    true
+                } else {
+                    diagnosticsLogger.record("runtime", "close_service_start")
+                    runBlockingRuntimeClose(policy.closeServiceTimeoutMs) {
+                        reflection.closeService(server)
+                    }.also { ok ->
+                        diagnosticsLogger.record(
+                            "runtime",
+                            if (ok) "close_service_end" else "close_service_timeout",
+                        )
+                    }
+                }
+            val closeServerOk =
+                if (server == null) {
+                    true
+                } else {
+                    diagnosticsLogger.record("runtime", "close_server_start")
+                    runBlockingRuntimeClose(policy.closeServerTimeoutMs) {
+                        reflection.closeServer(server)
+                    }.also { ok ->
+                        diagnosticsLogger.record(
+                            "runtime",
+                            if (ok) "close_server_end" else "close_server_timeout",
+                        )
+                    }
+                }
+            val elapsedMs = SystemClock.elapsedRealtime() - startedAt
+            val shouldKill =
+                policy.forceKillAfterTimeout &&
+                    (!closeServiceOk || !closeServerOk || elapsedMs > policy.totalGracefulTimeoutMs)
+            if (shouldKill) {
+                diagnosticsLogger.recordStructured(
+                    "runtime",
+                    "force_kill_start",
+                    "reason=stop_timeout",
+                    "elapsed_ms=$elapsedMs",
+                )
+                forceKill("stop_timeout")
+                diagnosticsLogger.record("runtime", "force_kill_end")
+            }
+            RuntimeStopResult(
+                closeServiceOk = closeServiceOk,
+                closeServerOk = closeServerOk,
+                tunClosed = tunClosed,
+                escalatedToKill = shouldKill,
+                elapsedMs = elapsedMs,
+            )
+        }
+
+    override fun forceKill(reason: String): RuntimeKillResult {
+        val server = commandServerRef.getAndSet(null)
         currentConfig = null
         currentHost = null
         currentDnsServerAddress = null
         defaultNetworkMonitor.stop()
-        runCatching {
-            if (server != null) {
-                reflection.closeService(server)
-                reflection.closeServer(server)
+        val tunClosed = closeTunFdNow()
+        if (server != null) {
+            CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
+                runCatching { reflection.closeService(server) }
+                runCatching { reflection.closeServer(server) }
             }
-        }.onFailure {
-            diagnosticsLogger.record("libbox", "close failed")
         }
-        runCatching {
-            fileDescriptor?.close()
-        }
-        fileDescriptor = null
+        diagnosticsLogger.recordStructured(
+            "runtime",
+            "runtime force kill",
+            "reason=$reason",
+            "server_detached=${server != null}",
+            "tun_closed=$tunClosed",
+        )
+        return RuntimeKillResult(
+            reason = reason,
+            tunClosed = tunClosed,
+            serverDetached = server != null,
+        )
     }
+
+    override fun nativeSnapshot(): NativeRuntimeSnapshot =
+        NativeRuntimeSnapshot(
+            hasCommandServer = commandServerRef.get() != null,
+            hasTunFileDescriptor = fileDescriptorRef.get() != null,
+            hasHost = currentHost != null,
+            hasConfig = currentConfig != null,
+            dnsServerAddress = currentDnsServerAddress,
+        )
 
     override fun onDefaultNetworkAvailable() {
         defaultNetworkMonitor.dispatchListenerUpdate()
-        commandServer?.let {
+        commandServerRef.get()?.let {
             runCatching { reflection.resetNetwork(it) }
                 .onFailure { diagnosticsLogger.record("libbox", "reset network failed") }
         }
@@ -232,12 +345,22 @@ private class ReflectiveLibboxRuntime(
 
             val includePackages = reflection.collectStrings(reflection.call(tunOptions, "getIncludePackage"))
             if (includePackages.isNotEmpty()) {
+                recordPackageSplitDiagnostics(
+                    mode = "include",
+                    includePackages = includePackages,
+                    excludePackages = emptyList(),
+                )
                 addPackages(
                     packages = includePackages,
                     onPackage = { builder.addAllowedApplication(it) },
                 )
             } else {
                 val excludePackages = reflection.collectStrings(reflection.call(tunOptions, "getExcludePackage"))
+                recordPackageSplitDiagnostics(
+                    mode = if (excludePackages.isEmpty()) "full" else "exclude",
+                    includePackages = emptyList(),
+                    excludePackages = excludePackages,
+                )
                 addPackages(
                     packages = excludePackages,
                     onPackage = { builder.addDisallowedApplication(it) },
@@ -248,8 +371,8 @@ private class ReflectiveLibboxRuntime(
         addHttpProxy(builder, tunOptions)
 
         val pfd = builder.establish() ?: error("android: vpn establish failed")
-        fileDescriptor?.close()
-        fileDescriptor = pfd
+        runCatching { fileDescriptorRef.getAndSet(pfd)?.close() }
+            .onFailure { diagnosticsLogger.record("runtime", "previous tun fd close failed") }
         return pfd.fd
     }
 
@@ -296,8 +419,10 @@ private class ReflectiveLibboxRuntime(
         tunOptions: Any,
     ) {
         var hasIpv4Route = false
+        var includeRouteCount = 0
         reflection.forEachRoutePrefix(reflection.call(tunOptions, "getInet4RouteAddress")) { prefix ->
             hasIpv4Route = true
+            includeRouteCount += 1
             builder.addRoute(IpPrefix(InetAddress.getByName(prefix.address), prefix.prefix))
         }
         if (!hasIpv4Route) {
@@ -305,6 +430,7 @@ private class ReflectiveLibboxRuntime(
                 hasIpv4Route = true
             }
             if (hasIpv4Route) {
+                includeRouteCount += 1
                 builder.addRoute("0.0.0.0", 0)
             }
         }
@@ -312,6 +438,7 @@ private class ReflectiveLibboxRuntime(
         var hasIpv6Route = false
         reflection.forEachRoutePrefix(reflection.call(tunOptions, "getInet6RouteAddress")) { prefix ->
             hasIpv6Route = true
+            includeRouteCount += 1
             builder.addRoute(IpPrefix(InetAddress.getByName(prefix.address), prefix.prefix))
         }
         if (!hasIpv6Route) {
@@ -319,28 +446,52 @@ private class ReflectiveLibboxRuntime(
                 hasIpv6Route = true
             }
             if (hasIpv6Route) {
+                includeRouteCount += 1
                 builder.addRoute("::", 0)
             }
         }
 
+        val excludeRoutes = mutableListOf<ReflectedRoutePrefix>()
         reflection.forEachRoutePrefix(reflection.call(tunOptions, "getInet4RouteExcludeAddress")) { prefix ->
-            builder.excludeRoute(IpPrefix(InetAddress.getByName(prefix.address), prefix.prefix))
+            excludeRoutes += prefix
         }
         reflection.forEachRoutePrefix(reflection.call(tunOptions, "getInet6RouteExcludeAddress")) { prefix ->
+            excludeRoutes += prefix
+        }
+        val acceptedExcludeRoutes =
+            if (excludeRoutes.size <= ANDROID_ROUTE_EXCLUDE_LIMIT) {
+                excludeRoutes
+            } else {
+                diagnosticsLogger.recordStructured(
+                    "split",
+                    "VPN route split rejected",
+                    "api=${Build.VERSION.SDK_INT}",
+                    "include_routes=$includeRouteCount",
+                    "exclude_routes=${excludeRoutes.size}",
+                    "reason=exclude_route_limit",
+                )
+                emptyList()
+            }
+        acceptedExcludeRoutes.forEach { prefix ->
             builder.excludeRoute(IpPrefix(InetAddress.getByName(prefix.address), prefix.prefix))
         }
+        recordRoutePlanDiagnostics(includeRouteCount, acceptedExcludeRoutes.size, legacyMode = false)
     }
 
     private fun addRoutesLegacy(
         builder: VpnService.Builder,
         tunOptions: Any,
     ) {
+        var includeRouteCount = 0
         reflection.forEachRoutePrefix(reflection.call(tunOptions, "getInet4RouteRange")) { prefix ->
+            includeRouteCount += 1
             builder.addRoute(prefix.address, prefix.prefix)
         }
         reflection.forEachRoutePrefix(reflection.call(tunOptions, "getInet6RouteRange")) { prefix ->
+            includeRouteCount += 1
             builder.addRoute(prefix.address, prefix.prefix)
         }
+        recordRoutePlanDiagnostics(includeRouteCount, excludeRouteCount = 0, legacyMode = true)
     }
 
     private fun addPackages(
@@ -353,26 +504,73 @@ private class ReflectiveLibboxRuntime(
                     if (it !is PackageManager.NameNotFoundException) {
                         throw it
                     }
+                    diagnosticsLogger.recordStructured(
+                        "split",
+                        "VPN package skipped",
+                        "package=$packageName",
+                        "reason=not_installed",
+                    )
                 }
         }
     }
 
-    private fun cleanupFailedStart(newServer: Any?) {
+    private fun recordPackageSplitDiagnostics(
+        mode: String,
+        includePackages: List<String>,
+        excludePackages: List<String>,
+    ) {
+        diagnosticsLogger.recordStructured(
+            "split",
+            "VPN app split applied",
+            "mode=$mode",
+            "include_count=${includePackages.size}",
+            "exclude_count=${excludePackages.size}",
+            "include_hash=${includePackages.stablePackageHash()}",
+            "exclude_hash=${excludePackages.stablePackageHash()}",
+        )
+    }
+
+    private fun recordRoutePlanDiagnostics(
+        includeRouteCount: Int,
+        excludeRouteCount: Int,
+        legacyMode: Boolean,
+    ) {
+        diagnosticsLogger.recordStructured(
+            "split",
+            "VPN route split applied",
+            "api=${Build.VERSION.SDK_INT}",
+            "include_routes=$includeRouteCount",
+            "exclude_routes=$excludeRouteCount",
+            "legacy_route_mode=$legacyMode",
+        )
+    }
+
+    private suspend fun cleanupFailedStart(newServer: Any?) {
         runCatching {
             newServer?.let { server ->
-                runCatching { reflection.closeService(server) }
-                reflection.closeServer(server)
+                runBlockingRuntimeClose(500L) { reflection.closeService(server) }
+                runBlockingRuntimeClose(500L) { reflection.closeServer(server) }
             }
         }.onFailure {
             diagnosticsLogger.record("libbox", "failed-start server cleanup failed")
         }
-        runCatching { fileDescriptor?.close() }
-            .onFailure { diagnosticsLogger.record("libbox", "failed-start tun cleanup failed") }
-        fileDescriptor = null
+        closeTunFdNow()
         currentConfig = null
         currentHost = null
         currentDnsServerAddress = null
         defaultNetworkMonitor.stop()
+    }
+
+    private fun closeTunFdNow(): Boolean {
+        val descriptor = fileDescriptorRef.getAndSet(null) ?: return true
+        return runCatching {
+            descriptor.close()
+            diagnosticsLogger.record("runtime", "close_fd")
+            true
+        }.getOrElse {
+            diagnosticsLogger.record("runtime", "close_fd_failed")
+            false
+        }
     }
 
 }
@@ -582,3 +780,11 @@ private fun logRuntimeFailure(
         Log.e("FoxholeLibbox", DiagnosticSanitizer.sanitizeForExport("$message error=${error.javaClass.simpleName}"))
     }
 }
+
+private fun Iterable<String>.stablePackageHash(): Int =
+    map(String::trim)
+        .filter(String::isNotBlank)
+        .distinct()
+        .sorted()
+        .joinToString(separator = "|")
+        .hashCode()

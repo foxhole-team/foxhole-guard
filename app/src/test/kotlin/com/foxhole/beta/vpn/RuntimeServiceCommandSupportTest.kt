@@ -11,6 +11,8 @@ class RuntimeServiceCommandSupportTest {
     @Test
     fun `disconnect command is dispatched as priority teardown`() {
         assertTrue(isPriorityRuntimeServiceCommand(FoxholeConnectionServiceContract.ACTION_DISCONNECT))
+        assertTrue(isPriorityRuntimeServiceCommand(FoxholeConnectionServiceContract.ACTION_KILL))
+        assertTrue(isPriorityRuntimeServiceCommand(FoxholeConnectionServiceContract.ACTION_KILL_TOR))
     }
 
     @Test
@@ -28,6 +30,8 @@ class RuntimeServiceCommandSupportTest {
 
         assertFalse(isFailClosedRuntimeServiceCommand(FoxholeConnectionServiceContract.ACTION_CONNECT))
         assertFalse(isFailClosedRuntimeServiceCommand(FoxholeConnectionServiceContract.ACTION_DISCONNECT))
+        assertFalse(isFailClosedRuntimeServiceCommand(FoxholeConnectionServiceContract.ACTION_KILL))
+        assertFalse(isFailClosedRuntimeServiceCommand(FoxholeConnectionServiceContract.ACTION_KILL_TOR))
         assertFalse(isFailClosedRuntimeServiceCommand(FoxholeConnectionServiceContract.ACTION_RELOAD))
         assertFalse(isFailClosedRuntimeServiceCommand(FoxholeConnectionServiceContract.ACTION_RESTORE))
         assertFalse(isFailClosedRuntimeServiceCommand(FoxholeConnectionServiceContract.ACTION_START_LOCAL_GUARD))

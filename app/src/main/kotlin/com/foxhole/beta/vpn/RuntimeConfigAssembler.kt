@@ -54,6 +54,28 @@ class RuntimeConfigAssembler(
         val expert: ExpertSettings,
     )
 
+    private data class RuntimeSplitPlan(
+        val vpnMode: VpnAppSelectionMode,
+        val vpnIncludedPackages: List<String>,
+        val vpnExcludedPackages: List<String>,
+        val torAllApps: Boolean,
+        val torTcpPackages: List<String>,
+        val torUdpBlockedPackages: List<String>,
+        val blockedPackages: List<String>,
+        val directPackages: List<String> = emptyList(),
+        val warnings: List<SplitWarning> = emptyList(),
+    )
+
+    private enum class VpnAppSelectionMode {
+        FULL_DEVICE,
+        INCLUDE_ONLY,
+        EXCLUDE_SELECTED,
+    }
+
+    private enum class SplitWarning {
+        TOR_SELECTED_APPS_FORCE_TUN_INCLUDE,
+    }
+
     fun assemble(
         baseConfigJson: String,
         settings: Settings,
@@ -208,6 +230,7 @@ class RuntimeConfigAssembler(
         val tunInbound = base["inbounds"]?.jsonArray?.firstOrNull { it.jsonObject["type"]?.jsonPrimitive?.content == "tun" }?.jsonObject
             ?: error("base config must define a tun inbound")
         val privacyRouteActive = settings.isTorPrivacyRouteActive(vpnProtocolHint)
+        val splitPlan = buildSplitPlan(settings, privacyRouteActive)
         val runtimeBase =
             base
                 .withTcpReliabilityOutbounds()
@@ -221,8 +244,9 @@ class RuntimeConfigAssembler(
                 traffic = settings.traffic,
                 dnsSettings = settings.dns,
                 expert = settings.expert,
+                splitPlan = splitPlan,
                 mtu = effectiveTunMtu(runtimeBase, settings.traffic.mtu),
-                stack = effectiveTunnelTunStack(settings.traffic.tunStack, vpnProtocolHint),
+                stack = effectiveTunnelTunStack(settings.traffic.tunStack),
             )
         val inbounds =
             buildJsonArray {
@@ -248,6 +272,7 @@ class RuntimeConfigAssembler(
                 settings = settings,
                 dnsFilterRuntimePaths = dnsFilterRuntimePaths,
                 privacyRouteActive = privacyRouteActive,
+                splitPlan = splitPlan,
             )
         val patchedExperimental =
             patchExperimental(
@@ -436,11 +461,12 @@ class RuntimeConfigAssembler(
         traffic: TrafficSettings,
         dnsSettings: DnsSettings,
         expert: ExpertSettings,
+        splitPlan: RuntimeSplitPlan,
         mtu: Int,
         stack: TunStack,
     ): JsonObject {
-        val includePackages = expert.vpnIncludedPackages()
-        val excludePackages = expert.vpnExcludedPackages()
+        val includePackages = splitPlan.vpnIncludedPackages
+        val excludePackages = splitPlan.vpnExcludedPackages
         return buildJsonObject {
             tunInbound.forEach { (key, value) ->
                 when (key) {
@@ -489,13 +515,59 @@ class RuntimeConfigAssembler(
 
     private fun effectiveTunnelTunStack(
         configured: TunStack,
-        protocolHint: ProtocolHint?,
-    ): TunStack =
-        when {
-            configured != TunStack.SYSTEM -> configured
-            protocolHint?.isUdpTransport() == true -> configured
-            else -> TunStack.GVISOR
-        }
+    ): TunStack = configured
+
+    private fun buildSplitPlan(
+        settings: Settings,
+        privacyRouteActive: Boolean,
+    ): RuntimeSplitPlan {
+        val blockedPackages =
+            normalizedRuntimePackages(
+                settings.expert.blockedPackages.takeIf { settings.expert.blockedPackagesEnabled }.orEmpty(),
+            )
+        val selectedTorPackages =
+            if (privacyRouteActive && settings.privacyRoute.scope == PrivacyRouteScope.SELECTED_APPS) {
+                normalizedRuntimePackages(settings.privacyRoute.selectedPackages)
+            } else {
+                emptyList()
+            }
+        val torAllApps = privacyRouteActive && settings.privacyRoute.scope == PrivacyRouteScope.ALL_APPS
+        val baseIncluded = settings.expert.vpnIncludedPackages()
+        val baseExcluded = settings.expert.vpnExcludedPackages()
+        val includePackages =
+            if (selectedTorPackages.isNotEmpty()) {
+                normalizedRuntimePackages(selectedTorPackages + blockedPackages)
+            } else {
+                baseIncluded
+            }
+        val excludePackages =
+            if (selectedTorPackages.isNotEmpty()) {
+                emptyList()
+            } else {
+                baseExcluded
+            }
+        val vpnMode =
+            when {
+                includePackages.isNotEmpty() -> VpnAppSelectionMode.INCLUDE_ONLY
+                excludePackages.isNotEmpty() -> VpnAppSelectionMode.EXCLUDE_SELECTED
+                else -> VpnAppSelectionMode.FULL_DEVICE
+            }
+        return RuntimeSplitPlan(
+            vpnMode = vpnMode,
+            vpnIncludedPackages = includePackages,
+            vpnExcludedPackages = excludePackages,
+            torAllApps = torAllApps,
+            torTcpPackages = selectedTorPackages,
+            torUdpBlockedPackages = selectedTorPackages,
+            blockedPackages = blockedPackages,
+            warnings =
+                if (selectedTorPackages.isNotEmpty()) {
+                    listOf(SplitWarning.TOR_SELECTED_APPS_FORCE_TUN_INCLUDE)
+                } else {
+                    emptyList()
+                },
+        )
+    }
 
     private fun localGuardTunInbound(
         settings: Settings,
@@ -735,6 +807,7 @@ class RuntimeConfigAssembler(
         }
     }
 
+    @Suppress("CyclomaticComplexMethod")
     private fun patchRoute(
         existing: JsonObject?,
         dns: JsonObject,
@@ -742,6 +815,7 @@ class RuntimeConfigAssembler(
         settings: Settings,
         dnsFilterRuntimePaths: DnsFilterRuntimePaths?,
         privacyRouteActive: Boolean,
+        splitPlan: RuntimeSplitPlan,
     ): JsonObject {
         val expert = settings.expert
         val source = existing ?: buildJsonObject {}
@@ -761,7 +835,7 @@ class RuntimeConfigAssembler(
         val appRules = buildAppRouteRules(expert)
         val privacyRouteRules =
             if (privacyRouteActive) {
-                buildTorPrivacyRouteRules(settings)
+                buildTorPrivacyRouteRules(splitPlan)
             } else {
                 emptyList()
             }
@@ -806,7 +880,7 @@ class RuntimeConfigAssembler(
             ruleSets?.let { put("rule_set", it) }
             put(
                 "final",
-                if (privacyRouteActive && settings.privacyRoute.scope == PrivacyRouteScope.ALL_APPS) {
+                if (splitPlan.torAllApps) {
                     TOR_OVER_VPN_OUTBOUND_TAG
                 } else {
                     tunnelFinalOutbound(source)
@@ -871,18 +945,25 @@ class RuntimeConfigAssembler(
     }
 
     private fun buildTorPrivacyRouteRules(settings: Settings): List<JsonObject> =
-        when (settings.privacyRoute.scope) {
-            PrivacyRouteScope.ALL_APPS ->
-                listOf(udpBlockRule())
-            PrivacyRouteScope.SELECTED_APPS ->
-                normalizedRuntimePackages(settings.privacyRoute.selectedPackages)
-                    .takeIf(List<String>::isNotEmpty)
-                    ?.let { packages ->
-                        listOf(
-                            packageNetworkRouteRule(packages, network = "udp", outboundTag = "block"),
-                            packageNetworkRouteRule(packages, network = "tcp", outboundTag = TOR_OVER_VPN_OUTBOUND_TAG),
-                        )
-                    }.orEmpty()
+        buildTorPrivacyRouteRules(buildSplitPlan(settings, privacyRouteActive = settings.privacyRoute.enabled))
+
+    private fun buildTorPrivacyRouteRules(splitPlan: RuntimeSplitPlan): List<JsonObject> =
+        when {
+            splitPlan.torAllApps -> listOf(udpBlockRule())
+            splitPlan.torTcpPackages.isNotEmpty() ->
+                listOf(
+                    packageNetworkRouteRule(
+                        splitPlan.torUdpBlockedPackages,
+                        network = "udp",
+                        outboundTag = "block",
+                    ),
+                    packageNetworkRouteRule(
+                        splitPlan.torTcpPackages,
+                        network = "tcp",
+                        outboundTag = TOR_OVER_VPN_OUTBOUND_TAG,
+                    ),
+                )
+            else -> emptyList()
         }
 
     private fun udpBlockRule(): JsonObject =

@@ -11,6 +11,8 @@ import com.foxhole.beta.core.model.TrafficMode
 internal object FoxholeConnectionServiceContract {
     const val ACTION_CONNECT = "com.foxhole.beta.action.CONNECT"
     const val ACTION_DISCONNECT = "com.foxhole.beta.action.DISCONNECT"
+    const val ACTION_KILL = "com.foxhole.beta.action.KILL"
+    const val ACTION_KILL_TOR = "com.foxhole.beta.action.KILL_TOR"
     const val ACTION_RELOAD = "com.foxhole.beta.action.RELOAD"
     const val ACTION_RESTORE = "com.foxhole.beta.action.RESTORE"
     const val ACTION_START_LOCAL_GUARD = "com.foxhole.beta.action.START_LOCAL_GUARD"
@@ -103,8 +105,24 @@ internal object FoxholeConnectionServiceContract {
         preserveSmartStartAnalysis: Boolean = false,
     ): Intent =
         when (action) {
-            ACTION_CONNECT -> connectIntent(context, mode, requireNotNull(profileId), protocolOptionId, previousVpnNetworkHandle)
+            ACTION_CONNECT ->
+                connectIntent(
+                    context,
+                    mode,
+                    requireNotNull(profileId),
+                    protocolOptionId,
+                    previousVpnNetworkHandle,
+                )
             ACTION_DISCONNECT -> disconnectIntent(context, mode, suppressLocalGuard, preserveSmartStartAnalysis)
+            ACTION_KILL,
+            ACTION_KILL_TOR,
+            ->
+                disconnectIntent(
+                    context,
+                    mode,
+                    suppressLocalGuard = true,
+                    preserveSmartStartAnalysis = false,
+                ).setAction(action)
             ACTION_RELOAD -> reloadIntent(context, mode, profileId)
             ACTION_RESTORE -> restoreIntent(context, mode)
             ACTION_START_LOCAL_GUARD -> localGuardIntent(context, requireNotNull(localGuardMode))
@@ -143,11 +161,21 @@ internal object FoxholeConnectionServiceContract {
     ) {
         TrafficMode.entries
             .filterNot { it == activeMode }
-            .forEach { mode -> context.stopService(Intent(context, serviceClass(mode))) }
+            .forEach { mode ->
+                ContextCompat.startForegroundService(
+                    context,
+                    Intent(context, serviceClass(mode)).setAction(ACTION_KILL),
+                )
+            }
     }
 
     fun stopAllServices(context: Context) {
-        TrafficMode.entries.forEach { mode -> context.stopService(Intent(context, serviceClass(mode))) }
+        TrafficMode.entries.forEach { mode ->
+            ContextCompat.startForegroundService(
+                context,
+                Intent(context, serviceClass(mode)).setAction(ACTION_KILL),
+            )
+        }
     }
 }
 

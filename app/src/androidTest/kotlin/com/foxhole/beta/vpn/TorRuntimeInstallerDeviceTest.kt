@@ -11,6 +11,7 @@ import java.io.File
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import org.junit.Assume.assumeTrue
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -89,6 +90,23 @@ class TorRuntimeInstallerDeviceTest {
             } finally {
                 runCatching { reflection.closeServer(server) }
             }
+        }
+    }
+
+    @Test
+    fun prepareIsIdempotentForInstalledTorBundle() {
+        runBlocking {
+            val context = ApplicationProvider.getApplicationContext<FoxholeApplication>()
+            val installer = TorRuntimeInstaller(context)
+            val first = installer.prepare()
+            val abi = File(first.dataDirectory).name
+            val sentinel = File(context.filesDir, "tor/$abi/.prepare-sentinel").apply { writeText("keep") }
+
+            val second = installer.prepare()
+
+            assertEquals(first, second)
+            assertTrue(sentinel.isFile)
+            assertEquals("keep", sentinel.readText())
         }
     }
 
