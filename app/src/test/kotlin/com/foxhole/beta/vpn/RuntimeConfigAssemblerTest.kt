@@ -483,11 +483,17 @@ class RuntimeConfigAssemblerTest {
         assertEquals(listOf("direct", "block"), outbounds)
         assertEquals("dns-direct", dns["final"]!!.jsonPrimitive.content)
         assertEquals("dns-direct", route["default_domain_resolver"]!!.jsonPrimitive.content)
-        assertEquals("block", route["final"]!!.jsonPrimitive.content)
+        assertEquals("direct", route["final"]!!.jsonPrimitive.content)
         assertEquals(false, tunInbound["strict_route"]!!.jsonPrimitive.content.toBoolean())
         assertFalse(dnsServers.any { server -> server["tag"]!!.jsonPrimitive.content == "dns-remote" })
         assertFalse(dnsServers.any { server -> server["detour"]?.jsonPrimitive?.content == "proxy" })
         assertEquals("org.mozilla.firefox", tunInbound["include_package"]!!.jsonArray.single().jsonPrimitive.content)
+        assertTrue(
+            route["rules"]!!.jsonArray.map { it.jsonObject }.any { rule ->
+                rule["package_name"]?.jsonArray?.single()?.jsonPrimitive?.content == "org.mozilla.firefox" &&
+                    rule["outbound"]?.jsonPrimitive?.content == "block"
+            },
+        )
     }
 
     @Test
@@ -513,7 +519,13 @@ class RuntimeConfigAssemblerTest {
         )
         assertFalse(tunInbound.containsKey("exclude_package"))
         assertEquals(false, tunInbound["strict_route"]!!.jsonPrimitive.content.toBoolean())
-        assertEquals("block", route["final"]!!.jsonPrimitive.content)
+        assertEquals("direct", route["final"]!!.jsonPrimitive.content)
+        assertTrue(
+            route["rules"]!!.jsonArray.map { it.jsonObject }.any { rule ->
+                rule["package_name"]?.jsonArray?.single()?.jsonPrimitive?.content == "org.mozilla.firefox" &&
+                    rule["outbound"]?.jsonPrimitive?.content == "block"
+            },
+        )
     }
 
     @Test

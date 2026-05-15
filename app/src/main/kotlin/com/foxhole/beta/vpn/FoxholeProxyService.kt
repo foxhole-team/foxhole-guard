@@ -292,6 +292,7 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
         runtime.stop()
         runtimeWakeLock.release()
         activeSession = null
+        RuntimeResumeStateStore.clear(this)
         container.connectionController.clearAppliedRuntime()
         FoxholeVpnRuntimeBridge.updateTraffic(trafficSampler.reset())
         FoxholeVpnRuntimeBridge.clearTransientState(clearIpInfo = true)
@@ -352,6 +353,7 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
         runtime.stop()
         runtimeWakeLock.release()
         activeSession = null
+        RuntimeResumeStateStore.clear(this)
         val failClosedMessage =
             if (action == ACTION_NATIVE_RUNTIME_STOP && hadActiveRuntime) {
                 getString(R.string.error_runtime_stopped)
@@ -955,6 +957,7 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
         val previousSnapshot = FoxholeVpnRuntimeBridge.snapshot.value
         val analysisStatus = getString(R.string.notification_status_analysis)
         resetAutoReconnectState()
+        RuntimeResumeStateStore.markProfileRuntime(this, TrafficMode.PROXY, session)
         if (trafficJob == null) {
             trafficSampler.start()
             startTrafficUpdates()

@@ -1212,6 +1212,7 @@ internal fun FoxholeVpnService.onConnectionStartedInternal(
     val previousSnapshot = FoxholeVpnRuntimeBridge.snapshot.value
     val analysisStatus = getString(R.string.notification_status_analysis)
     resetAutoReconnectState()
+    RuntimeResumeStateStore.markProfileRuntime(this, trafficMode, session)
     if (trafficJob == null) {
         trafficSampler.start()
         startTrafficUpdates()

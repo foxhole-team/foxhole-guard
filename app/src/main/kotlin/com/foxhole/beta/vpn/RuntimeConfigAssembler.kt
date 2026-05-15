@@ -111,14 +111,12 @@ class RuntimeConfigAssembler(
                         if (settings.expert.systemDnsProtectionEnabled || mode == LocalGuardMode.JOURNAL) {
                             hijackDnsRules().forEach(::add)
                         }
-                        if (mode == LocalGuardMode.JOURNAL) {
-                            if (settings.expert.blockAppsAlways) {
-                                buildAppRouteRules(settings.expert).forEach(::add)
-                            }
+                        if (mode != LocalGuardMode.DNS && settings.expert.blockAppsAlways) {
+                            buildAppRouteRules(settings.expert).forEach(::add)
                         }
                     }
                 put("rules", rules)
-                put("final", if (mode == LocalGuardMode.FIREWALL) "block" else "direct")
+                put("final", "direct")
                 val defaultResolver =
                     if (settings.expert.systemDnsProtectionEnabled) {
                         DNS_REMOTE_TAG

@@ -470,6 +470,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         releaseRuntimeWakeLock()
         activeSession = null
         activeLocalGuardMode = null
+        RuntimeResumeStateStore.clear(this)
         container.connectionController.clearAppliedRuntime()
         FoxholeVpnRuntimeBridge.updateTraffic(trafficSampler.reset())
         FoxholeVpnRuntimeBridge.clearTransientState(clearIpInfo = true)
@@ -581,6 +582,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
                 ),
             )
             container.diagnosticsLogger.record("connection", "local guard started mode=${mode.name.lowercase()}")
+            RuntimeResumeStateStore.markLocalGuardRuntime(this, mode)
             updateNotification()
         } else {
             activeLocalGuardMode = null
@@ -642,6 +644,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         releaseRuntimeWakeLock()
         activeSession = null
         activeLocalGuardMode = null
+        RuntimeResumeStateStore.clear(this)
         val failClosedMessage =
             if (action == ACTION_NATIVE_RUNTIME_STOP && hadActiveRuntime) {
                 getString(R.string.error_runtime_stopped)
