@@ -42,6 +42,20 @@ data class AutoConnectUiState(
     val options: List<AutoConnectProbeOptionUiState> = emptyList(),
 )
 
+enum class HomeTorOperationKind {
+    NONE,
+    CONNECTING,
+    CHANGING_LOCATION,
+}
+
+data class HomeTorOperationUiState(
+    val kind: HomeTorOperationKind = HomeTorOperationKind.NONE,
+    val startedAt: Long = 0L,
+) {
+    val active: Boolean
+        get() = kind != HomeTorOperationKind.NONE
+}
+
 data class HomeRouteUiState(
     val profilesLoaded: Boolean = false,
     val activeProfile: Profile? = null,
@@ -55,6 +69,7 @@ data class HomeRouteUiState(
     val traffic: TrafficSnapshot = TrafficSnapshot(),
     val reconnectRequired: Boolean = false,
     val reconnectInProgress: Boolean = false,
+    val torOperation: HomeTorOperationUiState = HomeTorOperationUiState(),
     val profileReconnectPromptUntilElapsedMs: Long = 0L,
     val selectedProtocolLatencyMs: Long? = null,
     val selectedProtocolLatencyUnavailable: Boolean = false,
@@ -164,6 +179,7 @@ internal fun HomeUiState.toHomeRouteUiState(
         traffic = traffic,
         reconnectRequired = reconnectRequired,
         reconnectInProgress = reconnectInProgress,
+        torOperation = torOperation,
         profileReconnectPromptUntilElapsedMs = profileReconnectPromptUntilElapsedMs,
         selectedProtocolLatencyMs = selectedProtocolLatencyMs,
         selectedProtocolLatencyUnavailable = selectedProtocolLatencyUnavailable,

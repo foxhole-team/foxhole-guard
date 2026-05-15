@@ -170,20 +170,18 @@ fun HomeScreen(
         ) {
             buildList {
                 add(HomeModeOption.TUNNEL)
-                if (
-                    state.settings.expert.perAppRoutingMode != PerAppRoutingMode.FULL_TUNNEL &&
-                    state.settings.expert.selectedPackages.isNotEmpty()
-                ) {
-                    add(HomeModeOption.SPLIT)
-                }
+                add(HomeModeOption.SPLIT)
                 add(HomeModeOption.PROXY)
             }
         }
     val darkTheme = MaterialTheme.colorScheme.background.luminance() < 0.3f
     val autoTone = foxholeSystemAwareAccentColor(fallback = MaterialTheme.colorScheme.primary)
+    val torOperationTone = Color(0xFFE89B3C)
     val topStatusState = homeTopStatusState(state)
     val statusTone =
-        if (state.autoConnect.running || state.reconnectInProgress) {
+        if (state.torOperation.active) {
+            torOperationTone
+        } else if (state.autoConnect.running || state.reconnectInProgress) {
             autoTone
         } else {
             homeStatusTone(state.connection.state)
@@ -459,7 +457,7 @@ fun HomeScreen(
                                                 label = homeStatusLabel(state, topStatusState),
                                                 textStyle = MaterialTheme.typography.titleMedium,
                                                 accentColor = statusTone,
-                                                loading = topStatusState == ConnectionState.RECONNECTING,
+                                                loading = state.torOperation.active || topStatusState == ConnectionState.RECONNECTING,
                                                 smartMarker =
                                                     state.connection.isSmartStartConnection &&
                                                         topStatusState in setOf(

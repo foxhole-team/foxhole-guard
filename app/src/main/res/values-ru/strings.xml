@@ -7,6 +7,8 @@
     <string name="home_status_connected">Подключен</string>
     <string name="home_status_not_connected">Отключен</string>
     <string name="home_status_analysis">Анализ</string>
+    <string name="home_status_tor_changing_location">Смена местоположения TOR сети</string>
+    <string name="home_status_tor_connecting">Подключение к сети TOR</string>
     <string name="home_network_title">Сеть</string>
     <string name="home_traffic_title">Трафик</string>
     <string name="home_session_traffic_title">Текущая сессия</string>
@@ -174,6 +176,7 @@
     <string name="notification_body_journal">Сетевая активность пишется локально.</string>
     <string name="notification_body_dns_guard">Системные DNS направлены через AdGuard DNS.</string>
     <string name="unknown_country">Местоположение не определено</string>
+    <string name="unknown_city">Город не определен</string>
     <string name="expert_warning_body">Эти настройки меняют маршрутизацию и локальные интерфейсы. Включайте их только если понимаете последствия.</string>
     <string name="block_screenshots_title">Запретить скриншоты</string>
     <string name="block_screenshots_summary">Защищает окно приложения и превью в списке недавних.</string>
@@ -976,6 +979,12 @@
     <string name="privacy_route_udp_modal_body">Для включения маршрута в сеть TOR сначала переключите активный VPN-протокол на TCP. UDP-протоколы вроде Hysteria2 или WireGuard не переносят TOR-over-VPN маршруты.</string>
     <string name="privacy_route_modal_ready_body">Маршрутизация TOR запустится внутри активного VPN после включения маршрута и обновления соединения.</string>
     <string name="privacy_route_modal_current_ip">Текущий TOR IP</string>
+    <string name="privacy_route_modal_in_progress">В процессе</string>
+    <string name="privacy_route_modal_log_changing_ip">Запрашиваем новый выходной маршрут TOR через hot reload sing-box. VPN-интерфейс остается активным, IP TOR обновится после проверки.</string>
+    <string name="privacy_route_modal_log_connecting">Готовим TOR outbound и применяем маршрут через sing-box. VPN-интерфейс не закрывается; после bootstrap FoxHole обновит TOR IP.</string>
+    <string name="privacy_route_modal_log_tor_only_connected">TOR-only tunnel активен. Трафик устройства идет через локальный TOR outbound.</string>
+    <string name="privacy_route_modal_log_connected">TOR route активен внутри текущего VPN runtime. Выбранный TCP-трафик идет через локальный TOR outbound.</string>
+    <string name="privacy_route_connected_banner">TOR подключен: %1$s, %2$s</string>
     <string name="privacy_route_modal_connection_time">Время подключения</string>
     <string name="privacy_route_modal_routing">Маршрутизация в TOR</string>
     <string name="privacy_route_modal_route_all">Все приложения</string>
@@ -1005,6 +1014,9 @@
     <string name="firewall_modal_persistent_block">Блокировать всегда</string>
     <string name="firewall_modal_statistics">Сбор статистики</string>
     <string name="firewall_modal_statistics_enabled">Приложения, страны, аномалии</string>
+    <string name="firewall_modal_app_statistics">Сбор статистики приложений</string>
+    <string name="firewall_modal_country_statistics">Сбор статистики стран</string>
+    <string name="firewall_modal_anomaly_statistics">Сбор статистики аномалий</string>
     <string name="privacy_route_selected_apps_empty">Приложения TOR не выбраны</string>
     <string name="block_ads_title">Block ads</string>
     <string name="block_telemetry_title">Block telemetry</string>

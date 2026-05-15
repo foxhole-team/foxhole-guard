@@ -39,6 +39,7 @@ data class HomeUiState(
     val installedAppsLoaded: Boolean = false,
     val reconnectRequired: Boolean = false,
     val reconnectInProgress: Boolean = false,
+    val torOperation: HomeTorOperationUiState = HomeTorOperationUiState(),
     val profileReconnectPromptUntilElapsedMs: Long = 0L,
     val diagnosticEntries: List<DiagnosticEntry> = emptyList(),
     val anomalyEvents: List<AnomalyEvent> = emptyList(),
@@ -84,6 +85,7 @@ internal data class HomeLocalStreams(
     val ipInfoLoading: Boolean,
     val dashboardConnectionMetricsLoading: Boolean,
     val runtimeReloadPending: Boolean,
+    val torOperation: HomeTorOperationUiState,
     val catalogPresetPreviews: Map<Long, List<RoutingRepository.RoutingCatalogPresetPreview>>,
     val appliedRuntimeSignature: Int?,
 )
@@ -103,6 +105,7 @@ internal data class HomeLocalState(
 
 internal data class HomeTrailingLocalState(
     val runtimeReloadPending: Boolean,
+    val torOperation: HomeTorOperationUiState = HomeTorOperationUiState(),
     val catalogPresetPreviews: Map<Long, List<RoutingRepository.RoutingCatalogPresetPreview>>,
     val startupActiveProfile: Profile?,
     val appliedRuntimeSignature: Int?,

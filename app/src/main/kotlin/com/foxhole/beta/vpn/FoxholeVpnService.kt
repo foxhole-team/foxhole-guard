@@ -765,7 +765,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
             expandedText = ::notificationExpandedText,
             stateLabel = ::notificationStateLabel,
             smallIconRes = notificationSmallIconRes(snapshot),
-            showAction = true,
+            showAction = activeLocalGuardMode == null,
         )
 
     internal fun updateNotification() {

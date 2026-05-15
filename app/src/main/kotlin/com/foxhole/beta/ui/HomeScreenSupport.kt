@@ -768,8 +768,11 @@ internal fun HomeConnectionFeatureDialog(
         }
     val torSelectedProtocolIsUdp = feature == HomeConnectionFeature.TOR && homeTorSelectedProtocolIsUdp(state)
     val confirmEnabled = !(feature == HomeConnectionFeature.TOR && torSelectedProtocolIsUdp && !enabled)
+    val torOperationActive = feature == HomeConnectionFeature.TOR && state.torOperation.active
     val confirmLabel =
-        if (restartAvailable) {
+        if (torOperationActive && enabled) {
+            stringResource(R.string.cancel)
+        } else if (restartAvailable) {
             stringResource(R.string.reconnect)
         } else {
             stringResource(
@@ -800,7 +803,6 @@ internal fun HomeConnectionFeatureDialog(
                             indicator = indicator,
                             torSelectedProtocolIsUdp = torSelectedProtocolIsUdp,
                             onRenewTorIp = onRenewTorIp,
-                            onDismiss = onDismiss,
                         )
                     }
                 }
@@ -814,21 +816,24 @@ internal fun HomeConnectionFeatureDialog(
         confirmButton = {
             FoxholeDialogConfirmButton(
                 onClick = {
-                    if (restartAvailable) {
+                    if (feature == HomeConnectionFeature.TOR) {
+                        onPrivacyRouteModeSelected(
+                            if (torOperationActive && enabled) {
+                                PrivacyRouteMode.OFF
+                            } else if (enabled) {
+                                PrivacyRouteMode.OFF
+                            } else {
+                                PrivacyRouteMode.TOR_OVER_VPN
+                            },
+                        )
+                    } else if (restartAvailable) {
                         onRestart()
                         onDismiss()
                     } else {
                         when (feature) {
                             HomeConnectionFeature.KILL_SWITCH -> onKillSwitchChanged(!enabled)
                             HomeConnectionFeature.FIREWALL -> onFirewallEnabledChanged(!enabled)
-                            HomeConnectionFeature.TOR ->
-                                onPrivacyRouteModeSelected(
-                                    if (enabled) {
-                                        PrivacyRouteMode.OFF
-                                    } else {
-                                        PrivacyRouteMode.TOR_OVER_VPN
-                                    },
-                                )
+                            HomeConnectionFeature.TOR -> Unit
                             HomeConnectionFeature.LAN_PROXY -> onLocalProxyLanAccessChanged(!enabled)
                         }
                         onDismiss()
@@ -853,28 +858,61 @@ private fun HomeConnectionFeatureDialogContent(
     indicator: HomeConnectionFeatureIndicator,
     torSelectedProtocolIsUdp: Boolean,
     onRenewTorIp: () -> Unit,
-    onDismiss: () -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         if (torSelectedProtocolIsUdp) {
             HomeTorWarningBlock()
         }
+        if (state.settings.privacyRoute.enabled || state.torOperation.active || indicator.status == HomeConnectionFeatureStatus.ON) {
+            HomeTorOperationLog(state)
+        }
         if (indicator.status == HomeConnectionFeatureStatus.ON) {
             HomeTorConnectedTable(
                 state = state,
-                onRenewTorIp = {
-                    onRenewTorIp()
-                    onDismiss()
-                },
+                loading = state.torOperation.active,
+                onRenewTorIp = onRenewTorIp,
             )
         } else if (!torSelectedProtocolIsUdp) {
-            Text(
-                text = stringResource(R.string.privacy_route_modal_ready_body),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            if (state.settings.privacyRoute.enabled || state.torOperation.active) {
+                HomeTorConnectedTable(
+                    state = state,
+                    loading = true,
+                    onRenewTorIp = onRenewTorIp,
+                )
+            } else {
+                Text(
+                    text = stringResource(R.string.privacy_route_modal_ready_body),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
     }
+}
+
+@Composable
+private fun HomeTorOperationLog(state: HomeRouteUiState) {
+    val text =
+        when (state.torOperation.kind) {
+            HomeTorOperationKind.CHANGING_LOCATION -> stringResource(R.string.privacy_route_modal_log_changing_ip)
+            HomeTorOperationKind.CONNECTING -> stringResource(R.string.privacy_route_modal_log_connecting)
+            HomeTorOperationKind.NONE ->
+                if (state.connection.profileId == FoxholeVpnService.TOR_ONLY_PROFILE_ID) {
+                    stringResource(R.string.privacy_route_modal_log_tor_only_connected)
+                } else {
+                    stringResource(R.string.privacy_route_modal_log_connected)
+                }
+        }
+    Text(
+        text = text,
+        style = MaterialTheme.typography.bodySmall,
+        color =
+            if (state.torOperation.active) {
+                Color(0xFFE89B3C)
+            } else {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            },
+    )
 }
 
 @Composable
@@ -896,10 +934,16 @@ private fun HomeTorWarningBlock() {
 @Composable
 private fun HomeTorConnectedTable(
     state: HomeRouteUiState,
+    loading: Boolean,
     onRenewTorIp: () -> Unit,
 ) {
     val durationText = rememberConnectionDurationText(state.connection) ?: "-"
     val torIpText = state.ipInfo?.let(::primaryVisibleIp) ?: "-"
+    val countryText =
+        state.ipInfo?.countryName
+            ?: state.ipInfo?.countryCode
+            ?: "-"
+    val cityText = state.ipInfo?.city?.takeIf(String::isNotBlank) ?: "-"
     val selectedApps = remember(state.installedApps, state.settings.privacyRoute.selectedPackages) {
         resolveSelectedApps(
             installedApps = state.installedApps,
@@ -917,12 +961,26 @@ private fun HomeTorConnectedTable(
                     label = stringResource(R.string.privacy_route_modal_current_ip),
                     value = torIpText,
                     valueMonospace = torIpText != "-",
+                    loading = loading,
+                )
+                HomeNetworkSubtleDivider()
+                HomeTorInfoRow(
+                    label = stringResource(R.string.home_network_country_label),
+                    value = countryText,
+                    loading = loading,
+                )
+                HomeNetworkSubtleDivider()
+                HomeTorInfoRow(
+                    label = stringResource(R.string.home_network_city_label),
+                    value = cityText,
+                    loading = loading,
                 )
                 HomeNetworkSubtleDivider()
                 HomeTorInfoRow(
                     label = stringResource(R.string.privacy_route_modal_connection_time),
                     value = durationText,
                     valueMonospace = durationText != "-",
+                    loading = loading,
                 )
                 HomeNetworkSubtleDivider()
                 HomeTorRouteRow(state = state, selectedApps = selectedApps)
@@ -930,7 +988,7 @@ private fun HomeTorConnectedTable(
         }
         OutlinedButton(
             onClick = onRenewTorIp,
-            enabled = state.connection.state == ConnectionState.CONNECTED && !state.reconnectInProgress,
+            enabled = state.connection.state == ConnectionState.CONNECTED && !state.reconnectInProgress && !loading,
             modifier = Modifier.fillMaxWidth().testTag("home_tor_renew_ip_action"),
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.34f)),
             colors =
@@ -941,7 +999,11 @@ private fun HomeTorConnectedTable(
         ) {
             Icon(Icons.Outlined.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
             Spacer(modifier = Modifier.width(8.dp))
-            Text(stringResource(R.string.privacy_route_modal_change_ip))
+            if (state.torOperation.kind == HomeTorOperationKind.CHANGING_LOCATION) {
+                Text(rememberAnimatedEllipsisText(stringResource(R.string.privacy_route_modal_in_progress)))
+            } else {
+                Text(stringResource(R.string.privacy_route_modal_change_ip))
+            }
         }
     }
 }
@@ -988,13 +1050,25 @@ private fun HomeFirewallFeatureDialogContent(state: HomeRouteUiState) {
         } else {
             stringResource(R.string.switch_state_off)
         }
-    val statisticsText =
+    val appStatisticsText =
         if (
             state.settings.statistics.enabled &&
             state.settings.statistics.appTrafficEnabled &&
             state.settings.appTrafficStatsEnabled
         ) {
-            stringResource(R.string.firewall_modal_statistics_enabled)
+            stringResource(R.string.switch_state_on)
+        } else {
+            stringResource(R.string.switch_state_off)
+        }
+    val countryStatisticsText =
+        if (state.settings.statistics.enabled && state.settings.statistics.countryTrafficEnabled) {
+            stringResource(R.string.switch_state_on)
+        } else {
+            stringResource(R.string.switch_state_off)
+        }
+    val anomalyStatisticsText =
+        if (state.settings.statistics.enabled && state.settings.statistics.anomalyMetricsEnabled) {
+            stringResource(R.string.switch_state_on)
         } else {
             stringResource(R.string.switch_state_off)
         }
@@ -1020,8 +1094,18 @@ private fun HomeFirewallFeatureDialogContent(state: HomeRouteUiState) {
             )
             HomeNetworkSubtleDivider()
             HomeTorInfoRow(
-                label = stringResource(R.string.firewall_modal_statistics),
-                value = statisticsText,
+                label = stringResource(R.string.firewall_modal_app_statistics),
+                value = appStatisticsText,
+            )
+            HomeNetworkSubtleDivider()
+            HomeTorInfoRow(
+                label = stringResource(R.string.firewall_modal_country_statistics),
+                value = countryStatisticsText,
+            )
+            HomeNetworkSubtleDivider()
+            HomeTorInfoRow(
+                label = stringResource(R.string.firewall_modal_anomaly_statistics),
+                value = anomalyStatisticsText,
             )
         }
     }
@@ -1071,6 +1155,7 @@ private fun HomeTorInfoRow(
     label: String,
     value: String,
     valueMonospace: Boolean = false,
+    loading: Boolean = false,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth().padding(vertical = 5.dp),
@@ -1085,20 +1170,45 @@ private fun HomeTorInfoRow(
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
-        Text(
-            text = value,
+        Box(
             modifier = Modifier.weight(1f),
-            style =
-                MaterialTheme.typography.labelMedium.copy(
-                    fontWeight = FontWeight.SemiBold,
-                    fontFamily = if (valueMonospace) FontFamily.Monospace else FontFamily.Default,
-                ),
-            color = MaterialTheme.colorScheme.onSurface,
-            textAlign = TextAlign.End,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
+            contentAlignment = Alignment.CenterEnd,
+        ) {
+            if (loading) {
+                FoxholeSkeletonBlock(
+                    modifier =
+                        Modifier
+                            .width(82.dp)
+                            .height(12.dp),
+                )
+            } else {
+                Text(
+                    text = value,
+                    style =
+                        MaterialTheme.typography.labelMedium.copy(
+                            fontWeight = FontWeight.SemiBold,
+                            fontFamily = if (valueMonospace) FontFamily.Monospace else FontFamily.Default,
+                        ),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    textAlign = TextAlign.End,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
     }
+}
+
+@Composable
+private fun rememberAnimatedEllipsisText(base: String): String {
+    var dotCount by remember(base) { mutableStateOf(0) }
+    LaunchedEffect(base) {
+        while (isActive) {
+            delay(320)
+            dotCount = (dotCount + 1) % 4
+        }
+    }
+    return base + ".".repeat(dotCount)
 }
 
 @Composable

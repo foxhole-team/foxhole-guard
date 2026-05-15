@@ -485,6 +485,11 @@ internal fun HomeViewModel.onSelectedPackagesChangedInternal(value: List<String>
 }
 
 internal fun HomeViewModel.onPrivacyRouteModeSelectedInternal(value: PrivacyRouteMode) {
+    if (value == PrivacyRouteMode.TOR_OVER_VPN) {
+        markTorOperation(HomeTorOperationKind.CONNECTING)
+    } else {
+        clearTorOperation()
+    }
     updateRuntimeSettingAndMaybeReload {
         container.settingsRepository.updatePrivacyRouteMode(value)
         if (value == PrivacyRouteMode.TOR_OVER_VPN) {

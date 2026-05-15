@@ -123,6 +123,7 @@ class HomeViewModel(
     internal val runtimeReloadPendingMutable = MutableStateFlow(false)
     internal val runtimeReconnectRequiredMutable = MutableStateFlow(false)
     internal val reconnectInProgressMutable = MutableStateFlow(false)
+    internal val torOperationMutable = MutableStateFlow(HomeTorOperationUiState())
     internal val dnsFilterRefreshInProgressMutable = MutableStateFlow(false)
     internal val profileReconnectPromptUntilMutable = MutableStateFlow(0L)
     internal val insecureTlsImportWarningMutable = MutableStateFlow<InsecureTlsImportWarningState?>(null)
@@ -202,19 +203,24 @@ class HomeViewModel(
                 )
             },
             combine(
-                runtimeReloadPendingMutable,
-                catalogPresetPreviewsMutable,
-                startupActiveProfileMutable,
-                container.connectionController.appliedRuntimeSignature,
-                dashboardConnectionMetricsLoadingMutable,
-            ) { runtimeReloadPending, catalogPresetPreviews, startupActiveProfile, appliedRuntimeSignature, dashboardConnectionMetricsLoading ->
-                HomeTrailingLocalState(
-                    runtimeReloadPending = runtimeReloadPending,
-                    catalogPresetPreviews = catalogPresetPreviews,
-                    startupActiveProfile = startupActiveProfile,
-                    appliedRuntimeSignature = appliedRuntimeSignature,
-                    dashboardConnectionMetricsLoading = dashboardConnectionMetricsLoading,
-                )
+                combine(
+                    runtimeReloadPendingMutable,
+                    catalogPresetPreviewsMutable,
+                    startupActiveProfileMutable,
+                    container.connectionController.appliedRuntimeSignature,
+                    dashboardConnectionMetricsLoadingMutable,
+                ) { runtimeReloadPending, catalogPresetPreviews, startupActiveProfile, appliedRuntimeSignature, dashboardConnectionMetricsLoading ->
+                    HomeTrailingLocalState(
+                        runtimeReloadPending = runtimeReloadPending,
+                        catalogPresetPreviews = catalogPresetPreviews,
+                        startupActiveProfile = startupActiveProfile,
+                        appliedRuntimeSignature = appliedRuntimeSignature,
+                        dashboardConnectionMetricsLoading = dashboardConnectionMetricsLoading,
+                    )
+                },
+                torOperationMutable,
+            ) { trailingState, torOperation ->
+                trailingState.copy(torOperation = torOperation)
             },
         ) { installedAppsStreams, trailingState ->
             HomeLocalState(
@@ -227,6 +233,7 @@ class HomeViewModel(
                         ipInfoLoading = installedAppsStreams.ipInfoLoading,
                         dashboardConnectionMetricsLoading = trailingState.dashboardConnectionMetricsLoading,
                         runtimeReloadPending = trailingState.runtimeReloadPending,
+                        torOperation = trailingState.torOperation,
                         catalogPresetPreviews = trailingState.catalogPresetPreviews,
                         appliedRuntimeSignature = trailingState.appliedRuntimeSignature,
                     ),
@@ -312,6 +319,7 @@ class HomeViewModel(
                 installedAppsLoaded = localStreams.installedAppsLoaded,
                 reconnectRequired = profileReconnectRequired || runtimeReconnectRequired,
                 reconnectInProgress = reconnectState.inProgress,
+                torOperation = localStreams.torOperation,
                 profileReconnectPromptUntilElapsedMs =
                     if (profileReconnectRequired) {
                         reconnectState.promptUntilElapsedMs
@@ -538,6 +546,7 @@ class HomeViewModel(
     internal var connectedIpRefreshJob: Job? = null
     internal var profileLatencyRefreshJob: Job? = null
     internal var runtimeReloadPendingJob: Job? = null
+    internal var torOperationTimeoutJob: Job? = null
     internal var profileReconnectPromptJob: Job? = null
     internal var autoConnectJob: Job? = null
     internal var reconnectJob: Job? = null
@@ -594,6 +603,7 @@ class HomeViewModel(
                     invalidateIpInfoRefreshes()
                     clearRuntimeReloadPending()
                     clearRuntimeReconnectRequired()
+                    clearTorOperation()
                     clearProfileLatencyRefresh()
                     clearProtocolLatencyState()
                     dashboardConnectionMetricsLoadingMutable.value = false
@@ -611,6 +621,25 @@ class HomeViewModel(
                         fetchMode = IpInfoFetchMode.ENTRY_QUICK,
                         minimumLoadingDurationMs = 0L,
                     )
+                }
+            }
+        }
+        viewModelScope.launch {
+            combine(
+                container.connectionController.snapshot,
+                container.connectionController.ipInfo,
+                torOperationMutable,
+            ) { snapshot, ipInfo, torOperation ->
+                Triple(snapshot, ipInfo, torOperation)
+            }.collect { (snapshot, ipInfo, torOperation) ->
+                if (
+                    torOperation.active &&
+                    snapshot.state == ConnectionState.CONNECTED &&
+                    ipInfo != null &&
+                    ipInfo.fetchedAt >= torOperation.startedAt
+                ) {
+                    clearTorOperation()
+                    emitTorConnectedBanner(ipInfo)
                 }
             }
         }
@@ -692,6 +721,7 @@ class HomeViewModel(
                             state.settings.privacyRoute.selectedPackages.any(String::isNotBlank)
                     )
             if (torOnlyRouteReady) {
+                markTorOperation(HomeTorOperationKind.CONNECTING)
                 val prepareIntent = android.net.VpnService.prepare(getApplication())
                 if (prepareIntent != null) {
                     pendingConnectRequest =
@@ -738,6 +768,9 @@ class HomeViewModel(
         val request = pendingConnectRequest
         pendingConnectRequest = null
         if (!granted || request == null) {
+            if (request?.profileId == FoxholeVpnService.TOR_ONLY_PROFILE_ID) {
+                clearTorOperation()
+            }
             snackbars.tryEmit(errorBanner(R.string.vpn_permission_denied))
             return
         }
@@ -1099,8 +1132,10 @@ class HomeViewModel(
                 ?: return
         if (state.connection.state in ACTIVE_CONNECTION_STATES && !state.reconnectInProgress) {
             clearRuntimeReconnectRequired()
+            markTorOperation(HomeTorOperationKind.CHANGING_LOCATION)
             markRuntimeReloadPending()
             if (!container.connectionController.reload(profileId)) {
+                clearTorOperation()
                 clearRuntimeReloadPending()
             }
         }
@@ -1352,6 +1387,12 @@ class HomeViewModel(
 
     internal fun clearRuntimeReconnectRequired() = clearRuntimeReconnectRequiredInternal()
 
+    internal fun markTorOperation(kind: HomeTorOperationKind) = markTorOperationInternal(kind)
+
+    internal fun clearTorOperation() = clearTorOperationInternal()
+
+    internal suspend fun emitTorConnectedBanner(ipInfo: IpInfo) = emitTorConnectedBannerInternal(ipInfo)
+
     internal fun loadInstalledApps() = loadInstalledAppsInternal()
 
     fun ensureInstalledAppsLoaded() = ensureInstalledAppsLoadedInternal()
@@ -1536,6 +1577,7 @@ class HomeViewModel(
         internal const val CONNECTED_SERVER_PING_TIMEOUT_MS = 1_200L
         internal const val PROFILE_RECONNECT_PROMPT_WINDOW_MS = 13_000L
         internal const val RUNTIME_RELOAD_PENDING_TIMEOUT_MS = 1_500L
+        internal const val TOR_OPERATION_TIMEOUT_MS = 20_000L
         internal const val AUTO_CONNECT_CONNECTION_TIMEOUT_MS =
             FoxholeVpnService.CONNECTIVITY_PROBE_TOTAL_TIMEOUT_MS +
                 FoxholeVpnService.CONNECTIVITY_PROBE_NETWORK_WAIT_TIMEOUT_MS +

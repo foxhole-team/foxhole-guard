@@ -557,6 +557,7 @@ internal fun resolveDashboardSelectedOptionId(
 
 internal fun homeTopStatusState(state: HomeRouteUiState): ConnectionState =
     when {
+        state.torOperation.active -> ConnectionState.RECONNECTING
         state.reconnectInProgress -> ConnectionState.RECONNECTING
         state.autoConnect.running -> ConnectionState.CONNECTING
         else -> state.connection.state
@@ -609,14 +610,16 @@ internal fun homeStatusLabel(
     routeState: HomeRouteUiState,
     state: ConnectionState,
 ): String =
-    if (
+    when {
+        routeState.torOperation.kind == HomeTorOperationKind.CHANGING_LOCATION ->
+            stringResource(R.string.home_status_tor_changing_location)
+        routeState.torOperation.kind == HomeTorOperationKind.CONNECTING ->
+            stringResource(R.string.home_status_tor_connecting)
         state == ConnectionState.CONNECTED &&
-        routeState.connection.profileId == FoxholeVpnService.LOCAL_GUARD_PROFILE_ID &&
-        routeState.settings.expert.firewallEnabled
-    ) {
-        stringResource(R.string.notification_status_firewall)
-    } else {
-        homeStatusLabel(state)
+            routeState.connection.profileId == FoxholeVpnService.LOCAL_GUARD_PROFILE_ID &&
+            routeState.settings.expert.firewallEnabled ->
+            stringResource(R.string.notification_status_firewall)
+        else -> homeStatusLabel(state)
     }
 
 @Composable
@@ -835,8 +838,7 @@ internal fun currentHomeModeOption(state: HomeRouteUiState): HomeModeOption =
 internal fun currentHomeModeOption(settings: Settings): HomeModeOption =
     when {
         settings.traffic.mode == TrafficMode.PROXY -> HomeModeOption.PROXY
-        settings.expert.perAppRoutingMode != PerAppRoutingMode.FULL_TUNNEL &&
-            settings.expert.selectedPackages.isNotEmpty() -> HomeModeOption.SPLIT
+        settings.expert.perAppRoutingMode != PerAppRoutingMode.FULL_TUNNEL -> HomeModeOption.SPLIT
         else -> HomeModeOption.TUNNEL
     }
 

@@ -7,6 +7,8 @@
     <string name="home_status_connected">Connected</string>
     <string name="home_status_not_connected">Disconnected</string>
     <string name="home_status_analysis">Analysis</string>
+    <string name="home_status_tor_changing_location">Changing TOR network location</string>
+    <string name="home_status_tor_connecting">Connecting to TOR network</string>
     <string name="home_network_title">Network</string>
     <string name="home_traffic_title">Traffic</string>
     <string name="home_session_traffic_title">Current session</string>
@@ -174,6 +176,7 @@
     <string name="notification_body_journal">Network activity is logged locally.</string>
     <string name="notification_body_dns_guard">System DNS is routed through AdGuard DNS.</string>
     <string name="unknown_country">Unknown location</string>
+    <string name="unknown_city">City unknown</string>
     <string name="expert_warning_body">These settings change routing and local control surfaces. Enable them only if you understand the impact.</string>
     <string name="block_screenshots_title">Block screenshots</string>
     <string name="block_screenshots_summary">Protects the app window and Recents preview.</string>
@@ -944,6 +947,12 @@
     <string name="privacy_route_udp_modal_body">To enable routing into the TOR network, switch the active VPN protocol to TCP first. UDP protocols such as Hysteria2 or WireGuard cannot carry TOR-over-VPN routes.</string>
     <string name="privacy_route_modal_ready_body">TOR routing will start inside the active VPN after the route is enabled and the connection is refreshed.</string>
     <string name="privacy_route_modal_current_ip">Current TOR IP</string>
+    <string name="privacy_route_modal_in_progress">In progress</string>
+    <string name="privacy_route_modal_log_changing_ip">Requesting a new TOR exit path through sing-box hot reload. The VPN interface stays active while the TOR IP is refreshed.</string>
+    <string name="privacy_route_modal_log_connecting">Preparing the TOR outbound and applying routing through sing-box. The VPN interface stays active; FoxHole will refresh TOR IP after bootstrap.</string>
+    <string name="privacy_route_modal_log_tor_only_connected">TOR-only tunnel is active. Device traffic is routed through the local TOR outbound.</string>
+    <string name="privacy_route_modal_log_connected">TOR route is active inside the current VPN runtime. Selected TCP traffic is routed through the local TOR outbound.</string>
+    <string name="privacy_route_connected_banner">TOR connected: %1$s, %2$s</string>
     <string name="privacy_route_modal_connection_time">Connection time</string>
     <string name="privacy_route_modal_routing">Routing to TOR</string>
     <string name="privacy_route_modal_route_all">All apps</string>
@@ -969,6 +978,9 @@
     <string name="firewall_modal_persistent_block">Always block</string>
     <string name="firewall_modal_statistics">Statistics</string>
     <string name="firewall_modal_statistics_enabled">Apps, countries, anomalies</string>
+    <string name="firewall_modal_app_statistics">App traffic statistics</string>
+    <string name="firewall_modal_country_statistics">Country traffic statistics</string>
+    <string name="firewall_modal_anomaly_statistics">Anomaly statistics</string>
     <string name="privacy_route_selected_apps_empty">No TOR apps selected</string>
     <string name="block_ads_title">Block ads</string>
     <string name="block_telemetry_title">Block telemetry</string>
