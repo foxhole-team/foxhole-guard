@@ -199,7 +199,7 @@ class HomeScreenTest {
             .onNodeWithText("${context.getString(R.string.delete_profile_summary)}\n\nSelection B")
             .assertIsDisplayed()
         composeRule.onNodeWithText(context.getString(R.string.delete_label)).assertIsDisplayed()
-        composeRule.onNodeWithText(context.getString(R.string.cancel)).assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.close)).assertIsDisplayed()
     }
 
     @Test
