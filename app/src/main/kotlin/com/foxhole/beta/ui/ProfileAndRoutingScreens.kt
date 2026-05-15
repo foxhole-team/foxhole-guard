@@ -283,7 +283,7 @@ fun ProfilesScreen(
                     },
                     modifier = Modifier.testTag("profiles_export_cancel_action"),
                 ) {
-                    Icon(Icons.Outlined.RemoveCircleOutline, contentDescription = stringResource(R.string.cancel))
+                    Icon(Icons.Outlined.RemoveCircleOutline, contentDescription = stringResource(R.string.close))
                 }
                 FoxholeSaveAction(
                     onClick = { exportDestinationDialogVisible = true },
@@ -380,10 +380,14 @@ fun ProfilesScreen(
                 revealed = revealedProfileSwipeKey == profileSwipeKey,
                 onRevealChange = { revealed -> revealedProfileSwipeKey = profileSwipeKey.takeIf { revealed } },
                 onSwipeRight =
-                    if (showInlineRefreshAction) {
-                        { onRefreshProfile(profile.id) }
-                    } else {
-                        null
+                    when {
+                        showInlineRefreshAction -> {
+                            { onRefreshProfile(profile.id) }
+                        }
+                        !isSelected && !exportMode -> {
+                            { onSetActiveProfile(profile.id) }
+                        }
+                        else -> null
                     },
             ) {
                 FoxholeCard(
@@ -670,7 +674,7 @@ fun ProfilesScreen(
             icon = Icons.Outlined.Delete,
             iconTint = MaterialTheme.colorScheme.error,
             iconContainerColor = MaterialTheme.colorScheme.error.copy(alpha = 0.12f),
-            dismissLabel = stringResource(R.string.cancel),
+            dismissLabel = stringResource(R.string.close),
             onDismiss = { deleteProfileId = null },
             onConfirm = {
                 onDeleteProfile(profileId)

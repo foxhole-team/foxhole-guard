@@ -815,7 +815,7 @@ internal fun FoxholeDialogDismissButton(
         modifier = modifier,
         shape = MaterialTheme.shapes.medium,
     ) {
-        Text(label ?: stringResource(R.string.cancel))
+        Text(label ?: stringResource(R.string.close))
     }
 }
 

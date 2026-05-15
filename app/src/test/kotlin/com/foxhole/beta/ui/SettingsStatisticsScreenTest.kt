@@ -23,20 +23,19 @@ class SettingsStatisticsScreenTest {
                 protocolHint = ProtocolHint.VLESS,
                 lastUpdatedAt = null,
                 lastEtag = null,
-                protocolOptions =
-                    listOf(
-                        ProfileProtocolOption(
-                            id = "vless",
-                            displayName = "VLESS",
-                            protocolHint = ProtocolHint.VLESS,
-                            isSelected = true,
-                        ),
-                        ProfileProtocolOption(
-                            id = "hysteria",
-                            displayName = "Hysteria2",
-                            protocolHint = ProtocolHint.HYSTERIA2,
-                        ),
+                protocolOptions = listOf(
+                    ProfileProtocolOption(
+                        id = "vless",
+                        displayName = "VLESS",
+                        protocolHint = ProtocolHint.VLESS,
+                        isSelected = true,
                     ),
+                    ProfileProtocolOption(
+                        id = "hysteria",
+                        displayName = "Hysteria2",
+                        protocolHint = ProtocolHint.HYSTERIA2,
+                    ),
+                ),
                 selectedProtocolOptionId = "vless",
                 isActive = true,
             )
@@ -44,30 +43,28 @@ class SettingsStatisticsScreenTest {
             SettingsRouteUiState(
                 profiles = listOf(profile),
                 activeProfile = profile,
-                settings =
-                    Settings(
-                        profileTrafficTotals =
-                            listOf(
-                                ProfileTrafficTotal(
-                                    profileId = 1L,
-                                    profileName = "Smart",
-                                    protocolHint = ProtocolHint.VLESS,
-                                    protocolOptionId = "vless",
-                                    rxTotalBytes = 100L,
-                                    txTotalBytes = 50L,
-                                    updatedAt = 2L,
-                                ),
-                                ProfileTrafficTotal(
-                                    profileId = 1L,
-                                    profileName = "Smart",
-                                    protocolHint = ProtocolHint.HYSTERIA2,
-                                    protocolOptionId = "hysteria",
-                                    rxTotalBytes = 300L,
-                                    txTotalBytes = 30L,
-                                    updatedAt = 3L,
-                                ),
-                            ),
+                settings = Settings(
+                    profileTrafficTotals = listOf(
+                        ProfileTrafficTotal(
+                            profileId = 1L,
+                            profileName = "Smart",
+                            protocolHint = ProtocolHint.VLESS,
+                            protocolOptionId = "vless",
+                            rxTotalBytes = 100L,
+                            txTotalBytes = 50L,
+                            updatedAt = 2L,
+                        ),
+                        ProfileTrafficTotal(
+                            profileId = 1L,
+                            profileName = "Smart",
+                            protocolHint = ProtocolHint.HYSTERIA2,
+                            protocolOptionId = "hysteria",
+                            rxTotalBytes = 300L,
+                            txTotalBytes = 30L,
+                            updatedAt = 3L,
+                        ),
                     ),
+                ),
             )
 
         val statistics = statisticsUiState(state = state, retention = StatisticsRetention.FOREVER)

@@ -215,7 +215,7 @@ internal fun SmartProfileAutoConnectMenu(
             body = stringResource(R.string.smart_profile_metrics_refresh_confirm_body),
             confirmLabel = stringResource(R.string.refresh),
             icon = Icons.Outlined.Refresh,
-            dismissLabel = stringResource(R.string.cancel),
+            dismissLabel = stringResource(R.string.close),
             onDismiss = { showRefreshWarning = false },
             onConfirm = {
                 showRefreshWarning = false

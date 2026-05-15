@@ -104,7 +104,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import java.util.Locale
 
-internal val HomePrimaryActionHeight = 52.dp
+internal val HomePrimaryActionHeight = 56.dp
 internal val HomeTriangleIndicatorSize = 15.dp
 internal val HomeDashboardBannerTopPadding = 74.dp
 internal val HomeConnectingStatusSignalOffset = 3.dp
@@ -683,7 +683,7 @@ private fun HomeConnectionFeatureIndicatorItem(
                 .border(BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.38f)), shape)
                 .clickable(onClick = onClick)
                 .heightIn(min = HomePrimaryActionHeight)
-                .padding(horizontal = 12.dp, vertical = 8.dp)
+                .padding(horizontal = 14.dp, vertical = 9.dp)
                 .testTag("home_connection_feature_indicator_${indicator.feature.name.lowercase(Locale.US)}"),
         horizontalArrangement = Arrangement.spacedBy(9.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -691,7 +691,7 @@ private fun HomeConnectionFeatureIndicatorItem(
         Icon(
             imageVector = icon,
             contentDescription = null,
-            modifier = Modifier.size(22.dp),
+            modifier = Modifier.size(24.dp),
             tint = if (indicator.status == HomeConnectionFeatureStatus.OFF) neutralIconColor else statusColor,
         )
         Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {

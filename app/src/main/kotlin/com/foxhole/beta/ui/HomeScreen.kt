@@ -239,20 +239,16 @@ fun HomeScreen(
         card: DashboardCard,
         steps: Int,
     ): Boolean {
-        if (steps == 0) {
-            return false
+        val nextOrder = reorderedDashboardCards(
+            order = dashboardCardOrder,
+            card = card,
+            steps = steps,
+        )
+        if (nextOrder != null) {
+            dashboardCardOrder = nextOrder
+            onDashboardCardOrderChanged(nextOrder)
         }
-        val current = dashboardCardOrder.toMutableList()
-        val from = current.indexOf(card)
-        val to = (from + steps).coerceIn(0, current.lastIndex)
-        if (from < 0 || from == to) {
-            return false
-        }
-        current.removeAt(from)
-        current.add(to, card)
-        dashboardCardOrder = current
-        onDashboardCardOrderChanged(current)
-        return true
+        return nextOrder != null
     }
     val deviceInternetAvailable by rememberDefaultInternetAvailability()
     var pinnedIpInfo by remember { mutableStateOf(state.ipInfo) }
@@ -512,7 +508,7 @@ fun HomeScreen(
                                                     Modifier.animateItem()
                                                 },
                                             )
-                                            .zIndex(activeDashboardCardZIndex(activeReorderCard, DashboardCard.TRAFFIC_MAP)),
+                                            .dashboardCardZIndex(activeReorderCard, DashboardCard.TRAFFIC_MAP),
                                     card = DashboardCard.TRAFFIC_MAP,
                                     activeCard = activeReorderCard,
                                     onActiveCardChange = { activeReorderCard = it },
@@ -536,7 +532,7 @@ fun HomeScreen(
                                                     Modifier.animateItem()
                                                 },
                                             )
-                                            .zIndex(activeDashboardCardZIndex(activeReorderCard, DashboardCard.PROFILES)),
+                                            .dashboardCardZIndex(activeReorderCard, DashboardCard.PROFILES),
                                 card = DashboardCard.PROFILES,
                                 activeCard = activeReorderCard,
                                 onActiveCardChange = { activeReorderCard = it },
@@ -695,7 +691,7 @@ fun HomeScreen(
                                                     Modifier.animateItem()
                                                 },
                                             )
-                                            .zIndex(activeDashboardCardZIndex(activeReorderCard, DashboardCard.ACTIONS)),
+                                            .dashboardCardZIndex(activeReorderCard, DashboardCard.ACTIONS),
                                 card = DashboardCard.ACTIONS,
                                 activeCard = activeReorderCard,
                                 onActiveCardChange = { activeReorderCard = it },
@@ -823,7 +819,7 @@ fun HomeScreen(
                                                     Modifier.animateItem()
                                                 },
                                             )
-                                            .zIndex(activeDashboardCardZIndex(activeReorderCard, DashboardCard.NETWORK)),
+                                            .dashboardCardZIndex(activeReorderCard, DashboardCard.NETWORK),
                                     card = DashboardCard.NETWORK,
                                     activeCard = activeReorderCard,
                                     onActiveCardChange = { activeReorderCard = it },
@@ -1013,7 +1009,7 @@ fun HomeScreen(
                                                     Modifier.animateItem()
                                                 },
                                             )
-                                            .zIndex(activeDashboardCardZIndex(activeReorderCard, DashboardCard.TRAFFIC)),
+                                            .dashboardCardZIndex(activeReorderCard, DashboardCard.TRAFFIC),
                                     card = DashboardCard.TRAFFIC,
                                     activeCard = activeReorderCard,
                                     onActiveCardChange = { activeReorderCard = it },
@@ -1176,7 +1172,7 @@ fun HomeScreen(
             body = stringResource(R.string.smart_profile_metrics_refresh_confirm_body),
             confirmLabel = stringResource(R.string.refresh),
             icon = Icons.Outlined.Refresh,
-            dismissLabel = stringResource(R.string.cancel),
+            dismissLabel = stringResource(R.string.close),
             onDismiss = { smartRefreshConfirmationProfileId = null },
             onConfirm = {
                 smartRefreshConfirmationProfileId = null
@@ -1191,7 +1187,7 @@ fun HomeScreen(
             body = stringResource(R.string.smart_start_first_analysis_body),
             confirmLabel = stringResource(R.string.smart_start_first_analysis_continue),
             icon = Icons.Outlined.Speed,
-            dismissLabel = stringResource(R.string.cancel),
+            dismissLabel = stringResource(R.string.close),
             onDismiss = { smartStartFirstAnalysisProfileId = null },
             onConfirm = {
                 smartStartFirstAnalysisProfileId = null
@@ -1236,7 +1232,9 @@ private fun DashboardCardDragContainer(
     val active = activeCard == card
     val dragShape = MaterialTheme.shapes.large
     val moveDistancePx = cardHeightPx.takeIf { it > 0f } ?: fallbackMoveDistancePx
-    val moveThresholdPx = (moveDistancePx * DashboardCardReorderThresholdFraction).coerceAtLeast(fallbackMoveDistancePx)
+    val moveThresholdPx =
+        (moveDistancePx * DASHBOARD_CARD_REORDER_THRESHOLD_FRACTION)
+            .coerceAtLeast(fallbackMoveDistancePx)
 
     Box(
         modifier =
@@ -1254,7 +1252,7 @@ private fun DashboardCardDragContainer(
                     clip = active
                     shadowElevation = if (active) 8f else 0f
                 }
-                .zIndex(if (active) DashboardCardActiveZIndex else 0f)
+                .zIndex(if (active) DASHBOARD_CARD_ACTIVE_Z_INDEX else 0f)
                 .pointerInput(card, moveDistancePx, moveThresholdPx) {
                     detectDragGesturesAfterLongPress(
                         onDragStart = {
@@ -1346,14 +1344,37 @@ private fun normalizedDashboardCardOrder(order: List<DashboardCard>): List<Dashb
         .distinct()
         .filter { card -> card in DashboardCard.entries }
 
-private fun activeDashboardCardZIndex(
+private fun reorderedDashboardCards(
+    order: List<DashboardCard>,
+    card: DashboardCard,
+    steps: Int,
+): List<DashboardCard>? {
+    val from = order.indexOf(card)
+    if (steps == 0 || from < 0) {
+        return null
+    }
+
+    val to = (from + steps).coerceIn(0, order.lastIndex)
+    return if (from == to) {
+        null
+    } else {
+        order.toMutableList().apply {
+            removeAt(from)
+            add(to, card)
+        }
+    }
+}
+
+private fun Modifier.dashboardCardZIndex(
     activeCard: DashboardCard?,
     card: DashboardCard,
-): Float =
-    if (activeCard == card) DashboardCardActiveZIndex else 0f
+): Modifier =
+    zIndex(
+        if (activeCard == card) DASHBOARD_CARD_ACTIVE_Z_INDEX else 0f,
+    )
 
-private const val DashboardCardActiveZIndex = 100f
-private const val DashboardCardReorderThresholdFraction = 0.5f
+private const val DASHBOARD_CARD_ACTIVE_Z_INDEX = 100f
+private const val DASHBOARD_CARD_REORDER_THRESHOLD_FRACTION = 0.5f
 private val DashboardCardReorderFallbackMoveDistance = 96.dp
 private val ImportMenuWidthChrome = 62.dp
 private val ImportMenuMinWidth = 188.dp

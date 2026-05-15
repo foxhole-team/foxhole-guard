@@ -23,10 +23,7 @@ internal fun Settings.localGuardModeOrNull(): LocalGuardMode? {
             expert.blockedPackages.isNotEmpty()
     val journalEnabled =
         expert.firewallEnabled &&
-            (
-                expert.networkActivityPersistentLogging ||
-                    (statistics.enabled && statistics.countryTrafficEnabled)
-            )
+            (expert.networkActivityPersistentLogging || (statistics.enabled && statistics.countryTrafficEnabled))
     return when {
         permanentAppBlockingEnabled && expert.systemDnsProtectionEnabled -> LocalGuardMode.JOURNAL
         permanentAppBlockingEnabled -> LocalGuardMode.FIREWALL

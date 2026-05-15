@@ -302,7 +302,7 @@ fun DnsSettingsScreen(
             title = stringResource(R.string.dns_auto_update_warning_title),
             body = stringResource(R.string.dns_auto_update_warning_body),
             confirmLabel = stringResource(R.string.disable_label),
-            dismissLabel = stringResource(R.string.cancel),
+            dismissLabel = stringResource(R.string.close),
             icon = Icons.Outlined.WarningAmber,
             onDismiss = { autoUpdateWarning = false },
             onConfirm = {

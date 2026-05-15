@@ -96,7 +96,10 @@ class TrafficMapRepository(
         destinations: List<TrafficMapPoint>,
     ): TrafficMapUiState {
         val origin = trafficMapOrigin(originInfo?.countryCode)
-        val visibleDestinations = destinations.take(MaxTrafficMapDestinations)
+        val visibleDestinations =
+            destinations
+                .take(MaxTrafficMapDestinations)
+                .map { point -> offsetTrafficMapDestinationFromOriginCountry(point, originInfo?.countryCode) }
         val highlightedCountries =
             (visibleDestinations.map(TrafficMapPoint::countryCode) + listOfNotNull(originInfo?.countryCode))
                 .map { countryCode -> countryCode.uppercase(Locale.US) }
@@ -158,6 +161,12 @@ class TrafficMapRepository(
         const val MaxTrafficMapDestinations = 30
         const val IsoCountryCodeLength = 2
         const val MaxRetainedConnectionSamples = 2_000
+        const val SameCountryDestinationLatOffset = 1.15
+        const val SameCountryDestinationLonOffset = 1.85
+        const val TrafficMapMinLat = -55.0
+        const val TrafficMapMaxLat = 85.0
+        const val TrafficMapMinLon = -179.0
+        const val TrafficMapMaxLon = 179.0
 
         val FallbackTrafficMapOrigin =
             TrafficMapCountryCoordinate(
@@ -222,6 +231,30 @@ private data class TrafficMapOriginInfo(
     val countryName: String?,
     val city: String?,
 )
+
+private fun offsetTrafficMapDestinationFromOriginCountry(
+    point: TrafficMapPoint,
+    originCountryCode: String?,
+): TrafficMapPoint {
+    val normalizedOrigin =
+        originCountryCode
+            ?.trim()
+            ?.uppercase(Locale.US)
+            ?.takeIf { value ->
+                value.length == TrafficMapRepository.IsoCountryCodeLength &&
+                    value.all { character -> character in 'A'..'Z' }
+            }
+    return if (normalizedOrigin != null && point.countryCode.equals(normalizedOrigin, ignoreCase = true)) {
+        point.copy(
+            lat = (point.lat + TrafficMapRepository.SameCountryDestinationLatOffset)
+                .coerceIn(TrafficMapRepository.TrafficMapMinLat, TrafficMapRepository.TrafficMapMaxLat),
+            lon = (point.lon + TrafficMapRepository.SameCountryDestinationLonOffset)
+                .coerceIn(TrafficMapRepository.TrafficMapMinLon, TrafficMapRepository.TrafficMapMaxLon),
+        )
+    } else {
+        point
+    }
+}
 
 internal data class TrafficMapSampleBatch(
     val samples: List<TrafficMapConnectionSample>,

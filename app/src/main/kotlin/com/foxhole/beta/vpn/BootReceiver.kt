@@ -27,7 +27,10 @@ class BootReceiver : BroadcastReceiver() {
                 val settings = dependencies.settingsRepository.current()
                 if (action == Intent.ACTION_MY_PACKAGE_REPLACED) {
                     if (!restoreRuntimeAfterPackageReplace(context, dependencies)) {
-                        dependencies.diagnosticsLogger.record("connection", "package replace restore skipped: no active runtime")
+                        dependencies.diagnosticsLogger.record(
+                            "connection",
+                            "package replace restore skipped: no active runtime",
+                        )
                     }
                     return@launch
                 }
@@ -67,75 +70,96 @@ class BootReceiver : BroadcastReceiver() {
     ): Boolean {
         val resumeState = RuntimeResumeStateStore.read(context)
         val resumeLocalGuardMode = resumeState?.localGuardMode
-        if (resumeLocalGuardMode != null) {
-            dependencies.diagnosticsLogger.record(
-                "connection",
-                "package replace local guard restore requested mode=${resumeLocalGuardMode.name.lowercase()}",
-            )
-            FoxholeConnectionServiceContract.startForegroundService(
-                context = context,
-                mode = TrafficMode.TUNNEL,
-                action = FoxholeConnectionServiceContract.ACTION_START_LOCAL_GUARD,
-                localGuardMode = resumeLocalGuardMode,
-            )
-            return true
-        }
         val resumeProfileId =
             resumeState
                 ?.profileId
                 ?.takeIf { profileId -> profileId > 0L || profileId == FoxholeVpnService.TOR_ONLY_PROFILE_ID }
-        if (resumeProfileId != null) {
-            dependencies.diagnosticsLogger.record(
-                "connection",
-                "package replace profile restore requested mode=${resumeState.trafficMode.name.lowercase()} profile=$resumeProfileId",
-            )
-            FoxholeConnectionServiceContract.startForegroundService(
-                context = context,
-                mode = resumeState.trafficMode,
-                action = FoxholeConnectionServiceContract.ACTION_CONNECT,
-                profileId = resumeProfileId,
-            )
-            return true
+        val resumeTrafficMode = resumeState?.trafficMode
+        return when {
+            resumeLocalGuardMode != null -> {
+                dependencies.diagnosticsLogger.record(
+                    "connection",
+                    "package replace local guard restore requested mode=${resumeLocalGuardMode.name.lowercase()}",
+                )
+                FoxholeConnectionServiceContract.startForegroundService(
+                    context = context,
+                    mode = TrafficMode.TUNNEL,
+                    action = FoxholeConnectionServiceContract.ACTION_START_LOCAL_GUARD,
+                    localGuardMode = resumeLocalGuardMode,
+                )
+                true
+            }
+
+            resumeProfileId != null && resumeTrafficMode != null -> {
+                val resumeTrafficModeName = resumeTrafficMode.name.lowercase()
+                dependencies.diagnosticsLogger.record(
+                    "connection",
+                    "package replace profile restore requested mode=$resumeTrafficModeName profile=$resumeProfileId",
+                )
+                FoxholeConnectionServiceContract.startForegroundService(
+                    context = context,
+                    mode = resumeTrafficMode,
+                    action = FoxholeConnectionServiceContract.ACTION_CONNECT,
+                    profileId = resumeProfileId,
+                )
+                true
+            }
+
+            !dependencies.connectionController.hasActiveVpnNetwork() -> false
+            else -> restoreActiveRuntimeAfterPackageReplace(context, dependencies)
         }
-        if (!dependencies.connectionController.hasActiveVpnNetwork()) {
-            return false
-        }
+    }
+
+    private suspend fun restoreActiveRuntimeAfterPackageReplace(
+        context: Context,
+        dependencies: FoxholeRuntimeDependencies,
+    ): Boolean {
         val settings = dependencies.settingsRepository.current()
         val activeProfile = dependencies.profileRepository.getActiveProfile()
-        if (activeProfile != null) {
-            dependencies.diagnosticsLogger.record(
-                "connection",
-                "package replace active vpn network found; restarting active profile=${activeProfile.id}",
-            )
-            FoxholeConnectionServiceContract.startForegroundService(
-                context = context,
-                mode = settings.traffic.mode,
-                action = FoxholeConnectionServiceContract.ACTION_CONNECT,
-                profileId = activeProfile.id,
-            )
-            return true
-        }
         val localGuardMode = settings.localGuardModeOrNull()
-        if (localGuardMode != null) {
-            dependencies.diagnosticsLogger.record(
-                "connection",
-                "package replace active vpn network found; restarting local guard mode=${localGuardMode.name.lowercase()}",
-            )
-            FoxholeConnectionServiceContract.startForegroundService(
-                context = context,
-                mode = TrafficMode.TUNNEL,
-                action = FoxholeConnectionServiceContract.ACTION_START_LOCAL_GUARD,
-                localGuardMode = localGuardMode,
-            )
-            return true
+        return when {
+            activeProfile != null -> {
+                dependencies.diagnosticsLogger.record(
+                    "connection",
+                    "package replace active vpn network found; restarting active profile=${activeProfile.id}",
+                )
+                FoxholeConnectionServiceContract.startForegroundService(
+                    context = context,
+                    mode = settings.traffic.mode,
+                    action = FoxholeConnectionServiceContract.ACTION_CONNECT,
+                    profileId = activeProfile.id,
+                )
+                true
+            }
+
+            localGuardMode != null -> {
+                val localGuardModeName = localGuardMode.name.lowercase()
+                dependencies.diagnosticsLogger.record(
+                    "connection",
+                    "package replace active vpn network found; restarting local guard mode=$localGuardModeName",
+                )
+                FoxholeConnectionServiceContract.startForegroundService(
+                    context = context,
+                    mode = TrafficMode.TUNNEL,
+                    action = FoxholeConnectionServiceContract.ACTION_START_LOCAL_GUARD,
+                    localGuardMode = localGuardMode,
+                )
+                true
+            }
+
+            else -> {
+                dependencies.diagnosticsLogger.record(
+                    "connection",
+                    "package replace active vpn network found; clearing stale vpn service",
+                )
+                FoxholeConnectionServiceContract.startForegroundService(
+                    context = context,
+                    mode = TrafficMode.TUNNEL,
+                    action = FoxholeConnectionServiceContract.ACTION_DISCONNECT,
+                    suppressLocalGuard = true,
+                )
+                true
+            }
         }
-        dependencies.diagnosticsLogger.record("connection", "package replace active vpn network found; clearing stale vpn service")
-        FoxholeConnectionServiceContract.startForegroundService(
-            context = context,
-            mode = TrafficMode.TUNNEL,
-            action = FoxholeConnectionServiceContract.ACTION_DISCONNECT,
-            suppressLocalGuard = true,
-        )
-        return true
     }
 }

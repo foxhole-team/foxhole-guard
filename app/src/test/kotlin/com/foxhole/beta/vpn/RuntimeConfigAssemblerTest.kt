@@ -22,8 +22,8 @@ import com.foxhole.beta.core.model.RoutingRuleAction
 import com.foxhole.beta.core.model.SecureDnsMode
 import com.foxhole.beta.core.model.Settings
 import com.foxhole.beta.core.model.StatisticsSettings
-import com.foxhole.beta.core.model.TrafficSettings
 import com.foxhole.beta.core.model.TrafficMode
+import com.foxhole.beta.core.model.TrafficSettings
 import com.foxhole.beta.core.model.TunStack
 import com.foxhole.beta.core.model.UiSettings
 import kotlinx.serialization.json.Json
@@ -319,7 +319,10 @@ class RuntimeConfigAssemblerTest {
         assertFalse(tor.containsKey("detour"))
         assertEquals("proxy", route["final"]!!.jsonPrimitive.content)
         assertEquals("tun", config["inbounds"]!!.jsonArray.first().jsonObject["type"]!!.jsonPrimitive.content)
-        assertTrue(route["rules"]!!.jsonArray.map { it.jsonObject }.any { it["outbound"]?.jsonPrimitive?.content == "block" })
+        assertTrue(
+            route["rules"]!!.jsonArray.map { it.jsonObject }
+                .any { it["outbound"]?.jsonPrimitive?.content == "block" },
+        )
     }
 
     @Test

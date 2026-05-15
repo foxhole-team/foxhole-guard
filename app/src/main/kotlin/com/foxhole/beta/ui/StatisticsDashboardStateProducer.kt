@@ -23,6 +23,7 @@ internal fun buildStatisticsDashboardUiState(
             trafficWindows = state.trafficWindows,
             appRows = appRows,
             retention = retention,
+            dnsSettings = state.settings.dns,
         )
     val appChanges =
         installedAppChangesForRetention(

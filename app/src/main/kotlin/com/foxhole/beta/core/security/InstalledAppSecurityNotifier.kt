@@ -76,7 +76,11 @@ class InstalledAppSecurityNotifier(
                 )
                 .build()
         runCatching {
-            NotificationManagerCompat.from(appContext).notify(NOTIFICATION_ID_BASE + summary.packageName.hashCode().absoluteValue % 1000, notification)
+            NotificationManagerCompat.from(appContext)
+                .notify(
+                    NOTIFICATION_ID_BASE + summary.packageName.hashCode().absoluteValue % 1000,
+                    notification,
+                )
         }
     }
 

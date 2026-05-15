@@ -161,7 +161,7 @@ internal fun QrScannerOverlay(
                     onClick = onDismiss,
                     modifier = Modifier.fillMaxWidth(),
                 ) {
-                    Text(stringResource(R.string.cancel))
+                    Text(stringResource(R.string.close))
                 }
             }
         }

@@ -5,8 +5,8 @@ import com.foxhole.beta.core.diagnostics.DiagnosticEntry
 import com.foxhole.beta.core.model.AnomalyEvent
 import com.foxhole.beta.core.model.AppTrafficWindow
 import com.foxhole.beta.core.model.ConnectionSnapshot
-import com.foxhole.beta.core.model.IpInfo
 import com.foxhole.beta.core.model.InstalledAppOption
+import com.foxhole.beta.core.model.IpInfo
 import com.foxhole.beta.core.model.OverallStatisticsUiItem
 import com.foxhole.beta.core.model.Profile
 import com.foxhole.beta.core.model.ProfileSourceType
@@ -120,6 +120,7 @@ data class SettingsRouteUiState(
     val profiles: List<Profile> = emptyList(),
     val activeProfile: Profile? = null,
     val traffic: TrafficSnapshot = TrafficSnapshot(),
+    val ipInfo: IpInfo? = null,
     val installedApps: List<InstalledAppOption> = emptyList(),
     val diagnosticEntries: List<DiagnosticEntry> = emptyList(),
     val anomalyEvents: List<AnomalyEvent> = emptyList(),
@@ -136,6 +137,7 @@ data class StatisticsDashboardUiState(
     val dnsSummary: DnsProtectionSummary = DnsProtectionSummary(
         blockedQueries = 0,
         allowedQueries = 0,
+        categoryRows = emptyList(),
         appRows = emptyList(),
     ),
     val appChanges: List<com.foxhole.beta.core.model.InstalledAppInventoryChange> = emptyList(),
@@ -281,6 +283,7 @@ internal fun HomeUiState.toSettingsRouteUiState(
         profiles = profiles,
         activeProfile = activeProfile,
         traffic = traffic,
+        ipInfo = ipInfo,
         installedApps = installedApps,
         diagnosticEntries = diagnosticEntries,
         anomalyEvents = anomalyEvents,

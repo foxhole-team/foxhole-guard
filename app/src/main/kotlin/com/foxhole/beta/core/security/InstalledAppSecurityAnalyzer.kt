@@ -51,10 +51,26 @@ class InstalledAppSecurityAnalyzer(
                     packageInfo = packageInfo,
                     installerPackageName = installerPackageName,
                     ignoresBatteryOptimizations = powerManager?.isIgnoringBatteryOptimizations(packageName) == true,
-                    hasAccessibilityService = hasServiceCapability(packageName, AccessibilityService.SERVICE_INTERFACE, Manifest.permission.BIND_ACCESSIBILITY_SERVICE),
-                    hasNotificationListener = hasServiceCapability(packageName, NotificationListenerService.SERVICE_INTERFACE, Manifest.permission.BIND_NOTIFICATION_LISTENER_SERVICE),
-                    hasDeviceAdmin = hasReceiverCapability(packageName, DeviceAdminReceiver.ACTION_DEVICE_ADMIN_ENABLED, Manifest.permission.BIND_DEVICE_ADMIN),
-                    hasVpnService = hasServiceCapability(packageName, VpnService.SERVICE_INTERFACE, Manifest.permission.BIND_VPN_SERVICE),
+                    hasAccessibilityService = hasServiceCapability(
+                        packageName,
+                        AccessibilityService.SERVICE_INTERFACE,
+                        Manifest.permission.BIND_ACCESSIBILITY_SERVICE,
+                    ),
+                    hasNotificationListener = hasServiceCapability(
+                        packageName,
+                        NotificationListenerService.SERVICE_INTERFACE,
+                        Manifest.permission.BIND_NOTIFICATION_LISTENER_SERVICE,
+                    ),
+                    hasDeviceAdmin = hasReceiverCapability(
+                        packageName,
+                        DeviceAdminReceiver.ACTION_DEVICE_ADMIN_ENABLED,
+                        Manifest.permission.BIND_DEVICE_ADMIN,
+                    ),
+                    hasVpnService = hasServiceCapability(
+                        packageName,
+                        VpnService.SERVICE_INTERFACE,
+                        Manifest.permission.BIND_VPN_SERVICE,
+                    ),
                     hasBootReceiver = hasReceiverCapability(packageName, Intent.ACTION_BOOT_COMPLETED, null),
                 )
             InstalledAppSecuritySummary(
@@ -100,10 +116,10 @@ class InstalledAppSecurityAnalyzer(
 
     private fun getPackageInfo(packageName: String): PackageInfo =
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            packageManager.getPackageInfo(packageName, PackageManager.PackageInfoFlags.of(PackageInfoFlags))
+            packageManager.getPackageInfo(packageName, PackageManager.PackageInfoFlags.of(PACKAGE_INFO_FLAGS.toLong()))
         } else {
             @Suppress("DEPRECATION")
-            packageManager.getPackageInfo(packageName, PackageInfoFlags.toInt())
+            packageManager.getPackageInfo(packageName, PACKAGE_INFO_FLAGS)
         }
 
     private fun installerPackageName(packageName: String): String? =
@@ -153,11 +169,11 @@ class InstalledAppSecurityAnalyzer(
     ) = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
         packageManager.queryIntentServices(
             Intent(action).setPackage(packageName),
-            PackageManager.ResolveInfoFlags.of(ComponentQueryFlags),
+            PackageManager.ResolveInfoFlags.of(COMPONENT_QUERY_FLAGS.toLong()),
         )
     } else {
         @Suppress("DEPRECATION")
-        packageManager.queryIntentServices(Intent(action).setPackage(packageName), ComponentQueryFlags.toInt())
+        packageManager.queryIntentServices(Intent(action).setPackage(packageName), COMPONENT_QUERY_FLAGS)
     }
 
     private fun queryBroadcastReceivers(
@@ -166,11 +182,11 @@ class InstalledAppSecurityAnalyzer(
     ) = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
         packageManager.queryBroadcastReceivers(
             Intent(action).setPackage(packageName),
-            PackageManager.ResolveInfoFlags.of(ComponentQueryFlags),
+            PackageManager.ResolveInfoFlags.of(COMPONENT_QUERY_FLAGS.toLong()),
         )
     } else {
         @Suppress("DEPRECATION")
-        packageManager.queryBroadcastReceivers(Intent(action).setPackage(packageName), ComponentQueryFlags.toInt())
+        packageManager.queryBroadcastReceivers(Intent(action).setPackage(packageName), COMPONENT_QUERY_FLAGS)
     }
 }
 
@@ -193,7 +209,9 @@ internal fun installedAppRiskSignals(
         if (hasNotificationListener) add(InstalledAppRiskSignal.NOTIFICATION_LISTENER)
         if (hasDeviceAdmin) add(InstalledAppRiskSignal.DEVICE_ADMIN)
         if (hasVpnService) add(InstalledAppRiskSignal.VPN_SERVICE)
-        if (Manifest.permission.SYSTEM_ALERT_WINDOW in requestedPermissions) add(InstalledAppRiskSignal.OVERLAY_PERMISSION)
+        if (Manifest.permission.SYSTEM_ALERT_WINDOW in requestedPermissions) {
+            add(InstalledAppRiskSignal.OVERLAY_PERMISSION)
+        }
         if (
             ignoresBatteryOptimizations ||
             Manifest.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS in requestedPermissions
@@ -273,11 +291,13 @@ private val SystemLikeLabels =
         "документы",
     )
 
-private const val PackageInfoFlags: Long =
-    (PackageManager.GET_PERMISSIONS or
+private const val PACKAGE_INFO_FLAGS =
+    PackageManager.GET_PERMISSIONS or
         PackageManager.GET_SERVICES or
         PackageManager.GET_RECEIVERS or
-        PackageManager.MATCH_DISABLED_COMPONENTS).toLong()
+        PackageManager.MATCH_DISABLED_COMPONENTS
 
-private const val ComponentQueryFlags: Long =
-    (PackageManager.MATCH_DISABLED_COMPONENTS or PackageManager.MATCH_DIRECT_BOOT_AWARE or PackageManager.MATCH_DIRECT_BOOT_UNAWARE).toLong()
+private const val COMPONENT_QUERY_FLAGS =
+    PackageManager.MATCH_DISABLED_COMPONENTS or
+        PackageManager.MATCH_DIRECT_BOOT_AWARE or
+        PackageManager.MATCH_DIRECT_BOOT_UNAWARE

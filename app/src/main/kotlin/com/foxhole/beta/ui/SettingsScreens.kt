@@ -1232,14 +1232,14 @@ fun PrivacyRouteSettingsScreen(
         snackbarHostState = snackbarHostState,
         onNavigateUp = onNavigateUp,
         tag = "privacy_route_settings_screen",
-    ) {
-        item {
-            InfoBlock(
+        actions = {
+            SettingsHelpAction(
                 title = stringResource(R.string.privacy_route_title),
                 body = stringResource(R.string.privacy_route_info_body),
-                toneColor = MaterialTheme.colorScheme.primary,
+                icon = ImageVector.vectorResource(R.drawable.ic_tor_route),
             )
-        }
+        },
+    ) {
         item {
             SettingsControlGroup {
                 SettingSwitchRow(
@@ -1318,7 +1318,7 @@ fun PrivacyRouteSettingsScreen(
     }
 }
 
-@Suppress("CyclomaticComplexMethod", "LongMethod")
+@Suppress("CyclomaticComplexMethod", "LongMethod", "UnusedParameter")
 @Composable
 fun ApplicationSettingsScreen(
     state: SettingsRouteUiState,
@@ -1456,16 +1456,6 @@ fun ApplicationSettingsScreen(
                     summary = stringResource(R.string.show_tor_quick_launch_summary),
                     leadingIcon = ImageVector.vectorResource(R.drawable.ic_tor_route),
                     onCheckedChange = onShowTorQuickLaunchChanged,
-                    summaryMaxLines = Int.MAX_VALUE,
-                    grouped = true,
-                )
-                SettingsControlGroupDivider()
-                SettingSwitchRow(
-                    title = stringResource(R.string.smart_start_dashboard_controls_title),
-                    checked = state.settings.ui.smartStartDashboardControlsEnabled,
-                    summary = stringResource(R.string.smart_start_dashboard_controls_summary),
-                    leadingIcon = Icons.Outlined.Speed,
-                    onCheckedChange = onSmartStartDashboardControlsEnabledChanged,
                     summaryMaxLines = Int.MAX_VALUE,
                     grouped = true,
                 )
