@@ -3,10 +3,12 @@ package com.foxhole.beta.vpn
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -105,6 +107,42 @@ class RuntimeCommandActorTest {
 
             releaseStop.complete(Unit)
             withTimeout(1_000L) { connectStarted.await() }
+            actor.close()
+        }
+
+    @Test
+    fun `stop runs immediately while current command is still cancelling`() =
+        runBlocking {
+            val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+            val killReasons = Collections.synchronizedList(mutableListOf<String>())
+            val actor = actor(scope, killReasons)
+            val currentStarted = CompletableDeferred<Unit>()
+            val releaseCurrentCleanup = CompletableDeferred<Unit>()
+            val currentCleanupFinished = CompletableDeferred<Unit>()
+            val stopCompleted = CompletableDeferred<Unit>()
+
+            actor.launch(RuntimeCommandPriority.NORMAL, reason = "connect") {
+                try {
+                    currentStarted.complete(Unit)
+                    delay(5_000L)
+                } finally {
+                    withContext(NonCancellable) {
+                        releaseCurrentCleanup.await()
+                        currentCleanupFinished.complete(Unit)
+                    }
+                }
+            }
+            withTimeout(1_000L) { currentStarted.await() }
+
+            actor.launch(RuntimeCommandPriority.STOP, reason = "disconnect") {
+                stopCompleted.complete(Unit)
+            }
+
+            withTimeout(1_000L) { stopCompleted.await() }
+            assertEquals(listOf("priority_command_preempt:disconnect"), killReasons.toList())
+
+            releaseCurrentCleanup.complete(Unit)
+            withTimeout(1_000L) { currentCleanupFinished.await() }
             actor.close()
         }
 

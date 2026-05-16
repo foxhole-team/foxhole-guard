@@ -275,6 +275,17 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
     ) {
         val session = activeSession
         val previousSnapshot = FoxholeVpnRuntimeBridge.snapshot.value
+        if (
+            session == null &&
+            previousSnapshot.isActiveRuntimeForAnotherMode(TrafficMode.PROXY)
+        ) {
+            container.diagnosticsLogger.record(
+                "connection",
+                "disconnect ignored by inactive proxy service while another mode is active",
+            )
+            stopService(commandStartId)
+            return
+        }
         val analysisStatus = getString(R.string.notification_status_analysis)
         val smartStartAnalysis =
             resolveSmartStartAnalysisPreservation(

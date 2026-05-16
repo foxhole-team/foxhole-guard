@@ -36,7 +36,10 @@ internal class FoxholeConnectionLifecycle(
         val runtimeProtocolOption = profile.runtimeProtocolOption(protocolOptionId)
         if (snapshot.value.state !in ACTIVE_CONNECTION_STATES) {
             disconnectStaleVpnBeforeConnectIfNeeded()
-            FoxholeConnectionServiceContract.stopAllServices(context)
+            FoxholeConnectionServiceContract.stopInactiveServices(
+                context = context,
+                activeMode = settings.traffic.mode,
+            )
         }
         diagnosticsLogger.record("connection", "connect requested")
         FoxholeVpnRuntimeBridge.updateIpInfo(null)
@@ -67,7 +70,10 @@ internal class FoxholeConnectionLifecycle(
         require(settings.privacyRoute.directTorEnabled) { "direct TOR route is disabled" }
         if (snapshot.value.state !in ACTIVE_CONNECTION_STATES) {
             disconnectStaleVpnBeforeConnectIfNeeded()
-            FoxholeConnectionServiceContract.stopAllServices(context)
+            FoxholeConnectionServiceContract.stopInactiveServices(
+                context = context,
+                activeMode = TrafficMode.TUNNEL,
+            )
         }
         diagnosticsLogger.record("connection", "direct TOR connect requested")
         FoxholeVpnRuntimeBridge.updateIpInfo(null)

@@ -490,6 +490,18 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         val session = activeSession
         val localGuardMode = activeLocalGuardMode
         val previousSnapshot = FoxholeVpnRuntimeBridge.snapshot.value
+        if (
+            session == null &&
+            localGuardMode == null &&
+            previousSnapshot.isActiveRuntimeForAnotherMode(TrafficMode.TUNNEL)
+        ) {
+            container.diagnosticsLogger.record(
+                "connection",
+                "disconnect ignored by inactive tunnel service while another mode is active",
+            )
+            stopService(commandStartId)
+            return
+        }
         val analysisStatus = getString(R.string.notification_status_analysis)
         val smartStartAnalysis =
             resolveSmartStartAnalysisPreservation(

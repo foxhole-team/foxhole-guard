@@ -26,6 +26,8 @@ import com.foxhole.beta.core.model.VpnSession
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.net.InetAddress
@@ -98,6 +100,8 @@ private class ReflectiveLibboxRuntime(
                     ),
                 )
                 reflection.setupIfNeeded()
+                currentCoroutineContext().ensureActive()
+
                 defaultNetworkMonitor.start()
                 currentHost = host
                 currentConfig = session.configJson
@@ -125,9 +129,13 @@ private class ReflectiveLibboxRuntime(
                         },
                     )
                 newServer = reflection.newCommandServer(handler, platform)
+                currentCoroutineContext().ensureActive()
                 reflection.startServer(newServer)
+                currentCoroutineContext().ensureActive()
                 reflection.checkConfig(newServer, session.configJson)
+                currentCoroutineContext().ensureActive()
                 reflection.startOrReloadService(newServer, session.configJson)
+                currentCoroutineContext().ensureActive()
                 commandServerRef.set(newServer)
                 newServer = null
                 diagnosticsLogger.record("libbox", "runtime started")

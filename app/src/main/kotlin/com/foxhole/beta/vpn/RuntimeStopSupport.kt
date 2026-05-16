@@ -6,6 +6,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
@@ -82,9 +83,16 @@ internal suspend fun runBlockingRuntimeClose(
             block()
             true
         }
-    return withTimeoutOrNull(timeoutMs.coerceAtLeast(1L)) {
-        deferred.await()
-    } == true
+    return try {
+        withTimeoutOrNull(timeoutMs.coerceAtLeast(1L)) {
+            deferred.await()
+        } == true
+    } finally {
+        if (!deferred.isCompleted) {
+            deferred.cancel()
+        }
+        closeScope.cancel()
+    }
 }
 
 internal fun stopRuntimeAfterServiceDestroy(

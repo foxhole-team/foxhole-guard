@@ -4,6 +4,8 @@ import com.foxhole.beta.core.diagnostics.DiagnosticsLogger
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.util.concurrent.CancellationException
@@ -33,36 +35,13 @@ internal class RuntimeCommandActor(
     private val worker =
         scope.launch(Dispatchers.IO) {
             while (isActive) {
-                val command = queue.poll(250L, TimeUnit.MILLISECONDS) ?: continue
-                recordCommandEvent(
-                    headline = "runtime command started",
-                    command = command,
-                )
+                val command = nextQueuedCommandOrNull() ?: continue
                 val job =
                     launch(Dispatchers.Default) {
-                        command.block()
+                        runCommandSafely(command)
                     }
                 currentJob = job
-                try {
-                    job.join()
-                    val completionHeadline =
-                        if (job.isCancelled) {
-                            "runtime command cancelled"
-                        } else {
-                            "runtime command completed"
-                        }
-                    recordCommandEvent(
-                        headline = completionHeadline,
-                        command = command,
-                    )
-                } catch (error: CancellationException) {
-                    recordCommandEvent(
-                        headline = "runtime command cancelled",
-                        command = command,
-                        extra = "error=${error.javaClass.simpleName}",
-                    )
-                    throw error
-                }
+                job.join()
                 if (currentJob == job) {
                     currentJob = null
                 }
@@ -93,6 +72,17 @@ internal class RuntimeCommandActor(
             )
         if (priority.value >= RuntimeCommandPriority.STOP.value) {
             preemptForPriorityCommand(command)
+            val job =
+                scope.launch(Dispatchers.Default) {
+                    runCommandSafely(command)
+                }
+            currentJob = job
+            job.invokeOnCompletion {
+                if (currentJob == job) {
+                    currentJob = null
+                }
+            }
+            return
         } else {
             recordCommandEvent("runtime command queued", command)
         }
@@ -126,6 +116,36 @@ internal class RuntimeCommandActor(
                 headline = "runtime command force-killed",
                 command = command,
                 extra = "kill_reason=${kill.reason}",
+            )
+        }
+    }
+
+    private suspend fun nextQueuedCommandOrNull(): QueuedRuntimeCommand? {
+        val command = queue.poll(250L, TimeUnit.MILLISECONDS) ?: return null
+        while (currentCoroutineContext().isActive && currentJob?.isActive == true) {
+            delay(PRIORITY_COMMAND_POLL_MS)
+        }
+        return command.takeIf { currentCoroutineContext().isActive }
+    }
+
+    @Suppress("TooGenericExceptionCaught")
+    private suspend fun runCommandSafely(command: QueuedRuntimeCommand) {
+        recordCommandEvent("runtime command started", command)
+        try {
+            command.block()
+            recordCommandEvent("runtime command completed", command)
+        } catch (cancelled: CancellationException) {
+            recordCommandEvent(
+                headline = "runtime command cancelled",
+                command = command,
+                extra = "error=${cancelled.javaClass.simpleName}",
+            )
+            throw cancelled
+        } catch (error: Throwable) {
+            recordCommandEvent(
+                headline = "runtime command failed",
+                command = command,
+                extra = "error=${error.javaClass.simpleName}",
             )
         }
     }
@@ -166,3 +186,5 @@ internal class RuntimeCommandActor(
             compareValuesBy(this, other, { -it.priority }, { it.sequence })
     }
 }
+
+private const val PRIORITY_COMMAND_POLL_MS = 25L
