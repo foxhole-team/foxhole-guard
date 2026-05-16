@@ -21,6 +21,7 @@ import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.unit.dp
+import com.foxhole.beta.BuildConfig
 import com.foxhole.beta.R
 import com.foxhole.beta.core.model.AnomalyHistoryRetention
 import com.foxhole.beta.core.model.AnomalySensitivity
@@ -50,12 +51,14 @@ fun SecuritySettingsScreen(
         onNavigateUp = onNavigateUp,
         tag = "security_settings_screen",
     ) {
-        item {
-            InfoBlock(
-                title = stringResource(R.string.security_development_warning_title),
-                body = stringResource(R.string.security_development_warning_body),
-                toneColor = MaterialTheme.colorScheme.primary,
-            )
+        if (BuildConfig.DEBUG) {
+            item {
+                InfoBlock(
+                    title = stringResource(R.string.security_development_warning_title),
+                    body = stringResource(R.string.security_development_warning_body),
+                    toneColor = MaterialTheme.colorScheme.primary,
+                )
+            }
         }
         item {
             SecurityProtectionControlGroup(

@@ -43,7 +43,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 
 private const val SMART_START_SUBSCRIPTION_REFRESH_CALL_TIMEOUT_MS = 4_000L
-private const val SMART_START_SUBSCRIPTION_REFRESH_MAX_ATTEMPTS = 1
+private const val SMART_START_SUBSCRIPTION_REFRESH_MAX_ATTEMPTS = 20
 
 internal fun HomeViewModel.onAutoConnectActiveProfileInternal() {
     val state = uiState.value
@@ -201,11 +201,24 @@ private suspend fun HomeViewModel.refreshSubscriptionBeforeSmartStartIfNeeded(pr
             .coerceAtLeast(1)
             .coerceAtMost(SMART_START_SUBSCRIPTION_REFRESH_MAX_ATTEMPTS)
     val retryDelayMs = settings.smartStartSubscriptionRetryDelaySeconds.coerceAtLeast(1).toLong() * 1000L
+    val refreshBudgetMs =
+        settings.smartStartRefreshSelectionTimeoutSeconds
+            .coerceAtLeast(SMART_START_REFRESH_TIMEOUT_MIN_SECONDS)
+            .toLong() * 1000L
+    val deadlineMs = SystemClock.elapsedRealtime() + refreshBudgetMs
     repeat(attempts) { index ->
+        val remainingBudgetMs = deadlineMs - SystemClock.elapsedRealtime()
+        if (remainingBudgetMs <= 0L) {
+            container.diagnosticsLogger.record(
+                "auto-connect",
+                "subscription refresh before smart start exhausted budget attempts_completed=$index, using cached profile",
+            )
+            return container.profileRepository.getProfile(profile.id) ?: profile
+        }
         runCatching {
             container.profileRepository.refreshProfile(
                 profileId = profile.id,
-                callTimeoutMs = SMART_START_SUBSCRIPTION_REFRESH_CALL_TIMEOUT_MS,
+                callTimeoutMs = SMART_START_SUBSCRIPTION_REFRESH_CALL_TIMEOUT_MS.coerceAtMost(remainingBudgetMs),
             )
         }.onSuccess { refreshed ->
             container.diagnosticsLogger.record(
@@ -216,13 +229,25 @@ private suspend fun HomeViewModel.refreshSubscriptionBeforeSmartStartIfNeeded(pr
         }.onFailure { error ->
             container.diagnosticsLogger.record(
                 "auto-connect",
-                "subscription refresh before smart start failed attempt=${index + 1}, using cached profile: ${error.message.orEmpty()}",
+                "subscription refresh before smart start failed attempt=${index + 1}: ${error.message.orEmpty()}",
             )
         }
         if (index < attempts - 1) {
-            delay(retryDelayMs)
+            val remainingAfterAttemptMs = deadlineMs - SystemClock.elapsedRealtime()
+            if (remainingAfterAttemptMs <= 0L) {
+                container.diagnosticsLogger.record(
+                    "auto-connect",
+                    "subscription refresh before smart start exhausted budget after attempt=${index + 1}, using cached profile",
+                )
+                return container.profileRepository.getProfile(profile.id) ?: profile
+            }
+            delay(retryDelayMs.coerceAtMost(remainingAfterAttemptMs))
         }
     }
+    container.diagnosticsLogger.record(
+        "auto-connect",
+        "subscription refresh before smart start exhausted attempts=$attempts, using cached profile",
+    )
     return container.profileRepository.getProfile(profile.id) ?: profile
 }
 

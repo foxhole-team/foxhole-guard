@@ -39,8 +39,6 @@ import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.net.InetSocketAddress
-import java.net.Socket
 
 class FoxholeProxyService : Service(), RuntimeServiceHost {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -53,6 +51,16 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
             context = applicationContext,
             diagnosticsLogger = container.diagnosticsLogger,
             isNetworkActivityLoggingEnabled = { container.settingsRepository.settings.value.expert.networkActivityLogging },
+            networkActivityContext = {
+                activeSession
+                    ?.let { session -> NetworkActivityContext(profileId = session.profileId, sessionId = session.correlationId) }
+                    ?: NetworkActivityContext()
+            },
+            onNetworkActivityEvent = { event ->
+                scope.launch(Dispatchers.IO) {
+                    container.anomalyRepository.recordNetworkActivityEvent(event)
+                }
+            },
         )
     }
     private val commandActor by lazy {
@@ -724,7 +732,7 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
             val result =
                 if (
                     endpointProbeResult.isFailure &&
-                    acceptProxyReachabilityFallback(
+                    acceptProxyEgressFallback(
                         session = session,
                         reason = "validation",
                         failure = endpointProbeResult.exceptionOrNull(),
@@ -744,7 +752,7 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
         }
 
     @Suppress("ReturnCount")
-    private suspend fun acceptProxyReachabilityFallback(
+    private suspend fun acceptProxyEgressFallback(
         session: VpnSession,
         reason: String,
         failure: Throwable?,
@@ -752,58 +760,30 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
         val proxyAccess =
             container.settingsRepository.current().preferredAppProxyAccess()
                 ?: return false
-        if (!isLocalProxyReachable(proxyAccess)) {
+        val egressProbe =
+            runCatching {
+                probeConnectivityEndpointsOverLocalProxy(
+                    proxy = proxyAccess,
+                    callTimeoutMs = PROXY_EGRESS_FALLBACK_CALL_TIMEOUT_MS,
+                )
+            }
+        if (egressProbe.isFailure) {
             container.diagnosticsLogger.record(
                 "dns",
-                "proxy reachability fallback rejected: local proxy unavailable reason=$reason",
+                "proxy egress fallback rejected: endpoint probe failed reason=$reason error=${egressProbe.exceptionOrNull()?.message.orEmpty()}",
             )
             return false
         }
         val target = VpnHealthProbeTargetSelector.select(session.configJson)
-        if (target?.transport == VpnHealthProbeTransport.TCP && !isTcpRuntimeTargetReachable(target)) {
-            container.diagnosticsLogger.record(
-                "dns",
-                "proxy reachability fallback rejected: runtime target unavailable reason=$reason",
-            )
-            return false
-        }
         container.diagnosticsLogger.recordStructured(
             "dns",
-            "proxy reachability fallback accepted",
+            "proxy egress fallback accepted",
             "reason=$reason",
             target?.transport?.name?.lowercase()?.let { "target_transport=$it" } ?: "target_transport=unknown",
             failure?.javaClass?.simpleName?.let { "failure=$it" },
         )
         return true
     }
-
-    private fun isLocalProxyReachable(proxyAccess: HttpProxyAccess): Boolean =
-        runCatching {
-            Socket().use { socket ->
-                socket.connect(
-                    InetSocketAddress(proxyAccess.host, proxyAccess.port),
-                    PROXY_REACHABILITY_FALLBACK_LOCAL_TIMEOUT_MS,
-                )
-            }
-        }.isSuccess
-
-    private fun isTcpRuntimeTargetReachable(target: VpnHealthProbeTarget): Boolean =
-        runCatching {
-            val upstreamNetwork = currentProxyUpstreamNetworkOrNull()
-            (upstreamNetwork?.socketFactory?.createSocket() ?: Socket()).use { socket ->
-                socket.connect(
-                    InetSocketAddress(target.host, target.port),
-                    PROXY_REACHABILITY_FALLBACK_TARGET_TIMEOUT_MS,
-                )
-            }
-        }.isSuccess
-
-    private fun currentProxyUpstreamNetworkOrNull(): Network? =
-        ConnectivityNetworkRegistry.snapshot(this).firstOrNull { network ->
-            isNonVpnNetwork(connectivityManager, network)
-        } ?: connectivityManager.activeNetwork?.takeIf { network ->
-            isNonVpnNetwork(connectivityManager, network)
-        }
 
     private fun startIpv4EnrichmentIfNeeded(info: IpInfo) {
         if (info.ipv4 != null) {
@@ -931,7 +911,7 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
                         "proxy notification probe failed for ${session.profileName}: ${error.message.orEmpty()}",
                     )
                 }.isSuccess ||
-                acceptProxyReachabilityFallback(
+                acceptProxyEgressFallback(
                     session = session,
                     reason = "notification_health",
                     failure = result.exceptionOrNull(),
@@ -1136,6 +1116,7 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
             profileName = session.profileName,
             protocolHint = session.protocolHint,
             protocolOptionId = session.protocolOptionId,
+            transport = session.runtimeTransportProtocol(),
             rxBytes = traffic.rxTotalBytes,
             txBytes = traffic.txTotalBytes,
             updatedAt = System.currentTimeMillis(),
@@ -1188,8 +1169,7 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
         private const val PROXY_VALIDATION_RETRY_DELAY_MS = 1_000L
         private const val PROXY_VALIDATION_CALL_TIMEOUT_MS = 5_000L
         private const val PROXY_VALIDATION_TOTAL_TIMEOUT_MS = 18_000L
-        private const val PROXY_REACHABILITY_FALLBACK_LOCAL_TIMEOUT_MS = 600
-        private const val PROXY_REACHABILITY_FALLBACK_TARGET_TIMEOUT_MS = 1_500
+        private const val PROXY_EGRESS_FALLBACK_CALL_TIMEOUT_MS = 1_500L
         private const val ACTION_NATIVE_RUNTIME_STOP = "libbox_service_stop"
         private val CONNECTIVITY_PROBE_ENDPOINTS =
             listOf(

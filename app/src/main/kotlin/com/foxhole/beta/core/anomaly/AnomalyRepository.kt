@@ -5,6 +5,7 @@ package com.foxhole.beta.core.anomaly
 import com.foxhole.beta.core.data.AnomalyDao
 import com.foxhole.beta.core.data.AnomalyEventEntity
 import com.foxhole.beta.core.data.AppTrafficWindowEntity
+import com.foxhole.beta.core.data.NetworkActivityEventEntity
 import com.foxhole.beta.core.data.TrafficWindowEntity
 import com.foxhole.beta.core.data.anomalyHourBucket
 import com.foxhole.beta.core.diagnostics.DiagnosticsLogger
@@ -13,6 +14,7 @@ import com.foxhole.beta.core.model.AnomalySeverity
 import com.foxhole.beta.core.model.AnomalySettings
 import com.foxhole.beta.core.model.AnomalySignal
 import com.foxhole.beta.core.model.AppTrafficWindow
+import com.foxhole.beta.core.model.NetworkActivityEvent
 import com.foxhole.beta.core.model.Settings
 import com.foxhole.beta.core.model.StatisticsRetention
 import com.foxhole.beta.core.model.TrafficWindow
@@ -64,6 +66,19 @@ class AnomalyRepository(
                         cutoff = statisticsRetentionCutoff(nowProvider(), settings.statistics.retention),
                     )
                         .map { entities -> entities.map(TrafficWindowEntity::toDomain) }
+                }
+            }
+
+    val recentNetworkActivityEvents: Flow<List<NetworkActivityEvent>> =
+        settingsRepository.settings
+            .flatMapLatest { settings ->
+                if (!settings.networkActivityStatsRuntimeEnabled()) {
+                    flowOf(emptyList())
+                } else {
+                    dao.observeRecentNetworkActivityEvents(
+                        cutoff = statisticsRetentionCutoff(nowProvider(), settings.statistics.retention),
+                    )
+                        .map { entities -> entities.map(NetworkActivityEventEntity::toDomain) }
                 }
             }
 
@@ -149,9 +164,18 @@ class AnomalyRepository(
         cleanupExpired(settingsRepository.current())
     }
 
+    suspend fun recordNetworkActivityEvent(event: NetworkActivityEvent) {
+        if (event.packageNames.isEmpty() || event.remoteHost.isBlank()) {
+            return
+        }
+        dao.insertNetworkActivityEvent(NetworkActivityEventEntity.from(event))
+        cleanupExpired(settingsRepository.current())
+    }
+
     suspend fun clearTrafficStatistics() {
         dao.deleteTrafficWindowsBefore(Long.MAX_VALUE)
         dao.deleteAppTrafficWindowsBefore(Long.MAX_VALUE)
+        dao.deleteNetworkActivityEventsBefore(Long.MAX_VALUE)
         dao.deleteAnomalyEventsBefore(Long.MAX_VALUE)
     }
 
@@ -233,6 +257,7 @@ class AnomalyRepository(
         dao.deleteAnomalyEventsBefore(anomalyCutoff)
         dao.deleteTrafficWindowsBefore(statisticsCutoff)
         dao.deleteAppTrafficWindowsBefore(statisticsCutoff)
+        dao.deleteNetworkActivityEventsBefore(statisticsCutoff)
     }
 
     companion object {
@@ -266,3 +291,8 @@ private fun Settings.trafficWindowStatsRuntimeEnabled(): Boolean =
                 statistics.anomalyMetricsEnabled ||
                 (statistics.countryTrafficEnabled && expert.firewallEnabled)
             )
+
+private fun Settings.networkActivityStatsRuntimeEnabled(): Boolean =
+    statistics.enabled &&
+        statistics.appTrafficEnabled &&
+        expert.networkActivityLogging

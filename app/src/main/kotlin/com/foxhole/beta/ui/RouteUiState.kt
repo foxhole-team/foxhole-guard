@@ -7,6 +7,7 @@ import com.foxhole.beta.core.model.AppTrafficWindow
 import com.foxhole.beta.core.model.ConnectionSnapshot
 import com.foxhole.beta.core.model.InstalledAppOption
 import com.foxhole.beta.core.model.IpInfo
+import com.foxhole.beta.core.model.NetworkActivityEvent
 import com.foxhole.beta.core.model.OverallStatisticsUiItem
 import com.foxhole.beta.core.model.Profile
 import com.foxhole.beta.core.model.ProfileSourceType
@@ -125,6 +126,7 @@ data class SettingsRouteUiState(
     val diagnosticEntries: List<DiagnosticEntry> = emptyList(),
     val anomalyEvents: List<AnomalyEvent> = emptyList(),
     val appTrafficWindows: List<AppTrafficWindow> = emptyList(),
+    val networkActivityEvents: List<NetworkActivityEvent> = emptyList(),
     val trafficWindows: List<TrafficWindow> = emptyList(),
     val dnsFilterRefreshInProgress: Boolean = false,
     val statisticsDashboard: StatisticsDashboardUiState = StatisticsDashboardUiState(),
@@ -288,6 +290,7 @@ internal fun HomeUiState.toSettingsRouteUiState(
         diagnosticEntries = diagnosticEntries,
         anomalyEvents = anomalyEvents,
         appTrafficWindows = appTrafficWindows,
+        networkActivityEvents = networkActivityEvents,
         trafficWindows = trafficWindows,
         dnsFilterRefreshInProgress = dnsFilterRefreshInProgress,
         statisticsDashboard = statisticsDashboard,

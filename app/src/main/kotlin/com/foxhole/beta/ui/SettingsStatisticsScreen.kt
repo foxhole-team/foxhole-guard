@@ -73,6 +73,8 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -80,7 +82,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.foxhole.beta.R
 import com.foxhole.beta.core.anomaly.UsageStatsAccess
-import com.foxhole.beta.core.diagnostics.DiagnosticEntry
 import com.foxhole.beta.core.model.AnomalyEvent
 import com.foxhole.beta.core.model.AnomalySeverity
 import com.foxhole.beta.core.model.AnomalyType
@@ -88,6 +89,7 @@ import com.foxhole.beta.core.model.AppTrafficWindow
 import com.foxhole.beta.core.model.DnsSettings
 import com.foxhole.beta.core.model.InstalledAppOption
 import com.foxhole.beta.core.model.InstalledAppInventoryChange
+import com.foxhole.beta.core.model.NetworkActivityEvent
 import com.foxhole.beta.core.model.OverallStatisticsUiItem
 import com.foxhole.beta.core.model.Profile
 import com.foxhole.beta.core.model.ProfileComparisonSideUiItem
@@ -117,7 +119,6 @@ import java.util.Date
 import java.util.Locale
 import kotlin.math.max
 import kotlin.math.roundToInt
-import kotlin.math.roundToLong
 
 @Composable
 @Suppress("ComplexCondition", "CyclomaticComplexMethod", "LongMethod", "UnusedParameter")
@@ -492,7 +493,7 @@ fun StatisticsScreen(
                 AppTrafficDetail(
                     row = selectedAppRow,
                     samples = state.appTrafficWindows,
-                    diagnosticEntries = state.diagnosticEntries,
+                    networkActivityEvents = state.networkActivityEvents,
                     ipInfo = state.ipInfo,
                 )
             },
@@ -988,6 +989,13 @@ private fun ProtocolStatCard(
                     successRate = item.successRate,
                     errorRate = item.errorRate,
                     visible = visible,
+                    contentDescription =
+                    stringResource(
+                        R.string.statistics_profile_protocol_metrics,
+                        formatPercent(item.successRate),
+                        formatPercent(item.errorRate),
+                        formatBytes(context, item.totalBytes),
+                    ),
                     modifier = Modifier.size(58.dp),
                 )
                 Text(
@@ -1022,6 +1030,7 @@ private fun AnimatedDonutChart(
     successRate: Float,
     errorRate: Float,
     visible: Boolean,
+    contentDescription: String,
     modifier: Modifier = Modifier,
 ) {
     val semanticColors = LocalFoxholeSemanticColors.current
@@ -1032,7 +1041,7 @@ private fun AnimatedDonutChart(
         animationSpec = tween(durationMillis = DONUT_ANIMATION_DURATION_MS, easing = FastOutSlowInEasing),
         label = "donut-progress",
     )
-    Canvas(modifier = modifier) {
+    Canvas(modifier = modifier.semantics { this.contentDescription = contentDescription }) {
         val stroke = Stroke(width = 14.dp.toPx(), cap = StrokeCap.Round)
         val successSweep = 360f * successRate.coerceIn(0f, 1f) * progress
         val errorSweep = 360f * errorRate.coerceIn(0f, 1f) * progress
@@ -2511,18 +2520,17 @@ private fun ProfileProtocolDetailPanel(protocol: ProfileProtocolDetail) {
 private fun AppTrafficDetail(
     row: AppTrafficRow,
     samples: List<AppTrafficWindow>,
-    diagnosticEntries: List<DiagnosticEntry>,
+    networkActivityEvents: List<NetworkActivityEvent>,
     ipInfo: com.foxhole.beta.core.model.IpInfo?,
 ) {
     val context = LocalContext.current
     val resolver = remember(context) { TorGeoIpCountryResolver(context) }
     var allConnectionsVisible by rememberSaveable { mutableStateOf(false) }
     val appSamples = samples.filter { sample -> sample.packageName == row.packageName }
-    val connectionRows = remember(row.packageName, diagnosticEntries, row.totalBytes, ipInfo) {
+    val connectionRows = remember(row.packageName, networkActivityEvents, ipInfo) {
         appConnectionRows(
             packageName = row.packageName,
-            entries = diagnosticEntries,
-            totalBytes = row.totalBytes,
+            events = networkActivityEvents,
             resolver = resolver,
             ipInfo = ipInfo,
         )
@@ -2972,7 +2980,7 @@ internal fun statisticsUiState(
         total = total,
         vpnProtocols = protocolStats,
         profileComparisons = profileComparisons(state, protocolTraffic),
-        transports = transportStatistics(state.profiles, protocolStats),
+        transports = transportStatistics(protocolTraffic),
     )
 }
 
@@ -2983,6 +2991,7 @@ private fun protocolTrafficItems(state: SettingsRouteUiState): List<ProfileTraff
                 profileId = total.profileId,
                 profileName = total.profileName,
                 protocolHint = total.protocolHint,
+                transport = total.transport,
                 rxBytes = total.rxTotalBytes,
                 txBytes = total.txTotalBytes,
                 updatedAt = total.updatedAt,
@@ -2997,6 +3006,7 @@ private fun protocolTrafficItems(state: SettingsRouteUiState): List<ProfileTraff
                 profileId = activeProfile.id,
                 profileName = activeProfile.name,
                 protocolHint = activeProfile.runtimeProtocolHint(),
+                transport = TransportProtocol.UNKNOWN,
                 rxBytes = liveTraffic.rxTotalBytes,
                 txBytes = liveTraffic.txTotalBytes,
                 updatedAt = liveTraffic.sampledAt,
@@ -3015,6 +3025,7 @@ private fun profileTrafficItems(state: SettingsRouteUiState): List<ProfileTraffi
                 profileId = latest.profileId,
                 profileName = latest.profileName,
                 protocolHint = latest.protocolHint,
+                transport = items.singleKnownTransportOrUnknown(),
                 rxBytes = items.sumOf(ProfileTrafficUiItem::rxBytes),
                 txBytes = items.sumOf(ProfileTrafficUiItem::txBytes),
                 updatedAt = latest.updatedAt,
@@ -3134,23 +3145,17 @@ private fun profileComparisons(
     }
 }
 
-private fun transportStatistics(
-    profiles: List<Profile>,
-    protocolStats: List<ProtocolStatisticsUiItem>,
-): List<TransportStatisticsUiItem> {
-    val transportByProtocol =
-        ProtocolHint.entries.associateWith { protocol ->
-            profiles.transportForProtocol(protocol)
-        }
+private fun transportStatistics(profileTraffic: List<ProfileTrafficUiItem>): List<TransportStatisticsUiItem> {
     val accumulators = linkedMapOf<TransportProtocol, ProtocolAccumulator>()
-    protocolStats.forEach { protocol ->
-        val transport = transportByProtocol[protocol.protocol] ?: TransportProtocol.UNKNOWN
+    profileTraffic.forEach { traffic ->
+        val transport = traffic.transport
         val accumulator = accumulators.getOrPut(transport) { ProtocolAccumulator() }
-        accumulator.successCount += protocol.successCount
-        accumulator.failureCount += protocol.failureCount
-        accumulator.rxBytes += protocol.rxBytes
-        accumulator.txBytes += protocol.txBytes
-        protocol.avgLatencyMs?.let(accumulator.latencies::add)
+        if (traffic.totalBytes > 0L) {
+            accumulator.successCount += 1
+        }
+        accumulator.rxBytes += traffic.rxBytes
+        accumulator.txBytes += traffic.txBytes
+        accumulator.lastUsedAt = maxOfNotNull(accumulator.lastUsedAt, traffic.updatedAt.takeIf { it > 0L })
     }
     return accumulators
         .map { (transport, accumulator) ->
@@ -3169,6 +3174,13 @@ private fun transportStatistics(
                 .thenBy { item -> item.transport.name },
         )
 }
+
+private fun List<ProfileTrafficUiItem>.singleKnownTransportOrUnknown(): TransportProtocol =
+    map(ProfileTrafficUiItem::transport)
+        .filterNot { transport -> transport == TransportProtocol.UNKNOWN }
+        .distinct()
+        .singleOrNull()
+        ?: TransportProtocol.UNKNOWN
 
 internal fun appTrafficRows(
     samples: List<AppTrafficWindow>,
@@ -3319,22 +3331,13 @@ private fun metricIfPositive(
 
 private fun appConnectionRows(
     packageName: String,
-    entries: List<DiagnosticEntry>,
-    totalBytes: Long,
+    events: List<NetworkActivityEvent>,
     resolver: TorGeoIpCountryResolver,
     ipInfo: com.foxhole.beta.core.model.IpInfo?,
 ): List<AppConnectionRow> =
-    appConnectionEventRows(packageName, entries, resolver, ipInfo)
+    appConnectionEventRows(packageName, events, resolver, ipInfo)
         .groupBy { row -> row.remote to row.protocol }
         .map { (key, rows) ->
-            val estimatedBytes =
-                if (rows.isEmpty()) {
-                    0L
-                } else {
-                    ((totalBytes.toDouble() * rows.size.toDouble()) / entries.size.coerceAtLeast(1).toDouble())
-                        .roundToLong()
-                        .coerceAtLeast(rows.sumOf(AppConnectionRow::bytes))
-                }
             val latest = rows.maxBy(AppConnectionRow::lastSeenAt)
             AppConnectionRow(
                 remote = key.first,
@@ -3344,7 +3347,7 @@ private fun appConnectionRows(
                 city = latest.city,
                 protocol = key.second,
                 count = rows.size,
-                bytes = estimatedBytes,
+                bytes = rows.sumOf(AppConnectionRow::bytes),
                 lastSeenAt = rows.maxOf(AppConnectionRow::lastSeenAt),
             )
         }
@@ -3356,51 +3359,43 @@ private fun appConnectionRows(
 
 private fun appConnectionEventRows(
     packageName: String,
-    entries: List<DiagnosticEntry>,
+    events: List<NetworkActivityEvent>,
     resolver: TorGeoIpCountryResolver,
     ipInfo: com.foxhole.beta.core.model.IpInfo?,
 ): List<AppConnectionRow> =
-    entries
+    events
         .asSequence()
-        .filter { entry -> entry.tag == "activity" && entry.message.contains("packages=") && entry.message.contains(packageName) }
-        .mapNotNull { entry ->
-            val parts = entry.message.substringAfter(": ", missingDelimiterValue = entry.message)
-                .split(" • ")
-                .mapNotNull { part ->
-                    val key = part.substringBefore("=", missingDelimiterValue = "").takeIf(String::isNotBlank)
-                    val value = part.substringAfter("=", missingDelimiterValue = "").takeIf(String::isNotBlank)
-                    if (key != null && value != null) key to value else null
-                }
-                .toMap()
-            val packages = parts["packages"].orEmpty().split(",").map(String::trim)
-            if (packageName !in packages) {
-                null
-            } else {
-                val remote = parts["remote"]?.takeIf { remote -> remote != "?:0" && remote != "?" } ?: return@mapNotNull null
-                val protocol = parts["protocol"]?.takeIf(String::isNotBlank) ?: "?"
-                val ipAddress = remote.connectionHost()
-                val countryCode =
-                    resolver.countryCodeForDestination(remote)
-                        ?: ipInfo?.takeIf { info ->
-                            ipAddress == info.ip || ipAddress == info.ipv4 || ipAddress == info.ipv6
-                        }?.countryCode
-                val countryName = countryCode?.let(::countryDisplayName)
-                val city =
-                    ipInfo
-                        ?.takeIf { info -> ipAddress == info.ip || ipAddress == info.ipv4 || ipAddress == info.ipv6 }
-                        ?.city
-                AppConnectionRow(
-                    remote = remote,
-                    ipAddress = ipAddress,
-                    countryCode = countryCode,
-                    countryName = countryName,
-                    city = city,
-                    protocol = protocol,
-                    count = 1,
-                    bytes = 0L,
-                    lastSeenAt = entry.timestamp,
-                )
-            }
+        .filter { event -> packageName in event.packageNames }
+        .mapNotNull { event ->
+            val remoteHost = event.remoteHost.takeIf(String::isNotBlank) ?: return@mapNotNull null
+            val remote =
+                event.remotePort
+                    ?.takeIf { port -> port in 1..65535 }
+                    ?.let { port -> "$remoteHost:$port" }
+                    ?: remoteHost
+            val ipAddress = remoteHost.connectionHost()
+            val countryCode =
+                event.countryCode
+                    ?: resolver.countryCodeForDestination(remoteHost)
+                    ?: ipInfo?.takeIf { info ->
+                        ipAddress == info.ip || ipAddress == info.ipv4 || ipAddress == info.ipv6
+                    }?.countryCode
+            val countryName = countryCode?.let(::countryDisplayName)
+            val city =
+                ipInfo
+                    ?.takeIf { info -> ipAddress == info.ip || ipAddress == info.ipv4 || ipAddress == info.ipv6 }
+                    ?.city
+            AppConnectionRow(
+                remote = remote,
+                ipAddress = ipAddress,
+                countryCode = countryCode,
+                countryName = countryName,
+                city = city,
+                protocol = event.protocol.ifBlank { "?" },
+                count = 1,
+                bytes = event.totalBytes.coerceAtLeast(0L),
+                lastSeenAt = event.timestampMs,
+            )
         }
         .sortedByDescending(AppConnectionRow::lastSeenAt)
         .toList()
@@ -3575,39 +3570,6 @@ private fun Profile.runtimeProtocolHint(): ProtocolHint =
         ?: protocolOptions.firstOrNull { option -> option.isSelected }?.protocolHint
         ?: protocolOptions.firstOrNull()?.protocolHint
         ?: protocolHint
-
-private fun List<Profile>.transportForProtocol(protocol: ProtocolHint): TransportProtocol {
-    val explicitTransports =
-        flatMap { profile ->
-            profile.protocolOptions
-                .filter { option -> option.protocolHint == protocol }
-                .map { option -> option.inferredTransport() }
-        }
-            .filterNot { transport -> transport == TransportProtocol.UNKNOWN }
-            .distinct()
-    return when {
-        protocol == ProtocolHint.HYSTERIA2 || protocol == ProtocolHint.WIREGUARD -> TransportProtocol.UDP
-        explicitTransports.size == 1 -> explicitTransports.first()
-        protocol in setOf(
-            ProtocolHint.VLESS,
-            ProtocolHint.TROJAN,
-            ProtocolHint.VMESS,
-            ProtocolHint.SHADOWSOCKS,
-            ProtocolHint.OUTLINE,
-        ) -> TransportProtocol.TCP
-        else -> TransportProtocol.UNKNOWN
-    }
-}
-
-private fun ProfileProtocolOption.inferredTransport(): TransportProtocol {
-    val raw = "$id $displayName".lowercase(Locale.US)
-    return when {
-        raw.contains("udp") || raw.contains("quic") -> TransportProtocol.UDP
-        raw.contains("tcp") || raw.contains("grpc") || raw.contains("websocket") || raw.contains(" ws") ||
-            raw.contains("-ws") || raw.contains("http") -> TransportProtocol.TCP
-        else -> TransportProtocol.UNKNOWN
-    }
-}
 
 @Composable
 private fun rememberOneShotVisible(key: String): Boolean {

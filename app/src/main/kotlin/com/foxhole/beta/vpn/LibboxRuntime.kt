@@ -22,6 +22,7 @@ import com.foxhole.beta.BuildConfig
 import com.foxhole.beta.core.anomaly.DnsRuntimeStats
 import com.foxhole.beta.core.diagnostics.DiagnosticSanitizer
 import com.foxhole.beta.core.diagnostics.DiagnosticsLogger
+import com.foxhole.beta.core.model.NetworkActivityEvent
 import com.foxhole.beta.core.model.VpnSession
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -38,7 +39,21 @@ internal fun createVpnRuntime(
     context: Context,
     diagnosticsLogger: DiagnosticsLogger,
     isNetworkActivityLoggingEnabled: () -> Boolean,
-): VpnCoreRuntime = ReflectiveLibboxRuntime(context, diagnosticsLogger, isNetworkActivityLoggingEnabled)
+    networkActivityContext: () -> NetworkActivityContext = { NetworkActivityContext() },
+    onNetworkActivityEvent: (NetworkActivityEvent) -> Unit = {},
+): VpnCoreRuntime =
+    ReflectiveLibboxRuntime(
+        context = context,
+        diagnosticsLogger = diagnosticsLogger,
+        isNetworkActivityLoggingEnabled = isNetworkActivityLoggingEnabled,
+        networkActivityContext = networkActivityContext,
+        onNetworkActivityEvent = onNetworkActivityEvent,
+    )
+
+internal data class NetworkActivityContext(
+    val profileId: Long? = null,
+    val sessionId: String? = null,
+)
 
 private const val ANDROID_ROUTE_EXCLUDE_LIMIT = 512
 
@@ -69,8 +84,17 @@ private class ReflectiveLibboxRuntime(
     private val context: Context,
     private val diagnosticsLogger: DiagnosticsLogger,
     isNetworkActivityLoggingEnabled: () -> Boolean,
+    networkActivityContext: () -> NetworkActivityContext,
+    onNetworkActivityEvent: (NetworkActivityEvent) -> Unit,
 ) : VpnCoreRuntime {
-    private val reflection = LibboxReflection(context, diagnosticsLogger, isNetworkActivityLoggingEnabled)
+    private val reflection =
+        LibboxReflection(
+            context = context,
+            diagnosticsLogger = diagnosticsLogger,
+            isNetworkActivityLoggingEnabled = isNetworkActivityLoggingEnabled,
+            networkActivityContext = networkActivityContext,
+            onNetworkActivityEvent = onNetworkActivityEvent,
+        )
     private val defaultNetworkMonitor by lazy { DefaultNetworkMonitor(context, reflection, diagnosticsLogger) }
     private val commandServerRef = AtomicReference<Any?>(null)
     private val fileDescriptorRef = AtomicReference<ParcelFileDescriptor?>(null)

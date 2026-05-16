@@ -1,16 +1,15 @@
 package com.foxhole.beta.vpn
 
 import com.foxhole.beta.core.diagnostics.DiagnosticsLogger
+import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.currentCoroutineContext
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.selects.select
+import java.util.PriorityQueue
 import java.util.concurrent.CancellationException
-import java.util.concurrent.PriorityBlockingQueue
-import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
 
@@ -26,7 +25,7 @@ internal class RuntimeCommandActor(
     private val emergencyKill: (String) -> RuntimeKillResult,
 ) {
     private val sequence = AtomicLong(0)
-    private val queue = PriorityBlockingQueue<QueuedRuntimeCommand>()
+    private val commands = Channel<QueuedRuntimeCommand>(Channel.UNLIMITED)
     private val closed = AtomicBoolean(false)
 
     @Volatile
@@ -34,18 +33,7 @@ internal class RuntimeCommandActor(
 
     private val worker =
         scope.launch(Dispatchers.IO) {
-            while (isActive) {
-                val command = nextQueuedCommandOrNull() ?: continue
-                val job =
-                    launch(Dispatchers.Default) {
-                        runCommandSafely(command)
-                    }
-                currentJob = job
-                job.join()
-                if (currentJob == job) {
-                    currentJob = null
-                }
-            }
+            runActorLoop()
         }
 
     fun launch(
@@ -70,43 +58,101 @@ internal class RuntimeCommandActor(
                 reason = reason,
                 block = block,
             )
-        if (priority.value >= RuntimeCommandPriority.STOP.value) {
-            preemptForPriorityCommand(command)
-            val job =
-                scope.launch(Dispatchers.Default) {
-                    runCommandSafely(command)
-                }
-            currentJob = job
-            job.invokeOnCompletion {
-                if (currentJob == job) {
-                    currentJob = null
-                }
-            }
-            return
-        } else {
+        if (priority.value < RuntimeCommandPriority.STOP.value) {
             recordCommandEvent("runtime command queued", command)
         }
-        queue.offer(command)
+        if (!commands.trySend(command).isSuccess) {
+            record(
+                "runtime command rejected",
+                "priority=${priority.name.lowercase()}",
+                "reason=$reason",
+                "closed=true",
+            )
+        }
     }
 
     fun close() {
         closed.set(true)
         record("runtime command actor closing")
+        commands.close()
         worker.cancel()
         currentJob?.cancel()
-        queue.clear()
     }
 
-    private fun preemptForPriorityCommand(command: QueuedRuntimeCommand) {
-        val removedNormalCommands = queue.removeIf { queued -> queued.priority < RuntimeCommandPriority.STOP.value }
+    private suspend fun runActorLoop() {
+        val pending = PriorityQueue<QueuedRuntimeCommand>()
+        var running: RunningRuntimeCommand? = null
+        var acceptingCommands = true
+        while (acceptingCommands && !closed.get()) {
+            if (running == null) {
+                val next = pending.poll() ?: receiveNextCommandOrNull()
+                if (next == null) {
+                    acceptingCommands = false
+                } else {
+                    running = startCommand(next)
+                }
+            } else {
+                val active = running
+                select {
+                    active.job.onJoin {
+                        if (currentJob == active.job) {
+                            currentJob = null
+                        }
+                        running = null
+                    }
+                    commands.onReceiveCatching { result ->
+                        val command = result.getOrNull()
+                        if (command == null) {
+                            active.job.cancel()
+                            running = null
+                            acceptingCommands = false
+                        } else if (command.priority >= RuntimeCommandPriority.STOP.value) {
+                            preemptRunningCommand(
+                                running = active,
+                                command = command,
+                                pending = pending,
+                            )
+                            running = null
+                        } else {
+                            recordCommandEvent("runtime command queued", command)
+                            pending.offer(command)
+                        }
+                    }
+                }
+            }
+        }
+        running?.job?.cancel()
+        pending.clear()
+    }
+
+    private suspend fun receiveNextCommandOrNull(): QueuedRuntimeCommand? =
+        commands.receiveCatching().getOrNull()
+
+    private fun startCommand(command: QueuedRuntimeCommand): RunningRuntimeCommand {
+        val job =
+            scope.launch(Dispatchers.Default + CoroutineName("RuntimeCommand:${command.priorityName}")) {
+                runCommandSafely(command)
+            }
+        currentJob = job
+        return RunningRuntimeCommand(job = job)
+    }
+
+    private fun preemptRunningCommand(
+        running: RunningRuntimeCommand,
+        command: QueuedRuntimeCommand,
+        pending: PriorityQueue<QueuedRuntimeCommand>,
+    ) {
+        val removedNormalCommands = pending.removeIf { queued -> queued.priority < RuntimeCommandPriority.STOP.value }
         recordCommandEvent(
             headline = "runtime priority command queued",
             command = command,
             extra = "cleared_normal=$removedNormalCommands",
         )
-        val active = currentJob?.takeIf { it.isActive }
-        if (active != null) {
-            active.cancel()
+        if (running.job.isActive) {
+            running.job.cancel()
+            if (currentJob == running.job) {
+                currentJob = null
+            }
             recordCommandEvent(
                 headline = "runtime command preempted",
                 command = command,
@@ -118,14 +164,7 @@ internal class RuntimeCommandActor(
                 extra = "kill_reason=${kill.reason}",
             )
         }
-    }
-
-    private suspend fun nextQueuedCommandOrNull(): QueuedRuntimeCommand? {
-        val command = queue.poll(250L, TimeUnit.MILLISECONDS) ?: return null
-        while (currentCoroutineContext().isActive && currentJob?.isActive == true) {
-            delay(PRIORITY_COMMAND_POLL_MS)
-        }
-        return command.takeIf { currentCoroutineContext().isActive }
+        pending.offer(command)
     }
 
     @Suppress("TooGenericExceptionCaught")
@@ -185,6 +224,8 @@ internal class RuntimeCommandActor(
         override fun compareTo(other: QueuedRuntimeCommand): Int =
             compareValuesBy(this, other, { -it.priority }, { it.sequence })
     }
-}
 
-private const val PRIORITY_COMMAND_POLL_MS = 25L
+    private data class RunningRuntimeCommand(
+        val job: Job,
+    )
+}

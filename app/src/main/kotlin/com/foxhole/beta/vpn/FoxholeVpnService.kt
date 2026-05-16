@@ -76,6 +76,16 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
             context = applicationContext,
             diagnosticsLogger = container.diagnosticsLogger,
             isNetworkActivityLoggingEnabled = { container.settingsRepository.settings.value.expert.networkActivityLogging },
+            networkActivityContext = {
+                activeSession
+                    ?.let { session -> NetworkActivityContext(profileId = session.profileId, sessionId = session.correlationId) }
+                    ?: NetworkActivityContext()
+            },
+            onNetworkActivityEvent = { event ->
+                scope.launch(Dispatchers.IO) {
+                    container.anomalyRepository.recordNetworkActivityEvent(event)
+                }
+            },
         )
     }
     internal val commandActor by lazy {

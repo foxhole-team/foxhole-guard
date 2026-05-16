@@ -91,6 +91,22 @@ data class AppTrafficWindow(
     val totalBytes: Long get() = rxBytes + txBytes
 }
 
+data class NetworkActivityEvent(
+    val id: Long = 0,
+    val timestampMs: Long,
+    val packageNames: List<String>,
+    val protocol: String,
+    val remoteHost: String,
+    val remotePort: Int?,
+    val countryCode: String?,
+    val bytesRx: Long,
+    val bytesTx: Long,
+    val profileId: Long?,
+    val sessionId: String?,
+) {
+    val totalBytes: Long get() = bytesRx + bytesTx
+}
+
 data class TrafficBaseline(
     val key: String,
     val profileId: String?,

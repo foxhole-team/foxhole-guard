@@ -632,6 +632,7 @@ data class ProfileTrafficTotal(
     val profileName: String,
     val protocolHint: ProtocolHint,
     val protocolOptionId: String? = null,
+    val transport: TransportProtocol = TransportProtocol.UNKNOWN,
     val rxTotalBytes: Long = 0,
     val txTotalBytes: Long = 0,
     val updatedAt: Long = 0,

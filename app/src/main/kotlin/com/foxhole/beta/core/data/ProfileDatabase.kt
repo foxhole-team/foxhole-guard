@@ -26,6 +26,7 @@ import com.foxhole.beta.core.model.AnomalySeverity
 import com.foxhole.beta.core.model.AnomalyType
 import com.foxhole.beta.core.model.AppBaseline
 import com.foxhole.beta.core.model.AppTrafficWindow
+import com.foxhole.beta.core.model.NetworkActivityEvent
 import com.foxhole.beta.core.model.NetworkType
 import com.foxhole.beta.core.model.Profile
 import com.foxhole.beta.core.model.ProfileSourceType
@@ -308,6 +309,62 @@ data class AppTrafficWindowEntity(
                 foreground = window.foreground,
                 networkType = window.networkType.name,
                 hourBucket = anomalyHourBucket(window.startedAtMs),
+            )
+    }
+}
+
+@Entity(
+    tableName = "network_activity_events",
+    indices = [
+        Index("timestampMs"),
+        Index("profileId"),
+        Index("sessionId"),
+        Index("remoteHost"),
+    ],
+)
+@TypeConverters(RoomValueConverters::class)
+data class NetworkActivityEventEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val timestampMs: Long,
+    val packageNames: List<String>,
+    val protocol: String,
+    val remoteHost: String,
+    val remotePort: Int?,
+    val countryCode: String?,
+    val bytesRx: Long,
+    val bytesTx: Long,
+    val profileId: Long?,
+    val sessionId: String?,
+) {
+    fun toDomain(): NetworkActivityEvent =
+        NetworkActivityEvent(
+            id = id,
+            timestampMs = timestampMs,
+            packageNames = packageNames,
+            protocol = protocol,
+            remoteHost = remoteHost,
+            remotePort = remotePort,
+            countryCode = countryCode,
+            bytesRx = bytesRx,
+            bytesTx = bytesTx,
+            profileId = profileId,
+            sessionId = sessionId,
+        )
+
+    companion object {
+        fun from(event: NetworkActivityEvent): NetworkActivityEventEntity =
+            NetworkActivityEventEntity(
+                id = event.id,
+                timestampMs = event.timestampMs,
+                packageNames = event.packageNames,
+                protocol = event.protocol,
+                remoteHost = event.remoteHost,
+                remotePort = event.remotePort,
+                countryCode = event.countryCode,
+                bytesRx = event.bytesRx,
+                bytesTx = event.bytesTx,
+                profileId = event.profileId,
+                sessionId = event.sessionId,
             )
     }
 }
@@ -784,6 +841,9 @@ interface AnomalyDao {
     suspend fun insertAppTrafficWindows(entities: List<AppTrafficWindowEntity>)
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertNetworkActivityEvent(entity: NetworkActivityEventEntity): Long
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertTrafficBaseline(entity: TrafficBaselineEntity)
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
@@ -958,6 +1018,9 @@ interface AnomalyDao {
     @Query("select * from traffic_windows where startedAtMs >= :cutoff order by startedAtMs desc")
     fun observeRecentTrafficWindows(cutoff: Long): Flow<List<TrafficWindowEntity>>
 
+    @Query("select * from network_activity_events where timestampMs >= :cutoff order by timestampMs desc, id desc")
+    fun observeRecentNetworkActivityEvents(cutoff: Long): Flow<List<NetworkActivityEventEntity>>
+
     @Query("select * from traffic_baselines where baselineKey = :key limit 1")
     suspend fun getTrafficBaseline(key: String): TrafficBaselineEntity?
 
@@ -984,6 +1047,9 @@ interface AnomalyDao {
 
     @Query("delete from app_traffic_windows where startedAtMs < :cutoff")
     suspend fun deleteAppTrafficWindowsBefore(cutoff: Long)
+
+    @Query("delete from network_activity_events where timestampMs < :cutoff")
+    suspend fun deleteNetworkActivityEventsBefore(cutoff: Long)
 
     @Query("delete from anomaly_events where createdAtMs < :cutoff")
     suspend fun deleteAnomalyEventsBefore(cutoff: Long)
@@ -1057,8 +1123,9 @@ class RoomValueConverters {
         AnomalyEventEntity::class,
         RuntimeTimelineEventEntity::class,
         ProtocolMetricEventEntity::class,
+        NetworkActivityEventEntity::class,
     ],
-    version = 4,
+    version = 5,
     exportSchema = true,
 )
 @TypeConverters(RoomValueConverters::class)
@@ -1297,6 +1364,41 @@ abstract class ProfileDatabase : RoomDatabase() {
                 }
             }
 
+        private val MIGRATION_4_5 =
+            object : Migration(4, 5) {
+                override fun migrate(db: SupportSQLiteDatabase) {
+                    db.execSQL(
+                        """
+                        create table if not exists `network_activity_events` (
+                            `id` integer primary key autoincrement not null,
+                            `timestampMs` integer not null,
+                            `packageNames` text not null,
+                            `protocol` text not null,
+                            `remoteHost` text not null,
+                            `remotePort` integer,
+                            `countryCode` text,
+                            `bytesRx` integer not null,
+                            `bytesTx` integer not null,
+                            `profileId` integer,
+                            `sessionId` text
+                        )
+                        """.trimIndent(),
+                    )
+                    db.execSQL(
+                        "create index if not exists `index_network_activity_events_timestampMs` on `network_activity_events` (`timestampMs`)",
+                    )
+                    db.execSQL(
+                        "create index if not exists `index_network_activity_events_profileId` on `network_activity_events` (`profileId`)",
+                    )
+                    db.execSQL(
+                        "create index if not exists `index_network_activity_events_sessionId` on `network_activity_events` (`sessionId`)",
+                    )
+                    db.execSQL(
+                        "create index if not exists `index_network_activity_events_remoteHost` on `network_activity_events` (`remoteHost`)",
+                    )
+                }
+            }
+
         fun create(context: Context): ProfileDatabase {
             val appContext = context.applicationContext
             val passphrase = DatabasePassphraseStore(appContext).readOrCreate()
@@ -1311,6 +1413,7 @@ abstract class ProfileDatabase : RoomDatabase() {
                     MIGRATION_1_2,
                     MIGRATION_2_3,
                     MIGRATION_3_4,
+                    MIGRATION_4_5,
                 ).fallbackToDestructiveMigration(false).build()
             migrateLegacyPlaintextDatabase(appContext, database)
             return database

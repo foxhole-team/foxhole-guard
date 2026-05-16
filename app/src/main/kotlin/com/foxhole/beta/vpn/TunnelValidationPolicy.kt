@@ -38,9 +38,9 @@ internal class TunnelValidationPolicy(
     private companion object {
         val DefaultRules =
             listOf(
-                TunnelValidationProbeRule { kind, _ ->
+                TunnelValidationProbeRule { kind, context ->
                     if (kind == TunnelValidationProbeKind.DNS_INDEPENDENT_LITERAL_IP) {
-                        true
+                        context.allowDnsIndependentLiteralIpValidation
                     } else {
                         null
                     }

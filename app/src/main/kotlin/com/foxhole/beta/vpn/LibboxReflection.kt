@@ -12,6 +12,7 @@ import android.util.Log
 import androidx.core.content.getSystemService
 import com.foxhole.beta.BuildConfig
 import com.foxhole.beta.core.diagnostics.DiagnosticsLogger
+import com.foxhole.beta.core.model.NetworkActivityEvent
 import java.io.File
 import java.lang.reflect.Method
 import java.lang.reflect.Proxy
@@ -30,6 +31,8 @@ internal class LibboxReflection(
     private val context: Context,
     private val diagnosticsLogger: DiagnosticsLogger,
     private val isNetworkActivityLoggingEnabled: () -> Boolean,
+    private val networkActivityContext: () -> NetworkActivityContext = { NetworkActivityContext() },
+    private val onNetworkActivityEvent: (NetworkActivityEvent) -> Unit = {},
 ) {
     private val setupDone = AtomicBoolean(false)
     private val appContext = context.applicationContext
@@ -574,8 +577,26 @@ internal class LibboxReflection(
             return
         }
         val appLabel = owner?.userName?.takeIf(String::isNotBlank) ?: "Unknown app"
+        val packageNames = owner?.packageNames.orEmpty().distinct().sorted()
+        if (packageNames.isNotEmpty() && destinationHost.isNotBlank()) {
+            val context = networkActivityContext()
+            onNetworkActivityEvent(
+                NetworkActivityEvent(
+                    timestampMs = System.currentTimeMillis(),
+                    packageNames = packageNames,
+                    protocol = protocolLabel(protocol),
+                    remoteHost = destinationHost,
+                    remotePort = destinationPort.takeIf { port -> port in 1..65535 },
+                    countryCode = null,
+                    bytesRx = 0L,
+                    bytesTx = 0L,
+                    profileId = context.profileId,
+                    sessionId = context.sessionId,
+                ),
+            )
+        }
         val throttleKey =
-            listOf(protocol, owner?.packageNames.orEmpty().sorted().joinToString(","), destinationHost, destinationPort)
+            listOf(protocol, packageNames.joinToString(","), destinationHost, destinationPort)
                 .joinToString("|")
         diagnosticsLogger.recordThrottled(
             tag = "activity",
@@ -588,7 +609,7 @@ internal class LibboxReflection(
                     append(
                         buildList {
                             add("app=$appLabel")
-                            owner?.packageNames?.takeIf { it.isNotEmpty() }?.let { add("packages=${it.joinToString()}") }
+                            packageNames.takeIf { it.isNotEmpty() }?.let { add("packages=${it.joinToString()}") }
                             owner?.let { add("uid=${it.uid}") }
                             add("protocol=${protocolLabel(protocol)}")
                             add("local=${sourceHost.ifBlank { "?" }}:$sourcePort")

@@ -12,6 +12,7 @@ import com.foxhole.beta.core.model.DiagnosticsRetention
 import com.foxhole.beta.core.model.ExpertSettings
 import com.foxhole.beta.core.model.InstalledAppOption
 import com.foxhole.beta.core.model.IpInfo
+import com.foxhole.beta.core.model.NetworkActivityEvent
 import com.foxhole.beta.core.model.Profile
 import com.foxhole.beta.core.model.ProfileSourceType
 import com.foxhole.beta.core.model.ProtocolHint
@@ -44,6 +45,7 @@ data class HomeUiState(
     val diagnosticEntries: List<DiagnosticEntry> = emptyList(),
     val anomalyEvents: List<AnomalyEvent> = emptyList(),
     val appTrafficWindows: List<AppTrafficWindow> = emptyList(),
+    val networkActivityEvents: List<NetworkActivityEvent> = emptyList(),
     val trafficWindows: List<TrafficWindow> = emptyList(),
     val catalogPresetPreviews: Map<Long, List<RoutingRepository.RoutingCatalogPresetPreview>> = emptyMap(),
     val appVersion: String = BuildConfig.VERSION_NAME,
@@ -118,10 +120,16 @@ internal data class HomeReconnectStreams(
     val runtimeReconnectRequired: Boolean,
 )
 
+internal data class HomeAppActivityStreams(
+    val appTrafficWindows: List<AppTrafficWindow>,
+    val networkActivityEvents: List<NetworkActivityEvent>,
+)
+
 internal data class HomeActivityStreams(
     val diagnosticEntries: List<DiagnosticEntry>,
     val anomalyEvents: List<AnomalyEvent>,
     val appTrafficWindows: List<AppTrafficWindow>,
+    val networkActivityEvents: List<NetworkActivityEvent>,
     val trafficWindows: List<TrafficWindow>,
     val reconnectState: HomeReconnectStreams,
 )

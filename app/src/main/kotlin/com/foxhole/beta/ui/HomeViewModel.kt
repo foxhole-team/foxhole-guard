@@ -241,18 +241,29 @@ class HomeViewModel(
                 runtimeReconnectRequired = runtimeReconnectRequired,
             )
         }
+    private val appActivityStreams =
+        combine(
+            container.anomalyRepository.recentAppTrafficWindows,
+            container.anomalyRepository.recentNetworkActivityEvents,
+        ) { appTrafficWindows, networkActivityEvents ->
+            HomeAppActivityStreams(
+                appTrafficWindows = appTrafficWindows,
+                networkActivityEvents = networkActivityEvents,
+            )
+        }
     private val activityStreams =
         combine(
             container.diagnosticsLogger.entries,
             container.anomalyRepository.recentEvents,
-            container.anomalyRepository.recentAppTrafficWindows,
+            appActivityStreams,
             container.anomalyRepository.recentTrafficWindows,
             reconnectState,
-        ) { diagnosticEntries, anomalyEvents, appTrafficWindows, trafficWindows, reconnectState ->
+        ) { diagnosticEntries, anomalyEvents, appActivityStreams, trafficWindows, reconnectState ->
             HomeActivityStreams(
                 diagnosticEntries = diagnosticEntries,
                 anomalyEvents = anomalyEvents,
-                appTrafficWindows = appTrafficWindows,
+                appTrafficWindows = appActivityStreams.appTrafficWindows,
+                networkActivityEvents = appActivityStreams.networkActivityEvents,
                 trafficWindows = trafficWindows,
                 reconnectState = reconnectState,
             )
@@ -318,6 +329,7 @@ class HomeViewModel(
                 diagnosticEntries = activityStreams.diagnosticEntries,
                 anomalyEvents = activityStreams.anomalyEvents,
                 appTrafficWindows = activityStreams.appTrafficWindows,
+                networkActivityEvents = activityStreams.networkActivityEvents,
                 trafficWindows = activityStreams.trafficWindows,
                 catalogPresetPreviews = localStreams.catalogPresetPreviews,
             )

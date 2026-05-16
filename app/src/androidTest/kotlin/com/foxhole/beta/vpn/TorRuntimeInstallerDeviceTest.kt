@@ -61,7 +61,12 @@ class TorRuntimeInstallerDeviceTest {
                     torRuntimePaths = paths,
                     vpnProtocolHint = ProtocolHint.VLESS,
                 )
-            val reflection = LibboxReflection(context, context.appGraph.diagnosticsLogger) { false }
+            val reflection =
+                LibboxReflection(
+                    context = context,
+                    diagnosticsLogger = context.appGraph.diagnosticsLogger,
+                    isNetworkActivityLoggingEnabled = { false },
+                )
             assumeTrue("libbox is unavailable on this device", reflection.isAvailable())
             reflection.setupIfNeeded()
             val host =

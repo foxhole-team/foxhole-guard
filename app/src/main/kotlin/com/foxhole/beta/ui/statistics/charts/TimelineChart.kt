@@ -11,6 +11,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.foxhole.beta.core.statistics.ChartModel
 import com.foxhole.beta.core.statistics.ChartSeriesKind
@@ -37,7 +39,8 @@ fun TimelineChart(
         Canvas(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(170.dp),
+                .height(170.dp)
+                .semantics { contentDescription = model.accessibilitySummary() },
         ) {
             val left = 2.dp.toPx()
             val right = size.width - 2.dp.toPx()

@@ -54,6 +54,7 @@ import com.foxhole.beta.core.model.SubscriptionRefreshInterval
 import com.foxhole.beta.core.model.ThemeMode
 import com.foxhole.beta.core.model.TrafficMode
 import com.foxhole.beta.core.model.TrafficSettings
+import com.foxhole.beta.core.model.TransportProtocol
 import com.foxhole.beta.core.model.TunStack
 import com.foxhole.beta.core.model.UiSettings
 import com.foxhole.beta.core.model.V2RayApiSettings
@@ -466,6 +467,7 @@ class SettingsRepository(
         profileName: String,
         protocolHint: ProtocolHint,
         protocolOptionId: String? = null,
+        transport: TransportProtocol = TransportProtocol.UNKNOWN,
         rxBytes: Long,
         txBytes: Long,
         updatedAt: Long = System.currentTimeMillis(),
@@ -483,6 +485,7 @@ class SettingsRepository(
                     profileName = profileName,
                     protocolHint = protocolHint,
                     protocolOptionId = normalizedProtocolOptionId,
+                    transport = transport,
                     rxTotalBytes = (previous?.rxTotalBytes ?: 0L) + rxBytes.coerceAtLeast(0L),
                     txTotalBytes = (previous?.txTotalBytes ?: 0L) + txBytes.coerceAtLeast(0L),
                     updatedAt = updatedAt,

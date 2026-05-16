@@ -7,17 +7,16 @@ import org.junit.Test
 
 class TunnelValidationPolicyTest {
     @Test
-    fun `accepts vpn-bound and dns-independent reachability probes as tunnel validation`() {
+    fun `accepts vpn-bound reachability probes as tunnel validation`() {
         assertTrue(acceptsTunnelValidationProbe(TunnelValidationProbeKind.VPN_IP_REFRESH))
         assertTrue(acceptsTunnelValidationProbe(TunnelValidationProbeKind.VPN_VALIDATION_ENDPOINT))
         assertTrue(acceptsTunnelValidationProbe(TunnelValidationProbeKind.VALIDATED_VPN_LITERAL_IP_ENDPOINT))
-        assertTrue(acceptsTunnelValidationProbe(TunnelValidationProbeKind.DNS_INDEPENDENT_LITERAL_IP))
         assertTrue(acceptsTunnelValidationProbe(TunnelValidationProbeKind.ANDROID_VALIDATED_VPN_NETWORK))
     }
 
     @Test
-    fun `literal ip validation is accepted even without private dns opt-in`() {
-        assertTrue(
+    fun `literal ip validation requires private dns opt-in`() {
+        assertFalse(
             acceptsTunnelValidationProbe(
                 kind = TunnelValidationProbeKind.DNS_INDEPENDENT_LITERAL_IP,
                 context = TunnelValidationPolicyContext(),
@@ -35,14 +34,14 @@ class TunnelValidationPolicyTest {
     }
 
     @Test
-    fun `private dns modes keep literal ip validation available`() {
+    fun `strict private dns mode enables literal ip validation`() {
         assertTrue(
             acceptsTunnelValidationProbe(
                 kind = TunnelValidationProbeKind.DNS_INDEPENDENT_LITERAL_IP,
                 context = tunnelValidationPolicyContextFor(PrivateDnsMode.STRICT),
             ),
         )
-        assertTrue(
+        assertFalse(
             acceptsTunnelValidationProbe(
                 kind = TunnelValidationProbeKind.DNS_INDEPENDENT_LITERAL_IP,
                 context = tunnelValidationPolicyContextFor(PrivateDnsMode.OFF),
