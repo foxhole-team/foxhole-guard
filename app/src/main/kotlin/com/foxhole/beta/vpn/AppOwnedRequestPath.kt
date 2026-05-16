@@ -14,4 +14,4 @@ internal fun <T> boundNetworkForAppOwnedRequest(candidate: T?): T? =
     }
 
 internal fun <T> tunnelValidationRequestNetwork(candidate: T?): T? =
-    candidate
+    boundNetworkForAppOwnedRequest(candidate)

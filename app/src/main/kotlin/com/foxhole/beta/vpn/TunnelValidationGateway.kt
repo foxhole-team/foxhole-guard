@@ -10,12 +10,14 @@ import com.foxhole.beta.core.data.ProfileRepository
 import com.foxhole.beta.core.diagnostics.DiagnosticsLogger
 import com.foxhole.beta.core.model.ConnectionSnapshot
 import com.foxhole.beta.core.model.IpInfo
+import com.foxhole.beta.core.model.Settings
 import com.foxhole.beta.core.model.TrafficMode
 import com.foxhole.beta.core.network.HttpProxyAccess
 import com.foxhole.beta.core.network.IpInfoFetchMode
 import com.foxhole.beta.core.network.IpInfoRepository
 import com.foxhole.beta.core.settings.SettingsRepository
 import kotlinx.coroutines.flow.StateFlow
+import java.io.IOException
 
 internal class TunnelValidationGateway(
     context: Context,
@@ -50,30 +52,12 @@ internal class TunnelValidationGateway(
         val remoteDnsServers = session?.configJson?.let(VpnDnsServerSelector::remoteDnsServerAddresses).orEmpty()
         if (activeTunnelConnected) {
             val vpnNetwork = currentVpnNetwork() ?: error("vpn network unavailable")
-            val requestNetwork = tunnelValidationRequestNetwork(vpnNetwork)
-            val resolverNetwork = currentUpstreamNetwork()
             val preferIpv4Validation =
                 shouldPreferIpv4TunnelValidation(
                     currentSnapshot.protocolHint,
                     session?.configJson,
                 )
-            val info =
-                if (preferIpv4Validation) {
-                    ipInfoRepository.fetchIpv4(
-                        endpoint = endpoint,
-                        callTimeoutMs = DASHBOARD_IP_REFRESH_CALL_TIMEOUT_MS,
-                        network = requestNetwork,
-                        resolverNetwork = resolverNetwork,
-                    ) ?: error("vpn ipv4 refresh failed")
-                } else {
-                    ipInfoRepository.fetch(
-                        endpoint = endpoint,
-                        callTimeoutMs = DASHBOARD_IP_REFRESH_CALL_TIMEOUT_MS,
-                        network = requestNetwork,
-                        resolverNetwork = resolverNetwork,
-                        mode = fetchMode,
-                    )
-                }
+            val info = fetchActiveTunnelIpInfo(settings, endpoint, fetchMode, vpnNetwork, preferIpv4Validation)
             return info.withDnsServers(
                 localDnsServers = connectivityManager.dnsServerAddresses(vpnNetwork),
                 remoteDnsServers = remoteDnsServers,
@@ -213,6 +197,117 @@ internal class TunnelValidationGateway(
                 appContext.getString(R.string.home_network_cellular_provider)
             else -> appContext.getString(R.string.home_network_local_network)
         }
+
+    private suspend fun fetchActiveTunnelIpInfo(
+        settings: Settings,
+        endpoint: String,
+        fetchMode: IpInfoFetchMode,
+        vpnNetwork: Network,
+        preferIpv4Validation: Boolean,
+    ): IpInfo =
+        try {
+            fetchActiveTunnelIpInfoOnProcessPath(
+                endpoint = endpoint,
+                fetchMode = fetchMode,
+                vpnNetwork = vpnNetwork,
+                preferIpv4Validation = preferIpv4Validation,
+            )
+        } catch (error: IOException) {
+            fetchActiveTunnelIpInfoViaRuntimeProxyAfterFailure(
+                settings = settings,
+                endpoint = endpoint,
+                fetchMode = fetchMode,
+                preferIpv4Validation = preferIpv4Validation,
+                error = error,
+            )
+        } catch (error: IllegalStateException) {
+            fetchActiveTunnelIpInfoViaRuntimeProxyAfterFailure(
+                settings = settings,
+                endpoint = endpoint,
+                fetchMode = fetchMode,
+                preferIpv4Validation = preferIpv4Validation,
+                error = error,
+            )
+        } catch (error: IllegalArgumentException) {
+            fetchActiveTunnelIpInfoViaRuntimeProxyAfterFailure(
+                settings = settings,
+                endpoint = endpoint,
+                fetchMode = fetchMode,
+                preferIpv4Validation = preferIpv4Validation,
+                error = error,
+            )
+        }
+
+    private suspend fun fetchActiveTunnelIpInfoViaRuntimeProxyAfterFailure(
+        settings: Settings,
+        endpoint: String,
+        fetchMode: IpInfoFetchMode,
+        preferIpv4Validation: Boolean,
+        error: Exception,
+    ): IpInfo {
+        diagnosticsLogger.record(
+            "ip",
+            "vpn ip refresh failed on process path, retrying runtime local proxy: ${error.javaClass.simpleName}",
+        )
+        return fetchActiveTunnelIpInfoViaRuntimeProxy(
+            settings = settings,
+            endpoint = endpoint,
+            fetchMode = fetchMode,
+            preferIpv4Validation = preferIpv4Validation,
+        )
+    }
+
+    private suspend fun fetchActiveTunnelIpInfoOnProcessPath(
+        endpoint: String,
+        fetchMode: IpInfoFetchMode,
+        vpnNetwork: Network,
+        preferIpv4Validation: Boolean,
+    ): IpInfo {
+        val requestNetwork = tunnelValidationRequestNetwork(vpnNetwork)
+        val resolverNetwork = currentUpstreamNetwork()
+        return if (preferIpv4Validation) {
+            ipInfoRepository.fetchIpv4(
+                endpoint = endpoint,
+                callTimeoutMs = DASHBOARD_IP_REFRESH_CALL_TIMEOUT_MS,
+                network = requestNetwork,
+                resolverNetwork = resolverNetwork,
+            ) ?: error("vpn ipv4 refresh failed")
+        } else {
+            ipInfoRepository.fetch(
+                endpoint = endpoint,
+                callTimeoutMs = DASHBOARD_IP_REFRESH_CALL_TIMEOUT_MS,
+                network = requestNetwork,
+                resolverNetwork = resolverNetwork,
+                mode = fetchMode,
+            )
+        }
+    }
+
+    private suspend fun fetchActiveTunnelIpInfoViaRuntimeProxy(
+        settings: Settings,
+        endpoint: String,
+        fetchMode: IpInfoFetchMode,
+        preferIpv4Validation: Boolean,
+    ): IpInfo {
+        val proxy = settings.tunnelRuntimeProxyAccess()
+        val resolverNetwork = currentUpstreamNetwork()
+        return if (preferIpv4Validation) {
+            ipInfoRepository.fetchIpv4(
+                endpoint = endpoint,
+                callTimeoutMs = DASHBOARD_IP_REFRESH_CALL_TIMEOUT_MS,
+                proxy = proxy,
+                resolverNetwork = resolverNetwork,
+            ) ?: error("runtime proxy ipv4 refresh failed")
+        } else {
+            ipInfoRepository.fetch(
+                endpoint = endpoint,
+                callTimeoutMs = DASHBOARD_IP_REFRESH_CALL_TIMEOUT_MS,
+                proxy = proxy,
+                resolverNetwork = resolverNetwork,
+                mode = fetchMode,
+            )
+        }
+    }
 
     private companion object {
         const val DASHBOARD_IP_REFRESH_CALL_TIMEOUT_MS = 2_500L

@@ -19,7 +19,7 @@ class AppOwnedRequestPathTest {
     }
 
     @Test
-    fun `tunnel validation requests stay bound to the vpn network`() {
-        assertEquals("vpn-network", tunnelValidationRequestNetwork("vpn-network"))
+    fun `tunnel validation requests use normal process path`() {
+        assertNull(tunnelValidationRequestNetwork("vpn-network"))
     }
 }
