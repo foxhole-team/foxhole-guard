@@ -561,7 +561,7 @@ class RuntimeConfigAssemblerTest {
             Settings(expert = ExpertSettings(killSwitchEnabled = true)).localGuardModeOrNull(),
         )
         assertEquals(
-            null,
+            LocalGuardMode.FIREWALL,
             Settings(
                 expert =
                     ExpertSettings(
@@ -610,7 +610,7 @@ class RuntimeConfigAssemblerTest {
             Settings(expert = blockedApps).localGuardModeOrNull(),
         )
         assertEquals(
-            null,
+            LocalGuardMode.FIREWALL,
             Settings(
                 expert =
                     blockedApps.copy(
@@ -640,10 +640,23 @@ class RuntimeConfigAssemblerTest {
     }
 
     @Test
-    fun `firewall only starts journal guard for persistent logging or country traffic stats`() {
+    fun `firewall starts local guard without app blocking prerequisites`() {
         val firewall = ExpertSettings(firewallEnabled = true)
 
-        assertEquals(null, Settings(expert = firewall).localGuardModeOrNull())
+        val settings = Settings(expert = firewall)
+        val config = parse(assembler.assembleLocalGuard(settings, settings.localGuardModeOrNull()!!))
+        val tunInbound = config["inbounds"]!!.jsonArray.single().jsonObject
+        val rules = config["route"]!!.jsonObject["rules"]!!.jsonArray
+
+        assertEquals(LocalGuardMode.FIREWALL, settings.localGuardModeOrNull())
+        assertFalse(tunInbound.containsKey("include_package"))
+        assertTrue(rules.isEmpty())
+    }
+
+    @Test
+    fun `firewall escalates local guard to journal for persistent logging or country traffic stats`() {
+        val firewall = ExpertSettings(firewallEnabled = true)
+
         assertEquals(
             LocalGuardMode.JOURNAL,
             Settings(
@@ -651,7 +664,7 @@ class RuntimeConfigAssemblerTest {
             ).localGuardModeOrNull(),
         )
         assertEquals(
-            null,
+            LocalGuardMode.FIREWALL,
             Settings(
                 ui = UiSettings(trafficMapEnabled = true),
                 expert = firewall,

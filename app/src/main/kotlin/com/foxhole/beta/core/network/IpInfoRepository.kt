@@ -5,6 +5,9 @@ import android.util.Log
 import com.foxhole.beta.BuildConfig
 import com.foxhole.beta.core.model.IpInfo
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
@@ -12,19 +15,25 @@ import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import okhttp3.Call
+import okhttp3.Callback
 import okhttp3.Credentials
 import okhttp3.Dns
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.Response
+import java.io.IOException
+import java.net.Authenticator
 import java.net.Inet4Address
 import java.net.Inet6Address
 import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.net.PasswordAuthentication
 import java.net.Proxy
-import java.net.Authenticator
 import java.util.concurrent.TimeUnit
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
 import kotlin.system.measureTimeMillis
 
 enum class ProxyAccessType {
@@ -129,6 +138,7 @@ class IpInfoRepository(
             val strategy = resolveFetchStrategy(endpoint, callTimeoutMs, mode)
             var lastFailure: Throwable? = null
             strategy.endpointCandidates.forEach { candidate ->
+                currentCoroutineContext().ensureActive()
                 diagnosticLog(
                     "fetch candidate host=${candidate.ipInfoHostLabel()} mode=${mode.name.lowercase()} bound=${network != null} proxy=${proxy != null}",
                 )
@@ -159,7 +169,7 @@ class IpInfoRepository(
             throw lastFailure ?: IllegalStateException("ip info request failed")
         }
 
-    private fun fetchSingleWithFamilyFallbacks(
+    private suspend fun fetchSingleWithFamilyFallbacks(
         endpoint: String,
         callTimeoutMs: Long?,
         network: Network?,
@@ -202,18 +212,18 @@ class IpInfoRepository(
             IpInfoFetchMode.FULL ->
                 EndpointFetchStrategy(
                     endpointCandidates = effectiveEndpoints(endpoint),
-                    callTimeoutMs = callTimeoutMs,
+                    callTimeoutMs = callTimeoutMs ?: FULL_CALL_TIMEOUT_MS,
                     includeFamilyProbes = true,
                 )
             IpInfoFetchMode.ENTRY_QUICK ->
                 EndpointFetchStrategy(
-                    endpointCandidates = effectiveEndpoints(endpoint),
+                    endpointCandidates = quickEndpoints(endpoint),
                     callTimeoutMs = callTimeoutMs ?: ENTRY_QUICK_CALL_TIMEOUT_MS,
                     includeFamilyProbes = false,
                 )
         }
 
-    private fun fetchSingle(
+    private suspend fun fetchSingle(
         endpoint: String,
         callTimeoutMs: Long?,
         network: Network?,
@@ -226,27 +236,35 @@ class IpInfoRepository(
             parseIpInfoResponse(response.body?.string().orEmpty(), json)
         }
 
-    private fun fetchFamily(
+    private suspend fun fetchFamily(
         endpoint: String,
         callTimeoutMs: Long?,
         network: Network?,
         addressFamilyPreference: AddressFamilyPreference,
         proxy: HttpProxyAccess?,
         resolverNetwork: Network? = null,
-    ): IpInfo? =
-        familyEndpoints(endpoint, addressFamilyPreference).firstNotNullOfOrNull { candidate ->
-            runCatching { fetchSingle(candidate, callTimeoutMs, network, addressFamilyPreference, proxy, resolverNetwork) }
-                .getOrNull()
-                ?.takeIf { info ->
-                    when (addressFamilyPreference) {
-                        AddressFamilyPreference.ANY -> true
-                        AddressFamilyPreference.IPV4 -> info.ipv4 != null
-                        AddressFamilyPreference.IPV6 -> info.ipv6 != null
+    ): IpInfo? {
+        familyEndpoints(endpoint, addressFamilyPreference).forEach { candidate ->
+            currentCoroutineContext().ensureActive()
+            val info =
+                runCatching { fetchSingle(candidate, callTimeoutMs, network, addressFamilyPreference, proxy, resolverNetwork) }
+                    .getOrNull()
+                    ?.takeIf { value ->
+                        when (addressFamilyPreference) {
+                            AddressFamilyPreference.ANY -> true
+                            AddressFamilyPreference.IPV4 -> value.ipv4 != null
+                            AddressFamilyPreference.IPV6 -> value.ipv6 != null
+                        }
                     }
-                }
+            if (info != null) {
+                return info
+            }
         }
+        return null
+    }
 
-    private fun execute(
+    @Suppress("CyclomaticComplexMethod", "NestedBlockDepth")
+    private suspend fun execute(
         endpoint: String,
         callTimeoutMs: Long?,
         network: Network?,
@@ -326,7 +344,7 @@ class IpInfoRepository(
                 }
             }
         } else {
-            effectiveClient.newCall(request).execute()
+            effectiveClient.newCall(request).awaitResponse()
         }
     }
 
@@ -340,6 +358,12 @@ class IpInfoRepository(
                 }
             }
         }
+    }
+
+    private fun quickEndpoints(endpoint: String): List<String> {
+        val primary = primaryEndpoint(endpoint)
+        val fallback = FALLBACK_ENDPOINTS.firstOrNull { candidate -> !candidate.equals(primary, ignoreCase = true) }
+        return listOfNotNull(primary, fallback)
     }
 
     internal fun effectiveEndpointCandidates(
@@ -409,7 +433,8 @@ class IpInfoRepository(
 
     private companion object {
         val SOCKS_AUTH_LOCK = Any()
-        const val ENTRY_QUICK_CALL_TIMEOUT_MS = 2_500L
+        const val ENTRY_QUICK_CALL_TIMEOUT_MS = 1_500L
+        const val FULL_CALL_TIMEOUT_MS = 4_000L
         const val FAMILY_PROBE_CALL_TIMEOUT_MS = 1_500L
         val FALLBACK_ENDPOINTS =
             listOf(
@@ -429,6 +454,35 @@ class IpInfoRepository(
             )
     }
 }
+
+private suspend fun Call.awaitResponse(): Response =
+    suspendCancellableCoroutine { continuation ->
+        continuation.invokeOnCancellation { cancel() }
+        enqueue(
+            object : Callback {
+                override fun onFailure(
+                    call: Call,
+                    e: IOException,
+                ) {
+                    if (!continuation.isActive) {
+                        return
+                    }
+                    continuation.resumeWithException(e)
+                }
+
+                override fun onResponse(
+                    call: Call,
+                    response: Response,
+                ) {
+                    if (!continuation.isActive) {
+                        response.close()
+                        return
+                    }
+                    continuation.resume(response)
+                }
+            },
+        )
+    }
 
 private fun diagnosticLog(message: String) {
     if (BuildConfig.ENABLE_DIAGNOSTIC_LOGCAT) {

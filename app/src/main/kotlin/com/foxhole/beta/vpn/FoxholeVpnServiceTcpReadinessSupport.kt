@@ -17,9 +17,9 @@ internal suspend fun FoxholeVpnService.prepareTcpRuntimeReadiness(target: VpnHea
         val upstreamNetwork = currentUpstreamNetworkOrNull()
         if (upstreamNetwork == null) {
             container.diagnosticsLogger.record("runtime", "tcp target preflight skipped: upstream network unavailable")
-            return@withContext Result.failure(IllegalStateException("upstream network unavailable"))
+            return@withContext Result.success(Unit)
         }
-        runCatching {
+        val probeResult = runCatching {
             probeSessionTarget(
                 target = target,
                 network = upstreamNetwork,
@@ -31,9 +31,13 @@ internal suspend fun FoxholeVpnService.prepareTcpRuntimeReadiness(target: VpnHea
         }.onFailure { error ->
             container.diagnosticsLogger.record(
                 "runtime",
-                "tcp target preflight failed: ${error.message.orEmpty()}",
+                "tcp target preflight failed, continuing runtime start: ${error.message.orEmpty()}",
             )
         }
+        probeResult.fold(
+            onSuccess = { Result.success(Unit) },
+            onFailure = { Result.success(Unit) },
+        )
     }
 }
 

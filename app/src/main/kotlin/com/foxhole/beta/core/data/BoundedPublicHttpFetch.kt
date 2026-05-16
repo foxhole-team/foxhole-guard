@@ -25,13 +25,17 @@ internal data class BoundedPublicHttpResponse(
         get() = code in 200..299
 }
 
-internal fun OkHttpClient.withBoundedRemoteFetchTimeouts(): OkHttpClient =
+internal fun OkHttpClient.withBoundedRemoteFetchTimeouts(
+    connectTimeoutMs: Long = DEFAULT_REMOTE_FETCH_CONNECT_TIMEOUT_MS,
+    readTimeoutMs: Long = DEFAULT_REMOTE_FETCH_READ_TIMEOUT_MS,
+    callTimeoutMs: Long = DEFAULT_REMOTE_FETCH_CALL_TIMEOUT_MS,
+): OkHttpClient =
     newBuilder()
         .followRedirects(false)
         .followSslRedirects(false)
-        .connectTimeout(10, TimeUnit.SECONDS)
-        .readTimeout(20, TimeUnit.SECONDS)
-        .callTimeout(30, TimeUnit.SECONDS)
+        .connectTimeout(connectTimeoutMs.coerceAtLeast(1L), TimeUnit.MILLISECONDS)
+        .readTimeout(readTimeoutMs.coerceAtLeast(1L), TimeUnit.MILLISECONDS)
+        .callTimeout(callTimeoutMs.coerceAtLeast(1L), TimeUnit.MILLISECONDS)
         .build()
 
 internal fun executeBoundedPublicGet(
@@ -80,6 +84,10 @@ private fun OkHttpClient.withPublicRemoteDns(): OkHttpClient =
     newBuilder()
         .dns(PublicRemoteDns(dns::lookup))
         .build()
+
+private const val DEFAULT_REMOTE_FETCH_CONNECT_TIMEOUT_MS = 10_000L
+private const val DEFAULT_REMOTE_FETCH_READ_TIMEOUT_MS = 20_000L
+private const val DEFAULT_REMOTE_FETCH_CALL_TIMEOUT_MS = 30_000L
 
 internal fun ResponseBody.readUtf8Capped(maxBytes: Long): String {
     require(maxBytes > 0L) { "maxBytes must be positive" }

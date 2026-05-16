@@ -5,6 +5,7 @@ internal enum class TunnelValidationProbeKind {
     VPN_VALIDATION_ENDPOINT,
     VALIDATED_VPN_LITERAL_IP_ENDPOINT,
     DNS_INDEPENDENT_LITERAL_IP,
+    ANDROID_VALIDATED_VPN_NETWORK,
 }
 
 internal data class TunnelValidationPolicyContext(
@@ -37,9 +38,9 @@ internal class TunnelValidationPolicy(
     private companion object {
         val DefaultRules =
             listOf(
-                TunnelValidationProbeRule { kind, context ->
+                TunnelValidationProbeRule { kind, _ ->
                     if (kind == TunnelValidationProbeKind.DNS_INDEPENDENT_LITERAL_IP) {
-                        context.allowDnsIndependentLiteralIpValidation
+                        true
                     } else {
                         null
                     }
@@ -49,6 +50,7 @@ internal class TunnelValidationPolicy(
                         TunnelValidationProbeKind.VPN_IP_REFRESH,
                         TunnelValidationProbeKind.VPN_VALIDATION_ENDPOINT,
                         TunnelValidationProbeKind.VALIDATED_VPN_LITERAL_IP_ENDPOINT,
+                        TunnelValidationProbeKind.ANDROID_VALIDATED_VPN_NETWORK,
                         -> true
                         TunnelValidationProbeKind.DNS_INDEPENDENT_LITERAL_IP -> null
                     }
@@ -72,5 +74,18 @@ internal fun acceptsValidatedVpnLiteralIpEndpointProbe(
         evidence.fatalRuntimeMessage == null &&
         acceptsTunnelValidationProbe(
             kind = TunnelValidationProbeKind.VALIDATED_VPN_LITERAL_IP_ENDPOINT,
+            context = context,
+        )
+
+internal fun acceptsAndroidValidatedVpnNetwork(
+    androidValidated: Boolean,
+    evidence: TunnelValidationEvidence?,
+    context: TunnelValidationPolicyContext = TunnelValidationPolicyContext(),
+): Boolean =
+    androidValidated &&
+        evidence?.hasSuccessfulTunnelActivity == true &&
+        evidence.fatalRuntimeMessage == null &&
+        acceptsTunnelValidationProbe(
+            kind = TunnelValidationProbeKind.ANDROID_VALIDATED_VPN_NETWORK,
             context = context,
         )

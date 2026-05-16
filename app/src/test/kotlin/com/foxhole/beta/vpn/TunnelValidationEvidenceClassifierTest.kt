@@ -147,4 +147,24 @@ class TunnelValidationEvidenceClassifierTest {
         assertTrue(evidence.hasOutboundTunnelActivity)
         assertEquals(null, evidence.fatalRuntimeMessage)
     }
+
+    @Test
+    fun `sanitized activity log counts as tunnel activity evidence`() {
+        val evidence =
+            TunnelValidationEvidenceClassifier.classify(
+                entries =
+                    listOf(
+                        DiagnosticEntry(
+                            timestamp = 1_000L,
+                            tag = "activity",
+                            message = "App connection: app=[redacted] • protocol=TCP • local=[redacted] • remote=[redacted]",
+                        ),
+                    ),
+                sinceMs = 900L,
+            )
+
+        assertTrue(evidence.hasSuccessfulTunnelActivity)
+        assertTrue(evidence.hasOutboundTunnelActivity)
+        assertEquals(null, evidence.fatalRuntimeMessage)
+    }
 }

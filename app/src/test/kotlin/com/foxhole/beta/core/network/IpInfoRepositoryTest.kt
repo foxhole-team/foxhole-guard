@@ -238,7 +238,7 @@ class IpInfoRepositoryTest {
     }
 
     @Test
-    fun `entry quick mode keeps primary plus fallback endpoints`() {
+    fun `entry quick mode keeps primary plus one fallback endpoint`() {
         val repository =
             IpInfoRepository(
                 client = okhttp3.OkHttpClient(),
@@ -252,7 +252,7 @@ class IpInfoRepositoryTest {
             )
 
         assertEquals("https://example.com/ip", candidates.first())
-        assertTrue(candidates.size > 1)
+        assertEquals(2, candidates.size)
     }
 
     @Test
@@ -291,7 +291,7 @@ class IpInfoRepositoryTest {
             )
 
         assertEquals("https://example.com/ip", strategy.endpointCandidates.first())
-        assertEquals(2_500L, strategy.callTimeoutMs)
+        assertEquals(1_500L, strategy.callTimeoutMs)
         assertFalse(strategy.includeFamilyProbes)
     }
 

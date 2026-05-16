@@ -16,18 +16,15 @@ internal fun LocalGuardMode.runtimeProfileName(): String =
     }
 
 internal fun Settings.localGuardModeOrNull(): LocalGuardMode? {
-    val permanentAppBlockingEnabled =
-        expert.firewallEnabled &&
-            expert.blockAppsAlways &&
-            expert.blockedPackagesEnabled &&
-            expert.blockedPackages.isNotEmpty()
-    val journalEnabled =
-        expert.firewallEnabled &&
-            (expert.networkActivityPersistentLogging || (statistics.enabled && statistics.countryTrafficEnabled))
+    val countryTrafficJournalEnabled = statistics.enabled && statistics.countryTrafficEnabled
+    val journalFeatureEnabled =
+        expert.systemDnsProtectionEnabled ||
+            expert.networkActivityPersistentLogging ||
+            countryTrafficJournalEnabled
+    val journalEnabled = expert.firewallEnabled && journalFeatureEnabled
     return when {
-        permanentAppBlockingEnabled && expert.systemDnsProtectionEnabled -> LocalGuardMode.JOURNAL
-        permanentAppBlockingEnabled -> LocalGuardMode.FIREWALL
         journalEnabled -> LocalGuardMode.JOURNAL
+        expert.firewallEnabled -> LocalGuardMode.FIREWALL
         expert.systemDnsProtectionEnabled -> LocalGuardMode.DNS
         else -> null
     }

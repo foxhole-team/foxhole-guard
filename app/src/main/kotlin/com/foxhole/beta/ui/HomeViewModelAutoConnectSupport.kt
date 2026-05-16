@@ -42,6 +42,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 
+private const val SMART_START_SUBSCRIPTION_REFRESH_CALL_TIMEOUT_MS = 4_000L
+private const val SMART_START_SUBSCRIPTION_REFRESH_MAX_ATTEMPTS = 1
+
 internal fun HomeViewModel.onAutoConnectActiveProfileInternal() {
     val state = uiState.value
     val profile = mobileNetworkProfileOverride(state) ?: state.activeProfile
@@ -193,11 +196,17 @@ private suspend fun HomeViewModel.refreshSubscriptionBeforeSmartStartIfNeeded(pr
     if (profile.sourceType != ProfileSourceType.SUBSCRIPTION_URL || !settings.smartStartV2RayTunSubscriptionsEnabled) {
         return profile
     }
-    val attempts = settings.smartStartSubscriptionRetryAttempts.coerceAtLeast(1)
+    val attempts =
+        settings.smartStartSubscriptionRetryAttempts
+            .coerceAtLeast(1)
+            .coerceAtMost(SMART_START_SUBSCRIPTION_REFRESH_MAX_ATTEMPTS)
     val retryDelayMs = settings.smartStartSubscriptionRetryDelaySeconds.coerceAtLeast(1).toLong() * 1000L
     repeat(attempts) { index ->
         runCatching {
-            container.profileRepository.refreshProfile(profile.id)
+            container.profileRepository.refreshProfile(
+                profileId = profile.id,
+                callTimeoutMs = SMART_START_SUBSCRIPTION_REFRESH_CALL_TIMEOUT_MS,
+            )
         }.onSuccess { refreshed ->
             container.diagnosticsLogger.record(
                 "auto-connect",
@@ -207,7 +216,7 @@ private suspend fun HomeViewModel.refreshSubscriptionBeforeSmartStartIfNeeded(pr
         }.onFailure { error ->
             container.diagnosticsLogger.record(
                 "auto-connect",
-                "subscription refresh before smart start failed attempt=${index + 1}: ${error.message.orEmpty()}",
+                "subscription refresh before smart start failed attempt=${index + 1}, using cached profile: ${error.message.orEmpty()}",
             )
         }
         if (index < attempts - 1) {

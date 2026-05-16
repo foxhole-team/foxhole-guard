@@ -454,7 +454,12 @@ fun HomeScreen(
                                                 label = homeStatusLabel(state, topStatusState),
                                                 textStyle = MaterialTheme.typography.titleMedium,
                                                 accentColor = statusTone,
-                                                loading = state.torOperation.active || topStatusState == ConnectionState.RECONNECTING,
+                                                loading =
+                                                    state.torOperation.active ||
+                                                        topStatusState in setOf(
+                                                            ConnectionState.CONNECTING,
+                                                            ConnectionState.RECONNECTING,
+                                                        ),
                                                 smartMarker =
                                                     state.connection.isSmartStartConnection &&
                                                         topStatusState in setOf(
@@ -656,6 +661,7 @@ fun HomeScreen(
                                                     recommendedOptionIds = state.recommendedProtocolOptionIds,
                                                     favoriteOptionId = state.favoriteProtocolOptionId,
                                                     activeOptionId = dashboardProtocolPresentation.selectedProtocolOptionId,
+                                                    onSelectOption = onSelectActiveProtocolOption,
                                                     onRefreshMetrics = { requestSmartProfileMetricsRefresh(state.activeProfile.id) },
                                                     onCancelRefreshMetrics = onCancelSmartProfileMetricsRefresh,
                                                     showLatency = dashboardShowSmartStartLatency,

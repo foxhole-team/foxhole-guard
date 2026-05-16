@@ -67,6 +67,7 @@ internal fun HomeViewModel.refreshIpInfoSilentlyInternal() {
     )
 }
 
+@Suppress("CyclomaticComplexMethod", "TooGenericExceptionCaught")
 internal fun HomeViewModel.refreshIpInfoInternalInternal(
     reportFailures: Boolean,
     showLoading: Boolean,
@@ -92,37 +93,40 @@ internal fun HomeViewModel.refreshIpInfoInternalInternal(
                 FoxholeVpnRuntimeBridge.updateIpInfo(null)
             }
             try {
-                runCatching { container.connectionController.refreshIpInfo(fetchMode = fetchMode) }
-                    .onSuccess { info ->
-                        if (ipInfoRefreshToken == refreshToken) {
-                            if (container.connectionController.snapshot.value.shouldPublishDeviceIpInfoFromDashboardRefresh()) {
-                                FoxholeVpnRuntimeBridge.updateDeviceIpInfo(info)
-                            }
-                            FoxholeVpnRuntimeBridge.updateIpInfo(info)
-                            container.diagnosticsLogger.record(
-                                "ip",
-                                "geo refreshed id=$refreshToken reason=${reason.name.lowercase()} target=${target.name.lowercase()}",
-                            )
-                        }
+                val info = container.connectionController.refreshIpInfo(fetchMode = fetchMode)
+                if (ipInfoRefreshToken == refreshToken) {
+                    if (container.connectionController.snapshot.value.shouldPublishDeviceIpInfoFromDashboardRefresh()) {
+                        FoxholeVpnRuntimeBridge.updateDeviceIpInfo(info)
                     }
-                    .onFailure {
-                        container.diagnosticsLogger.record(
-                            "ip",
-                            "geo refresh failed: ${it.javaClass.simpleName}: ${it.message.orEmpty()}",
-                        )
-                        if (reason == IpInfoRefreshReason.POST_CONNECT && target == IpInfoRefreshTarget.VPN_BOUND) {
-                            FoxholeVpnRuntimeBridge.updateIpInfo(null)
-                        }
-                        if (reportFailures) {
-                            emitError(getApplication<Application>().getString(R.string.ip_info_failed))
-                        }
-                    }
+                    FoxholeVpnRuntimeBridge.updateIpInfo(info)
+                    container.diagnosticsLogger.record(
+                        "ip",
+                        "geo refreshed id=$refreshToken reason=${reason.name.lowercase()} target=${target.name.lowercase()}",
+                    )
+                }
+            } catch (cancelled: CancellationException) {
+                container.diagnosticsLogger.record(
+                    "ip",
+                    "dashboard refresh cancelled id=$refreshToken reason=${reason.name.lowercase()}",
+                )
+                throw cancelled
+            } catch (error: Throwable) {
+                container.diagnosticsLogger.record(
+                    "ip",
+                    "geo refresh failed: ${error.javaClass.simpleName}: ${error.message.orEmpty()}",
+                )
+                if (reason == IpInfoRefreshReason.POST_CONNECT && target == IpInfoRefreshTarget.VPN_BOUND) {
+                    FoxholeVpnRuntimeBridge.updateIpInfo(null)
+                }
+                if (reportFailures) {
+                    emitError(getApplication<Application>().getString(R.string.ip_info_failed))
+                }
             } finally {
                 if (showLoading && ipInfoRefreshToken == refreshToken) {
                     val elapsedLoadingMs = SystemClock.elapsedRealtime() - loadingStartedAtMs
                     val remainingLoadingMs = minimumLoadingDurationMs - elapsedLoadingMs
                     if (remainingLoadingMs > 0L) {
-                        delay(remainingLoadingMs)
+                        runCatching { delay(remainingLoadingMs) }
                     }
                 }
                 if (showLoading && ipInfoRefreshToken == refreshToken) {

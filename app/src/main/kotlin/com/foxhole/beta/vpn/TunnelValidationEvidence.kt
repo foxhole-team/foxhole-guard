@@ -63,21 +63,31 @@ internal object TunnelValidationEvidenceClassifier {
     private fun isSuccessfulTunnelActivityEntry(
         tag: String,
         message: String,
-    ): Boolean {
-        if (tag != "libbox") {
-            return false
+    ): Boolean =
+        when {
+            isNetworkActivityEntry(tag, message) -> true
+            tag == "libbox" ->
+                message.contains("inbound/tun[") && message.contains("connection to") ||
+                    isOutboundTunnelActivityMessage(message)
+            else -> false
         }
-        return message.contains("inbound/tun[") && message.contains("connection to") ||
-            isOutboundTunnelActivityMessage(message)
-    }
 
     private fun isOutboundTunnelActivityEntry(
         tag: String,
         message: String,
     ): Boolean =
-        tag == "libbox" && isOutboundTunnelActivityMessage(message)
+        isNetworkActivityEntry(tag, message) ||
+            tag == "libbox" && isOutboundTunnelActivityMessage(message)
 
     private fun isOutboundTunnelActivityMessage(message: String): Boolean =
         message.contains("outbound/") && message.contains("outbound connection to") ||
             message.contains("endpoint/wireguard[") && message.contains("received handshake response")
+
+    private fun isNetworkActivityEntry(
+        tag: String,
+        message: String,
+    ): Boolean =
+        tag == "activity" &&
+            message.contains("app connection") &&
+            message.contains("remote=")
 }

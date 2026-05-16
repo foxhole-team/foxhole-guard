@@ -61,7 +61,7 @@ import com.foxhole.beta.core.profile.MultiProtocolProfileSupport
 import kotlin.math.max
 
 @Composable
-@Suppress("LongParameterList")
+@Suppress("CyclomaticComplexMethod", "LongMethod", "LongParameterList")
 internal fun SmartProfileAutoConnectMenu(
     profile: Profile,
     excludedOptionIds: Set<String>,
@@ -78,6 +78,7 @@ internal fun SmartProfileAutoConnectMenu(
     recommendedOptionIds: Set<String> = recommendedOptionId?.let(::setOf).orEmpty(),
     favoriteOptionId: String? = null,
     activeOptionId: String? = profile.selectedProtocolOptionId ?: MultiProtocolProfileSupport.selectedOption(profile)?.id,
+    onSelectOption: ((String) -> Unit)? = null,
     onRefreshMetrics: (() -> Unit)? = null,
     onCancelRefreshMetrics: (() -> Unit)? = null,
     refreshWarningRequired: Boolean = false,
@@ -115,6 +116,10 @@ internal fun SmartProfileAutoConnectMenu(
             forcedExpansionDismissed = false
             expanded = false
         }
+    }
+    fun selectOptionAndDismiss(optionId: String) {
+        onSelectOption?.invoke(optionId)
+        expanded = false
     }
     Box {
         val density = LocalDensity.current
@@ -200,6 +205,7 @@ internal fun SmartProfileAutoConnectMenu(
                 recommendedOptionIds = recommendedOptionIds,
                 favoriteOptionId = favoriteOptionId,
                 activeOptionId = activeOptionId,
+                onSelectOption = if (onSelectOption != null) ::selectOptionAndDismiss else null,
                 onRefreshMetrics = onRefreshMetrics?.let { requestRefreshMetrics },
                 onCancelRefreshMetrics = onCancelRefreshMetrics,
                 compact = compact,
@@ -597,6 +603,7 @@ private fun SmartProfileProtocolMenuContent(
     recommendedOptionIds: Set<String>,
     favoriteOptionId: String?,
     activeOptionId: String?,
+    onSelectOption: ((String) -> Unit)?,
     onRefreshMetrics: (() -> Unit)?,
     onCancelRefreshMetrics: (() -> Unit)?,
     compact: Boolean,
@@ -641,6 +648,10 @@ private fun SmartProfileProtocolMenuContent(
             val selectionTone = foxholeSystemAwareAccentColor(fallback = FoxholeInfoAccent)
             FoxholeDropdownItem(
                 onClick = {
+                    if (onSelectOption != null && included) {
+                        onSelectOption(option.id)
+                        return@FoxholeDropdownItem
+                    }
                     val nextExcluded =
                         if (included) {
                             if (includedCount <= 1) {

@@ -757,6 +757,7 @@ class ProfileRepository(
         profileId: Long,
         excludeInsecureTlsOptions: Boolean = false,
         allowInsecureTlsForProfile: Boolean = false,
+        callTimeoutMs: Long? = null,
     ): Profile {
         val entity = dao.getById(profileId) ?: error("profile not found")
         require(entity.sourceType == ProfileSourceType.SUBSCRIPTION_URL.name) { "profile is not refreshable" }
@@ -783,6 +784,7 @@ class ProfileRepository(
                     safeUrl = safeUrl,
                     lastEtag = entity.lastEtag,
                     allowHttp = false,
+                    callTimeoutMs = callTimeoutMs,
                 )
             }.getOrElse { error ->
                 throw IllegalStateException(describeSubscriptionTransportFailure(sourceUrl, error), error)
@@ -1096,16 +1098,26 @@ class ProfileRepository(
         safeUrl: HttpUrl,
         lastEtag: String?,
         allowHttp: Boolean,
+        callTimeoutMs: Long? = null,
     ): SubscriptionResponse =
         withContext(Dispatchers.IO) {
             executeSubscriptionRequest(
-                client = subscriptionHttpClient,
+                client = subscriptionHttpClientFor(callTimeoutMs),
                 safeUrl = safeUrl,
                 sourceUrl = sourceUrl,
                 lastEtag = lastEtag,
                 allowHttp = allowHttp,
             )
         }
+
+    private fun subscriptionHttpClientFor(callTimeoutMs: Long?): OkHttpClient {
+        val timeoutMs = callTimeoutMs?.coerceAtLeast(1L) ?: return subscriptionHttpClient
+        return httpClient.withBoundedRemoteFetchTimeouts(
+            connectTimeoutMs = timeoutMs,
+            readTimeoutMs = timeoutMs,
+            callTimeoutMs = timeoutMs,
+        )
+    }
 
     private fun buildSubscriptionRequest(
         safeUrl: HttpUrl,

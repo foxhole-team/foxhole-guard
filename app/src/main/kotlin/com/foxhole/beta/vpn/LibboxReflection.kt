@@ -575,7 +575,7 @@ internal class LibboxReflection(
         }
         val appLabel = owner?.userName?.takeIf(String::isNotBlank) ?: "Unknown app"
         val throttleKey =
-            listOf(protocol, owner?.packageNames?.firstOrNull(), sourceHost, sourcePort, destinationHost, destinationPort)
+            listOf(protocol, owner?.packageNames.orEmpty().sorted().joinToString(","), destinationHost, destinationPort)
                 .joinToString("|")
         diagnosticsLogger.recordThrottled(
             tag = "activity",
@@ -727,7 +727,7 @@ internal class LibboxReflection(
 
     private companion object {
         const val LOG_TAG = "FoxholeLibbox"
-        const val NETWORK_ACTIVITY_THROTTLE_MS = 2_000L
+        const val NETWORK_ACTIVITY_THROTTLE_MS = 10_000L
         const val LIBBOX_LOG_MAX_LINES = 4_000L
         const val DNS_RCODE_SERVFAIL = 2
         const val DNS_RCODE_NXDOMAIN = 3

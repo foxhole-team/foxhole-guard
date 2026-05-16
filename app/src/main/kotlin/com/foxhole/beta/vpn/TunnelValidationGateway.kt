@@ -61,14 +61,14 @@ internal class TunnelValidationGateway(
                 if (preferIpv4Validation) {
                     ipInfoRepository.fetchIpv4(
                         endpoint = endpoint,
-                        callTimeoutMs = FoxholeVpnService.CONNECTIVITY_PROBE_CALL_TIMEOUT_MS,
+                        callTimeoutMs = DASHBOARD_IP_REFRESH_CALL_TIMEOUT_MS,
                         network = requestNetwork,
                         resolverNetwork = resolverNetwork,
                     ) ?: error("vpn ipv4 refresh failed")
                 } else {
                     ipInfoRepository.fetch(
                         endpoint = endpoint,
-                        callTimeoutMs = FoxholeVpnService.CONNECTIVITY_PROBE_CALL_TIMEOUT_MS,
+                        callTimeoutMs = DASHBOARD_IP_REFRESH_CALL_TIMEOUT_MS,
                         network = requestNetwork,
                         resolverNetwork = resolverNetwork,
                         mode = fetchMode,
@@ -115,6 +115,7 @@ internal class TunnelValidationGateway(
             proxy != null ->
                 ipInfoRepository.fetch(
                     endpoint = endpoint,
+                    callTimeoutMs = DASHBOARD_IP_REFRESH_CALL_TIMEOUT_MS,
                     proxy = proxy,
                     mode = fetchMode,
                 )
@@ -131,6 +132,7 @@ internal class TunnelValidationGateway(
         runCatching {
             ipInfoRepository.fetch(
                 endpoint = endpoint,
+                callTimeoutMs = DASHBOARD_IP_REFRESH_CALL_TIMEOUT_MS,
                 network = requestNetwork,
                 mode = fetchMode,
             )
@@ -152,6 +154,7 @@ internal class TunnelValidationGateway(
         runCatching {
             ipInfoRepository.fetch(
                 endpoint = endpoint,
+                callTimeoutMs = DASHBOARD_IP_REFRESH_CALL_TIMEOUT_MS,
                 mode = fetchMode,
             )
         }.recoverCatching { error ->
@@ -162,6 +165,7 @@ internal class TunnelValidationGateway(
             )
             ipInfoRepository.fetch(
                 endpoint = endpoint,
+                callTimeoutMs = DASHBOARD_IP_REFRESH_CALL_TIMEOUT_MS,
                 network = upstreamNetwork,
                 mode = fetchMode,
             )
@@ -209,4 +213,8 @@ internal class TunnelValidationGateway(
                 appContext.getString(R.string.home_network_cellular_provider)
             else -> appContext.getString(R.string.home_network_local_network)
         }
+
+    private companion object {
+        const val DASHBOARD_IP_REFRESH_CALL_TIMEOUT_MS = 2_500L
+    }
 }
