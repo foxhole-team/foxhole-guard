@@ -23,7 +23,7 @@ concurrency:
 
 jobs:
   release:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-22.04
     timeout-minutes: 60
     env:
       EXPECTED_RELEASE_CERT_SHA256: fcbf14862040fbe26726f06f3016ec3b027d8431c76cb4c25c13c5a06837177c
