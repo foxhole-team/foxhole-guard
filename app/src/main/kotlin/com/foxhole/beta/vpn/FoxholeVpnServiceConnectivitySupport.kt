@@ -197,7 +197,14 @@ internal fun FoxholeVpnService.scheduleValidationInternal(
     validationJob?.cancel()
     val job =
         scope.launch(Dispatchers.Main.immediate) {
-            val validation = validateTunnelConnectivity(expectedFreshVpnNetworkHandle)
+            if (!activeSession.matchesRuntimeValidationSession(session)) {
+                container.diagnosticsLogger.record(
+                    "dns",
+                    "post-start probe ignored for stale session sessionId=${session.correlationId}",
+                )
+                return@launch
+            }
+            val validation = validateTunnelConnectivity(expectedFreshVpnNetworkHandle, session)
             if (!activeSession.matchesRuntimeValidationSession(session)) {
                 container.diagnosticsLogger.record(
                     "dns",
@@ -224,12 +231,21 @@ internal fun FoxholeVpnService.scheduleValidationInternal(
     validationJob = job
 }
 
+@Suppress("LongMethod", "CyclomaticComplexMethod")
 internal suspend fun FoxholeVpnService.validateTunnelConnectivityInternal(
     expectedFreshVpnNetworkHandle: Long? = null,
+    session: VpnSession? = null,
 ): Result<Network> =
     withContext(Dispatchers.IO) {
         val validationStartedAt = System.currentTimeMillis()
-        val currentSession = activeSession
+        val currentSession = session ?: activeSession
+        if (!canPublishValidationResult(currentSession)) {
+            container.diagnosticsLogger.record(
+                "dns",
+                "runtime validation skipped for stale session sessionId=${currentSession?.correlationId.orEmpty()}",
+            )
+            return@withContext Result.failure(IllegalStateException("stale runtime validation session"))
+        }
         val activeProtocolHint = currentSession?.protocolHint
         val validationPolicyContext = tunnelValidationPolicyContextFor(PrivateDnsSettings.current(this@validateTunnelConnectivityInternal))
         val preferIpv4Validation = shouldPreferIpv4TunnelValidation(activeProtocolHint, currentSession?.configJson)
@@ -277,7 +293,7 @@ internal suspend fun FoxholeVpnService.validateTunnelConnectivityInternal(
                 if (runtimeProxyProbe.isSuccess) {
                     container.diagnosticsLogger.record("dns", "tunnel runtime proxy passed egress validation")
                     scope.launch(Dispatchers.IO) {
-                        refreshValidatedTunnelIpInfoBestEffort(vpnNetwork)
+                        refreshValidatedTunnelIpInfoBestEffort(vpnNetwork, currentSession)
                     }
                     return@run vpnNetwork
                 }
@@ -306,6 +322,7 @@ internal suspend fun FoxholeVpnService.validateTunnelConnectivityInternal(
                             vpnNetwork = vpnNetwork,
                             validationStartedAt = validationStartedAt,
                             context = validationPolicyContext,
+                            session = currentSession,
                         )
                     ) {
                         return@run vpnNetwork
@@ -318,6 +335,7 @@ internal suspend fun FoxholeVpnService.validateTunnelConnectivityInternal(
                         requestNetwork = requestNetwork,
                         validationStartedAt = validationStartedAt,
                         context = validationPolicyContext,
+                        session = currentSession,
                     )
                 ) {
                     return@run vpnNetwork
@@ -340,7 +358,7 @@ internal suspend fun FoxholeVpnService.validateTunnelConnectivityInternal(
                             "dns-independent public reachability probe accepted for strict private dns",
                         )
                         scope.launch(Dispatchers.IO) {
-                            refreshValidatedTunnelIpInfoBestEffort(vpnNetwork)
+                            refreshValidatedTunnelIpInfoBestEffort(vpnNetwork, currentSession)
                         }
                         return@run vpnNetwork
                     }
@@ -361,7 +379,7 @@ internal suspend fun FoxholeVpnService.validateTunnelConnectivityInternal(
                 if (earlyEndpointProbe.isSuccess) {
                     container.diagnosticsLogger.record("dns", "vpn network passed validation endpoint probe")
                     scope.launch(Dispatchers.IO) {
-                        refreshValidatedTunnelIpInfoBestEffort(vpnNetwork)
+                        refreshValidatedTunnelIpInfoBestEffort(vpnNetwork, currentSession)
                     }
                     return@run vpnNetwork
                 }
@@ -410,7 +428,14 @@ internal suspend fun FoxholeVpnService.validateTunnelConnectivityInternal(
                         )
                     }
                 if (ipRefresh.isSuccess) {
-                    FoxholeVpnRuntimeBridge.updateIpInfo(ipRefresh.getOrThrow())
+                    if (canPublishValidationResult(currentSession)) {
+                        FoxholeVpnRuntimeBridge.updateIpInfo(ipRefresh.getOrThrow())
+                    } else {
+                        container.diagnosticsLogger.record(
+                            "ip",
+                            "validated tunnel ip refresh ignored for stale session sessionId=${currentSession?.correlationId.orEmpty()}",
+                        )
+                    }
                     container.diagnosticsLogger.record("dns", "vpn network passed in-process ip refresh")
                     return@run vpnNetwork
                 }
@@ -453,7 +478,7 @@ internal suspend fun FoxholeVpnService.validateTunnelConnectivityInternal(
                                 "dns-independent public reachability probe accepted for strict private dns",
                             )
                             scope.launch(Dispatchers.IO) {
-                                refreshValidatedTunnelIpInfoBestEffort(vpnNetwork)
+                                refreshValidatedTunnelIpInfoBestEffort(vpnNetwork, currentSession)
                             }
                             return@run vpnNetwork
                         } else if (acceptsValidatedVpnLiteralIpEndpointProbe(
@@ -467,7 +492,7 @@ internal suspend fun FoxholeVpnService.validateTunnelConnectivityInternal(
                                 "vpn-bound literal public endpoint accepted after android validation",
                             )
                             scope.launch(Dispatchers.IO) {
-                                refreshValidatedTunnelIpInfoBestEffort(vpnNetwork)
+                                refreshValidatedTunnelIpInfoBestEffort(vpnNetwork, currentSession)
                             }
                             return@run vpnNetwork
                         } else {
@@ -496,6 +521,7 @@ internal suspend fun FoxholeVpnService.validateTunnelConnectivityInternal(
                                 vpnNetwork = vpnNetwork,
                                 policy = gracePolicy,
                                 preferIpv4 = preferIpv4Validation,
+                                session = currentSession,
                             )
                         if (graceResult.isSuccess) {
                             container.diagnosticsLogger.record("dns", "validated tunnel grace retry passed")
@@ -515,7 +541,7 @@ internal suspend fun FoxholeVpnService.validateTunnelConnectivityInternal(
                             "android validated vpn network accepted with tunnel activity after endpoint probes failed",
                         )
                         scope.launch(Dispatchers.IO) {
-                            refreshValidatedTunnelIpInfoBestEffort(vpnNetwork)
+                            refreshValidatedTunnelIpInfoBestEffort(vpnNetwork, currentSession)
                         }
                         return@run vpnNetwork
                     }
@@ -528,10 +554,17 @@ internal suspend fun FoxholeVpnService.validateTunnelConnectivityInternal(
                     throw (endpointProbe.exceptionOrNull() ?: IllegalStateException("connectivity probe failed"))
                 }
                 scope.launch(Dispatchers.IO) {
-                    refreshValidatedTunnelIpInfoBestEffort(vpnNetwork)
+                    refreshValidatedTunnelIpInfoBestEffort(vpnNetwork, currentSession)
                 }
                 vpnNetwork
             }
+        if (!canPublishValidationResult(currentSession)) {
+            container.diagnosticsLogger.record(
+                "dns",
+                "runtime validation result ignored for stale session sessionId=${currentSession?.correlationId.orEmpty()}",
+            )
+            return@withContext Result.failure(IllegalStateException("stale runtime validation session"))
+        }
         if (result.isSuccess) {
             container.diagnosticsLogger.recordStructured(
                 "runtime",
@@ -571,6 +604,7 @@ internal suspend fun FoxholeVpnService.tryAcceptEarlyAndroidValidatedVpnNetwork(
     vpnNetwork: Network,
     validationStartedAt: Long,
     context: TunnelValidationPolicyContext,
+    session: VpnSession? = null,
 ): Boolean {
     val evidence =
         withTimeoutOrNull(FoxholeVpnService.CONNECTIVITY_LITERAL_PROBE_EARLY_WINDOW_MS) {
@@ -598,7 +632,7 @@ internal suspend fun FoxholeVpnService.tryAcceptEarlyAndroidValidatedVpnNetwork(
         "android validated vpn network accepted with tunnel activity",
     )
     scope.launch(Dispatchers.IO) {
-        refreshValidatedTunnelIpInfoBestEffort(vpnNetwork)
+        refreshValidatedTunnelIpInfoBestEffort(vpnNetwork, session)
     }
     return true
 }
@@ -609,6 +643,7 @@ internal suspend fun FoxholeVpnService.tryAcceptEarlyValidatedVpnLiteralEndpoint
     requestNetwork: Network?,
     validationStartedAt: Long,
     context: TunnelValidationPolicyContext,
+    session: VpnSession? = null,
 ): Boolean {
     val evidence =
         withTimeoutOrNull(FoxholeVpnService.CONNECTIVITY_LITERAL_PROBE_EARLY_WINDOW_MS) {
@@ -654,7 +689,7 @@ internal suspend fun FoxholeVpnService.tryAcceptEarlyValidatedVpnLiteralEndpoint
         "vpn-bound literal public endpoint accepted after android validation",
     )
     scope.launch(Dispatchers.IO) {
-        refreshValidatedTunnelIpInfoBestEffort(vpnNetwork)
+        refreshValidatedTunnelIpInfoBestEffort(vpnNetwork, session)
     }
     return true
 }
@@ -684,6 +719,7 @@ internal suspend fun FoxholeVpnService.retryValidatedTunnelConnectivityWithGrace
     vpnNetwork: Network,
     policy: TunnelValidationGracePolicy,
     preferIpv4: Boolean = false,
+    session: VpnSession? = null,
 ): Result<Unit> {
     val validationPolicyContext = tunnelValidationPolicyContextFor(PrivateDnsSettings.current(this))
     return TunnelConnectivityProbe.run(
@@ -727,6 +763,7 @@ internal suspend fun FoxholeVpnService.retryValidatedTunnelConnectivityWithGrace
                     requestNetwork = requestNetwork,
                     policy = policy,
                     validationPolicyContext = validationPolicyContext,
+                    session = session,
                 )
             ) {
                 return@run Unit
@@ -734,7 +771,7 @@ internal suspend fun FoxholeVpnService.retryValidatedTunnelConnectivityWithGrace
             throw (endpointProbe.exceptionOrNull() ?: IllegalStateException("connectivity probe failed"))
         }
         endpointProbe.getOrThrow()
-        refreshValidatedTunnelIpInfoBestEffort(vpnNetwork)
+        refreshValidatedTunnelIpInfoBestEffort(vpnNetwork, session)
     }
 }
 
@@ -743,6 +780,7 @@ private suspend fun FoxholeVpnService.tryAcceptGraceDnsIndependentFallback(
     requestNetwork: Network?,
     policy: TunnelValidationGracePolicy,
     validationPolicyContext: TunnelValidationPolicyContext,
+    session: VpnSession? = null,
 ): Boolean {
     val dnsIndependentFallback =
         runCatchingUnlessCancelled {
@@ -774,7 +812,7 @@ private suspend fun FoxholeVpnService.tryAcceptGraceDnsIndependentFallback(
                 "dns",
                 "grace retry dns-independent probe accepted for strict private dns",
             )
-            refreshValidatedTunnelIpInfoBestEffort(vpnNetwork)
+            refreshValidatedTunnelIpInfoBestEffort(vpnNetwork, session)
             true
         }
     }
@@ -796,12 +834,23 @@ internal fun FoxholeVpnService.inspectValidatedTunnelEvidenceInternal(validation
     return evidence.takeIf(TunnelValidationEvidence::hasSuccessfulTunnelActivity)
 }
 
-internal suspend fun FoxholeVpnService.refreshValidatedTunnelIpInfoBestEffortInternal(vpnNetwork: Network) {
+internal suspend fun FoxholeVpnService.refreshValidatedTunnelIpInfoBestEffortInternal(
+    vpnNetwork: Network,
+    session: VpnSession? = null,
+) {
+    val sessionSnapshot = session ?: activeSession
+    if (!canPublishValidationResult(sessionSnapshot)) {
+        container.diagnosticsLogger.record(
+            "ip",
+            "validated tunnel ip refresh ignored for stale session sessionId=${sessionSnapshot?.correlationId.orEmpty()}",
+        )
+        return
+    }
     runCatchingUnlessCancelled {
         val endpoint = container.settingsRepository.current().connection.ipInfoEndpoint
-        val remoteDnsServers = VpnDnsServerSelector.remoteDnsServerAddresses(activeSession?.configJson)
+        val remoteDnsServers = VpnDnsServerSelector.remoteDnsServerAddresses(sessionSnapshot?.configJson)
         val info =
-            if (shouldPreferIpv4TunnelValidation(activeSession?.protocolHint, activeSession?.configJson)) {
+            if (shouldPreferIpv4TunnelValidation(sessionSnapshot?.protocolHint, sessionSnapshot?.configJson)) {
                 refreshTunnelRuntimeProxyIpv4Info(
                     callTimeoutMs = FoxholeVpnService.CONNECTIVITY_PROBE_CALL_TIMEOUT_MS,
                 ) ?: error("runtime proxy ipv4 refresh failed")
@@ -826,7 +875,7 @@ internal suspend fun FoxholeVpnService.refreshValidatedTunnelIpInfoBestEffortInt
         val requestNetwork = tunnelValidationRequestNetwork(vpnNetwork)
         val resolverNetwork = currentUpstreamNetworkOrNull()
         val endpoint = settings.connection.ipInfoEndpoint
-        val remoteDnsServers = VpnDnsServerSelector.remoteDnsServerAddresses(activeSession?.configJson)
+        val remoteDnsServers = VpnDnsServerSelector.remoteDnsServerAddresses(sessionSnapshot?.configJson)
         val ipv4Info =
             container.ipInfoRepository.fetchIpv4(
                 endpoint = endpoint,
@@ -840,8 +889,15 @@ internal suspend fun FoxholeVpnService.refreshValidatedTunnelIpInfoBestEffortInt
         )
     }
         .onSuccess { info ->
-            FoxholeVpnRuntimeBridge.updateIpInfo(info)
-            container.diagnosticsLogger.record("ip", "validated tunnel ip refresh published to dashboard")
+            if (canPublishValidationResult(sessionSnapshot)) {
+                FoxholeVpnRuntimeBridge.updateIpInfo(info)
+                container.diagnosticsLogger.record("ip", "validated tunnel ip refresh published to dashboard")
+            } else {
+                container.diagnosticsLogger.record(
+                    "ip",
+                    "validated tunnel ip refresh ignored for stale session sessionId=${sessionSnapshot?.correlationId.orEmpty()}",
+                )
+            }
         }
         .onFailure { error ->
             container.diagnosticsLogger.record(
@@ -1382,6 +1438,9 @@ internal fun VpnSession?.matchesRuntimeValidationSession(session: VpnSession): B
         profileId == session.profileId &&
         correlationId == session.correlationId &&
         protocolOptionId == session.protocolOptionId
+
+internal fun FoxholeVpnService.canPublishValidationResult(session: VpnSession?): Boolean =
+    session != null && activeSession.matchesRuntimeValidationSession(session)
 
 internal fun FoxholeVpnService.currentNotificationSnapshotInternal(): NotificationSnapshot {
     val connection = FoxholeVpnRuntimeBridge.snapshot.value

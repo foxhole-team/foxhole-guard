@@ -360,9 +360,25 @@ private class ReflectiveLibboxRuntime(
             currentConfig = null
             currentHost = null
             currentDnsServerAddress = null
-            defaultNetworkMonitor.stop()
             val tunClosed = preclosedTun ?: closeTunFdNow()
-            var closeDetached = !operationLockAcquired
+            if (!operationLockAcquired) {
+                diagnosticsLogger.recordStructured(
+                    "runtime",
+                    "runtime force kill detached native close skipped",
+                    "reason=$reason",
+                    "server_detached=${server != null}",
+                    "tun_closed=$tunClosed",
+                )
+                return@withContext RuntimeKillResult(
+                    reason = reason,
+                    tunClosed = tunClosed,
+                    serverDetached = server != null,
+                    closeDetached = server != null,
+                )
+            }
+
+            defaultNetworkMonitor.stop()
+            var closeDetached = false
             if (server != null) {
                 val serviceClosed =
                     closeNativeServerPart(

@@ -1389,8 +1389,11 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         onSuccess: (Network) -> Unit,
     ) = scheduleValidationInternal(session, failOnFailure, expectedFreshVpnNetworkHandle, onSuccess)
 
-    internal suspend fun validateTunnelConnectivity(expectedFreshVpnNetworkHandle: Long? = null): Result<Network> =
-        validateTunnelConnectivityInternal(expectedFreshVpnNetworkHandle)
+    internal suspend fun validateTunnelConnectivity(
+        expectedFreshVpnNetworkHandle: Long? = null,
+        session: VpnSession? = null,
+    ): Result<Network> =
+        validateTunnelConnectivityInternal(expectedFreshVpnNetworkHandle, session)
 
     internal fun inspectValidatedTunnelEvidence(validationStartedAt: Long): TunnelValidationEvidence? =
         inspectValidatedTunnelEvidenceInternal(validationStartedAt)
@@ -1399,15 +1402,18 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         vpnNetwork: Network,
         policy: TunnelValidationGracePolicy,
         preferIpv4: Boolean = false,
-    ): Result<Unit> = retryValidatedTunnelConnectivityWithGraceInternal(vpnNetwork, policy, preferIpv4)
+        session: VpnSession? = null,
+    ): Result<Unit> = retryValidatedTunnelConnectivityWithGraceInternal(vpnNetwork, policy, preferIpv4, session)
 
     internal suspend fun probeDnsIndependentConnectivityFallback(
         callTimeoutMs: Long,
         network: Network? = null,
     ) = probeDnsIndependentConnectivityFallbackInternal(callTimeoutMs, network)
 
-    internal suspend fun refreshValidatedTunnelIpInfoBestEffort(vpnNetwork: Network) =
-        refreshValidatedTunnelIpInfoBestEffortInternal(vpnNetwork)
+    internal suspend fun refreshValidatedTunnelIpInfoBestEffort(
+        vpnNetwork: Network,
+        session: VpnSession? = null,
+    ) = refreshValidatedTunnelIpInfoBestEffortInternal(vpnNetwork, session)
 
     internal suspend fun probeConnectivityEndpoints(
         callTimeoutMs: Long = CONNECTIVITY_PROBE_CALL_TIMEOUT_MS,

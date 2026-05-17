@@ -32,6 +32,7 @@ import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.foxhole.beta.core.model.ThemeMode
 import android.graphics.Color as AndroidColor
@@ -364,6 +365,20 @@ fun FoxholeAppBackground(
     modifier: Modifier = Modifier,
     content: @Composable BoxScope.() -> Unit,
 ) {
+    Box(
+        modifier =
+            modifier
+                .fillMaxSize()
+                .foxholeAppBackgroundLayer(),
+        content = content,
+    )
+}
+
+@Composable
+fun Modifier.foxholeAppBackgroundLayer(
+    gradientHeight: Dp? = null,
+    opacity: Float = 1f,
+): Modifier {
     val dark = LocalFoxholeDarkTheme.current
     val themeMode = LocalFoxholeThemeMode.current
     val colorScheme = MaterialTheme.colorScheme
@@ -408,51 +423,57 @@ fun FoxholeAppBackground(
             )
         }
 
-    Box(
-        modifier =
-            modifier
-                .fillMaxSize()
-                .background(base)
-                .drawWithCache {
-                    val gradientPaint =
-                        Paint(Paint.ANTI_ALIAS_FLAG or Paint.DITHER_FLAG).apply {
-                            isDither = true
-                            shader =
-                                LinearGradient(
-                                    0f,
-                                    0f,
-                                    0f,
-                                    size.height,
-                                    intArrayOf(
-                                        top.toArgb(),
-                                        base.toArgb(),
-                                        bottom.toArgb(),
-                                    ),
-                                    floatArrayOf(0f, 0.55f, 1f),
-                                    Shader.TileMode.CLAMP,
-                                )
-                        }
-                    val noisePaint =
-                        Paint(Paint.DITHER_FLAG).apply {
-                            isDither = true
-                            shader =
-                                BitmapShader(
-                                    noiseBitmap,
-                                    Shader.TileMode.REPEAT,
-                                    Shader.TileMode.REPEAT,
-                                )
-                        }
+    val clampedOpacity = opacity.coerceIn(0f, 1f)
+    val paintAlpha = (255 * clampedOpacity).toInt().coerceIn(0, 255)
+    val baseModifier =
+        if (clampedOpacity >= 1f) {
+            background(base)
+        } else {
+            this
+        }
 
-                    onDrawBehind {
-                        drawIntoCanvas { canvas ->
-                            val nativeCanvas = canvas.nativeCanvas
-                            nativeCanvas.drawRect(0f, 0f, size.width, size.height, gradientPaint)
-                            nativeCanvas.drawRect(0f, 0f, size.width, size.height, noisePaint)
-                        }
-                    }
-                },
-        content = content,
-    )
+    return baseModifier
+        .drawWithCache {
+            val shaderHeight = gradientHeight?.toPx() ?: size.height
+            val gradientPaint =
+                Paint(Paint.ANTI_ALIAS_FLAG or Paint.DITHER_FLAG).apply {
+                    isDither = true
+                    alpha = paintAlpha
+                    shader =
+                        LinearGradient(
+                            0f,
+                            0f,
+                            0f,
+                            shaderHeight,
+                            intArrayOf(
+                                top.toArgb(),
+                                base.toArgb(),
+                                bottom.toArgb(),
+                            ),
+                            floatArrayOf(0f, 0.55f, 1f),
+                            Shader.TileMode.CLAMP,
+                        )
+                }
+            val noisePaint =
+                Paint(Paint.DITHER_FLAG).apply {
+                    isDither = true
+                    alpha = paintAlpha
+                    shader =
+                        BitmapShader(
+                            noiseBitmap,
+                            Shader.TileMode.REPEAT,
+                            Shader.TileMode.REPEAT,
+                        )
+                }
+
+            onDrawBehind {
+                drawIntoCanvas { canvas ->
+                    val nativeCanvas = canvas.nativeCanvas
+                    nativeCanvas.drawRect(0f, 0f, size.width, size.height, gradientPaint)
+                    nativeCanvas.drawRect(0f, 0f, size.width, size.height, noisePaint)
+                }
+            }
+        }
 }
 
 private fun createFoxholeNoiseBitmap(

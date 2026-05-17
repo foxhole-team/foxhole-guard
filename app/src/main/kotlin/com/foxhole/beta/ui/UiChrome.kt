@@ -1,4 +1,4 @@
-@file:Suppress("ImportOrdering")
+@file:Suppress("ImportOrdering", "TooManyFunctions")
 
 package com.foxhole.beta.ui
 
@@ -66,7 +66,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -85,8 +84,6 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
@@ -112,6 +109,7 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
@@ -122,6 +120,7 @@ import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupPositionProvider
 import androidx.compose.ui.window.PopupProperties
@@ -133,6 +132,7 @@ import com.foxhole.beta.core.model.ThemeMode
 import com.foxhole.beta.ui.theme.LocalFoxholeDarkTheme
 import com.foxhole.beta.ui.theme.LocalFoxholeThemeMode
 import com.foxhole.beta.ui.theme.LocalFoxholeUiPalette
+import com.foxhole.beta.ui.theme.foxholeAppBackgroundLayer
 import kotlin.math.max
 
 internal val ScreenHorizontalPadding = 16.dp
@@ -141,7 +141,7 @@ internal val ScreenSectionSpacing = 10.dp
 internal val CardInnerPadding = 12.dp
 internal val CardContentSpacing = 8.dp
 internal val BottomDockOverlayPadding = 100.dp
-internal val FoxholeTopChromeHeight = 64.dp
+internal val FoxholeTopChromeHeight = 52.dp
 internal val HomeTopStatusInnerSurfaceMinHeight = 42.dp
 internal val HomeTopStatusInnerHorizontalPadding = 10.dp
 internal val HomeTopStatusInnerVerticalPadding = 6.dp
@@ -241,7 +241,6 @@ internal fun Modifier.foxholeMenuShadow(
     )
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun FoxholeScaffold(
     title: String,
@@ -253,9 +252,9 @@ internal fun FoxholeScaffold(
     bannerPlacement: FoxholeBannerPlacement = FoxholeBannerPlacement.TOP,
     content: @Composable (PaddingValues) -> Unit,
 ) {
-    val uiPalette = LocalFoxholeUiPalette.current
     val statusTopPadding = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     val navigationBottomPadding = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    val screenHeight = LocalConfiguration.current.screenHeightDp.dp
     val contentTopPadding = statusTopPadding + FoxholeTopChromeHeight
     val resolvedTopBannerPadding =
         if (bannerTopPadding > contentTopPadding) {
@@ -275,48 +274,14 @@ internal fun FoxholeScaffold(
                         .padding(bottom = scaffoldPadding.calculateBottomPadding()),
             ) {
                 content(PaddingValues(top = contentTopPadding))
-                FoxholeGlassPanel(
-                    modifier =
-                        Modifier
-                            .align(Alignment.TopCenter)
-                            .fillMaxWidth()
-                            .height(contentTopPadding),
-                    shape = RoundedCornerShape(bottomStart = 24.dp, bottomEnd = 24.dp),
-                    containerColor = uiPalette.bottomBarContainerColor,
-                    borderColor = uiPalette.bottomBarBorderColor,
-                    blurRadius = 18.dp,
-                    backgroundAlpha = 0.72f,
-                ) {
-                    TopAppBar(
-                        modifier = Modifier.align(Alignment.TopCenter),
-                        title = {
-                            Text(
-                                text = title,
-                                style = MaterialTheme.typography.titleLarge,
-                                fontWeight = FontWeight.SemiBold,
-                            )
-                        },
-                        navigationIcon = {
-                            onNavigateUp?.let {
-                                IconButton(onClick = it) {
-                                    Icon(
-                                        Icons.AutoMirrored.Outlined.ArrowBack,
-                                        contentDescription = stringResource(R.string.navigate_back),
-                                    )
-                                }
-                            }
-                        },
-                        actions = actions,
-                        colors =
-                            TopAppBarDefaults.topAppBarColors(
-                                containerColor = Color.Transparent,
-                                scrolledContainerColor = Color.Transparent,
-                                titleContentColor = MaterialTheme.colorScheme.onBackground,
-                                navigationIconContentColor = MaterialTheme.colorScheme.onBackground,
-                                actionIconContentColor = MaterialTheme.colorScheme.onBackground,
-                            ),
-                    )
-                }
+                FoxholeTopChrome(
+                    title = title,
+                    statusTopPadding = statusTopPadding,
+                    contentTopPadding = contentTopPadding,
+                    gradientHeight = screenHeight,
+                    onNavigateUp = onNavigateUp,
+                    actions = actions,
+                )
                 val bannerModifier =
                     when (bannerPlacement) {
                         FoxholeBannerPlacement.TOP ->
@@ -339,6 +304,87 @@ internal fun FoxholeScaffold(
             }
         },
     )
+}
+
+@Composable
+private fun BoxScope.FoxholeTopChrome(
+    title: String,
+    statusTopPadding: Dp,
+    contentTopPadding: Dp,
+    gradientHeight: Dp,
+    onNavigateUp: (() -> Unit)?,
+    actions: @Composable RowScope.() -> Unit,
+) {
+    Box(
+        modifier =
+            Modifier
+                .align(Alignment.TopCenter)
+                .fillMaxWidth()
+                .height(contentTopPadding),
+    ) {
+        FoxholeBlurredBackgroundLayer(
+            modifier = Modifier.fillMaxSize(),
+            shape = RectangleShape,
+            gradientHeight = gradientHeight,
+            opacity = 0.78f,
+            blurRadius = 18.dp,
+        )
+    }
+    Row(
+        modifier =
+            Modifier
+                .align(Alignment.TopCenter)
+                .fillMaxWidth()
+                .padding(top = statusTopPadding)
+                .height(FoxholeTopChromeHeight)
+                .padding(
+                    start = if (onNavigateUp == null) 18.dp else 4.dp,
+                    end = 8.dp,
+                ),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (onNavigateUp != null) {
+            IconButton(
+                onClick = onNavigateUp,
+                modifier = Modifier.size(48.dp),
+            ) {
+                Icon(
+                    Icons.AutoMirrored.Outlined.ArrowBack,
+                    contentDescription = stringResource(R.string.navigate_back),
+                    tint = MaterialTheme.colorScheme.onBackground,
+                )
+            }
+        }
+        Box(
+            modifier =
+                Modifier
+                    .weight(1f)
+                    .padding(
+                        start = if (onNavigateUp == null) 0.dp else 8.dp,
+                        end = 8.dp,
+                    ),
+            contentAlignment = Alignment.CenterStart,
+        ) {
+            Text(
+                text = title,
+                color = MaterialTheme.colorScheme.onBackground,
+                style =
+                    TextStyle(
+                        fontFamily = FontFamily.Default,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 20.sp,
+                        lineHeight = 24.sp,
+                        letterSpacing = 0.sp,
+                    ),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            content = actions,
+        )
+    }
 }
 
 internal enum class FoxholeBannerTone {
@@ -996,6 +1042,32 @@ internal fun FoxholeGlassPanel(
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun FoxholeBlurredBackgroundLayer(
+    modifier: Modifier = Modifier,
+    shape: Shape = RectangleShape,
+    gradientHeight: Dp? = null,
+    opacity: Float = 0.78f,
+    blurRadius: Dp = 18.dp,
+) {
+    Box(
+        modifier =
+            modifier
+                .clip(shape),
+    ) {
+        Box(
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .foxholeAppBackgroundLayer(
+                        gradientHeight = gradientHeight,
+                        opacity = opacity,
+                    )
+                    .blur(blurRadius),
+        )
     }
 }
 
