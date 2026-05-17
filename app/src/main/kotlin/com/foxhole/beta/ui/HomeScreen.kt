@@ -527,7 +527,6 @@ fun HomeScreen(
                                         legendLoading =
                                             shouldShowTrafficMapLegendLoading(
                                                 connectionState = state.connection.state,
-                                                explicitLoading = state.ipInfoLoading,
                                                 appLoaded = state.profilesLoaded,
                                             ),
                                     )

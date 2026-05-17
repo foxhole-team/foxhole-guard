@@ -190,11 +190,9 @@ internal fun shouldShowDashboardNetworkLoading(
 
 internal fun shouldShowTrafficMapLegendLoading(
     connectionState: ConnectionState,
-    explicitLoading: Boolean,
     appLoaded: Boolean,
 ): Boolean =
-    explicitLoading ||
-        !appLoaded ||
+    !appLoaded ||
         connectionState in setOf(ConnectionState.CONNECTING, ConnectionState.RECONNECTING)
 
 internal fun isProfileReconnectRequired(

@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -156,15 +157,27 @@ private fun TrafficMapLegendLoadingBlock(modifier: Modifier = Modifier) {
         modifier = modifier.padding(top = 24.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        repeat(4) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalAlignment = Alignment.CenterVertically,
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(5.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            FoxholeSkeletonBlock(modifier = Modifier.size(16.dp))
+            Column(
+                verticalArrangement = Arrangement.spacedBy(3.dp),
             ) {
-                FoxholeSkeletonBlock(modifier = Modifier.size(8.dp))
-                FoxholeSkeletonBlock(modifier = Modifier.width(46.dp).height(9.dp))
+                FoxholeSkeletonBlock(modifier = Modifier.width(56.dp).height(9.dp))
+                FoxholeSkeletonBlock(modifier = Modifier.width(42.dp).height(8.dp))
             }
+        }
+        Spacer(modifier = Modifier.height(2.dp))
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(5.dp),
+        ) {
+            FoxholeSkeletonBlock(modifier = Modifier.fillMaxWidth(0.92f).height(8.dp))
+            FoxholeSkeletonBlock(modifier = Modifier.fillMaxWidth(0.74f).height(8.dp))
+            FoxholeSkeletonBlock(modifier = Modifier.fillMaxWidth(0.52f).height(8.dp))
         }
     }
 }

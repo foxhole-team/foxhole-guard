@@ -113,7 +113,6 @@ internal val HomeNetworkContentHeight = 82.dp
 internal val HomeDashboardProfileContentHeight = 62.dp
 private val HomeNetworkValueLoadingWidth = 68.dp
 private val HomeNetworkMetricValueLoadingWidth = 54.dp
-private val HomeNetworkLabelLoadingWidth = 76.dp
 private val HomeModeSelectorMinWidth = 58.dp
 private val HomeModeSelectorMaxWidth = 104.dp
 private val HomeNetworkMetricValueLoadingHeight = 12.dp
@@ -1668,9 +1667,9 @@ internal fun HomeNetworkLoadingBlock(
         verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
         HomeNetworkColumnTitle(title)
-        labels.forEachIndexed { index, _ ->
+        labels.forEachIndexed { index, label ->
             HomeNetworkLoadingLine(
-                index = index,
+                label = label,
                 valueWidth = valueWidth,
                 loadingColor = loadingColor,
             )
@@ -1703,25 +1702,28 @@ internal fun HomeConnectionStatusLoadingBlock(
 
 @Composable
 private fun HomeNetworkLoadingLine(
-    index: Int,
+    label: String,
     valueWidth: Dp,
     loadingColor: Color,
 ) {
-    val labelWidth = HomeNetworkLabelLoadingWidth + ((index % 2) * 10).dp
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(modifier = Modifier.weight(1f)) {
-            FoxholeSkeletonBlock(
-                modifier =
-                    Modifier
-                        .width(labelWidth)
-                        .height(10.dp),
-                color = loadingColor,
-            )
-        }
+        Text(
+            text = label,
+            modifier = Modifier.weight(1f),
+            style =
+                MaterialTheme.typography.labelSmall.copy(
+                    fontSize = 11.sp,
+                    lineHeight = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                ),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
         Box(
             modifier = Modifier.weight(1f),
             contentAlignment = Alignment.CenterEnd,
