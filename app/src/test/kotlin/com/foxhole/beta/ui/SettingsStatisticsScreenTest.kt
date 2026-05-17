@@ -5,10 +5,12 @@ import com.foxhole.beta.core.model.ProfileProtocolOption
 import com.foxhole.beta.core.model.ProfileSourceType
 import com.foxhole.beta.core.model.ProfileTrafficTotal
 import com.foxhole.beta.core.model.ProtocolHint
+import com.foxhole.beta.core.model.ProtocolQuality
 import com.foxhole.beta.core.model.Settings
 import com.foxhole.beta.core.model.StatisticsRetention
 import com.foxhole.beta.core.model.TransportProtocol
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Test
 
 class SettingsStatisticsScreenTest {
@@ -100,5 +102,48 @@ class SettingsStatisticsScreenTest {
             ),
             dashboardStatisticsDisplayRanges(),
         )
+    }
+
+    @Test
+    fun `traffic only protocol statistics do not imply successful attempts`() {
+        val profile =
+            Profile(
+                id = 7L,
+                name = "Traffic only",
+                sourceType = ProfileSourceType.SHARE_URI,
+                secretRef = "secret",
+                protocolHint = ProtocolHint.VLESS,
+                lastUpdatedAt = null,
+                lastEtag = null,
+                isActive = true,
+            )
+        val state =
+            SettingsRouteUiState(
+                profiles = listOf(profile),
+                activeProfile = profile,
+                settings = Settings(
+                    profileTrafficTotals = listOf(
+                        ProfileTrafficTotal(
+                            profileId = 7L,
+                            profileName = "Traffic only",
+                            protocolHint = ProtocolHint.VLESS,
+                            protocolOptionId = null,
+                            transport = TransportProtocol.TCP,
+                            rxTotalBytes = 2048L,
+                            txTotalBytes = 1024L,
+                            updatedAt = 10L,
+                        ),
+                    ),
+                ),
+            )
+
+        val statistics = statisticsUiState(state = state, retention = StatisticsRetention.FOREVER)
+        val item = statistics.vpnProtocols.single()
+
+        assertEquals(ProtocolQuality.TRAFFIC_ONLY, item.quality)
+        assertEquals(0, item.successCount)
+        assertEquals(0, item.failureCount)
+        assertNull(item.successRateOrNull)
+        assertNull(item.errorRateOrNull)
     }
 }

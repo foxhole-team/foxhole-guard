@@ -5,6 +5,7 @@ internal fun buildStatisticsDashboardUiState(
     trafficMapState: com.foxhole.beta.core.model.TrafficMapUiState,
 ): StatisticsDashboardUiState {
     val retention = state.settings.statistics.retention
+    val nowMs = System.currentTimeMillis()
     val statistics = statisticsUiState(state = state, retention = retention)
     val appRows =
         appTrafficRows(
@@ -12,6 +13,7 @@ internal fun buildStatisticsDashboardUiState(
             installedApps = state.installedApps,
             anomalyEvents = state.anomalyEvents,
             retention = retention,
+            nowMs = nowMs,
         )
     val countryRows =
         countryTrafficRows(
@@ -24,13 +26,16 @@ internal fun buildStatisticsDashboardUiState(
             appRows = appRows,
             retention = retention,
             dnsSettings = state.settings.dns,
+            nowMs = nowMs,
         )
     val appChanges =
         installedAppChangesForRetention(
             changes = state.settings.installedAppInventoryAudit.recentChanges,
             retention = retention,
+            nowMs = nowMs,
         )
     return StatisticsDashboardUiState(
+        nowMs = nowMs,
         statistics = statistics,
         appRows = appRows,
         countryRows = countryRows,

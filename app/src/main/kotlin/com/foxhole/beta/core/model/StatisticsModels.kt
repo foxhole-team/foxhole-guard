@@ -56,11 +56,20 @@ data class ProtocolStatisticsUiItem(
     val txBytes: Long,
     val avgLatencyMs: Long?,
     val lastUsedAt: Long?,
+    val quality: ProtocolQuality = ProtocolQuality.MEASURED,
 ) {
     val totalAttempts: Int get() = successCount + failureCount
+    val hasMeasuredAttempts: Boolean get() = totalAttempts > 0
+    val successRateOrNull: Float? get() = if (hasMeasuredAttempts) successCount.toFloat() / totalAttempts else null
+    val errorRateOrNull: Float? get() = if (hasMeasuredAttempts) failureCount.toFloat() / totalAttempts else null
     val successRate: Float get() = if (totalAttempts == 0) 0f else successCount.toFloat() / totalAttempts
     val errorRate: Float get() = if (totalAttempts == 0) 0f else failureCount.toFloat() / totalAttempts
     val totalBytes: Long get() = rxBytes + txBytes
+}
+
+enum class ProtocolQuality {
+    MEASURED,
+    TRAFFIC_ONLY,
 }
 
 data class ProfileComparisonUiItem(

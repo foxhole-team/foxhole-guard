@@ -27,12 +27,13 @@ import com.foxhole.beta.core.model.VpnSession
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.net.InetAddress
 import java.net.NetworkInterface
+import java.util.concurrent.CancellationException
+import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
 
 internal fun createVpnRuntime(
@@ -100,6 +101,7 @@ private class ReflectiveLibboxRuntime(
     private val defaultNetworkMonitor by lazy { DefaultNetworkMonitor(context, reflection, diagnosticsLogger) }
     private val commandServerRef = AtomicReference<Any?>(null)
     private val fileDescriptorRef = AtomicReference<ParcelFileDescriptor?>(null)
+    private val runtimeGeneration = AtomicLong(0L)
 
     @Volatile
     private var currentConfig: String? = null
@@ -112,10 +114,18 @@ private class ReflectiveLibboxRuntime(
 
     override suspend fun start(session: VpnSession, host: RuntimeServiceHost): Result<Unit> =
         libboxRuntimeOperationMutex.withLock {
-            startLocked(session = session, host = host)
+            startLocked(
+                session = session,
+                host = host,
+                generation = nextRuntimeGeneration("start"),
+            )
         }
 
-    private suspend fun startLocked(session: VpnSession, host: RuntimeServiceHost): Result<Unit> {
+    private suspend fun startLocked(
+        session: VpnSession,
+        host: RuntimeServiceHost,
+        generation: Long,
+    ): Result<Unit> {
         var newServer: Any? = null
         return try {
             if (!reflection.isAvailable()) {
@@ -130,8 +140,9 @@ private class ReflectiveLibboxRuntime(
                         forceKillAfterTimeout = true,
                     ),
                 )
+                ensureRuntimeGenerationCurrent(generation)
                 reflection.setupIfNeeded()
-                currentCoroutineContext().ensureActive()
+                ensureRuntimeGenerationCurrent(generation)
 
                 defaultNetworkMonitor.start()
                 currentHost = host
@@ -160,18 +171,22 @@ private class ReflectiveLibboxRuntime(
                         },
                     )
                 newServer = reflection.newCommandServer(handler, platform)
-                currentCoroutineContext().ensureActive()
+                ensureRuntimeGenerationCurrent(generation)
                 reflection.startServer(newServer)
-                currentCoroutineContext().ensureActive()
+                ensureRuntimeGenerationCurrent(generation)
                 reflection.checkConfig(newServer, session.configJson)
-                currentCoroutineContext().ensureActive()
+                ensureRuntimeGenerationCurrent(generation)
                 reflection.startOrReloadService(newServer, session.configJson)
-                currentCoroutineContext().ensureActive()
+                ensureRuntimeGenerationCurrent(generation)
                 commandServerRef.set(newServer)
                 newServer = null
                 diagnosticsLogger.record("libbox", "runtime started")
             }
             Result.success(Unit)
+        } catch (cancelled: CancellationException) {
+            cleanupFailedStart(newServer)
+            diagnosticsLogger.record("runtime", "start cancelled: ${cancelled.message.orEmpty()}")
+            throw cancelled
         } catch (error: Throwable) {
             cleanupFailedStart(newServer)
             val normalized = unwrapVpnRuntimeFailure(error)
@@ -182,6 +197,19 @@ private class ReflectiveLibboxRuntime(
     }
 
     override suspend fun reload(session: VpnSession, host: RuntimeServiceHost): Result<Unit> =
+        libboxRuntimeOperationMutex.withLock {
+            reloadLocked(
+                session = session,
+                host = host,
+                generation = nextRuntimeGeneration("reload"),
+            )
+        }
+
+    private suspend fun reloadLocked(
+        session: VpnSession,
+        host: RuntimeServiceHost,
+        generation: Long,
+    ): Result<Unit> =
         try {
             if (!reflection.isAvailable()) {
                 error(host.runtimeContext.getString(com.foxhole.beta.R.string.error_runtime_missing))
@@ -192,10 +220,15 @@ private class ReflectiveLibboxRuntime(
                 currentConfig = session.configJson
                 diagnosticsLogger.record("runtime", "reload ${sanitizedConfigFingerprint(session.configJson)}")
                 reflection.checkConfig(server, session.configJson)
+                ensureRuntimeGenerationCurrent(generation)
                 reflection.startOrReloadService(server, session.configJson)
+                ensureRuntimeGenerationCurrent(generation)
             }
             diagnosticsLogger.record("libbox", "runtime reloaded")
             Result.success(Unit)
+        } catch (cancelled: CancellationException) {
+            diagnosticsLogger.record("runtime", "reload cancelled: ${cancelled.message.orEmpty()}")
+            throw cancelled
         } catch (error: Throwable) {
             val normalized = unwrapVpnRuntimeFailure(error)
             diagnosticsLogger.record("runtime", "reload failed: ${describeVpnRuntimeFailure(normalized)}")
@@ -205,6 +238,7 @@ private class ReflectiveLibboxRuntime(
 
     override suspend fun stop(policy: RuntimeStopPolicy): RuntimeStopResult =
         libboxRuntimeOperationMutex.withLock {
+            nextRuntimeGeneration("stop")
             stopLocked(policy)
         }
 
@@ -233,28 +267,24 @@ private class ReflectiveLibboxRuntime(
                 if (server == null) {
                     true
                 } else {
-                    diagnosticsLogger.record("runtime", "close_service_start")
-                    runBlockingRuntimeClose(policy.closeServiceTimeoutMs) {
-                        reflection.closeService(server)
-                    }.also { ok ->
-                        diagnosticsLogger.record(
-                            "runtime",
-                            if (ok) "close_service_end" else "close_service_timeout",
-                        )
+                    closeNativeServerPart(
+                        server = server,
+                        label = "close_service",
+                        timeoutMs = policy.closeServiceTimeoutMs,
+                    ) { target ->
+                        reflection.closeService(target)
                     }
                 }
             val closeServerOk =
                 if (server == null) {
                     true
                 } else {
-                    diagnosticsLogger.record("runtime", "close_server_start")
-                    runBlockingRuntimeClose(policy.closeServerTimeoutMs) {
-                        reflection.closeServer(server)
-                    }.also { ok ->
-                        diagnosticsLogger.record(
-                            "runtime",
-                            if (ok) "close_server_end" else "close_server_timeout",
-                        )
+                    closeNativeServerPart(
+                        server = server,
+                        label = "close_server",
+                        timeoutMs = policy.closeServerTimeoutMs,
+                    ) { target ->
+                        reflection.closeServer(target)
                     }
                 }
             val elapsedMs = SystemClock.elapsedRealtime() - startedAt
@@ -268,7 +298,7 @@ private class ReflectiveLibboxRuntime(
                     "reason=stop_timeout",
                     "elapsed_ms=$elapsedMs",
                 )
-                forceKill("stop_timeout")
+                killLocked("stop_timeout")
                 diagnosticsLogger.record("runtime", "force_kill_end")
             }
             RuntimeStopResult(
@@ -280,31 +310,88 @@ private class ReflectiveLibboxRuntime(
             )
         }
 
-    override fun forceKill(reason: String): RuntimeKillResult {
-        val server = commandServerRef.getAndSet(null)
-        currentConfig = null
-        currentHost = null
-        currentDnsServerAddress = null
-        defaultNetworkMonitor.stop()
-        val tunClosed = closeTunFdNow()
-        if (server != null) {
-            runBlocking {
-                runBlockingRuntimeClose(RUNTIME_FORCE_CLOSE_TIMEOUT_MS) { reflection.closeService(server) }
-                runBlockingRuntimeClose(RUNTIME_FORCE_CLOSE_TIMEOUT_MS) { reflection.closeServer(server) }
-            }
+    override suspend fun forceKill(reason: String): RuntimeKillResult {
+        nextRuntimeGeneration("kill:$reason")
+        return libboxRuntimeOperationMutex.withLock {
+            killLocked(reason)
         }
+    }
+
+    private suspend fun killLocked(reason: String): RuntimeKillResult =
+        withContext(Dispatchers.IO) {
+            val server = commandServerRef.getAndSet(null)
+            currentConfig = null
+            currentHost = null
+            currentDnsServerAddress = null
+            defaultNetworkMonitor.stop()
+            val tunClosed = closeTunFdNow()
+            var closeDetached = false
+            if (server != null) {
+                val serviceClosed =
+                    closeNativeServerPart(
+                        server = server,
+                        label = "force_close_service",
+                        timeoutMs = RUNTIME_FORCE_CLOSE_TIMEOUT_MS,
+                    ) { target ->
+                        reflection.closeService(target)
+                    }
+                val serverClosed =
+                    closeNativeServerPart(
+                        server = server,
+                        label = "force_close_server",
+                        timeoutMs = RUNTIME_FORCE_CLOSE_TIMEOUT_MS,
+                    ) { target ->
+                        reflection.closeServer(target)
+                    }
+                closeDetached = !serviceClosed || !serverClosed
+            }
+            diagnosticsLogger.recordStructured(
+                "runtime",
+                "runtime force kill",
+                "reason=$reason",
+                "server_detached=${server != null}",
+                "tun_closed=$tunClosed",
+                "close_detached=$closeDetached",
+            )
+            RuntimeKillResult(
+                reason = reason,
+                tunClosed = tunClosed,
+                serverDetached = server != null,
+                closeDetached = closeDetached,
+            )
+        }
+
+    private fun nextRuntimeGeneration(reason: String): Long =
+        runtimeGeneration.incrementAndGet().also { generation ->
+            diagnosticsLogger.recordStructured(
+                "runtime",
+                "runtime generation advanced",
+                "reason=$reason",
+                "generation=$generation",
+            )
+        }
+
+    private suspend fun ensureRuntimeGenerationCurrent(generation: Long) {
+        currentCoroutineContext().ensureActive()
+        if (runtimeGeneration.get() != generation) {
+            throw CancellationException("runtime generation superseded")
+        }
+    }
+
+    private suspend fun closeNativeServerPart(
+        server: Any,
+        label: String,
+        timeoutMs: Long,
+        close: (Any) -> Unit,
+    ): Boolean {
+        diagnosticsLogger.record("runtime", "${label}_start")
+        val closed = runBlockingRuntimeClose(timeoutMs) { close(server) }
         diagnosticsLogger.recordStructured(
             "runtime",
-            "runtime force kill",
-            "reason=$reason",
-            "server_detached=${server != null}",
-            "tun_closed=$tunClosed",
+            if (closed) "${label}_end" else "${label}_timeout",
+            "close_detached=${!closed}",
         )
-        return RuntimeKillResult(
-            reason = reason,
-            tunClosed = tunClosed,
-            serverDetached = server != null,
-        )
+        return closed
     }
 
     override fun nativeSnapshot(): NativeRuntimeSnapshot =

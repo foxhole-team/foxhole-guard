@@ -80,7 +80,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.foxhole.beta.R
 import com.foxhole.beta.core.anomaly.UsageStatsAccess
 import com.foxhole.beta.core.model.AnomalyEvent
@@ -98,6 +97,7 @@ import com.foxhole.beta.core.model.ProfileComparisonUiItem
 import com.foxhole.beta.core.model.ProfileProtocolOption
 import com.foxhole.beta.core.model.ProfileTrafficUiItem
 import com.foxhole.beta.core.model.ProtocolHint
+import com.foxhole.beta.core.model.ProtocolQuality
 import com.foxhole.beta.core.model.ProtocolStatisticsUiItem
 import com.foxhole.beta.core.model.SmartProfileProtocolMemory
 import com.foxhole.beta.core.model.StatisticsRange
@@ -156,10 +156,12 @@ fun StatisticsScreen(
     val statisticsSettings = state.settings.statistics
     val context = LocalContext.current
     val retention = state.settings.statistics.retention
-    val statistics = state.statisticsDashboard.statistics
-    val appRows = state.statisticsDashboard.appRows
+    val dashboard = state.statisticsDashboard
+    val dashboardNowMs = dashboard.nowMs
+    val statistics = dashboard.statistics
+    val appRows = dashboard.appRows
     val topApps = appRows.take(APP_TRAFFIC_CHART_LIMIT)
-    val countryRows = state.statisticsDashboard.countryRows
+    val countryRows = dashboard.countryRows
     val topCountryLimit =
         if (countryRows.size > STATISTICS_TOP_PREVIEW_LIMIT) {
             STATISTICS_TOP_PREVIEW_LIMIT + 1
@@ -174,12 +176,13 @@ fun StatisticsScreen(
             retention = dnsRange.toStatisticsRetention(),
             displayRange = dnsRange,
             dnsSettings = state.settings.dns,
+            nowMs = dashboardNowMs,
         )
-    val anomalyEventsForRange = remember(state.anomalyEvents, anomalyRange) {
-        state.anomalyEvents.filterForDisplayRange(anomalyRange, AnomalyEvent::createdAtMs)
+    val anomalyEventsForRange = remember(state.anomalyEvents, anomalyRange, dashboardNowMs) {
+        state.anomalyEvents.filterForDisplayRange(anomalyRange, dashboardNowMs, AnomalyEvent::createdAtMs)
     }
-    val appSamplesForRange = remember(state.appTrafficWindows, appTrafficRange) {
-        state.appTrafficWindows.filterForDisplayRange(appTrafficRange, AppTrafficWindow::startedAtMs)
+    val appSamplesForRange = remember(state.appTrafficWindows, appTrafficRange, dashboardNowMs) {
+        state.appTrafficWindows.filterForDisplayRange(appTrafficRange, dashboardNowMs, AppTrafficWindow::startedAtMs)
     }
     val appStatsSwitchChecked = state.settings.appTrafficStatsEnabled
     val usageAccessGranted = rememberUsageAccessGranted()
@@ -271,6 +274,7 @@ fun StatisticsScreen(
                     AppTrafficStatisticsCard(
                         rows = topApps,
                         samples = appSamplesForRange,
+                        nowMs = dashboardNowMs,
                         allRowsCount = appRows.size,
                         enabled = appStatsEnabled,
                         usageAccessGranted = usageAccessGranted,
@@ -981,6 +985,23 @@ private fun ProtocolStatCard(
 ) {
     val context = LocalContext.current
     val visible = rememberOneShotVisible("protocol:${item.protocol.name}")
+    val successRate = item.successRateOrNull
+    val errorRate = item.errorRateOrNull
+    val successText = successRate?.let(::formatPercent) ?: stringResource(R.string.smart_profile_metric_unavailable)
+    val errorText = errorRate?.let(::formatPercent) ?: stringResource(R.string.smart_profile_metric_unavailable)
+    val footerText =
+        if (item.quality == ProtocolQuality.TRAFFIC_ONLY) {
+            stringResource(
+                R.string.statistics_protocol_footer_unmeasured,
+                formatBytes(context, item.totalBytes),
+            )
+        } else {
+            stringResource(
+                R.string.statistics_protocol_footer,
+                formatBytes(context, item.totalBytes),
+                item.totalAttempts.toString(),
+            )
+        }
     Card(
         modifier = modifier,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.38f)),
@@ -995,7 +1016,7 @@ private fun ProtocolStatCard(
             Text(
                 text = protocolDisplayName(item.protocol),
                 modifier = Modifier.fillMaxWidth(),
-                style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.sp, lineHeight = 9.sp),
+                style = MaterialTheme.typography.labelMedium,
                 fontWeight = FontWeight.SemiBold,
                 textAlign = TextAlign.Center,
                 maxLines = 1,
@@ -1006,39 +1027,34 @@ private fun ProtocolStatCard(
                 contentAlignment = Alignment.Center,
             ) {
                 AnimatedDonutChart(
-                    successRate = item.successRate,
-                    errorRate = item.errorRate,
+                    successRate = successRate ?: 0f,
+                    errorRate = errorRate ?: 0f,
                     visible = visible,
                     contentDescription =
                     stringResource(
                         R.string.statistics_profile_protocol_metrics,
-                        formatPercent(item.successRate),
-                        formatPercent(item.errorRate),
+                        successText,
+                        errorText,
                         formatBytes(context, item.totalBytes),
                     ),
-                    modifier = Modifier.size(58.dp),
+                    modifier = Modifier.size(76.dp),
                 )
                 Text(
-                    text = formatPercent(item.successRate),
+                    text = successText,
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.SemiBold,
                 )
             }
             Text(
-                text = stringResource(R.string.statistics_errors_percent, formatPercent(item.errorRate)),
+                text = stringResource(R.string.statistics_errors_percent, errorText),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.error,
             )
             Text(
-                text =
-                stringResource(
-                    R.string.statistics_protocol_footer,
-                    formatBytes(context, item.totalBytes),
-                    item.totalAttempts,
-                ),
+                text = footerText,
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
+                maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
         }
@@ -1888,6 +1904,7 @@ private fun openUsageAccessSettings(context: Context) {
 private fun AppTrafficStatisticsCard(
     rows: List<AppTrafficRow>,
     samples: List<AppTrafficWindow>,
+    nowMs: Long,
     allRowsCount: Int,
     enabled: Boolean,
     usageAccessGranted: Boolean,
@@ -1946,7 +1963,7 @@ private fun AppTrafficStatisticsCard(
                         Text(stringResource(R.string.show_all_label))
                     }
                 }
-                AppTrafficTimelineChart(samples = samples, range = range)
+                AppTrafficTimelineChart(samples = samples, range = range, nowMs = nowMs)
             }
         }
     }
@@ -1956,17 +1973,18 @@ private fun AppTrafficStatisticsCard(
 private fun AppTrafficTimelineChart(
     samples: List<AppTrafficWindow>,
     range: StatisticsDisplayRange,
+    nowMs: Long,
 ) {
     val context = LocalContext.current
-    val buckets = remember(samples, range) { trafficTimelineBuckets(samples, range) }
+    val buckets = remember(samples, range, nowMs) { trafficTimelineBuckets(samples, range, nowMs) }
     val maxBytes =
         buckets
             .maxOfOrNull { bucket -> max(bucket.txBytes, bucket.rxBytes) }
             ?.coerceAtLeast(1L)
             ?: 1L
     val yMax = niceTimelineTrafficScale(maxBytes)
-    val rangeStart = buckets.firstOrNull()?.startedAtMs ?: System.currentTimeMillis()
-    val rangeEnd = (buckets.lastOrNull()?.startedAtMs ?: rangeStart) + range.policy(rangeStart).bucketSizeMs
+    val rangeStart = buckets.firstOrNull()?.startedAtMs ?: nowMs
+    val rangeEnd = (buckets.lastOrNull()?.startedAtMs ?: rangeStart) + range.policy(rangeStart, nowMs).bucketSizeMs
     val updatedAtMs = samples.maxOfOrNull(AppTrafficWindow::startedAtMs) ?: rangeEnd
     val model =
         com.foxhole.beta.core.statistics.ChartModel(
@@ -2686,7 +2704,11 @@ private fun AppTrafficDetail(
 
 @Composable
 private fun AppTrafficMiniChart(samples: List<AppTrafficWindow>) {
-    AppTrafficTimelineChart(samples = samples, range = StatisticsDisplayRange.HOURS_24)
+    AppTrafficTimelineChart(
+        samples = samples,
+        range = StatisticsDisplayRange.HOURS_24,
+        nowMs = samples.maxOfOrNull(AppTrafficWindow::startedAtMs) ?: System.currentTimeMillis(),
+    )
 }
 
 @Composable
@@ -2847,9 +2869,12 @@ private data class ProtocolAccumulator(
     }
 
     fun toProtocolItem(protocol: ProtocolHint): ProtocolStatisticsUiItem {
-        if (successCount + failureCount == 0 && rxBytes + txBytes > 0L) {
-            successCount = 1
-        }
+        val quality =
+            if (successCount + failureCount == 0 && rxBytes + txBytes > 0L) {
+                ProtocolQuality.TRAFFIC_ONLY
+            } else {
+                ProtocolQuality.MEASURED
+            }
         return ProtocolStatisticsUiItem(
             protocol = protocol,
             successCount = successCount,
@@ -2858,6 +2883,7 @@ private data class ProtocolAccumulator(
             txBytes = txBytes,
             avgLatencyMs = latencies.averageOrNull(),
             lastUsedAt = lastUsedAt,
+            quality = quality,
         )
     }
 }
@@ -2883,9 +2909,6 @@ private data class ComparisonAccumulator(
     }
 
     fun toSide(): ProfileComparisonSideUiItem {
-        if (successCount + failureCount == 0 && rxBytes + txBytes > 0L) {
-            successCount = 1
-        }
         return ProfileComparisonSideUiItem(
             profileId = profileId,
             profileName = profileName,
@@ -2992,7 +3015,7 @@ private fun profileStatisticsDetail(
                 ProfileProtocolDetail(
                     label = protocolDisplayName(fallbackProtocol),
                     protocolHint = fallbackProtocol,
-                    successCount = if (item.totalBytes > 0L) 1 else 0,
+                    successCount = 0,
                     failureCount = 0,
                     rxBytes = item.rxBytes,
                     txBytes = item.txBytes,
@@ -3003,9 +3026,7 @@ private fun profileStatisticsDetail(
                 ),
             )
     val latencies = visibleProtocolDetails.mapNotNull(ProfileProtocolDetail::avgLatencyMs)
-    val successCount = visibleProtocolDetails.sumOf(ProfileProtocolDetail::successCount).let { count ->
-        if (count == 0 && item.totalBytes > 0L) 1 else count
-    }
+    val successCount = visibleProtocolDetails.sumOf(ProfileProtocolDetail::successCount)
     val failureCount = visibleProtocolDetails.sumOf(ProfileProtocolDetail::failureCount)
     val lastProtocol =
         visibleProtocolDetails
@@ -3146,8 +3167,6 @@ private fun overallStatistics(
         }
     val successCount = protocolStats.sumOf(ProtocolStatisticsUiItem::successCount)
     val failureCount = protocolStats.sumOf(ProtocolStatisticsUiItem::failureCount)
-    val trafficBackedSessions =
-        profileTraffic.count { item -> item.totalBytes > 0L && successCount == 0 }
     val lastActivity =
         maxOfNotNull(
             profileTraffic.maxOfOrNull(ProfileTrafficUiItem::updatedAt),
@@ -3156,8 +3175,8 @@ private fun overallStatistics(
         )
     return OverallStatisticsUiItem(
         totalBytes = profileTraffic.sumOf(ProfileTrafficUiItem::totalBytes),
-        vpnSessions = successCount + failureCount + trafficBackedSessions,
-        successCount = successCount + trafficBackedSessions,
+        vpnSessions = successCount + failureCount,
+        successCount = successCount,
         failureCount = failureCount,
         avgLatencyMs = memoryLatencies.averageOrNull(),
         lastActivityAt = lastActivity,
@@ -3217,9 +3236,6 @@ private fun transportStatistics(profileTraffic: List<ProfileTrafficUiItem>): Lis
     profileTraffic.forEach { traffic ->
         val transport = traffic.transport
         val accumulator = accumulators.getOrPut(transport) { ProtocolAccumulator() }
-        if (traffic.totalBytes > 0L) {
-            accumulator.successCount += 1
-        }
         accumulator.rxBytes += traffic.rxBytes
         accumulator.txBytes += traffic.txBytes
         accumulator.lastUsedAt = maxOfNotNull(accumulator.lastUsedAt, traffic.updatedAt.takeIf { it > 0L })
@@ -3254,9 +3270,10 @@ internal fun appTrafficRows(
     installedApps: List<InstalledAppOption>,
     anomalyEvents: List<AnomalyEvent>,
     retention: StatisticsRetention,
+    nowMs: Long = System.currentTimeMillis(),
 ): List<AppTrafficRow> {
     val labels = installedApps.associate { it.packageName to it.label }
-    val cutoff = retention.durationMs?.let { System.currentTimeMillis() - it }
+    val cutoff = retention.durationMs?.let { nowMs - it }
     return com.foxhole.beta.core.statistics.appTrafficRows(
         windows = samples.filter { sample -> cutoff == null || sample.startedAtMs >= cutoff },
         labelsByPackage = labels,
@@ -3271,8 +3288,9 @@ internal fun dnsProtectionSummary(
     retention: StatisticsRetention,
     displayRange: StatisticsDisplayRange? = null,
     dnsSettings: DnsSettings,
+    nowMs: Long = System.currentTimeMillis(),
 ): DnsProtectionSummary {
-    val cutoff = (displayRange?.durationMs ?: retention.durationMs)?.let { System.currentTimeMillis() - it }
+    val cutoff = (displayRange?.durationMs ?: retention.durationMs)?.let { nowMs - it }
     val windows =
         trafficWindows.filter { window -> cutoff == null || window.startedAtMs >= cutoff }
     return com.foxhole.beta.core.statistics.dnsProtectionSummary(
@@ -3295,8 +3313,9 @@ private fun splitDnsBlockedByCategory(
 internal fun installedAppChangesForRetention(
     changes: List<InstalledAppInventoryChange>,
     retention: StatisticsRetention,
+    nowMs: Long = System.currentTimeMillis(),
 ): List<InstalledAppInventoryChange> {
-    val cutoff = retention.durationMs?.let { System.currentTimeMillis() - it }
+    val cutoff = retention.durationMs?.let { nowMs - it }
     return changes
         .asSequence()
         .filter { change -> cutoff == null || change.detectedAt >= cutoff }
@@ -3470,16 +3489,16 @@ private fun appConnectionEventRows(
 private fun trafficTimelineBuckets(
     samples: List<AppTrafficWindow>,
     range: StatisticsDisplayRange,
+    nowMs: Long,
 ): List<TrafficTimelineBucket> {
-    val now = System.currentTimeMillis()
     val policy =
         range.policy(
-            firstAtMs = samples.minOfOrNull(AppTrafficWindow::startedAtMs) ?: now,
-            nowMs = now,
+            firstAtMs = samples.minOfOrNull(AppTrafficWindow::startedAtMs) ?: nowMs,
+            nowMs = nowMs,
         )
     val bucketMs = policy.bucketSizeMs
-    val durationMs = range.durationMs ?: samples.durationForAllRange(now, bucketMs, policy.maxBuckets)
-    val startAt = now - durationMs
+    val durationMs = range.durationMs ?: samples.durationForAllRange(nowMs, bucketMs, policy.maxBuckets)
+    val startAt = nowMs - durationMs
     val bucketCount = (durationMs / bucketMs).toInt().coerceIn(1, policy.maxBuckets)
     val buckets =
         (0 until bucketCount).associate { index ->
@@ -3547,9 +3566,10 @@ private fun StatisticsDisplayRange.policy(
 
 private fun <T> List<T>.filterForDisplayRange(
     range: StatisticsDisplayRange,
+    nowMs: Long,
     timestamp: (T) -> Long,
 ): List<T> {
-    val cutoff = range.durationMs?.let { duration -> System.currentTimeMillis() - duration } ?: return this
+    val cutoff = range.durationMs?.let { duration -> nowMs - duration } ?: return this
     return filter { item -> timestamp(item) >= cutoff }
 }
 
@@ -3722,7 +3742,7 @@ private fun List<Long>.averageOrNull(): Long? =
 private fun maxOfNotNull(vararg values: Long?): Long? =
     values.filterNotNull().maxOrNull()
 
-private val COMPACT_PROTOCOL_GRID_WIDTH = 360.dp
+private val COMPACT_PROTOCOL_GRID_WIDTH = 480.dp
 private const val DONUT_ANIMATION_DURATION_MS = 700
 private const val PROFILE_TRAFFIC_PREVIEW_LIMIT = 6
 private const val STATISTICS_TOP_PREVIEW_LIMIT = 5

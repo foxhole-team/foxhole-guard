@@ -548,7 +548,8 @@
     <string name="statistics_errors_percent">Errors: %1$s</string>
     <string name="statistics_error_rate">Error rate</string>
     <string name="statistics_success_rate">Success rate</string>
-    <string name="statistics_protocol_footer">%1$s • %2$d sessions</string>
+    <string name="statistics_protocol_footer">%1$s • %2$s sessions</string>
+    <string name="statistics_protocol_footer_unmeasured">%1$s • traffic only</string>
     <string name="statistics_more_stable">More stable</string>
     <string name="statistics_more_errors">More errors</string>
     <string name="statistics_even">Even</string>

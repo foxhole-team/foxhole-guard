@@ -9,7 +9,7 @@ internal fun DonutChartModel.accessibilitySummary(): String =
         append(title)
         val total = segments.sumOf(DonutSegment::value)
         if (total > 0.0) {
-            append(", total ")
+            append(", ")
             append(total.toLong())
             append(". ")
             append(

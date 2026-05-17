@@ -36,6 +36,7 @@ data class RuntimeKillResult(
     val reason: String,
     val tunClosed: Boolean,
     val serverDetached: Boolean,
+    val closeDetached: Boolean = false,
 )
 
 data class NativeRuntimeSnapshot(

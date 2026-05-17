@@ -22,7 +22,7 @@ internal enum class RuntimeCommandPriority(val value: Int) {
 internal class RuntimeCommandActor(
     private val scope: CoroutineScope,
     private val diagnosticsLogger: DiagnosticsLogger?,
-    private val emergencyKill: (String) -> RuntimeKillResult,
+    private val emergencyKill: suspend (String) -> RuntimeKillResult,
 ) {
     private val sequence = AtomicLong(0)
     private val commands = Channel<QueuedRuntimeCommand>(Channel.UNLIMITED)
@@ -131,7 +131,7 @@ internal class RuntimeCommandActor(
         drainingPreemptedJobs.clear()
     }
 
-    private fun handleReceivedCommand(
+    private suspend fun handleReceivedCommand(
         result: kotlinx.coroutines.channels.ChannelResult<QueuedRuntimeCommand>,
         running: RunningRuntimeCommand,
         pending: PriorityQueue<QueuedRuntimeCommand>,
@@ -179,7 +179,7 @@ internal class RuntimeCommandActor(
         return RunningRuntimeCommand(job = job)
     }
 
-    private fun preemptRunningCommand(
+    private suspend fun preemptRunningCommand(
         running: RunningRuntimeCommand,
         command: QueuedRuntimeCommand,
         pending: PriorityQueue<QueuedRuntimeCommand>,
@@ -205,7 +205,10 @@ internal class RuntimeCommandActor(
             recordCommandEvent(
                 headline = "runtime command force-killed",
                 command = command,
-                extra = "kill_reason=${kill.reason}",
+                extra = listOf(
+                    "kill_reason=${kill.reason}",
+                    "close_detached=${kill.closeDetached}",
+                ).joinToString(" • "),
             )
         }
         pending.offer(command)

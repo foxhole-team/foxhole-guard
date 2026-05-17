@@ -19,6 +19,7 @@ import androidx.compose.material3.SnackbarResult
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.core.content.ContextCompat
+import androidx.core.view.WindowCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
@@ -160,6 +161,7 @@ class MainActivity : AppCompatActivity() {
         window.decorView.invalidate()
     }
 
+    @Suppress("DEPRECATION")
     private fun applyEdgeToEdgeSystemBars(
         themeMode: ThemeMode,
         systemDarkTheme: Boolean,
@@ -176,6 +178,13 @@ class MainActivity : AppCompatActivity() {
             statusBarStyle = systemBarStyle,
             navigationBarStyle = systemBarStyle,
         )
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        window.statusBarColor = AndroidColor.TRANSPARENT
+        window.navigationBarColor = AndroidColor.TRANSPARENT
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            window.isStatusBarContrastEnforced = false
+            window.isNavigationBarContrastEnforced = false
+        }
     }
 
     private fun isSystemDarkTheme(): Boolean =

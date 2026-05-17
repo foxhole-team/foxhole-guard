@@ -1586,7 +1586,7 @@ internal interface VpnCoreRuntime {
 
     suspend fun stop(policy: RuntimeStopPolicy = RuntimeStopPolicy()): RuntimeStopResult
 
-    fun forceKill(reason: String): RuntimeKillResult =
+    suspend fun forceKill(reason: String): RuntimeKillResult =
         RuntimeKillResult(
             reason = reason,
             tunClosed = true,

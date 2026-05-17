@@ -134,6 +134,7 @@ data class SettingsRouteUiState(
 )
 
 data class StatisticsDashboardUiState(
+    val nowMs: Long = System.currentTimeMillis(),
     val statistics: StatisticsUiState = emptyStatisticsUiState(),
     val appRows: List<AppTrafficRow> = emptyList(),
     val countryRows: List<CountryTrafficUiRow> = emptyList(),

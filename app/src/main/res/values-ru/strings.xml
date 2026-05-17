@@ -556,7 +556,8 @@
     <string name="statistics_errors_percent">Ошибки: %1$s</string>
     <string name="statistics_error_rate">Доля ошибок</string>
     <string name="statistics_success_rate">Доля успеха</string>
-    <string name="statistics_protocol_footer">%1$s • %2$d сессий</string>
+    <string name="statistics_protocol_footer">%1$s • %2$s сессий</string>
+    <string name="statistics_protocol_footer_unmeasured">%1$s • только трафик</string>
     <string name="statistics_more_stable">Стабильнее</string>
     <string name="statistics_more_errors">Больше ошибок</string>
     <string name="statistics_even">Ровно</string>
