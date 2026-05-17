@@ -267,9 +267,12 @@ internal fun FoxholeScaffold(
         containerColor = Color.Transparent,
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         snackbarHost = {},
-        content = {
+        content = { scaffoldPadding ->
             Box(
-                modifier = Modifier.fillMaxSize(),
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .padding(bottom = scaffoldPadding.calculateBottomPadding()),
             ) {
                 content(PaddingValues(top = contentTopPadding))
                 TopAppBar(
