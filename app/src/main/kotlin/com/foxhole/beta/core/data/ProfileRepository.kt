@@ -709,7 +709,7 @@ class ProfileRepository(
 
     suspend fun getTorOnlySession(privateDnsMode: PrivateDnsMode? = null): VpnSession {
         val settings = settingsRepository.current()
-        require(settings.privacyRoute.directTorEnabled) { "direct TOR route is disabled" }
+        require(settings.privacyRoute.enabled) { "TOR route is disabled" }
         val correlationId = newRuntimeCorrelationId()
         val dnsFilterRuntimePaths =
             if (settings.dns.bundledAdGuardFilterEnabled()) {

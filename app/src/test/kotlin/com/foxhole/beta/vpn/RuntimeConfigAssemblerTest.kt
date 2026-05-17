@@ -1,5 +1,6 @@
 package com.foxhole.beta.vpn
 
+import com.foxhole.beta.BuildConfig
 import com.foxhole.beta.core.model.AppLocale
 import com.foxhole.beta.core.model.ClashApiSettings
 import com.foxhole.beta.core.model.DiagnosticsRetention
@@ -376,7 +377,6 @@ class RuntimeConfigAssemblerTest {
                                 com.foxhole.beta.core.model.PrivacyRouteSettings(
                                     mode = PrivacyRouteMode.TOR_OVER_VPN,
                                     scope = PrivacyRouteScope.ALL_APPS,
-                                    bypassVpnTunnel = true,
                                 ),
                         ),
                     activePreset = null,
@@ -387,11 +387,22 @@ class RuntimeConfigAssemblerTest {
         val tor = config["outbounds"]!!.jsonArray.map { it.jsonObject }
             .single { it["tag"]!!.jsonPrimitive.content == "proxy" }
         val route = config["route"]!!.jsonObject
+        val routeOutbounds =
+            route["rules"]!!.jsonArray
+                .map { it.jsonObject }
+                .mapNotNull { it["outbound"]?.jsonPrimitive?.content }
 
         assertEquals("tor", tor["type"]!!.jsonPrimitive.content)
         assertFalse(tor.containsKey("detour"))
         assertEquals("proxy", route["final"]!!.jsonPrimitive.content)
-        assertEquals("tun", config["inbounds"]!!.jsonArray.first().jsonObject["type"]!!.jsonPrimitive.content)
+        assertFalse(routeOutbounds.contains("tor-over-vpn"))
+        assertTrue(routeOutbounds.contains("proxy"))
+        val tunInbound = config["inbounds"]!!.jsonArray.first().jsonObject
+        assertEquals("tun", tunInbound["type"]!!.jsonPrimitive.content)
+        assertEquals(
+            listOf(BuildConfig.APPLICATION_ID),
+            tunInbound["exclude_package"]!!.jsonArray.map { it.jsonPrimitive.content },
+        )
         assertTrue(
             route["rules"]!!.jsonArray.map { it.jsonObject }
                 .any { it["outbound"]?.jsonPrimitive?.content == "block" },
@@ -413,6 +424,18 @@ class RuntimeConfigAssemblerTest {
         assertFalse(inbounds[1].containsKey("users"))
         assertSniffRule(config["route"]!!.jsonObject["rules"]!!.jsonArray[0].jsonObject)
         assertFalse(config.containsKey("experimental"))
+    }
+
+    @Test
+    fun `full-device tunnel excludes app control plane from vpn capture`() {
+        val config = parse(assembler.assemble(baseConfigWithRules("profile.example"), Settings(), null))
+        val tunInbound = config["inbounds"]!!.jsonArray.first().jsonObject
+
+        assertEquals(
+            listOf(BuildConfig.APPLICATION_ID),
+            tunInbound["exclude_package"]!!.jsonArray.map { it.jsonPrimitive.content },
+        )
+        assertFalse(tunInbound.containsKey("include_package"))
     }
 
     @Test

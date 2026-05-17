@@ -415,7 +415,10 @@ internal fun HomeViewModel.connectInternal(
     setDashboardConnectionMetricsLoading(true)
     viewModelScope.launch {
         runCatching {
-            if (uiState.value.activeProfile?.id != profileId) {
+            if (
+                profileId != FoxholeVpnService.TOR_ONLY_PROFILE_ID &&
+                uiState.value.activeProfile?.id != profileId
+            ) {
                 container.connectionController.setActiveProfile(profileId)
                 val updated = container.profileRepository.getProfile(profileId)?.copy(isActive = true)
                 startupActiveProfileMutable.value = updated

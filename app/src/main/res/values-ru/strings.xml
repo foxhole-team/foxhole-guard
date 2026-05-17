@@ -147,6 +147,7 @@
     <string name="error_profile_missing">Сначала выберите или импортируйте профиль</string>
     <string name="error_profile_invalid">Конфигурация профиля некорректна</string>
     <string name="error_runtime_missing">В этой сборке пока не подключен sing-box core bridge</string>
+    <string name="error_runtime_start_timeout">Служба подключения не завершила запуск. Проверьте сеть и попробуйте снова.</string>
     <string name="error_runtime_stopped">VPN runtime неожиданно остановился</string>
     <string name="error_tcp_runtime_readiness_failed">TCP-цель VPN недоступна в текущей сети. Попробуйте еще раз или выберите другой протокол.</string>
     <string name="error_dns_probe_failed">После старта рантайма не прошла проверка связи</string>

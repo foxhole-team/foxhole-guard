@@ -2,8 +2,11 @@ package com.foxhole.beta.vpn
 
 import com.foxhole.beta.core.diagnostics.DiagnosticsLogger
 import com.foxhole.beta.core.model.TrafficMode
+import com.foxhole.beta.core.model.VpnSession
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
@@ -12,6 +15,8 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 
 internal const val RUNTIME_STOP_TIMEOUT_MS = 3_000L
+internal const val RUNTIME_START_TIMEOUT_MS = 20_000L
+internal const val TOR_RUNTIME_START_TIMEOUT_MS = 75_000L
 
 data class RuntimeStopPolicy(
     val closeTunFdImmediately: Boolean = true,
@@ -95,6 +100,47 @@ internal suspend fun runBlockingRuntimeClose(
             deferred.cancel()
         }
         closeScope.cancel()
+    }
+}
+
+internal suspend fun VpnCoreRuntime.startFailClosed(
+    session: VpnSession,
+    host: RuntimeServiceHost,
+    owner: String,
+    diagnosticsLogger: DiagnosticsLogger,
+    timeoutMessage: String,
+    timeoutMs: Long = RUNTIME_START_TIMEOUT_MS,
+): Result<Unit> {
+    val startScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    val deferred =
+        startScope.async {
+            start(session, host)
+        }
+    return try {
+        val result =
+            withTimeoutOrNull(timeoutMs.coerceAtLeast(1L)) {
+                deferred.await()
+            }
+        if (result != null) {
+            result
+        } else {
+            deferred.cancel()
+            withContext(NonCancellable + Dispatchers.IO) {
+                diagnosticsLogger.recordStructured(
+                    "runtime",
+                    "$owner runtime start timeout",
+                    "sessionId=${session.correlationId}",
+                    "timeout_ms=$timeoutMs",
+                )
+                forceKill("${owner}_start_timeout")
+            }
+            Result.failure(IllegalStateException(timeoutMessage))
+        }
+    } catch (cancelled: CancellationException) {
+        deferred.cancel()
+        throw cancelled
+    } finally {
+        startScope.cancel()
     }
 }
 

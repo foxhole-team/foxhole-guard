@@ -26,16 +26,21 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowForward
+import androidx.compose.material.icons.outlined.AccessTime
 import androidx.compose.material.icons.outlined.AccountTree
 import androidx.compose.material.icons.outlined.Apps
 import androidx.compose.material.icons.outlined.ArrowDownward
 import androidx.compose.material.icons.outlined.ArrowUpward
+import androidx.compose.material.icons.outlined.Business
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.ContentPaste
 import androidx.compose.material.icons.outlined.DeleteSweep
+import androidx.compose.material.icons.outlined.Dns
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.FileUpload
+import androidx.compose.material.icons.outlined.Language
+import androidx.compose.material.icons.outlined.LocationCity
 import androidx.compose.material.icons.outlined.PowerSettingsNew
 import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.QrCodeScanner
@@ -172,7 +177,9 @@ fun HomeScreen(
         ) {
             buildList {
                 add(HomeModeOption.TUNNEL)
-                add(HomeModeOption.SPLIT)
+                if (state.settings.homeSplitTunnelConfigured()) {
+                    add(HomeModeOption.SPLIT)
+                }
                 add(HomeModeOption.PROXY)
             }
         }
@@ -337,12 +344,6 @@ fun HomeScreen(
             firstAnalysisProtocolMenuStarted = false
         }
     }
-    LaunchedEffect(selectedConnectionFeature, state.settings.privacyRoute.enabled) {
-        if (selectedConnectionFeature == HomeConnectionFeature.TOR && !state.settings.privacyRoute.enabled) {
-            selectedConnectionFeature = null
-        }
-    }
-
     fun requestSmartProfileMetricsRefresh(profileId: Long) {
         smartRefreshConfirmationProfileId = profileId
     }
@@ -903,18 +904,21 @@ fun HomeScreen(
                                     ) {
                                         HomeNetworkColumnTitle(stringResource(networkInfoTitleRes))
                                         HomeNetworkDetailLine(
+                                            icon = Icons.Outlined.Language,
                                             label = stringResource(R.string.home_network_country_label),
                                             value = countryText,
                                             modifier = Modifier.testTag("home_network_country"),
                                         )
                                         HomeNetworkSubtleDivider()
                                         HomeNetworkDetailLine(
+                                            icon = Icons.Outlined.LocationCity,
                                             label = stringResource(R.string.home_network_city_label),
                                             value = cityText,
                                             modifier = Modifier.testTag("home_network_city"),
                                         )
                                         HomeNetworkSubtleDivider()
                                         HomeNetworkDetailLine(
+                                            icon = Icons.Outlined.Public,
                                             label = stringResource(R.string.home_network_ip_label),
                                             value = ipText,
                                             modifier = Modifier.testTag("home_network_primary_ip"),
@@ -922,6 +926,7 @@ fun HomeScreen(
                                         )
                                         HomeNetworkSubtleDivider()
                                         HomeNetworkDetailLine(
+                                            icon = Icons.Outlined.Business,
                                             label = stringResource(R.string.home_network_provider_label),
                                             value = providerText,
                                         )
@@ -975,23 +980,27 @@ fun HomeScreen(
                                             val transportTypeText = dashboardTransportTypeLabel(dashboardProtocolPresentation.protocolHint)
                                             HomeNetworkColumnTitle(stringResource(R.string.home_network_profile_info_title))
                                             HomeNetworkDetailLine(
+                                                icon = Icons.Outlined.Speed,
                                                 label = stringResource(R.string.home_network_server_ping_label),
                                                 value = serverPingText,
                                                 valueMonospace = connectionMetricsAvailable && dashboardSelectedServerPingMs != null,
                                             )
                                             HomeNetworkSubtleDivider()
                                             HomeNetworkDetailLine(
+                                                icon = Icons.Outlined.Dns,
                                                 label = stringResource(R.string.home_network_dns_label),
                                                 value = dnsStatusText,
                                             )
                                             HomeNetworkSubtleDivider()
                                             HomeNetworkDetailLine(
+                                                icon = Icons.Outlined.SwapVert,
                                                 label = stringResource(R.string.home_network_transport_type_label),
                                                 value = transportTypeText,
                                                 valueMonospace = transportTypeText != "-",
                                             )
                                             HomeNetworkSubtleDivider()
                                             HomeNetworkDetailLine(
+                                                icon = Icons.Outlined.AccessTime,
                                                 label = stringResource(R.string.home_network_connect_time_label),
                                                 value = connectionDurationText ?: "-",
                                                 valueMonospace = connectionDurationText != null,
@@ -1217,6 +1226,7 @@ fun HomeScreen(
         HomeConnectionFeatureDialog(
             feature = feature,
             state = state,
+            wifiLanAddress = wifiLanAddress,
             onDismiss = { selectedConnectionFeature = null },
             onKillSwitchChanged = onKillSwitchChanged,
             onFirewallEnabledChanged = onFirewallEnabledChanged,

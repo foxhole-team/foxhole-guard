@@ -176,7 +176,7 @@ class RuntimeConfigAssembler(
         dnsFilterRuntimePaths: DnsFilterRuntimePaths? = null,
     ): String {
         validate(settings.expert)
-        require(settings.privacyRoute.directTorEnabled) { "direct TOR route is disabled" }
+        require(settings.privacyRoute.enabled) { "TOR route is disabled" }
         require(
             settings.privacyRoute.scope == PrivacyRouteScope.ALL_APPS ||
                 settings.privacyRoute.selectedPackages.any(String::isNotBlank),
@@ -930,7 +930,7 @@ class RuntimeConfigAssembler(
                 if (expert.bypassLan) {
                     add(bypassLanRule())
                 }
-                buildTorPrivacyRouteRules(settings).forEach(::add)
+                buildTorPrivacyRouteRules(settings, outboundTag = "proxy").forEach(::add)
                 presetRules.forEach(::add)
             }
         val ruleSets =
@@ -948,15 +948,24 @@ class RuntimeConfigAssembler(
         }
     }
 
-    private fun buildTorPrivacyRouteRules(settings: Settings): List<JsonObject> =
-        buildTorPrivacyRouteRules(buildSplitPlan(settings, privacyRouteActive = settings.privacyRoute.enabled))
+    private fun buildTorPrivacyRouteRules(
+        settings: Settings,
+        outboundTag: String = TOR_OVER_VPN_OUTBOUND_TAG,
+    ): List<JsonObject> =
+        buildTorPrivacyRouteRules(
+            splitPlan = buildSplitPlan(settings, privacyRouteActive = settings.privacyRoute.enabled),
+            outboundTag = outboundTag,
+        )
 
-    private fun buildTorPrivacyRouteRules(splitPlan: RuntimeSplitPlan): List<JsonObject> =
+    private fun buildTorPrivacyRouteRules(
+        splitPlan: RuntimeSplitPlan,
+        outboundTag: String = TOR_OVER_VPN_OUTBOUND_TAG,
+    ): List<JsonObject> =
         when {
-            splitPlan.torAllApps -> listOf(runtimeProxyTorRouteRule(), udpBlockRule())
+            splitPlan.torAllApps -> listOf(runtimeProxyTorRouteRule(outboundTag), udpBlockRule())
             splitPlan.torTcpPackages.isNotEmpty() ->
                 listOf(
-                    runtimeProxyTorRouteRule(),
+                    runtimeProxyTorRouteRule(outboundTag),
                     packageNetworkRouteRule(
                         splitPlan.torUdpBlockedPackages,
                         network = "udp",
@@ -965,20 +974,20 @@ class RuntimeConfigAssembler(
                     packageNetworkRouteRule(
                         splitPlan.torTcpPackages,
                         network = "tcp",
-                        outboundTag = TOR_OVER_VPN_OUTBOUND_TAG,
+                        outboundTag = outboundTag,
                     ),
                 )
             else -> emptyList()
         }
 
-    private fun runtimeProxyTorRouteRule(): JsonObject =
+    private fun runtimeProxyTorRouteRule(outboundTag: String = TOR_OVER_VPN_OUTBOUND_TAG): JsonObject =
         buildJsonObject {
             putJsonArray("inbound") {
                 add(JsonPrimitive(RUNTIME_LOOPBACK_PROXY_INBOUND_TAG))
             }
             put("network", "tcp")
             put("action", "route")
-            put("outbound", TOR_OVER_VPN_OUTBOUND_TAG)
+            put("outbound", outboundTag)
         }
 
     private fun udpBlockRule(): JsonObject =
@@ -1222,11 +1231,14 @@ class RuntimeConfigAssembler(
 
     private fun ExpertSettings.vpnExcludedPackages(): List<String> =
         when (perAppRoutingMode) {
-            PerAppRoutingMode.EXCLUDE_SELECTED_APPS -> normalizedRuntimePackages(selectedPackages)
-            PerAppRoutingMode.FULL_TUNNEL,
+            PerAppRoutingMode.EXCLUDE_SELECTED_APPS -> appControlPlaneExcludedPackages(selectedPackages)
+            PerAppRoutingMode.FULL_TUNNEL -> appControlPlaneExcludedPackages(emptyList())
             PerAppRoutingMode.INCLUDE_SELECTED_APPS,
             -> emptyList()
         }
+
+    private fun appControlPlaneExcludedPackages(packageNames: List<String>): List<String> =
+        normalizedRuntimePackages(packageNames + BuildConfig.APPLICATION_ID)
 
     private fun normalizedRuntimePackages(packageNames: List<String>): List<String> =
         packageNames

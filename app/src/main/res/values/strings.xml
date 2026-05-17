@@ -147,6 +147,7 @@
     <string name="error_profile_missing">Select or import a profile first</string>
     <string name="error_profile_invalid">Profile config is invalid</string>
     <string name="error_runtime_missing">The sing-box core bridge is not bundled in this source build yet</string>
+    <string name="error_runtime_start_timeout">Connection runtime did not finish starting. Check the network and try again.</string>
     <string name="error_runtime_stopped">VPN runtime stopped unexpectedly</string>
     <string name="error_tcp_runtime_readiness_failed">TCP VPN target is unavailable on the current network. Try again or choose another protocol.</string>
     <string name="error_dns_probe_failed">Connectivity validation failed after runtime start</string>

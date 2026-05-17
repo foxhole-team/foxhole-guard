@@ -6,6 +6,7 @@ import com.foxhole.beta.core.model.ConnectionState
 import com.foxhole.beta.core.model.ExpertSettings
 import com.foxhole.beta.core.model.IpInfo
 import com.foxhole.beta.core.model.LocalSurfaceSettings
+import com.foxhole.beta.core.model.PerAppRoutingMode
 import com.foxhole.beta.core.model.PrivacyRouteMode
 import com.foxhole.beta.core.model.PrivacyRouteScope
 import com.foxhole.beta.core.model.PrivacyRouteSettings
@@ -256,6 +257,25 @@ class HomeDashboardPresentationTest {
 
         assertFalse(homeTorSelectedProtocolIsUdp(state))
         assertEquals(HomeConnectionFeatureStatus.ON, homeTorFeatureStatus(state))
+    }
+
+    @Test
+    fun `tor route can start without vpn profile when route scope is ready`() {
+        val state =
+            HomeRouteUiState(
+                settings =
+                    Settings(
+                        privacyRoute =
+                            PrivacyRouteSettings(
+                                mode = PrivacyRouteMode.TOR_OVER_VPN,
+                                scope = PrivacyRouteScope.ALL_APPS,
+                            ),
+                    ),
+            )
+
+        assertTrue(homeTorOnlyStartAvailable(state))
+        assertFalse(homeTorSelectedProtocolIsUdp(state))
+        assertEquals(HomeConnectionFeatureStatus.PENDING, homeTorFeatureStatus(state))
     }
 
     @Test
@@ -724,6 +744,30 @@ class HomeDashboardPresentationTest {
 
         assertEquals(HomePrimaryAction.STOP, homePrimaryAction(state))
         assertTrue(state.hasPrimaryConnectionRuntime())
+    }
+
+    @Test
+    fun `home mode treats split tunnel as configured only after apps are selected`() {
+        val splitModeWithoutApps =
+            Settings(
+                expert =
+                    ExpertSettings(
+                        perAppRoutingMode = PerAppRoutingMode.INCLUDE_SELECTED_APPS,
+                    ),
+            )
+        val configuredSplit =
+            Settings(
+                expert =
+                    ExpertSettings(
+                        perAppRoutingMode = PerAppRoutingMode.INCLUDE_SELECTED_APPS,
+                        selectedPackages = listOf("org.example.app"),
+                    ),
+            )
+
+        assertFalse(splitModeWithoutApps.homeSplitTunnelConfigured())
+        assertEquals(HomeModeOption.TUNNEL, currentHomeModeOption(splitModeWithoutApps))
+        assertTrue(configuredSplit.homeSplitTunnelConfigured())
+        assertEquals(HomeModeOption.SPLIT, currentHomeModeOption(configuredSplit))
     }
 
     @Test

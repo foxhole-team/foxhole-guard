@@ -28,6 +28,10 @@ abstract class VerifyBundledLibboxInReleaseApkTask : DefaultTask() {
                 "lib/armeabi-v7a/libbox.so",
                 "lib/arm64-v8a/libTor.so",
                 "lib/armeabi-v7a/libTor.so",
+                "lib/arm64-v8a/liblyrebird.so",
+                "lib/armeabi-v7a/liblyrebird.so",
+                "lib/arm64-v8a/libconjure_client.so",
+                "lib/armeabi-v7a/libconjure_client.so",
             )
         val discoveredEntries = linkedSetOf<String>()
 
@@ -35,7 +39,12 @@ abstract class VerifyBundledLibboxInReleaseApkTask : DefaultTask() {
             ZipFile(apk).use { zip ->
                 zip.entries().asSequence()
                     .map { entry -> entry.name }
-                    .filter { entryName -> entryName.endsWith("/libbox.so") || entryName.endsWith("/libTor.so") }
+                    .filter { entryName ->
+                        entryName.endsWith("/libbox.so") ||
+                            entryName.endsWith("/libTor.so") ||
+                            entryName.endsWith("/liblyrebird.so") ||
+                            entryName.endsWith("/libconjure_client.so")
+                    }
                     .forEach(discoveredEntries::add)
             }
         }
@@ -132,10 +141,18 @@ val prepareBundledLibbox by tasks.registering {
 val prepareTorNativeLibs by tasks.registering(Sync::class) {
     from("src/main/assets/tor") {
         include("*/tor/libTor.so")
+        include("*/tor/pluggable_transports/lyrebird")
+        include("*/tor/pluggable_transports/conjure-client")
         includeEmptyDirs = false
         eachFile {
             val abi = relativePath.segments.first()
-            path = "$abi/libTor.so"
+            path =
+                when (name) {
+                    "libTor.so" -> "$abi/libTor.so"
+                    "lyrebird" -> "$abi/liblyrebird.so"
+                    "conjure-client" -> "$abi/libconjure_client.so"
+                    else -> "$abi/$name"
+                }
         }
     }
     into(layout.buildDirectory.dir("generated/torNativeLibs"))

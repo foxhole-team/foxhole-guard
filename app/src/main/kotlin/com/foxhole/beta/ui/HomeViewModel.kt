@@ -837,7 +837,7 @@ class HomeViewModel(
     }
 
     private fun HomeUiState.torOnlyRouteReady(): Boolean =
-        settings.privacyRoute.directTorEnabled &&
+        settings.privacyRoute.enabled &&
             (
                 settings.privacyRoute.scope == PrivacyRouteScope.ALL_APPS ||
                     settings.privacyRoute.selectedPackages.any(String::isNotBlank)

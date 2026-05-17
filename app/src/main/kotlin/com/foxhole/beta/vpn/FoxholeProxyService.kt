@@ -262,7 +262,14 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
         runtimeWakeLock.acquire()
         startNotificationHealthMonitoring()
         val runtimeStartAtMs = SystemClock.elapsedRealtime()
-        val result = runtime.start(session, this)
+        val result =
+            runtime.startFailClosed(
+                session = session,
+                host = this,
+                owner = "proxy",
+                diagnosticsLogger = container.diagnosticsLogger,
+                timeoutMessage = getString(R.string.error_runtime_start_timeout),
+            )
         RuntimeHealthMetrics.recordStart(
             owner = "proxy",
             success = result.isSuccess,

@@ -1075,9 +1075,13 @@ internal fun currentHomeModeOption(state: HomeRouteUiState): HomeModeOption =
 internal fun currentHomeModeOption(settings: Settings): HomeModeOption =
     when {
         settings.traffic.mode == TrafficMode.PROXY -> HomeModeOption.PROXY
-        settings.expert.perAppRoutingMode != PerAppRoutingMode.FULL_TUNNEL -> HomeModeOption.SPLIT
+        settings.homeSplitTunnelConfigured() -> HomeModeOption.SPLIT
         else -> HomeModeOption.TUNNEL
     }
+
+internal fun Settings.homeSplitTunnelConfigured(): Boolean =
+    expert.perAppRoutingMode != PerAppRoutingMode.FULL_TUNNEL &&
+        expert.selectedPackages.any(String::isNotBlank)
 
 internal fun homeModeOptionIcon(option: HomeModeOption): ImageVector =
     when (option) {

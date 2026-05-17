@@ -67,7 +67,7 @@ internal class FoxholeConnectionLifecycle(
 
     suspend fun connectTorOnly(statusMessage: String?) {
         val settings = settingsRepository.current()
-        require(settings.privacyRoute.directTorEnabled) { "direct TOR route is disabled" }
+        require(settings.privacyRoute.enabled) { "TOR route is disabled" }
         if (snapshot.value.state !in ACTIVE_CONNECTION_STATES) {
             disconnectStaleVpnBeforeConnectIfNeeded()
             FoxholeConnectionServiceContract.stopInactiveServices(

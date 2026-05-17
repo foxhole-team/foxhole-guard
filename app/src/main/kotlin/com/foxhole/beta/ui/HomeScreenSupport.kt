@@ -35,13 +35,18 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.AccessTime
 import androidx.compose.material.icons.outlined.Apps
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.ExpandMore
+import androidx.compose.material.icons.outlined.Language
+import androidx.compose.material.icons.outlined.LocationCity
 import androidx.compose.material.icons.outlined.PowerSettingsNew
 import androidx.compose.material.icons.outlined.Public
+import androidx.compose.material.icons.outlined.QueryStats
 import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.outlined.Router
 import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material.icons.outlined.Speed
 import androidx.compose.material3.AlertDialog
@@ -86,6 +91,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.DialogProperties
 import androidx.core.os.ConfigurationCompat
 import com.foxhole.beta.R
 import com.foxhole.beta.core.model.ConnectionSnapshot
@@ -108,7 +114,7 @@ import java.util.Locale
 internal val HomePrimaryActionHeight = 56.dp
 internal val HomeTriangleIndicatorSize = 15.dp
 internal val HomeDashboardBannerTopPadding = 74.dp
-internal val HomeConnectingStatusSignalOffset = 3.dp
+internal val HomeConnectingStatusSignalOffset = (-2).dp
 internal val HomeNetworkContentHeight = 96.dp
 internal val HomeDashboardProfileContentHeight = 62.dp
 private val HomeNetworkValueLoadingWidth = 68.dp
@@ -195,6 +201,7 @@ internal fun HomeHeaderActionButton(
 
 @Composable
 internal fun HomeNetworkDetailLine(
+    icon: ImageVector? = null,
     label: String,
     value: String,
     modifier: Modifier = Modifier,
@@ -205,19 +212,33 @@ internal fun HomeNetworkDetailLine(
         horizontalArrangement = Arrangement.spacedBy(4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(
-            text = label,
+        Row(
             modifier = Modifier.weight(1f),
-            style =
-                MaterialTheme.typography.labelSmall.copy(
-                    fontSize = 11.sp,
-                    lineHeight = 12.sp,
-                    fontWeight = FontWeight.SemiBold,
-                ),
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
+            horizontalArrangement = Arrangement.spacedBy(5.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            icon?.let {
+                Icon(
+                    imageVector = it,
+                    contentDescription = null,
+                    modifier = Modifier.size(13.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.78f),
+                )
+            }
+            Text(
+                text = label,
+                modifier = Modifier.weight(1f),
+                style =
+                    MaterialTheme.typography.labelSmall.copy(
+                        fontSize = 11.sp,
+                        lineHeight = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                    ),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
         Text(
             text = value,
             modifier = modifier.weight(1f),
@@ -598,11 +619,15 @@ internal fun homeTorFeatureStatus(state: HomeRouteUiState): HomeConnectionFeatur
     if (!state.settings.privacyRoute.enabled) {
         return HomeConnectionFeatureStatus.OFF
     }
-    if (state.activeProfile == null && !state.settings.privacyRoute.directTorEnabled) {
+    if (state.activeProfile == null && !homeTorRouteHasRunnableScope(state)) {
         return HomeConnectionFeatureStatus.PENDING
     }
     val torCanRun =
-        (state.settings.privacyRoute.directTorEnabled || state.settings.traffic.mode == TrafficMode.TUNNEL) &&
+        (
+            state.activeProfile == null ||
+                state.settings.privacyRoute.directTorEnabled ||
+                state.settings.traffic.mode == TrafficMode.TUNNEL
+            ) &&
             homeTorRouteHasRunnableScope(state) &&
             !homeTorSelectedProtocolIsUdp(state)
     return if (torCanRun && state.connection.state == ConnectionState.CONNECTED) {
@@ -628,6 +653,11 @@ private fun homeTorRouteHasRunnableScope(state: HomeRouteUiState): Boolean =
         PrivacyRouteScope.ALL_APPS -> true
         PrivacyRouteScope.SELECTED_APPS -> state.settings.privacyRoute.selectedPackages.any(String::isNotBlank)
     }
+
+internal fun homeTorOnlyStartAvailable(state: HomeRouteUiState): Boolean =
+    state.activeProfile == null &&
+        state.settings.privacyRoute.enabled &&
+        homeTorRouteHasRunnableScope(state)
 
 private fun Profile.selectedRuntimeProtocolHint(): ProtocolHint? {
     val selectedId = selectedProtocolOptionId?.takeIf(String::isNotBlank)
@@ -728,6 +758,7 @@ private fun homeConnectionFeatureStatusColor(status: HomeConnectionFeatureStatus
 internal fun HomeConnectionFeatureDialog(
     feature: HomeConnectionFeature,
     state: HomeRouteUiState,
+    wifiLanAddress: String?,
     onDismiss: () -> Unit,
     onKillSwitchChanged: (Boolean) -> Unit,
     onFirewallEnabledChanged: (Boolean) -> Unit,
@@ -744,13 +775,18 @@ internal fun HomeConnectionFeatureDialog(
     val enabled = feature.enabledIn(state)
     val torSelectedProtocolIsUdp = feature == HomeConnectionFeature.TOR && homeTorSelectedProtocolIsUdp(state)
     val torRouteNeedsSetup = feature == HomeConnectionFeature.TOR && !enabled && homeTorRouteNeedsSetup(state)
-    val confirmEnabled = !(feature == HomeConnectionFeature.TOR && torSelectedProtocolIsUdp && !enabled)
+    val confirmEnabled =
+        !(feature == HomeConnectionFeature.TOR && torSelectedProtocolIsUdp && !enabled && !torRouteNeedsSetup)
     val torOperationActive = feature == HomeConnectionFeature.TOR && state.torOperation.active
     val confirmLabel = homeConnectionFeatureConfirmLabel(torOperationActive, enabled, restartAvailable)
     AlertDialog(
         onDismissRequest = onDismiss,
-        modifier = Modifier.foxholeDialogChrome(),
+        modifier =
+            Modifier
+                .foxholeDialogChrome()
+                .testTag("home_connection_feature_dialog_${feature.name.lowercase(Locale.US)}"),
         shape = FoxholeDialogShape,
+        properties = DialogProperties(dismissOnClickOutside = false),
         title = {
             FoxholeDialogTitle(
                 title = title,
@@ -763,6 +799,7 @@ internal fun HomeConnectionFeatureDialog(
                 feature = feature,
                 state = state,
                 indicator = indicator,
+                wifiLanAddress = wifiLanAddress,
                 torSelectedProtocolIsUdp = torSelectedProtocolIsUdp,
                 onRenewTorIp = onRenewTorIp,
             ),
@@ -842,6 +879,7 @@ private fun homeConnectionFeatureDialogContent(
     feature: HomeConnectionFeature,
     state: HomeRouteUiState,
     indicator: HomeConnectionFeatureIndicator,
+    wifiLanAddress: String?,
     torSelectedProtocolIsUdp: Boolean,
     onRenewTorIp: () -> Unit,
 ): (@Composable () -> Unit)? =
@@ -859,6 +897,14 @@ private fun homeConnectionFeatureDialogContent(
         HomeConnectionFeature.FIREWALL -> {
             {
                 HomeFirewallFeatureDialogContent(state = state)
+            }
+        }
+        HomeConnectionFeature.LAN_PROXY -> {
+            {
+                HomeLanProxyFeatureDialogContent(
+                    state = state,
+                    wifiLanAddress = wifiLanAddress,
+                )
             }
         }
         else -> null
@@ -958,7 +1004,7 @@ private fun HomeConnectionFeatureDialogContent(
                     loading = true,
                     onRenewTorIp = onRenewTorIp,
                 )
-            } else if (state.settings.privacyRoute.enabled && !torRouteRunnable) {
+            } else if (!torRouteRunnable) {
                 Text(
                     text = stringResource(R.string.privacy_route_selected_apps_summary),
                     style = MaterialTheme.typography.bodyMedium,
@@ -1059,6 +1105,7 @@ private fun HomeTorConnectedTable(
         ) {
             Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp)) {
                 HomeTorInfoRow(
+                    icon = Icons.Outlined.Public,
                     label = stringResource(R.string.privacy_route_modal_current_ip),
                     value = torIpPresentation.ipText,
                     valueMonospace = torIpPresentation.hasIp,
@@ -1066,18 +1113,21 @@ private fun HomeTorConnectedTable(
                 )
                 HomeNetworkSubtleDivider()
                 HomeTorInfoRow(
+                    icon = Icons.Outlined.Language,
                     label = stringResource(R.string.home_network_country_label),
                     value = torIpPresentation.countryText,
                     loading = torIpPresentation.loading,
                 )
                 HomeNetworkSubtleDivider()
                 HomeTorInfoRow(
+                    icon = Icons.Outlined.LocationCity,
                     label = stringResource(R.string.home_network_city_label),
                     value = torIpPresentation.cityText,
                     loading = torIpPresentation.loading,
                 )
                 HomeNetworkSubtleDivider()
                 HomeTorInfoRow(
+                    icon = Icons.Outlined.AccessTime,
                     label = stringResource(R.string.privacy_route_modal_connection_time),
                     value = durationText,
                     valueMonospace = durationText != "-",
@@ -1201,6 +1251,7 @@ private fun HomeFirewallFeatureDialogContent(state: HomeRouteUiState) {
     ) {
         Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp)) {
             HomeTorInfoRow(
+                icon = Icons.Outlined.Shield,
                 label = stringResource(R.string.firewall_modal_mode),
                 value = runtimeMode,
             )
@@ -1211,27 +1262,94 @@ private fun HomeFirewallFeatureDialogContent(state: HomeRouteUiState) {
             )
             HomeNetworkSubtleDivider()
             HomeTorInfoRow(
+                icon = Icons.Outlined.PowerSettingsNew,
                 label = stringResource(R.string.firewall_modal_persistent_block),
                 value = persistentBlockText,
                 valueColor = switchStateValueColor(persistentBlockEnabled),
             )
             HomeNetworkSubtleDivider()
             HomeTorInfoRow(
+                icon = Icons.Outlined.Apps,
                 label = stringResource(R.string.firewall_modal_app_statistics),
                 value = appStatisticsText,
                 valueColor = switchStateValueColor(appStatisticsEnabled),
             )
             HomeNetworkSubtleDivider()
             HomeTorInfoRow(
+                icon = Icons.Outlined.Language,
                 label = stringResource(R.string.firewall_modal_country_statistics),
                 value = countryStatisticsText,
                 valueColor = switchStateValueColor(countryStatisticsEnabled),
             )
             HomeNetworkSubtleDivider()
             HomeTorInfoRow(
+                icon = Icons.Outlined.QueryStats,
                 label = stringResource(R.string.firewall_modal_anomaly_statistics),
                 value = anomalyStatisticsText,
                 valueColor = switchStateValueColor(anomalyStatisticsEnabled),
+            )
+        }
+    }
+}
+
+@Composable
+private fun HomeLanProxyFeatureDialogContent(
+    state: HomeRouteUiState,
+    wifiLanAddress: String?,
+) {
+    val lanSurface = activeLanProxySurface(state)
+    val lanAvailable = wifiLanAddress != null && lanSurface != null
+    val endpoint =
+        if (lanAvailable) {
+            "$wifiLanAddress:${lanSurface.settings.port}"
+        } else {
+            stringResource(R.string.proxy_surface_lan_waiting_for_wifi)
+        }
+    val authEnabled = state.settings.expert.localSurfaces.lanAuth.enabled
+    Surface(
+        shape = MaterialTheme.shapes.medium,
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.30f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)),
+    ) {
+        Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp)) {
+            HomeTorInfoRow(
+                icon = Icons.Outlined.Router,
+                label = stringResource(R.string.firewall_modal_mode),
+                value = lanSurface?.label ?: "-",
+            )
+            HomeNetworkSubtleDivider()
+            HomeTorInfoRow(
+                icon = Icons.Outlined.Public,
+                label = stringResource(R.string.proxy_surface_endpoint_title),
+                value = endpoint,
+                valueMonospace = lanAvailable,
+                valueColor =
+                    if (lanAvailable) {
+                        MaterialTheme.colorScheme.onSurface
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+            )
+            HomeNetworkSubtleDivider()
+            HomeTorInfoRow(
+                icon = Icons.Outlined.Router,
+                label = stringResource(R.string.port),
+                value = lanSurface?.settings?.port?.toString() ?: "-",
+                valueMonospace = true,
+            )
+            HomeNetworkSubtleDivider()
+            HomeTorInfoRow(
+                icon = Icons.Outlined.Shield,
+                label = stringResource(R.string.lan_proxy_auth_title),
+                value =
+                    stringResource(
+                        if (authEnabled) {
+                            R.string.auth_required_label
+                        } else {
+                            R.string.no_auth_label
+                        },
+                    ),
+                valueColor = switchStateValueColor(authEnabled),
             )
         }
     }
@@ -1313,13 +1431,10 @@ private fun HomeFirewallBlockedAppsRow(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(
-            text = stringResource(R.string.firewall_modal_app_blocking),
+        HomeFeatureInfoLabel(
+            icon = Icons.Outlined.Apps,
+            label = stringResource(R.string.firewall_modal_app_blocking),
             modifier = Modifier.weight(1f),
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
         )
         Row(
             modifier = Modifier.weight(1f),
@@ -1344,6 +1459,7 @@ private fun HomeFirewallBlockedAppsRow(
 
 @Composable
 private fun HomeTorInfoRow(
+    icon: ImageVector? = null,
     label: String,
     value: String,
     valueMonospace: Boolean = false,
@@ -1355,13 +1471,10 @@ private fun HomeTorInfoRow(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(
-            text = label,
+        HomeFeatureInfoLabel(
+            icon = icon,
+            label = label,
             modifier = Modifier.weight(1f),
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
         )
         Box(
             modifier = Modifier.weight(1f),
@@ -1393,6 +1506,36 @@ private fun HomeTorInfoRow(
 }
 
 @Composable
+private fun HomeFeatureInfoLabel(
+    icon: ImageVector?,
+    label: String,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.spacedBy(7.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        icon?.let {
+            Icon(
+                imageVector = it,
+                contentDescription = null,
+                modifier = Modifier.size(15.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.78f),
+            )
+        }
+        Text(
+            text = label,
+            modifier = Modifier.weight(1f),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+@Composable
 private fun HomeTorRouteRow(
     state: HomeRouteUiState,
     selectedApps: List<InstalledAppOption>,
@@ -1412,13 +1555,10 @@ private fun HomeTorRouteRow(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(
-            text = stringResource(R.string.privacy_route_modal_routing),
+        HomeFeatureInfoLabel(
+            icon = Icons.Outlined.Apps,
+            label = stringResource(R.string.privacy_route_modal_routing),
             modifier = Modifier.weight(1f),
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
         )
         Row(
             modifier = Modifier.weight(1f),
@@ -1869,10 +2009,7 @@ internal fun HomeConnectionActions(
     smartStartControlsEnabled: Boolean = true,
 ) {
     val activeProfile = state.activeProfile
-    val torOnlyStartAvailable =
-        activeProfile == null &&
-            state.settings.privacyRoute.directTorEnabled &&
-            homeTorRouteHasRunnableScope(state)
+    val torOnlyStartAvailable = homeTorOnlyStartAvailable(state)
     val showAutoConnectAction = smartStartControlsEnabled && shouldShowAutoConnectAction(activeProfile)
     val autoConnectRunning = state.autoConnect.running
     val protocolRefreshRunning = state.protocolMetricsRefreshing
