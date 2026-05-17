@@ -8,6 +8,7 @@ import com.foxhole.beta.core.model.ProfileSourceType
 import com.foxhole.beta.core.model.ProtocolHint
 import com.foxhole.beta.core.model.Settings
 import com.foxhole.beta.core.model.SmartProfilePreference
+import com.foxhole.beta.core.model.SmartProfileProtocolMemory
 import com.foxhole.beta.core.settings.smartStartEnabledProtocolSetHash
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -580,6 +581,54 @@ class HomeDashboardProtocolPresentationTest {
 
         assertEquals(setOf(1L), resolved.smartProfileMetricsRefreshingProfileIds)
         assertEquals(mapOf(1L to "wireguard"), resolved.smartProfileMetricsRefreshingOptionIdByProfileId)
+    }
+
+    @Test
+    fun `profiles route lets live unavailable state replace stale remembered latency`() {
+        val activeProfile =
+            profile(
+                selectedProtocolOptionId = "vless",
+                protocolOptions =
+                    listOf(
+                        option("vless", ProtocolHint.VLESS),
+                        option("trojan", ProtocolHint.TROJAN),
+                    ),
+            )
+        val state =
+            HomeUiState(
+                profiles = listOf(activeProfile),
+                activeProfile = activeProfile,
+                settings =
+                    Settings(
+                        smartProfilePreferences =
+                            listOf(
+                                SmartProfilePreference(
+                                    profileId = 1L,
+                                    protocolMemories =
+                                        listOf(
+                                            SmartProfileProtocolMemory(
+                                                optionId = "vless",
+                                                lastLatencyMs = 240L,
+                                                lastSuccessAt = System.currentTimeMillis(),
+                                            ),
+                                        ),
+                                ),
+                            ),
+                    ),
+            )
+
+        val resolved =
+            buildProfilesRouteUiState(
+                state = state,
+                autoConnect = AutoConnectUiState(),
+                protocolMetrics = ProtocolMetricsUiState(),
+                profileOptionLatencies = emptyMap(),
+                profileOptionLatencyUnavailable = setOf(ProfileOptionLatencyKey(1L, "vless")),
+                networkFingerprintKey = null,
+            )
+
+        assertEquals(setOf("vless"), resolved.smartProfileLatencyUnavailable(1L))
+        assertNull(resolved.smartStartRememberedLatency(1L)["vless"])
     }
 
     @Test

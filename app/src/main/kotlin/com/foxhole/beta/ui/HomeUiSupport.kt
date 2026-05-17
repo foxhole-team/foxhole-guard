@@ -528,13 +528,21 @@ private fun HomeRouteUiState.dashboardVisibleIpInfo(visibleIpInfo: IpInfo?): IpI
         return visibleIpInfo
     }
     val protocolSearchRunning = autoConnect.running || protocolMetricsRefreshing
+    val routeTransitionActive =
+        reconnectInProgress ||
+            (
+                connection.state in setOf(ConnectionState.CONNECTING, ConnectionState.RECONNECTING) &&
+                    hasDashboardRouteProfile()
+                )
+    if (routeTransitionActive) {
+        return visibleIpInfo.takeIf { info -> info.isFreshForRouteTransition(connection.lastChangeAt) }
+    }
     val routeRuntimeActive =
-        (reconnectInProgress || connection.state in ACTIVE_CONNECTION_STATES) &&
+        connection.state in ACTIVE_CONNECTION_STATES &&
             hasDashboardRouteProfile()
     if (routeRuntimeActive) {
         return visibleIpInfo.takeIf { info ->
-            reconnectInProgress ||
-                protocolSearchRunning ||
+            protocolSearchRunning ||
                 ipInfoLoading ||
                 dashboardConnectionMetricsLoading ||
                 info.fetchedAt >= connection.lastChangeAt - ACTIVE_ROUTE_IP_INFO_GRACE_MS
@@ -546,11 +554,17 @@ private fun HomeRouteUiState.dashboardVisibleIpInfo(visibleIpInfo: IpInfo?): IpI
 private fun HomeRouteUiState.shouldKeepVisibleNetworkInfoDuringRouteTransition(dashboardIpInfo: IpInfo?): Boolean =
     dashboardIpInfo != null &&
         (
-            connection.state in setOf(ConnectionState.CONNECTING, ConnectionState.RECONNECTING) ||
+            (
+                connection.state in setOf(ConnectionState.CONNECTING, ConnectionState.RECONNECTING) &&
+                    dashboardIpInfo.isFreshForRouteTransition(connection.lastChangeAt)
+                ) ||
                 autoConnect.running ||
                 protocolMetricsRefreshing ||
                 dashboardConnectionMetricsLoading
             )
+
+private fun IpInfo.isFreshForRouteTransition(lastChangeAt: Long): Boolean =
+    lastChangeAt <= 0L || fetchedAt >= lastChangeAt
 
 private const val ACTIVE_ROUTE_IP_INFO_GRACE_MS = 30_000L
 

@@ -79,54 +79,96 @@ internal class RuntimeCommandActor(
         currentJob?.cancel()
     }
 
+    @Suppress("NestedBlockDepth")
     private suspend fun runActorLoop() {
         val pending = PriorityQueue<QueuedRuntimeCommand>()
+        val drainingPreemptedJobs = mutableListOf<Job>()
+        suspend fun awaitRunningCommand(active: RunningRuntimeCommand): RuntimeActorReceiveResult =
+            select {
+                active.job.onJoin {
+                    if (currentJob == active.job) {
+                        currentJob = null
+                    }
+                    RuntimeActorReceiveResult.CLEAR_RUNNING
+                }
+                commands.onReceiveCatching { result ->
+                    handleReceivedCommand(
+                        result = result,
+                        running = active,
+                        pending = pending,
+                        drainingPreemptedJobs = drainingPreemptedJobs,
+                    )
+                }
+            }
+
         var running: RunningRuntimeCommand? = null
         var acceptingCommands = true
         while (acceptingCommands && !closed.get()) {
-            if (running == null) {
-                val next = pending.poll() ?: receiveNextCommandOrNull()
+            val active = running
+            if (active == null) {
+                val next = pending.poll() ?: commands.receiveCatching().getOrNull()
                 if (next == null) {
                     acceptingCommands = false
                 } else {
+                    if (next.priority < RuntimeCommandPriority.STOP.value) {
+                        drainPreemptedJobs(drainingPreemptedJobs)
+                    }
                     running = startCommand(next)
                 }
             } else {
-                val active = running
-                select {
-                    active.job.onJoin {
-                        if (currentJob == active.job) {
-                            currentJob = null
-                        }
+                when (awaitRunningCommand(active)) {
+                    RuntimeActorReceiveResult.KEEP_RUNNING -> Unit
+                    RuntimeActorReceiveResult.CLEAR_RUNNING -> running = null
+                    RuntimeActorReceiveResult.CLOSE -> {
                         running = null
-                    }
-                    commands.onReceiveCatching { result ->
-                        val command = result.getOrNull()
-                        if (command == null) {
-                            active.job.cancel()
-                            running = null
-                            acceptingCommands = false
-                        } else if (command.priority >= RuntimeCommandPriority.STOP.value) {
-                            preemptRunningCommand(
-                                running = active,
-                                command = command,
-                                pending = pending,
-                            )
-                            running = null
-                        } else {
-                            recordCommandEvent("runtime command queued", command)
-                            pending.offer(command)
-                        }
+                        acceptingCommands = false
                     }
                 }
             }
         }
         running?.job?.cancel()
         pending.clear()
+        drainingPreemptedJobs.clear()
     }
 
-    private suspend fun receiveNextCommandOrNull(): QueuedRuntimeCommand? =
-        commands.receiveCatching().getOrNull()
+    private fun handleReceivedCommand(
+        result: kotlinx.coroutines.channels.ChannelResult<QueuedRuntimeCommand>,
+        running: RunningRuntimeCommand,
+        pending: PriorityQueue<QueuedRuntimeCommand>,
+        drainingPreemptedJobs: MutableList<Job>,
+    ): RuntimeActorReceiveResult {
+        val command = result.getOrNull()
+        return when {
+            command == null -> {
+                running.job.cancel()
+                RuntimeActorReceiveResult.CLOSE
+            }
+            command.priority >= RuntimeCommandPriority.STOP.value -> {
+                preemptRunningCommand(
+                    running = running,
+                    command = command,
+                    pending = pending,
+                    drainingPreemptedJobs = drainingPreemptedJobs,
+                )
+                RuntimeActorReceiveResult.CLEAR_RUNNING
+            }
+            else -> {
+                recordCommandEvent("runtime command queued", command)
+                pending.offer(command)
+                RuntimeActorReceiveResult.KEEP_RUNNING
+            }
+        }
+    }
+
+    private suspend fun drainPreemptedJobs(drainingPreemptedJobs: MutableList<Job>) {
+        drainingPreemptedJobs.removeAll(Job::isCompleted)
+        if (drainingPreemptedJobs.isEmpty()) {
+            return
+        }
+        record("runtime waiting for preempted cleanup", "count=${drainingPreemptedJobs.size}")
+        drainingPreemptedJobs.forEach { job -> job.join() }
+        drainingPreemptedJobs.clear()
+    }
 
     private fun startCommand(command: QueuedRuntimeCommand): RunningRuntimeCommand {
         val job =
@@ -141,6 +183,7 @@ internal class RuntimeCommandActor(
         running: RunningRuntimeCommand,
         command: QueuedRuntimeCommand,
         pending: PriorityQueue<QueuedRuntimeCommand>,
+        drainingPreemptedJobs: MutableList<Job>,
     ) {
         val removedNormalCommands = pending.removeIf { queued -> queued.priority < RuntimeCommandPriority.STOP.value }
         recordCommandEvent(
@@ -153,6 +196,7 @@ internal class RuntimeCommandActor(
             if (currentJob == running.job) {
                 currentJob = null
             }
+            drainingPreemptedJobs += running.job
             recordCommandEvent(
                 headline = "runtime command preempted",
                 command = command,
@@ -228,4 +272,10 @@ internal class RuntimeCommandActor(
     private data class RunningRuntimeCommand(
         val job: Job,
     )
+
+    private enum class RuntimeActorReceiveResult {
+        KEEP_RUNNING,
+        CLEAR_RUNNING,
+        CLOSE,
+    }
 }

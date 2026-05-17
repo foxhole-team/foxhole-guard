@@ -492,12 +492,16 @@ class HomeViewModel(
         combine(
             uiState,
             autoConnectUiStateMutable,
+            profileOptionLatenciesMutable,
+            profileOptionLatencyUnavailableMutable,
             protocolMetricsState,
-        ) { state, autoConnect, protocolMetrics ->
+        ) { state, autoConnect, profileOptionLatencies, profileOptionLatencyUnavailable, protocolMetrics ->
             buildProfilesRouteUiState(
                 state = state,
                 autoConnect = autoConnect,
                 protocolMetrics = protocolMetrics,
+                profileOptionLatencies = profileOptionLatencies,
+                profileOptionLatencyUnavailable = profileOptionLatencyUnavailable,
                 networkFingerprintKey = currentNetworkFingerprintForSmartRules()?.key,
             )
         }
@@ -1689,7 +1693,7 @@ class HomeViewModel(
         internal const val AUTO_CONNECT_DISCONNECT_FORCE_STABILIZE_TIMEOUT_MS = 3_000L
         internal const val AUTO_CONNECT_DISCONNECT_POLL_DELAY_MS = FoxholeVpnService.VPN_NETWORK_WAIT_POLL_DELAY_MS
         internal const val AUTO_CONNECT_LATENCY_MEASUREMENT_SETTLE_MS = CONNECTED_LATENCY_FIRST_DELAY_MS
-        internal const val AUTO_CONNECT_LATENCY_MEASUREMENT_RETRY_THRESHOLD_MS = 900L
+        internal const val AUTO_CONNECT_LATENCY_MEASUREMENT_RETRY_THRESHOLD_MS = 350L
         internal const val AUTO_CONNECT_LATENCY_MEASUREMENT_RETRY_DELAY_MS = 160L
         internal const val AUTO_CONNECT_PROTOCOL_TRANSITION_SETTLE_MS = 90L
         internal const val AUTO_CONNECT_RESULT_SETTLE_MS = 500L

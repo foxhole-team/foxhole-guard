@@ -436,7 +436,7 @@ class HomeDashboardPresentationTest {
     }
 
     @Test
-    fun `network model shows loading during reconnect even with previous ip info`() {
+    fun `network model hides stale ip during route transition`() {
         val ipInfo =
             IpInfo(
                 ip = "203.0.113.10",
@@ -450,8 +450,48 @@ class HomeDashboardPresentationTest {
             resolveHomeDashboardNetworkModel(
                 state =
                     HomeRouteUiState(
-                        connection = ConnectionSnapshot(state = ConnectionState.IDLE, lastChangeAt = 500L),
-                        reconnectInProgress = true,
+                        connection =
+                            ConnectionSnapshot(
+                                state = ConnectionState.CONNECTING,
+                                trafficMode = TrafficMode.TUNNEL,
+                                profileId = 42L,
+                                lastChangeAt = 2_000L,
+                            ),
+                    ),
+                visibleIpInfo = ipInfo,
+                deviceInternetAvailable = true,
+            )
+
+        assertEquals(null, model.visibleIpInfo)
+        assertEquals(R.string.home_network_connection_info_title, model.titleRes)
+        assertTrue(model.showConnectionStatus)
+        assertTrue(model.showLoading)
+        assertTrue(model.showIpInfoLoading)
+        assertTrue(model.showConnectionDetailsLoading)
+    }
+
+    @Test
+    fun `network model keeps fresh route ip during route transition`() {
+        val ipInfo =
+            IpInfo(
+                ip = "203.0.113.10",
+                countryCode = "NL",
+                countryName = "Netherlands",
+                city = "Amsterdam",
+                isp = "Example",
+                fetchedAt = 2_100L,
+            )
+        val model =
+            resolveHomeDashboardNetworkModel(
+                state =
+                    HomeRouteUiState(
+                        connection =
+                            ConnectionSnapshot(
+                                state = ConnectionState.CONNECTING,
+                                trafficMode = TrafficMode.TUNNEL,
+                                profileId = 42L,
+                                lastChangeAt = 2_000L,
+                            ),
                     ),
                 visibleIpInfo = ipInfo,
                 deviceInternetAvailable = true,

@@ -251,49 +251,34 @@ internal fun FoxholeScaffold(
     Scaffold(
         containerColor = Color.Transparent,
         topBar = {
-            Box(modifier = Modifier.fillMaxWidth()) {
-                Box(
-                    modifier =
-                        Modifier
-                            .matchParentSize()
-                            .blur(18.dp)
-                            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.70f)),
-                )
-                Box(
-                    modifier =
-                        Modifier
-                            .matchParentSize()
-                            .background(MaterialTheme.colorScheme.background.copy(alpha = 0.26f)),
-                )
-                TopAppBar(
-                    title = {
-                        Text(
-                            text = title,
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.SemiBold,
-                        )
-                    },
-                    navigationIcon = {
-                        onNavigateUp?.let {
-                            IconButton(onClick = it) {
-                                Icon(
-                                    Icons.AutoMirrored.Outlined.ArrowBack,
-                                    contentDescription = stringResource(R.string.navigate_back),
-                                )
-                            }
+            TopAppBar(
+                title = {
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                },
+                navigationIcon = {
+                    onNavigateUp?.let {
+                        IconButton(onClick = it) {
+                            Icon(
+                                Icons.AutoMirrored.Outlined.ArrowBack,
+                                contentDescription = stringResource(R.string.navigate_back),
+                            )
                         }
-                    },
-                    actions = actions,
-                    colors =
-                        TopAppBarDefaults.topAppBarColors(
-                            containerColor = topBarContainerColor,
-                            scrolledContainerColor = topBarContainerColor,
-                            titleContentColor = MaterialTheme.colorScheme.onBackground,
-                            navigationIconContentColor = MaterialTheme.colorScheme.onBackground,
-                            actionIconContentColor = MaterialTheme.colorScheme.onBackground,
-                        ),
-                )
-            }
+                    }
+                },
+                actions = actions,
+                colors =
+                    TopAppBarDefaults.topAppBarColors(
+                        containerColor = topBarContainerColor,
+                        scrolledContainerColor = topBarContainerColor,
+                        titleContentColor = MaterialTheme.colorScheme.onBackground,
+                        navigationIconContentColor = MaterialTheme.colorScheme.onBackground,
+                        actionIconContentColor = MaterialTheme.colorScheme.onBackground,
+                    ),
+            )
         },
         snackbarHost = {},
         content = { padding ->
@@ -583,7 +568,13 @@ private fun FoxholeBanner(
             FoxholeBannerTone.ERROR -> FoxholeErrorAccent.copy(alpha = 0.96f)
             FoxholeBannerTone.SUCCESS -> FoxholePositiveAccent.copy(alpha = 0.96f)
         }
-    val contentColor = Color.White
+    val contentColor =
+        when (tone) {
+            FoxholeBannerTone.INFO -> Color(0xFF111418)
+            FoxholeBannerTone.ERROR,
+            FoxholeBannerTone.SUCCESS,
+            -> Color.White
+        }
     val icon =
         when (tone) {
             FoxholeBannerTone.INFO -> Icons.Outlined.Info

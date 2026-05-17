@@ -435,7 +435,7 @@ private suspend fun HomeViewModel.waitForRuntimeDisconnect() {
     }
 }
 
-private fun HomeViewModel.runtimeConnectionFailureMessage(error: Throwable): String {
+internal fun HomeViewModel.runtimeConnectionFailureMessage(error: Throwable): String {
     val app = getApplication<Application>()
     val message = error.message.orEmpty()
     return when {

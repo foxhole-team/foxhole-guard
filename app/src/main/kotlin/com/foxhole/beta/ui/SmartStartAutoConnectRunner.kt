@@ -47,15 +47,12 @@ internal object SmartStartAutoConnectRunner {
         recommendedIds: List<String>,
     ): List<AdaptiveProtocolCandidateScore> {
         val scoresById = rankedCandidates.associateBy { score -> score.candidate.optionId }
+        val freshLeaders = rankedCandidates.take(HomeViewModel.AUTO_CONNECT_MAX_ATTEMPTS - 1)
         val recommended =
             recommendedIds
                 .mapNotNull(scoresById::get)
                 .distinctBy { score -> score.candidate.optionId }
-        val fallback =
-            rankedCandidates.filterNot { score ->
-                recommended.any { selected -> selected.candidate.optionId == score.candidate.optionId }
-            }
-        return (recommended + fallback)
+        return (freshLeaders + recommended + rankedCandidates)
             .distinctBy { score -> score.candidate.optionId }
             .take(HomeViewModel.AUTO_CONNECT_MAX_ATTEMPTS)
     }

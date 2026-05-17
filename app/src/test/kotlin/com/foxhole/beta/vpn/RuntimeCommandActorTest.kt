@@ -147,6 +147,44 @@ class RuntimeCommandActorTest {
         }
 
     @Test
+    fun `normal command after stop waits for preempted cleanup`() =
+        runBlocking {
+            val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+            val actor = actor(scope)
+            val currentStarted = CompletableDeferred<Unit>()
+            val releaseCurrentCleanup = CompletableDeferred<Unit>()
+            val stopCompleted = CompletableDeferred<Unit>()
+            val nextStarted = CompletableDeferred<Unit>()
+
+            actor.launch(RuntimeCommandPriority.NORMAL, reason = "connect") {
+                try {
+                    currentStarted.complete(Unit)
+                    delay(5_000L)
+                } finally {
+                    withContext(NonCancellable) {
+                        releaseCurrentCleanup.await()
+                    }
+                }
+            }
+            withTimeout(1_000L) { currentStarted.await() }
+
+            actor.launch(RuntimeCommandPriority.STOP, reason = "disconnect") {
+                stopCompleted.complete(Unit)
+            }
+            withTimeout(1_000L) { stopCompleted.await() }
+
+            actor.launch(RuntimeCommandPriority.NORMAL, reason = "connect-next") {
+                nextStarted.complete(Unit)
+            }
+            delay(50L)
+            assertFalse(nextStarted.isCompleted)
+
+            releaseCurrentCleanup.complete(Unit)
+            withTimeout(1_000L) { nextStarted.await() }
+            actor.close()
+        }
+
+    @Test
     fun `reload during disconnect is serialized`() =
         runBlocking {
             val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)

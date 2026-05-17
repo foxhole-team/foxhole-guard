@@ -23,6 +23,9 @@ on:
 permissions:
   contents: read
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 concurrency:
   group: android-${{ github.ref }}
   cancel-in-progress: true
@@ -81,7 +84,6 @@ jobs:
 
   connected-tests:
     name: emulator UI/regression connected tests
-    needs: verify
     if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch' || github.event_name == 'schedule' || (github.event_name == 'push' && github.ref == 'refs/heads/dev')
     runs-on: ubuntu-24.04
     timeout-minutes: 70

@@ -102,6 +102,7 @@ data class ProfilesRouteUiState(
     val smartProfileExcludedOptionIdsByProfileId: Map<Long, Set<String>> = emptyMap(),
     val smartStartRememberedLatenciesByProfileId: Map<Long, Map<String, Long>> = emptyMap(),
     val smartProfileDownOptionIdsByProfileId: Map<Long, Set<String>> = emptyMap(),
+    val smartProfileLatencyUnavailableByProfileId: Map<Long, Set<String>> = emptyMap(),
     val smartProfileServerPingsByProfileId: Map<Long, Map<String, Long>> = emptyMap(),
     val smartProfileServerPingUnavailableByProfileId: Map<Long, Set<String>> = emptyMap(),
     val smartProfileMetricsUpdatedAtByProfileId: Map<Long, Map<String, Long>> = emptyMap(),
@@ -242,6 +243,7 @@ internal fun HomeUiState.toHomeRouteUiState(
 internal fun HomeUiState.toProfilesRouteUiState(
     smartStartRememberedLatenciesByProfileId: Map<Long, Map<String, Long>> = emptyMap(),
     smartProfileDownOptionIdsByProfileId: Map<Long, Set<String>> = emptyMap(),
+    smartProfileLatencyUnavailableByProfileId: Map<Long, Set<String>> = emptyMap(),
     smartProfileServerPingsByProfileId: Map<Long, Map<String, Long>> = emptyMap(),
     smartProfileServerPingUnavailableByProfileId: Map<Long, Set<String>> = emptyMap(),
     smartProfileMetricsUpdatedAtByProfileId: Map<Long, Map<String, Long>> = emptyMap(),
@@ -262,6 +264,7 @@ internal fun HomeUiState.toProfilesRouteUiState(
             },
         smartStartRememberedLatenciesByProfileId = smartStartRememberedLatenciesByProfileId,
         smartProfileDownOptionIdsByProfileId = smartProfileDownOptionIdsByProfileId,
+        smartProfileLatencyUnavailableByProfileId = smartProfileLatencyUnavailableByProfileId,
         smartProfileServerPingsByProfileId = smartProfileServerPingsByProfileId,
         smartProfileServerPingUnavailableByProfileId = smartProfileServerPingUnavailableByProfileId,
         smartProfileMetricsUpdatedAtByProfileId = smartProfileMetricsUpdatedAtByProfileId,
@@ -323,6 +326,9 @@ internal fun ProfilesRouteUiState.smartStartRememberedLatency(profileId: Long): 
 
 internal fun ProfilesRouteUiState.smartProfileDownOptionIds(profileId: Long): Set<String> =
     smartProfileDownOptionIdsByProfileId[profileId].orEmpty()
+
+internal fun ProfilesRouteUiState.smartProfileLatencyUnavailable(profileId: Long): Set<String> =
+    smartProfileLatencyUnavailableByProfileId[profileId].orEmpty()
 
 internal fun ProfilesRouteUiState.smartProfileServerPings(profileId: Long): Map<String, Long> =
     smartProfileServerPingsByProfileId[profileId].orEmpty()

@@ -35,6 +35,7 @@ import com.foxhole.beta.core.smart.SmartStartReplayEvent
 import com.foxhole.beta.vpn.FoxholeConnectionServiceContract
 import com.foxhole.beta.vpn.FoxholeVpnService
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
@@ -93,22 +94,34 @@ internal fun HomeViewModel.requestReconnectInternal(profileId: Long) {
 }
 
 internal fun HomeViewModel.reconnectInternal(profileId: Long) {
-    reconnectJob?.cancel()
-    reconnectJob = viewModelScope.launch {
+    val previousReconnectJob = reconnectJob
+    previousReconnectJob?.cancel()
+    val nextReconnectJob = viewModelScope.launch {
+        previousReconnectJob?.join()
         reconnectInProgressMutable.value = true
         dashboardConnectionMetricsLoadingMutable.value = true
         try {
+            cancelSmartProfileMetricsRefreshInternal(restoreConnection = false)
             if (container.connectionController.snapshot.value.state in HomeViewModel.ACTIVE_CONNECTION_STATES) {
                 container.connectionController.disconnect(suppressLocalGuard = true)
                 awaitDisconnectedForAutoConnect()
             }
             connectNow(profileId)
             awaitReconnectConnectionOutcome()
+        } catch (cancelled: CancellationException) {
+            container.diagnosticsLogger.record("connection", "manual reconnect cancelled")
+            throw cancelled
+        } catch (error: Throwable) {
+            dashboardConnectionMetricsLoadingMutable.value = false
+            emitError(runtimeConnectionFailureMessage(error))
         } finally {
             reconnectInProgressMutable.value = false
-            reconnectJob = null
+            if (reconnectJob == coroutineContext[Job]) {
+                reconnectJob = null
+            }
         }
     }
+    reconnectJob = nextReconnectJob
 }
 
 private suspend fun HomeViewModel.awaitReconnectConnectionOutcome(): ConnectionSnapshot? {
@@ -134,11 +147,16 @@ private fun ConnectionSnapshot?.isConnectedSmartStartWinner(
 
 internal fun HomeViewModel.startAutoConnectInternal(profileId: Long) {
     autoConnectJob?.cancel()
+    autoConnectUiStateMutable.value = AutoConnectUiState(running = true)
     autoConnectJob =
         viewModelScope.launch {
             var completedSmartStart = false
             try {
                 var profile = container.profileRepository.getProfile(profileId) ?: error("profile not found")
+                fullScanAutoConnectCandidates(profileId, profile)
+                    .take(HomeViewModel.AUTO_CONNECT_MAX_ATTEMPTS)
+                    .takeIf(::canStartAutoConnect)
+                    ?.let(::initializeAutoConnectUi)
                 profile = refreshSubscriptionBeforeSmartStartIfNeeded(profile)
                 val autoConnectNetworkFingerprint = currentNetworkFingerprintForSmartRules()
                 recommendedProtocolMutable.value = null
@@ -209,7 +227,7 @@ private fun HomeViewModel.refreshDashboardAfterSmartStartIfConnected() {
     if (container.connectionController.snapshot.value.state != ConnectionState.CONNECTED) {
         return
     }
-    scheduleConnectedIpRefresh(reason = IpInfoRefreshReason.POST_CONNECT, clearExistingIp = true)
+    scheduleConnectedIpRefresh(reason = IpInfoRefreshReason.POST_CONNECT, clearExistingIp = false)
     if (dashboardVisible) {
         scheduleActiveProfileLatencyRefresh()
     }
@@ -1072,6 +1090,8 @@ private suspend fun HomeViewModel.restoreConnectionAfterMetricsRefresh(
 internal fun HomeViewModel.onProtocolRecommendationAcceptedInternal() {
     val recommendation = recommendedProtocolMutable.value ?: return
     recommendedProtocolMutable.value = null
+    cancelAutoConnect(clearUiOnly = true)
+    cancelSmartProfileMetricsRefreshInternal(restoreConnection = false)
     viewModelScope.launch {
         runCatching {
             container.profileRepository.selectProfileProtocolOption(
@@ -1994,7 +2014,9 @@ internal fun canStartAutoConnect(candidates: List<AutoConnectProbeCandidate>): B
 internal fun resolveAutoConnectLatencyMeasurementResult(
     warmupLatencyMs: Long,
     settledLatencyMs: Long?,
-): Long = (settledLatencyMs ?: warmupLatencyMs).coerceAtLeast(1L)
+): Long =
+    (settledLatencyMs?.let { settled -> minOf(warmupLatencyMs, settled) } ?: warmupLatencyMs)
+        .coerceAtLeast(1L)
 
 internal fun currentTrafficObservedAt(
     traffic: TrafficSnapshot,

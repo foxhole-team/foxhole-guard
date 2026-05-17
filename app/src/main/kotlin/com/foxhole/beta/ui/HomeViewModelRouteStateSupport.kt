@@ -94,6 +94,7 @@ internal fun buildHomeRouteUiState(
                 state.settings
                     .smartProfilePreference(activeProfile.id)
                     ?.rememberedSmartStartLatencyByOptionId(currentNetworkFingerprintKey)
+                    ?.filterKeys { optionId -> optionId !in activeProfileLatencyUnavailable }
             }.orEmpty()
     val activeKnownLatenciesByOptionId = smartStartRememberedLatenciesByOptionId + activeProfileLatencies
     val activeRecommendedProtocolOptionIds =
@@ -150,6 +151,8 @@ internal fun buildProfilesRouteUiState(
     state: HomeUiState,
     autoConnect: AutoConnectUiState,
     protocolMetrics: ProtocolMetricsUiState,
+    profileOptionLatencies: Map<ProfileOptionLatencyKey, Long> = emptyMap(),
+    profileOptionLatencyUnavailable: Set<ProfileOptionLatencyKey> = emptySet(),
     networkFingerprintKey: String?,
 ): ProfilesRouteUiState {
     val rememberedServerPingsByProfileId =
@@ -167,6 +170,11 @@ internal fun buildProfilesRouteUiState(
                 rememberedServerPingsByProfileId[profileId].orEmpty() +
                     liveServerPingsByProfileId[profileId].orEmpty()
             }
+    val serverPingUnavailableByProfileId =
+        smartProfileServerPingUnavailableByProfileId(
+            serverPings = protocolMetrics.serverPings,
+            mergedServerPingsByProfileId = mergedServerPingsByProfileId,
+        )
     val fullRefreshUpdatedAtByProfileId =
         state.profiles
             .mapNotNull { profile ->
@@ -180,16 +188,11 @@ internal fun buildProfilesRouteUiState(
         state.settings.rememberedSmartProfileDownOptionIdsByProfileId(
             networkFingerprint = networkFingerprintKey,
         )
-    val liveDownOptionIdsByProfileId =
-        protocolMetrics.downOptionIds
-            .groupBy(ProfileOptionLatencyKey::profileId, ProfileOptionLatencyKey::optionId)
-            .mapValues { (_, values) -> values.toSet() }
     val downOptionIdsByProfileId =
-        (rememberedDownOptionIdsByProfileId.keys + liveDownOptionIdsByProfileId.keys)
-            .associateWith { profileId ->
-                rememberedDownOptionIdsByProfileId[profileId].orEmpty() +
-                    liveDownOptionIdsByProfileId[profileId].orEmpty()
-            }
+        smartProfileDownOptionIdsByProfileId(
+            rememberedDownOptionIdsByProfileId = rememberedDownOptionIdsByProfileId,
+            liveDownOptionIds = protocolMetrics.downOptionIds,
+        )
     val dashboardRefreshingProfileId = state.activeProfile?.id?.takeIf { state.dashboardConnectionMetricsLoading }
     val dashboardRefreshingOptionIdByProfileId =
         dashboardRefreshingProfileId
@@ -219,51 +222,142 @@ internal fun buildProfilesRouteUiState(
         state.settings.rememberedSmartStartLatencyByProfileId(
             networkFingerprint = networkFingerprintKey,
         )
+    val liveLatenciesByProfileId =
+        liveSmartProfileLatenciesByProfileId(profileOptionLatencies)
+    val latencyUnavailableByProfileId =
+        liveSmartProfileLatencyUnavailableByProfileId(
+            profileOptionLatencyUnavailable = profileOptionLatencyUnavailable,
+            liveLatenciesByProfileId = liveLatenciesByProfileId,
+        )
+    val mergedLatenciesByProfileId =
+        mergedSmartProfileLatenciesByProfileId(
+            rememberedLatenciesByProfileId = rememberedLatenciesByProfileId,
+            liveLatenciesByProfileId = liveLatenciesByProfileId,
+            latencyUnavailableByProfileId = latencyUnavailableByProfileId,
+        )
+    val recommendedProtocolOptionByProfileId =
+        smartProfileRecommendedOptionByProfileId(state.settings, protocolMetrics.recommendation)
+    val recommendedProtocolOptionsByProfileId =
+        smartProfileRecommendedOptionsByProfileId(state.settings, protocolMetrics.recommendation)
+    val favoriteProtocolOptionByProfileId =
+        smartProfileFavoriteOptionByProfileId(
+            settings = state.settings,
+            latenciesByProfileId = mergedLatenciesByProfileId,
+            networkFingerprintKey = networkFingerprintKey,
+        )
     return state.toProfilesRouteUiState(
-        smartStartRememberedLatenciesByProfileId = rememberedLatenciesByProfileId,
+        smartStartRememberedLatenciesByProfileId = mergedLatenciesByProfileId,
         smartProfileDownOptionIdsByProfileId = downOptionIdsByProfileId,
+        smartProfileLatencyUnavailableByProfileId = latencyUnavailableByProfileId,
         smartProfileServerPingsByProfileId = mergedServerPingsByProfileId,
-        smartProfileServerPingUnavailableByProfileId =
-            protocolMetrics.serverPings
-                .filter { (_, value) -> value.unavailable }
-                .keys
-                .groupBy(ProfileOptionLatencyKey::profileId, ProfileOptionLatencyKey::optionId)
-                .mapValues { (profileId, values) ->
-                    values.filterNot(mergedServerPingsByProfileId[profileId].orEmpty()::containsKey).toSet()
-                },
+        smartProfileServerPingUnavailableByProfileId = serverPingUnavailableByProfileId,
         smartProfileMetricsUpdatedAtByProfileId = fullRefreshUpdatedAtByProfileId,
         smartProfileMetricsRefreshingProfileIds = refreshingProfileIds,
         smartProfileMetricsRefreshingOptionIdByProfileId = refreshingOptionIdByProfileId,
-        recommendedProtocolOptionByProfileId =
-            state.settings.smartProfilePreferences
-                .mapNotNull { preference ->
-                    preference.recommendedProtocolIds.firstOrNull()?.let { optionId ->
-                        preference.profileId to optionId
-                    }
-                }.toMap() +
-                protocolMetrics.recommendation
-                    ?.let { recommendation -> mapOf(recommendation.profileId to recommendation.optionId) }
-                    .orEmpty(),
-        recommendedProtocolOptionsByProfileId =
-            state.settings.smartProfilePreferences
-                .associate { preference ->
-                    preference.profileId to preference.recommendedProtocolIds.toSet()
-                } +
-                protocolMetrics.recommendation
-                    ?.let { recommendation -> mapOf(recommendation.profileId to setOf(recommendation.optionId)) }
-                    .orEmpty(),
-        favoriteProtocolOptionByProfileId =
-            state.settings.smartProfilePreferences
-                .mapNotNull { preference ->
-                    (
-                        fastestProtocolOptionId(rememberedLatenciesByProfileId[preference.profileId].orEmpty())
-                            ?: preference.preferredLastKnownGoodOptionId(networkFingerprintKey)
-                    )?.let { optionId ->
-                        preference.profileId to optionId
-                    }
-                }.toMap(),
+        recommendedProtocolOptionByProfileId = recommendedProtocolOptionByProfileId,
+        recommendedProtocolOptionsByProfileId = recommendedProtocolOptionsByProfileId,
+        favoriteProtocolOptionByProfileId = favoriteProtocolOptionByProfileId,
     )
 }
+
+private fun smartProfileRecommendedOptionByProfileId(
+    settings: Settings,
+    recommendation: ProtocolRecommendationState?,
+): Map<Long, String> =
+    settings.smartProfilePreferences
+        .mapNotNull { preference ->
+            preference.recommendedProtocolIds.firstOrNull()?.let { optionId ->
+                preference.profileId to optionId
+            }
+        }.toMap() +
+        recommendation
+            ?.let { state -> mapOf(state.profileId to state.optionId) }
+            .orEmpty()
+
+private fun smartProfileRecommendedOptionsByProfileId(
+    settings: Settings,
+    recommendation: ProtocolRecommendationState?,
+): Map<Long, Set<String>> =
+    settings.smartProfilePreferences
+        .associate { preference ->
+            preference.profileId to preference.recommendedProtocolIds.toSet()
+        } +
+        recommendation
+            ?.let { state -> mapOf(state.profileId to setOf(state.optionId)) }
+            .orEmpty()
+
+private fun smartProfileFavoriteOptionByProfileId(
+    settings: Settings,
+    latenciesByProfileId: Map<Long, Map<String, Long>>,
+    networkFingerprintKey: String?,
+): Map<Long, String> =
+    settings.smartProfilePreferences
+        .mapNotNull { preference ->
+            (
+                fastestProtocolOptionId(latenciesByProfileId[preference.profileId].orEmpty())
+                    ?: preference.preferredLastKnownGoodOptionId(networkFingerprintKey)
+            )?.let { optionId ->
+                preference.profileId to optionId
+            }
+        }.toMap()
+
+private fun smartProfileServerPingUnavailableByProfileId(
+    serverPings: Map<ProfileOptionLatencyKey, ProfileOptionServerPingState>,
+    mergedServerPingsByProfileId: Map<Long, Map<String, Long>>,
+): Map<Long, Set<String>> =
+    serverPings
+        .filter { (_, value) -> value.unavailable }
+        .keys
+        .groupBy(ProfileOptionLatencyKey::profileId, ProfileOptionLatencyKey::optionId)
+        .mapValues { (profileId, values) ->
+            values.filterNot(mergedServerPingsByProfileId[profileId].orEmpty()::containsKey).toSet()
+        }
+
+private fun smartProfileDownOptionIdsByProfileId(
+    rememberedDownOptionIdsByProfileId: Map<Long, Set<String>>,
+    liveDownOptionIds: Set<ProfileOptionLatencyKey>,
+): Map<Long, Set<String>> {
+    val liveDownOptionIdsByProfileId =
+        liveDownOptionIds
+            .groupBy(ProfileOptionLatencyKey::profileId, ProfileOptionLatencyKey::optionId)
+            .mapValues { (_, values) -> values.toSet() }
+    return (rememberedDownOptionIdsByProfileId.keys + liveDownOptionIdsByProfileId.keys)
+        .associateWith { profileId ->
+            rememberedDownOptionIdsByProfileId[profileId].orEmpty() +
+                liveDownOptionIdsByProfileId[profileId].orEmpty()
+        }
+}
+
+private fun liveSmartProfileLatenciesByProfileId(
+    profileOptionLatencies: Map<ProfileOptionLatencyKey, Long>,
+): Map<Long, Map<String, Long>> =
+    profileOptionLatencies
+        .map { (key, latencyMs) -> key.profileId to (key.optionId to latencyMs) }
+        .groupBy({ it.first }, { it.second })
+        .mapValues { (_, values) -> values.toMap() }
+
+private fun liveSmartProfileLatencyUnavailableByProfileId(
+    profileOptionLatencyUnavailable: Set<ProfileOptionLatencyKey>,
+    liveLatenciesByProfileId: Map<Long, Map<String, Long>>,
+): Map<Long, Set<String>> =
+    profileOptionLatencyUnavailable
+        .groupBy(ProfileOptionLatencyKey::profileId, ProfileOptionLatencyKey::optionId)
+        .mapValues { (profileId, values) ->
+            values
+                .filterNot(liveLatenciesByProfileId[profileId].orEmpty()::containsKey)
+                .toSet()
+        }
+
+private fun mergedSmartProfileLatenciesByProfileId(
+    rememberedLatenciesByProfileId: Map<Long, Map<String, Long>>,
+    liveLatenciesByProfileId: Map<Long, Map<String, Long>>,
+    latencyUnavailableByProfileId: Map<Long, Set<String>>,
+): Map<Long, Map<String, Long>> =
+    (rememberedLatenciesByProfileId.keys + liveLatenciesByProfileId.keys + latencyUnavailableByProfileId.keys)
+        .associateWith { profileId ->
+            (rememberedLatenciesByProfileId[profileId].orEmpty() + liveLatenciesByProfileId[profileId].orEmpty())
+                .filterKeys { optionId -> optionId !in latencyUnavailableByProfileId[profileId].orEmpty() }
+        }
 
 private fun fastestProtocolOptionId(latenciesByOptionId: Map<String, Long>): String? =
     latenciesByOptionId

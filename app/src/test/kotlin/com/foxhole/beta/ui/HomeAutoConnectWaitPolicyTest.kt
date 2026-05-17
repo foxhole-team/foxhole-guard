@@ -237,12 +237,23 @@ class HomeAutoConnectWaitPolicyTest {
 
     @Test
     fun `auto connect retries high warmup latency before recording display latency`() {
-        assertFalse(shouldRetryAutoConnectLatencyMeasurement(899L))
-        assertTrue(shouldRetryAutoConnectLatencyMeasurement(900L))
+        assertFalse(shouldRetryAutoConnectLatencyMeasurement(349L))
+        assertTrue(shouldRetryAutoConnectLatencyMeasurement(350L))
         assertEquals(
             430L,
             resolveAutoConnectLatencyMeasurementResult(
                 warmupLatencyMs = 2_181L,
+                settledLatencyMs = 430L,
+            ),
+        )
+    }
+
+    @Test
+    fun `auto connect keeps lower warmup latency when settled retry is slower`() {
+        assertEquals(
+            380L,
+            resolveAutoConnectLatencyMeasurementResult(
+                warmupLatencyMs = 380L,
                 settledLatencyMs = 430L,
             ),
         )
@@ -316,13 +327,14 @@ class HomeAutoConnectWaitPolicyTest {
     }
 
     @Test
-    fun `runner keeps recommended attempts before fallback candidates`() {
+    fun `runner tries fresh leaders before saved recommended candidates`() {
         val vless = candidate("vless")
+        val outline = candidate("outline")
+        val wireguard = candidate("wireguard")
         val trojan = candidate("trojan")
-        val hysteria = candidate("hysteria")
         val state =
             SmartStartAutoConnectRunner.resolveState(
-                fullScanCandidates = listOf(vless, trojan, hysteria),
+                fullScanCandidates = listOf(vless, outline, wireguard, trojan),
                 enabledProtocolSetHash = "hash",
                 preference =
                 SmartProfilePreference(
@@ -331,11 +343,11 @@ class HomeAutoConnectWaitPolicyTest {
                     recommendedProtocolIds = listOf("trojan"),
                     enabledProtocolSetHash = "hash",
                 ),
-                rankedCandidates = listOf(score(vless), score(trojan), score(hysteria)),
+                rankedCandidates = listOf(score(vless), score(outline), score(wireguard), score(trojan)),
             )
 
         assertEquals(
-            listOf("trojan", "vless", "hysteria"),
+            listOf("vless", "outline", "trojan"),
             state.candidates.map(AutoConnectProbeCandidate::optionId),
         )
     }
