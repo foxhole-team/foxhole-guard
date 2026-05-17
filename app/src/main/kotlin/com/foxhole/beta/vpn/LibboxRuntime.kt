@@ -24,12 +24,12 @@ import com.foxhole.beta.core.diagnostics.DiagnosticSanitizer
 import com.foxhole.beta.core.diagnostics.DiagnosticsLogger
 import com.foxhole.beta.core.model.NetworkActivityEvent
 import com.foxhole.beta.core.model.VpnSession
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.net.InetAddress
 import java.net.NetworkInterface
@@ -56,6 +56,8 @@ internal data class NetworkActivityContext(
 )
 
 private const val ANDROID_ROUTE_EXCLUDE_LIMIT = 512
+private const val RUNTIME_FORCE_CLOSE_TIMEOUT_MS = 700L
+private val libboxRuntimeOperationMutex = Mutex()
 
 private fun sanitizedConfigFingerprint(configJson: String): String {
     val dnsLocal = "\"dns-local\""
@@ -108,14 +110,19 @@ private class ReflectiveLibboxRuntime(
     @Volatile
     private var currentDnsServerAddress: String? = null
 
-    override suspend fun start(session: VpnSession, host: RuntimeServiceHost): Result<Unit> {
+    override suspend fun start(session: VpnSession, host: RuntimeServiceHost): Result<Unit> =
+        libboxRuntimeOperationMutex.withLock {
+            startLocked(session = session, host = host)
+        }
+
+    private suspend fun startLocked(session: VpnSession, host: RuntimeServiceHost): Result<Unit> {
         var newServer: Any? = null
         return try {
             if (!reflection.isAvailable()) {
                 error(host.runtimeContext.getString(com.foxhole.beta.R.string.error_runtime_missing))
             }
             withContext(Dispatchers.IO) {
-                stop(
+                stopLocked(
                     RuntimeStopPolicy(
                         closeServiceTimeoutMs = 500L,
                         closeServerTimeoutMs = 500L,
@@ -197,6 +204,11 @@ private class ReflectiveLibboxRuntime(
         }
 
     override suspend fun stop(policy: RuntimeStopPolicy): RuntimeStopResult =
+        libboxRuntimeOperationMutex.withLock {
+            stopLocked(policy)
+        }
+
+    private suspend fun stopLocked(policy: RuntimeStopPolicy): RuntimeStopResult =
         withContext(Dispatchers.IO) {
             val startedAt = SystemClock.elapsedRealtime()
             diagnosticsLogger.recordStructured(
@@ -276,9 +288,9 @@ private class ReflectiveLibboxRuntime(
         defaultNetworkMonitor.stop()
         val tunClosed = closeTunFdNow()
         if (server != null) {
-            CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
-                runCatching { reflection.closeService(server) }
-                runCatching { reflection.closeServer(server) }
+            runBlocking {
+                runBlockingRuntimeClose(RUNTIME_FORCE_CLOSE_TIMEOUT_MS) { reflection.closeService(server) }
+                runBlockingRuntimeClose(RUNTIME_FORCE_CLOSE_TIMEOUT_MS) { reflection.closeServer(server) }
             }
         }
         diagnosticsLogger.recordStructured(

@@ -260,7 +260,8 @@ class HomeRuntimeBehaviorTest {
             FoxholeVpnRuntimeBridge.updateIpInfo(null)
         }
 
-        composeRule.waitUntil(timeoutMillis = 3_000) { textOfOrNull("home_network_primary_ip") == previousIp }
+        composeRule.waitUntil(timeoutMillis = 3_000) { textOfOrNull("home_network_primary_ip") == null }
+        composeRule.onNodeWithTag("home_network_loading").assertIsDisplayed()
         composeRule
             .onAllNodesWithText(
                 InstrumentationRegistry.getInstrumentation().targetContext.getString(R.string.home_network_unavailable),
