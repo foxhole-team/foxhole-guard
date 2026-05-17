@@ -198,7 +198,11 @@ internal fun FoxholeVpnService.scheduleValidationInternal(
     val job =
         scope.launch(Dispatchers.Main.immediate) {
             val validation = validateTunnelConnectivity(expectedFreshVpnNetworkHandle)
-            if (activeSession?.profileId != session.profileId) {
+            if (!activeSession.matchesRuntimeValidationSession(session)) {
+                container.diagnosticsLogger.record(
+                    "dns",
+                    "post-start probe ignored for stale session sessionId=${session.correlationId}",
+                )
                 return@launch
             }
             if (validation.isSuccess) {
@@ -281,9 +285,14 @@ internal suspend fun FoxholeVpnService.validateTunnelConnectivityInternal(
                     "dns",
                     "tunnel runtime proxy egress validation failed: ${runtimeProxyProbe.exceptionOrNull()?.message.orEmpty()}",
                 )
-                if (FoxholeVpnRuntimeBridge.snapshot.value.trafficMode == TrafficMode.TUNNEL) {
+                val settings = container.settingsRepository.current()
+                if (settings.requiresStrictRuntimeProxyIpRefresh(FoxholeVpnRuntimeBridge.snapshot.value)) {
                     throw (runtimeProxyProbe.exceptionOrNull() ?: IllegalStateException("runtime proxy egress failed"))
                 }
+                container.diagnosticsLogger.record(
+                    "dns",
+                    "runtime proxy egress failed; continuing with vpn-bound tunnel validation",
+                )
                 val requestNetwork = tunnelValidationRequestNetwork(vpnNetwork)
                 val resolverNetwork = currentUpstreamNetworkOrNull()
                 val androidValidatedEarly = isVpnNetworkValidated(vpnNetwork)
@@ -712,29 +721,62 @@ internal suspend fun FoxholeVpnService.retryValidatedTunnelConnectivityWithGrace
                 )
             }
         if (endpointProbe.isFailure) {
-            val dnsIndependentFallback =
-                runCatchingUnlessCancelled {
-                    probeDnsIndependentConnectivityFallback(
-                        callTimeoutMs = policy.callTimeoutMs,
-                        network = requestNetwork,
-                    )
-                }
             if (
-                dnsIndependentFallback.isSuccess &&
-                !acceptsTunnelValidationProbe(
-                    TunnelValidationProbeKind.DNS_INDEPENDENT_LITERAL_IP,
-                    validationPolicyContext,
+                tryAcceptGraceDnsIndependentFallback(
+                    vpnNetwork = vpnNetwork,
+                    requestNetwork = requestNetwork,
+                    policy = policy,
+                    validationPolicyContext = validationPolicyContext,
                 )
             ) {
-                container.diagnosticsLogger.record(
-                    "dns",
-                    "grace retry dns-independent probe passed but is not accepted as tunnel validation",
-                )
+                return@run Unit
             }
             throw (endpointProbe.exceptionOrNull() ?: IllegalStateException("connectivity probe failed"))
         }
         endpointProbe.getOrThrow()
         refreshValidatedTunnelIpInfoBestEffort(vpnNetwork)
+    }
+}
+
+private suspend fun FoxholeVpnService.tryAcceptGraceDnsIndependentFallback(
+    vpnNetwork: Network,
+    requestNetwork: Network?,
+    policy: TunnelValidationGracePolicy,
+    validationPolicyContext: TunnelValidationPolicyContext,
+): Boolean {
+    val dnsIndependentFallback =
+        runCatchingUnlessCancelled {
+            probeDnsIndependentConnectivityFallback(
+                callTimeoutMs = policy.callTimeoutMs,
+                network = requestNetwork,
+            )
+        }
+    return when {
+        dnsIndependentFallback.isFailure -> {
+            container.diagnosticsLogger.record(
+                "dns",
+                "grace retry dns-independent probe failed: ${dnsIndependentFallback.exceptionOrNull()?.message.orEmpty()}",
+            )
+            false
+        }
+        !acceptsTunnelValidationProbe(
+            TunnelValidationProbeKind.DNS_INDEPENDENT_LITERAL_IP,
+            validationPolicyContext,
+        ) -> {
+            container.diagnosticsLogger.record(
+                "dns",
+                "grace retry dns-independent probe passed but is not accepted as tunnel validation",
+            )
+            false
+        }
+        else -> {
+            container.diagnosticsLogger.record(
+                "dns",
+                "grace retry dns-independent probe accepted for strict private dns",
+            )
+            refreshValidatedTunnelIpInfoBestEffort(vpnNetwork)
+            true
+        }
     }
 }
 
@@ -819,7 +861,7 @@ internal suspend fun FoxholeVpnService.probeConnectivityEndpointsInternal(
     connectivityProbeEndpoints().forEach { endpoint ->
         var usedIpv4 = preferIpv4
         val result =
-            runCatching {
+            runCatchingUnlessCancelled {
                 if (preferIpv4) {
                     container.ipInfoRepository.probeIpv4(
                         endpoint = endpoint,
@@ -835,7 +877,7 @@ internal suspend fun FoxholeVpnService.probeConnectivityEndpointsInternal(
                         resolverNetwork = resolverNetwork,
                     )
                 }
-            }.recoverCatching {
+            }.recoverCatchingUnlessCancelled {
                 usedIpv4 = true
                 container.ipInfoRepository.probeIpv4(
                     endpoint = endpoint,
@@ -1029,7 +1071,7 @@ internal suspend fun FoxholeVpnService.probeConnectivityEndpointsOverLocalProxyI
     var lastFailure: Throwable? = null
     connectivityProbeEndpoints().forEach { endpoint ->
         val result =
-            runCatching {
+            runCatchingUnlessCancelled {
                 container.ipInfoRepository.probe(
                     endpoint = endpoint,
                     callTimeoutMs = callTimeoutMs,
@@ -1059,7 +1101,7 @@ internal suspend fun FoxholeVpnService.probeDnsIndependentConnectivityFallbackIn
     var lastFailure: Throwable? = null
     dnsIndependentConnectivityProbeTargets().forEach { target ->
         val result =
-            runCatching {
+            runCatchingUnlessCancelled {
                 probeSessionTarget(
                     target = target,
                     network = network,
@@ -1320,6 +1362,13 @@ internal fun FoxholeVpnService.onTunnelValidatedInternal(
     session: VpnSession,
     vpnNetwork: Network,
 ) {
+    if (!activeSession.matchesRuntimeValidationSession(session)) {
+        container.diagnosticsLogger.record(
+            "dns",
+            "validated tunnel ignored for stale session sessionId=${session.correlationId}",
+        )
+        return
+    }
     activeVpnNetworkHandle = vpnNetwork.networkHandle
     registerVpnNetworkCallbackIfNeeded()
     if (FoxholeVpnRuntimeBridge.snapshot.value.state != ConnectionState.CONNECTED) {
@@ -1327,6 +1376,12 @@ internal fun FoxholeVpnService.onTunnelValidatedInternal(
     }
     startGeoRefresh(vpnNetwork)
 }
+
+internal fun VpnSession?.matchesRuntimeValidationSession(session: VpnSession): Boolean =
+    this != null &&
+        profileId == session.profileId &&
+        correlationId == session.correlationId &&
+        protocolOptionId == session.protocolOptionId
 
 internal fun FoxholeVpnService.currentNotificationSnapshotInternal(): NotificationSnapshot {
     val connection = FoxholeVpnRuntimeBridge.snapshot.value

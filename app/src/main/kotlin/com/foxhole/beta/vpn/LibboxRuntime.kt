@@ -83,6 +83,7 @@ private fun sanitizedConfigFingerprint(configJson: String): String {
     }
 }
 
+@Suppress("LargeClass")
 private class ReflectiveLibboxRuntime(
     private val context: Context,
     private val diagnosticsLogger: DiagnosticsLogger,
@@ -237,12 +238,22 @@ private class ReflectiveLibboxRuntime(
         }
 
     override suspend fun stop(policy: RuntimeStopPolicy): RuntimeStopResult =
-        libboxRuntimeOperationMutex.withLock {
-            nextRuntimeGeneration("stop")
-            stopLocked(policy)
+        nextRuntimeGeneration("stop").let {
+            val preclosedTun =
+                if (policy.closeTunFdImmediately) {
+                    closeTunFdNow()
+                } else {
+                    null
+                }
+            libboxRuntimeOperationMutex.withLock {
+                stopLocked(policy, preclosedTun)
+            }
         }
 
-    private suspend fun stopLocked(policy: RuntimeStopPolicy): RuntimeStopResult =
+    private suspend fun stopLocked(
+        policy: RuntimeStopPolicy,
+        preclosedTun: Boolean? = null,
+    ): RuntimeStopResult =
         withContext(Dispatchers.IO) {
             val startedAt = SystemClock.elapsedRealtime()
             diagnosticsLogger.recordStructured(
@@ -256,7 +267,7 @@ private class ReflectiveLibboxRuntime(
             currentHost = null
             currentDnsServerAddress = null
             val tunClosed =
-                if (policy.closeTunFdImmediately) {
+                preclosedTun ?: if (policy.closeTunFdImmediately) {
                     closeTunFdNow()
                 } else {
                     fileDescriptorRef.get() == null
@@ -312,20 +323,46 @@ private class ReflectiveLibboxRuntime(
 
     override suspend fun forceKill(reason: String): RuntimeKillResult {
         nextRuntimeGeneration("kill:$reason")
-        return libboxRuntimeOperationMutex.withLock {
-            killLocked(reason)
+        val preclosedTun = closeTunFdNow()
+        if (libboxRuntimeOperationMutex.tryLock()) {
+            return try {
+                killRuntimeState(
+                    reason = reason,
+                    operationLockAcquired = true,
+                    preclosedTun = preclosedTun,
+                )
+            } finally {
+                libboxRuntimeOperationMutex.unlock()
+            }
         }
+        diagnosticsLogger.recordStructured(
+            "runtime",
+            "force_kill_lock_busy",
+            "reason=$reason",
+        )
+        return killRuntimeState(
+            reason = reason,
+            operationLockAcquired = false,
+            preclosedTun = preclosedTun,
+        )
     }
 
     private suspend fun killLocked(reason: String): RuntimeKillResult =
+        killRuntimeState(reason = reason, operationLockAcquired = true)
+
+    private suspend fun killRuntimeState(
+        reason: String,
+        operationLockAcquired: Boolean,
+        preclosedTun: Boolean? = null,
+    ): RuntimeKillResult =
         withContext(Dispatchers.IO) {
             val server = commandServerRef.getAndSet(null)
             currentConfig = null
             currentHost = null
             currentDnsServerAddress = null
             defaultNetworkMonitor.stop()
-            val tunClosed = closeTunFdNow()
-            var closeDetached = false
+            val tunClosed = preclosedTun ?: closeTunFdNow()
+            var closeDetached = !operationLockAcquired
             if (server != null) {
                 val serviceClosed =
                     closeNativeServerPart(
@@ -352,6 +389,7 @@ private class ReflectiveLibboxRuntime(
                 "server_detached=${server != null}",
                 "tun_closed=$tunClosed",
                 "close_detached=$closeDetached",
+                "operation_lock_acquired=$operationLockAcquired",
             )
             RuntimeKillResult(
                 reason = reason,
@@ -418,6 +456,7 @@ private class ReflectiveLibboxRuntime(
     override fun currentDnsServerAddress(): String? = currentDnsServerAddress
 
     private fun openTun(host: RuntimeServiceHost, tunOptions: Any): Int {
+        val generation = runtimeGeneration.get()
         if (!host.hasVpnPermission()) {
             error("android: missing vpn permission")
         }
@@ -502,6 +541,11 @@ private class ReflectiveLibboxRuntime(
         addHttpProxy(builder, tunOptions)
 
         val pfd = builder.establish() ?: error("android: vpn establish failed")
+        if (runtimeGeneration.get() != generation) {
+            runCatching { pfd.close() }
+                .onFailure { diagnosticsLogger.record("runtime", "superseded tun fd close failed") }
+            throw CancellationException("runtime generation superseded during tun establish")
+        }
         runCatching { fileDescriptorRef.getAndSet(pfd)?.close() }
             .onFailure { diagnosticsLogger.record("runtime", "previous tun fd close failed") }
         return pfd.fd
@@ -638,7 +682,7 @@ private class ReflectiveLibboxRuntime(
                     diagnosticsLogger.recordStructured(
                         "split",
                         "VPN package skipped",
-                        "package=$packageName",
+                        "package_hash=${listOf(packageName).stablePackageHash()}",
                         "reason=not_installed",
                     )
                 }
@@ -762,8 +806,10 @@ internal class DefaultNetworkMonitor(
         if (started) {
             return
         }
+        if (!register()) {
+            return
+        }
         started = true
-        register()
         if (currentNetwork == null) {
             currentNetwork = preferredNetwork()
         }
@@ -874,21 +920,27 @@ internal class DefaultNetworkMonitor(
 
     private fun isUpstreamNetwork(network: Network): Boolean = isNonVpnNetwork(connectivity, network)
 
-    private fun register() {
+    private fun register(): Boolean =
         runCatching {
             when {
                 Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> connectivity.registerBestMatchingNetworkCallback(request, callback, mainHandler)
                 else -> connectivity.registerNetworkCallback(request, callback, mainHandler)
             }
-        }.onFailure { error ->
-            diagnosticsLogger.record("libbox", "default network monitor registration failed: ${error.javaClass.simpleName}")
-            runCatching {
-                connectivity.registerDefaultNetworkCallback(callback, mainHandler)
-            }.onFailure {
-                diagnosticsLogger.record("libbox", "default network monitor fallback failed")
+        }.fold(
+            onSuccess = { true },
+            onFailure = { error ->
+                diagnosticsLogger.record("libbox", "default network monitor registration failed: ${error.javaClass.simpleName}")
+                runCatching {
+                    connectivity.registerDefaultNetworkCallback(callback, mainHandler)
+                }.fold(
+                    onSuccess = { true },
+                    onFailure = {
+                        diagnosticsLogger.record("libbox", "default network monitor fallback failed")
+                        false
+                    },
+                )
             }
-        }
-    }
+        )
 }
 
 internal fun isNonVpnNetwork(

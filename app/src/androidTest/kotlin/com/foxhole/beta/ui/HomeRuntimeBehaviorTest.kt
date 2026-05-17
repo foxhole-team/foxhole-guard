@@ -145,7 +145,13 @@ class HomeRuntimeBehaviorTest {
                 ),
             )
         }
-        Thread.sleep(HomeViewModel.CONNECTED_IP_REFRESH_DELAY_MS + 1_500L)
+        composeRule.waitUntil(timeoutMillis = 10_000) {
+            app().container.diagnosticsLogger.entries.value.any {
+                it.tag == "ip" &&
+                    it.message.contains("dashboard refresh started") &&
+                    it.message.contains("reason=post_connect")
+            }
+        }
         composeRule.runOnUiThread {
             viewModel.invalidateIpInfoRefreshes()
             app().container.diagnosticsLogger.clear()

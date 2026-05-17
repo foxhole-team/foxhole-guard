@@ -46,30 +46,32 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
     private val notificationManager by lazy { getSystemService<NotificationManager>()!! }
     private val mainHandler by lazy { Handler(Looper.getMainLooper()) }
     private val container: FoxholeRuntimeDependencies by lazy { (applicationContext as FoxholeApplication).appGraph }
-    private val runtime by lazy<VpnCoreRuntime> {
-        createVpnRuntime(
-            context = applicationContext,
-            diagnosticsLogger = container.diagnosticsLogger,
-            isNetworkActivityLoggingEnabled = { container.settingsRepository.settings.value.expert.networkActivityLogging },
-            networkActivityContext = {
-                activeSession
-                    ?.let { session -> NetworkActivityContext(profileId = session.profileId, sessionId = session.correlationId) }
-                    ?: NetworkActivityContext()
-            },
-            onNetworkActivityEvent = { event ->
-                scope.launch(Dispatchers.IO) {
-                    container.anomalyRepository.recordNetworkActivityEvent(event)
-                }
-            },
-        )
-    }
-    private val commandActor by lazy {
-        RuntimeCommandActor(
-            scope = scope,
-            diagnosticsLogger = container.diagnosticsLogger,
-            emergencyKill = runtime::forceKill,
-        )
-    }
+    private var runtimeInstance: VpnCoreRuntime? = null
+    private val runtime: VpnCoreRuntime
+        get() =
+            runtimeInstance ?: createVpnRuntime(
+                context = applicationContext,
+                diagnosticsLogger = container.diagnosticsLogger,
+                isNetworkActivityLoggingEnabled = { container.settingsRepository.settings.value.expert.networkActivityLogging },
+                networkActivityContext = {
+                    activeSession
+                        ?.let { session -> NetworkActivityContext(profileId = session.profileId, sessionId = session.correlationId) }
+                        ?: NetworkActivityContext()
+                },
+                onNetworkActivityEvent = { event ->
+                    scope.launch(Dispatchers.IO) {
+                        container.anomalyRepository.recordNetworkActivityEvent(event)
+                    }
+                },
+            ).also { runtimeInstance = it }
+    private var commandActorInstance: RuntimeCommandActor? = null
+    private val commandActor: RuntimeCommandActor
+        get() =
+            commandActorInstance ?: RuntimeCommandActor(
+                scope = scope,
+                diagnosticsLogger = container.diagnosticsLogger,
+                emergencyKill = { reason -> runtime.forceKill(reason) },
+            ).also { commandActorInstance = it }
     private val runtimeWakeLock by lazy {
         RuntimeWakeLock(
             context = applicationContext,
@@ -166,12 +168,14 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
         stopGeoRefresh()
         stopNotificationHealthMonitoring()
         cancelScheduledAutoReconnect(resetAttempts = true)
-        commandActor.close()
-        stopRuntimeAfterServiceDestroy(
-            runtime = runtime,
-            diagnosticsLogger = container.diagnosticsLogger,
-            owner = "proxy",
-        )
+        commandActorInstance?.close()
+        runtimeInstance?.let { runtime ->
+            stopRuntimeAfterServiceDestroy(
+                runtime = runtime,
+                diagnosticsLogger = container.diagnosticsLogger,
+                owner = "proxy",
+            )
+        }
         runtimeWakeLock.release()
         if (hadActiveRuntime) {
             container.diagnosticsLogger.record(

@@ -46,6 +46,16 @@ import kotlinx.coroutines.withTimeoutOrNull
 private const val SMART_START_SUBSCRIPTION_REFRESH_CALL_TIMEOUT_MS = 4_000L
 private const val SMART_START_SUBSCRIPTION_REFRESH_MAX_ATTEMPTS = 20
 
+@Suppress("TooGenericExceptionCaught")
+private suspend inline fun <T> runCatchingUnlessCancelled(crossinline block: suspend () -> T): Result<T> =
+    try {
+        Result.success(block())
+    } catch (cancelled: CancellationException) {
+        throw cancelled
+    } catch (error: Throwable) {
+        Result.failure(error)
+    }
+
 internal fun HomeViewModel.onAutoConnectActiveProfileInternal() {
     val state = uiState.value
     val profile = mobileNetworkProfileOverride(state) ?: state.activeProfile
@@ -257,7 +267,7 @@ private suspend fun HomeViewModel.refreshSubscriptionBeforeSmartStartIfNeeded(pr
             )
             return container.profileRepository.getProfile(profile.id) ?: profile
         }
-        runCatching {
+        runCatchingUnlessCancelled {
             container.profileRepository.refreshProfile(
                 profileId = profile.id,
                 callTimeoutMs = SMART_START_SUBSCRIPTION_REFRESH_CALL_TIMEOUT_MS.coerceAtMost(remainingBudgetMs),
@@ -1144,7 +1154,7 @@ internal suspend fun HomeViewModel.probeAutoConnectCandidateInternal(
             fallbackAt = outcomeRecordedAt,
         )
     val measuredLatency =
-        runCatching { measureAutoConnectCandidateLatency() }
+        runCatchingUnlessCancelled { measureAutoConnectCandidateLatency() }
             .onFailure { probeError ->
                 container.diagnosticsLogger.record(
                     "auto-connect",
@@ -1202,7 +1212,7 @@ private suspend fun HomeViewModel.measureAndCacheProtocolServerPing(
         container.diagnosticsLogger.record("latency", "server ping skipped: unsupported for udp transport")
         return
     }
-    runCatching {
+    runCatchingUnlessCancelled {
         container.connectionController.measureCurrentVpnServerPing(
             profileId = profileId,
             protocolOptionId = optionId,
@@ -1236,7 +1246,7 @@ internal suspend fun HomeViewModel.measureAutoConnectCandidateLatency(): Long {
     }
     delay(HomeViewModel.AUTO_CONNECT_LATENCY_MEASUREMENT_RETRY_DELAY_MS)
     val settledLatencyMs =
-        runCatching { container.connectionController.measureCurrentConnectionLatency() }
+        runCatchingUnlessCancelled { container.connectionController.measureCurrentConnectionLatency() }
             .onFailure { error ->
                 container.diagnosticsLogger.record(
                     "auto-connect",
@@ -1731,7 +1741,7 @@ internal fun HomeViewModel.scheduleActiveProfileLatencyRefreshInternal(showLoadi
                             fallbackProtocolHint = selectedProtocolHint,
                         ) ?: return@launch
                     val latencyResult =
-                        runCatching {
+                        runCatchingUnlessCancelled {
                             withTimeoutOrNull(HomeViewModel.CONNECTED_LATENCY_TIMEOUT_MS) {
                                 container.connectionController.measureCurrentConnectionLatency()
                             } ?: error("dashboard latency timed out")
@@ -1772,7 +1782,7 @@ internal fun HomeViewModel.scheduleActiveProfileLatencyRefreshInternal(showLoadi
                         waitingForInitialSample = clearDashboardMetricsLoadingAfterInitialSample(waitingForInitialSample)
                         continue
                     }
-                    runCatching {
+                    runCatchingUnlessCancelled {
                         withTimeoutOrNull(HomeViewModel.CONNECTED_SERVER_PING_TIMEOUT_MS) {
                             container.connectionController.measureCurrentVpnServerPing(
                                 profileId = refreshTarget.profile.id,
