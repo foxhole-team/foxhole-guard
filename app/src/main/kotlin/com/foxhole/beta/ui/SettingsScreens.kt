@@ -75,6 +75,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -340,6 +341,7 @@ private fun SettingsSecurityRoutingNavigationGroup(
     onOpenRoutingSites: () -> Unit,
     onOpenPrivacyRoute: () -> Unit,
 ) {
+    val torRouteIcon = ImageVector.vectorResource(R.drawable.ic_tor_route)
     SettingsNavigationGroup {
         SettingsGroupedNavigationRow(
             modifier = Modifier.testTag("settings_security_action"),
@@ -367,7 +369,7 @@ private fun SettingsSecurityRoutingNavigationGroup(
         SettingsGroupDivider()
         SettingsGroupedNavigationRow(
             modifier = Modifier.testTag("settings_privacy_route_action"),
-            icon = Icons.Outlined.VpnKey,
+            icon = torRouteIcon,
             title = stringResource(R.string.privacy_route_title),
             summary = stringResource(R.string.privacy_route_summary),
             summaryMaxLines = Int.MAX_VALUE,
@@ -1255,6 +1257,7 @@ fun PrivacyRouteSettingsScreen(
     onPrivacyRouteSelectedPackagesChanged: (List<String>) -> Unit,
 ) {
     var privacyRouteScopeMenuExpanded by rememberSaveable { mutableStateOf(false) }
+    val torRouteIcon = ImageVector.vectorResource(R.drawable.ic_tor_route)
     val selectedPackages = state.settings.privacyRoute.selectedPackages
     val selectedPackageSet = selectedPackages.toSet()
     val selectedApps =
@@ -1270,7 +1273,7 @@ fun PrivacyRouteSettingsScreen(
             SettingsHelpAction(
                 title = stringResource(R.string.privacy_route_title),
                 body = stringResource(R.string.privacy_route_info_body),
-                icon = Icons.Outlined.VpnKey,
+                icon = torRouteIcon,
             )
         },
     ) {
@@ -1289,7 +1292,7 @@ fun PrivacyRouteSettingsScreen(
                         )
                     },
                     summary = stringResource(R.string.privacy_route_summary),
-                    leadingIcon = Icons.Outlined.VpnKey,
+                    leadingIcon = torRouteIcon,
                     summaryMaxLines = 3,
                     grouped = true,
                 )
