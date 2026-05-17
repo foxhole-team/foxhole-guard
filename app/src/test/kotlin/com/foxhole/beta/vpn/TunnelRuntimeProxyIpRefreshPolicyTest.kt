@@ -1,0 +1,62 @@
+package com.foxhole.beta.vpn
+
+import com.foxhole.beta.core.model.ConnectionSnapshot
+import com.foxhole.beta.core.model.ConnectionState
+import com.foxhole.beta.core.model.PrivacyRouteMode
+import com.foxhole.beta.core.model.PrivacyRouteScope
+import com.foxhole.beta.core.model.PrivacyRouteSettings
+import com.foxhole.beta.core.model.ProtocolHint
+import com.foxhole.beta.core.model.Settings
+import com.foxhole.beta.core.model.TrafficMode
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+class TunnelRuntimeProxyIpRefreshPolicyTest {
+    @Test
+    fun `tor-only route requires runtime proxy ip refresh`() {
+        val snapshot =
+            ConnectionSnapshot(
+                state = ConnectionState.CONNECTED,
+                trafficMode = TrafficMode.TUNNEL,
+                profileId = FoxholeVpnService.TOR_ONLY_PROFILE_ID,
+            )
+
+        assertTrue(Settings().requiresStrictRuntimeProxyIpRefresh(snapshot))
+    }
+
+    @Test
+    fun `tor over vpn selected apps requires runtime proxy ip refresh for udp-backed vpn`() {
+        val settings =
+            Settings(
+                privacyRoute =
+                    PrivacyRouteSettings(
+                        mode = PrivacyRouteMode.TOR_OVER_VPN,
+                        scope = PrivacyRouteScope.SELECTED_APPS,
+                        selectedPackages = listOf("org.tor.browser"),
+                    ),
+            )
+        val snapshot =
+            ConnectionSnapshot(
+                state = ConnectionState.CONNECTED,
+                trafficMode = TrafficMode.TUNNEL,
+                profileId = 42L,
+                protocolHint = ProtocolHint.HYSTERIA2,
+            )
+
+        assertTrue(settings.requiresStrictRuntimeProxyIpRefresh(snapshot))
+    }
+
+    @Test
+    fun `normal vpn does not require strict runtime proxy ip refresh`() {
+        val snapshot =
+            ConnectionSnapshot(
+                state = ConnectionState.CONNECTED,
+                trafficMode = TrafficMode.TUNNEL,
+                profileId = 42L,
+                protocolHint = ProtocolHint.VLESS,
+            )
+
+        assertFalse(Settings().requiresStrictRuntimeProxyIpRefresh(snapshot))
+    }
+}

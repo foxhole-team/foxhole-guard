@@ -777,9 +777,13 @@ internal suspend fun FoxholeVpnService.refreshValidatedTunnelIpInfoBestEffortInt
             remoteDnsServers = remoteDnsServers,
         )
     }.recoverCatchingUnlessCancelled { primaryError ->
+        val settings = container.settingsRepository.current()
+        if (settings.requiresStrictRuntimeProxyIpRefresh(FoxholeVpnRuntimeBridge.snapshot.value)) {
+            throw primaryError
+        }
         val requestNetwork = tunnelValidationRequestNetwork(vpnNetwork)
         val resolverNetwork = currentUpstreamNetworkOrNull()
-        val endpoint = container.settingsRepository.current().connection.ipInfoEndpoint
+        val endpoint = settings.connection.ipInfoEndpoint
         val remoteDnsServers = VpnDnsServerSelector.remoteDnsServerAddresses(activeSession?.configJson)
         val ipv4Info =
             container.ipInfoRepository.fetchIpv4(

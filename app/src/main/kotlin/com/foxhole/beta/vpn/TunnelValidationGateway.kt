@@ -14,7 +14,6 @@ import com.foxhole.beta.core.model.PrivacyRouteMode
 import com.foxhole.beta.core.model.PrivacyRouteScope
 import com.foxhole.beta.core.model.Settings
 import com.foxhole.beta.core.model.TrafficMode
-import com.foxhole.beta.core.model.isUdpTransport
 import com.foxhole.beta.core.network.HttpProxyAccess
 import com.foxhole.beta.core.network.IpInfoFetchMode
 import com.foxhole.beta.core.network.IpInfoRepository
@@ -335,12 +334,11 @@ internal class TunnelValidationGateway(
     }
 }
 
-private fun Settings.requiresStrictRuntimeProxyIpRefresh(snapshot: ConnectionSnapshot): Boolean =
+internal fun Settings.requiresStrictRuntimeProxyIpRefresh(snapshot: ConnectionSnapshot): Boolean =
     snapshot.profileId == FoxholeVpnService.TOR_ONLY_PROFILE_ID ||
         (
             privacyRoute.mode == PrivacyRouteMode.TOR_OVER_VPN &&
                 traffic.mode == TrafficMode.TUNNEL &&
-                (privacyRoute.bypassVpnTunnel || snapshot.protocolHint?.isUdpTransport() != true) &&
                 when (privacyRoute.scope) {
                     PrivacyRouteScope.ALL_APPS -> true
                     PrivacyRouteScope.SELECTED_APPS -> privacyRoute.selectedPackages.any(String::isNotBlank)

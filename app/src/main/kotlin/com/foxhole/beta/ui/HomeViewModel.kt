@@ -722,6 +722,9 @@ class HomeViewModel(
         if (cancelReconnectConnection(state)) {
             return
         }
+        if (toggleStandaloneRuntimeConnection(state)) {
+            return
+        }
         val activeProfile = state.activeProfile
         if (activeProfile == null) {
             handleToggleWithoutActiveProfile(state)
@@ -752,6 +755,14 @@ class HomeViewModel(
         reconnectJob?.cancel()
         reconnectJob = null
         reconnectInProgressMutable.value = false
+        container.connectionController.disconnect(suppressLocalGuard = false)
+        return true
+    }
+
+    private fun toggleStandaloneRuntimeConnection(state: HomeUiState): Boolean {
+        if (state.activeProfile != null || !state.connection.isPrimaryConnectionRuntime()) {
+            return false
+        }
         container.connectionController.disconnect(suppressLocalGuard = false)
         return true
     }
