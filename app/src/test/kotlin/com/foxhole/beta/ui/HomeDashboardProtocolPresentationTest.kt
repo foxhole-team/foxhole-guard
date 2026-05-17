@@ -740,7 +740,7 @@ class HomeDashboardProtocolPresentationTest {
     }
 
     @Test
-    fun `dashboard down status wins over stale remembered latency`() {
+    fun `dashboard live latency wins over stale down status`() {
         val resolved =
             resolveDashboardLatencyPresentation(
                 HomeRouteUiState(
@@ -761,8 +761,61 @@ class HomeDashboardProtocolPresentationTest {
                 ),
             )
 
+        assertEquals(426L, resolved.latencyMs)
+        assertFalse(resolved.isDown)
+        assertFalse(resolved.isUnavailable)
+    }
+
+    @Test
+    fun `dashboard down status is shown after refresh when no live latency is available`() {
+        val resolved =
+            resolveDashboardLatencyPresentation(
+                HomeRouteUiState(
+                    activeProfile =
+                        profile(
+                            selectedProtocolOptionId = "outline",
+                            protocolOptions = listOf(option("outline", ProtocolHint.OUTLINE)),
+                        ),
+                    connection =
+                        ConnectionSnapshot(
+                            state = ConnectionState.CONNECTED,
+                            profileId = 1L,
+                            protocolHint = ProtocolHint.OUTLINE,
+                        ),
+                    protocolDownOptionIds = setOf("outline"),
+                ),
+            )
+
         assertNull(resolved.latencyMs)
         assertTrue(resolved.isDown)
+        assertFalse(resolved.isUnavailable)
+    }
+
+    @Test
+    fun `dashboard latency waits instead of showing down while selected protocol refreshes`() {
+        val resolved =
+            resolveDashboardLatencyPresentation(
+                HomeRouteUiState(
+                    activeProfile =
+                        profile(
+                            selectedProtocolOptionId = "outline",
+                            protocolOptions = listOf(option("outline", ProtocolHint.OUTLINE)),
+                        ),
+                    connection =
+                        ConnectionSnapshot(
+                            state = ConnectionState.CONNECTED,
+                            profileId = 1L,
+                            protocolHint = ProtocolHint.OUTLINE,
+                        ),
+                    protocolMetricsRefreshing = true,
+                    protocolMetricsRefreshingOptionId = "outline",
+                    protocolDownOptionIds = setOf("outline"),
+                    selectedProtocolLatencyUnavailable = true,
+                ),
+            )
+
+        assertNull(resolved.latencyMs)
+        assertFalse(resolved.isDown)
         assertFalse(resolved.isUnavailable)
     }
 

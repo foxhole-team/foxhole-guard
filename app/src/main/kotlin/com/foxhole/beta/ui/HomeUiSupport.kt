@@ -328,24 +328,48 @@ internal fun resolveHomeDashboardProtocolModel(state: HomeRouteUiState): HomeDas
                         }?.let { latencyMs -> option.optionId to latencyMs }
                 }.toMap()
     val activeConnectedAutoConnectOptionId = state.activeConnectedAutoConnectOptionId()
+    val refreshingOptionId =
+        state.protocolMetricsRefreshingOptionId.takeIf {
+            state.protocolMetricsRefreshing
+        }
+    val refreshingProbeOptionIds =
+        if (state.protocolMetricsRefreshing) {
+            state.autoConnect.options.map(AutoConnectProbeOptionUiState::optionId).toSet()
+        } else {
+            emptySet()
+        }
+    val autoConnectFailedOptionIds =
+        if (state.protocolMetricsRefreshing) {
+            emptySet()
+        } else {
+            state.autoConnect.options
+                .filter { option -> option.status == AutoConnectProbeStatus.FAILED }
+                .map(AutoConnectProbeOptionUiState::optionId)
+                .toSet()
+        }
     val downOptionIds =
         (
-            state.protocolDownOptionIds +
-                state.autoConnect.options
-                    .filter { option -> option.status == AutoConnectProbeStatus.FAILED }
-                    .map(AutoConnectProbeOptionUiState::optionId)
-                    .toSet()
+            (state.protocolDownOptionIds - refreshingProbeOptionIds) +
+                autoConnectFailedOptionIds
             ).withoutOption(activeConnectedAutoConnectOptionId)
+            .withoutOption(refreshingOptionId)
+    val autoConnectUnavailableOptionIds =
+        if (state.protocolMetricsRefreshing) {
+            emptySet()
+        } else {
+            state.autoConnect.options
+                .filter { option ->
+                    option.status in setOf(AutoConnectProbeStatus.SUCCESS, AutoConnectProbeStatus.WINNER) &&
+                        option.latencyUnavailable
+                }.map(AutoConnectProbeOptionUiState::optionId)
+                .toSet()
+        }
     val latencyUnavailableOptionIds =
         (
-            state.protocolLatencyUnavailableOptionIds +
-                state.autoConnect.options
-                    .filter { option ->
-                        option.status in setOf(AutoConnectProbeStatus.SUCCESS, AutoConnectProbeStatus.WINNER) &&
-                            option.latencyUnavailable
-                    }.map(AutoConnectProbeOptionUiState::optionId)
-                    .toSet()
+            (state.protocolLatencyUnavailableOptionIds - refreshingProbeOptionIds) +
+                autoConnectUnavailableOptionIds
             ).withoutOption(activeConnectedAutoConnectOptionId)
+            .withoutOption(refreshingOptionId)
     val latencyPresentation = resolveDashboardLatencyPresentation(state)
     val protocolPresentation =
         resolveHomeDashboardProtocolPresentation(
@@ -871,41 +895,68 @@ internal fun shouldRenderDashboardConnectionDetails(
 
 internal fun resolveDashboardLatencyPresentation(state: HomeRouteUiState): HomeDashboardLatencyPresentation {
     if (state.autoConnect.running && !state.protocolMetricsRefreshing) {
-        val currentOption =
-            state.autoConnect.options.firstOrNull { option ->
-                option.optionId == state.autoConnect.currentOptionId
-            }
-        if (currentOption?.status == AutoConnectProbeStatus.FAILED) {
-            return HomeDashboardLatencyPresentation(isDown = true)
-        }
-        if (currentOption?.status in setOf(AutoConnectProbeStatus.SUCCESS, AutoConnectProbeStatus.WINNER)) {
-            currentOption?.latencyMs?.let { latencyMs ->
-                return HomeDashboardLatencyPresentation(latencyMs = latencyMs)
-            }
-            if (currentOption?.latencyUnavailable == true) {
-                return HomeDashboardLatencyPresentation(isUnavailable = true)
-            }
-        }
+        return autoConnectDashboardLatencyPresentation(state.autoConnect)
+    }
+    if (state.connection.state !in DASHBOARD_LATENCY_ACTIVE_STATES) {
         return HomeDashboardLatencyPresentation()
     }
-    return if (state.connection.state in setOf(ConnectionState.CONNECTED, ConnectionState.CONNECTING, ConnectionState.RECONNECTING)) {
-        val selectedOptionId = resolveDashboardLatencyOptionId(state.activeProfile, state.connection)
-        val rememberedLatencyMs = selectedOptionId?.let(state.smartStartRememberedLatenciesByOptionId::get)
-        when {
-            selectedOptionId != null && selectedOptionId in state.protocolDownOptionIds ->
-                HomeDashboardLatencyPresentation(isDown = true)
-            state.selectedProtocolLatencyMs != null ->
-                HomeDashboardLatencyPresentation(latencyMs = state.selectedProtocolLatencyMs)
-            rememberedLatencyMs != null ->
-                HomeDashboardLatencyPresentation(latencyMs = rememberedLatencyMs)
-            state.selectedProtocolLatencyUnavailable ->
-                HomeDashboardLatencyPresentation(isUnavailable = true)
-            else -> HomeDashboardLatencyPresentation()
+    return connectedDashboardLatencyPresentation(state)
+}
+
+private fun autoConnectDashboardLatencyPresentation(autoConnect: AutoConnectUiState): HomeDashboardLatencyPresentation {
+    val currentOption =
+        autoConnect.options.firstOrNull { option ->
+            option.optionId == autoConnect.currentOptionId
         }
-    } else {
-        HomeDashboardLatencyPresentation()
+    val latencyMs = currentOption?.latencyMs
+    return when {
+        currentOption?.status == AutoConnectProbeStatus.FAILED ->
+            HomeDashboardLatencyPresentation(isDown = true)
+        currentOption?.status in DASHBOARD_LATENCY_SUCCESS_STATES && latencyMs != null ->
+            HomeDashboardLatencyPresentation(latencyMs = latencyMs)
+        currentOption?.status in DASHBOARD_LATENCY_SUCCESS_STATES && currentOption?.latencyUnavailable == true ->
+            HomeDashboardLatencyPresentation(isUnavailable = true)
+        else -> HomeDashboardLatencyPresentation()
     }
 }
+
+private fun connectedDashboardLatencyPresentation(state: HomeRouteUiState): HomeDashboardLatencyPresentation {
+    val selectedOptionId = resolveDashboardLatencyOptionId(state.activeProfile, state.connection)
+    val rememberedLatencyMs = selectedOptionId?.let(state.smartStartRememberedLatenciesByOptionId::get)
+    return when {
+        state.selectedProtocolLatencyMs != null ->
+            HomeDashboardLatencyPresentation(latencyMs = state.selectedProtocolLatencyMs)
+        state.selectedProtocolRefreshing(selectedOptionId) -> HomeDashboardLatencyPresentation()
+        selectedOptionId != null && selectedOptionId in state.protocolDownOptionIds ->
+            HomeDashboardLatencyPresentation(isDown = true)
+        rememberedLatencyMs != null ->
+            HomeDashboardLatencyPresentation(latencyMs = rememberedLatencyMs)
+        state.selectedProtocolLatencyUnavailable ->
+            HomeDashboardLatencyPresentation(isUnavailable = true)
+        else -> HomeDashboardLatencyPresentation()
+    }
+}
+
+private fun HomeRouteUiState.selectedProtocolRefreshing(selectedOptionId: String?): Boolean =
+    protocolMetricsRefreshing &&
+        selectedOptionId != null &&
+        (
+            protocolMetricsRefreshingOptionId == null ||
+                protocolMetricsRefreshingOptionId == selectedOptionId
+            )
+
+private val DASHBOARD_LATENCY_ACTIVE_STATES =
+    setOf(
+        ConnectionState.CONNECTED,
+        ConnectionState.CONNECTING,
+        ConnectionState.RECONNECTING,
+    )
+
+private val DASHBOARD_LATENCY_SUCCESS_STATES =
+    setOf(
+        AutoConnectProbeStatus.SUCCESS,
+        AutoConnectProbeStatus.WINNER,
+    )
 
 internal fun resolveDashboardSelectedLatencyMs(state: HomeRouteUiState): Long? =
     resolveDashboardLatencyPresentation(state).latencyMs

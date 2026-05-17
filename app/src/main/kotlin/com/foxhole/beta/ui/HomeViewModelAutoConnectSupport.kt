@@ -706,7 +706,6 @@ internal fun HomeViewModel.refreshSmartProfileMetricsInternal(profileId: Long) {
                 val enabledProtocolSetHash =
                     smartStartEnabledProtocolSetHash(candidates.map(AutoConnectProbeCandidate::optionId))
                 selectedOptionId = resolveDashboardLatencyOptionId(profile)
-                recommendedProtocolMutable.value = null
                 protocolMetricsRefreshingOptionIdByProfileIdMutable.value =
                     protocolMetricsRefreshingOptionIdByProfileIdMutable.value +
                     (profileId to candidates.first().optionId)

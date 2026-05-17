@@ -115,6 +115,56 @@ class HomeDashboardPresentationTest {
     }
 
     @Test
+    fun `protocol model suppresses transient down states while smart profile refresh is running`() {
+        val state =
+            HomeRouteUiState(
+                activeProfile = smartProfile(),
+                connection =
+                    ConnectionSnapshot(
+                        state = ConnectionState.CONNECTED,
+                        profileId = 1L,
+                        protocolHint = ProtocolHint.VLESS,
+                        protocolOptionId = "vless",
+                    ),
+                protocolMetricsRefreshing = true,
+                protocolMetricsRefreshingOptionId = "trojan",
+                protocolDownOptionIds = setOf("vless", "trojan", "wg"),
+                protocolLatencyUnavailableOptionIds = setOf("trojan"),
+                autoConnect =
+                    AutoConnectUiState(
+                        running = true,
+                        currentOptionId = "trojan",
+                        options =
+                            listOf(
+                                AutoConnectProbeOptionUiState(
+                                    optionId = "vless",
+                                    displayName = "VLESS",
+                                    protocolHint = ProtocolHint.VLESS,
+                                    status = AutoConnectProbeStatus.FAILED,
+                                ),
+                                AutoConnectProbeOptionUiState(
+                                    optionId = "trojan",
+                                    displayName = "Trojan",
+                                    protocolHint = ProtocolHint.TROJAN,
+                                    status = AutoConnectProbeStatus.FAILED,
+                                ),
+                                AutoConnectProbeOptionUiState(
+                                    optionId = "wg",
+                                    displayName = "WireGuard",
+                                    protocolHint = ProtocolHint.WIREGUARD,
+                                    status = AutoConnectProbeStatus.FAILED,
+                                ),
+                            ),
+                    ),
+            )
+
+        val model = resolveHomeDashboardProtocolModel(state)
+
+        assertEquals(emptySet<String>(), model.downOptionIds)
+        assertEquals(emptySet<String>(), model.latencyUnavailableOptionIds)
+    }
+
+    @Test
     fun `protocol model shows latency loading during reconnect before metrics refresh starts`() {
         val model =
             resolveHomeDashboardProtocolModel(

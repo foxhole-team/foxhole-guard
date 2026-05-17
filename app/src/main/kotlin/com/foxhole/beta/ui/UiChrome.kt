@@ -40,6 +40,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
@@ -103,6 +104,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
@@ -253,6 +255,7 @@ internal fun FoxholeScaffold(
 ) {
     val topBarContainerColor = Color.Transparent
     val statusTopPadding = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    val navigationBottomPadding = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val contentTopPadding = statusTopPadding + FoxholeTopChromeHeight
     val resolvedTopBannerPadding =
         if (bannerTopPadding > contentTopPadding) {
@@ -310,7 +313,7 @@ internal fun FoxholeScaffold(
                             Modifier
                                 .align(Alignment.BottomCenter)
                                 .padding(horizontal = ScreenHorizontalPadding)
-                                .padding(bottom = bannerBottomPadding)
+                                .padding(bottom = bannerBottomPadding + navigationBottomPadding)
                     }
                 FoxholeBannerHost(
                     snackbarHostState = snackbarHostState,
@@ -580,13 +583,7 @@ private fun FoxholeBanner(
             FoxholeBannerTone.ERROR -> FoxholeErrorAccent.copy(alpha = 0.96f)
             FoxholeBannerTone.SUCCESS -> FoxholePositiveAccent.copy(alpha = 0.96f)
         }
-    val contentColor =
-        when (tone) {
-            FoxholeBannerTone.INFO -> Color(0xFF111418)
-            FoxholeBannerTone.ERROR,
-            FoxholeBannerTone.SUCCESS,
-            -> Color.White
-        }
+    val contentColor = readableBannerContentColor(containerColor)
     val icon =
         when (tone) {
             FoxholeBannerTone.INFO -> Icons.Outlined.Info
@@ -651,14 +648,17 @@ private fun FoxholeBanner(
                     overflow = TextOverflow.Ellipsis,
                 )
                 visuals?.actionLabel?.let { label ->
-                    IconButton(
+                    TextButton(
                         onClick = data::performAction,
-                        modifier = Modifier.size(28.dp),
+                        modifier = Modifier.heightIn(min = 32.dp),
                     ) {
-                        Icon(
-                            imageVector = Icons.Outlined.Check,
-                            contentDescription = label,
-                            tint = contentColor,
+                        Text(
+                            text = label,
+                            color = contentColor,
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
                         )
                     }
                 }
@@ -687,6 +687,15 @@ private fun FoxholeBanner(
         }
     }
 }
+
+private fun readableBannerContentColor(containerColor: Color): Color =
+    if (containerColor.luminance() >= FOXHOLE_BANNER_LIGHT_CONTAINER_LUMINANCE) {
+        Color(0xFF111418)
+    } else {
+        Color.White
+    }
+
+private const val FOXHOLE_BANNER_LIGHT_CONTAINER_LUMINANCE = 0.45f
 
 @Composable
 internal fun FoxholeLazyScaffold(

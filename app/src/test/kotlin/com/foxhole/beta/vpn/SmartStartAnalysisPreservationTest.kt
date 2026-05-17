@@ -2,6 +2,7 @@ package com.foxhole.beta.vpn
 
 import com.foxhole.beta.core.model.ConnectionSnapshot
 import com.foxhole.beta.core.model.ConnectionState
+import com.foxhole.beta.core.model.TrafficMode
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -53,5 +54,39 @@ class SmartStartAnalysisPreservationTest {
                 preserveSmartStartAnalysis = false,
             ).message,
         )
+    }
+
+    @Test
+    fun `smart start analysis window does not publish app owned ip as dashboard route ip`() {
+        val snapshot =
+            ConnectionSnapshot(
+                state = ConnectionState.IDLE,
+                trafficMode = TrafficMode.TUNNEL,
+                message = "Analysis",
+                isSmartStartConnection = true,
+            )
+
+        val publish =
+            shouldPublishAppOwnedIpInfoForSnapshot(
+                snapshot = snapshot,
+                analysisStatus = "Analysis",
+            )
+
+        assertFalse(publish)
+    }
+
+    @Test
+    fun `ordinary idle state may publish app owned ip`() {
+        val publish =
+            shouldPublishAppOwnedIpInfoForSnapshot(
+                snapshot =
+                ConnectionSnapshot(
+                    state = ConnectionState.IDLE,
+                    trafficMode = TrafficMode.TUNNEL,
+                ),
+                analysisStatus = "Analysis",
+            )
+
+        assertTrue(publish)
     }
 }

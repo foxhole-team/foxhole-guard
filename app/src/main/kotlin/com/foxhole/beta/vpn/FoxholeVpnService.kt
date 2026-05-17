@@ -1471,9 +1471,10 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
 
     internal fun shouldPublishAppOwnedIpInfo(): Boolean {
         val snapshot = FoxholeVpnRuntimeBridge.snapshot.value
-        return snapshot.state !in ACTIVE_CONNECTION_STATES ||
-            snapshot.trafficMode != TrafficMode.TUNNEL ||
-            snapshot.profileId == LOCAL_GUARD_PROFILE_ID
+        return shouldPublishAppOwnedIpInfoForSnapshot(
+            snapshot = snapshot,
+            analysisStatus = getString(R.string.notification_status_analysis),
+        )
     }
 
     internal fun isVpnNetworkValidated(network: Network): Boolean = isVpnNetworkValidatedInternal(network)
