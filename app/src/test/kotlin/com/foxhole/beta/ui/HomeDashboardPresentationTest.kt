@@ -31,6 +31,22 @@ import org.junit.Test
 @Suppress("LargeClass")
 class HomeDashboardPresentationTest {
     @Test
+    fun `primary action stays stop while reconnecting even if reconnect is required`() {
+        assertEquals(
+            HomePrimaryAction.STOP,
+            homePrimaryAction(ConnectionState.RECONNECTING, reconnectRequired = true),
+        )
+        assertEquals(
+            HomePrimaryAction.STOP,
+            homePrimaryAction(ConnectionState.CONNECTING, reconnectRequired = true),
+        )
+        assertEquals(
+            HomePrimaryAction.RECONNECT,
+            homePrimaryAction(ConnectionState.CONNECTED, reconnectRequired = true),
+        )
+    }
+
+    @Test
     fun `protocol model merges remembered current and running smart start metrics`() {
         val state =
             HomeRouteUiState(

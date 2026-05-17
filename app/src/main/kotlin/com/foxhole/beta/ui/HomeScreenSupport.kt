@@ -109,7 +109,7 @@ internal val HomePrimaryActionHeight = 56.dp
 internal val HomeTriangleIndicatorSize = 15.dp
 internal val HomeDashboardBannerTopPadding = 74.dp
 internal val HomeConnectingStatusSignalOffset = 3.dp
-internal val HomeNetworkContentHeight = 82.dp
+internal val HomeNetworkContentHeight = 96.dp
 internal val HomeDashboardProfileContentHeight = 62.dp
 private val HomeNetworkValueLoadingWidth = 68.dp
 private val HomeNetworkMetricValueLoadingWidth = 54.dp
@@ -1707,6 +1707,7 @@ internal fun HomeConnectionStatusLoadingBlock(
         title = stringResource(R.string.home_network_profile_info_title),
         labels =
             listOf(
+                stringResource(R.string.home_network_vpn_latency_label),
                 stringResource(R.string.home_network_server_ping_label),
                 stringResource(R.string.home_network_dns_label),
                 stringResource(R.string.home_network_transport_type_label),

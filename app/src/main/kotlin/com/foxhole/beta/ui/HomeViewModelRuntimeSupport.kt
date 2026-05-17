@@ -46,6 +46,9 @@ internal fun HomeViewModel.importPresetTextInternal(
 }
 
 internal fun HomeViewModel.refreshIpInfoInternal() {
+    if (container.connectionController.snapshot.value.state == ConnectionState.CONNECTED) {
+        scheduleActiveProfileLatencyRefresh()
+    }
     startIpInfoRefresh(
         reportFailures = true,
         showLoading = true,

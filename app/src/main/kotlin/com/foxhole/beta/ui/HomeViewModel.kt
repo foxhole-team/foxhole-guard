@@ -793,7 +793,7 @@ class HomeViewModel(
         if (!state.connection.isPrimaryConnectionRuntime()) {
             return false
         }
-        if (state.reconnectRequired) {
+        if (state.reconnectRequired && state.connection.state == ConnectionState.CONNECTED) {
             requestReconnect(activeProfile.id)
         } else {
             container.connectionController.disconnect(suppressLocalGuard = false)

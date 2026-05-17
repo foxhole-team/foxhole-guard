@@ -121,20 +121,20 @@ internal class FoxholeConnectionLifecycle(
         clearAppliedRuntime()
         diagnosticsLogger.record("connection", "disconnect requested")
         val currentSnapshot = snapshot.value
+        val activeVpnNetworkAvailable = hasActiveVpnNetwork()
+        if (shouldClearDetachedTunnelReconnect(currentSnapshot, activeVpnNetworkAvailable)) {
+            diagnosticsLogger.record("connection", "disconnect clearing detached reconnect snapshot")
+            stopAllServicesAndPublishIdle()
+            return
+        }
         val disconnectModes =
             disconnectDispatchModes(
                 snapshot = currentSnapshot,
-                activeVpnNetworkAvailable = hasActiveVpnNetwork(),
+                activeVpnNetworkAvailable = activeVpnNetworkAvailable,
             )
         if (disconnectModes.isEmpty()) {
             diagnosticsLogger.record("connection", "disconnect skipped: no active runtime")
-            FoxholeConnectionServiceContract.stopAllServices(context)
-            FoxholeVpnRuntimeBridge.clearTransientState()
-            FoxholeVpnRuntimeBridge.update(
-                ConnectionSnapshot(
-                    trafficMode = settingsRepository.settings.value.traffic.mode,
-                ),
-            )
+            stopAllServicesAndPublishIdle()
             return
         }
         disconnectModes.forEach { disconnectMode ->
@@ -181,6 +181,16 @@ internal class FoxholeConnectionLifecycle(
         )
         return true
     }
+
+    private fun stopAllServicesAndPublishIdle() {
+        FoxholeConnectionServiceContract.stopAllServices(context)
+        FoxholeVpnRuntimeBridge.clearTransientState()
+        FoxholeVpnRuntimeBridge.update(
+            ConnectionSnapshot(
+                trafficMode = settingsRepository.settings.value.traffic.mode,
+            ),
+        )
+    }
 }
 
 private const val STALE_VPN_DISCONNECT_TIMEOUT_MS = 10_000L
@@ -204,3 +214,11 @@ internal fun disconnectDispatchModes(
 ): List<TrafficMode> =
     disconnectDispatchModeOrNull(snapshot)?.let(::listOf)
         ?: if (activeVpnNetworkAvailable) listOf(TrafficMode.TUNNEL) else emptyList()
+
+internal fun shouldClearDetachedTunnelReconnect(
+    snapshot: ConnectionSnapshot,
+    activeVpnNetworkAvailable: Boolean,
+): Boolean =
+    snapshot.trafficMode == TrafficMode.TUNNEL &&
+        snapshot.state == ConnectionState.RECONNECTING &&
+        !activeVpnNetworkAvailable

@@ -2,6 +2,7 @@ package com.foxhole.beta.vpn
 
 import com.foxhole.beta.R
 import com.foxhole.beta.core.model.AutoConnectReasonCode
+import com.foxhole.beta.core.model.ConnectionSnapshot
 import com.foxhole.beta.core.model.ConnectionState
 import com.foxhole.beta.core.model.Settings
 import com.foxhole.beta.core.model.VpnSession
@@ -209,21 +210,28 @@ private suspend fun FoxholeVpnService.reconnectIfStillEnabled(
     reconnectActiveRuntime(session, reason, attempt)
 }
 
+@Suppress("TooGenericExceptionCaught")
 private suspend fun FoxholeVpnService.reconnectActiveRuntime(
     session: VpnSession,
     reason: String,
     attempt: Int,
 ) {
     val previousVpnNetworkHandle = currentVpnNetworkOrNull()?.networkHandle
-    stopActiveRuntimeForReconnect(session = session, reason = reason, attempt = attempt)
-    connect(
-        profileId = session.profileId,
-        commandStartId = 0,
-        protocolOptionIdOverride = session.protocolOptionId,
-        previousVpnNetworkHandle = previousVpnNetworkHandle,
-    )
+    try {
+        stopActiveRuntimeForReconnect(session = session, reason = reason, attempt = attempt)
+        connect(
+            profileId = session.profileId,
+            commandStartId = 0,
+            protocolOptionIdOverride = session.protocolOptionId,
+            previousVpnNetworkHandle = previousVpnNetworkHandle,
+        )
+    } catch (error: Throwable) {
+        clearDetachedReconnectSnapshot("auto reconnect failed: ${error.javaClass.simpleName}")
+        throw error
+    }
 }
 
+@Suppress("TooGenericExceptionCaught")
 private suspend fun FoxholeVpnService.reconnectSmartStartFallbackIfStillEnabled(
     session: VpnSession,
     reason: String,
@@ -243,13 +251,18 @@ private suspend fun FoxholeVpnService.reconnectSmartStartFallbackIfStillEnabled(
         return
     }
     val previousVpnNetworkHandle = currentVpnNetworkOrNull()?.networkHandle
-    stopActiveRuntimeForReconnect(session = session, reason = "smart_start_failover:$reason", attempt = exhaustedAttempts + 1)
-    connect(
-        profileId = session.profileId,
-        commandStartId = 0,
-        protocolOptionIdOverride = fallbackOptionId,
-        previousVpnNetworkHandle = previousVpnNetworkHandle,
-    )
+    try {
+        stopActiveRuntimeForReconnect(session = session, reason = "smart_start_failover:$reason", attempt = exhaustedAttempts + 1)
+        connect(
+            profileId = session.profileId,
+            commandStartId = 0,
+            protocolOptionIdOverride = fallbackOptionId,
+            previousVpnNetworkHandle = previousVpnNetworkHandle,
+        )
+    } catch (error: Throwable) {
+        clearDetachedReconnectSnapshot("smart start failover reconnect failed: ${error.javaClass.simpleName}")
+        throw error
+    }
 }
 
 private suspend fun FoxholeVpnService.smartStartFailoverOptionId(
@@ -325,4 +338,19 @@ private suspend fun FoxholeVpnService.stopActiveRuntimeForReconnect(
         ),
     )
     updateNotification()
+}
+
+private fun FoxholeVpnService.clearDetachedReconnectSnapshot(reason: String) {
+    val currentSnapshot = FoxholeVpnRuntimeBridge.snapshot.value
+    if (activeSession != null || currentSnapshot.state != ConnectionState.RECONNECTING) {
+        return
+    }
+    container.diagnosticsLogger.record("connection", "clearing detached vpn reconnect snapshot: $reason")
+    FoxholeVpnRuntimeBridge.clearTransientState()
+    FoxholeVpnRuntimeBridge.update(
+        ConnectionSnapshot(
+            trafficMode = container.settingsRepository.settings.value.traffic.mode,
+        ),
+    )
+    removeForegroundNotification()
 }

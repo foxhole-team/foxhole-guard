@@ -253,7 +253,10 @@ internal fun FoxholeScaffold(
     bannerPlacement: FoxholeBannerPlacement = FoxholeBannerPlacement.TOP,
     content: @Composable (PaddingValues) -> Unit,
 ) {
-    val topBarContainerColor = Color.Transparent
+    val uiPalette = LocalFoxholeUiPalette.current
+    val darkTheme = LocalFoxholeDarkTheme.current
+    val topBarContainerColor =
+        uiPalette.cardContainerColor.copy(alpha = if (darkTheme) 0.78f else 0.90f)
     val statusTopPadding = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     val navigationBottomPadding = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val contentTopPadding = statusTopPadding + FoxholeTopChromeHeight

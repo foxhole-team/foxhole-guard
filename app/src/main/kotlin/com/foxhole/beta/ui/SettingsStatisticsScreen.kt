@@ -45,7 +45,6 @@ import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -2198,7 +2197,10 @@ private fun AppTrafficTimelineChart(
             ),
             updatedAtMs = updatedAtMs,
         )
-    com.foxhole.beta.ui.statistics.charts.TimelineChart(model = model)
+    com.foxhole.beta.ui.statistics.charts.TimelineChart(
+        model = model,
+        lineStrokeWidth = 1.dp,
+    )
 }
 
 @Composable
@@ -2599,21 +2601,27 @@ private fun ProfileStatisticsDetail(
                 EmptySectionText(text = stringResource(R.string.statistics_protocols_empty))
             } else {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    val overallSummary =
+                        listOf(
+                            stringResource(R.string.statistics_success_rate) to formatPercent(detail.successRate),
+                            stringResource(R.string.statistics_error_rate) to formatPercent(detail.errorRate),
+                        ).joinToString(" • ") { (label, value) -> "$label: $value" }
                     Text(
                         text = stringResource(R.string.statistics_profile_protocols_title),
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.SemiBold,
                     )
-                    ProfileDetailFilterChip(
-                        label = stringResource(R.string.statistics_profile_overall_tab),
-                        selected = selectedDetailKey == PROFILE_DETAIL_OVERALL_KEY,
-                        onClick = { selectedDetailKey = PROFILE_DETAIL_OVERALL_KEY },
-                    )
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        ProfileDetailUsageRow(
+                            title = stringResource(R.string.statistics_profile_overall_tab),
+                            summary = overallSummary,
+                            trailing = formatBytes(context, detail.totalBytes),
+                            selected = selectedDetailKey == PROFILE_DETAIL_OVERALL_KEY,
+                            onClick = { selectedDetailKey = PROFILE_DETAIL_OVERALL_KEY },
+                        )
                         connectedProtocols.forEach { protocol ->
-                            ProfileDetailFilterChip(
-                                label = protocol.label,
-                                supportingText = formatBytes(context, protocol.totalBytes),
+                            ProfileProtocolUsageRow(
+                                protocol = protocol,
                                 selected = protocol.label == selectedProtocol?.label,
                                 onClick = { selectedDetailKey = protocol.label },
                             )
@@ -2630,15 +2638,6 @@ private fun ProfileStatisticsDetail(
                         )
                     } else {
                         ProfileProtocolDetailPanel(protocol = selectedProtocol)
-                    }
-                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        connectedProtocols.forEach { protocol ->
-                            ProfileProtocolUsageRow(
-                                protocol = protocol,
-                                selected = protocol.label == selectedProtocol?.label,
-                                onClick = { selectedDetailKey = protocol.label },
-                            )
-                        }
                     }
                 }
             }
@@ -2659,47 +2658,13 @@ private fun ProfileStatisticsDetail(
 }
 
 @Composable
-private fun ProfileDetailFilterChip(
-    label: String,
-    selected: Boolean,
-    onClick: () -> Unit,
-    supportingText: String? = null,
-) {
-    FilterChip(
-        selected = selected,
-        onClick = onClick,
-        label = {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = label,
-                    modifier = Modifier.weight(1f),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                if (supportingText != null) {
-                    Text(
-                        text = supportingText,
-                        style = MaterialTheme.typography.labelSmall,
-                        maxLines = 1,
-                    )
-                }
-            }
-        },
-        modifier = Modifier.fillMaxWidth(),
-    )
-}
-
-@Composable
-private fun ProfileProtocolUsageRow(
-    protocol: ProfileProtocolDetail,
+private fun ProfileDetailUsageRow(
+    title: String,
+    summary: String,
+    trailing: String,
     selected: Boolean,
     onClick: () -> Unit,
 ) {
-    val context = LocalContext.current
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.small,
@@ -2730,32 +2695,49 @@ private fun ProfileProtocolUsageRow(
         ) {
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(
-                    text = protocol.label,
+                    text = title,
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
+                    maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
-                    text =
-                    listOfNotNull(
-                        protocol.lastUsedAt?.let { stringResource(R.string.statistics_last_activity) to it.formatLastActivity() },
-                        stringResource(R.string.statistics_success_rate) to formatPercent(protocol.successRate),
-                    ).joinToString(" • ") { (label, value) -> "$label: $value" },
+                    text = summary,
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
+                    maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
             }
             Text(
-                text = formatBytes(context, protocol.totalBytes),
+                text = trailing,
                 style = MaterialTheme.typography.labelMedium,
                 fontWeight = FontWeight.SemiBold,
                 textAlign = TextAlign.End,
             )
         }
     }
+}
+
+@Composable
+private fun ProfileProtocolUsageRow(
+    protocol: ProfileProtocolDetail,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    val context = LocalContext.current
+    val summary =
+        listOfNotNull(
+            protocol.lastUsedAt?.let { stringResource(R.string.statistics_last_activity) to it.formatLastActivity() },
+            stringResource(R.string.statistics_success_rate) to formatPercent(protocol.successRate),
+        ).joinToString(" • ") { (label, value) -> "$label: $value" }
+    ProfileDetailUsageRow(
+        title = protocol.label,
+        summary = summary,
+        trailing = formatBytes(context, protocol.totalBytes),
+        selected = selected,
+        onClick = onClick,
+    )
 }
 
 @Composable

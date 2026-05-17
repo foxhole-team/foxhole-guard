@@ -1011,7 +1011,7 @@ internal fun homePrimaryAction(
     reconnectRequired: Boolean,
 ): HomePrimaryAction =
     when {
-        state in setOf(ConnectionState.CONNECTED, ConnectionState.CONNECTING, ConnectionState.RECONNECTING) && reconnectRequired ->
+        state == ConnectionState.CONNECTED && reconnectRequired ->
             HomePrimaryAction.RECONNECT
         state in setOf(ConnectionState.CONNECTED, ConnectionState.CONNECTING, ConnectionState.RECONNECTING) ->
             HomePrimaryAction.STOP

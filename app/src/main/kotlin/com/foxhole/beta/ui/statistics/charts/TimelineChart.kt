@@ -36,8 +36,10 @@ fun TimelineChart(
     model: ChartModel,
     modifier: Modifier = Modifier,
     height: Dp = 170.dp,
+    lineStrokeWidth: Dp? = null,
 ) {
     val tokens = chartVisualTokens()
+    val resolvedLineStrokeWidth = lineStrokeWidth ?: tokens.lineStrokeWidth
     val colorsBySeries = model.series.associate { series -> series.id to chartColor(series.colorToken) }
     val visible = remember(model.id) { mutableStateOf(false) }
     LaunchedEffect(model.id) {
@@ -73,6 +75,7 @@ fun TimelineChart(
                     tokens = tokens,
                     geometry = geometry,
                     entranceProgress = entranceProgress,
+                    lineStrokeWidth = resolvedLineStrokeWidth,
                 )
             }
         }
@@ -117,11 +120,12 @@ private fun DrawScope.drawTimelineSeries(
     tokens: ChartTokens,
     geometry: TimelineChartGeometry,
     entranceProgress: Float,
+    lineStrokeWidth: Dp,
 ) {
     when (series.kind) {
         ChartSeriesKind.LINE,
         ChartSeriesKind.AREA,
-        -> drawLineOrAreaSeries(model, series, color, tokens, geometry, entranceProgress)
+        -> drawLineOrAreaSeries(model, series, color, geometry, entranceProgress, lineStrokeWidth)
 
         ChartSeriesKind.BAR,
         ChartSeriesKind.STACKED_BAR,
@@ -136,9 +140,9 @@ private fun DrawScope.drawLineOrAreaSeries(
     model: ChartModel,
     series: ChartSeries,
     color: Color,
-    tokens: ChartTokens,
     geometry: TimelineChartGeometry,
     entranceProgress: Float,
+    lineStrokeWidth: Dp,
 ) {
     val offsets =
         series.points.map { point ->
@@ -161,7 +165,7 @@ private fun DrawScope.drawLineOrAreaSeries(
         color = color,
         style =
         Stroke(
-            width = tokens.lineStrokeWidth.toPx(),
+            width = lineStrokeWidth.toPx(),
             cap = StrokeCap.Round,
             join = StrokeJoin.Round,
         ),

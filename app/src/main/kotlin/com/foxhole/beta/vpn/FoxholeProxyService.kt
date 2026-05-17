@@ -552,18 +552,24 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
         }
     }
 
+    @Suppress("TooGenericExceptionCaught")
     private suspend fun reconnectActiveRuntime(
         session: VpnSession,
         reason: String,
         attempt: Int,
     ) {
-        stopActiveRuntimeForReconnect(session = session, reason = reason, attempt = attempt)
-        connect(
-            profileId = session.profileId,
-            commandStartId = 0,
-            protocolOptionIdOverride = session.protocolOptionId,
-            previousVpnNetworkHandle = null,
-        )
+        try {
+            stopActiveRuntimeForReconnect(session = session, reason = reason, attempt = attempt)
+            connect(
+                profileId = session.profileId,
+                commandStartId = 0,
+                protocolOptionIdOverride = session.protocolOptionId,
+                previousVpnNetworkHandle = null,
+            )
+        } catch (error: Throwable) {
+            clearDetachedReconnectSnapshot("proxy auto reconnect failed: ${error.javaClass.simpleName}")
+            throw error
+        }
     }
 
     private suspend fun stopActiveRuntimeForReconnect(
@@ -593,6 +599,21 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
             ),
         )
         updateNotification()
+    }
+
+    private fun clearDetachedReconnectSnapshot(reason: String) {
+        val currentSnapshot = FoxholeVpnRuntimeBridge.snapshot.value
+        if (activeSession != null || currentSnapshot.state != ConnectionState.RECONNECTING) {
+            return
+        }
+        container.diagnosticsLogger.record("connection", "clearing detached proxy reconnect snapshot: $reason")
+        FoxholeVpnRuntimeBridge.clearTransientState()
+        FoxholeVpnRuntimeBridge.update(
+            ConnectionSnapshot(
+                trafficMode = container.settingsRepository.settings.value.traffic.mode,
+            ),
+        )
+        removeForegroundNotification()
     }
 
     private fun stopService(commandStartId: Int?) {

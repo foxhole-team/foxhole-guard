@@ -4,7 +4,9 @@ import com.foxhole.beta.core.model.ConnectionSnapshot
 import com.foxhole.beta.core.model.ConnectionState
 import com.foxhole.beta.core.model.TrafficMode
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class FoxholeConnectionServiceContractTest {
@@ -88,6 +90,32 @@ class FoxholeConnectionServiceContractTest {
                 ),
                 activeVpnNetworkAvailable = false,
             ),
+        )
+    }
+
+    @Test
+    fun `detached tunnel reconnect clears locally instead of dispatching to dead service`() {
+        val reconnectingTunnel =
+            ConnectionSnapshot(
+                state = ConnectionState.RECONNECTING,
+                trafficMode = TrafficMode.TUNNEL,
+            )
+        val reconnectingProxy =
+            ConnectionSnapshot(
+                state = ConnectionState.RECONNECTING,
+                trafficMode = TrafficMode.PROXY,
+            )
+
+        assertTrue(
+            shouldClearDetachedTunnelReconnect(reconnectingTunnel, activeVpnNetworkAvailable = false),
+        )
+
+        assertFalse(
+            shouldClearDetachedTunnelReconnect(reconnectingTunnel, activeVpnNetworkAvailable = true),
+        )
+
+        assertFalse(
+            shouldClearDetachedTunnelReconnect(reconnectingProxy, activeVpnNetworkAvailable = false),
         )
     }
 }

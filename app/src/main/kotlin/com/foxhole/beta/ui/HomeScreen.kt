@@ -295,7 +295,11 @@ fun HomeScreen(
     val showNetworkConnectionStatus = networkModel.showConnectionStatus
     val showNetworkRouteDetails =
         showNetworkConnectionStatus &&
-            (showNetworkConnectionDetailsLoading || dashboardConnectionDetailsReady)
+            (
+                showNetworkConnectionDetailsLoading ||
+                    dashboardConnectionDetailsReady ||
+                    state.connection.state == ConnectionState.CONNECTED
+                )
     val networkInfoTitleRes = networkModel.titleRes
     val profileModel = remember(state) { resolveHomeDashboardProfileModel(state = state) }
     val isSmartDashboardProfile = profileModel.isSmartDashboardProfile
@@ -606,9 +610,7 @@ fun HomeScreen(
                                                 ProtocolLatencyLoadingPill(
                                                     compact = true,
                                                     showLabel = true,
-                                                    color = autoTone,
                                                 )
-                                            !dashboardConnectionDetailsReady -> Unit
                                             dashboardSelectedLatencyMs != null ->
                                                 ProtocolLatencyPill(
                                                     latencyMs = dashboardSelectedLatencyMs,
@@ -627,6 +629,7 @@ fun HomeScreen(
                                                     isUnavailable = true,
                                                     showLabel = true,
                                                 )
+                                            else -> Unit
                                         }
                                     },
                                 )
@@ -935,6 +938,19 @@ fun HomeScreen(
                                             verticalArrangement = Arrangement.spacedBy(2.dp),
                                         ) {
                                             val connectionMetricsAvailable = state.connection.state == ConnectionState.CONNECTED
+                                            val vpnLatencyText =
+                                                when {
+                                                    !connectionMetricsAvailable -> stringResource(R.string.smart_start_protocol_status_no_data)
+                                                    dashboardSelectedLatencyMs != null ->
+                                                        stringResource(
+                                                            R.string.latency_pill_value,
+                                                            boundedDisplayLatencyMs(dashboardSelectedLatencyMs),
+                                                        )
+                                                    dashboardSelectedLatencyDown ->
+                                                        stringResource(R.string.latency_pill_down)
+                                                    dashboardSelectedLatencyUnavailable -> stringResource(R.string.latency_pill_unavailable)
+                                                    else -> stringResource(R.string.smart_profile_metric_unavailable)
+                                                }
                                             val serverPingText =
                                                 when {
                                                     !connectionMetricsAvailable -> stringResource(R.string.smart_start_protocol_status_no_data)
@@ -967,6 +983,12 @@ fun HomeScreen(
                                                 }
                                             val transportTypeText = dashboardTransportTypeLabel(dashboardProtocolPresentation.protocolHint)
                                             HomeNetworkColumnTitle(stringResource(R.string.home_network_profile_info_title))
+                                            HomeNetworkDetailLine(
+                                                label = stringResource(R.string.home_network_vpn_latency_label),
+                                                value = vpnLatencyText,
+                                                valueMonospace = connectionMetricsAvailable && dashboardSelectedLatencyMs != null,
+                                            )
+                                            HomeNetworkSubtleDivider()
                                             HomeNetworkDetailLine(
                                                 label = stringResource(R.string.home_network_server_ping_label),
                                                 value = serverPingText,
