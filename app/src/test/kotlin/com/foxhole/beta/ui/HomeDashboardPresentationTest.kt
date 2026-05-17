@@ -276,6 +276,23 @@ class HomeDashboardPresentationTest {
     }
 
     @Test
+    fun `network model shows startup skeleton before profiles load`() {
+        val model =
+            resolveHomeDashboardNetworkModel(
+                state =
+                    HomeRouteUiState(
+                        profilesLoaded = false,
+                        connection = ConnectionSnapshot(state = ConnectionState.IDLE),
+                    ),
+                visibleIpInfo = null,
+                deviceInternetAvailable = true,
+            )
+
+        assertFalse(model.showConnectionStatus)
+        assertTrue(model.showLoading)
+    }
+
+    @Test
     fun `network model shows loading during reconnect even with previous ip info`() {
         val ipInfo =
             IpInfo(

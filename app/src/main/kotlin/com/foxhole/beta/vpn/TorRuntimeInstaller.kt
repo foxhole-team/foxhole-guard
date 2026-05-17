@@ -16,6 +16,19 @@ data class TorRuntimePaths(
     val torrcDefaultsFilePath: String? = null,
 )
 
+internal fun TorRuntimePaths.withIdentityVersion(identityVersion: Long): TorRuntimePaths {
+    if (identityVersion <= 0L) {
+        return this
+    }
+    val rootDirectory = File(dataDirectory)
+    val identityDirectory = File(rootDirectory, "identity-$identityVersion").apply { mkdirs() }
+    rootDirectory
+        .listFiles { file -> file.isDirectory && file.name.startsWith("identity-") && file.name != identityDirectory.name }
+        .orEmpty()
+        .forEach { staleDirectory -> staleDirectory.deleteRecursively() }
+    return copy(dataDirectory = identityDirectory.absolutePath)
+}
+
 class TorRuntimeUnavailableException(message: String) : IllegalStateException(message)
 
 class TorRuntimeInstaller(

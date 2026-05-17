@@ -326,6 +326,7 @@ data class PrivacyRouteSettings(
     val scope: PrivacyRouteScope = PrivacyRouteScope.SELECTED_APPS,
     val selectedPackages: List<String> = emptyList(),
     val bypassVpnTunnel: Boolean = false,
+    val identityVersion: Long = 0L,
 ) {
     val enabled: Boolean
         get() = mode == PrivacyRouteMode.TOR_OVER_VPN

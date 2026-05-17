@@ -867,8 +867,67 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
             val error = result.exceptionOrNull()
             val message = error?.let(::describeVpnRuntimeFailure) ?: "unknown"
             container.diagnosticsLogger.record("connection", "runtime reload failed: $message")
-            fail(message)
+            if (!recoverRuntimeAfterReloadFailure(session, snapshot, message)) {
+                fail(message)
+            }
         }
+    }
+
+    private suspend fun recoverRuntimeAfterReloadFailure(
+        session: VpnSession,
+        previousSnapshot: ConnectionSnapshot,
+        message: String,
+    ): Boolean {
+        container.diagnosticsLogger.record(
+            "connection",
+            "runtime reload recovery restart requested after: $message",
+        )
+        validationJob?.cancel()
+        validationJob = null
+        stopTrafficUpdates()
+        stopAppTrafficStatsUpdates()
+        stopGeoRefresh()
+        runtime.stop(RuntimeStopPolicy(closeTunFdImmediately = true, forceKillAfterTimeout = true))
+        activeVpnNetworkHandle = null
+        activeSession = session
+        FoxholeVpnRuntimeBridge.updateTraffic(trafficSampler.reset())
+        FoxholeVpnRuntimeBridge.updateIpInfo(null)
+        FoxholeVpnRuntimeBridge.update(
+            previousSnapshot.copy(
+                state = ConnectionState.RECONNECTING,
+                profileId = session.profileId,
+                profileName = session.profileName,
+                protocolHint = session.protocolHint,
+                protocolOptionId = session.protocolOptionId,
+                message = getString(R.string.status_reconnecting),
+            ),
+        )
+        updateNotification()
+        val restartResult =
+            startRuntimeWithHealthMetrics(
+                session = session,
+                owner = "vpn_reload_recovery",
+            )
+        if (restartResult.isFailure) {
+            val restartMessage = restartResult.exceptionOrNull()?.let(::describeVpnRuntimeFailure) ?: "unknown"
+            container.diagnosticsLogger.record(
+                "connection",
+                "runtime reload recovery restart failed: $restartMessage",
+            )
+            return false
+        }
+        container.connectionController.markCurrentRuntimeApplied()
+        container.diagnosticsLogger.record(
+            "connection",
+            "runtime reload recovery restarted, tunnel validation required",
+        )
+        FoxholeVpnRuntimeBridge.requestImmediateTrafficSample()
+        scheduleValidation(
+            session = session,
+            failOnFailure = true,
+            onSuccess = { vpnNetwork -> onTunnelValidated(session, vpnNetwork) },
+        )
+        return true
     }
 
     internal fun ensureNotificationChannel() = ensureConnectionNotificationChannel(notificationManager)

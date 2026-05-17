@@ -41,6 +41,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import kotlin.io.path.createTempDirectory
 
 class RuntimeConfigAssemblerTest {
     private val json =
@@ -196,6 +197,48 @@ class RuntimeConfigAssemblerTest {
         val udpBlock = route["rules"]!!.jsonArray.map { it.jsonObject }
             .single { it["network"]?.jsonPrimitive?.content == "udp" }
         assertEquals("block", udpBlock["outbound"]!!.jsonPrimitive.content)
+    }
+
+    @Test
+    fun `tor privacy route can use rotated identity data directory`() {
+        val root = createTempDirectory("foxhole-tor-identity").toFile()
+        try {
+            val paths =
+                TorRuntimePaths(
+                    executablePath = "/data/app/com.foxhole.beta/lib/arm64/libTor.so",
+                    dataDirectory = root.absolutePath,
+                ).withIdentityVersion(42L)
+
+            val config =
+                parse(
+                    assembler.assemble(
+                        baseConfigJson = baseConfigWithRules("profile.example"),
+                        settings =
+                            Settings(
+                                privacyRoute =
+                                    com.foxhole.beta.core.model.PrivacyRouteSettings(
+                                        mode = PrivacyRouteMode.TOR_OVER_VPN,
+                                        scope = PrivacyRouteScope.ALL_APPS,
+                                    ),
+                            ),
+                        activePreset = null,
+                        torRuntimePaths = paths,
+                        vpnProtocolHint = ProtocolHint.VLESS,
+                    ),
+                )
+
+            val tor =
+                config["outbounds"]!!
+                    .jsonArray
+                    .map { outbound -> outbound.jsonObject }
+                    .single { outbound -> outbound["tag"]!!.jsonPrimitive.content == "tor-over-vpn" }
+
+            assertEquals("${root.absolutePath}/identity-42", paths.dataDirectory)
+            assertTrue(root.resolve("identity-42").isDirectory)
+            assertEquals(paths.dataDirectory, tor["data_directory"]!!.jsonPrimitive.content)
+        } finally {
+            root.deleteRecursively()
+        }
     }
 
     @Test

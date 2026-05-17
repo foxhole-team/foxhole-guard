@@ -3,7 +3,6 @@ package com.foxhole.beta.ui.statistics.charts
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
@@ -32,8 +31,7 @@ fun TimelineChart(
     modifier: Modifier = Modifier,
     interactions: ChartInteractions = ChartInteractions.Default,
 ) {
-    val gridColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)
-    val axisColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+    val tokens = chartVisualTokens()
     val colorsBySeries = model.series.associate { series -> series.id to chartColor(series.colorToken) }
     ChartScaffold(model = model, modifier = modifier) {
         Canvas(
@@ -51,14 +49,14 @@ fun TimelineChart(
             listOf(0f, 0.5f, 1f).forEach { ratio ->
                 val y = bottom - chartHeight * ratio
                 drawLine(
-                    color = gridColor,
+                    color = tokens.gridColor,
                     start = Offset(left, y),
                     end = Offset(right, y),
                     pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 8f)),
                 )
             }
             drawLine(
-                color = axisColor,
+                color = tokens.axisColor,
                 start = Offset(left, bottom),
                 end = Offset(right, bottom),
                 strokeWidth = 1.dp.toPx(),
@@ -88,7 +86,7 @@ fun TimelineChart(
                                 color = color,
                                 start = start,
                                 end = end,
-                                strokeWidth = 2.dp.toPx(),
+                                strokeWidth = tokens.lineStrokeWidth.toPx(),
                                 cap = StrokeCap.Round,
                             )
                         }
@@ -101,6 +99,7 @@ fun TimelineChart(
                             ((right - left) / series.points.size.coerceAtLeast(1).toFloat())
                                 .coerceAtLeast(1.dp.toPx())
                         val barWidth = (slotWidth * 0.28f).coerceIn(1.dp.toPx(), 7.dp.toPx())
+                        val radius = tokens.barCornerRadius.toPx()
                         series.points.forEach { point ->
                             val x =
                                 timestampToChartX(
@@ -115,7 +114,7 @@ fun TimelineChart(
                                 color = color,
                                 topLeft = Offset(x - barWidth / 2f, bottom - barHeight),
                                 size = Size(barWidth, barHeight.coerceAtLeast(if (point.y > 0.0) 1.5f else 0f)),
-                                cornerRadius = CornerRadius(2.dp.toPx(), 2.dp.toPx()),
+                                cornerRadius = CornerRadius(radius, radius),
                             )
                         }
                     }

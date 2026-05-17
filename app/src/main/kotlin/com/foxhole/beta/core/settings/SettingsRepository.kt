@@ -772,6 +772,16 @@ class SettingsRepository(
             )
         }
 
+    suspend fun rotatePrivacyRouteIdentity() =
+        update { current ->
+            current.copy(
+                privacyRoute =
+                    current.privacyRoute.copy(
+                        identityVersion = System.currentTimeMillis(),
+                    ),
+            )
+        }
+
     suspend fun updateTrafficMtu(value: Int) =
         update { it.copy(traffic = it.traffic.copy(mtu = value.coerceIn(MIN_MTU, MAX_MTU))) }
 

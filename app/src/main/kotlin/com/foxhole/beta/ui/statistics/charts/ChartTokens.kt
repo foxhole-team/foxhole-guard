@@ -2,9 +2,39 @@ package com.foxhole.beta.ui.statistics.charts
 
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 import com.foxhole.beta.core.statistics.ChartColorToken
 import com.foxhole.beta.ui.theme.LocalFoxholeSemanticColors
+
+@Immutable
+data class ChartTokens(
+    val gridColor: Color,
+    val axisColor: Color,
+    val trackColor: Color,
+    val ringTrackColor: Color,
+    val lineStrokeWidth: Dp,
+    val ringStrokeWidth: Dp,
+    val barCornerRadius: Dp,
+    val donutGapDegrees: Float,
+)
+
+@Composable
+fun chartVisualTokens(): ChartTokens {
+    val colorScheme = MaterialTheme.colorScheme
+    return ChartTokens(
+        gridColor = colorScheme.outlineVariant.copy(alpha = 0.32f),
+        axisColor = colorScheme.onSurfaceVariant.copy(alpha = 0.58f),
+        trackColor = colorScheme.surfaceVariant.copy(alpha = 0.42f),
+        ringTrackColor = colorScheme.onSurface.copy(alpha = 0.16f),
+        lineStrokeWidth = 2.dp,
+        ringStrokeWidth = 14.dp,
+        barCornerRadius = 5.dp,
+        donutGapDegrees = 3f,
+    )
+}
 
 @Composable
 fun chartColor(token: ChartColorToken): Color {
@@ -36,3 +66,14 @@ fun chartColor(token: ChartColorToken): Color {
         ChartColorToken.OTHER -> MaterialTheme.colorScheme.outline
     }
 }
+
+@Composable
+fun chartCountryColors(): List<Color> =
+    listOf(
+        chartColor(ChartColorToken.COUNTRY_1),
+        chartColor(ChartColorToken.COUNTRY_2),
+        chartColor(ChartColorToken.COUNTRY_3),
+        chartColor(ChartColorToken.COUNTRY_4),
+        chartColor(ChartColorToken.COUNTRY_5),
+        chartColor(ChartColorToken.OTHER),
+    )

@@ -91,6 +91,7 @@ import com.foxhole.beta.R
 import com.foxhole.beta.core.model.ConnectionSnapshot
 import com.foxhole.beta.core.model.ConnectionState
 import com.foxhole.beta.core.model.InstalledAppOption
+import com.foxhole.beta.core.model.IpInfo
 import com.foxhole.beta.core.model.LocalAuthSettings
 import com.foxhole.beta.core.model.PrivacyRouteMode
 import com.foxhole.beta.core.model.PrivacyRouteScope
@@ -967,16 +968,37 @@ private fun HomeTorOperationLog(state: HomeRouteUiState) {
                     stringResource(R.string.privacy_route_modal_log_connected)
                 }
         }
-    Text(
-        text = text,
-        style = MaterialTheme.typography.bodySmall,
-        color =
-            if (state.torOperation.active) {
-                Color(0xFFE89B3C)
-            } else {
-                MaterialTheme.colorScheme.onSurfaceVariant
-            },
-    )
+    val activeTone = Color(0xFFE89B3C)
+    val pulseAlpha by rememberTorActionButtonPulse(active = state.torOperation.active)
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.Start),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Surface(
+            modifier = Modifier.size(8.dp),
+            shape = CircleShape,
+            color =
+                if (state.torOperation.active) {
+                    activeTone.copy(alpha = pulseAlpha.coerceAtLeast(0.12f))
+                } else {
+                    MaterialTheme.colorScheme.primary.copy(alpha = 0.22f)
+                },
+        ) {
+        }
+        Text(
+            text = text,
+            modifier = Modifier.weight(1f),
+            style = MaterialTheme.typography.bodySmall,
+            color =
+                if (state.torOperation.active) {
+                    activeTone
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
+            textAlign = TextAlign.Start,
+        )
+    }
 }
 
 @Composable
@@ -1002,13 +1024,7 @@ private fun HomeTorConnectedTable(
     onRenewTorIp: () -> Unit,
 ) {
     val durationText = rememberConnectionDurationText(state.connection) ?: "-"
-    val torIpText = state.ipInfo?.let(::primaryVisibleIp) ?: "-"
-    val countryText =
-        state.ipInfo?.let { ipInfo ->
-            val country = ipInfo.countryName ?: ipInfo.countryCode
-            country?.let { "${countryEmoji(ipInfo.countryCode)} $it" }
-        } ?: "-"
-    val cityText = state.ipInfo?.city?.takeIf(String::isNotBlank) ?: "-"
+    val torIpPresentation = state.torIpPresentation(loading = loading)
     val selectedApps = remember(state.installedApps, state.settings.privacyRoute.selectedPackages) {
         resolveSelectedApps(
             installedApps = state.installedApps,
@@ -1024,21 +1040,21 @@ private fun HomeTorConnectedTable(
             Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp)) {
                 HomeTorInfoRow(
                     label = stringResource(R.string.privacy_route_modal_current_ip),
-                    value = torIpText,
-                    valueMonospace = torIpText != "-",
-                    loading = loading,
+                    value = torIpPresentation.ipText,
+                    valueMonospace = torIpPresentation.hasIp,
+                    loading = torIpPresentation.loading,
                 )
                 HomeNetworkSubtleDivider()
                 HomeTorInfoRow(
                     label = stringResource(R.string.home_network_country_label),
-                    value = countryText,
-                    loading = loading,
+                    value = torIpPresentation.countryText,
+                    loading = torIpPresentation.loading,
                 )
                 HomeNetworkSubtleDivider()
                 HomeTorInfoRow(
                     label = stringResource(R.string.home_network_city_label),
-                    value = cityText,
-                    loading = loading,
+                    value = torIpPresentation.cityText,
+                    loading = torIpPresentation.loading,
                 )
                 HomeNetworkSubtleDivider()
                 HomeTorInfoRow(
@@ -1088,6 +1104,49 @@ private fun HomeTorConnectedTable(
                 Text(stringResource(R.string.privacy_route_modal_change_ip))
             }
         }
+    }
+}
+
+private data class HomeTorIpPresentation(
+    val ipText: String,
+    val countryText: String,
+    val cityText: String,
+    val loading: Boolean,
+    val hasIp: Boolean,
+)
+
+private fun HomeRouteUiState.torIpPresentation(loading: Boolean): HomeTorIpPresentation {
+    val info = visibleTorIpInfo()
+    val ipText = info?.let(::primaryVisibleIp) ?: "-"
+    val countryText =
+        info?.let { ipInfo ->
+            val country = ipInfo.countryName ?: ipInfo.countryCode
+            country?.let { "${countryEmoji(ipInfo.countryCode)} $it" }
+        } ?: "-"
+    return HomeTorIpPresentation(
+        ipText = ipText,
+        countryText = countryText,
+        cityText = info?.city?.takeIf(String::isNotBlank) ?: "-",
+        loading = loading || (info == null && connection.state in ACTIVE_CONNECTION_STATES),
+        hasIp = ipText != "-",
+    )
+}
+
+private fun HomeRouteUiState.visibleTorIpInfo(): IpInfo? {
+    val info = ipInfo
+    val torRouteVisible =
+        connection.profileId == FoxholeVpnService.TOR_ONLY_PROFILE_ID ||
+            settings.privacyRoute.enabled
+    val requiredFetchedAt =
+        maxOf(
+            connection.lastChangeAt,
+            torOperation.startedAt.takeIf { torOperation.active } ?: 0L,
+        )
+    return when {
+        info == null -> null
+        !torRouteVisible -> info
+        info.fetchedAt >= requiredFetchedAt -> info
+        else -> null
     }
 }
 
@@ -1377,9 +1436,9 @@ private fun HomeTorRouteIcons(
     selectedApps.take(4).forEach { app ->
         AppIcon(
             packageName = app.packageName,
-            modifier = Modifier.size(18.dp),
-            contentPadding = 2.dp,
-            fallbackIconSize = 14.dp,
+            modifier = Modifier.size(24.dp),
+            contentPadding = 1.dp,
+            fallbackIconSize = 16.dp,
         )
     }
 }

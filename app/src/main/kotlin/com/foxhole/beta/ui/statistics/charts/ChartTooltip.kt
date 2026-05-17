@@ -1,5 +1,6 @@
 package com.foxhole.beta.ui.statistics.charts
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -10,6 +11,8 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.foxhole.beta.core.statistics.ChartTooltipModel
@@ -20,7 +23,9 @@ fun ChartTooltip(
     modifier: Modifier = Modifier,
 ) {
     Surface(
-        modifier = modifier,
+        modifier = modifier.clearAndSetSemantics {
+            contentDescription = model.accessibilitySummary()
+        },
         shape = MaterialTheme.shapes.small,
         color = MaterialTheme.colorScheme.surfaceContainerHighest,
     ) {
@@ -44,7 +49,7 @@ fun ChartTooltip(
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     row.colorToken?.let { token ->
                         val color = chartColor(token)
-                        androidx.compose.foundation.Canvas(modifier = Modifier.size(8.dp)) {
+                        Canvas(modifier = Modifier.size(8.dp).clearAndSetSemantics {}) {
                             drawCircle(color)
                         }
                     }

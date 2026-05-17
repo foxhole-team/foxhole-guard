@@ -10,8 +10,11 @@ import com.foxhole.beta.core.data.ProfileRepository
 import com.foxhole.beta.core.diagnostics.DiagnosticsLogger
 import com.foxhole.beta.core.model.ConnectionSnapshot
 import com.foxhole.beta.core.model.IpInfo
+import com.foxhole.beta.core.model.PrivacyRouteMode
+import com.foxhole.beta.core.model.PrivacyRouteScope
 import com.foxhole.beta.core.model.Settings
 import com.foxhole.beta.core.model.TrafficMode
+import com.foxhole.beta.core.model.isUdpTransport
 import com.foxhole.beta.core.network.HttpProxyAccess
 import com.foxhole.beta.core.network.IpInfoFetchMode
 import com.foxhole.beta.core.network.IpInfoRepository
@@ -57,7 +60,15 @@ internal class TunnelValidationGateway(
                     currentSnapshot.protocolHint,
                     session?.configJson,
                 )
-            val info = fetchActiveTunnelIpInfo(settings, endpoint, fetchMode, vpnNetwork, preferIpv4Validation)
+            val info =
+                fetchActiveTunnelIpInfo(
+                    settings = settings,
+                    endpoint = endpoint,
+                    fetchMode = fetchMode,
+                    vpnNetwork = vpnNetwork,
+                    preferIpv4Validation = preferIpv4Validation,
+                    currentSnapshot = currentSnapshot,
+                )
             return info.withDnsServers(
                 localDnsServers = connectivityManager.dnsServerAddresses(vpnNetwork),
                 remoteDnsServers = remoteDnsServers,
@@ -204,6 +215,7 @@ internal class TunnelValidationGateway(
         fetchMode: IpInfoFetchMode,
         vpnNetwork: Network,
         preferIpv4Validation: Boolean,
+        currentSnapshot: ConnectionSnapshot,
     ): IpInfo =
         try {
             fetchActiveTunnelIpInfoViaRuntimeProxy(
@@ -213,6 +225,9 @@ internal class TunnelValidationGateway(
                 preferIpv4Validation = preferIpv4Validation,
             )
         } catch (error: IOException) {
+            if (settings.requiresStrictRuntimeProxyIpRefresh(currentSnapshot)) {
+                throw error
+            }
             fetchActiveTunnelIpInfoOnProcessPathAfterRuntimeProxyFailure(
                 endpoint = endpoint,
                 fetchMode = fetchMode,
@@ -221,6 +236,9 @@ internal class TunnelValidationGateway(
                 error = error,
             )
         } catch (error: IllegalStateException) {
+            if (settings.requiresStrictRuntimeProxyIpRefresh(currentSnapshot)) {
+                throw error
+            }
             fetchActiveTunnelIpInfoOnProcessPathAfterRuntimeProxyFailure(
                 endpoint = endpoint,
                 fetchMode = fetchMode,
@@ -229,6 +247,9 @@ internal class TunnelValidationGateway(
                 error = error,
             )
         } catch (error: IllegalArgumentException) {
+            if (settings.requiresStrictRuntimeProxyIpRefresh(currentSnapshot)) {
+                throw error
+            }
             fetchActiveTunnelIpInfoOnProcessPathAfterRuntimeProxyFailure(
                 endpoint = endpoint,
                 fetchMode = fetchMode,
@@ -313,3 +334,15 @@ internal class TunnelValidationGateway(
         const val DASHBOARD_IP_REFRESH_CALL_TIMEOUT_MS = 2_500L
     }
 }
+
+private fun Settings.requiresStrictRuntimeProxyIpRefresh(snapshot: ConnectionSnapshot): Boolean =
+    snapshot.profileId == FoxholeVpnService.TOR_ONLY_PROFILE_ID ||
+        (
+            privacyRoute.mode == PrivacyRouteMode.TOR_OVER_VPN &&
+                traffic.mode == TrafficMode.TUNNEL &&
+                (privacyRoute.bypassVpnTunnel || snapshot.protocolHint?.isUdpTransport() != true) &&
+                when (privacyRoute.scope) {
+                    PrivacyRouteScope.ALL_APPS -> true
+                    PrivacyRouteScope.SELECTED_APPS -> privacyRoute.selectedPackages.any(String::isNotBlank)
+                }
+            )

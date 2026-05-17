@@ -73,6 +73,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -109,7 +110,11 @@ import com.foxhole.beta.core.model.TrafficMapUiState
 import com.foxhole.beta.core.model.TransportProtocol
 import com.foxhole.beta.core.model.TransportStatisticsUiItem
 import com.foxhole.beta.core.model.TrafficWindow
+import com.foxhole.beta.core.statistics.ChartColorToken
 import com.foxhole.beta.core.traffic.TorGeoIpCountryResolver
+import com.foxhole.beta.ui.statistics.charts.chartColor
+import com.foxhole.beta.ui.statistics.charts.chartCountryColors
+import com.foxhole.beta.ui.statistics.charts.chartVisualTokens
 import com.foxhole.beta.ui.theme.LocalFoxholeSemanticColors
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -757,8 +762,15 @@ private fun CountryVerticalBarChart(
 ) {
     val context = LocalContext.current
     val colors = statisticsCountryChartColors()
-    val gridColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+    val tokens = chartVisualTokens()
     val maxBytes = points.maxOfOrNull(CountryTrafficUiRow::bytes)?.coerceAtLeast(1L) ?: 1L
+    val chartDescription =
+        listOf(
+            stringResource(R.string.statistics_country_traffic_title),
+            points
+                .map { point -> "${point.label} ${formatBytes(context, point.bytes)}" }
+                .joinToString(),
+        ).filter { value -> value.isNotBlank() }.joinToString(". ")
     val visible = rememberOneShotVisible("countries")
     val progress by animateFloatAsState(
         targetValue = if (visible) 1f else 0f,
@@ -778,28 +790,36 @@ private fun CountryVerticalBarChart(
             modifier =
             Modifier
                 .fillMaxWidth()
-                .weight(1f),
+                .weight(1f)
+                .semantics { contentDescription = chartDescription },
         ) {
             val chartTop = 8.dp.toPx()
             val chartBottom = size.height - 4.dp.toPx()
             val chartHeight = (chartBottom - chartTop).coerceAtLeast(1f)
             drawLine(
-                color = gridColor,
+                color = tokens.gridColor,
                 start = Offset(0f, chartTop),
                 end = Offset(size.width, chartTop),
                 pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 8f)),
             )
             val slotWidth = size.width / points.size.coerceAtLeast(1).toFloat()
             val barWidth = (slotWidth * 0.48f).coerceAtMost(18.dp.toPx())
+            val radius = CornerRadius(tokens.barCornerRadius.toPx(), tokens.barCornerRadius.toPx())
             points.forEachIndexed { index, point ->
                 val normalized = point.bytes.toFloat() / maxBytes.toFloat()
                 val barHeight = (chartHeight * normalized * progress).coerceAtLeast(if (point.bytes > 0L) 2f else 0f)
                 val center = slotWidth * index + slotWidth / 2f
                 drawRoundRect(
+                    color = tokens.trackColor,
+                    topLeft = Offset(center - barWidth / 2f, chartTop),
+                    size = Size(barWidth, chartHeight),
+                    cornerRadius = radius,
+                )
+                drawRoundRect(
                     color = colors[index % colors.size],
                     topLeft = Offset(center - barWidth / 2f, chartBottom - barHeight),
                     size = Size(barWidth, barHeight),
-                    cornerRadius = CornerRadius(5.dp.toPx(), 5.dp.toPx()),
+                    cornerRadius = radius,
                 )
             }
         }
@@ -902,7 +922,7 @@ private fun CountryTrafficList(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Canvas(modifier = Modifier.size(9.dp)) {
+                Canvas(modifier = Modifier.size(9.dp).clearAndSetSemantics {}) {
                     drawCircle(color = colors[index % colors.size])
                 }
                 Text(
@@ -1033,27 +1053,27 @@ private fun AnimatedDonutChart(
     contentDescription: String,
     modifier: Modifier = Modifier,
 ) {
-    val semanticColors = LocalFoxholeSemanticColors.current
-    val trackColor = MaterialTheme.colorScheme.surfaceVariant
-    val errorColor = MaterialTheme.colorScheme.error
+    val tokens = chartVisualTokens()
+    val successColor = chartColor(ChartColorToken.SUCCESS)
+    val errorColor = chartColor(ChartColorToken.ERROR)
     val progress by animateFloatAsState(
         targetValue = if (visible) 1f else 0f,
         animationSpec = tween(durationMillis = DONUT_ANIMATION_DURATION_MS, easing = FastOutSlowInEasing),
         label = "donut-progress",
     )
     Canvas(modifier = modifier.semantics { this.contentDescription = contentDescription }) {
-        val stroke = Stroke(width = 14.dp.toPx(), cap = StrokeCap.Round)
+        val stroke = Stroke(width = tokens.ringStrokeWidth.toPx(), cap = StrokeCap.Round)
         val successSweep = 360f * successRate.coerceIn(0f, 1f) * progress
         val errorSweep = 360f * errorRate.coerceIn(0f, 1f) * progress
         drawArc(
-            color = trackColor,
+            color = tokens.ringTrackColor,
             startAngle = -90f,
             sweepAngle = 360f,
             useCenter = false,
             style = stroke,
         )
         drawArc(
-            color = semanticColors.success,
+            color = successColor,
             startAngle = -90f,
             sweepAngle = successSweep,
             useCenter = false,
@@ -1194,9 +1214,18 @@ private fun TransportStatisticsSection(items: List<TransportStatisticsUiItem>) {
 @Composable
 private fun TransportRow(item: TransportStatisticsUiItem) {
     val context = LocalContext.current
-    val semanticColors = LocalFoxholeSemanticColors.current
-    val trackColor = MaterialTheme.colorScheme.surfaceVariant
-    val errorColor = MaterialTheme.colorScheme.error
+    val tokens = chartVisualTokens()
+    val successColor = chartColor(ChartColorToken.SUCCESS)
+    val errorColor = chartColor(ChartColorToken.ERROR)
+    val barDescription =
+        "${transportLabel(item.transport)} ${
+            stringResource(
+                R.string.statistics_profile_protocol_metrics,
+                formatPercent(item.successRate),
+                formatPercent(item.errorRate),
+                formatBytes(context, item.totalBytes),
+            )
+        }"
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -1211,15 +1240,16 @@ private fun TransportRow(item: TransportStatisticsUiItem) {
         Canvas(
             modifier = Modifier
                 .weight(1f)
-                .height(10.dp),
+                .height(10.dp)
+                .semantics { contentDescription = barDescription },
         ) {
-            val radius = CornerRadius(5.dp.toPx(), 5.dp.toPx())
+            val radius = CornerRadius(tokens.barCornerRadius.toPx(), tokens.barCornerRadius.toPx())
             drawRoundRect(
-                color = trackColor,
+                color = tokens.trackColor,
                 cornerRadius = radius,
             )
             drawRoundRect(
-                color = semanticColors.success,
+                color = successColor,
                 size = Size(size.width * item.successRate.coerceIn(0f, 1f), size.height),
                 cornerRadius = radius,
             )
@@ -1320,9 +1350,13 @@ private fun DnsProtectionCard(
 private fun DnsProtectionChart(rows: List<DnsProtectionAppRow>) {
     val maxBlocked = rows.maxOfOrNull(DnsProtectionAppRow::estimatedBlockedQueries)?.coerceAtLeast(1) ?: 1
     val categoryColors = dnsCategoryColorMap()
-    val trackColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+    val tokens = chartVisualTokens()
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         rows.forEachIndexed { index, row ->
+            val barDescription =
+                "${row.label}: ${row.estimatedBlockedQueries} ${
+                    stringResource(R.string.statistics_dns_blocked_queries)
+                }, ${formatPercent(row.blockRatio)}"
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -1348,10 +1382,11 @@ private fun DnsProtectionChart(rows: List<DnsProtectionAppRow>) {
                     modifier =
                     Modifier
                         .weight(1f)
-                        .height(14.dp),
+                        .height(14.dp)
+                        .semantics { contentDescription = barDescription },
                 ) {
-                    val radius = CornerRadius(5.dp.toPx(), 5.dp.toPx())
-                    drawRoundRect(color = trackColor, size = size, cornerRadius = radius)
+                    val radius = CornerRadius(tokens.barCornerRadius.toPx(), tokens.barCornerRadius.toPx())
+                    drawRoundRect(color = tokens.trackColor, size = size, cornerRadius = radius)
                     val scaledWidth =
                         size.width *
                             (row.estimatedBlockedQueries.toFloat() / maxBlocked.toFloat()).coerceIn(0f, 1f)
@@ -1394,7 +1429,16 @@ private fun DnsProtectionChart(rows: List<DnsProtectionAppRow>) {
 private fun DnsCategoryDonutChart(summary: DnsProtectionSummary) {
     val visible = rememberOneShotVisible("dns-categories")
     val categoryColors = dnsCategoryColorMap()
-    val trackColor = MaterialTheme.colorScheme.surfaceVariant
+    val tokens = chartVisualTokens()
+    val categoryDescriptions =
+        summary.categoryRows.map { row ->
+            "${stringResource(dnsCategoryLabel(row.category))} ${row.blockedQueries}"
+        }
+    val donutDescription =
+        listOf(
+            stringResource(R.string.statistics_dns_categories_title),
+            categoryDescriptions.joinToString(),
+        ).filter { value -> value.isNotBlank() }.joinToString(". ")
     val progress by animateFloatAsState(
         targetValue = if (visible) 1f else 0f,
         animationSpec = tween(durationMillis = DONUT_ANIMATION_DURATION_MS, easing = FastOutSlowInEasing),
@@ -1410,12 +1454,16 @@ private fun DnsCategoryDonutChart(summary: DnsProtectionSummary) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(contentAlignment = Alignment.Center) {
-                Canvas(modifier = Modifier.size(118.dp)) {
+                Canvas(
+                    modifier = Modifier
+                        .size(118.dp)
+                        .semantics { contentDescription = donutDescription },
+                ) {
                     val total = summary.categoryRows.sumOf(DnsProtectionCategoryRow::blockedQueries).coerceAtLeast(1)
-                    val stroke = Stroke(width = 18.dp.toPx(), cap = StrokeCap.Round)
+                    val stroke = Stroke(width = tokens.ringStrokeWidth.toPx(), cap = StrokeCap.Round)
                     var start = -90f
                     drawArc(
-                        color = trackColor,
+                        color = tokens.ringTrackColor,
                         startAngle = -90f,
                         sweepAngle = 360f,
                         useCenter = false,
@@ -1540,13 +1588,20 @@ private fun DnsProtectionAppRowView(
 
 @Composable
 private fun DnsAppDropStack(row: DnsProtectionAppRow) {
-    val trackColor = MaterialTheme.colorScheme.surfaceVariant
+    val tokens = chartVisualTokens()
     val categoryColors = dnsCategoryColorMap()
+    val description =
+        "${row.label}: ${formatPercent(row.blockRatio)} ${
+            stringResource(R.string.statistics_dns_block_ratio)
+        }"
     Canvas(
-        modifier = Modifier.fillMaxWidth().height(7.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(7.dp)
+            .semantics { contentDescription = description },
     ) {
-        val radius = CornerRadius(4.dp.toPx(), 4.dp.toPx())
-        drawRoundRect(color = trackColor, cornerRadius = radius)
+        val radius = CornerRadius(tokens.barCornerRadius.toPx(), tokens.barCornerRadius.toPx())
+        drawRoundRect(color = tokens.trackColor, cornerRadius = radius)
         var left = 0f
         row.categoryRatios.forEach { (category, ratio) ->
             val width = size.width * ratio.coerceIn(0f, 1f)
@@ -1640,11 +1695,14 @@ private fun dnsCategoryLabel(category: DnsProtectionCategory): Int =
 
 @Composable
 private fun dnsCategoryColor(category: DnsProtectionCategory): Color =
+    chartColor(dnsCategoryColorToken(category))
+
+private fun dnsCategoryColorToken(category: DnsProtectionCategory): ChartColorToken =
     when (category) {
-        DnsProtectionCategory.ADS -> Color(0xFF42A5F5)
-        DnsProtectionCategory.TRACKERS -> Color(0xFFFFD54F)
-        DnsProtectionCategory.TELEMETRY -> Color(0xFFFF9800)
-        DnsProtectionCategory.MALICIOUS -> MaterialTheme.colorScheme.error
+        DnsProtectionCategory.ADS -> ChartColorToken.ADS
+        DnsProtectionCategory.TRACKERS -> ChartColorToken.TRACKERS
+        DnsProtectionCategory.TELEMETRY -> ChartColorToken.TELEMETRY
+        DnsProtectionCategory.MALICIOUS -> ChartColorToken.MALICIOUS
     }
 
 @Composable
@@ -2023,10 +2081,15 @@ private fun AppTrafficStackedBarRow(
     onClick: () -> Unit,
 ) {
     val context = LocalContext.current
-    val semanticColors = LocalFoxholeSemanticColors.current
-    val sentColor = MaterialTheme.colorScheme.primary
-    val receivedColor = semanticColors.success
-    val trackColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+    val tokens = chartVisualTokens()
+    val sentColor = chartColor(ChartColorToken.TX)
+    val receivedColor = chartColor(ChartColorToken.RX)
+    val barDescription =
+        "${row.label}: ${formatBytes(context, row.totalBytes)}, ${
+            stringResource(R.string.traffic_sent)
+        } ${formatBytes(context, row.txBytes)}, ${
+            stringResource(R.string.traffic_received)
+        } ${formatBytes(context, row.rxBytes)}"
     Row(
         modifier =
         Modifier
@@ -2072,10 +2135,11 @@ private fun AppTrafficStackedBarRow(
                 modifier =
                 Modifier
                     .fillMaxWidth()
-                    .height(16.dp),
+                    .height(16.dp)
+                    .semantics { contentDescription = barDescription },
             ) {
-                val radius = CornerRadius(5.dp.toPx(), 5.dp.toPx())
-                drawRoundRect(color = trackColor, size = size, cornerRadius = radius)
+                val radius = CornerRadius(tokens.barCornerRadius.toPx(), tokens.barCornerRadius.toPx())
+                drawRoundRect(color = tokens.trackColor, size = size, cornerRadius = radius)
                 val scaledWidth = size.width * (row.totalBytes.toFloat() / maxTotal.toFloat()).coerceIn(0f, 1f)
                 if (scaledWidth <= 0f) {
                     return@Canvas
@@ -2125,18 +2189,21 @@ private fun AppTrafficStackedBarRow(
 
 @Composable
 private fun ChartLegend() {
-    val semanticColors = LocalFoxholeSemanticColors.current
     Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-        LegendItem(color = MaterialTheme.colorScheme.primary, text = stringResource(R.string.traffic_sent))
-        LegendItem(color = semanticColors.success, text = stringResource(R.string.traffic_received))
+        LegendItem(color = chartColor(ChartColorToken.TX), text = stringResource(R.string.traffic_sent))
+        LegendItem(color = chartColor(ChartColorToken.RX), text = stringResource(R.string.traffic_received))
     }
 }
 
 @Composable
 private fun LegendItem(color: Color, text: String) {
-    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(
+        modifier = Modifier.semantics(mergeDescendants = true) { contentDescription = text },
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
         Box(modifier = Modifier.size(10.dp).padding(1.dp)) {
-            Canvas(modifier = Modifier.size(8.dp)) { drawCircle(color) }
+            Canvas(modifier = Modifier.size(8.dp).clearAndSetSemantics {}) { drawCircle(color) }
         }
         Text(text = text, style = MaterialTheme.typography.labelMedium)
     }
@@ -3583,17 +3650,7 @@ private fun rememberOneShotVisible(key: String): Boolean {
 }
 
 @Composable
-private fun statisticsCountryChartColors(): List<Color> {
-    val semanticColors = LocalFoxholeSemanticColors.current
-    return listOf(
-        MaterialTheme.colorScheme.primary,
-        semanticColors.success,
-        MaterialTheme.colorScheme.tertiary,
-        semanticColors.warning,
-        Color(0xFF64B5F6),
-        MaterialTheme.colorScheme.outline,
-    )
-}
+private fun statisticsCountryChartColors(): List<Color> = chartCountryColors()
 
 private fun niceTrafficScale(maxBytes: Long): Long {
     return com.foxhole.beta.core.statistics.niceBytesScale(maxBytes)

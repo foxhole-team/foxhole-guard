@@ -30,6 +30,7 @@ import com.foxhole.beta.vpn.FoxholeVpnService
 import com.foxhole.beta.vpn.PrivateDnsMode
 import com.foxhole.beta.vpn.RuntimeConfigAssembler
 import com.foxhole.beta.vpn.TorRuntimeInstaller
+import com.foxhole.beta.vpn.withIdentityVersion
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
@@ -664,7 +665,7 @@ class ProfileRepository(
             }
         val torRuntimePaths =
             if (settings.shouldPrepareTorRuntime(selectedProtocolHint)) {
-                torRuntimeInstaller.prepare()
+                torRuntimeInstaller.prepare().withIdentityVersion(settings.privacyRoute.identityVersion)
             } else {
                 null
             }
@@ -722,7 +723,10 @@ class ProfileRepository(
                     settings = settings,
                     activePreset = routingRepository.currentPresetForRuntime(),
                     privateDnsMode = privateDnsMode,
-                    torRuntimePaths = torRuntimeInstaller.prepare(),
+                    torRuntimePaths =
+                        torRuntimeInstaller
+                            .prepare()
+                            .withIdentityVersion(settings.privacyRoute.identityVersion),
                     dnsFilterRuntimePaths = dnsFilterRuntimePaths,
                 )
             }.onFailure { error ->

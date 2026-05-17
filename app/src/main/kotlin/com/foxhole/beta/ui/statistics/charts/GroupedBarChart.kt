@@ -3,13 +3,14 @@ package com.foxhole.beta.ui.statistics.charts
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.foxhole.beta.core.statistics.ChartModel
 
@@ -18,20 +19,21 @@ fun GroupedBarChart(
     model: ChartModel,
     modifier: Modifier = Modifier,
 ) {
-    val gridColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)
+    val tokens = chartVisualTokens()
     val colorsBySeries = model.series.associate { series -> series.id to chartColor(series.colorToken) }
     ChartScaffold(model = model, modifier = modifier) {
         Canvas(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(170.dp),
+                .height(170.dp)
+                .semantics { contentDescription = model.accessibilitySummary() },
         ) {
             val top = 10.dp.toPx()
             val bottom = size.height - 18.dp.toPx()
             val chartHeight = (bottom - top).coerceAtLeast(1f)
             val yMax = model.yAxis.max.coerceAtLeast(1.0)
             drawLine(
-                color = gridColor,
+                color = tokens.gridColor,
                 start = Offset(0f, top),
                 end = Offset(size.width, top),
                 pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 8f)),
@@ -40,6 +42,7 @@ fun GroupedBarChart(
             val slotWidth = size.width / pointsCount.toFloat()
             val seriesWidth = slotWidth * 0.68f
             val barWidth = (seriesWidth / model.series.size.coerceAtLeast(1)).coerceIn(2.dp.toPx(), 14.dp.toPx())
+            val radius = tokens.barCornerRadius.toPx()
             model.series.forEachIndexed { seriesIndex, series ->
                 val color = colorsBySeries[series.id] ?: return@forEachIndexed
                 series.points.forEachIndexed { pointIndex, point ->
@@ -50,7 +53,7 @@ fun GroupedBarChart(
                         color = color,
                         topLeft = Offset(x, bottom - height),
                         size = Size(barWidth, height.coerceAtLeast(if (point.y > 0.0) 2f else 0f)),
-                        cornerRadius = CornerRadius(4.dp.toPx(), 4.dp.toPx()),
+                        cornerRadius = CornerRadius(radius, radius),
                     )
                 }
             }

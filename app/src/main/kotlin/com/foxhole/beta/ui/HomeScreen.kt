@@ -519,7 +519,16 @@ fun HomeScreen(
                                     onActiveCardChange = { activeReorderCard = it },
                                     onMove = ::moveDashboardCard,
                                 ) {
-                                    TrafficMapDashboardCard(state = trafficMapState)
+                                    TrafficMapDashboardCard(
+                                        state = trafficMapState,
+                                        legendLoading =
+                                            shouldShowTrafficMapLegendLoading(
+                                                connectionState = state.connection.state,
+                                                autoConnectRunning = state.autoConnect.running,
+                                                explicitLoading = state.ipInfoLoading,
+                                                appLoaded = state.profilesLoaded,
+                                            ),
+                                    )
                                 }
                             }
                         }

@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
@@ -82,6 +83,7 @@ import kotlin.math.sqrt
 @Composable
 internal fun TrafficMapDashboardCard(
     state: TrafficMapUiState,
+    legendLoading: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     val countries by rememberTrafficMapCountries()
@@ -129,12 +131,39 @@ internal fun TrafficMapDashboardCard(
                 }
             }
             if (!mapDisabledForPower) {
-                TrafficMapLegend(
-                    state = state,
-                    modifier = Modifier
-                        .weight(TRAFFIC_MAP_LEGEND_WEIGHT)
-                        .fillMaxHeight(),
-                )
+                if (legendLoading) {
+                    TrafficMapLegendLoadingBlock(
+                        modifier = Modifier
+                            .weight(TRAFFIC_MAP_LEGEND_WEIGHT)
+                            .fillMaxHeight(),
+                    )
+                } else {
+                    TrafficMapLegend(
+                        state = state,
+                        modifier = Modifier
+                            .weight(TRAFFIC_MAP_LEGEND_WEIGHT)
+                            .fillMaxHeight(),
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TrafficMapLegendLoadingBlock(modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier.padding(top = 24.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        repeat(4) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                FoxholeSkeletonBlock(modifier = Modifier.size(8.dp))
+                FoxholeSkeletonBlock(modifier = Modifier.width(46.dp).height(9.dp))
             }
         }
     }

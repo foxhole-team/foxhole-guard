@@ -144,8 +144,8 @@ class HomeIpLoadingPolicyTest {
     }
 
     @Test
-    fun `keeps current ip surface instead of pending loading while tunnel is connecting`() {
-        assertFalse(
+    fun `shows pending network loading while tunnel is connecting`() {
+        assertTrue(
             shouldShowPendingNetworkLoading(
                 visibleIpInfo = null,
                 explicitLoading = false,
@@ -158,8 +158,8 @@ class HomeIpLoadingPolicyTest {
     }
 
     @Test
-    fun `keeps current ip surface instead of pending loading while smart start is running`() {
-        assertFalse(
+    fun `shows pending network loading while smart start is running`() {
+        assertTrue(
             shouldShowPendingNetworkLoading(
                 visibleIpInfo = null,
                 explicitLoading = false,
@@ -208,8 +208,8 @@ class HomeIpLoadingPolicyTest {
     }
 
     @Test
-    fun `does not show pending network loading while disconnected app is still loading and ip is empty`() {
-        assertFalse(
+    fun `shows startup pending network loading while disconnected app is still loading and ip is empty`() {
+        assertTrue(
             shouldShowPendingNetworkLoading(
                 visibleIpInfo = null,
                 explicitLoading = false,
@@ -230,6 +230,50 @@ class HomeIpLoadingPolicyTest {
                 connectionState = ConnectionState.IDLE,
                 autoConnectRunning = false,
                 deviceInternetAvailable = true,
+                appLoaded = true,
+            ),
+        )
+    }
+
+    @Test
+    fun `traffic map legend loading is limited to startup refresh and vpn transitions`() {
+        assertTrue(
+            shouldShowTrafficMapLegendLoading(
+                connectionState = ConnectionState.IDLE,
+                autoConnectRunning = false,
+                explicitLoading = false,
+                appLoaded = false,
+            ),
+        )
+        assertTrue(
+            shouldShowTrafficMapLegendLoading(
+                connectionState = ConnectionState.CONNECTING,
+                autoConnectRunning = false,
+                explicitLoading = false,
+                appLoaded = true,
+            ),
+        )
+        assertTrue(
+            shouldShowTrafficMapLegendLoading(
+                connectionState = ConnectionState.IDLE,
+                autoConnectRunning = false,
+                explicitLoading = true,
+                appLoaded = true,
+            ),
+        )
+        assertFalse(
+            shouldShowTrafficMapLegendLoading(
+                connectionState = ConnectionState.IDLE,
+                autoConnectRunning = false,
+                explicitLoading = false,
+                appLoaded = true,
+            ),
+        )
+        assertFalse(
+            shouldShowTrafficMapLegendLoading(
+                connectionState = ConnectionState.CONNECTED,
+                autoConnectRunning = false,
+                explicitLoading = false,
                 appLoaded = true,
             ),
         )

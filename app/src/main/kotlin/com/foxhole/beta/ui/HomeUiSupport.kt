@@ -157,9 +157,10 @@ internal fun shouldShowPendingNetworkLoading(
 ): Boolean =
     when {
         visibleIpInfo != null -> false
-        explicitLoading -> true
         deviceInternetAvailable == false -> false
-        autoConnectRunning || connectionState in setOf(ConnectionState.CONNECTING, ConnectionState.RECONNECTING) -> false
+        explicitLoading -> true
+        !appLoaded -> true
+        autoConnectRunning || connectionState in setOf(ConnectionState.CONNECTING, ConnectionState.RECONNECTING) -> true
         else -> false
     }
 
@@ -184,6 +185,17 @@ internal fun shouldShowDashboardNetworkLoading(
             deviceInternetAvailable = deviceInternetAvailable,
             appLoaded = appLoaded,
         )
+
+internal fun shouldShowTrafficMapLegendLoading(
+    connectionState: ConnectionState,
+    autoConnectRunning: Boolean,
+    explicitLoading: Boolean,
+    appLoaded: Boolean,
+): Boolean =
+    explicitLoading ||
+        !appLoaded ||
+        autoConnectRunning ||
+        connectionState in setOf(ConnectionState.CONNECTING, ConnectionState.RECONNECTING)
 
 internal fun isProfileReconnectRequired(
     activeProfile: Profile?,
@@ -458,7 +470,7 @@ private fun HomeRouteUiState.homeNetworkTitleRes(
 private fun HomeRouteUiState.hasRealTunnelConnectionStatus(): Boolean =
     reconnectInProgress ||
         (
-            connection.state == ConnectionState.CONNECTED &&
+            connection.state in setOf(ConnectionState.CONNECTING, ConnectionState.CONNECTED, ConnectionState.RECONNECTING) &&
                 hasDashboardTunnelProfile()
             )
 

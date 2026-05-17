@@ -59,6 +59,7 @@ import com.foxhole.beta.core.profile.PreparedProfileExport
 import com.foxhole.beta.core.profile.ProfileExportRequest
 import com.foxhole.beta.core.settings.AppTrafficStatsRecorder
 import com.foxhole.beta.core.smart.SmartStartController
+import com.foxhole.beta.vpn.FoxholeVpnRuntimeBridge
 import com.foxhole.beta.vpn.FoxholeVpnService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -628,7 +629,7 @@ class HomeViewModel(
                 } else if (shouldRefreshIdleIp && !autoConnectUiStateMutable.value.running) {
                     startIpInfoRefresh(
                         reportFailures = false,
-                        showLoading = false,
+                        showLoading = true,
                         clearExistingIp = false,
                         fetchMode = IpInfoFetchMode.ENTRY_QUICK,
                         minimumLoadingDurationMs = 0L,
@@ -1201,12 +1202,16 @@ class HomeViewModel(
                 ?: state.activeProfile?.id
                 ?: return
         if (state.connection.state in ACTIVE_CONNECTION_STATES && !state.reconnectInProgress) {
-            clearRuntimeReconnectRequired()
-            markTorOperation(HomeTorOperationKind.CHANGING_LOCATION)
-            markRuntimeReloadPending()
-            if (!container.connectionController.reload(profileId)) {
-                clearTorOperation()
-                clearRuntimeReloadPending()
+            viewModelScope.launch {
+                clearRuntimeReconnectRequired()
+                markTorOperation(HomeTorOperationKind.CHANGING_LOCATION)
+                container.settingsRepository.rotatePrivacyRouteIdentity()
+                FoxholeVpnRuntimeBridge.updateIpInfo(null)
+                markRuntimeReloadPending()
+                if (!container.connectionController.reload(profileId)) {
+                    clearTorOperation()
+                    clearRuntimeReloadPending()
+                }
             }
         }
     }
