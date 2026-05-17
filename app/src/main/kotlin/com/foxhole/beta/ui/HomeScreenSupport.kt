@@ -113,6 +113,7 @@ internal val HomeNetworkContentHeight = 82.dp
 internal val HomeDashboardProfileContentHeight = 62.dp
 private val HomeNetworkValueLoadingWidth = 68.dp
 private val HomeNetworkMetricValueLoadingWidth = 54.dp
+private val HomeNetworkLabelLoadingWidth = 76.dp
 private val HomeModeSelectorMinWidth = 58.dp
 private val HomeModeSelectorMaxWidth = 104.dp
 private val HomeNetworkMetricValueLoadingHeight = 12.dp
@@ -1667,8 +1668,12 @@ internal fun HomeNetworkLoadingBlock(
         verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
         HomeNetworkColumnTitle(title)
-        labels.forEachIndexed { index, label ->
-            HomeNetworkLoadingLine(label = label, valueWidth = valueWidth, loadingColor = loadingColor)
+        labels.forEachIndexed { index, _ ->
+            HomeNetworkLoadingLine(
+                index = index,
+                valueWidth = valueWidth,
+                loadingColor = loadingColor,
+            )
             if (index < labels.lastIndex) {
                 HomeNetworkSubtleDivider()
             }
@@ -1698,28 +1703,25 @@ internal fun HomeConnectionStatusLoadingBlock(
 
 @Composable
 private fun HomeNetworkLoadingLine(
-    label: String,
+    index: Int,
     valueWidth: Dp,
     loadingColor: Color,
 ) {
+    val labelWidth = HomeNetworkLabelLoadingWidth + ((index % 2) * 10).dp
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(
-            text = label,
-            modifier = Modifier.weight(1f),
-            style =
-                MaterialTheme.typography.labelSmall.copy(
-                    fontSize = 10.sp,
-                    lineHeight = 11.sp,
-                    fontWeight = FontWeight.SemiBold,
-                ),
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
+        Box(modifier = Modifier.weight(1f)) {
+            FoxholeSkeletonBlock(
+                modifier =
+                    Modifier
+                        .width(labelWidth)
+                        .height(10.dp),
+                color = loadingColor,
+            )
+        }
         Box(
             modifier = Modifier.weight(1f),
             contentAlignment = Alignment.CenterEnd,

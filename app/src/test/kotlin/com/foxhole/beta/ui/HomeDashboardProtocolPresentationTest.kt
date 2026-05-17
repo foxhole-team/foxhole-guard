@@ -665,7 +665,7 @@ class HomeDashboardProtocolPresentationTest {
     }
 
     @Test
-    fun `dashboard latency unavailable wins over stale remembered latency`() {
+    fun `dashboard remembered latency keeps connected card from showing unavailable`() {
         val resolved =
             resolveDashboardLatencyPresentation(
                 HomeRouteUiState(
@@ -680,13 +680,13 @@ class HomeDashboardProtocolPresentationTest {
                             profileId = 1L,
                             protocolHint = ProtocolHint.OUTLINE,
                         ),
-                    selectedProtocolLatencyMs = 426L,
                     selectedProtocolLatencyUnavailable = true,
+                    smartStartRememberedLatenciesByOptionId = mapOf("outline" to 426L),
                 ),
             )
 
-        assertNull(resolved.latencyMs)
-        assertTrue(resolved.isUnavailable)
+        assertEquals(426L, resolved.latencyMs)
+        assertFalse(resolved.isUnavailable)
         assertFalse(resolved.isDown)
     }
 

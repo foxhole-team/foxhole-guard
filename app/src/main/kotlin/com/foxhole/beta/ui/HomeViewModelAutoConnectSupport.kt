@@ -127,6 +127,7 @@ internal fun HomeViewModel.startAutoConnectInternal(profileId: Long) {
     autoConnectJob?.cancel()
     autoConnectJob =
         viewModelScope.launch {
+            var completedSmartStart = false
             try {
                 var profile = container.profileRepository.getProfile(profileId) ?: error("profile not found")
                 profile = refreshSubscriptionBeforeSmartStartIfNeeded(profile)
@@ -174,6 +175,7 @@ internal fun HomeViewModel.startAutoConnectInternal(profileId: Long) {
                         )
                     }
                 }
+                completedSmartStart = true
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: Throwable) {
@@ -187,8 +189,21 @@ internal fun HomeViewModel.startAutoConnectInternal(profileId: Long) {
                 autoConnectJob = null
                 delay(HomeViewModel.AUTO_CONNECT_RESULT_SETTLE_MS)
                 clearAutoConnectUiState()
+                if (completedSmartStart) {
+                    refreshDashboardAfterSmartStartIfConnected()
+                }
             }
         }
+}
+
+private fun HomeViewModel.refreshDashboardAfterSmartStartIfConnected() {
+    if (container.connectionController.snapshot.value.state != ConnectionState.CONNECTED) {
+        return
+    }
+    scheduleConnectedIpRefresh(reason = IpInfoRefreshReason.POST_CONNECT, clearExistingIp = true)
+    if (dashboardVisible) {
+        scheduleActiveProfileLatencyRefresh()
+    }
 }
 
 private suspend fun HomeViewModel.refreshSubscriptionBeforeSmartStartIfNeeded(profile: Profile): Profile {
@@ -1011,7 +1026,7 @@ private fun HomeViewModel.buildConnectedAutoConnectFallbackResult(
             protocolHint = candidate.protocolHint,
             latencyProbeMethod = uiState.value.settings.connection.latencyProbeMethod,
         ),
-        displayLatencyMs = null,
+        displayLatencyMs = rememberedLatencyMs,
         connectDurationMs = elapsedMs,
         validatedAt = outcomeRecordedAt,
         trafficObservedAt =
@@ -1668,7 +1683,7 @@ internal fun HomeViewModel.scheduleActiveProfileLatencyRefreshInternal() {
             .firstOrNull { option -> option.id == selectedOptionId }
             ?.protocolHint
     profileLatencyRefreshJob?.cancel()
-    dashboardConnectionMetricsLoadingMutable.value = false
+    dashboardConnectionMetricsLoadingMutable.value = true
     profileLatencyRefreshJob =
         viewModelScope.launch {
             var waitingForInitialSample = true

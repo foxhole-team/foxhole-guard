@@ -79,6 +79,42 @@ class HomeDashboardPresentationTest {
     }
 
     @Test
+    fun `protocol model does not mark active smart start connection down while scan is running`() {
+        val state =
+            HomeRouteUiState(
+                activeProfile = smartProfile(),
+                connection =
+                    ConnectionSnapshot(
+                        state = ConnectionState.CONNECTED,
+                        profileId = 1L,
+                        protocolHint = ProtocolHint.VLESS,
+                        protocolOptionId = "vless",
+                    ),
+                protocolDownOptionIds = setOf("vless"),
+                protocolLatencyUnavailableOptionIds = setOf("vless"),
+                autoConnect =
+                    AutoConnectUiState(
+                        running = true,
+                        currentOptionId = "vless",
+                        options =
+                            listOf(
+                                AutoConnectProbeOptionUiState(
+                                    optionId = "vless",
+                                    displayName = "VLESS",
+                                    protocolHint = ProtocolHint.VLESS,
+                                    status = AutoConnectProbeStatus.FAILED,
+                                ),
+                            ),
+                    ),
+            )
+
+        val model = resolveHomeDashboardProtocolModel(state)
+
+        assertFalse("active smart start option should not be down", "vless" in model.downOptionIds)
+        assertFalse("active smart start option should not be unavailable", "vless" in model.latencyUnavailableOptionIds)
+    }
+
+    @Test
     fun `protocol model shows latency loading during reconnect before metrics refresh starts`() {
         val model =
             resolveHomeDashboardProtocolModel(
@@ -185,6 +221,8 @@ class HomeDashboardPresentationTest {
         assertEquals(R.string.home_network_connection_info_title, model.titleRes)
         assertTrue(model.showConnectionStatus)
         assertFalse(model.showLoading)
+        assertFalse(model.showIpInfoLoading)
+        assertFalse(model.showConnectionDetailsLoading)
     }
 
     @Test
@@ -217,6 +255,8 @@ class HomeDashboardPresentationTest {
         assertEquals(R.string.home_network_connection_info_title, model.titleRes)
         assertTrue(model.showConnectionStatus)
         assertTrue(model.showLoading)
+        assertFalse(model.showIpInfoLoading)
+        assertTrue(model.showConnectionDetailsLoading)
     }
 
     @Test
@@ -249,6 +289,8 @@ class HomeDashboardPresentationTest {
         assertEquals(R.string.home_network_current_ip_title, model.titleRes)
         assertTrue(model.showConnectionStatus)
         assertFalse(model.showLoading)
+        assertFalse(model.showIpInfoLoading)
+        assertFalse(model.showConnectionDetailsLoading)
         assertTrue(model.showRefreshProgress)
     }
 
@@ -273,6 +315,8 @@ class HomeDashboardPresentationTest {
 
         assertTrue(model.showConnectionStatus)
         assertTrue(model.showLoading)
+        assertTrue(model.showIpInfoLoading)
+        assertFalse(model.showConnectionDetailsLoading)
     }
 
     @Test
@@ -290,6 +334,8 @@ class HomeDashboardPresentationTest {
 
         assertFalse(model.showConnectionStatus)
         assertTrue(model.showLoading)
+        assertTrue(model.showIpInfoLoading)
+        assertFalse(model.showConnectionDetailsLoading)
     }
 
     @Test
@@ -318,6 +364,8 @@ class HomeDashboardPresentationTest {
         assertEquals(R.string.home_network_connection_info_title, model.titleRes)
         assertTrue(model.showConnectionStatus)
         assertTrue(model.showLoading)
+        assertFalse(model.showIpInfoLoading)
+        assertTrue(model.showConnectionDetailsLoading)
     }
 
     @Test
@@ -351,6 +399,8 @@ class HomeDashboardPresentationTest {
         assertEquals(R.string.home_network_current_ip_title, model.titleRes)
         assertFalse(model.showConnectionStatus)
         assertFalse(model.showLoading)
+        assertFalse(model.showIpInfoLoading)
+        assertFalse(model.showConnectionDetailsLoading)
     }
 
     @Test
@@ -411,6 +461,8 @@ class HomeDashboardPresentationTest {
         assertEquals(R.string.home_network_current_ip_title, model.titleRes)
         assertFalse(model.showConnectionStatus)
         assertFalse(model.showLoading)
+        assertFalse(model.showIpInfoLoading)
+        assertFalse(model.showConnectionDetailsLoading)
     }
 
     @Test
@@ -439,6 +491,8 @@ class HomeDashboardPresentationTest {
         assertEquals(R.string.home_network_current_ip_title, model.titleRes)
         assertFalse(model.showConnectionStatus)
         assertFalse(model.showLoading)
+        assertFalse(model.showIpInfoLoading)
+        assertFalse(model.showConnectionDetailsLoading)
     }
 
     @Test

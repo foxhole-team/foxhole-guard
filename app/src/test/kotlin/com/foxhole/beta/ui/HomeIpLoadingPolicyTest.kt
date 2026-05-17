@@ -240,7 +240,6 @@ class HomeIpLoadingPolicyTest {
         assertTrue(
             shouldShowTrafficMapLegendLoading(
                 connectionState = ConnectionState.IDLE,
-                autoConnectRunning = false,
                 explicitLoading = false,
                 appLoaded = false,
             ),
@@ -248,7 +247,6 @@ class HomeIpLoadingPolicyTest {
         assertTrue(
             shouldShowTrafficMapLegendLoading(
                 connectionState = ConnectionState.CONNECTING,
-                autoConnectRunning = false,
                 explicitLoading = false,
                 appLoaded = true,
             ),
@@ -256,7 +254,6 @@ class HomeIpLoadingPolicyTest {
         assertTrue(
             shouldShowTrafficMapLegendLoading(
                 connectionState = ConnectionState.IDLE,
-                autoConnectRunning = false,
                 explicitLoading = true,
                 appLoaded = true,
             ),
@@ -264,7 +261,6 @@ class HomeIpLoadingPolicyTest {
         assertFalse(
             shouldShowTrafficMapLegendLoading(
                 connectionState = ConnectionState.IDLE,
-                autoConnectRunning = false,
                 explicitLoading = false,
                 appLoaded = true,
             ),
@@ -272,7 +268,6 @@ class HomeIpLoadingPolicyTest {
         assertFalse(
             shouldShowTrafficMapLegendLoading(
                 connectionState = ConnectionState.CONNECTED,
-                autoConnectRunning = false,
                 explicitLoading = false,
                 appLoaded = true,
             ),

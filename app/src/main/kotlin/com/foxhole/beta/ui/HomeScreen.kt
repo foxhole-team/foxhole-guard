@@ -291,9 +291,12 @@ fun HomeScreen(
             )
         }
     val visibleNetworkIpInfo = networkModel.visibleIpInfo
-    val showNetworkLoading = networkModel.showLoading
+    val showNetworkIpInfoLoading = networkModel.showIpInfoLoading
+    val showNetworkConnectionDetailsLoading = networkModel.showConnectionDetailsLoading
     val showNetworkConnectionStatus = networkModel.showConnectionStatus
-    val showNetworkRouteDetails = showNetworkConnectionStatus && (showNetworkLoading || dashboardConnectionDetailsReady)
+    val showNetworkRouteDetails =
+        showNetworkConnectionStatus &&
+            (showNetworkConnectionDetailsLoading || dashboardConnectionDetailsReady)
     val networkInfoTitleRes = networkModel.titleRes
     val profileModel = remember(state) { resolveHomeDashboardProfileModel(state = state) }
     val isSmartDashboardProfile = profileModel.isSmartDashboardProfile
@@ -524,7 +527,6 @@ fun HomeScreen(
                                         legendLoading =
                                             shouldShowTrafficMapLegendLoading(
                                                 connectionState = state.connection.state,
-                                                autoConnectRunning = state.autoConnect.running,
                                                 explicitLoading = state.ipInfoLoading,
                                                 appLoaded = state.profilesLoaded,
                                             ),
@@ -860,12 +862,13 @@ fun HomeScreen(
                             modifier = Modifier.fillMaxWidth().height(HomeNetworkContentHeight),
                             contentAlignment = Alignment.TopStart,
                         ) {
-                            if (showNetworkLoading) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                                    verticalAlignment = Alignment.Top,
-                                ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                verticalAlignment = Alignment.Top,
+                            ) {
+                                val networkIpInfo = visibleNetworkIpInfo
+                                if (showNetworkIpInfoLoading) {
                                     HomeNetworkLoadingBlock(
                                         title = stringResource(networkInfoTitleRes),
                                         labels =
@@ -879,26 +882,8 @@ fun HomeScreen(
                                             Modifier
                                                 .weight(if (showNetworkRouteDetails) 1f else 2f)
                                                 .testTag("home_network_loading"),
-                                        loadingColor = autoTone,
                                     )
-                                    if (showNetworkRouteDetails) {
-                                        HomeNetworkVerticalDivider()
-                                        HomeConnectionStatusLoadingBlock(
-                                            modifier =
-                                                Modifier
-                                                    .weight(1f)
-                                                    .testTag("home_connection_status_loading"),
-                                            loadingColor = autoTone,
-                                        )
-                                    }
-                                }
-                            } else {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                                    verticalAlignment = Alignment.Top,
-                                ) {
-                                    val networkIpInfo = visibleNetworkIpInfo
+                                } else {
                                     val countryText =
                                         if (networkIpInfo != null) {
                                             buildCountryLine(networkIpInfo)
@@ -937,8 +922,17 @@ fun HomeScreen(
                                             value = providerText,
                                         )
                                     }
-                                    if (showNetworkRouteDetails) {
-                                        HomeNetworkVerticalDivider()
+                                }
+                                if (showNetworkRouteDetails) {
+                                    HomeNetworkVerticalDivider()
+                                    if (showNetworkConnectionDetailsLoading) {
+                                        HomeConnectionStatusLoadingBlock(
+                                            modifier =
+                                                Modifier
+                                                    .weight(1f)
+                                                    .testTag("home_connection_status_loading"),
+                                        )
+                                    } else {
                                         Column(
                                             modifier = Modifier.weight(1f),
                                             verticalArrangement = Arrangement.spacedBy(2.dp),
