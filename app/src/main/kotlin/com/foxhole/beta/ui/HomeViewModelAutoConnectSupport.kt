@@ -1705,8 +1705,12 @@ internal fun HomeViewModel.clearProtocolLatencyStateInternal(
         }
 }
 
-@Suppress("ReturnCount")
-internal fun HomeViewModel.scheduleActiveProfileLatencyRefreshInternal(showLoading: Boolean = true) {
+@Suppress("LongMethod", "ReturnCount")
+internal fun HomeViewModel.scheduleActiveProfileLatencyRefreshInternal(
+    showLoading: Boolean = true,
+    refreshImmediately: Boolean = false,
+    clearSelectedMetrics: Boolean = false,
+) {
     val activeProfile = uiState.value.activeProfile ?: return
     val selectedOptionId =
         resolveDashboardLatencyOptionId(
@@ -1726,13 +1730,26 @@ internal fun HomeViewModel.scheduleActiveProfileLatencyRefreshInternal(showLoadi
             ?.protocolHint
     profileLatencyRefreshJob?.cancel()
     dashboardConnectionMetricsLoadingMutable.value = showLoading
+    if (clearSelectedMetrics) {
+        clearActiveProfileConnectionMetrics(
+            profileId = activeProfile.id,
+            optionId = selectedOptionId,
+        )
+    }
     profileLatencyRefreshJob =
         viewModelScope.launch {
             var waitingForInitialSample = true
             try {
-                var nextDelayMs = HomeViewModel.CONNECTED_LATENCY_FIRST_DELAY_MS
+                var nextDelayMs =
+                    if (refreshImmediately) {
+                        0L
+                    } else {
+                        HomeViewModel.CONNECTED_LATENCY_FIRST_DELAY_MS
+                    }
                 while (true) {
-                    delay(nextDelayMs)
+                    if (nextDelayMs > 0L) {
+                        delay(nextDelayMs)
+                    }
                     nextDelayMs = HomeViewModel.CONNECTED_LATENCY_REFRESH_INTERVAL_MS
                     val refreshTarget =
                         activeDashboardLatencyTarget(
@@ -1815,6 +1832,18 @@ internal fun HomeViewModel.scheduleActiveProfileLatencyRefreshInternal(showLoadi
                 profileLatencyRefreshJob = null
             }
         }
+}
+
+private fun HomeViewModel.clearActiveProfileConnectionMetrics(
+    profileId: Long,
+    optionId: String,
+) {
+    val key = ProfileOptionLatencyKey(profileId, optionId)
+    profileOptionLatenciesMutable.value = profileOptionLatenciesMutable.value - key
+    profileOptionLatencyUnavailableMutable.value = profileOptionLatencyUnavailableMutable.value - key
+    profileOptionDownMutable.value = profileOptionDownMutable.value - key
+    profileOptionServerPingsMutable.value = profileOptionServerPingsMutable.value - key
+    markProtocolMetricsUpdated(profileId, optionId)
 }
 
 private suspend fun HomeViewModel.recordConnectedProtocolSmartStartMemory(

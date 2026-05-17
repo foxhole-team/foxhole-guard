@@ -298,6 +298,7 @@
     <string name="traffic_settings">Network</string>
     <string name="security_settings_title">Security</string>
     <string name="security_settings_summary">Firewall and anomaly detection</string>
+    <string name="security_settings_info_body">Security groups network and app protections: Firewall, DNS protection, new-app monitoring, quarantine, and anomaly analysis. App installs, removals, and risk signals are in Logs; traffic, countries, apps, and app-change summaries are in Statistics.</string>
     <string name="security_firewall_title">Firewall</string>
     <string name="security_firewall_summary">Enables the local Firewall for logging, permanent blocking, and the live connections map.</string>
     <string name="security_firewall_info_body">When Firewall is enabled, Foxhole can keep a local VPN runtime for features that need honest access to network connections.</string>

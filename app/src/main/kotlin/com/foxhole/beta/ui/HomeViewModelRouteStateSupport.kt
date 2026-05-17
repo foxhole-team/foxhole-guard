@@ -53,14 +53,23 @@ internal fun buildHomeRouteUiState(
     val activeProfileServerPings =
         state.activeProfile
             ?.let { activeProfile ->
+                val liveServerPingStates =
+                    protocolMetrics.serverPings
+                        .filterKeys { key -> key.profileId == activeProfile.id }
+                val liveServerPingUnavailableOptionIds =
+                    liveServerPingStates
+                        .filter { (_, value) -> value.unavailable }
+                        .keys
+                        .map(ProfileOptionLatencyKey::optionId)
+                        .toSet()
                 val rememberedServerPings =
                     state.settings
                         .smartProfilePreference(activeProfile.id)
                         ?.rememberedSmartProfileServerPingByOptionId(currentNetworkFingerprintKey)
+                        ?.filterKeys { optionId -> optionId !in liveServerPingUnavailableOptionIds }
                         .orEmpty()
                 val liveServerPings =
-                    protocolMetrics.serverPings
-                        .filterKeys { key -> key.profileId == activeProfile.id }
+                    liveServerPingStates
                         .mapNotNull { (key, value) -> value.pingMs?.let { key.optionId to it } }
                         .toMap()
                 rememberedServerPings + liveServerPings
@@ -164,10 +173,20 @@ internal fun buildProfilesRouteUiState(
             .mapNotNull { (key, value) -> value.pingMs?.let { key.profileId to (key.optionId to it) } }
             .groupBy({ it.first }, { it.second })
             .mapValues { (_, values) -> values.toMap() }
+    val liveUnavailableServerPingOptionIdsByProfileId =
+        protocolMetrics.serverPings
+            .filter { (_, value) -> value.unavailable }
+            .keys
+            .groupBy(ProfileOptionLatencyKey::profileId, ProfileOptionLatencyKey::optionId)
+            .mapValues { (_, values) -> values.toSet() }
     val mergedServerPingsByProfileId =
         (rememberedServerPingsByProfileId.keys + liveServerPingsByProfileId.keys)
             .associateWith { profileId ->
-                rememberedServerPingsByProfileId[profileId].orEmpty() +
+                rememberedServerPingsByProfileId[profileId]
+                    .orEmpty()
+                    .filterKeys { optionId ->
+                        optionId !in liveUnavailableServerPingOptionIdsByProfileId[profileId].orEmpty()
+                    } +
                     liveServerPingsByProfileId[profileId].orEmpty()
             }
     val serverPingUnavailableByProfileId =

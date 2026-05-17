@@ -302,6 +302,7 @@
     <string name="traffic_settings">Сеть</string>
     <string name="security_settings_title">Безопасность</string>
     <string name="security_settings_summary">Firewall и обнаружение аномалий</string>
+    <string name="security_settings_info_body">Раздел «Безопасность» собирает защиту сети и приложений: Firewall, DNS-защиту, контроль новых приложений, карантин и анализ аномалий. Установки, удаления и признаки риска смотрите в «Журналах»; трафик, страны, приложения и сводку изменений — в «Статистике».</string>
     <string name="security_firewall_title">Firewall</string>
     <string name="security_firewall_summary">Включает локальный Firewall для журнала, постоянной блокировки и live-карты подключений.</string>
     <string name="security_firewall_info_body">Когда Firewall включен, Foxhole может держать локальный VPN runtime для функций, которым нужен честный доступ к сетевым подключениям.</string>

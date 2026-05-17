@@ -7,6 +7,7 @@ import androidx.compose.material.icons.outlined.Apps
 import androidx.compose.material.icons.outlined.Dns
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.QueryStats
+import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
@@ -14,10 +15,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.res.vectorResource
 import com.foxhole.beta.BuildConfig
 import com.foxhole.beta.R
 import com.foxhole.beta.core.model.AnomalyHistoryRetention
@@ -30,6 +28,7 @@ fun SecuritySettingsScreen(
     onNavigateUp: () -> Unit,
     onFirewallEnabledChanged: (Boolean) -> Unit,
     onNewAppQuarantineChanged: (Boolean) -> Unit,
+    onInstalledAppMonitoringChanged: (Boolean) -> Unit,
     onSystemDnsProtectionChanged: (Boolean) -> Unit,
     onAnomalyEnabledChanged: (Boolean) -> Unit,
     onNotifyUnusualTrafficChanged: (Boolean) -> Unit,
@@ -40,12 +39,18 @@ fun SecuritySettingsScreen(
 ) {
     var sensitivityExpanded by rememberSaveable { mutableStateOf(false) }
     var retentionExpanded by rememberSaveable { mutableStateOf(false) }
-    val installedAppChangeCount = state.settings.installedAppInventoryAudit.recentChanges.size
     SettingsScaffold(
         title = stringResource(R.string.security_settings_title),
         snackbarHostState = snackbarHostState,
         onNavigateUp = onNavigateUp,
         tag = "security_settings_screen",
+        actions = {
+            SettingsHelpAction(
+                title = stringResource(R.string.security_settings_title),
+                body = stringResource(R.string.security_settings_info_body),
+                icon = Icons.Outlined.Shield,
+            )
+        },
     ) {
         if (BuildConfig.DEBUG) {
             item {
@@ -59,9 +64,9 @@ fun SecuritySettingsScreen(
         item {
             SecurityProtectionControlGroup(
                 state = state,
-                installedAppChangeCount = installedAppChangeCount,
                 onFirewallEnabledChanged = onFirewallEnabledChanged,
                 onSystemDnsProtectionChanged = onSystemDnsProtectionChanged,
+                onInstalledAppMonitoringChanged = onInstalledAppMonitoringChanged,
                 onNewAppQuarantineChanged = onNewAppQuarantineChanged,
             )
         }
@@ -145,23 +150,19 @@ fun SecuritySettingsScreen(
 @Composable
 private fun SecurityProtectionControlGroup(
     state: SettingsRouteUiState,
-    installedAppChangeCount: Int,
     onFirewallEnabledChanged: (Boolean) -> Unit,
     onSystemDnsProtectionChanged: (Boolean) -> Unit,
+    onInstalledAppMonitoringChanged: (Boolean) -> Unit,
     onNewAppQuarantineChanged: (Boolean) -> Unit,
 ) {
-    val installedAppMonitorValue =
-        pluralStringResource(
-            R.plurals.security_app_install_monitor_value,
-            installedAppChangeCount,
-            installedAppChangeCount,
-        )
+    val installedAppMonitoringEnabled =
+        state.settings.statistics.enabled && state.settings.statistics.appChangesEnabled
     SettingsControlGroup {
         SettingSwitchRow(
             title = stringResource(R.string.security_firewall_title),
             checked = state.settings.expert.firewallEnabled,
             summary = stringResource(R.string.security_firewall_summary),
-            leadingIcon = ImageVector.vectorResource(R.drawable.ic_firewall_shield_key),
+            leadingIcon = Icons.Outlined.Shield,
             onCheckedChange = onFirewallEnabledChanged,
             summaryMaxLines = 3,
             grouped = true,
@@ -178,7 +179,8 @@ private fun SecurityProtectionControlGroup(
         )
         SettingsControlGroupDivider()
         AppInstallMonitorSettingsRow(
-            value = installedAppMonitorValue,
+            checked = installedAppMonitoringEnabled,
+            onCheckedChange = onInstalledAppMonitoringChanged,
         )
         SettingsControlGroupDivider()
         SettingSwitchRow(
@@ -195,14 +197,15 @@ private fun SecurityProtectionControlGroup(
 
 @Composable
 private fun AppInstallMonitorSettingsRow(
-    value: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
 ) {
-    SettingValueRow(
+    SettingSwitchRow(
         title = stringResource(R.string.security_app_install_monitor_title),
-        value = value,
+        checked = checked,
         summary = stringResource(R.string.security_app_install_monitor_summary),
         leadingIcon = Icons.Outlined.Apps,
-        onClick = null,
+        onCheckedChange = onCheckedChange,
         summaryMaxLines = 5,
         grouped = true,
     )

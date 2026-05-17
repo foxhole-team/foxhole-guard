@@ -132,6 +132,7 @@ fun HomeScreen(
     onKillSwitchChanged: (Boolean) -> Unit,
     onFirewallEnabledChanged: (Boolean) -> Unit,
     onPrivacyRouteModeSelected: (PrivacyRouteMode) -> Unit,
+    onOpenPrivacyRoute: () -> Unit,
     onSelectActiveProtocolOption: (String) -> Unit,
     onUpdateAutoConnectExcludedOptions: (Set<String>) -> Unit,
     onRefreshSmartProfileMetrics: (Long) -> Unit,
@@ -1084,7 +1085,7 @@ fun HomeScreen(
                                     }
                                 val outgoingTrafficTint =
                                     if (trafficModel.hasOutgoingTraffic) {
-                                        FoxholeInfoAccent
+                                        Color(0xFF2F80ED)
                                     } else {
                                         trafficLabelTint
                                     }
@@ -1219,6 +1220,7 @@ fun HomeScreen(
             onKillSwitchChanged = onKillSwitchChanged,
             onFirewallEnabledChanged = onFirewallEnabledChanged,
             onPrivacyRouteModeSelected = onPrivacyRouteModeSelected,
+            onOpenPrivacyRoute = onOpenPrivacyRoute,
             onLocalProxyLanAccessChanged = onLocalProxyLanAccessChanged,
             onRenewTorIp = onRenewTorIp,
             onRestart = onToggleConnection,

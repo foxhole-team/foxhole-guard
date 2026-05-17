@@ -19,6 +19,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
 
 class InstalledAppChangeReceiver : BroadcastReceiver() {
+    @Suppress("CyclomaticComplexMethod")
     override fun onReceive(
         context: Context,
         intent: Intent,
@@ -38,9 +39,20 @@ class InstalledAppChangeReceiver : BroadcastReceiver() {
                 },
             ) {
                 runCatching {
+                    val settings = app.container.settingsRepository.current()
+                    val monitoringEnabled = settings.statistics.enabled && settings.statistics.appChangesEnabled
+                    val quarantineEnabled = settings.expert.newAppQuarantineEnabled
+                    val quarantineNeedsPackage =
+                        packageChange.type == InstalledAppChangeType.INSTALLED && quarantineEnabled
+                    if (!monitoringEnabled && !quarantineNeedsPackage) {
+                        return@runCatching
+                    }
                     val packageInfo = app.packageInventoryInfo(packageChange.packageName, packageChange.type)
                     val securitySummary =
-                        if (packageChange.type == InstalledAppChangeType.INSTALLED) {
+                        if (
+                            packageChange.type == InstalledAppChangeType.INSTALLED &&
+                            (monitoringEnabled || quarantineEnabled)
+                        ) {
                             InstalledAppSecurityAnalyzer(app).analyzePackage(
                                 packageName = packageChange.packageName,
                                 fallbackLabel = packageInfo.label,
@@ -63,11 +75,11 @@ class InstalledAppChangeReceiver : BroadcastReceiver() {
                     if (
                         packageChange.type == InstalledAppChangeType.INSTALLED &&
                         !resolvedIsSystemApp &&
-                        app.container.settingsRepository.current().expert.newAppQuarantineEnabled
+                        quarantineEnabled
                     ) {
                         app.container.connectionController.syncLocalGuard()
                     }
-                    if (securitySummary != null) {
+                    if (monitoringEnabled && securitySummary != null) {
                         InstalledAppSecurityNotifier(app).notifyInstalledApp(securitySummary)
                     }
                 }.onFailure { error ->

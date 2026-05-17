@@ -14,7 +14,6 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -61,6 +60,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
@@ -277,6 +277,7 @@ fun FoxholeApp(
                         onKillSwitchChanged = viewModel::onKillSwitchChanged,
                         onFirewallEnabledChanged = viewModel::onFirewallEnabledChanged,
                         onPrivacyRouteModeSelected = viewModel::onPrivacyRouteModeSelected,
+                        onOpenPrivacyRoute = { navController.navigate(AppRoute.PRIVACY_ROUTE) },
                         onSelectActiveProtocolOption = { optionId ->
                             state.activeProfile?.id?.let { profileId ->
                                 viewModel.onSelectProfileProtocolOption(profileId, optionId)
@@ -502,6 +503,7 @@ fun FoxholeApp(
                         onNavigateUp = navController::navigateUp,
                         onFirewallEnabledChanged = viewModel::onFirewallEnabledChanged,
                         onNewAppQuarantineChanged = viewModel::onNewAppQuarantineChanged,
+                        onInstalledAppMonitoringChanged = viewModel::onInstalledAppMonitoringChanged,
                         onSystemDnsProtectionChanged = viewModel::onSystemDnsProtectionChanged,
                         onAnomalyEnabledChanged = viewModel::onAnomalyEnabledChanged,
                         onNotifyUnusualTrafficChanged = viewModel::onNotifyUnusualTrafficChanged,
@@ -519,6 +521,7 @@ fun FoxholeApp(
                         onNavigateUp = navController::navigateUp,
                         onFirewallEnabledChanged = viewModel::onFirewallEnabledChanged,
                         onNewAppQuarantineChanged = viewModel::onNewAppQuarantineChanged,
+                        onInstalledAppMonitoringChanged = viewModel::onInstalledAppMonitoringChanged,
                         onSystemDnsProtectionChanged = viewModel::onSystemDnsProtectionChanged,
                         onAnomalyEnabledChanged = viewModel::onAnomalyEnabledChanged,
                         onNotifyUnusualTrafficChanged = viewModel::onNotifyUnusualTrafficChanged,
@@ -778,6 +781,7 @@ private fun FoxholeBottomBar(
 ) {
     val selectedSection = currentSection ?: AppSection.DASHBOARD
     val uiPalette = LocalFoxholeUiPalette.current
+    val screenHeight = LocalConfiguration.current.screenHeightDp.dp
     Box(
         modifier =
             Modifier
@@ -786,70 +790,59 @@ private fun FoxholeBottomBar(
                 .padding(top = 4.dp, bottom = 10.dp),
         contentAlignment = Alignment.BottomCenter,
     ) {
-        Surface(
+        FoxholeBlurredBackgroundLayer(
             modifier =
                 Modifier
                     .fillMaxWidth(0.62f)
-                    .widthIn(min = 180.dp, max = 248.dp),
+                    .widthIn(min = 180.dp, max = 248.dp)
+                    .height(60.dp),
             shape = MaterialTheme.shapes.large,
-            color = Color.Transparent,
-            tonalElevation = 0.dp,
-            shadowElevation = 0.dp,
-            border = BorderStroke(0.dp, Color.Transparent),
+            gradientHeight = screenHeight,
+            opacity = 0.96f,
+            blurRadius = 18.dp,
+            borderColor = uiPalette.bottomBarBorderColor,
         ) {
-            FoxholeGlassPanel(
+            BoxWithConstraints(
                 modifier =
                     Modifier
                         .fillMaxWidth()
-                        .height(60.dp),
-                shape = MaterialTheme.shapes.large,
-                containerColor = uiPalette.bottomBarContainerColor,
-                borderColor = uiPalette.bottomBarBorderColor,
-                blurRadius = 18.dp,
-                backgroundAlpha = 0.72f,
+                        .padding(horizontal = 4.dp, vertical = 4.dp)
+                        .height(52.dp),
             ) {
-                BoxWithConstraints(
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 4.dp, vertical = 4.dp)
-                            .height(52.dp),
-                ) {
-                    val sections = AppSection.entries
-                    val tabWidth = maxWidth / sections.size
-                    val selectedIndex = sections.indexOf(selectedSection).coerceAtLeast(0)
-                    val indicatorOffset by animateDpAsState(
-                        targetValue = tabWidth * selectedIndex,
-                        animationSpec =
-                            tween(
-                                durationMillis = FoxholeMotionTokens.NavigationIndicatorDurationMs,
-                                easing = FoxholeMotionTokens.NavigationIndicatorEasing,
-                            ),
-                        label = "bottom_bar_indicator",
-                    )
+                val sections = AppSection.entries
+                val tabWidth = maxWidth / sections.size
+                val selectedIndex = sections.indexOf(selectedSection).coerceAtLeast(0)
+                val indicatorOffset by animateDpAsState(
+                    targetValue = tabWidth * selectedIndex,
+                    animationSpec =
+                        tween(
+                            durationMillis = FoxholeMotionTokens.NavigationIndicatorDurationMs,
+                            easing = FoxholeMotionTokens.NavigationIndicatorEasing,
+                        ),
+                    label = "bottom_bar_indicator",
+                )
 
-                    Box(modifier = Modifier.fillMaxSize()) {
-                        Surface(
-                            modifier =
-                                Modifier
-                                    .offset { IntOffset(x = indicatorOffset.roundToPx(), y = 0) }
-                                    .width(tabWidth)
-                                    .fillMaxHeight(),
-                            shape = MaterialTheme.shapes.medium,
-                            color = uiPalette.bottomBarIndicatorColor,
-                            shadowElevation = 0.dp,
-                        ) {}
-                        Row(
-                            modifier = Modifier.fillMaxSize(),
-                            horizontalArrangement = Arrangement.spacedBy(0.dp),
-                        ) {
-                            sections.forEach { section ->
-                                FoxholeBottomBarItem(
-                                    section = section,
-                                    selected = section == selectedSection,
-                                    onClick = { onSectionSelected(section) },
-                                )
-                            }
+                Box(modifier = Modifier.fillMaxSize()) {
+                    Surface(
+                        modifier =
+                            Modifier
+                                .offset { IntOffset(x = indicatorOffset.roundToPx(), y = 0) }
+                                .width(tabWidth)
+                                .fillMaxHeight(),
+                        shape = MaterialTheme.shapes.medium,
+                        color = uiPalette.bottomBarIndicatorColor,
+                        shadowElevation = 0.dp,
+                    ) {}
+                    Row(
+                        modifier = Modifier.fillMaxSize(),
+                        horizontalArrangement = Arrangement.spacedBy(0.dp),
+                    ) {
+                        sections.forEach { section ->
+                            FoxholeBottomBarItem(
+                                section = section,
+                                selected = section == selectedSection,
+                                onClick = { onSectionSelected(section) },
+                            )
                         }
                     }
                 }

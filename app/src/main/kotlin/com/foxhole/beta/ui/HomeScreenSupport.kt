@@ -730,6 +730,7 @@ internal fun HomeConnectionFeatureDialog(
     onKillSwitchChanged: (Boolean) -> Unit,
     onFirewallEnabledChanged: (Boolean) -> Unit,
     onPrivacyRouteModeSelected: (PrivacyRouteMode) -> Unit,
+    onOpenPrivacyRoute: () -> Unit,
     onLocalProxyLanAccessChanged: (Boolean) -> Unit,
     onRenewTorIp: () -> Unit,
     onRestart: () -> Unit,
@@ -740,6 +741,7 @@ internal fun HomeConnectionFeatureDialog(
     val restartAvailable = state.homeConnectionFeatureRestartAvailable()
     val enabled = feature.enabledIn(state)
     val torSelectedProtocolIsUdp = feature == HomeConnectionFeature.TOR && homeTorSelectedProtocolIsUdp(state)
+    val torRouteNeedsSetup = feature == HomeConnectionFeature.TOR && !enabled && homeTorRouteNeedsSetup(state)
     val confirmEnabled = !(feature == HomeConnectionFeature.TOR && torSelectedProtocolIsUdp && !enabled)
     val torOperationActive = feature == HomeConnectionFeature.TOR && state.torOperation.active
     val confirmLabel = homeConnectionFeatureConfirmLabel(torOperationActive, enabled, restartAvailable)
@@ -772,9 +774,11 @@ internal fun HomeConnectionFeatureDialog(
                         onKillSwitchChanged = onKillSwitchChanged,
                         onFirewallEnabledChanged = onFirewallEnabledChanged,
                         onPrivacyRouteModeSelected = onPrivacyRouteModeSelected,
+                        onOpenPrivacyRoute = onOpenPrivacyRoute,
                         onLocalProxyLanAccessChanged = onLocalProxyLanAccessChanged,
                         onRestart = onRestart,
                         onDismiss = onDismiss,
+                        torRouteNeedsSetup = torRouteNeedsSetup,
                     )
                 },
                 enabled = confirmEnabled,
@@ -807,6 +811,9 @@ private fun HomeConnectionFeature.enabledIn(state: HomeRouteUiState): Boolean =
         HomeConnectionFeature.TOR -> state.settings.privacyRoute.enabled
         HomeConnectionFeature.LAN_PROXY -> state.settings.expert.localSurfaces.allowLanAccess
     }
+
+private fun homeTorRouteNeedsSetup(state: HomeRouteUiState): Boolean =
+    !homeTorRouteHasRunnableScope(state)
 
 @Composable
 private fun homeConnectionFeatureConfirmLabel(
@@ -862,12 +869,19 @@ private fun handleHomeConnectionFeatureConfirm(
     onKillSwitchChanged: (Boolean) -> Unit,
     onFirewallEnabledChanged: (Boolean) -> Unit,
     onPrivacyRouteModeSelected: (PrivacyRouteMode) -> Unit,
+    onOpenPrivacyRoute: () -> Unit,
     onLocalProxyLanAccessChanged: (Boolean) -> Unit,
     onRestart: () -> Unit,
     onDismiss: () -> Unit,
+    torRouteNeedsSetup: Boolean,
 ) {
     when {
         feature == HomeConnectionFeature.TOR -> {
+            if (!enabled && torRouteNeedsSetup) {
+                onDismiss()
+                onOpenPrivacyRoute()
+                return
+            }
             onPrivacyRouteModeSelected(
                 if (enabled) {
                     PrivacyRouteMode.OFF

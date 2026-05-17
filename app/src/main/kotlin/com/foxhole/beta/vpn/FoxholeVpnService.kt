@@ -536,10 +536,42 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         stopNotificationHealthMonitoring()
         validationJob?.cancel()
         validationJob = null
-        runtime.stop()
+        stopRuntimeFailClosed(reason = "local_guard_handoff")
         releaseRuntimeWakeLock()
         activeLocalGuardMode = null
         FoxholeVpnRuntimeBridge.updateTraffic(trafficSampler.reset())
+    }
+
+    private suspend fun stopRuntimeFailClosed(reason: String): RuntimeStopResult {
+        val policy =
+            RuntimeStopPolicy(
+                closeTunFdImmediately = true,
+                closeServiceTimeoutMs = 700L,
+                closeServerTimeoutMs = 700L,
+                totalGracefulTimeoutMs = RUNTIME_STOP_TIMEOUT_MS,
+                forceKillAfterTimeout = true,
+            )
+        val result =
+            withTimeoutOrNull(RUNTIME_STOP_TIMEOUT_MS) {
+                runtime.stop(policy)
+            }
+        if (result != null) {
+            return result
+        }
+        container.diagnosticsLogger.recordStructured(
+            "runtime",
+            "runtime stop timeout",
+            "reason=$reason",
+            "timeout_ms=$RUNTIME_STOP_TIMEOUT_MS",
+        )
+        val killResult = runtime.forceKill("${reason}_stop_timeout")
+        return RuntimeStopResult(
+            closeServiceOk = false,
+            closeServerOk = false,
+            tunClosed = killResult.tunClosed,
+            escalatedToKill = true,
+            elapsedMs = RUNTIME_STOP_TIMEOUT_MS,
+        )
     }
 
     @Suppress("CyclomaticComplexMethod")
@@ -605,7 +637,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
                 detail = message.takeIf(String::isNotBlank)?.let { "message=$it" },
             )
         }
-        runtime.stop()
+        stopRuntimeFailClosed(reason = "disconnect")
         releaseRuntimeWakeLock()
         activeSession = null
         activeLocalGuardMode = null
@@ -668,7 +700,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
                 "connection",
                 "local guard restarting mode=${activeLocalGuardMode?.name?.lowercase().orEmpty()}",
             )
-            runtime.stop()
+            stopRuntimeFailClosed(reason = "local_guard_restart")
             releaseRuntimeWakeLock()
             activeLocalGuardMode = null
             activeVpnNetworkHandle = null
@@ -783,7 +815,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
             "runtime command fail-closed teardown",
             action?.let { "action=$it" } ?: "action=null",
         )
-        runtime.stop()
+        stopRuntimeFailClosed(reason = "runtime_command_fail_closed")
         releaseRuntimeWakeLock()
         activeSession = null
         activeLocalGuardMode = null
@@ -893,7 +925,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         stopTrafficUpdates()
         stopAppTrafficStatsUpdates()
         stopGeoRefresh()
-        runtime.stop(RuntimeStopPolicy(closeTunFdImmediately = true, forceKillAfterTimeout = true))
+        stopRuntimeFailClosed(reason = "reload_recovery")
         activeVpnNetworkHandle = null
         activeSession = session
         FoxholeVpnRuntimeBridge.updateTraffic(trafficSampler.reset())

@@ -326,7 +326,7 @@ private fun BoxScope.FoxholeTopChrome(
             modifier = Modifier.fillMaxSize(),
             shape = RectangleShape,
             gradientHeight = gradientHeight,
-            opacity = 0.78f,
+            opacity = 0.96f,
             blurRadius = 18.dp,
         )
     }
@@ -672,7 +672,6 @@ private fun FoxholeBanner(
     Surface(
         modifier =
             modifier
-                .padding(horizontal = CardInnerPadding)
                 .heightIn(min = HomeTopStatusInnerSurfaceMinHeight)
                 .testTag("foxhole_banner_shell"),
         shape = MaterialTheme.shapes.large,
@@ -1046,12 +1045,14 @@ internal fun FoxholeGlassPanel(
 }
 
 @Composable
-private fun FoxholeBlurredBackgroundLayer(
+internal fun FoxholeBlurredBackgroundLayer(
     modifier: Modifier = Modifier,
     shape: Shape = RectangleShape,
     gradientHeight: Dp? = null,
-    opacity: Float = 0.78f,
+    opacity: Float = 0.96f,
     blurRadius: Dp = 18.dp,
+    borderColor: Color = Color.Unspecified,
+    content: @Composable BoxScope.() -> Unit = {},
 ) {
     Box(
         modifier =
@@ -1067,6 +1068,20 @@ private fun FoxholeBlurredBackgroundLayer(
                         opacity = opacity,
                     )
                     .blur(blurRadius),
+        )
+        if (borderColor != Color.Unspecified) {
+            Surface(
+                modifier = Modifier.fillMaxSize(),
+                shape = shape,
+                color = Color.Transparent,
+                tonalElevation = 0.dp,
+                shadowElevation = 0.dp,
+                border = BorderStroke(1.dp, borderColor),
+            ) {}
+        }
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            content = content,
         )
     }
 }

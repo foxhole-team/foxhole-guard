@@ -1092,8 +1092,15 @@ class HomeViewModel(
 
     fun onProtocolRecommendationAccepted() = onProtocolRecommendationAcceptedInternal()
 
-    internal fun scheduleActiveProfileLatencyRefresh(showLoading: Boolean = true) =
-        scheduleActiveProfileLatencyRefreshInternal(showLoading = showLoading)
+    internal fun scheduleActiveProfileLatencyRefresh(
+        showLoading: Boolean = true,
+        refreshImmediately: Boolean = false,
+        clearSelectedMetrics: Boolean = false,
+    ) = scheduleActiveProfileLatencyRefreshInternal(
+        showLoading = showLoading,
+        refreshImmediately = refreshImmediately,
+        clearSelectedMetrics = clearSelectedMetrics,
+    )
 
     internal fun clearProfileLatencyRefresh() = clearProfileLatencyRefreshInternal()
 
@@ -1175,6 +1182,8 @@ class HomeViewModel(
     fun onBlockScreenshotsChanged(value: Boolean) = onBlockScreenshotsChangedInternal(value)
 
     fun onNewAppQuarantineChanged(value: Boolean) = onNewAppQuarantineChangedInternal(value)
+
+    fun onInstalledAppMonitoringChanged(value: Boolean) = onInstalledAppMonitoringChangedInternal(value)
 
     fun onTrafficMapEnabledChanged(value: Boolean) = onTrafficMapEnabledChangedInternal(value)
 

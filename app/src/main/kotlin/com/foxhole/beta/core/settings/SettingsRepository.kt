@@ -532,6 +532,17 @@ class SettingsRepository(
         current.copy(statistics = statistics)
     }
 
+    suspend fun updateInstalledAppMonitoringEnabled(value: Boolean) =
+        update { current ->
+            val statistics =
+                if (value) {
+                    current.statistics.copy(enabled = true, appChangesEnabled = true)
+                } else {
+                    current.statistics.copy(appChangesEnabled = false)
+                }
+            current.copy(statistics = statistics)
+        }
+
     suspend fun updateAppTrafficStatsEnabled(value: Boolean) =
         update { current ->
             current.copy(appTrafficStatsEnabled = value)

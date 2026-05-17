@@ -36,7 +36,6 @@ import androidx.compose.material.icons.outlined.FileDownload
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.LightMode
-import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Map
 import androidx.compose.material.icons.outlined.PhoneAndroid
 import androidx.compose.material.icons.outlined.Public
@@ -76,7 +75,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -274,31 +272,32 @@ private fun LazyListScope.settingsHomeNavigationItems(
         }
     }
     item {
-        SettingsNavigationRow(
-            modifier = Modifier.testTag("settings_security_action"),
-            icon = Icons.Outlined.Lock,
-            title = stringResource(R.string.security_settings_title),
-            titleTrailingContent = { ExperimentalBadge() },
-            summary = stringResource(R.string.security_settings_summary),
-            onClick = onOpenSecurity,
-        )
-    }
-    item {
-        SettingsRoutingNavigationGroup(
+        SettingsSecurityRoutingNavigationGroup(
+            onOpenSecurity = onOpenSecurity,
             onOpenRoutingApps = onOpenRoutingApps,
             onOpenRoutingSites = onOpenRoutingSites,
             onOpenPrivacyRoute = onOpenPrivacyRoute,
         )
     }
     item {
-            SettingsNavigationGroup {
-                SettingsGroupedNavigationRow(
-                    modifier = Modifier.testTag("settings_application_action"),
-                    icon = Icons.Outlined.PhoneAndroid,
-                    title = stringResource(R.string.app_settings),
-                    summary = stringResource(R.string.settings_home_application_summary),
-                    onClick = onOpenApplication,
+        SettingsNavigationGroup {
+            SettingsGroupedNavigationRow(
+                modifier = Modifier.testTag("settings_application_action"),
+                icon = Icons.Outlined.PhoneAndroid,
+                title = stringResource(R.string.app_settings),
+                summary = stringResource(R.string.settings_home_application_summary),
+                onClick = onOpenApplication,
             )
+            if (expertVisible) {
+                SettingsGroupDivider()
+                SettingsGroupedNavigationRow(
+                    modifier = Modifier.testTag("settings_expert_action"),
+                    icon = Icons.Outlined.Tune,
+                    title = stringResource(R.string.expert_settings),
+                    summary = stringResource(R.string.settings_home_advanced_summary),
+                    onClick = onOpenExpert,
+                )
+            }
             SettingsGroupDivider()
             SettingsGroupedNavigationRow(
                 icon = Icons.AutoMirrored.Outlined.Article,
@@ -312,17 +311,6 @@ private fun LazyListScope.settingsHomeNavigationItems(
                 title = stringResource(R.string.statistics_title),
                 summary = stringResource(R.string.settings_home_statistics_summary),
                 onClick = onOpenStatistics,
-            )
-        }
-    }
-    if (expertVisible) {
-        item {
-            SettingsNavigationRow(
-                modifier = Modifier.testTag("settings_expert_action"),
-                icon = Icons.Outlined.Shield,
-                title = stringResource(R.string.expert_settings),
-                summary = stringResource(R.string.settings_home_advanced_summary),
-                onClick = onOpenExpert,
             )
         }
     }
@@ -346,12 +334,21 @@ private fun LazyListScope.settingsHomeFooterItem(
 }
 
 @Composable
-private fun SettingsRoutingNavigationGroup(
+private fun SettingsSecurityRoutingNavigationGroup(
+    onOpenSecurity: () -> Unit,
     onOpenRoutingApps: () -> Unit,
     onOpenRoutingSites: () -> Unit,
     onOpenPrivacyRoute: () -> Unit,
 ) {
     SettingsNavigationGroup {
+        SettingsGroupedNavigationRow(
+            modifier = Modifier.testTag("settings_security_action"),
+            icon = Icons.Outlined.Shield,
+            title = stringResource(R.string.security_settings_title),
+            summary = stringResource(R.string.security_settings_summary),
+            onClick = onOpenSecurity,
+        )
+        SettingsGroupDivider()
         SettingsGroupedNavigationRow(
             modifier = Modifier.testTag("settings_routing_sites_action"),
             icon = Icons.Outlined.Language,
@@ -370,7 +367,7 @@ private fun SettingsRoutingNavigationGroup(
         SettingsGroupDivider()
         SettingsGroupedNavigationRow(
             modifier = Modifier.testTag("settings_privacy_route_action"),
-            icon = ImageVector.vectorResource(R.drawable.ic_tor_route),
+            icon = Icons.Outlined.VpnKey,
             title = stringResource(R.string.privacy_route_title),
             summary = stringResource(R.string.privacy_route_summary),
             summaryMaxLines = Int.MAX_VALUE,
@@ -1265,7 +1262,7 @@ fun PrivacyRouteSettingsScreen(
             SettingsHelpAction(
                 title = stringResource(R.string.privacy_route_title),
                 body = stringResource(R.string.privacy_route_info_body),
-                icon = ImageVector.vectorResource(R.drawable.ic_tor_route),
+                icon = Icons.Outlined.VpnKey,
             )
         },
     ) {
@@ -1284,7 +1281,7 @@ fun PrivacyRouteSettingsScreen(
                         )
                     },
                     summary = stringResource(R.string.privacy_route_summary),
-                    leadingIcon = ImageVector.vectorResource(R.drawable.ic_tor_route),
+                    leadingIcon = Icons.Outlined.VpnKey,
                     summaryMaxLines = 3,
                     grouped = true,
                 )
@@ -1483,7 +1480,7 @@ fun ApplicationSettingsScreen(
                     title = stringResource(R.string.show_tor_quick_launch_title),
                     checked = state.settings.ui.showTorQuickLaunch,
                     summary = stringResource(R.string.show_tor_quick_launch_summary),
-                    leadingIcon = ImageVector.vectorResource(R.drawable.ic_tor_route),
+                    leadingIcon = Icons.Outlined.RocketLaunch,
                     onCheckedChange = onShowTorQuickLaunchChanged,
                     summaryMaxLines = Int.MAX_VALUE,
                     grouped = true,
@@ -1493,7 +1490,7 @@ fun ApplicationSettingsScreen(
                     title = stringResource(R.string.show_firewall_status_title),
                     checked = state.settings.expert.firewallEnabled && state.settings.ui.showFirewallStatus,
                     summary = stringResource(R.string.show_firewall_status_summary),
-                    leadingIcon = ImageVector.vectorResource(R.drawable.ic_firewall_shield_key),
+                    leadingIcon = Icons.Outlined.Shield,
                     onCheckedChange = onShowFirewallStatusChanged,
                     enabled = state.settings.expert.firewallEnabled,
                     summaryMaxLines = Int.MAX_VALUE,

@@ -237,18 +237,48 @@ private class ReflectiveLibboxRuntime(
             Result.failure(normalized)
         }
 
-    override suspend fun stop(policy: RuntimeStopPolicy): RuntimeStopResult =
-        nextRuntimeGeneration("stop").let {
-            val preclosedTun =
-                if (policy.closeTunFdImmediately) {
-                    closeTunFdNow()
-                } else {
-                    null
+    override suspend fun stop(policy: RuntimeStopPolicy): RuntimeStopResult {
+        val startedAt = SystemClock.elapsedRealtime()
+        nextRuntimeGeneration("stop")
+        val preclosedTun =
+            if (policy.closeTunFdImmediately) {
+                closeTunFdNow()
+            } else {
+                null
+            }
+        return if (policy.forceKillAfterTimeout) {
+            if (libboxRuntimeOperationMutex.tryLock()) {
+                try {
+                    stopLocked(policy, preclosedTun)
+                } finally {
+                    libboxRuntimeOperationMutex.unlock()
                 }
+            } else {
+                diagnosticsLogger.recordStructured(
+                    "runtime",
+                    "stop_lock_busy",
+                    "total_timeout_ms=${policy.totalGracefulTimeoutMs}",
+                )
+                val killResult =
+                    killRuntimeState(
+                        reason = "stop_lock_busy",
+                        operationLockAcquired = false,
+                        preclosedTun = preclosedTun,
+                    )
+                RuntimeStopResult(
+                    closeServiceOk = false,
+                    closeServerOk = false,
+                    tunClosed = killResult.tunClosed,
+                    escalatedToKill = true,
+                    elapsedMs = SystemClock.elapsedRealtime() - startedAt,
+                )
+            }
+        } else {
             libboxRuntimeOperationMutex.withLock {
                 stopLocked(policy, preclosedTun)
             }
         }
+    }
 
     private suspend fun stopLocked(
         policy: RuntimeStopPolicy,

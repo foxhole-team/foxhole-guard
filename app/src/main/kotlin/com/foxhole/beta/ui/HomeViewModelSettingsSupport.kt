@@ -288,6 +288,20 @@ internal fun HomeViewModel.onNewAppQuarantineChangedInternal(value: Boolean) {
     }
 }
 
+internal fun HomeViewModel.onInstalledAppMonitoringChangedInternal(value: Boolean) {
+    viewModelScope.launch {
+        container.settingsRepository.updateInstalledAppMonitoringEnabled(value)
+        if (value) {
+            requestNotificationPermission.tryEmit(Unit)
+            if (installedAppsMutable.value.isEmpty()) {
+                loadInstalledApps()
+            } else {
+                container.settingsRepository.recordInstalledAppInventory(installedAppsMutable.value)
+            }
+        }
+    }
+}
+
 internal fun HomeViewModel.onTrafficMapEnabledChangedInternal(value: Boolean) {
     viewModelScope.launch {
         container.settingsRepository.updateTrafficMapEnabled(value)
