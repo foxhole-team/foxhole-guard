@@ -15,14 +15,14 @@ class TunnelValidationPolicyTest {
     }
 
     @Test
-    fun `literal ip validation requires private dns opt-in`() {
+    fun `literal ip validation requires private dns opt-in and evidence`() {
         assertFalse(
             acceptsTunnelValidationProbe(
                 kind = TunnelValidationProbeKind.DNS_INDEPENDENT_LITERAL_IP,
                 context = TunnelValidationPolicyContext(),
             ),
         )
-        assertTrue(
+        assertFalse(
             acceptsTunnelValidationProbe(
                 kind = TunnelValidationProbeKind.DNS_INDEPENDENT_LITERAL_IP,
                 context =
@@ -31,20 +31,53 @@ class TunnelValidationPolicyTest {
                     ),
             ),
         )
-    }
-
-    @Test
-    fun `strict private dns mode enables literal ip validation`() {
+        assertFalse(
+            acceptsTunnelValidationProbe(
+                kind = TunnelValidationProbeKind.DNS_INDEPENDENT_LITERAL_IP,
+                context =
+                    TunnelValidationPolicyContext(
+                        hasDnsIndependentLiteralIpValidationEvidence = true,
+                    ),
+            ),
+        )
         assertTrue(
             acceptsTunnelValidationProbe(
                 kind = TunnelValidationProbeKind.DNS_INDEPENDENT_LITERAL_IP,
-                context = tunnelValidationPolicyContextFor(PrivateDnsMode.STRICT),
+                context =
+                    TunnelValidationPolicyContext(
+                        allowDnsIndependentLiteralIpValidation = true,
+                        hasDnsIndependentLiteralIpValidationEvidence = true,
+                    ),
+            ),
+        )
+    }
+
+    @Test
+    fun `strict private dns mode opts in but does not prove literal ip validation`() {
+        val strictContext = tunnelValidationPolicyContextFor(PrivateDnsMode.STRICT)
+
+        assertFalse(
+            acceptsTunnelValidationProbe(
+                kind = TunnelValidationProbeKind.DNS_INDEPENDENT_LITERAL_IP,
+                context = strictContext,
+            ),
+        )
+        assertTrue(
+            acceptsTunnelValidationProbe(
+                kind = TunnelValidationProbeKind.DNS_INDEPENDENT_LITERAL_IP,
+                context =
+                    strictContext.copy(
+                        hasDnsIndependentLiteralIpValidationEvidence = true,
+                    ),
             ),
         )
         assertFalse(
             acceptsTunnelValidationProbe(
                 kind = TunnelValidationProbeKind.DNS_INDEPENDENT_LITERAL_IP,
-                context = tunnelValidationPolicyContextFor(PrivateDnsMode.OFF),
+                context =
+                    tunnelValidationPolicyContextFor(PrivateDnsMode.OFF).copy(
+                        hasDnsIndependentLiteralIpValidationEvidence = true,
+                    ),
             ),
         )
     }

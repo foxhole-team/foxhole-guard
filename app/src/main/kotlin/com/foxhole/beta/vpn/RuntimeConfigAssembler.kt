@@ -953,9 +953,10 @@ class RuntimeConfigAssembler(
 
     private fun buildTorPrivacyRouteRules(splitPlan: RuntimeSplitPlan): List<JsonObject> =
         when {
-            splitPlan.torAllApps -> listOf(udpBlockRule())
+            splitPlan.torAllApps -> listOf(runtimeProxyTorRouteRule(), udpBlockRule())
             splitPlan.torTcpPackages.isNotEmpty() ->
                 listOf(
+                    runtimeProxyTorRouteRule(),
                     packageNetworkRouteRule(
                         splitPlan.torUdpBlockedPackages,
                         network = "udp",
@@ -968,6 +969,16 @@ class RuntimeConfigAssembler(
                     ),
                 )
             else -> emptyList()
+        }
+
+    private fun runtimeProxyTorRouteRule(): JsonObject =
+        buildJsonObject {
+            putJsonArray("inbound") {
+                add(JsonPrimitive(RUNTIME_LOOPBACK_PROXY_INBOUND_TAG))
+            }
+            put("network", "tcp")
+            put("action", "route")
+            put("outbound", TOR_OVER_VPN_OUTBOUND_TAG)
         }
 
     private fun udpBlockRule(): JsonObject =
@@ -1141,7 +1152,7 @@ class RuntimeConfigAssembler(
         val localSurface = localSurfaces.proxySurface()
         return proxyInbound(
             type = ProxySurfaceMode.ALL.inboundType,
-            tag = "foxhole-runtime-proxy-in",
+            tag = RUNTIME_LOOPBACK_PROXY_INBOUND_TAG,
             listenHost = localSurface.host,
             port = localSurface.port,
             auth = LocalAuthSettings(enabled = false),
@@ -1752,6 +1763,7 @@ class RuntimeConfigAssembler(
         const val DNS_ADGUARD_RULE_SET_TAG = "foxhole-adguard-dns-filter"
         const val WIREGUARD_DNS_TAG = "dns-wireguard"
         const val TOR_OVER_VPN_OUTBOUND_TAG = "tor-over-vpn"
+        const val RUNTIME_LOOPBACK_PROXY_INBOUND_TAG = "foxhole-runtime-proxy-in"
         const val FOXHOLE_REMOTE_DNS_SERVER = "1.1.1.1"
         const val FOXHOLE_DOH_ADDRESS = "https://1.1.1.1/dns-query"
         const val ADGUARD_DNS_PRIMARY = "94.140.14.14"

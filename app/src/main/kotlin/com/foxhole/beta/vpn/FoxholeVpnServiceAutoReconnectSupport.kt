@@ -308,6 +308,7 @@ private suspend fun FoxholeVpnService.stopActiveRuntimeForReconnect(
     )
     runtime.stop()
     activeSession = null
+    activeVpnNetworkHandle = null
     container.connectionController.clearAppliedRuntime()
     FoxholeVpnRuntimeBridge.updateTraffic(trafficSampler.reset())
     FoxholeVpnRuntimeBridge.update(

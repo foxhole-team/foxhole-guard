@@ -662,8 +662,12 @@ class HomeViewModel(
                 scheduleConnectedIpRefresh(reason = IpInfoRefreshReason.RESTORED_VPN, clearExistingIp = true)
             } else {
                 container.connectionController.syncLocalGuard()
+                refreshIpInfoOnForegroundIfNeeded()
             }
         }
+    }
+
+    private fun refreshIpInfoOnForegroundIfNeeded() {
         val runtimeState = container.connectionController.snapshot.value.state
         if (!shouldAutoRefreshIpOnForeground(runtimeState) || ipInfoLoadingMutable.value) {
             return

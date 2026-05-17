@@ -206,53 +206,53 @@ internal class TunnelValidationGateway(
         preferIpv4Validation: Boolean,
     ): IpInfo =
         try {
-            fetchActiveTunnelIpInfoOnProcessPath(
+            fetchActiveTunnelIpInfoViaRuntimeProxy(
+                settings = settings,
+                endpoint = endpoint,
+                fetchMode = fetchMode,
+                preferIpv4Validation = preferIpv4Validation,
+            )
+        } catch (error: IOException) {
+            fetchActiveTunnelIpInfoOnProcessPathAfterRuntimeProxyFailure(
                 endpoint = endpoint,
                 fetchMode = fetchMode,
                 vpnNetwork = vpnNetwork,
                 preferIpv4Validation = preferIpv4Validation,
-            )
-        } catch (error: IOException) {
-            fetchActiveTunnelIpInfoViaRuntimeProxyAfterFailure(
-                settings = settings,
-                endpoint = endpoint,
-                fetchMode = fetchMode,
-                preferIpv4Validation = preferIpv4Validation,
                 error = error,
             )
         } catch (error: IllegalStateException) {
-            fetchActiveTunnelIpInfoViaRuntimeProxyAfterFailure(
-                settings = settings,
+            fetchActiveTunnelIpInfoOnProcessPathAfterRuntimeProxyFailure(
                 endpoint = endpoint,
                 fetchMode = fetchMode,
+                vpnNetwork = vpnNetwork,
                 preferIpv4Validation = preferIpv4Validation,
                 error = error,
             )
         } catch (error: IllegalArgumentException) {
-            fetchActiveTunnelIpInfoViaRuntimeProxyAfterFailure(
-                settings = settings,
+            fetchActiveTunnelIpInfoOnProcessPathAfterRuntimeProxyFailure(
                 endpoint = endpoint,
                 fetchMode = fetchMode,
+                vpnNetwork = vpnNetwork,
                 preferIpv4Validation = preferIpv4Validation,
                 error = error,
             )
         }
 
-    private suspend fun fetchActiveTunnelIpInfoViaRuntimeProxyAfterFailure(
-        settings: Settings,
+    private suspend fun fetchActiveTunnelIpInfoOnProcessPathAfterRuntimeProxyFailure(
         endpoint: String,
         fetchMode: IpInfoFetchMode,
+        vpnNetwork: Network,
         preferIpv4Validation: Boolean,
         error: Exception,
     ): IpInfo {
         diagnosticsLogger.record(
             "ip",
-            "vpn ip refresh failed on process path, retrying runtime local proxy: ${error.javaClass.simpleName}",
+            "runtime local proxy ip refresh failed, retrying vpn process path: ${error.javaClass.simpleName}",
         )
-        return fetchActiveTunnelIpInfoViaRuntimeProxy(
-            settings = settings,
+        return fetchActiveTunnelIpInfoOnProcessPath(
             endpoint = endpoint,
             fetchMode = fetchMode,
+            vpnNetwork = vpnNetwork,
             preferIpv4Validation = preferIpv4Validation,
         )
     }

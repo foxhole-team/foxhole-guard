@@ -1378,6 +1378,8 @@ private fun HomeTorRouteIcons(
         AppIcon(
             packageName = app.packageName,
             modifier = Modifier.size(18.dp),
+            contentPadding = 2.dp,
+            fallbackIconSize = 14.dp,
         )
     }
 }

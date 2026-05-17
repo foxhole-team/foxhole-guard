@@ -232,6 +232,13 @@ class RuntimeConfigAssemblerTest {
         assertEquals(2, packageRules.size)
         assertTrue(packageRules.any { it["network"]!!.jsonPrimitive.content == "tcp" && it["outbound"]!!.jsonPrimitive.content == "tor-over-vpn" })
         assertTrue(packageRules.any { it["network"]!!.jsonPrimitive.content == "udp" && it["outbound"]!!.jsonPrimitive.content == "block" })
+        val runtimeProxyRule = route["rules"]!!.jsonArray.map { it.jsonObject }
+            .single { it["inbound"] != null && it["outbound"]?.jsonPrimitive?.content == "tor-over-vpn" }
+        assertEquals(
+            listOf("foxhole-runtime-proxy-in"),
+            runtimeProxyRule["inbound"]!!.jsonArray.map { it.jsonPrimitive.content },
+        )
+        assertEquals("tcp", runtimeProxyRule["network"]!!.jsonPrimitive.content)
     }
 
     @Test

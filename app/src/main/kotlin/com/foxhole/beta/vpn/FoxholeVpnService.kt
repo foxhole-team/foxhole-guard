@@ -70,6 +70,12 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
             .addCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN)
             .build()
     }
+    internal val trackedVpnNetworkRequest by lazy {
+        NetworkRequest.Builder()
+            .addTransportType(NetworkCapabilities.TRANSPORT_VPN)
+            .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+            .build()
+    }
     internal val container: FoxholeRuntimeDependencies by lazy { (applicationContext as FoxholeApplication).appGraph }
     internal val runtime by lazy<VpnCoreRuntime> {
         createVpnRuntime(
@@ -115,12 +121,14 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
     internal var notificationHealthJob: Job? = null
     internal var appTrafficStatsJob: Job? = null
     internal var networkCallbackRegistered = false
+    internal var vpnNetworkCallbackRegistered = false
     internal var defaultNetworkCallbackRegistered = false
     internal var notificationConnectivityHealthState = ConnectivityHealthState.CHECKING
     internal var consecutiveNotificationHealthFailures = 0
     internal var defaultNetworkAvailable = true
     internal var lastDefaultNetworkSummary: String? = null
     internal val upstreamNetworkHandles = mutableSetOf<Long>()
+    internal var activeVpnNetworkHandle: Long? = null
 
     internal val networkCallback =
         object : ConnectivityManager.NetworkCallback() {
@@ -171,6 +179,42 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
                     )
                 }
                 updateNotification()
+            }
+        }
+
+    internal val vpnNetworkCallback =
+        object : ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: Network) {
+                val capabilities = connectivityManager.getNetworkCapabilities(network)
+                if (capabilities?.hasTransport(NetworkCapabilities.TRANSPORT_VPN) != true) {
+                    return
+                }
+                recordNetworkEvent(
+                    message = "vpn network available",
+                    capabilities = capabilities,
+                )
+                if (activeSession != null || activeLocalGuardMode != null) {
+                    activeVpnNetworkHandle = network.networkHandle
+                }
+            }
+
+            override fun onLost(network: Network) {
+                val lostHandle = network.networkHandle
+                val trackedHandle = activeVpnNetworkHandle
+                recordNetworkEvent(
+                    message = "vpn network lost",
+                    capabilities = connectivityManager.getNetworkCapabilities(network),
+                )
+                if (trackedHandle == null || trackedHandle == lostHandle) {
+                    handleVpnNetworkLost(lostHandle, reason = "vpn_network_lost")
+                    return
+                }
+                scope.launch(Dispatchers.Main.immediate) {
+                    delay(VPN_NETWORK_LOST_SETTLE_MS)
+                    if (currentVpnNetworkOrNull()?.networkHandle == null) {
+                        handleVpnNetworkLost(lostHandle, reason = "vpn_network_lost")
+                    }
+                }
             }
         }
 
@@ -261,6 +305,10 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         if (networkCallbackRegistered) {
             runCatching { connectivityManager.unregisterNetworkCallback(networkCallback) }
             networkCallbackRegistered = false
+        }
+        if (vpnNetworkCallbackRegistered) {
+            runCatching { connectivityManager.unregisterNetworkCallback(vpnNetworkCallback) }
+            vpnNetworkCallbackRegistered = false
         }
         if (defaultNetworkCallbackRegistered) {
             runCatching { connectivityManager.unregisterNetworkCallback(defaultNetworkCallback) }
@@ -449,6 +497,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         updateNotification()
         if (trafficMode == TrafficMode.TUNNEL) {
             registerNetworkCallbackIfNeeded()
+            registerVpnNetworkCallbackIfNeeded()
         }
         registerDefaultNetworkCallbackIfNeeded()
         acquireRuntimeWakeLock()
@@ -555,6 +604,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         releaseRuntimeWakeLock()
         activeSession = null
         activeLocalGuardMode = null
+        activeVpnNetworkHandle = null
         RuntimeResumeStateStore.clear(this)
         container.connectionController.clearAppliedRuntime()
         FoxholeVpnRuntimeBridge.updateTraffic(trafficSampler.reset())
@@ -616,6 +666,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
             runtime.stop()
             releaseRuntimeWakeLock()
             activeLocalGuardMode = null
+            activeVpnNetworkHandle = null
         }
         FoxholeConnectionServiceContract.stopInactiveServices(context = this, activeMode = TrafficMode.TUNNEL)
         val session =
@@ -648,6 +699,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         acquireRuntimeWakeLock()
         val result = startRuntimeWithHealthMetrics(session = session, owner = "local_guard")
         if (result.isSuccess) {
+            registerVpnNetworkCallbackIfNeeded()
             if (mode == LocalGuardMode.DNS) {
                 FoxholeVpnRuntimeBridge.updateTraffic(TrafficSnapshot())
             } else {
@@ -729,6 +781,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         releaseRuntimeWakeLock()
         activeSession = null
         activeLocalGuardMode = null
+        activeVpnNetworkHandle = null
         RuntimeResumeStateStore.clear(this)
         val failClosedMessage =
             if (action == ACTION_NATIVE_RUNTIME_STOP && hadActiveRuntime) {
@@ -753,6 +806,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
     private fun publishUnexpectedRuntimeStopSnapshot() {
         activeSession = null
         activeLocalGuardMode = null
+        activeVpnNetworkHandle = null
         container.connectionController.clearAppliedRuntime()
         FoxholeVpnRuntimeBridge.updateTraffic(trafficSampler.reset())
         FoxholeVpnRuntimeBridge.clearTransientState()
@@ -871,6 +925,125 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         registration
             .onSuccess { networkCallbackRegistered = true }
             .onFailure { container.diagnosticsLogger.record("connection", "network callback registration failed") }
+    }
+
+    internal fun registerVpnNetworkCallbackIfNeeded() {
+        if (vpnNetworkCallbackRegistered) {
+            return
+        }
+        val registration =
+            runCatching {
+                connectivityManager.registerNetworkCallback(trackedVpnNetworkRequest, vpnNetworkCallback, mainHandler)
+            }.recoverCatching {
+                connectivityManager.registerNetworkCallback(trackedVpnNetworkRequest, vpnNetworkCallback)
+            }
+        registration
+            .onSuccess { vpnNetworkCallbackRegistered = true }
+            .onFailure { container.diagnosticsLogger.record("connection", "vpn network callback registration failed") }
+    }
+
+    internal fun handleVpnNetworkLost(
+        lostHandle: Long,
+        reason: String,
+    ) {
+        val session = activeSession
+        val localGuardMode = activeLocalGuardMode
+        val snapshot = FoxholeVpnRuntimeBridge.snapshot.value
+        if (!shouldHandleVpnNetworkLoss(session, localGuardMode, snapshot)) {
+            return
+        }
+        val currentVpnHandle = currentVpnNetworkOrNull()?.networkHandle
+        if (currentVpnHandle != null && currentVpnHandle != lostHandle) {
+            activeVpnNetworkHandle = currentVpnHandle
+            return
+        }
+        activeVpnNetworkHandle = null
+        validationJob?.cancel()
+        validationJob = null
+        stopGeoRefresh()
+        markNotificationConnectivityOffline()
+        if (session != null) {
+            handleActiveTunnelVpnNetworkLost(
+                session = session,
+                snapshot = snapshot,
+                lostHandle = lostHandle,
+                reason = reason,
+            )
+        } else if (localGuardMode != null) {
+            handleLocalGuardVpnNetworkLost(
+                mode = localGuardMode,
+                snapshot = snapshot,
+                lostHandle = lostHandle,
+                reason = reason,
+            )
+        }
+    }
+
+    private fun shouldHandleVpnNetworkLoss(
+        session: VpnSession?,
+        localGuardMode: LocalGuardMode?,
+        snapshot: ConnectionSnapshot,
+    ): Boolean =
+        snapshot.trafficMode == TrafficMode.TUNNEL &&
+            snapshot.state in ACTIVE_CONNECTION_STATES &&
+            (session != null || localGuardMode != null)
+
+    private fun handleActiveTunnelVpnNetworkLost(
+        session: VpnSession,
+        snapshot: ConnectionSnapshot,
+        lostHandle: Long,
+        reason: String,
+    ) {
+        container.diagnosticsLogger.recordStructured(
+            "connection",
+            "active vpn network disappeared",
+            "reason=$reason",
+            "lost_handle=$lostHandle",
+            "sessionId=${session.correlationId}",
+        )
+        FoxholeVpnRuntimeBridge.update(
+            snapshot.copy(
+                state = ConnectionState.RECONNECTING,
+                message = getString(R.string.status_reconnecting),
+            ),
+        )
+        updateNotification()
+        if (container.settingsRepository.settings.value.connection.autoReconnect) {
+            scheduleAutoReconnect(reason = reason)
+        } else {
+            fail(
+                message = getString(R.string.error_runtime_stopped),
+                reasonCode = AutoConnectReasonCode.CONNECT_ERROR,
+            )
+        }
+    }
+
+    private fun handleLocalGuardVpnNetworkLost(
+        mode: LocalGuardMode,
+        snapshot: ConnectionSnapshot,
+        lostHandle: Long,
+        reason: String,
+    ) {
+        val message = getString(R.string.error_runtime_stopped)
+        container.diagnosticsLogger.recordStructured(
+            "connection",
+            "local guard vpn network disappeared",
+            "reason=$reason",
+            "lost_handle=$lostHandle",
+            "mode=${mode.name.lowercase()}",
+        )
+        FoxholeVpnRuntimeBridge.update(
+            snapshot.copy(
+                state = ConnectionState.ERROR,
+                message = message,
+                reasonCode = AutoConnectReasonCode.CONNECT_ERROR,
+            ),
+        )
+        updateNotification()
+        fail(
+            message = message,
+            reasonCode = AutoConnectReasonCode.CONNECT_ERROR,
+        )
     }
 
     internal fun registerDefaultNetworkCallbackIfNeeded() {
@@ -1285,6 +1458,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         internal const val GEO_REFRESH_RETRY_DELAY_MS = 2_000L
         internal const val GEO_REFRESH_CALL_TIMEOUT_MS = 5_000L
         internal const val VPN_NETWORK_WAIT_TIMEOUT_MS = 3_000L
+        internal const val VPN_NETWORK_LOST_SETTLE_MS = 350L
         internal const val CONNECTIVITY_PROBE_NETWORK_WAIT_TIMEOUT_MS = 3_000L
         internal const val VPN_NETWORK_WAIT_POLL_DELAY_MS = 100L
         internal const val IPV4_ENRICHMENT_CALL_TIMEOUT_MS = 4_000L

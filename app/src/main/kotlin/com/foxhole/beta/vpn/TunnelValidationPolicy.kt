@@ -10,6 +10,7 @@ internal enum class TunnelValidationProbeKind {
 
 internal data class TunnelValidationPolicyContext(
     val allowDnsIndependentLiteralIpValidation: Boolean = false,
+    val hasDnsIndependentLiteralIpValidationEvidence: Boolean = false,
 )
 
 internal fun tunnelValidationPolicyContextFor(
@@ -40,7 +41,8 @@ internal class TunnelValidationPolicy(
             listOf(
                 TunnelValidationProbeRule { kind, context ->
                     if (kind == TunnelValidationProbeKind.DNS_INDEPENDENT_LITERAL_IP) {
-                        context.allowDnsIndependentLiteralIpValidation
+                        context.allowDnsIndependentLiteralIpValidation &&
+                            context.hasDnsIndependentLiteralIpValidationEvidence
                     } else {
                         null
                     }

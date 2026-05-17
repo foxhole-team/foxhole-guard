@@ -1038,12 +1038,14 @@ internal fun AppTypePill(isSystemApp: Boolean) {
 @Composable
 internal fun AppIcon(
     packageName: String,
-    modifier: Modifier = Modifier,
+    modifier: Modifier = Modifier.size(56.dp),
+    contentPadding: Dp = 4.dp,
+    fallbackIconSize: Dp = 24.dp,
 ) {
     val bitmap = rememberAppIconBitmap(packageName = packageName, bitmapSize = 48.dp)
 
     Surface(
-        modifier = modifier.size(56.dp),
+        modifier = modifier,
         shape = MaterialTheme.shapes.medium,
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.62f),
     ) {
@@ -1051,7 +1053,7 @@ internal fun AppIcon(
             Image(
                 bitmap = bitmap!!,
                 contentDescription = null,
-                modifier = Modifier.padding(8.dp).fillMaxSize(),
+                modifier = Modifier.padding(contentPadding).fillMaxSize(),
             )
         } else {
             Row(
@@ -1062,7 +1064,7 @@ internal fun AppIcon(
                 Icon(
                     imageVector = Icons.Outlined.Apps,
                     contentDescription = null,
-                    modifier = Modifier.size(24.dp),
+                    modifier = Modifier.size(fallbackIconSize),
                     tint = MaterialTheme.colorScheme.primary,
                 )
             }

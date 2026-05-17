@@ -606,7 +606,7 @@ internal fun HomeViewModel.scheduleConnectedIpRefreshInternal(
             }
             pendingPostConnectIpRefresh = false
             startIpInfoRefresh(
-                reportFailures = true,
+                reportFailures = reason == IpInfoRefreshReason.POST_CONNECT,
                 showLoading = false,
                 clearExistingIp = clearExistingIp,
                 fetchMode = ipInfoFetchModeForRefreshReason(reason),

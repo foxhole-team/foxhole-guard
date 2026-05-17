@@ -51,8 +51,7 @@ class TrafficWindowAggregator(
 
         val previous = lastSnapshot
         if (previous == null || snapshot.rxTotalBytes < previous.rxTotalBytes || snapshot.txTotalBytes < previous.txTotalBytes) {
-            lastSnapshot = snapshot
-            lastDestinationCountries = context.destinationCountries.sanitizedCountryBytes()
+            storeBaseline(snapshot, context.destinationCountries)
             return null
         }
         val elapsedMs = snapshot.sampledAt - previous.sampledAt
@@ -82,6 +81,14 @@ class TrafficWindowAggregator(
             )
         reconnectsInWindow = 0
         return window
+    }
+
+    private fun storeBaseline(
+        snapshot: TrafficSnapshot,
+        destinationCountries: Map<String, Long>,
+    ) {
+        lastSnapshot = snapshot
+        lastDestinationCountries = destinationCountries.sanitizedCountryBytes()
     }
 
     companion object {
