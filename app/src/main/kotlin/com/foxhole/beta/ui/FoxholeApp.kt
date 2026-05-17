@@ -804,7 +804,7 @@ private fun FoxholeBottomBar(
                 containerColor = uiPalette.bottomBarContainerColor,
                 borderColor = uiPalette.bottomBarBorderColor,
                 blurRadius = 18.dp,
-                backgroundAlpha = 1f,
+                backgroundAlpha = 0.72f,
             ) {
                 BoxWithConstraints(
                     modifier =

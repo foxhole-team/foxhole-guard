@@ -597,7 +597,9 @@ private fun HomeViewModel.updateAppRoutingSettingAndPromptReconnect(
         if (appliedFingerprint != currentFingerprint) {
             clearRuntimeReconnectRequired()
             val reloadRequested = targetProfileId?.let { container.connectionController.reload(it) } == true
-            if (!reloadRequested) {
+            if (reloadRequested) {
+                scheduleDashboardRefreshAfterRuntimeReload()
+            } else {
                 markRuntimeReconnectRequired()
                 clearRuntimeReloadPending()
                 snackbars.emit(infoBanner(R.string.split_tunnel_reconnect_required))

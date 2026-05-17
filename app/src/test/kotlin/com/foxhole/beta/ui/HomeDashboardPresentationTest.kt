@@ -260,7 +260,36 @@ class HomeDashboardPresentationTest {
     }
 
     @Test
-    fun `network model keeps current ip title during smart protocol refresh`() {
+    fun `network model shows data skeleton during manual network refresh with current ip`() {
+        val ipInfo =
+            IpInfo(
+                ip = "203.0.113.10",
+                countryCode = "NL",
+                countryName = "Netherlands",
+                city = "Amsterdam",
+                isp = "Example",
+                fetchedAt = 1_000L,
+            )
+        val model =
+            resolveHomeDashboardNetworkModel(
+                state =
+                    HomeRouteUiState(
+                        profilesLoaded = true,
+                        ipInfoLoading = true,
+                        connection = ConnectionSnapshot(state = ConnectionState.IDLE),
+                    ),
+                visibleIpInfo = ipInfo,
+                deviceInternetAvailable = true,
+            )
+
+        assertEquals(ipInfo, model.visibleIpInfo)
+        assertTrue(model.showLoading)
+        assertTrue(model.showIpInfoLoading)
+        assertFalse(model.showConnectionDetailsLoading)
+    }
+
+    @Test
+    fun `network model keeps current ip and shows connection skeleton during smart protocol refresh`() {
         val ipInfo =
             IpInfo(
                 ip = "203.0.113.10",
@@ -288,10 +317,78 @@ class HomeDashboardPresentationTest {
         assertEquals(ipInfo, model.visibleIpInfo)
         assertEquals(R.string.home_network_current_ip_title, model.titleRes)
         assertTrue(model.showConnectionStatus)
+        assertTrue(model.showLoading)
+        assertFalse(model.showIpInfoLoading)
+        assertTrue(model.showConnectionDetailsLoading)
+        assertTrue(model.showRefreshProgress)
+    }
+
+    @Test
+    fun `network model treats connected proxy like routed connection surface`() {
+        val ipInfo =
+            IpInfo(
+                ip = "203.0.113.10",
+                countryCode = "NL",
+                countryName = "Netherlands",
+                city = "Amsterdam",
+                isp = "Example",
+                fetchedAt = 1_000L,
+            )
+        val model =
+            resolveHomeDashboardNetworkModel(
+                state =
+                    HomeRouteUiState(
+                        connection =
+                            ConnectionSnapshot(
+                                state = ConnectionState.CONNECTED,
+                                trafficMode = TrafficMode.PROXY,
+                                profileId = 42L,
+                                lastChangeAt = 500L,
+                            ),
+                    ),
+                visibleIpInfo = ipInfo,
+                deviceInternetAvailable = true,
+            )
+
+        assertEquals(ipInfo, model.visibleIpInfo)
+        assertEquals(R.string.home_network_connection_info_title, model.titleRes)
+        assertTrue(model.showConnectionStatus)
         assertFalse(model.showLoading)
         assertFalse(model.showIpInfoLoading)
         assertFalse(model.showConnectionDetailsLoading)
-        assertTrue(model.showRefreshProgress)
+    }
+
+    @Test
+    fun `network model keeps just loaded route ip during connected metrics refresh`() {
+        val ipInfo =
+            IpInfo(
+                ip = "203.0.113.10",
+                countryCode = "NL",
+                countryName = "Netherlands",
+                city = "Amsterdam",
+                isp = "Example",
+                fetchedAt = 9_900L,
+            )
+        val model =
+            resolveHomeDashboardNetworkModel(
+                state =
+                    HomeRouteUiState(
+                        connection =
+                            ConnectionSnapshot(
+                                state = ConnectionState.CONNECTED,
+                                trafficMode = TrafficMode.TUNNEL,
+                                profileId = 42L,
+                                lastChangeAt = 10_000L,
+                            ),
+                        dashboardConnectionMetricsLoading = true,
+                    ),
+                visibleIpInfo = ipInfo,
+                deviceInternetAvailable = true,
+            )
+
+        assertEquals(ipInfo, model.visibleIpInfo)
+        assertFalse(model.showIpInfoLoading)
+        assertTrue(model.showConnectionDetailsLoading)
     }
 
     @Test

@@ -275,9 +275,8 @@ fun HomeScreen(
                 pinnedIpInfo = state.ipInfo
                 keepPinnedNetworkInfo = false
             }
-            keepPinnedNetworkInfo && state.connection.state !in pinnedConnectionStates -> {
+            keepPinnedNetworkInfo && pinnedIpInfo == null -> {
                 keepPinnedNetworkInfo = false
-                pinnedIpInfo = null
             }
         }
     }
@@ -528,6 +527,7 @@ fun HomeScreen(
                                             shouldShowTrafficMapLegendLoading(
                                                 connectionState = state.connection.state,
                                                 appLoaded = state.profilesLoaded,
+                                                explicitLoading = state.ipInfoLoading,
                                             ),
                                     )
                                 }
@@ -569,7 +569,6 @@ fun HomeScreen(
                                     icon = Icons.AutoMirrored.Outlined.ArrowForward,
                                     contentDescription = null,
                                     onClick = onOpenProfiles,
-                                    modifier = Modifier.size(40.dp),
                                     tint = autoTone,
                                 )
                             },
@@ -1063,7 +1062,7 @@ fun HomeScreen(
                                     icon = Icons.Outlined.DeleteSweep,
                                     contentDescription = stringResource(R.string.reset_usage_tracking),
                                     onClick = onResetUsageTracking,
-                                    modifier = Modifier.size(40.dp).testTag("home_reset_usage_button"),
+                                    modifier = Modifier.testTag("home_reset_usage_button"),
                                     tint = autoTone,
                                 )
                             },

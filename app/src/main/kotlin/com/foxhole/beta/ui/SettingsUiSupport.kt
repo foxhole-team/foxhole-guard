@@ -1311,7 +1311,7 @@ internal fun ConfirmDialog(
         title = {
             FoxholeDialogTitle(
                 title = title,
-                icon = icon,
+                icon = icon.takeIf { !dismissOnBackPress && !dismissOnClickOutside },
                 iconTint = iconTint,
                 iconContainerColor = iconContainerColor,
             )

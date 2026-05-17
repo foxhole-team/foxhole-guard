@@ -236,7 +236,7 @@ class HomeIpLoadingPolicyTest {
     }
 
     @Test
-    fun `traffic map legend loading is limited to startup and vpn transitions`() {
+    fun `traffic map legend loading is limited to startup vpn transitions and explicit refresh`() {
         assertTrue(
             shouldShowTrafficMapLegendLoading(
                 connectionState = ConnectionState.IDLE,
@@ -265,6 +265,13 @@ class HomeIpLoadingPolicyTest {
             shouldShowTrafficMapLegendLoading(
                 connectionState = ConnectionState.CONNECTED,
                 appLoaded = true,
+            ),
+        )
+        assertTrue(
+            shouldShowTrafficMapLegendLoading(
+                connectionState = ConnectionState.IDLE,
+                appLoaded = true,
+                explicitLoading = true,
             ),
         )
     }

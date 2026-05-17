@@ -103,7 +103,6 @@ class HomeRuntimeBehaviorTest {
             app().container.diagnosticsLogger.entries.value.any {
                 it.tag == "ip" &&
                     it.message.contains("mode=entry_quick") &&
-                    it.message.contains("showLoading=false") &&
                     it.message.contains("clearExistingIp=false")
             },
         )
@@ -261,8 +260,7 @@ class HomeRuntimeBehaviorTest {
             FoxholeVpnRuntimeBridge.updateIpInfo(null)
         }
 
-        composeRule.waitForIdle()
-        composeRule.onNodeWithTag("home_network_loading").assertIsDisplayed()
+        composeRule.waitUntil(timeoutMillis = 3_000) { textOfOrNull("home_network_primary_ip") == previousIp }
         composeRule
             .onAllNodesWithText(
                 InstrumentationRegistry.getInstrumentation().targetContext.getString(R.string.home_network_unavailable),

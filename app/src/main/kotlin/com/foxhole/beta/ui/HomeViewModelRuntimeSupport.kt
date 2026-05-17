@@ -89,7 +89,7 @@ internal fun HomeViewModel.refreshIpInfoInternalInternal(
                 ipInfoLoadingMutable.value = true
             }
             val loadingStartedAtMs = if (showLoading) SystemClock.elapsedRealtime() else 0L
-            if (clearExistingIp) {
+            if (clearExistingIp && reason != IpInfoRefreshReason.POST_CONNECT) {
                 FoxholeVpnRuntimeBridge.updateIpInfo(null)
             }
             try {
@@ -115,9 +115,6 @@ internal fun HomeViewModel.refreshIpInfoInternalInternal(
                     "ip",
                     "geo refresh failed: ${error.javaClass.simpleName}: ${error.message.orEmpty()}",
                 )
-                if (reason == IpInfoRefreshReason.POST_CONNECT && target == IpInfoRefreshTarget.VPN_BOUND) {
-                    FoxholeVpnRuntimeBridge.updateIpInfo(null)
-                }
                 if (reportFailures) {
                     emitError(getApplication<Application>().getString(R.string.ip_info_failed))
                 }
@@ -387,6 +384,7 @@ internal suspend fun HomeViewModel.maybeReloadActiveRuntimeInternal(): Boolean {
         return false
     }
     if (container.connectionController.reload(targetProfileId)) {
+        scheduleDashboardRefreshAfterRuntimeReload()
         return true
     }
     return false
@@ -588,7 +586,7 @@ internal fun HomeViewModel.invalidateIpInfoRefreshesInternal(): Long {
 
 internal fun HomeViewModel.scheduleConnectedIpRefreshInternal(
     reason: IpInfoRefreshReason = IpInfoRefreshReason.POST_CONNECT,
-    clearExistingIp: Boolean = true,
+    clearExistingIp: Boolean = false,
 ) {
     connectedIpRefreshJob?.cancel()
     connectedIpRefreshJob =

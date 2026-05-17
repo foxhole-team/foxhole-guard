@@ -111,7 +111,7 @@ internal fun HomeViewModel.reconnectInternal(profileId: Long) {
     }
 }
 
-private suspend fun HomeViewModel.awaitReconnectConnectionOutcome() {
+private suspend fun HomeViewModel.awaitReconnectConnectionOutcome(): ConnectionSnapshot? {
     val outcome =
         withTimeoutOrNull(HomeViewModel.AUTO_CONNECT_CONNECTION_TIMEOUT_MS) {
             container.connectionController.snapshot.first { snapshot ->
@@ -121,7 +121,16 @@ private suspend fun HomeViewModel.awaitReconnectConnectionOutcome() {
     if (outcome == null) {
         container.diagnosticsLogger.record("connection", "manual reconnect status wait timed out")
     }
+    return outcome
 }
+
+private fun ConnectionSnapshot?.isConnectedSmartStartWinner(
+    profileId: Long,
+    protocolOptionId: String,
+): Boolean =
+    this?.state == ConnectionState.CONNECTED &&
+        this.profileId == profileId &&
+        (this.protocolOptionId == null || this.protocolOptionId == protocolOptionId)
 
 internal fun HomeViewModel.startAutoConnectInternal(profileId: Long) {
     autoConnectJob?.cancel()
@@ -411,7 +420,11 @@ private suspend fun HomeViewModel.runColdSmartStartScan(
                 isSmartStartConnection = true,
                 previousVpnNetworkHandle = previousVpnNetworkHandle,
             )
-            awaitReconnectConnectionOutcome()
+            val outcome = awaitReconnectConnectionOutcome()
+            if (!outcome.isConnectedSmartStartWinner(profileId, winner.candidate.optionId)) {
+                emitError(getApplication<Application>().getString(R.string.auto_connect_failed))
+                return
+            }
         }
         commitAutoConnectWinner(
             profileId = profileId,

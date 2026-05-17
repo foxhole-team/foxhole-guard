@@ -251,34 +251,49 @@ internal fun FoxholeScaffold(
     Scaffold(
         containerColor = Color.Transparent,
         topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        text = title,
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                },
-                navigationIcon = {
-                    onNavigateUp?.let {
-                        IconButton(onClick = it) {
-                            Icon(
-                                Icons.AutoMirrored.Outlined.ArrowBack,
-                                contentDescription = stringResource(R.string.navigate_back),
-                            )
+            Box(modifier = Modifier.fillMaxWidth()) {
+                Box(
+                    modifier =
+                        Modifier
+                            .matchParentSize()
+                            .blur(18.dp)
+                            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.70f)),
+                )
+                Box(
+                    modifier =
+                        Modifier
+                            .matchParentSize()
+                            .background(MaterialTheme.colorScheme.background.copy(alpha = 0.26f)),
+                )
+                TopAppBar(
+                    title = {
+                        Text(
+                            text = title,
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                    },
+                    navigationIcon = {
+                        onNavigateUp?.let {
+                            IconButton(onClick = it) {
+                                Icon(
+                                    Icons.AutoMirrored.Outlined.ArrowBack,
+                                    contentDescription = stringResource(R.string.navigate_back),
+                                )
+                            }
                         }
-                    }
-                },
-                actions = actions,
-                colors =
-                    TopAppBarDefaults.topAppBarColors(
-                        containerColor = topBarContainerColor,
-                        scrolledContainerColor = topBarContainerColor,
-                        titleContentColor = MaterialTheme.colorScheme.onBackground,
-                        navigationIconContentColor = MaterialTheme.colorScheme.onBackground,
-                        actionIconContentColor = MaterialTheme.colorScheme.onBackground,
-                    ),
-            )
+                    },
+                    actions = actions,
+                    colors =
+                        TopAppBarDefaults.topAppBarColors(
+                            containerColor = topBarContainerColor,
+                            scrolledContainerColor = topBarContainerColor,
+                            titleContentColor = MaterialTheme.colorScheme.onBackground,
+                            navigationIconContentColor = MaterialTheme.colorScheme.onBackground,
+                            actionIconContentColor = MaterialTheme.colorScheme.onBackground,
+                        ),
+                )
+            }
         },
         snackbarHost = {},
         content = { padding ->
@@ -795,8 +810,9 @@ internal fun FoxholeDialogConfirmButton(
     Button(
         onClick = onClick,
         enabled = enabled,
-        modifier = modifier,
+        modifier = modifier.height(FoxholeDialogActionButtonHeight),
         shape = MaterialTheme.shapes.medium,
+        contentPadding = FoxholeDialogActionButtonPadding,
     ) {
         Text(label ?: stringResource(R.string.save))
     }
@@ -812,8 +828,9 @@ internal fun FoxholeDialogDismissButton(
     OutlinedButton(
         onClick = onClick,
         enabled = enabled,
-        modifier = modifier,
+        modifier = modifier.height(FoxholeDialogActionButtonHeight),
         shape = MaterialTheme.shapes.medium,
+        contentPadding = FoxholeDialogActionButtonPadding,
     ) {
         Text(label ?: stringResource(R.string.close))
     }
@@ -829,12 +846,16 @@ internal fun FoxholeDialogSecondaryButton(
     OutlinedButton(
         onClick = onClick,
         enabled = enabled,
-        modifier = modifier,
+        modifier = modifier.height(FoxholeDialogActionButtonHeight),
         shape = MaterialTheme.shapes.medium,
+        contentPadding = FoxholeDialogActionButtonPadding,
     ) {
         Text(label)
     }
 }
+
+private val FoxholeDialogActionButtonHeight = 34.dp
+private val FoxholeDialogActionButtonPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp)
 
 @Composable
 internal fun Modifier.foxholeDialogChrome(): Modifier =

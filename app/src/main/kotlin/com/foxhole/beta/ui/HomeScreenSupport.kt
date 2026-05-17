@@ -467,7 +467,7 @@ internal fun HomeStatusBadge(
             )
         }
         Row(
-            horizontalArrangement = Arrangement.spacedBy(5.dp),
+            horizontalArrangement = Arrangement.spacedBy(3.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
@@ -486,6 +486,7 @@ internal fun HomeStatusBadge(
 @Composable
 private fun SmartConnectionBadge(color: Color) {
     Surface(
+        modifier = Modifier.offset(y = (-3).dp),
         shape = MaterialTheme.shapes.small,
         color = color.copy(alpha = 0.12f),
         border = BorderStroke(1.dp, color.copy(alpha = 0.34f)),
@@ -686,24 +687,24 @@ private fun HomeConnectionFeatureIndicatorItem(
                 .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.50f))
                 .border(BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.38f)), shape)
                 .clickable(onClick = onClick)
-                .heightIn(min = 32.dp)
-                .padding(horizontal = 12.dp, vertical = 6.dp)
+                .heightIn(min = 30.dp)
+                .padding(horizontal = 9.dp, vertical = 4.dp)
                 .testTag("home_connection_feature_indicator_${indicator.feature.name.lowercase(Locale.US)}"),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(
             imageVector = icon,
             contentDescription = null,
-            modifier = Modifier.size(18.dp),
+            modifier = Modifier.size(16.dp),
             tint = iconColor ?: neutralIconColor,
         )
         Text(
             text = stringResource(indicator.titleRes),
             style =
                 MaterialTheme.typography.labelMedium.copy(
-                    fontSize = 13.sp,
-                    lineHeight = 15.sp,
+                    fontSize = 12.sp,
+                    lineHeight = 14.sp,
                     fontWeight = FontWeight.SemiBold,
                 ),
             color = MaterialTheme.colorScheme.onSurface,
@@ -1159,12 +1160,16 @@ private fun HomeFirewallFeatureDialogContent(state: HomeRouteUiState) {
         )
     }
     val blockedAppsEnabled = state.firewallBlockedAppsEnabled(blockedApps)
+    val persistentBlockEnabled = state.firewallPersistentBlockEnabled(blockedApps)
+    val appStatisticsEnabled = state.firewallAppStatisticsEnabled()
+    val countryStatisticsEnabled = state.firewallCountryStatisticsEnabled()
+    val anomalyStatisticsEnabled = state.firewallAnomalyStatisticsEnabled()
     val runtimeMode = homeFirewallRuntimeMode(state)
     val blockedAppsText = homeFirewallBlockedAppsText(blockedAppsEnabled, blockedApps.size)
-    val persistentBlockText = switchStateLabel(state.firewallPersistentBlockEnabled(blockedApps))
-    val appStatisticsText = switchStateLabel(state.firewallAppStatisticsEnabled())
-    val countryStatisticsText = switchStateLabel(state.firewallCountryStatisticsEnabled())
-    val anomalyStatisticsText = switchStateLabel(state.firewallAnomalyStatisticsEnabled())
+    val persistentBlockText = switchStateLabel(persistentBlockEnabled)
+    val appStatisticsText = switchStateLabel(appStatisticsEnabled)
+    val countryStatisticsText = switchStateLabel(countryStatisticsEnabled)
+    val anomalyStatisticsText = switchStateLabel(anomalyStatisticsEnabled)
     Surface(
         shape = MaterialTheme.shapes.medium,
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.30f),
@@ -1184,21 +1189,25 @@ private fun HomeFirewallFeatureDialogContent(state: HomeRouteUiState) {
             HomeTorInfoRow(
                 label = stringResource(R.string.firewall_modal_persistent_block),
                 value = persistentBlockText,
+                valueColor = switchStateValueColor(persistentBlockEnabled),
             )
             HomeNetworkSubtleDivider()
             HomeTorInfoRow(
                 label = stringResource(R.string.firewall_modal_app_statistics),
                 value = appStatisticsText,
+                valueColor = switchStateValueColor(appStatisticsEnabled),
             )
             HomeNetworkSubtleDivider()
             HomeTorInfoRow(
                 label = stringResource(R.string.firewall_modal_country_statistics),
                 value = countryStatisticsText,
+                valueColor = switchStateValueColor(countryStatisticsEnabled),
             )
             HomeNetworkSubtleDivider()
             HomeTorInfoRow(
                 label = stringResource(R.string.firewall_modal_anomaly_statistics),
                 value = anomalyStatisticsText,
+                valueColor = switchStateValueColor(anomalyStatisticsEnabled),
             )
         }
     }
@@ -1239,6 +1248,14 @@ private fun switchStateLabel(enabled: Boolean): String =
             R.string.switch_state_off
         },
     )
+
+@Composable
+private fun switchStateValueColor(enabled: Boolean): Color =
+    if (enabled) {
+        homeConnectionFeatureStatusColor(HomeConnectionFeatureStatus.ON)
+    } else {
+        MaterialTheme.colorScheme.onSurface
+    }
 
 private fun HomeRouteUiState.firewallBlockedAppsEnabled(blockedApps: List<InstalledAppOption>): Boolean =
     settings.expert.firewallEnabled &&
@@ -1307,6 +1324,7 @@ private fun HomeTorInfoRow(
     value: String,
     valueMonospace: Boolean = false,
     loading: Boolean = false,
+    valueColor: Color = MaterialTheme.colorScheme.onSurface,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth().padding(vertical = 5.dp),
@@ -1339,8 +1357,8 @@ private fun HomeTorInfoRow(
                         MaterialTheme.typography.labelMedium.copy(
                             fontWeight = FontWeight.SemiBold,
                             fontFamily = if (valueMonospace) FontFamily.Monospace else FontFamily.Default,
-                        ),
-                    color = MaterialTheme.colorScheme.onSurface,
+                    ),
+                    color = valueColor,
                     textAlign = TextAlign.End,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -1447,7 +1465,7 @@ private fun HomeTorRouteIcons(
 private fun homeConnectionFeatureIcon(feature: HomeConnectionFeature): ImageVector =
     when (feature) {
         HomeConnectionFeature.KILL_SWITCH -> Icons.Outlined.Shield
-        HomeConnectionFeature.FIREWALL -> ImageVector.vectorResource(R.drawable.ic_firewall_shield_key)
+        HomeConnectionFeature.FIREWALL -> Icons.Outlined.Shield
         HomeConnectionFeature.TOR -> ImageVector.vectorResource(R.drawable.ic_tor_route)
         HomeConnectionFeature.LAN_PROXY -> Icons.Outlined.Public
     }

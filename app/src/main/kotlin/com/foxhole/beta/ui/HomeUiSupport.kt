@@ -191,8 +191,10 @@ internal fun shouldShowDashboardNetworkLoading(
 internal fun shouldShowTrafficMapLegendLoading(
     connectionState: ConnectionState,
     appLoaded: Boolean,
+    explicitLoading: Boolean = false,
 ): Boolean =
-    !appLoaded ||
+    explicitLoading ||
+        !appLoaded ||
         connectionState in setOf(ConnectionState.CONNECTING, ConnectionState.RECONNECTING)
 
 internal fun isProfileReconnectRequired(
@@ -358,7 +360,10 @@ internal fun resolveHomeDashboardProtocolModel(state: HomeRouteUiState): HomeDas
         selectedServerPingOptionId != null &&
             selectedServerPingMs == null &&
             selectedServerPingOptionId in state.protocolServerPingUnavailableOptionIds
-    val connectionMetricsLoading = state.dashboardConnectionMetricsLoading || state.reconnectInProgress
+    val connectionMetricsLoading =
+        state.dashboardConnectionMetricsLoading ||
+            state.reconnectInProgress ||
+            state.protocolMetricsRefreshing
     return HomeDashboardProtocolModel(
         presentation = protocolPresentation,
         latencyPresentation = latencyPresentation,
@@ -450,50 +455,55 @@ private fun HomeRouteUiState.shouldShowHomeNetworkIpInfoLoading(
     dashboardIpInfo: IpInfo?,
     protocolSearchRunning: Boolean,
     deviceInternetAvailable: Boolean?,
-): Boolean =
-    dashboardIpInfo == null &&
-        (
-            reconnectInProgress ||
-                shouldShowVpnTransitionLoading(protocolSearchRunning) ||
-                shouldShowConnectedTunnelLoading(protocolSearchRunning, dashboardIpInfo) ||
-                shouldShowDashboardNetworkLoading(
-                    visibleIpInfo = dashboardIpInfo,
-                    explicitLoading = ipInfoLoading,
-                    connectionState = connection.state,
-                    autoConnectRunning = autoConnect.running,
-                    deviceInternetAvailable = deviceInternetAvailable,
-                    appLoaded = profilesLoaded,
+): Boolean {
+    val manualRefreshNeedsSkeleton =
+        ipInfoLoading && !shouldKeepVisibleNetworkInfoDuringRouteTransition(dashboardIpInfo)
+    val missingIpNeedsSkeleton =
+        dashboardIpInfo == null &&
+            (
+                reconnectInProgress ||
+                    shouldShowVpnTransitionLoading(protocolSearchRunning) ||
+                    shouldShowConnectedRouteLoading(protocolSearchRunning, dashboardIpInfo) ||
+                    shouldShowDashboardNetworkLoading(
+                        visibleIpInfo = dashboardIpInfo,
+                        explicitLoading = ipInfoLoading,
+                        connectionState = connection.state,
+                        autoConnectRunning = autoConnect.running,
+                        deviceInternetAvailable = deviceInternetAvailable,
+                        appLoaded = profilesLoaded,
+                    )
                 )
-            )
+    return manualRefreshNeedsSkeleton || missingIpNeedsSkeleton
+}
 
 private fun HomeRouteUiState.shouldShowHomeNetworkConnectionDetailsLoading(
     showConnectionStatus: Boolean,
     protocolSearchRunning: Boolean,
 ): Boolean =
     showConnectionStatus &&
-        !protocolSearchRunning &&
         (
             reconnectInProgress ||
                 shouldShowVpnTransitionLoading(protocolSearchRunning) ||
-                dashboardConnectionMetricsLoading
+                dashboardConnectionMetricsLoading ||
+                protocolSearchRunning
             )
 
 private fun HomeRouteUiState.shouldShowVpnTransitionLoading(protocolSearchRunning: Boolean): Boolean =
     !protocolSearchRunning &&
         connection.state in setOf(ConnectionState.CONNECTING, ConnectionState.RECONNECTING) &&
-        hasDashboardTunnelProfile()
+        hasDashboardRouteProfile()
 
-private fun HomeRouteUiState.shouldShowConnectedTunnelLoading(
+private fun HomeRouteUiState.shouldShowConnectedRouteLoading(
     protocolSearchRunning: Boolean,
     dashboardIpInfo: IpInfo?,
 ): Boolean =
     !protocolSearchRunning &&
         connection.state == ConnectionState.CONNECTED &&
-        hasDashboardTunnelProfile() &&
+        hasDashboardRouteProfile() &&
         dashboardIpInfo == null
 
-private fun HomeRouteUiState.hasDashboardTunnelProfile(): Boolean =
-    connection.trafficMode == TrafficMode.TUNNEL &&
+private fun HomeRouteUiState.hasDashboardRouteProfile(): Boolean =
+    connection.trafficMode in setOf(TrafficMode.TUNNEL, TrafficMode.PROXY) &&
         connection.profileId != FoxholeVpnService.LOCAL_GUARD_PROFILE_ID
 
 private fun HomeRouteUiState.homeNetworkTitleRes(
@@ -510,7 +520,7 @@ private fun HomeRouteUiState.hasRealTunnelConnectionStatus(): Boolean =
     reconnectInProgress ||
         (
             connection.state in setOf(ConnectionState.CONNECTING, ConnectionState.CONNECTED, ConnectionState.RECONNECTING) &&
-                hasDashboardTunnelProfile()
+                hasDashboardRouteProfile()
             )
 
 private fun HomeRouteUiState.dashboardVisibleIpInfo(visibleIpInfo: IpInfo?): IpInfo? {
@@ -518,19 +528,31 @@ private fun HomeRouteUiState.dashboardVisibleIpInfo(visibleIpInfo: IpInfo?): IpI
         return visibleIpInfo
     }
     val protocolSearchRunning = autoConnect.running || protocolMetricsRefreshing
-    val realTunnelActive =
+    val routeRuntimeActive =
         (reconnectInProgress || connection.state in ACTIVE_CONNECTION_STATES) &&
-            connection.trafficMode == TrafficMode.TUNNEL &&
-            connection.profileId != FoxholeVpnService.LOCAL_GUARD_PROFILE_ID
-    if (realTunnelActive) {
+            hasDashboardRouteProfile()
+    if (routeRuntimeActive) {
         return visibleIpInfo.takeIf { info ->
             reconnectInProgress ||
                 protocolSearchRunning ||
-                info.fetchedAt >= connection.lastChangeAt
+                ipInfoLoading ||
+                dashboardConnectionMetricsLoading ||
+                info.fetchedAt >= connection.lastChangeAt - ACTIVE_ROUTE_IP_INFO_GRACE_MS
         }
     }
     return visibleIpInfo
 }
+
+private fun HomeRouteUiState.shouldKeepVisibleNetworkInfoDuringRouteTransition(dashboardIpInfo: IpInfo?): Boolean =
+    dashboardIpInfo != null &&
+        (
+            connection.state in setOf(ConnectionState.CONNECTING, ConnectionState.RECONNECTING) ||
+                autoConnect.running ||
+                protocolMetricsRefreshing ||
+                dashboardConnectionMetricsLoading
+            )
+
+private const val ACTIVE_ROUTE_IP_INFO_GRACE_MS = 30_000L
 
 internal fun resolveHomeDashboardTrafficModel(
     state: HomeRouteUiState,

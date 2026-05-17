@@ -59,7 +59,6 @@ import com.foxhole.beta.core.profile.PreparedProfileExport
 import com.foxhole.beta.core.profile.ProfileExportRequest
 import com.foxhole.beta.core.settings.AppTrafficStatsRecorder
 import com.foxhole.beta.core.smart.SmartStartController
-import com.foxhole.beta.vpn.FoxholeVpnRuntimeBridge
 import com.foxhole.beta.vpn.FoxholeVpnService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -1206,9 +1205,10 @@ class HomeViewModel(
                 clearRuntimeReconnectRequired()
                 markTorOperation(HomeTorOperationKind.CHANGING_LOCATION)
                 container.settingsRepository.rotatePrivacyRouteIdentity()
-                FoxholeVpnRuntimeBridge.updateIpInfo(null)
                 markRuntimeReloadPending()
-                if (!container.connectionController.reload(profileId)) {
+                if (container.connectionController.reload(profileId)) {
+                    scheduleDashboardRefreshAfterRuntimeReload()
+                } else {
                     clearTorOperation()
                     clearRuntimeReloadPending()
                 }
@@ -1460,8 +1460,18 @@ class HomeViewModel(
 
     internal fun scheduleConnectedIpRefresh(
         reason: IpInfoRefreshReason = IpInfoRefreshReason.POST_CONNECT,
-        clearExistingIp: Boolean = true,
+        clearExistingIp: Boolean = false,
     ) = scheduleConnectedIpRefreshInternal(reason = reason, clearExistingIp = clearExistingIp)
+
+    internal fun scheduleDashboardRefreshAfterRuntimeReload() {
+        if (container.connectionController.snapshot.value.state != ConnectionState.CONNECTED) {
+            return
+        }
+        scheduleConnectedIpRefresh(reason = IpInfoRefreshReason.POST_UPDATE, clearExistingIp = false)
+        if (dashboardVisible && !autoConnectUiStateMutable.value.running) {
+            scheduleActiveProfileLatencyRefresh()
+        }
+    }
 
     internal fun markRuntimeReloadPending() = markRuntimeReloadPendingInternal()
 
