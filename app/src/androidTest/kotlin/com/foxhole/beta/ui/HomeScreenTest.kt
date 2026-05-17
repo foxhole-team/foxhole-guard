@@ -230,9 +230,15 @@ class HomeScreenTest {
     @Test
     fun opensUniversalImportMenuFromHomeAction() {
         composeRule.onNodeWithTag("home_import_action").performClick()
-        composeRule.onNodeWithTag("home_import_from_clipboard_action").assertIsDisplayed()
-        composeRule.onNodeWithTag("home_import_from_file_action").assertIsDisplayed()
-        composeRule.onNodeWithTag("home_import_from_qr_action").assertIsDisplayed()
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            composeRule
+                .onAllNodesWithTag("home_import_from_clipboard_action")
+                .fetchSemanticsNodes()
+                .isNotEmpty()
+        }
+        composeRule.onAllNodesWithTag("home_import_from_clipboard_action").assertCountEquals(1)
+        composeRule.onAllNodesWithTag("home_import_from_file_action").assertCountEquals(1)
+        composeRule.onAllNodesWithTag("home_import_from_qr_action").assertCountEquals(1)
     }
 
     @Test
@@ -362,8 +368,11 @@ class HomeScreenTest {
 
     private fun waitForSettingsHomeExpertActionVisible() {
         composeRule.waitUntil(timeoutMillis = 5_000) {
-            composeRule.onAllNodesWithTag("settings_screen").fetchSemanticsNodes().isNotEmpty() &&
-                composeRule.onAllNodesWithTag("settings_expert_action").fetchSemanticsNodes().isNotEmpty()
+            composeRule.onAllNodesWithTag("settings_screen").fetchSemanticsNodes().isNotEmpty()
+        }
+        composeRule.onNodeWithTag("settings_screen").performScrollToNode(hasTestTag("settings_expert_action"))
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            composeRule.onAllNodesWithTag("settings_expert_action").fetchSemanticsNodes().isNotEmpty()
         }
     }
 

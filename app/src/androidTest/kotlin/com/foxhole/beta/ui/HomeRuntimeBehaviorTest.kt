@@ -106,6 +106,7 @@ class HomeRuntimeBehaviorTest {
                     it.message.contains("clearExistingIp=false")
             },
         )
+        composeRule.onNodeWithTag("home_dashboard_list").performScrollToNode(hasTestTag("home_network_primary_ip"))
         composeRule.onNodeWithTag("home_network_primary_ip", useUnmergedTree = true).assertIsDisplayed()
         composeRule
             .onAllNodesWithText(
