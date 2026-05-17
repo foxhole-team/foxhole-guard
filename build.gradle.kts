@@ -79,6 +79,19 @@ subprojects {
     }
 }
 
+val cyclonedxAggregateRequested =
+    gradle.startParameter.taskNames.any { taskName ->
+        taskName == "cyclonedxBom" || taskName.endsWith(":cyclonedxBom")
+    }
+
+if (cyclonedxAggregateRequested) {
+    gradle.projectsEvaluated {
+        allprojects {
+            tasks.named("cyclonedxDirectBom", CyclonedxDirectTask::class).get()
+        }
+    }
+}
+
 tasks.withType<CyclonedxAggregateTask>().configureEach {
     projectType.set(Component.Type.APPLICATION)
     componentName.set("foxhole-android")
