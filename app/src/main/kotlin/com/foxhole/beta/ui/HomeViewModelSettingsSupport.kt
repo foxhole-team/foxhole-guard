@@ -512,6 +512,7 @@ internal fun HomeViewModel.onPrivacyRouteModeSelectedInternal(value: PrivacyRout
         markTorOperation(HomeTorOperationKind.CONNECTING)
     } else {
         clearTorOperation()
+        torIpInfoMutable.value = null
     }
     updateRuntimeSettingAndMaybeReload {
         container.settingsRepository.updatePrivacyRouteMode(value)

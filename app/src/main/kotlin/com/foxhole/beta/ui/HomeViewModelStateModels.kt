@@ -29,6 +29,7 @@ data class HomeUiState(
     val settings: FoxholeSettings = FoxholeSettings(),
     val connection: ConnectionSnapshot = ConnectionSnapshot(),
     val ipInfo: IpInfo? = null,
+    val torIpInfo: IpInfo? = null,
     val ipInfoLoading: Boolean = false,
     val dashboardConnectionMetricsLoading: Boolean = false,
     val traffic: TrafficSnapshot = TrafficSnapshot(),
@@ -58,6 +59,7 @@ internal data class HomeConnectionStreams(
     val settings: FoxholeSettings,
     val connection: ConnectionSnapshot,
     val ipInfo: IpInfo?,
+    val torIpInfo: IpInfo?,
     val traffic: TrafficSnapshot,
 )
 
@@ -70,6 +72,7 @@ internal data class HomeProfileStreams(
 internal data class HomeRealtimeStreams(
     val connection: ConnectionSnapshot,
     val ipInfo: IpInfo?,
+    val torIpInfo: IpInfo?,
     val traffic: TrafficSnapshot,
 )
 
@@ -85,6 +88,7 @@ internal data class HomeLocalStreams(
     val installedAppsLoading: Boolean,
     val installedAppsLoaded: Boolean,
     val ipInfoLoading: Boolean,
+    val torIpInfo: IpInfo?,
     val dashboardConnectionMetricsLoading: Boolean,
     val runtimeReloadPending: Boolean,
     val torOperation: HomeTorOperationUiState,
@@ -112,6 +116,7 @@ internal data class HomeTrailingLocalState(
     val startupActiveProfile: Profile?,
     val appliedRuntimeSignature: Int?,
     val dashboardConnectionMetricsLoading: Boolean,
+    val torIpInfo: IpInfo?,
 )
 
 internal data class HomeReconnectStreams(

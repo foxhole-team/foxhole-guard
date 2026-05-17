@@ -254,9 +254,6 @@ internal fun FoxholeScaffold(
     content: @Composable (PaddingValues) -> Unit,
 ) {
     val uiPalette = LocalFoxholeUiPalette.current
-    val darkTheme = LocalFoxholeDarkTheme.current
-    val topBarContainerColor =
-        uiPalette.cardContainerColor.copy(alpha = if (darkTheme) 0.78f else 0.90f)
     val statusTopPadding = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     val navigationBottomPadding = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val contentTopPadding = statusTopPadding + FoxholeTopChromeHeight
@@ -278,35 +275,48 @@ internal fun FoxholeScaffold(
                         .padding(bottom = scaffoldPadding.calculateBottomPadding()),
             ) {
                 content(PaddingValues(top = contentTopPadding))
-                TopAppBar(
-                    modifier = Modifier.align(Alignment.TopCenter),
-                    title = {
-                        Text(
-                            text = title,
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.SemiBold,
-                        )
-                    },
-                    navigationIcon = {
-                        onNavigateUp?.let {
-                            IconButton(onClick = it) {
-                                Icon(
-                                    Icons.AutoMirrored.Outlined.ArrowBack,
-                                    contentDescription = stringResource(R.string.navigate_back),
-                                )
+                FoxholeGlassPanel(
+                    modifier =
+                        Modifier
+                            .align(Alignment.TopCenter)
+                            .fillMaxWidth()
+                            .height(contentTopPadding),
+                    shape = RoundedCornerShape(bottomStart = 24.dp, bottomEnd = 24.dp),
+                    containerColor = uiPalette.bottomBarContainerColor,
+                    borderColor = uiPalette.bottomBarBorderColor,
+                    blurRadius = 18.dp,
+                    backgroundAlpha = 0.72f,
+                ) {
+                    TopAppBar(
+                        modifier = Modifier.align(Alignment.TopCenter),
+                        title = {
+                            Text(
+                                text = title,
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                        },
+                        navigationIcon = {
+                            onNavigateUp?.let {
+                                IconButton(onClick = it) {
+                                    Icon(
+                                        Icons.AutoMirrored.Outlined.ArrowBack,
+                                        contentDescription = stringResource(R.string.navigate_back),
+                                    )
+                                }
                             }
-                        }
-                    },
-                    actions = actions,
-                    colors =
-                        TopAppBarDefaults.topAppBarColors(
-                            containerColor = topBarContainerColor,
-                            scrolledContainerColor = topBarContainerColor,
-                            titleContentColor = MaterialTheme.colorScheme.onBackground,
-                            navigationIconContentColor = MaterialTheme.colorScheme.onBackground,
-                            actionIconContentColor = MaterialTheme.colorScheme.onBackground,
-                        ),
-                )
+                        },
+                        actions = actions,
+                        colors =
+                            TopAppBarDefaults.topAppBarColors(
+                                containerColor = Color.Transparent,
+                                scrolledContainerColor = Color.Transparent,
+                                titleContentColor = MaterialTheme.colorScheme.onBackground,
+                                navigationIconContentColor = MaterialTheme.colorScheme.onBackground,
+                                actionIconContentColor = MaterialTheme.colorScheme.onBackground,
+                            ),
+                    )
+                }
                 val bannerModifier =
                     when (bannerPlacement) {
                         FoxholeBannerPlacement.TOP ->

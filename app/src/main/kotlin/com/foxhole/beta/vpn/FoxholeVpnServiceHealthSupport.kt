@@ -48,12 +48,20 @@ internal fun FoxholeVpnService.stopNotificationHealthMonitoring() {
 }
 
 private fun FoxholeVpnService.updateHealthAfterProbe(probeSucceeded: Boolean) {
+    val androidValidatedVpnNetwork = currentVpnNetworkOrNull()?.let(::isVpnNetworkValidated) == true
+    val healthAccepted = probeSucceeded || androidValidatedVpnNetwork
     RuntimeHealthMetrics.recordHealthProbe(
         owner = "vpn",
-        success = probeSucceeded,
+        success = healthAccepted,
         diagnosticsLogger = container.diagnosticsLogger,
     )
-    if (probeSucceeded) {
+    if (healthAccepted) {
+        if (!probeSucceeded && androidValidatedVpnNetwork) {
+            container.diagnosticsLogger.record(
+                "connection",
+                "notification health probe failed but android validated vpn network is online",
+            )
+        }
         updateNotificationConnectivityHealth(
             state = ConnectivityHealthState.ONLINE,
             resetFailures = true,

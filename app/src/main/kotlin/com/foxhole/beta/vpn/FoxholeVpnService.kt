@@ -558,6 +558,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
                 "connection",
                 "disconnect ignored by inactive tunnel service while another mode is active",
             )
+            removeForegroundNotification()
             stopService(commandStartId)
             return
         }
@@ -753,6 +754,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
                 "connection",
                 "runtime command ignored by inactive tunnel service while another mode is active",
             )
+            removeForegroundNotification()
             stopService(commandStartId)
             return
         }

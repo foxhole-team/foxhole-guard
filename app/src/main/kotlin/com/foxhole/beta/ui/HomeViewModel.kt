@@ -94,6 +94,7 @@ class HomeViewModel(
     internal val installedAppsLoadingMutable = MutableStateFlow(false)
     internal val installedAppsLoadedMutable = MutableStateFlow(false)
     internal val ipInfoLoadingMutable = MutableStateFlow(false)
+    internal val torIpInfoMutable = MutableStateFlow<com.foxhole.beta.core.model.IpInfo?>(null)
     internal val dashboardConnectionMetricsLoadingMutable = MutableStateFlow(false)
     internal val profileOptionLatenciesMutable = MutableStateFlow<Map<ProfileOptionLatencyKey, Long>>(emptyMap())
     internal val profileOptionDownMutable = MutableStateFlow<Set<ProfileOptionLatencyKey>>(emptySet())
@@ -138,10 +139,12 @@ class HomeViewModel(
             container.connectionController.snapshot,
             container.connectionController.ipInfo,
             container.connectionController.traffic,
-        ) { connection, ipInfo, traffic ->
+            torIpInfoMutable,
+        ) { connection, ipInfo, traffic, torIpInfo ->
             HomeRealtimeStreams(
                 connection = connection,
                 ipInfo = ipInfo,
+                torIpInfo = torIpInfo,
                 traffic = traffic,
             )
         }
@@ -157,6 +160,7 @@ class HomeViewModel(
                 settings = profileStreams.settings,
                 connection = realtimeStreams.connection,
                 ipInfo = realtimeStreams.ipInfo,
+                torIpInfo = realtimeStreams.torIpInfo,
                 traffic = realtimeStreams.traffic,
             )
         }
@@ -205,11 +209,17 @@ class HomeViewModel(
                         startupActiveProfile = startupActiveProfile,
                         appliedRuntimeSignature = appliedRuntimeSignature,
                         dashboardConnectionMetricsLoading = dashboardConnectionMetricsLoading,
+                        torIpInfo = torIpInfoMutable.value,
                     )
                 },
-                torOperationMutable,
-            ) { trailingState, torOperation ->
-                trailingState.copy(torOperation = torOperation)
+                combine(torOperationMutable, torIpInfoMutable) { torOperation, torIpInfo ->
+                    torOperation to torIpInfo
+                },
+            ) { trailingState, torState ->
+                trailingState.copy(
+                    torOperation = torState.first,
+                    torIpInfo = torState.second,
+                )
             },
         ) { installedAppsStreams, trailingState ->
             HomeLocalState(
@@ -220,6 +230,7 @@ class HomeViewModel(
                     installedAppsLoading = installedAppsStreams.installedAppsLoading,
                     installedAppsLoaded = installedAppsStreams.installedAppsLoaded,
                     ipInfoLoading = installedAppsStreams.ipInfoLoading,
+                    torIpInfo = trailingState.torIpInfo,
                     dashboardConnectionMetricsLoading = trailingState.dashboardConnectionMetricsLoading,
                     runtimeReloadPending = trailingState.runtimeReloadPending,
                     torOperation = trailingState.torOperation,
@@ -303,6 +314,7 @@ class HomeViewModel(
                 settings = connectionStreams.settings,
                 connection = connectionStreams.connection,
                 ipInfo = connectionStreams.ipInfo,
+                torIpInfo = localStreams.torIpInfo,
                 ipInfoLoading =
                 shouldShowIpInfoLoading(
                     currentIpInfo = connectionStreams.ipInfo,
@@ -559,6 +571,7 @@ class HomeViewModel(
     internal var ipInfoRefreshToken: Long = 0L
     internal var activeIpInfoRefreshReason: IpInfoRefreshReason? = null
     internal var pendingPostConnectIpRefresh: Boolean = false
+    internal var lastForegroundDashboardRefreshElapsedMs: Long = 0L
     internal var connectedIpRefreshJob: Job? = null
     internal var profileLatencyRefreshJob: Job? = null
     internal var runtimeReloadPendingJob: Job? = null
@@ -590,9 +603,40 @@ class HomeViewModel(
             }
         }
         viewModelScope.launch {
-            container.profileRepository.ensureActiveProfileInvariant()
-            startupActiveProfileMutable.value = container.profileRepository.getActiveProfile()
-            container.profileRepository.profiles.first()
+            val loaded =
+                try {
+                    kotlinx.coroutines.withTimeoutOrNull(PROFILE_PRELOAD_TIMEOUT_MS) {
+                        container.profileRepository.ensureActiveProfileInvariant()
+                        startupActiveProfileMutable.value = container.profileRepository.getActiveProfile()
+                        container.profileRepository.profiles.first()
+                        true
+                    } == true
+                } catch (error: kotlinx.coroutines.CancellationException) {
+                    throw error
+                } catch (error: android.database.SQLException) {
+                    container.diagnosticsLogger.record("profile", "profile preload failed: ${error::class.simpleName}")
+                    false
+                } catch (error: kotlinx.serialization.SerializationException) {
+                    container.diagnosticsLogger.record("profile", "profile preload failed: ${error::class.simpleName}")
+                    false
+                } catch (error: java.io.IOException) {
+                    container.diagnosticsLogger.record("profile", "profile preload failed: ${error::class.simpleName}")
+                    false
+                } catch (error: java.security.GeneralSecurityException) {
+                    container.diagnosticsLogger.record("profile", "profile preload failed: ${error::class.simpleName}")
+                    false
+                } catch (error: IllegalStateException) {
+                    container.diagnosticsLogger.record("profile", "profile preload failed: ${error::class.simpleName}")
+                    false
+                } catch (error: SecurityException) {
+                    container.diagnosticsLogger.record("profile", "profile preload failed: ${error::class.simpleName}")
+                    false
+                }
+            if (!loaded) {
+                startupActiveProfileMutable.value =
+                    container.settingsRepository.settings.value.lastActiveProfile?.toStartupProfile()
+                container.diagnosticsLogger.record("profile", "profile preload finished with fallback")
+            }
             profilesLoadedMutable.value = true
         }
         viewModelScope.launch {
@@ -677,7 +721,7 @@ class HomeViewModel(
             return
         }
         if (runtimeState == ConnectionState.CONNECTED) {
-            scheduleConnectedIpRefresh(reason = IpInfoRefreshReason.FOREGROUND, clearExistingIp = false)
+            scheduleForegroundDashboardRefreshIfStale()
         } else {
             startIpInfoRefresh(
                 reportFailures = false,
@@ -1048,7 +1092,8 @@ class HomeViewModel(
 
     fun onProtocolRecommendationAccepted() = onProtocolRecommendationAcceptedInternal()
 
-    internal fun scheduleActiveProfileLatencyRefresh() = scheduleActiveProfileLatencyRefreshInternal()
+    internal fun scheduleActiveProfileLatencyRefresh(showLoading: Boolean = true) =
+        scheduleActiveProfileLatencyRefreshInternal(showLoading = showLoading)
 
     internal fun clearProfileLatencyRefresh() = clearProfileLatencyRefreshInternal()
 
@@ -1516,10 +1561,6 @@ class HomeViewModel(
         onTrafficUiVisibilityChangedInternal(dashboardVisible || statisticsVisible)
         if (visible) {
             startPendingProfileReconnectPromptIfNeeded()
-            if (container.connectionController.snapshot.value.state == ConnectionState.CONNECTED && !autoConnectUiStateMutable.value.running) {
-                scheduleConnectedIpRefresh(reason = IpInfoRefreshReason.FOREGROUND, clearExistingIp = false)
-                scheduleActiveProfileLatencyRefresh()
-            }
         } else {
             clearProfileLatencyRefresh()
         }
@@ -1683,8 +1724,10 @@ class HomeViewModel(
 
     companion object {
         internal const val CONNECTED_IP_REFRESH_DELAY_MS = 250L
+        internal const val PROFILE_PRELOAD_TIMEOUT_MS = 2_500L
         internal const val MANUAL_IP_REFRESH_MIN_LOADING_MS = 666L
         internal const val AUTO_IP_REFRESH_MIN_LOADING_MS = 450L
+        internal const val FOREGROUND_DASHBOARD_REFRESH_MIN_INTERVAL_MS = 20_000L
         internal const val CONNECTED_LATENCY_FIRST_DELAY_MS = 350L
         internal const val CONNECTED_LATENCY_REFRESH_INTERVAL_MS = 15_000L
         internal const val CONNECTED_LATENCY_TIMEOUT_MS = 2_500L

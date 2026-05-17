@@ -102,6 +102,7 @@ internal fun HomeViewModel.refreshIpInfoInternalInternal(
                         FoxholeVpnRuntimeBridge.updateDeviceIpInfo(info)
                     }
                     FoxholeVpnRuntimeBridge.updateIpInfo(info)
+                    publishTorIpInfoFromDashboardRefresh(info)
                     container.diagnosticsLogger.record(
                         "ip",
                         "geo refreshed id=$refreshToken reason=${reason.name.lowercase()} target=${target.name.lowercase()}",
@@ -717,8 +718,7 @@ internal fun HomeViewModel.onTrafficUiVisibilityChangedInternal(visible: Boolean
         FoxholeVpnRuntimeBridge.requestImmediateTrafficSample()
         val connectionState = container.connectionController.snapshot.value.state
         if (connectionState == ConnectionState.CONNECTED && !autoConnectUiStateMutable.value.running) {
-            scheduleActiveProfileLatencyRefresh()
-            scheduleConnectedIpRefresh(reason = IpInfoRefreshReason.FOREGROUND, clearExistingIp = false)
+            scheduleForegroundDashboardRefreshIfStale()
         }
     } else {
         clearProfileLatencyRefresh()

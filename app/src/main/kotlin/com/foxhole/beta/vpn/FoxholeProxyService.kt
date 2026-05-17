@@ -293,6 +293,7 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
                 "connection",
                 "disconnect ignored by inactive proxy service while another mode is active",
             )
+            removeForegroundNotification()
             stopService(commandStartId)
             return
         }
@@ -364,6 +365,7 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
                 "connection",
                 "proxy command ignored by inactive proxy service while another mode is active",
             )
+            removeForegroundNotification()
             stopService(commandStartId)
             return
         }

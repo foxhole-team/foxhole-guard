@@ -106,6 +106,7 @@ import com.foxhole.beta.core.model.ProtocolHint
 import com.foxhole.beta.core.model.ProxyInboundSettings
 import com.foxhole.beta.core.model.TrafficMapUiState
 import com.foxhole.beta.core.model.TrafficMode
+import com.foxhole.beta.ui.theme.LocalFoxholeUiPalette
 import com.foxhole.beta.ui.BottomDockOverlayPadding
 import com.foxhole.beta.ui.FoxholeCard
 import com.foxhole.beta.ui.FoxholeScaffold
@@ -175,6 +176,7 @@ fun HomeScreen(
             }
         }
     val darkTheme = MaterialTheme.colorScheme.background.luminance() < 0.3f
+    val uiPalette = LocalFoxholeUiPalette.current
     val autoTone = foxholeSystemAwareAccentColor(fallback = MaterialTheme.colorScheme.primary)
     val torOperationTone = Color(0xFFE89B3C)
     val topStatusState = homeTopStatusState(state)
@@ -334,6 +336,11 @@ fun HomeScreen(
             firstAnalysisProtocolMenuStarted = false
         }
     }
+    LaunchedEffect(selectedConnectionFeature, state.settings.privacyRoute.enabled) {
+        if (selectedConnectionFeature == HomeConnectionFeature.TOR && !state.settings.privacyRoute.enabled) {
+            selectedConnectionFeature = null
+        }
+    }
 
     fun requestSmartProfileMetricsRefresh(profileId: Long) {
         smartRefreshConfirmationProfileId = profileId
@@ -359,10 +366,6 @@ fun HomeScreen(
     DisposableEffect(onTrafficUiVisibilityChanged) {
         onTrafficUiVisibilityChanged(true)
         onDispose { onTrafficUiVisibilityChanged(false) }
-    }
-
-    LaunchedEffect(state.connection.state, state.activeProfile?.id) {
-        onTrafficUiVisibilityChanged(true)
     }
 
     FoxholeScaffold(
@@ -396,7 +399,7 @@ fun HomeScreen(
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
                     shape = MaterialTheme.shapes.large,
-                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    color = uiPalette.cardContainerColor,
                     tonalElevation = 0.dp,
                     shadowElevation = 0.dp,
                 ) {
@@ -938,19 +941,6 @@ fun HomeScreen(
                                             verticalArrangement = Arrangement.spacedBy(2.dp),
                                         ) {
                                             val connectionMetricsAvailable = state.connection.state == ConnectionState.CONNECTED
-                                            val vpnLatencyText =
-                                                when {
-                                                    !connectionMetricsAvailable -> stringResource(R.string.smart_start_protocol_status_no_data)
-                                                    dashboardSelectedLatencyMs != null ->
-                                                        stringResource(
-                                                            R.string.latency_pill_value,
-                                                            boundedDisplayLatencyMs(dashboardSelectedLatencyMs),
-                                                        )
-                                                    dashboardSelectedLatencyDown ->
-                                                        stringResource(R.string.latency_pill_down)
-                                                    dashboardSelectedLatencyUnavailable -> stringResource(R.string.latency_pill_unavailable)
-                                                    else -> stringResource(R.string.smart_profile_metric_unavailable)
-                                                }
                                             val serverPingText =
                                                 when {
                                                     !connectionMetricsAvailable -> stringResource(R.string.smart_start_protocol_status_no_data)
@@ -983,12 +973,6 @@ fun HomeScreen(
                                                 }
                                             val transportTypeText = dashboardTransportTypeLabel(dashboardProtocolPresentation.protocolHint)
                                             HomeNetworkColumnTitle(stringResource(R.string.home_network_profile_info_title))
-                                            HomeNetworkDetailLine(
-                                                label = stringResource(R.string.home_network_vpn_latency_label),
-                                                value = vpnLatencyText,
-                                                valueMonospace = connectionMetricsAvailable && dashboardSelectedLatencyMs != null,
-                                            )
-                                            HomeNetworkSubtleDivider()
                                             HomeNetworkDetailLine(
                                                 label = stringResource(R.string.home_network_server_ping_label),
                                                 value = serverPingText,

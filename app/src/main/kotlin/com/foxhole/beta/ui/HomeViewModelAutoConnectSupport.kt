@@ -1696,7 +1696,7 @@ internal fun HomeViewModel.clearProtocolLatencyStateInternal(
 }
 
 @Suppress("ReturnCount")
-internal fun HomeViewModel.scheduleActiveProfileLatencyRefreshInternal() {
+internal fun HomeViewModel.scheduleActiveProfileLatencyRefreshInternal(showLoading: Boolean = true) {
     val activeProfile = uiState.value.activeProfile ?: return
     val selectedOptionId =
         resolveDashboardLatencyOptionId(
@@ -1715,7 +1715,7 @@ internal fun HomeViewModel.scheduleActiveProfileLatencyRefreshInternal() {
             .firstOrNull { option -> option.id == selectedOptionId }
             ?.protocolHint
     profileLatencyRefreshJob?.cancel()
-    dashboardConnectionMetricsLoadingMutable.value = true
+    dashboardConnectionMetricsLoadingMutable.value = showLoading
     profileLatencyRefreshJob =
         viewModelScope.launch {
             var waitingForInitialSample = true

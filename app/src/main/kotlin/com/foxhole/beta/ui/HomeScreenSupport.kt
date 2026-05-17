@@ -875,6 +875,9 @@ private fun handleHomeConnectionFeatureConfirm(
                     PrivacyRouteMode.TOR_OVER_VPN
                 },
             )
+            if (enabled) {
+                onDismiss()
+            }
         }
         restartAvailable -> {
             onRestart()
@@ -1134,10 +1137,15 @@ private fun HomeRouteUiState.torIpPresentation(loading: Boolean): HomeTorIpPrese
 }
 
 private fun HomeRouteUiState.visibleTorIpInfo(): IpInfo? {
-    val info = ipInfo
     val torRouteVisible =
         connection.profileId == FoxholeVpnService.TOR_ONLY_PROFILE_ID ||
             settings.privacyRoute.enabled
+    val info =
+        when {
+            connection.profileId == FoxholeVpnService.TOR_ONLY_PROFILE_ID -> torIpInfo ?: ipInfo
+            settings.privacyRoute.enabled -> torIpInfo
+            else -> null
+        }
     val requiredFetchedAt =
         maxOf(
             connection.lastChangeAt,
@@ -1145,7 +1153,7 @@ private fun HomeRouteUiState.visibleTorIpInfo(): IpInfo? {
         )
     return when {
         info == null -> null
-        !torRouteVisible -> info
+        !torRouteVisible -> null
         info.fetchedAt >= requiredFetchedAt -> info
         else -> null
     }
@@ -1707,7 +1715,6 @@ internal fun HomeConnectionStatusLoadingBlock(
         title = stringResource(R.string.home_network_profile_info_title),
         labels =
             listOf(
-                stringResource(R.string.home_network_vpn_latency_label),
                 stringResource(R.string.home_network_server_ping_label),
                 stringResource(R.string.home_network_dns_label),
                 stringResource(R.string.home_network_transport_type_label),

@@ -11,6 +11,9 @@ internal fun HomeViewModel.markTorOperationInternal(kind: HomeTorOperationKind) 
     torOperationTimeoutJob?.cancel()
     val startedAt = System.currentTimeMillis()
     val startedIpAddress = container.connectionController.ipInfo.value?.let(::primaryVisibleIp)
+    if (kind == HomeTorOperationKind.CONNECTING) {
+        torIpInfoMutable.value = null
+    }
     torOperationMutable.value =
         HomeTorOperationUiState(
             kind = kind,
@@ -31,6 +34,7 @@ internal suspend fun HomeViewModel.maybeFinishTorOperationInternal(
     ipInfo: IpInfo?,
 ) {
     val publishableIpInfo = ipInfo?.takeIf(torOperation::canPublishTorIp) ?: return
+    torIpInfoMutable.value = publishableIpInfo
     emitTorConnectedBanner(publishableIpInfo)
     clearTorOperation()
 }
@@ -48,8 +52,7 @@ private fun HomeTorOperationUiState.canPublishTorIp(ipInfo: IpInfo): Boolean {
         active &&
             ipInfo.fetchedAt >= startedAt &&
             System.currentTimeMillis() - startedAt >= HomeViewModel.TOR_OPERATION_MIN_VISIBLE_MS
-    val currentIpAddress = primaryVisibleIp(ipInfo)
-    return readyToPublish && (startedIpAddress == null || currentIpAddress != startedIpAddress)
+    return readyToPublish && canAcceptTorIp(ipInfo)
 }
 
 internal fun HomeViewModel.clearTorOperationInternal() {
