@@ -195,6 +195,28 @@ class HomeDashboardPresentationTest {
     }
 
     @Test
+    fun `protocol model uses server ping when connected latency endpoint is unavailable`() {
+        val model =
+            resolveHomeDashboardProtocolModel(
+                HomeRouteUiState(
+                    activeProfile = smartProfile(),
+                    connection =
+                        ConnectionSnapshot(
+                            state = ConnectionState.CONNECTED,
+                            profileId = 1L,
+                            protocolOptionId = "vless",
+                        ),
+                    selectedProtocolLatencyUnavailable = true,
+                    protocolServerPingsByOptionId = mapOf("vless" to 379L),
+                ),
+            )
+
+        assertEquals(379L, model.latencyPresentation.latencyMs)
+        assertFalse(model.latencyPresentation.isUnavailable)
+        assertTrue(model.connectionDetailsReady)
+    }
+
+    @Test
     fun `tor feature stays pending and reports udp when selected vpn protocol is udp`() {
         val state =
             HomeRouteUiState(

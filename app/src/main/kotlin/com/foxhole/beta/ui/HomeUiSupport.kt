@@ -370,7 +370,7 @@ internal fun resolveHomeDashboardProtocolModel(state: HomeRouteUiState): HomeDas
                 autoConnectUnavailableOptionIds
             ).withoutOption(activeConnectedAutoConnectOptionId)
             .withoutOption(refreshingOptionId)
-    val latencyPresentation = resolveDashboardLatencyPresentation(state)
+    val measuredLatencyPresentation = resolveDashboardLatencyPresentation(state)
     val protocolPresentation =
         resolveHomeDashboardProtocolPresentation(
             activeProfile = state.activeProfile,
@@ -384,6 +384,7 @@ internal fun resolveHomeDashboardProtocolModel(state: HomeRouteUiState): HomeDas
         selectedServerPingOptionId != null &&
             selectedServerPingMs == null &&
             selectedServerPingOptionId in state.protocolServerPingUnavailableOptionIds
+    val latencyPresentation = measuredLatencyPresentation.withServerPingFallback(selectedServerPingMs)
     val connectionMetricsLoading =
         state.dashboardConnectionMetricsLoading ||
             state.reconnectInProgress ||
@@ -414,6 +415,12 @@ internal fun resolveHomeDashboardProtocolModel(state: HomeRouteUiState): HomeDas
         connectionMetricsLoading = connectionMetricsLoading,
     )
 }
+
+private fun HomeDashboardLatencyPresentation.withServerPingFallback(serverPingMs: Long?): HomeDashboardLatencyPresentation =
+    when {
+        latencyMs != null || isDown || serverPingMs == null -> this
+        else -> HomeDashboardLatencyPresentation(latencyMs = serverPingMs)
+    }
 
 private fun HomeRouteUiState.activeConnectedAutoConnectOptionId(): String? =
     autoConnect.currentOptionId?.takeIf { optionId ->
