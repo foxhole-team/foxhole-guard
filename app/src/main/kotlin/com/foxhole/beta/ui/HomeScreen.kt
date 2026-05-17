@@ -1077,17 +1077,18 @@ fun HomeScreen(
                         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
                                 val trafficLabelTint = MaterialTheme.colorScheme.primary
+                                val inactiveTrafficIconTint = MaterialTheme.colorScheme.onSurfaceVariant
                                 val incomingTrafficTint =
                                     if (trafficModel.hasIncomingTraffic) {
                                         FoxholePositiveAccent
                                     } else {
-                                        trafficLabelTint
+                                        inactiveTrafficIconTint
                                     }
                                 val outgoingTrafficTint =
                                     if (trafficModel.hasOutgoingTraffic) {
                                         Color(0xFF2F80ED)
                                     } else {
-                                        trafficLabelTint
+                                        inactiveTrafficIconTint
                                     }
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),

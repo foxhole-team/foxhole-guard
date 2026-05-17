@@ -13,6 +13,7 @@ import androidx.core.content.getSystemService
 import com.foxhole.beta.BuildConfig
 import com.foxhole.beta.core.diagnostics.DiagnosticsLogger
 import com.foxhole.beta.core.model.NetworkActivityEvent
+import com.foxhole.beta.core.traffic.TorGeoIpCountryResolver
 import java.io.File
 import java.lang.reflect.Method
 import java.lang.reflect.Proxy
@@ -38,6 +39,7 @@ internal class LibboxReflection(
     private val appContext = context.applicationContext
     private val connectivityManager by lazy { appContext.getSystemService<ConnectivityManager>()!! }
     private val packageManager by lazy { appContext.packageManager }
+    private val countryResolver by lazy { TorGeoIpCountryResolver(appContext) }
 
     private val libboxClass by lazy { classOrNull("io.nekohasekai.libbox.Libbox") }
     private val setupOptionsClass by lazy { requireClass("io.nekohasekai.libbox.SetupOptions") }
@@ -578,6 +580,10 @@ internal class LibboxReflection(
         }
         val appLabel = owner?.userName?.takeIf(String::isNotBlank) ?: "Unknown app"
         val packageNames = owner?.packageNames.orEmpty().distinct().sorted()
+        val countryCode =
+            destinationHost
+                .takeIf(String::isNotBlank)
+                ?.let(countryResolver::countryCodeForDestination)
         if (packageNames.isNotEmpty() && destinationHost.isNotBlank()) {
             val context = networkActivityContext()
             onNetworkActivityEvent(
@@ -587,7 +593,7 @@ internal class LibboxReflection(
                     protocol = protocolLabel(protocol),
                     remoteHost = destinationHost,
                     remotePort = destinationPort.takeIf { port -> port in 1..65535 },
-                    countryCode = null,
+                    countryCode = countryCode,
                     bytesRx = 0L,
                     bytesTx = 0L,
                     profileId = context.profileId,
@@ -614,6 +620,7 @@ internal class LibboxReflection(
                             add("protocol=${protocolLabel(protocol)}")
                             add("local=${sourceHost.ifBlank { "?" }}:$sourcePort")
                             add("remote=${destinationHost.ifBlank { "?" }}:$destinationPort")
+                            countryCode?.let { add("country=$it") }
                         }.joinToString(separator = " • "),
                     )
                 },

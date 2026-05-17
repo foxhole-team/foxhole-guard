@@ -553,13 +553,15 @@ internal data class HomeConnectionFeatureIndicator(
 
 internal fun homeConnectionFeatureIndicators(state: HomeRouteUiState): List<HomeConnectionFeatureIndicator> =
     buildList {
-        add(
-            HomeConnectionFeatureIndicator(
-                feature = HomeConnectionFeature.FIREWALL,
-                titleRes = R.string.home_connection_feature_firewall,
-                status = homeFirewallFeatureStatus(state),
-            ),
-        )
+        if (state.settings.ui.showFirewallStatus) {
+            add(
+                HomeConnectionFeatureIndicator(
+                    feature = HomeConnectionFeature.FIREWALL,
+                    titleRes = R.string.home_connection_feature_firewall,
+                    status = homeFirewallFeatureStatus(state),
+                ),
+            )
+        }
         add(
             HomeConnectionFeatureIndicator(
                 feature = HomeConnectionFeature.TOR,

@@ -96,6 +96,18 @@ class HomeViewModel(
     internal val ipInfoLoadingMutable = MutableStateFlow(false)
     internal val torIpInfoMutable = MutableStateFlow<com.foxhole.beta.core.model.IpInfo?>(null)
     internal val dashboardConnectionMetricsLoadingMutable = MutableStateFlow(false)
+    internal var dashboardConnectionMetricsLoadingStartedAtMs = 0L
+
+    internal fun setDashboardConnectionMetricsLoading(value: Boolean) {
+        dashboardConnectionMetricsLoadingMutable.value = value
+        dashboardConnectionMetricsLoadingStartedAtMs =
+            if (value) {
+                SystemClock.elapsedRealtime()
+            } else {
+                0L
+            }
+    }
+
     internal val profileOptionLatenciesMutable = MutableStateFlow<Map<ProfileOptionLatencyKey, Long>>(emptyMap())
     internal val profileOptionDownMutable = MutableStateFlow<Set<ProfileOptionLatencyKey>>(emptySet())
     internal val profileOptionLatencyUnavailableMutable = MutableStateFlow<Set<ProfileOptionLatencyKey>>(emptySet())
@@ -666,7 +678,7 @@ class HomeViewModel(
                     clearTorOperation()
                     clearProfileLatencyRefresh()
                     clearProtocolLatencyState()
-                    dashboardConnectionMetricsLoadingMutable.value = false
+                    setDashboardConnectionMetricsLoading(false)
                 }
                 if (shouldRefreshConnectedIp) {
                     scheduleConnectedIpRefresh()
@@ -1736,6 +1748,7 @@ class HomeViewModel(
         internal const val PROFILE_PRELOAD_TIMEOUT_MS = 2_500L
         internal const val MANUAL_IP_REFRESH_MIN_LOADING_MS = 666L
         internal const val AUTO_IP_REFRESH_MIN_LOADING_MS = 450L
+        internal const val DASHBOARD_CONNECTION_METRICS_MIN_LOADING_MS = 450L
         internal const val FOREGROUND_DASHBOARD_REFRESH_MIN_INTERVAL_MS = 20_000L
         internal const val CONNECTED_LATENCY_FIRST_DELAY_MS = 350L
         internal const val CONNECTED_LATENCY_REFRESH_INTERVAL_MS = 15_000L

@@ -2199,7 +2199,7 @@ private fun AppTrafficTimelineChart(
         )
     com.foxhole.beta.ui.statistics.charts.TimelineChart(
         model = model,
-        lineStrokeWidth = 1.dp,
+        lineStrokeWidth = 0.65.dp,
     )
 }
 
@@ -2284,7 +2284,7 @@ private fun AppTrafficStackedBarRow(
                 modifier =
                 Modifier
                     .fillMaxWidth()
-                    .height(16.dp)
+                    .height(6.dp)
                     .semantics { contentDescription = barDescription },
             ) {
                 val radius = CornerRadius(tokens.barCornerRadius.toPx(), tokens.barCornerRadius.toPx())
@@ -2295,10 +2295,10 @@ private fun AppTrafficStackedBarRow(
                 }
                 val total = row.totalBytes.coerceAtLeast(1L).toFloat()
                 val sentWidth = (scaledWidth * (row.txBytes.coerceAtLeast(0L).toFloat() / total)).coerceAtLeast(
-                    if (row.txBytes > 0L) 2.dp.toPx() else 0f,
+                    if (row.txBytes > 0L) 1.dp.toPx() else 0f,
                 )
                 val receivedWidth = (scaledWidth - sentWidth).coerceAtLeast(
-                    if (row.rxBytes > 0L) 2.dp.toPx() else 0f,
+                    if (row.rxBytes > 0L) 1.dp.toPx() else 0f,
                 ).coerceAtMost((scaledWidth - sentWidth).coerceAtLeast(0f))
                 if (sentWidth > 0f) {
                     drawRoundRect(
@@ -2627,16 +2627,7 @@ private fun ProfileStatisticsDetail(
                             )
                         }
                     }
-                    if (selectedProtocol == null) {
-                        DetailMetricGrid(
-                            metrics =
-                            listOf(
-                                stringResource(R.string.statistics_total_traffic) to formatBytes(context, detail.totalBytes),
-                                stringResource(R.string.statistics_success_rate) to formatPercent(detail.successRate),
-                                stringResource(R.string.statistics_error_rate) to formatPercent(detail.errorRate),
-                            ),
-                        )
-                    } else {
+                    if (selectedProtocol != null) {
                         ProfileProtocolDetailPanel(protocol = selectedProtocol)
                     }
                 }
@@ -2897,7 +2888,7 @@ private fun AppConnectionRowView(connection: AppConnectionRow) {
         )
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(
-                text = connection.ipAddress.ifBlank { connection.remote },
+                text = connection.remote,
                 style = MaterialTheme.typography.bodySmall,
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 1,

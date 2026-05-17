@@ -1488,11 +1488,10 @@ fun ApplicationSettingsScreen(
                 SettingsControlGroupDivider()
                 SettingSwitchRow(
                     title = stringResource(R.string.show_firewall_status_title),
-                    checked = state.settings.expert.firewallEnabled && state.settings.ui.showFirewallStatus,
+                    checked = state.settings.ui.showFirewallStatus,
                     summary = stringResource(R.string.show_firewall_status_summary),
                     leadingIcon = Icons.Outlined.Shield,
                     onCheckedChange = onShowFirewallStatusChanged,
-                    enabled = state.settings.expert.firewallEnabled,
                     summaryMaxLines = Int.MAX_VALUE,
                     grouped = true,
                 )

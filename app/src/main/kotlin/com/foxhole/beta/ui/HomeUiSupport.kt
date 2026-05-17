@@ -573,10 +573,15 @@ private fun HomeRouteUiState.dashboardVisibleIpInfo(visibleIpInfo: IpInfo?): IpI
             hasDashboardRouteProfile()
     if (routeRuntimeActive) {
         return visibleIpInfo.takeIf { info ->
+            val freshForConnectedRoute =
+                info.fetchedAt >= connection.lastChangeAt ||
+                    (
+                        !ipInfoLoading &&
+                            dashboardConnectionMetricsLoading &&
+                            info.fetchedAt >= connection.lastChangeAt - CONNECTED_ROUTE_IP_INFO_SETTLE_GRACE_MS
+                        )
             protocolSearchRunning ||
-                ipInfoLoading ||
-                dashboardConnectionMetricsLoading ||
-                info.fetchedAt >= connection.lastChangeAt - ACTIVE_ROUTE_IP_INFO_GRACE_MS
+                freshForConnectedRoute
         }
     }
     return visibleIpInfo
@@ -597,7 +602,7 @@ private fun HomeRouteUiState.shouldKeepVisibleNetworkInfoDuringRouteTransition(d
 private fun IpInfo.isFreshForRouteTransition(lastChangeAt: Long): Boolean =
     lastChangeAt <= 0L || fetchedAt >= lastChangeAt
 
-private const val ACTIVE_ROUTE_IP_INFO_GRACE_MS = 30_000L
+private const val CONNECTED_ROUTE_IP_INFO_SETTLE_GRACE_MS = 250L
 
 internal fun resolveHomeDashboardTrafficModel(
     state: HomeRouteUiState,

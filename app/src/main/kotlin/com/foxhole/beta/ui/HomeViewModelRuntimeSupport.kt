@@ -312,13 +312,13 @@ internal suspend fun HomeViewModel.reconnectProfileIfRequestedInternal(
     }
 
     return runCatching {
-        dashboardConnectionMetricsLoadingMutable.value = true
+        setDashboardConnectionMetricsLoading(true)
         container.connectionController.disconnect(suppressLocalGuard = true)
         waitForRuntimeDisconnect()
         connectNow(profileId)
         true
     }.onFailure {
-        dashboardConnectionMetricsLoadingMutable.value = false
+        setDashboardConnectionMetricsLoading(false)
         if (it is CancellationException) {
             container.diagnosticsLogger.record("connection", "profile reconnect cancelled")
         } else {
@@ -342,13 +342,13 @@ internal fun HomeViewModel.updateRuntimeSettingAndMaybeReconnectInternal(
         runCatching {
             updateAction()
             if (reconnectProfileId != null) {
-                dashboardConnectionMetricsLoadingMutable.value = true
+                setDashboardConnectionMetricsLoading(true)
                 container.connectionController.disconnect(suppressLocalGuard = true)
                 waitForRuntimeDisconnect()
                 connectNow(reconnectProfileId)
             }
         }.onFailure {
-            dashboardConnectionMetricsLoadingMutable.value = false
+            setDashboardConnectionMetricsLoading(false)
             clearRuntimeReloadPending()
             if (it is CancellationException) {
                 container.diagnosticsLogger.record("connection", "runtime setting reconnect cancelled")
@@ -409,7 +409,7 @@ internal fun HomeViewModel.activeRuntimeProfileIdForReload(): Long? {
 }
 
 internal fun HomeViewModel.connectInternal(profileId: Long) {
-    dashboardConnectionMetricsLoadingMutable.value = true
+    setDashboardConnectionMetricsLoading(true)
     viewModelScope.launch {
         runCatching {
             if (uiState.value.activeProfile?.id != profileId) {
@@ -420,7 +420,7 @@ internal fun HomeViewModel.connectInternal(profileId: Long) {
             connectNow(profileId)
         }
             .onFailure {
-                dashboardConnectionMetricsLoadingMutable.value = false
+                setDashboardConnectionMetricsLoading(false)
                 if (it is CancellationException) {
                     container.diagnosticsLogger.record("connection", "connect cancelled")
                 } else {

@@ -505,6 +505,73 @@ class HomeDashboardPresentationTest {
     }
 
     @Test
+    fun `network model hides pre-connect device ip after tunnel connects`() {
+        val ipInfo =
+            IpInfo(
+                ip = "198.51.100.20",
+                countryCode = "US",
+                countryName = "United States",
+                city = "New York",
+                isp = "Device network",
+                fetchedAt = 1_000L,
+            )
+        val model =
+            resolveHomeDashboardNetworkModel(
+                state =
+                    HomeRouteUiState(
+                        profilesLoaded = true,
+                        connection =
+                            ConnectionSnapshot(
+                                state = ConnectionState.CONNECTED,
+                                trafficMode = TrafficMode.TUNNEL,
+                                profileId = 42L,
+                                lastChangeAt = 2_000L,
+                            ),
+                    ),
+                visibleIpInfo = ipInfo,
+                deviceInternetAvailable = true,
+            )
+
+        assertEquals(null, model.visibleIpInfo)
+        assertTrue(model.showConnectionStatus)
+        assertTrue(model.showLoading)
+        assertTrue(model.showIpInfoLoading)
+    }
+
+    @Test
+    fun `network model hides pre-connect device ip during connected ip refresh`() {
+        val ipInfo =
+            IpInfo(
+                ip = "198.51.100.20",
+                countryCode = "US",
+                countryName = "United States",
+                city = "New York",
+                isp = "Device network",
+                fetchedAt = 1_950L,
+            )
+        val model =
+            resolveHomeDashboardNetworkModel(
+                state =
+                    HomeRouteUiState(
+                        profilesLoaded = true,
+                        ipInfoLoading = true,
+                        connection =
+                            ConnectionSnapshot(
+                                state = ConnectionState.CONNECTED,
+                                trafficMode = TrafficMode.TUNNEL,
+                                profileId = 42L,
+                                lastChangeAt = 2_000L,
+                            ),
+                    ),
+                visibleIpInfo = ipInfo,
+                deviceInternetAvailable = true,
+            )
+
+        assertEquals(null, model.visibleIpInfo)
+        assertTrue(model.showIpInfoLoading)
+    }
+
+    @Test
     fun `network model shows startup skeleton before profiles load`() {
         val model =
             resolveHomeDashboardNetworkModel(
@@ -895,14 +962,12 @@ class HomeDashboardPresentationTest {
         )
         assertEquals(
             listOf(
-                HomeConnectionFeature.FIREWALL,
                 HomeConnectionFeature.TOR,
             ),
             homeConnectionFeatureIndicators(HomeRouteUiState(settings = Settings())).map { it.feature },
         )
         assertEquals(
             listOf(
-                HomeConnectionFeatureStatus.OFF,
                 HomeConnectionFeatureStatus.OFF,
             ),
             homeConnectionFeatureIndicators(HomeRouteUiState(settings = Settings())).map { it.status },

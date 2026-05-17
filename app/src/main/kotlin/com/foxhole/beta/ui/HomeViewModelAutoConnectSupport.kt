@@ -109,7 +109,7 @@ internal fun HomeViewModel.reconnectInternal(profileId: Long) {
     val nextReconnectJob = viewModelScope.launch {
         previousReconnectJob?.join()
         reconnectInProgressMutable.value = true
-        dashboardConnectionMetricsLoadingMutable.value = true
+        setDashboardConnectionMetricsLoading(true)
         try {
             cancelSmartProfileMetricsRefreshInternal(restoreConnection = false)
             if (container.connectionController.snapshot.value.state in HomeViewModel.ACTIVE_CONNECTION_STATES) {
@@ -122,7 +122,7 @@ internal fun HomeViewModel.reconnectInternal(profileId: Long) {
             container.diagnosticsLogger.record("connection", "manual reconnect cancelled")
             throw cancelled
         } catch (error: Throwable) {
-            dashboardConnectionMetricsLoadingMutable.value = false
+            setDashboardConnectionMetricsLoading(false)
             emitError(runtimeConnectionFailureMessage(error))
         } finally {
             reconnectInProgressMutable.value = false
@@ -691,7 +691,7 @@ internal fun HomeViewModel.refreshSmartProfileMetricsInternal(profileId: Long) {
     protocolMetricsRefreshJob?.cancel()
     if (shouldSkipSpeedTestsOnCurrentNetwork()) {
         protocolMetricsRefreshJob = null
-        dashboardConnectionMetricsLoadingMutable.value = false
+        setDashboardConnectionMetricsLoading(false)
         container.diagnosticsLogger.record("latency", "manual speed tests skipped: cellular or metered network")
         snackbars.tryEmit(infoBanner(R.string.network_rules_speed_tests_skipped_mobile))
         return
@@ -1720,7 +1720,7 @@ internal fun HomeViewModel.scheduleActiveProfileLatencyRefreshInternal(
     if (shouldSkipSpeedTestsOnCurrentNetwork()) {
         profileLatencyRefreshJob?.cancel()
         profileLatencyRefreshJob = null
-        dashboardConnectionMetricsLoadingMutable.value = false
+        setDashboardConnectionMetricsLoading(false)
         container.diagnosticsLogger.record("latency", "dashboard speed tests skipped: cellular or metered network")
         return
     }
@@ -1729,7 +1729,7 @@ internal fun HomeViewModel.scheduleActiveProfileLatencyRefreshInternal(
             .firstOrNull { option -> option.id == selectedOptionId }
             ?.protocolHint
     profileLatencyRefreshJob?.cancel()
-    dashboardConnectionMetricsLoadingMutable.value = showLoading
+    setDashboardConnectionMetricsLoading(showLoading)
     if (clearSelectedMetrics) {
         clearActiveProfileConnectionMetrics(
             profileId = activeProfile.id,
@@ -1903,7 +1903,7 @@ private suspend fun HomeViewModel.recordConnectedProtocolSmartStartMemory(
 internal fun HomeViewModel.clearProfileLatencyRefreshInternal() {
     profileLatencyRefreshJob?.cancel()
     profileLatencyRefreshJob = null
-    dashboardConnectionMetricsLoadingMutable.value = false
+    setDashboardConnectionMetricsLoading(false)
 }
 
 private fun shouldMeasureProtocolServerPing(protocolHint: ProtocolHint?): Boolean =
@@ -1946,9 +1946,24 @@ private fun HomeViewModel.activeDashboardLatencyTarget(
     }
 }
 
-private fun HomeViewModel.clearDashboardMetricsLoadingAfterInitialSample(waitingForInitialSample: Boolean): Boolean {
+private suspend fun HomeViewModel.clearDashboardMetricsLoadingAfterInitialSample(waitingForInitialSample: Boolean): Boolean {
     if (waitingForInitialSample) {
-        dashboardConnectionMetricsLoadingMutable.value = false
+        val loadingStartedAt = dashboardConnectionMetricsLoadingStartedAtMs
+        val remainingMs =
+            if (loadingStartedAt > 0L) {
+                HomeViewModel.DASHBOARD_CONNECTION_METRICS_MIN_LOADING_MS -
+                    (SystemClock.elapsedRealtime() - loadingStartedAt)
+            } else {
+                0L
+            }
+        if (remainingMs > 0L) {
+            withContext(NonCancellable) {
+                delay(remainingMs)
+            }
+        }
+        if (dashboardConnectionMetricsLoadingStartedAtMs == loadingStartedAt) {
+            setDashboardConnectionMetricsLoading(false)
+        }
     }
     return false
 }
