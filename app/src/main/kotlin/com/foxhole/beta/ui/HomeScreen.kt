@@ -378,12 +378,11 @@ fun HomeScreen(
             modifier =
                 Modifier
                     .fillMaxSize()
-                    .padding(padding)
                     .testTag("home_dashboard_list"),
             contentPadding =
                 PaddingValues(
                     start = ScreenHorizontalPadding + safeStartPadding,
-                    top = ScreenVerticalPadding,
+                    top = padding.calculateTopPadding() + ScreenVerticalPadding,
                     end = ScreenHorizontalPadding + safeEndPadding,
                     bottom = BottomDockOverlayPadding,
                 ),

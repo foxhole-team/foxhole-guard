@@ -42,6 +42,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
@@ -136,6 +139,7 @@ internal val ScreenSectionSpacing = 10.dp
 internal val CardInnerPadding = 12.dp
 internal val CardContentSpacing = 8.dp
 internal val BottomDockOverlayPadding = 100.dp
+internal val FoxholeTopChromeHeight = 64.dp
 internal val HomeTopStatusInnerSurfaceMinHeight = 42.dp
 internal val HomeTopStatusInnerHorizontalPadding = 10.dp
 internal val HomeTopStatusInnerVerticalPadding = 6.dp
@@ -248,51 +252,59 @@ internal fun FoxholeScaffold(
     content: @Composable (PaddingValues) -> Unit,
 ) {
     val topBarContainerColor = Color.Transparent
+    val statusTopPadding = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    val contentTopPadding = statusTopPadding + FoxholeTopChromeHeight
+    val resolvedTopBannerPadding =
+        if (bannerTopPadding > contentTopPadding) {
+            bannerTopPadding
+        } else {
+            contentTopPadding
+        }
     Scaffold(
         containerColor = Color.Transparent,
-        topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        text = title,
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                },
-                navigationIcon = {
-                    onNavigateUp?.let {
-                        IconButton(onClick = it) {
-                            Icon(
-                                Icons.AutoMirrored.Outlined.ArrowBack,
-                                contentDescription = stringResource(R.string.navigate_back),
-                            )
-                        }
-                    }
-                },
-                actions = actions,
-                colors =
-                    TopAppBarDefaults.topAppBarColors(
-                        containerColor = topBarContainerColor,
-                        scrolledContainerColor = topBarContainerColor,
-                        titleContentColor = MaterialTheme.colorScheme.onBackground,
-                        navigationIconContentColor = MaterialTheme.colorScheme.onBackground,
-                        actionIconContentColor = MaterialTheme.colorScheme.onBackground,
-                    ),
-            )
-        },
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         snackbarHost = {},
-        content = { padding ->
+        content = {
             Box(
                 modifier = Modifier.fillMaxSize(),
             ) {
-                content(padding)
+                content(PaddingValues(top = contentTopPadding))
+                TopAppBar(
+                    modifier = Modifier.align(Alignment.TopCenter),
+                    title = {
+                        Text(
+                            text = title,
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                    },
+                    navigationIcon = {
+                        onNavigateUp?.let {
+                            IconButton(onClick = it) {
+                                Icon(
+                                    Icons.AutoMirrored.Outlined.ArrowBack,
+                                    contentDescription = stringResource(R.string.navigate_back),
+                                )
+                            }
+                        }
+                    },
+                    actions = actions,
+                    colors =
+                        TopAppBarDefaults.topAppBarColors(
+                            containerColor = topBarContainerColor,
+                            scrolledContainerColor = topBarContainerColor,
+                            titleContentColor = MaterialTheme.colorScheme.onBackground,
+                            navigationIconContentColor = MaterialTheme.colorScheme.onBackground,
+                            actionIconContentColor = MaterialTheme.colorScheme.onBackground,
+                        ),
+                )
                 val bannerModifier =
                     when (bannerPlacement) {
                         FoxholeBannerPlacement.TOP ->
                             Modifier
                                 .align(Alignment.TopCenter)
                                 .padding(horizontal = ScreenHorizontalPadding)
-                                .padding(top = bannerTopPadding)
+                                .padding(top = resolvedTopBannerPadding)
 
                         FoxholeBannerPlacement.BOTTOM ->
                             Modifier
@@ -700,12 +712,11 @@ internal fun FoxholeLazyScaffold(
             modifier =
                 modifier
                     .fillMaxSize()
-                    .padding(padding)
                     .testTag(tag),
             contentPadding =
                 PaddingValues(
                     start = ScreenHorizontalPadding + safeStartPadding,
-                    top = ScreenVerticalPadding,
+                    top = padding.calculateTopPadding() + ScreenVerticalPadding,
                     end = ScreenHorizontalPadding + safeEndPadding,
                     bottom = BottomDockOverlayPadding,
                 ),
