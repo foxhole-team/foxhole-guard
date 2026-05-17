@@ -40,8 +40,8 @@ fun chartVisualTokens(): ChartTokens {
 fun chartColor(token: ChartColorToken): Color {
     val semantic = LocalFoxholeSemanticColors.current
     return when (token) {
-        ChartColorToken.TX -> MaterialTheme.colorScheme.primary
-        ChartColorToken.RX -> semantic.success
+        ChartColorToken.TX -> Color(0xFF2F80ED)
+        ChartColorToken.RX -> Color(0xFF22C55E)
         ChartColorToken.TOTAL -> MaterialTheme.colorScheme.tertiary
         ChartColorToken.SUCCESS -> semantic.success
         ChartColorToken.ERROR -> MaterialTheme.colorScheme.error

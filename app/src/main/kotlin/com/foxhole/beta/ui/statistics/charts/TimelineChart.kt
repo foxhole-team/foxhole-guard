@@ -19,7 +19,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
@@ -154,15 +156,16 @@ private fun DrawScope.drawLineOrAreaSeries(
             color = color.copy(alpha = 0.18f),
         )
     }
-    offsets.zipWithNext().forEach { (start, end) ->
-        drawLine(
-            color = color,
-            start = start,
-            end = end,
-            strokeWidth = tokens.lineStrokeWidth.toPx(),
+    drawPath(
+        path = linePath(offsets),
+        color = color,
+        style =
+        Stroke(
+            width = tokens.lineStrokeWidth.toPx(),
             cap = StrokeCap.Round,
-        )
-    }
+            join = StrokeJoin.Round,
+        ),
+    )
 }
 
 private fun DrawScope.drawBarSeries(
@@ -252,4 +255,12 @@ private fun areaPath(
         offsets.forEach { offset -> lineTo(offset.x, offset.y) }
         lineTo(offsets.last().x, bottom)
         close()
+    }
+
+private fun linePath(offsets: List<Offset>): Path =
+    Path().apply {
+        offsets.firstOrNull()?.let { first ->
+            moveTo(first.x, first.y)
+            offsets.drop(1).forEach { offset -> lineTo(offset.x, offset.y) }
+        }
     }

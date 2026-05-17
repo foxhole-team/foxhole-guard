@@ -7,10 +7,8 @@ import androidx.compose.material.icons.outlined.Apps
 import androidx.compose.material.icons.outlined.Dns
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.QueryStats
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -20,7 +18,6 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.vectorResource
-import androidx.compose.ui.unit.dp
 import com.foxhole.beta.BuildConfig
 import com.foxhole.beta.R
 import com.foxhole.beta.core.model.AnomalyHistoryRetention
@@ -40,7 +37,6 @@ fun SecuritySettingsScreen(
     onAnalyzeBackgroundTrafficChanged: (Boolean) -> Unit,
     onAnalyzeDestinationCountriesChanged: (Boolean) -> Unit,
     onAnomalyHistoryRetentionSelected: (AnomalyHistoryRetention) -> Unit,
-    highlightAppInstallMonitor: Boolean = false,
 ) {
     var sensitivityExpanded by rememberSaveable { mutableStateOf(false) }
     var retentionExpanded by rememberSaveable { mutableStateOf(false) }
@@ -64,7 +60,6 @@ fun SecuritySettingsScreen(
             SecurityProtectionControlGroup(
                 state = state,
                 installedAppChangeCount = installedAppChangeCount,
-                highlightAppInstallMonitor = highlightAppInstallMonitor,
                 onFirewallEnabledChanged = onFirewallEnabledChanged,
                 onSystemDnsProtectionChanged = onSystemDnsProtectionChanged,
                 onNewAppQuarantineChanged = onNewAppQuarantineChanged,
@@ -151,7 +146,6 @@ fun SecuritySettingsScreen(
 private fun SecurityProtectionControlGroup(
     state: SettingsRouteUiState,
     installedAppChangeCount: Int,
-    highlightAppInstallMonitor: Boolean,
     onFirewallEnabledChanged: (Boolean) -> Unit,
     onSystemDnsProtectionChanged: (Boolean) -> Unit,
     onNewAppQuarantineChanged: (Boolean) -> Unit,
@@ -185,7 +179,6 @@ private fun SecurityProtectionControlGroup(
         SettingsControlGroupDivider()
         AppInstallMonitorSettingsRow(
             value = installedAppMonitorValue,
-            highlight = highlightAppInstallMonitor,
         )
         SettingsControlGroupDivider()
         SettingSwitchRow(
@@ -203,30 +196,16 @@ private fun SecurityProtectionControlGroup(
 @Composable
 private fun AppInstallMonitorSettingsRow(
     value: String,
-    highlight: Boolean,
 ) {
-    val content: @Composable () -> Unit = {
-        SettingValueRow(
-            title = stringResource(R.string.security_app_install_monitor_title),
-            value = value,
-            summary = stringResource(R.string.security_app_install_monitor_summary),
-            leadingIcon = Icons.Outlined.Apps,
-            onClick = null,
-            summaryMaxLines = 5,
-            grouped = true,
-        )
-    }
-    if (highlight) {
-        Surface(
-            shape = MaterialTheme.shapes.small,
-            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.52f),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)),
-        ) {
-            content()
-        }
-    } else {
-        content()
-    }
+    SettingValueRow(
+        title = stringResource(R.string.security_app_install_monitor_title),
+        value = value,
+        summary = stringResource(R.string.security_app_install_monitor_summary),
+        leadingIcon = Icons.Outlined.Apps,
+        onClick = null,
+        summaryMaxLines = 5,
+        grouped = true,
+    )
 }
 
 @Composable

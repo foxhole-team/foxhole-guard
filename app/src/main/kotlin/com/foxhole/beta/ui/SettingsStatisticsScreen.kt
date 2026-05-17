@@ -45,6 +45,7 @@ import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -124,6 +125,7 @@ import java.util.Date
 import java.util.Locale
 import kotlin.math.max
 import kotlin.math.roundToInt
+import kotlin.math.roundToLong
 
 @Composable
 @Suppress("ComplexCondition", "CyclomaticComplexMethod", "LongMethod", "UnusedParameter")
@@ -957,7 +959,7 @@ private fun ProtocolStatisticsSection(items: List<ProtocolStatisticsUiItem>) {
             EmptySectionText(text = stringResource(R.string.statistics_protocols_empty))
         } else {
             BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
-                val columns = if (maxWidth >= COMPACT_PROTOCOL_GRID_WIDTH) 4 else 2
+                val columns = if (maxWidth >= COMPACT_PROTOCOL_GRID_WIDTH) 3 else 2
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     items.chunked(columns).forEach { rowItems ->
                         Row(
@@ -1339,6 +1341,9 @@ private fun DnsProtectionCard(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             DnsCategoryDonutChart(summary = summary)
+            if (summary.appRows.isNotEmpty()) {
+                DnsTrafficShareRings(summary = summary)
+            }
             DnsCategoryTable(rows = summary.categoryRows)
         }
         if (summary.appRows.isNotEmpty()) {
@@ -1526,6 +1531,110 @@ private fun DnsCategoryDonutChart(summary: DnsProtectionSummary) {
 }
 
 @Composable
+private fun DnsTrafficShareRings(summary: DnsProtectionSummary) {
+    val metrics = remember(summary.appRows) { dnsTrafficShareMetrics(summary) }
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+            text = stringResource(R.string.statistics_dns_traffic_share_title),
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.SemiBold,
+        )
+        metrics.chunked(2).forEach { rowMetrics ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                rowMetrics.forEach { metric ->
+                    DnsTrafficShareRing(metric = metric, modifier = Modifier.weight(1f))
+                }
+                repeat(2 - rowMetrics.size) {
+                    Box(modifier = Modifier.weight(1f))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DnsTrafficShareRing(
+    metric: DnsTrafficShareMetric,
+    modifier: Modifier = Modifier,
+) {
+    val context = LocalContext.current
+    val visible = rememberOneShotVisible("dns-traffic-share:${metric.category.name}")
+    val progress by animateFloatAsState(
+        targetValue = if (visible) 1f else 0f,
+        animationSpec = tween(durationMillis = DONUT_ANIMATION_DURATION_MS, easing = FastOutSlowInEasing),
+        label = "dns-traffic-share-ring",
+    )
+    val categoryLabel = stringResource(dnsCategoryLabel(metric.category))
+    val ringDescription = "$categoryLabel: ${formatPercent(metric.ratio)}"
+    val tokens = chartVisualTokens()
+    val color = dnsCategoryColor(metric.category)
+    Surface(
+        modifier = modifier,
+        shape = MaterialTheme.shapes.small,
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.24f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.36f)),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(10.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Canvas(
+                    modifier =
+                    Modifier
+                        .size(58.dp)
+                        .semantics {
+                            contentDescription = ringDescription
+                        },
+                ) {
+                    val stroke = Stroke(width = 8.dp.toPx(), cap = StrokeCap.Round)
+                    drawArc(
+                        color = tokens.ringTrackColor,
+                        startAngle = -90f,
+                        sweepAngle = 360f,
+                        useCenter = false,
+                        style = stroke,
+                    )
+                    drawArc(
+                        color = color,
+                        startAngle = -90f,
+                        sweepAngle = 360f * metric.ratio.coerceIn(0f, 1f) * progress,
+                        useCenter = false,
+                        style = stroke,
+                    )
+                }
+                Text(
+                    text = formatPercent(metric.ratio),
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                )
+            }
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                    text = categoryLabel,
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = formatBytes(context, metric.estimatedBytes),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+    }
+}
+
+@Composable
 private fun DnsCategoryTable(rows: List<DnsProtectionCategoryRow>) {
     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
         rows.forEachIndexed { index, row ->
@@ -1552,6 +1661,29 @@ private fun DnsCategoryTable(rows: List<DnsProtectionCategoryRow>) {
         }
     }
 }
+
+private data class DnsTrafficShareMetric(
+    val category: DnsProtectionCategory,
+    val estimatedBytes: Long,
+    val ratio: Float,
+)
+
+private fun dnsTrafficShareMetrics(summary: DnsProtectionSummary): List<DnsTrafficShareMetric> {
+    val totalBytes = summary.appRows.sumOf(DnsProtectionAppRow::totalBytes).coerceAtLeast(1L)
+    return DnsProtectionCategory.entries.map { category ->
+        val estimatedBytes =
+            summary.appRows
+                .sumOf { row -> (row.totalBytes.toDouble() * row.categoryRatios[category].orZero()).roundToLong() }
+                .coerceAtLeast(0L)
+        DnsTrafficShareMetric(
+            category = category,
+            estimatedBytes = estimatedBytes,
+            ratio = (estimatedBytes.toFloat() / totalBytes.toFloat()).coerceIn(0f, 1f),
+        )
+    }
+}
+
+private fun Float?.orZero(): Float = this ?: 0f
 
 @Composable
 private fun DnsProtectionAppRowView(
@@ -2012,10 +2144,7 @@ private fun AppTrafficTimelineChart(
                 min = 0.0,
                 max = yMax.toDouble(),
                 ticks =
-                listOf(
-                    com.foxhole.beta.core.statistics.ChartTick(0.0, "0"),
-                    com.foxhole.beta.core.statistics.ChartTick(yMax.toDouble(), formatBytes(context, yMax)),
-                ),
+                timelineTrafficTicks(context, yMax),
                 formatter = com.foxhole.beta.core.statistics.ChartValueFormatter.BYTES,
             ),
             series =
@@ -2315,15 +2444,16 @@ private fun anomalyBadgeContentColor(badge: AppAnomalyBadge): Color =
 @Composable
 private fun TrafficCells(tx: Long, rx: Long) {
     val context = LocalContext.current
-    val semanticColors = LocalFoxholeSemanticColors.current
+    val txColor = chartColor(ChartColorToken.TX)
+    val rxColor = chartColor(ChartColorToken.RX)
     Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(horizontalAlignment = Alignment.End) {
             Text(
                 formatBytes(context, tx),
                 style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.primary
+                color = txColor,
             )
-            Text(formatBytes(context, rx), style = MaterialTheme.typography.labelMedium, color = semanticColors.success)
+            Text(formatBytes(context, rx), style = MaterialTheme.typography.labelMedium, color = rxColor)
         }
         Text(
             formatBytes(context, tx + rx),
@@ -2460,30 +2590,53 @@ private fun ProfileStatisticsDetail(
                                 .thenBy { protocol -> protocol.label.lowercase(Locale.getDefault()) },
                         )
                 }
-            var selectedProtocolLabel by rememberSaveable(item.profileId, connectedProtocols.size) {
-                mutableStateOf(connectedProtocols.firstOrNull()?.label.orEmpty())
+            var selectedDetailKey by rememberSaveable(item.profileId, connectedProtocols.size) {
+                mutableStateOf(PROFILE_DETAIL_OVERALL_KEY)
             }
             val selectedProtocol =
-                connectedProtocols.firstOrNull { protocol -> protocol.label == selectedProtocolLabel }
-                    ?: connectedProtocols.firstOrNull()
+                connectedProtocols.firstOrNull { protocol -> protocol.label == selectedDetailKey }
             if (connectedProtocols.isEmpty()) {
                 EmptySectionText(text = stringResource(R.string.statistics_protocols_empty))
             } else {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    if (selectedProtocol != null) {
-                        ProfileProtocolDetailPanel(protocol = selectedProtocol)
-                    }
                     Text(
                         text = stringResource(R.string.statistics_profile_protocols_title),
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.SemiBold,
                     )
+                    ProfileDetailFilterChip(
+                        label = stringResource(R.string.statistics_profile_overall_tab),
+                        selected = selectedDetailKey == PROFILE_DETAIL_OVERALL_KEY,
+                        onClick = { selectedDetailKey = PROFILE_DETAIL_OVERALL_KEY },
+                    )
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        connectedProtocols.forEach { protocol ->
+                            ProfileDetailFilterChip(
+                                label = protocol.label,
+                                supportingText = formatBytes(context, protocol.totalBytes),
+                                selected = protocol.label == selectedProtocol?.label,
+                                onClick = { selectedDetailKey = protocol.label },
+                            )
+                        }
+                    }
+                    if (selectedProtocol == null) {
+                        DetailMetricGrid(
+                            metrics =
+                            listOf(
+                                stringResource(R.string.statistics_total_traffic) to formatBytes(context, detail.totalBytes),
+                                stringResource(R.string.statistics_success_rate) to formatPercent(detail.successRate),
+                                stringResource(R.string.statistics_error_rate) to formatPercent(detail.errorRate),
+                            ),
+                        )
+                    } else {
+                        ProfileProtocolDetailPanel(protocol = selectedProtocol)
+                    }
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         connectedProtocols.forEach { protocol ->
                             ProfileProtocolUsageRow(
                                 protocol = protocol,
                                 selected = protocol.label == selectedProtocol?.label,
-                                onClick = { selectedProtocolLabel = protocol.label },
+                                onClick = { selectedDetailKey = protocol.label },
                             )
                         }
                     }
@@ -2503,6 +2656,41 @@ private fun ProfileStatisticsDetail(
             comparisons.forEach { comparison -> ProfileComparisonCard(item = comparison) }
         }
     }
+}
+
+@Composable
+private fun ProfileDetailFilterChip(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    supportingText: String? = null,
+) {
+    FilterChip(
+        selected = selected,
+        onClick = onClick,
+        label = {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = label,
+                    modifier = Modifier.weight(1f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                if (supportingText != null) {
+                    Text(
+                        text = supportingText,
+                        style = MaterialTheme.typography.labelSmall,
+                        maxLines = 1,
+                    )
+                }
+            }
+        },
+        modifier = Modifier.fillMaxWidth(),
+    )
 }
 
 @Composable
@@ -2827,6 +3015,8 @@ private data class ProfileStatisticsDetailModel(
     val protocols: List<ProfileProtocolDetail>,
 ) {
     val totalAttempts: Int get() = successCount + failureCount
+    val successRate: Float get() = if (totalAttempts == 0) 0f else successCount.toFloat() / totalAttempts
+    val errorRate: Float get() = if (totalAttempts == 0) 0f else failureCount.toFloat() / totalAttempts
 }
 
 private data class ProfileProtocolDetail(
@@ -3638,8 +3828,18 @@ private fun String.countryFlagEmoji(): String {
         .joinToString("")
 }
 
+private fun timelineTrafficTicks(
+    context: Context,
+    yMax: Long,
+): List<com.foxhole.beta.core.statistics.ChartTick> =
+    listOf(
+        com.foxhole.beta.core.statistics.ChartTick(0.0, "0"),
+        com.foxhole.beta.core.statistics.ChartTick((yMax / 2L).toDouble(), formatBytes(context, yMax / 2L)),
+        com.foxhole.beta.core.statistics.ChartTick(yMax.toDouble(), formatBytes(context, yMax)),
+    )
+
 private fun niceTimelineTrafficScale(maxBytes: Long): Long =
-    niceTrafficScale(maxBytes)
+    niceTrafficScale(maxBytes.coerceAtLeast(MIN_TIMELINE_TRAFFIC_SCALE_BYTES))
 
 private fun Profile.statisticsProtocolHints(): List<ProtocolHint> {
     val optionHints = protocolOptions.map(ProfileProtocolOption::protocolHint)
@@ -3742,8 +3942,10 @@ private fun List<Long>.averageOrNull(): Long? =
 private fun maxOfNotNull(vararg values: Long?): Long? =
     values.filterNotNull().maxOrNull()
 
-private val COMPACT_PROTOCOL_GRID_WIDTH = 480.dp
+private val COMPACT_PROTOCOL_GRID_WIDTH = 360.dp
 private const val DONUT_ANIMATION_DURATION_MS = 700
+private const val PROFILE_DETAIL_OVERALL_KEY = "__overall__"
+private const val MIN_TIMELINE_TRAFFIC_SCALE_BYTES = 10L * 1024L * 1024L
 private const val PROFILE_TRAFFIC_PREVIEW_LIMIT = 6
 private const val STATISTICS_TOP_PREVIEW_LIMIT = 5
 private const val APP_TRAFFIC_CHART_LIMIT = 10

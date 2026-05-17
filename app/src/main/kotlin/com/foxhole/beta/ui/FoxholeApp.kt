@@ -526,7 +526,6 @@ fun FoxholeApp(
                         onAnalyzeBackgroundTrafficChanged = viewModel::onAnalyzeBackgroundTrafficChanged,
                         onAnalyzeDestinationCountriesChanged = viewModel::onAnalyzeDestinationCountriesChanged,
                         onAnomalyHistoryRetentionSelected = viewModel::onAnomalyHistoryRetentionSelected,
-                        highlightAppInstallMonitor = true,
                     )
                 }
                 composable(AppRoute.NETWORK_RULES) {

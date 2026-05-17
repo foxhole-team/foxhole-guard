@@ -29,12 +29,11 @@ class TunnelRuntimeProxyIpRefreshPolicyTest {
     fun `tor over vpn selected apps requires runtime proxy ip refresh for udp-backed vpn`() {
         val settings =
             Settings(
-                privacyRoute =
-                    PrivacyRouteSettings(
-                        mode = PrivacyRouteMode.TOR_OVER_VPN,
-                        scope = PrivacyRouteScope.SELECTED_APPS,
-                        selectedPackages = listOf("org.tor.browser"),
-                    ),
+                privacyRoute = PrivacyRouteSettings(
+                    mode = PrivacyRouteMode.TOR_OVER_VPN,
+                    scope = PrivacyRouteScope.SELECTED_APPS,
+                    selectedPackages = listOf("org.tor.browser"),
+                ),
             )
         val snapshot =
             ConnectionSnapshot(

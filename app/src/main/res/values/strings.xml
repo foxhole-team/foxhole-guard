@@ -452,6 +452,7 @@
     <string name="statistics_protocols_empty">Protocols appear after successful connections or traffic.</string>
     <string name="statistics_profile_comparison_title">Profile comparison</string>
     <string name="statistics_profile_protocols_title">Connected protocols</string>
+    <string name="statistics_profile_overall_tab">Overall statistics</string>
     <string name="statistics_profile_protocol_metrics">%1$s success • %2$s errors • %3$s</string>
     <string name="statistics_transports_title">Transport protocols</string>
     <string name="statistics_transports_empty">Transport data appears when it can be inferred honestly from profiles.</string>
@@ -526,6 +527,7 @@
     <string name="statistics_chart_axes_dns">Top apps by blocked DNS queries, split by category.</string>
     <string name="statistics_dns_categories_title">DNS categories</string>
     <string name="statistics_dns_categories_estimated">Category split is estimated from enabled filters</string>
+    <string name="statistics_dns_traffic_share_title">DNS block traffic share</string>
     <string name="statistics_dns_real_summary">Allowed and blocked totals are real; category and per-app splits are labeled when estimated.</string>
     <string name="statistics_dns_category_ads">Ads</string>
     <string name="statistics_dns_category_trackers">Trackers</string>

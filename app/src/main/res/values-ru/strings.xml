@@ -460,6 +460,7 @@
     <string name="statistics_protocols_empty">Протоколы появятся после успешных подключений или трафика.</string>
     <string name="statistics_profile_comparison_title">Сравнение профилей</string>
     <string name="statistics_profile_protocols_title">Подключавшиеся протоколы</string>
+    <string name="statistics_profile_overall_tab">Общая статистика</string>
     <string name="statistics_profile_protocol_metrics">%1$s успех • %2$s ошибки • %3$s</string>
     <string name="statistics_transports_title">Транспортные протоколы</string>
     <string name="statistics_transports_empty">Данные по транспорту появятся, когда их можно честно определить из профилей.</string>
@@ -534,6 +535,7 @@
     <string name="statistics_chart_axes_dns">Топ приложений по заблокированным DNS-запросам с разбивкой по категориям.</string>
     <string name="statistics_dns_categories_title">Категории DNS</string>
     <string name="statistics_dns_categories_estimated">Разбивка категорий рассчитана по включённым фильтрам</string>
+    <string name="statistics_dns_traffic_share_title">Доля трафика по DNS-блокировкам</string>
     <string name="statistics_dns_real_summary">Разрешённые и заблокированные DNS — реальные счётчики; категории и приложения подписаны, если это оценка.</string>
     <string name="statistics_dns_category_ads">Реклама</string>
     <string name="statistics_dns_category_trackers">Трекеры</string>
