@@ -50,4 +50,15 @@ class RuntimeStopSupportTest {
 
             assertTrue(completed)
         }
+
+    @Test
+    fun `blocking runtime close reports false when native close throws`() =
+        runBlocking {
+            val completed =
+                runBlockingRuntimeClose(timeoutMs = 250L) {
+                    error("native close failed")
+                }
+
+            assertFalse(completed)
+        }
 }

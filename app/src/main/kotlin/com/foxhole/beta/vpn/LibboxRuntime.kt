@@ -392,6 +392,10 @@ private class ReflectiveLibboxRuntime(
             currentDnsServerAddress = null
             val tunClosed = preclosedTun ?: closeTunFdNow()
             if (!operationLockAcquired) {
+                runCatching { defaultNetworkMonitor.stop() }
+                    .onFailure {
+                        diagnosticsLogger.record("libbox", "default network monitor detached stop failed")
+                    }
                 diagnosticsLogger.recordStructured(
                     "runtime",
                     "runtime force kill detached native close skipped",

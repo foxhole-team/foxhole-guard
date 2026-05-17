@@ -408,7 +408,10 @@ internal fun HomeViewModel.activeRuntimeProfileIdForReload(): Long? {
     return uiState.value.activeProfile?.id
 }
 
-internal fun HomeViewModel.connectInternal(profileId: Long) {
+internal fun HomeViewModel.connectInternal(
+    profileId: Long,
+    protocolOptionId: String? = null,
+) {
     setDashboardConnectionMetricsLoading(true)
     viewModelScope.launch {
         runCatching {
@@ -417,7 +420,7 @@ internal fun HomeViewModel.connectInternal(profileId: Long) {
                 val updated = container.profileRepository.getProfile(profileId)?.copy(isActive = true)
                 startupActiveProfileMutable.value = updated
             }
-            connectNow(profileId)
+            connectNow(profileId, protocolOptionId = protocolOptionId)
         }
             .onFailure {
                 setDashboardConnectionMetricsLoading(false)
@@ -647,8 +650,8 @@ internal fun HomeViewModel.clearRuntimeReconnectRequiredInternal() {
     runtimeReconnectRequiredMutable.value = false
 }
 
-internal fun HomeViewModel.loadInstalledAppsInternal() {
-    if (installedAppsLoadedMutable.value || installedAppsLoadingMutable.value) {
+internal fun HomeViewModel.loadInstalledAppsInternal(force: Boolean = false) {
+    if (!force && (installedAppsLoadedMutable.value || installedAppsLoadingMutable.value)) {
         return
     }
     viewModelScope.launch {
@@ -705,7 +708,7 @@ internal fun HomeViewModel.loadInstalledAppsInternal() {
                 "installed app visibility query failed: ${error.message.orEmpty()}",
             )
             installedAppsMutable.value = emptyList()
-            installedAppsLoadedMutable.value = true
+            installedAppsLoadedMutable.value = false
         } finally {
             installedAppsLoadingMutable.value = false
         }

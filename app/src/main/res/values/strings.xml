@@ -1077,6 +1077,13 @@
     <string name="network_rules_skip_subscription_refresh_mobile_summary">Scheduled subscription refresh waits for Wi-Fi or an unmetered network.</string>
     <string name="network_rules_skip_speed_tests_mobile_title">Do not run speed tests on mobile network</string>
     <string name="network_rules_skip_speed_tests_mobile_summary">Manual and background latency checks are skipped on mobile or metered networks.</string>
+    <string name="network_rules_wifi_profile_title">Use another profile on Wi-Fi</string>
+    <string name="network_rules_wifi_profile_summary">When Start is tapped on Wi-Fi, Foxhole connects the selected Wi-Fi profile.</string>
+    <string name="network_rules_wifi_profile_summary_empty">Import another profile first to use a separate Wi-Fi profile.</string>
+    <string name="network_rules_wifi_profile_picker_title">Wi-Fi profile</string>
+    <string name="network_rules_wifi_profile_value_unselected">Not selected</string>
+    <string name="network_rules_wifi_protocol_picker_title">Wi-Fi VPN protocol</string>
+    <string name="network_rules_wifi_protocol_value_unselected">Protocol not selected</string>
     <string name="network_rules_mobile_profile_title">Use another profile on mobile network</string>
     <string name="network_rules_mobile_profile_summary">When Start is tapped on mobile or metered networks, Foxhole connects the selected mobile profile.</string>
     <string name="network_rules_mobile_profile_summary_empty">Import another profile first to use a separate mobile-network profile.</string>

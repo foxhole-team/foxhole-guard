@@ -294,7 +294,7 @@ internal fun HomeViewModel.onInstalledAppMonitoringChangedInternal(value: Boolea
         if (value) {
             requestNotificationPermission.tryEmit(Unit)
             if (installedAppsMutable.value.isEmpty()) {
-                loadInstalledApps()
+                loadInstalledApps(force = true)
             } else {
                 container.settingsRepository.recordInstalledAppInventory(installedAppsMutable.value)
             }

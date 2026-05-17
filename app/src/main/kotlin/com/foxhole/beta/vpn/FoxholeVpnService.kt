@@ -51,7 +51,6 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeoutOrNull
 import java.net.DatagramPacket
 import java.net.DatagramSocket
 import java.net.InetAddress
@@ -543,34 +542,10 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
     }
 
     private suspend fun stopRuntimeFailClosed(reason: String): RuntimeStopResult {
-        val policy =
-            RuntimeStopPolicy(
-                closeTunFdImmediately = true,
-                closeServiceTimeoutMs = 700L,
-                closeServerTimeoutMs = 700L,
-                totalGracefulTimeoutMs = RUNTIME_STOP_TIMEOUT_MS,
-                forceKillAfterTimeout = true,
-            )
-        val result =
-            withTimeoutOrNull(RUNTIME_STOP_TIMEOUT_MS) {
-                runtime.stop(policy)
-            }
-        if (result != null) {
-            return result
-        }
-        container.diagnosticsLogger.recordStructured(
-            "runtime",
-            "runtime stop timeout",
-            "reason=$reason",
-            "timeout_ms=$RUNTIME_STOP_TIMEOUT_MS",
-        )
-        val killResult = runtime.forceKill("${reason}_stop_timeout")
-        return RuntimeStopResult(
-            closeServiceOk = false,
-            closeServerOk = false,
-            tunClosed = killResult.tunClosed,
-            escalatedToKill = true,
-            elapsedMs = RUNTIME_STOP_TIMEOUT_MS,
+        return runtime.stopFailClosed(
+            owner = "vpn",
+            reason = reason,
+            diagnosticsLogger = container.diagnosticsLogger,
         )
     }
 

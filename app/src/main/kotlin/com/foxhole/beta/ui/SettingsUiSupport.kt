@@ -417,6 +417,7 @@ internal fun SettingSwitchRow(
     leadingIconContainerColor: Color = Color.Unspecified,
     titleTrailingContent: (@Composable RowScope.() -> Unit)? = null,
     enabled: Boolean = true,
+    titleMaxLines: Int = 1,
     summaryMaxLines: Int = 3,
     grouped: Boolean = false,
 ) {
@@ -462,6 +463,7 @@ internal fun SettingSwitchRow(
             leadingIcon = leadingIcon,
             leadingIconContainerColor = leadingIconContainerColor,
             titleTrailingContent = titleTrailingContent,
+            titleMaxLines = titleMaxLines,
             summaryMaxLines = summaryMaxLines,
             onClick = rowClick,
             trailingContent = rowTrailingContent,
@@ -476,6 +478,7 @@ internal fun SettingSwitchRow(
         leadingIcon = leadingIcon,
         leadingIconContainerColor = leadingIconContainerColor,
         titleTrailingContent = titleTrailingContent,
+        titleMaxLines = titleMaxLines,
         summaryMaxLines = summaryMaxLines,
         onClick = rowClick,
         trailingContent = rowTrailingContent,
@@ -526,6 +529,7 @@ private fun SettingsControlRow(
     leadingIconContainerColor: Color = Color.Unspecified,
     leadingIconTint: Color = MaterialTheme.colorScheme.onSurfaceVariant,
     titleTrailingContent: (@Composable RowScope.() -> Unit)? = null,
+    titleMaxLines: Int = 1,
     summaryMaxLines: Int = 3,
     onClick: (() -> Unit)?,
     trailingContent: (@Composable RowScope.() -> Unit)? = null,
@@ -580,7 +584,7 @@ private fun SettingsControlRow(
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
+                    maxLines = titleMaxLines,
                     overflow = TextOverflow.Ellipsis,
                 )
                 titleTrailingContent?.invoke(this)

@@ -58,8 +58,29 @@ private suspend inline fun <T> runCatchingUnlessCancelled(crossinline block: sus
 
 internal fun HomeViewModel.onAutoConnectActiveProfileInternal() {
     val state = uiState.value
-    val profile = mobileNetworkProfileOverride(state) ?: state.activeProfile
+    val networkOverride = currentNetworkProfileOverride(state)
+    val profile = networkOverride?.profile ?: state.activeProfile
     val profileId = profile?.id ?: return
+    val protocolOptionId = networkOverride?.protocolOptionId
+    if (protocolOptionId != null) {
+        if (uiState.value.settings.traffic.mode == TrafficMode.PROXY) {
+            connect(profileId, protocolOptionId = protocolOptionId)
+            return
+        }
+        val prepareIntent = android.net.VpnService.prepare(getApplication())
+        if (prepareIntent != null) {
+            pendingConnectRequest =
+                PendingConnectRequest(
+                    profileId = profileId,
+                    protocolOptionId = protocolOptionId,
+                    action = PendingConnectAction.AUTO_CONNECT,
+                )
+            requestVpnPermission.tryEmit(Unit)
+        } else {
+            connect(profileId, protocolOptionId = protocolOptionId)
+        }
+        return
+    }
     val availableCandidates =
         profile?.let {
             availableAutoConnectCandidates(it.id, it, currentNetworkFingerprintForSmartRules())

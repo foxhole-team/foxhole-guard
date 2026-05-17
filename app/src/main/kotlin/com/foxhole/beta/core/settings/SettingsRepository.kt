@@ -496,7 +496,13 @@ class SettingsRepository(
 
     suspend fun updateStatisticsEnabled(value: Boolean) =
         update { current ->
-            current.copy(statistics = current.statistics.copy(enabled = value))
+            current.copy(
+                statistics =
+                    current.statistics.copy(
+                        enabled = value,
+                        profileTrafficEnabled = current.statistics.profileTrafficEnabled || value,
+                    ),
+            )
         }
 
     suspend fun updateStatisticsRetention(value: StatisticsRetention) =
@@ -540,7 +546,15 @@ class SettingsRepository(
                 } else {
                     current.statistics.copy(appChangesEnabled = false)
                 }
-            current.copy(statistics = statistics)
+            current.copy(
+                statistics = statistics,
+                installedAppInventoryAudit =
+                    if (value) {
+                        current.installedAppInventoryAudit
+                    } else {
+                        InstalledAppInventoryAudit()
+                    },
+            )
         }
 
     suspend fun updateAppTrafficStatsEnabled(value: Boolean) =
@@ -551,88 +565,109 @@ class SettingsRepository(
     suspend fun recordInstalledAppInventory(
         apps: List<InstalledAppOption>,
         detectedAt: Long = System.currentTimeMillis(),
-    ) = update { current ->
-        if (!current.statistics.enabled || !current.statistics.appChangesEnabled) {
-            return@update current
+    ) {
+        val currentSettings = current()
+        if (!currentSettings.statistics.enabled || !currentSettings.statistics.appChangesEnabled) {
+            return
         }
         val currentPackages =
-            apps
-                .asSequence()
-                .filterNot { app -> app.packageName == BuildConfig.APPLICATION_ID }
-                .map { app ->
-                    val security =
-                        installedAppSecurityAnalyzer.analyzePackage(
-                            packageName = app.packageName,
-                            fallbackLabel = app.label,
-                            fallbackIsSystemApp = app.isSystemApp,
-                        )
-                    InstalledAppInventoryEntry(
-                        packageName = app.packageName,
-                        label = security.label.takeIf(String::isNotBlank) ?: app.label.takeIf(String::isNotBlank) ?: app.packageName,
-                        isSystemApp = security.isSystemApp,
-                        installerPackageName = security.installerPackageName,
-                        riskLevel = security.riskLevel,
-                        riskSignals = security.riskSignals,
-                    )
-                }
-                .distinctBy(InstalledAppInventoryEntry::packageName)
-                .sortedBy(InstalledAppInventoryEntry::packageName)
-                .toList()
-        val previousPackages = current.installedAppInventoryAudit.packages
-        val previousByPackage = previousPackages.associateBy(InstalledAppInventoryEntry::packageName)
-        val currentByPackage = currentPackages.associateBy(InstalledAppInventoryEntry::packageName)
-        val changes =
-            if (previousPackages.isEmpty()) {
-                emptyList()
-            } else {
-                buildList {
-                    currentPackages
-                        .filterNot { app -> app.packageName in previousByPackage }
-                        .forEach { app ->
-                            add(
-                                InstalledAppInventoryChange(
-                                    packageName = app.packageName,
-                                    label = app.label,
-                                    isSystemApp = app.isSystemApp,
-                                    type = InstalledAppChangeType.INSTALLED,
-                                    detectedAt = detectedAt,
-                                    installerPackageName = app.installerPackageName,
-                                    riskLevel = app.riskLevel,
-                                    riskSignals = app.riskSignals,
-                                ),
-                            )
-                        }
-                    previousPackages
-                        .filterNot { app -> app.packageName in currentByPackage }
-                        .forEach { app ->
-                            add(
-                                InstalledAppInventoryChange(
-                                    packageName = app.packageName,
-                                    label = app.label,
-                                    isSystemApp = app.isSystemApp,
-                                    type = InstalledAppChangeType.REMOVED,
-                                    detectedAt = detectedAt,
-                                    installerPackageName = app.installerPackageName,
-                                    riskLevel = app.riskLevel,
-                                    riskSignals = app.riskSignals,
-                                ),
-                            )
-                        }
-                }
+            withContext(Dispatchers.IO) {
+                apps
+                    .asSequence()
+                    .filterNot { app -> app.packageName == BuildConfig.APPLICATION_ID }
+                    .map(::installedAppInventoryEntry)
+                    .distinctBy(InstalledAppInventoryEntry::packageName)
+                    .sortedBy(InstalledAppInventoryEntry::packageName)
+                    .toList()
             }
-        current.copy(
-            installedAppInventoryAudit =
-                InstalledAppInventoryAudit(
-                    capturedAt = detectedAt,
-                    packages = currentPackages,
-                    recentChanges =
-                        (changes + current.installedAppInventoryAudit.recentChanges)
-                            .distinctBy { change -> "${change.type}:${change.packageName}:${change.detectedAt}" }
-                            .sortedByDescending(InstalledAppInventoryChange::detectedAt)
-                            .take(INSTALLED_APP_CHANGE_HISTORY_LIMIT),
-                ),
+        update { current ->
+            if (!current.statistics.enabled || !current.statistics.appChangesEnabled) {
+                return@update current
+            }
+            current.copy(
+                installedAppInventoryAudit =
+                    buildInstalledAppInventoryAudit(
+                        previousAudit = current.installedAppInventoryAudit,
+                        currentPackages = currentPackages,
+                        detectedAt = detectedAt,
+                    ),
+            )
+        }
+    }
+
+    private fun installedAppInventoryEntry(app: InstalledAppOption): InstalledAppInventoryEntry {
+        val security =
+            installedAppSecurityAnalyzer.analyzePackage(
+                packageName = app.packageName,
+                fallbackLabel = app.label,
+                fallbackIsSystemApp = app.isSystemApp,
+            )
+        return InstalledAppInventoryEntry(
+            packageName = app.packageName,
+            label = security.label.takeIf(String::isNotBlank) ?: app.label.takeIf(String::isNotBlank) ?: app.packageName,
+            isSystemApp = security.isSystemApp,
+            installerPackageName = security.installerPackageName,
+            riskLevel = security.riskLevel,
+            riskSignals = security.riskSignals,
         )
     }
+
+    private fun buildInstalledAppInventoryAudit(
+        previousAudit: InstalledAppInventoryAudit,
+        currentPackages: List<InstalledAppInventoryEntry>,
+        detectedAt: Long,
+    ): InstalledAppInventoryAudit {
+        val previousPackages = previousAudit.packages
+        val changes = installedAppInventoryChanges(previousPackages, currentPackages, detectedAt)
+        return InstalledAppInventoryAudit(
+            capturedAt = detectedAt,
+            packages = currentPackages,
+            recentChanges =
+                (changes + previousAudit.recentChanges)
+                    .distinctBy { change -> "${change.type}:${change.packageName}:${change.detectedAt}" }
+                    .sortedByDescending(InstalledAppInventoryChange::detectedAt)
+                    .take(INSTALLED_APP_CHANGE_HISTORY_LIMIT),
+        )
+    }
+
+    private fun installedAppInventoryChanges(
+        previousPackages: List<InstalledAppInventoryEntry>,
+        currentPackages: List<InstalledAppInventoryEntry>,
+        detectedAt: Long,
+    ): List<InstalledAppInventoryChange> {
+        if (previousPackages.isEmpty()) {
+            return emptyList()
+        }
+        val previousByPackage = previousPackages.associateBy(InstalledAppInventoryEntry::packageName)
+        val currentByPackage = currentPackages.associateBy(InstalledAppInventoryEntry::packageName)
+        return buildList {
+            currentPackages
+                .filterNot { app -> app.packageName in previousByPackage }
+                .forEach { app ->
+                    add(app.toInstalledAppInventoryChange(InstalledAppChangeType.INSTALLED, detectedAt))
+                }
+            previousPackages
+                .filterNot { app -> app.packageName in currentByPackage }
+                .forEach { app ->
+                    add(app.toInstalledAppInventoryChange(InstalledAppChangeType.REMOVED, detectedAt))
+                }
+        }
+    }
+
+    private fun InstalledAppInventoryEntry.toInstalledAppInventoryChange(
+        type: InstalledAppChangeType,
+        detectedAt: Long,
+    ): InstalledAppInventoryChange =
+        InstalledAppInventoryChange(
+            packageName = packageName,
+            label = label,
+            isSystemApp = isSystemApp,
+            type = type,
+            detectedAt = detectedAt,
+            installerPackageName = installerPackageName,
+            riskLevel = riskLevel,
+            riskSignals = riskSignals,
+        )
 
     suspend fun recordInstalledAppChange(
         packageName: String,
@@ -1686,6 +1721,9 @@ class SettingsRepository(
 
     private fun NetworkRulesSettings.normalized(): NetworkRulesSettings =
         copy(
+            wifiProfileId = wifiProfileId?.takeIf { it > 0L },
+            wifiProtocolOptionId = wifiProtocolOptionId?.trim()?.takeIf(String::isNotBlank),
+            useWifiProfile = useWifiProfile && wifiProfileId != null && wifiProfileId > 0L,
             cellularProfileId = cellularProfileId?.takeIf { it > 0L },
             useCellularProfile = useCellularProfile && cellularProfileId != null && cellularProfileId > 0L,
         )

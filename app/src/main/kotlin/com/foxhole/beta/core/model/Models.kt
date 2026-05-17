@@ -316,6 +316,9 @@ data class NetworkRulesSettings(
     val cellularRulesEnabled: Boolean = true,
     val skipSubscriptionRefreshOnCellular: Boolean = true,
     val skipSpeedTestsOnCellular: Boolean = true,
+    val useWifiProfile: Boolean = false,
+    val wifiProfileId: Long? = null,
+    val wifiProtocolOptionId: String? = null,
     val useCellularProfile: Boolean = false,
     val cellularProfileId: Long? = null,
 )

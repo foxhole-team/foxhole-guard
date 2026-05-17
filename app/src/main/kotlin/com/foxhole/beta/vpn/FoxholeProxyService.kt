@@ -26,6 +26,7 @@ import com.foxhole.beta.core.model.TrafficSnapshot
 import com.foxhole.beta.core.model.VpnSession
 import com.foxhole.beta.core.network.HttpProxyAccess
 import com.foxhole.beta.core.network.mergeIpInfo
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -39,6 +40,16 @@ import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+
+@Suppress("TooGenericExceptionCaught")
+private suspend inline fun <T> runCatchingUnlessCancelled(crossinline block: suspend () -> T): Result<T> =
+    try {
+        Result.success(block())
+    } catch (cancelled: CancellationException) {
+        throw cancelled
+    } catch (error: Throwable) {
+        Result.failure(error)
+    }
 
 class FoxholeProxyService : Service(), RuntimeServiceHost {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -268,6 +279,14 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
         if (result.isSuccess) {
             container.diagnosticsLogger.record("connection", "proxy runtime started, validation required")
             val validation = validateProxyConnectivity(session)
+            currentCoroutineContext().ensureActive()
+            if (!activeSession.matchesProxyRuntimeSession(session)) {
+                container.diagnosticsLogger.record(
+                    "connection",
+                    "proxy validation ignored for stale session sessionId=${session.correlationId}",
+                )
+                return
+            }
             if (validation.isSuccess) {
                 container.connectionController.markCurrentRuntimeApplied()
                 onConnectionStarted(session)
@@ -329,7 +348,7 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
             message?.let { "result=error" } ?: "result=stopped",
             message?.takeIf(String::isNotBlank)?.let { "reason=$it" },
         )
-        runtime.stop()
+        stopRuntimeFailClosed(reason = "disconnect")
         runtimeWakeLock.release()
         activeSession = null
         RuntimeResumeStateStore.clear(this)
@@ -356,6 +375,13 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
         container.diagnosticsLogger.record("connection", "runtime failure: $message")
         launchCommand { disconnect(message, commandStartId) }
     }
+
+    private suspend fun stopRuntimeFailClosed(reason: String): RuntimeStopResult =
+        runtime.stopFailClosed(
+            owner = "proxy",
+            reason = reason,
+            diagnosticsLogger = container.diagnosticsLogger,
+        )
 
     private suspend fun failClosedTeardown(
         commandStartId: Int,
@@ -391,7 +417,7 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
             "proxy command fail-closed teardown",
             action?.let { "action=$it" } ?: "action=null",
         )
-        runtime.stop()
+        stopRuntimeFailClosed(reason = "runtime_command_fail_closed")
         runtimeWakeLock.release()
         activeSession = null
         RuntimeResumeStateStore.clear(this)
@@ -458,6 +484,14 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
             FoxholeVpnRuntimeBridge.requestImmediateTrafficSample()
             updateNotification()
             val validation = validateProxyConnectivity(session)
+            currentCoroutineContext().ensureActive()
+            if (!activeSession.matchesProxyRuntimeSession(session)) {
+                container.diagnosticsLogger.record(
+                    "connection",
+                    "proxy reload validation ignored for stale session sessionId=${session.correlationId}",
+                )
+                return
+            }
             if (validation.isSuccess) {
                 container.connectionController.markCurrentRuntimeApplied()
                 onConnectionStarted(session)
@@ -594,7 +628,7 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
             "attempt=$attempt",
             "sessionId=${session.correlationId}",
         )
-        runtime.stop()
+        stopRuntimeFailClosed(reason = "reconnect")
         activeSession = null
         container.connectionController.clearAppliedRuntime()
         FoxholeVpnRuntimeBridge.updateTraffic(trafficSampler.reset())
@@ -690,7 +724,7 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
         trafficJob = null
     }
 
-    private fun startGeoRefresh() {
+    private fun startGeoRefresh(session: VpnSession) {
         stopGeoRefresh()
         geoRefreshJob =
             scope.launch(Dispatchers.IO) {
@@ -698,15 +732,23 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
                     delay(GEO_REFRESH_INITIAL_DELAY_MS)
                 }
                 repeat(GEO_REFRESH_ATTEMPTS) { attempt ->
+                    if (!activeSession.matchesProxyRuntimeSession(session)) {
+                        container.diagnosticsLogger.record("ip", "proxy geo refresh skipped for stale session")
+                        return@launch
+                    }
                     val success =
-                        runCatching {
-                            refreshProxyIpInfo(callTimeoutMs = GEO_REFRESH_CALL_TIMEOUT_MS)
+                        runCatchingUnlessCancelled {
+                            refreshProxyIpInfo(session = session, callTimeoutMs = GEO_REFRESH_CALL_TIMEOUT_MS)
                         }
-                            .onSuccess {
-                                FoxholeVpnRuntimeBridge.updateIpInfo(it)
+                            .onSuccess { info ->
+                                if (!activeSession.matchesProxyRuntimeSession(session)) {
+                                    container.diagnosticsLogger.record("ip", "proxy geo refresh ignored for stale session")
+                                    return@onSuccess
+                                }
+                                FoxholeVpnRuntimeBridge.updateIpInfo(info)
                                 container.diagnosticsLogger.record("ip", "geo refreshed")
                                 launch(Dispatchers.Main.immediate) { updateNotification() }
-                                startIpv4EnrichmentIfNeeded(it)
+                                startIpv4EnrichmentIfNeeded(session, info)
                             }
                             .onFailure { error ->
                                 container.diagnosticsLogger.record("ip", "geo refresh failed: ${error.message.orEmpty()}")
@@ -727,6 +769,12 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
         ipv4EnrichmentJob?.cancel()
         ipv4EnrichmentJob = null
     }
+
+    private fun VpnSession?.matchesProxyRuntimeSession(session: VpnSession): Boolean =
+        this != null &&
+            profileId == session.profileId &&
+            correlationId == session.correlationId &&
+            protocolOptionId == session.protocolOptionId
 
     private suspend fun validateProxyConnectivity(session: VpnSession): Result<Unit> =
         withContext(Dispatchers.IO) {
@@ -812,7 +860,10 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
         return true
     }
 
-    private fun startIpv4EnrichmentIfNeeded(info: IpInfo) {
+    private fun startIpv4EnrichmentIfNeeded(
+        session: VpnSession,
+        info: IpInfo,
+    ) {
         if (info.ipv4 != null) {
             ipv4EnrichmentJob?.cancel()
             ipv4EnrichmentJob = null
@@ -821,10 +872,18 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
         ipv4EnrichmentJob?.cancel()
         ipv4EnrichmentJob =
             scope.launch(Dispatchers.IO) {
+                if (!activeSession.matchesProxyRuntimeSession(session)) {
+                    container.diagnosticsLogger.record("ip", "proxy ipv4 enrichment skipped for stale session")
+                    return@launch
+                }
                 val ipv4Info =
-                    runCatching {
-                        refreshProxyIpv4Info(callTimeoutMs = IPV4_ENRICHMENT_CALL_TIMEOUT_MS)
+                    runCatchingUnlessCancelled {
+                        refreshProxyIpv4Info(session = session, callTimeoutMs = IPV4_ENRICHMENT_CALL_TIMEOUT_MS)
                     }.getOrNull() ?: return@launch
+                if (!activeSession.matchesProxyRuntimeSession(session)) {
+                    container.diagnosticsLogger.record("ip", "proxy ipv4 enrichment ignored for stale session")
+                    return@launch
+                }
                 val merged = mergeIpInfo(primary = FoxholeVpnRuntimeBridge.ipInfo.value ?: info, ipv4 = ipv4Info, ipv6 = null)
                 FoxholeVpnRuntimeBridge.updateIpInfo(merged)
                 container.diagnosticsLogger.record("ip", "ipv4 enriched")
@@ -832,10 +891,13 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
             }
     }
 
-    private suspend fun refreshProxyIpInfo(callTimeoutMs: Long): IpInfo {
+    private suspend fun refreshProxyIpInfo(
+        session: VpnSession,
+        callTimeoutMs: Long,
+    ): IpInfo {
         val settings = container.settingsRepository.current()
         val proxyAccess = settings.preferredAppProxyAccess() ?: error("proxy surface is unavailable")
-        val remoteDnsServers = VpnDnsServerSelector.remoteDnsServerAddresses(activeSession?.configJson)
+        val remoteDnsServers = VpnDnsServerSelector.remoteDnsServerAddresses(session.configJson)
         return container.ipInfoRepository
             .fetch(
                 endpoint = settings.connection.ipInfoEndpoint,
@@ -847,10 +909,13 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
             )
     }
 
-    private suspend fun refreshProxyIpv4Info(callTimeoutMs: Long): IpInfo? {
+    private suspend fun refreshProxyIpv4Info(
+        session: VpnSession,
+        callTimeoutMs: Long,
+    ): IpInfo? {
         val settings = container.settingsRepository.current()
         val proxyAccess = settings.preferredAppProxyAccess() ?: return null
-        val remoteDnsServers = VpnDnsServerSelector.remoteDnsServerAddresses(activeSession?.configJson)
+        val remoteDnsServers = VpnDnsServerSelector.remoteDnsServerAddresses(session.configJson)
         return container.ipInfoRepository
             .fetchIpv4(
                 endpoint = settings.connection.ipInfoEndpoint,
@@ -1098,7 +1163,7 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
             ),
         )
         updateNotification()
-        startGeoRefresh()
+        startGeoRefresh(session)
     }
 
     private fun currentNotificationSnapshot(): NotificationSnapshot {

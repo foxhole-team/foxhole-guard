@@ -1115,6 +1115,13 @@
     <string name="network_rules_skip_subscription_refresh_mobile_summary">Плановое обновление подписок ждёт Wi-Fi или безлимитную сеть.</string>
     <string name="network_rules_skip_speed_tests_mobile_title">Не делать тест скорости через мобильную сеть</string>
     <string name="network_rules_skip_speed_tests_mobile_summary">Ручные и фоновые замеры задержки пропускаются в мобильной или лимитной сети.</string>
+    <string name="network_rules_wifi_profile_title">Использовать другой профиль для Wi-Fi</string>
+    <string name="network_rules_wifi_profile_summary">При нажатии Старт в Wi-Fi сети Foxhole подключит выбранный Wi-Fi профиль.</string>
+    <string name="network_rules_wifi_profile_summary_empty">Сначала импортируйте ещё один профиль, чтобы выбрать отдельный профиль для Wi-Fi.</string>
+    <string name="network_rules_wifi_profile_picker_title">Профиль для Wi-Fi</string>
+    <string name="network_rules_wifi_profile_value_unselected">Не выбран</string>
+    <string name="network_rules_wifi_protocol_picker_title">VPN протокол для Wi-Fi</string>
+    <string name="network_rules_wifi_protocol_value_unselected">Протокол не выбран</string>
     <string name="network_rules_mobile_profile_title">Использовать другой профиль на мобильной сети</string>
     <string name="network_rules_mobile_profile_summary">При нажатии Старт в мобильной или лимитной сети Foxhole подключит выбранный мобильный профиль.</string>
     <string name="network_rules_mobile_profile_summary_empty">Сначала импортируйте ещё один профиль, чтобы выбрать отдельный профиль для мобильной сети.</string>

@@ -34,7 +34,7 @@ class InstalledAppChangeReceiver : BroadcastReceiver() {
                 onTimeout = {
                     app.container.diagnosticsLogger.record(
                         "app-inventory",
-                        "package change receiver timed out package=${packageChange.packageName}",
+                        "package change receiver timed out package_hash=${packageChange.packageName.stablePackageHash()}",
                     )
                 },
             ) {
@@ -96,6 +96,12 @@ class InstalledAppChangeReceiver : BroadcastReceiver() {
         const val PACKAGE_CHANGE_TIMEOUT_MS = 8_000L
     }
 }
+
+private fun String.stablePackageHash(): Int =
+    trim()
+        .takeIf(String::isNotBlank)
+        ?.hashCode()
+        ?: 0
 
 private data class PackageInventoryChange(
     val packageName: String,

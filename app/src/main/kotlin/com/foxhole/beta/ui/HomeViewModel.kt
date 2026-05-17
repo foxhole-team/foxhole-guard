@@ -786,11 +786,12 @@ class HomeViewModel(
             handleToggleWithoutActiveProfile(state)
             return
         }
-        val connectProfile = mobileNetworkProfileOverride(state) ?: activeProfile
+        val networkOverride = currentNetworkProfileOverride(state)
+        val connectProfile = networkOverride?.profile ?: activeProfile
         if (togglePrimaryRuntimeConnection(state, activeProfile)) {
             return
         }
-        connectSelectedProfile(state, connectProfile)
+        connectSelectedProfile(state, connectProfile, networkOverride?.protocolOptionId)
     }
 
     private fun cancelProtocolSearchConnection(): Boolean {
@@ -860,25 +861,30 @@ class HomeViewModel(
     private fun connectSelectedProfile(
         state: HomeUiState,
         connectProfile: Profile,
+        protocolOptionId: String? = null,
     ) {
         if (state.settings.traffic.mode == TrafficMode.PROXY) {
-            connect(connectProfile.id)
+            connect(connectProfile.id, protocolOptionId = protocolOptionId)
         } else {
-            requestManualConnectPermissionOrConnect(connectProfile.id)
+            requestManualConnectPermissionOrConnect(connectProfile.id, protocolOptionId)
         }
     }
 
-    private fun requestManualConnectPermissionOrConnect(profileId: Long) {
+    private fun requestManualConnectPermissionOrConnect(
+        profileId: Long,
+        protocolOptionId: String? = null,
+    ) {
         val prepareIntent = android.net.VpnService.prepare(getApplication())
         if (prepareIntent != null) {
             pendingConnectRequest =
                 PendingConnectRequest(
                     profileId = profileId,
+                    protocolOptionId = protocolOptionId,
                     action = PendingConnectAction.MANUAL,
                 )
             requestVpnPermission.tryEmit(Unit)
         } else {
-            connect(profileId)
+            connect(profileId, protocolOptionId = protocolOptionId)
         }
     }
 
@@ -893,8 +899,13 @@ class HomeViewModel(
             return
         }
         when (request.action) {
-            PendingConnectAction.MANUAL -> connect(request.profileId)
-            PendingConnectAction.AUTO_CONNECT -> startAutoConnect(request.profileId)
+            PendingConnectAction.MANUAL -> connect(request.profileId, protocolOptionId = request.protocolOptionId)
+            PendingConnectAction.AUTO_CONNECT ->
+                if (request.protocolOptionId != null) {
+                    connect(request.profileId, protocolOptionId = request.protocolOptionId)
+                } else {
+                    startAutoConnect(request.profileId)
+                }
             PendingConnectAction.RECONNECT -> reconnect(request.profileId)
             PendingConnectAction.LOCAL_GUARD ->
                 viewModelScope.launch {
@@ -1511,7 +1522,10 @@ class HomeViewModel(
 
     internal suspend fun maybeReloadActiveRuntime(): Boolean = maybeReloadActiveRuntimeInternal()
 
-    internal fun connect(profileId: Long) = connectInternal(profileId)
+    internal fun connect(
+        profileId: Long,
+        protocolOptionId: String? = null,
+    ) = connectInternal(profileId, protocolOptionId)
 
     internal fun infoBanner(stringRes: Int): FoxholeBannerEvent = infoBannerInternal(stringRes)
 
@@ -1573,7 +1587,7 @@ class HomeViewModel(
 
     internal suspend fun emitTorConnectedBanner(ipInfo: IpInfo) = emitTorConnectedBannerInternal(ipInfo)
 
-    internal fun loadInstalledApps() = loadInstalledAppsInternal()
+    internal fun loadInstalledApps(force: Boolean = false) = loadInstalledAppsInternal(force = force)
 
     fun ensureInstalledAppsLoaded() = ensureInstalledAppsLoadedInternal()
 

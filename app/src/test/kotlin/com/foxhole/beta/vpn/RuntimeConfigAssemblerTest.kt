@@ -611,7 +611,7 @@ class RuntimeConfigAssemblerTest {
             Settings(expert = ExpertSettings(killSwitchEnabled = true)).localGuardModeOrNull(),
         )
         assertEquals(
-            LocalGuardMode.FIREWALL,
+            null,
             Settings(
                 expert =
                     ExpertSettings(
@@ -647,7 +647,7 @@ class RuntimeConfigAssemblerTest {
     }
 
     @Test
-    fun `firewall toggle owns local guard mode without leaking blocked app state`() {
+    fun `firewall local guard starts only when permanent app blocking is active`() {
         val blockedApps =
             ExpertSettings(
                 blockedPackagesEnabled = true,
@@ -660,7 +660,7 @@ class RuntimeConfigAssemblerTest {
             Settings(expert = blockedApps).localGuardModeOrNull(),
         )
         assertEquals(
-            LocalGuardMode.FIREWALL,
+            null,
             Settings(
                 expert =
                     blockedApps.copy(
@@ -690,17 +690,11 @@ class RuntimeConfigAssemblerTest {
     }
 
     @Test
-    fun `firewall starts local guard without app blocking prerequisites`() {
+    fun `firewall alone does not start full-device local guard`() {
         val firewall = ExpertSettings(firewallEnabled = true)
 
         val settings = Settings(expert = firewall)
-        val config = parse(assembler.assembleLocalGuard(settings, settings.localGuardModeOrNull()!!))
-        val tunInbound = config["inbounds"]!!.jsonArray.single().jsonObject
-        val rules = config["route"]!!.jsonObject["rules"]!!.jsonArray
-
-        assertEquals(LocalGuardMode.FIREWALL, settings.localGuardModeOrNull())
-        assertFalse(tunInbound.containsKey("include_package"))
-        assertTrue(rules.isEmpty())
+        assertEquals(null, settings.localGuardModeOrNull())
     }
 
     @Test
@@ -714,7 +708,7 @@ class RuntimeConfigAssemblerTest {
             ).localGuardModeOrNull(),
         )
         assertEquals(
-            LocalGuardMode.FIREWALL,
+            null,
             Settings(
                 ui = UiSettings(trafficMapEnabled = true),
                 expert = firewall,

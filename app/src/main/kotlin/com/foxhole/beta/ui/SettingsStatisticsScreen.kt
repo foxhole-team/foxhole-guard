@@ -43,6 +43,8 @@ import androidx.compose.material.icons.outlined.WarningAmber
 import androidx.compose.material.icons.outlined.Storage
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
@@ -903,7 +905,13 @@ private fun StatisticsDisabledState(onEnable: () -> Unit) {
                 fontWeight = FontWeight.SemiBold,
                 textAlign = TextAlign.Center,
             )
-            TextButton(onClick = onEnable) {
+            Button(
+                onClick = onEnable,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color.Black,
+                    contentColor = Color.White,
+                ),
+            ) {
                 Text(stringResource(R.string.statistics_enable_action))
             }
         }

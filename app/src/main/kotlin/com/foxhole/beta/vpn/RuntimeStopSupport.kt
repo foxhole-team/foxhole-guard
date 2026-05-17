@@ -81,8 +81,10 @@ internal suspend fun runBlockingRuntimeClose(
     val closeScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     val deferred =
         closeScope.async {
-            block()
-            true
+            runCatching {
+                block()
+                true
+            }.getOrDefault(false)
         }
     return try {
         withTimeoutOrNull(timeoutMs.coerceAtLeast(1L)) {
@@ -96,32 +98,46 @@ internal suspend fun runBlockingRuntimeClose(
     }
 }
 
+internal suspend fun VpnCoreRuntime.stopFailClosed(
+    owner: String,
+    reason: String,
+    diagnosticsLogger: DiagnosticsLogger,
+): RuntimeStopResult {
+    val policy =
+        RuntimeStopPolicy(
+            closeTunFdImmediately = true,
+            closeServiceTimeoutMs = 700L,
+            closeServerTimeoutMs = 700L,
+            totalGracefulTimeoutMs = RUNTIME_STOP_TIMEOUT_MS,
+            forceKillAfterTimeout = true,
+        )
+    return withTimeoutOrNull(RUNTIME_STOP_TIMEOUT_MS) {
+        stop(policy)
+    } ?: withContext(Dispatchers.IO) {
+        diagnosticsLogger.recordStructured(
+            "runtime",
+            "$owner runtime stop timeout",
+            "reason=$reason",
+            "timeout_ms=$RUNTIME_STOP_TIMEOUT_MS",
+        )
+        val killResult = forceKill("${owner}_${reason}_stop_timeout")
+        RuntimeStopResult(
+            closeServiceOk = false,
+            closeServerOk = false,
+            tunClosed = killResult.tunClosed,
+            escalatedToKill = true,
+            elapsedMs = RUNTIME_STOP_TIMEOUT_MS,
+        )
+    }
+}
+
 internal fun stopRuntimeAfterServiceDestroy(
     runtime: VpnCoreRuntime,
     diagnosticsLogger: DiagnosticsLogger,
     owner: String,
 ) {
     CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
-        val policy =
-            RuntimeStopPolicy(
-                closeServiceTimeoutMs = 700L,
-                closeServerTimeoutMs = 700L,
-                totalGracefulTimeoutMs = RUNTIME_STOP_TIMEOUT_MS,
-                forceKillAfterTimeout = true,
-            )
-        val result =
-            withTimeoutOrNull(RUNTIME_STOP_TIMEOUT_MS) {
-                runtime.stop(policy)
-            } ?: withContext(Dispatchers.IO) {
-                runtime.forceKill("${owner}_destroy_stop_timeout")
-                RuntimeStopResult(
-                    closeServiceOk = false,
-                    closeServerOk = false,
-                    tunClosed = true,
-                    escalatedToKill = true,
-                    elapsedMs = RUNTIME_STOP_TIMEOUT_MS,
-                )
-            }
+        val result = runtime.stopFailClosed(owner = owner, reason = "destroy", diagnosticsLogger = diagnosticsLogger)
         diagnosticsLogger.record(
             "runtime",
             if (result.graceful) {

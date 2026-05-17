@@ -148,6 +148,7 @@ internal enum class PendingConnectAction {
 
 internal data class PendingConnectRequest(
     val profileId: Long = 0L,
+    val protocolOptionId: String? = null,
     val action: PendingConnectAction,
 )
 

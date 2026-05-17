@@ -1113,8 +1113,16 @@ fun NetworkRulesSettingsScreen(
                     onCheckedChange = { enabled ->
                         onNetworkRulesChanged(networkRules.copy(wifiRulesEnabled = enabled))
                     },
+                    titleMaxLines = 2,
                     summaryMaxLines = 3,
                     grouped = true,
+                )
+                SettingsControlGroupDivider()
+                NetworkRulesWifiProfileRows(
+                    networkRules = networkRules,
+                    profiles = state.profiles,
+                    activeProfileId = state.activeProfile?.id,
+                    onNetworkRulesChanged = onNetworkRulesChanged,
                 )
                 SettingsControlGroupDivider()
                 SettingSwitchRow(
@@ -1506,12 +1514,6 @@ private fun privacyRouteScopeLabel(value: PrivacyRouteScope): String =
         PrivacyRouteScope.SELECTED_APPS -> stringResource(R.string.privacy_route_scope_selected_apps)
         PrivacyRouteScope.ALL_APPS -> stringResource(R.string.privacy_route_scope_all_apps)
     }
-
-private fun List<Profile>.profileNameOrDefault(
-    profileId: Long?,
-    fallback: String,
-): String =
-    firstOrNull { profile -> profile.id == profileId }?.name ?: fallback
 
 private fun privacyRouteScopeIcon(value: PrivacyRouteScope): ImageVector =
     when (value) {
