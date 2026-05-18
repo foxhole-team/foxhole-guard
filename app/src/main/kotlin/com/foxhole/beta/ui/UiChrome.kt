@@ -90,7 +90,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithCache
@@ -132,7 +131,6 @@ import com.foxhole.beta.core.model.ThemeMode
 import com.foxhole.beta.ui.theme.LocalFoxholeDarkTheme
 import com.foxhole.beta.ui.theme.LocalFoxholeThemeMode
 import com.foxhole.beta.ui.theme.LocalFoxholeUiPalette
-import com.foxhole.beta.ui.theme.foxholeAppBackgroundLayer
 import kotlin.math.max
 
 internal val ScreenHorizontalPadding = 16.dp
@@ -169,6 +167,11 @@ internal val FoxholeWarningAccent = Color(0xFFE0B84A)
 private val FoxholeErrorAccent = Color(0xFFC63C3C)
 private val FoxholeCardShadowElevation = 3.dp
 private val FoxholeDropdownShadowElevation = 8.dp
+private const val TOP_CHROME_SCRIM_DARK_ALPHA = 0.78f
+private const val TOP_CHROME_SCRIM_LIGHT_ALPHA = 0.82f
+private const val BOTTOM_DOCK_CONTAINER_DARK_ALPHA = 0.74f
+private const val BOTTOM_DOCK_CONTAINER_LIGHT_ALPHA = 0.80f
+private const val BOTTOM_DOCK_BORDER_ALPHA = 0.42f
 
 @Composable
 internal fun foxholeSystemAwareAccentColor(
@@ -254,7 +257,6 @@ internal fun FoxholeScaffold(
 ) {
     val statusTopPadding = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     val navigationBottomPadding = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-    val screenHeight = LocalConfiguration.current.screenHeightDp.dp
     val contentTopPadding = statusTopPadding + FoxholeTopChromeHeight
     val resolvedTopBannerPadding =
         if (bannerTopPadding > contentTopPadding) {
@@ -278,7 +280,6 @@ internal fun FoxholeScaffold(
                     title = title,
                     statusTopPadding = statusTopPadding,
                     contentTopPadding = contentTopPadding,
-                    gradientHeight = screenHeight,
                     onNavigateUp = onNavigateUp,
                     actions = actions,
                 )
@@ -311,7 +312,6 @@ private fun BoxScope.FoxholeTopChrome(
     title: String,
     statusTopPadding: Dp,
     contentTopPadding: Dp,
-    gradientHeight: Dp,
     onNavigateUp: (() -> Unit)?,
     actions: @Composable RowScope.() -> Unit,
 ) {
@@ -322,14 +322,8 @@ private fun BoxScope.FoxholeTopChrome(
                 .fillMaxWidth()
                 .height(contentTopPadding),
     ) {
-        FoxholeBlurredBackgroundLayer(
+        FoxholeTopScrimLayer(
             modifier = Modifier.fillMaxSize(),
-            shape = RectangleShape,
-            gradientHeight = gradientHeight,
-            opacity = 0.72f,
-            topOpacity = 0.45f,
-            bottomOpacity = 0.88f,
-            blurRadius = 18.dp,
         )
     }
     Row(
@@ -387,6 +381,53 @@ private fun BoxScope.FoxholeTopChrome(
             content = actions,
         )
     }
+}
+
+@Composable
+internal fun FoxholeTopScrimLayer(
+    modifier: Modifier = Modifier,
+) {
+    val dark = LocalFoxholeDarkTheme.current
+    val scheme = MaterialTheme.colorScheme
+    val bottomColor =
+        if (dark) {
+            scheme.background.copy(alpha = TOP_CHROME_SCRIM_DARK_ALPHA)
+        } else {
+            scheme.surface.copy(alpha = TOP_CHROME_SCRIM_LIGHT_ALPHA)
+        }
+    val frostColor =
+        if (dark) {
+            Color.White.copy(alpha = 0.035f)
+        } else {
+            Color.White.copy(alpha = 0.22f)
+        }
+    Box(
+        modifier =
+            modifier.drawWithCache {
+                val scrim =
+                    Brush.verticalGradient(
+                        colorStops =
+                            arrayOf(
+                                0.00f to Color.Transparent,
+                                0.35f to Color.Transparent,
+                                0.72f to bottomColor.copy(alpha = bottomColor.alpha * 0.55f),
+                                1.00f to bottomColor,
+                            ),
+                    )
+                val frost =
+                    Brush.verticalGradient(
+                        colorStops =
+                            arrayOf(
+                                0.00f to Color.Transparent,
+                                1.00f to frostColor,
+                            ),
+                    )
+                onDrawBehind {
+                    drawRect(scrim)
+                    drawRect(frost)
+                }
+            },
+    )
 }
 
 internal enum class FoxholeBannerTone {
@@ -1009,85 +1050,65 @@ internal fun FoxholeCard(
 }
 
 @Composable
-internal fun FoxholeGlassPanel(
+internal fun FoxholeBottomDockGlassLayer(
     modifier: Modifier = Modifier,
     shape: Shape = MaterialTheme.shapes.large,
-    containerColor: Color,
     borderColor: Color,
-    blurRadius: androidx.compose.ui.unit.Dp = 18.dp,
-    backgroundAlpha: Float = 0.56f,
     content: @Composable BoxScope.() -> Unit,
 ) {
-    Box(modifier = modifier) {
-        Surface(
-            shape = shape,
-            color = containerColor,
-            tonalElevation = 0.dp,
-            shadowElevation = 0.dp,
-            border = BorderStroke(1.dp, borderColor),
-        ) {
-            Box(modifier = Modifier.clip(shape)) {
-                Box(
-                    modifier =
-                        Modifier
-                            .fillMaxSize()
-                            .clip(shape)
-                            .blur(blurRadius)
-                            .background(containerColor.copy(alpha = backgroundAlpha)),
-                )
-                Box(
-                    modifier =
-                        Modifier
-                            .fillMaxSize()
-                            .clip(shape),
-                    content = content,
-                )
-            }
+    val dark = LocalFoxholeDarkTheme.current
+    val scheme = MaterialTheme.colorScheme
+    val containerColor =
+        if (dark) {
+            scheme.background.copy(alpha = BOTTOM_DOCK_CONTAINER_DARK_ALPHA)
+        } else {
+            scheme.surface.copy(alpha = BOTTOM_DOCK_CONTAINER_LIGHT_ALPHA)
         }
-    }
-}
-
-@Composable
-internal fun FoxholeBlurredBackgroundLayer(
-    modifier: Modifier = Modifier,
-    shape: Shape = RectangleShape,
-    gradientHeight: Dp? = null,
-    opacity: Float = 0.96f,
-    topOpacity: Float = opacity,
-    bottomOpacity: Float = opacity,
-    blurRadius: Dp = 18.dp,
-    borderColor: Color = Color.Unspecified,
-    content: @Composable BoxScope.() -> Unit = {},
-) {
-    Box(
+    val frostColor =
+        if (dark) {
+            Color.White.copy(alpha = 0.030f)
+        } else {
+            Color.White.copy(alpha = 0.18f)
+        }
+    Surface(
         modifier =
-            modifier
-                .clip(shape),
+            modifier.foxholeMenuShadow(
+                shape = shape,
+                elevation = FoxholeDropdownShadowElevation,
+            ),
+        shape = shape,
+        color = Color.Transparent,
+        tonalElevation = 0.dp,
+        shadowElevation = 0.dp,
+        border = BorderStroke(1.dp, borderColor.copy(alpha = BOTTOM_DOCK_BORDER_ALPHA)),
     ) {
         Box(
             modifier =
                 Modifier
                     .fillMaxSize()
-                    .foxholeAppBackgroundLayer(
-                        gradientHeight = gradientHeight,
-                        opacity = opacity,
-                        topOpacity = topOpacity,
-                        bottomOpacity = bottomOpacity,
-                    )
-                    .blur(blurRadius),
-        )
-        if (borderColor != Color.Unspecified) {
-            Surface(
-                modifier = Modifier.fillMaxSize(),
-                shape = shape,
-                color = Color.Transparent,
-                tonalElevation = 0.dp,
-                shadowElevation = 0.dp,
-                border = BorderStroke(1.dp, borderColor),
-            ) {}
-        }
-        Box(
-            modifier = Modifier.fillMaxSize(),
+                    .clip(shape)
+                    .drawWithCache {
+                        val container =
+                            Brush.verticalGradient(
+                                colorStops =
+                                    arrayOf(
+                                        0.00f to containerColor.copy(alpha = containerColor.alpha * 0.72f),
+                                        1.00f to containerColor,
+                                    ),
+                            )
+                        val frost =
+                            Brush.verticalGradient(
+                                colorStops =
+                                    arrayOf(
+                                        0.00f to frostColor,
+                                        1.00f to Color.Transparent,
+                                    ),
+                            )
+                        onDrawBehind {
+                            drawRect(container)
+                            drawRect(frost)
+                        }
+                    },
             content = content,
         )
     }

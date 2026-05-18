@@ -60,7 +60,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
@@ -781,7 +780,6 @@ private fun FoxholeBottomBar(
 ) {
     val selectedSection = currentSection ?: AppSection.DASHBOARD
     val uiPalette = LocalFoxholeUiPalette.current
-    val screenHeight = LocalConfiguration.current.screenHeightDp.dp
     Box(
         modifier =
             Modifier
@@ -790,16 +788,13 @@ private fun FoxholeBottomBar(
                 .padding(top = 4.dp, bottom = 10.dp),
         contentAlignment = Alignment.BottomCenter,
     ) {
-        FoxholeBlurredBackgroundLayer(
+        FoxholeBottomDockGlassLayer(
             modifier =
                 Modifier
                     .fillMaxWidth(0.62f)
                     .widthIn(min = 180.dp, max = 248.dp)
                     .height(60.dp),
             shape = MaterialTheme.shapes.large,
-            gradientHeight = screenHeight,
-            opacity = 0.96f,
-            blurRadius = 18.dp,
             borderColor = uiPalette.bottomBarBorderColor,
         ) {
             BoxWithConstraints(
