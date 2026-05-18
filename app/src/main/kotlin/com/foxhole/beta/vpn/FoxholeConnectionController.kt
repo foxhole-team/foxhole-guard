@@ -13,6 +13,7 @@ import com.foxhole.beta.core.model.ConnectionSnapshot
 import com.foxhole.beta.core.model.ConnectionState
 import com.foxhole.beta.core.model.IpInfo
 import com.foxhole.beta.core.model.Profile
+import com.foxhole.beta.core.model.Settings
 import com.foxhole.beta.core.model.TrafficMode
 import com.foxhole.beta.core.model.TrafficSnapshot
 import com.foxhole.beta.core.network.IpInfoFetchMode
@@ -238,10 +239,10 @@ class FoxholeConnectionController(
             onSuccess = { validation ->
                 diagnosticsLogger.record(
                     "connection",
-                    if (validation.ipInfo != null) {
-                        "active vpn restore passed vpn-bound ip validation"
-                    } else {
-                        "active vpn restore passed vpn-bound endpoint validation"
+                    when {
+                        validation.ipInfo != null -> "active vpn restore passed vpn-bound ip validation"
+                        validation.androidValidated -> "active vpn restore accepted validated android vpn network"
+                        else -> "active vpn restore passed vpn-bound endpoint validation"
                     },
                 )
                 validation.ipInfo?.let(FoxholeVpnRuntimeBridge::updateIpInfo)
@@ -286,27 +287,122 @@ class FoxholeConnectionController(
             )
             probeRestoredVpnConnectivityEndpoint(vpnNetwork)
             RestoredVpnValidation(ipInfo = null)
+        }.recoverCatching { probeError ->
+            if (!isRestoredVpnNetworkValidatedByAndroid(vpnNetwork)) {
+                throw probeError
+            }
+            diagnosticsLogger.record(
+                "connection",
+                "active vpn restore accepted android validated vpn network after app probe failed: ${probeError.message.orEmpty()}",
+            )
+            RestoredVpnValidation(ipInfo = null, androidValidated = true)
         }
 
     private suspend fun refreshRestoredVpnIpInfo(vpnNetwork: Network): IpInfo {
         val settings = settingsRepository.current()
         val endpoint = settings.connection.ipInfoEndpoint
+        val activeProfile = profileRepository.getActiveProfile()
+        val session =
+            activeProfile?.id?.let { profileId ->
+                runCatching { profileRepository.getSession(profileId) }.getOrNull()
+            }
+        val preferIpv4Validation =
+            shouldPreferIpv4TunnelValidation(
+                protocolHint = activeProfile?.protocolHint,
+                configJson = session?.configJson,
+            )
+        val info =
+            runCatching {
+                fetchRestoredVpnIpInfoViaRuntimeProxy(
+                    settings = settings,
+                    endpoint = endpoint,
+                    preferIpv4Validation = preferIpv4Validation,
+                )
+            }.recoverCatching { proxyError ->
+                if (settings.requiresStrictRuntimeProxyIpRefresh(snapshot.value)) {
+                    throw proxyError
+                }
+                diagnosticsLogger.record(
+                    "connection",
+                    "active vpn restore runtime proxy ip validation failed, trying process path: ${proxyError.message.orEmpty()}",
+                )
+                fetchRestoredVpnIpInfoOnProcessPath(
+                    endpoint = endpoint,
+                    vpnNetwork = vpnNetwork,
+                    preferIpv4Validation = preferIpv4Validation,
+                )
+            }.getOrThrow()
+        return info.withDnsServers(
+            localDnsServers = connectivityManager.dnsServerAddresses(vpnNetwork),
+            remoteDnsServers = emptyList(),
+        )
+    }
+
+    private suspend fun fetchRestoredVpnIpInfoViaRuntimeProxy(
+        settings: Settings,
+        endpoint: String,
+        preferIpv4Validation: Boolean,
+    ): IpInfo {
+        val resolverNetwork = currentUpstreamNetwork()
+        return if (preferIpv4Validation) {
+            ipInfoRepository.fetchIpv4(
+                endpoint = endpoint,
+                callTimeoutMs = FoxholeVpnService.CONNECTIVITY_PROBE_CALL_TIMEOUT_MS,
+                proxy = settings.tunnelRuntimeProxyAccess(),
+                resolverNetwork = resolverNetwork,
+            ) ?: error("runtime proxy ipv4 refresh failed")
+        } else {
+            ipInfoRepository.fetch(
+                endpoint = endpoint,
+                callTimeoutMs = FoxholeVpnService.CONNECTIVITY_PROBE_CALL_TIMEOUT_MS,
+                proxy = settings.tunnelRuntimeProxyAccess(),
+                resolverNetwork = resolverNetwork,
+                mode = IpInfoFetchMode.FULL,
+            )
+        }
+    }
+
+    private suspend fun fetchRestoredVpnIpInfoOnProcessPath(
+        endpoint: String,
+        vpnNetwork: Network,
+        preferIpv4Validation: Boolean,
+    ): IpInfo {
         val requestNetwork = tunnelValidationRequestNetwork(vpnNetwork)
         val resolverNetwork = currentUpstreamNetwork()
-        return ipInfoRepository
-            .fetch(
+        return if (preferIpv4Validation) {
+            ipInfoRepository.fetchIpv4(
+                endpoint = endpoint,
+                callTimeoutMs = FoxholeVpnService.CONNECTIVITY_PROBE_CALL_TIMEOUT_MS,
+                network = requestNetwork,
+                resolverNetwork = resolverNetwork,
+            ) ?: error("vpn ipv4 refresh failed")
+        } else {
+            ipInfoRepository.fetch(
                 endpoint = endpoint,
                 callTimeoutMs = FoxholeVpnService.CONNECTIVITY_PROBE_CALL_TIMEOUT_MS,
                 network = requestNetwork,
                 resolverNetwork = resolverNetwork,
                 mode = IpInfoFetchMode.FULL,
-            ).withDnsServers(
-                localDnsServers = connectivityManager.dnsServerAddresses(vpnNetwork),
-                remoteDnsServers = emptyList(),
             )
+        }
     }
 
     private suspend fun probeRestoredVpnConnectivityEndpoint(vpnNetwork: Network) {
+        val settings = settingsRepository.current()
+        val runtimeProxyProbe =
+            runCatching {
+                probeRestoredVpnConnectivityEndpointViaRuntimeProxy(settings)
+            }
+        if (runtimeProxyProbe.isSuccess) {
+            return
+        }
+        if (settings.requiresStrictRuntimeProxyIpRefresh(snapshot.value)) {
+            throw runtimeProxyProbe.exceptionOrNull() ?: error("runtime proxy endpoint validation failed")
+        }
+        diagnosticsLogger.record(
+            "connection",
+            "active vpn restore runtime proxy endpoint probe failed, trying process path: ${runtimeProxyProbe.exceptionOrNull()?.message.orEmpty()}",
+        )
         val activeProfile = profileRepository.getActiveProfile()
         val session =
             activeProfile?.id?.let { profileId ->
@@ -359,6 +455,30 @@ class FoxholeConnectionController(
         throw lastFailure ?: error("vpn endpoint validation failed")
     }
 
+    private suspend fun probeRestoredVpnConnectivityEndpointViaRuntimeProxy(settings: Settings) {
+        var lastFailure: Throwable? = null
+        restoredVpnConnectivityProbeEndpoints().forEach { endpoint ->
+            val result =
+                runCatching {
+                    ipInfoRepository.probe(
+                        endpoint = endpoint,
+                        callTimeoutMs = FoxholeVpnService.CONNECTIVITY_PROBE_CALL_TIMEOUT_MS,
+                        proxy = settings.tunnelRuntimeProxyAccess(),
+                    )
+                }
+            if (result.isSuccess) {
+                diagnosticsLogger.record("connection", "active vpn restore runtime proxy endpoint probe ok: $endpoint")
+                return
+            }
+            lastFailure = result.exceptionOrNull()
+            diagnosticsLogger.record(
+                "connection",
+                "active vpn restore runtime proxy endpoint probe failed: $endpoint reason=${lastFailure?.message.orEmpty()}",
+            )
+        }
+        throw lastFailure ?: error("runtime proxy endpoint validation failed")
+    }
+
     private suspend fun restoredVpnConnectivityProbeEndpoints(): List<String> {
         val preferredEndpoint = settingsRepository.current().connection.ipInfoEndpoint.trim()
         return buildList {
@@ -373,8 +493,13 @@ class FoxholeConnectionController(
 
     private fun currentVpnNetwork(): Network? =
         ConnectivityNetworkRegistry.snapshot(context).firstOrNull { network ->
-            connectivityManager.getNetworkCapabilities(network)?.hasTransport(NetworkCapabilities.TRANSPORT_VPN) == true
+            connectivityManager.getNetworkCapabilities(network)?.isFoxholeVpnNetwork(context) == true
         }
+
+    private fun isRestoredVpnNetworkValidatedByAndroid(vpnNetwork: Network): Boolean =
+        connectivityManager
+            .getNetworkCapabilities(vpnNetwork)
+            ?.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED) == true
 
     private fun currentUpstreamNetwork(): Network? =
         ConnectivityNetworkRegistry.snapshot(context).firstOrNull { network ->
@@ -391,6 +516,7 @@ class FoxholeConnectionController(
 
 private data class RestoredVpnValidation(
     val ipInfo: IpInfo?,
+    val androidValidated: Boolean = false,
 )
 
 private fun ConnectionSnapshot.isStaleTunnelSnapshotWithoutVpn(vpnNetwork: Network?): Boolean =

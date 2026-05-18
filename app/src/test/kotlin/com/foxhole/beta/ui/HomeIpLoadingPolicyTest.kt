@@ -73,6 +73,26 @@ class HomeIpLoadingPolicyTest {
     }
 
     @Test
+    fun `restored vpn refresh keeps existing ip visible`() {
+        assertFalse(
+            shouldClearExistingIpForRefresh(
+                reason = IpInfoRefreshReason.RESTORED_VPN,
+                clearExistingIp = true,
+            ),
+        )
+    }
+
+    @Test
+    fun `manual clear request can still clear existing ip`() {
+        assertTrue(
+            shouldClearExistingIpForRefresh(
+                reason = IpInfoRefreshReason.MANUAL,
+                clearExistingIp = true,
+            ),
+        )
+    }
+
+    @Test
     fun `auto refreshes device ip after active connection ends`() {
         assertTrue(
             shouldAutoRefreshIpAfterDisconnect(

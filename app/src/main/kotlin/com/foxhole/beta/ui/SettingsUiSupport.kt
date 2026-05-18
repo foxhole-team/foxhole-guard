@@ -979,7 +979,7 @@ internal fun SettingsFooterVersionText(
                 onClick = onRepositoryClick,
             )
             SettingsFooterActionButton(
-                painterRes = R.drawable.ic_telegram_mark,
+                painterRes = R.drawable.ic_support_channel_mark,
                 contentDescription = stringResource(R.string.open_support_bot),
                 tint = Color.Unspecified,
                 iconSize = 34.dp,

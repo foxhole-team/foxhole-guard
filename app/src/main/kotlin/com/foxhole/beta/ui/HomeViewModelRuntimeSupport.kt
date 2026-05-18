@@ -96,7 +96,7 @@ internal fun HomeViewModel.refreshIpInfoInternalInternal(
                 ipInfoLoadingMutable.value = true
             }
             val loadingStartedAtMs = if (showLoading) SystemClock.elapsedRealtime() else 0L
-            if (clearExistingIp && reason != IpInfoRefreshReason.POST_CONNECT) {
+            if (shouldClearExistingIpForRefresh(reason = reason, clearExistingIp = clearExistingIp)) {
                 FoxholeVpnRuntimeBridge.updateIpInfo(null)
             }
             try {
@@ -618,7 +618,7 @@ internal fun HomeViewModel.scheduleConnectedIpRefreshInternal(
             }
             pendingPostConnectIpRefresh = false
             startIpInfoRefresh(
-                reportFailures = reason == IpInfoRefreshReason.POST_CONNECT,
+                reportFailures = false,
                 showLoading = false,
                 clearExistingIp = clearExistingIp,
                 fetchMode = ipInfoFetchModeForRefreshReason(reason),

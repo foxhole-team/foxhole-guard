@@ -9,6 +9,7 @@ import android.os.SystemClock
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.view.Gravity
+import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import androidx.compose.animation.AnimatedVisibility
@@ -102,7 +103,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.draw.shadow
@@ -113,6 +113,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
@@ -145,8 +146,8 @@ import com.foxhole.beta.ui.theme.FoxholeTheme
 import com.foxhole.beta.ui.theme.LocalFoxholeDarkTheme
 import com.foxhole.beta.ui.theme.LocalFoxholeThemeMode
 import com.foxhole.beta.ui.theme.LocalFoxholeUiPalette
+import com.foxhole.beta.ui.theme.foxholeAppBackgroundLayer
 import eightbitlab.com.blurview.BlurTarget
-import eightbitlab.com.blurview.FoxholeTelegramBlurView
 import kotlin.math.max
 import android.graphics.Color as AndroidColor
 
@@ -157,7 +158,6 @@ internal val CardInnerPadding = 12.dp
 internal val CardContentSpacing = 8.dp
 internal val BottomDockOverlayPadding = 100.dp
 internal val FoxholeTopChromeHeight = 52.dp
-private val FoxholeTopChromeBlurBleed = 64.dp
 internal val HomeTopStatusInnerSurfaceMinHeight = 42.dp
 internal val HomeTopStatusInnerHorizontalPadding = 10.dp
 internal val HomeTopStatusInnerVerticalPadding = 6.dp
@@ -175,7 +175,40 @@ internal val LocalFoxholeBackdropBlurHost =
         null
     }
 
-private typealias FoxholeTopChromeActions = @Composable RowScope.() -> Unit
+internal typealias FoxholeTopChromeActions = @Composable RowScope.() -> Unit
+
+internal class FoxholeTopChromeController {
+    private var topChromeView: FoxholeTopChromeBlurView? = null
+    private var latestState = FoxholeTopChromeState(visible = false)
+
+    fun attach(view: FoxholeTopChromeBlurView) {
+        topChromeView = view
+        view.applyState(latestState)
+    }
+
+    fun detach(view: FoxholeTopChromeBlurView) {
+        if (topChromeView === view) {
+            topChromeView = null
+        }
+    }
+
+    fun publish(state: FoxholeTopChromeState) {
+        latestState = state
+        topChromeView?.applyState(state)
+    }
+}
+
+internal data class FoxholeTopChromeState(
+    val title: String = "",
+    val onNavigateUp: (() -> Unit)? = null,
+    val actions: FoxholeTopChromeActions = {},
+    val visible: Boolean = true,
+)
+
+internal val LocalFoxholeTopChromeController =
+    staticCompositionLocalOf<FoxholeTopChromeController?> {
+        null
+    }
 
 internal object FoxholeMotionTokens {
     const val FastDurationMs = 120
@@ -203,10 +236,27 @@ private const val TOP_CHROME_SCRIM_LIGHT_ALPHA = 0.24f
 private const val TOP_CHROME_FROST_DARK_ALPHA = 0.018f
 private const val TOP_CHROME_FROST_LIGHT_ALPHA = 0.030f
 private const val TOP_CHROME_MIN_SCROLL_ALPHA = 0.64f
-private const val TOP_CHROME_BLUR_MIN_SCROLL_ALPHA = 1.0f
 private const val BOTTOM_DOCK_CONTAINER_DARK_ALPHA = 0.88f
 private const val BOTTOM_DOCK_CONTAINER_LIGHT_ALPHA = 0.92f
-private const val BOTTOM_DOCK_BORDER_ALPHA = 0.42f
+private const val BOTTOM_DOCK_BORDER_ALPHA = 0.14f
+
+internal fun foxholeTopChromeBackgroundColor(): Int = Color.Transparent.toArgb()
+
+@Composable
+internal fun foxholeBottomDockBackgroundColor(): Int {
+    val dark = LocalFoxholeDarkTheme.current
+    return when (LocalFoxholeThemeMode.current) {
+        ThemeMode.SYSTEM ->
+            if (dark) {
+                MaterialTheme.colorScheme.surfaceDim
+            } else {
+                MaterialTheme.colorScheme.surfaceContainerLow
+            }
+
+        ThemeMode.DARK -> Color(0xFF050506)
+        ThemeMode.LIGHT -> Color(0xFFECECEA)
+    }.toArgb()
+}
 
 @Composable
 internal fun foxholeSystemAwareAccentColor(
@@ -314,11 +364,9 @@ internal fun FoxholeScaffold(
                 Box(
                     modifier =
                         Modifier
-                            .fillMaxSize()
-                            .padding(top = statusTopPadding)
-                            .clipToBounds(),
+                            .fillMaxSize(),
                 ) {
-                    content(PaddingValues(top = FoxholeTopChromeHeight))
+                    content(PaddingValues(top = contentTopPadding))
                 }
                 FoxholeTopChrome(
                     title = title,
@@ -361,16 +409,18 @@ private fun BoxScope.FoxholeTopChrome(
     actions: @Composable RowScope.() -> Unit,
     scrimProgress: () -> Float,
 ) {
-    val blurHost = LocalFoxholeBackdropBlurHost.current
-    if (blurHost != null) {
-        FoxholeExternalTopChrome(
-            host = blurHost,
-            title = title,
-            statusTopPadding = statusTopPadding,
-            onNavigateUp = onNavigateUp,
-            actions = actions,
-            scrimProgress = scrimProgress,
-        )
+    if (LocalFoxholeBackdropBlurHost.current != null) {
+        LocalFoxholeTopChromeController.current?.let { controller ->
+            SideEffect {
+                controller.publish(
+                    FoxholeTopChromeState(
+                        title = title,
+                        onNavigateUp = onNavigateUp,
+                        actions = actions,
+                    ),
+                )
+            }
+        }
         return
     }
     FoxholeTopChromeContent(
@@ -384,21 +434,16 @@ private fun BoxScope.FoxholeTopChrome(
 }
 
 @Composable
-private fun FoxholeExternalTopChrome(
+internal fun FoxholeRootTopChromeOverlay(
     host: FoxholeBackdropBlurHost,
-    title: String,
-    statusTopPadding: Dp,
-    onNavigateUp: (() -> Unit)?,
-    actions: FoxholeTopChromeActions,
-    scrimProgress: () -> Float,
+    controller: FoxholeTopChromeController,
 ) {
-    val dark = LocalFoxholeDarkTheme.current
     val density = LocalDensity.current
     val themeMode = LocalFoxholeThemeMode.current
-    val blurBleed = statusTopPadding.coerceAtMost(FoxholeTopChromeBlurBleed)
-    val topChromeHeight = FoxholeTopChromeHeight + blurBleed
+    val backgroundColor = foxholeTopChromeBackgroundColor()
+    val statusTopPadding = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    val topChromeHeight = statusTopPadding + FoxholeTopChromeHeight
     val topChromeHeightPx = with(density) { topChromeHeight.roundToPx() }
-    val topMarginPx = with(density) { (statusTopPadding - blurBleed).roundToPx() }
     val topChromeView =
         remember(host.overlayHost, host.blurTarget) {
             FoxholeTopChromeBlurView(host.overlayHost.context)
@@ -406,23 +451,20 @@ private fun FoxholeExternalTopChrome(
 
     DisposableEffect(topChromeView, host.overlayHost) {
         host.overlayHost.addView(topChromeView)
+        controller.attach(topChromeView)
         onDispose {
+            controller.detach(topChromeView)
             host.overlayHost.removeView(topChromeView)
         }
     }
 
     SideEffect {
         topChromeView.apply {
-            configureBlur(
-                blurTarget = host.blurTarget,
-                dark = dark,
+            configureBackground(
+                backgroundColor = backgroundColor,
             )
-            titleState.value = title
-            statusTopPaddingState.value = blurBleed
+            statusTopPaddingState.value = statusTopPadding
             contentTopPaddingState.value = topChromeHeight
-            onNavigateUpState.value = onNavigateUp
-            actionsState.value = actions
-            scrimProgressState.value = scrimProgress
             themeModeState.value = themeMode
             layoutParams =
                 FrameLayout.LayoutParams(
@@ -430,14 +472,13 @@ private fun FoxholeExternalTopChrome(
                     topChromeHeightPx,
                 ).apply {
                     gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
-                    topMargin = topMarginPx
                 }
             elevation = 0f
         }
     }
 }
 
-private class FoxholeTopChromeBlurView(
+internal class FoxholeTopChromeBlurView(
     context: Context,
 ) : FrameLayout(context) {
     val titleState = mutableStateOf("")
@@ -445,41 +486,32 @@ private class FoxholeTopChromeBlurView(
     val contentTopPaddingState = mutableStateOf(FoxholeTopChromeHeight)
     val onNavigateUpState = mutableStateOf<(() -> Unit)?>(null, referentialEqualityPolicy())
     val actionsState = mutableStateOf<FoxholeTopChromeActions>({}, referentialEqualityPolicy())
-    val scrimProgressState = mutableStateOf<() -> Float>({ 0f }, referentialEqualityPolicy())
     val themeModeState = mutableStateOf(ThemeMode.SYSTEM)
-
-    private val blurView = FoxholeTelegramBlurView(context)
-    private var configuredBlurTarget: BlurTarget? = null
-    private var configuredDark: Boolean? = null
 
     init {
         clipChildren = true
         clipToPadding = true
-        blurView.alpha = 1f
-        addView(
-            blurView,
-            LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.MATCH_PARENT,
-            ),
-        )
         addView(
             ComposeView(context).apply {
                 setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
                 setContent {
                     FoxholeTheme(themeMode = themeModeState.value) {
-                        val rawProgress = scrimProgressState.value().coerceIn(0f, 1f)
-                        SideEffect {
-                            blurView.alpha = TOP_CHROME_BLUR_MIN_SCROLL_ALPHA
-                        }
-                        Box(Modifier.fillMaxSize()) {
+                        val configuration = LocalConfiguration.current
+                        Box(
+                            Modifier
+                                .fillMaxSize()
+                                .foxholeAppBackgroundLayer(
+                                    gradientHeight = configuration.screenHeightDp.dp,
+                                ),
+                        ) {
                             FoxholeTopChromeContent(
                                 title = titleState.value,
                                 statusTopPadding = statusTopPaddingState.value,
                                 contentTopPadding = contentTopPaddingState.value,
                                 onNavigateUp = onNavigateUpState.value,
                                 actions = actionsState.value,
-                                scrimProgress = { rawProgress },
+                                scrimProgress = { 1f },
+                                drawScrimLayer = false,
                             )
                         }
                     }
@@ -492,44 +524,17 @@ private class FoxholeTopChromeBlurView(
         )
     }
 
-    fun configureBlur(
-        blurTarget: BlurTarget,
-        dark: Boolean,
+    fun applyState(state: FoxholeTopChromeState) {
+        visibility = if (state.visible) View.VISIBLE else View.GONE
+        titleState.value = state.title
+        onNavigateUpState.value = state.onNavigateUp
+        actionsState.value = state.actions
+    }
+
+    fun configureBackground(
+        backgroundColor: Int,
     ) {
-        val frameClearColor =
-            if (dark) {
-                AndroidColor.rgb(18, 19, 21)
-            } else {
-                AndroidColor.rgb(250, 251, 253)
-            }
-        val blurRadius = if (dark) 82f else 72f
-        val overlayColor =
-            if (dark) {
-                AndroidColor.argb(62, 22, 23, 25)
-            } else {
-                AndroidColor.argb(94, 250, 251, 253)
-            }
-        if (configuredBlurTarget !== blurTarget || configuredDark != dark) {
-            blurView.configure(
-                blurTarget = blurTarget,
-                frameClearColor = frameClearColor,
-                blurRadius = blurRadius,
-                inputScale = 1f,
-                saturation = if (dark) 1.52f else 1.22f,
-                overlayColor = overlayColor,
-            )
-            configuredBlurTarget = blurTarget
-            configuredDark = dark
-        } else {
-            blurView.configure(
-                blurTarget = blurTarget,
-                frameClearColor = frameClearColor,
-                blurRadius = blurRadius,
-                inputScale = 1f,
-                saturation = if (dark) 1.52f else 1.22f,
-                overlayColor = overlayColor,
-            )
-        }
+        setBackgroundColor(backgroundColor)
     }
 }
 
@@ -541,22 +546,25 @@ private fun BoxScope.FoxholeTopChromeContent(
     onNavigateUp: (() -> Unit)?,
     actions: FoxholeTopChromeActions,
     scrimProgress: () -> Float,
+    drawScrimLayer: Boolean = true,
 ) {
-    Box(
-        modifier =
-            Modifier
-                .align(Alignment.TopCenter)
-                .fillMaxWidth()
-                .height(contentTopPadding),
-    ) {
-        FoxholeTopScrimLayer(
+    if (drawScrimLayer) {
+        Box(
             modifier =
                 Modifier
-                    .align(Alignment.BottomCenter)
+                    .align(Alignment.TopCenter)
                     .fillMaxWidth()
                     .height(contentTopPadding),
-            progress = scrimProgress,
-        )
+        ) {
+            FoxholeTopScrimLayer(
+                modifier =
+                    Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .height(FoxholeTopChromeHeight),
+                progress = scrimProgress,
+            )
+        }
     }
     Row(
         modifier =
@@ -1038,7 +1046,7 @@ private fun readableBannerContentColor(containerColor: Color): Color =
         Color.White
     }
 
-private const val FOXHOLE_BANNER_LIGHT_CONTAINER_LUMINANCE = 0.45f
+private const val FOXHOLE_BANNER_LIGHT_CONTAINER_LUMINANCE = 0.36f
 
 @Composable
 internal fun FoxholeLazyScaffold(

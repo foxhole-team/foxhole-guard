@@ -102,11 +102,9 @@ import com.foxhole.beta.ui.theme.LocalFoxholeDarkTheme
 import com.foxhole.beta.ui.theme.LocalFoxholeThemeMode
 import com.foxhole.beta.ui.theme.LocalFoxholeUiPalette
 import eightbitlab.com.blurview.BlurTarget
-import eightbitlab.com.blurview.FoxholeTelegramBlurView
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.min
-import android.graphics.Color as AndroidColor
 
 private object AppRoute {
     const val HOME = "home"
@@ -189,6 +187,7 @@ fun FoxholeApp(
                 null
             }
         }
+    val topChromeController = remember { FoxholeTopChromeController() }
     var qrScannerVisible by rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
     val insecureTlsImportWarning by viewModel.insecureTlsImportWarning.collectAsStateWithLifecycle()
     val profileImportTooLargeMessage = stringResource(R.string.profile_import_too_large)
@@ -241,7 +240,10 @@ fun FoxholeApp(
                     )
                     .testTag("app_section_swipe_surface"),
         ) {
-            CompositionLocalProvider(LocalFoxholeBackdropBlurHost provides backdropBlurHost) {
+            CompositionLocalProvider(
+                LocalFoxholeBackdropBlurHost provides backdropBlurHost,
+                LocalFoxholeTopChromeController provides topChromeController,
+            ) {
                 NavHost(
                     navController = navController,
                     startDestination = AppRoute.HOME,
@@ -760,6 +762,12 @@ fun FoxholeApp(
             blurTarget = bottomDockBlurTarget,
         )
     }
+    backdropBlurHost?.let { host ->
+        FoxholeRootTopChromeOverlay(
+            host = host,
+            controller = topChromeController,
+        )
+    }
 
     if (qrScannerVisible) {
         QrScannerOverlay(
@@ -817,10 +825,10 @@ private fun FoxholeBottomBar(
     blurTarget: BlurTarget?,
 ) {
     val selectedSection = currentSection ?: AppSection.DASHBOARD
-    val dark = LocalFoxholeDarkTheme.current
     val density = LocalDensity.current
     val cornerRadiusPx = with(density) { 28.dp.toPx() }
     val themeMode = LocalFoxholeThemeMode.current
+    val backgroundColor = foxholeBottomDockBackgroundColor()
     val navigationBottomPadding = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val configuration = androidx.compose.ui.platform.LocalConfiguration.current
     val dockWidth = (configuration.screenWidthDp.dp * 0.62f).coerceIn(180.dp, 248.dp)
@@ -847,9 +855,8 @@ private fun FoxholeBottomBar(
     }
     SideEffect {
         externalDockView?.apply {
-            configureBlur(
-                blurTarget = blurTarget,
-                dark = dark,
+            configureBackground(
+                backgroundColor = backgroundColor,
                 cornerRadiusPx = cornerRadiusPx,
             )
             selectedSectionState.value = selectedSection
@@ -860,7 +867,7 @@ private fun FoxholeBottomBar(
                     gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
                     bottomMargin = dockBottomMarginPx
                 }
-            elevation = with(density) { 5.dp.toPx() }
+            elevation = 0f
         }
     }
     if (externalDockView != null) {
@@ -897,24 +904,11 @@ private class FoxholeBottomDockBlurView(
     val selectedSectionState = mutableStateOf(AppSection.DASHBOARD)
     val themeModeState = mutableStateOf(ThemeMode.SYSTEM)
     val onSectionSelectedState = mutableStateOf<(AppSection) -> Unit>({})
-    private val blurView = FoxholeTelegramBlurView(context)
-    private var configuredBlurTarget: BlurTarget? = null
-    private var configuredDark: Boolean? = null
-    private var blurOverscanPx = 0
+    private val outlineBackground = GradientDrawable()
 
     init {
         clipChildren = true
         clipToPadding = true
-        addView(
-            blurView.apply {
-                clipChildren = false
-                clipToPadding = false
-            },
-            FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.MATCH_PARENT,
-            ),
-        )
         addView(
             ComposeView(context).apply {
                 setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
@@ -923,6 +917,7 @@ private class FoxholeBottomDockBlurView(
                         FoxholeBottomBarDockContent(
                             selectedSection = selectedSectionState.value,
                             onSectionSelected = onSectionSelectedState.value,
+                            drawBorder = false,
                         )
                     }
                 }
@@ -934,82 +929,17 @@ private class FoxholeBottomDockBlurView(
         )
     }
 
-    override fun onSizeChanged(
-        w: Int,
-        h: Int,
-        oldw: Int,
-        oldh: Int,
-    ) {
-        super.onSizeChanged(w, h, oldw, oldh)
-        updateBlurOverscanLayout()
-    }
-
-    private fun updateBlurOverscanLayout() {
-        if (width <= 0 || height <= 0) {
-            return
-        }
-        val overscanPx = blurOverscanPx.coerceAtLeast(0)
-        blurView.layoutParams =
-            FrameLayout.LayoutParams(
-                width + (overscanPx * 2),
-                height + (overscanPx * 2),
-            ).apply {
-                leftMargin = -overscanPx
-                topMargin = -overscanPx
-            }
-    }
-
-    fun configureBlur(
-        blurTarget: BlurTarget?,
-        dark: Boolean,
+    fun configureBackground(
+        backgroundColor: Int,
         cornerRadiusPx: Float,
     ) {
-        val outlineBackground =
-            GradientDrawable().apply {
-                shape = GradientDrawable.RECTANGLE
-                cornerRadius = cornerRadiusPx
-                setColor(AndroidColor.TRANSPARENT)
-            }
+        outlineBackground.shape = GradientDrawable.RECTANGLE
+        outlineBackground.cornerRadius = cornerRadiusPx
+        outlineBackground.setColor(backgroundColor)
         background = outlineBackground
         outlineProvider = ViewOutlineProvider.BACKGROUND
         clipToOutline = true
-        blurOverscanPx = 0
-        updateBlurOverscanLayout()
-        if (blurTarget == null) return
-        val overlayColor =
-            if (dark) {
-                AndroidColor.argb(112, 28, 29, 31)
-            } else {
-                AndroidColor.argb(180, 250, 251, 253)
-            }
-        val frameClearColor =
-            if (dark) {
-                AndroidColor.rgb(14, 15, 16)
-            } else {
-                AndroidColor.rgb(250, 251, 253)
-            }
-        val blurRadius = if (dark) 48f else 40f
-        if (configuredBlurTarget !== blurTarget || configuredDark != dark) {
-            blurView.configure(
-                blurTarget = blurTarget,
-                frameClearColor = frameClearColor,
-                blurRadius = blurRadius,
-                inputScale = 1f,
-                saturation = if (dark) 1.28f else 1.10f,
-                overlayColor = overlayColor,
-            )
-            configuredBlurTarget = blurTarget
-            configuredDark = dark
-        } else {
-            blurView.configure(
-                blurTarget = blurTarget,
-                frameClearColor = frameClearColor,
-                blurRadius = blurRadius,
-                inputScale = 1f,
-                saturation = if (dark) 1.28f else 1.10f,
-                overlayColor = overlayColor,
-            )
-        }
+        foreground = null
     }
 }
 

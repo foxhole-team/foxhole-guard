@@ -82,6 +82,15 @@ internal data class HomeDashboardProfileModel(
     val isSmartDashboardProfile: Boolean,
 )
 
+private data class HomeDashboardProfileLatencyState(
+    val presentation: HomeDashboardLatencyPresentation,
+    val latenciesByOptionId: Map<String, Long>,
+    val downOptionIds: Set<String>,
+    val latencyUnavailableOptionIds: Set<String>,
+    val showSmartStartLatency: Boolean,
+    val connectionMetricsLoading: Boolean,
+)
+
 internal fun isTrafficMapRuntimeAvailable(
     connection: ConnectionSnapshot,
     settings: Settings,
@@ -269,6 +278,16 @@ internal fun ipInfoFetchModeForRefreshReason(reason: IpInfoRefreshReason): IpInf
         -> IpInfoFetchMode.ENTRY_QUICK
     }
 
+internal fun shouldClearExistingIpForRefresh(
+    reason: IpInfoRefreshReason,
+    clearExistingIp: Boolean,
+): Boolean =
+    clearExistingIp &&
+        reason !in setOf(
+            IpInfoRefreshReason.POST_CONNECT,
+            IpInfoRefreshReason.RESTORED_VPN,
+        )
+
 internal fun shouldShowAutoConnectAction(activeProfile: Profile?): Boolean =
     activeProfile?.let { profile ->
         MultiProtocolProfileSupport.hasMultipleSupportedOptions(profile) ||
@@ -370,7 +389,6 @@ internal fun resolveHomeDashboardProtocolModel(state: HomeRouteUiState): HomeDas
                 autoConnectUnavailableOptionIds
             ).withoutOption(activeConnectedAutoConnectOptionId)
             .withoutOption(refreshingOptionId)
-    val measuredLatencyPresentation = resolveDashboardLatencyPresentation(state)
     val protocolPresentation =
         resolveHomeDashboardProtocolPresentation(
             activeProfile = state.activeProfile,
@@ -384,14 +402,55 @@ internal fun resolveHomeDashboardProtocolModel(state: HomeRouteUiState): HomeDas
         selectedServerPingOptionId != null &&
             selectedServerPingMs == null &&
             selectedServerPingOptionId in state.protocolServerPingUnavailableOptionIds
-    val latencyPresentation = measuredLatencyPresentation.withServerPingFallback(selectedServerPingMs)
-    val connectionMetricsLoading =
-        state.dashboardConnectionMetricsLoading ||
-            state.reconnectInProgress ||
-            state.protocolMetricsRefreshing
+    val latencyState =
+        state.resolveDashboardProfileLatencyState(
+            latenciesByOptionId = latenciesByOptionId,
+            downOptionIds = downOptionIds,
+            latencyUnavailableOptionIds = latencyUnavailableOptionIds,
+            selectedServerPingMs = selectedServerPingMs,
+        )
     return HomeDashboardProtocolModel(
         presentation = protocolPresentation,
-        latencyPresentation = latencyPresentation,
+        latencyPresentation = latencyState.presentation,
+        latenciesByOptionId = latencyState.latenciesByOptionId,
+        downOptionIds = latencyState.downOptionIds,
+        latencyUnavailableOptionIds = latencyState.latencyUnavailableOptionIds,
+        showSmartStartLatency = latencyState.showSmartStartLatency,
+        selectedServerPingMs = selectedServerPingMs,
+        selectedServerPingUnavailable = selectedServerPingUnavailable,
+        connectionDetailsReady =
+        shouldRenderDashboardConnectionDetails(
+            connectionState = state.connection.state,
+            activeProfile = state.activeProfile,
+            selectedLatencyMs = latencyState.presentation.latencyMs,
+            selectedLatencyDown = latencyState.presentation.isDown,
+            selectedLatencyUnavailable = latencyState.presentation.isUnavailable,
+            selectedServerPingMs = selectedServerPingMs,
+            selectedServerPingUnavailable = selectedServerPingUnavailable,
+            selectedServerPingUnsupported = protocolPresentation.protocolHint.isUdpTransport(),
+        ),
+        connectionMetricsLoading = latencyState.connectionMetricsLoading,
+    )
+}
+
+private fun HomeRouteUiState.resolveDashboardProfileLatencyState(
+    latenciesByOptionId: Map<String, Long>,
+    downOptionIds: Set<String>,
+    latencyUnavailableOptionIds: Set<String>,
+    selectedServerPingMs: Long?,
+): HomeDashboardProfileLatencyState {
+    if (!shouldShowDashboardProfileLatency()) {
+        return HomeDashboardProfileLatencyState(
+            presentation = HomeDashboardLatencyPresentation(),
+            latenciesByOptionId = emptyMap(),
+            downOptionIds = emptySet(),
+            latencyUnavailableOptionIds = emptySet(),
+            showSmartStartLatency = false,
+            connectionMetricsLoading = false,
+        )
+    }
+    return HomeDashboardProfileLatencyState(
+        presentation = resolveDashboardLatencyPresentation(this).withServerPingFallback(selectedServerPingMs),
         latenciesByOptionId = latenciesByOptionId,
         downOptionIds = downOptionIds,
         latencyUnavailableOptionIds = latencyUnavailableOptionIds,
@@ -399,20 +458,7 @@ internal fun resolveHomeDashboardProtocolModel(state: HomeRouteUiState): HomeDas
         latenciesByOptionId.isNotEmpty() ||
             downOptionIds.isNotEmpty() ||
             latencyUnavailableOptionIds.isNotEmpty(),
-        selectedServerPingMs = selectedServerPingMs,
-        selectedServerPingUnavailable = selectedServerPingUnavailable,
-        connectionDetailsReady =
-        shouldRenderDashboardConnectionDetails(
-            connectionState = state.connection.state,
-            activeProfile = state.activeProfile,
-            selectedLatencyMs = latencyPresentation.latencyMs,
-            selectedLatencyDown = latencyPresentation.isDown,
-            selectedLatencyUnavailable = latencyPresentation.isUnavailable,
-            selectedServerPingMs = selectedServerPingMs,
-            selectedServerPingUnavailable = selectedServerPingUnavailable,
-            selectedServerPingUnsupported = protocolPresentation.protocolHint.isUdpTransport(),
-        ),
-        connectionMetricsLoading = connectionMetricsLoading,
+        connectionMetricsLoading = dashboardConnectionMetricsLoading || reconnectInProgress || protocolMetricsRefreshing,
     )
 }
 
@@ -421,6 +467,11 @@ private fun HomeDashboardLatencyPresentation.withServerPingFallback(serverPingMs
         latencyMs != null || isDown || serverPingMs == null -> this
         else -> HomeDashboardLatencyPresentation(latencyMs = serverPingMs)
     }
+
+private fun HomeRouteUiState.shouldShowDashboardProfileLatency(): Boolean =
+    reconnectInProgress ||
+        connection.state in DASHBOARD_LATENCY_ACTIVE_STATES ||
+        (autoConnect.running && !protocolMetricsRefreshing)
 
 private fun HomeRouteUiState.activeConnectedAutoConnectOptionId(): String? =
     autoConnect.currentOptionId?.takeIf { optionId ->
@@ -576,11 +627,7 @@ private fun HomeRouteUiState.dashboardVisibleIpInfo(visibleIpInfo: IpInfo?): IpI
         return visibleIpInfo.takeIf { info ->
             val freshForConnectedRoute =
                 info.fetchedAt >= connection.lastChangeAt ||
-                    (
-                        !ipInfoLoading &&
-                            dashboardConnectionMetricsLoading &&
-                            info.fetchedAt >= connection.lastChangeAt - CONNECTED_ROUTE_IP_INFO_SETTLE_GRACE_MS
-                        )
+                    (!ipInfoLoading && info.isFreshForConnectedRouteSettle(connection.lastChangeAt))
             (protocolSearchRunning && info.isFreshForRouteTransition(connection.lastChangeAt)) ||
                 freshForConnectedRoute
         }
@@ -602,6 +649,9 @@ private fun HomeRouteUiState.shouldKeepVisibleNetworkInfoDuringRouteTransition(d
 
 private fun IpInfo.isFreshForRouteTransition(lastChangeAt: Long): Boolean =
     lastChangeAt <= 0L || fetchedAt >= lastChangeAt
+
+private fun IpInfo.isFreshForConnectedRouteSettle(lastChangeAt: Long): Boolean =
+    lastChangeAt <= 0L || fetchedAt >= lastChangeAt - CONNECTED_ROUTE_IP_INFO_SETTLE_GRACE_MS
 
 private const val CONNECTED_ROUTE_IP_INFO_SETTLE_GRACE_MS = 250L
 

@@ -160,7 +160,7 @@ fun SettingsHomeScreen(
         }
     }
     val onSupportBotClick = {
-        if (!openTelegramChannel(context)) {
+        if (!openSupportChannel(context)) {
             scope.launch {
                 snackbarHostState.showBanner(
                     supportChannelOpenFailed,

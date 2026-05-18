@@ -96,6 +96,33 @@ class HomeDashboardPresentationTest {
     }
 
     @Test
+    fun `protocol model hides profile latency while disconnected`() {
+        val model =
+            resolveHomeDashboardProtocolModel(
+                HomeRouteUiState(
+                    activeProfile = smartProfile(),
+                    connection = ConnectionSnapshot(state = ConnectionState.IDLE),
+                    selectedProtocolLatencyMs = 220L,
+                    smartStartRememberedLatenciesByOptionId = mapOf("vless" to 120L),
+                    protocolLatenciesByOptionId = mapOf("trojan" to 180L),
+                    protocolDownOptionIds = setOf("wg"),
+                    protocolLatencyUnavailableOptionIds = setOf("hysteria"),
+                    protocolServerPingsByOptionId = mapOf("vless" to 88L),
+                    protocolMetricsRefreshing = true,
+                ),
+            )
+
+        assertEquals(null, model.latencyPresentation.latencyMs)
+        assertFalse(model.latencyPresentation.isDown)
+        assertFalse(model.latencyPresentation.isUnavailable)
+        assertEquals(emptyMap<String, Long>(), model.latenciesByOptionId)
+        assertEquals(emptySet<String>(), model.downOptionIds)
+        assertEquals(emptySet<String>(), model.latencyUnavailableOptionIds)
+        assertFalse(model.showSmartStartLatency)
+        assertFalse(model.connectionMetricsLoading)
+    }
+
+    @Test
     fun `protocol model does not mark active smart start connection down while scan is running`() {
         val state =
             HomeRouteUiState(
@@ -534,6 +561,39 @@ class HomeDashboardPresentationTest {
         assertEquals(ipInfo, model.visibleIpInfo)
         assertFalse(model.showIpInfoLoading)
         assertTrue(model.showConnectionDetailsLoading)
+    }
+
+    @Test
+    fun `network model keeps just validated route ip after connected snapshot settles`() {
+        val ipInfo =
+            IpInfo(
+                ip = "203.0.113.10",
+                countryCode = "NL",
+                countryName = "Netherlands",
+                city = "Amsterdam",
+                isp = "Example",
+                fetchedAt = 9_900L,
+            )
+        val model =
+            resolveHomeDashboardNetworkModel(
+                state =
+                    HomeRouteUiState(
+                        connection =
+                            ConnectionSnapshot(
+                                state = ConnectionState.CONNECTED,
+                                trafficMode = TrafficMode.TUNNEL,
+                                profileId = 42L,
+                                lastChangeAt = 10_000L,
+                            ),
+                    ),
+                visibleIpInfo = ipInfo,
+                deviceInternetAvailable = true,
+            )
+
+        assertEquals(ipInfo, model.visibleIpInfo)
+        assertFalse(model.showLoading)
+        assertFalse(model.showIpInfoLoading)
+        assertFalse(model.showConnectionDetailsLoading)
     }
 
     @Test

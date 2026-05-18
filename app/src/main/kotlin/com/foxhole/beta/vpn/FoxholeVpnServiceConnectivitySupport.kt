@@ -1375,7 +1375,7 @@ internal fun FoxholeVpnService.currentVpnNetworkInternal(excludedHandle: Long? =
 
 internal fun FoxholeVpnService.currentVpnNetworkOrNullInternal(excludedHandle: Long? = null): Network? =
     currentNetworkSnapshot().firstOrNull { network ->
-        connectivityManager.getNetworkCapabilities(network)?.hasTransport(NetworkCapabilities.TRANSPORT_VPN) == true &&
+        connectivityManager.getNetworkCapabilities(network)?.isFoxholeVpnNetwork(this) == true &&
             network.networkHandle != excludedHandle
     }
 

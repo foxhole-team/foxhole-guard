@@ -22,8 +22,8 @@ internal fun openFoxholeRepository(context: Context): Boolean {
     }
 }
 
-internal fun installedTelegramPackage(packageManager: PackageManager): String? =
-    TELEGRAM_PACKAGE_CANDIDATES.firstOrNull { packageName ->
+internal fun installedSupportAppPackage(packageManager: PackageManager): String? =
+    SUPPORT_APP_PACKAGE_CANDIDATES.firstOrNull { packageName ->
         runCatching {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 packageManager.getPackageInfo(packageName, PackageManager.PackageInfoFlags.of(0))
@@ -34,18 +34,18 @@ internal fun installedTelegramPackage(packageManager: PackageManager): String? =
         }.isSuccess
     }
 
-internal fun openTelegramChannel(context: Context): Boolean {
+internal fun openSupportChannel(context: Context): Boolean {
     val browserIntent =
         Intent(Intent.ACTION_VIEW, supportChannelBrowserUri())
             .addCategory(Intent.CATEGORY_BROWSABLE)
-    val telegramPackage = installedTelegramPackage(context.packageManager)
-    if (telegramPackage != null) {
-        val telegramIntent =
-            Intent(Intent.ACTION_VIEW, supportChannelTelegramUri())
-                .setPackage(telegramPackage)
+    val supportAppPackage = installedSupportAppPackage(context.packageManager)
+    if (supportAppPackage != null) {
+        val supportAppIntent =
+            Intent(Intent.ACTION_VIEW, supportChannelAppUri())
+                .setPackage(supportAppPackage)
                 .addCategory(Intent.CATEGORY_BROWSABLE)
         try {
-            context.startActivity(telegramIntent)
+            context.startActivity(supportAppIntent)
             return true
         } catch (_: ActivityNotFoundException) {
         } catch (_: SecurityException) {
@@ -61,13 +61,13 @@ internal fun openTelegramChannel(context: Context): Boolean {
     }
 }
 
-private fun supportChannelBrowserUri(): Uri = "https://t.me/$FOXHOLE_TELEGRAM_CHANNEL".toUri()
+private fun supportChannelBrowserUri(): Uri = "https://t.me/$FOXHOLE_SUPPORT_CHANNEL".toUri()
 
-private fun supportChannelTelegramUri(): Uri = "tg://resolve?domain=$FOXHOLE_TELEGRAM_CHANNEL".toUri()
+private fun supportChannelAppUri(): Uri = "tg://resolve?domain=$FOXHOLE_SUPPORT_CHANNEL".toUri()
 
 private const val FOXHOLE_REPOSITORY_URL = "https://github.com/foxhole-repo/foxhole-app"
-private const val FOXHOLE_TELEGRAM_CHANNEL = "foxhole_repo"
-private val TELEGRAM_PACKAGE_CANDIDATES =
+private const val FOXHOLE_SUPPORT_CHANNEL = "foxhole_repo"
+private val SUPPORT_APP_PACKAGE_CANDIDATES =
     listOf(
         "org.telegram.messenger",
         "org.telegram.messenger.web",

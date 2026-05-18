@@ -113,6 +113,7 @@ import java.util.Locale
 
 internal val HomePrimaryActionHeight = 56.dp
 internal val HomeTriangleIndicatorSize = 15.dp
+private val HomeTriangleIndicatorCanvasBleed = 2.dp
 internal val HomeDashboardBannerTopPadding = 74.dp
 internal val HomeConnectingStatusSignalOffset = 2.dp
 internal val HomeNetworkContentHeight = 96.dp
@@ -480,7 +481,10 @@ internal fun HomeStatusBadge(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (loading) {
-            HomeAnalysisSignal(tint = color)
+            HomeAnalysisSignal(
+                tint = color,
+                modifier = Modifier.offset(x = HomeConnectingStatusSignalOffset),
+            )
         } else {
             HomeStatusSignal(
                 tint = color,
@@ -537,10 +541,12 @@ internal fun HomeStatusSignal(
         modifier =
             modifier
                 .offset(x = HomeConnectingStatusSignalOffset)
-                .size(HomeTriangleIndicatorSize),
+                .width(HomeTriangleIndicatorSize + (HomeTriangleIndicatorCanvasBleed * 2))
+                .height(HomeTriangleIndicatorSize),
     ) {
-        val dotRadius = size.minDimension * 0.16f
-        val anchors = homeTriangleAnchors(size.minDimension)
+        val canvasSize = size.height
+        val dotRadius = canvasSize * 0.16f
+        val anchors = homeTriangleAnchors(canvasSize).withHorizontalOffset((size.width - canvasSize) / 2f)
         anchors.forEach { center ->
             drawCircle(
                 color = tint.copy(alpha = if (settled) 0.96f else 0.82f),
@@ -2306,10 +2312,13 @@ internal fun HomeJellyTriangleLoader(
             fastForwardMillis = 583,
         )
     Canvas(
-        modifier = modifier.size(indicatorSize),
+        modifier =
+            modifier
+                .width(indicatorSize + (HomeTriangleIndicatorCanvasBleed * 2))
+                .height(indicatorSize),
     ) {
-        val canvasSize = size.minDimension
-        val anchors = homeTriangleAnchors(canvasSize)
+        val canvasSize = size.height
+        val anchors = homeTriangleAnchors(canvasSize).withHorizontalOffset((size.width - canvasSize) / 2f)
         val dotRadius = canvasSize * 0.16f
         drawCircle(
             color = color,
@@ -2340,6 +2349,9 @@ internal fun homeTriangleAnchors(sizePx: Float): List<Offset> =
         Offset(x = sizePx * 0.165f, y = sizePx * 0.775f),
         Offset(x = sizePx * 0.835f, y = sizePx * 0.775f),
     )
+
+private fun List<Offset>.withHorizontalOffset(offsetPx: Float): List<Offset> =
+    map { anchor -> Offset(x = anchor.x + offsetPx, y = anchor.y) }
 
 internal fun triangleTravelerCenter(
     progress: Float,

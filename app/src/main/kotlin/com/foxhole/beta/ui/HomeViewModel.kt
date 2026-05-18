@@ -719,7 +719,7 @@ class HomeViewModel(
         viewModelScope.launch {
             val reconciledActiveVpn = container.connectionController.reconcileActiveVpnNetworkIfNeeded()
             if (reconciledActiveVpn) {
-                scheduleConnectedIpRefresh(reason = IpInfoRefreshReason.RESTORED_VPN, clearExistingIp = true)
+                scheduleConnectedIpRefresh(reason = IpInfoRefreshReason.RESTORED_VPN, clearExistingIp = false)
             } else {
                 container.connectionController.syncLocalGuard()
                 refreshIpInfoOnForegroundIfNeeded()

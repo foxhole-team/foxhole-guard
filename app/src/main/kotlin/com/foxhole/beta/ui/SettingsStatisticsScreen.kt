@@ -2476,6 +2476,19 @@ private fun ProfileDetailUsageRow(
     selected: Boolean,
     onClick: () -> Unit,
 ) {
+    val selectedContentColor = Color(0xFF111418)
+    val rowContentColor =
+        if (selected) {
+            selectedContentColor
+        } else {
+            MaterialTheme.colorScheme.onSurface
+        }
+    val summaryColor =
+        if (selected) {
+            selectedContentColor.copy(alpha = 0.74f)
+        } else {
+            MaterialTheme.colorScheme.onSurfaceVariant
+        }
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.small,
@@ -2494,6 +2507,7 @@ private fun ProfileDetailUsageRow(
                 MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)
             },
         ),
+        contentColor = rowContentColor,
     ) {
         Row(
             modifier =
@@ -2515,7 +2529,7 @@ private fun ProfileDetailUsageRow(
                 Text(
                     text = summary,
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = summaryColor,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
