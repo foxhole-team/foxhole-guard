@@ -9,15 +9,15 @@ import com.foxhole.beta.R
 import com.foxhole.beta.core.model.ConnectionSnapshot
 import com.foxhole.beta.core.model.ConnectionState
 import com.foxhole.beta.core.model.TrafficMode
+import com.foxhole.beta.finishPendingBroadcast
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 
 class BootReceiver : BroadcastReceiver() {
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-
     override fun onReceive(context: Context, intent: Intent) {
         val action = intent.action
         if (action != Intent.ACTION_BOOT_COMPLETED && action != Intent.ACTION_MY_PACKAGE_REPLACED) {
@@ -25,15 +25,21 @@ class BootReceiver : BroadcastReceiver() {
         }
         val pendingResult = goAsync()
         val app = context.applicationContext as FoxholeApplication
-        scope.launch {
-            try {
+        CoroutineScope(SupervisorJob() + Dispatchers.Default).launch {
+            finishPendingBroadcast(
+                timeoutMs = BOOT_RECEIVER_TIMEOUT_MS,
+                finish = pendingResult::finish,
+                onTimeout = {
+                    runCatching {
+                        app.appGraph.diagnosticsLogger.record("connection", "boot receiver timed out action=$action")
+                    }
+                },
+            ) {
                 val dependencies: FoxholeRuntimeDependencies = app.appGraph
                 val settings = dependencies.settingsRepository.current()
                 if (action == Intent.ACTION_MY_PACKAGE_REPLACED) {
                     recoverAfterPackageReplace(context, dependencies)
-                    return@launch
-                }
-                if (settings.connection.autoStartOnBoot) {
+                } else if (settings.connection.autoStartOnBoot) {
                     dependencies.diagnosticsLogger.record("connection", "boot restore requested")
                     FoxholeConnectionServiceContract.startForegroundService(
                         context = context,
@@ -57,8 +63,6 @@ class BootReceiver : BroadcastReceiver() {
                         dependencies.diagnosticsLogger.record("connection", "boot restore skipped: auto start disabled")
                     }
                 }
-            } finally {
-                pendingResult.finish()
             }
         }
     }
@@ -87,13 +91,35 @@ class BootReceiver : BroadcastReceiver() {
                 "connection",
                 "package replace stale runtime kill requested mode=${plan.killTrafficMode.name.lowercase()}",
             )
+            val killStartedAtMs = System.currentTimeMillis()
             FoxholeConnectionServiceContract.startForegroundService(
                 context = context,
                 mode = plan.killTrafficMode,
                 action = FoxholeConnectionServiceContract.ACTION_KILL,
                 suppressLocalGuard = true,
             )
-            delay(PACKAGE_REPLACE_RESTORE_DELAY_MS)
+            val runtimeSettled =
+                waitForPackageReplaceRuntimeIdle(
+                    dependencies = dependencies,
+                    killTrafficMode = plan.killTrafficMode,
+                    killStartedAtMs = killStartedAtMs,
+                )
+            if (!runtimeSettled) {
+                dependencies.diagnosticsLogger.recordStructured(
+                    "connection",
+                    "package replace stale runtime did not settle",
+                    "mode=${plan.killTrafficMode.name.lowercase()}",
+                    "timeout_ms=$PACKAGE_REPLACE_RUNTIME_IDLE_TIMEOUT_MS",
+                )
+                FoxholeVpnRuntimeBridge.update(
+                    ConnectionSnapshot(
+                        state = ConnectionState.ERROR,
+                        trafficMode = settings.traffic.mode,
+                        message = context.getString(R.string.reconnect_required),
+                    ),
+                )
+                return
+            }
         }
         when {
             plan.localGuardMode != null -> {
@@ -143,7 +169,42 @@ class BootReceiver : BroadcastReceiver() {
         }
         dependencies.diagnosticsLogger.record("ip", "post-update ip refresh requested reason=post-update")
     }
+
+    private suspend fun waitForPackageReplaceRuntimeIdle(
+        dependencies: FoxholeRuntimeDependencies,
+        killTrafficMode: TrafficMode,
+        killStartedAtMs: Long,
+    ): Boolean =
+        withTimeoutOrNull(PACKAGE_REPLACE_RUNTIME_IDLE_TIMEOUT_MS) {
+            while (true) {
+                val snapshot = FoxholeVpnRuntimeBridge.snapshot.value
+                val hasActiveVpnNetwork =
+                    killTrafficMode == TrafficMode.TUNNEL &&
+                        dependencies.connectionController.hasActiveVpnNetwork()
+                if (
+                    isPackageReplaceRuntimeIdleAfterKill(
+                        snapshot = snapshot,
+                        hasActiveVpnNetwork = hasActiveVpnNetwork,
+                        killTrafficMode = killTrafficMode,
+                        killStartedAtMs = killStartedAtMs,
+                    )
+                ) {
+                    return@withTimeoutOrNull true
+                }
+                delay(PACKAGE_REPLACE_RUNTIME_IDLE_POLL_MS)
+            }
+        } == true
 }
+
+internal fun isPackageReplaceRuntimeIdleAfterKill(
+    snapshot: ConnectionSnapshot,
+    hasActiveVpnNetwork: Boolean,
+    killTrafficMode: TrafficMode,
+    killStartedAtMs: Long,
+): Boolean =
+    snapshot.lastChangeAt >= killStartedAtMs &&
+        snapshot.state !in ACTIVE_CONNECTION_STATES &&
+        (killTrafficMode != TrafficMode.TUNNEL || !hasActiveVpnNetwork)
 
 internal data class PackageReplaceRecoveryPlan(
     val killStaleRuntime: Boolean,
@@ -221,4 +282,6 @@ internal fun packageReplaceRecoveryPlan(
     }
 }
 
-private const val PACKAGE_REPLACE_RESTORE_DELAY_MS = 500L
+private const val BOOT_RECEIVER_TIMEOUT_MS = 8_000L
+private const val PACKAGE_REPLACE_RUNTIME_IDLE_TIMEOUT_MS = 3_000L
+private const val PACKAGE_REPLACE_RUNTIME_IDLE_POLL_MS = 100L

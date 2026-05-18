@@ -149,6 +149,8 @@
     <string name="error_runtime_missing">В этой сборке пока не подключен sing-box core bridge</string>
     <string name="error_runtime_start_timeout">Служба подключения не завершила запуск. Проверьте сеть и попробуйте снова.</string>
     <string name="error_runtime_stopped">VPN runtime неожиданно остановился</string>
+    <string name="error_route_excludes_android_version">Route excludes требуют Android 13 или новее. Этот профиль нельзя безопасно запустить на этом устройстве.</string>
+    <string name="error_route_excludes_too_many">В профиле слишком много route excludes (%1$d; лимит Android - %2$d). Уменьшите набор маршрутов и попробуйте снова.</string>
     <string name="error_tcp_runtime_readiness_failed">TCP-цель VPN недоступна в текущей сети. Попробуйте еще раз или выберите другой протокол.</string>
     <string name="error_dns_probe_failed">После старта рантайма не прошла проверка связи</string>
     <string name="error_private_dns_strict_unsupported">Android Private DNS пока не поддерживается в режиме Tunnel. Переключите Private DNS на Выключено и подключитесь снова</string>

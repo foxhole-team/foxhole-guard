@@ -19,6 +19,7 @@ import android.util.Log
 import androidx.annotation.RequiresApi
 import androidx.core.content.getSystemService
 import com.foxhole.beta.BuildConfig
+import com.foxhole.beta.R
 import com.foxhole.beta.core.anomaly.DnsRuntimeStats
 import com.foxhole.beta.core.diagnostics.DiagnosticSanitizer
 import com.foxhole.beta.core.diagnostics.DiagnosticsLogger
@@ -59,6 +60,23 @@ internal data class NetworkActivityContext(
 private const val ANDROID_ROUTE_EXCLUDE_LIMIT = 512
 private const val RUNTIME_FORCE_CLOSE_TIMEOUT_MS = 700L
 private val libboxRuntimeOperationMutex = Mutex()
+
+internal enum class RouteExcludeCompatibility {
+    SUPPORTED,
+    UNSUPPORTED_ANDROID_VERSION,
+    EXCEEDS_ANDROID_LIMIT,
+}
+
+internal fun routeExcludeCompatibility(
+    apiLevel: Int,
+    excludeRouteCount: Int,
+): RouteExcludeCompatibility =
+    when {
+        excludeRouteCount <= 0 -> RouteExcludeCompatibility.SUPPORTED
+        apiLevel < Build.VERSION_CODES.TIRAMISU -> RouteExcludeCompatibility.UNSUPPORTED_ANDROID_VERSION
+        excludeRouteCount > ANDROID_ROUTE_EXCLUDE_LIMIT -> RouteExcludeCompatibility.EXCEEDS_ANDROID_LIMIT
+        else -> RouteExcludeCompatibility.SUPPORTED
+    }
 
 private data class LibboxRuntimeDependencies(
     val diagnosticsLogger: RuntimeDiagnosticsSink,
@@ -637,9 +655,9 @@ internal class ReflectiveLibboxRuntime(
             advertisedDnsServers.forEach(builder::addDnsServer)
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                addRoutesApi33(builder, tunOptions)
+                addRoutesApi33(builder, tunOptions, host.runtimeContext)
             } else {
-                addRoutesLegacy(builder, tunOptions)
+                addRoutesLegacy(builder, tunOptions, host.runtimeContext)
             }
 
             val includePackages = reflection.collectStrings(reflection.call(tunOptions, "getIncludePackage"))
@@ -721,6 +739,7 @@ internal class ReflectiveLibboxRuntime(
     private fun addRoutesApi33(
         builder: VpnService.Builder,
         tunOptions: Any,
+        context: Context,
     ) {
         var hasIpv4Route = false
         var includeRouteCount = 0
@@ -755,17 +774,22 @@ internal class ReflectiveLibboxRuntime(
             }
         }
 
-        val excludeRoutes = mutableListOf<ReflectedRoutePrefix>()
-        reflection.forEachRoutePrefix(reflection.call(tunOptions, "getInet4RouteExcludeAddress")) { prefix ->
-            excludeRoutes += prefix
-        }
-        reflection.forEachRoutePrefix(reflection.call(tunOptions, "getInet6RouteExcludeAddress")) { prefix ->
-            excludeRoutes += prefix
-        }
-        val acceptedExcludeRoutes =
-            if (excludeRoutes.size <= ANDROID_ROUTE_EXCLUDE_LIMIT) {
-                excludeRoutes
-            } else {
+        val excludeRoutes = collectExcludeRoutes(tunOptions)
+        when (routeExcludeCompatibility(Build.VERSION.SDK_INT, excludeRoutes.size)) {
+            RouteExcludeCompatibility.SUPPORTED -> Unit
+            RouteExcludeCompatibility.UNSUPPORTED_ANDROID_VERSION -> {
+                diagnosticsLogger.recordStructured(
+                    "split",
+                    "VPN route split rejected",
+                    "api=${Build.VERSION.SDK_INT}",
+                    "include_routes=$includeRouteCount",
+                    "exclude_routes=${excludeRoutes.size}",
+                    "reason=exclude_route_android_version",
+                )
+                error(context.getString(R.string.error_route_excludes_android_version))
+            }
+
+            RouteExcludeCompatibility.EXCEEDS_ANDROID_LIMIT -> {
                 diagnosticsLogger.recordStructured(
                     "split",
                     "VPN route split rejected",
@@ -774,17 +798,25 @@ internal class ReflectiveLibboxRuntime(
                     "exclude_routes=${excludeRoutes.size}",
                     "reason=exclude_route_limit",
                 )
-                emptyList()
+                error(
+                    context.getString(
+                        R.string.error_route_excludes_too_many,
+                        excludeRoutes.size,
+                        ANDROID_ROUTE_EXCLUDE_LIMIT,
+                    ),
+                )
             }
-        acceptedExcludeRoutes.forEach { prefix ->
+        }
+        excludeRoutes.forEach { prefix ->
             builder.excludeRoute(IpPrefix(InetAddress.getByName(prefix.address), prefix.prefix))
         }
-        recordRoutePlanDiagnostics(includeRouteCount, acceptedExcludeRoutes.size, legacyMode = false)
+        recordRoutePlanDiagnostics(includeRouteCount, excludeRoutes.size, legacyMode = false)
     }
 
     private fun addRoutesLegacy(
         builder: VpnService.Builder,
         tunOptions: Any,
+        context: Context,
     ) {
         var includeRouteCount = 0
         reflection.forEachRoutePrefix(reflection.call(tunOptions, "getInet4RouteRange")) { prefix ->
@@ -795,8 +827,30 @@ internal class ReflectiveLibboxRuntime(
             includeRouteCount += 1
             builder.addRoute(prefix.address, prefix.prefix)
         }
+        val excludeRoutes = collectExcludeRoutes(tunOptions)
+        if (routeExcludeCompatibility(Build.VERSION.SDK_INT, excludeRoutes.size) != RouteExcludeCompatibility.SUPPORTED) {
+            diagnosticsLogger.recordStructured(
+                "split",
+                "VPN route split rejected",
+                "api=${Build.VERSION.SDK_INT}",
+                "include_routes=$includeRouteCount",
+                "exclude_routes=${excludeRoutes.size}",
+                "reason=exclude_route_android_version",
+            )
+            error(context.getString(R.string.error_route_excludes_android_version))
+        }
         recordRoutePlanDiagnostics(includeRouteCount, excludeRouteCount = 0, legacyMode = true)
     }
+
+    private fun collectExcludeRoutes(tunOptions: Any): List<ReflectedRoutePrefix> =
+        buildList {
+            reflection.forEachRoutePrefix(reflection.call(tunOptions, "getInet4RouteExcludeAddress")) { prefix ->
+                add(prefix)
+            }
+            reflection.forEachRoutePrefix(reflection.call(tunOptions, "getInet6RouteExcludeAddress")) { prefix ->
+                add(prefix)
+            }
+        }
 
     private fun addPackages(
         packages: Iterable<String>,

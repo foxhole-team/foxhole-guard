@@ -37,14 +37,14 @@ internal fun Service.handleForegroundRuntimeCommand(
     failClosedTeardown: suspend (commandStartId: Int, action: String?) -> Unit,
 ): Int {
     ensureConnectionNotificationChannel(notificationManager)
-    if (isFailClosedRuntimeServiceCommand(intent?.action)) {
-        launchPriorityCommand { failClosedTeardown(startId, intent?.action) }
-        return Service.START_NOT_STICKY
-    }
     startForeground(
         FoxholeConnectionServiceContract.NOTIFICATION_ID,
         buildNotification(currentNotificationSnapshot()),
     )
+    if (isFailClosedRuntimeServiceCommand(intent?.action)) {
+        launchPriorityCommand { failClosedTeardown(startId, intent?.action) }
+        return Service.START_NOT_STICKY
+    }
     handleRuntimeServiceCommand(
         intent = intent,
         startId = startId,

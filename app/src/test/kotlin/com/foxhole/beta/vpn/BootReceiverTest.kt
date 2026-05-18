@@ -1,5 +1,7 @@
 package com.foxhole.beta.vpn
 
+import com.foxhole.beta.core.model.ConnectionSnapshot
+import com.foxhole.beta.core.model.ConnectionState
 import com.foxhole.beta.core.model.TrafficMode
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -81,5 +83,62 @@ class BootReceiverTest {
 
         assertFalse(plan.killStaleRuntime)
         assertEquals(LocalGuardMode.DNS, plan.localGuardMode)
+    }
+
+    @Test
+    fun `package replace wait requires a kill-time bridge update`() {
+        val snapshot =
+            ConnectionSnapshot(
+                state = ConnectionState.IDLE,
+                trafficMode = TrafficMode.TUNNEL,
+                lastChangeAt = 100L,
+            )
+
+        assertFalse(
+            isPackageReplaceRuntimeIdleAfterKill(
+                snapshot = snapshot,
+                hasActiveVpnNetwork = false,
+                killTrafficMode = TrafficMode.TUNNEL,
+                killStartedAtMs = 200L,
+            ),
+        )
+    }
+
+    @Test
+    fun `package replace wait keeps tunnel blocked while vpn network is active`() {
+        val snapshot =
+            ConnectionSnapshot(
+                state = ConnectionState.IDLE,
+                trafficMode = TrafficMode.TUNNEL,
+                lastChangeAt = 300L,
+            )
+
+        assertFalse(
+            isPackageReplaceRuntimeIdleAfterKill(
+                snapshot = snapshot,
+                hasActiveVpnNetwork = true,
+                killTrafficMode = TrafficMode.TUNNEL,
+                killStartedAtMs = 200L,
+            ),
+        )
+    }
+
+    @Test
+    fun `package replace wait accepts idle bridge and released vpn network`() {
+        val snapshot =
+            ConnectionSnapshot(
+                state = ConnectionState.IDLE,
+                trafficMode = TrafficMode.TUNNEL,
+                lastChangeAt = 300L,
+            )
+
+        assertTrue(
+            isPackageReplaceRuntimeIdleAfterKill(
+                snapshot = snapshot,
+                hasActiveVpnNetwork = false,
+                killTrafficMode = TrafficMode.TUNNEL,
+                killStartedAtMs = 200L,
+            ),
+        )
     }
 }

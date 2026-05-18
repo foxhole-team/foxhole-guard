@@ -1130,7 +1130,7 @@ class ProfileRepository(
         Request.Builder()
             .url(safeUrl)
             .get()
-            .header("User-Agent", "foxhole/0.1.0")
+            .header("User-Agent", "FoxHole/${BuildConfig.VERSION_NAME}")
             .apply {
                 lastEtag?.takeIf(String::isNotBlank)?.let { header("If-None-Match", it) }
             }.build()
