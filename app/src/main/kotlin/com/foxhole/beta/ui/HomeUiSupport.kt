@@ -475,7 +475,7 @@ internal fun resolveHomeDashboardNetworkModel(
         showConnectionDetailsLoading = connectionDetailsLoading,
         showRefreshProgress = protocolSearchRunning || (state.ipInfoLoading && dashboardIpInfo != null),
         showConnectionStatus = showConnectionStatus,
-        titleRes = state.homeNetworkTitleRes(showConnectionStatus, protocolSearchRunning),
+        titleRes = state.homeNetworkTitleRes(showConnectionStatus),
     )
 }
 
@@ -493,6 +493,7 @@ private fun HomeRouteUiState.shouldShowHomeNetworkIpInfoLoading(
         dashboardIpInfo == null &&
             (
                 reconnectInProgress ||
+                    (protocolSearchRunning && hasDashboardRouteProfile()) ||
                     shouldShowVpnTransitionLoading(protocolSearchRunning) ||
                     shouldShowConnectedRouteLoading(protocolSearchRunning, dashboardIpInfo) ||
                     shouldShowDashboardNetworkLoading(
@@ -540,11 +541,10 @@ private fun HomeRouteUiState.hasDashboardRouteProfile(): Boolean =
 
 private fun HomeRouteUiState.homeNetworkTitleRes(
     showConnectionStatus: Boolean,
-    protocolSearchRunning: Boolean,
 ): Int =
     when {
         connection.profileId == FoxholeVpnService.TOR_ONLY_PROFILE_ID -> R.string.home_network_tor_title
-        showConnectionStatus && !protocolSearchRunning -> R.string.home_network_connection_info_title
+        showConnectionStatus -> R.string.home_network_connection_info_title
         else -> R.string.home_network_current_ip_title
     }
 
@@ -581,7 +581,7 @@ private fun HomeRouteUiState.dashboardVisibleIpInfo(visibleIpInfo: IpInfo?): IpI
                             dashboardConnectionMetricsLoading &&
                             info.fetchedAt >= connection.lastChangeAt - CONNECTED_ROUTE_IP_INFO_SETTLE_GRACE_MS
                         )
-            protocolSearchRunning ||
+            (protocolSearchRunning && info.isFreshForRouteTransition(connection.lastChangeAt)) ||
                 freshForConnectedRoute
         }
     }

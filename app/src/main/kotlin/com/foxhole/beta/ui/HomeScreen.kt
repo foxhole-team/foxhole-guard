@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowForward
@@ -369,11 +370,14 @@ fun HomeScreen(
         onTrafficUiVisibilityChanged(true)
         onDispose { onTrafficUiVisibilityChanged(false) }
     }
+    val dashboardListState = rememberLazyListState()
+    val topChromeScrimProgress = rememberFoxholeTopChromeScrimProgress(dashboardListState)
 
     FoxholeScaffold(
         title = stringResource(R.string.app_name),
         snackbarHostState = snackbarHostState,
         bannerTopPadding = HomeDashboardBannerTopPadding,
+        topChromeScrimProgress = topChromeScrimProgress,
         actions = {
             SettingsHelpAction(
                 title = stringResource(R.string.help_quick_start_title),
@@ -384,6 +388,7 @@ fun HomeScreen(
     ) { padding ->
         val (safeStartPadding, safeEndPadding) = foxholeHorizontalSafePadding()
         LazyColumn(
+            state = dashboardListState,
             modifier =
                 Modifier
                     .fillMaxSize()
@@ -438,6 +443,7 @@ fun HomeScreen(
                             Column(
                                 modifier =
                                     Modifier
+                                        .padding(start = 8.dp)
                                         .weight(1f)
                                         .foxholeAnimateContentSize(),
                                 verticalArrangement = Arrangement.Center,

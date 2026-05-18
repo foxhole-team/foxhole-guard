@@ -249,7 +249,7 @@
     <string name="auto_connect_ip_unavailable">Connection was established, but IP validation did not finish in time.</string>
     <string name="auto_connect_failed">No working protocol was found.</string>
     <string name="auto_connect_success">Selected: %1$s. Latency: %2$d ms.</string>
-    <string name="auto_connect_success_unavailable">Selected: %1$s. Unavailable.</string>
+    <string name="auto_connect_success_unavailable">Selected: %1$s. Connected.</string>
     <string name="smart_profile_tag">Smart</string>
     <string name="v2raytun_profile_tag">v2raytun</string>
     <string name="smart_profile_menu_title">Manage\nVPN protocols</string>

@@ -253,7 +253,7 @@
     <string name="auto_connect_ip_unavailable">Подключение установлено, но IP-проверка не завершилась вовремя.</string>
     <string name="auto_connect_failed">Не найден рабочий протокол.</string>
     <string name="auto_connect_success">Выбран: %1$s. Задержка: %2$d мс.</string>
-    <string name="auto_connect_success_unavailable">Выбран: %1$s. Недоступно.</string>
+    <string name="auto_connect_success_unavailable">Выбран: %1$s. Подключено.</string>
     <string name="smart_profile_tag">Smart</string>
     <string name="v2raytun_profile_tag">v2raytun</string>
     <string name="smart_profile_menu_title">Управление\nпротоколами VPN</string>

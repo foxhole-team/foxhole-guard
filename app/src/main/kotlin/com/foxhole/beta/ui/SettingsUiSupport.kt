@@ -231,6 +231,32 @@ internal fun ExperimentalBadge() {
     }
 }
 
+@Composable
+internal fun BetaBadge(
+    modifier: Modifier = Modifier,
+) {
+    val badgeColor = Color(0xFFF59E0B)
+    Surface(
+        modifier = modifier,
+        shape = MaterialTheme.shapes.extraSmall,
+        color = badgeColor.copy(alpha = 0.16f),
+        border = BorderStroke(1.dp, badgeColor.copy(alpha = 0.34f)),
+    ) {
+        Text(
+            text = stringResource(R.string.beta_badge),
+            modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp),
+            style =
+                MaterialTheme.typography.labelSmall.copy(
+                    fontSize = 9.sp,
+                    lineHeight = 9.sp,
+                    fontWeight = FontWeight.Black,
+                ),
+            color = badgeColor,
+            maxLines = 1,
+        )
+    }
+}
+
 private fun String.trimMenuSummary(): String = trimEnd().removeSuffix(".")
 
 @Composable

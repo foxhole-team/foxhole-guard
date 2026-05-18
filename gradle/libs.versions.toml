@@ -23,6 +23,7 @@ uiautomator = "2.3.0"
 detekt = "1.23.8"
 errorprone = "2.49.0"
 zxing-embedded = "4.3.0"
+blurview = "version-3.2.0"
 
 [libraries]
 androidx-core-ktx = { module = "androidx.core:core-ktx", version = "1.18.0" }
@@ -60,6 +61,7 @@ androidx-benchmark-macro-junit4 = { module = "androidx.benchmark:benchmark-macro
 androidx-test-uiautomator = { module = "androidx.test.uiautomator:uiautomator", version.ref = "uiautomator" }
 detekt-formatting = { module = "io.gitlab.arturbosch.detekt:detekt-formatting", version.ref = "detekt" }
 zxing-android-embedded = { module = "com.journeyapps:zxing-android-embedded", version.ref = "zxing-embedded" }
+blurview = { module = "com.github.Dimezis:BlurView", version.ref = "blurview" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

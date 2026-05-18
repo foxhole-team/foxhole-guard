@@ -493,6 +493,7 @@ dependencies {
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.okhttp)
     implementation(libs.zxing.android.embedded)
+    implementation(libs.blurview)
 
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.ui)

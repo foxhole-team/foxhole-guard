@@ -3,7 +3,6 @@
 package com.foxhole.beta.ui
 
 import androidx.compose.material.icons.Icons
-import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.outlined.Apps
 import androidx.compose.material.icons.outlined.Dns
 import androidx.compose.material.icons.outlined.Notifications
@@ -11,19 +10,12 @@ import androidx.compose.material.icons.outlined.QueryStats
 import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.foxhole.beta.BuildConfig
 import com.foxhole.beta.R
 import com.foxhole.beta.core.model.AnomalyHistoryRetention
@@ -53,7 +45,6 @@ fun SecuritySettingsScreen(
         onNavigateUp = onNavigateUp,
         tag = "security_settings_screen",
         actions = {
-            SecurityBetaBadge()
             SettingsHelpAction(
                 title = stringResource(R.string.security_settings_title),
                 body = stringResource(R.string.security_settings_info_body),
@@ -153,28 +144,6 @@ fun SecuritySettingsScreen(
                 )
             }
         }
-    }
-}
-
-@Composable
-private fun SecurityBetaBadge() {
-    val badgeColor = Color(0xFFF59E0B)
-    Surface(
-        modifier = Modifier.padding(end = 6.dp),
-        shape = MaterialTheme.shapes.extraSmall,
-        color = badgeColor.copy(alpha = 0.16f),
-    ) {
-        Text(
-            text = stringResource(R.string.beta_badge),
-            modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp),
-            style = MaterialTheme.typography.labelSmall.copy(
-                fontSize = 9.sp,
-                lineHeight = 9.sp,
-                fontWeight = FontWeight.Black,
-            ),
-            color = badgeColor,
-            maxLines = 1,
-        )
     }
 }
 

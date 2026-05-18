@@ -397,7 +397,7 @@ class HomeDashboardPresentationTest {
     }
 
     @Test
-    fun `network model keeps current ip and shows connection skeleton during smart protocol refresh`() {
+    fun `network model keeps fresh current ip and shows server skeleton during smart protocol refresh`() {
         val ipInfo =
             IpInfo(
                 ip = "203.0.113.10",
@@ -423,12 +423,49 @@ class HomeDashboardPresentationTest {
             )
 
         assertEquals(ipInfo, model.visibleIpInfo)
-        assertEquals(R.string.home_network_current_ip_title, model.titleRes)
+        assertEquals(R.string.home_network_connection_info_title, model.titleRes)
         assertTrue(model.showConnectionStatus)
         assertTrue(model.showLoading)
         assertFalse(model.showIpInfoLoading)
         assertTrue(model.showConnectionDetailsLoading)
         assertTrue(model.showRefreshProgress)
+    }
+
+    @Test
+    fun `network model hides stale device ip during smart protocol refresh`() {
+        val deviceIpInfo =
+            IpInfo(
+                ip = "198.51.100.20",
+                countryCode = "US",
+                countryName = "United States",
+                city = "New York",
+                isp = "Device network",
+                fetchedAt = 1_000L,
+            )
+        val model =
+            resolveHomeDashboardNetworkModel(
+                state =
+                    HomeRouteUiState(
+                        profilesLoaded = true,
+                        connection =
+                            ConnectionSnapshot(
+                                state = ConnectionState.CONNECTED,
+                                trafficMode = TrafficMode.TUNNEL,
+                                profileId = 42L,
+                                lastChangeAt = 2_000L,
+                            ),
+                        protocolMetricsRefreshing = true,
+                    ),
+                visibleIpInfo = deviceIpInfo,
+                deviceInternetAvailable = true,
+            )
+
+        assertEquals(null, model.visibleIpInfo)
+        assertEquals(R.string.home_network_connection_info_title, model.titleRes)
+        assertTrue(model.showConnectionStatus)
+        assertTrue(model.showLoading)
+        assertTrue(model.showIpInfoLoading)
+        assertTrue(model.showConnectionDetailsLoading)
     }
 
     @Test

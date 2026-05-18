@@ -8,6 +8,9 @@ import android.content.Context
 import android.os.SystemClock
 import android.os.VibrationEffect
 import android.os.Vibrator
+import android.view.Gravity
+import android.view.ViewGroup
+import android.widget.FrameLayout
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Animatable
@@ -48,7 +51,9 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
@@ -85,12 +90,19 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.referentialEqualityPolicy
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.draw.shadow
@@ -105,6 +117,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
@@ -128,10 +141,14 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import com.foxhole.beta.R
 import com.foxhole.beta.core.model.ThemeMode
+import com.foxhole.beta.ui.theme.FoxholeTheme
 import com.foxhole.beta.ui.theme.LocalFoxholeDarkTheme
 import com.foxhole.beta.ui.theme.LocalFoxholeThemeMode
 import com.foxhole.beta.ui.theme.LocalFoxholeUiPalette
+import eightbitlab.com.blurview.BlurTarget
+import eightbitlab.com.blurview.FoxholeTelegramBlurView
 import kotlin.math.max
+import android.graphics.Color as AndroidColor
 
 internal val ScreenHorizontalPadding = 16.dp
 internal val ScreenVerticalPadding = 10.dp
@@ -140,12 +157,26 @@ internal val CardInnerPadding = 12.dp
 internal val CardContentSpacing = 8.dp
 internal val BottomDockOverlayPadding = 100.dp
 internal val FoxholeTopChromeHeight = 52.dp
+private val FoxholeTopChromeBlurBleed = 64.dp
 internal val HomeTopStatusInnerSurfaceMinHeight = 42.dp
 internal val HomeTopStatusInnerHorizontalPadding = 10.dp
 internal val HomeTopStatusInnerVerticalPadding = 6.dp
 internal val FoxholeTopBarBannerPadding = 86.dp
 
 internal val FoxholeDialogShape = RoundedCornerShape(24.dp)
+
+internal data class FoxholeBackdropBlurHost(
+    val overlayHost: ViewGroup,
+    val blurTarget: BlurTarget,
+)
+
+internal val LocalFoxholeBackdropBlurHost =
+    staticCompositionLocalOf<FoxholeBackdropBlurHost?> {
+        null
+    }
+
+private typealias FoxholeTopChromeActions = @Composable RowScope.() -> Unit
+
 internal object FoxholeMotionTokens {
     const val FastDurationMs = 120
     const val StandardDurationMs = 180
@@ -167,10 +198,14 @@ internal val FoxholeWarningAccent = Color(0xFFE0B84A)
 private val FoxholeErrorAccent = Color(0xFFC63C3C)
 private val FoxholeCardShadowElevation = 3.dp
 private val FoxholeDropdownShadowElevation = 8.dp
-private const val TOP_CHROME_SCRIM_DARK_ALPHA = 0.78f
-private const val TOP_CHROME_SCRIM_LIGHT_ALPHA = 0.82f
-private const val BOTTOM_DOCK_CONTAINER_DARK_ALPHA = 0.74f
-private const val BOTTOM_DOCK_CONTAINER_LIGHT_ALPHA = 0.80f
+private const val TOP_CHROME_SCRIM_DARK_ALPHA = 0.14f
+private const val TOP_CHROME_SCRIM_LIGHT_ALPHA = 0.24f
+private const val TOP_CHROME_FROST_DARK_ALPHA = 0.018f
+private const val TOP_CHROME_FROST_LIGHT_ALPHA = 0.030f
+private const val TOP_CHROME_MIN_SCROLL_ALPHA = 0.64f
+private const val TOP_CHROME_BLUR_MIN_SCROLL_ALPHA = 1.0f
+private const val BOTTOM_DOCK_CONTAINER_DARK_ALPHA = 0.88f
+private const val BOTTOM_DOCK_CONTAINER_LIGHT_ALPHA = 0.92f
 private const val BOTTOM_DOCK_BORDER_ALPHA = 0.42f
 
 @Composable
@@ -253,6 +288,7 @@ internal fun FoxholeScaffold(
     bannerTopPadding: Dp = ScreenVerticalPadding,
     bannerBottomPadding: Dp = ScreenVerticalPadding,
     bannerPlacement: FoxholeBannerPlacement = FoxholeBannerPlacement.TOP,
+    topChromeScrimProgress: () -> Float = { 0f },
     content: @Composable (PaddingValues) -> Unit,
 ) {
     val statusTopPadding = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
@@ -275,13 +311,22 @@ internal fun FoxholeScaffold(
                         .fillMaxSize()
                         .padding(bottom = scaffoldPadding.calculateBottomPadding()),
             ) {
-                content(PaddingValues(top = contentTopPadding))
+                Box(
+                    modifier =
+                        Modifier
+                            .fillMaxSize()
+                            .padding(top = statusTopPadding)
+                            .clipToBounds(),
+                ) {
+                    content(PaddingValues(top = FoxholeTopChromeHeight))
+                }
                 FoxholeTopChrome(
                     title = title,
                     statusTopPadding = statusTopPadding,
                     contentTopPadding = contentTopPadding,
                     onNavigateUp = onNavigateUp,
                     actions = actions,
+                    scrimProgress = topChromeScrimProgress,
                 )
                 val bannerModifier =
                     when (bannerPlacement) {
@@ -314,6 +359,188 @@ private fun BoxScope.FoxholeTopChrome(
     contentTopPadding: Dp,
     onNavigateUp: (() -> Unit)?,
     actions: @Composable RowScope.() -> Unit,
+    scrimProgress: () -> Float,
+) {
+    val blurHost = LocalFoxholeBackdropBlurHost.current
+    if (blurHost != null) {
+        FoxholeExternalTopChrome(
+            host = blurHost,
+            title = title,
+            statusTopPadding = statusTopPadding,
+            onNavigateUp = onNavigateUp,
+            actions = actions,
+            scrimProgress = scrimProgress,
+        )
+        return
+    }
+    FoxholeTopChromeContent(
+        title = title,
+        statusTopPadding = statusTopPadding,
+        contentTopPadding = contentTopPadding,
+        onNavigateUp = onNavigateUp,
+        actions = actions,
+        scrimProgress = scrimProgress,
+    )
+}
+
+@Composable
+private fun FoxholeExternalTopChrome(
+    host: FoxholeBackdropBlurHost,
+    title: String,
+    statusTopPadding: Dp,
+    onNavigateUp: (() -> Unit)?,
+    actions: FoxholeTopChromeActions,
+    scrimProgress: () -> Float,
+) {
+    val dark = LocalFoxholeDarkTheme.current
+    val density = LocalDensity.current
+    val themeMode = LocalFoxholeThemeMode.current
+    val blurBleed = statusTopPadding.coerceAtMost(FoxholeTopChromeBlurBleed)
+    val topChromeHeight = FoxholeTopChromeHeight + blurBleed
+    val topChromeHeightPx = with(density) { topChromeHeight.roundToPx() }
+    val topMarginPx = with(density) { (statusTopPadding - blurBleed).roundToPx() }
+    val topChromeView =
+        remember(host.overlayHost, host.blurTarget) {
+            FoxholeTopChromeBlurView(host.overlayHost.context)
+        }
+
+    DisposableEffect(topChromeView, host.overlayHost) {
+        host.overlayHost.addView(topChromeView)
+        onDispose {
+            host.overlayHost.removeView(topChromeView)
+        }
+    }
+
+    SideEffect {
+        topChromeView.apply {
+            configureBlur(
+                blurTarget = host.blurTarget,
+                dark = dark,
+            )
+            titleState.value = title
+            statusTopPaddingState.value = blurBleed
+            contentTopPaddingState.value = topChromeHeight
+            onNavigateUpState.value = onNavigateUp
+            actionsState.value = actions
+            scrimProgressState.value = scrimProgress
+            themeModeState.value = themeMode
+            layoutParams =
+                FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    topChromeHeightPx,
+                ).apply {
+                    gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
+                    topMargin = topMarginPx
+                }
+            elevation = 0f
+        }
+    }
+}
+
+private class FoxholeTopChromeBlurView(
+    context: Context,
+) : FrameLayout(context) {
+    val titleState = mutableStateOf("")
+    val statusTopPaddingState = mutableStateOf(0.dp)
+    val contentTopPaddingState = mutableStateOf(FoxholeTopChromeHeight)
+    val onNavigateUpState = mutableStateOf<(() -> Unit)?>(null, referentialEqualityPolicy())
+    val actionsState = mutableStateOf<FoxholeTopChromeActions>({}, referentialEqualityPolicy())
+    val scrimProgressState = mutableStateOf<() -> Float>({ 0f }, referentialEqualityPolicy())
+    val themeModeState = mutableStateOf(ThemeMode.SYSTEM)
+
+    private val blurView = FoxholeTelegramBlurView(context)
+    private var configuredBlurTarget: BlurTarget? = null
+    private var configuredDark: Boolean? = null
+
+    init {
+        clipChildren = true
+        clipToPadding = true
+        blurView.alpha = 1f
+        addView(
+            blurView,
+            LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT,
+            ),
+        )
+        addView(
+            ComposeView(context).apply {
+                setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
+                setContent {
+                    FoxholeTheme(themeMode = themeModeState.value) {
+                        val rawProgress = scrimProgressState.value().coerceIn(0f, 1f)
+                        SideEffect {
+                            blurView.alpha = TOP_CHROME_BLUR_MIN_SCROLL_ALPHA
+                        }
+                        Box(Modifier.fillMaxSize()) {
+                            FoxholeTopChromeContent(
+                                title = titleState.value,
+                                statusTopPadding = statusTopPaddingState.value,
+                                contentTopPadding = contentTopPaddingState.value,
+                                onNavigateUp = onNavigateUpState.value,
+                                actions = actionsState.value,
+                                scrimProgress = { rawProgress },
+                            )
+                        }
+                    }
+                }
+            },
+            LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT,
+            ),
+        )
+    }
+
+    fun configureBlur(
+        blurTarget: BlurTarget,
+        dark: Boolean,
+    ) {
+        val frameClearColor =
+            if (dark) {
+                AndroidColor.rgb(18, 19, 21)
+            } else {
+                AndroidColor.rgb(250, 251, 253)
+            }
+        val blurRadius = if (dark) 82f else 72f
+        val overlayColor =
+            if (dark) {
+                AndroidColor.argb(62, 22, 23, 25)
+            } else {
+                AndroidColor.argb(94, 250, 251, 253)
+            }
+        if (configuredBlurTarget !== blurTarget || configuredDark != dark) {
+            blurView.configure(
+                blurTarget = blurTarget,
+                frameClearColor = frameClearColor,
+                blurRadius = blurRadius,
+                inputScale = 1f,
+                saturation = if (dark) 1.52f else 1.22f,
+                overlayColor = overlayColor,
+            )
+            configuredBlurTarget = blurTarget
+            configuredDark = dark
+        } else {
+            blurView.configure(
+                blurTarget = blurTarget,
+                frameClearColor = frameClearColor,
+                blurRadius = blurRadius,
+                inputScale = 1f,
+                saturation = if (dark) 1.52f else 1.22f,
+                overlayColor = overlayColor,
+            )
+        }
+    }
+}
+
+@Composable
+private fun BoxScope.FoxholeTopChromeContent(
+    title: String,
+    statusTopPadding: Dp,
+    contentTopPadding: Dp,
+    onNavigateUp: (() -> Unit)?,
+    actions: FoxholeTopChromeActions,
+    scrimProgress: () -> Float,
 ) {
     Box(
         modifier =
@@ -323,7 +550,12 @@ private fun BoxScope.FoxholeTopChrome(
                 .height(contentTopPadding),
     ) {
         FoxholeTopScrimLayer(
-            modifier = Modifier.fillMaxSize(),
+            modifier =
+                Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .height(contentTopPadding),
+            progress = scrimProgress,
         )
     }
     Row(
@@ -386,48 +618,55 @@ private fun BoxScope.FoxholeTopChrome(
 @Composable
 internal fun FoxholeTopScrimLayer(
     modifier: Modifier = Modifier,
+    progress: () -> Float = { 1f },
 ) {
     val dark = LocalFoxholeDarkTheme.current
     val scheme = MaterialTheme.colorScheme
-    val bottomColor =
+    val topScrimColor =
         if (dark) {
             scheme.background.copy(alpha = TOP_CHROME_SCRIM_DARK_ALPHA)
         } else {
             scheme.surface.copy(alpha = TOP_CHROME_SCRIM_LIGHT_ALPHA)
         }
-    val frostColor =
+    val frostTopColor =
         if (dark) {
-            Color.White.copy(alpha = 0.035f)
+            Color.White.copy(alpha = TOP_CHROME_FROST_DARK_ALPHA)
         } else {
-            Color.White.copy(alpha = 0.22f)
+            Color.White.copy(alpha = TOP_CHROME_FROST_LIGHT_ALPHA)
         }
     Box(
         modifier =
             modifier.drawWithCache {
-                val scrim =
-                    Brush.verticalGradient(
-                        colorStops =
-                            arrayOf(
-                                0.00f to Color.Transparent,
-                                0.35f to Color.Transparent,
-                                0.72f to bottomColor.copy(alpha = bottomColor.alpha * 0.55f),
-                                1.00f to bottomColor,
-                            ),
-                    )
-                val frost =
-                    Brush.verticalGradient(
-                        colorStops =
-                            arrayOf(
-                                0.00f to Color.Transparent,
-                                1.00f to frostColor,
-                            ),
-                    )
                 onDrawBehind {
-                    drawRect(scrim)
-                    drawRect(frost)
+                    val rawProgress = progress().coerceIn(0f, 1f)
+                    val scrimProgress =
+                        if (rawProgress > 0f) {
+                            TOP_CHROME_MIN_SCROLL_ALPHA + ((1f - TOP_CHROME_MIN_SCROLL_ALPHA) * rawProgress)
+                        } else {
+                            0f
+                        }
+                    if (scrimProgress > 0f) {
+                        drawRect(topScrimColor, alpha = scrimProgress)
+                        drawRect(frostTopColor, alpha = scrimProgress)
+                    }
                 }
             },
     )
+}
+
+@Composable
+internal fun rememberFoxholeTopChromeScrimProgress(listState: LazyListState): () -> Float {
+    val density = LocalDensity.current
+    val scrollRangePx = with(density) { 28.dp.toPx() }.coerceAtLeast(1f)
+    return remember(listState, scrollRangePx) {
+        {
+            if (listState.firstVisibleItemIndex > 0) {
+                1f
+            } else {
+                (listState.firstVisibleItemScrollOffset / scrollRangePx).coerceIn(0f, 1f)
+            }
+        }
+    }
 }
 
 internal enum class FoxholeBannerTone {
@@ -812,6 +1051,8 @@ internal fun FoxholeLazyScaffold(
     bannerPlacement: FoxholeBannerPlacement = FoxholeBannerPlacement.TOP,
     content: LazyListScope.() -> Unit,
 ) {
+    val listState = rememberLazyListState()
+    val topChromeScrimProgress = rememberFoxholeTopChromeScrimProgress(listState)
     FoxholeScaffold(
         title = title,
         snackbarHostState = snackbarHostState,
@@ -819,10 +1060,12 @@ internal fun FoxholeLazyScaffold(
         actions = actions,
         bannerTopPadding = FoxholeTopBarBannerPadding,
         bannerPlacement = bannerPlacement,
+        topChromeScrimProgress = topChromeScrimProgress,
     ) { padding ->
         val (safeStartPadding, safeEndPadding) = foxholeHorizontalSafePadding()
         val navigationBottomPadding = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
         LazyColumn(
+            state = listState,
             modifier =
                 modifier
                     .fillMaxSize()
@@ -1066,9 +1309,9 @@ internal fun FoxholeBottomDockGlassLayer(
         }
     val frostColor =
         if (dark) {
-            Color.White.copy(alpha = 0.030f)
+            Color.White.copy(alpha = 0.020f)
         } else {
-            Color.White.copy(alpha = 0.18f)
+            Color.White.copy(alpha = 0.10f)
         }
     Surface(
         modifier =
@@ -1092,7 +1335,8 @@ internal fun FoxholeBottomDockGlassLayer(
                             Brush.verticalGradient(
                                 colorStops =
                                     arrayOf(
-                                        0.00f to containerColor.copy(alpha = containerColor.alpha * 0.72f),
+                                        0.00f to containerColor.copy(alpha = containerColor.alpha * 0.96f),
+                                        0.54f to containerColor,
                                         1.00f to containerColor,
                                     ),
                             )

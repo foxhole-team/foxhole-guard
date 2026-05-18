@@ -1096,9 +1096,34 @@ internal suspend fun FoxholeVpnService.runNotificationConnectivityProbeInternal(
                             runCatching { currentVpnNetwork() }
                                 .getOrElse { error("vpn network unavailable") }
                         activeVpnNetworkHandle = vpnNetwork.networkHandle
-                        probeConnectivityEndpointsOverLocalProxy(
-                            proxy = container.settingsRepository.current().tunnelRuntimeProxyAccess(),
+                        val settings = container.settingsRepository.current()
+                        val runtimeProxyProbe =
+                            runCatchingUnlessCancelled {
+                                probeConnectivityEndpointsOverLocalProxy(
+                                    proxy = settings.tunnelRuntimeProxyAccess(),
+                                    callTimeoutMs = FoxholeVpnService.NOTIFICATION_HEALTH_PROBE_TIMEOUT_MS,
+                                )
+                            }
+                        if (runtimeProxyProbe.isSuccess) {
+                            return@runCatchingUnlessCancelled
+                        }
+                        if (settings.requiresStrictRuntimeProxyIpRefresh(FoxholeVpnRuntimeBridge.snapshot.value)) {
+                            throw (runtimeProxyProbe.exceptionOrNull() ?: IllegalStateException("runtime proxy probe failed"))
+                        }
+                        container.diagnosticsLogger.record(
+                            "health",
+                            "proxy notification probe failed, retrying vpn-bound endpoint: ${runtimeProxyProbe.exceptionOrNull()?.message.orEmpty()}",
+                        )
+                        val preferIpv4Validation =
+                            shouldPreferIpv4TunnelValidation(
+                                activeSession?.protocolHint,
+                                activeSession?.configJson,
+                            )
+                        probeConnectivityEndpoints(
                             callTimeoutMs = FoxholeVpnService.NOTIFICATION_HEALTH_PROBE_TIMEOUT_MS,
+                            network = tunnelValidationRequestNetwork(vpnNetwork),
+                            resolverNetwork = currentUpstreamNetworkOrNull(),
+                            preferIpv4 = preferIpv4Validation,
                         )
                     }
                     TrafficMode.PROXY -> {

@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -348,6 +349,9 @@ private fun SettingsSecurityRoutingNavigationGroup(
             icon = Icons.Outlined.Shield,
             title = stringResource(R.string.security_settings_title),
             summary = stringResource(R.string.security_settings_summary),
+            titleTrailingContent = {
+                BetaBadge(modifier = Modifier.offset(y = (-3).dp))
+            },
             onClick = onOpenSecurity,
         )
         SettingsGroupDivider()
@@ -407,6 +411,7 @@ private fun SettingsGroupedNavigationRow(
     title: String,
     summary: String,
     summaryMaxLines: Int = 3,
+    titleTrailingContent: (@Composable RowScope.() -> Unit)? = null,
     enabled: Boolean = true,
     onClick: () -> Unit,
 ) {
@@ -437,14 +442,21 @@ private fun SettingsGroupedNavigationRow(
             modifier = Modifier.weight(1f),
             verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = contentAlpha),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = title,
+                    modifier = Modifier.weight(1f, fill = false),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = contentAlpha),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                titleTrailingContent?.invoke(this)
+            }
             Text(
                 text = summary.trimEnd().removeSuffix("."),
                 style = MaterialTheme.typography.bodySmall,

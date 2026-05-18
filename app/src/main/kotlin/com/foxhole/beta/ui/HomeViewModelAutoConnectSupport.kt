@@ -902,9 +902,12 @@ internal fun HomeViewModel.cancelSmartProfileMetricsRefreshInternal(restoreConne
     if (!restoreConnection) {
         protocolMetricsRefreshingProfileIdsMutable.value = emptySet()
         protocolMetricsRefreshingOptionIdByProfileIdMutable.value = emptyMap()
+        setDashboardConnectionMetricsLoading(false)
         clearAutoConnectUiState()
     }
-    protocolMetricsRefreshJob?.cancel()
+    val runningJob = protocolMetricsRefreshJob
+    protocolMetricsRefreshJob = null
+    runningJob?.cancel()
 }
 
 private suspend fun HomeViewModel.probeAutoConnectCandidateForMetricsRefresh(
@@ -1567,9 +1570,11 @@ internal fun HomeViewModel.clearAutoConnectUiStateInternal() {
 }
 
 internal fun HomeViewModel.cancelAutoConnectInternal(clearUiOnly: Boolean) {
-    autoConnectJob?.cancel()
+    val runningJob = autoConnectJob
     autoConnectJob = null
+    runningJob?.cancel()
     if (clearUiOnly) {
+        container.connectionController.clearSmartStartAnalysisStatus()
         clearAutoConnectUiState()
     }
 }

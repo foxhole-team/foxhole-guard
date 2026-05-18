@@ -114,7 +114,7 @@ import java.util.Locale
 internal val HomePrimaryActionHeight = 56.dp
 internal val HomeTriangleIndicatorSize = 15.dp
 internal val HomeDashboardBannerTopPadding = 74.dp
-internal val HomeConnectingStatusSignalOffset = (-2).dp
+internal val HomeConnectingStatusSignalOffset = 2.dp
 internal val HomeNetworkContentHeight = 96.dp
 internal val HomeDashboardProfileContentHeight = 62.dp
 private val HomeNetworkValueLoadingWidth = 68.dp

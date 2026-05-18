@@ -6,9 +6,10 @@ import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.os.Build
 import android.os.Bundle
+import android.view.ViewGroup
 import android.view.WindowManager
+import android.widget.FrameLayout
 import androidx.activity.SystemBarStyle
-import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
@@ -18,6 +19,8 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.Lifecycle
@@ -33,6 +36,7 @@ import com.foxhole.beta.ui.handleSnackbarHaptic
 import com.foxhole.beta.ui.showBanner
 import com.foxhole.beta.ui.theme.FoxholeAppBackground
 import com.foxhole.beta.ui.theme.FoxholeTheme
+import eightbitlab.com.blurview.BlurTarget
 import kotlinx.coroutines.launch
 import android.graphics.Color as AndroidColor
 
@@ -68,7 +72,37 @@ class MainActivity : AppCompatActivity() {
                 homeViewModel.secureScreenEnabled.collect(::applySecureScreenPolicy)
             }
         }
-        setContent {
+        val contentRoot =
+            FrameLayout(this).apply {
+                clipChildren = false
+                clipToPadding = false
+            }
+        val blurTarget =
+            BlurTarget(this).apply {
+                clipChildren = false
+                clipToPadding = false
+            }
+        val composeView =
+            ComposeView(this).apply {
+                setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
+            }
+        blurTarget.addView(
+            composeView,
+            FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT,
+            ),
+        )
+        contentRoot.addView(
+            blurTarget,
+            FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT,
+            ),
+        )
+        setContentView(contentRoot)
+
+        composeView.setContent {
             val themeMode = homeViewModel.themeMode.collectAsStateWithLifecycle()
             val systemDarkTheme = isSystemInDarkTheme()
             val snackbarHostState = remember { SnackbarHostState() }
@@ -122,6 +156,8 @@ class MainActivity : AppCompatActivity() {
                     FoxholeApp(
                         viewModel = homeViewModel,
                         snackbarHostState = snackbarHostState,
+                        bottomDockOverlayHost = contentRoot,
+                        bottomDockBlurTarget = blurTarget,
                     )
                 }
             }

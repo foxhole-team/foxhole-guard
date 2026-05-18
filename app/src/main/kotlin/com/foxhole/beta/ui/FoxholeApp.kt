@@ -1,5 +1,11 @@
 package com.foxhole.beta.ui
 
+import android.content.Context
+import android.graphics.drawable.GradientDrawable
+import android.view.Gravity
+import android.view.ViewGroup
+import android.view.ViewOutlineProvider
+import android.widget.FrameLayout
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContentTransitionScope
@@ -24,17 +30,18 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Dashboard
 import androidx.compose.material.icons.outlined.Settings
@@ -46,9 +53,12 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -60,8 +70,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -83,10 +96,17 @@ import com.foxhole.beta.R
 import com.foxhole.beta.core.data.ProfileImportPayloadTooLargeException
 import com.foxhole.beta.core.data.readLocalProfileImportUtf8Capped
 import com.foxhole.beta.core.model.ConnectionState
+import com.foxhole.beta.core.model.ThemeMode
+import com.foxhole.beta.ui.theme.FoxholeTheme
+import com.foxhole.beta.ui.theme.LocalFoxholeDarkTheme
+import com.foxhole.beta.ui.theme.LocalFoxholeThemeMode
 import com.foxhole.beta.ui.theme.LocalFoxholeUiPalette
+import eightbitlab.com.blurview.BlurTarget
+import eightbitlab.com.blurview.FoxholeTelegramBlurView
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.min
+import android.graphics.Color as AndroidColor
 
 private object AppRoute {
     const val HOME = "home"
@@ -147,6 +167,8 @@ fun FoxholeApp(
     viewModel: HomeViewModel,
     snackbarHostState: SnackbarHostState,
     navController: NavHostController = rememberNavController(),
+    bottomDockOverlayHost: ViewGroup? = null,
+    bottomDockBlurTarget: BlurTarget? = null,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -156,6 +178,17 @@ fun FoxholeApp(
     val showBottomBar = currentRoute.isRootRoute()
     val rootSwipeSection = navBackStackEntry?.destination?.rootSwipeSection()
     val settingsBackSwipeEnabled = navBackStackEntry?.destination?.settingsBackSwipeEnabled() == true
+    val backdropBlurHost =
+        remember(bottomDockOverlayHost, bottomDockBlurTarget) {
+            if (bottomDockOverlayHost != null && bottomDockBlurTarget != null) {
+                FoxholeBackdropBlurHost(
+                    overlayHost = bottomDockOverlayHost,
+                    blurTarget = bottomDockBlurTarget,
+                )
+            } else {
+                null
+            }
+        }
     var qrScannerVisible by rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
     val insecureTlsImportWarning by viewModel.insecureTlsImportWarning.collectAsStateWithLifecycle()
     val profileImportTooLargeMessage = stringResource(R.string.profile_import_too_large)
@@ -185,14 +218,6 @@ fun FoxholeApp(
     Scaffold(
         containerColor = Color.Transparent,
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
-        bottomBar = {
-            if (showBottomBar) {
-                FoxholeBottomBar(
-                    currentSection = currentSection,
-                    onSectionSelected = { section -> navController.navigateToSection(section) },
-                )
-            }
-        },
     ) { innerPadding ->
         Box(
             modifier =
@@ -216,39 +241,40 @@ fun FoxholeApp(
                     )
                     .testTag("app_section_swipe_surface"),
         ) {
-            NavHost(
-                navController = navController,
-                startDestination = AppRoute.HOME,
-                modifier = Modifier.fillMaxSize(),
-                enterTransition = {
-                    if (targetState.destination.route.isSettingsDetailRoute()) {
-                        detailForwardEnter()
-                    } else {
-                        rootEnter()
-                    }
-                },
-                exitTransition = {
-                    if (targetState.destination.route.isSettingsDetailRoute()) {
-                        detailForwardExit()
-                    } else {
-                        rootExit()
-                    }
-                },
-                popEnterTransition = {
-                    if (initialState.destination.route.isSettingsDetailRoute()) {
-                        detailBackEnter()
-                    } else {
-                        rootEnter()
-                    }
-                },
-                popExitTransition = {
-                    if (initialState.destination.route.isSettingsDetailRoute()) {
-                        detailBackExit()
-                    } else {
-                        rootExit()
-                    }
-                },
-            ) {
+            CompositionLocalProvider(LocalFoxholeBackdropBlurHost provides backdropBlurHost) {
+                NavHost(
+                    navController = navController,
+                    startDestination = AppRoute.HOME,
+                    modifier = Modifier.fillMaxSize(),
+                    enterTransition = {
+                        if (targetState.destination.route.isSettingsDetailRoute()) {
+                            detailForwardEnter()
+                        } else {
+                            rootEnter()
+                        }
+                    },
+                    exitTransition = {
+                        if (targetState.destination.route.isSettingsDetailRoute()) {
+                            detailForwardExit()
+                        } else {
+                            rootExit()
+                        }
+                    },
+                    popEnterTransition = {
+                        if (initialState.destination.route.isSettingsDetailRoute()) {
+                            detailBackEnter()
+                        } else {
+                            rootEnter()
+                        }
+                    },
+                    popExitTransition = {
+                        if (initialState.destination.route.isSettingsDetailRoute()) {
+                            detailBackExit()
+                        } else {
+                            rootExit()
+                        }
+                    },
+                ) {
                 composable(AppRoute.HOME) {
                     val state by viewModel.homeRouteState.collectAsStateWithLifecycle()
                     val trafficMapState by viewModel.trafficMapUiState.collectAsStateWithLifecycle()
@@ -721,8 +747,18 @@ fun FoxholeApp(
                         onClearUsage = viewModel::resetUsageTracking,
                     )
                 }
+                }
             }
         }
+    }
+
+    if (showBottomBar) {
+        FoxholeBottomBar(
+            currentSection = currentSection,
+            onSectionSelected = { section -> navController.navigateToSection(section) },
+            overlayHost = bottomDockOverlayHost,
+            blurTarget = bottomDockBlurTarget,
+        )
     }
 
     if (qrScannerVisible) {
@@ -777,68 +813,278 @@ fun FoxholeApp(
 private fun FoxholeBottomBar(
     currentSection: AppSection?,
     onSectionSelected: (AppSection) -> Unit,
+    overlayHost: ViewGroup?,
+    blurTarget: BlurTarget?,
 ) {
     val selectedSection = currentSection ?: AppSection.DASHBOARD
-    val uiPalette = LocalFoxholeUiPalette.current
+    val dark = LocalFoxholeDarkTheme.current
+    val density = LocalDensity.current
+    val cornerRadiusPx = with(density) { 28.dp.toPx() }
+    val themeMode = LocalFoxholeThemeMode.current
+    val navigationBottomPadding = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+    val dockWidth = (configuration.screenWidthDp.dp * 0.62f).coerceIn(180.dp, 248.dp)
+    val dockWidthPx = with(density) { dockWidth.roundToPx() }
+    val dockHeightPx = with(density) { 60.dp.roundToPx() }
+    val dockBottomMarginPx = with(density) { (navigationBottomPadding + 10.dp).roundToPx() }
+    val externalDockView =
+        remember(overlayHost, blurTarget) {
+            if (overlayHost != null && blurTarget != null) {
+                FoxholeBottomDockBlurView(overlayHost.context)
+            } else {
+                null
+            }
+        }
+    DisposableEffect(externalDockView, overlayHost) {
+        if (externalDockView != null && overlayHost != null) {
+            overlayHost.addView(externalDockView)
+            onDispose {
+                overlayHost.removeView(externalDockView)
+            }
+        } else {
+            onDispose {}
+        }
+    }
+    SideEffect {
+        externalDockView?.apply {
+            configureBlur(
+                blurTarget = blurTarget,
+                dark = dark,
+                cornerRadiusPx = cornerRadiusPx,
+            )
+            selectedSectionState.value = selectedSection
+            themeModeState.value = themeMode
+            onSectionSelectedState.value = onSectionSelected
+            layoutParams =
+                FrameLayout.LayoutParams(dockWidthPx, dockHeightPx).apply {
+                    gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
+                    bottomMargin = dockBottomMarginPx
+                }
+            elevation = with(density) { 5.dp.toPx() }
+        }
+    }
+    if (externalDockView != null) {
+        return
+    }
     Box(
         modifier =
             Modifier
-                .fillMaxWidth()
+                .fillMaxSize()
                 .navigationBarsPadding()
-                .padding(top = 4.dp, bottom = 10.dp),
+                .padding(bottom = 10.dp),
         contentAlignment = Alignment.BottomCenter,
     ) {
         FoxholeBottomDockGlassLayer(
             modifier =
                 Modifier
-                    .fillMaxWidth(0.62f)
-                    .widthIn(min = 180.dp, max = 248.dp)
+                    .width(dockWidth)
                     .height(60.dp),
             shape = MaterialTheme.shapes.large,
-            borderColor = uiPalette.bottomBarBorderColor,
+            borderColor = LocalFoxholeUiPalette.current.bottomBarBorderColor,
         ) {
-            BoxWithConstraints(
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 4.dp, vertical = 4.dp)
-                        .height(52.dp),
-            ) {
-                val sections = AppSection.entries
-                val tabWidth = maxWidth / sections.size
-                val selectedIndex = sections.indexOf(selectedSection).coerceAtLeast(0)
-                val indicatorOffset by animateDpAsState(
-                    targetValue = tabWidth * selectedIndex,
-                    animationSpec =
-                        tween(
-                            durationMillis = FoxholeMotionTokens.NavigationIndicatorDurationMs,
-                            easing = FoxholeMotionTokens.NavigationIndicatorEasing,
-                        ),
-                    label = "bottom_bar_indicator",
-                )
+            FoxholeBottomBarDockContent(
+                selectedSection = selectedSection,
+                onSectionSelected = onSectionSelected,
+                drawBorder = false,
+            )
+        }
+    }
+}
 
-                Box(modifier = Modifier.fillMaxSize()) {
-                    Surface(
-                        modifier =
-                            Modifier
-                                .offset { IntOffset(x = indicatorOffset.roundToPx(), y = 0) }
-                                .width(tabWidth)
-                                .fillMaxHeight(),
-                        shape = MaterialTheme.shapes.medium,
-                        color = uiPalette.bottomBarIndicatorColor,
-                        shadowElevation = 0.dp,
-                    ) {}
-                    Row(
-                        modifier = Modifier.fillMaxSize(),
-                        horizontalArrangement = Arrangement.spacedBy(0.dp),
-                    ) {
-                        sections.forEach { section ->
-                            FoxholeBottomBarItem(
-                                section = section,
-                                selected = section == selectedSection,
-                                onClick = { onSectionSelected(section) },
-                            )
-                        }
+private class FoxholeBottomDockBlurView(
+    context: Context,
+) : FrameLayout(context) {
+    val selectedSectionState = mutableStateOf(AppSection.DASHBOARD)
+    val themeModeState = mutableStateOf(ThemeMode.SYSTEM)
+    val onSectionSelectedState = mutableStateOf<(AppSection) -> Unit>({})
+    private val blurView = FoxholeTelegramBlurView(context)
+    private var configuredBlurTarget: BlurTarget? = null
+    private var configuredDark: Boolean? = null
+    private var blurOverscanPx = 0
+
+    init {
+        clipChildren = true
+        clipToPadding = true
+        addView(
+            blurView.apply {
+                clipChildren = false
+                clipToPadding = false
+            },
+            FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT,
+            ),
+        )
+        addView(
+            ComposeView(context).apply {
+                setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
+                setContent {
+                    FoxholeTheme(themeMode = themeModeState.value) {
+                        FoxholeBottomBarDockContent(
+                            selectedSection = selectedSectionState.value,
+                            onSectionSelected = onSectionSelectedState.value,
+                        )
+                    }
+                }
+            },
+            FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT,
+            ),
+        )
+    }
+
+    override fun onSizeChanged(
+        w: Int,
+        h: Int,
+        oldw: Int,
+        oldh: Int,
+    ) {
+        super.onSizeChanged(w, h, oldw, oldh)
+        updateBlurOverscanLayout()
+    }
+
+    private fun updateBlurOverscanLayout() {
+        if (width <= 0 || height <= 0) {
+            return
+        }
+        val overscanPx = blurOverscanPx.coerceAtLeast(0)
+        blurView.layoutParams =
+            FrameLayout.LayoutParams(
+                width + (overscanPx * 2),
+                height + (overscanPx * 2),
+            ).apply {
+                leftMargin = -overscanPx
+                topMargin = -overscanPx
+            }
+    }
+
+    fun configureBlur(
+        blurTarget: BlurTarget?,
+        dark: Boolean,
+        cornerRadiusPx: Float,
+    ) {
+        val outlineBackground =
+            GradientDrawable().apply {
+                shape = GradientDrawable.RECTANGLE
+                cornerRadius = cornerRadiusPx
+                setColor(AndroidColor.TRANSPARENT)
+            }
+        background = outlineBackground
+        outlineProvider = ViewOutlineProvider.BACKGROUND
+        clipToOutline = true
+        blurOverscanPx = 0
+        updateBlurOverscanLayout()
+        if (blurTarget == null) return
+        val overlayColor =
+            if (dark) {
+                AndroidColor.argb(112, 28, 29, 31)
+            } else {
+                AndroidColor.argb(180, 250, 251, 253)
+            }
+        val frameClearColor =
+            if (dark) {
+                AndroidColor.rgb(14, 15, 16)
+            } else {
+                AndroidColor.rgb(250, 251, 253)
+            }
+        val blurRadius = if (dark) 48f else 40f
+        if (configuredBlurTarget !== blurTarget || configuredDark != dark) {
+            blurView.configure(
+                blurTarget = blurTarget,
+                frameClearColor = frameClearColor,
+                blurRadius = blurRadius,
+                inputScale = 1f,
+                saturation = if (dark) 1.28f else 1.10f,
+                overlayColor = overlayColor,
+            )
+            configuredBlurTarget = blurTarget
+            configuredDark = dark
+        } else {
+            blurView.configure(
+                blurTarget = blurTarget,
+                frameClearColor = frameClearColor,
+                blurRadius = blurRadius,
+                inputScale = 1f,
+                saturation = if (dark) 1.28f else 1.10f,
+                overlayColor = overlayColor,
+            )
+        }
+    }
+}
+
+@Composable
+private fun FoxholeBottomBarDockContent(
+    selectedSection: AppSection,
+    onSectionSelected: (AppSection) -> Unit,
+    drawBorder: Boolean = true,
+) {
+    val uiPalette = LocalFoxholeUiPalette.current
+    val dark = LocalFoxholeDarkTheme.current
+    val borderAlpha = if (dark) 0.40f else 0.56f
+    BoxWithConstraints(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .height(60.dp)
+                .clip(MaterialTheme.shapes.large),
+    ) {
+        Surface(
+            modifier = Modifier.fillMaxSize(),
+            shape = MaterialTheme.shapes.large,
+            color = Color.Transparent,
+            border =
+                if (drawBorder) {
+                    androidx.compose.foundation.BorderStroke(
+                        1.dp,
+                        uiPalette.bottomBarBorderColor.copy(alpha = borderAlpha),
+                    )
+                } else {
+                    null
+                },
+            shadowElevation = 0.dp,
+        ) {}
+        BoxWithConstraints(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 4.dp, vertical = 4.dp)
+                    .height(52.dp),
+        ) {
+            val sections = AppSection.entries
+            val tabWidth = maxWidth / sections.size
+            val selectedIndex = sections.indexOf(selectedSection).coerceAtLeast(0)
+            val indicatorOffset by animateDpAsState(
+                targetValue = tabWidth * selectedIndex,
+                animationSpec =
+                    tween(
+                        durationMillis = FoxholeMotionTokens.NavigationIndicatorDurationMs,
+                        easing = FoxholeMotionTokens.NavigationIndicatorEasing,
+                    ),
+                label = "bottom_bar_indicator",
+            )
+
+            Box(modifier = Modifier.fillMaxSize()) {
+                Surface(
+                    modifier =
+                        Modifier
+                            .offset { IntOffset(x = indicatorOffset.roundToPx(), y = 0) }
+                            .width(tabWidth)
+                            .fillMaxHeight(),
+                    shape = MaterialTheme.shapes.medium,
+                    color = uiPalette.bottomBarIndicatorColor,
+                    shadowElevation = 0.dp,
+                ) {}
+                Row(
+                    modifier = Modifier.fillMaxSize(),
+                    horizontalArrangement = Arrangement.spacedBy(0.dp),
+                ) {
+                    sections.forEach { section ->
+                        FoxholeBottomBarItem(
+                            section = section,
+                            selected = section == selectedSection,
+                            onClick = { onSectionSelected(section) },
+                        )
                     }
                 }
             }
