@@ -778,7 +778,14 @@ internal fun HomeConnectionFeatureDialog(
     val confirmEnabled =
         !(feature == HomeConnectionFeature.TOR && torSelectedProtocolIsUdp && !enabled && !torRouteNeedsSetup)
     val torOperationActive = feature == HomeConnectionFeature.TOR && state.torOperation.active
-    val confirmLabel = homeConnectionFeatureConfirmLabel(torOperationActive, enabled, restartAvailable)
+    val torOnlyRuntimeActive = feature == HomeConnectionFeature.TOR && state.hasTorOnlyRuntime()
+    val confirmLabel =
+        homeConnectionFeatureConfirmLabel(
+            torOperationActive = torOperationActive,
+            torOnlyRuntimeActive = torOnlyRuntimeActive,
+            enabled = enabled,
+            restartAvailable = restartAvailable,
+        )
     AlertDialog(
         onDismissRequest = onDismiss,
         modifier =
@@ -818,6 +825,7 @@ internal fun HomeConnectionFeatureDialog(
                         onRestart = onRestart,
                         onDismiss = onDismiss,
                         torRouteNeedsSetup = torRouteNeedsSetup,
+                        torOnlyRuntimeActive = torOnlyRuntimeActive,
                     )
                 },
                 enabled = confirmEnabled,
@@ -857,10 +865,13 @@ private fun homeTorRouteNeedsSetup(state: HomeRouteUiState): Boolean =
 @Composable
 private fun homeConnectionFeatureConfirmLabel(
     torOperationActive: Boolean,
+    torOnlyRuntimeActive: Boolean,
     enabled: Boolean,
     restartAvailable: Boolean,
 ): String =
-    if (torOperationActive && enabled) {
+    if (torOnlyRuntimeActive) {
+        stringResource(R.string.disconnect_tor)
+    } else if (torOperationActive && enabled) {
         stringResource(R.string.cancel)
     } else if (restartAvailable) {
         stringResource(R.string.reconnect)
@@ -922,9 +933,15 @@ private fun handleHomeConnectionFeatureConfirm(
     onRestart: () -> Unit,
     onDismiss: () -> Unit,
     torRouteNeedsSetup: Boolean,
+    torOnlyRuntimeActive: Boolean,
 ) {
     when {
         feature == HomeConnectionFeature.TOR -> {
+            if (torOnlyRuntimeActive) {
+                onRestart()
+                onDismiss()
+                return
+            }
             if (!enabled && torRouteNeedsSetup) {
                 onDismiss()
                 onOpenPrivacyRoute()
@@ -2010,6 +2027,7 @@ internal fun HomeConnectionActions(
 ) {
     val activeProfile = state.activeProfile
     val torOnlyStartAvailable = homeTorOnlyStartAvailable(state)
+    val torOnlyRuntimeActive = state.hasTorOnlyRuntime()
     val showAutoConnectAction = smartStartControlsEnabled && shouldShowAutoConnectAction(activeProfile)
     val autoConnectRunning = state.autoConnect.running
     val protocolRefreshRunning = state.protocolMetricsRefreshing
@@ -2078,7 +2096,7 @@ internal fun HomeConnectionActions(
     if (!showAutoConnectAction) {
         ClippedOutlinedButton(
             onClick = onToggleConnection,
-            enabled = activeProfile != null || torOnlyStartAvailable,
+            enabled = activeProfile != null || torOnlyStartAvailable || torOnlyRuntimeActive,
             modifier =
                 Modifier
                     .fillMaxWidth()
@@ -2095,6 +2113,8 @@ internal fun HomeConnectionActions(
             Text(
                 if (autoConnectRunning || protocolRefreshRunning || state.reconnectInProgress) {
                     stringResource(R.string.disconnect)
+                } else if (torOnlyRuntimeActive) {
+                    stringResource(R.string.disconnect_tor)
                 } else if (torOnlyStartAvailable && !state.hasPrimaryConnectionRuntime()) {
                     stringResource(R.string.connect_tor)
                 } else {
@@ -2112,7 +2132,7 @@ internal fun HomeConnectionActions(
     ) {
         ClippedOutlinedButton(
             onClick = onToggleConnection,
-            enabled = activeProfile != null || torOnlyStartAvailable,
+            enabled = activeProfile != null || torOnlyStartAvailable || torOnlyRuntimeActive,
             modifier =
                 Modifier
                     .weight(1f)
@@ -2129,6 +2149,8 @@ internal fun HomeConnectionActions(
             Text(
                 if (autoConnectRunning || protocolRefreshRunning || state.reconnectInProgress) {
                     stringResource(R.string.disconnect)
+                } else if (torOnlyRuntimeActive) {
+                    stringResource(R.string.disconnect_tor)
                 } else if (torOnlyStartAvailable && !state.hasPrimaryConnectionRuntime()) {
                     stringResource(R.string.connect_tor)
                 } else {

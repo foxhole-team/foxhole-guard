@@ -141,6 +141,7 @@ class TorRuntimeInstaller(
             .also { target -> target.writeTextIfChanged(content) }
     }
 
+    @Suppress("ReturnCount")
     private fun normalizedTorrcDefaultsLine(line: String): String? {
         if (!line.startsWith("ClientTransportPlugin ") || " exec " !in line) {
             return line
@@ -175,6 +176,7 @@ class TorRuntimeInstaller(
         return File("")
     }
 
+    @Suppress("ReturnCount")
     private fun defaultBridgeTorrcLines(
         targetRoot: File,
         transportLines: List<String>,

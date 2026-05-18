@@ -11,7 +11,6 @@ import android.util.Base64
 import android.util.Log
 import androidx.core.content.getSystemService
 import com.foxhole.beta.BuildConfig
-import com.foxhole.beta.core.diagnostics.DiagnosticsLogger
 import com.foxhole.beta.core.model.NetworkActivityEvent
 import com.foxhole.beta.core.traffic.TorGeoIpCountryResolver
 import java.io.File
@@ -28,13 +27,14 @@ import java.security.KeyStore
 import java.util.Locale
 import java.util.concurrent.atomic.AtomicBoolean
 
+@Suppress("LargeClass", "TooManyFunctions")
 internal class LibboxReflection(
     private val context: Context,
-    private val diagnosticsLogger: DiagnosticsLogger,
+    private val diagnosticsLogger: RuntimeDiagnosticsSink,
     private val isNetworkActivityLoggingEnabled: () -> Boolean,
     private val networkActivityContext: () -> NetworkActivityContext = { NetworkActivityContext() },
     private val onNetworkActivityEvent: (NetworkActivityEvent) -> Unit = {},
-) {
+) : LibboxRuntimeNative {
     private val setupDone = AtomicBoolean(false)
     private val appContext = context.applicationContext
     private val connectivityManager by lazy { appContext.getSystemService<ConnectivityManager>()!! }
@@ -61,9 +61,9 @@ internal class LibboxReflection(
     val interfaceTypeEthernet: Int by lazy { staticField("InterfaceTypeEthernet") as Int }
     val interfaceTypeOther: Int by lazy { staticField("InterfaceTypeOther") as Int }
 
-    fun isAvailable(): Boolean = libboxClass != null
+    override fun isAvailable(): Boolean = libboxClass != null
 
-    fun setupIfNeeded() {
+    override fun setupIfNeeded() {
         if (setupDone.get() || !isAvailable()) {
             return
         }
@@ -88,7 +88,7 @@ internal class LibboxReflection(
         }
     }
 
-    fun commandServerHandlerProxy(
+    override fun commandServerHandlerProxy(
         onReload: () -> Unit,
         onStop: () -> Unit,
         onDebug: (String) -> Unit,
@@ -107,9 +107,10 @@ internal class LibboxReflection(
             }
         }
 
-    fun platformProxy(
+    @Suppress("CyclomaticComplexMethod")
+    override fun platformProxy(
         host: RuntimeServiceHost,
-        defaultNetworkMonitor: DefaultNetworkMonitor,
+        defaultNetworkMonitor: RuntimeDefaultNetworkMonitor,
         openTun: (RuntimeServiceHost, Any) -> Int,
     ): Any =
         Proxy.newProxyInstance(
@@ -166,38 +167,38 @@ internal class LibboxReflection(
             }
         }
 
-    fun newCommandServer(handler: Any, platform: Any): Any {
+    override fun newCommandServer(handler: Any, platform: Any): Any {
         val method = libboxClass!!.getMethod("newCommandServer", commandServerHandlerClass, platformInterfaceClass)
         return method.invoke(null, handler, platform) ?: error("libbox returned null command server")
     }
 
-    fun startServer(commandServer: Any) {
+    override fun startServer(commandServer: Any) {
         call(commandServer, "start")
     }
 
-    fun closeServer(commandServer: Any) {
+    override fun closeServer(commandServer: Any) {
         call(commandServer, "close")
     }
 
-    fun closeService(commandServer: Any) {
+    override fun closeService(commandServer: Any) {
         call(commandServer, "closeService")
     }
 
-    fun checkConfig(commandServer: Any, config: String) {
+    override fun checkConfig(commandServer: Any, config: String) {
         call(commandServer, "checkConfig", config)
     }
 
-    fun startOrReloadService(commandServer: Any, config: String) {
+    override fun startOrReloadService(commandServer: Any, config: String) {
         val overrideOptions = overrideOptionsClass.getDeclaredConstructor().newInstance()
         call(overrideOptions, "setAutoRedirect", false)
         call(commandServer, "startOrReloadService", config, overrideOptions)
     }
 
-    fun resetNetwork(commandServer: Any) {
+    override fun resetNetwork(commandServer: Any) {
         call(commandServer, "resetNetwork")
     }
 
-    private fun localDnsTransport(defaultNetworkMonitor: DefaultNetworkMonitor): Any? {
+    private fun localDnsTransport(defaultNetworkMonitor: RuntimeDefaultNetworkMonitor): Any? {
         val clazz = localDnsTransportClass ?: return null
         return Proxy.newProxyInstance(
             clazz.classLoader,
@@ -223,7 +224,7 @@ internal class LibboxReflection(
 
     private fun resolveLocalDns(
         ctx: Any,
-        defaultNetworkMonitor: DefaultNetworkMonitor,
+        defaultNetworkMonitor: RuntimeDefaultNetworkMonitor,
         networkHint: String,
         domain: String,
     ) {
@@ -250,7 +251,7 @@ internal class LibboxReflection(
             else -> this
         }
 
-    fun call(target: Any?, name: String, vararg args: Any?): Any? {
+    override fun call(target: Any?, name: String, vararg args: Any?): Any? {
         require(target != null) { "reflection target is null for $name" }
         val method =
             target.javaClass.methods.firstOrNull { it.name == name && it.parameterCount == args.size }
@@ -258,9 +259,9 @@ internal class LibboxReflection(
         return method.invoke(target, *args)
     }
 
-    fun callBoolean(target: Any?, name: String): Boolean = call(target, name) as Boolean
+    override fun callBoolean(target: Any?, name: String): Boolean = call(target, name) as Boolean
 
-    fun callInt(target: Any?, name: String): Int = call(target, name) as Int
+    override fun callInt(target: Any?, name: String): Int = call(target, name) as Int
 
     fun forEachString(
         iterator: Any?,
@@ -274,13 +275,14 @@ internal class LibboxReflection(
         }
     }
 
-    fun collectStrings(iterator: Any?): List<String> {
+    override fun collectStrings(iterator: Any?): List<String> {
         val items = mutableListOf<String>()
         forEachString(iterator) { items += it }
         return items
     }
 
-    fun collectStringBoxOrIterator(value: Any?): List<String> {
+    @Suppress("ReturnCount")
+    override fun collectStringBoxOrIterator(value: Any?): List<String> {
         if (value == null) {
             return emptyList()
         }
@@ -295,7 +297,7 @@ internal class LibboxReflection(
         ).filter(String::isNotBlank)
     }
 
-    fun forEachRoutePrefix(
+    override fun forEachRoutePrefix(
         iterator: Any?,
         block: (ReflectedRoutePrefix) -> Unit,
     ) {

@@ -375,9 +375,12 @@ fun FoxholeAppBackground(
 }
 
 @Composable
+@Suppress("CyclomaticComplexMethod")
 fun Modifier.foxholeAppBackgroundLayer(
     gradientHeight: Dp? = null,
     opacity: Float = 1f,
+    topOpacity: Float = opacity,
+    bottomOpacity: Float = opacity,
 ): Modifier {
     val dark = LocalFoxholeDarkTheme.current
     val themeMode = LocalFoxholeThemeMode.current
@@ -424,9 +427,11 @@ fun Modifier.foxholeAppBackgroundLayer(
         }
 
     val clampedOpacity = opacity.coerceIn(0f, 1f)
+    val clampedTopOpacity = topOpacity.coerceIn(0f, 1f)
+    val clampedBottomOpacity = bottomOpacity.coerceIn(0f, 1f)
     val paintAlpha = (255 * clampedOpacity).toInt().coerceIn(0, 255)
     val baseModifier =
-        if (clampedOpacity >= 1f) {
+        if (clampedTopOpacity >= 1f && clampedOpacity >= 1f && clampedBottomOpacity >= 1f) {
             background(base)
         } else {
             this
@@ -438,7 +443,6 @@ fun Modifier.foxholeAppBackgroundLayer(
             val gradientPaint =
                 Paint(Paint.ANTI_ALIAS_FLAG or Paint.DITHER_FLAG).apply {
                     isDither = true
-                    alpha = paintAlpha
                     shader =
                         LinearGradient(
                             0f,
@@ -446,9 +450,9 @@ fun Modifier.foxholeAppBackgroundLayer(
                             0f,
                             shaderHeight,
                             intArrayOf(
-                                top.toArgb(),
-                                base.toArgb(),
-                                bottom.toArgb(),
+                                top.copy(alpha = clampedTopOpacity).toArgb(),
+                                base.copy(alpha = clampedOpacity).toArgb(),
+                                bottom.copy(alpha = clampedBottomOpacity).toArgb(),
                             ),
                             floatArrayOf(0f, 0.55f, 1f),
                             Shader.TileMode.CLAMP,

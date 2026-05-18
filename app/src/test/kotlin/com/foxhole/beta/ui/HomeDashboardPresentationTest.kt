@@ -732,6 +732,59 @@ class HomeDashboardPresentationTest {
     }
 
     @Test
+    fun `tor only runtime keeps network card on current ip layout with tor title`() {
+        val ipInfo =
+            IpInfo(
+                ip = "198.51.100.20",
+                countryCode = "NL",
+                countryName = "Netherlands",
+                city = "Amsterdam",
+                isp = "Example",
+                fetchedAt = 1_000L,
+            )
+        val model =
+            resolveHomeDashboardNetworkModel(
+                state =
+                    HomeRouteUiState(
+                        profilesLoaded = true,
+                        connection =
+                            ConnectionSnapshot(
+                                state = ConnectionState.CONNECTED,
+                                trafficMode = TrafficMode.TUNNEL,
+                                profileId = FoxholeVpnService.TOR_ONLY_PROFILE_ID,
+                                lastChangeAt = 500L,
+                            ),
+                    ),
+                visibleIpInfo = ipInfo,
+                deviceInternetAvailable = true,
+            )
+
+        assertEquals(ipInfo, model.visibleIpInfo)
+        assertEquals(R.string.home_network_tor_title, model.titleRes)
+        assertFalse(model.showConnectionStatus)
+        assertFalse(model.showLoading)
+        assertFalse(model.showIpInfoLoading)
+        assertFalse(model.showConnectionDetailsLoading)
+    }
+
+    @Test
+    fun `tor only runtime keeps dashboard primary action on stop without active profile`() {
+        val state =
+            HomeRouteUiState(
+                activeProfile = null,
+                connection =
+                    ConnectionSnapshot(
+                        state = ConnectionState.CONNECTED,
+                        profileId = FoxholeVpnService.TOR_ONLY_PROFILE_ID,
+                    ),
+            )
+
+        assertEquals(HomePrimaryAction.STOP, homePrimaryAction(state))
+        assertTrue(state.hasPrimaryConnectionRuntime())
+        assertTrue(state.hasTorOnlyRuntime())
+    }
+
+    @Test
     fun `ordinary vpn runtime keeps dashboard primary action on stop`() {
         val state =
             HomeRouteUiState(

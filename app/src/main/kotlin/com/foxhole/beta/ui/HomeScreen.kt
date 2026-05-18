@@ -493,10 +493,10 @@ fun HomeScreen(
                                                     currentPerAppRoutingMode = state.settings.expert.perAppRoutingMode,
                                                 )
                                             },
-	                                    )
-	                                }
-		                            }
-	                        }
+                                        )
+                                    }
+                                }
+                            }
                         }
                         HomeConnectionFeatureIndicators(
                             indicators = connectionFeatureIndicators,
@@ -583,9 +583,9 @@ fun HomeScreen(
                         )
                         Column(
                             modifier =
-	                                Modifier
-	                                    .fillMaxWidth()
-	                                    .height(HomeDashboardProfileContentHeight),
+                                Modifier
+                                    .fillMaxWidth()
+                                    .height(HomeDashboardProfileContentHeight),
                             verticalArrangement = Arrangement.spacedBy(3.dp),
                         ) {
                             if (state.activeProfile == null && !state.profilesLoaded) {
@@ -1037,139 +1037,172 @@ fun HomeScreen(
                                     onActiveCardChange = { activeReorderCard = it },
                                     onMove = ::moveDashboardCard,
                                 ) {
-	                val trafficModel = resolveHomeDashboardTrafficModel(state, System.currentTimeMillis())
-	                val trafficLoading = false
-                val totalTrafficText =
-                    buildAnnotatedString {
-                        val periodBytes = trafficModel.selectedProtocolTotalBytes ?: trafficModel.totalBytes
-                        append(stringResource(R.string.home_total_traffic_title))
-                        append(" ")
-                        withStyle(SpanStyle(color = MaterialTheme.colorScheme.onSurfaceVariant)) {
-                            append(stringResource(R.string.home_total_traffic_days, trafficModel.totalDays))
-                        }
-                        append(" ")
-                        append(formatBytes(context, periodBytes))
-                    }
-                    FoxholeCard {
-                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            HomeCardHeader(
-                            icon = Icons.Outlined.SwapVert,
-                            title = stringResource(R.string.home_traffic_title),
-                            titleContent = {
-                                Text(
-                                    text = stringResource(R.string.home_traffic_title),
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.SemiBold,
-                                    maxLines = 1,
-                                )
-                                Text(
-                                    text = totalTrafficText,
-                                    modifier = Modifier.weight(1f),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = FontWeight.SemiBold,
-                                    textAlign = TextAlign.End,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                            },
-                            trailing = {
-                                HomeHeaderActionButton(
-                                    icon = Icons.Outlined.DeleteSweep,
-                                    contentDescription = stringResource(R.string.reset_usage_tracking),
-                                    onClick = onResetUsageTracking,
-                                    modifier = Modifier.testTag("home_reset_usage_button"),
-                                    tint = autoTone,
-                                )
-                            },
-                        )
-                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
-                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                                val trafficLabelTint = MaterialTheme.colorScheme.primary
-                                val inactiveTrafficIconTint = MaterialTheme.colorScheme.onSurfaceVariant
-                                val incomingTrafficTint =
-                                    if (trafficModel.hasIncomingTraffic) {
-                                        FoxholePositiveAccent
-                                    } else {
-                                        inactiveTrafficIconTint
-                                    }
-                                val outgoingTrafficTint =
-                                    if (trafficModel.hasOutgoingTraffic) {
-                                        Color(0xFF2F80ED)
-                                    } else {
-                                        inactiveTrafficIconTint
-                                    }
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                ) {
-                                    Text(
-                                        text = stringResource(R.string.home_session_traffic_title),
-                                        modifier = Modifier.weight(1f),
-                                        style = MaterialTheme.typography.labelMedium,
-                                        fontWeight = FontWeight.SemiBold,
-                                    )
-                                }
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                ) {
-                                    TrafficStatBlock(
-                                        modifier = Modifier.weight(1f),
-                                        icon = Icons.Outlined.ArrowDownward,
-                                        iconTint = incomingTrafficTint,
-                                        labelColor = trafficLabelTint,
-                                        label = stringResource(R.string.home_received_label),
-                                        value = formatBytes(context, state.traffic.rxTotalBytes),
-                                        secondary = formatRate(context, state.traffic.rxBytesPerSec),
-                                        valueTag = "home_traffic_rx_value",
-                                        secondaryTag = "home_traffic_rx_rate",
-                                        horizontalAlignment = Alignment.CenterHorizontally,
-                                        loading = trafficLoading,
-                                    )
-                                    TrafficStatBlock(
-                                        modifier = Modifier.weight(1f),
-                                        icon = Icons.Outlined.ArrowUpward,
-                                        iconTint = outgoingTrafficTint,
-                                        labelColor = trafficLabelTint,
-                                        label = stringResource(R.string.home_sent_label),
-                                        value = formatBytes(context, state.traffic.txTotalBytes),
-                                        secondary = formatRate(context, state.traffic.txBytesPerSec),
-                                        valueTag = "home_traffic_tx_value",
-                                        secondaryTag = "home_traffic_tx_rate",
-                                        horizontalAlignment = Alignment.CenterHorizontally,
-                                        loading = trafficLoading,
-                                    )
-                                    TrafficStatBlock(
-                                        modifier = Modifier.weight(1f),
-                                        headerSpacing = 1.dp,
-                                        leadingContent = {
-                                            Text(
-                                                text =
-                                                    buildAnnotatedString {
-                                                        withStyle(SpanStyle(color = incomingTrafficTint)) { append("↓") }
-                                                        withStyle(SpanStyle(color = outgoingTrafficTint)) { append("↑") }
-                                                    },
-                                                style = MaterialTheme.typography.labelSmall,
-                                                fontWeight = FontWeight.SemiBold,
-                                                maxLines = 1,
+                                    val trafficModel =
+                                        resolveHomeDashboardTrafficModel(
+                                            state,
+                                            System.currentTimeMillis(),
+                                        )
+                                    val trafficLoading = false
+                                    val totalTrafficText =
+                                        buildAnnotatedString {
+                                            val periodBytes = trafficModel.selectedProtocolTotalBytes ?: trafficModel.totalBytes
+                                            append(stringResource(R.string.home_total_traffic_title))
+                                            append(" ")
+                                            withStyle(SpanStyle(color = MaterialTheme.colorScheme.onSurfaceVariant)) {
+                                                append(
+                                                    stringResource(
+                                                        R.string.home_total_traffic_days,
+                                                        trafficModel.totalDays,
+                                                    ),
+                                                )
+                                            }
+                                            append(" ")
+                                            append(formatBytes(context, periodBytes))
+                                        }
+                                    FoxholeCard {
+                                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                            HomeCardHeader(
+                                                icon = Icons.Outlined.SwapVert,
+                                                title = stringResource(R.string.home_traffic_title),
+                                                titleContent = {
+                                                    Text(
+                                                        text = stringResource(R.string.home_traffic_title),
+                                                        style = MaterialTheme.typography.titleMedium,
+                                                        fontWeight = FontWeight.SemiBold,
+                                                        maxLines = 1,
+                                                    )
+                                                    Text(
+                                                        text = totalTrafficText,
+                                                        modifier = Modifier.weight(1f),
+                                                        style = MaterialTheme.typography.labelSmall,
+                                                        fontWeight = FontWeight.SemiBold,
+                                                        textAlign = TextAlign.End,
+                                                        maxLines = 1,
+                                                        overflow = TextOverflow.Ellipsis,
+                                                    )
+                                                },
+                                                trailing = {
+                                                    HomeHeaderActionButton(
+                                                        icon = Icons.Outlined.DeleteSweep,
+                                                        contentDescription =
+                                                            stringResource(R.string.reset_usage_tracking),
+                                                        onClick = onResetUsageTracking,
+                                                        modifier = Modifier.testTag("home_reset_usage_button"),
+                                                        tint = autoTone,
+                                                    )
+                                                },
                                             )
-                                        },
-                                        leadingContentSpacing = 0.dp,
-                                        labelColor = trafficLabelTint,
-                                        label = stringResource(R.string.home_total_label),
-                                        value = formatBytes(context, state.traffic.rxTotalBytes + state.traffic.txTotalBytes),
-                                        secondary = formatRate(context, state.traffic.rxBytesPerSec + state.traffic.txBytesPerSec),
-	                                        valueTag = "home_traffic_total_value",
-	                                        secondaryTag = "home_traffic_total_rate",
-	                                        horizontalAlignment = Alignment.CenterHorizontally,
-	                                        loading = trafficLoading,
-	                                    )
-	                                }
-	                            }
-	                        }
-                        }
+                                            HorizontalDivider(
+                                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f),
+                                            )
+                                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                                Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                                                    val trafficLabelTint = MaterialTheme.colorScheme.primary
+                                                    val inactiveTrafficIconTint = MaterialTheme.colorScheme.onSurfaceVariant
+                                                    val incomingTrafficTint =
+                                                        if (trafficModel.hasIncomingTraffic) {
+                                                            FoxholePositiveAccent
+                                                        } else {
+                                                            inactiveTrafficIconTint
+                                                        }
+                                                    val outgoingTrafficTint =
+                                                        if (trafficModel.hasOutgoingTraffic) {
+                                                            Color(0xFF2F80ED)
+                                                        } else {
+                                                            inactiveTrafficIconTint
+                                                        }
+                                                    Row(
+                                                        modifier = Modifier.fillMaxWidth(),
+                                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                                        verticalAlignment = Alignment.CenterVertically,
+                                                    ) {
+                                                        Text(
+                                                            text = stringResource(R.string.home_session_traffic_title),
+                                                            modifier = Modifier.weight(1f),
+                                                            style = MaterialTheme.typography.labelMedium,
+                                                            fontWeight = FontWeight.SemiBold,
+                                                        )
+                                                    }
+                                                    Row(
+                                                        modifier = Modifier.fillMaxWidth(),
+                                                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                                    ) {
+                                                        TrafficStatBlock(
+                                                            modifier = Modifier.weight(1f),
+                                                            icon = Icons.Outlined.ArrowDownward,
+                                                            iconTint = incomingTrafficTint,
+                                                            labelColor = trafficLabelTint,
+                                                            label = stringResource(R.string.home_received_label),
+                                                            value =
+                                                                formatBytes(
+                                                                    context,
+                                                                    state.traffic.rxTotalBytes,
+                                                                ),
+                                                            secondary =
+                                                                formatRate(
+                                                                    context,
+                                                                    state.traffic.rxBytesPerSec,
+                                                                ),
+                                                            valueTag = "home_traffic_rx_value",
+                                                            secondaryTag = "home_traffic_rx_rate",
+                                                            horizontalAlignment = Alignment.CenterHorizontally,
+                                                            loading = trafficLoading,
+                                                        )
+                                                        TrafficStatBlock(
+                                                            modifier = Modifier.weight(1f),
+                                                            icon = Icons.Outlined.ArrowUpward,
+                                                            iconTint = outgoingTrafficTint,
+                                                            labelColor = trafficLabelTint,
+                                                            label = stringResource(R.string.home_sent_label),
+                                                            value =
+                                                                formatBytes(
+                                                                    context,
+                                                                    state.traffic.txTotalBytes,
+                                                                ),
+                                                            secondary =
+                                                                formatRate(
+                                                                    context,
+                                                                    state.traffic.txBytesPerSec,
+                                                                ),
+                                                            valueTag = "home_traffic_tx_value",
+                                                            secondaryTag = "home_traffic_tx_rate",
+                                                            horizontalAlignment = Alignment.CenterHorizontally,
+                                                            loading = trafficLoading,
+                                                        )
+                                                        TrafficStatBlock(
+                                                            modifier = Modifier.weight(1f),
+                                                            headerSpacing = 1.dp,
+                                                            leadingContent = {
+                                                                Text(
+                                                                    text =
+                                                                        buildAnnotatedString {
+                                                                            withStyle(SpanStyle(color = incomingTrafficTint)) { append("↓") }
+                                                                            withStyle(SpanStyle(color = outgoingTrafficTint)) { append("↑") }
+                                                                        },
+                                                                    style = MaterialTheme.typography.labelSmall,
+                                                                    fontWeight = FontWeight.SemiBold,
+                                                                    maxLines = 1,
+                                                                )
+                                                            },
+                                                            leadingContentSpacing = 0.dp,
+                                                            labelColor = trafficLabelTint,
+                                                            label = stringResource(R.string.home_total_label),
+                                                            value = formatBytes(context, state.traffic.rxTotalBytes + state.traffic.txTotalBytes),
+                                                            secondary =
+                                                                formatRate(
+                                                                    context,
+                                                                    state.traffic.rxBytesPerSec + state.traffic.txBytesPerSec,
+                                                                ),
+                                                            valueTag = "home_traffic_total_value",
+                                                            secondaryTag = "home_traffic_total_rate",
+                                                            horizontalAlignment = Alignment.CenterHorizontally,
+                                                            loading = trafficLoading,
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -1237,7 +1270,6 @@ fun HomeScreen(
             onRestart = onToggleConnection,
         )
     }
-}
 }
 
 @Composable

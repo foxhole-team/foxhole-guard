@@ -60,6 +60,35 @@ private const val ANDROID_ROUTE_EXCLUDE_LIMIT = 512
 private const val RUNTIME_FORCE_CLOSE_TIMEOUT_MS = 700L
 private val libboxRuntimeOperationMutex = Mutex()
 
+private data class LibboxRuntimeDependencies(
+    val diagnosticsLogger: RuntimeDiagnosticsSink,
+    val reflection: LibboxRuntimeNative,
+    val defaultNetworkMonitor: RuntimeDefaultNetworkMonitor,
+)
+
+private fun buildLibboxRuntimeDependencies(
+    context: Context,
+    diagnosticsLogger: DiagnosticsLogger,
+    isNetworkActivityLoggingEnabled: () -> Boolean,
+    networkActivityContext: () -> NetworkActivityContext,
+    onNetworkActivityEvent: (NetworkActivityEvent) -> Unit,
+): LibboxRuntimeDependencies {
+    val diagnosticsSink = DiagnosticsLoggerRuntimeDiagnosticsSink(diagnosticsLogger)
+    val reflection =
+        LibboxReflection(
+            context = context,
+            diagnosticsLogger = diagnosticsSink,
+            isNetworkActivityLoggingEnabled = isNetworkActivityLoggingEnabled,
+            networkActivityContext = networkActivityContext,
+            onNetworkActivityEvent = onNetworkActivityEvent,
+        )
+    return LibboxRuntimeDependencies(
+        diagnosticsLogger = diagnosticsSink,
+        reflection = reflection,
+        defaultNetworkMonitor = DefaultNetworkMonitor(context, reflection, diagnosticsSink),
+    )
+}
+
 private fun sanitizedConfigFingerprint(configJson: String): String {
     val dnsLocal = "\"dns-local\""
     val dnsRemote = "\"dns-remote\""
@@ -83,23 +112,71 @@ private fun sanitizedConfigFingerprint(configJson: String): String {
     }
 }
 
+@Suppress("ReturnCount")
+internal inline fun withRunningServerIfIdle(
+    reason: String,
+    operationMutex: Mutex,
+    commandServerRef: AtomicReference<Any?>,
+    diagnosticsLogger: RuntimeDiagnosticsSink,
+    noinline beforeTryLock: (() -> Unit)? = null,
+    block: (Any) -> Unit,
+) {
+    val server = commandServerRef.get() ?: return
+    beforeTryLock?.invoke()
+    if (!operationMutex.tryLock()) {
+        diagnosticsLogger.recordStructured(
+            "runtime",
+            "native_callback_skipped_operation_busy",
+            "reason=$reason",
+        )
+        return
+    }
+    try {
+        val currentServer = commandServerRef.get() ?: return
+        if (currentServer !== server) {
+            diagnosticsLogger.recordStructured(
+                "runtime",
+                "native_callback_skipped_stale_server",
+                "reason=$reason",
+            )
+            return
+        }
+        block(currentServer)
+    } finally {
+        operationMutex.unlock()
+    }
+}
+
 @Suppress("LargeClass")
-private class ReflectiveLibboxRuntime(
-    private val context: Context,
-    private val diagnosticsLogger: DiagnosticsLogger,
-    isNetworkActivityLoggingEnabled: () -> Boolean,
-    networkActivityContext: () -> NetworkActivityContext,
-    onNetworkActivityEvent: (NetworkActivityEvent) -> Unit,
+internal class ReflectiveLibboxRuntime(
+    private val diagnosticsLogger: RuntimeDiagnosticsSink,
+    private val reflection: LibboxRuntimeNative,
+    private val defaultNetworkMonitor: RuntimeDefaultNetworkMonitor,
+    private val operationMutex: Mutex = libboxRuntimeOperationMutex,
+    private val elapsedRealtime: () -> Long = SystemClock::elapsedRealtime,
 ) : VpnCoreRuntime {
-    private val reflection =
-        LibboxReflection(
+    constructor(
+        context: Context,
+        diagnosticsLogger: DiagnosticsLogger,
+        isNetworkActivityLoggingEnabled: () -> Boolean,
+        networkActivityContext: () -> NetworkActivityContext,
+        onNetworkActivityEvent: (NetworkActivityEvent) -> Unit,
+    ) : this(
+        buildLibboxRuntimeDependencies(
             context = context,
             diagnosticsLogger = diagnosticsLogger,
             isNetworkActivityLoggingEnabled = isNetworkActivityLoggingEnabled,
             networkActivityContext = networkActivityContext,
             onNetworkActivityEvent = onNetworkActivityEvent,
-        )
-    private val defaultNetworkMonitor by lazy { DefaultNetworkMonitor(context, reflection, diagnosticsLogger) }
+        ),
+    )
+
+    private constructor(dependencies: LibboxRuntimeDependencies) : this(
+        diagnosticsLogger = dependencies.diagnosticsLogger,
+        reflection = dependencies.reflection,
+        defaultNetworkMonitor = dependencies.defaultNetworkMonitor,
+    )
+
     private val commandServerRef = AtomicReference<Any?>(null)
     private val fileDescriptorRef = AtomicReference<ParcelFileDescriptor?>(null)
     private val runtimeGeneration = AtomicLong(0L)
@@ -114,7 +191,7 @@ private class ReflectiveLibboxRuntime(
     private var currentDnsServerAddress: String? = null
 
     override suspend fun start(session: VpnSession, host: RuntimeServiceHost): Result<Unit> =
-        libboxRuntimeOperationMutex.withLock {
+        operationMutex.withLock {
             startLocked(
                 session = session,
                 host = host,
@@ -153,9 +230,11 @@ private class ReflectiveLibboxRuntime(
                 val handler =
                     reflection.commandServerHandlerProxy(
                         onReload = {
-                            val config = currentConfig ?: return@commandServerHandlerProxy
-                            val server = commandServerRef.get() ?: return@commandServerHandlerProxy
-                            reflection.startOrReloadService(server, config)
+                            withRunningServerIfIdle("command_server_reload") { server ->
+                                currentConfig?.let { config ->
+                                    reflection.startOrReloadService(server, config)
+                                }
+                            }
                         },
                         onStop = {
                             diagnosticsLogger.record("libbox", "service stop requested")
@@ -198,7 +277,7 @@ private class ReflectiveLibboxRuntime(
     }
 
     override suspend fun reload(session: VpnSession, host: RuntimeServiceHost): Result<Unit> =
-        libboxRuntimeOperationMutex.withLock {
+        operationMutex.withLock {
             reloadLocked(
                 session = session,
                 host = host,
@@ -238,7 +317,7 @@ private class ReflectiveLibboxRuntime(
         }
 
     override suspend fun stop(policy: RuntimeStopPolicy): RuntimeStopResult {
-        val startedAt = SystemClock.elapsedRealtime()
+        val startedAt = elapsedRealtime()
         nextRuntimeGeneration("stop")
         val preclosedTun =
             if (policy.closeTunFdImmediately) {
@@ -247,11 +326,11 @@ private class ReflectiveLibboxRuntime(
                 null
             }
         return if (policy.forceKillAfterTimeout) {
-            if (libboxRuntimeOperationMutex.tryLock()) {
+            if (operationMutex.tryLock()) {
                 try {
                     stopLocked(policy, preclosedTun)
                 } finally {
-                    libboxRuntimeOperationMutex.unlock()
+                    operationMutex.unlock()
                 }
             } else {
                 diagnosticsLogger.recordStructured(
@@ -270,11 +349,11 @@ private class ReflectiveLibboxRuntime(
                     closeServerOk = false,
                     tunClosed = killResult.tunClosed,
                     escalatedToKill = true,
-                    elapsedMs = SystemClock.elapsedRealtime() - startedAt,
+                    elapsedMs = elapsedRealtime() - startedAt,
                 )
             }
         } else {
-            libboxRuntimeOperationMutex.withLock {
+            operationMutex.withLock {
                 stopLocked(policy, preclosedTun)
             }
         }
@@ -285,7 +364,7 @@ private class ReflectiveLibboxRuntime(
         preclosedTun: Boolean? = null,
     ): RuntimeStopResult =
         withContext(Dispatchers.IO) {
-            val startedAt = SystemClock.elapsedRealtime()
+            val startedAt = elapsedRealtime()
             diagnosticsLogger.recordStructured(
                 "runtime",
                 "stop requested",
@@ -328,7 +407,7 @@ private class ReflectiveLibboxRuntime(
                         reflection.closeServer(target)
                     }
                 }
-            val elapsedMs = SystemClock.elapsedRealtime() - startedAt
+            val elapsedMs = elapsedRealtime() - startedAt
             val shouldKill =
                 policy.forceKillAfterTimeout &&
                     (!closeServiceOk || !closeServerOk || elapsedMs > policy.totalGracefulTimeoutMs)
@@ -354,7 +433,7 @@ private class ReflectiveLibboxRuntime(
     override suspend fun forceKill(reason: String): RuntimeKillResult {
         nextRuntimeGeneration("kill:$reason")
         val preclosedTun = closeTunFdNow()
-        if (libboxRuntimeOperationMutex.tryLock()) {
+        if (operationMutex.tryLock()) {
             return try {
                 killRuntimeState(
                     reason = reason,
@@ -362,7 +441,7 @@ private class ReflectiveLibboxRuntime(
                     preclosedTun = preclosedTun,
                 )
             } finally {
-                libboxRuntimeOperationMutex.unlock()
+                operationMutex.unlock()
             }
         }
         diagnosticsLogger.recordStructured(
@@ -493,8 +572,8 @@ private class ReflectiveLibboxRuntime(
 
     override fun onDefaultNetworkAvailable() {
         defaultNetworkMonitor.dispatchListenerUpdate()
-        commandServerRef.get()?.let {
-            runCatching { reflection.resetNetwork(it) }
+        withRunningServerIfIdle("default_network_available") { server ->
+            runCatching { reflection.resetNetwork(server) }
                 .onFailure { diagnosticsLogger.record("libbox", "reset network failed") }
         }
     }
@@ -798,13 +877,26 @@ private class ReflectiveLibboxRuntime(
         }
     }
 
+    private inline fun withRunningServerIfIdle(
+        reason: String,
+        block: (Any) -> Unit,
+    ) {
+        withRunningServerIfIdle(
+            reason = reason,
+            operationMutex = operationMutex,
+            commandServerRef = commandServerRef,
+            diagnosticsLogger = diagnosticsLogger,
+            block = block,
+        )
+    }
+
 }
 
 internal class DefaultNetworkMonitor(
     context: Context,
-    private val reflection: LibboxReflection,
-    private val diagnosticsLogger: DiagnosticsLogger,
-) {
+    private val reflection: LibboxRuntimeNative,
+    private val diagnosticsLogger: RuntimeDiagnosticsSink,
+) : RuntimeDefaultNetworkMonitor {
     private val appContext = context.applicationContext
     private val connectivity = context.getSystemService<ConnectivityManager>() ?: error("missing connectivity manager")
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -852,7 +944,7 @@ internal class DefaultNetworkMonitor(
             }
         }
 
-    fun start() {
+    override fun start() {
         if (started) {
             return
         }
@@ -866,7 +958,7 @@ internal class DefaultNetworkMonitor(
         dispatchListenerUpdate()
     }
 
-    fun stop() {
+    override fun stop() {
         if (!started) {
             return
         }
@@ -877,23 +969,23 @@ internal class DefaultNetworkMonitor(
             .onFailure { diagnosticsLogger.record("libbox", "default network monitor unregister failed") }
     }
 
-    fun setListener(listener: Any?) {
+    override fun setListener(listener: Any?) {
         this.listener = listener
         dispatchListenerUpdate()
     }
 
-    fun requireNetwork(): Network {
+    override fun requireNetwork(): Network {
         currentNetwork?.let { return it }
         return preferredNetwork() ?: error("android: missing default network")
     }
 
-    fun isCurrentNetworkMetered(): Boolean {
+    override fun isCurrentNetworkMetered(): Boolean {
         val network = currentNetwork ?: preferredNetwork()
         val capabilities = network?.let(connectivity::getNetworkCapabilities)
         return capabilities?.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED) != true
     }
 
-    fun bindSocketToDefaultNetwork(fd: Int) {
+    override fun bindSocketToDefaultNetwork(fd: Int) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
             return
         }
@@ -915,7 +1007,8 @@ internal class DefaultNetworkMonitor(
         }
     }
 
-    fun dispatchListenerUpdate() {
+    @Suppress("ReturnCount")
+    override fun dispatchListenerUpdate() {
         val listener = listener ?: return
         val network = currentNetwork ?: preferredNetwork()
         if (network == null) {
@@ -951,13 +1044,13 @@ internal class DefaultNetworkMonitor(
             }
         runCatching {
             reflection.call(
-                    listener,
-                    "updateDefaultInterface",
-                    interfaceName,
-                    interfaceIndex,
-                    !capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED),
-                    isConstrained,
-                )
+                listener,
+                "updateDefaultInterface",
+                interfaceName,
+                interfaceIndex,
+                !capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED),
+                isConstrained,
+            )
         }.onFailure {
             diagnosticsLogger.record("libbox", "default interface callback failed")
         }

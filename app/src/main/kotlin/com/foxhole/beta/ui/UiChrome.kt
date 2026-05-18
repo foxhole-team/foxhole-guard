@@ -326,7 +326,9 @@ private fun BoxScope.FoxholeTopChrome(
             modifier = Modifier.fillMaxSize(),
             shape = RectangleShape,
             gradientHeight = gradientHeight,
-            opacity = 0.96f,
+            opacity = 0.72f,
+            topOpacity = 0.45f,
+            bottomOpacity = 0.88f,
             blurRadius = 18.dp,
         )
     }
@@ -778,6 +780,7 @@ internal fun FoxholeLazyScaffold(
         bannerPlacement = bannerPlacement,
     ) { padding ->
         val (safeStartPadding, safeEndPadding) = foxholeHorizontalSafePadding()
+        val navigationBottomPadding = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
         LazyColumn(
             modifier =
                 modifier
@@ -788,7 +791,7 @@ internal fun FoxholeLazyScaffold(
                     start = ScreenHorizontalPadding + safeStartPadding,
                     top = padding.calculateTopPadding() + ScreenVerticalPadding,
                     end = ScreenHorizontalPadding + safeEndPadding,
-                    bottom = BottomDockOverlayPadding,
+                    bottom = BottomDockOverlayPadding + navigationBottomPadding,
                 ),
             verticalArrangement = Arrangement.spacedBy(ScreenSectionSpacing),
         ) {
@@ -1050,6 +1053,8 @@ internal fun FoxholeBlurredBackgroundLayer(
     shape: Shape = RectangleShape,
     gradientHeight: Dp? = null,
     opacity: Float = 0.96f,
+    topOpacity: Float = opacity,
+    bottomOpacity: Float = opacity,
     blurRadius: Dp = 18.dp,
     borderColor: Color = Color.Unspecified,
     content: @Composable BoxScope.() -> Unit = {},
@@ -1066,6 +1071,8 @@ internal fun FoxholeBlurredBackgroundLayer(
                     .foxholeAppBackgroundLayer(
                         gradientHeight = gradientHeight,
                         opacity = opacity,
+                        topOpacity = topOpacity,
+                        bottomOpacity = bottomOpacity,
                     )
                     .blur(blurRadius),
         )

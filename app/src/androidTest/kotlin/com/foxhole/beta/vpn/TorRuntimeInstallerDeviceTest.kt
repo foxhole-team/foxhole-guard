@@ -31,8 +31,9 @@ class TorRuntimeInstallerDeviceTest {
             assertTrue(File(paths.geoIpFilePath.orEmpty()).isFile)
             assertTrue(File(paths.geoIpv6FilePath.orEmpty()).isFile)
             val torrcDefaults = File(paths.torrcDefaultsFilePath.orEmpty())
+            val nativeLyrebird = File(context.applicationInfo.nativeLibraryDir, "liblyrebird.so")
             assertTrue(torrcDefaults.isFile)
-            assertTrue(torrcDefaults.readText().contains("/tor/pluggable_transports/lyrebird"))
+            assertTrue(torrcDefaults.readText().contains(nativeLyrebird.absolutePath))
         }
     }
 
@@ -58,13 +59,15 @@ class TorRuntimeInstallerDeviceTest {
                                 ),
                         ),
                     activePreset = null,
-                    torRuntimePaths = paths,
-                    vpnProtocolHint = ProtocolHint.VLESS,
+                        torRuntimePaths = paths,
+                        vpnProtocolHint = ProtocolHint.VLESS,
                 )
+            val diagnosticsSink =
+                DiagnosticsLoggerRuntimeDiagnosticsSink(context.appGraph.diagnosticsLogger)
             val reflection =
                 LibboxReflection(
                     context = context,
-                    diagnosticsLogger = context.appGraph.diagnosticsLogger,
+                    diagnosticsLogger = diagnosticsSink,
                     isNetworkActivityLoggingEnabled = { false },
                 )
             assumeTrue("libbox is unavailable on this device", reflection.isAvailable())
@@ -77,7 +80,7 @@ class TorRuntimeInstallerDeviceTest {
 
                     override fun protectSocket(socket: Int): Boolean = true
                 }
-            val monitor = DefaultNetworkMonitor(context, reflection, context.appGraph.diagnosticsLogger)
+            val monitor = DefaultNetworkMonitor(context, reflection, diagnosticsSink)
             val server =
                 reflection.newCommandServer(
                     reflection.commandServerHandlerProxy(

@@ -6,9 +6,6 @@ import android.content.Intent
 import android.provider.Settings
 import android.text.format.DateUtils
 import android.content.Context
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
@@ -64,13 +61,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.PathEffect
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -113,9 +104,15 @@ import com.foxhole.beta.core.model.TransportStatisticsUiItem
 import com.foxhole.beta.core.model.TrafficWindow
 import com.foxhole.beta.core.statistics.ChartColorToken
 import com.foxhole.beta.core.traffic.TorGeoIpCountryResolver
+import com.foxhole.beta.ui.statistics.charts.AnimatedProgressRing
+import com.foxhole.beta.ui.statistics.charts.AnimatedSegmentDonutChart
+import com.foxhole.beta.ui.statistics.charts.AnimatedSplitDonutChart
+import com.foxhole.beta.ui.statistics.charts.SegmentedBarSegment
+import com.foxhole.beta.ui.statistics.charts.SegmentedLinearBar
+import com.foxhole.beta.ui.statistics.charts.SplitOutcomeBar
+import com.foxhole.beta.ui.statistics.charts.VerticalValueBarChart
 import com.foxhole.beta.ui.statistics.charts.chartColor
 import com.foxhole.beta.ui.statistics.charts.chartCountryColors
-import com.foxhole.beta.ui.statistics.charts.chartVisualTokens
 import com.foxhole.beta.ui.theme.LocalFoxholeSemanticColors
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -768,7 +765,6 @@ private fun CountryVerticalBarChart(
 ) {
     val context = LocalContext.current
     val colors = statisticsCountryChartColors()
-    val tokens = chartVisualTokens()
     val maxBytes = points.maxOfOrNull(CountryTrafficUiRow::bytes)?.coerceAtLeast(1L) ?: 1L
     val chartDescription =
         listOf(
@@ -778,11 +774,6 @@ private fun CountryVerticalBarChart(
                 .joinToString(),
         ).filter { value -> value.isNotBlank() }.joinToString(". ")
     val visible = rememberOneShotVisible("countries")
-    val progress by animateFloatAsState(
-        targetValue = if (visible) 1f else 0f,
-        animationSpec = tween(durationMillis = DONUT_ANIMATION_DURATION_MS, easing = FastOutSlowInEasing),
-        label = "country-bars-progress",
-    )
     Column(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(6.dp),
@@ -792,43 +783,17 @@ private fun CountryVerticalBarChart(
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        Canvas(
-            modifier =
-            Modifier
+        VerticalValueBarChart(
+            values = points.map(CountryTrafficUiRow::bytes),
+            colors = colors,
+            maxValue = maxBytes,
+            visible = visible,
+            contentDescription = chartDescription,
+            modifier = Modifier
                 .fillMaxWidth()
-                .weight(1f)
-                .semantics { contentDescription = chartDescription },
-        ) {
-            val chartTop = 8.dp.toPx()
-            val chartBottom = size.height - 4.dp.toPx()
-            val chartHeight = (chartBottom - chartTop).coerceAtLeast(1f)
-            drawLine(
-                color = tokens.gridColor,
-                start = Offset(0f, chartTop),
-                end = Offset(size.width, chartTop),
-                pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 8f)),
-            )
-            val slotWidth = size.width / points.size.coerceAtLeast(1).toFloat()
-            val barWidth = (slotWidth * 0.48f).coerceAtMost(18.dp.toPx())
-            val radius = CornerRadius(tokens.barCornerRadius.toPx(), tokens.barCornerRadius.toPx())
-            points.forEachIndexed { index, point ->
-                val normalized = point.bytes.toFloat() / maxBytes.toFloat()
-                val barHeight = (chartHeight * normalized * progress).coerceAtLeast(if (point.bytes > 0L) 2f else 0f)
-                val center = slotWidth * index + slotWidth / 2f
-                drawRoundRect(
-                    color = tokens.trackColor,
-                    topLeft = Offset(center - barWidth / 2f, chartTop),
-                    size = Size(barWidth, chartHeight),
-                    cornerRadius = radius,
-                )
-                drawRoundRect(
-                    color = colors[index % colors.size],
-                    topLeft = Offset(center - barWidth / 2f, chartBottom - barHeight),
-                    size = Size(barWidth, barHeight),
-                    cornerRadius = radius,
-                )
-            }
-        }
+                .weight(1f),
+            animationLabel = "country-bars-progress",
+        )
         Row(modifier = Modifier.fillMaxWidth()) {
             points.forEach { point ->
                 Text(
@@ -1028,18 +993,18 @@ private fun ProtocolStatCard(
                 modifier = Modifier.padding(top = 4.dp),
                 contentAlignment = Alignment.Center,
             ) {
-                AnimatedDonutChart(
+                AnimatedSplitDonutChart(
                     successRate = successRate ?: 0f,
                     errorRate = errorRate ?: 0f,
                     visible = visible,
-                    contentDescription =
-                    stringResource(
+                    contentDescription = stringResource(
                         R.string.statistics_profile_protocol_metrics,
                         successText,
                         errorText,
                         formatBytes(context, item.totalBytes),
                     ),
                     modifier = Modifier.size(76.dp),
+                    animationLabel = "protocol-donut-${item.protocol.name}",
                 )
                 Text(
                     text = successText,
@@ -1060,50 +1025,6 @@ private fun ProtocolStatCard(
                 overflow = TextOverflow.Ellipsis,
             )
         }
-    }
-}
-
-@Composable
-private fun AnimatedDonutChart(
-    successRate: Float,
-    errorRate: Float,
-    visible: Boolean,
-    contentDescription: String,
-    modifier: Modifier = Modifier,
-) {
-    val tokens = chartVisualTokens()
-    val successColor = chartColor(ChartColorToken.SUCCESS)
-    val errorColor = chartColor(ChartColorToken.ERROR)
-    val progress by animateFloatAsState(
-        targetValue = if (visible) 1f else 0f,
-        animationSpec = tween(durationMillis = DONUT_ANIMATION_DURATION_MS, easing = FastOutSlowInEasing),
-        label = "donut-progress",
-    )
-    Canvas(modifier = modifier.semantics { this.contentDescription = contentDescription }) {
-        val stroke = Stroke(width = tokens.ringStrokeWidth.toPx(), cap = StrokeCap.Round)
-        val successSweep = 360f * successRate.coerceIn(0f, 1f) * progress
-        val errorSweep = 360f * errorRate.coerceIn(0f, 1f) * progress
-        drawArc(
-            color = tokens.ringTrackColor,
-            startAngle = -90f,
-            sweepAngle = 360f,
-            useCenter = false,
-            style = stroke,
-        )
-        drawArc(
-            color = successColor,
-            startAngle = -90f,
-            sweepAngle = successSweep,
-            useCenter = false,
-            style = stroke,
-        )
-        drawArc(
-            color = errorColor,
-            startAngle = -90f + successSweep,
-            sweepAngle = errorSweep,
-            useCenter = false,
-            style = stroke,
-        )
     }
 }
 
@@ -1232,9 +1153,6 @@ private fun TransportStatisticsSection(items: List<TransportStatisticsUiItem>) {
 @Composable
 private fun TransportRow(item: TransportStatisticsUiItem) {
     val context = LocalContext.current
-    val tokens = chartVisualTokens()
-    val successColor = chartColor(ChartColorToken.SUCCESS)
-    val errorColor = chartColor(ChartColorToken.ERROR)
     val barDescription =
         "${transportLabel(item.transport)} ${
             stringResource(
@@ -1255,32 +1173,14 @@ private fun TransportRow(item: TransportStatisticsUiItem) {
             style = MaterialTheme.typography.bodyMedium,
             fontWeight = FontWeight.SemiBold,
         )
-        Canvas(
+        SplitOutcomeBar(
+            successRate = item.successRate,
+            errorRate = item.errorRate,
+            contentDescription = barDescription,
             modifier = Modifier
                 .weight(1f)
-                .height(10.dp)
-                .semantics { contentDescription = barDescription },
-        ) {
-            val radius = CornerRadius(tokens.barCornerRadius.toPx(), tokens.barCornerRadius.toPx())
-            drawRoundRect(
-                color = tokens.trackColor,
-                cornerRadius = radius,
-            )
-            drawRoundRect(
-                color = successColor,
-                size = Size(size.width * item.successRate.coerceIn(0f, 1f), size.height),
-                cornerRadius = radius,
-            )
-            if (item.errorRate > 0f) {
-                val errorWidth = size.width * item.errorRate.coerceIn(0f, 1f)
-                drawRoundRect(
-                    color = errorColor,
-                    topLeft = Offset(size.width - errorWidth, 0f),
-                    size = Size(errorWidth, size.height),
-                    cornerRadius = radius,
-                )
-            }
-        }
+                .height(10.dp),
+        )
         Text(
             text = formatBytes(context, item.totalBytes),
             style = MaterialTheme.typography.labelMedium,
@@ -1371,13 +1271,29 @@ private fun DnsProtectionCard(
 private fun DnsProtectionChart(rows: List<DnsProtectionAppRow>) {
     val maxBlocked = rows.maxOfOrNull(DnsProtectionAppRow::estimatedBlockedQueries)?.coerceAtLeast(1) ?: 1
     val categoryColors = dnsCategoryColorMap()
-    val tokens = chartVisualTokens()
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         rows.forEachIndexed { index, row ->
             val barDescription =
                 "${row.label}: ${row.estimatedBlockedQueries} ${
                     stringResource(R.string.statistics_dns_blocked_queries)
                 }, ${formatPercent(row.blockRatio)}"
+            val barSegments =
+                row.categoryRatios.entries.map { (category, ratio) ->
+                    val categoryShareOfBlocked =
+                        if (row.blockRatio > 0f) {
+                            (ratio / row.blockRatio).coerceIn(0f, 1f)
+                        } else {
+                            0f
+                        }
+                    SegmentedBarSegment(
+                        color = categoryColors.getValue(category),
+                        ratio = categoryShareOfBlocked,
+                        minVisibleWidth = 1.5.dp,
+                    )
+                }
+            val barScale =
+                (row.estimatedBlockedQueries.toFloat() / maxBlocked.toFloat())
+                    .coerceIn(0f, 1f)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -1399,41 +1315,14 @@ private fun DnsProtectionChart(rows: List<DnsProtectionAppRow>) {
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                Canvas(
-                    modifier =
-                    Modifier
+                SegmentedLinearBar(
+                    segments = barSegments,
+                    scale = barScale,
+                    contentDescription = barDescription,
+                    modifier = Modifier
                         .weight(1f)
-                        .height(14.dp)
-                        .semantics { contentDescription = barDescription },
-                ) {
-                    val radius = CornerRadius(tokens.barCornerRadius.toPx(), tokens.barCornerRadius.toPx())
-                    drawRoundRect(color = tokens.trackColor, size = size, cornerRadius = radius)
-                    val scaledWidth =
-                        size.width *
-                            (row.estimatedBlockedQueries.toFloat() / maxBlocked.toFloat()).coerceIn(0f, 1f)
-                    var left = 0f
-                    row.categoryRatios.entries.forEach { (category, ratio) ->
-                        val categoryShareOfBlocked =
-                            if (row.blockRatio > 0f) {
-                                (ratio / row.blockRatio).coerceIn(0f, 1f)
-                            } else {
-                                0f
-                            }
-                        val width =
-                            (scaledWidth * categoryShareOfBlocked)
-                                .coerceAtLeast(if (row.estimatedBlockedQueries > 0) 1.5f else 0f)
-                                .coerceAtMost((scaledWidth - left).coerceAtLeast(0f))
-                        if (width > 0f) {
-                            drawRoundRect(
-                                color = categoryColors.getValue(category),
-                                topLeft = Offset(left, 0f),
-                                size = Size(width, size.height),
-                                cornerRadius = radius,
-                            )
-                            left += width
-                        }
-                    }
-                }
+                        .height(14.dp),
+                )
                 Text(
                     text = row.estimatedBlockedQueries.toString(),
                     modifier = Modifier.widthIn(min = 34.dp),
@@ -1450,7 +1339,6 @@ private fun DnsProtectionChart(rows: List<DnsProtectionAppRow>) {
 private fun DnsCategoryDonutChart(summary: DnsProtectionSummary) {
     val visible = rememberOneShotVisible("dns-categories")
     val categoryColors = dnsCategoryColorMap()
-    val tokens = chartVisualTokens()
     val categoryDescriptions =
         summary.categoryRows.map { row ->
             "${stringResource(dnsCategoryLabel(row.category))} ${row.blockedQueries}"
@@ -1460,11 +1348,6 @@ private fun DnsCategoryDonutChart(summary: DnsProtectionSummary) {
             stringResource(R.string.statistics_dns_categories_title),
             categoryDescriptions.joinToString(),
         ).filter { value -> value.isNotBlank() }.joinToString(". ")
-    val progress by animateFloatAsState(
-        targetValue = if (visible) 1f else 0f,
-        animationSpec = tween(durationMillis = DONUT_ANIMATION_DURATION_MS, easing = FastOutSlowInEasing),
-        label = "dns-category-donut",
-    )
     Surface(
         shape = MaterialTheme.shapes.small,
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.26f),
@@ -1475,33 +1358,14 @@ private fun DnsCategoryDonutChart(summary: DnsProtectionSummary) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(contentAlignment = Alignment.Center) {
-                Canvas(
-                    modifier = Modifier
-                        .size(118.dp)
-                        .semantics { contentDescription = donutDescription },
-                ) {
-                    val total = summary.categoryRows.sumOf(DnsProtectionCategoryRow::blockedQueries).coerceAtLeast(1)
-                    val stroke = Stroke(width = tokens.ringStrokeWidth.toPx(), cap = StrokeCap.Round)
-                    var start = -90f
-                    drawArc(
-                        color = tokens.ringTrackColor,
-                        startAngle = -90f,
-                        sweepAngle = 360f,
-                        useCenter = false,
-                        style = stroke,
-                    )
-                    summary.categoryRows.forEach { row ->
-                        val sweep = 360f * (row.blockedQueries.toFloat() / total.toFloat()) * progress
-                        drawArc(
-                            color = categoryColors.getValue(row.category),
-                            startAngle = start,
-                            sweepAngle = sweep,
-                            useCenter = false,
-                            style = stroke,
-                        )
-                        start += sweep
-                    }
-                }
+                AnimatedSegmentDonutChart(
+                    values = summary.categoryRows.map { row -> row.blockedQueries.toFloat() },
+                    colors = summary.categoryRows.map { row -> categoryColors.getValue(row.category) },
+                    visible = visible,
+                    contentDescription = donutDescription,
+                    modifier = Modifier.size(118.dp),
+                    animationLabel = "dns-category-donut",
+                )
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
                         text = formatPercent(summary.blockRatio),
@@ -1562,14 +1426,8 @@ private fun DnsTrafficShareRing(
 ) {
     val context = LocalContext.current
     val visible = rememberOneShotVisible("dns-traffic-share:${metric.category.name}")
-    val progress by animateFloatAsState(
-        targetValue = if (visible) 1f else 0f,
-        animationSpec = tween(durationMillis = DONUT_ANIMATION_DURATION_MS, easing = FastOutSlowInEasing),
-        label = "dns-traffic-share-ring",
-    )
     val categoryLabel = stringResource(dnsCategoryLabel(metric.category))
     val ringDescription = "$categoryLabel: ${formatPercent(metric.ratio)}"
-    val tokens = chartVisualTokens()
     val color = dnsCategoryColor(metric.category)
     Surface(
         modifier = modifier,
@@ -1583,30 +1441,15 @@ private fun DnsTrafficShareRing(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(contentAlignment = Alignment.Center) {
-                Canvas(
-                    modifier =
-                    Modifier
-                        .size(58.dp)
-                        .semantics {
-                            contentDescription = ringDescription
-                        },
-                ) {
-                    val stroke = Stroke(width = 8.dp.toPx(), cap = StrokeCap.Round)
-                    drawArc(
-                        color = tokens.ringTrackColor,
-                        startAngle = -90f,
-                        sweepAngle = 360f,
-                        useCenter = false,
-                        style = stroke,
-                    )
-                    drawArc(
-                        color = color,
-                        startAngle = -90f,
-                        sweepAngle = 360f * metric.ratio.coerceIn(0f, 1f) * progress,
-                        useCenter = false,
-                        style = stroke,
-                    )
-                }
+                AnimatedProgressRing(
+                    value = metric.ratio,
+                    color = color,
+                    visible = visible,
+                    contentDescription = ringDescription,
+                    modifier = Modifier.size(58.dp),
+                    strokeWidth = 8.dp,
+                    animationLabel = "dns-traffic-share-ring-${metric.category.name}",
+                )
                 Text(
                     text = formatPercent(metric.ratio),
                     style = MaterialTheme.typography.labelSmall,
@@ -1736,34 +1579,25 @@ private fun DnsProtectionAppRowView(
 
 @Composable
 private fun DnsAppDropStack(row: DnsProtectionAppRow) {
-    val tokens = chartVisualTokens()
     val categoryColors = dnsCategoryColorMap()
     val description =
         "${row.label}: ${formatPercent(row.blockRatio)} ${
             stringResource(R.string.statistics_dns_block_ratio)
         }"
-    Canvas(
+    val segments =
+        row.categoryRatios.map { (category, ratio) ->
+            SegmentedBarSegment(
+                color = categoryColors.getValue(category),
+                ratio = ratio,
+            )
+        }
+    SegmentedLinearBar(
+        segments = segments,
+        contentDescription = description,
         modifier = Modifier
             .fillMaxWidth()
-            .height(7.dp)
-            .semantics { contentDescription = description },
-    ) {
-        val radius = CornerRadius(tokens.barCornerRadius.toPx(), tokens.barCornerRadius.toPx())
-        drawRoundRect(color = tokens.trackColor, cornerRadius = radius)
-        var left = 0f
-        row.categoryRatios.forEach { (category, ratio) ->
-            val width = size.width * ratio.coerceIn(0f, 1f)
-            if (width > 0f) {
-                drawRoundRect(
-                    color = categoryColors.getValue(category),
-                    topLeft = Offset(left, 0f),
-                    size = Size(width, size.height),
-                    cornerRadius = radius,
-                )
-                left += width
-            }
-        }
-    }
+            .height(7.dp),
+    )
 }
 
 @Composable
@@ -2231,7 +2065,6 @@ private fun AppTrafficStackedBarRow(
     onClick: () -> Unit,
 ) {
     val context = LocalContext.current
-    val tokens = chartVisualTokens()
     val sentColor = chartColor(ChartColorToken.TX)
     val receivedColor = chartColor(ChartColorToken.RX)
     val barDescription =
@@ -2281,42 +2114,28 @@ private fun AppTrafficStackedBarRow(
                     maxLines = 1,
                 )
             }
-            Canvas(
-                modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .height(6.dp)
-                    .semantics { contentDescription = barDescription },
-            ) {
-                val radius = CornerRadius(tokens.barCornerRadius.toPx(), tokens.barCornerRadius.toPx())
-                drawRoundRect(color = tokens.trackColor, size = size, cornerRadius = radius)
-                val scaledWidth = size.width * (row.totalBytes.toFloat() / maxTotal.toFloat()).coerceIn(0f, 1f)
-                if (scaledWidth <= 0f) {
-                    return@Canvas
-                }
-                val total = row.totalBytes.coerceAtLeast(1L).toFloat()
-                val sentWidth = (scaledWidth * (row.txBytes.coerceAtLeast(0L).toFloat() / total)).coerceAtLeast(
-                    if (row.txBytes > 0L) 1.dp.toPx() else 0f,
-                )
-                val receivedWidth = (scaledWidth - sentWidth).coerceAtLeast(
-                    if (row.rxBytes > 0L) 1.dp.toPx() else 0f,
-                ).coerceAtMost((scaledWidth - sentWidth).coerceAtLeast(0f))
-                if (sentWidth > 0f) {
-                    drawRoundRect(
+            val total = row.totalBytes.coerceAtLeast(1L).toFloat()
+            val barSegments =
+                listOf(
+                    SegmentedBarSegment(
                         color = sentColor,
-                        size = Size(sentWidth.coerceAtMost(scaledWidth), size.height),
-                        cornerRadius = radius,
-                    )
-                }
-                if (receivedWidth > 0f) {
-                    drawRoundRect(
+                        ratio = row.txBytes.coerceAtLeast(0L).toFloat() / total,
+                        minVisibleWidth = 1.dp,
+                    ),
+                    SegmentedBarSegment(
                         color = receivedColor,
-                        topLeft = Offset(sentWidth.coerceAtMost(scaledWidth), 0f),
-                        size = Size(receivedWidth, size.height),
-                        cornerRadius = radius,
-                    )
-                }
-            }
+                        ratio = row.rxBytes.coerceAtLeast(0L).toFloat() / total,
+                        minVisibleWidth = 1.dp,
+                    ),
+                )
+            SegmentedLinearBar(
+                segments = barSegments,
+                scale = (row.totalBytes.toFloat() / maxTotal.toFloat()).coerceIn(0f, 1f),
+                contentDescription = barDescription,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(6.dp),
+            )
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text(
                     text = "${stringResource(R.string.traffic_sent)} ${formatBytes(context, row.txBytes)}",
@@ -3917,7 +3736,6 @@ private fun maxOfNotNull(vararg values: Long?): Long? =
     values.filterNotNull().maxOrNull()
 
 private val COMPACT_PROTOCOL_GRID_WIDTH = 360.dp
-private const val DONUT_ANIMATION_DURATION_MS = 700
 private const val PROFILE_DETAIL_OVERALL_KEY = "__overall__"
 private const val MIN_TIMELINE_TRAFFIC_SCALE_BYTES = 10L * 1024L * 1024L
 private const val PROFILE_TRAFFIC_PREVIEW_LIMIT = 6

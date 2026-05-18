@@ -173,13 +173,13 @@ fun FoxholeApp(
                     }.orEmpty()
                 }.onSuccess { raw ->
                     viewModel.importProfileRaw(raw)
-	                }.onFailure { error ->
-	                    if (error is ProfileImportPayloadTooLargeException) {
-	                        snackbarHostState.showBanner(profileImportTooLargeMessage, FoxholeBannerTone.ERROR)
-	                    } else {
-	                        snackbarHostState.showBanner(profileImportFailedMessage, FoxholeBannerTone.ERROR)
-	                    }
-	                }
+                }.onFailure { error ->
+                    if (error is ProfileImportPayloadTooLargeException) {
+                        snackbarHostState.showBanner(profileImportTooLargeMessage, FoxholeBannerTone.ERROR)
+                    } else {
+                        snackbarHostState.showBanner(profileImportFailedMessage, FoxholeBannerTone.ERROR)
+                    }
+                }
             }
         }
 

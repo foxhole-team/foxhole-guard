@@ -535,7 +535,8 @@ private fun HomeRouteUiState.shouldShowConnectedRouteLoading(
 
 private fun HomeRouteUiState.hasDashboardRouteProfile(): Boolean =
     connection.trafficMode in setOf(TrafficMode.TUNNEL, TrafficMode.PROXY) &&
-        connection.profileId != FoxholeVpnService.LOCAL_GUARD_PROFILE_ID
+        connection.profileId != FoxholeVpnService.LOCAL_GUARD_PROFILE_ID &&
+        connection.profileId != FoxholeVpnService.TOR_ONLY_PROFILE_ID
 
 private fun HomeRouteUiState.homeNetworkTitleRes(
     showConnectionStatus: Boolean,
@@ -1010,6 +1011,10 @@ internal fun ConnectionSnapshot.isPrimaryConnectionRuntime(): Boolean =
         profileId != FoxholeVpnService.LOCAL_GUARD_PROFILE_ID
 
 internal fun HomeRouteUiState.hasPrimaryConnectionRuntime(): Boolean = connection.isPrimaryConnectionRuntime()
+
+internal fun HomeRouteUiState.hasTorOnlyRuntime(): Boolean =
+    connection.state in ACTIVE_CONNECTION_STATES &&
+        connection.profileId == FoxholeVpnService.TOR_ONLY_PROFILE_ID
 
 internal fun homePrimaryAction(state: HomeRouteUiState): HomePrimaryAction =
     if (state.hasPrimaryConnectionRuntime()) {
