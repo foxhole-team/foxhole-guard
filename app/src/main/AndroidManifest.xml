@@ -16,7 +16,7 @@
         android:name="android.permission.PACKAGE_USAGE_STATS"
         tools:ignore="ProtectedPermissions" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <!-- Required so Split Tunnel include/exclude rules can show the full installed-app list. -->
+    <!-- Required for app selection, local app inventory/risk review, and optional per-app traffic statistics. -->
     <uses-permission
         android:name="android.permission.QUERY_ALL_PACKAGES"
         tools:ignore="QueryAllPackagesPermission" />

@@ -202,9 +202,13 @@ internal fun isPackageReplaceRuntimeIdleAfterKill(
     killTrafficMode: TrafficMode,
     killStartedAtMs: Long,
 ): Boolean =
-    snapshot.lastChangeAt >= killStartedAtMs &&
-        snapshot.state !in ACTIVE_CONNECTION_STATES &&
-        (killTrafficMode != TrafficMode.TUNNEL || !hasActiveVpnNetwork)
+    when {
+        killTrafficMode == TrafficMode.TUNNEL && !hasActiveVpnNetwork -> true
+        else ->
+            snapshot.lastChangeAt >= killStartedAtMs &&
+                snapshot.state !in ACTIVE_CONNECTION_STATES &&
+                (killTrafficMode != TrafficMode.TUNNEL || !hasActiveVpnNetwork)
+    }
 
 internal data class PackageReplaceRecoveryPlan(
     val killStaleRuntime: Boolean,

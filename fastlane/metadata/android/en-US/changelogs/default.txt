@@ -1,1 +1,4 @@
-1.0.0-beta1: first Foxhole beta release
+1.0.0-beta1: first Foxhole beta release.
+
+Notes:
+- Profiles that require route excludes need Android 13 or newer. On Android 12 and older, Foxhole now rejects those profiles instead of silently dropping route excludes.

@@ -51,7 +51,7 @@ Profiles can be imported from files, clipboard, QR codes, and HTTPS subscription
 - Encrypted local storage
 - No ads / analytics / telemetry
 
->QUERY_ALL_PACKAGES is used only for the Split Tunnel app picker, so Foxhole can list installed apps for include/exclude routing. Package lists stay local.
+>Permission and privacy note: `QUERY_ALL_PACKAGES` lets Foxhole show installed apps for Split Tunnel include/exclude routing, local installed-app inventory/security review, and optional per-app traffic statistics. Usage Access (`PACKAGE_USAGE_STATS`) is requested only when per-app traffic statistics are enabled. Package lists, local risk signals, traffic statistics, diagnostics, and Smart start history stay on the device unless you explicitly export or share them.
 
 ## Foxhole smart config
 

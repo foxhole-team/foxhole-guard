@@ -86,7 +86,7 @@ class BootReceiverTest {
     }
 
     @Test
-    fun `package replace wait requires a kill-time bridge update`() {
+    fun `package replace wait accepts released tunnel network even with stale idle snapshot`() {
         val snapshot =
             ConnectionSnapshot(
                 state = ConnectionState.IDLE,
@@ -94,7 +94,26 @@ class BootReceiverTest {
                 lastChangeAt = 100L,
             )
 
-        assertFalse(
+        assertTrue(
+            isPackageReplaceRuntimeIdleAfterKill(
+                snapshot = snapshot,
+                hasActiveVpnNetwork = false,
+                killTrafficMode = TrafficMode.TUNNEL,
+                killStartedAtMs = 200L,
+            ),
+        )
+    }
+
+    @Test
+    fun `package replace wait accepts released tunnel network even with stale active snapshot`() {
+        val snapshot =
+            ConnectionSnapshot(
+                state = ConnectionState.CONNECTED,
+                trafficMode = TrafficMode.TUNNEL,
+                lastChangeAt = 100L,
+            )
+
+        assertTrue(
             isPackageReplaceRuntimeIdleAfterKill(
                 snapshot = snapshot,
                 hasActiveVpnNetwork = false,
@@ -124,19 +143,19 @@ class BootReceiverTest {
     }
 
     @Test
-    fun `package replace wait accepts idle bridge and released vpn network`() {
+    fun `package replace wait still requires bridge update for proxy runtime`() {
         val snapshot =
             ConnectionSnapshot(
                 state = ConnectionState.IDLE,
-                trafficMode = TrafficMode.TUNNEL,
-                lastChangeAt = 300L,
+                trafficMode = TrafficMode.PROXY,
+                lastChangeAt = 100L,
             )
 
-        assertTrue(
+        assertFalse(
             isPackageReplaceRuntimeIdleAfterKill(
                 snapshot = snapshot,
                 hasActiveVpnNetwork = false,
-                killTrafficMode = TrafficMode.TUNNEL,
+                killTrafficMode = TrafficMode.PROXY,
                 killStartedAtMs = 200L,
             ),
         )
