@@ -317,16 +317,16 @@ class SmartStartProtocolPresentationTest {
         assertEquals("Управление\\nпротоколами VPN", stringValue(ruStrings, "smart_profile_menu_title"))
         assertEquals("Протокол", stringValue(ruStrings, "smart_profile_menu_protocol_column"))
         assertEquals("Статус", stringValue(ruStrings, "smart_profile_menu_status_column"))
-        assertEquals("Server ping", stringValue(ruStrings, "smart_profile_menu_server_ping_column"))
-        assertEquals("Latency %1\$s", stringValue(ruStrings, "smart_profile_menu_latency_column"))
+        assertEquals("Пинг сервера", stringValue(ruStrings, "smart_profile_menu_server_ping_column"))
+        assertEquals("Задержка %1\$s", stringValue(ruStrings, "smart_profile_menu_latency_column"))
         assertFalse(ruStrings.contains("name=\"smart_profile_menu_dashboard_on_column\""))
         assertFalse(ruStrings.contains("name=\"smart_profile_menu_on_column\""))
         assertEquals(
-            "Нажмите на протокол для включения/отключения\\nПериодически обновляйте для улучшения коннекта",
+            "Нажмите на протокол, чтобы включить или отключить его\\nПериодически обновляйте данные для более стабильного подключения",
             stringValue(ruStrings, "smart_profile_metrics_refresh_hint"),
         )
         assertEquals(
-            "Нажмите на протокол для включения/отключения\\nПериодически обновляйте для улучшения коннекта",
+            "Нажмите на протокол, чтобы включить или отключить его\\nПериодически обновляйте данные для более стабильного подключения",
             stringValue(ruStrings, "smart_profile_metrics_refresh_compact_hint"),
         )
         assertFalse(ruStrings.contains("name=\"smart_profile_legend_current\""))
@@ -359,7 +359,7 @@ class SmartStartProtocolPresentationTest {
             stringValue(ruStrings, "smart_start_first_analysis_body"),
         )
         assertEquals("Продолжить", stringValue(ruStrings, "smart_start_first_analysis_continue"))
-        assertEquals("Выключить LAN Proxy?", stringValue(ruStrings, "lan_proxy_disable_confirm_title"))
+        assertEquals("Выключить LAN-прокси?", stringValue(ruStrings, "lan_proxy_disable_confirm_title"))
         assertEquals("Быстрый старт", stringValue(ruStrings, "help_quick_start_title"))
         assertEquals("Режимы подключения", stringValue(ruStrings, "help_connection_modes_title"))
         assertEquals("Диагностика и поддержка", stringValue(ruStrings, "help_diagnostics_support_title"))

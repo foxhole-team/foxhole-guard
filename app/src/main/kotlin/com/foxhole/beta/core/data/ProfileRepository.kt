@@ -6,7 +6,6 @@ import com.foxhole.beta.BuildConfig
 import com.foxhole.beta.core.diagnostics.DiagnosticSanitizer
 import com.foxhole.beta.core.diagnostics.DiagnosticsLogger
 import com.foxhole.beta.core.importer.ProfileImportParser
-import com.foxhole.beta.core.importer.SubscriptionMetadataParser
 import com.foxhole.beta.core.model.CachedActiveProfile
 import com.foxhole.beta.core.model.DnsSettings
 import com.foxhole.beta.core.model.ParsedImport
@@ -38,12 +37,8 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
-import okhttp3.HttpUrl
 import okhttp3.OkHttpClient
-import okhttp3.Request
 import java.net.URI
-import java.nio.charset.StandardCharsets
-import java.util.Base64
 import java.util.UUID
 
 class ProfileRepository(
@@ -59,14 +54,6 @@ class ProfileRepository(
     private val dnsFilterAssetInstaller: DnsFilterAssetInstaller,
     private val json: Json,
 ) {
-    private data class SubscriptionResponse(
-        val body: String? = null,
-        val etag: String? = null,
-        val metadataTitle: String? = null,
-        val subscriptionExpiresAt: Long? = null,
-        val notModified: Boolean = false,
-    )
-
     private data class SubscriptionGroupMember(
         val entity: ProfileEntity,
         val storedSecret: StoredProfileSecret,
@@ -114,9 +101,7 @@ class ProfileRepository(
     )
 
     private val dao = database.profileDao()
-    private val subscriptionHttpClient: OkHttpClient by lazy {
-        httpClient.withBoundedRemoteFetchTimeouts()
-    }
+    private val subscriptionFetchUseCase = SubscriptionFetchUseCase(httpClient)
 
     val profiles: Flow<List<Profile>> = dao.observeProfiles().map { list -> list.map { entity -> resolveDomainProfile(entity) } }
     val activeProfile: Flow<Profile?> =
@@ -327,7 +312,7 @@ class ProfileRepository(
             }
         val response =
             runCatching {
-                fetchSubscriptionResponse(
+                subscriptionFetchUseCase.fetchSubscriptionResponse(
                     sourceUrl = sourceUrl,
                     safeUrl = safeUrl,
                     lastEtag = null,
@@ -790,7 +775,7 @@ class ProfileRepository(
             }
         val response =
             runCatching {
-                fetchSubscriptionResponse(
+                subscriptionFetchUseCase.fetchSubscriptionResponse(
                     sourceUrl = sourceUrl,
                     safeUrl = safeUrl,
                     lastEtag = entity.lastEtag,
@@ -1104,83 +1089,6 @@ class ProfileRepository(
         return requireProfile(refreshedProfileId)
     }
 
-    private suspend fun fetchSubscriptionResponse(
-        sourceUrl: String,
-        safeUrl: HttpUrl,
-        lastEtag: String?,
-        allowHttp: Boolean,
-        callTimeoutMs: Long? = null,
-    ): SubscriptionResponse =
-        withContext(Dispatchers.IO) {
-            executeSubscriptionRequest(
-                client = subscriptionHttpClientFor(callTimeoutMs),
-                safeUrl = safeUrl,
-                sourceUrl = sourceUrl,
-                lastEtag = lastEtag,
-                allowHttp = allowHttp,
-            )
-        }
-
-    private fun subscriptionHttpClientFor(callTimeoutMs: Long?): OkHttpClient {
-        val timeoutMs = callTimeoutMs?.coerceAtLeast(1L) ?: return subscriptionHttpClient
-        return httpClient.withBoundedRemoteFetchTimeouts(
-            connectTimeoutMs = timeoutMs,
-            readTimeoutMs = timeoutMs,
-            callTimeoutMs = timeoutMs,
-        )
-    }
-
-    private fun buildSubscriptionRequest(
-        safeUrl: HttpUrl,
-        lastEtag: String?,
-    ): Request =
-        Request.Builder()
-            .url(safeUrl)
-            .get()
-            .header("User-Agent", "FoxHole/${BuildConfig.VERSION_NAME}")
-            .apply {
-                lastEtag?.takeIf(String::isNotBlank)?.let { header("If-None-Match", it) }
-            }.build()
-
-    private fun executeSubscriptionRequest(
-        client: OkHttpClient,
-        safeUrl: HttpUrl,
-        sourceUrl: String,
-        lastEtag: String?,
-        allowHttp: Boolean,
-    ): SubscriptionResponse {
-        val response =
-            executeBoundedPublicGet(
-                client = client,
-                initialUrl = safeUrl,
-                allowHttp = allowHttp,
-                maxBytes = MAX_SUBSCRIPTION_BYTES,
-            ) { url ->
-                buildSubscriptionRequest(safeUrl = url, lastEtag = lastEtag)
-            }
-        if (response.code == 304) {
-            return SubscriptionResponse(notModified = true)
-        }
-        if (!response.isSuccessful) {
-            error(
-                describeSubscriptionHttpFailure(
-                    code = response.code,
-                    serverHeader = response.headers["Server"],
-                    responseBody = response.body.orEmpty(),
-                ),
-            )
-        }
-        return SubscriptionResponse(
-            body = response.body.orEmpty(),
-            etag = response.headers["ETag"],
-            metadataTitle = response.headers["profile-title"].decodeSubscriptionMetadataHeader(),
-            subscriptionExpiresAt =
-                SubscriptionMetadataParser
-                    .expirationFromSubscriptionUserinfo(response.headers["subscription-userinfo"])
-                    ?: SubscriptionMetadataParser.expirationFromSubscriptionUrl(sourceUrl),
-        )
-    }
-
     private suspend fun persistCachedActiveProfile(profile: Profile?) {
         settingsRepository.updateLastActiveProfile(
             profile?.let {
@@ -1283,22 +1191,6 @@ class ProfileRepository(
             }
         }
 
-    private fun String?.decodeSubscriptionMetadataHeader(): String? {
-        val raw = this?.trim()?.takeIf { it.isNotBlank() } ?: return null
-        val value =
-            if (raw.startsWith("base64:", ignoreCase = true)) {
-                runCatching {
-                    String(
-                        Base64.getDecoder().decode(raw.removePrefix("base64:").removePrefix("BASE64:")),
-                        StandardCharsets.UTF_8,
-                    )
-                }.getOrNull()
-            } else {
-                raw
-            }
-        return value?.trim()?.takeIf { it.isNotBlank() }
-    }
-
     private fun String.shouldReplaceSubscriptionName(defaultImportedName: String): Boolean =
         isBlank() || this == "subscription" || this == defaultImportedName
 
@@ -1382,39 +1274,6 @@ class ProfileRepository(
     private companion object {
         private const val LOG_TAG = "FoxholeProfileRepo"
     }
-}
-
-internal fun StoredProfileSecret.withUpdatedResolvedConfigJson(
-    sanitized: String,
-    protocolOptionIdOverride: String? = null,
-): StoredProfileSecret {
-    if (protocolOptions.isEmpty()) {
-        return copy(resolvedConfigJson = sanitized)
-    }
-    val targetOption =
-        protocolOptionIdOverride
-            ?.takeIf(String::isNotBlank)
-            ?.let { overrideId -> protocolOptions.firstOrNull { option -> option.id == overrideId } }
-            ?: selectedProtocolOptionId
-                ?.takeIf(String::isNotBlank)
-                ?.let { selectedId -> protocolOptions.firstOrNull { option -> option.id == selectedId } }
-            ?: protocolOptions.firstOrNull()
-            ?: return copy(resolvedConfigJson = sanitized)
-    val shouldMirrorTopLevel =
-        selectedProtocolOptionId == targetOption.id ||
-            (selectedProtocolOptionId == null && protocolOptions.firstOrNull()?.id == targetOption.id) ||
-            resolvedConfigJson == targetOption.normalizedConfigJson
-    return copy(
-        resolvedConfigJson = if (shouldMirrorTopLevel) sanitized else resolvedConfigJson,
-        protocolOptions =
-            protocolOptions.map { option ->
-                if (option.id == targetOption.id) {
-                    option.copy(normalizedConfigJson = sanitized)
-                } else {
-                    option
-                }
-            },
-    )
 }
 
 private fun DnsSettings.bundledAdGuardFilterEnabled(): Boolean =

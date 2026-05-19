@@ -26,15 +26,12 @@ import com.foxhole.beta.core.diagnostics.DiagnosticsLogger
 import com.foxhole.beta.core.model.NetworkActivityEvent
 import com.foxhole.beta.core.model.VpnSession
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.currentCoroutineContext
-import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.net.InetAddress
 import java.net.NetworkInterface
 import java.util.concurrent.CancellationException
-import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
 
 internal fun createVpnRuntime(
@@ -57,26 +54,7 @@ internal data class NetworkActivityContext(
     val sessionId: String? = null,
 )
 
-private const val ANDROID_ROUTE_EXCLUDE_LIMIT = 512
-private const val RUNTIME_FORCE_CLOSE_TIMEOUT_MS = 700L
 private val libboxRuntimeOperationMutex = Mutex()
-
-internal enum class RouteExcludeCompatibility {
-    SUPPORTED,
-    UNSUPPORTED_ANDROID_VERSION,
-    EXCEEDS_ANDROID_LIMIT,
-}
-
-internal fun routeExcludeCompatibility(
-    apiLevel: Int,
-    excludeRouteCount: Int,
-): RouteExcludeCompatibility =
-    when {
-        excludeRouteCount <= 0 -> RouteExcludeCompatibility.SUPPORTED
-        apiLevel < Build.VERSION_CODES.TIRAMISU -> RouteExcludeCompatibility.UNSUPPORTED_ANDROID_VERSION
-        excludeRouteCount > ANDROID_ROUTE_EXCLUDE_LIMIT -> RouteExcludeCompatibility.EXCEEDS_ANDROID_LIMIT
-        else -> RouteExcludeCompatibility.SUPPORTED
-    }
 
 private data class LibboxRuntimeDependencies(
     val diagnosticsLogger: RuntimeDiagnosticsSink,
@@ -197,7 +175,7 @@ internal class ReflectiveLibboxRuntime(
 
     private val commandServerRef = AtomicReference<Any?>(null)
     private val fileDescriptorRef = AtomicReference<ParcelFileDescriptor?>(null)
-    private val runtimeGeneration = AtomicLong(0L)
+    private val runtimeGenerationGuard = RuntimeGenerationGuard(diagnosticsLogger)
 
     @Volatile
     private var currentConfig: String? = null
@@ -515,7 +493,7 @@ internal class ReflectiveLibboxRuntime(
                     closeNativeServerPart(
                         server = server,
                         label = "force_close_service",
-                        timeoutMs = RUNTIME_FORCE_CLOSE_TIMEOUT_MS,
+                        timeoutMs = RuntimeNativeClosePolicy.FORCE_CLOSE_TIMEOUT_MS,
                     ) { target ->
                         reflection.closeService(target)
                     }
@@ -523,7 +501,7 @@ internal class ReflectiveLibboxRuntime(
                     closeNativeServerPart(
                         server = server,
                         label = "force_close_server",
-                        timeoutMs = RUNTIME_FORCE_CLOSE_TIMEOUT_MS,
+                        timeoutMs = RuntimeNativeClosePolicy.FORCE_CLOSE_TIMEOUT_MS,
                     ) { target ->
                         reflection.closeServer(target)
                     }
@@ -547,21 +525,10 @@ internal class ReflectiveLibboxRuntime(
         }
 
     private fun nextRuntimeGeneration(reason: String): Long =
-        runtimeGeneration.incrementAndGet().also { generation ->
-            diagnosticsLogger.recordStructured(
-                "runtime",
-                "runtime generation advanced",
-                "reason=$reason",
-                "generation=$generation",
-            )
-        }
+        runtimeGenerationGuard.next(reason)
 
-    private suspend fun ensureRuntimeGenerationCurrent(generation: Long) {
-        currentCoroutineContext().ensureActive()
-        if (runtimeGeneration.get() != generation) {
-            throw CancellationException("runtime generation superseded")
-        }
-    }
+    private suspend fun ensureRuntimeGenerationCurrent(generation: Long) =
+        runtimeGenerationGuard.ensureCurrent(generation)
 
     private suspend fun closeNativeServerPart(
         server: Any,
@@ -603,7 +570,7 @@ internal class ReflectiveLibboxRuntime(
     override fun currentDnsServerAddress(): String? = currentDnsServerAddress
 
     private fun openTun(host: RuntimeServiceHost, tunOptions: Any): Int {
-        val generation = runtimeGeneration.get()
+        val generation = runtimeGenerationGuard.current()
         if (!host.hasVpnPermission()) {
             error("android: missing vpn permission")
         }
@@ -688,7 +655,7 @@ internal class ReflectiveLibboxRuntime(
         addHttpProxy(builder, tunOptions)
 
         val pfd = builder.establish() ?: error("android: vpn establish failed")
-        if (runtimeGeneration.get() != generation) {
+        if (!runtimeGenerationGuard.isCurrent(generation)) {
             runCatching { pfd.close() }
                 .onFailure { diagnosticsLogger.record("runtime", "superseded tun fd close failed") }
             throw CancellationException("runtime generation superseded during tun establish")
