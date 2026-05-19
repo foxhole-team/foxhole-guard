@@ -42,6 +42,7 @@ data class HomeUiState(
     val reconnectRequired: Boolean = false,
     val reconnectInProgress: Boolean = false,
     val torOperation: HomeTorOperationUiState = HomeTorOperationUiState(),
+    val torTransitionPrompt: TorTransitionPrompt? = null,
     val profileReconnectPromptUntilElapsedMs: Long = 0L,
     val diagnosticEntries: List<DiagnosticEntry> = emptyList(),
     val anomalyEvents: List<AnomalyEvent> = emptyList(),
@@ -52,6 +53,24 @@ data class HomeUiState(
     val appVersion: String = BuildConfig.VERSION_NAME,
     val coreVersion: String = BuildConfig.LIBBOX_SOURCE_VERSION,
 )
+
+sealed class TorTransitionPrompt {
+    data class DisableTorForUdpProtocol(
+        val profileId: Long,
+        val protocolOptionId: String,
+        val protocolName: String,
+    ) : TorTransitionPrompt()
+
+    data class StartTcpVpnWhileTorOnlyActive(
+        val profileId: Long,
+        val protocolOptionId: String?,
+        val profileName: String,
+    ) : TorTransitionPrompt()
+
+    data class UdpVpnProtocolNotSupported(
+        val protocolName: String?,
+    ) : TorTransitionPrompt()
+}
 
 internal data class HomeConnectionStreams(
     val profiles: List<Profile>,
@@ -92,6 +111,7 @@ internal data class HomeLocalStreams(
     val dashboardConnectionMetricsLoading: Boolean,
     val runtimeReloadPending: Boolean,
     val torOperation: HomeTorOperationUiState,
+    val torTransitionPrompt: TorTransitionPrompt?,
     val catalogPresetPreviews: Map<Long, List<RoutingRepository.RoutingCatalogPresetPreview>>,
     val appliedRuntimeSignature: Int?,
 )
@@ -112,11 +132,18 @@ internal data class HomeLocalState(
 internal data class HomeTrailingLocalState(
     val runtimeReloadPending: Boolean,
     val torOperation: HomeTorOperationUiState = HomeTorOperationUiState(),
+    val torTransitionPrompt: TorTransitionPrompt? = null,
     val catalogPresetPreviews: Map<Long, List<RoutingRepository.RoutingCatalogPresetPreview>>,
     val startupActiveProfile: Profile?,
     val appliedRuntimeSignature: Int?,
     val dashboardConnectionMetricsLoading: Boolean,
     val torIpInfo: IpInfo?,
+)
+
+internal data class HomeTorLocalState(
+    val operation: HomeTorOperationUiState,
+    val ipInfo: IpInfo?,
+    val transitionPrompt: TorTransitionPrompt?,
 )
 
 internal data class HomeReconnectStreams(

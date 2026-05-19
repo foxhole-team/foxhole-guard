@@ -63,6 +63,7 @@ internal object ConnectivityNetworkRegistry {
             synchronized(lock) {
                 linkedSetOf<Network>().apply {
                     connectivity.activeNetwork?.let(::add)
+                    connectivity.allNetworks.forEach(::add)
                     addAll(trackedNetworks)
                 }.toList()
             }

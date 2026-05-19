@@ -19,6 +19,7 @@ import com.foxhole.beta.core.model.TrafficSnapshot
 import com.foxhole.beta.core.network.IpInfoFetchMode
 import com.foxhole.beta.core.network.IpInfoRepository
 import com.foxhole.beta.core.settings.SettingsRepository
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -192,30 +193,47 @@ class FoxholeConnectionController(
         val vpnNetwork = currentVpnNetwork()
         return when {
             currentSnapshot.isStaleTunnelSnapshotWithoutVpn(vpnNetwork) -> {
-                diagnosticsLogger.record(
-                    "connection",
-                    "active tunnel snapshot found without vpn network; cleared stale runtime state",
-                )
-                clearAppliedRuntime()
-                FoxholeVpnRuntimeBridge.clearTransientState()
-                FoxholeVpnRuntimeBridge.update(
-                    ConnectionSnapshot(
-                        state = ConnectionState.ERROR,
-                        trafficMode = settingsRepository.current().traffic.mode,
-                    ),
-                )
-                false
+                val restoredVpnNetwork = awaitVpnNetworkForActiveSnapshot()
+                if (restoredVpnNetwork != null) {
+                    diagnosticsLogger.record(
+                        "connection",
+                        "active tunnel snapshot kept after vpn network appeared during foreground grace",
+                    )
+                    false
+                } else {
+                    diagnosticsLogger.record(
+                        "connection",
+                        "active tunnel snapshot kept during foreground grace; vpn network temporarily missing",
+                    )
+                    false
+                }
             }
 
             currentSnapshot.state in ACTIVE_CONNECTION_STATES || vpnNetwork == null -> false
 
             settingsRepository.current().localGuardModeOrNull() != null -> {
-                diagnosticsLogger.record("connection", "active local guard vpn found with idle snapshot")
+                diagnosticsLogger.record(
+                    "connection",
+                    "active local guard vpn found with idle snapshot",
+                )
                 false
             }
 
             else -> restoreActiveVpnNetwork(vpnNetwork)
         }
+    }
+
+    private suspend fun awaitVpnNetworkForActiveSnapshot(
+        timeoutMs: Long = 1_500L,
+        pollMs: Long = 100L,
+    ): Network? {
+        currentVpnNetwork()?.let { return it }
+        val deadline = System.currentTimeMillis() + timeoutMs
+        while (System.currentTimeMillis() < deadline) {
+            delay(pollMs)
+            currentVpnNetwork()?.let { return it }
+        }
+        return null
     }
 
     private suspend fun restoreActiveVpnNetwork(vpnNetwork: Network): Boolean {

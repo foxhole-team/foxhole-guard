@@ -39,6 +39,10 @@ class PrivateDnsModeTest {
             PrivateDnsMode.STRICT,
             PrivateDnsSettings.fromValues(modeValue = "hostname", specifierValue = "dns.example"),
         )
+        assertEquals(
+            PrivateDnsState(PrivateDnsMode.STRICT, "dns.example"),
+            PrivateDnsSettings.stateFromValues(modeValue = "hostname", specifierValue = "dns.example"),
+        )
     }
 
     @Test

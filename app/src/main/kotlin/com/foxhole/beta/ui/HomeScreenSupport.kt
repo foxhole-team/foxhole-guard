@@ -20,6 +20,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
@@ -781,8 +782,6 @@ internal fun HomeConnectionFeatureDialog(
     val enabled = feature.enabledIn(state)
     val torSelectedProtocolIsUdp = feature == HomeConnectionFeature.TOR && homeTorSelectedProtocolIsUdp(state)
     val torRouteNeedsSetup = feature == HomeConnectionFeature.TOR && !enabled && homeTorRouteNeedsSetup(state)
-    val confirmEnabled =
-        !(feature == HomeConnectionFeature.TOR && torSelectedProtocolIsUdp && !enabled && !torRouteNeedsSetup)
     val torOperationActive = feature == HomeConnectionFeature.TOR && state.torOperation.active
     val torOnlyRuntimeActive = feature == HomeConnectionFeature.TOR && state.hasTorOnlyRuntime()
     val confirmLabel =
@@ -832,9 +831,9 @@ internal fun HomeConnectionFeatureDialog(
                         onDismiss = onDismiss,
                         torRouteNeedsSetup = torRouteNeedsSetup,
                         torOnlyRuntimeActive = torOnlyRuntimeActive,
+                        torSelectedProtocolIsUdp = torSelectedProtocolIsUdp,
                     )
                 },
-                enabled = confirmEnabled,
                 label = confirmLabel,
             )
         },
@@ -847,6 +846,105 @@ internal fun HomeConnectionFeatureDialog(
     )
 }
 
+@Composable
+internal fun TorTransitionPromptDialog(
+    prompt: TorTransitionPrompt,
+    onDismiss: () -> Unit,
+    onConfirmDisableTorForUdpProtocol: (TorTransitionPrompt.DisableTorForUdpProtocol) -> Unit,
+    onConfirmMoveTorIntoVpn: (TorTransitionPrompt.StartTcpVpnWhileTorOnlyActive) -> Unit,
+    onConfirmKeepTorOnDeviceAndStartVpn: (TorTransitionPrompt.StartTcpVpnWhileTorOnlyActive) -> Unit,
+) {
+    when (prompt) {
+        is TorTransitionPrompt.DisableTorForUdpProtocol ->
+            TorTransitionAlertDialog(
+                title = stringResource(R.string.privacy_route_udp_switch_warning_title),
+                body = stringResource(R.string.privacy_route_udp_switch_warning_body),
+                onDismiss = onDismiss,
+                confirmLabel = stringResource(R.string.privacy_route_continue_tor_over_vpn),
+                onConfirm = { onConfirmDisableTorForUdpProtocol(prompt) },
+            )
+        is TorTransitionPrompt.StartTcpVpnWhileTorOnlyActive ->
+            TorTransitionAlertDialog(
+                title = stringResource(R.string.privacy_route_tcp_vpn_from_tor_title),
+                body = stringResource(R.string.privacy_route_tcp_vpn_from_tor_body),
+                onDismiss = onDismiss,
+                secondaryLabel = stringResource(R.string.privacy_route_keep_tor_on_device),
+                onSecondary = { onConfirmKeepTorOnDeviceAndStartVpn(prompt) },
+                confirmLabel = stringResource(R.string.privacy_route_continue_tor_over_vpn),
+                onConfirm = { onConfirmMoveTorIntoVpn(prompt) },
+            )
+        is TorTransitionPrompt.UdpVpnProtocolNotSupported ->
+            TorTransitionAlertDialog(
+                title = stringResource(R.string.privacy_route_udp_protocol_not_supported_title),
+                body = stringResource(R.string.privacy_route_udp_protocol_not_supported_body),
+                onDismiss = onDismiss,
+                confirmLabel = stringResource(R.string.close),
+                onConfirm = onDismiss,
+                showDismissButton = false,
+            )
+    }
+}
+
+@Composable
+private fun TorTransitionAlertDialog(
+    title: String,
+    body: String,
+    onDismiss: () -> Unit,
+    confirmLabel: String,
+    onConfirm: () -> Unit,
+    secondaryLabel: String? = null,
+    onSecondary: (() -> Unit)? = null,
+    showDismissButton: Boolean = true,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        modifier =
+            Modifier
+                .foxholeDialogChrome()
+                .testTag("tor_transition_prompt_dialog"),
+        shape = FoxholeDialogShape,
+        properties = DialogProperties(dismissOnClickOutside = false),
+        title = {
+            FoxholeDialogTitle(
+                title = title,
+                icon = Icons.Outlined.Shield,
+                iconTint = MaterialTheme.colorScheme.primary,
+            )
+        },
+        text = {
+            Text(
+                text = body,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        },
+        confirmButton = {
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                if (secondaryLabel != null && onSecondary != null) {
+                    FoxholeDialogSecondaryButton(
+                        label = secondaryLabel,
+                        onClick = onSecondary,
+                    )
+                }
+                if (showDismissButton) {
+                    FoxholeDialogDismissButton(
+                        onClick = onDismiss,
+                        label = stringResource(R.string.cancel),
+                    )
+                }
+                FoxholeDialogConfirmButton(
+                    onClick = onConfirm,
+                    label = confirmLabel,
+                )
+            }
+        },
+    )
+}
+
 private fun HomeRouteUiState.homeConnectionFeatureRestartAvailable(): Boolean {
     val connectionActive =
         connection.state in setOf(
@@ -855,6 +953,34 @@ private fun HomeRouteUiState.homeConnectionFeatureRestartAvailable(): Boolean {
             ConnectionState.RECONNECTING,
         )
     return reconnectRequired && connectionActive
+}
+
+internal fun homeProtocolMetricsAnalysisState(
+    state: HomeRouteUiState,
+    presentation: HomeDashboardProtocolPresentation,
+): AutoConnectUiState {
+    val refreshingOption =
+        presentation.protocolOptions.firstOrNull { option -> option.id == state.protocolMetricsRefreshingOptionId }
+            ?: presentation.protocolOptions.firstOrNull { option -> option.id == presentation.selectedProtocolOptionId }
+            ?: presentation.protocolOptions.firstOrNull()
+    return AutoConnectUiState(
+        running = true,
+        currentOptionId = refreshingOption?.id,
+        currentProtocolHint = refreshingOption?.protocolHint ?: presentation.protocolHint,
+        currentDisplayName = refreshingOption?.displayName,
+        options =
+            refreshingOption
+                ?.let { option ->
+                    listOf(
+                        AutoConnectProbeOptionUiState(
+                            optionId = option.id,
+                            displayName = option.displayName,
+                            protocolHint = option.protocolHint,
+                            status = AutoConnectProbeStatus.TESTING,
+                        ),
+                    )
+                }.orEmpty(),
+    )
 }
 
 private fun HomeConnectionFeature.enabledIn(state: HomeRouteUiState): Boolean =
@@ -940,6 +1066,7 @@ private fun handleHomeConnectionFeatureConfirm(
     onDismiss: () -> Unit,
     torRouteNeedsSetup: Boolean,
     torOnlyRuntimeActive: Boolean,
+    torSelectedProtocolIsUdp: Boolean,
 ) {
     when {
         feature == HomeConnectionFeature.TOR -> {
@@ -960,7 +1087,7 @@ private fun handleHomeConnectionFeatureConfirm(
                     PrivacyRouteMode.TOR_OVER_VPN
                 },
             )
-            if (enabled) {
+            if (enabled || torSelectedProtocolIsUdp) {
                 onDismiss()
             }
         }
@@ -1020,6 +1147,9 @@ private fun HomeConnectionFeatureDialogContent(
                 loading = state.torOperation.active,
                 onRenewTorIp = onRenewTorIp,
             )
+            if (state.settings.privacyRoute.bypassVpnTunnel && state.connection.profileId != FoxholeVpnService.TOR_ONLY_PROFILE_ID) {
+                HomeTorParallelBatteryNotice()
+            }
         } else if (!torSelectedProtocolIsUdp) {
             if (torRouteLoading) {
                 HomeTorConnectedTable(
@@ -1098,10 +1228,26 @@ private fun HomeTorWarningBlock() {
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.32f)),
     ) {
         Text(
-            text = stringResource(R.string.privacy_route_udp_modal_body),
+            text = stringResource(R.string.privacy_route_udp_protocol_not_supported_body),
             modifier = Modifier.padding(10.dp),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onErrorContainer,
+        )
+    }
+}
+
+@Composable
+private fun HomeTorParallelBatteryNotice() {
+    Surface(
+        shape = MaterialTheme.shapes.medium,
+        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.26f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.22f)),
+    ) {
+        Text(
+            text = stringResource(R.string.privacy_route_parallel_battery_notice),
+            modifier = Modifier.padding(10.dp),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
 }

@@ -361,7 +361,7 @@ class HomeDashboardPresentationTest {
     }
 
     @Test
-    fun `network model shows loading while dashboard connection metrics refresh is active`() {
+    fun `network model keeps data steady while dashboard connection metrics refresh is active`() {
         val ipInfo =
             IpInfo(
                 ip = "203.0.113.10",
@@ -389,9 +389,9 @@ class HomeDashboardPresentationTest {
         assertEquals(ipInfo, model.visibleIpInfo)
         assertEquals(R.string.home_network_connection_info_title, model.titleRes)
         assertTrue(model.showConnectionStatus)
-        assertTrue(model.showLoading)
+        assertFalse(model.showLoading)
         assertFalse(model.showIpInfoLoading)
-        assertTrue(model.showConnectionDetailsLoading)
+        assertFalse(model.showConnectionDetailsLoading)
     }
 
     @Test
@@ -424,7 +424,7 @@ class HomeDashboardPresentationTest {
     }
 
     @Test
-    fun `network model keeps fresh current ip and shows server skeleton during smart protocol refresh`() {
+    fun `connected smart metrics refresh keeps current vpn data without skeleton`() {
         val ipInfo =
             IpInfo(
                 ip = "203.0.113.10",
@@ -452,14 +452,14 @@ class HomeDashboardPresentationTest {
         assertEquals(ipInfo, model.visibleIpInfo)
         assertEquals(R.string.home_network_connection_info_title, model.titleRes)
         assertTrue(model.showConnectionStatus)
-        assertTrue(model.showLoading)
+        assertFalse(model.showLoading)
         assertFalse(model.showIpInfoLoading)
-        assertTrue(model.showConnectionDetailsLoading)
+        assertFalse(model.showConnectionDetailsLoading)
         assertTrue(model.showRefreshProgress)
     }
 
     @Test
-    fun `network model hides stale device ip during smart protocol refresh`() {
+    fun `connected smart metrics refresh keeps pinned network data even when older than snapshot`() {
         val deviceIpInfo =
             IpInfo(
                 ip = "198.51.100.20",
@@ -487,12 +487,13 @@ class HomeDashboardPresentationTest {
                 deviceInternetAvailable = true,
             )
 
-        assertEquals(null, model.visibleIpInfo)
+        assertEquals(deviceIpInfo, model.visibleIpInfo)
         assertEquals(R.string.home_network_connection_info_title, model.titleRes)
         assertTrue(model.showConnectionStatus)
-        assertTrue(model.showLoading)
-        assertTrue(model.showIpInfoLoading)
-        assertTrue(model.showConnectionDetailsLoading)
+        assertFalse(model.showLoading)
+        assertFalse(model.showIpInfoLoading)
+        assertFalse(model.showConnectionDetailsLoading)
+        assertTrue(model.showRefreshProgress)
     }
 
     @Test
@@ -560,7 +561,7 @@ class HomeDashboardPresentationTest {
 
         assertEquals(ipInfo, model.visibleIpInfo)
         assertFalse(model.showIpInfoLoading)
-        assertTrue(model.showConnectionDetailsLoading)
+        assertFalse(model.showConnectionDetailsLoading)
     }
 
     @Test

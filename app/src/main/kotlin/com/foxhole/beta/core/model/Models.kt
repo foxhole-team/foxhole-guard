@@ -178,6 +178,12 @@ enum class PrivacyRouteScope {
 }
 
 @Serializable
+enum class PrivacyRouteUdpPolicy {
+    VPN,
+    BLOCK,
+}
+
+@Serializable
 enum class DiagnosticsRetention(
     val retentionHours: Int,
     val maxEntries: Int,
@@ -329,6 +335,7 @@ data class PrivacyRouteSettings(
     val scope: PrivacyRouteScope = PrivacyRouteScope.SELECTED_APPS,
     val selectedPackages: List<String> = emptyList(),
     val bypassVpnTunnel: Boolean = false,
+    val udpPolicy: PrivacyRouteUdpPolicy = PrivacyRouteUdpPolicy.VPN,
     val identityVersion: Long = 0L,
 ) {
     val enabled: Boolean

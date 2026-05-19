@@ -11,6 +11,7 @@ import com.foxhole.beta.core.model.LocalSurfaceSettings
 import com.foxhole.beta.core.model.PerAppRoutingMode
 import com.foxhole.beta.core.model.PrivacyRouteMode
 import com.foxhole.beta.core.model.PrivacyRouteScope
+import com.foxhole.beta.core.model.PrivacyRouteUdpPolicy
 import com.foxhole.beta.core.model.ProfileTrafficTotal
 import com.foxhole.beta.core.model.ProtocolHint
 import com.foxhole.beta.core.model.ProxyInboundSettings
@@ -149,7 +150,7 @@ class RuntimeConfigAssemblerTest {
     }
 
     @Test
-    fun `tor privacy route adds tor outbound detoured through proxy and blocks udp for all apps`() {
+    fun `tor privacy route routes tcp through tor and udp through proxy by default`() {
         val config =
             parse(
                 assembler.assemble(
@@ -197,6 +198,33 @@ class RuntimeConfigAssemblerTest {
         assertEquals("tor-over-vpn", route["final"]!!.jsonPrimitive.content)
         val udpBlock = route["rules"]!!.jsonArray.map { it.jsonObject }
             .single { it["network"]?.jsonPrimitive?.content == "udp" }
+        assertEquals("proxy", udpBlock["outbound"]!!.jsonPrimitive.content)
+    }
+
+    @Test
+    fun `tor privacy route blocks udp only when udp policy is block`() {
+        val config =
+            parse(
+                assembler.assemble(
+                    baseConfigJson = baseConfigWithRules("profile.example"),
+                    settings =
+                        Settings(
+                            privacyRoute =
+                                com.foxhole.beta.core.model.PrivacyRouteSettings(
+                                    mode = PrivacyRouteMode.TOR_OVER_VPN,
+                                    scope = PrivacyRouteScope.ALL_APPS,
+                                    udpPolicy = PrivacyRouteUdpPolicy.BLOCK,
+                                ),
+                        ),
+                    activePreset = null,
+                    torRuntimePaths = TorRuntimePaths(executablePath = "/tor", dataDirectory = "/tor-data"),
+                    vpnProtocolHint = ProtocolHint.VLESS,
+                ),
+            )
+
+        val udpBlock = config["route"]!!.jsonObject["rules"]!!.jsonArray.map { it.jsonObject }
+            .single { it["network"]?.jsonPrimitive?.content == "udp" }
+
         assertEquals("block", udpBlock["outbound"]!!.jsonPrimitive.content)
     }
 
@@ -243,7 +271,7 @@ class RuntimeConfigAssemblerTest {
     }
 
     @Test
-    fun `tor privacy route selected apps routes only selected tcp packages and blocks their udp`() {
+    fun `tor privacy route selected apps routes selected tcp through tor and udp through proxy`() {
         val config =
             parse(
                 assembler.assemble(
@@ -275,7 +303,7 @@ class RuntimeConfigAssemblerTest {
             .filter { it["package_name"] != null && it["network"] != null }
         assertEquals(2, packageRules.size)
         assertTrue(packageRules.any { it["network"]!!.jsonPrimitive.content == "tcp" && it["outbound"]!!.jsonPrimitive.content == "tor-over-vpn" })
-        assertTrue(packageRules.any { it["network"]!!.jsonPrimitive.content == "udp" && it["outbound"]!!.jsonPrimitive.content == "block" })
+        assertTrue(packageRules.any { it["network"]!!.jsonPrimitive.content == "udp" && it["outbound"]!!.jsonPrimitive.content == "proxy" })
         val runtimeProxyRule = route["rules"]!!.jsonArray.map { it.jsonObject }
             .single { it["inbound"] != null && it["outbound"]?.jsonPrimitive?.content == "tor-over-vpn" }
         assertEquals(
@@ -1868,6 +1896,41 @@ class RuntimeConfigAssemblerTest {
         assertEquals("dns-remote", remote["tag"]!!.jsonPrimitive.content)
         assertEquals("tls", remote["type"]!!.jsonPrimitive.content)
         assertEquals("dns.example", remote["server"]!!.jsonPrimitive.content)
+        assertEquals("853", remote["server_port"]!!.jsonPrimitive.content)
+        assertEquals("dns-direct", remote["domain_resolver"]!!.jsonPrimitive.content)
+        assertFalse(remote.containsKey("path"))
+        assertFalse(remote.containsKey("detour"))
+    }
+
+    @Test
+    fun `strict private dns hostname is used as dns over tls upstream`() {
+        val settings =
+            Settings(
+                dns =
+                    DnsSettings(
+                        dnsThroughVpn = false,
+                        server = "9.9.9.9",
+                        secureMode = SecureDnsMode.PLAIN,
+                    ),
+            )
+
+        val config =
+            parse(
+                assembler.assemble(
+                    baseConfigJson = baseConfigWithRules("profile.example"),
+                    settings = settings,
+                    activePreset = null,
+                    privateDnsState = PrivateDnsState(
+                        mode = PrivateDnsMode.STRICT,
+                        hostname = "one.one.one.one",
+                    ),
+                ),
+            )
+        val remote = config["dns"]!!.jsonObject["servers"]!!.jsonArray[2].jsonObject
+
+        assertEquals("dns-remote", remote["tag"]!!.jsonPrimitive.content)
+        assertEquals("tls", remote["type"]!!.jsonPrimitive.content)
+        assertEquals("one.one.one.one", remote["server"]!!.jsonPrimitive.content)
         assertEquals("853", remote["server_port"]!!.jsonPrimitive.content)
         assertEquals("dns-direct", remote["domain_resolver"]!!.jsonPrimitive.content)
         assertFalse(remote.containsKey("path"))

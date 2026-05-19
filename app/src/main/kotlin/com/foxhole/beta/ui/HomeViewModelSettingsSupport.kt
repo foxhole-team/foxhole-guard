@@ -31,6 +31,8 @@ import com.foxhole.beta.core.model.ThemeMode
 import com.foxhole.beta.core.model.TrafficMode
 import com.foxhole.beta.core.model.TunStack
 import com.foxhole.beta.core.model.V2RayApiSettings
+import com.foxhole.beta.core.model.isUdpTransport
+import com.foxhole.beta.vpn.ACTIVE_CONNECTION_STATES
 import com.foxhole.beta.vpn.localGuardModeOrNull
 import kotlinx.coroutines.launch
 import android.provider.Settings as AndroidSettings
@@ -516,6 +518,13 @@ internal fun HomeViewModel.onSelectedPackagesChangedInternal(value: List<String>
 }
 
 internal fun HomeViewModel.onPrivacyRouteModeSelectedInternal(value: PrivacyRouteMode) {
+    if (value == PrivacyRouteMode.TOR_OVER_VPN && shouldBlockTorOverUdpVpnEnable()) {
+        torTransitionPromptMutable.value =
+            TorTransitionPrompt.UdpVpnProtocolNotSupported(
+                protocolName = uiState.value.activeProfile?.protocolOptionOrDefault(null)?.displayName,
+            )
+        return
+    }
     val privacyRoute = container.settingsRepository.settings.value.privacyRoute
     val routeScopeReady =
         when (privacyRoute.scope) {
@@ -535,6 +544,20 @@ internal fun HomeViewModel.onPrivacyRouteModeSelectedInternal(value: PrivacyRout
             snackbars.tryEmit(infoBanner(R.string.privacy_route_all_apps_start_warning))
         }
     }
+}
+
+private fun HomeViewModel.shouldBlockTorOverUdpVpnEnable(): Boolean {
+    val state = uiState.value
+    val snapshot = state.connection
+    if (
+        state.settings.privacyRoute.bypassVpnTunnel ||
+        snapshot.state !in ACTIVE_CONNECTION_STATES ||
+        snapshot.profileId == com.foxhole.beta.vpn.FoxholeVpnService.TOR_ONLY_PROFILE_ID
+    ) {
+        return false
+    }
+    val protocolHint = snapshot.protocolHint ?: state.activeProfile?.protocolOptionOrDefault(null)?.protocolHint
+    return protocolHint?.isUdpTransport() == true
 }
 
 internal fun HomeViewModel.onPrivacyRouteScopeSelectedInternal(value: PrivacyRouteScope) {

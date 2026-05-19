@@ -305,11 +305,7 @@ fun FoxholeApp(
                         onFirewallEnabledChanged = viewModel::onFirewallEnabledChanged,
                         onPrivacyRouteModeSelected = viewModel::onPrivacyRouteModeSelected,
                         onOpenPrivacyRoute = { navController.navigate(AppRoute.PRIVACY_ROUTE) },
-                        onSelectActiveProtocolOption = { optionId ->
-                            state.activeProfile?.id?.let { profileId ->
-                                viewModel.onSelectProfileProtocolOption(profileId, optionId)
-                            }
-                        },
+                        onSelectActiveProtocolOptionRequested = viewModel::onSelectActiveProtocolOptionRequested,
                         onUpdateAutoConnectExcludedOptions = { excludedIds ->
                             state.activeProfile?.id?.let { profileId ->
                                 viewModel.onSmartProfileAutoConnectExcludedOptionsChanged(profileId, excludedIds)
@@ -317,6 +313,10 @@ fun FoxholeApp(
                         },
                         onRefreshSmartProfileMetrics = viewModel::refreshSmartProfileMetrics,
                         onCancelSmartProfileMetricsRefresh = viewModel::cancelSmartProfileMetricsRefresh,
+                        onConfirmDisableTorForUdpProtocol = viewModel::confirmDisableTorForUdpProtocol,
+                        onConfirmMoveTorIntoVpn = viewModel::confirmMoveTorIntoVpn,
+                        onConfirmKeepTorOnDeviceAndStartVpn = viewModel::confirmKeepTorOnDeviceAndStartVpn,
+                        onDismissTorTransitionPrompt = viewModel::dismissTorTransitionPrompt,
                         onOpenProfiles = { navController.navigateToProfilesRoot() },
                         onRefreshIpInfo = viewModel::refreshIpInfo,
                         onResetUsageTracking = viewModel::resetUsageTracking,

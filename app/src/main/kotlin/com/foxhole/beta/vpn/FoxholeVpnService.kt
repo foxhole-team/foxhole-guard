@@ -391,16 +391,20 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         stopService(commandStartId)
     }
 
-    private suspend fun validatePrivateDnsMode(
-        privateDnsMode: PrivateDnsMode?,
+    private suspend fun validatePrivateDnsState(
+        privateDnsState: PrivateDnsState?,
         commandStartId: Int,
     ): Boolean {
+        val privateDnsMode = privateDnsState?.mode
         val supported = privateDnsMode?.isSupportedForTunnelMode() != false
         if (!supported) {
-            container.diagnosticsLogger.record("dns", "unsupported android private dns mode: $privateDnsMode")
-            fail(getString(R.string.error_private_dns_strict_unsupported), commandStartId)
-        } else if (privateDnsMode != null) {
-            container.diagnosticsLogger.record("dns", "android private dns mode: $privateDnsMode")
+            container.diagnosticsLogger.record("dns", "unsupported android private dns state: $privateDnsState")
+            fail(getString(R.string.error_private_dns_unknown_unsupported), commandStartId)
+        } else if (privateDnsState != null) {
+            container.diagnosticsLogger.record(
+                "dns",
+                "android private dns mode: ${privateDnsState.mode} hostname=${privateDnsState.hostname.orEmpty()}",
+            )
         }
         return supported
     }
@@ -460,22 +464,26 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
             )
             return
         }
-        val privateDnsMode =
+        val privateDnsState =
             if (trafficMode == TrafficMode.TUNNEL) {
-                PrivateDnsSettings.current(this)
+                PrivateDnsSettings.currentState(this)
             } else {
                 null
             }
-        if (!validatePrivateDnsMode(privateDnsMode, commandStartId)) {
+        if (!validatePrivateDnsState(privateDnsState, commandStartId)) {
             return
         }
         FoxholeConnectionServiceContract.stopInactiveServices(context = this, activeMode = trafficMode)
         val session =
             runCatching {
                 if (torOnlyConnect) {
-                    container.profileRepository.getTorOnlySession(privateDnsMode)
+                    container.profileRepository.getTorOnlySession(privateDnsState = privateDnsState)
                 } else {
-                    container.profileRepository.getSession(profileId, protocolOptionIdOverride, privateDnsMode)
+                    container.profileRepository.getSession(
+                        profileId = profileId,
+                        protocolOptionIdOverride = protocolOptionIdOverride,
+                        privateDnsState = privateDnsState,
+                    )
                 }
             }
                 .getOrElse {
@@ -858,9 +866,12 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         val session =
             runCatching {
                 if (targetProfileId == TOR_ONLY_PROFILE_ID) {
-                    container.profileRepository.getTorOnlySession(PrivateDnsSettings.current(this))
+                    container.profileRepository.getTorOnlySession(privateDnsState = PrivateDnsSettings.currentState(this))
                 } else {
-                    container.profileRepository.getSession(targetProfileId)
+                    container.profileRepository.getSession(
+                        profileId = targetProfileId,
+                        privateDnsState = PrivateDnsSettings.currentState(this),
+                    )
                 }
             }
                 .getOrElse {

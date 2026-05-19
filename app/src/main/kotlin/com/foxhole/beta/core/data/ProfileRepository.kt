@@ -28,6 +28,7 @@ import com.foxhole.beta.core.settings.SettingsRepository
 import com.foxhole.beta.vpn.DnsFilterAssetInstaller
 import com.foxhole.beta.vpn.FoxholeVpnService
 import com.foxhole.beta.vpn.PrivateDnsMode
+import com.foxhole.beta.vpn.PrivateDnsState
 import com.foxhole.beta.vpn.RuntimeConfigAssembler
 import com.foxhole.beta.vpn.TorRuntimeInstaller
 import com.foxhole.beta.vpn.withIdentityVersion
@@ -650,6 +651,7 @@ class ProfileRepository(
         profileId: Long,
         protocolOptionIdOverride: String? = null,
         privateDnsMode: PrivateDnsMode? = null,
+        privateDnsState: PrivateDnsState? = null,
     ): VpnSession {
         val profile = requireProfile(profileId)
         val secret = secretStore.read(profile.secretRef) ?: error("profile secret is missing")
@@ -676,6 +678,7 @@ class ProfileRepository(
                     settings = settings,
                     activePreset = routingRepository.currentPresetForRuntime(),
                     privateDnsMode = privateDnsMode,
+                    privateDnsState = privateDnsState,
                     torRuntimePaths = torRuntimePaths,
                     dnsFilterRuntimePaths = dnsFilterRuntimePaths,
                     vpnProtocolHint = selectedProtocolHint,
@@ -707,7 +710,10 @@ class ProfileRepository(
             traffic.mode == TrafficMode.TUNNEL &&
             (privacyRoute.bypassVpnTunnel || !selectedProtocolHint.isUdpTransport())
 
-    suspend fun getTorOnlySession(privateDnsMode: PrivateDnsMode? = null): VpnSession {
+    suspend fun getTorOnlySession(
+        privateDnsMode: PrivateDnsMode? = null,
+        privateDnsState: PrivateDnsState? = null,
+    ): VpnSession {
         val settings = settingsRepository.current()
         require(settings.privacyRoute.enabled) { "TOR route is disabled" }
         val correlationId = newRuntimeCorrelationId()
@@ -723,6 +729,7 @@ class ProfileRepository(
                     settings = settings,
                     activePreset = routingRepository.currentPresetForRuntime(),
                     privateDnsMode = privateDnsMode,
+                    privateDnsState = privateDnsState,
                     torRuntimePaths =
                         torRuntimeInstaller
                             .prepare()

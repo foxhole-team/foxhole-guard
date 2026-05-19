@@ -123,6 +123,7 @@ class HomeViewModel(
     internal val runtimeReconnectRequiredMutable = MutableStateFlow(false)
     internal val reconnectInProgressMutable = MutableStateFlow(false)
     internal val torOperationMutable = MutableStateFlow(HomeTorOperationUiState())
+    internal val torTransitionPromptMutable = MutableStateFlow<TorTransitionPrompt?>(null)
     internal val dnsFilterRefreshInProgressMutable = MutableStateFlow(false)
     internal val profileReconnectPromptUntilMutable = MutableStateFlow(0L)
     internal val insecureTlsImportWarningMutable = MutableStateFlow<InsecureTlsImportWarningState?>(null)
@@ -224,13 +225,22 @@ class HomeViewModel(
                         torIpInfo = torIpInfoMutable.value,
                     )
                 },
-                combine(torOperationMutable, torIpInfoMutable) { torOperation, torIpInfo ->
-                    torOperation to torIpInfo
+                combine(
+                    torOperationMutable,
+                    torIpInfoMutable,
+                    torTransitionPromptMutable,
+                ) { torOperation, torIpInfo, torTransitionPrompt ->
+                    HomeTorLocalState(
+                        operation = torOperation,
+                        ipInfo = torIpInfo,
+                        transitionPrompt = torTransitionPrompt,
+                    )
                 },
             ) { trailingState, torState ->
                 trailingState.copy(
-                    torOperation = torState.first,
-                    torIpInfo = torState.second,
+                    torOperation = torState.operation,
+                    torIpInfo = torState.ipInfo,
+                    torTransitionPrompt = torState.transitionPrompt,
                 )
             },
         ) { installedAppsStreams, trailingState ->
@@ -246,6 +256,7 @@ class HomeViewModel(
                     dashboardConnectionMetricsLoading = trailingState.dashboardConnectionMetricsLoading,
                     runtimeReloadPending = trailingState.runtimeReloadPending,
                     torOperation = trailingState.torOperation,
+                    torTransitionPrompt = trailingState.torTransitionPrompt,
                     catalogPresetPreviews = trailingState.catalogPresetPreviews,
                     appliedRuntimeSignature = trailingState.appliedRuntimeSignature,
                 ),
@@ -344,6 +355,7 @@ class HomeViewModel(
                 reconnectRequired = profileReconnectRequired || runtimeReconnectRequired,
                 reconnectInProgress = reconnectState.inProgress,
                 torOperation = localStreams.torOperation,
+                torTransitionPrompt = localStreams.torTransitionPrompt,
                 profileReconnectPromptUntilElapsedMs =
                 if (profileReconnectRequired) {
                     reconnectState.promptUntilElapsedMs
@@ -795,13 +807,17 @@ class HomeViewModel(
     }
 
     private fun cancelProtocolSearchConnection(): Boolean {
-        val protocolSearchRunning = autoConnectUiStateMutable.value.running || protocolMetricsRefreshJob != null
+        val autoConnectRunning = autoConnectUiStateMutable.value.running
+        val metricsRefreshRunning = protocolMetricsRefreshJob != null
+        val protocolSearchRunning = autoConnectRunning || metricsRefreshRunning
         if (!protocolSearchRunning) {
             return false
         }
         cancelAutoConnect(clearUiOnly = true)
         cancelSmartProfileMetricsRefreshInternal(restoreConnection = false)
-        container.connectionController.disconnect(suppressLocalGuard = false)
+        if (autoConnectRunning) {
+            container.connectionController.disconnect(suppressLocalGuard = false)
+        }
         return true
     }
 
@@ -863,6 +879,9 @@ class HomeViewModel(
         connectProfile: Profile,
         protocolOptionId: String? = null,
     ) {
+        if (maybePromptStartTcpVpnWhileTorOnlyActive(connectProfile, protocolOptionId)) {
+            return
+        }
         if (state.settings.traffic.mode == TrafficMode.PROXY) {
             connect(connectProfile.id, protocolOptionId = protocolOptionId)
         } else {
@@ -870,7 +889,7 @@ class HomeViewModel(
         }
     }
 
-    private fun requestManualConnectPermissionOrConnect(
+    internal fun requestManualConnectPermissionOrConnect(
         profileId: Long,
         protocolOptionId: String? = null,
     ) {
@@ -944,26 +963,9 @@ class HomeViewModel(
     fun onSelectProfileProtocolOption(
         profileId: Long,
         optionId: String,
-    ) {
-        cancelAutoConnect(clearUiOnly = true)
-        viewModelScope.launch {
-            runCatching {
-                val updated = container.profileRepository.selectProfileProtocolOption(profileId, optionId)
-                if (updated.isActive) {
-                    startupActiveProfileMutable.value = updated
-                    markProfileReconnectPromptWindow()
-                }
-                if (uiState.value.activeProfile?.id == profileId && uiState.value.connection.state in ACTIVE_CONNECTION_STATES) {
-                    markRuntimeReloadPending()
-                    clearProfileLatencyRefresh()
-                }
-            }.onFailure {
-                emitError(it.message ?: getApplication<Application>().getString(R.string.profile_update_failed))
-            }
-        }
-    }
+    ) = selectProtocolOptionAndMaybeReconnect(profileId, optionId)
 
-    private fun markProfileReconnectPromptWindow() {
+    internal fun markProfileReconnectPromptWindow() {
         if (!dashboardVisible) {
             reconnectPromptPendingUntilDashboard = true
             profileReconnectPromptJob?.cancel()
@@ -1286,6 +1288,20 @@ class HomeViewModel(
         value
     )
 
+    fun onSelectActiveProtocolOptionRequested(optionId: String) =
+        onSelectActiveProtocolOptionRequestedInternal(optionId)
+
+    fun confirmDisableTorForUdpProtocol(prompt: TorTransitionPrompt.DisableTorForUdpProtocol) =
+        confirmDisableTorForUdpProtocolInternal(prompt)
+
+    fun confirmMoveTorIntoVpn(prompt: TorTransitionPrompt.StartTcpVpnWhileTorOnlyActive) =
+        confirmMoveTorIntoVpnInternal(prompt)
+
+    fun confirmKeepTorOnDeviceAndStartVpn(prompt: TorTransitionPrompt.StartTcpVpnWhileTorOnlyActive) =
+        confirmKeepTorOnDeviceAndStartVpnInternal(prompt)
+
+    fun dismissTorTransitionPrompt() = dismissTorTransitionPromptInternal()
+
     fun onRenewTorIp() {
         val state = uiState.value
         val profileId =
@@ -1526,6 +1542,11 @@ class HomeViewModel(
         profileId: Long,
         protocolOptionId: String? = null,
     ) = connectInternal(profileId, protocolOptionId)
+
+    internal fun selectProtocolOptionAndMaybeReconnect(
+        profileId: Long,
+        optionId: String,
+    ) = selectProtocolOptionAndMaybeReconnectInternal(profileId, optionId)
 
     internal fun infoBanner(stringRes: Int): FoxholeBannerEvent = infoBannerInternal(stringRes)
 

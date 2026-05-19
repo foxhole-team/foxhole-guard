@@ -53,6 +53,14 @@ Profiles can be imported from files, clipboard, QR codes, and HTTPS subscription
 
 >Permission and privacy note: `QUERY_ALL_PACKAGES` lets Foxhole show installed apps for Split Tunnel include/exclude routing, local installed-app inventory/security review, and optional per-app traffic statistics. Usage Access (`PACKAGE_USAGE_STATS`) is requested only when per-app traffic statistics are enabled. Package lists, local risk signals, traffic statistics, diagnostics, and Smart start history stay on the device unless you explicitly export or share them.
 
+## TOR routing
+
+TOR in Foxhole works with TCP traffic. UDP traffic is not sent through TOR.
+
+If TOR is enabled inside VPN, TCP traffic from the selected scope goes through TOR, while UDP stays on the normal VPN route or is blocked by setting.
+
+If TOR is kept on the device route while VPN is active, VPN and TOR run in parallel. This mode can use more battery.
+
 ## Foxhole smart config
 
 <p align="center">

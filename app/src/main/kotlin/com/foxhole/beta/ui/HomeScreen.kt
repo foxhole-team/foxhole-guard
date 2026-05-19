@@ -139,10 +139,14 @@ fun HomeScreen(
     onFirewallEnabledChanged: (Boolean) -> Unit,
     onPrivacyRouteModeSelected: (PrivacyRouteMode) -> Unit,
     onOpenPrivacyRoute: () -> Unit,
-    onSelectActiveProtocolOption: (String) -> Unit,
+    onSelectActiveProtocolOptionRequested: (String) -> Unit,
     onUpdateAutoConnectExcludedOptions: (Set<String>) -> Unit,
     onRefreshSmartProfileMetrics: (Long) -> Unit,
     onCancelSmartProfileMetricsRefresh: () -> Unit,
+    onConfirmDisableTorForUdpProtocol: (TorTransitionPrompt.DisableTorForUdpProtocol) -> Unit,
+    onConfirmMoveTorIntoVpn: (TorTransitionPrompt.StartTcpVpnWhileTorOnlyActive) -> Unit,
+    onConfirmKeepTorOnDeviceAndStartVpn: (TorTransitionPrompt.StartTcpVpnWhileTorOnlyActive) -> Unit,
+    onDismissTorTransitionPrompt: () -> Unit,
     onOpenProfiles: () -> Unit,
     onRefreshIpInfo: () -> Unit,
     onResetUsageTracking: () -> Unit,
@@ -192,7 +196,7 @@ fun HomeScreen(
     val statusTone =
         if (state.torOperation.active) {
             torOperationTone
-        } else if (state.autoConnect.running || state.reconnectInProgress) {
+        } else if (state.autoConnect.running || state.protocolMetricsRefreshing || state.reconnectInProgress) {
             autoTone
         } else {
             homeStatusTone(state.connection.state)
@@ -234,6 +238,10 @@ fun HomeScreen(
     val dashboardSelectedServerPingUnavailable = dashboardProtocolModel.selectedServerPingUnavailable
     val dashboardConnectionDetailsReady = dashboardProtocolModel.connectionDetailsReady
     val dashboardConnectionMetricsLoading = dashboardProtocolModel.connectionMetricsLoading
+    val protocolMetricsAnalysisState =
+        remember(state, dashboardProtocolPresentation) {
+            homeProtocolMetricsAnalysisState(state, dashboardProtocolPresentation)
+        }
     val smartStartDashboardControlsEnabled = state.settings.ui.smartStartDashboardControlsEnabled
     var activeReorderCard by rememberSaveable { mutableStateOf<DashboardCard?>(null) }
     var dashboardCardOrder by remember {
@@ -458,9 +466,14 @@ fun HomeScreen(
                                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                                         verticalAlignment = Alignment.CenterVertically,
                                     ) {
-                                        if (state.autoConnect.running) {
+                                        if (state.autoConnect.running || state.protocolMetricsRefreshing) {
                                             HomeAutoConnectStatusLine(
-                                                state = state.autoConnect,
+                                                state =
+                                                    if (state.autoConnect.running) {
+                                                        state.autoConnect
+                                                    } else {
+                                                        protocolMetricsAnalysisState
+                                                    },
                                                 modifier = Modifier.weight(1f),
                                                 textStyle = MaterialTheme.typography.titleMedium,
                                             )
@@ -649,7 +662,7 @@ fun HomeScreen(
                                     subscriptionExpiresAt = state.activeProfile.subscriptionExpiresAt,
                                     protocolOptions = dashboardProtocolPresentation.protocolOptions,
                                     selectedProtocolOptionId = dashboardProtocolPresentation.selectedProtocolOptionId,
-                                    onProtocolOptionSelected = onSelectActiveProtocolOption,
+                                    onProtocolOptionSelected = onSelectActiveProtocolOptionRequested,
                                     compact = true,
                                     animateSelection = true,
                                     latencyByOptionId = dashboardProtocolLatencies,
@@ -683,7 +696,7 @@ fun HomeScreen(
                                                     recommendedOptionIds = state.recommendedProtocolOptionIds,
                                                     favoriteOptionId = state.favoriteProtocolOptionId,
                                                     activeOptionId = dashboardProtocolPresentation.selectedProtocolOptionId,
-                                                    onSelectOption = onSelectActiveProtocolOption,
+                                                    onSelectOption = onSelectActiveProtocolOptionRequested,
                                                     onRefreshMetrics = { requestSmartProfileMetricsRefresh(state.activeProfile.id) },
                                                     onCancelRefreshMetrics = onCancelSmartProfileMetricsRefresh,
                                                     showLatency = dashboardShowSmartStartLatency,
@@ -1274,6 +1287,16 @@ fun HomeScreen(
             onLocalProxyLanAccessChanged = onLocalProxyLanAccessChanged,
             onRenewTorIp = onRenewTorIp,
             onRestart = onToggleConnection,
+        )
+    }
+
+    state.torTransitionPrompt?.let { prompt ->
+        TorTransitionPromptDialog(
+            prompt = prompt,
+            onDismiss = onDismissTorTransitionPrompt,
+            onConfirmDisableTorForUdpProtocol = onConfirmDisableTorForUdpProtocol,
+            onConfirmMoveTorIntoVpn = onConfirmMoveTorIntoVpn,
+            onConfirmKeepTorOnDeviceAndStartVpn = onConfirmKeepTorOnDeviceAndStartVpn,
         )
     }
 }

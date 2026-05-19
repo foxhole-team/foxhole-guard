@@ -152,7 +152,7 @@ internal class FoxholeConnectionLifecycle(
         runtimeConfigAssembler.runtimeFingerprint(
             settingsRepository.current(),
             routingRepository.currentPresetForRuntime(),
-            PrivateDnsSettings.current(context),
+            privateDnsState = PrivateDnsSettings.currentState(context),
         )
 
     suspend fun markCurrentRuntimeApplied() {

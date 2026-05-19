@@ -11,6 +11,7 @@ import com.foxhole.beta.core.model.PerAppRoutingMode
 import com.foxhole.beta.core.model.PrivacyRouteMode
 import com.foxhole.beta.core.model.PrivacyRouteScope
 import com.foxhole.beta.core.model.PrivacyRouteSettings
+import com.foxhole.beta.core.model.PrivacyRouteUdpPolicy
 import com.foxhole.beta.core.model.ProxyInboundSettings
 import com.foxhole.beta.core.model.ProxySurfaceMode
 import com.foxhole.beta.core.model.ProtocolHint
@@ -81,19 +82,21 @@ class RuntimeConfigAssembler(
         settings: Settings,
         activePreset: RoutingPreset?,
         privateDnsMode: PrivateDnsMode? = null,
+        privateDnsState: PrivateDnsState? = null,
         torRuntimePaths: TorRuntimePaths? = null,
         dnsFilterRuntimePaths: DnsFilterRuntimePaths? = null,
         vpnProtocolHint: ProtocolHint? = null,
     ): String {
         validate(settings.expert)
         val base = json.parseToJsonElement(baseConfigJson).jsonObject
+        val resolvedPrivateDnsState = privateDnsState ?: privateDnsMode?.let(::PrivateDnsState)
         return when (settings.traffic.mode) {
             TrafficMode.TUNNEL ->
                 assembleTunnel(
                     base = base,
                     settings = settings,
                     activePreset = activePreset,
-                    privateDnsMode = privateDnsMode,
+                    privateDnsState = resolvedPrivateDnsState,
                     torRuntimePaths = torRuntimePaths,
                     dnsFilterRuntimePaths = dnsFilterRuntimePaths,
                     vpnProtocolHint = vpnProtocolHint,
@@ -116,7 +119,7 @@ class RuntimeConfigAssembler(
             buildFoxholeDnsConfig(
                 strategy = settings.traffic.domainStrategy.configValue,
                 dnsSettings = dnsSettings,
-                privateDnsMode = null,
+                privateDnsState = null,
                 finalTag =
                     if (settings.expert.systemDnsProtectionEnabled) {
                         DNS_REMOTE_TAG
@@ -172,6 +175,7 @@ class RuntimeConfigAssembler(
         settings: Settings,
         activePreset: RoutingPreset?,
         privateDnsMode: PrivateDnsMode? = null,
+        privateDnsState: PrivateDnsState? = null,
         torRuntimePaths: TorRuntimePaths,
         dnsFilterRuntimePaths: DnsFilterRuntimePaths? = null,
     ): String {
@@ -185,7 +189,7 @@ class RuntimeConfigAssembler(
             buildFoxholeDnsConfig(
                 strategy = settings.traffic.domainStrategy.configValue,
                 dnsSettings = settings.dns,
-                privateDnsMode = privateDnsMode,
+                privateDnsState = privateDnsState ?: privateDnsMode?.let(::PrivateDnsState),
                 dnsFilterRuntimePaths = dnsFilterRuntimePaths,
             )
         val route =
@@ -222,7 +226,7 @@ class RuntimeConfigAssembler(
         base: JsonObject,
         settings: Settings,
         activePreset: RoutingPreset?,
-        privateDnsMode: PrivateDnsMode?,
+        privateDnsState: PrivateDnsState?,
         torRuntimePaths: TorRuntimePaths?,
         dnsFilterRuntimePaths: DnsFilterRuntimePaths?,
         vpnProtocolHint: ProtocolHint?,
@@ -260,7 +264,7 @@ class RuntimeConfigAssembler(
                 base = runtimeBase,
                 traffic = settings.traffic,
                 dnsSettings = settings.dns,
-                privateDnsMode = privateDnsMode,
+                privateDnsState = privateDnsState,
                 dnsFilterRuntimePaths = dnsFilterRuntimePaths,
                 privacyRouteActive = privacyRouteActive,
             )
@@ -360,6 +364,7 @@ class RuntimeConfigAssembler(
         settings: Settings,
         activePreset: RoutingPreset?,
         privateDnsMode: PrivateDnsMode? = null,
+        privateDnsState: PrivateDnsState? = null,
     ): Int {
         val settingsFingerprint =
             json.encodeToString(
@@ -376,7 +381,7 @@ class RuntimeConfigAssembler(
                 ?.let { lanProxyAddressProvider.currentWifiIpv4Address() }
                 ?.hashCode()
                 ?: 0
-        val dnsFingerprint = privateDnsMode?.hashCode() ?: 0
+        val dnsFingerprint = (privateDnsState ?: privateDnsMode?.let(::PrivateDnsState))?.hashCode() ?: 0
         return (((settingsFingerprint * 31) + (activePreset?.hashCode() ?: 0)) * 31 + lanFingerprint) * 31 + dnsFingerprint
     }
 
@@ -773,7 +778,7 @@ class RuntimeConfigAssembler(
         traffic: TrafficSettings,
         dnsSettings: DnsSettings = DnsSettings(),
         dnsFilterRuntimePaths: DnsFilterRuntimePaths? = null,
-        privateDnsMode: PrivateDnsMode? = null,
+        privateDnsState: PrivateDnsState? = null,
         privacyRouteActive: Boolean = false,
     ): JsonObject {
         val effectiveStrategy =
@@ -788,7 +793,7 @@ class RuntimeConfigAssembler(
             return buildFoxholeDnsConfig(
                 strategy = effectiveStrategy.configValue,
                 dnsSettings = dnsSettings,
-                privateDnsMode = privateDnsMode,
+                privateDnsState = privateDnsState,
                 dnsFilterRuntimePaths = dnsFilterRuntimePaths,
                 extraServers = wireGuardDnsServers,
                 finalTag = dnsRoute.finalTag,
@@ -839,7 +844,10 @@ class RuntimeConfigAssembler(
         val appRules = buildAppRouteRules(expert)
         val privacyRouteRules =
             if (privacyRouteActive) {
-                buildTorPrivacyRouteRules(splitPlan)
+                buildTorPrivacyRouteRules(
+                    splitPlan = splitPlan,
+                    udpPolicy = settings.privacyRoute.udpPolicy,
+                )
             } else {
                 emptyList()
             }
@@ -930,7 +938,11 @@ class RuntimeConfigAssembler(
                 if (expert.bypassLan) {
                     add(bypassLanRule())
                 }
-                buildTorPrivacyRouteRules(settings, outboundTag = "proxy").forEach(::add)
+                buildTorPrivacyRouteRules(
+                    settings = settings,
+                    outboundTag = "proxy",
+                    udpPolicy = PrivacyRouteUdpPolicy.BLOCK,
+                ).forEach(::add)
                 presetRules.forEach(::add)
             }
         val ruleSets =
@@ -951,25 +963,33 @@ class RuntimeConfigAssembler(
     private fun buildTorPrivacyRouteRules(
         settings: Settings,
         outboundTag: String = TOR_OVER_VPN_OUTBOUND_TAG,
+        udpPolicy: PrivacyRouteUdpPolicy = settings.privacyRoute.udpPolicy,
     ): List<JsonObject> =
         buildTorPrivacyRouteRules(
             splitPlan = buildSplitPlan(settings, privacyRouteActive = settings.privacyRoute.enabled),
             outboundTag = outboundTag,
+            udpPolicy = udpPolicy,
         )
 
     private fun buildTorPrivacyRouteRules(
         splitPlan: RuntimeSplitPlan,
         outboundTag: String = TOR_OVER_VPN_OUTBOUND_TAG,
-    ): List<JsonObject> =
-        when {
-            splitPlan.torAllApps -> listOf(runtimeProxyTorRouteRule(outboundTag), udpBlockRule())
+        udpPolicy: PrivacyRouteUdpPolicy = PrivacyRouteUdpPolicy.VPN,
+    ): List<JsonObject> {
+        val udpOutbound =
+            when (udpPolicy) {
+                PrivacyRouteUdpPolicy.VPN -> "proxy"
+                PrivacyRouteUdpPolicy.BLOCK -> "block"
+            }
+        return when {
+            splitPlan.torAllApps -> listOf(runtimeProxyTorRouteRule(outboundTag), udpRouteRule(udpOutbound))
             splitPlan.torTcpPackages.isNotEmpty() ->
                 listOf(
                     runtimeProxyTorRouteRule(outboundTag),
                     packageNetworkRouteRule(
                         splitPlan.torUdpBlockedPackages,
                         network = "udp",
-                        outboundTag = "block",
+                        outboundTag = udpOutbound,
                     ),
                     packageNetworkRouteRule(
                         splitPlan.torTcpPackages,
@@ -979,6 +999,7 @@ class RuntimeConfigAssembler(
                 )
             else -> emptyList()
         }
+    }
 
     private fun runtimeProxyTorRouteRule(outboundTag: String = TOR_OVER_VPN_OUTBOUND_TAG): JsonObject =
         buildJsonObject {
@@ -990,11 +1011,11 @@ class RuntimeConfigAssembler(
             put("outbound", outboundTag)
         }
 
-    private fun udpBlockRule(): JsonObject =
+    private fun udpRouteRule(outboundTag: String): JsonObject =
         buildJsonObject {
             put("network", "udp")
             put("action", "route")
-            put("outbound", "block")
+            put("outbound", outboundTag)
         }
 
     private fun packageNetworkRouteRule(
@@ -1402,7 +1423,7 @@ class RuntimeConfigAssembler(
     private fun buildFoxholeDnsConfig(
         strategy: String,
         dnsSettings: DnsSettings = DnsSettings(),
-        privateDnsMode: PrivateDnsMode?,
+        privateDnsState: PrivateDnsState?,
         dnsFilterRuntimePaths: DnsFilterRuntimePaths? = null,
         extraServers: List<JsonObject> = emptyList(),
         finalTag: String = DNS_REMOTE_TAG,
@@ -1426,7 +1447,7 @@ class RuntimeConfigAssembler(
                         add(
                             foxholeRemoteDnsServer(
                                 dnsSettings = dnsSettings,
-                                _privateDnsMode = privateDnsMode,
+                                privateDnsState = privateDnsState,
                                 detourTag = remoteDetourTag.takeIf { dnsSettings.dnsThroughVpn },
                             ),
                         )
@@ -1518,22 +1539,35 @@ class RuntimeConfigAssembler(
 
     private fun foxholeRemoteDnsServer(
         dnsSettings: DnsSettings,
-        _privateDnsMode: PrivateDnsMode?,
+        privateDnsState: PrivateDnsState?,
         detourTag: String?,
-    ): JsonObject =
-        buildJsonObject {
+    ): JsonObject {
+        val strictPrivateDnsHostname =
+            privateDnsState
+                ?.takeIf { state -> state.mode == PrivateDnsMode.STRICT }
+                ?.hostname
+                ?.takeIf(String::isNotBlank)
+        return buildJsonObject {
             put("tag", DNS_REMOTE_TAG)
-            put("server", dnsSettings.server)
-            put("type", dnsSettings.secureMode.configType)
-            put("server_port", dnsSettings.secureMode.defaultPort)
-            if (dnsSettings.secureMode == SecureDnsMode.DOH) {
-                put("path", "/dns-query")
-            }
-            if (dnsSettings.server.requiresDnsDomainResolver()) {
+            if (strictPrivateDnsHostname != null) {
+                put("server", strictPrivateDnsHostname)
+                put("type", SecureDnsMode.DOT.configType)
+                put("server_port", SecureDnsMode.DOT.defaultPort)
                 put("domain_resolver", DNS_DIRECT_TAG)
+            } else {
+                put("server", dnsSettings.server)
+                put("type", dnsSettings.secureMode.configType)
+                put("server_port", dnsSettings.secureMode.defaultPort)
+                if (dnsSettings.secureMode == SecureDnsMode.DOH) {
+                    put("path", "/dns-query")
+                }
+                if (dnsSettings.server.requiresDnsDomainResolver()) {
+                    put("domain_resolver", DNS_DIRECT_TAG)
+                }
             }
             detourTag?.let { put("detour", it) }
         }
+    }
 
     private fun buildDnsRules(
         dnsSettings: DnsSettings,
