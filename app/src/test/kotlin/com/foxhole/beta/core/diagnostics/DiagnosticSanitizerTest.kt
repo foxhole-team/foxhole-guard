@@ -145,6 +145,37 @@ class DiagnosticSanitizerTest {
     }
 
     @Test
+    fun `redacts raw proxy profile uris before host ip and uuid passes`() {
+        val samples =
+            mapOf(
+                "vless" to "vless://11111111-1111-1111-1111-111111111111@edge.example.com:443?security=tls#main",
+                "vmess" to "vmess://eyJhZGQiOiJlZGdlLmV4YW1wbGUuY29tIiwiaWQiOiIxMTExMTExMS0xMTExLTExMTEtMTExMS0xMTExMTExMTExMTEifQ==",
+                "trojan" to "trojan://secret-password@203.0.113.10:443?sni=edge.example.com#trojan",
+                "ss" to "ss://YWVzLTEyOC1nY206c2VjcmV0QGVkZ2UuZXhhbXBsZS5jb206ODM4OA==#ss",
+                "hysteria" to "hysteria://secret@edge.example.com:443?insecure=0#hy",
+                "hysteria2" to "hysteria2://secret@edge.example.com:443?insecure=0#hy2",
+                "hy2" to "hy2://secret@edge.example.com:443?insecure=0#hy2",
+                "tuic" to "tuic://11111111-1111-1111-1111-111111111111:secret@edge.example.com:443#tuic",
+                "wireguard" to "wireguard://secret@198.51.100.2:51820?publickey=abc#wireguard",
+            )
+
+        samples.forEach { (scheme, uri) ->
+            val sanitized = DiagnosticSanitizer.sanitize("import failed for $uri")
+
+            assertFalse(sanitized.contains("$scheme://"))
+            assertTrue(sanitized.contains("[profile-uri-redacted]"))
+            assertFalse(sanitized.contains(uri))
+            assertFalse(sanitized.contains("edge.example.com"))
+            assertFalse(sanitized.contains("203.0.113.10"))
+            assertFalse(sanitized.contains("198.51.100.2"))
+            assertFalse(sanitized.contains("11111111-1111-1111-1111-111111111111"))
+            assertFalse(sanitized.contains("[host]"))
+            assertFalse(sanitized.contains("[ip]"))
+            assertFalse(sanitized.contains("[uuid]"))
+        }
+    }
+
+    @Test
     fun `persistence sanitizer redacts alternate separators and query strings`() {
         val sanitized =
             DiagnosticSanitizer.sanitizeForPersistence(

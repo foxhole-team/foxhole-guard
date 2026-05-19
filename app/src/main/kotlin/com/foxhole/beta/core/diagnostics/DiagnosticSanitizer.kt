@@ -17,6 +17,7 @@ internal object DiagnosticSanitizer {
 
     private fun sanitizeInternal(message: String): String {
         return normalizeForStorage(message)
+            .replace(PROXY_PROFILE_URI_REGEX, "[profile-uri-redacted]")
             .replace(Regex("""https?://[^\s]+"""), "https://[redacted]")
             .replace(ESCAPED_JSON_SENSITIVE_FIELD_REGEX) { result ->
                 "${result.groupValues[1]}\\\"[redacted]\\\""
@@ -46,6 +47,10 @@ internal object DiagnosticSanitizer {
     private val ANSI_ESCAPE_REGEX = Regex("""\u001B\[[0-?]*[ -/]*[@-~]""")
     private val CONTROL_CHAR_REGEX = Regex("""[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]""")
     private val LINE_BREAK_REGEX = Regex("""(?:\r\n|\r|\n)+""")
+    private val PROXY_PROFILE_URI_REGEX =
+        Regex(
+            """(?i)\b(vless|vmess|trojan|ss|ssr|hysteria2?|hy2|tuic|wireguard)://[^\s"'<>]+""",
+        )
     private val HOSTNAME_REGEX =
         Regex(
             """(?<![@\w-])(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}(?![\w-])""",

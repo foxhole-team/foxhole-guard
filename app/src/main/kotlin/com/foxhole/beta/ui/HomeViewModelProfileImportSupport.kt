@@ -1,12 +1,38 @@
 package com.foxhole.beta.ui
 
 import android.app.Application
+import android.content.ClipData
 import androidx.lifecycle.viewModelScope
 import com.foxhole.beta.R
 import com.foxhole.beta.core.data.InsecureTlsImportWarning
 import com.foxhole.beta.core.data.InsecureTlsProfileConsentRequiredException
 import com.foxhole.beta.core.data.ProfileImportPayloadTooLargeException
+import com.foxhole.beta.core.data.requireLocalProfileImportWithinLimit
 import kotlinx.coroutines.launch
+
+internal fun HomeViewModel.onPasteFromClipboardInternal() {
+    val text = clipboard.primaryClip?.firstTextItem(getApplication())
+    if (text.isNullOrBlank()) {
+        snackbars.tryEmit(infoBanner(R.string.clipboard_empty))
+        return
+    }
+    importProfileRaw(text)
+}
+
+internal fun HomeViewModel.importProfileRawInternal(value: String) {
+    if (value.isBlank()) {
+        snackbars.tryEmit(errorBanner(R.string.profile_import_failed))
+        return
+    }
+    val boundedValue =
+        try {
+            requireLocalProfileImportWithinLimit(value)
+        } catch (_: ProfileImportPayloadTooLargeException) {
+            snackbars.tryEmit(errorBanner(R.string.profile_import_too_large))
+            return
+        }
+    importRaw(boundedValue)
+}
 
 internal fun HomeViewModel.importRawInternal(value: String) {
     viewModelScope.launch {
@@ -183,3 +209,10 @@ internal suspend fun HomeViewModel.handleProfileImportFailureInternal(
 ) {
     emitError(profileImportFailureMessage(rawInput, throwable))
 }
+
+private fun ClipData.firstTextItem(application: Application): String? =
+    if (itemCount > 0) {
+        getItemAt(0).coerceToText(application).toString()
+    } else {
+        null
+    }

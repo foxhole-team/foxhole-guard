@@ -12,6 +12,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.util.Collections
 
@@ -45,6 +46,74 @@ class RuntimeCommandActorTest {
             withTimeout(1_000L) { secondStarted.await() }
 
             assertEquals(listOf("first-start", "first-end", "second-start"), events.toList())
+            actor.close()
+        }
+
+    @Test
+    fun `normal command overload stays bounded while command is active`() =
+        runBlocking {
+            val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+            val actor = actor(scope)
+            val currentStarted = CompletableDeferred<Unit>()
+            val releaseCurrent = CompletableDeferred<Unit>()
+            val started = Collections.synchronizedList(mutableListOf<Int>())
+
+            actor.launch(RuntimeCommandPriority.NORMAL, reason = "connect") {
+                currentStarted.complete(Unit)
+                releaseCurrent.await()
+            }
+            withTimeout(1_000L) { currentStarted.await() }
+
+            repeat(250) { index ->
+                actor.launch(RuntimeCommandPriority.NORMAL, reason = "reload-$index") {
+                    started += index
+                }
+            }
+            delay(250L)
+
+            releaseCurrent.complete(Unit)
+            delay(1_000L)
+
+            assertTrue("normal overload should stay within the actor's bounded queues", started.size <= 80)
+            actor.close()
+        }
+
+    @Test
+    fun `stop still preempts after normal command overload`() =
+        runBlocking {
+            val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+            val killReasons = Collections.synchronizedList(mutableListOf<String>())
+            val actor = actor(scope, killReasons)
+            val currentStarted = CompletableDeferred<Unit>()
+            val currentCancelled = CompletableDeferred<Unit>()
+            val stopCompleted = CompletableDeferred<Unit>()
+            val normalStarted = Collections.synchronizedList(mutableListOf<Int>())
+
+            actor.launch(RuntimeCommandPriority.NORMAL, reason = "connect") {
+                try {
+                    currentStarted.complete(Unit)
+                    awaitCancellation()
+                } finally {
+                    currentCancelled.complete(Unit)
+                }
+            }
+            withTimeout(1_000L) { currentStarted.await() }
+
+            repeat(250) { index ->
+                actor.launch(RuntimeCommandPriority.NORMAL, reason = "reload-$index") {
+                    normalStarted += index
+                }
+            }
+            actor.launch(RuntimeCommandPriority.STOP, reason = "disconnect") {
+                stopCompleted.complete(Unit)
+            }
+
+            withTimeout(1_000L) { currentCancelled.await() }
+            withTimeout(1_000L) { stopCompleted.await() }
+            delay(50L)
+
+            assertTrue(normalStarted.isEmpty())
+            assertEquals(listOf("priority_command_preempt:disconnect"), killReasons.toList())
             actor.close()
         }
 

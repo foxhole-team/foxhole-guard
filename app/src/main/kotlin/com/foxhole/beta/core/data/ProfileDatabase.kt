@@ -664,7 +664,7 @@ interface ProfileDao {
     suspend fun clearActive()
 
     @Query("update profiles set isActive = 1 where id = :id")
-    suspend fun setActive(id: Long)
+    suspend fun setActive(id: Long): Int
 
     @Query("delete from profiles where id = :id")
     suspend fun delete(id: Long)

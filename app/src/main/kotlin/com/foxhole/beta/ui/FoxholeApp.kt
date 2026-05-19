@@ -721,6 +721,7 @@ fun FoxholeApp(
                         onNetworkActivityPersistentLoggingChanged = viewModel::onNetworkActivityPersistentLoggingChanged,
                         onFirewallEnabledChanged = viewModel::onFirewallEnabledChanged,
                         onDiagnosticsRetentionSelected = viewModel::onDiagnosticsRetentionSelected,
+                        onRawLiveDiagnosticsChanged = viewModel::onRawLiveDiagnosticsChanged,
                         onStatisticsMetricEnabledChanged = viewModel::onStatisticsMetricEnabledChanged,
                         onOpenSecurityAppMonitorSettings = { navController.navigate(AppRoute.SECURITY_APP_MONITOR) },
                     )

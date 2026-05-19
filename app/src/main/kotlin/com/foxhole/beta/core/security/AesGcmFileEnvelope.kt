@@ -15,7 +15,7 @@ internal object AesGcmFileEnvelope {
         iv: ByteArray,
         ciphertext: ByteArray,
     ): ByteArray {
-        require(iv.isNotEmpty()) { "iv must not be empty" }
+        require(iv.size == AES_GCM_IV_SIZE_BYTES) { "iv must be 12 bytes" }
         require(ciphertext.isNotEmpty()) { "ciphertext must not be empty" }
         return ByteBuffer
             .allocate(HEADER_SIZE_BYTES + iv.size + ciphertext.size)
@@ -32,7 +32,7 @@ internal object AesGcmFileEnvelope {
         val version = buffer.get()
         require(version == VERSION) { "unsupported payload version: $version" }
         val ivSize = buffer.int
-        require(ivSize > 0) { "invalid iv length" }
+        require(ivSize == AES_GCM_IV_SIZE_BYTES) { "iv must be 12 bytes" }
         require(payload.size > HEADER_SIZE_BYTES + ivSize) { "payload is truncated" }
         val iv = ByteArray(ivSize)
         buffer.get(iv)
@@ -41,4 +41,6 @@ internal object AesGcmFileEnvelope {
         require(ciphertext.isNotEmpty()) { "ciphertext must not be empty" }
         return DecodedPayload(iv = iv, ciphertext = ciphertext)
     }
+
+    private const val AES_GCM_IV_SIZE_BYTES = 12
 }

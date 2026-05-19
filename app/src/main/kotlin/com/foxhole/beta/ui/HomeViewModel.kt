@@ -1,7 +1,6 @@
 package com.foxhole.beta.ui
 
 import android.app.Application
-import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
@@ -12,9 +11,7 @@ import androidx.lifecycle.viewModelScope
 import com.foxhole.beta.FoxholeApplication
 import com.foxhole.beta.FoxholeHomeDependencies
 import com.foxhole.beta.R
-import com.foxhole.beta.core.data.ProfileImportPayloadTooLargeException
 import com.foxhole.beta.core.data.RoutingRepository
-import com.foxhole.beta.core.data.requireLocalProfileImportWithinLimit
 import com.foxhole.beta.core.model.AnomalyHistoryRetention
 import com.foxhole.beta.core.model.AnomalySensitivity
 import com.foxhole.beta.core.model.AppLocale
@@ -757,155 +754,11 @@ class HomeViewModel(
         }
     }
 
-    fun onPasteFromClipboard() {
-        val text = clipboard.primaryClip?.firstTextItem()
-        if (text.isNullOrBlank()) {
-            snackbars.tryEmit(infoBanner(R.string.clipboard_empty))
-            return
-        }
-        importProfileRaw(text)
-    }
+    fun onPasteFromClipboard() = onPasteFromClipboardInternal()
 
-    fun importProfileRaw(value: String) {
-        if (value.isBlank()) {
-            snackbars.tryEmit(errorBanner(R.string.profile_import_failed))
-            return
-        }
-        val boundedValue =
-            try {
-                requireLocalProfileImportWithinLimit(value)
-            } catch (_: ProfileImportPayloadTooLargeException) {
-                snackbars.tryEmit(errorBanner(R.string.profile_import_too_large))
-                return
-            }
-        importRaw(boundedValue)
-    }
+    fun importProfileRaw(value: String) = importProfileRawInternal(value)
 
-    fun onToggleConnection() {
-        if (cancelProtocolSearchConnection()) {
-            return
-        }
-        cancelAutoConnect(clearUiOnly = true)
-        val state = uiState.value
-        if (cancelReconnectConnection(state)) {
-            return
-        }
-        if (toggleStandaloneRuntimeConnection(state)) {
-            return
-        }
-        val activeProfile = state.activeProfile
-        if (activeProfile == null) {
-            handleToggleWithoutActiveProfile(state)
-            return
-        }
-        val networkOverride = currentNetworkProfileOverride(state)
-        val connectProfile = networkOverride?.profile ?: activeProfile
-        if (togglePrimaryRuntimeConnection(state, activeProfile)) {
-            return
-        }
-        connectSelectedProfile(state, connectProfile, networkOverride?.protocolOptionId)
-    }
-
-    private fun cancelProtocolSearchConnection(): Boolean {
-        val autoConnectRunning = autoConnectUiStateMutable.value.running
-        val metricsRefreshRunning = protocolMetricsRefreshJob != null
-        val protocolSearchRunning = autoConnectRunning || metricsRefreshRunning
-        if (!protocolSearchRunning) {
-            return false
-        }
-        cancelAutoConnect(clearUiOnly = true)
-        cancelSmartProfileMetricsRefreshInternal(restoreConnection = false)
-        if (autoConnectRunning) {
-            container.connectionController.disconnect(suppressLocalGuard = false)
-        }
-        return true
-    }
-
-    private fun cancelReconnectConnection(state: HomeUiState): Boolean {
-        if (!state.reconnectInProgress) {
-            return false
-        }
-        reconnectJob?.cancel()
-        reconnectJob = null
-        reconnectInProgressMutable.value = false
-        container.connectionController.disconnect(suppressLocalGuard = false)
-        return true
-    }
-
-    private fun toggleStandaloneRuntimeConnection(state: HomeUiState): Boolean {
-        if (state.activeProfile != null || !state.connection.isPrimaryConnectionRuntime()) {
-            return false
-        }
-        container.connectionController.disconnect(suppressLocalGuard = false)
-        return true
-    }
-
-    private fun handleToggleWithoutActiveProfile(state: HomeUiState) {
-        if (!state.torOnlyRouteReady()) {
-            snackbars.tryEmit(errorBanner(R.string.error_profile_missing))
-            return
-        }
-        if (state.settings.privacyRoute.scope == PrivacyRouteScope.ALL_APPS) {
-            snackbars.tryEmit(infoBanner(R.string.privacy_route_all_apps_start_warning))
-        }
-        markTorOperation(HomeTorOperationKind.CONNECTING)
-        requestManualConnectPermissionOrConnect(FoxholeVpnService.TOR_ONLY_PROFILE_ID)
-    }
-
-    private fun HomeUiState.torOnlyRouteReady(): Boolean =
-        settings.privacyRoute.enabled &&
-            (
-                settings.privacyRoute.scope == PrivacyRouteScope.ALL_APPS ||
-                    settings.privacyRoute.selectedPackages.any(String::isNotBlank)
-                )
-
-    private fun togglePrimaryRuntimeConnection(
-        state: HomeUiState,
-        activeProfile: Profile,
-    ): Boolean {
-        if (!state.connection.isPrimaryConnectionRuntime()) {
-            return false
-        }
-        if (state.reconnectRequired && state.connection.state == ConnectionState.CONNECTED) {
-            requestReconnect(activeProfile.id)
-        } else {
-            container.connectionController.disconnect(suppressLocalGuard = false)
-        }
-        return true
-    }
-
-    private fun connectSelectedProfile(
-        state: HomeUiState,
-        connectProfile: Profile,
-        protocolOptionId: String? = null,
-    ) {
-        if (maybePromptStartTcpVpnWhileTorOnlyActive(connectProfile, protocolOptionId)) {
-            return
-        }
-        if (state.settings.traffic.mode == TrafficMode.PROXY) {
-            connect(connectProfile.id, protocolOptionId = protocolOptionId)
-        } else {
-            requestManualConnectPermissionOrConnect(connectProfile.id, protocolOptionId)
-        }
-    }
-
-    internal fun requestManualConnectPermissionOrConnect(
-        profileId: Long,
-        protocolOptionId: String? = null,
-    ) {
-        val prepareIntent = android.net.VpnService.prepare(getApplication())
-        if (prepareIntent != null) {
-            pendingConnectRequest =
-                PendingConnectRequest(
-                    profileId = profileId,
-                    protocolOptionId = protocolOptionId,
-                    action = PendingConnectAction.MANUAL,
-                )
-            requestVpnPermission.tryEmit(Unit)
-        } else {
-            connect(profileId, protocolOptionId = protocolOptionId)
-        }
-    }
+    fun onToggleConnection() = toggleConnectionInternal()
 
     fun onVpnPermissionResult(granted: Boolean) {
         val request = pendingConnectRequest
@@ -1247,6 +1100,8 @@ class HomeViewModel(
     fun onSmartStartReplayLoggingChanged(value: Boolean) = onSmartStartReplayLoggingChangedInternal(value)
 
     fun onDiagnosticsRetentionSelected(value: DiagnosticsRetention) = onDiagnosticsRetentionSelectedInternal(value)
+
+    fun onRawLiveDiagnosticsChanged(value: Boolean) = onRawLiveDiagnosticsChangedInternal(value)
 
     fun onNotifyUnusualTrafficChanged(value: Boolean) = onNotifyUnusualTrafficChangedInternal(value)
 
@@ -1622,161 +1477,21 @@ class HomeViewModel(
         }
     }
 
-    fun onStatisticsUiVisibilityChanged(visible: Boolean) {
-        statisticsVisible = visible
-        onTrafficUiVisibilityChangedInternal(dashboardVisible || statisticsVisible)
-        val runtimeAllowed =
-            appTrafficStatsRuntimeAllowed(
-                settings = container.settingsRepository.settings.value,
-            )
-        syncAppTrafficStatsSampler(runtimeAllowed)
-        if (visible && runtimeAllowed) {
-            viewModelScope.launch {
-                loadInstalledApps()
-                sampleAppTrafficStats()
-            }
-        }
-        if (visible && container.settingsRepository.settings.value.statistics.appChangesEnabled) {
-            viewModelScope.launch {
-                recordInstalledAppInventoryFromLoadedApps()
-            }
-        }
-    }
+    fun onStatisticsUiVisibilityChanged(visible: Boolean) = onStatisticsUiVisibilityChangedInternal(visible)
 
-    fun onStatisticsEnabledChanged(value: Boolean) {
-        viewModelScope.launch {
-            container.settingsRepository.updateStatisticsEnabled(value)
-            val runtimeAllowed =
-                appTrafficStatsRuntimeAllowed(
-                    settings = container.settingsRepository.settings.value,
-                )
-            syncAppTrafficStatsSampler(runtimeAllowed)
-            if (value && runtimeAllowed) {
-                loadInstalledApps()
-                sampleAppTrafficStats()
-            }
-            if (value && container.settingsRepository.settings.value.statistics.appChangesEnabled) {
-                recordInstalledAppInventoryFromLoadedApps()
-            }
-            syncLocalGuardWithPermissionRequest()
-        }
-    }
+    fun onStatisticsEnabledChanged(value: Boolean) = onStatisticsEnabledChangedInternal(value)
 
-    fun onStatisticsRetentionSelected(value: StatisticsRetention) {
-        viewModelScope.launch {
-            container.settingsRepository.updateStatisticsRetention(value)
-        }
-    }
+    fun onStatisticsRetentionSelected(value: StatisticsRetention) = onStatisticsRetentionSelectedInternal(value)
 
-    fun onStatisticsRefreshIntervalSelected(value: StatisticsRefreshInterval) {
-        viewModelScope.launch {
-            container.settingsRepository.updateStatisticsRefreshInterval(value)
-            syncAppTrafficStatsSampler(
-                appTrafficStatsRuntimeAllowed(
-                    settings = container.settingsRepository.settings.value,
-                ),
-            )
-        }
-    }
+    fun onStatisticsRefreshIntervalSelected(value: StatisticsRefreshInterval) =
+        onStatisticsRefreshIntervalSelectedInternal(value)
 
     fun onStatisticsMetricEnabledChanged(
         metric: StatisticsMetric,
         value: Boolean,
-    ) {
-        viewModelScope.launch {
-            container.settingsRepository.updateStatisticsMetricEnabled(metric, value)
-            val runtimeAllowed =
-                appTrafficStatsRuntimeAllowed(
-                    settings = container.settingsRepository.settings.value,
-                )
-            syncAppTrafficStatsSampler(runtimeAllowed)
-            if (value && metric == StatisticsMetric.APP_TRAFFIC && runtimeAllowed) {
-                loadInstalledApps()
-                sampleAppTrafficStats()
-            }
-            if (value && metric == StatisticsMetric.APP_CHANGES) {
-                recordInstalledAppInventoryFromLoadedApps()
-            }
-            if (metric == StatisticsMetric.COUNTRY_TRAFFIC) {
-                syncLocalGuardWithPermissionRequest()
-            }
-        }
-    }
+    ) = onStatisticsMetricEnabledChangedInternal(metric, value)
 
-    fun onAppTrafficStatsEnabledChanged(value: Boolean) {
-        viewModelScope.launch {
-            container.settingsRepository.updateAppTrafficStatsEnabled(value)
-            container.connectionController.syncLocalGuard()
-            val runtimeAllowed =
-                appTrafficStatsRuntimeAllowed(
-                    settings = container.settingsRepository.settings.value,
-                )
-            syncAppTrafficStatsSampler(runtimeAllowed)
-            if (value && runtimeAllowed) {
-                loadInstalledApps()
-                sampleAppTrafficStats()
-            }
-        }
-    }
-
-    internal fun syncAppTrafficStatsSampler(enabled: Boolean) {
-        if (!enabled) {
-            appTrafficStatsJob?.cancel()
-            appTrafficStatsJob = null
-            appTrafficStatsIntervalMs = APP_TRAFFIC_BACKGROUND_SAMPLE_INTERVAL_MS
-            return
-        }
-        val targetIntervalMs = appTrafficStatsSampleIntervalMs()
-        if (appTrafficStatsJob != null && appTrafficStatsIntervalMs != targetIntervalMs) {
-            appTrafficStatsJob?.cancel()
-            appTrafficStatsJob = null
-        }
-        if (appTrafficStatsJob != null) {
-            return
-        }
-        appTrafficStatsIntervalMs = targetIntervalMs
-        appTrafficStatsJob =
-            viewModelScope.launch {
-                while (true) {
-                    sampleAppTrafficStats()
-                    delay(appTrafficStatsIntervalMs)
-                }
-            }
-    }
-
-    private fun appTrafficStatsSampleIntervalMs(): Long =
-        if (statisticsVisible) {
-            container.settingsRepository.settings.value.statistics.refreshInterval.seconds * 1_000L
-        } else {
-            APP_TRAFFIC_BACKGROUND_SAMPLE_INTERVAL_MS
-        }
-
-    internal suspend fun sampleAppTrafficStats() {
-        appTrafficStatsRecorder.recordSnapshot(minDurationMs = appTrafficStatsIntervalMs)
-    }
-
-    private suspend fun recordInstalledAppInventoryFromLoadedApps() {
-        val apps = installedAppsMutable.value
-        if (apps.isEmpty()) {
-            loadInstalledApps()
-        } else {
-            container.settingsRepository.recordInstalledAppInventory(apps)
-        }
-    }
-
-    private fun appTrafficStatsRuntimeAllowed(
-        settings: Settings,
-    ): Boolean =
-        settings.statistics.enabled &&
-            settings.statistics.appTrafficEnabled &&
-            settings.appTrafficStatsEnabled
-
-    internal fun ClipData.firstTextItem(): String? =
-        if (itemCount > 0) {
-            getItemAt(0).coerceToText(getApplication<Application>()).toString()
-        } else {
-            null
-        }
+    fun onAppTrafficStatsEnabledChanged(value: Boolean) = onAppTrafficStatsEnabledChangedInternal(value)
 
     companion object {
         internal const val CONNECTED_IP_REFRESH_DELAY_MS = 250L

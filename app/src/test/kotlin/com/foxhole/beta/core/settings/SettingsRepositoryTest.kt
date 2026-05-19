@@ -222,6 +222,11 @@ class SettingsRepositoryTest {
     }
 
     @Test
+    fun `raw live diagnostics defaults off`() {
+        assertFalse(ExpertSettings().rawLiveDiagnostics)
+    }
+
+    @Test
     fun `reset expert safe defaults disables insecure tls import exceptions`() {
         val reset =
             Settings(
@@ -252,6 +257,7 @@ class SettingsRepositoryTest {
                         blockScreenshots = true,
                         networkActivityLogging = true,
                         diagnosticsRetention = DiagnosticsRetention.DAYS_7,
+                        rawLiveDiagnostics = true,
                         smartStartReplayLogging = true,
                         allowInsecureTls = true,
                         sniff = true,
@@ -267,6 +273,7 @@ class SettingsRepositoryTest {
         assertEquals(1234L, reset.expert.unlockedAt)
         assertTrue(reset.expert.blockScreenshots)
         assertFalse(reset.expert.networkActivityLogging)
+        assertFalse(reset.expert.rawLiveDiagnostics)
         assertFalse(reset.expert.allowInsecureTls)
         assertTrue(reset.expert.sniff)
         assertFalse(reset.expert.bypassLan)

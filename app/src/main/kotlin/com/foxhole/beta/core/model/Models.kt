@@ -402,6 +402,7 @@ data class ExpertSettings(
     val networkActivityLogging: Boolean = false,
     val networkActivityPersistentLogging: Boolean = false,
     val diagnosticsRetention: DiagnosticsRetention = DiagnosticsRetention.HOURS_24,
+    val rawLiveDiagnostics: Boolean = false,
     val smartStartReplayLogging: Boolean = false,
     val allowInsecureTls: Boolean = false,
     val sniff: Boolean = true,

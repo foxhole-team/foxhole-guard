@@ -32,4 +32,19 @@ class AesGcmFileEnvelopeTest {
     fun `rejects unsupported envelope version`() {
         AesGcmFileEnvelope.decode(byteArrayOf(9, 0, 0, 0, 1, 1, 2))
     }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun `rejects encoding AES GCM envelope with short iv`() {
+        AesGcmFileEnvelope.encode(
+            iv = ByteArray(11),
+            ciphertext = byteArrayOf(1),
+        )
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun `rejects decoding AES GCM envelope with long iv`() {
+        AesGcmFileEnvelope.decode(
+            byteArrayOf(1, 0, 0, 0, 13) + ByteArray(13) + byteArrayOf(1),
+        )
+    }
 }

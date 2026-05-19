@@ -1,13 +1,9 @@
 package com.foxhole.beta.core.data
 
-import android.util.Log
 import androidx.room.withTransaction
-import com.foxhole.beta.BuildConfig
-import com.foxhole.beta.core.diagnostics.DiagnosticSanitizer
 import com.foxhole.beta.core.diagnostics.DiagnosticsLogger
 import com.foxhole.beta.core.importer.ProfileImportParser
 import com.foxhole.beta.core.model.CachedActiveProfile
-import com.foxhole.beta.core.model.DnsSettings
 import com.foxhole.beta.core.model.ParsedImport
 import com.foxhole.beta.core.model.ParsedSubscriptionImport
 import com.foxhole.beta.core.model.ParsedSubscriptionProfile
@@ -18,19 +14,15 @@ import com.foxhole.beta.core.model.ProtocolHint
 import com.foxhole.beta.core.model.Settings
 import com.foxhole.beta.core.model.StoredProfileProtocolOption
 import com.foxhole.beta.core.model.StoredProfileSecret
-import com.foxhole.beta.core.model.TrafficMode
 import com.foxhole.beta.core.model.VpnSession
-import com.foxhole.beta.core.model.isUdpTransport
 import com.foxhole.beta.core.network.ensurePublicUrl
 import com.foxhole.beta.core.network.requirePublicUrl
 import com.foxhole.beta.core.settings.SettingsRepository
 import com.foxhole.beta.vpn.DnsFilterAssetInstaller
-import com.foxhole.beta.vpn.FoxholeVpnService
 import com.foxhole.beta.vpn.PrivateDnsMode
 import com.foxhole.beta.vpn.PrivateDnsState
 import com.foxhole.beta.vpn.RuntimeConfigAssembler
 import com.foxhole.beta.vpn.TorRuntimeInstaller
-import com.foxhole.beta.vpn.withIdentityVersion
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
@@ -102,6 +94,19 @@ class ProfileRepository(
 
     private val dao = database.profileDao()
     private val subscriptionFetchUseCase = SubscriptionFetchUseCase(httpClient)
+    private val sessionFactory by lazy {
+        ProfileSessionFactory(
+            settingsRepository = settingsRepository,
+            routingRepository = routingRepository,
+            runtimeConfigAssembler = runtimeConfigAssembler,
+            torRuntimeInstaller = torRuntimeInstaller,
+            dnsFilterAssetInstaller = dnsFilterAssetInstaller,
+            diagnosticsLogger = diagnosticsLogger,
+            profileProvider = ::requireProfile,
+            secretProvider = secretStore::read,
+            resolvedConfigProvider = ::getResolvedConfig,
+        )
+    }
 
     val profiles: Flow<List<Profile>> = dao.observeProfiles().map { list -> list.map { entity -> resolveDomainProfile(entity) } }
     val activeProfile: Flow<Profile?> =
@@ -454,8 +459,7 @@ class ProfileRepository(
 
     suspend fun setActiveProfile(profileId: Long) {
         database.withTransaction {
-            dao.clearActive()
-            dao.setActive(profileId)
+            dao.setActiveProfileIfPresent(profileId)
         }
         persistCachedActiveProfile(requireProfile(profileId))
         diagnosticsLogger.record("profile", "active profile changed")
@@ -637,110 +641,22 @@ class ProfileRepository(
         protocolOptionIdOverride: String? = null,
         privateDnsMode: PrivateDnsMode? = null,
         privateDnsState: PrivateDnsState? = null,
-    ): VpnSession {
-        val profile = requireProfile(profileId)
-        val secret = secretStore.read(profile.secretRef) ?: error("profile secret is missing")
-        val selectedOption = secret.selectedStoredProtocolOption(protocolOptionIdOverride)
-        val selectedProtocolHint = selectedOption?.protocolHint ?: profile.protocolHint
-        val correlationId = newRuntimeCorrelationId()
-        val settings = settingsRepository.current()
-        val dnsFilterRuntimePaths =
-            if (settings.dns.bundledAdGuardFilterEnabled()) {
-                dnsFilterAssetInstaller.prepare()
-            } else {
-                null
-            }
-        val torRuntimePaths =
-            if (settings.shouldPrepareTorRuntime(selectedProtocolHint)) {
-                torRuntimeInstaller.prepare().withIdentityVersion(settings.privacyRoute.identityVersion)
-            } else {
-                null
-            }
-        val assembled =
-            runCatching {
-                runtimeConfigAssembler.assemble(
-                    baseConfigJson = getResolvedConfig(profileId, protocolOptionIdOverride),
-                    settings = settings,
-                    activePreset = routingRepository.currentPresetForRuntime(),
-                    privateDnsMode = privateDnsMode,
-                    privateDnsState = privateDnsState,
-                    torRuntimePaths = torRuntimePaths,
-                    dnsFilterRuntimePaths = dnsFilterRuntimePaths,
-                    vpnProtocolHint = selectedProtocolHint,
-                )
-            }.onFailure { error ->
-                diagnosticsLogger.record(
-                    "profile",
-                    "session build failed sessionId=$correlationId error=${error.javaClass.simpleName}: ${error.message.orEmpty()}",
-                )
-                val logMessage = "session build failed sessionId=$correlationId error=${error.javaClass.simpleName}"
-                if (BuildConfig.DEBUG) {
-                    Log.e(LOG_TAG, logMessage, error)
-                } else {
-                    Log.e(LOG_TAG, DiagnosticSanitizer.sanitizeForExport(logMessage))
-                }
-            }.getOrThrow()
-        return VpnSession(
-            profileId = profile.id,
-            profileName = profile.name,
-            protocolHint = selectedProtocolHint,
-            protocolOptionId = selectedOption?.id,
-            configJson = assembled,
-            correlationId = correlationId,
+    ): VpnSession =
+        sessionFactory.getSession(
+            profileId = profileId,
+            protocolOptionIdOverride = protocolOptionIdOverride,
+            privateDnsMode = privateDnsMode,
+            privateDnsState = privateDnsState,
         )
-    }
-
-    private fun Settings.shouldPrepareTorRuntime(selectedProtocolHint: ProtocolHint): Boolean =
-        privacyRoute.enabled &&
-            traffic.mode == TrafficMode.TUNNEL &&
-            (privacyRoute.bypassVpnTunnel || !selectedProtocolHint.isUdpTransport())
 
     suspend fun getTorOnlySession(
         privateDnsMode: PrivateDnsMode? = null,
         privateDnsState: PrivateDnsState? = null,
-    ): VpnSession {
-        val settings = settingsRepository.current()
-        require(settings.privacyRoute.enabled) { "TOR route is disabled" }
-        val correlationId = newRuntimeCorrelationId()
-        val dnsFilterRuntimePaths =
-            if (settings.dns.bundledAdGuardFilterEnabled()) {
-                dnsFilterAssetInstaller.prepare()
-            } else {
-                null
-            }
-        val assembled =
-            runCatching {
-                runtimeConfigAssembler.assembleTorOnly(
-                    settings = settings,
-                    activePreset = routingRepository.currentPresetForRuntime(),
-                    privateDnsMode = privateDnsMode,
-                    privateDnsState = privateDnsState,
-                    torRuntimePaths =
-                        torRuntimeInstaller
-                            .prepare()
-                            .withIdentityVersion(settings.privacyRoute.identityVersion),
-                    dnsFilterRuntimePaths = dnsFilterRuntimePaths,
-                )
-            }.onFailure { error ->
-                diagnosticsLogger.record(
-                    "profile",
-                    "tor-only session build failed sessionId=$correlationId error=${error.javaClass.simpleName}: ${error.message.orEmpty()}",
-                )
-                val logMessage = "tor-only session build failed sessionId=$correlationId error=${error.javaClass.simpleName}"
-                if (BuildConfig.DEBUG) {
-                    Log.e(LOG_TAG, logMessage, error)
-                } else {
-                    Log.e(LOG_TAG, DiagnosticSanitizer.sanitizeForExport(logMessage))
-                }
-            }.getOrThrow()
-        return VpnSession(
-            profileId = FoxholeVpnService.TOR_ONLY_PROFILE_ID,
-            profileName = "TOR",
-            protocolHint = ProtocolHint.SING_BOX,
-            configJson = assembled,
-            correlationId = correlationId,
+    ): VpnSession =
+        sessionFactory.getTorOnlySession(
+            privateDnsMode = privateDnsMode,
+            privateDnsState = privateDnsState,
         )
-    }
 
     suspend fun verifyBundledDnsFilters() {
         dnsFilterAssetInstaller.prepare()
@@ -1205,9 +1121,6 @@ class ProfileRepository(
             ?: protocolOptions.firstOrNull()
     }
 
-    private fun newRuntimeCorrelationId(): String =
-        "s-" + UUID.randomUUID().toString().replace("-", "").take(12)
-
     private fun StoredProfileSecret.profileProtocolOptions(): List<ProfileProtocolOption> =
         protocolOptions.map { option ->
             ProfileProtocolOption(
@@ -1224,7 +1137,7 @@ class ProfileRepository(
         previousSelectedProtocolOptionId?.takeIf { selectedId -> protocolOptions.any { option -> option.id == selectedId } }
             ?: selectedProtocolOptionId
 
-    private fun ParsedSubscriptionProfile.resolveProtocolHint(selectedProtocolOptionId: String?): com.foxhole.beta.core.model.ProtocolHint =
+    private fun ParsedSubscriptionProfile.resolveProtocolHint(selectedProtocolOptionId: String?): ProtocolHint =
         protocolOptions.firstOrNull { option -> option.id == selectedProtocolOptionId }?.protocolHint ?: protocolHint
 
     private fun ParsedSubscriptionProfile.resolveNormalizedConfigJson(selectedProtocolOptionId: String?): String =
@@ -1270,14 +1183,13 @@ class ProfileRepository(
                     ?.hasInsecureTlsConsent() != true
         }
     }
-
-    private companion object {
-        private const val LOG_TAG = "FoxholeProfileRepo"
-    }
 }
 
-private fun DnsSettings.bundledAdGuardFilterEnabled(): Boolean =
-    filteringEnabled && (blockAds || blockTrackers || blockAppTelemetry || blockMaliciousDomains)
+internal suspend fun ProfileDao.setActiveProfileIfPresent(profileId: Long) {
+    getById(profileId) ?: error("profile not found")
+    clearActive()
+    require(setActive(profileId) == 1) { "profile not found" }
+}
 
 internal fun ProfileImportParser.normalizeLegacyRawResolvedConfig(
     raw: String,

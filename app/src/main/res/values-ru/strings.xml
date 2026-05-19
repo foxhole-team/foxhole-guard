@@ -391,6 +391,8 @@
     <string name="app_changes_journal_enable_body">FoxHole может хранить зашифрованный локальный снимок списка приложений и показывать установки, удаления, источник, риск и признаки безопасности в Журналах.</string>
     <string name="app_changes_journal_go_to_security">Перейти в безопасность</string>
     <string name="app_changes_journal_empty">Установки и удаления приложений пока не записаны.</string>
+    <string name="raw_live_diagnostics_title">Сырые live-логи диагностики</string>
+    <string name="raw_live_diagnostics_summary">Показывать неочищенные записи live-журнала FoxHole на этом устройстве. Файлы, отправляемые через общий доступ, остаются очищенными.</string>
     <string name="clear_usage_title">Очистить статистику</string>
     <string name="statistics_title">Статистика</string>
     <string name="settings_home_statistics_summary">Статистика использования сети</string>

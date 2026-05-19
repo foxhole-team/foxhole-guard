@@ -429,6 +429,13 @@ internal fun HomeViewModel.onDiagnosticsRetentionSelectedInternal(value: Diagnos
     }
 }
 
+internal fun HomeViewModel.onRawLiveDiagnosticsChangedInternal(value: Boolean) {
+    viewModelScope.launch {
+        container.settingsRepository.updateRawLiveDiagnostics(value)
+        container.diagnosticsLogger.applyLiveDiagnosticsPrivacySetting()
+    }
+}
+
 internal fun HomeViewModel.onNotifyUnusualTrafficChangedInternal(value: Boolean) {
     viewModelScope.launch {
         container.settingsRepository.updateNotifyUnusualTraffic(value)

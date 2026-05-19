@@ -958,6 +958,9 @@ class SettingsRepository(
     suspend fun updateDiagnosticsRetention(value: DiagnosticsRetention) =
         update { it.copy(expert = it.expert.copy(diagnosticsRetention = value)) }
 
+    suspend fun updateRawLiveDiagnostics(value: Boolean) =
+        update { it.copy(expert = it.expert.copy(rawLiveDiagnostics = value && BuildConfig.DEBUG)) }
+
     suspend fun updateNotifyUnusualTraffic(value: Boolean) =
         update { it.copy(anomaly = it.anomaly.copy(notifyUnusualTraffic = value)) }
 
@@ -1621,6 +1624,7 @@ class SettingsRepository(
                 firewallEnabled = firewallEnabled,
                 newAppQuarantineEnabled = newAppQuarantineEnabled && firewallEnabled,
                 systemDnsProtectionEnabled = systemDnsProtectionEnabled,
+                rawLiveDiagnostics = rawLiveDiagnostics && BuildConfig.DEBUG,
                 smartStartReplayLogging = smartStartReplayLogging && BuildConfig.DEBUG,
                 localSurfaces = localSurfaces.normalized().migratedProxySurfaceModesIfNeeded(storedSchemaVersion),
                 routeOnly = routeOnly && sniff,

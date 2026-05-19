@@ -28,6 +28,16 @@ data class DiagnosticEntry(
     val message: String,
 )
 
+internal fun liveDiagnosticMessage(
+    message: String,
+    allowRawLiveDiagnostics: Boolean,
+): String =
+    if (allowRawLiveDiagnostics) {
+        message
+    } else {
+        DiagnosticSanitizer.sanitizeForPersistence(message)
+    }
+
 class DiagnosticsLogger(
     private val context: Context,
     private val nowProvider: () -> Long = System::currentTimeMillis,
@@ -56,9 +66,19 @@ class DiagnosticsLogger(
     fun record(tag: String, message: String) {
         val now = nowProvider()
         val retention = currentRetention()
-        val current = prune(entriesMutable.value, now, retention)
+        val allowRawLiveDiagnostics = allowRawLiveDiagnostics()
+        val current =
+            prune(entriesMutable.value, now, retention)
+                .let { entries ->
+                    if (allowRawLiveDiagnostics) {
+                        entries
+                    } else {
+                        entries.map { entry -> entry.copy(message = liveDiagnosticMessage(entry.message, false)) }
+                    }
+                }
         val normalizedMessage = DiagnosticSanitizer.normalizeForStorage(message)
-        val entry = DiagnosticEntry(now, tag.lowercase(Locale.ROOT), normalizedMessage)
+        val liveMessage = liveDiagnosticMessage(normalizedMessage, allowRawLiveDiagnostics)
+        val entry = DiagnosticEntry(now, tag.lowercase(Locale.ROOT), liveMessage)
         val persistedEntry =
             entry.copy(message = DiagnosticSanitizer.sanitizeForPersistence(normalizedMessage))
         val next =
@@ -131,21 +151,31 @@ class DiagnosticsLogger(
         runCatching {
             val now = nowProvider()
             val retention = currentRetention()
+            val allowRawLiveDiagnostics = allowRawLiveDiagnostics()
+            val replayMessage = event.toJsonLine()
             val entry =
                 DiagnosticEntry(
                     timestamp = now,
                     tag = SMART_START_REPLAY_TAG,
-                    message = event.toJsonLine(),
+                    message = liveDiagnosticMessage(replayMessage, allowRawLiveDiagnostics),
                 )
             val persistedEntry =
-                entry.copy(message = DiagnosticSanitizer.sanitizeForPersistence(entry.message))
+                entry.copy(message = DiagnosticSanitizer.sanitizeForPersistence(replayMessage))
             sessionStore.append(persistedEntry, retention)
             entriesMutable.value =
-                (prune(entriesMutable.value, now, retention) + entry)
+                (prune(entriesMutable.value, now, retention).sanitizeLiveEntriesIfNeeded() + entry)
                     .takeLast(retention.maxEntries)
         }.onFailure {
             record("diagnostics", "smart start replay write failed")
         }
+    }
+
+    fun applyLiveDiagnosticsPrivacySetting() {
+        if (allowRawLiveDiagnostics()) {
+            return
+        }
+        val now = nowProvider()
+        entriesMutable.value = prune(entriesMutable.value, now).sanitizeLiveEntriesIfNeeded()
     }
 
     fun snapshotForExport(sanitize: Boolean = true): String {
@@ -228,6 +258,18 @@ class DiagnosticsLogger(
 
     private fun currentRetention(): DiagnosticsRetention =
         runCatching { retentionProvider() }.getOrDefault(DiagnosticsRetention.HOURS_24)
+
+    private fun allowRawLiveDiagnostics(): Boolean =
+        BuildConfig.DEBUG &&
+            runCatching { settingsSnapshotProvider().expert.rawLiveDiagnostics }
+            .getOrDefault(false)
+
+    private fun List<DiagnosticEntry>.sanitizeLiveEntriesIfNeeded(): List<DiagnosticEntry> =
+        if (allowRawLiveDiagnostics()) {
+            this
+        } else {
+            map { entry -> entry.copy(message = liveDiagnosticMessage(entry.message, false)) }
+        }
 
     private fun diagnosticsExportMetadata(retention: DiagnosticsRetention): DiagnosticsExportMetadata {
         val settings = runCatching(settingsSnapshotProvider).getOrDefault(Settings())

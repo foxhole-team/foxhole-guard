@@ -45,6 +45,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
+import com.foxhole.beta.BuildConfig
 import com.foxhole.beta.R
 import com.foxhole.beta.core.diagnostics.DiagnosticEntry
 import com.foxhole.beta.core.diagnostics.DiagnosticSanitizer
@@ -74,6 +75,7 @@ fun DiagnosticsScreen(
     onNetworkActivityPersistentLoggingChanged: (Boolean) -> Unit,
     onFirewallEnabledChanged: (Boolean) -> Unit,
     onDiagnosticsRetentionSelected: (DiagnosticsRetention) -> Unit,
+    onRawLiveDiagnosticsChanged: (Boolean) -> Unit,
     onStatisticsMetricEnabledChanged: (StatisticsMetric, Boolean) -> Unit,
     onOpenSecurityAppMonitorSettings: () -> Unit,
 ) {
@@ -118,6 +120,7 @@ fun DiagnosticsScreen(
         onNetworkActivityPersistentLoggingChanged = onNetworkActivityPersistentLoggingChanged,
         onFirewallEnabledChanged = onFirewallEnabledChanged,
         onDiagnosticsRetentionSelected = onDiagnosticsRetentionSelected,
+        onRawLiveDiagnosticsChanged = onRawLiveDiagnosticsChanged,
         onOpenNetworkLog = { networkLogVisible = true },
         onOpenFoxholeLog = { foxholeLogVisible = true },
         onOpenAppChangesLog = {
@@ -225,6 +228,7 @@ private fun DiagnosticsScreenContent(
     onNetworkActivityPersistentLoggingChanged: (Boolean) -> Unit,
     onFirewallEnabledChanged: (Boolean) -> Unit,
     onDiagnosticsRetentionSelected: (DiagnosticsRetention) -> Unit,
+    onRawLiveDiagnosticsChanged: (Boolean) -> Unit,
     onOpenNetworkLog: () -> Unit,
     onOpenFoxholeLog: () -> Unit,
     onOpenAppChangesLog: () -> Unit,
@@ -298,6 +302,17 @@ private fun DiagnosticsScreenContent(
                     onClick = onOpenFoxholeLog,
                 )
                 SettingsControlGroupDivider()
+                if (BuildConfig.DEBUG) {
+                    SettingSwitchRow(
+                        title = stringResource(R.string.raw_live_diagnostics_title),
+                        checked = state.settings.expert.rawLiveDiagnostics,
+                        summary = stringResource(R.string.raw_live_diagnostics_summary),
+                        leadingIcon = Icons.Outlined.FileUpload,
+                        onCheckedChange = onRawLiveDiagnosticsChanged,
+                        grouped = true,
+                    )
+                    SettingsControlGroupDivider()
+                }
                 SettingsNavigationRow(
                     icon = Icons.Outlined.Apps,
                     title = stringResource(R.string.app_changes_journal_title),
