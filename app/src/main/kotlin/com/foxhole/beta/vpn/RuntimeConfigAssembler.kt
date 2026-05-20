@@ -270,6 +270,7 @@ class RuntimeConfigAssembler(
             )
         val patchedRoute =
             patchRoute(
+                base = runtimeBase,
                 existing = runtimeBase["route"]?.jsonObject,
                 dns = patchedDns,
                 activePreset = activePreset,
@@ -277,6 +278,7 @@ class RuntimeConfigAssembler(
                 dnsFilterRuntimePaths = dnsFilterRuntimePaths,
                 privacyRouteActive = privacyRouteActive,
                 splitPlan = splitPlan,
+                vpnProtocolHint = vpnProtocolHint,
             )
         val patchedExperimental =
             patchExperimental(
@@ -414,6 +416,7 @@ class RuntimeConfigAssembler(
                 "route_final=${route?.stringField("final") ?: "missing"}",
                 "route_auto_detect=${route?.stringField("auto_detect_interface") ?: "missing"}",
                 "route_default_interface=${route?.stringField("default_interface") ?: "none"}",
+                "route_udp_block=${route?.hasUdpBlockRule() == true}",
             ).joinToString(" ")
         }.getOrElse { error ->
             "outbound_shape unavailable error=${error.javaClass.simpleName}"
@@ -451,6 +454,12 @@ class RuntimeConfigAssembler(
         this["inbounds"]?.jsonArray.orEmpty().firstOrNull { inbound ->
             inbound.jsonObject.stringField("tag") == RUNTIME_LOOPBACK_PROXY_INBOUND_TAG
         }?.jsonObject
+
+    private fun JsonObject.hasUdpBlockRule(): Boolean =
+        this["rules"]?.jsonArray.orEmpty().any { rule ->
+            val value = rule.jsonObject
+            value.stringField("network") == "udp" && value.stringField("outbound") == "block"
+        }
 
     private fun JsonObject.stringField(key: String): String? =
         this[key]?.jsonPrimitive?.contentOrNull?.trim()?.takeIf(String::isNotBlank)
@@ -898,6 +907,7 @@ class RuntimeConfigAssembler(
 
     @Suppress("CyclomaticComplexMethod")
     private fun patchRoute(
+        base: JsonObject,
         existing: JsonObject?,
         dns: JsonObject,
         activePreset: RoutingPreset?,
@@ -905,10 +915,12 @@ class RuntimeConfigAssembler(
         dnsFilterRuntimePaths: DnsFilterRuntimePaths?,
         privacyRouteActive: Boolean,
         splitPlan: RuntimeSplitPlan,
+        vpnProtocolHint: ProtocolHint?,
     ): JsonObject {
         val expert = settings.expert
         val source = existing ?: buildJsonObject {}
         val preserveSource = existing != null && !isFoxholeManagedRoute(existing)
+        val blockUnsupportedUdp = shouldBlockUnsupportedUdp(base, vpnProtocolHint)
         val baseRules =
             source["rules"]
                 ?.jsonArray
@@ -943,6 +955,9 @@ class RuntimeConfigAssembler(
                 }
                 if (expert.bypassLan) {
                     add(bypassLanRule())
+                }
+                if (blockUnsupportedUdp) {
+                    add(udpRouteRule("block"))
                 }
                 privacyRouteRules.forEach(::add)
                 if (activePreset?.enabled == true && activePreset.overrideMode == RoutingPresetOverrideMode.FORCE_LOCAL) {
@@ -1108,6 +1123,17 @@ class RuntimeConfigAssembler(
             put("action", "route")
             put("outbound", outboundTag)
         }
+
+    private fun shouldBlockUnsupportedUdp(
+        base: JsonObject,
+        vpnProtocolHint: ProtocolHint?,
+    ): Boolean {
+        if (vpnProtocolHint?.isUdpTransport() == true) {
+            return false
+        }
+        val outbound = base.primaryProxyOutbound() ?: return false
+        return outbound.stringField("network") == "tcp"
+    }
 
     private fun packageNetworkRouteRule(
         packageNames: List<String>,
@@ -1870,6 +1896,10 @@ class RuntimeConfigAssembler(
                 rule["outbound"]?.jsonPrimitive?.contentOrNull == "direct" &&
                 rule["ip_is_private"]?.jsonPrimitive?.contentOrNull == "true" ->
                 rule.keys.all { it in setOf("ip_is_private", "action", "outbound") }
+            action == "route" &&
+                rule["network"]?.jsonPrimitive?.contentOrNull == "udp" &&
+                rule["outbound"]?.jsonPrimitive?.contentOrNull == "block" ->
+                rule.keys.all { it in setOf("network", "action", "outbound") }
             action == "route" &&
                 rule["outbound"]?.jsonPrimitive?.contentOrNull in setOf("proxy", "direct", "block") &&
                 rule["package_name"] != null ->

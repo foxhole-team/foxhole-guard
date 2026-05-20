@@ -472,6 +472,46 @@ class RuntimeConfigAssemblerTest {
     }
 
     @Test
+    fun `tcp only proxy outbound blocks browser udp fallback`() {
+        val config =
+            parse(
+                assembler.assemble(
+                    baseConfigJson =
+                        baseConfigWithOutbounds(
+                            buildJsonArray {
+                                add(
+                                    buildJsonObject {
+                                        put("type", "vless")
+                                        put("tag", "proxy")
+                                        put("server", "edge.example")
+                                        put("server_port", 443)
+                                        put("uuid", "11111111-1111-1111-1111-111111111111")
+                                        put("network", "tcp")
+                                    },
+                                )
+                            },
+                        ),
+                    settings = Settings(),
+                    activePreset = null,
+                    vpnProtocolHint = ProtocolHint.VLESS,
+                ),
+            )
+
+        val udpBlock =
+            config["route"]!!
+                .jsonObject["rules"]!!
+                .jsonArray
+                .map { it.jsonObject }
+                .single {
+                    it["network"]?.jsonPrimitive?.content == "udp" &&
+                        it["outbound"]?.jsonPrimitive?.content == "block" &&
+                        it["package_name"] == null
+                }
+
+        assertEquals("route", udpBlock["action"]!!.jsonPrimitive.content)
+    }
+
+    @Test
     fun `full-device tunnel excludes app control plane from vpn capture`() {
         val config = parse(assembler.assemble(baseConfigWithRules("profile.example"), Settings(), null))
         val tunInbound = config["inbounds"]!!.jsonArray.first().jsonObject
