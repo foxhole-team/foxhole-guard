@@ -40,7 +40,6 @@ import com.foxhole.beta.core.settings.AppTrafficStatsRecorder
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.currentCoroutineContext
@@ -50,7 +49,6 @@ import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import java.net.DatagramPacket
 import java.net.DatagramSocket
 import java.net.InetAddress
@@ -342,7 +340,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
     }
 
     override fun onRevoke() {
-        launchPriorityCommand {
+        launchPriorityCommand(RuntimeCommandPriority.STOP, "permission_revoked") {
             disconnect(message = getString(R.string.vpn_permission_revoked))
         }
     }
@@ -354,7 +352,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
 
     override fun stopRuntimeService() {
         container.diagnosticsLogger.record("connection", "native runtime requested vpn service stop; failing closed")
-        launchPriorityCommand {
+        launchPriorityCommand(RuntimeCommandPriority.KILL, "native_stop") {
             failClosedTeardown(commandStartId = 0, action = ACTION_NATIVE_RUNTIME_STOP)
         }
     }
@@ -551,10 +549,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         startNotificationHealthMonitoring()
         val result = startRuntimeWithHealthMetrics(session = session, owner = "vpn")
         if (!currentCoroutineContext().isActive) {
-            withContext(NonCancellable) {
-                container.diagnosticsLogger.record("connection", "runtime start cancelled after native return")
-                disconnect(commandStartId = commandStartId)
-            }
+            container.diagnosticsLogger.record("connection", "runtime start cancelled after native return")
             return
         }
         handleRuntimeStartResult(
@@ -707,6 +702,14 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
             stopService(commandStartId)
             return
         }
+        if (isSameLocalGuardRuntimeActive(mode)) {
+            container.diagnosticsLogger.record(
+                "connection",
+                "local guard already active mode=${mode.name.lowercase()}",
+            )
+            updateNotification()
+            return
+        }
         stopTrafficUpdates()
         stopAppTrafficStatsUpdates()
         stopGeoRefresh()
@@ -791,7 +794,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         reasonCode: AutoConnectReasonCode? = null,
     ) {
         container.diagnosticsLogger.record("connection", "runtime failure: $message")
-        launchCommand { disconnect(message, commandStartId, reasonCode) }
+        launchCommand("fail_disconnect") { disconnect(message, commandStartId, reasonCode) }
     }
 
     internal suspend fun failClosedTeardown(
@@ -908,15 +911,22 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
             activeSession = session
             container.connectionController.markCurrentRuntimeApplied()
             container.diagnosticsLogger.record("connection", "runtime reloaded, tunnel validation required")
+            val connectedSnapshot = snapshot.state == ConnectionState.CONNECTED
             FoxholeVpnRuntimeBridge.update(
                 snapshot.copy(
-                    state = ConnectionState.RECONNECTING,
+                    state = if (connectedSnapshot) ConnectionState.CONNECTED else ConnectionState.RECONNECTING,
                     profileId = session.profileId,
                     profileName = session.profileName,
                     protocolHint = session.protocolHint,
                     protocolOptionId = session.protocolOptionId,
-                    message = getString(R.string.status_reconnecting),
+                    message =
+                        if (connectedSnapshot) {
+                            snapshot.message
+                        } else {
+                            getString(R.string.status_reconnecting)
+                        },
                 ),
+                refreshLastChangeAt = !connectedSnapshot,
             )
             FoxholeVpnRuntimeBridge.requestImmediateTrafficSample()
             updateNotification()
@@ -994,12 +1004,19 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
 
     internal fun ensureNotificationChannel() = ensureConnectionNotificationChannel(notificationManager)
 
-    internal fun launchCommand(block: suspend () -> Unit) {
-        commandActor.launch(RuntimeCommandPriority.NORMAL, reason = "service_command", block = block)
+    internal fun launchCommand(
+        reason: String,
+        block: suspend () -> Unit,
+    ) {
+        commandActor.launch(RuntimeCommandPriority.NORMAL, reason = reason, block = block)
     }
 
-    internal fun launchPriorityCommand(block: suspend () -> Unit) {
-        commandActor.launch(RuntimeCommandPriority.STOP, reason = "priority_service_command", block = block)
+    internal fun launchPriorityCommand(
+        priority: RuntimeCommandPriority,
+        reason: String,
+        block: suspend () -> Unit,
+    ) {
+        commandActor.launch(priority, reason = reason, block = block)
     }
 
     internal fun stopService(commandStartId: Int?) {
@@ -1185,11 +1202,13 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
     internal fun startTrafficUpdates() {
         stopTrafficUpdates()
         DnsRuntimeStats.reset()
-        trafficMapCountryTrackingJob =
-            container.trafficMapRepository.startDestinationCountryTracking(
-                scope = scope,
-                runtimeAvailable = flowOf(true),
-            )
+        if (destinationCountryTrackingRuntimeEnabled(container.settingsRepository.settings.value)) {
+            trafficMapCountryTrackingJob =
+                container.trafficMapRepository.startDestinationCountryTracking(
+                    scope = scope,
+                    runtimeAvailable = flowOf(true),
+                )
+        }
         FoxholeVpnRuntimeBridge.updateTraffic(trafficSampler.sample(resetRateBaseline = true))
         immediateTrafficSampleJob =
             scope.launch(Dispatchers.Default) {
@@ -1627,6 +1646,13 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
     }
 }
 
+private fun FoxholeVpnService.isSameLocalGuardRuntimeActive(mode: LocalGuardMode): Boolean {
+    val snapshot = FoxholeVpnRuntimeBridge.snapshot.value
+    return activeLocalGuardMode == mode &&
+        snapshot.profileId == FoxholeVpnService.LOCAL_GUARD_PROFILE_ID &&
+        snapshot.state == ConnectionState.CONNECTED
+}
+
 private fun FoxholeVpnService.notificationSmallIconRes(snapshot: NotificationSnapshot): Int =
     when {
         activeLocalGuardMode != null -> R.drawable.ic_notification_firewall
@@ -1648,6 +1674,11 @@ private fun FoxholeVpnService.appTrafficStatsRuntimeEnabled(settings: Settings):
         settings.statistics.appTrafficEnabled &&
         settings.appTrafficStatsEnabled &&
         appTrafficStatsRecorder.hasUsageAccess()
+
+private fun destinationCountryTrackingRuntimeEnabled(settings: Settings): Boolean =
+    settings.statistics.enabled &&
+        (settings.statistics.countryTrafficEnabled ||
+            (settings.statistics.anomalyMetricsEnabled && settings.anomaly.analyzeDestinationCountries))
 
 internal interface VpnCoreRuntime {
     suspend fun start(session: VpnSession, host: RuntimeServiceHost): Result<Unit>

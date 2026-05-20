@@ -180,6 +180,71 @@ class RuntimeCommandActorTest {
         }
 
     @Test
+    fun `second stop while stop is running is coalesced without emergency kill`() =
+        runBlocking {
+            val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+            val killReasons = Collections.synchronizedList(mutableListOf<String>())
+            val actor = actor(scope, killReasons)
+            val events = Collections.synchronizedList(mutableListOf<String>())
+            val stopStarted = CompletableDeferred<Unit>()
+            val releaseStop = CompletableDeferred<Unit>()
+
+            actor.launch(RuntimeCommandPriority.STOP, reason = "disconnect") {
+                events += "first-stop-start"
+                stopStarted.complete(Unit)
+                releaseStop.await()
+                events += "first-stop-end"
+            }
+            withTimeout(1_000L) { stopStarted.await() }
+
+            actor.launch(RuntimeCommandPriority.STOP, reason = "disconnect") {
+                events += "second-stop"
+            }
+            delay(100L)
+
+            assertEquals(listOf("first-stop-start"), events.toList())
+            assertTrue(killReasons.isEmpty())
+
+            releaseStop.complete(Unit)
+            delay(100L)
+
+            assertEquals(listOf("first-stop-start", "first-stop-end"), events.toList())
+            assertTrue(killReasons.isEmpty())
+            actor.close()
+        }
+
+    @Test
+    fun `kill preempts running stop once`() =
+        runBlocking {
+            val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+            val killReasons = Collections.synchronizedList(mutableListOf<String>())
+            val actor = actor(scope, killReasons)
+            val stopStarted = CompletableDeferred<Unit>()
+            val stopCancelled = CompletableDeferred<Unit>()
+            val killCompleted = CompletableDeferred<Unit>()
+
+            actor.launch(RuntimeCommandPriority.STOP, reason = "disconnect") {
+                try {
+                    stopStarted.complete(Unit)
+                    awaitCancellation()
+                } finally {
+                    stopCancelled.complete(Unit)
+                }
+            }
+            withTimeout(1_000L) { stopStarted.await() }
+
+            actor.launch(RuntimeCommandPriority.KILL, reason = "kill") {
+                killCompleted.complete(Unit)
+            }
+
+            withTimeout(1_000L) { stopCancelled.await() }
+            withTimeout(1_000L) { killCompleted.await() }
+
+            assertEquals(listOf("priority_command_preempt:kill"), killReasons.toList())
+            actor.close()
+        }
+
+    @Test
     fun `stop runs immediately while current command is still cancelling`() =
         runBlocking {
             val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -254,6 +319,34 @@ class RuntimeCommandActorTest {
         }
 
     @Test
+    fun `duplicate normal command coalesces into running command`() =
+        runBlocking {
+            val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+            val actor = actor(scope)
+            val events = Collections.synchronizedList(mutableListOf<String>())
+            val currentStarted = CompletableDeferred<Unit>()
+            val releaseCurrent = CompletableDeferred<Unit>()
+
+            actor.launch(RuntimeCommandPriority.NORMAL, reason = "connect:1:wireguard") {
+                events += "first-start"
+                currentStarted.complete(Unit)
+                releaseCurrent.await()
+                events += "first-end"
+            }
+            withTimeout(1_000L) { currentStarted.await() }
+
+            actor.launch(RuntimeCommandPriority.NORMAL, reason = "connect:1:wireguard") {
+                events += "duplicate-start"
+            }
+            delay(100L)
+            releaseCurrent.complete(Unit)
+            delay(100L)
+
+            assertEquals(listOf("first-start", "first-end"), events.toList())
+            actor.close()
+        }
+
+    @Test
     fun `reload during disconnect is serialized`() =
         runBlocking {
             val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -311,6 +404,62 @@ class RuntimeCommandActorTest {
             withTimeout(1_000L) { currentCancelled.await() }
             delay(50L)
             assertFalse(pendingStarted.isCompleted)
+        }
+
+    @Test
+    fun `repeated stop commands coalesce while force kill is draining`() =
+        runBlocking {
+            val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+            val currentStarted = CompletableDeferred<Unit>()
+            val killStarted = CompletableDeferred<Unit>()
+            val releaseKill = CompletableDeferred<Unit>()
+            val diagnostics = Collections.synchronizedList(mutableListOf<RuntimeCommandDiagnosticEvent>())
+            val actor =
+                actor(
+                    scope = scope,
+                    diagnostics = diagnostics,
+                    emergencyKill = { reason ->
+                        killStarted.complete(Unit)
+                        releaseKill.await()
+                        RuntimeKillResult(
+                            reason = reason,
+                            tunClosed = true,
+                            serverDetached = true,
+                        )
+                    },
+                )
+
+            actor.launch(RuntimeCommandPriority.NORMAL, reason = "connect") {
+                currentStarted.complete(Unit)
+                awaitCancellation()
+            }
+            withTimeout(1_000L) { currentStarted.await() }
+            actor.launch(RuntimeCommandPriority.STOP, reason = "disconnect") {
+            }
+            withTimeout(1_000L) { killStarted.await() }
+
+            repeat(100) {
+                actor.launch(RuntimeCommandPriority.STOP, reason = "disconnect") {
+                }
+            }
+            delay(100L)
+
+            assertFalse(
+                diagnostics.any { event ->
+                    event.headline == "runtime command rejected" &&
+                        event.details.contains("reason=disconnect")
+                },
+            )
+            assertTrue(
+                diagnostics.any { event ->
+                    event.headline == "runtime priority command coalesced" &&
+                        event.details.contains("reason=disconnect") &&
+                        event.details.contains("buffered=true")
+                },
+            )
+
+            releaseKill.complete(Unit)
+            actor.close()
         }
 
     @Test

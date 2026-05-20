@@ -22,8 +22,10 @@ internal class DiagnosticsSessionStore(
             explicitNulls = false
         }
     private var currentSessionFile: File? = null
+    private var currentSessionEntries: MutableList<DiagnosticEntry>? = null
     private var lastCleanupAt = 0L
 
+    @Synchronized
     fun loadRecentEntries(
         now: Long,
         retention: DiagnosticsRetention,
@@ -39,40 +41,56 @@ internal class DiagnosticsSessionStore(
             .takeLast(retention.maxEntries)
     }
 
+    @Synchronized
     fun append(
         entry: DiagnosticEntry,
         retention: DiagnosticsRetention,
     ) {
-        val target = writableSessionFile(entry.timestamp)
-        val existingEntries =
-            if (target.exists()) {
-                runCatching { target.readPersistedEntries() }
-                    .getOrElse { error ->
-                        currentSessionFile = null
-                        val replacement = writableSessionFile(entry.timestamp)
-                        writeEntriesSync(
-                            replacement,
-                            listOf(
-                                journalReadFailureEntry(entry.timestamp, target, error),
-                                entry,
-                            ),
-                        )
-                        maybeCleanup(entry.timestamp, retention)
-                        return
-                    }
-            } else {
-                emptyList()
-            }
-        writeEntriesSync(target, existingEntries + entry)
-        maybeCleanup(entry.timestamp, retention)
+        appendAll(listOf(entry), retention)
     }
 
+    @Synchronized
+    fun appendAll(
+        entries: List<DiagnosticEntry>,
+        retention: DiagnosticsRetention,
+    ) {
+        if (entries.isEmpty()) {
+            return
+        }
+        val now = entries.last().timestamp
+        val target = writableSessionFile(now)
+        val sessionEntries =
+            runCatching { cachedEntriesFor(target) }
+                .getOrElse { error ->
+                    currentSessionFile = null
+                    currentSessionEntries = null
+                    val replacement = writableSessionFile(now)
+                    val replacementEntries =
+                        (listOf(journalReadFailureEntry(now, target, error)) + entries)
+                            .sanitizePersistedEntries()
+                            .takeLast(retention.maxEntries)
+                            .toMutableList()
+                    currentSessionEntries = replacementEntries
+                    writeEntriesSync(replacement, replacementEntries)
+                    maybeCleanup(now, retention)
+                    return
+                }
+        sessionEntries += entries.sanitizePersistedEntries()
+        val retained = sessionEntries.takeLast(retention.maxEntries).toMutableList()
+        currentSessionEntries = retained
+        writeEntriesSync(target, retained)
+        maybeCleanup(now, retention)
+    }
+
+    @Synchronized
     fun clear() {
         sessionFiles(includeLegacy = true).forEach(File::delete)
         currentSessionFile = null
+        currentSessionEntries = null
         lastCleanupAt = 0L
     }
 
+    @Synchronized
     fun cleanup(
         now: Long,
         retention: DiagnosticsRetention,
@@ -100,7 +118,23 @@ internal class DiagnosticsSessionStore(
         }
         val file = File(journalDir, "session-$now-${sessionIdProvider()}.jsonl.enc")
         currentSessionFile = file
+        currentSessionEntries = mutableListOf()
         return file
+    }
+
+    private fun cachedEntriesFor(file: File): MutableList<DiagnosticEntry> {
+        if (file == currentSessionFile) {
+            currentSessionEntries?.let { return it }
+        }
+        val entries =
+            if (file.exists()) {
+                file.readPersistedEntries().toMutableList()
+            } else {
+                mutableListOf()
+            }
+        currentSessionFile = file
+        currentSessionEntries = entries
+        return entries
     }
 
     private fun maybeCleanup(
@@ -182,6 +216,9 @@ internal class DiagnosticsSessionStore(
             tag = tag,
             message = DiagnosticSanitizer.sanitizeForPersistence(message),
         )
+
+    private fun List<DiagnosticEntry>.sanitizePersistedEntries(): List<DiagnosticEntry> =
+        map { entry -> entry.copy(message = DiagnosticSanitizer.sanitizeForPersistence(entry.message)) }
 
     @Serializable
     private data class PersistedDiagnosticEntry(

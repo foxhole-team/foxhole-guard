@@ -631,11 +631,6 @@ fun HomeScreen(
                                             !isSmartDashboardProfile,
                                     trailing = {
                                         when {
-                                            dashboardConnectionMetricsLoading ->
-                                                ProtocolLatencyLoadingPill(
-                                                    compact = true,
-                                                    showLabel = true,
-                                                )
                                             dashboardSelectedLatencyMs != null ->
                                                 ProtocolLatencyPill(
                                                     latencyMs = dashboardSelectedLatencyMs,
@@ -652,6 +647,11 @@ fun HomeScreen(
                                                 ProtocolLatencyPill(
                                                     compact = true,
                                                     isUnavailable = true,
+                                                    showLabel = true,
+                                                )
+                                            dashboardConnectionMetricsLoading ->
+                                                ProtocolLatencyLoadingPill(
+                                                    compact = true,
                                                     showLabel = true,
                                                 )
                                             else -> Unit
@@ -688,11 +688,11 @@ fun HomeScreen(
                                                     serverPingByOptionId = state.protocolServerPingsByOptionId,
                                                     serverPingUnavailableOptionIds = state.protocolServerPingUnavailableOptionIds,
                                                     metricsUpdatedAtByOptionId = state.protocolMetricsUpdatedAtByOptionId,
-                                                    metricsRefreshing = state.protocolMetricsRefreshing,
+                                                    metricsRefreshing = state.protocolMetricsRefreshing || state.autoConnect.running,
                                                     refreshingOptionId =
                                                         state.protocolMetricsRefreshingOptionId
                                                             ?: state.autoConnect.currentOptionId
-                                                                .takeIf { state.protocolMetricsRefreshing },
+                                                                .takeIf { state.protocolMetricsRefreshing || state.autoConnect.running },
                                                     recommendedOptionId = state.recommendedProtocolOptionId,
                                                     recommendedOptionIds = state.recommendedProtocolOptionIds,
                                                     favoriteOptionId = state.favoriteProtocolOptionId,

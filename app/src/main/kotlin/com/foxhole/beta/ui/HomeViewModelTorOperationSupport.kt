@@ -10,10 +10,9 @@ import kotlinx.coroutines.launch
 internal fun HomeViewModel.markTorOperationInternal(kind: HomeTorOperationKind) {
     torOperationTimeoutJob?.cancel()
     val startedAt = System.currentTimeMillis()
-    val startedIpAddress = container.connectionController.ipInfo.value?.let(::primaryVisibleIp)
-    if (kind == HomeTorOperationKind.CONNECTING) {
-        torIpInfoMutable.value = null
-    }
+    val startedIpAddress =
+        (torIpInfoMutable.value ?: container.connectionController.ipInfo.value)
+            ?.let(::primaryVisibleIp)
     torOperationMutable.value =
         HomeTorOperationUiState(
             kind = kind,

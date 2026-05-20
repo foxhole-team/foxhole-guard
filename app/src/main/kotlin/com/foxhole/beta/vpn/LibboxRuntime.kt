@@ -31,6 +31,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.net.InetAddress
 import java.net.NetworkInterface
+import java.util.Locale
 import java.util.concurrent.CancellationException
 import java.util.concurrent.atomic.AtomicReference
 
@@ -239,8 +240,10 @@ internal class ReflectiveLibboxRuntime(
                                 .trim()
                                 .takeIf(String::isNotBlank)
                                 ?.let {
-                                    DnsRuntimeStats.recordLogMessage(it)
-                                    diagnosticsLogger.record("libbox", it)
+                                    if (shouldRecordDnsRuntimeStats(it)) {
+                                        DnsRuntimeStats.recordLogMessage(it)
+                                    }
+                                    recordLibboxDebugMessage(diagnosticsLogger, it)
                                 }
                         },
                     )
@@ -1123,6 +1126,125 @@ private fun logRuntimeFailure(
     }
 }
 
+private fun recordLibboxDebugMessage(
+    diagnosticsLogger: RuntimeDiagnosticsSink,
+    message: String,
+) {
+    val throttleKey = libboxHighVolumeThrottleKey(message)
+    if (throttleKey == null) {
+        logLibboxDebugMessage(message)
+        diagnosticsLogger.record("libbox", message)
+        return
+    }
+    val summarize = shouldSummarizeLibboxDiagnostic(message)
+    val windowMs =
+        if (summarize) {
+            LIBBOX_SUMMARIZED_DIAGNOSTICS_WINDOW_MS
+        } else {
+            LIBBOX_HIGH_VOLUME_DIAGNOSTICS_WINDOW_MS
+        }
+    val outputKey =
+        if (summarize) {
+            "summary:$throttleKey"
+        } else {
+            throttleKey
+        }
+    if (!shouldEmitLibboxDiagnostic(outputKey, windowMs)) {
+        return
+    }
+    val outputMessage =
+        if (summarize) {
+            "high-volume libbox logs suppressed category=${throttleKey.removePrefix("libbox:")}; raw trace omitted"
+        } else {
+            message
+        }
+    logLibboxDebugMessage(outputMessage)
+    diagnosticsLogger.record("libbox", outputMessage)
+}
+
+private fun logLibboxDebugMessage(message: String) {
+    if (BuildConfig.ENABLE_DIAGNOSTIC_LOGCAT) {
+        Log.d("FoxholeLibbox", DiagnosticSanitizer.sanitizeForExport(message))
+    }
+}
+
+private fun shouldEmitLibboxDiagnostic(
+    key: String,
+    windowMs: Long,
+): Boolean {
+    val now = SystemClock.elapsedRealtime()
+    synchronized(libboxDiagnosticThrottleLock) {
+        pruneLibboxDiagnosticThrottle(now)
+        val previousAt = libboxDiagnosticThrottleAt[key]
+        if (previousAt != null && now - previousAt < windowMs) {
+            return false
+        }
+        libboxDiagnosticThrottleAt[key] = now
+        return true
+    }
+}
+
+private fun pruneLibboxDiagnosticThrottle(now: Long) {
+    val cutoff = now - LIBBOX_DIAGNOSTIC_THROTTLE_TTL_MS
+    val iterator = libboxDiagnosticThrottleAt.entries.iterator()
+    while (iterator.hasNext()) {
+        if (iterator.next().value < cutoff) {
+            iterator.remove()
+        }
+    }
+}
+
+private fun shouldRecordDnsRuntimeStats(message: String): Boolean {
+    val trimmed = message.trimStart()
+    return trimmed.startsWith("rejected ", ignoreCase = true) ||
+        trimmed.contains(" rejected ", ignoreCase = true) ||
+        trimmed.startsWith("exchanged ", ignoreCase = true) ||
+        trimmed.startsWith("cached ", ignoreCase = true)
+}
+
+private fun shouldSummarizeLibboxDiagnostic(message: String): Boolean {
+    val lower = message.lowercase(Locale.ROOT)
+    return lower.startsWith("trace[") ||
+        "outbound/tor[" in lower ||
+        "connection_edge_process_relay_cell" in lower ||
+        "sendme_circuit_data_received" in lower ||
+        "channel_process_cell" in lower ||
+        "connection_or_process_cells_from_inbuf" in lower ||
+        "conn_read_callback" in lower ||
+        "tor_tls_" in lower
+}
+
+private fun libboxHighVolumeThrottleKey(message: String): String? {
+    val lower = message.lowercase(Locale.ROOT)
+    if (lower.contains("error") || lower.contains("warn") || lower.contains("panic")) {
+        return null
+    }
+    return when {
+        "dns: exchange" in lower ||
+            "dns: exchanged" in lower ||
+            "dns: cached" in lower ->
+            "libbox:dns"
+        "inbound packet connection" in lower ||
+            "inbound connection" in lower ->
+            "libbox:inbound"
+        "router: found package name" in lower ||
+            "router: found user id" in lower ->
+            "libbox:router-identity"
+        "router: match" in lower ||
+            "router: sniffed" in lower ->
+            "libbox:router-match"
+        "outbound/" in lower && "connection to" in lower ->
+            "libbox:outbound"
+        "connection upload" in lower ||
+            "connection download" in lower ->
+            "libbox:connection-close"
+        lower.startsWith("trace[") ->
+            "libbox:trace"
+        else ->
+            null
+    }
+}
+
 private fun Iterable<String>.stablePackageHash(): Int =
     map(String::trim)
         .filter(String::isNotBlank)
@@ -1130,3 +1252,10 @@ private fun Iterable<String>.stablePackageHash(): Int =
         .sorted()
         .joinToString(separator = "|")
         .hashCode()
+
+private val libboxDiagnosticThrottleLock = Any()
+private val libboxDiagnosticThrottleAt = LinkedHashMap<String, Long>()
+
+private const val LIBBOX_HIGH_VOLUME_DIAGNOSTICS_WINDOW_MS = 1_000L
+private const val LIBBOX_SUMMARIZED_DIAGNOSTICS_WINDOW_MS = 10_000L
+private const val LIBBOX_DIAGNOSTIC_THROTTLE_TTL_MS = 30 * 60 * 1000L

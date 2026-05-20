@@ -335,7 +335,8 @@ internal class TunnelValidationGateway(
 }
 
 internal fun Settings.requiresStrictRuntimeProxyIpRefresh(snapshot: ConnectionSnapshot): Boolean =
-    snapshot.profileId == FoxholeVpnService.TOR_ONLY_PROFILE_ID ||
+    snapshot.requiresRuntimeProxyForActiveTunnelIpRefresh() ||
+        snapshot.profileId == FoxholeVpnService.TOR_ONLY_PROFILE_ID ||
         (
             privacyRoute.mode == PrivacyRouteMode.TOR_OVER_VPN &&
                 traffic.mode == TrafficMode.TUNNEL &&
@@ -344,3 +345,9 @@ internal fun Settings.requiresStrictRuntimeProxyIpRefresh(snapshot: ConnectionSn
                     PrivacyRouteScope.SELECTED_APPS -> privacyRoute.selectedPackages.any(String::isNotBlank)
                 }
             )
+
+private fun ConnectionSnapshot.requiresRuntimeProxyForActiveTunnelIpRefresh(): Boolean =
+    appOwnedRequestPath() == AppOwnedRequestPath.NORMAL_PROCESS &&
+        state in ACTIVE_CONNECTION_STATES &&
+        trafficMode == TrafficMode.TUNNEL &&
+        profileId != FoxholeVpnService.LOCAL_GUARD_PROFILE_ID

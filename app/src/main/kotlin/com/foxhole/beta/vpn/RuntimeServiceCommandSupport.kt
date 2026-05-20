@@ -11,8 +11,8 @@ internal fun handleRuntimeServiceCommand(
     intent: Intent?,
     startId: Int,
     container: FoxholeRuntimeDependencies,
-    launchCommand: (suspend () -> Unit) -> Unit,
-    launchPriorityCommand: (suspend () -> Unit) -> Unit,
+    launchCommand: (String, suspend () -> Unit) -> Unit,
+    launchPriorityCommand: (RuntimeCommandPriority, String, suspend () -> Unit) -> Unit,
     connect: suspend (
         profileId: Long,
         commandStartId: Int,
@@ -32,7 +32,7 @@ internal fun handleRuntimeServiceCommand(
             val profileId = intent.getLongExtra(FoxholeConnectionServiceContract.EXTRA_PROFILE_ID, -1L)
             val protocolOptionId = intent.getStringExtra(FoxholeConnectionServiceContract.EXTRA_PROTOCOL_OPTION_ID)
             val previousVpnNetworkHandle = intent.previousVpnNetworkHandleOrNull()
-            launchCommand {
+            launchCommand("connect:$profileId:${protocolOptionId ?: "default"}") {
                 connect(profileId, startId, protocolOptionId, previousVpnNetworkHandle)
             }
         }
@@ -41,13 +41,21 @@ internal fun handleRuntimeServiceCommand(
             val suppressLocalGuard = intent.getBooleanExtra(FoxholeConnectionServiceContract.EXTRA_SUPPRESS_LOCAL_GUARD, false)
             val preserveSmartStartAnalysis =
                 intent.getBooleanExtra(FoxholeConnectionServiceContract.EXTRA_PRESERVE_SMART_START_ANALYSIS, false)
-            launchPriorityCommand { disconnect(startId, suppressLocalGuard, preserveSmartStartAnalysis) }
+            launchPriorityCommand(RuntimeCommandPriority.STOP, "disconnect") {
+                disconnect(startId, suppressLocalGuard, preserveSmartStartAnalysis)
+            }
         }
 
         FoxholeConnectionServiceContract.ACTION_KILL,
         FoxholeConnectionServiceContract.ACTION_KILL_TOR,
         -> {
-            launchPriorityCommand {
+            val reason =
+                if (intent.action == FoxholeConnectionServiceContract.ACTION_KILL_TOR) {
+                    "kill_tor"
+                } else {
+                    "kill"
+                }
+            launchPriorityCommand(RuntimeCommandPriority.KILL, reason) {
                 disconnect(
                     startId,
                     true,
@@ -58,11 +66,11 @@ internal fun handleRuntimeServiceCommand(
 
         FoxholeConnectionServiceContract.ACTION_RELOAD -> {
             val profileId = intent.getLongExtra(FoxholeConnectionServiceContract.EXTRA_PROFILE_ID, -1L)
-            launchCommand { reload(profileId) }
+            launchCommand("reload:$profileId") { reload(profileId) }
         }
 
         FoxholeConnectionServiceContract.ACTION_RESTORE -> {
-            launchCommand {
+            launchCommand("restore") {
                 restoreLastActiveConnection(
                     container = container,
                     startId = startId,
@@ -80,7 +88,7 @@ internal fun handleRuntimeServiceCommand(
                 intent.getStringExtra(FoxholeConnectionServiceContract.EXTRA_LOCAL_GUARD_MODE)
                     ?.let { raw -> runCatching { LocalGuardMode.valueOf(raw) }.getOrNull() }
                     ?: LocalGuardMode.FIREWALL
-            launchCommand { startLocalGuard(mode, startId) }
+            launchCommand("local_guard:${mode.name.lowercase()}") { startLocalGuard(mode, startId) }
         }
     }
 }

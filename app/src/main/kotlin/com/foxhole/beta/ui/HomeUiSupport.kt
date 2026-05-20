@@ -44,6 +44,7 @@ import com.foxhole.beta.core.settings.smartProfilePreference
 import com.foxhole.beta.core.settings.smartStartEnabledProtocolSetHash
 import com.foxhole.beta.vpn.ACTIVE_CONNECTION_STATES
 import com.foxhole.beta.vpn.FoxholeVpnService
+import com.foxhole.beta.vpn.LocalGuardMode
 import com.foxhole.beta.vpn.localGuardModeOrNull
 
 internal data class HomeProxySurface(
@@ -245,6 +246,7 @@ internal enum class IpInfoRefreshReason {
     POST_CONNECT,
     POST_UPDATE,
     RESTORED_VPN,
+    TOR_ROUTE,
 }
 
 internal enum class IpInfoRefreshTarget {
@@ -275,6 +277,7 @@ internal fun ipInfoFetchModeForRefreshReason(reason: IpInfoRefreshReason): IpInf
         IpInfoRefreshReason.POST_CONNECT,
         IpInfoRefreshReason.POST_UPDATE,
         IpInfoRefreshReason.RESTORED_VPN,
+        IpInfoRefreshReason.TOR_ROUTE,
         -> IpInfoFetchMode.ENTRY_QUICK
     }
 
@@ -286,6 +289,7 @@ internal fun shouldClearExistingIpForRefresh(
         reason !in setOf(
             IpInfoRefreshReason.POST_CONNECT,
             IpInfoRefreshReason.RESTORED_VPN,
+            IpInfoRefreshReason.TOR_ROUTE,
         )
 
 internal fun shouldShowAutoConnectAction(activeProfile: Profile?): Boolean =
@@ -407,7 +411,6 @@ internal fun resolveHomeDashboardProtocolModel(state: HomeRouteUiState): HomeDas
             latenciesByOptionId = latenciesByOptionId,
             downOptionIds = downOptionIds,
             latencyUnavailableOptionIds = latencyUnavailableOptionIds,
-            selectedServerPingMs = selectedServerPingMs,
         )
     return HomeDashboardProtocolModel(
         presentation = protocolPresentation,
@@ -437,7 +440,6 @@ private fun HomeRouteUiState.resolveDashboardProfileLatencyState(
     latenciesByOptionId: Map<String, Long>,
     downOptionIds: Set<String>,
     latencyUnavailableOptionIds: Set<String>,
-    selectedServerPingMs: Long?,
 ): HomeDashboardProfileLatencyState {
     if (!shouldShowDashboardProfileLatency()) {
         return HomeDashboardProfileLatencyState(
@@ -450,7 +452,7 @@ private fun HomeRouteUiState.resolveDashboardProfileLatencyState(
         )
     }
     return HomeDashboardProfileLatencyState(
-        presentation = resolveDashboardLatencyPresentation(this).withServerPingFallback(selectedServerPingMs),
+        presentation = resolveDashboardLatencyPresentation(this),
         latenciesByOptionId = latenciesByOptionId,
         downOptionIds = downOptionIds,
         latencyUnavailableOptionIds = latencyUnavailableOptionIds,
@@ -462,16 +464,10 @@ private fun HomeRouteUiState.resolveDashboardProfileLatencyState(
     )
 }
 
-private fun HomeDashboardLatencyPresentation.withServerPingFallback(serverPingMs: Long?): HomeDashboardLatencyPresentation =
-    when {
-        latencyMs != null || isDown || serverPingMs == null -> this
-        else -> HomeDashboardLatencyPresentation(latencyMs = serverPingMs)
-    }
-
 private fun HomeRouteUiState.shouldShowDashboardProfileLatency(): Boolean =
     reconnectInProgress ||
         connection.state in DASHBOARD_LATENCY_ACTIVE_STATES ||
-        (autoConnect.running && !protocolMetricsRefreshing)
+        autoConnect.running
 
 private fun HomeRouteUiState.activeConnectedAutoConnectOptionId(): String? =
     autoConnect.currentOptionId?.takeIf { optionId ->
@@ -533,7 +529,6 @@ internal fun resolveHomeDashboardNetworkModel(
 
 private fun HomeRouteUiState.homeRouteTransitionRunning(): Boolean =
     reconnectInProgress ||
-        torOperation.active ||
         connection.state in setOf(ConnectionState.CONNECTING, ConnectionState.RECONNECTING) ||
         (autoConnect.running && connection.state !in ACTIVE_CONNECTION_STATES)
 
@@ -621,10 +616,12 @@ private fun HomeRouteUiState.dashboardVisibleIpInfo(visibleIpInfo: IpInfo?): IpI
     if (homeAnalysisOnlyRunning()) {
         return visibleIpInfo
     }
+    if (shouldPinVpnIpDuringTorOperation()) {
+        return visibleIpInfo
+    }
     val protocolSearchRunning = autoConnect.running
     val routeTransitionActive =
         reconnectInProgress ||
-            torOperation.active ||
             (
                 connection.state in setOf(ConnectionState.CONNECTING, ConnectionState.RECONNECTING) &&
                     hasDashboardRouteProfile()
@@ -646,6 +643,12 @@ private fun HomeRouteUiState.dashboardVisibleIpInfo(visibleIpInfo: IpInfo?): IpI
     }
     return visibleIpInfo
 }
+
+private fun HomeRouteUiState.shouldPinVpnIpDuringTorOperation(): Boolean =
+    torOperation.active &&
+        settings.privacyRoute.enabled &&
+        connection.state == ConnectionState.CONNECTED &&
+        hasDashboardRouteProfile()
 
 private fun IpInfo.isFreshForRouteTransition(lastChangeAt: Long): Boolean =
     lastChangeAt <= 0L || fetchedAt >= lastChangeAt
@@ -862,10 +865,18 @@ internal fun homeStatusLabel(
         routeState.torOperation.kind == HomeTorOperationKind.CONNECTING ->
             stringResource(R.string.home_status_tor_connecting)
         state == ConnectionState.CONNECTED &&
-            routeState.connection.profileId == FoxholeVpnService.LOCAL_GUARD_PROFILE_ID &&
-            routeState.settings.expert.firewallEnabled ->
-            stringResource(R.string.notification_status_firewall)
+            routeState.connection.profileId == FoxholeVpnService.LOCAL_GUARD_PROFILE_ID ->
+            homeLocalGuardStatusLabel(routeState)
         else -> homeStatusLabel(state)
+    }
+
+@Composable
+private fun homeLocalGuardStatusLabel(routeState: HomeRouteUiState): String =
+    when (routeState.settings.localGuardModeOrNull()) {
+        LocalGuardMode.FIREWALL -> stringResource(R.string.notification_status_firewall)
+        LocalGuardMode.JOURNAL -> stringResource(R.string.notification_status_journal)
+        LocalGuardMode.DNS -> stringResource(R.string.notification_status_dns_guard)
+        null -> stringResource(R.string.firewall_modal_mode_local_guard)
     }
 
 @Composable
@@ -957,7 +968,7 @@ internal fun shouldRenderDashboardConnectionDetails(
 }
 
 internal fun resolveDashboardLatencyPresentation(state: HomeRouteUiState): HomeDashboardLatencyPresentation {
-    if (state.autoConnect.running && !state.protocolMetricsRefreshing) {
+    if (state.autoConnect.running) {
         return autoConnectDashboardLatencyPresentation(state.autoConnect)
     }
     if (state.connection.state !in DASHBOARD_LATENCY_ACTIVE_STATES) {

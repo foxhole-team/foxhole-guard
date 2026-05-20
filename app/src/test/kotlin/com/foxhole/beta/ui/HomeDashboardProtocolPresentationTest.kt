@@ -396,7 +396,7 @@ class HomeDashboardProtocolPresentationTest {
     }
 
     @Test
-    fun `manual metrics refresh does not move dashboard latency to current probe`() {
+    fun `manual metrics refresh shows current smart start probe state`() {
         val state =
             HomeRouteUiState(
                 connection = ConnectionSnapshot(state = ConnectionState.CONNECTED),
@@ -419,8 +419,8 @@ class HomeDashboardProtocolPresentationTest {
                     ),
             )
 
-        assertEquals(222L, resolveDashboardSelectedLatencyMs(state))
-        assertFalse(resolveDashboardSelectedLatencyDown(state))
+        assertNull(resolveDashboardSelectedLatencyMs(state))
+        assertTrue(resolveDashboardSelectedLatencyDown(state))
     }
 
     @Test

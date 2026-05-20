@@ -6,7 +6,6 @@ import io.nekohasekai.libbox.CommandClientHandler
 import io.nekohasekai.libbox.CommandClientOptions
 import io.nekohasekai.libbox.Connection
 import io.nekohasekai.libbox.ConnectionEvents
-import io.nekohasekai.libbox.ConnectionIterator
 import io.nekohasekai.libbox.Connections
 import io.nekohasekai.libbox.Libbox
 import io.nekohasekai.libbox.LogIterator
@@ -101,11 +100,18 @@ internal class LibboxTrafficMapConnectionSource(
             val ticker =
                 launch(Dispatchers.IO) {
                     while (isActive) {
-                        val samples =
+                        val result =
                             synchronized(lock) {
-                                connections.toTrafficMapSamples(countryResolver)
+                                connections.toTrafficMapSamples(
+                                    countryResolver = countryResolver,
+                                    maxConnections = MaxTrackedConnections,
+                                ).also { result ->
+                                    if (result.truncated) {
+                                        connections = Connections()
+                                    }
+                                }
                             }
-                        trySend(samples)
+                        trySend(result.samples)
                         delay(SampleIntervalMillis)
                     }
                 }
@@ -121,21 +127,36 @@ internal class LibboxTrafficMapConnectionSource(
         const val SampleIntervalMillis = 3_000L
         const val ReconnectDelayMillis = 1_000L
         const val StatusIntervalNanos = 1_000_000_000L
+        const val MaxTrackedConnections = 2_000
     }
 }
 
-private fun Connections.toTrafficMapSamples(countryResolver: TorGeoIpCountryResolver): List<TrafficMapConnectionSample> =
-    iterator()
-        .toConnectionList()
-        .asSequence()
-        .onEach { connection ->
-            if (connection.outboundType.equals(DNS_OUTBOUND_TYPE, ignoreCase = true)) {
-                DnsRuntimeStats.recordDnsConnection(connection.stableTrafficMapConnectionId())
-            }
+private data class TrafficMapSampleResult(
+    val samples: List<TrafficMapConnectionSample>,
+    val truncated: Boolean,
+)
+
+private fun Connections.toTrafficMapSamples(
+    countryResolver: TorGeoIpCountryResolver,
+    maxConnections: Int,
+): TrafficMapSampleResult {
+    val iterator = iterator()
+    val samples = mutableListOf<TrafficMapConnectionSample>()
+    var count = 0
+    while (iterator.hasNext()) {
+        if (count >= maxConnections) {
+            return TrafficMapSampleResult(samples = samples, truncated = true)
         }
-        .filterNot { connection -> connection.outboundType.equals(DNS_OUTBOUND_TYPE, ignoreCase = true) }
-        .mapNotNull { connection -> connection.toTrafficMapSample(countryResolver) }
-        .toList()
+        count += 1
+        val connection = iterator.next()
+        if (connection.outboundType.equals(DNS_OUTBOUND_TYPE, ignoreCase = true)) {
+            DnsRuntimeStats.recordDnsConnection(connection.stableTrafficMapConnectionId())
+        } else {
+            connection.toTrafficMapSample(countryResolver)?.let(samples::add)
+        }
+    }
+    return TrafficMapSampleResult(samples = samples, truncated = false)
+}
 
 private fun Connection.toTrafficMapSample(countryResolver: TorGeoIpCountryResolver): TrafficMapConnectionSample? {
     val countryCode = countryResolver.countryCodeForDestination(destination) ?: return null
@@ -148,12 +169,5 @@ private fun Connection.toTrafficMapSample(countryResolver: TorGeoIpCountryResolv
 
 private fun Connection.stableTrafficMapConnectionId(): String =
     id.takeIf(String::isNotBlank) ?: "$network|$source|$destination|$createdAt"
-
-private fun ConnectionIterator.toConnectionList(): List<Connection> =
-    buildList {
-        while (hasNext()) {
-            add(next())
-        }
-    }
 
 private const val DNS_OUTBOUND_TYPE = "dns"

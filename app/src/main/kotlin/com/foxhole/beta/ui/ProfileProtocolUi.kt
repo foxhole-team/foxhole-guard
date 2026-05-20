@@ -994,7 +994,7 @@ internal fun SelectableInstalledAppRow(
             FoxholeSwitch(
                 checked = checked,
                 enabled = enabled,
-                onCheckedChange = if (enabled) onToggle else null,
+                onCheckedChange = null,
             )
         }
     }

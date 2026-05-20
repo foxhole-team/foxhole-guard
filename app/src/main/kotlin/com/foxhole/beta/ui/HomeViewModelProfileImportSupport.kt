@@ -154,17 +154,21 @@ internal suspend fun HomeViewModel.refreshProfileAndMaybeReconnectInternal(
             excludeInsecureTlsOptions = excludeInsecureTlsOptions,
             allowInsecureTlsForProfile = allowInsecureTlsForProfile,
         )
-    val reconnected = reconnectProfileIfRequested(profileId, reconnectNow = true)
+    val activeRuntime =
+        container.connectionController.snapshot.value.profileId == profileId &&
+            container.connectionController.snapshot.value.state in HomeViewModel.ACTIVE_CONNECTION_STATES
+    val reloaded =
+        activeRuntime &&
+            container.connectionController.reload(profileId).also { reloadRequested ->
+                if (reloadRequested) {
+                    scheduleDashboardRefreshAfterRuntimeReload()
+                }
+            }
     val app = getApplication<Application>()
-    val message =
-        if (reconnected) {
-            app.getString(R.string.profile_refreshed_reconnecting)
-        } else {
-            app.getString(R.string.profile_refreshed)
-        }
+    val message = app.getString(R.string.profile_refreshed)
     container.diagnosticsLogger.record(
         "profile",
-        "profile refresh in-app notification emitted profileId=$profileId name=${refreshedProfile.name} reconnecting=$reconnected",
+        "profile refresh in-app notification emitted profileId=$profileId name=${refreshedProfile.name} hotReloadRequested=$reloaded",
     )
     emitSuccess(message)
 }

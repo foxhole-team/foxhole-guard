@@ -125,6 +125,8 @@ class HomeIpLoadingPolicyTest {
         assertTrue(shouldSupersedeIpRefreshForConnect(IpInfoRefreshReason.MANUAL))
         assertTrue(shouldSupersedeIpRefreshForConnect(IpInfoRefreshReason.FOREGROUND))
         assertFalse(shouldSupersedeIpRefreshForConnect(IpInfoRefreshReason.POST_CONNECT))
+        assertFalse(shouldSupersedeIpRefreshForConnect(IpInfoRefreshReason.POST_UPDATE))
+        assertFalse(shouldSupersedeIpRefreshForConnect(IpInfoRefreshReason.TOR_ROUTE))
         assertFalse(shouldSupersedeIpRefreshForConnect(null))
     }
 

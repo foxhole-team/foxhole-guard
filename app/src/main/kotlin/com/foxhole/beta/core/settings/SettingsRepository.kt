@@ -1052,8 +1052,12 @@ class SettingsRepository(
                         selectedPackages = normalizedSelectedPackages,
                         blockedPackages = it.expert.blockedPackages.filterNot { packageName -> packageName in normalizedSelectedPackages },
                         perAppRoutingMode =
-                            it.expert.perAppRoutingMode.takeIf { normalizedSelectedPackages.isNotEmpty() }
-                                ?: PerAppRoutingMode.FULL_TUNNEL,
+                            when {
+                                normalizedSelectedPackages.isEmpty() -> PerAppRoutingMode.FULL_TUNNEL
+                                it.expert.perAppRoutingMode == PerAppRoutingMode.FULL_TUNNEL ->
+                                    PerAppRoutingMode.INCLUDE_SELECTED_APPS
+                                else -> it.expert.perAppRoutingMode
+                            },
                     ),
             )
         }

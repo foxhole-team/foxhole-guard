@@ -14,8 +14,8 @@ internal fun Service.handleForegroundRuntimeCommand(
     currentNotificationSnapshot: () -> NotificationSnapshot,
     buildNotification: (NotificationSnapshot) -> Notification,
     container: FoxholeRuntimeDependencies,
-    launchCommand: (suspend () -> Unit) -> Unit,
-    launchPriorityCommand: (suspend () -> Unit) -> Unit,
+    launchCommand: (String, suspend () -> Unit) -> Unit,
+    launchPriorityCommand: (RuntimeCommandPriority, String, suspend () -> Unit) -> Unit,
     connect: suspend (
         profileId: Long,
         commandStartId: Int,
@@ -42,7 +42,10 @@ internal fun Service.handleForegroundRuntimeCommand(
         buildNotification(currentNotificationSnapshot()),
     )
     if (isFailClosedRuntimeServiceCommand(intent?.action)) {
-        launchPriorityCommand { failClosedTeardown(startId, intent?.action) }
+        launchPriorityCommand(
+            RuntimeCommandPriority.KILL,
+            "fail_closed:${intent?.action ?: "null"}",
+        ) { failClosedTeardown(startId, intent?.action) }
         return Service.START_NOT_STICKY
     }
     handleRuntimeServiceCommand(

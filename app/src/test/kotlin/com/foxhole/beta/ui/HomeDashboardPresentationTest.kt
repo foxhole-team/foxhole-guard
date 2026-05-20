@@ -223,7 +223,7 @@ class HomeDashboardPresentationTest {
     }
 
     @Test
-    fun `protocol model uses server ping when connected latency endpoint is unavailable`() {
+    fun `protocol model does not use server ping as connected latency`() {
         val model =
             resolveHomeDashboardProtocolModel(
                 HomeRouteUiState(
@@ -239,8 +239,9 @@ class HomeDashboardPresentationTest {
                 ),
             )
 
-        assertEquals(379L, model.latencyPresentation.latencyMs)
-        assertFalse(model.latencyPresentation.isUnavailable)
+        assertEquals(null, model.latencyPresentation.latencyMs)
+        assertTrue(model.latencyPresentation.isUnavailable)
+        assertEquals(379L, model.selectedServerPingMs)
         assertTrue(model.connectionDetailsReady)
     }
 
@@ -456,6 +457,52 @@ class HomeDashboardPresentationTest {
         assertFalse(model.showIpInfoLoading)
         assertFalse(model.showConnectionDetailsLoading)
         assertTrue(model.showRefreshProgress)
+    }
+
+    @Test
+    fun `network model keeps vpn ip visible while tor route starts in background`() {
+        val ipInfo =
+            IpInfo(
+                ip = "203.0.113.10",
+                countryCode = "NL",
+                countryName = "Netherlands",
+                city = "Amsterdam",
+                isp = "Example",
+                fetchedAt = 1_000L,
+            )
+        val model =
+            resolveHomeDashboardNetworkModel(
+                state =
+                    HomeRouteUiState(
+                        connection =
+                            ConnectionSnapshot(
+                                state = ConnectionState.CONNECTED,
+                                profileId = 1L,
+                                lastChangeAt = 5_000L,
+                            ),
+                        settings =
+                            Settings(
+                                privacyRoute =
+                                    PrivacyRouteSettings(
+                                        mode = PrivacyRouteMode.TOR_OVER_VPN,
+                                        scope = PrivacyRouteScope.ALL_APPS,
+                                    ),
+                            ),
+                        torOperation =
+                            HomeTorOperationUiState(
+                                kind = HomeTorOperationKind.CONNECTING,
+                                startedAt = 5_000L,
+                                startedIpAddress = "203.0.113.10",
+                            ),
+                    ),
+                visibleIpInfo = ipInfo,
+                deviceInternetAvailable = true,
+            )
+
+        assertEquals(ipInfo, model.visibleIpInfo)
+        assertFalse(model.showLoading)
+        assertFalse(model.showIpInfoLoading)
+        assertFalse(model.showRefreshProgress)
     }
 
     @Test

@@ -10,7 +10,6 @@ import android.system.OsConstants
 import android.util.Base64
 import android.util.Log
 import androidx.core.content.getSystemService
-import com.foxhole.beta.BuildConfig
 import com.foxhole.beta.core.model.NetworkActivityEvent
 import com.foxhole.beta.core.traffic.TorGeoIpCountryResolver
 import java.io.File
@@ -80,7 +79,7 @@ internal class LibboxReflection(
             call(options, "setTempPath", tempDir.absolutePath)
             call(options, "setFixAndroidStack", true)
             call(options, "setCommandServerListenPort", 0)
-            call(options, "setDebug", BuildConfig.DEBUG)
+            call(options, "setDebug", false)
             call(options, "setLogMaxLines", LIBBOX_LOG_MAX_LINES)
             callStatic("setLocale", Locale.getDefault().toLanguageTag().replace("-", "_"))
             callStatic("setup", options)

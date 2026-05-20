@@ -245,15 +245,8 @@ internal fun foxholeTopChromeBackgroundColor(): Int = Color.Transparent.toArgb()
 
 @Composable
 internal fun foxholeBottomDockBackgroundColor(): Int {
-    val dark = LocalFoxholeDarkTheme.current
     return when (LocalFoxholeThemeMode.current) {
-        ThemeMode.SYSTEM ->
-            if (dark) {
-                MaterialTheme.colorScheme.surfaceDim
-            } else {
-                MaterialTheme.colorScheme.surfaceContainerLow
-            }
-
+        ThemeMode.SYSTEM -> LocalFoxholeUiPalette.current.bottomBarContainerColor
         ThemeMode.DARK -> Color(0xFF050506)
         ThemeMode.LIGHT -> Color(0xFFECECEA)
     }.toArgb()
@@ -1312,7 +1305,9 @@ internal fun FoxholeBottomDockGlassLayer(
     val dark = LocalFoxholeDarkTheme.current
     val scheme = MaterialTheme.colorScheme
     val containerColor =
-        if (dark) {
+        if (LocalFoxholeThemeMode.current == ThemeMode.SYSTEM) {
+            LocalFoxholeUiPalette.current.bottomBarContainerColor
+        } else if (dark) {
             scheme.background.copy(alpha = BOTTOM_DOCK_CONTAINER_DARK_ALPHA)
         } else {
             scheme.surface.copy(alpha = BOTTOM_DOCK_CONTAINER_LIGHT_ALPHA)

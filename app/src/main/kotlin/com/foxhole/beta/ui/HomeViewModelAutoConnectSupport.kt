@@ -35,6 +35,7 @@ import com.foxhole.beta.core.smart.SmartStartReplayEvent
 import com.foxhole.beta.vpn.FoxholeConnectionServiceContract
 import com.foxhole.beta.vpn.FoxholeVpnService
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
@@ -188,10 +189,10 @@ private fun ConnectionSnapshot?.isConnectedSmartStartWinner(
         (this.protocolOptionId == null || this.protocolOptionId == protocolOptionId)
 
 internal fun HomeViewModel.startAutoConnectInternal(profileId: Long) {
-    autoConnectJob?.cancel()
-    autoConnectUiStateMutable.value = AutoConnectUiState(running = true)
-    autoConnectJob =
-        viewModelScope.launch {
+    val previousAutoConnectJob = autoConnectJob
+    val nextAutoConnectJob =
+        viewModelScope.launch(start = CoroutineStart.LAZY) {
+            previousAutoConnectJob?.join()
             var completedSmartStart = false
             try {
                 var profile = container.profileRepository.getProfile(profileId) ?: error("profile not found")
@@ -254,15 +255,21 @@ internal fun HomeViewModel.startAutoConnectInternal(profileId: Long) {
                 )
                 emitError(getApplication<Application>().getString(R.string.auto_connect_failed))
             } finally {
-                container.connectionController.clearSmartStartAnalysisStatus()
-                autoConnectJob = null
-                delay(HomeViewModel.AUTO_CONNECT_RESULT_SETTLE_MS)
-                clearAutoConnectUiState()
-                if (completedSmartStart) {
-                    refreshDashboardAfterSmartStartIfConnected()
+                if (autoConnectJob == coroutineContext[Job]) {
+                    container.connectionController.clearSmartStartAnalysisStatus()
+                    autoConnectJob = null
+                    delay(HomeViewModel.AUTO_CONNECT_RESULT_SETTLE_MS)
+                    clearAutoConnectUiState()
+                    if (completedSmartStart) {
+                        refreshDashboardAfterSmartStartIfConnected()
+                    }
                 }
             }
         }
+    autoConnectJob = nextAutoConnectJob
+    previousAutoConnectJob?.cancel()
+    autoConnectUiStateMutable.value = AutoConnectUiState(running = true)
+    nextAutoConnectJob.start()
 }
 
 private fun HomeViewModel.refreshDashboardAfterSmartStartIfConnected() {
@@ -271,7 +278,7 @@ private fun HomeViewModel.refreshDashboardAfterSmartStartIfConnected() {
     }
     scheduleConnectedIpRefresh(reason = IpInfoRefreshReason.POST_CONNECT, clearExistingIp = false)
     if (dashboardVisible) {
-        scheduleActiveProfileLatencyRefresh()
+        scheduleActiveProfileLatencyRefresh(showLoading = false)
     }
 }
 
@@ -987,6 +994,19 @@ private suspend fun HomeViewModel.refreshSmartProfileMetricsPassive(
         protocolHint = activeCandidate.protocolHint,
         networkFingerprint = networkFingerprint?.key,
     )
+    candidates
+        .asSequence()
+        .filterNot { candidate -> candidate.optionId == activeCandidate.optionId }
+        .forEach { candidate ->
+            protocolMetricsRefreshingOptionIdByProfileIdMutable.value =
+                protocolMetricsRefreshingOptionIdByProfileIdMutable.value + (profileId to candidate.optionId)
+            measureAndCacheProtocolServerPing(
+                profileId = profileId,
+                optionId = candidate.optionId,
+                protocolHint = candidate.protocolHint,
+                networkFingerprint = networkFingerprint?.key,
+            )
+        }
     val recommendedIds =
         recomputeRecommendedProtocolIds(
             profileId = profileId,
@@ -1604,11 +1624,17 @@ internal fun HomeViewModel.initializeAutoConnectUiInternal(candidates: List<Auto
             currentProtocolHint = candidates.firstOrNull()?.protocolHint,
             currentDisplayName = candidates.firstOrNull()?.displayName,
             options =
-            candidates.map { candidate ->
+            candidates.mapIndexed { index, candidate ->
                 AutoConnectProbeOptionUiState(
                     optionId = candidate.optionId,
                     displayName = candidate.displayName,
                     protocolHint = candidate.protocolHint,
+                    status =
+                        if (index == 0) {
+                            AutoConnectProbeStatus.TESTING
+                        } else {
+                            AutoConnectProbeStatus.PENDING
+                        },
                 )
             },
         )

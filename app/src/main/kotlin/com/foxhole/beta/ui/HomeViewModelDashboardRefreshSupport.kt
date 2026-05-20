@@ -21,16 +21,21 @@ internal fun HomeTorOperationUiState.canAcceptTorIp(ipInfo: IpInfo): Boolean {
     return readyToPublish && (startedIpAddress == null || currentIpAddress != startedIpAddress)
 }
 
-internal fun HomeViewModel.publishTorIpInfoFromDashboardRefresh(info: IpInfo) {
+internal suspend fun HomeViewModel.publishTorIpInfoFromDashboardRefresh(info: IpInfo): Boolean {
     val state = uiState.value
     val torRouteVisible =
         state.connection.profileId == FoxholeVpnService.TOR_ONLY_PROFILE_ID ||
             state.settings.privacyRoute.enabled
     if (!torRouteVisible) {
-        return
+        return false
     }
     if (state.torOperation.active && !state.torOperation.canAcceptTorIp(info)) {
-        return
+        return false
     }
     torIpInfoMutable.value = info
+    if (state.torOperation.active) {
+        emitTorConnectedBanner(info)
+        clearTorOperation()
+    }
+    return true
 }

@@ -295,10 +295,10 @@ class RuntimeConfigAssemblerTest {
         val tunInbound = config["inbounds"]!!.jsonArray.first().jsonObject
         assertEquals("proxy", route["final"]!!.jsonPrimitive.content)
         assertEquals(
-            listOf("org.mozilla.firefox"),
-            tunInbound["include_package"]!!.jsonArray.map { it.jsonPrimitive.content },
+            listOf(BuildConfig.APPLICATION_ID),
+            tunInbound["exclude_package"]!!.jsonArray.map { it.jsonPrimitive.content },
         )
-        assertFalse(tunInbound.containsKey("exclude_package"))
+        assertFalse(tunInbound.containsKey("include_package"))
         val packageRules = route["rules"]!!.jsonArray.map { it.jsonObject }
             .filter { it["package_name"] != null && it["network"] != null }
         assertEquals(2, packageRules.size)

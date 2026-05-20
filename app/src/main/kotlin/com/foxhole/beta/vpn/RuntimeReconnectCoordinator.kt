@@ -91,7 +91,7 @@ private fun FoxholeVpnService.scheduleAutoReconnectAttempt(
     reconnectState.job =
         scope.launch(Dispatchers.Default) {
             delay(delayMs)
-            launchCommand {
+            launchCommand("auto_reconnect:${session.profileId}:$nextAttempt") {
                 val current = activeSession
                 if (current?.correlationId == session.correlationId) {
                     reconnectIfStillEnabled(session, reason, nextAttempt)
@@ -121,7 +121,7 @@ private fun FoxholeVpnService.scheduleSmartStartFailoverAttempt(
             )
             updateNotification()
             delay(SMART_START_FAILOVER_MIN_DOWN_MS)
-            launchCommand {
+            launchCommand("smart_failover:${session.profileId}:$exhaustedAttempts") {
                 val current = activeSession
                 if (current?.correlationId == session.correlationId) {
                     reconnectSmartStartFallbackIfStillEnabled(session, reason, exhaustedAttempts)

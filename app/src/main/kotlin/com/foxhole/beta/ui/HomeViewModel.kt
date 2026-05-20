@@ -1450,10 +1450,25 @@ class HomeViewModel(
         if (container.connectionController.snapshot.value.state != ConnectionState.CONNECTED) {
             return
         }
-        scheduleConnectedIpRefresh(reason = IpInfoRefreshReason.POST_UPDATE, clearExistingIp = false)
+        val refreshReason =
+            if (shouldRefreshTorRouteIpAfterRuntimeReload()) {
+                IpInfoRefreshReason.TOR_ROUTE
+            } else {
+                IpInfoRefreshReason.POST_UPDATE
+            }
+        scheduleConnectedIpRefresh(reason = refreshReason, clearExistingIp = false)
         if (dashboardVisible && !autoConnectUiStateMutable.value.running) {
-            scheduleActiveProfileLatencyRefresh()
+            scheduleActiveProfileLatencyRefresh(showLoading = false)
         }
+    }
+
+    private fun shouldRefreshTorRouteIpAfterRuntimeReload(): Boolean {
+        val state = uiState.value
+        val snapshot = container.connectionController.snapshot.value
+        return snapshot.profileId != FoxholeVpnService.TOR_ONLY_PROFILE_ID &&
+            snapshot.state == ConnectionState.CONNECTED &&
+            state.settings.privacyRoute.enabled &&
+            !state.settings.privacyRoute.bypassVpnTunnel
     }
 
     internal fun markRuntimeReloadPending() = markRuntimeReloadPendingInternal()
@@ -1520,6 +1535,8 @@ class HomeViewModel(
         internal const val RUNTIME_RELOAD_PENDING_TIMEOUT_MS = 1_500L
         internal const val TOR_OPERATION_MIN_VISIBLE_MS = 3_500L
         internal const val TOR_OPERATION_TIMEOUT_MS = 20_000L
+        internal const val TOR_IP_REFRESH_ATTEMPTS = 6
+        internal const val TOR_IP_REFRESH_RETRY_DELAY_MS = 1_000L
         internal const val AUTO_CONNECT_CONNECTION_TIMEOUT_MS =
             FoxholeVpnService.CONNECTIVITY_PROBE_TOTAL_TIMEOUT_MS +
                 FoxholeVpnService.CONNECTIVITY_PROBE_NETWORK_WAIT_TIMEOUT_MS +

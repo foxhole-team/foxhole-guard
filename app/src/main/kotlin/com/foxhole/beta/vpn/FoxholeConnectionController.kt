@@ -117,10 +117,17 @@ class FoxholeConnectionController(
 
     fun clearSmartStartAnalysisStatus() {
         val currentSnapshot = snapshot.value
-        if (currentSnapshot.message != context.getString(R.string.notification_status_analysis)) {
+        val analysisStatus = context.getString(R.string.notification_status_analysis)
+        if (!currentSnapshot.isSmartStartConnection && currentSnapshot.message != analysisStatus) {
             return
         }
-        FoxholeVpnRuntimeBridge.update(currentSnapshot.copy(message = null))
+        FoxholeVpnRuntimeBridge.update(
+            currentSnapshot.copy(
+                message = null,
+                isSmartStartConnection = false,
+            ),
+            refreshLastChangeAt = false,
+        )
     }
 
     fun reload(profileId: Long? = snapshot.value.profileId): Boolean = lifecycle.reload(profileId)
@@ -146,7 +153,7 @@ class FoxholeConnectionController(
                 action = FoxholeConnectionServiceContract.ACTION_START_LOCAL_GUARD,
                 localGuardMode = mode,
             )
-        } else if (hasActiveVpnNetwork()) {
+        } else if (localGuardSnapshot || hasActiveVpnNetwork()) {
             FoxholeConnectionServiceContract.startForegroundService(
                 context = context,
                 mode = TrafficMode.TUNNEL,
@@ -762,8 +769,16 @@ object FoxholeVpnRuntimeBridge {
     val highFrequencyTrafficUpdates: StateFlow<Boolean> = highFrequencyTrafficUpdatesMutable
     val immediateTrafficSampleRequests: SharedFlow<Unit> = immediateTrafficSampleRequestsMutable
 
-    fun update(value: ConnectionSnapshot) {
-        snapshotMutable.value = value.copy(lastChangeAt = System.currentTimeMillis())
+    fun update(
+        value: ConnectionSnapshot,
+        refreshLastChangeAt: Boolean = true,
+    ) {
+        snapshotMutable.value =
+            if (refreshLastChangeAt) {
+                value.copy(lastChangeAt = System.currentTimeMillis())
+            } else {
+                value
+            }
     }
 
     fun updateIpInfo(value: IpInfo?) {

@@ -30,7 +30,6 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.currentCoroutineContext
@@ -141,7 +140,7 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
 
     override fun stopRuntimeService() {
         container.diagnosticsLogger.record("connection", "native runtime requested proxy service stop; failing closed")
-        launchPriorityCommand {
+        launchPriorityCommand(RuntimeCommandPriority.KILL, "native_stop") {
             failClosedTeardown(commandStartId = 0, action = ACTION_NATIVE_RUNTIME_STOP)
         }
     }
@@ -277,10 +276,7 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
             diagnosticsLogger = container.diagnosticsLogger,
         )
         if (!currentCoroutineContext().isActive) {
-            withContext(NonCancellable) {
-                container.diagnosticsLogger.record("connection", "runtime start cancelled after native return")
-                disconnect(commandStartId = commandStartId)
-            }
+            container.diagnosticsLogger.record("connection", "runtime start cancelled after native return")
             return
         }
         if (result.isSuccess) {
@@ -380,7 +376,7 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
         commandStartId: Int? = null,
     ) {
         container.diagnosticsLogger.record("connection", "runtime failure: $message")
-        launchCommand { disconnect(message, commandStartId) }
+        launchCommand("fail_disconnect") { disconnect(message, commandStartId) }
     }
 
     private suspend fun stopRuntimeFailClosed(reason: String): RuntimeStopResult =
@@ -517,12 +513,19 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
 
     private fun ensureNotificationChannel() = ensureConnectionNotificationChannel(notificationManager)
 
-    private fun launchCommand(block: suspend () -> Unit) {
-        commandActor.launch(RuntimeCommandPriority.NORMAL, reason = "service_command", block = block)
+    private fun launchCommand(
+        reason: String,
+        block: suspend () -> Unit,
+    ) {
+        commandActor.launch(RuntimeCommandPriority.NORMAL, reason = reason, block = block)
     }
 
-    private fun launchPriorityCommand(block: suspend () -> Unit) {
-        commandActor.launch(RuntimeCommandPriority.STOP, reason = "priority_service_command", block = block)
+    private fun launchPriorityCommand(
+        priority: RuntimeCommandPriority,
+        reason: String,
+        block: suspend () -> Unit,
+    ) {
+        commandActor.launch(priority, reason = reason, block = block)
     }
 
     private fun scheduleAutoReconnect(reason: String) {
@@ -566,7 +569,7 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
         autoReconnectJob =
             scope.launch(Dispatchers.Default) {
                 delay(delayMs)
-                launchCommand {
+                launchCommand("auto_reconnect:${session.profileId}:$nextAttempt") {
                     val current = activeSession
                     if (current?.correlationId == session.correlationId) {
                         reconnectIfStillEnabled(session, reason, nextAttempt)

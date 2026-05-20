@@ -109,6 +109,8 @@ import com.foxhole.beta.core.model.TrafficMode
 import com.foxhole.beta.core.model.isUdpTransport
 import com.foxhole.beta.vpn.ACTIVE_CONNECTION_STATES
 import com.foxhole.beta.vpn.FoxholeVpnService
+import com.foxhole.beta.vpn.LocalGuardMode
+import com.foxhole.beta.vpn.localGuardModeOrNull
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import java.util.Locale
@@ -1259,7 +1261,7 @@ private fun HomeTorConnectedTable(
     loading: Boolean,
     onRenewTorIp: () -> Unit,
 ) {
-    val durationText = rememberConnectionDurationText(state.connection) ?: "-"
+    val durationText = rememberTorConnectionDurationText(state) ?: "-"
     val torIpPresentation = state.torIpPresentation(loading = loading)
     val selectedApps = remember(state.installedApps, state.settings.privacyRoute.selectedPackages) {
         resolveSelectedApps(
@@ -1383,13 +1385,15 @@ private fun HomeRouteUiState.visibleTorIpInfo(): IpInfo? {
             else -> null
         }
     val requiredFetchedAt =
-        maxOf(
-            connection.lastChangeAt,
-            torOperation.startedAt.takeIf { torOperation.active } ?: 0L,
-        )
+        when {
+            torOperation.active -> torOperation.startedAt
+            connection.profileId == FoxholeVpnService.TOR_ONLY_PROFILE_ID -> connection.lastChangeAt
+            else -> 0L
+        }
     return when {
         info == null -> null
         !torRouteVisible -> null
+        torOperation.active && info == torIpInfo -> info
         info.fetchedAt >= requiredFetchedAt -> info
         else -> null
     }
@@ -1528,9 +1532,15 @@ private fun HomeLanProxyFeatureDialogContent(
 @Composable
 private fun homeFirewallRuntimeMode(state: HomeRouteUiState): String =
     when {
+        state.connection.profileId == FoxholeVpnService.LOCAL_GUARD_PROFILE_ID &&
+            state.connection.state in ACTIVE_CONNECTION_STATES ->
+            when (state.settings.localGuardModeOrNull()) {
+                LocalGuardMode.FIREWALL -> stringResource(R.string.firewall_modal_mode_local_guard)
+                LocalGuardMode.JOURNAL -> stringResource(R.string.notification_status_journal)
+                LocalGuardMode.DNS -> stringResource(R.string.notification_status_dns_guard)
+                null -> stringResource(R.string.firewall_modal_mode_local_guard)
+            }
         !state.settings.expert.firewallEnabled -> stringResource(R.string.switch_state_off)
-        state.connection.profileId == FoxholeVpnService.LOCAL_GUARD_PROFILE_ID ->
-            stringResource(R.string.firewall_modal_mode_local_guard)
         state.connection.state in ACTIVE_CONNECTION_STATES ->
             stringResource(R.string.firewall_modal_mode_vpn)
         else -> stringResource(R.string.firewall_modal_mode_waiting)
@@ -2096,22 +2106,45 @@ internal fun rememberConnectionDurationText(snapshot: ConnectionSnapshot): Strin
     if (!shouldShowConnectionDuration(snapshot)) {
         return null
     }
+    return rememberElapsedDurationText(startedAt = snapshot.lastChangeAt, key = snapshot.state)
+}
+
+@Composable
+private fun rememberTorConnectionDurationText(state: HomeRouteUiState): String? {
+    val startedAt =
+        when {
+            state.torOperation.active -> state.torOperation.startedAt
+            state.connection.profileId == FoxholeVpnService.TOR_ONLY_PROFILE_ID -> state.connection.lastChangeAt
+            state.torIpInfo != null -> state.torIpInfo.fetchedAt
+            else -> 0L
+        }
+    return rememberElapsedDurationText(startedAt = startedAt, key = state.torOperation.kind)
+}
+
+@Composable
+private fun rememberElapsedDurationText(
+    startedAt: Long,
+    key: Any?,
+): String? {
+    if (startedAt <= 0L) {
+        return null
+    }
     val configuration = LocalConfiguration.current
     val locale =
         remember(configuration) {
             ConfigurationCompat.getLocales(configuration)[0] ?: Locale.getDefault()
         }
-    var now by remember(snapshot.lastChangeAt, snapshot.state) { mutableLongStateOf(System.currentTimeMillis()) }
-    LaunchedEffect(snapshot.lastChangeAt, snapshot.state) {
+    var now by remember(startedAt, key) { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(startedAt, key) {
         now = System.currentTimeMillis()
         while (isActive) {
-            val elapsedMs = (now - snapshot.lastChangeAt).coerceAtLeast(0L)
+            val elapsedMs = (now - startedAt).coerceAtLeast(0L)
             delay(connectionDurationTickDelayMillis(elapsedMs))
             now = System.currentTimeMillis()
         }
     }
     return formatConnectionDuration(
-        elapsedMs = (now - snapshot.lastChangeAt).coerceAtLeast(0L),
+        elapsedMs = (now - startedAt).coerceAtLeast(0L),
         locale = locale,
     )
 }

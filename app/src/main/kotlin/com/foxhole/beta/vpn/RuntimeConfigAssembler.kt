@@ -539,18 +539,24 @@ class RuntimeConfigAssembler(
         val torAllApps = privacyRouteActive && settings.privacyRoute.scope == PrivacyRouteScope.ALL_APPS
         val baseIncluded = settings.expert.vpnIncludedPackages()
         val baseExcluded = settings.expert.vpnExcludedPackages()
+        val selectedTorPackageSet = selectedTorPackages.toSet()
         val includePackages =
-            if (selectedTorPackages.isNotEmpty()) {
-                normalizedRuntimePackages(selectedTorPackages + blockedPackages)
+            if (baseIncluded.isNotEmpty()) {
+                normalizedRuntimePackages(baseIncluded + selectedTorPackages)
             } else {
                 baseIncluded
             }
         val excludePackages =
-            if (selectedTorPackages.isNotEmpty()) {
+            if (includePackages.isNotEmpty()) {
                 emptyList()
+            } else if (selectedTorPackageSet.isNotEmpty()) {
+                baseExcluded.filterNot { packageName -> packageName in selectedTorPackageSet }
             } else {
                 baseExcluded
             }
+        val torChangesTunPolicy =
+            selectedTorPackageSet.isNotEmpty() &&
+                (baseIncluded.isNotEmpty() || baseExcluded != excludePackages)
         val vpnMode =
             when {
                 includePackages.isNotEmpty() -> VpnAppSelectionMode.INCLUDE_ONLY
@@ -566,7 +572,7 @@ class RuntimeConfigAssembler(
             torUdpBlockedPackages = selectedTorPackages,
             blockedPackages = blockedPackages,
             warnings =
-                if (selectedTorPackages.isNotEmpty()) {
+                if (torChangesTunPolicy) {
                     listOf(SplitWarning.TOR_SELECTED_APPS_FORCE_TUN_INCLUDE)
                 } else {
                     emptyList()

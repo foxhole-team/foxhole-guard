@@ -77,6 +77,12 @@ internal class RuntimeCommandActor(
         if (priority.value < RuntimeCommandPriority.STOP.value) {
             recordCommandEvent("runtime command queued", command)
         }
+        val coalescedBufferedPriority =
+            if (priority.value >= RuntimeCommandPriority.STOP.value) {
+                coalesceBufferedPriorityCommands(command)
+            } else {
+                false
+            }
         val sendResult =
             if (priority.value >= RuntimeCommandPriority.STOP.value) {
                 priorityCommands.trySend(command)
@@ -91,6 +97,12 @@ internal class RuntimeCommandActor(
                 "closed=${closed.get()}",
                 "queue_full=${!closed.get() && !sendResult.isClosed}",
                 "buffer_rejected=true",
+            )
+        } else if (coalescedBufferedPriority) {
+            recordCommandEvent(
+                headline = "runtime priority command coalesced",
+                command = command,
+                extra = "buffered=true",
             )
         }
     }
@@ -188,13 +200,28 @@ internal class RuntimeCommandActor(
                 RuntimeActorReceiveResult.CLOSE
             }
             command.priority >= RuntimeCommandPriority.STOP.value -> {
-                preemptRunningCommand(
+                handlePriorityCommand(
                     running = running,
                     command = command,
                     pending = pending,
                     drainingPreemptedJobs = drainingPreemptedJobs,
                 )
-                RuntimeActorReceiveResult.CLEAR_RUNNING
+            }
+            running.command.priority < RuntimeCommandPriority.STOP.value &&
+                running.command.reason == command.reason -> {
+                val removedPending = pending.removeIf { queued ->
+                    queued.priority < RuntimeCommandPriority.STOP.value && queued.reason == command.reason
+                }
+                recordCommandEvent(
+                    headline = "runtime normal command coalesced",
+                    command = command,
+                    extra =
+                        listOf(
+                            "running_reason=${running.command.reason}",
+                            "removed_pending=$removedPending",
+                        ).joinToString(" • "),
+                )
+                RuntimeActorReceiveResult.KEEP_RUNNING
             }
             else -> {
                 val result = enqueuePendingNormalCommand(command, pending)
@@ -249,6 +276,40 @@ internal class RuntimeCommandActor(
         return oldest
     }
 
+    private suspend fun handlePriorityCommand(
+        running: RunningRuntimeCommand,
+        command: QueuedRuntimeCommand,
+        pending: PriorityQueue<QueuedRuntimeCommand>,
+        drainingPreemptedJobs: MutableList<Job>,
+    ): RuntimeActorReceiveResult {
+        if (command.priority > running.command.priority) {
+            preemptRunningCommand(
+                running = running,
+                command = command,
+                pending = pending,
+                drainingPreemptedJobs = drainingPreemptedJobs,
+            )
+            return RuntimeActorReceiveResult.CLEAR_RUNNING
+        }
+        val removedPendingPriority =
+            pending.removeIf { queued ->
+                queued.priority >= RuntimeCommandPriority.STOP.value &&
+                    queued.priority <= command.priority &&
+                    queued.reason == command.reason
+            }
+        recordCommandEvent(
+            headline = "runtime priority command coalesced",
+            command = command,
+            extra =
+                listOf(
+                    "running_priority=${running.command.priorityName}",
+                    "running_reason=${running.command.reason}",
+                    "removed_pending=$removedPendingPriority",
+                ).joinToString(" • "),
+        )
+        return RuntimeActorReceiveResult.KEEP_RUNNING
+    }
+
     private suspend fun drainPreemptedJobs(drainingPreemptedJobs: MutableList<Job>) {
         drainingPreemptedJobs.removeAll(Job::isCompleted)
         if (drainingPreemptedJobs.isEmpty()) {
@@ -265,7 +326,7 @@ internal class RuntimeCommandActor(
                 runCommandSafely(command)
             }
         currentJob = job
-        return RunningRuntimeCommand(job = job)
+        return RunningRuntimeCommand(job = job, command = command)
     }
 
     private suspend fun preemptRunningCommand(
@@ -308,6 +369,28 @@ internal class RuntimeCommandActor(
         var removed = 0
         while (normalCommands.tryReceive().isSuccess) {
             removed += 1
+        }
+        return removed
+    }
+
+    private fun coalesceBufferedPriorityCommands(command: QueuedRuntimeCommand): Boolean {
+        var removed = false
+        val retained = mutableListOf<QueuedRuntimeCommand>()
+        while (true) {
+            val queued = priorityCommands.tryReceive().getOrNull() ?: break
+            if (queued.priority <= command.priority && queued.reason == command.reason) {
+                removed = true
+            } else {
+                retained += queued
+            }
+        }
+        retained.forEach { queued ->
+            if (!priorityCommands.trySend(queued).isSuccess) {
+                recordCommandEvent(
+                    headline = "runtime priority command dropped during coalesce restore",
+                    command = queued,
+                )
+            }
         }
         return removed
     }
@@ -373,6 +456,7 @@ internal class RuntimeCommandActor(
 
     private data class RunningRuntimeCommand(
         val job: Job,
+        val command: QueuedRuntimeCommand,
     )
 
     private data class PendingNormalCommandResult(

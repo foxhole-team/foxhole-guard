@@ -12,11 +12,17 @@ import com.foxhole.beta.core.model.DiagnosticsRetention
 import com.foxhole.beta.core.model.Settings
 import com.foxhole.beta.core.smart.SmartStartReplayEvent
 import com.foxhole.beta.core.smart.toJsonLine
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.launch
 import java.io.File
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import java.util.ArrayDeque
 import java.util.Locale
 import java.util.UUID
 import java.util.concurrent.TimeUnit
@@ -53,13 +59,21 @@ class DiagnosticsLogger(
             nowProvider = nowProvider,
         )
     private val entriesMutable = MutableStateFlow<List<DiagnosticEntry>>(emptyList())
+    private val entriesLock = Any()
+    private val throttleLock = Any()
     private val throttledKeys = LinkedHashMap<String, Long>()
+    private val persistenceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val persistenceLock = Any()
+    private val pendingPersistedEntries = ArrayDeque<PendingDiagnosticWrite>()
+    private var persistenceFlushScheduled = false
+    private var droppedPersistenceEntries = 0
+    private var persistenceGeneration = 0L
+    private var lastPersistenceFailureAt = 0L
 
     val entries: StateFlow<List<DiagnosticEntry>> = entriesMutable
 
     init {
-        val now = nowProvider()
-        entriesMutable.value = sessionStore.loadRecentEntries(now, currentRetention())
+        loadRecentEntriesAsync()
         record("diagnostics", "Log session started")
     }
 
@@ -67,37 +81,16 @@ class DiagnosticsLogger(
         val now = nowProvider()
         val retention = currentRetention()
         val allowRawLiveDiagnostics = allowRawLiveDiagnostics()
-        val current =
-            prune(entriesMutable.value, now, retention)
-                .let { entries ->
-                    if (allowRawLiveDiagnostics) {
-                        entries
-                    } else {
-                        entries.map { entry -> entry.copy(message = liveDiagnosticMessage(entry.message, false)) }
-                    }
-                }
         val normalizedMessage = DiagnosticSanitizer.normalizeForStorage(message)
+        val normalizedTag = tag.lowercase(Locale.ROOT)
         val liveMessage = liveDiagnosticMessage(normalizedMessage, allowRawLiveDiagnostics)
-        val entry = DiagnosticEntry(now, tag.lowercase(Locale.ROOT), liveMessage)
+        val entry = DiagnosticEntry(now, normalizedTag, liveMessage)
         val persistedEntry =
             entry.copy(message = DiagnosticSanitizer.sanitizeForPersistence(normalizedMessage))
-        val next =
-            (current + entry)
-                .takeLast(retention.maxEntries)
-        entriesMutable.value = next
-        runCatching { sessionStore.append(persistedEntry, retention) }
-            .onFailure { error ->
-                val failureEntry =
-                    DiagnosticEntry(
-                        timestamp = now,
-                        tag = "diagnostics",
-                        message = "diagnostics journal write failed error=${error.javaClass.simpleName}",
-                    )
-                entriesMutable.value = (next + failureEntry).takeLast(retention.maxEntries)
-                Log.w(LOG_TAG, failureEntry.message)
-            }
+        publishLiveEntry(entry, now, retention)
+        enqueuePersistence(persistedEntry, retention)
         if (BuildConfig.ENABLE_DIAGNOSTIC_LOGCAT) {
-            Log.d(LOG_TAG, "[${tag.lowercase(Locale.ROOT)}] ${DiagnosticSanitizer.sanitizeForExport(normalizedMessage)}")
+            Log.d(LOG_TAG, "[$normalizedTag] ${DiagnosticSanitizer.sanitizeForExport(normalizedMessage)}")
         }
     }
 
@@ -127,13 +120,20 @@ class DiagnosticsLogger(
         message: String,
     ) {
         val now = nowProvider()
-        pruneThrottledKeys(now)
-        val previousAt = throttledKeys[throttleKey]
-        if (previousAt != null && now - previousAt < windowMs) {
-            return
+        val shouldRecord =
+            synchronized(throttleLock) {
+                pruneThrottledKeys(now)
+                val previousAt = throttledKeys[throttleKey]
+                if (previousAt != null && now - previousAt < windowMs) {
+                    false
+                } else {
+                    throttledKeys[throttleKey] = now
+                    true
+                }
+            }
+        if (shouldRecord) {
+            record(tag, message)
         }
-        throttledKeys[throttleKey] = now
-        record(tag, message)
     }
 
     fun recordConnection(state: ConnectionState, reason: String? = null) {
@@ -161,10 +161,8 @@ class DiagnosticsLogger(
                 )
             val persistedEntry =
                 entry.copy(message = DiagnosticSanitizer.sanitizeForPersistence(replayMessage))
-            sessionStore.append(persistedEntry, retention)
-            entriesMutable.value =
-                (prune(entriesMutable.value, now, retention).sanitizeLiveEntriesIfNeeded() + entry)
-                    .takeLast(retention.maxEntries)
+            publishLiveEntry(entry, now, retention)
+            enqueuePersistence(persistedEntry, retention)
         }.onFailure {
             record("diagnostics", "smart start replay write failed")
         }
@@ -175,21 +173,30 @@ class DiagnosticsLogger(
             return
         }
         val now = nowProvider()
-        entriesMutable.value = prune(entriesMutable.value, now).sanitizeLiveEntriesIfNeeded()
+        synchronized(entriesLock) {
+            entriesMutable.value = prune(entriesMutable.value, now).sanitizeLiveEntriesIfNeeded()
+        }
     }
 
     fun snapshotForExport(sanitize: Boolean = true): String {
         val now = nowProvider()
         val retention = currentRetention()
         val snapshot =
-            if (sanitize) {
-                prune(sessionStore.loadRecentEntries(now, retention), now, retention)
-            } else {
-                prune(entriesMutable.value, now, retention)
+            synchronized(entriesLock) {
+                val liveSnapshot = prune(entriesMutable.value, now, retention)
+                val prepared =
+                    if (sanitize) {
+                        liveSnapshot.map { entry ->
+                            entry.copy(message = DiagnosticSanitizer.sanitizeForExport(entry.message))
+                        }
+                    } else {
+                        liveSnapshot
+                    }
+                if (sanitize) {
+                    entriesMutable.value = prepared
+                }
+                prepared
             }
-        if (sanitize) {
-            entriesMutable.value = snapshot
-        }
         return formatDiagnosticsExport(
             metadata = diagnosticsExportMetadata(retention),
             entries = snapshot,
@@ -210,9 +217,21 @@ class DiagnosticsLogger(
     }
 
     fun clear() {
-        entriesMutable.value = emptyList()
-        throttledKeys.clear()
-        sessionStore.clear()
+        synchronized(entriesLock) {
+            entriesMutable.value = emptyList()
+        }
+        synchronized(throttleLock) {
+            throttledKeys.clear()
+        }
+        synchronized(persistenceLock) {
+            pendingPersistedEntries.clear()
+            droppedPersistenceEntries = 0
+            persistenceGeneration += 1
+        }
+        persistenceScope.launch {
+            runCatching { sessionStore.clear() }
+                .onFailure { error -> publishPersistenceFailure(error) }
+        }
     }
 
     fun cleanupExpiredExports() {
@@ -241,6 +260,158 @@ class DiagnosticsLogger(
             ?.filter { file -> file.isFile && file.lastModified() < cutoff }
             ?.forEach(File::delete)
         replayDir.takeIf { dir -> dir.isDirectory && dir.listFiles().orEmpty().isEmpty() }?.delete()
+    }
+
+    private fun loadRecentEntriesAsync() {
+        persistenceScope.launch {
+            val now = nowProvider()
+            val retention = currentRetention()
+            runCatching { sessionStore.loadRecentEntries(now, retention) }
+                .onSuccess { persistedEntries ->
+                    val allowRawLiveDiagnostics = allowRawLiveDiagnostics()
+                    synchronized(entriesLock) {
+                        val merged =
+                            mergeEntries(
+                                first = persistedEntries,
+                                second = entriesMutable.value,
+                            )
+                        entriesMutable.value =
+                            prune(merged, now, retention)
+                                .let { entries ->
+                                    if (allowRawLiveDiagnostics) {
+                                        entries
+                                    } else {
+                                        entries.map { entry -> entry.copy(message = liveDiagnosticMessage(entry.message, false)) }
+                                    }
+                                }
+                    }
+                }.onFailure { error ->
+                    publishPersistenceFailure(error)
+                }
+        }
+    }
+
+    private fun publishLiveEntry(
+        entry: DiagnosticEntry,
+        now: Long,
+        retention: DiagnosticsRetention,
+    ) {
+        synchronized(entriesLock) {
+            entriesMutable.value = (prune(entriesMutable.value, now, retention) + entry).takeLast(retention.maxEntries)
+        }
+    }
+
+    private fun enqueuePersistence(
+        entry: DiagnosticEntry,
+        retention: DiagnosticsRetention,
+    ) {
+        var shouldLaunch = false
+        synchronized(persistenceLock) {
+            while (pendingPersistedEntries.size >= MAX_PENDING_PERSISTENCE_ENTRIES) {
+                pendingPersistedEntries.removeFirst()
+                droppedPersistenceEntries += 1
+            }
+            pendingPersistedEntries.addLast(PendingDiagnosticWrite(entry, retention, persistenceGeneration))
+            if (!persistenceFlushScheduled) {
+                persistenceFlushScheduled = true
+                shouldLaunch = true
+            }
+        }
+        if (shouldLaunch) {
+            persistenceScope.launch {
+                delay(PERSISTENCE_BATCH_DELAY_MS)
+                flushPersistenceQueue()
+            }
+        }
+    }
+
+    private suspend fun flushPersistenceQueue() {
+        while (true) {
+            val batch = drainPersistenceBatch()
+            if (batch.isEmpty()) {
+                return
+            }
+            val currentGeneration = synchronized(persistenceLock) { persistenceGeneration }
+            val currentBatch = batch.filter { write -> write.generation == currentGeneration }
+            if (currentBatch.isNotEmpty()) {
+                runCatching {
+                    sessionStore.appendAll(
+                        entries = currentBatch.map(PendingDiagnosticWrite::entry),
+                        retention = currentBatch.last().retention,
+                    )
+                }.onFailure { error ->
+                    publishPersistenceFailure(error)
+                }
+            }
+            if (batch.size >= MAX_PERSISTENCE_BATCH_SIZE) {
+                delay(PERSISTENCE_BATCH_COOLDOWN_MS)
+            }
+        }
+    }
+
+    private fun drainPersistenceBatch(): List<PendingDiagnosticWrite> =
+        synchronized(persistenceLock) {
+            if (pendingPersistedEntries.isEmpty() && droppedPersistenceEntries == 0) {
+                persistenceFlushScheduled = false
+                return@synchronized emptyList()
+            }
+            buildList {
+                val dropped = droppedPersistenceEntries
+                if (dropped > 0) {
+                    droppedPersistenceEntries = 0
+                    val now = nowProvider()
+                    add(
+                        PendingDiagnosticWrite(
+                            entry =
+                                DiagnosticEntry(
+                                    timestamp = now,
+                                    tag = "diagnostics",
+                                    message = "diagnostics journal dropped entries count=$dropped",
+                                ),
+                            retention = currentRetention(),
+                            generation = persistenceGeneration,
+                        ),
+                    )
+                }
+                while (size < MAX_PERSISTENCE_BATCH_SIZE && pendingPersistedEntries.isNotEmpty()) {
+                    add(pendingPersistedEntries.removeFirst())
+                }
+            }
+        }
+
+    private fun publishPersistenceFailure(error: Throwable) {
+        val now = nowProvider()
+        val shouldPublish =
+            synchronized(persistenceLock) {
+                if (now - lastPersistenceFailureAt < PERSISTENCE_FAILURE_THROTTLE_MS) {
+                    false
+                } else {
+                    lastPersistenceFailureAt = now
+                    true
+                }
+            }
+        if (!shouldPublish) {
+            return
+        }
+        val retention = currentRetention()
+        val failureEntry =
+            DiagnosticEntry(
+                timestamp = now,
+                tag = "diagnostics",
+                message = "diagnostics journal write failed error=${error.javaClass.simpleName}",
+            )
+        publishLiveEntry(failureEntry, now, retention)
+        Log.w(LOG_TAG, failureEntry.message)
+    }
+
+    private fun mergeEntries(
+        first: List<DiagnosticEntry>,
+        second: List<DiagnosticEntry>,
+    ): List<DiagnosticEntry> {
+        val seen = HashSet<String>(first.size + second.size)
+        return (first + second).filter { entry ->
+            seen.add("${entry.timestamp}\u0000${entry.tag}\u0000${entry.message}")
+        }
     }
 
     private fun prune(entries: List<DiagnosticEntry>, now: Long): List<DiagnosticEntry> {
@@ -312,9 +483,20 @@ class DiagnosticsLogger(
         )
     }
 
+    private data class PendingDiagnosticWrite(
+        val entry: DiagnosticEntry,
+        val retention: DiagnosticsRetention,
+        val generation: Long,
+    )
+
     companion object {
         private const val LOG_TAG = "FoxholeDiag"
         private const val THROTTLE_TTL_MS = 30 * 60 * 1000L
+        private const val MAX_PENDING_PERSISTENCE_ENTRIES = 1_024
+        private const val MAX_PERSISTENCE_BATCH_SIZE = 128
+        private const val PERSISTENCE_BATCH_DELAY_MS = 250L
+        private const val PERSISTENCE_BATCH_COOLDOWN_MS = 20L
+        private const val PERSISTENCE_FAILURE_THROTTLE_MS = 30_000L
         private const val EXPORT_TTL_MS = 5 * 60 * 1000L
         private const val EXPORT_DIR_NAME = "diagnostics-export"
         private const val JOURNAL_DIR_NAME = "diagnostics-journal"

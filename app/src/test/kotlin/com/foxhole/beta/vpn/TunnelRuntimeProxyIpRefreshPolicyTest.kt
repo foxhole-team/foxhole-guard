@@ -47,13 +47,25 @@ class TunnelRuntimeProxyIpRefreshPolicyTest {
     }
 
     @Test
-    fun `normal vpn does not require strict runtime proxy ip refresh`() {
+    fun `normal vpn requires runtime proxy ip refresh when app control plane is outside tunnel`() {
         val snapshot =
             ConnectionSnapshot(
                 state = ConnectionState.CONNECTED,
                 trafficMode = TrafficMode.TUNNEL,
                 profileId = 42L,
                 protocolHint = ProtocolHint.VLESS,
+            )
+
+        assertTrue(Settings().requiresStrictRuntimeProxyIpRefresh(snapshot))
+    }
+
+    @Test
+    fun `local guard does not require strict runtime proxy ip refresh`() {
+        val snapshot =
+            ConnectionSnapshot(
+                state = ConnectionState.CONNECTED,
+                trafficMode = TrafficMode.TUNNEL,
+                profileId = FoxholeVpnService.LOCAL_GUARD_PROFILE_ID,
             )
 
         assertFalse(Settings().requiresStrictRuntimeProxyIpRefresh(snapshot))
