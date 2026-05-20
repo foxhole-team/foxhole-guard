@@ -109,18 +109,23 @@ internal fun String.toFlexibleBoolean(): Boolean? =
         else -> null
     }
 
-internal fun parseQueryParameters(rawQuery: String?): Map<String, String> =
+internal fun parseQueryParameters(rawQuery: String?): Map<String, String> {
+    val parameters = linkedMapOf<String, String>()
     rawQuery
         ?.split('&')
-        ?.mapNotNull { item ->
+        ?.forEach { item ->
             if (item.isBlank()) {
-                null
-            } else {
-                val key = item.substringBefore('=')
-                val value = item.substringAfter('=', "")
-                uriDecode(key) to uriDecode(value)
+                return@forEach
             }
-        }?.toMap().orEmpty()
+            val key = uriDecode(item.substringBefore('=')).trim()
+            val value = uriDecode(item.substringAfter('=', ""))
+            if (key.isNotBlank()) {
+                parameters[key] = value
+                parameters[key.lowercase()] = value
+            }
+        }
+    return parameters
+}
 
 internal fun uriDecode(value: String): String = URLDecoder.decode(value, StandardCharsets.UTF_8.name())
 

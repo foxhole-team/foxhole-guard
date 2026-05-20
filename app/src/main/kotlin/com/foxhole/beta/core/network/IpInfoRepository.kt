@@ -23,7 +23,9 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
+import java.io.ByteArrayOutputStream
 import java.io.IOException
+import java.io.InputStream
 import java.net.Authenticator
 import java.net.Inet4Address
 import java.net.Inet6Address
@@ -31,7 +33,11 @@ import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.net.PasswordAuthentication
 import java.net.Proxy
+import java.net.Socket
 import java.util.concurrent.TimeUnit
+import javax.net.ssl.HttpsURLConnection
+import javax.net.ssl.SSLSocket
+import javax.net.ssl.SSLSocketFactory
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import kotlin.system.measureTimeMillis
@@ -84,8 +90,14 @@ class IpInfoRepository(
         resolverNetwork: Network? = null,
     ) {
         withContext(Dispatchers.IO) {
-            execute(endpoint, callTimeoutMs, network, proxy = proxy, resolverNetwork = resolverNetwork).use { response ->
-                require(response.isSuccessful) { "connectivity probe failed: ${response.code}" }
+            if (proxy?.type == ProxyAccessType.HTTP) {
+                executeHttpProxyTunnel(endpoint, callTimeoutMs, proxy, resolverNetwork = resolverNetwork).let { response ->
+                    require(response.isSuccessful) { "connectivity probe failed: ${response.code}" }
+                }
+            } else {
+                execute(endpoint, callTimeoutMs, network, proxy = proxy, resolverNetwork = resolverNetwork).use { response ->
+                    require(response.isSuccessful) { "connectivity probe failed: ${response.code}" }
+                }
             }
         }
     }
@@ -119,11 +131,18 @@ class IpInfoRepository(
         resolverNetwork: Network? = null,
     ): Long =
         withContext(Dispatchers.IO) {
-            measureTimeMillis {
-                execute(endpoint, callTimeoutMs, network, proxy = proxy, resolverNetwork = resolverNetwork).use { response ->
+            if (proxy?.type == ProxyAccessType.HTTP) {
+                executeHttpProxyTunnel(endpoint, callTimeoutMs, proxy, resolverNetwork = resolverNetwork).let { response ->
                     require(response.isSuccessful) { "connectivity probe failed: ${response.code}" }
+                    response.elapsedMs
                 }
-            }.coerceAtLeast(1L)
+            } else {
+                measureTimeMillis {
+                    execute(endpoint, callTimeoutMs, network, proxy = proxy, resolverNetwork = resolverNetwork).use { response ->
+                        require(response.isSuccessful) { "connectivity probe failed: ${response.code}" }
+                    }
+                }.coerceAtLeast(1L)
+            }
         }
 
     suspend fun fetch(
@@ -230,11 +249,24 @@ class IpInfoRepository(
         addressFamilyPreference: AddressFamilyPreference,
         proxy: HttpProxyAccess?,
         resolverNetwork: Network? = null,
-    ): IpInfo =
-        execute(endpoint, callTimeoutMs, network, addressFamilyPreference, proxy, resolverNetwork).use { response ->
+    ): IpInfo {
+        if (proxy?.type == ProxyAccessType.HTTP) {
+            val response =
+                executeHttpProxyTunnel(
+                    endpoint = endpoint,
+                    callTimeoutMs = callTimeoutMs,
+                    proxy = proxy,
+                    addressFamilyPreference = addressFamilyPreference,
+                    resolverNetwork = resolverNetwork,
+                )
+            require(response.isSuccessful) { "ip info request failed: ${response.code}" }
+            return parseIpInfoResponse(response.body, json)
+        }
+        return execute(endpoint, callTimeoutMs, network, addressFamilyPreference, proxy, resolverNetwork).use { response ->
             require(response.isSuccessful) { "ip info request failed: ${response.code}" }
             parseIpInfoResponse(response.body?.string().orEmpty(), json)
         }
+    }
 
     private suspend fun fetchFamily(
         endpoint: String,
@@ -348,6 +380,56 @@ class IpInfoRepository(
         }
     }
 
+    private suspend fun executeHttpProxyTunnel(
+        endpoint: String,
+        callTimeoutMs: Long?,
+        proxy: HttpProxyAccess,
+        addressFamilyPreference: AddressFamilyPreference = AddressFamilyPreference.ANY,
+        resolverNetwork: Network? = null,
+    ): HttpProxyTunnelResponse =
+        withContext(Dispatchers.IO) {
+            val url =
+                endpoint
+                    .ensurePublicHttpsUrl()
+                    .requirePublicHttpsUrl(resolveHost = true) { hostname ->
+                        resolveAddresses(hostname, network = null, preference = addressFamilyPreference, resolverNetwork = resolverNetwork)
+                    }
+            val target = HttpProxyTunnelTarget(url.host, url.port)
+            val timeout = (callTimeoutMs ?: FULL_CALL_TIMEOUT_MS).coerceIn(1L, Int.MAX_VALUE.toLong()).toInt()
+            val startedAt = System.nanoTime()
+            Socket().use { rawSocket ->
+                rawSocket.soTimeout = timeout
+                rawSocket.connect(InetSocketAddress(proxy.host, proxy.port), timeout)
+                val output = rawSocket.getOutputStream()
+                output.write(proxyConnectRequest(target, proxy).toByteArray(Charsets.ISO_8859_1))
+                output.flush()
+                val connectHead = readHttpResponseHead(rawSocket.getInputStream())
+                require(connectHead.code in 200..299) { "proxy CONNECT failed: ${connectHead.code}" }
+
+                val sslSocket =
+                    (SSLSocketFactory.getDefault() as SSLSocketFactory)
+                        .createSocket(rawSocket, url.host, url.port, true) as SSLSocket
+                sslSocket.soTimeout = timeout
+                sslSocket.use { tlsSocket ->
+                    tlsSocket.startHandshake()
+                    require(HttpsURLConnection.getDefaultHostnameVerifier().verify(url.host, tlsSocket.session)) {
+                        "proxy tunnel TLS hostname verification failed"
+                    }
+                    val tlsOutput = tlsSocket.getOutputStream()
+                    tlsOutput.write(proxyTunnelGetRequest(url.encodedPathWithQuery(), target).toByteArray(Charsets.ISO_8859_1))
+                    tlsOutput.flush()
+                    val input = tlsSocket.getInputStream()
+                    val responseHead = readHttpResponseHead(input)
+                    val body = String(readHttpResponseBody(input, responseHead), Charsets.UTF_8)
+                    HttpProxyTunnelResponse(
+                        code = responseHead.code,
+                        body = body,
+                        elapsedMs = ((System.nanoTime() - startedAt) / 1_000_000L).coerceAtLeast(1L),
+                    )
+                }
+            }
+        }
+
     private fun effectiveEndpoints(endpoint: String): List<String> {
         val primary = primaryEndpoint(endpoint)
         return buildList {
@@ -454,6 +536,187 @@ class IpInfoRepository(
             )
     }
 }
+
+private data class HttpProxyTunnelTarget(
+    val host: String,
+    val port: Int,
+) {
+    val authority: String =
+        if (host.contains(':') && !host.startsWith('[')) {
+            "[$host]:$port"
+        } else {
+            "$host:$port"
+        }
+}
+
+private data class HttpProxyTunnelResponse(
+    val code: Int,
+    val body: String,
+    val elapsedMs: Long,
+) {
+    val isSuccessful: Boolean
+        get() = code in 200..299
+}
+
+private data class HttpResponseHead(
+    val code: Int,
+    val headers: Map<String, List<String>>,
+) {
+    fun firstHeader(name: String): String? = headers[name.lowercase()]?.firstOrNull()
+}
+
+private fun proxyConnectRequest(
+    target: HttpProxyTunnelTarget,
+    proxy: HttpProxyAccess,
+): String {
+    val authHeader =
+        if (!proxy.username.isNullOrBlank() && !proxy.password.isNullOrBlank()) {
+            "Proxy-Authorization: ${Credentials.basic(proxy.username, proxy.password)}\r\n"
+        } else {
+            ""
+        }
+    return "CONNECT ${target.authority} HTTP/1.1\r\n" +
+        "Host: ${target.authority}\r\n" +
+        authHeader +
+        "Proxy-Connection: keep-alive\r\n" +
+        "\r\n"
+}
+
+private fun proxyTunnelGetRequest(
+    path: String,
+    target: HttpProxyTunnelTarget,
+): String =
+    "GET $path HTTP/1.1\r\n" +
+        "Host: ${target.authority}\r\n" +
+        "User-Agent: FoxHole/${BuildConfig.VERSION_NAME}\r\n" +
+        "Accept: application/json,*/*;q=0.1\r\n" +
+        "Connection: close\r\n" +
+        "\r\n"
+
+private fun readHttpResponseHead(input: InputStream): HttpResponseHead {
+    val buffer = ByteArrayOutputStream()
+    var tail = 0
+    while (buffer.size() < HTTP_TUNNEL_MAX_HEADER_BYTES) {
+        val value = input.read()
+        if (value == -1) {
+            break
+        }
+        buffer.write(value)
+        tail = (tail shl 8) or (value and 0xff)
+        if (tail == HTTP_HEADER_TERMINATOR) {
+            val text = buffer.toString(Charsets.ISO_8859_1.name())
+            val lines = text.substringBefore("\r\n\r\n").split("\r\n")
+            val statusCode =
+                lines.firstOrNull()
+                    ?.split(' ', limit = 3)
+                    ?.getOrNull(1)
+                    ?.toIntOrNull()
+                    ?: error("invalid http response status")
+            val headers =
+                lines.drop(1)
+                    .mapNotNull { line ->
+                        val separator = line.indexOf(':')
+                        if (separator <= 0) {
+                            null
+                        } else {
+                            line.substring(0, separator).trim().lowercase() to line.substring(separator + 1).trim()
+                        }
+                    }.groupBy(keySelector = { it.first }, valueTransform = { it.second })
+            return HttpResponseHead(statusCode, headers)
+        }
+    }
+    error("http response headers incomplete")
+}
+
+private fun readHttpResponseBody(
+    input: InputStream,
+    head: HttpResponseHead,
+): ByteArray {
+    if (head.code == 204 || head.code == 304 || head.code in 100..199) {
+        return ByteArray(0)
+    }
+    if (head.firstHeader("transfer-encoding")?.contains("chunked", ignoreCase = true) == true) {
+        return readChunkedHttpBody(input)
+    }
+    val contentLength = head.firstHeader("content-length")?.toIntOrNull()
+    if (contentLength != null) {
+        require(contentLength <= HTTP_TUNNEL_MAX_BODY_BYTES) { "http response body too large" }
+        return input.readExactBytesBounded(contentLength)
+    }
+    return input.readUntilEofBounded(HTTP_TUNNEL_MAX_BODY_BYTES)
+}
+
+private fun readChunkedHttpBody(input: InputStream): ByteArray {
+    val output = ByteArrayOutputStream()
+    while (true) {
+        val sizeLine = input.readAsciiLine(HTTP_TUNNEL_MAX_LINE_BYTES)
+        val chunkSize = sizeLine.substringBefore(';').trim().toIntOrNull(16) ?: error("invalid chunk size")
+        if (chunkSize == 0) {
+            while (input.readAsciiLine(HTTP_TUNNEL_MAX_LINE_BYTES).isNotEmpty()) {
+                // Consume trailers.
+            }
+            return output.toByteArray()
+        }
+        require(output.size() + chunkSize <= HTTP_TUNNEL_MAX_BODY_BYTES) { "http response body too large" }
+        output.write(input.readExactBytesBounded(chunkSize))
+        input.expectCrlf()
+    }
+}
+
+private fun InputStream.readExactBytesBounded(size: Int): ByteArray {
+    val output = ByteArray(size)
+    var offset = 0
+    while (offset < size) {
+        val read = read(output, offset, size - offset)
+        if (read == -1) {
+            error("http response body ended early")
+        }
+        offset += read
+    }
+    return output
+}
+
+private fun InputStream.readUntilEofBounded(maxBytes: Int): ByteArray {
+    val output = ByteArrayOutputStream()
+    val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+    while (true) {
+        val read = read(buffer)
+        if (read == -1) {
+            return output.toByteArray()
+        }
+        require(output.size() + read <= maxBytes) { "http response body too large" }
+        output.write(buffer, 0, read)
+    }
+}
+
+private fun InputStream.readAsciiLine(maxBytes: Int): String {
+    val output = ByteArrayOutputStream()
+    while (output.size() < maxBytes) {
+        val value = read()
+        if (value == -1) {
+            error("http response ended before line")
+        }
+        if (value == '\n'.code) {
+            return output.toString(Charsets.ISO_8859_1.name()).trimEnd('\r')
+        }
+        output.write(value)
+    }
+    error("http response line too long")
+}
+
+private fun InputStream.expectCrlf() {
+    val cr = read()
+    val lf = read()
+    require(cr == '\r'.code && lf == '\n'.code) { "invalid chunk delimiter" }
+}
+
+private fun okhttp3.HttpUrl.encodedPathWithQuery(): String =
+    encodedPath + encodedQuery?.let { query -> "?$query" }.orEmpty()
+
+private const val HTTP_TUNNEL_MAX_HEADER_BYTES = 16 * 1024
+private const val HTTP_TUNNEL_MAX_BODY_BYTES = 128 * 1024
+private const val HTTP_TUNNEL_MAX_LINE_BYTES = 8 * 1024
+private const val HTTP_HEADER_TERMINATOR = 0x0D0A0D0A
 
 private suspend fun Call.awaitResponse(): Response =
     suspendCancellableCoroutine { continuation ->

@@ -28,12 +28,7 @@ internal fun Settings.preferredAppProxyAccess(): HttpProxyAccess? {
 }
 
 internal fun Settings.tunnelRuntimeProxyAccess(): HttpProxyAccess {
-    val surface =
-        when (expert.localSurfaces.proxyMode) {
-            ProxySurfaceMode.SOCKS5 -> expert.localSurfaces.socks
-            ProxySurfaceMode.HTTP -> expert.localSurfaces.http
-            ProxySurfaceMode.ALL -> expert.localSurfaces.mixed
-        }
+    val surface = expert.localSurfaces.http
     return HttpProxyAccess(
         host = surface.host,
         port = surface.port,

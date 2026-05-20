@@ -334,16 +334,24 @@ internal fun buildXrayTls(
                 put("enabled", echEnabled)
             }
         }
-        if (security == "reality" || realitySettings != null) {
+        val utlsFingerprint =
+            normalizeUtlsFingerprint(
+                firstXrayTlsValue(
+                    realitySettings,
+                    tlsSettings,
+                    "fingerprint",
+                    "fp",
+                    "utlsFingerprint",
+                    "utls_fingerprint",
+                ),
+            )
+        if (utlsFingerprint != null || security == "reality" || realitySettings != null) {
             putJsonObject("utls") {
                 put("enabled", true)
-                put(
-                    "fingerprint",
-                    realitySettings?.get("fingerprint")?.jsonPrimitive?.contentOrNull
-                        ?: tlsSettings?.get("fingerprint")?.jsonPrimitive?.contentOrNull
-                        ?: "chrome",
-                )
+                put("fingerprint", utlsFingerprint ?: "chrome")
             }
+        }
+        if (security == "reality" || realitySettings != null) {
             putJsonObject("reality") {
                 put("enabled", true)
                 put(

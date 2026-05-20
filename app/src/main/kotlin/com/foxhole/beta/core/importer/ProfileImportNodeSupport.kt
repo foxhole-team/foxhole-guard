@@ -114,7 +114,8 @@ internal fun parseVlessUri(
             put("server_port", port)
             put("uuid", uri.userInfo ?: error("missing uuid"))
             query["flow"]?.takeIf { it.isNotBlank() }?.let { put("flow", it) }
-            query["packetEncoding"]?.takeIf { it.isNotBlank() }?.let { put("packet_encoding", it) }
+            buildVlessNetwork(query)?.let { put("network", it) }
+            query.firstValue("packetEncoding", "packet_encoding", "packet-encoding")?.let { put("packet_encoding", it) }
             buildTls(query, host, allowInsecureTls = allowInsecureTls)?.let { put("tls", it) }
             buildTransport(query)?.let { put("transport", it) }
         }
@@ -194,9 +195,10 @@ internal fun parseNaiveUri(
                     put("enabled", true)
                     put("server_name", query["sni"]?.takeIf(String::isNotBlank) ?: host)
                     val insecureTls =
-                        listOfNotNull(query["allowInsecure"], query["insecure"]).firstNotNullOfOrNull { item ->
-                            item.toFlexibleBoolean()
-                        } ?: false
+                        listOfNotNull(query.firstValue("allowInsecure", "allow_insecure"), query["insecure"])
+                            .firstNotNullOfOrNull { item ->
+                                item.toFlexibleBoolean()
+                            } ?: false
                     require(allowInsecureTls || !insecureTls) { "INSECURE TLS is not allowed" }
                     require(!insecureTls) { "insecure is not supported on naive outbound" }
                     query.booleanValue("ech")?.let { echEnabled ->
@@ -268,10 +270,27 @@ internal fun parseShadowsocksUri(
 }
 
 private fun Map<String, String>.firstValue(vararg keys: String): String? =
-    keys.firstNotNullOfOrNull { key -> this[key]?.trim()?.takeIf(String::isNotBlank) }
+    keys.firstNotNullOfOrNull { key ->
+        this[key]?.trim()?.takeIf(String::isNotBlank)
+            ?: this[key.lowercase()]?.trim()?.takeIf(String::isNotBlank)
+    }
 
 private fun Map<String, String>.booleanValue(vararg keys: String): Boolean? =
     firstValue(*keys)?.toFlexibleBoolean()
+
+internal fun normalizeUtlsFingerprint(value: String?): String? =
+    when (val fingerprint = value?.trim()?.lowercase()) {
+        null, "", "auto", "off", "false", "0", "disabled" -> null
+        else -> fingerprint
+    }
+
+internal fun buildVlessNetwork(query: Map<String, String>): String? {
+    query["network"]?.trim()?.lowercase()?.takeIf { it in setOf("tcp", "udp") }?.let { return it }
+    return when (query["type"].orEmpty().trim().lowercase()) {
+        "tcp" -> "tcp"
+        else -> null
+    }
+}
 
 internal fun decodeOutlineAccessKey(value: String): String {
     val payload = value.removePrefix("outline://")
@@ -720,16 +739,18 @@ internal fun buildTls(
     tlsDefault: Boolean = false,
     allowInsecureTls: Boolean,
 ): JsonObject? {
-    val security = query["security"].orEmpty()
+    val security = query["security"].orEmpty().trim().lowercase()
     val hasTls = tlsDefault || security == "tls" || security == "reality" || query["sni"].orEmpty().isNotBlank()
     if (!hasTls) {
         return null
     }
+    val utlsFingerprint =
+        normalizeUtlsFingerprint(query.firstValue("fp", "fingerprint", "utlsFingerprint", "utls_fingerprint"))
     return buildJsonObject {
         put("enabled", true)
         put("server_name", query["sni"]?.takeIf { it.isNotBlank() } ?: host)
         val insecureTls =
-            listOfNotNull(query["allowInsecure"], query["insecure"]).firstNotNullOfOrNull { value ->
+            listOfNotNull(query.firstValue("allowInsecure", "allow_insecure"), query["insecure"]).firstNotNullOfOrNull { value ->
                 value.toFlexibleBoolean()
             } ?: false
         require(allowInsecureTls || !insecureTls) { "INSECURE TLS is not allowed" }
@@ -755,11 +776,13 @@ internal fun buildTls(
                 put("enabled", echEnabled)
             }
         }
-        if (security == "reality") {
+        if (utlsFingerprint != null || security == "reality") {
             putJsonObject("utls") {
                 put("enabled", true)
-                put("fingerprint", query["fp"]?.takeIf { it.isNotBlank() } ?: "chrome")
+                put("fingerprint", utlsFingerprint ?: "chrome")
             }
+        }
+        if (security == "reality") {
             putJsonObject("reality") {
                 put("enabled", true)
                 put("public_key", query["pbk"] ?: error("missing reality public key"))
@@ -784,7 +807,7 @@ internal fun buildTransport(query: Map<String, String>): JsonObject? {
         }
         "grpc" -> buildJsonObject {
             put("type", "grpc")
-            put("service_name", query["serviceName"]?.takeIf { it.isNotBlank() } ?: query["path"].orEmpty())
+            put("service_name", query.firstValue("serviceName", "service_name") ?: query["path"].orEmpty())
         }
         "httpupgrade" -> buildJsonObject {
             put("type", "httpupgrade")

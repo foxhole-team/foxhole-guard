@@ -13,6 +13,7 @@ import com.foxhole.beta.core.model.TrafficMode
 import com.foxhole.beta.core.model.VpnSession
 import com.foxhole.beta.core.model.isUdpTransport
 import com.foxhole.beta.core.network.IpInfoFetchMode
+import com.foxhole.beta.core.network.ProxyAccessType
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
@@ -245,10 +246,15 @@ internal suspend fun FoxholeVpnService.validateTunnelConnectivityInternal(
             tunnelValidationPolicyContextFor(
                 PrivateDnsSettings.current(this@validateTunnelConnectivityInternal),
             )
+        val requiresRuntimeProxyValidation =
+            container.settingsRepository
+                .current()
+                .requiresStrictRuntimeProxyIpRefresh(FoxholeVpnRuntimeBridge.snapshot.value)
         val preferIpv4Validation = shouldPreferIpv4TunnelValidation(activeProtocolHint, currentSession?.configJson)
         val validationTimeoutMs =
             FoxholeVpnService.CONNECTIVITY_PROBE_TOTAL_TIMEOUT_MS +
-                maxTunnelValidationGraceTimeoutMs(activeProtocolHint)
+                maxTunnelValidationGraceTimeoutMs(activeProtocolHint) +
+                if (requiresRuntimeProxyValidation) TUNNEL_RUNTIME_PROXY_VALIDATION_EXTRA_TIMEOUT_MS else 0L
         val validationDiagnostics = runtimeValidationDiagnosticFields(currentSession)
         container.diagnosticsLogger.recordStructured(
             "dns",
@@ -283,31 +289,31 @@ internal suspend fun FoxholeVpnService.validateTunnelConnectivityInternal(
                         FoxholeVpnService.CONNECTIVITY_PROBE_NETWORK_WAIT_TIMEOUT_MS,
                         excludedHandle = expectedFreshVpnNetworkHandle,
                     ) ?: error("vpn network unavailable")
-                val runtimeProxyProbe =
-                    runCatchingUnlessCancelled {
-                        probeConnectivityEndpointsOverLocalProxy(
-                            proxy = container.settingsRepository.current().tunnelRuntimeProxyAccess(),
-                            callTimeoutMs = FoxholeVpnService.CONNECTIVITY_PROBE_CALL_TIMEOUT_MS,
-                        )
-                    }
-                if (runtimeProxyProbe.isSuccess) {
-                    container.diagnosticsLogger.record("dns", "tunnel runtime proxy passed egress validation")
-                    scope.launch(Dispatchers.IO) {
-                        refreshValidatedTunnelIpInfoBestEffort(vpnNetwork, currentSession)
-                    }
-                    return@run vpnNetwork
-                }
-                container.diagnosticsLogger.record(
-                    "dns",
-                    "tunnel runtime proxy egress validation failed: ${runtimeProxyProbe.exceptionOrNull()?.message.orEmpty()}",
-                )
                 val settings = container.settingsRepository.current()
                 if (settings.requiresStrictRuntimeProxyIpRefresh(FoxholeVpnRuntimeBridge.snapshot.value)) {
+                    val runtimeProxyProbe =
+                        runCatchingUnlessCancelled {
+                            probeConnectivityEndpointsOverLocalProxy(
+                                proxy = settings.tunnelRuntimeProxyAccess(),
+                                callTimeoutMs = TUNNEL_RUNTIME_PROXY_VALIDATION_CALL_TIMEOUT_MS,
+                            )
+                        }
+                    if (runtimeProxyProbe.isSuccess) {
+                        container.diagnosticsLogger.record("dns", "tunnel runtime proxy passed egress validation")
+                        scope.launch(Dispatchers.IO) {
+                            refreshValidatedTunnelIpInfoBestEffort(vpnNetwork, currentSession)
+                        }
+                        return@run vpnNetwork
+                    }
+                    container.diagnosticsLogger.record(
+                        "dns",
+                        "tunnel runtime proxy egress validation failed: ${runtimeProxyProbe.exceptionOrNull()?.message.orEmpty()}",
+                    )
                     throw (runtimeProxyProbe.exceptionOrNull() ?: IllegalStateException("runtime proxy egress failed"))
                 }
                 container.diagnosticsLogger.record(
                     "dns",
-                    "runtime proxy egress failed; continuing with vpn-bound tunnel validation",
+                    "runtime proxy egress skipped; using vpn-bound tunnel validation",
                 )
                 val requestNetwork = tunnelValidationRequestNetwork(vpnNetwork)
                 val resolverNetwork = currentUpstreamNetworkOrNull()
@@ -1172,6 +1178,28 @@ internal suspend fun FoxholeVpnService.probeConnectivityEndpointsOverLocalProxyI
     callTimeoutMs: Long,
 ) {
     var lastFailure: Throwable? = null
+    if (proxy.type == ProxyAccessType.HTTP) {
+        connectivityProbeEndpoints().forEach { endpoint ->
+            val result =
+                runCatchingUnlessCancelled {
+                    container.ipInfoRepository.probeLatency(
+                        endpoint = endpoint,
+                        callTimeoutMs = callTimeoutMs,
+                        proxy = proxy,
+                    )
+                }
+            if (result.isSuccess) {
+                container.diagnosticsLogger.record("health", "proxy payload ok: $endpoint elapsed_ms=${result.getOrThrow()}")
+                return
+            }
+            lastFailure = result.exceptionOrNull()
+            container.diagnosticsLogger.record(
+                "health",
+                "proxy payload failed: $endpoint reason=${lastFailure?.message.orEmpty()}",
+            )
+        }
+        throw (lastFailure ?: error("proxy payload probe failed"))
+    }
     connectivityProbeEndpoints().forEach { endpoint ->
         val result =
             runCatchingUnlessCancelled {
@@ -1196,6 +1224,9 @@ internal suspend fun FoxholeVpnService.probeConnectivityEndpointsOverLocalProxyI
     }
     throw (lastFailure ?: error("proxy probe failed"))
 }
+
+private const val TUNNEL_RUNTIME_PROXY_VALIDATION_CALL_TIMEOUT_MS = 5_000L
+private const val TUNNEL_RUNTIME_PROXY_VALIDATION_EXTRA_TIMEOUT_MS = 12_000L
 
 internal suspend fun FoxholeVpnService.probeDnsIndependentConnectivityFallbackInternal(
     callTimeoutMs: Long,

@@ -385,6 +385,79 @@ class RuntimeConfigAssembler(
         return (((settingsFingerprint * 31) + (activePreset?.hashCode() ?: 0)) * 31 + lanFingerprint) * 31 + dnsFingerprint
     }
 
+    fun redactedRuntimeShape(configJson: String): String =
+        runCatching {
+            val root = json.parseToJsonElement(configJson).jsonObject
+            val outbound = root.primaryProxyOutbound()
+            val runtimeInbound = root.runtimeProxyInbound()
+            val tls = outbound?.get("tls")?.jsonObject
+            val utls = tls?.get("utls")?.jsonObject
+            val reality = tls?.get("reality")?.jsonObject
+            val transport = outbound?.get("transport")?.jsonObject
+            val route = root["route"]?.jsonObject
+            val dnsServers = root["dns"]?.jsonObject?.get("servers")?.jsonArray.orEmpty()
+            listOf(
+                "outbound_shape",
+                "type=${outbound?.stringField("type") ?: "missing"}",
+                "selector=${root.hasProxySelector()}",
+                "transport=${transport?.stringField("type") ?: "tcp"}",
+                "tls=${tls?.enabledField(default = true) == true}",
+                "utls=${utls?.enabledField(default = true) == true}",
+                "fp=${utls?.stringField("fingerprint")?.takeIf(String::isNotBlank) ?: "none"}",
+                "reality=${reality?.enabledField(default = true) == true}",
+                "flow=${outbound?.containsKey("flow") == true}",
+                "packet=${outbound?.stringField("packet_encoding") ?: "default"}",
+                "network=${outbound?.stringField("network") ?: "default"}",
+                "bind_interface=${outbound?.stringField("bind_interface") ?: "none"}",
+                "runtime_inbound=${runtimeInbound?.stringField("type") ?: "missing"}",
+                "dns_remote=${dnsServers.any { it.jsonObject.stringField("tag") == DNS_REMOTE_TAG }}",
+                "route_final=${route?.stringField("final") ?: "missing"}",
+                "route_auto_detect=${route?.stringField("auto_detect_interface") ?: "missing"}",
+                "route_default_interface=${route?.stringField("default_interface") ?: "none"}",
+            ).joinToString(" ")
+        }.getOrElse { error ->
+            "outbound_shape unavailable error=${error.javaClass.simpleName}"
+        }
+
+    private fun JsonObject.primaryProxyOutbound(): JsonObject? {
+        val outbounds = this["outbounds"]?.jsonArray.orEmpty().map { it.jsonObject }
+        val outboundsByTag = outbounds.mapNotNull { outbound ->
+            outbound.stringField("tag")?.let { tag -> tag to outbound }
+        }.toMap()
+        val selector =
+            outboundsByTag["proxy"]?.takeIf { it.stringField("type") == "selector" }
+                ?: outbounds.firstOrNull { it.stringField("type") == "selector" }
+        val selectedTag =
+            selector?.stringField("default")
+                ?: selector
+                    ?.get("outbounds")
+                    ?.jsonArray
+                    ?.firstOrNull()
+                    ?.jsonPrimitive
+                    ?.contentOrNull
+        return selectedTag?.let(outboundsByTag::get)
+            ?: outbounds.firstOrNull { outbound ->
+                outbound.stringField("type") !in setOf("selector", "direct", "block", "dns")
+            }
+    }
+
+    private fun JsonObject.hasProxySelector(): Boolean =
+        this["outbounds"]?.jsonArray.orEmpty().any { outbound ->
+            val value = outbound.jsonObject
+            value.stringField("tag") == "proxy" && value.stringField("type") == "selector"
+        }
+
+    private fun JsonObject.runtimeProxyInbound(): JsonObject? =
+        this["inbounds"]?.jsonArray.orEmpty().firstOrNull { inbound ->
+            inbound.jsonObject.stringField("tag") == RUNTIME_LOOPBACK_PROXY_INBOUND_TAG
+        }?.jsonObject
+
+    private fun JsonObject.stringField(key: String): String? =
+        this[key]?.jsonPrimitive?.contentOrNull?.trim()?.takeIf(String::isNotBlank)
+
+    private fun JsonObject.enabledField(default: Boolean): Boolean =
+        stringField("enabled")?.toBooleanStrictOrNull() ?: default
+
     fun validate(expert: ExpertSettings) {
         val enabledPorts =
             buildMap<String, String> {
@@ -861,6 +934,7 @@ class RuntimeConfigAssembler(
         val combinedRules =
             buildJsonArray {
                 appRules.forEach(::add)
+                add(runtimeProxyRouteRule(runtimeProxyOutboundTag(privacyRouteActive, splitPlan)))
                 if (expert.sniff) {
                     add(sniffRule())
                 }
@@ -936,6 +1010,7 @@ class RuntimeConfigAssembler(
         val combinedRules =
             buildJsonArray {
                 buildAppRouteRules(expert).forEach(::add)
+                add(runtimeProxyRouteRule("proxy"))
                 if (expert.sniff) {
                     add(sniffRule())
                 }
@@ -989,10 +1064,9 @@ class RuntimeConfigAssembler(
                 PrivacyRouteUdpPolicy.BLOCK -> "block"
             }
         return when {
-            splitPlan.torAllApps -> listOf(runtimeProxyTorRouteRule(outboundTag), udpRouteRule(udpOutbound))
+            splitPlan.torAllApps -> listOf(udpRouteRule(udpOutbound))
             splitPlan.torTcpPackages.isNotEmpty() ->
                 listOf(
-                    runtimeProxyTorRouteRule(outboundTag),
                     packageNetworkRouteRule(
                         splitPlan.torUdpBlockedPackages,
                         network = "udp",
@@ -1008,7 +1082,17 @@ class RuntimeConfigAssembler(
         }
     }
 
-    private fun runtimeProxyTorRouteRule(outboundTag: String = TOR_OVER_VPN_OUTBOUND_TAG): JsonObject =
+    private fun runtimeProxyOutboundTag(
+        privacyRouteActive: Boolean,
+        splitPlan: RuntimeSplitPlan,
+    ): String =
+        if (privacyRouteActive && (splitPlan.torAllApps || splitPlan.torTcpPackages.isNotEmpty())) {
+            TOR_OVER_VPN_OUTBOUND_TAG
+        } else {
+            "proxy"
+        }
+
+    private fun runtimeProxyRouteRule(outboundTag: String): JsonObject =
         buildJsonObject {
             putJsonArray("inbound") {
                 add(JsonPrimitive(RUNTIME_LOOPBACK_PROXY_INBOUND_TAG))
@@ -1186,9 +1270,9 @@ class RuntimeConfigAssembler(
         }
 
     private fun runtimeLoopbackProxyInbound(localSurfaces: LocalSurfaceSettings): JsonObject {
-        val localSurface = localSurfaces.proxySurface()
+        val localSurface = localSurfaces.http
         return proxyInbound(
-            type = ProxySurfaceMode.ALL.inboundType,
+            type = ProxySurfaceMode.HTTP.inboundType,
             tag = RUNTIME_LOOPBACK_PROXY_INBOUND_TAG,
             listenHost = localSurface.host,
             port = localSurface.port,
@@ -1777,6 +1861,11 @@ class RuntimeConfigAssembler(
             action == "hijack-dns" &&
                 foxholeHijackMatch(rule) ->
                 rule.keys.all { it in setOf("protocol", "port", "action") }
+            action == "route" &&
+                rule["inbound"]?.jsonArray?.singleOrNull()?.jsonPrimitive?.contentOrNull == RUNTIME_LOOPBACK_PROXY_INBOUND_TAG &&
+                rule["network"]?.jsonPrimitive?.contentOrNull == "tcp" &&
+                rule["outbound"]?.jsonPrimitive?.contentOrNull in setOf("proxy", TOR_OVER_VPN_OUTBOUND_TAG) ->
+                rule.keys.all { it in setOf("inbound", "network", "action", "outbound") }
             action == "route" &&
                 rule["outbound"]?.jsonPrimitive?.contentOrNull == "direct" &&
                 rule["ip_is_private"]?.jsonPrimitive?.contentOrNull == "true" ->

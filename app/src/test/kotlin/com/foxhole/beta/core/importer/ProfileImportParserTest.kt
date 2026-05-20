@@ -270,6 +270,44 @@ class ProfileImportParserTest {
     }
 
     @Test
+    fun `parses vless tls uri fingerprint and snake case packet encoding`() {
+        val parsed =
+            parser.parseUserInput(
+                "vless://11111111-1111-1111-1111-111111111111@example.com:443?security=tls&sni=edge.example.com&fp=chrome&packet_encoding=xudp#tls",
+            )
+
+        val root = json.parseToJsonElement(parsed.normalizedConfigJson!!).jsonObject
+        val outbound = root["outbounds"]!!.jsonArray.first().jsonObject
+        val tls = outbound["tls"]!!.jsonObject
+
+        assertEquals("xudp", outbound["packet_encoding"]!!.jsonPrimitive.content)
+        assertEquals("edge.example.com", tls["server_name"]!!.jsonPrimitive.content)
+        assertEquals("chrome", tls["utls"]!!.jsonObject["fingerprint"]!!.jsonPrimitive.content)
+        assertTrue(!tls.containsKey("reality"))
+    }
+
+    @Test
+    fun `parses vless uri query parameters case insensitively`() {
+        val parsed =
+            parser.parseUserInput(
+                "vless://11111111-1111-1111-1111-111111111111@example.com:443?Security=TLS&SNI=edge.example.com&FP=Chrome&Flow=xtls-rprx-vision&PacketEncoding=xudp&Type=WS&Host=cdn.example.com&Path=%2Fedge#tls",
+            )
+
+        val root = json.parseToJsonElement(parsed.normalizedConfigJson!!).jsonObject
+        val outbound = root["outbounds"]!!.jsonArray.first().jsonObject
+        val tls = outbound["tls"]!!.jsonObject
+        val transport = outbound["transport"]!!.jsonObject
+
+        assertEquals("xtls-rprx-vision", outbound["flow"]!!.jsonPrimitive.content)
+        assertEquals("xudp", outbound["packet_encoding"]!!.jsonPrimitive.content)
+        assertEquals("edge.example.com", tls["server_name"]!!.jsonPrimitive.content)
+        assertEquals("chrome", tls["utls"]!!.jsonObject["fingerprint"]!!.jsonPrimitive.content)
+        assertEquals("ws", transport["type"]!!.jsonPrimitive.content)
+        assertEquals("/edge", transport["path"]!!.jsonPrimitive.content)
+        assertEquals("cdn.example.com", transport["headers"]!!.jsonObject["Host"]!!.jsonPrimitive.content)
+    }
+
+    @Test
     fun `parses real single hysteria2 uri`() {
         val parsed =
             parser.parseUserInput(
@@ -908,6 +946,51 @@ class ProfileImportParserTest {
         assertEquals("8.8.8.8", routeRules[0].jsonObject["ip_cidr"]!!.jsonArray[0].jsonPrimitive.content)
         assertEquals("direct", routeRules[1].jsonObject["outbound"]!!.jsonPrimitive.content)
         assertEquals("223.5.5.5", routeRules[1].jsonObject["ip_cidr"]!!.jsonArray[0].jsonPrimitive.content)
+    }
+
+    @Test
+    fun `parses xray vless tls fingerprint into utls`() {
+        val parsed =
+            parser.parseUserInput(
+                """
+                {
+                  "outbounds": [
+                    {
+                      "protocol": "vless",
+                      "settings": {
+                        "vnext": [
+                          {
+                            "address": "example.com",
+                            "port": 443,
+                            "users": [
+                              {
+                                "id": "11111111-1111-1111-1111-111111111111"
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      "streamSettings": {
+                        "network": "tcp",
+                        "security": "tls",
+                        "tlsSettings": {
+                          "fingerprint": "chrome",
+                          "serverName": "edge.example.com"
+                        }
+                      },
+                      "tag": "proxy"
+                    }
+                  ]
+                }
+                """.trimIndent(),
+            )
+
+        val root = json.parseToJsonElement(parsed.normalizedConfigJson!!).jsonObject
+        val tls = root["outbounds"]!!.jsonArray.first().jsonObject["tls"]!!.jsonObject
+
+        assertEquals("edge.example.com", tls["server_name"]!!.jsonPrimitive.content)
+        assertEquals("chrome", tls["utls"]!!.jsonObject["fingerprint"]!!.jsonPrimitive.content)
+        assertTrue(!tls.containsKey("reality"))
     }
 
     @Test

@@ -65,7 +65,14 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
                 isNetworkActivityLoggingEnabled = { container.settingsRepository.settings.value.expert.networkActivityLogging },
                 networkActivityContext = {
                     activeSession
-                        ?.let { session -> NetworkActivityContext(profileId = session.profileId, sessionId = session.correlationId) }
+                        ?.let { session ->
+                            NetworkActivityContext(
+                                profileId = session.profileId,
+                                sessionId = session.correlationId,
+                                trafficMode = TrafficMode.PROXY,
+                                runtimeProxyPort = container.settingsRepository.settings.value.preferredAppProxyAccess()?.port,
+                            )
+                        }
                         ?: NetworkActivityContext()
                 },
                 onNetworkActivityEvent = { event ->

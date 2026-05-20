@@ -6,6 +6,7 @@ import com.foxhole.beta.core.model.LocalSurfaceSettings
 import com.foxhole.beta.core.model.ProxyInboundSettings
 import com.foxhole.beta.core.model.ProxySurfaceMode
 import com.foxhole.beta.core.model.Settings
+import com.foxhole.beta.core.network.ProxyAccessType
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -67,5 +68,26 @@ class TrafficModeSupportTest {
 
         assertEquals("local-user", access.username)
         assertEquals("local-pass", access.password)
+    }
+
+    @Test
+    fun `tunnel runtime proxy uses internal http access`() {
+        val settings =
+            Settings(
+                expert =
+                    ExpertSettings(
+                        localSurfaces =
+                            LocalSurfaceSettings(
+                                proxyMode = ProxySurfaceMode.HTTP,
+                                http = ProxyInboundSettings(enabled = true, port = 10809),
+                            ),
+                    ),
+            )
+
+        val access = settings.tunnelRuntimeProxyAccess()
+
+        assertEquals("127.0.0.1", access.host)
+        assertEquals(10809, access.port)
+        assertEquals(ProxyAccessType.HTTP, access.type)
     }
 }

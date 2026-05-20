@@ -10,7 +10,9 @@ import android.system.OsConstants
 import android.util.Base64
 import android.util.Log
 import androidx.core.content.getSystemService
+import com.foxhole.beta.BuildConfig
 import com.foxhole.beta.core.model.NetworkActivityEvent
+import com.foxhole.beta.core.model.TrafficMode
 import com.foxhole.beta.core.traffic.TorGeoIpCountryResolver
 import java.io.File
 import java.lang.reflect.Method
@@ -79,7 +81,7 @@ internal class LibboxReflection(
             call(options, "setTempPath", tempDir.absolutePath)
             call(options, "setFixAndroidStack", true)
             call(options, "setCommandServerListenPort", 0)
-            call(options, "setDebug", false)
+            call(options, "setDebug", BuildConfig.DEBUG)
             call(options, "setLogMaxLines", LIBBOX_LOG_MAX_LINES)
             callStatic("setLocale", Locale.getDefault().toLanguageTag().replace("-", "_"))
             callStatic("setup", options)
@@ -116,15 +118,23 @@ internal class LibboxReflection(
             platformInterfaceClass.classLoader,
             arrayOf(platformInterfaceClass),
         ) { _, method, args ->
+            recordPlatformCall(method, args)
             when (method.name) {
                 "autoDetectInterfaceControl" -> {
-                    val fd = args?.firstOrNull() as Int
-                    if (host.protectSocket(fd)) {
-                        defaultNetworkMonitor.bindSocketToDefaultNetwork(fd)
-                    } else {
+                    val fd = platformFileDescriptor(args?.firstOrNull())
+                    if (!host.protectSocket(fd)) {
                         diagnosticsLogger.record("libbox", "protect upstream socket failed")
                         error("android: protect upstream socket failed")
                     }
+                    if (BuildConfig.DEBUG) {
+                        diagnosticsLogger.recordThrottled(
+                            tag = "libbox",
+                            throttleKey = "auto_detect_interface_control",
+                            windowMs = 5_000L,
+                            message = "auto-detect protected upstream socket",
+                        )
+                    }
+                    defaultNetworkMonitor.bindSocketToDefaultNetwork(fd)
                     Unit
                 }
                 "clearDNSCache" -> Unit
@@ -164,6 +174,34 @@ internal class LibboxReflection(
                 "useProcFS" -> Build.VERSION.SDK_INT < Build.VERSION_CODES.Q
                 else -> defaultValue(method)
             }
+        }
+
+    private fun recordPlatformCall(
+        method: Method,
+        args: Array<Any?>?,
+    ) {
+        if (!BuildConfig.DEBUG) {
+            return
+        }
+        val argTypes =
+            args
+                ?.map { arg -> arg?.javaClass?.simpleName ?: "null" }
+                ?.joinToString(",")
+                ?.takeIf(String::isNotBlank)
+                ?: "none"
+        diagnosticsLogger.recordThrottled(
+            tag = "libbox",
+            throttleKey = "platform_call_${method.name}",
+            windowMs = 5_000L,
+            message = "platform call ${method.name} args=$argTypes",
+        )
+    }
+
+    private fun platformFileDescriptor(raw: Any?): Int =
+        when (raw) {
+            is Int -> raw
+            is Number -> raw.toInt()
+            else -> error("android: invalid auto-detect fd argument")
         }
 
     override fun newCommandServer(handler: Any, platform: Any): Any {
@@ -415,7 +453,7 @@ internal class LibboxReflection(
                 destinationHost = destinationHost,
                 destinationPort = destinationPort,
             )
-        call(owner, "setUserId", resolved?.uid ?: 0)
+        call(owner, "setUserId", resolved?.uid ?: UNKNOWN_CONNECTION_OWNER_UID)
         call(owner, "setUserName", resolved?.userName.orEmpty())
         call(owner, "setProcessPath", "")
         call(owner, "setAndroidPackageNames", stringIterator(resolved?.packageNames.orEmpty()))
@@ -437,6 +475,15 @@ internal class LibboxReflection(
         destinationHost: String,
         destinationPort: Int,
     ): ResolvedConnectionOwner? {
+        if (shouldSkipRuntimeProxyOwnerLookup(sourceHost, destinationHost, destinationPort)) {
+            diagnosticsLogger.recordThrottled(
+                tag = "network",
+                throttleKey = "runtime_proxy_owner_lookup_skip",
+                windowMs = 5_000L,
+                message = "runtime proxy owner lookup skipped",
+            )
+            return null
+        }
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
             return resolveConnectionOwnerFromProcNet(
                 protocol = protocol,
@@ -470,6 +517,20 @@ internal class LibboxReflection(
             userName = userName,
             packageNames = packageNames,
         )
+    }
+
+    private fun shouldSkipRuntimeProxyOwnerLookup(
+        sourceHost: String,
+        destinationHost: String,
+        destinationPort: Int,
+    ): Boolean {
+        val context = networkActivityContext()
+        if (context.trafficMode != TrafficMode.TUNNEL || context.runtimeProxyPort != destinationPort) {
+            return false
+        }
+        val sourceAddress = sourceHost.toInetAddressOrNull() ?: return false
+        val destinationAddress = destinationHost.toInetAddressOrNull() ?: return false
+        return sourceAddress.isLoopbackAddress && destinationAddress.isLoopbackAddress
     }
 
     private fun resolveConnectionOwnerFromProcNet(
@@ -761,6 +822,7 @@ internal class LibboxReflection(
         const val DNS_RCODE_SERVFAIL = 2
         const val DNS_RCODE_NXDOMAIN = 3
         const val DNS_RCODE_NOT_IMPLEMENTED = 4
+        const val UNKNOWN_CONNECTION_OWNER_UID = -1
     }
 }
 

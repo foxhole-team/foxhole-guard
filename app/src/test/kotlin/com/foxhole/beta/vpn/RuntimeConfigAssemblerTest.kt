@@ -38,6 +38,8 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
+import kotlinx.serialization.json.putJsonArray
+import kotlinx.serialization.json.putJsonObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
@@ -71,12 +73,13 @@ class RuntimeConfigAssemblerTest {
         )
 
         val rules = config["route"]!!.jsonObject["rules"]!!.jsonArray
-        assertEquals(5, rules.size)
-        assertSniffRule(rules[0].jsonObject)
-        assertPortDnsHijack(rules[1].jsonObject)
-        assertProtocolDnsHijack(rules[2].jsonObject)
-        assertEquals("profile.example", rules[3].jsonObject["domain"]!!.jsonArray[0].jsonPrimitive.content)
-        assertEquals("local.example", rules[4].jsonObject["domain"]!!.jsonArray[0].jsonPrimitive.content)
+        assertEquals(6, rules.size)
+        assertRuntimeProxyRoute(rules[0].jsonObject)
+        assertSniffRule(rules[1].jsonObject)
+        assertPortDnsHijack(rules[2].jsonObject)
+        assertProtocolDnsHijack(rules[3].jsonObject)
+        assertEquals("profile.example", rules[4].jsonObject["domain"]!!.jsonArray[0].jsonPrimitive.content)
+        assertEquals("local.example", rules[5].jsonObject["domain"]!!.jsonArray[0].jsonPrimitive.content)
     }
 
     @Test
@@ -91,11 +94,12 @@ class RuntimeConfigAssemblerTest {
             )
 
         val rules = config["route"]!!.jsonObject["rules"]!!.jsonArray
-        assertEquals(4, rules.size)
-        assertSniffRule(rules[0].jsonObject)
-        assertPortDnsHijack(rules[1].jsonObject)
-        assertProtocolDnsHijack(rules[2].jsonObject)
-        assertEquals("local.example", rules[3].jsonObject["domain"]!!.jsonArray[0].jsonPrimitive.content)
+        assertEquals(5, rules.size)
+        assertRuntimeProxyRoute(rules[0].jsonObject)
+        assertSniffRule(rules[1].jsonObject)
+        assertPortDnsHijack(rules[2].jsonObject)
+        assertProtocolDnsHijack(rules[3].jsonObject)
+        assertEquals("local.example", rules[4].jsonObject["domain"]!!.jsonArray[0].jsonPrimitive.content)
     }
 
     @Test
@@ -456,11 +460,14 @@ class RuntimeConfigAssemblerTest {
         assertEquals(FOXHOLE_RUNTIME_LOG_LEVEL, config["log"]!!.jsonObject["level"]!!.jsonPrimitive.content)
         assertFalse(inbounds[0].containsKey("sniff"))
         assertEquals("tun", inbounds[0]["type"]!!.jsonPrimitive.content)
-        assertEquals("mixed", inbounds[1]["type"]!!.jsonPrimitive.content)
+        assertEquals("http", inbounds[1]["type"]!!.jsonPrimitive.content)
         assertEquals("foxhole-runtime-proxy-in", inbounds[1]["tag"]!!.jsonPrimitive.content)
         assertEquals("127.0.0.1", inbounds[1]["listen"]!!.jsonPrimitive.content)
+        assertEquals("10809", inbounds[1]["listen_port"]!!.jsonPrimitive.content)
         assertFalse(inbounds[1].containsKey("users"))
-        assertSniffRule(config["route"]!!.jsonObject["rules"]!!.jsonArray[0].jsonObject)
+        val rules = config["route"]!!.jsonObject["rules"]!!.jsonArray
+        assertRuntimeProxyRoute(rules[0].jsonObject)
+        assertSniffRule(rules[1].jsonObject)
         assertFalse(config.containsKey("experimental"))
     }
 
@@ -474,6 +481,59 @@ class RuntimeConfigAssemblerTest {
             tunInbound["exclude_package"]!!.jsonArray.map { it.jsonPrimitive.content },
         )
         assertFalse(tunInbound.containsKey("include_package"))
+    }
+
+    @Test
+    fun `redacted runtime shape reports proxy tls flags without secrets`() {
+        val config =
+            assembler.assemble(
+                baseConfigJson =
+                    baseConfigWithOutbounds(
+                        buildJsonArray {
+                            add(
+                                buildJsonObject {
+                                    put("type", "vless")
+                                    put("tag", "vless-direct")
+                                    put("server", "edge.example")
+                                    put("server_port", 443)
+                                    put("uuid", "11111111-1111-1111-1111-111111111111")
+                                    put("flow", "xtls-rprx-vision")
+                                    put("packet_encoding", "xudp")
+                                    putJsonObject("tls") {
+                                        put("enabled", true)
+                                        put("server_name", "cdn.example")
+                                        putJsonObject("utls") {
+                                            put("enabled", true)
+                                            put("fingerprint", "chrome")
+                                        }
+                                    }
+                                },
+                            )
+                            add(
+                                buildJsonObject {
+                                    put("type", "selector")
+                                    put("tag", "proxy")
+                                    put("default", "vless-direct")
+                                    putJsonArray("outbounds") { add(JsonPrimitive("vless-direct")) }
+                                },
+                            )
+                        },
+                    ),
+                settings = Settings(),
+                activePreset = null,
+            )
+
+        val shape = assembler.redactedRuntimeShape(config)
+
+        assertTrue(shape, shape.contains("type=vless"))
+        assertTrue(shape, shape.contains("selector=true"))
+        assertTrue(shape, shape.contains("tls=true"))
+        assertTrue(shape, shape.contains("utls=true"))
+        assertTrue(shape, shape.contains("fp=chrome"))
+        assertTrue(shape, shape.contains("flow=true"))
+        assertTrue(shape, shape.contains("packet=xudp"))
+        assertFalse(shape, shape.contains("edge.example"))
+        assertFalse(shape, shape.contains("11111111"))
     }
 
     @Test
@@ -2057,9 +2117,10 @@ class RuntimeConfigAssemblerTest {
         val route = config["route"]!!.jsonObject
         val rules = route["rules"]!!.jsonArray
 
-        assertSniffRule(rules[0].jsonObject)
-        assertPortDnsHijack(rules[1].jsonObject)
-        assertProtocolDnsHijack(rules[2].jsonObject)
+        assertRuntimeProxyRoute(rules[0].jsonObject)
+        assertSniffRule(rules[1].jsonObject)
+        assertPortDnsHijack(rules[2].jsonObject)
+        assertProtocolDnsHijack(rules[3].jsonObject)
         assertEquals("dns-direct", route["default_domain_resolver"]!!.jsonPrimitive.content)
         assertEquals("true", route["auto_detect_interface"]!!.jsonPrimitive.content)
     }
@@ -2070,9 +2131,10 @@ class RuntimeConfigAssemblerTest {
         val route = config["route"]!!.jsonObject
         val rules = route["rules"]!!.jsonArray
 
-        assertSniffRule(rules[0].jsonObject)
-        assertPortDnsHijack(rules[1].jsonObject)
-        assertProtocolDnsHijack(rules[2].jsonObject)
+        assertRuntimeProxyRoute(rules[0].jsonObject)
+        assertSniffRule(rules[1].jsonObject)
+        assertPortDnsHijack(rules[2].jsonObject)
+        assertProtocolDnsHijack(rules[3].jsonObject)
         assertEquals("proxy", route["final"]!!.jsonPrimitive.content)
         assertEquals("dns-direct", route["default_domain_resolver"]!!.jsonPrimitive.content)
         assertEquals("true", route["auto_detect_interface"]!!.jsonPrimitive.content)
@@ -2107,7 +2169,7 @@ class RuntimeConfigAssemblerTest {
             )
 
         val config = parse(assembler.assemble(baseConfigWithRules("profile.example"), Settings(), preset))
-        val rule = config["route"]!!.jsonObject["rules"]!!.jsonArray[4].jsonObject
+        val rule = config["route"]!!.jsonObject["rules"]!!.jsonArray[5].jsonObject
 
         assertEquals("53", rule["port"]!!.jsonPrimitive.content)
         assertFalse(rule["port"]!!.jsonPrimitive.isString)
@@ -2131,9 +2193,10 @@ class RuntimeConfigAssemblerTest {
 
         assertFalse(tunInbound.containsKey("sniff"))
         assertFalse(tunInbound.containsKey("sniff_override_destination"))
-        assertEquals("sniff", rules[0].jsonObject["action"]!!.jsonPrimitive.content)
-        assertPortDnsHijack(rules[1].jsonObject)
-        assertProtocolDnsHijack(rules[2].jsonObject)
+        assertRuntimeProxyRoute(rules[0].jsonObject)
+        assertEquals("sniff", rules[1].jsonObject["action"]!!.jsonPrimitive.content)
+        assertPortDnsHijack(rules[2].jsonObject)
+        assertProtocolDnsHijack(rules[3].jsonObject)
     }
 
     @Test
@@ -2493,6 +2556,16 @@ class RuntimeConfigAssemblerTest {
 
     private fun assertSniffRule(rule: JsonObject) {
         assertEquals("sniff", rule["action"]!!.jsonPrimitive.content)
+    }
+
+    private fun assertRuntimeProxyRoute(
+        rule: JsonObject,
+        outbound: String = "proxy",
+    ) {
+        assertEquals("route", rule["action"]!!.jsonPrimitive.content)
+        assertEquals(listOf("foxhole-runtime-proxy-in"), rule["inbound"]!!.jsonArray.map { it.jsonPrimitive.content })
+        assertEquals("tcp", rule["network"]!!.jsonPrimitive.content)
+        assertEquals(outbound, rule["outbound"]!!.jsonPrimitive.content)
     }
 
     private fun assertProtocolDnsHijack(rule: JsonObject) {

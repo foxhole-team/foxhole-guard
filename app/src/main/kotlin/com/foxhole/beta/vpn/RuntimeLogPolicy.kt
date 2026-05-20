@@ -1,4 +1,5 @@
 package com.foxhole.beta.vpn
 
-internal const val FOXHOLE_RUNTIME_LOG_LEVEL = "info"
+import com.foxhole.beta.BuildConfig
 
+internal val FOXHOLE_RUNTIME_LOG_LEVEL: String = if (BuildConfig.DEBUG) "debug" else "info"

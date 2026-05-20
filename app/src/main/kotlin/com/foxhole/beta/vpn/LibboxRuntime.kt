@@ -24,6 +24,7 @@ import com.foxhole.beta.core.anomaly.DnsRuntimeStats
 import com.foxhole.beta.core.diagnostics.DiagnosticSanitizer
 import com.foxhole.beta.core.diagnostics.DiagnosticsLogger
 import com.foxhole.beta.core.model.NetworkActivityEvent
+import com.foxhole.beta.core.model.TrafficMode
 import com.foxhole.beta.core.model.VpnSession
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
@@ -53,6 +54,8 @@ internal fun createVpnRuntime(
 internal data class NetworkActivityContext(
     val profileId: Long? = null,
     val sessionId: String? = null,
+    val trafficMode: TrafficMode? = null,
+    val runtimeProxyPort: Int? = null,
 )
 
 private val libboxRuntimeOperationMutex = Mutex()
@@ -1017,6 +1020,14 @@ internal class DefaultNetworkMonitor(
         runCatching {
             ParcelFileDescriptor.fromFd(fd).use { parcel ->
                 network.bindSocket(parcel.fileDescriptor)
+            }
+            if (BuildConfig.DEBUG) {
+                diagnosticsLogger.recordThrottled(
+                    tag = "libbox",
+                    throttleKey = "default_network_socket_bind_success",
+                    windowMs = 5_000L,
+                    message = "default network socket bind ok",
+                )
             }
         }.onFailure { error ->
             diagnosticsLogger.record(

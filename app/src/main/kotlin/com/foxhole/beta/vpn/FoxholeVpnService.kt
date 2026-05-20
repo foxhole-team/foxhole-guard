@@ -83,7 +83,14 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
                 isNetworkActivityLoggingEnabled = { container.settingsRepository.settings.value.expert.networkActivityLogging },
                 networkActivityContext = {
                     activeSession
-                        ?.let { session -> NetworkActivityContext(profileId = session.profileId, sessionId = session.correlationId) }
+                        ?.let { session ->
+                            NetworkActivityContext(
+                                profileId = session.profileId,
+                                sessionId = session.correlationId,
+                                trafficMode = TrafficMode.TUNNEL,
+                                runtimeProxyPort = container.settingsRepository.settings.value.tunnelRuntimeProxyAccess().port,
+                            )
+                        }
                         ?: NetworkActivityContext()
                 },
                 onNetworkActivityEvent = { event ->

@@ -82,6 +82,7 @@ internal class ProfileSessionFactory(
                     Log.e(LOG_TAG, DiagnosticSanitizer.sanitizeForExport(logMessage))
                 }
             }.getOrThrow()
+        diagnosticsLogger.record("runtime", runtimeConfigAssembler.redactedRuntimeShape(assembled))
         return VpnSession(
             profileId = profile.id,
             profileName = profile.name,
