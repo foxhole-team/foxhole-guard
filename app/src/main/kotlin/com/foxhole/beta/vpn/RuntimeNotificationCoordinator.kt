@@ -19,6 +19,7 @@ import androidx.core.content.ContextCompat
 import com.foxhole.beta.MainActivity
 import com.foxhole.beta.R
 import com.foxhole.beta.core.model.ConnectionState
+import com.foxhole.beta.core.model.ConnectivityHealthState
 import com.foxhole.beta.core.model.NotificationSnapshot
 import com.foxhole.beta.core.model.TrafficMode
 
@@ -60,7 +61,7 @@ internal fun notificationActionForSnapshot(
     val action = notificationActionForState(snapshot.state)
     return if (
         snapshot.statusMessage == analysisStatus &&
-        snapshot.state in ACTIVE_NOTIFICATION_ACTION_STATES
+        snapshot.state in RuntimeNotificationCoordinator.activeNotificationActionStates
     ) {
         action.copy(labelRes = R.string.notification_action_auto_connect)
     } else {
@@ -148,19 +149,18 @@ internal fun Service.buildConnectionNotification(
         builder.setPublicVersion(
             buildConnectionNotification(
                 mode = mode,
-                snapshot =
-                    snapshot.copy(
-                        profileName = null,
-                        ipAddress = null,
-                        countryCode = null,
-                        countryName = null,
-                        txRate = 0L,
-                        rxRate = 0L,
-                        txTotal = 0L,
-                        rxTotal = 0L,
-                        updatedAt = 0L,
-                        isRedacted = true,
-                    ),
+                snapshot = snapshot.copy(
+                    profileName = null,
+                    ipAddress = null,
+                    countryCode = null,
+                    countryName = null,
+                    txRate = 0L,
+                    rxRate = 0L,
+                    txTotal = 0L,
+                    rxTotal = 0L,
+                    updatedAt = 0L,
+                    isRedacted = true,
+                ),
                 collapsedText = collapsedText,
                 expandedText = expandedText,
                 stateLabel = stateLabel,
@@ -172,12 +172,131 @@ internal fun Service.buildConnectionNotification(
     return builder.build()
 }
 
-private val ACTIVE_NOTIFICATION_ACTION_STATES =
-    setOf(
-        ConnectionState.CONNECTING,
-        ConnectionState.CONNECTED,
-        ConnectionState.RECONNECTING,
+internal object RuntimeNotificationCoordinator {
+    val activeNotificationActionStates =
+        setOf(
+            ConnectionState.CONNECTING,
+            ConnectionState.CONNECTED,
+            ConnectionState.RECONNECTING,
+        )
+}
+
+internal fun FoxholeVpnService.currentNotificationSnapshotInternal(): NotificationSnapshot {
+    val connection = FoxholeVpnRuntimeBridge.snapshot.value
+    val ipInfo = FoxholeVpnRuntimeBridge.ipInfo.value
+    val traffic = FoxholeVpnRuntimeBridge.traffic.value
+    val localGuardMode = activeLocalGuardMode
+    if (localGuardMode != null) {
+        val analysisStatus = getString(R.string.notification_status_analysis)
+        val analysisMessage =
+            connection.message
+                .takeIf { connection.isSmartStartConnection && it == analysisStatus }
+        return NotificationSnapshot(
+            state = ConnectionState.CONNECTED,
+            statusMessage = analysisMessage ?: localGuardMode.name,
+            updatedAt = connection.lastChangeAt,
+            isSmartStartConnection = analysisMessage != null,
+        )
+    }
+    return NotificationSnapshot(
+        profileName = connection.profileName,
+        state = connection.state,
+        statusMessage = connection.message,
+        connectivityHealthState = notificationConnectivityHealthState,
+        ipAddress = ipInfo?.ipv4 ?: ipInfo?.ip,
+        countryCode = ipInfo?.countryCode,
+        countryName = ipInfo?.countryName,
+        trafficAvailable = traffic.available,
+        txRate = traffic.txBytesPerSec,
+        rxRate = traffic.rxBytesPerSec,
+        txTotal = traffic.txTotalBytes,
+        rxTotal = traffic.rxTotalBytes,
+        updatedAt = maxOf(connection.lastChangeAt, ipInfo?.fetchedAt ?: 0L, traffic.sampledAt),
+        isSmartStartConnection = connection.isSmartStartConnection,
     )
+}
+
+internal fun FoxholeVpnService.notificationCollapsedTextInternal(snapshot: NotificationSnapshot): String =
+    buildNotificationStatusText(snapshot, notificationHealthText(snapshot))
+
+internal fun FoxholeVpnService.notificationExpandedTextInternal(snapshot: NotificationSnapshot): String? =
+    buildNotificationStatusText(snapshot, notificationHealthText(snapshot))
+
+internal fun FoxholeVpnService.notificationHealthTextInternal(snapshot: NotificationSnapshot): String? =
+    notificationBodyRes(snapshot)?.let(::getString)
+
+internal fun FoxholeVpnService.notificationStateLabelInternal(snapshot: NotificationSnapshot): String =
+    when {
+        snapshot.statusMessage == getString(R.string.notification_status_analysis) ->
+            getString(R.string.notification_status_analysis)
+        localGuardFirewallNotificationActive() -> getString(R.string.notification_status_firewall)
+        activeLocalGuardMode == LocalGuardMode.JOURNAL -> getString(R.string.notification_status_journal)
+        activeLocalGuardMode == LocalGuardMode.DNS -> getString(R.string.notification_status_dns_guard)
+        snapshot.state == ConnectionState.CONNECTED ->
+            if (snapshot.isSmartStartConnection) {
+                getString(R.string.notification_status_connected_smart)
+            } else {
+                getString(R.string.notification_status_connected)
+            }
+        snapshot.state == ConnectionState.CONNECTING -> getString(R.string.notification_status_connecting)
+        snapshot.state == ConnectionState.RECONNECTING -> getString(R.string.notification_status_reconnecting)
+        snapshot.state == ConnectionState.ERROR -> getString(R.string.notification_status_error)
+        else -> getString(R.string.notification_status_disconnected)
+    }
+
+private fun FoxholeVpnService.buildNotificationStatusText(
+    snapshot: NotificationSnapshot,
+    baseText: String?,
+): String =
+    when {
+        activeLocalGuardMode != null -> baseText.orEmpty()
+        snapshot.state == ConnectionState.CONNECTED && snapshot.isSmartStartConnection ->
+            listOfNotNull(baseText, getString(R.string.smart_profile_tag))
+                .filter(String::isNotBlank)
+                .joinToString(separator = " • ")
+        else -> baseText.orEmpty()
+    }
+
+private fun FoxholeVpnService.localGuardFirewallNotificationActive(): Boolean {
+    val firewallGuardActive = activeLocalGuardMode == LocalGuardMode.FIREWALL
+    val journalFirewallActive =
+        activeLocalGuardMode == LocalGuardMode.JOURNAL &&
+            container.settingsRepository.settings.value.expert.firewallEnabled
+    return firewallGuardActive || journalFirewallActive
+}
+
+private fun FoxholeVpnService.localGuardNotificationBodyRes(): Int? =
+    when {
+        localGuardFirewallNotificationActive() -> R.string.notification_body_firewall
+        activeLocalGuardMode == LocalGuardMode.JOURNAL -> R.string.notification_body_journal
+        activeLocalGuardMode == LocalGuardMode.DNS -> R.string.notification_body_dns_guard
+        else -> null
+    }
+
+private fun FoxholeVpnService.notificationBodyRes(snapshot: NotificationSnapshot): Int? =
+    if (snapshot.statusMessage == getString(R.string.notification_status_analysis)) {
+        R.string.notification_body_validating
+    } else {
+        localGuardNotificationBodyRes() ?: when (snapshot.state) {
+            ConnectionState.CONNECTED ->
+                when (snapshot.connectivityHealthState) {
+                    ConnectivityHealthState.CHECKING -> R.string.notification_body_validating
+                    ConnectivityHealthState.ONLINE -> R.string.notification_body_connected
+                    ConnectivityHealthState.OFFLINE -> R.string.notification_body_waiting
+                }
+            ConnectionState.CONNECTING ->
+                R.string.notification_body_waiting
+            ConnectionState.RECONNECTING ->
+                if (snapshot.statusMessage == getString(R.string.status_smart_start_reconnecting)) {
+                    R.string.notification_body_smart_start_reconnecting
+                } else {
+                    R.string.notification_body_reconnecting
+                }
+            ConnectionState.IDLE,
+            ConnectionState.ERROR,
+            -> null
+        }
+    }
 
 internal fun Service.updateConnectionNotification(buildNotification: () -> Notification) {
     TileService.requestListeningState(this, ComponentName(this, FoxholeTileService::class.java))

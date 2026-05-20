@@ -63,7 +63,7 @@ internal object ConnectivityNetworkRegistry {
             synchronized(lock) {
                 linkedSetOf<Network>().apply {
                     connectivity.activeNetwork?.let(::add)
-                    connectivity.allNetworks.forEach(::add)
+                    connectivity.snapshotAllNetworks().forEach(::add)
                     addAll(trackedNetworks)
                 }.toList()
             }
@@ -87,5 +87,10 @@ internal object ConnectivityNetworkRegistry {
                 trackedNetworks -= network
             }
         }
+
+        @Suppress("DEPRECATION")
+        private fun ConnectivityManager.snapshotAllNetworks(): Array<Network> =
+            // There is no public replacement for enumerating currently known networks.
+            allNetworks
     }
 }

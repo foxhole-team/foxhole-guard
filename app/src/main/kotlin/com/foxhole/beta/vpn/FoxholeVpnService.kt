@@ -162,6 +162,28 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
                 if (!wasAcceptedUpstream && !isUpstreamNetwork(network)) {
                     return
                 }
+                val fallbackUpstream = currentUpstreamNetworkOrNull(excludedHandle = network.networkHandle)
+                if (fallbackUpstream != null) {
+                    upstreamNetworkHandles += fallbackUpstream.networkHandle
+                    recordNetworkEvent(
+                        message = "upstream switched",
+                        capabilities = connectivityManager.getNetworkCapabilities(fallbackUpstream),
+                    )
+                    runtime.onDefaultNetworkAvailable()
+                    val snapshot = FoxholeVpnRuntimeBridge.snapshot.value
+                    if (snapshot.state == ConnectionState.RECONNECTING) {
+                        val session = activeSession
+                        if (session != null) {
+                            scheduleValidation(
+                                session = session,
+                                failOnFailure = false,
+                                onSuccess = { vpnNetwork -> onTunnelValidated(session, vpnNetwork) },
+                            )
+                        }
+                    }
+                    updateNotification()
+                    return
+                }
                 recordNetworkEvent(
                     message = "upstream lost",
                     capabilities = connectivityManager.getNetworkCapabilities(network),
@@ -866,7 +888,9 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         val session =
             runCatching {
                 if (targetProfileId == TOR_ONLY_PROFILE_ID) {
-                    container.profileRepository.getTorOnlySession(privateDnsState = PrivateDnsSettings.currentState(this))
+                    container.profileRepository.getTorOnlySession(
+                        privateDnsState = PrivateDnsSettings.currentState(this),
+                    )
                 } else {
                     container.profileRepository.getSession(
                         profileId = targetProfileId,
@@ -1205,14 +1229,14 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
     internal fun startAppTrafficStatsUpdates() {
         stopAppTrafficStatsUpdates()
         val settings = container.settingsRepository.settings.value
-        if (!settings.appTrafficStatsRuntimeEnabled()) {
+        if (!appTrafficStatsRuntimeEnabled(settings)) {
             return
         }
         appTrafficStatsJob =
             scope.launch(Dispatchers.Default) {
                 while (currentCoroutineContext().isActive) {
                     val currentSettings = container.settingsRepository.settings.value
-                    if (!currentSettings.appTrafficStatsRuntimeEnabled()) {
+                    if (!appTrafficStatsRuntimeEnabled(currentSettings)) {
                         break
                     }
                     runCatching { appTrafficStatsRecorder.recordSnapshot() }
@@ -1248,7 +1272,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         DnsRuntimeStats.drain()
         scope.launch(Dispatchers.IO) {
             val appWindows =
-                if (settings.appTrafficStatsRuntimeEnabled()) {
+                if (appTrafficStatsRuntimeEnabled(settings)) {
                     runCatching {
                         appTrafficStatsRecorder.sampleWindows(maxCacheAgeMs = APP_TRAFFIC_SAMPLE_CACHE_MAX_AGE_MS)
                     }.getOrDefault(emptyList())
@@ -1510,8 +1534,8 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
     internal fun currentVpnNetworkOrNull(excludedHandle: Long? = null): Network? =
         currentVpnNetworkOrNullInternal(excludedHandle)
 
-    internal fun currentUpstreamNetworkOrNull(): Network? =
-        currentUpstreamNetworkOrNullInternal()
+    internal fun currentUpstreamNetworkOrNull(excludedHandle: Long? = null): Network? =
+        currentUpstreamNetworkOrNullInternal(excludedHandle)
 
     internal fun shouldPublishAppOwnedIpInfo(): Boolean {
         val snapshot = FoxholeVpnRuntimeBridge.snapshot.value
@@ -1619,10 +1643,11 @@ private fun FoxholeVpnService.notificationTorRouteActive(): Boolean {
         (settings.privacyRoute.bypassVpnTunnel || activeSession?.protocolHint?.isUdpTransport() != true)
 }
 
-private fun Settings.appTrafficStatsRuntimeEnabled(): Boolean =
-    statistics.enabled &&
-        statistics.appTrafficEnabled &&
-        appTrafficStatsEnabled
+private fun FoxholeVpnService.appTrafficStatsRuntimeEnabled(settings: Settings): Boolean =
+    settings.statistics.enabled &&
+        settings.statistics.appTrafficEnabled &&
+        settings.appTrafficStatsEnabled &&
+        appTrafficStatsRecorder.hasUsageAccess()
 
 internal interface VpnCoreRuntime {
     suspend fun start(session: VpnSession, host: RuntimeServiceHost): Result<Unit>

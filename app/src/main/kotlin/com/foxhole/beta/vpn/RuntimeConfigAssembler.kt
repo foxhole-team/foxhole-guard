@@ -12,15 +12,15 @@ import com.foxhole.beta.core.model.PrivacyRouteMode
 import com.foxhole.beta.core.model.PrivacyRouteScope
 import com.foxhole.beta.core.model.PrivacyRouteSettings
 import com.foxhole.beta.core.model.PrivacyRouteUdpPolicy
+import com.foxhole.beta.core.model.ProtocolHint
 import com.foxhole.beta.core.model.ProxyInboundSettings
 import com.foxhole.beta.core.model.ProxySurfaceMode
-import com.foxhole.beta.core.model.ProtocolHint
 import com.foxhole.beta.core.model.RoutingPreset
 import com.foxhole.beta.core.model.RoutingPresetOverrideMode
 import com.foxhole.beta.core.model.RoutingRule
 import com.foxhole.beta.core.model.RoutingRuleAction
-import com.foxhole.beta.core.model.Settings
 import com.foxhole.beta.core.model.SecureDnsMode
+import com.foxhole.beta.core.model.Settings
 import com.foxhole.beta.core.model.TrafficMode
 import com.foxhole.beta.core.model.TrafficSettings
 import com.foxhole.beta.core.model.TunStack

@@ -22,6 +22,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.foxhole.beta.R
 import com.foxhole.beta.core.diagnostics.DiagnosticEntry
+import com.foxhole.beta.core.diagnostics.DiagnosticSanitizer
 import com.foxhole.beta.core.model.DiagnosticsRetention
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -45,12 +46,25 @@ internal fun LiveLogsDialog(
     entries: List<DiagnosticEntry>,
     onDismiss: () -> Unit,
     notice: String? = null,
+    sanitizeEntries: Boolean = false,
+    onSanitizeEntriesChanged: ((Boolean) -> Unit)? = null,
     confirmLabel: String? = null,
     onConfirm: (() -> Unit)? = null,
 ) {
     val locale = remember { Locale.getDefault() }
     val timeFormat = remember(locale) { SimpleDateFormat("yyyy-MM-dd HH:mm:ss", locale) }
-    val visibleEntries = remember(entries) { entries.asReversed() }
+    val visibleEntries =
+        remember(entries, sanitizeEntries) {
+            entries
+                .asReversed()
+                .map { entry ->
+                    if (sanitizeEntries) {
+                        entry.copy(message = DiagnosticSanitizer.sanitizeForExport(entry.message))
+                    } else {
+                        entry
+                    }
+                }
+        }
 
     AlertDialog(
         modifier = Modifier.testTag(LIVE_LOGS_DIALOG_TAG),
@@ -78,6 +92,12 @@ internal fun LiveLogsDialog(
                             color = MaterialTheme.colorScheme.onSurface,
                         )
                     }
+                }
+                onSanitizeEntriesChanged?.let { onSanitizeChanged ->
+                    LiveLogSanitizerSwitch(
+                        sanitizeEntries = sanitizeEntries,
+                        onSanitizeEntriesChanged = onSanitizeChanged,
+                    )
                 }
                 if (visibleEntries.isEmpty()) {
                     Surface(
@@ -144,6 +164,27 @@ internal fun LiveLogsDialog(
                 onClick = onDismiss,
             )
         },
+    )
+}
+
+@Composable
+private fun LiveLogSanitizerSwitch(
+    sanitizeEntries: Boolean,
+    onSanitizeEntriesChanged: (Boolean) -> Unit,
+) {
+    val summary =
+        stringResource(
+            if (sanitizeEntries) {
+                R.string.logs_sanitize_private_data_summary_on
+            } else {
+                R.string.logs_sanitize_private_data_summary_off
+            },
+        )
+    SettingSwitchRow(
+        title = stringResource(R.string.logs_sanitize_private_data_title),
+        checked = sanitizeEntries,
+        summary = summary,
+        onCheckedChange = onSanitizeEntriesChanged,
     )
 }
 

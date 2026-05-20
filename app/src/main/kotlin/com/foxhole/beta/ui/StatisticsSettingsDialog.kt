@@ -31,19 +31,10 @@ internal fun StatisticsSettingsDialog(
     dnsFilteringAvailable: Boolean,
     retentionMenuExpanded: Boolean,
     refreshIntervalMenuExpanded: Boolean,
-    onRetentionMenuExpandedChange: (Boolean) -> Unit,
-    onRefreshIntervalMenuExpandedChange: (Boolean) -> Unit,
-    onStatisticsEnabledChanged: (Boolean) -> Unit,
-    onStatisticsRetentionSelected: (StatisticsRetention) -> Unit,
-    onStatisticsRefreshIntervalSelected: (StatisticsRefreshInterval) -> Unit,
-    onStatisticsMetricEnabledChanged: (StatisticsMetric, Boolean) -> Unit,
-    onAppTrafficStatsEnabledChanged: (Boolean) -> Unit,
-    onUsageAccessRequired: () -> Unit,
-    onUsageAccessCleared: () -> Unit,
-    onDismiss: () -> Unit,
+    actions: StatisticsSettingsDialogActions,
 ) {
     AlertDialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = actions.onDismiss,
         title = { Text(stringResource(R.string.statistics_settings_title)) },
         text = {
             Column(
@@ -55,11 +46,7 @@ internal fun StatisticsSettingsDialog(
                     statisticsSettings = statisticsSettings,
                     retentionMenuExpanded = retentionMenuExpanded,
                     refreshIntervalMenuExpanded = refreshIntervalMenuExpanded,
-                    onRetentionMenuExpandedChange = onRetentionMenuExpandedChange,
-                    onRefreshIntervalMenuExpandedChange = onRefreshIntervalMenuExpandedChange,
-                    onStatisticsEnabledChanged = onStatisticsEnabledChanged,
-                    onStatisticsRetentionSelected = onStatisticsRetentionSelected,
-                    onStatisticsRefreshIntervalSelected = onStatisticsRefreshIntervalSelected,
+                    actions = actions,
                 )
                 SettingsControlGroup {
                     SettingSwitchRow(
@@ -69,10 +56,10 @@ internal fun StatisticsSettingsDialog(
                         leadingIcon = Icons.Outlined.Apps,
                         onCheckedChange = { enabled ->
                             if (enabled && !usageAccessGranted) {
-                                onUsageAccessRequired()
+                                actions.onUsageAccessRequired()
                             } else {
-                                onUsageAccessCleared()
-                                onAppTrafficStatsEnabledChanged(enabled)
+                                actions.onUsageAccessCleared()
+                                actions.onAppTrafficStatsEnabledChanged(enabled)
                             }
                         },
                         enabled = statisticsSettings.enabled,
@@ -85,17 +72,29 @@ internal fun StatisticsSettingsDialog(
                     appStatsSwitchChecked = appStatsSwitchChecked,
                     usageAccessGranted = usageAccessGranted,
                     dnsFilteringAvailable = dnsFilteringAvailable,
-                    onUsageAccessRequired = onUsageAccessRequired,
-                    onStatisticsMetricEnabledChanged = onStatisticsMetricEnabledChanged,
+                    actions = actions,
                 )
             }
         },
         confirmButton = {},
         dismissButton = {
-            FoxholeDialogDismissButton(onClick = onDismiss)
+            FoxholeDialogDismissButton(onClick = actions.onDismiss)
         },
     )
 }
+
+internal data class StatisticsSettingsDialogActions(
+    val onRetentionMenuExpandedChange: (Boolean) -> Unit,
+    val onRefreshIntervalMenuExpandedChange: (Boolean) -> Unit,
+    val onStatisticsEnabledChanged: (Boolean) -> Unit,
+    val onStatisticsRetentionSelected: (StatisticsRetention) -> Unit,
+    val onStatisticsRefreshIntervalSelected: (StatisticsRefreshInterval) -> Unit,
+    val onStatisticsMetricEnabledChanged: (StatisticsMetric, Boolean) -> Unit,
+    val onAppTrafficStatsEnabledChanged: (Boolean) -> Unit,
+    val onUsageAccessRequired: () -> Unit,
+    val onUsageAccessCleared: () -> Unit,
+    val onDismiss: () -> Unit,
+)
 
 @Composable
 private fun StatisticsStorageSettingsGroup(
@@ -103,11 +102,7 @@ private fun StatisticsStorageSettingsGroup(
     statisticsSettings: StatisticsSettings,
     retentionMenuExpanded: Boolean,
     refreshIntervalMenuExpanded: Boolean,
-    onRetentionMenuExpandedChange: (Boolean) -> Unit,
-    onRefreshIntervalMenuExpandedChange: (Boolean) -> Unit,
-    onStatisticsEnabledChanged: (Boolean) -> Unit,
-    onStatisticsRetentionSelected: (StatisticsRetention) -> Unit,
-    onStatisticsRefreshIntervalSelected: (StatisticsRefreshInterval) -> Unit,
+    actions: StatisticsSettingsDialogActions,
 ) {
     SettingsControlGroup {
         SettingSwitchRow(
@@ -115,7 +110,7 @@ private fun StatisticsStorageSettingsGroup(
             checked = statisticsSettings.enabled,
             summary = stringResource(R.string.statistics_enabled_summary),
             leadingIcon = Icons.Outlined.BarChart,
-            onCheckedChange = onStatisticsEnabledChanged,
+            onCheckedChange = actions.onStatisticsEnabledChanged,
             grouped = true,
         )
         SettingsControlGroupDivider()
@@ -123,11 +118,11 @@ private fun StatisticsStorageSettingsGroup(
             title = stringResource(R.string.statistics_retention_title),
             value = statisticsRetentionLabel(state.settings.statistics.retention),
             expanded = retentionMenuExpanded,
-            onExpandedChange = onRetentionMenuExpandedChange,
+            onExpandedChange = actions.onRetentionMenuExpandedChange,
             values = StatisticsRetention.entries,
             selected = state.settings.statistics.retention,
             label = { statisticsRetentionLabel(it) },
-            onSelect = onStatisticsRetentionSelected,
+            onSelect = actions.onStatisticsRetentionSelected,
             leadingIcon = Icons.Outlined.Storage,
             grouped = true,
         )
@@ -136,11 +131,11 @@ private fun StatisticsStorageSettingsGroup(
             title = stringResource(R.string.statistics_refresh_interval_title),
             value = statisticsRefreshIntervalLabel(state.settings.statistics.refreshInterval),
             expanded = refreshIntervalMenuExpanded,
-            onExpandedChange = onRefreshIntervalMenuExpandedChange,
+            onExpandedChange = actions.onRefreshIntervalMenuExpandedChange,
             values = StatisticsRefreshInterval.entries,
             selected = state.settings.statistics.refreshInterval,
             label = { statisticsRefreshIntervalLabel(it) },
-            onSelect = onStatisticsRefreshIntervalSelected,
+            onSelect = actions.onStatisticsRefreshIntervalSelected,
             summary = stringResource(R.string.statistics_refresh_interval_summary),
             leadingIcon = Icons.Outlined.BarChart,
             grouped = true,
@@ -155,8 +150,7 @@ private fun StatisticsMetricSettingsGroup(
     appStatsSwitchChecked: Boolean,
     usageAccessGranted: Boolean,
     dnsFilteringAvailable: Boolean,
-    onUsageAccessRequired: () -> Unit,
-    onStatisticsMetricEnabledChanged: (StatisticsMetric, Boolean) -> Unit,
+    actions: StatisticsSettingsDialogActions,
 ) {
     SettingsControlGroup {
         StatisticsMetricSwitch(
@@ -164,7 +158,7 @@ private fun StatisticsMetricSettingsGroup(
             checked = statisticsSettings.profileTrafficEnabled,
             title = stringResource(R.string.statistics_metric_profiles),
             enabled = statisticsSettings.enabled,
-            onMetricChanged = onStatisticsMetricEnabledChanged,
+            onMetricChanged = actions.onStatisticsMetricEnabledChanged,
         )
         SettingsControlGroupDivider()
         StatisticsMetricSwitch(
@@ -172,7 +166,7 @@ private fun StatisticsMetricSettingsGroup(
             checked = statisticsSettings.vpnProtocolsEnabled,
             title = stringResource(R.string.statistics_metric_protocols),
             enabled = statisticsSettings.enabled,
-            onMetricChanged = onStatisticsMetricEnabledChanged,
+            onMetricChanged = actions.onStatisticsMetricEnabledChanged,
         )
         SettingsControlGroupDivider()
         StatisticsMetricSwitch(
@@ -180,7 +174,7 @@ private fun StatisticsMetricSettingsGroup(
             checked = statisticsSettings.profileComparisonsEnabled,
             title = stringResource(R.string.statistics_metric_comparisons),
             enabled = statisticsSettings.enabled,
-            onMetricChanged = onStatisticsMetricEnabledChanged,
+            onMetricChanged = actions.onStatisticsMetricEnabledChanged,
         )
         SettingsControlGroupDivider()
         StatisticsMetricSwitch(
@@ -188,7 +182,7 @@ private fun StatisticsMetricSettingsGroup(
             checked = statisticsSettings.transportsEnabled,
             title = stringResource(R.string.statistics_metric_transports),
             enabled = statisticsSettings.enabled,
-            onMetricChanged = onStatisticsMetricEnabledChanged,
+            onMetricChanged = actions.onStatisticsMetricEnabledChanged,
         )
         SettingsControlGroupDivider()
         StatisticsMetricSwitch(
@@ -198,9 +192,9 @@ private fun StatisticsMetricSettingsGroup(
             enabled = statisticsSettings.enabled,
             onMetricChanged = { metric, enabled ->
                 if (enabled && appStatsSwitchChecked && !usageAccessGranted) {
-                    onUsageAccessRequired()
+                    actions.onUsageAccessRequired()
                 }
-                onStatisticsMetricEnabledChanged(metric, enabled)
+                actions.onStatisticsMetricEnabledChanged(metric, enabled)
             },
         )
         SettingsControlGroupDivider()
@@ -215,7 +209,7 @@ private fun StatisticsMetricSettingsGroup(
                 stringResource(R.string.statistics_metric_dns_filtering_summary)
             },
             enabled = statisticsSettings.enabled && dnsFilteringAvailable,
-            onMetricChanged = onStatisticsMetricEnabledChanged,
+            onMetricChanged = actions.onStatisticsMetricEnabledChanged,
         )
         SettingsControlGroupDivider()
         StatisticsMetricSwitch(
@@ -229,7 +223,7 @@ private fun StatisticsMetricSettingsGroup(
                 stringResource(R.string.statistics_metric_countries_firewall_summary)
             },
             enabled = statisticsSettings.enabled && state.settings.expert.firewallEnabled,
-            onMetricChanged = onStatisticsMetricEnabledChanged,
+            onMetricChanged = actions.onStatisticsMetricEnabledChanged,
         )
         SettingsControlGroupDivider()
         StatisticsMetricSwitch(
@@ -237,7 +231,7 @@ private fun StatisticsMetricSettingsGroup(
             checked = statisticsSettings.anomalyMetricsEnabled,
             title = stringResource(R.string.statistics_metric_anomalies),
             enabled = statisticsSettings.enabled,
-            onMetricChanged = onStatisticsMetricEnabledChanged,
+            onMetricChanged = actions.onStatisticsMetricEnabledChanged,
         )
     }
 }

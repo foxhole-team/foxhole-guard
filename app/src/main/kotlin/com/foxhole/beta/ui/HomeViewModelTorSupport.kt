@@ -16,23 +16,25 @@ import kotlinx.coroutines.launch
 
 internal fun HomeViewModel.onSelectActiveProtocolOptionRequestedInternal(optionId: String) {
     val state = uiState.value
-    val profile = state.activeProfile ?: return
-    val option = profile.protocolOptionOrDefault(optionId) ?: return
-    if (
-        shouldPromptDisableTorForUdpProtocol(
-            torEnabledOrRuntimeActive = state.settings.privacyRoute.enabled || isTorOnlyRuntimeActive(state.connection),
-            switchingToUdp = option.protocolHint.isUdpTransport(),
-        )
-    ) {
-        torTransitionPromptMutable.value =
-            TorTransitionPrompt.DisableTorForUdpProtocol(
-                profileId = profile.id,
-                protocolOptionId = option.id,
-                protocolName = option.displayName,
+    val profile = state.activeProfile
+    val option = profile?.protocolOptionOrDefault(optionId)
+    if (profile != null && option != null) {
+        if (
+            shouldPromptDisableTorForUdpProtocol(
+                torEnabledOrRuntimeActive = state.settings.privacyRoute.enabled || isTorOnlyRuntimeActive(state.connection),
+                switchingToUdp = option.protocolHint.isUdpTransport(),
             )
-        return
+        ) {
+            torTransitionPromptMutable.value =
+                TorTransitionPrompt.DisableTorForUdpProtocol(
+                    profileId = profile.id,
+                    protocolOptionId = option.id,
+                    protocolName = option.displayName,
+                )
+        } else {
+            selectProtocolOptionAndMaybeReconnect(profile.id, option.id)
+        }
     }
-    selectProtocolOptionAndMaybeReconnect(profile.id, option.id)
 }
 
 internal fun shouldPromptDisableTorForUdpProtocol(
@@ -112,20 +114,17 @@ internal fun HomeViewModel.maybePromptStartTcpVpnWhileTorOnlyActive(
     protocolOptionId: String?,
 ): Boolean {
     val snapshot = container.connectionController.snapshot.value
-    if (!isTorOnlyRuntimeActive(snapshot)) {
-        return false
-    }
     val targetProtocolHint = profile.protocolOptionOrDefault(protocolOptionId)?.protocolHint ?: profile.protocolHint
-    if (targetProtocolHint.isUdpTransport()) {
-        return false
+    val shouldPrompt = isTorOnlyRuntimeActive(snapshot) && !targetProtocolHint.isUdpTransport()
+    if (shouldPrompt) {
+        torTransitionPromptMutable.value =
+            TorTransitionPrompt.StartTcpVpnWhileTorOnlyActive(
+                profileId = profile.id,
+                protocolOptionId = protocolOptionId,
+                profileName = profile.name,
+            )
     }
-    torTransitionPromptMutable.value =
-        TorTransitionPrompt.StartTcpVpnWhileTorOnlyActive(
-            profileId = profile.id,
-            protocolOptionId = protocolOptionId,
-            profileName = profile.name,
-        )
-    return true
+    return shouldPrompt
 }
 
 internal fun shouldPromptStartTcpVpnWhileTorOnlyActive(

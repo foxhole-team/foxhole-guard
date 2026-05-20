@@ -193,6 +193,20 @@ class DiagnosticSanitizerTest {
     }
 
     @Test
+    fun `redacts quoted key value fields with spaces`() {
+        val sanitized =
+            DiagnosticSanitizer.sanitizeForExport(
+                "password=\"hello world\" server='edge example' note=kept",
+            )
+
+        assertFalse(sanitized.contains("hello world"))
+        assertFalse(sanitized.contains("edge example"))
+        assertTrue(sanitized.contains("password=[redacted]"))
+        assertTrue(sanitized.contains("server=[redacted]"))
+        assertTrue(sanitized.contains("note=kept"))
+    }
+
+    @Test
     fun `export sanitizer redacts escaped nested json fields`() {
         val sanitized =
             DiagnosticSanitizer.sanitizeForExport(

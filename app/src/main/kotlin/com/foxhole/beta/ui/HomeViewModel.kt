@@ -38,7 +38,6 @@ import com.foxhole.beta.core.model.ProxySurfaceMode
 import com.foxhole.beta.core.model.RoutingPresetOverrideMode
 import com.foxhole.beta.core.model.RoutingPresetSource
 import com.foxhole.beta.core.model.RoutingRuleAction
-import com.foxhole.beta.core.model.Settings
 import com.foxhole.beta.core.model.SmartStartTransportPriority
 import com.foxhole.beta.core.model.StatisticsMetric
 import com.foxhole.beta.core.model.StatisticsRefreshInterval
@@ -90,6 +89,7 @@ class HomeViewModel(
     internal val profilesLoadedMutable = MutableStateFlow(false)
     internal val installedAppsLoadingMutable = MutableStateFlow(false)
     internal val installedAppsLoadedMutable = MutableStateFlow(false)
+    internal val appTrafficUsageAccessGrantedMutable = MutableStateFlow(false)
     internal val ipInfoLoadingMutable = MutableStateFlow(false)
     internal val torIpInfoMutable = MutableStateFlow<com.foxhole.beta.core.model.IpInfo?>(null)
     internal val dashboardConnectionMetricsLoadingMutable = MutableStateFlow(false)
@@ -549,13 +549,15 @@ class HomeViewModel(
             uiState,
             dnsFilterRefreshInProgressMutable,
             trafficMapUiState,
-        ) { state, dnsFilterRefreshInProgress, trafficMapState ->
+            appTrafficUsageAccessGrantedMutable,
+        ) { state, dnsFilterRefreshInProgress, trafficMapState, usageAccessGranted ->
             val routeState = state.toSettingsRouteUiState(dnsFilterRefreshInProgress = dnsFilterRefreshInProgress)
             routeState.copy(
                 statisticsDashboard =
                 buildStatisticsDashboardUiState(
                     state = routeState,
                     trafficMapState = trafficMapState,
+                    usageAccessGranted = usageAccessGranted,
                 ),
             )
         }
@@ -615,6 +617,7 @@ class HomeViewModel(
                     snackbars.emit(errorBanner(R.string.settings_secure_storage_failed))
                 }
             val settings = container.settingsRepository.settings.value
+            appTrafficUsageAccessGrantedMutable.value = appTrafficStatsRecorder.hasUsageAccess()
             syncAppTrafficStatsSampler(appTrafficStatsRuntimeAllowed(settings))
         }
         viewModelScope.launch {
@@ -726,6 +729,15 @@ class HomeViewModel(
 
     fun onAppForegrounded() {
         viewModelScope.launch {
+            appTrafficUsageAccessGrantedMutable.value = appTrafficStatsRecorder.hasUsageAccess()
+            val appTrafficStatsAllowed =
+                appTrafficStatsRuntimeAllowed(
+                    settings = container.settingsRepository.settings.value,
+                )
+            syncAppTrafficStatsSampler(appTrafficStatsAllowed)
+            if (statisticsVisible && appTrafficStatsAllowed) {
+                sampleAppTrafficStats()
+            }
             val reconciledActiveVpn = container.connectionController.reconcileActiveVpnNetworkIfNeeded()
             if (reconciledActiveVpn) {
                 scheduleConnectedIpRefresh(reason = IpInfoRefreshReason.RESTORED_VPN, clearExistingIp = false)

@@ -20,11 +20,20 @@ internal enum class RuntimeCommandPriority(val value: Int) {
     KILL(1_000),
 }
 
+internal fun interface RuntimeCommandDiagnosticsRecorder {
+    fun record(
+        tag: String,
+        headline: String,
+        details: List<String?>,
+    )
+}
+
 @Suppress("TooManyFunctions")
 internal class RuntimeCommandActor(
     private val scope: CoroutineScope,
     private val diagnosticsLogger: DiagnosticsLogger?,
     private val emergencyKill: suspend (String) -> RuntimeKillResult,
+    private val diagnosticsRecorder: RuntimeCommandDiagnosticsRecorder? = null,
 ) {
     private val sequence = AtomicLong(0)
     private val normalCommands =
@@ -68,18 +77,20 @@ internal class RuntimeCommandActor(
         if (priority.value < RuntimeCommandPriority.STOP.value) {
             recordCommandEvent("runtime command queued", command)
         }
-        val accepted =
+        val sendResult =
             if (priority.value >= RuntimeCommandPriority.STOP.value) {
-                priorityCommands.trySend(command).isSuccess
+                priorityCommands.trySend(command)
             } else {
-                normalCommands.trySend(command).isSuccess
+                normalCommands.trySend(command)
             }
-        if (!accepted) {
+        if (!sendResult.isSuccess) {
             record(
                 "runtime command rejected",
                 "priority=${priority.name.lowercase()}",
                 "reason=$reason",
-                "closed=true",
+                "closed=${closed.get()}",
+                "queue_full=${!closed.get() && !sendResult.isClosed}",
+                "buffer_rejected=true",
             )
         }
     }
@@ -341,6 +352,7 @@ internal class RuntimeCommandActor(
         headline: String,
         vararg details: String?,
     ) {
+        diagnosticsRecorder?.record("runtime", headline, details.toList())
         diagnosticsLogger?.recordStructured(
             "runtime",
             headline,

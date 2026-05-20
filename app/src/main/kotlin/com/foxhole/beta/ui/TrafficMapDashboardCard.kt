@@ -84,8 +84,8 @@ import kotlin.math.sqrt
 @Composable
 internal fun TrafficMapDashboardCard(
     state: TrafficMapUiState,
-    legendLoading: Boolean = false,
     modifier: Modifier = Modifier,
+    legendLoading: Boolean = false,
 ) {
     val countries by rememberTrafficMapCountries()
     val powerState = rememberTrafficMapPowerState()

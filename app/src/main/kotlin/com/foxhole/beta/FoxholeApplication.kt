@@ -6,7 +6,6 @@ import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.os.LocaleListCompat
 import androidx.work.BackoffPolicy
 import androidx.work.Constraints
-import androidx.work.Configuration
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.PeriodicWorkRequestBuilder
@@ -24,7 +23,7 @@ import kotlinx.coroutines.launch
 import java.io.File
 import java.util.concurrent.TimeUnit
 
-class FoxholeApplication : Application(), Configuration.Provider {
+class FoxholeApplication : Application() {
     lateinit var appGraph: FoxholeAppGraph
         private set
 
@@ -64,9 +63,6 @@ class FoxholeApplication : Application(), Configuration.Provider {
             interval = settings.connection.subscriptionRefreshInterval,
         )
     }
-
-    override val workManagerConfiguration: Configuration
-        get() = Configuration.Builder().build()
 }
 
 internal fun Context.applySubscriptionRefreshSchedule(

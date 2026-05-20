@@ -964,7 +964,7 @@ internal fun SelectedAppRow(
             horizontalArrangement = Arrangement.spacedBy(14.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            AppIcon(packageName = app.packageName)
+            AppIcon(packageName = app.packageName, modifier = Modifier.size(56.dp))
             AppTextBlock(app = app, modifier = Modifier.weight(1f))
             IconButton(onClick = onRemove) {
                 Icon(Icons.Outlined.RemoveCircleOutline, contentDescription = stringResource(R.string.delete_label))
@@ -989,7 +989,7 @@ internal fun SelectableInstalledAppRow(
             horizontalArrangement = Arrangement.spacedBy(14.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            AppIcon(packageName = app.packageName)
+            AppIcon(packageName = app.packageName, modifier = Modifier.size(56.dp))
             AppTextBlock(app = app, modifier = Modifier.weight(1f))
             FoxholeSwitch(
                 checked = checked,
@@ -1038,7 +1038,7 @@ internal fun AppTypePill(isSystemApp: Boolean) {
 @Composable
 internal fun AppIcon(
     packageName: String,
-    modifier: Modifier = Modifier.size(56.dp),
+    modifier: Modifier = Modifier,
     contentPadding: Dp = 4.dp,
     fallbackIconSize: Dp = 24.dp,
 ) {

@@ -59,40 +59,35 @@ class TorTransitionPolicyTest {
             TorRoutePlacement.TOR_ONLY_DEVICE,
             resolveTorRoutePlacement(
                 settings = Settings(privacyRoute = PrivacyRouteSettings(mode = PrivacyRouteMode.TOR_OVER_VPN)),
-                connection =
-                    ConnectionSnapshot(
-                        state = ConnectionState.CONNECTED,
-                        profileId = FoxholeVpnService.TOR_ONLY_PROFILE_ID,
-                    ),
+                connection = ConnectionSnapshot(
+                    state = ConnectionState.CONNECTED,
+                    profileId = FoxholeVpnService.TOR_ONLY_PROFILE_ID,
+                ),
             ),
         )
         assertEquals(
             TorRoutePlacement.TOR_OVER_VPN,
             resolveTorRoutePlacement(
                 settings = Settings(privacyRoute = PrivacyRouteSettings(mode = PrivacyRouteMode.TOR_OVER_VPN)),
-                connection =
-                    ConnectionSnapshot(
-                        state = ConnectionState.CONNECTED,
-                        profileId = 42L,
-                    ),
+                connection = ConnectionSnapshot(
+                    state = ConnectionState.CONNECTED,
+                    profileId = 42L,
+                ),
             ),
         )
         assertEquals(
             TorRoutePlacement.TOR_ON_DEVICE_WITH_VPN,
             resolveTorRoutePlacement(
-                settings =
-                    Settings(
-                        privacyRoute =
-                            PrivacyRouteSettings(
-                                mode = PrivacyRouteMode.TOR_OVER_VPN,
-                                bypassVpnTunnel = true,
-                            ),
+                settings = Settings(
+                    privacyRoute = PrivacyRouteSettings(
+                        mode = PrivacyRouteMode.TOR_OVER_VPN,
+                        bypassVpnTunnel = true,
                     ),
-                connection =
-                    ConnectionSnapshot(
-                        state = ConnectionState.CONNECTED,
-                        profileId = 42L,
-                    ),
+                ),
+                connection = ConnectionSnapshot(
+                    state = ConnectionState.CONNECTED,
+                    profileId = 42L,
+                ),
             ),
         )
     }
@@ -108,11 +103,10 @@ class TorTransitionPolicyTest {
                 protocolHint = ProtocolHint.VLESS,
                 lastUpdatedAt = null,
                 lastEtag = null,
-                protocolOptions =
-                    listOf(
-                        ProfileProtocolOption("tcp", "TCP", ProtocolHint.VLESS),
-                        ProfileProtocolOption("udp", "UDP", ProtocolHint.WIREGUARD),
-                    ),
+                protocolOptions = listOf(
+                    ProfileProtocolOption("tcp", "TCP", ProtocolHint.VLESS),
+                    ProfileProtocolOption("udp", "UDP", ProtocolHint.WIREGUARD),
+                ),
                 selectedProtocolOptionId = "tcp",
                 isActive = true,
             )

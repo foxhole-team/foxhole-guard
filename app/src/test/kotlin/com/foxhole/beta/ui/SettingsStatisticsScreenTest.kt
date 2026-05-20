@@ -8,9 +8,13 @@ import com.foxhole.beta.core.model.ProtocolHint
 import com.foxhole.beta.core.model.ProtocolQuality
 import com.foxhole.beta.core.model.Settings
 import com.foxhole.beta.core.model.StatisticsRetention
+import com.foxhole.beta.core.model.StatisticsSettings
+import com.foxhole.beta.core.model.TrafficSnapshot
 import com.foxhole.beta.core.model.TransportProtocol
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class SettingsStatisticsScreenTest {
@@ -145,5 +149,114 @@ class SettingsStatisticsScreenTest {
         assertEquals(0, item.failureCount)
         assertNull(item.successRateOrNull)
         assertNull(item.errorRateOrNull)
+    }
+
+    @Test
+    fun `app traffic runtime allowed requires settings and usage access`() {
+        val enabled =
+            Settings(
+                statistics = StatisticsSettings(enabled = true, appTrafficEnabled = true),
+                appTrafficStatsEnabled = true,
+            )
+
+        assertTrue(appTrafficStatsRuntimeAllowed(enabled, usageAccessGranted = true))
+        assertFalse(appTrafficStatsRuntimeAllowed(enabled, usageAccessGranted = false))
+        assertFalse(
+            appTrafficStatsRuntimeAllowed(
+                enabled.copy(appTrafficStatsEnabled = false),
+                usageAccessGranted = true,
+            ),
+        )
+        assertFalse(
+            appTrafficStatsRuntimeAllowed(
+                enabled.copy(statistics = enabled.statistics.copy(appTrafficEnabled = false)),
+                usageAccessGranted = true,
+            ),
+        )
+        assertFalse(
+            appTrafficStatsRuntimeAllowed(
+                enabled.copy(statistics = enabled.statistics.copy(enabled = false)),
+                usageAccessGranted = true,
+            ),
+        )
+    }
+
+    @Test
+    fun `extended statistics mode follows usage access availability`() {
+        val state =
+            SettingsRouteUiState(
+                settings = Settings(
+                    statistics = StatisticsSettings(enabled = true, appTrafficEnabled = true),
+                    appTrafficStatsEnabled = true,
+                ),
+            )
+
+        assertTrue(
+            statisticsUiState(
+                state = state,
+                retention = StatisticsRetention.FOREVER,
+                usageAccessGranted = true,
+            ).extendedMode,
+        )
+        assertFalse(
+            statisticsUiState(
+                state = state,
+                retention = StatisticsRetention.FOREVER,
+                usageAccessGranted = false,
+            ).extendedMode,
+        )
+    }
+
+    @Test
+    fun `active live traffic is added only when persisted totals are older than live sample`() {
+        val profile =
+            Profile(
+                id = 11L,
+                name = "Active",
+                sourceType = ProfileSourceType.SHARE_URI,
+                secretRef = "secret",
+                protocolHint = ProtocolHint.VLESS,
+                lastUpdatedAt = null,
+                lastEtag = null,
+                isActive = true,
+            )
+        val baseState =
+            SettingsRouteUiState(
+                profiles = listOf(profile),
+                activeProfile = profile,
+                settings = Settings(
+                    profileTrafficTotals = listOf(
+                        ProfileTrafficTotal(
+                            profileId = 11L,
+                            profileName = "Active",
+                            protocolHint = ProtocolHint.VLESS,
+                            rxTotalBytes = 100L,
+                            txTotalBytes = 50L,
+                            updatedAt = 100L,
+                        ),
+                    ),
+                ),
+            )
+
+        val withOlderPersisted =
+            baseState.copy(
+                traffic = TrafficSnapshot(
+                    available = true,
+                    rxTotalBytes = 10L,
+                    txTotalBytes = 5L,
+                    sampledAt = 200L,
+                ),
+            )
+        assertEquals(165L, profileTrafficItems(withOlderPersisted).single().totalBytes)
+
+        val updatedTotals =
+            withOlderPersisted.settings.profileTrafficTotals.map { total ->
+                total.copy(updatedAt = 250L)
+            }
+        val persistedAlreadyUpdated =
+            withOlderPersisted.copy(
+                settings = withOlderPersisted.settings.copy(profileTrafficTotals = updatedTotals),
+            )
+        assertEquals(150L, profileTrafficItems(persistedAlreadyUpdated).single().totalBytes)
     }
 }

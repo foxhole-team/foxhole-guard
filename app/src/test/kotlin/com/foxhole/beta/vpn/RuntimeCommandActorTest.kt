@@ -313,20 +313,90 @@ class RuntimeCommandActorTest {
             assertFalse(pendingStarted.isCompleted)
         }
 
+    @Test
+    fun `priority command reject logs queue full instead of closed when buffer is full`() =
+        runBlocking {
+            val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+            val currentStarted = CompletableDeferred<Unit>()
+            val killStarted = CompletableDeferred<Unit>()
+            val releaseKill = CompletableDeferred<Unit>()
+            val diagnostics = Collections.synchronizedList(mutableListOf<RuntimeCommandDiagnosticEvent>())
+            val actor =
+                actor(
+                    scope = scope,
+                    diagnostics = diagnostics,
+                    emergencyKill = { reason ->
+                        killStarted.complete(Unit)
+                        releaseKill.await()
+                        RuntimeKillResult(
+                            reason = reason,
+                            tunClosed = true,
+                            serverDetached = true,
+                        )
+                    },
+                )
+
+            actor.launch(RuntimeCommandPriority.NORMAL, reason = "connect") {
+                currentStarted.complete(Unit)
+                awaitCancellation()
+            }
+            withTimeout(1_000L) { currentStarted.await() }
+            actor.launch(RuntimeCommandPriority.STOP, reason = "disconnect") {
+            }
+            withTimeout(1_000L) { killStarted.await() }
+
+            repeat(17) { index ->
+                actor.launch(RuntimeCommandPriority.KILL, reason = "kill-$index") {
+                }
+            }
+
+            val rejected =
+                diagnostics.first { event ->
+                    event.headline == "runtime command rejected" &&
+                        event.details.contains("reason=kill-16")
+                }
+            assertTrue(rejected.details.contains("closed=false"))
+            assertTrue(rejected.details.contains("queue_full=true"))
+            assertTrue(rejected.details.contains("buffer_rejected=true"))
+
+            releaseKill.complete(Unit)
+            actor.close()
+        }
+
     private fun actor(
         scope: CoroutineScope,
         killReasons: MutableList<String> = mutableListOf(),
-    ): RuntimeCommandActor =
-        RuntimeCommandActor(
+        diagnostics: MutableList<RuntimeCommandDiagnosticEvent> = mutableListOf(),
+        emergencyKill: (suspend (String) -> RuntimeKillResult)? = null,
+    ): RuntimeCommandActor {
+        val fallbackKill: suspend (String) -> RuntimeKillResult = { reason ->
+            killReasons += reason
+            RuntimeKillResult(
+                reason = reason,
+                tunClosed = true,
+                serverDetached = true,
+            )
+        }
+        val recorder =
+            RuntimeCommandDiagnosticsRecorder { tag, headline, details ->
+                diagnostics +=
+                    RuntimeCommandDiagnosticEvent(
+                        tag = tag,
+                        headline = headline,
+                        details = details.filterNotNull(),
+                    )
+            }
+        return RuntimeCommandActor(
             scope = scope,
             diagnosticsLogger = null,
-            emergencyKill = { reason ->
-                killReasons += reason
-                RuntimeKillResult(
-                    reason = reason,
-                    tunClosed = true,
-                    serverDetached = true,
-                )
-            },
+            emergencyKill = emergencyKill ?: fallbackKill,
+            diagnosticsRecorder = recorder,
         )
+    }
+
+    private data class RuntimeCommandDiagnosticEvent(
+        val tag: String,
+        val headline: String,
+        val details: List<String>,
+    )
 }

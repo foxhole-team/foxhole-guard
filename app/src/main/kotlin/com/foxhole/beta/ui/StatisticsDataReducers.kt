@@ -1,12 +1,5 @@
 package com.foxhole.beta.ui
 
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.unit.dp
 import com.foxhole.beta.core.model.AnomalyEvent
 import com.foxhole.beta.core.model.AppTrafficWindow
 import com.foxhole.beta.core.model.DnsSettings
@@ -200,6 +193,7 @@ internal fun profileStatisticsDetail(
 internal fun statisticsUiState(
     state: SettingsRouteUiState,
     retention: StatisticsRetention,
+    usageAccessGranted: Boolean = true,
 ): StatisticsUiState {
     val profileTraffic = profileTrafficItems(state)
     val protocolTraffic = protocolTrafficItems(state)
@@ -210,7 +204,8 @@ internal fun statisticsUiState(
         extendedMode =
         state.settings.statistics.enabled &&
             state.settings.statistics.appTrafficEnabled &&
-            state.settings.appTrafficStatsEnabled,
+            state.settings.appTrafficStatsEnabled &&
+            usageAccessGranted,
         profileTraffic = profileTraffic,
         total = total,
         vpnProtocols = protocolStats,
@@ -236,16 +231,26 @@ internal fun protocolTrafficItems(state: SettingsRouteUiState): List<ProfileTraf
     val activeProfile = state.activeProfile
     val liveTraffic = state.traffic
     if (activeProfile != null && (liveTraffic.rxTotalBytes > 0L || liveTraffic.txTotalBytes > 0L)) {
-        items +=
-            ProfileTrafficUiItem(
-                profileId = activeProfile.id,
-                profileName = activeProfile.name,
-                protocolHint = activeProfile.runtimeProtocolHint(),
-                transport = TransportProtocol.UNKNOWN,
-                rxBytes = liveTraffic.rxTotalBytes,
-                txBytes = liveTraffic.txTotalBytes,
-                updatedAt = liveTraffic.sampledAt,
-            )
+        val liveProtocol = activeProfile.runtimeProtocolHint()
+        val persistedCoversLiveTraffic =
+            liveTraffic.sampledAt > 0L &&
+                state.settings.profileTrafficTotals.any { total ->
+                    total.profileId == activeProfile.id &&
+                        total.updatedAt >= liveTraffic.sampledAt &&
+                        (liveProtocol == ProtocolHint.UNKNOWN || total.protocolHint == liveProtocol)
+                }
+        if (!persistedCoversLiveTraffic) {
+            items +=
+                ProfileTrafficUiItem(
+                    profileId = activeProfile.id,
+                    profileName = activeProfile.name,
+                    protocolHint = liveProtocol,
+                    transport = TransportProtocol.UNKNOWN,
+                    rxBytes = liveTraffic.rxTotalBytes,
+                    txBytes = liveTraffic.txTotalBytes,
+                    updatedAt = liveTraffic.sampledAt,
+                )
+        }
     }
     return items.sortedByDescending(ProfileTrafficUiItem::updatedAt)
 }
@@ -490,17 +495,6 @@ internal fun metricIfPositive(
     displayValue: String = value.toString(),
 ): Pair<String, String>? = value.takeIf { it > 0L }?.let { label to displayValue }
 
-@Composable
-internal fun rememberOneShotVisible(key: String): Boolean {
-    var visible by rememberSaveable(key) { mutableStateOf(false) }
-    LaunchedEffect(key) {
-        if (!visible) {
-            visible = true
-        }
-    }
-    return visible
-}
-
 internal fun protocolDisplayName(protocol: ProtocolHint): String =
     when (protocol) {
         ProtocolHint.HYSTERIA2 -> "Hysteria2"
@@ -519,17 +513,4 @@ internal fun transportLabel(transport: TransportProtocol): String =
 internal fun maxOfNotNull(vararg values: Long?): Long? =
     values.filterNotNull().maxOrNull()
 
-internal val COMPACT_PROTOCOL_GRID_WIDTH = 360.dp
-internal const val PROFILE_DETAIL_OVERALL_KEY = "__overall__"
-internal const val MIN_TIMELINE_TRAFFIC_SCALE_BYTES = 10L * 1024L * 1024L
-internal const val PROFILE_TRAFFIC_PREVIEW_LIMIT = 6
-internal const val STATISTICS_TOP_PREVIEW_LIMIT = 5
-internal const val APP_TRAFFIC_CHART_LIMIT = 10
-internal val DASHBOARD_DISPLAY_RANGES =
-    listOf(
-        StatisticsDisplayRange.HOURS_24,
-        StatisticsDisplayRange.WEEK,
-        StatisticsDisplayRange.MONTH,
-    )
-internal fun dashboardStatisticsDisplayRanges(): List<StatisticsDisplayRange> = DASHBOARD_DISPLAY_RANGES
-internal const val PROFILE_COMPARISON_MIN_ATTEMPTS = 2
+private const val PROFILE_COMPARISON_MIN_ATTEMPTS = 2

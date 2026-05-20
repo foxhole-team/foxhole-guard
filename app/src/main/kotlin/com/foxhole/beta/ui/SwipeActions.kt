@@ -12,13 +12,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SwipeToDismissBox
-import androidx.compose.material3.SwipeToDismissBoxValue
-import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -31,12 +27,14 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import com.foxhole.beta.R
@@ -49,7 +47,6 @@ internal data class FoxholeSwipeAction(
     val onClick: () -> Unit,
 )
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun FoxholeSwipeActions(
     key: Any,
@@ -74,6 +71,7 @@ internal fun FoxholeSwipeActions(
         }
     }
     val haptic = LocalHapticFeedback.current
+    val density = LocalDensity.current
     val actionWidth = (actions.size * 48).dp + 12.dp
     val defaultActionLabel = stringResource(R.string.action_label)
     val accessibilityActions =
@@ -95,31 +93,6 @@ internal fun FoxholeSwipeActions(
             ),
         label = "swipe_action_offset",
     )
-    val dismissState =
-        rememberSwipeToDismissBoxState(
-            confirmValueChange = { value ->
-                when (value) {
-                    SwipeToDismissBoxValue.EndToStart -> {
-                        setRevealed(true)
-                        haptic.performHapticFeedback(HapticFeedbackType.GestureThresholdActivate)
-                    }
-                    SwipeToDismissBoxValue.StartToEnd -> {
-                        if (onSwipeRight != null) {
-                            setRevealed(false)
-                            haptic.performHapticFeedback(HapticFeedbackType.Confirm)
-                            onSwipeRight()
-                        } else if (isRevealed) {
-                            setRevealed(false)
-                            haptic.performHapticFeedback(HapticFeedbackType.GestureEnd)
-                        }
-                    }
-                    SwipeToDismissBoxValue.Settled -> Unit
-                }
-                false
-            },
-            positionalThreshold = { distance -> distance * 0.28f },
-        )
-
     Box(
         modifier =
             modifier
@@ -131,25 +104,48 @@ internal fun FoxholeSwipeActions(
         SwipeActionsBackground(
             actions = actions,
             onAction = {},
-            exposeTestTags = false,
-            modifier = Modifier.align(Alignment.CenterEnd),
-        )
-        SwipeToDismissBox(
-            state = dismissState,
-            backgroundContent = {},
-            enableDismissFromStartToEnd = isRevealed || onSwipeRight != null,
-            enableDismissFromEndToStart = true,
-            content = {
-                Box(
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .offset(x = contentOffset),
-                ) {
-                    content()
-                }
-            },
-        )
+                exposeTestTags = false,
+                modifier = Modifier.align(Alignment.CenterEnd),
+            )
+        Box(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .offset { with(density) { IntOffset(x = contentOffset.roundToPx(), y = 0) } }
+                    .pointerInput(key, isRevealed, onSwipeRight) {
+                        var dragDistance = 0f
+                        detectHorizontalDragGestures(
+                            onDragStart = { dragDistance = 0f },
+                            onHorizontalDrag = { change, dragAmount ->
+                                dragDistance += dragAmount
+                                change.consume()
+                            },
+                            onDragEnd = {
+                                when {
+                                    dragDistance <= -actionWidth.toPx() * SWIPE_ACTION_REVEAL_THRESHOLD_FRACTION -> {
+                                        setRevealed(true)
+                                        haptic.performHapticFeedback(HapticFeedbackType.GestureThresholdActivate)
+                                    }
+                                    dragDistance >= actionWidth.toPx() * SWIPE_ACTION_REVEAL_THRESHOLD_FRACTION &&
+                                        onSwipeRight != null -> {
+                                        setRevealed(false)
+                                        haptic.performHapticFeedback(HapticFeedbackType.Confirm)
+                                        onSwipeRight()
+                                    }
+                                    dragDistance >= actionWidth.toPx() * SWIPE_ACTION_REVEAL_THRESHOLD_FRACTION &&
+                                        isRevealed -> {
+                                        setRevealed(false)
+                                        haptic.performHapticFeedback(HapticFeedbackType.GestureEnd)
+                                    }
+                                }
+                                dragDistance = 0f
+                            },
+                            onDragCancel = { dragDistance = 0f },
+                        )
+                    },
+        ) {
+            content()
+        }
         if (isRevealed) {
             SwipeActionsDismissOverlay(
                 actionWidth = actionWidth,
@@ -249,3 +245,4 @@ private fun SwipeActionsBackground(
 }
 
 private const val SWIPE_ACTION_CLOSE_THRESHOLD_FRACTION = 0.08f
+private const val SWIPE_ACTION_REVEAL_THRESHOLD_FRACTION = 0.45f

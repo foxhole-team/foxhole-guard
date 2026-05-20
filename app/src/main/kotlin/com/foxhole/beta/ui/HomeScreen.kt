@@ -65,6 +65,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -1313,8 +1314,8 @@ private fun DashboardCardDragContainer(
     val haptic = LocalHapticFeedback.current
     val density = LocalDensity.current
     val fallbackMoveDistancePx = with(density) { DashboardCardReorderFallbackMoveDistance.toPx() }
-    var dragOffset by remember(card) { mutableStateOf(0f) }
-    var cardHeightPx by remember(card) { mutableStateOf(0f) }
+    var dragOffset by remember(card) { mutableFloatStateOf(0f) }
+    var cardHeightPx by remember(card) { mutableFloatStateOf(0f) }
     val active = activeCard == card
     val dragShape = MaterialTheme.shapes.large
     val moveDistancePx = cardHeightPx.takeIf { it > 0f } ?: fallbackMoveDistancePx

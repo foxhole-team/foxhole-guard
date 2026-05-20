@@ -1,24 +1,18 @@
 package com.foxhole.beta.vpn
 
 import android.net.Network
-import android.net.NetworkCapabilities
-import androidx.core.content.getSystemService
 import com.foxhole.beta.R
 import com.foxhole.beta.core.model.AutoConnectReasonCode
 import com.foxhole.beta.core.model.ConnectionSnapshot
 import com.foxhole.beta.core.model.ConnectionState
-import com.foxhole.beta.core.model.ConnectivityHealthState
 import com.foxhole.beta.core.model.IpInfo
-import com.foxhole.beta.core.model.NotificationSnapshot
 import com.foxhole.beta.core.model.ProtocolHint
 import com.foxhole.beta.core.model.RuntimeFailureCode
 import com.foxhole.beta.core.model.RuntimeFailureException
 import com.foxhole.beta.core.model.TrafficMode
-import com.foxhole.beta.core.model.TrafficSnapshot
 import com.foxhole.beta.core.model.VpnSession
 import com.foxhole.beta.core.model.isUdpTransport
 import com.foxhole.beta.core.network.IpInfoFetchMode
-import com.foxhole.beta.core.network.mergeIpInfo
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
@@ -247,11 +241,15 @@ internal suspend fun FoxholeVpnService.validateTunnelConnectivityInternal(
             return@withContext Result.failure(IllegalStateException("stale runtime validation session"))
         }
         val activeProtocolHint = currentSession?.protocolHint
-        val validationPolicyContext = tunnelValidationPolicyContextFor(PrivateDnsSettings.current(this@validateTunnelConnectivityInternal))
+        val validationPolicyContext =
+            tunnelValidationPolicyContextFor(
+                PrivateDnsSettings.current(this@validateTunnelConnectivityInternal),
+            )
         val preferIpv4Validation = shouldPreferIpv4TunnelValidation(activeProtocolHint, currentSession?.configJson)
         val validationTimeoutMs =
             FoxholeVpnService.CONNECTIVITY_PROBE_TOTAL_TIMEOUT_MS +
                 maxTunnelValidationGraceTimeoutMs(activeProtocolHint)
+        val validationDiagnostics = runtimeValidationDiagnosticFields(currentSession)
         container.diagnosticsLogger.recordStructured(
             "dns",
             "Tunnel validation started",
@@ -262,7 +260,9 @@ internal suspend fun FoxholeVpnService.validateTunnelConnectivityInternal(
         container.diagnosticsLogger.recordStructured(
             "runtime",
             "Runtime validation started",
-            *runtimeValidationDiagnosticFields(currentSession),
+            validationDiagnostics.protocolHint,
+            validationDiagnostics.dnsShape,
+            validationDiagnostics.probeTransport,
             "validation_result=pending",
         )
         val result =
@@ -569,7 +569,9 @@ internal suspend fun FoxholeVpnService.validateTunnelConnectivityInternal(
             container.diagnosticsLogger.recordStructured(
                 "runtime",
                 "Runtime validation result",
-                *runtimeValidationDiagnosticFields(currentSession),
+                validationDiagnostics.protocolHint,
+                validationDiagnostics.dnsShape,
+                validationDiagnostics.probeTransport,
                 "validation_result=success",
             )
             RuntimeHealthMetrics.recordValidation(
@@ -585,7 +587,9 @@ internal suspend fun FoxholeVpnService.validateTunnelConnectivityInternal(
         container.diagnosticsLogger.recordStructured(
             "runtime",
             "Runtime validation result",
-            *runtimeValidationDiagnosticFields(currentSession),
+            validationDiagnostics.protocolHint,
+            validationDiagnostics.dnsShape,
+            validationDiagnostics.probeTransport,
             "validation_result=failure",
             "failure_class=${validationFailure?.javaClass?.simpleName ?: "unknown"}",
             "endpoint_refusal=${validationFailure.isEndpointConnectRefusal()}",
@@ -959,45 +963,33 @@ internal suspend fun FoxholeVpnService.probeConnectivityEndpointsInternal(
             "validation endpoint failed: $endpoint reason=${lastFailure?.message.orEmpty()}",
         )
         if (!currentCoroutineContext().isActive) {
-            throw lastFailure ?: IllegalStateException("connectivity probe cancelled")
+            throw (lastFailure ?: error("connectivity probe cancelled"))
         }
     }
-    throw lastFailure ?: IllegalStateException("connectivity probe failed")
+    throw (lastFailure ?: error("connectivity probe failed"))
 }
 
 internal fun shouldPreferIpv4TunnelValidation(
     protocolHint: ProtocolHint?,
     configJson: String?,
-): Boolean {
-    if (protocolHint != ProtocolHint.WIREGUARD) {
-        return false
+): Boolean =
+    when {
+        protocolHint != ProtocolHint.WIREGUARD -> false
+        configJson.isNullOrBlank() -> true
+        else ->
+            runCatching {
+                val root = tunnelValidationJson.parseToJsonElement(configJson).jsonObject
+                val wireGuardEndpoints =
+                    root["endpoints"]
+                        ?.jsonArray
+                        .orEmpty()
+                        .map { it.jsonObject }
+                        .filter { endpoint ->
+                            endpoint["type"]?.jsonPrimitive?.contentOrNull.equals("wireguard", ignoreCase = true)
+                        }
+                wireGuardEndpoints.isEmpty() || wireGuardEndpoints.none(JsonObject::hasIpv6WireGuardAddress)
+            }.getOrDefault(true)
     }
-    if (configJson.isNullOrBlank()) {
-        return true
-    }
-    return runCatching {
-        val root = tunnelValidationJson.parseToJsonElement(configJson).jsonObject
-        val wireGuardEndpoints =
-            root["endpoints"]
-                ?.jsonArray
-                .orEmpty()
-                .map { it.jsonObject }
-                .filter { endpoint ->
-                    endpoint["type"]?.jsonPrimitive?.contentOrNull.equals("wireguard", ignoreCase = true)
-                }
-        if (wireGuardEndpoints.isEmpty()) {
-            true
-        } else {
-            wireGuardEndpoints.none { endpoint ->
-                endpoint["address"]
-                    ?.jsonArray
-                    .orEmpty()
-                    .mapNotNull { it.jsonPrimitive.contentOrNull }
-                    .any { address -> address.substringBefore('/').contains(':') }
-            }
-        }
-    }.getOrDefault(true)
-}
 
 private val tunnelValidationJson =
     Json {
@@ -1010,7 +1002,8 @@ internal fun redactedRuntimeDnsShape(configJson: String?): String =
         if (configJson.isNullOrBlank()) {
             "unavailable"
         } else {
-            val servers = tunnelValidationJson.parseToJsonElement(configJson).jsonObject["dns"]?.jsonObject?.get("servers")?.jsonArray
+            val dnsObject = tunnelValidationJson.parseToJsonElement(configJson).jsonObject["dns"]?.jsonObject
+            val servers = dnsObject?.get("servers")?.jsonArray
             if (servers.isNullOrEmpty()) {
                 "missing"
             } else {
@@ -1021,47 +1014,76 @@ internal fun redactedRuntimeDnsShape(configJson: String?): String =
         }
     }.getOrDefault("unparseable")
 
-private fun JsonObject.redactedDnsServerShape(): String {
-    val tag =
-        when (this["tag"]?.jsonPrimitive?.contentOrNull) {
-            "dns-local" -> "dns-local"
-            "dns-direct" -> "dns-direct"
-            "dns-remote" -> "dns-remote"
-            null -> "untagged"
-            else -> "custom"
-        }
-    val type =
-        when (this["type"]?.jsonPrimitive?.contentOrNull ?: this["address"]?.jsonPrimitive?.contentOrNull) {
-            "local" -> "platform"
-            "udp" -> "udp"
-            "tcp" -> "tcp"
-            "https" -> "https"
-            null -> "default"
-            else -> "custom"
-        }
-    val port = this["server_port"]?.jsonPrimitive?.contentOrNull?.takeIf { value -> value.all(Char::isDigit) } ?: "default"
-    val detour =
-        when (this["detour"]?.jsonPrimitive?.contentOrNull) {
-            "proxy" -> "proxy"
-            "direct" -> "direct"
-            null -> "no_detour"
-            else -> "custom_detour"
-        }
-    return "$tag:$type:$port:$detour"
-}
+private fun JsonObject.hasIpv6WireGuardAddress(): Boolean =
+    this["address"]
+        ?.jsonArray
+        .orEmpty()
+        .mapNotNull { it.jsonPrimitive.contentOrNull }
+        .any { address -> address.substringBefore('/').contains(':') }
 
-private fun runtimeValidationDiagnosticFields(session: VpnSession?): Array<String?> =
-    arrayOf(
-        session?.protocolHint?.name?.lowercase()?.let { "protocol_hint=$it" },
-        "dns_shape=${redactedRuntimeDnsShape(session?.configJson)}",
+private fun JsonObject.redactedDnsServerShape(): String =
+    listOf(
+        redactedDnsTag(),
+        redactedDnsType(),
+        redactedDnsPort(),
+        redactedDnsDetour(),
+    ).joinToString(separator = ":")
+
+private fun JsonObject.redactedDnsTag(): String =
+    when (this["tag"]?.jsonPrimitive?.contentOrNull) {
+        "dns-local" -> "dns-local"
+        "dns-direct" -> "dns-direct"
+        "dns-remote" -> "dns-remote"
+        null -> "untagged"
+        else -> "custom"
+    }
+
+private fun JsonObject.redactedDnsType(): String =
+    when (this["type"]?.jsonPrimitive?.contentOrNull ?: this["address"]?.jsonPrimitive?.contentOrNull) {
+        "local" -> "platform"
+        "udp" -> "udp"
+        "tcp" -> "tcp"
+        "https" -> "https"
+        null -> "default"
+        else -> "custom"
+    }
+
+private fun JsonObject.redactedDnsPort(): String =
+    this["server_port"]
+        ?.jsonPrimitive
+        ?.contentOrNull
+        ?.takeIf { value -> value.all(Char::isDigit) }
+        ?: "default"
+
+private fun JsonObject.redactedDnsDetour(): String =
+    when (this["detour"]?.jsonPrimitive?.contentOrNull) {
+        "proxy" -> "proxy"
+        "direct" -> "direct"
+        null -> "no_detour"
+        else -> "custom_detour"
+    }
+
+private data class RuntimeValidationDiagnosticFields(
+    val protocolHint: String?,
+    val dnsShape: String,
+    val probeTransport: String,
+)
+
+private fun runtimeValidationDiagnosticFields(session: VpnSession?): RuntimeValidationDiagnosticFields {
+    val probeTransport =
         VpnHealthProbeTargetSelector
             .select(session?.configJson)
             ?.transport
             ?.name
             ?.lowercase()
             ?.let { "probe_transport=$it" }
-            ?: "probe_transport=unavailable",
+            ?: "probe_transport=unavailable"
+    return RuntimeValidationDiagnosticFields(
+        protocolHint = session?.protocolHint?.name?.lowercase()?.let { "protocol_hint=$it" },
+        dnsShape = "dns_shape=${redactedRuntimeDnsShape(session?.configJson)}",
+        probeTransport = probeTransport,
     )
+}
 
 private fun Throwable?.isEndpointConnectRefusal(): Boolean {
     var cursor = this
@@ -1169,10 +1191,10 @@ internal suspend fun FoxholeVpnService.probeConnectivityEndpointsOverLocalProxyI
             "proxy probe failed: $endpoint reason=${lastFailure?.message.orEmpty()}",
         )
         if (!currentCoroutineContext().isActive) {
-            throw lastFailure ?: IllegalStateException("proxy probe cancelled")
+            throw (lastFailure ?: error("proxy probe cancelled"))
         }
     }
-    throw lastFailure ?: IllegalStateException("proxy probe failed")
+    throw (lastFailure ?: error("proxy probe failed"))
 }
 
 internal suspend fun FoxholeVpnService.probeDnsIndependentConnectivityFallbackInternal(
@@ -1202,10 +1224,10 @@ internal suspend fun FoxholeVpnService.probeDnsIndependentConnectivityFallbackIn
             "dns-independent public reachability probe failed: ${target.host}:${target.port} reason=${lastFailure?.message.orEmpty()} timeout_ms=$callTimeoutMs",
         )
         if (!currentCoroutineContext().isActive) {
-            throw lastFailure ?: IllegalStateException("dns-independent connectivity probe cancelled")
+            throw (lastFailure ?: error("dns-independent connectivity probe cancelled"))
         }
     }
-    throw lastFailure ?: IllegalStateException("dns-independent connectivity probe failed")
+    throw (lastFailure ?: error("dns-independent connectivity probe failed"))
 }
 
 internal fun FoxholeVpnService.probeSessionTargetInternal(
@@ -1248,7 +1270,7 @@ internal fun FoxholeVpnService.resolveProbeAddressInternal(
     host: String,
     network: Network? = null,
 ): InetAddress {
-    if (host.isProbeIpLiteral()) {
+    if (host.isProbeIpLiteral) {
         return InetAddress.getByName(host)
     }
     val addresses =
@@ -1259,155 +1281,6 @@ internal fun FoxholeVpnService.resolveProbeAddressInternal(
         }
     return addresses.firstOrNull() ?: error("probe target unavailable")
 }
-
-internal fun FoxholeVpnService.refreshDefaultNetworkAvailabilityInternal() {
-    val activeNetwork = connectivityManager.activeNetwork
-    val capabilities = activeNetwork?.let(connectivityManager::getNetworkCapabilities)
-    defaultNetworkAvailable = capabilities?.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) == true
-}
-
-internal fun FoxholeVpnService.onDefaultNetworkCapabilitiesChangedInternal(
-    capabilities: NetworkCapabilities?,
-    reason: String,
-) {
-    defaultNetworkAvailable = capabilities?.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) == true
-    recordDefaultNetworkCapabilities(reason = reason, capabilities = capabilities)
-    if (FoxholeVpnRuntimeBridge.snapshot.value.state !in FoxholeVpnService.NOTIFICATION_HEALTH_VISIBLE_STATES) {
-        return
-    }
-    if (defaultNetworkAvailable) {
-        updateNotificationConnectivityHealth(
-            state = ConnectivityHealthState.CHECKING,
-            resetFailures = true,
-        )
-    } else {
-        markNotificationConnectivityOffline()
-    }
-}
-
-internal fun FoxholeVpnService.markNotificationConnectivityOfflineInternal() {
-    updateNotificationConnectivityHealth(
-        state = ConnectivityHealthState.OFFLINE,
-        force = true,
-    )
-    consecutiveNotificationHealthFailures = FoxholeVpnService.NOTIFICATION_HEALTH_FAILURE_THRESHOLD
-}
-
-internal fun FoxholeVpnService.updateNotificationConnectivityHealthInternal(
-    state: ConnectivityHealthState,
-    resetFailures: Boolean = false,
-    force: Boolean = false,
-) {
-    if (resetFailures) {
-        consecutiveNotificationHealthFailures = 0
-    }
-    if (state == ConnectivityHealthState.ONLINE && resetFailures) {
-        resetAutoReconnectState()
-    }
-    if (!force && notificationConnectivityHealthState == state) {
-        return
-    }
-    notificationConnectivityHealthState = state
-    updateNotification()
-}
-
-internal fun FoxholeVpnService.isUpstreamNetworkInternal(network: Network): Boolean {
-    val capabilities = connectivityManager.getNetworkCapabilities(network) ?: return false
-    return capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
-        capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_RESTRICTED) &&
-        !capabilities.hasTransport(NetworkCapabilities.TRANSPORT_VPN)
-}
-
-internal fun FoxholeVpnService.recordDefaultNetworkCapabilitiesInternal(
-    reason: String,
-    capabilities: NetworkCapabilities?,
-) {
-    val summary = describeNetworkCapabilities(capabilities)
-    if (reason == "default network changed" && summary == lastDefaultNetworkSummary) {
-        return
-    }
-    lastDefaultNetworkSummary = summary
-    container.diagnosticsLogger.recordStructured(
-        "network",
-        reason.replaceFirstChar(Char::uppercaseChar),
-        summary,
-    )
-}
-
-internal fun FoxholeVpnService.recordNetworkEventInternal(
-    message: String,
-    capabilities: NetworkCapabilities?,
-) {
-    container.diagnosticsLogger.recordStructured(
-        "network",
-        message.replaceFirstChar(Char::uppercaseChar),
-        describeNetworkCapabilities(capabilities),
-    )
-}
-
-internal fun FoxholeVpnService.describeNetworkCapabilitiesInternal(capabilities: NetworkCapabilities?): String {
-    if (capabilities == null) {
-        return "unavailable"
-    }
-    val transport =
-        when {
-            capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> "wifi"
-            capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> "cellular"
-            capabilities.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) -> "ethernet"
-            capabilities.hasTransport(NetworkCapabilities.TRANSPORT_VPN) -> "vpn"
-            else -> "other"
-        }
-    val traits =
-        buildList {
-            if (capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)) add("internet")
-            if (capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)) add("validated")
-            if (capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED)) add("unmetered")
-        }
-    return if (traits.isEmpty()) {
-        transport
-    } else {
-        "$transport • ${traits.joinToString(separator = " • ")}"
-    }
-}
-
-internal fun FoxholeVpnService.currentVpnNetworkInternal(excludedHandle: Long? = null): Network =
-    currentVpnNetworkOrNull(excludedHandle) ?: error("vpn network unavailable")
-
-internal fun FoxholeVpnService.currentVpnNetworkOrNullInternal(excludedHandle: Long? = null): Network? =
-    currentNetworkSnapshot().firstOrNull { network ->
-        connectivityManager.getNetworkCapabilities(network)?.isFoxholeVpnNetwork(this) == true &&
-            network.networkHandle != excludedHandle
-    }
-
-internal fun FoxholeVpnService.currentUpstreamNetworkOrNullInternal(): Network? =
-    connectivityManager.activeNetwork
-        ?.takeIf(::isUpstreamNetwork)
-        ?: currentNetworkSnapshot().firstOrNull(::isUpstreamNetwork)
-
-@Suppress("DEPRECATION")
-private fun FoxholeVpnService.currentNetworkSnapshot(): List<Network> =
-    linkedSetOf<Network>().apply {
-        connectivityManager.activeNetwork?.let(::add)
-        addAll(connectivityManager.allNetworks)
-        addAll(ConnectivityNetworkRegistry.snapshot(this@currentNetworkSnapshot))
-    }.toList()
-
-internal fun FoxholeVpnService.isVpnNetworkValidatedInternal(network: Network): Boolean =
-    connectivityManager
-        .getNetworkCapabilities(network)
-        ?.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED) == true
-
-internal suspend fun FoxholeVpnService.awaitVpnNetworkOrNullInternal(
-    timeoutMs: Long,
-    excludedHandle: Long? = null,
-): Network? =
-    withTimeoutOrNull(timeoutMs) {
-        while (currentCoroutineContext().isActive) {
-            currentVpnNetworkOrNull(excludedHandle)?.let { return@withTimeoutOrNull it }
-            delay(FoxholeVpnService.VPN_NETWORK_WAIT_POLL_DELAY_MS)
-        }
-        null
-    }
 
 internal fun FoxholeVpnService.onConnectionStartedInternal(
     session: VpnSession,
@@ -1467,143 +1340,8 @@ internal fun VpnSession?.matchesRuntimeValidationSession(session: VpnSession): B
 internal fun FoxholeVpnService.canPublishValidationResult(session: VpnSession?): Boolean =
     session != null && activeSession.matchesRuntimeValidationSession(session)
 
-internal fun FoxholeVpnService.currentNotificationSnapshotInternal(): NotificationSnapshot {
-    val connection = FoxholeVpnRuntimeBridge.snapshot.value
-    val ipInfo = FoxholeVpnRuntimeBridge.ipInfo.value
-    val traffic = FoxholeVpnRuntimeBridge.traffic.value
-    val localGuardMode = activeLocalGuardMode
-    if (localGuardMode != null) {
-        val analysisStatus = getString(R.string.notification_status_analysis)
-        val analysisMessage =
-            connection.message
-                .takeIf { connection.isSmartStartConnection && it == analysisStatus }
-        return NotificationSnapshot(
-            state = ConnectionState.CONNECTED,
-            statusMessage = analysisMessage ?: localGuardMode.name,
-            updatedAt = connection.lastChangeAt,
-            isSmartStartConnection = analysisMessage != null,
-        )
-    }
-    return NotificationSnapshot(
-        profileName = connection.profileName,
-        state = connection.state,
-        statusMessage = connection.message,
-        connectivityHealthState = notificationConnectivityHealthState,
-        ipAddress = ipInfo?.ipv4 ?: ipInfo?.ip,
-        countryCode = ipInfo?.countryCode,
-        countryName = ipInfo?.countryName,
-        trafficAvailable = traffic.available,
-        txRate = traffic.txBytesPerSec,
-        rxRate = traffic.rxBytesPerSec,
-        txTotal = traffic.txTotalBytes,
-        rxTotal = traffic.rxTotalBytes,
-        updatedAt = maxOf(connection.lastChangeAt, ipInfo?.fetchedAt ?: 0L, traffic.sampledAt),
-        isSmartStartConnection = connection.isSmartStartConnection,
-    )
-}
-
-internal fun FoxholeVpnService.notificationCollapsedTextInternal(snapshot: NotificationSnapshot): String =
-    buildNotificationStatusText(snapshot, notificationHealthText(snapshot))
-
-internal fun FoxholeVpnService.notificationExpandedTextInternal(snapshot: NotificationSnapshot): String? =
-    buildNotificationStatusText(snapshot, notificationHealthText(snapshot))
-
-internal fun FoxholeVpnService.notificationHealthTextInternal(snapshot: NotificationSnapshot): String? =
-    notificationBodyRes(snapshot)?.let(::getString)
-
-internal suspend fun FoxholeVpnService.persistProfileTrafficInternal(
-    session: VpnSession,
-    traffic: TrafficSnapshot,
-) {
-    if (!traffic.available && traffic.rxTotalBytes <= 0L && traffic.txTotalBytes <= 0L) {
-        return
-    }
-    container.settingsRepository.accumulateProfileTraffic(
-        profileId = session.profileId,
-        profileName = session.profileName,
-        protocolHint = session.protocolHint,
-        protocolOptionId = session.protocolOptionId,
-        transport = session.runtimeTransportProtocol(),
-        rxBytes = traffic.rxTotalBytes,
-        txBytes = traffic.txTotalBytes,
-        updatedAt = System.currentTimeMillis(),
-    )
-}
-
-internal fun FoxholeVpnService.notificationStateLabelInternal(snapshot: NotificationSnapshot): String =
-    when {
-        snapshot.statusMessage == getString(R.string.notification_status_analysis) ->
-            getString(R.string.notification_status_analysis)
-        localGuardFirewallNotificationActive() -> getString(R.string.notification_status_firewall)
-        activeLocalGuardMode == LocalGuardMode.JOURNAL -> getString(R.string.notification_status_journal)
-        activeLocalGuardMode == LocalGuardMode.DNS -> getString(R.string.notification_status_dns_guard)
-        snapshot.state == ConnectionState.CONNECTED ->
-            if (snapshot.isSmartStartConnection) {
-                getString(R.string.notification_status_connected_smart)
-            } else {
-                getString(R.string.notification_status_connected)
-            }
-        snapshot.state == ConnectionState.CONNECTING -> getString(R.string.notification_status_connecting)
-        snapshot.state == ConnectionState.RECONNECTING -> getString(R.string.notification_status_reconnecting)
-        snapshot.state == ConnectionState.ERROR -> getString(R.string.notification_status_error)
-        else -> getString(R.string.notification_status_disconnected)
-    }
-
-private fun FoxholeVpnService.buildNotificationStatusText(
-    snapshot: NotificationSnapshot,
-    baseText: String?,
-): String =
-    when {
-        activeLocalGuardMode != null -> baseText.orEmpty()
-        snapshot.state == ConnectionState.CONNECTED && snapshot.isSmartStartConnection ->
-            listOfNotNull(baseText, getString(R.string.smart_profile_tag))
-                .filter(String::isNotBlank)
-                .joinToString(separator = " • ")
-        else -> baseText.orEmpty()
-    }
-
-private fun FoxholeVpnService.localGuardFirewallNotificationActive(): Boolean {
-    val firewallGuardActive = activeLocalGuardMode == LocalGuardMode.FIREWALL
-    val journalFirewallActive =
-        activeLocalGuardMode == LocalGuardMode.JOURNAL &&
-            container.settingsRepository.settings.value.expert.firewallEnabled
-    return firewallGuardActive || journalFirewallActive
-}
-
-private fun FoxholeVpnService.localGuardNotificationBodyRes(): Int? =
-    when {
-        localGuardFirewallNotificationActive() -> R.string.notification_body_firewall
-        activeLocalGuardMode == LocalGuardMode.JOURNAL -> R.string.notification_body_journal
-        activeLocalGuardMode == LocalGuardMode.DNS -> R.string.notification_body_dns_guard
-        else -> null
-    }
-
-private fun FoxholeVpnService.notificationBodyRes(snapshot: NotificationSnapshot): Int? =
-    if (snapshot.statusMessage == getString(R.string.notification_status_analysis)) {
-        R.string.notification_body_validating
-    } else {
-        localGuardNotificationBodyRes() ?: when (snapshot.state) {
-            ConnectionState.CONNECTED ->
-                when (snapshot.connectivityHealthState) {
-                    ConnectivityHealthState.CHECKING -> R.string.notification_body_validating
-                    ConnectivityHealthState.ONLINE -> R.string.notification_body_connected
-                    ConnectivityHealthState.OFFLINE -> R.string.notification_body_waiting
-                }
-            ConnectionState.CONNECTING ->
-                R.string.notification_body_waiting
-            ConnectionState.RECONNECTING ->
-                if (snapshot.statusMessage == getString(R.string.status_smart_start_reconnecting)) {
-                    R.string.notification_body_smart_start_reconnecting
-                } else {
-                    R.string.notification_body_reconnecting
-                }
-            ConnectionState.IDLE,
-            ConnectionState.ERROR,
-            -> null
-        }
-    }
-
-private fun String.isProbeIpLiteral(): Boolean = contains(':') || PROBE_IPV4_REGEX.matches(this)
+private val String.isProbeIpLiteral: Boolean
+    get() = contains(':') || PROBE_IPV4_REGEX.matches(this)
 
 private val PROBE_IPV4_REGEX =
     Regex(

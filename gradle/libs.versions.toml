@@ -59,6 +59,7 @@ androidx-espresso-core = { module = "androidx.test.espresso:espresso-core", vers
 androidx-test-core = { module = "androidx.test:core-ktx", version.ref = "test-core" }
 androidx-benchmark-macro-junit4 = { module = "androidx.benchmark:benchmark-macro-junit4", version.ref = "benchmark" }
 androidx-test-uiautomator = { module = "androidx.test.uiautomator:uiautomator", version.ref = "uiautomator" }
+detekt-cli = { module = "io.gitlab.arturbosch.detekt:detekt-cli", version.ref = "detekt" }
 detekt-formatting = { module = "io.gitlab.arturbosch.detekt:detekt-formatting", version.ref = "detekt" }
 zxing-android-embedded = { module = "com.journeyapps:zxing-android-embedded", version.ref = "zxing-embedded" }
 blurview = { module = "com.github.Dimezis:BlurView", version.ref = "blurview" }

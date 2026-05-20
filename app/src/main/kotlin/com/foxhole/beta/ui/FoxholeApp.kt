@@ -74,6 +74,7 @@ import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
@@ -831,8 +832,8 @@ private fun FoxholeBottomBar(
     val themeMode = LocalFoxholeThemeMode.current
     val backgroundColor = foxholeBottomDockBackgroundColor()
     val navigationBottomPadding = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-    val configuration = androidx.compose.ui.platform.LocalConfiguration.current
-    val dockWidth = (configuration.screenWidthDp.dp * 0.62f).coerceIn(180.dp, 248.dp)
+    val windowWidth = with(density) { LocalWindowInfo.current.containerSize.width.toDp() }
+    val dockWidth = (windowWidth * 0.62f).coerceIn(180.dp, 248.dp)
     val dockWidthPx = with(density) { dockWidth.roundToPx() }
     val dockHeightPx = with(density) { 60.dp.roundToPx() }
     val dockBottomMarginPx = with(density) { (navigationBottomPadding + 10.dp).roundToPx() }

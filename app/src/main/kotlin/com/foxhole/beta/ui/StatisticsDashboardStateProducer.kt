@@ -3,10 +3,16 @@ package com.foxhole.beta.ui
 internal fun buildStatisticsDashboardUiState(
     state: SettingsRouteUiState,
     trafficMapState: com.foxhole.beta.core.model.TrafficMapUiState,
+    usageAccessGranted: Boolean = true,
 ): StatisticsDashboardUiState {
     val retention = state.settings.statistics.retention
     val nowMs = System.currentTimeMillis()
-    val statistics = statisticsUiState(state = state, retention = retention)
+    val statistics =
+        statisticsUiState(
+            state = state,
+            retention = retention,
+            usageAccessGranted = usageAccessGranted,
+        )
     val appRows =
         appTrafficRows(
             samples = state.appTrafficWindows,

@@ -21,21 +21,49 @@ if [[ -z "$OSV_ASSET" ]]; then
   esac
 fi
 
-curl -fsSL -o "$SCAN_TMP/$OSV_ASSET" "https://github.com/google/osv-scanner/releases/download/$OSV_VERSION/$OSV_ASSET"
-curl -fsSL -o "$SCAN_TMP/osv-scanner_SHA256SUMS" "https://github.com/google/osv-scanner/releases/download/$OSV_VERSION/osv-scanner_SHA256SUMS"
-(
-  cd "$SCAN_TMP"
+OSV_CACHE_PREFIX="$SCAN_TMP/osv-scanner-$OSV_VERSION"
+OSV_SCANNER_PATH="$OSV_CACHE_PREFIX-$OSV_ASSET"
+OSV_SUMS_PATH="$OSV_CACHE_PREFIX-SHA256SUMS"
+
+download_file() {
+  local destination="$1"
+  local url="$2"
+  curl --continue-at - --connect-timeout 20 --max-time 1800 --speed-limit 1024 --speed-time 30 --retry 3 --retry-all-errors -fsSL -o "$destination" "$url"
+}
+
+download_if_missing() {
+  local destination="$1"
+  local url="$2"
+  [[ -s "$destination" ]] || download_file "$destination" "$url"
+}
+
+download_if_missing "$OSV_SUMS_PATH" "https://github.com/google/osv-scanner/releases/download/$OSV_VERSION/osv-scanner_SHA256SUMS"
+
+checksum_line="$(grep "  $OSV_ASSET\$" "$OSV_SUMS_PATH")"
+checksum="${checksum_line%% *}"
+
+verify_scanner_checksum() {
   if command -v sha256sum >/dev/null 2>&1; then
-    grep "  $OSV_ASSET\$" osv-scanner_SHA256SUMS | sha256sum -c -
+    printf '%s  %s\n' "$checksum" "$OSV_SCANNER_PATH" | sha256sum -c -
   else
-    grep "  $OSV_ASSET\$" osv-scanner_SHA256SUMS | shasum -a 256 -c -
+    printf '%s  %s\n' "$checksum" "$OSV_SCANNER_PATH" | shasum -a 256 -c -
   fi
-)
-chmod +x "$SCAN_TMP/$OSV_ASSET"
+}
+
+if ! verify_scanner_checksum >/dev/null 2>&1; then
+  download_file "$OSV_SCANNER_PATH" "https://github.com/google/osv-scanner/releases/download/$OSV_VERSION/$OSV_ASSET"
+fi
+if ! verify_scanner_checksum; then
+  rm -f "$OSV_SCANNER_PATH"
+  download_file "$OSV_SCANNER_PATH" "https://github.com/google/osv-scanner/releases/download/$OSV_VERSION/$OSV_ASSET"
+  verify_scanner_checksum
+fi
+chmod +x "$OSV_SCANNER_PATH"
 
 rm -f "$REPORT_PATH"
 set +e
-"$SCAN_TMP/$OSV_ASSET" scan source -r . \
+"$OSV_SCANNER_PATH" scan source -r . \
+  --verbosity error \
   --experimental-exclude app/build \
   --experimental-exclude build \
   --experimental-exclude output \

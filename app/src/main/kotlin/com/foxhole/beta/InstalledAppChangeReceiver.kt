@@ -24,8 +24,14 @@ class InstalledAppChangeReceiver : BroadcastReceiver() {
         context: Context,
         intent: Intent,
     ) {
-        val app = context.applicationContext as? FoxholeApplication ?: return
-        val packageChange = intent.packageInventoryChangeOrNull() ?: return
+        val packageChange =
+            if (intent.action == Intent.ACTION_PACKAGE_ADDED || intent.action == Intent.ACTION_PACKAGE_REMOVED) {
+                intent.packageInventoryChangeOrNull()
+            } else {
+                null
+            }
+        val app = context.applicationContext as? FoxholeApplication
+        if (app == null || packageChange == null) return
         val pendingResult = goAsync()
         CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
             finishPendingBroadcast(

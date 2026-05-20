@@ -82,6 +82,7 @@ fun DiagnosticsScreen(
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     var networkLogVisible by rememberSaveable { mutableStateOf(false) }
+    var networkLogSanitize by rememberSaveable { mutableStateOf(true) }
     var foxholeLogVisible by rememberSaveable { mutableStateOf(false) }
     var appChangesLogVisible by rememberSaveable { mutableStateOf(false) }
     var appChangesEnableVisible by rememberSaveable { mutableStateOf(false) }
@@ -133,18 +134,16 @@ fun DiagnosticsScreen(
     )
 
     if (networkLogVisible) {
-        val title = stringResource(R.string.network_activity_log_title)
-        LiveLogsDialog(
-            title = title,
+        NetworkActivityLogDialog(
             entries = networkEntries,
-            notice = stringResource(R.string.logs_network_activity_notice),
+            sanitizeEntries = networkLogSanitize,
+            onSanitizeEntriesChanged = { networkLogSanitize = it },
             onDismiss = { networkLogVisible = false },
-            confirmLabel = stringResource(R.string.save_log),
-            onConfirm = {
+            onSave = { title, sanitize ->
                 pendingSavedLog =
                     SavedLogPayload(
                         filename = "foxhole-network-activity-${System.currentTimeMillis()}.log",
-                        text = formatPlainLog(title, networkEntries, sanitize = false),
+                        text = formatPlainLog(title, networkEntries, sanitize = sanitize),
                     )
                 textLogSaver.launch(pendingSavedLog?.filename ?: "foxhole-network-activity.log")
             },
@@ -152,33 +151,11 @@ fun DiagnosticsScreen(
     }
 
     if (foxholeLogVisible) {
-        val title = stringResource(R.string.logs_title)
-        LiveLogsDialog(
-            title = title,
+        FoxholeAppLogDialog(
             entries = foxholeEntries,
             onDismiss = { foxholeLogVisible = false },
-            confirmLabel = stringResource(R.string.send_log_to_bot),
-            onConfirm = {
-                coroutineScope.launch {
-                    runCatching {
-                        withContext(Dispatchers.IO) {
-                            createPlainLogFile(
-                                context = context,
-                                title = title,
-                                entries = foxholeEntries,
-                                filenamePrefix = "foxhole-app-log",
-                            )
-                        }
-                    }.onSuccess { file ->
-                        context.startActivity(Intent.createChooser(sharePlainLogIntent(context, file), title))
-                    }.onFailure {
-                        snackbarHostState.showBanner(
-                            it.message ?: saveStrings.failed,
-                            FoxholeBannerTone.ERROR,
-                        )
-                    }
-                }
-            },
+            snackbarHostState = snackbarHostState,
+            saveFailedMessage = saveStrings.failed,
         )
     }
 
@@ -199,6 +176,74 @@ fun DiagnosticsScreen(
             },
         )
     }
+}
+
+@Composable
+private fun FoxholeAppLogDialog(
+    entries: List<DiagnosticEntry>,
+    onDismiss: () -> Unit,
+    snackbarHostState: SnackbarHostState,
+    saveFailedMessage: String,
+) {
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+    val title = stringResource(R.string.logs_title)
+    LiveLogsDialog(
+        title = title,
+        entries = entries,
+        onDismiss = onDismiss,
+        confirmLabel = stringResource(R.string.send_log_to_bot),
+        onConfirm = {
+            coroutineScope.launch {
+                runCatching {
+                    withContext(Dispatchers.IO) {
+                        createPlainLogFile(
+                            context = context,
+                            title = title,
+                            entries = entries,
+                            filenamePrefix = "foxhole-app-log",
+                        )
+                    }
+                }.onSuccess { file ->
+                    context.startActivity(Intent.createChooser(sharePlainLogIntent(context, file), title))
+                }.onFailure {
+                    snackbarHostState.showBanner(
+                        it.message ?: saveFailedMessage,
+                        FoxholeBannerTone.ERROR,
+                    )
+                }
+            }
+        },
+    )
+}
+
+@Composable
+private fun NetworkActivityLogDialog(
+    entries: List<DiagnosticEntry>,
+    sanitizeEntries: Boolean,
+    onSanitizeEntriesChanged: (Boolean) -> Unit,
+    onDismiss: () -> Unit,
+    onSave: (String, Boolean) -> Unit,
+) {
+    val title = stringResource(R.string.network_activity_log_title)
+    val confirmLabel =
+        stringResource(
+            if (sanitizeEntries) {
+                R.string.save_sanitized_log
+            } else {
+                R.string.save_raw_log
+            },
+        )
+    LiveLogsDialog(
+        title = title,
+        entries = entries,
+        notice = stringResource(R.string.logs_network_activity_notice),
+        sanitizeEntries = sanitizeEntries,
+        onSanitizeEntriesChanged = onSanitizeEntriesChanged,
+        onDismiss = onDismiss,
+        confirmLabel = confirmLabel,
+        onConfirm = { onSave(title, sanitizeEntries) },
+    )
 }
 
 @Composable

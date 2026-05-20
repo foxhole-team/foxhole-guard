@@ -22,20 +22,11 @@ object UsageStatsAccess {
         val appContext = context.applicationContext
         val appOps = appContext.getSystemService<AppOpsManager>() ?: return false
         val mode =
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                appOps.unsafeCheckOpNoThrow(
-                    AppOpsManager.OPSTR_GET_USAGE_STATS,
-                    Process.myUid(),
-                    appContext.packageName,
-                )
-            } else {
-                @Suppress("DEPRECATION")
-                appOps.checkOpNoThrow(
-                    AppOpsManager.OPSTR_GET_USAGE_STATS,
-                    Process.myUid(),
-                    appContext.packageName,
-                )
-            }
+            appOps.checkOpNoThrow(
+                AppOpsManager.OPSTR_GET_USAGE_STATS,
+                Process.myUid(),
+                appContext.packageName,
+            )
         return mode == AppOpsManager.MODE_ALLOWED
     }
 }
@@ -157,7 +148,7 @@ class AppTrafficSampler(
         endAt: Long,
     ): Map<Int, UidTrafficUsage> {
         val totals = mutableMapOf<Int, UidTrafficUsage>()
-        listOf(ConnectivityManager.TYPE_WIFI, ConnectivityManager.TYPE_MOBILE).forEach { networkType ->
+        networkStatsSummaryTypes().forEach { networkType ->
             runCatching {
                 val bucket = NetworkStats.Bucket()
                 querySummary(networkType, null, startAt, endAt).use { stats ->
@@ -181,6 +172,11 @@ class AppTrafficSampler(
         }
         return totals
     }
+
+    @Suppress("DEPRECATION")
+    private fun networkStatsSummaryTypes(): List<Int> =
+        // NetworkStatsManager.querySummary still accepts legacy ConnectivityManager type ids.
+        listOf(ConnectivityManager.TYPE_WIFI, ConnectivityManager.TYPE_MOBILE)
 
     private fun uidTrafficStatsDelta(uid: Int): UidTrafficUsage {
         val validUid = uid > 0

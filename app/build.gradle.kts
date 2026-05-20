@@ -68,7 +68,6 @@ plugins {
     id("com.google.devtools.ksp") version "2.3.7"
     id("org.jetbrains.kotlin.plugin.compose") version "2.3.21"
     id("org.jetbrains.kotlin.plugin.serialization") version "2.3.21"
-    id("io.gitlab.arturbosch.detekt")
     jacoco
 }
 
@@ -285,7 +284,7 @@ android {
 
     sourceSets {
         getByName("main") {
-            jniLibs.srcDir(layout.buildDirectory.asFile.get().resolve("generated/torNativeLibs"))
+            jniLibs.directories.add(layout.buildDirectory.dir("generated/torNativeLibs").get().asFile.path)
         }
     }
 
@@ -294,11 +293,23 @@ android {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
         jniLibs.useLegacyPackaging = true
+        jniLibs.keepDebugSymbols +=
+            listOf(
+                "**/libTor.so",
+                "**/libandroidx.graphics.path.so",
+                "**/libbox.so",
+                "**/libconjure_client.so",
+                "**/libdatastore_shared_counter.so",
+                "**/liblyrebird.so",
+                "**/libsqlcipher.so",
+            )
     }
 
     lint {
         // Release distribution is intentionally ARM-only: arm64-v8a, armeabi-v7a, and an ARM universal APK.
         disable += "ChromeOsAbiSupport"
+        // Dependency freshness is handled by the release audit/update pass; lint must stay focused on app defects.
+        disable += setOf("AndroidGradlePluginVersion", "GradleDependency", "NewerVersionAvailable")
     }
 
     if (enableAbiSplitApks) {
@@ -330,15 +341,61 @@ composeCompiler {
     includeComposeMappingFile.set(false)
 }
 
-detekt {
-    buildUponDefaultConfig = true
-    allRules = false
-    config.setFrom(rootProject.files("config/detekt/detekt.yml"))
-    baseline = rootProject.file("config/detekt/baseline.xml")
-}
-
 jacoco {
     toolVersion = "0.8.14"
+}
+
+val detektCli by configurations.creating {
+    isCanBeConsumed = false
+    isCanBeResolved = true
+}
+
+val detektPlugins by configurations.creating {
+    isCanBeConsumed = false
+    isCanBeResolved = true
+}
+
+tasks.register<JavaExec>("detekt") {
+    group = "verification"
+    description = "Run detekt analysis with the stable CLI."
+
+    val detektReportDir = layout.buildDirectory.dir("reports/detekt")
+    val detektConfig = rootProject.file("config/detekt/detekt.yml")
+    val detektBaseline = rootProject.file("config/detekt/baseline.xml")
+    val detektSources =
+        listOf(
+            "src/main/kotlin",
+            "src/test/kotlin",
+        ).map(::file)
+
+    mainClass.set("io.gitlab.arturbosch.detekt.cli.Main")
+    classpath = detektCli
+
+    inputs.files(detektSources)
+    inputs.files(detektConfig, detektBaseline)
+    outputs.dir(detektReportDir)
+
+    args(
+        "--build-upon-default-config",
+        "--config",
+        detektConfig.path,
+        "--baseline",
+        detektBaseline.path,
+        "--input",
+        detektSources.joinToString(separator = ",") { source -> source.path },
+    )
+    doFirst {
+        args(
+            "--plugins",
+            detektPlugins.files.joinToString(separator = ",") { plugin -> plugin.path },
+        )
+    }
+    listOf("html", "md", "sarif", "txt", "xml").forEach { reportId ->
+        args(
+            "--report",
+            "$reportId:${detektReportDir.get().file("detekt.$reportId").asFile.path}",
+        )
+    }
 }
 
 val jacocoExcludes =
@@ -515,5 +572,6 @@ dependencies {
     debugImplementation(libs.compose.ui.tooling)
     debugImplementation(libs.compose.ui.test.manifest)
 
+    detektCli(libs.detekt.cli)
     detektPlugins(libs.detekt.formatting)
 }

@@ -153,6 +153,16 @@ private suspend fun HomeViewModel.recordInstalledAppInventoryFromLoadedApps() {
 internal fun HomeViewModel.appTrafficStatsRuntimeAllowed(
     settings: Settings,
 ): Boolean =
+    appTrafficStatsRuntimeAllowed(
+        settings = settings,
+        usageAccessGranted = appTrafficStatsRecorder.hasUsageAccess(),
+    )
+
+internal fun appTrafficStatsRuntimeAllowed(
+    settings: Settings,
+    usageAccessGranted: Boolean,
+): Boolean =
     settings.statistics.enabled &&
         settings.statistics.appTrafficEnabled &&
-        settings.appTrafficStatsEnabled
+        settings.appTrafficStatsEnabled &&
+        usageAccessGranted

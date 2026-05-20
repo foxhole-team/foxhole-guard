@@ -5,6 +5,7 @@ import com.foxhole.beta.core.model.AutoConnectReasonCode
 import com.foxhole.beta.core.model.ConnectionSnapshot
 import com.foxhole.beta.core.model.ConnectionState
 import com.foxhole.beta.core.model.Settings
+import com.foxhole.beta.core.model.TrafficSnapshot
 import com.foxhole.beta.core.model.VpnSession
 import com.foxhole.beta.core.network.scopedByNetworkRules
 import com.foxhole.beta.core.profile.MultiProtocolProfileSupport
@@ -126,7 +127,7 @@ private fun FoxholeVpnService.scheduleSmartStartFailoverAttempt(
                     reconnectSmartStartFallbackIfStillEnabled(session, reason, exhaustedAttempts)
                 }
             }
-    }
+        }
 }
 
 private suspend fun FoxholeVpnService.recordSmartStartProtocolDownAfterReconnectExhausted(
@@ -148,10 +149,15 @@ internal suspend fun FoxholeVpnService.recordSmartStartProtocolDown(
     headline: String,
     detail: String? = null,
 ) {
-    val optionId = session.protocolOptionId?.trim()?.takeIf(String::isNotBlank) ?: return
-    val profile = container.profileRepository.getProfile(session.profileId) ?: return
-    val supportedOptionIds = MultiProtocolProfileSupport.supportedOptions(profile).map { option -> option.id }.toSet()
-    if (optionId !in supportedOptionIds) {
+    val optionId = session.protocolOptionId?.trim()?.takeIf(String::isNotBlank)
+    val profile = optionId?.let { container.profileRepository.getProfile(session.profileId) }
+    val supportedOptionIds =
+        profile
+            ?.let(MultiProtocolProfileSupport::supportedOptions)
+            .orEmpty()
+            .map { option -> option.id }
+            .toSet()
+    if (optionId == null || optionId !in supportedOptionIds) {
         return
     }
     val recordedAt = System.currentTimeMillis()
@@ -252,7 +258,11 @@ private suspend fun FoxholeVpnService.reconnectSmartStartFallbackIfStillEnabled(
     }
     val previousVpnNetworkHandle = currentVpnNetworkOrNull()?.networkHandle
     try {
-        stopActiveRuntimeForReconnect(session = session, reason = "smart_start_failover:$reason", attempt = exhaustedAttempts + 1)
+        stopActiveRuntimeForReconnect(
+            session = session,
+            reason = "smart_start_failover:$reason",
+            attempt = exhaustedAttempts + 1,
+        )
         connect(
             profileId = session.profileId,
             commandStartId = 0,
@@ -268,38 +278,55 @@ private suspend fun FoxholeVpnService.reconnectSmartStartFallbackIfStillEnabled(
 private suspend fun FoxholeVpnService.smartStartFailoverOptionId(
     session: VpnSession,
     settings: Settings,
-): String? {
-    val profile = container.profileRepository.getProfile(session.profileId) ?: return null
-    val supportedOptions = MultiProtocolProfileSupport.supportedOptions(profile)
-    if (supportedOptions.size < 2) {
-        return null
+): String? =
+    container.profileRepository.getProfile(session.profileId)?.let { profile ->
+        val supportedOptions = MultiProtocolProfileSupport.supportedOptions(profile)
+        val preference = settings.smartProfilePreference(profile.id)
+        val excludedOptionIds = preference?.excludedProtocolOptionIds.orEmpty().toSet()
+        val currentOptionId = session.protocolOptionId?.takeIf(String::isNotBlank) ?: profile.selectedProtocolOptionId
+        val fallbackOptions =
+            supportedOptions
+                .takeIf { options -> options.size >= 2 }
+                .orEmpty()
+                .filterNot { option -> option.id in excludedOptionIds }
+                .filterNot { option -> option.id == currentOptionId }
+        fallbackOptions.takeIf { it.isNotEmpty() }?.let { options ->
+            val fallbackIds = options.map { option -> option.id }.toSet()
+            val memoriesById = preference?.protocolMemories.orEmpty().associateBy { memory -> memory.optionId }
+            val orderedIds =
+                preference?.recommendedProtocolIds.orEmpty() +
+                    listOfNotNull(preference?.lastKnownGoodOptionId) +
+                    options
+                        .sortedWith(
+                            compareBy(
+                                { option -> memoriesById[option.id]?.lastLatencyMs ?: Long.MAX_VALUE },
+                                { option -> option.id },
+                            ),
+                        ).map { option -> option.id }
+            orderedIds.firstOrNull { optionId -> optionId in fallbackIds }
+        }
     }
-    val preference = settings.smartProfilePreference(profile.id)
-    val excludedOptionIds = preference?.excludedProtocolOptionIds.orEmpty().toSet()
-    val currentOptionId = session.protocolOptionId?.takeIf(String::isNotBlank) ?: profile.selectedProtocolOptionId
-    val fallbackOptions =
-        supportedOptions
-            .filterNot { option -> option.id in excludedOptionIds }
-            .filterNot { option -> option.id == currentOptionId }
-    if (fallbackOptions.isEmpty()) {
-        return null
-    }
-    val fallbackIds = fallbackOptions.map { option -> option.id }.toSet()
-    val memoriesById = preference?.protocolMemories.orEmpty().associateBy { memory -> memory.optionId }
-    val orderedIds =
-        preference?.recommendedProtocolIds.orEmpty() +
-            listOfNotNull(preference?.lastKnownGoodOptionId) +
-            fallbackOptions
-                .sortedWith(
-                    compareBy(
-                        { option -> memoriesById[option.id]?.lastLatencyMs ?: Long.MAX_VALUE },
-                        { option -> option.id },
-                    ),
-                ).map { option -> option.id }
-    return orderedIds.firstOrNull { optionId -> optionId in fallbackIds }
-}
 
 private const val SMART_START_FAILOVER_MIN_DOWN_MS = 3_000L
+
+internal suspend fun FoxholeVpnService.persistProfileTrafficInternal(
+    session: VpnSession,
+    traffic: TrafficSnapshot,
+) {
+    if (!traffic.available && traffic.rxTotalBytes <= 0L && traffic.txTotalBytes <= 0L) {
+        return
+    }
+    container.settingsRepository.accumulateProfileTraffic(
+        profileId = session.profileId,
+        profileName = session.profileName,
+        protocolHint = session.protocolHint,
+        protocolOptionId = session.protocolOptionId,
+        transport = session.runtimeTransportProtocol(),
+        rxBytes = traffic.rxTotalBytes,
+        txBytes = traffic.txTotalBytes,
+        updatedAt = System.currentTimeMillis(),
+    )
+}
 
 private suspend fun FoxholeVpnService.stopActiveRuntimeForReconnect(
     session: VpnSession,
@@ -312,6 +339,12 @@ private suspend fun FoxholeVpnService.stopActiveRuntimeForReconnect(
     stopNotificationHealthMonitoring()
     validationJob?.cancel()
     validationJob = null
+    val messageRes =
+        if (reason.startsWith("smart_start_failover:")) {
+            R.string.status_smart_start_reconnecting
+        } else {
+            R.string.status_reconnecting
+        }
     container.diagnosticsLogger.recordStructured(
         "connection",
         "runtime restarting",
@@ -327,14 +360,7 @@ private suspend fun FoxholeVpnService.stopActiveRuntimeForReconnect(
     FoxholeVpnRuntimeBridge.update(
         FoxholeVpnRuntimeBridge.snapshot.value.copy(
             state = ConnectionState.RECONNECTING,
-            message =
-                getString(
-                    if (reason.startsWith("smart_start_failover:")) {
-                        R.string.status_smart_start_reconnecting
-                    } else {
-                        R.string.status_reconnecting
-                    },
-                ),
+            message = getString(messageRes),
         ),
     )
     updateNotification()

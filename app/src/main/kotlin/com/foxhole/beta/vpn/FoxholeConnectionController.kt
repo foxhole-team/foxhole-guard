@@ -11,6 +11,7 @@ import com.foxhole.beta.core.data.RoutingRepository
 import com.foxhole.beta.core.diagnostics.DiagnosticsLogger
 import com.foxhole.beta.core.model.ConnectionSnapshot
 import com.foxhole.beta.core.model.ConnectionState
+import com.foxhole.beta.core.model.ConnectivityHealthState
 import com.foxhole.beta.core.model.IpInfo
 import com.foxhole.beta.core.model.Profile
 import com.foxhole.beta.core.model.Settings
@@ -19,11 +20,14 @@ import com.foxhole.beta.core.model.TrafficSnapshot
 import com.foxhole.beta.core.network.IpInfoFetchMode
 import com.foxhole.beta.core.network.IpInfoRepository
 import com.foxhole.beta.core.settings.SettingsRepository
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.withTimeoutOrNull
 
 class FoxholeConnectionController(
     private val context: Context,
@@ -227,13 +231,13 @@ class FoxholeConnectionController(
         timeoutMs: Long = 1_500L,
         pollMs: Long = 100L,
     ): Network? {
-        currentVpnNetwork()?.let { return it }
+        var vpnNetwork = currentVpnNetwork()
         val deadline = System.currentTimeMillis() + timeoutMs
-        while (System.currentTimeMillis() < deadline) {
+        while (vpnNetwork == null && System.currentTimeMillis() < deadline) {
             delay(pollMs)
-            currentVpnNetwork()?.let { return it }
+            vpnNetwork = currentVpnNetwork()
         }
-        return null
+        return vpnNetwork
     }
 
     private suspend fun restoreActiveVpnNetwork(vpnNetwork: Network): Boolean {
@@ -560,6 +564,158 @@ internal const val SERVER_PING_TIMEOUT_MS = 1_200L
 private val LATENCY_PROBE_ENDPOINTS = FoxholeVpnService.CONNECTIVITY_PROBE_ENDPOINTS
 
 internal fun latencyProbeEndpoints(): List<String> = LATENCY_PROBE_ENDPOINTS
+
+internal fun FoxholeVpnService.refreshDefaultNetworkAvailabilityInternal() {
+    val activeNetwork = connectivityManager.activeNetwork
+    val capabilities = activeNetwork?.let(connectivityManager::getNetworkCapabilities)
+    defaultNetworkAvailable = capabilities?.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) == true
+}
+
+internal fun FoxholeVpnService.onDefaultNetworkCapabilitiesChangedInternal(
+    capabilities: NetworkCapabilities?,
+    reason: String,
+) {
+    defaultNetworkAvailable = capabilities?.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) == true
+    recordDefaultNetworkCapabilities(reason = reason, capabilities = capabilities)
+    if (FoxholeVpnRuntimeBridge.snapshot.value.state !in FoxholeVpnService.NOTIFICATION_HEALTH_VISIBLE_STATES) {
+        return
+    }
+    if (defaultNetworkAvailable) {
+        updateNotificationConnectivityHealth(
+            state = ConnectivityHealthState.CHECKING,
+            resetFailures = true,
+        )
+    } else {
+        markNotificationConnectivityOffline()
+    }
+}
+
+internal fun FoxholeVpnService.markNotificationConnectivityOfflineInternal() {
+    updateNotificationConnectivityHealth(
+        state = ConnectivityHealthState.OFFLINE,
+        force = true,
+    )
+    consecutiveNotificationHealthFailures = FoxholeVpnService.NOTIFICATION_HEALTH_FAILURE_THRESHOLD
+}
+
+internal fun FoxholeVpnService.updateNotificationConnectivityHealthInternal(
+    state: ConnectivityHealthState,
+    resetFailures: Boolean = false,
+    force: Boolean = false,
+) {
+    if (resetFailures) {
+        consecutiveNotificationHealthFailures = 0
+    }
+    if (state == ConnectivityHealthState.ONLINE && resetFailures) {
+        resetAutoReconnectState()
+    }
+    if (!force && notificationConnectivityHealthState == state) {
+        return
+    }
+    notificationConnectivityHealthState = state
+    updateNotification()
+}
+
+internal fun FoxholeVpnService.isUpstreamNetworkInternal(network: Network): Boolean {
+    val capabilities = connectivityManager.getNetworkCapabilities(network) ?: return false
+    return capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
+        capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_RESTRICTED) &&
+        !capabilities.hasTransport(NetworkCapabilities.TRANSPORT_VPN)
+}
+
+internal fun FoxholeVpnService.recordDefaultNetworkCapabilitiesInternal(
+    reason: String,
+    capabilities: NetworkCapabilities?,
+) {
+    val summary = describeNetworkCapabilities(capabilities)
+    if (reason == "default network changed" && summary == lastDefaultNetworkSummary) {
+        return
+    }
+    lastDefaultNetworkSummary = summary
+    container.diagnosticsLogger.recordStructured(
+        "network",
+        reason.replaceFirstChar(Char::uppercaseChar),
+        summary,
+    )
+}
+
+internal fun FoxholeVpnService.recordNetworkEventInternal(
+    message: String,
+    capabilities: NetworkCapabilities?,
+) {
+    container.diagnosticsLogger.recordStructured(
+        "network",
+        message.replaceFirstChar(Char::uppercaseChar),
+        describeNetworkCapabilities(capabilities),
+    )
+}
+
+internal fun FoxholeVpnService.describeNetworkCapabilitiesInternal(capabilities: NetworkCapabilities?): String {
+    if (capabilities == null) {
+        return "unavailable"
+    }
+    val transport =
+        when {
+            capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> "wifi"
+            capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> "cellular"
+            capabilities.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) -> "ethernet"
+            capabilities.hasTransport(NetworkCapabilities.TRANSPORT_VPN) -> "vpn"
+            else -> "other"
+        }
+    val traits =
+        buildList {
+            if (capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)) add("internet")
+            if (capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)) add("validated")
+            if (capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED)) add("unmetered")
+        }
+    return if (traits.isEmpty()) {
+        transport
+    } else {
+        "$transport • ${traits.joinToString(separator = " • ")}"
+    }
+}
+
+internal fun FoxholeVpnService.currentVpnNetworkInternal(excludedHandle: Long? = null): Network =
+    currentVpnNetworkOrNull(excludedHandle) ?: error("vpn network unavailable")
+
+internal fun FoxholeVpnService.currentVpnNetworkOrNullInternal(excludedHandle: Long? = null): Network? =
+    currentNetworkSnapshot().firstOrNull { network ->
+        connectivityManager.getNetworkCapabilities(network)?.isFoxholeVpnNetwork(this) == true &&
+            network.networkHandle != excludedHandle
+    }
+
+internal fun FoxholeVpnService.currentUpstreamNetworkOrNullInternal(excludedHandle: Long? = null): Network? =
+    connectivityManager.activeNetwork
+        ?.takeUnless { network -> network.networkHandle == excludedHandle }
+        ?.takeIf(::isUpstreamNetwork)
+        ?: currentNetworkSnapshot().firstOrNull { network ->
+            network.networkHandle != excludedHandle && isUpstreamNetwork(network)
+        }
+
+@Suppress("DEPRECATION")
+private fun FoxholeVpnService.currentNetworkSnapshot(): List<Network> =
+    linkedSetOf<Network>().apply {
+        connectivityManager.activeNetwork?.let(::add)
+        addAll(connectivityManager.allNetworks)
+        addAll(ConnectivityNetworkRegistry.snapshot(this@currentNetworkSnapshot))
+    }.toList()
+
+internal fun FoxholeVpnService.isVpnNetworkValidatedInternal(network: Network): Boolean =
+    connectivityManager
+        .getNetworkCapabilities(network)
+        ?.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED) == true
+
+internal suspend fun FoxholeVpnService.awaitVpnNetworkOrNullInternal(
+    timeoutMs: Long,
+    excludedHandle: Long? = null,
+): Network? =
+    withTimeoutOrNull(timeoutMs) {
+        while (currentCoroutineContext().isActive) {
+            currentVpnNetworkOrNull(excludedHandle)?.let { return@withTimeoutOrNull it }
+            delay(FoxholeVpnService.VPN_NETWORK_WAIT_POLL_DELAY_MS)
+        }
+        null
+    }
 
 internal fun representativeLatencyMs(latenciesMs: List<Long>): Long? {
     val normalized = latenciesMs.map { it.coerceAtLeast(1L) }.sorted()

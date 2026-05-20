@@ -34,8 +34,12 @@ buildscript {
 }
 
 plugins {
-    id("io.gitlab.arturbosch.detekt") version "1.23.8" apply false
     id("org.cyclonedx.bom") version "3.2.4"
+}
+
+allprojects {
+    group = "com.foxhole"
+    version = "1.0.0-beta1"
 }
 
 val hardenedToolDependencyVersions =
@@ -68,6 +72,9 @@ allprojects {
         skipConfigs.set(listOf(".*[Tt]est.*", ".*[Bb]enchmark.*", ".*[Ll]int.*", ".*[Kk]sp.*"))
         includeBuildEnvironment.set(false)
         includeMetadataResolution.set(false)
+        jsonOutput.unsetConvention()
+        resolvedDependencies.setFrom(emptyList<Any>())
+        outputs.upToDateWhen { false }
     }
 }
 
@@ -79,21 +86,10 @@ subprojects {
     }
 }
 
-val cyclonedxAggregateRequested =
-    gradle.startParameter.taskNames.any { taskName ->
-        taskName == "cyclonedxBom" || taskName.endsWith(":cyclonedxBom")
-    }
-
-if (cyclonedxAggregateRequested) {
-    gradle.projectsEvaluated {
-        allprojects {
-            tasks.named("cyclonedxDirectBom", CyclonedxDirectTask::class).get()
-        }
-    }
-}
-
 tasks.withType<CyclonedxAggregateTask>().configureEach {
     projectType.set(Component.Type.APPLICATION)
     componentName.set("foxhole-android")
+    componentGroup.set("com.foxhole")
+    componentVersion.set("1.0.0-beta1")
     includeBuildSystem.set(true)
 }

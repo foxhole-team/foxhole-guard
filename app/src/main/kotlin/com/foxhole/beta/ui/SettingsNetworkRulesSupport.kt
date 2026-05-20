@@ -69,6 +69,7 @@ internal fun NetworkRulesWifiProfileRows(
                 ),
             )
         },
+        titleMaxLines = 2,
         summaryMaxLines = 4,
         grouped = true,
     )

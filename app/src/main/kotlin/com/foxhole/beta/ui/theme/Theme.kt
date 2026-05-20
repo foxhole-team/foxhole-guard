@@ -34,6 +34,7 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.core.graphics.createBitmap
 import com.foxhole.beta.core.model.ThemeMode
 import android.graphics.Color as AndroidColor
 
@@ -485,7 +486,7 @@ private fun createFoxholeNoiseBitmap(
     dark: Boolean,
     maxAlpha: Int,
 ): Bitmap {
-    val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+    val bitmap = createBitmap(size, size, Bitmap.Config.ARGB_8888)
     val pixels = IntArray(size * size)
     var seed = if (dark) 0x13579BDF.toInt() else 0x2468ACE0.toInt()
 

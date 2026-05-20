@@ -62,6 +62,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -147,7 +148,7 @@ fun SettingsHomeScreen(
     val repositoryOpenFailed = stringResource(R.string.open_repository_failed)
     val supportChannelOpenFailed = stringResource(R.string.support_channel_open_failed)
     val expertVisible = state.settings.ui.showExpertSettings
-    var expertUnlockClickCount by rememberSaveable(expertVisible) { mutableStateOf(0) }
+    var expertUnlockClickCount by rememberSaveable(expertVisible) { mutableIntStateOf(0) }
     var expertUnlockConfirmVisible by rememberSaveable { mutableStateOf(false) }
     val onRepositoryClick = {
         if (!openFoxholeRepository(context)) {
@@ -1147,6 +1148,7 @@ fun NetworkRulesSettingsScreen(
                     onCheckedChange = { enabled ->
                         onNetworkRulesChanged(networkRules.copy(cellularRulesEnabled = enabled))
                     },
+                    titleMaxLines = 2,
                     summaryMaxLines = 3,
                     grouped = true,
                 )
@@ -1159,6 +1161,7 @@ fun NetworkRulesSettingsScreen(
                     onCheckedChange = { enabled ->
                         onNetworkRulesChanged(networkRules.copy(skipSubscriptionRefreshOnCellular = enabled))
                     },
+                    titleMaxLines = 2,
                     summaryMaxLines = 3,
                     grouped = true,
                 )
@@ -1171,6 +1174,7 @@ fun NetworkRulesSettingsScreen(
                     onCheckedChange = { enabled ->
                         onNetworkRulesChanged(networkRules.copy(skipSpeedTestsOnCellular = enabled))
                     },
+                    titleMaxLines = 2,
                     summaryMaxLines = 3,
                     grouped = true,
                 )
@@ -1227,6 +1231,7 @@ private fun NetworkRulesMobileProfileRows(
                 ),
             )
         },
+        titleMaxLines = 2,
         summaryMaxLines = 4,
         grouped = true,
     )

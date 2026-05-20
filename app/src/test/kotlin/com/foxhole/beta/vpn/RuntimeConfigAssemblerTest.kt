@@ -302,8 +302,18 @@ class RuntimeConfigAssemblerTest {
         val packageRules = route["rules"]!!.jsonArray.map { it.jsonObject }
             .filter { it["package_name"] != null && it["network"] != null }
         assertEquals(2, packageRules.size)
-        assertTrue(packageRules.any { it["network"]!!.jsonPrimitive.content == "tcp" && it["outbound"]!!.jsonPrimitive.content == "tor-over-vpn" })
-        assertTrue(packageRules.any { it["network"]!!.jsonPrimitive.content == "udp" && it["outbound"]!!.jsonPrimitive.content == "proxy" })
+        assertTrue(
+            packageRules.any {
+                it["network"]!!.jsonPrimitive.content == "tcp" &&
+                    it["outbound"]!!.jsonPrimitive.content == "tor-over-vpn"
+            },
+        )
+        assertTrue(
+            packageRules.any {
+                it["network"]!!.jsonPrimitive.content == "udp" &&
+                    it["outbound"]!!.jsonPrimitive.content == "proxy"
+            },
+        )
         val runtimeProxyRule = route["rules"]!!.jsonArray.map { it.jsonObject }
             .single { it["inbound"] != null && it["outbound"]?.jsonPrimitive?.content == "tor-over-vpn" }
         assertEquals(

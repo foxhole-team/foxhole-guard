@@ -60,7 +60,7 @@ jobs:
         run: scripts/verify-adguard-dns-assets.sh app/build/outputs/apk/debug/*.apk app/build/outputs/apk/release/*.apk
 
       - name: generate sbom
-        run: ./gradlew --no-daemon --console=plain --stacktrace cyclonedxBom
+        run: ./gradlew --no-daemon --console=plain --stacktrace :app:cyclonedxDirectBom
 
       - name: secret scan
         run: |

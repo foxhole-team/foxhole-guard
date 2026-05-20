@@ -87,6 +87,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -411,7 +412,7 @@ private fun rememberSettingsDropdownWidth(
 ): Dp {
     val textMeasurer = rememberTextMeasurer()
     val density = LocalDensity.current
-    val screenWidth = LocalConfiguration.current.screenWidthDp.dp
+    val screenWidth = with(density) { LocalWindowInfo.current.containerSize.width.toDp() }
     val maxTextWidthPx =
         remember(labels, textStyle) {
             labels.maxOfOrNull { label ->
@@ -601,6 +602,7 @@ private fun SettingsControlRow(
             verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
             Row(
+                modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -678,7 +680,8 @@ private fun SettingsInfoBottomSheet(
     content: @Composable ColumnScope.() -> Unit = {},
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    val maxSheetHeight = LocalConfiguration.current.screenHeightDp.dp * 0.65f
+    val density = LocalDensity.current
+    val maxSheetHeight = with(density) { LocalWindowInfo.current.containerSize.height.toDp() } * 0.65f
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,

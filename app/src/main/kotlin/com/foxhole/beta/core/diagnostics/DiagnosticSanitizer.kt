@@ -39,7 +39,7 @@ internal object DiagnosticSanitizer {
             "profile[_-]?id|profileid|profile[_-]?name|option[_-]?id|optionid|local|remote|" +
             "source[_-]?host|sourcehost|destination[_-]?host|destinationhost|query|raw_input|config|resolved_config"
     private val KEY_VALUE_SENSITIVE_FIELD_REGEX =
-        Regex("""(?i)(?<![\w-])($SENSITIVE_FIELD_NAMES)(\s*(?:=>|=|:)\s*)([^\s&]+)""")
+        Regex("""(?i)(?<![\w-])($SENSITIVE_FIELD_NAMES)(\s*(?:=>|=|:)\s*)("[^"]*"|'[^']*'|[^\s&]+)""")
     private val JSON_SENSITIVE_FIELD_REGEX =
         Regex("""(?i)("($SENSITIVE_FIELD_NAMES)"\s*:\s*)("[^"]*"|-?\d+(?:\.\d+)?|true|false|null)""")
     private val ESCAPED_JSON_SENSITIVE_FIELD_REGEX =

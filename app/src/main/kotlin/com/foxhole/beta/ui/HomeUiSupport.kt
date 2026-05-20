@@ -647,18 +647,6 @@ private fun HomeRouteUiState.dashboardVisibleIpInfo(visibleIpInfo: IpInfo?): IpI
     return visibleIpInfo
 }
 
-private fun HomeRouteUiState.shouldKeepVisibleNetworkInfoDuringRouteTransition(dashboardIpInfo: IpInfo?): Boolean =
-    dashboardIpInfo != null &&
-        (
-            (
-                connection.state in setOf(ConnectionState.CONNECTING, ConnectionState.RECONNECTING) &&
-                    dashboardIpInfo.isFreshForRouteTransition(connection.lastChangeAt)
-                ) ||
-                autoConnect.running ||
-                protocolMetricsRefreshing ||
-                dashboardConnectionMetricsLoading
-            )
-
 private fun IpInfo.isFreshForRouteTransition(lastChangeAt: Long): Boolean =
     lastChangeAt <= 0L || fetchedAt >= lastChangeAt
 

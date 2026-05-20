@@ -62,6 +62,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -203,10 +204,10 @@ internal fun HomeHeaderActionButton(
 
 @Composable
 internal fun HomeNetworkDetailLine(
-    icon: ImageVector? = null,
     label: String,
     value: String,
     modifier: Modifier = Modifier,
+    icon: ImageVector? = null,
     valueMonospace: Boolean = false,
 ) {
     Row(
@@ -294,9 +295,9 @@ internal fun HomeNetworkColumnTitle(text: String) {
 @Composable
 internal fun HomeModeDropdown(
     selected: HomeModeOption,
-    values: List<HomeModeOption> = HomeModeOption.entries,
     onSelect: (HomeModeOption) -> Unit,
     modifier: Modifier = Modifier,
+    values: List<HomeModeOption> = HomeModeOption.entries,
 ) {
     val selectorTint = MaterialTheme.colorScheme.primary
     var expanded by rememberSaveable(selected) { mutableStateOf(false) }
@@ -1755,7 +1756,7 @@ private fun HomeTorRouteRow(
 @Composable
 private fun rememberTorActionButtonPulse(active: Boolean): State<Float> {
     if (!active) {
-        return remember { mutableStateOf(0.06f) }
+        return remember { mutableFloatStateOf(0.06f) }
     }
     val transition = rememberInfiniteTransition(label = "tor_action_button_pulse")
     return transition.animateFloat(

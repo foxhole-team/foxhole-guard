@@ -40,10 +40,12 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -72,6 +74,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.foxhole.beta.R
 import com.foxhole.beta.core.model.InstalledAppOption
 import com.foxhole.beta.core.model.PerAppRoutingMode
@@ -272,7 +277,7 @@ fun RoutingAppsScreen(
 @Composable
 internal fun AppGridSectionContent(
     title: String,
-    subtitle: String? = null,
+    subtitle: String?,
     leadingIcon: androidx.compose.ui.graphics.vector.ImageVector,
     apps: List<InstalledAppOption>,
     emptyText: String,
@@ -518,6 +523,7 @@ fun AppPickerScreen(
     var query by rememberSaveable { mutableStateOf("") }
     var filterMenuExpanded by rememberSaveable { mutableStateOf(false) }
     var appFilter by rememberSaveable { mutableStateOf(InstalledAppFilter.ALL) }
+    val popupsAllowed = rememberAppPickerPopupsAllowed { filterMenuExpanded = false }
     var draftSelection by rememberSaveable(selectedPackages) {
         mutableStateOf(selectedPackages)
     }
@@ -556,8 +562,8 @@ fun AppPickerScreen(
             DropdownSettingRow(
                 title = stringResource(R.string.app_filter_title),
                 value = appFilterLabel(appFilter),
-                expanded = filterMenuExpanded,
-                onExpandedChange = { filterMenuExpanded = it },
+                expanded = filterMenuExpanded && popupsAllowed,
+                onExpandedChange = { expanded -> filterMenuExpanded = expanded && popupsAllowed },
                 values = InstalledAppFilter.entries,
                 selected = appFilter,
                 label = ::appFilterLabel,
@@ -617,6 +623,31 @@ fun AppPickerScreen(
             )
         }
     }
+}
+
+@Composable
+private fun rememberAppPickerPopupsAllowed(onClosePopups: () -> Unit): Boolean {
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val currentOnClosePopups by rememberUpdatedState(onClosePopups)
+    var popupsAllowed by remember(lifecycleOwner) {
+        mutableStateOf(lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED))
+    }
+    DisposableEffect(lifecycleOwner) {
+        val observer =
+            LifecycleEventObserver { _, _ ->
+                popupsAllowed = lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)
+                if (!popupsAllowed) {
+                    currentOnClosePopups()
+                }
+            }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            currentOnClosePopups()
+            popupsAllowed = false
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
+    return popupsAllowed
 }
 
 @Composable

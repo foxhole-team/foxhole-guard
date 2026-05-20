@@ -134,9 +134,6 @@ class AnomalyNotifier(
         }.getOrNull()
 
     private fun ensureChannel() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
-            return
-        }
         notificationManager?.createNotificationChannel(
             NotificationChannel(
                 CHANNEL_ID,

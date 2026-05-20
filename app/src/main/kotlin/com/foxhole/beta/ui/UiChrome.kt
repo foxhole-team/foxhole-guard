@@ -118,6 +118,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
@@ -496,12 +497,13 @@ internal class FoxholeTopChromeBlurView(
                 setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
                 setContent {
                     FoxholeTheme(themeMode = themeModeState.value) {
-                        val configuration = LocalConfiguration.current
+                        val density = LocalDensity.current
+                        val gradientHeight = with(density) { LocalWindowInfo.current.containerSize.height.toDp() }
                         Box(
                             Modifier
                                 .fillMaxSize()
                                 .foxholeAppBackgroundLayer(
-                                    gradientHeight = configuration.screenHeightDp.dp,
+                                    gradientHeight = gradientHeight,
                                 ),
                         ) {
                             FoxholeTopChromeContent(
@@ -1381,6 +1383,7 @@ internal fun FoxholeDropdownMenu(
         return
     }
     val density = LocalDensity.current
+    val windowHeight = with(density) { LocalWindowInfo.current.containerSize.height.toDp() }
     val menuOffset =
         with(density) {
             IntOffset(
@@ -1389,7 +1392,7 @@ internal fun FoxholeDropdownMenu(
             )
         }
     val screenEndPaddingPx = with(density) { screenEndPadding.roundToPx() }
-    val menuMaxHeight = (LocalConfiguration.current.screenHeightDp.dp - 72.dp).coerceAtLeast(160.dp)
+    val menuMaxHeight = (windowHeight - 72.dp).coerceAtLeast(160.dp)
     Popup(
         popupPositionProvider =
             remember(menuOffset, horizontalAlignment, screenEndPaddingPx) {
@@ -1489,7 +1492,7 @@ internal fun rememberFoxholeDropdownMenuWidth(
 ): Dp {
     val textMeasurer = rememberTextMeasurer()
     val density = LocalDensity.current
-    val screenWidth = LocalConfiguration.current.screenWidthDp.dp
+    val screenWidth = with(density) { LocalWindowInfo.current.containerSize.width.toDp() }
     val maxTextWidthPx =
         remember(labels, textStyle) {
             labels.maxOfOrNull { label ->

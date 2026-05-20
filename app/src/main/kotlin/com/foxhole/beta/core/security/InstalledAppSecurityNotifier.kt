@@ -8,13 +8,13 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.net.Uri
 import android.os.Build
 import android.provider.Settings
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import androidx.core.content.getSystemService
+import androidx.core.net.toUri
 import com.foxhole.beta.R
 import com.foxhole.beta.core.model.InstalledAppRiskLevel
 import com.foxhole.beta.core.model.InstalledAppRiskSignal
@@ -91,7 +91,7 @@ class InstalledAppSecurityNotifier(
         PendingIntent.getActivity(
             appContext,
             requestCode + packageName.hashCode(),
-            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName"))
+            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, "package:$packageName".toUri())
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
             pendingIntentFlags(),
         )
@@ -100,19 +100,15 @@ class InstalledAppSecurityNotifier(
         PendingIntent.getActivity(
             appContext,
             RequestCodeUninstall + packageName.hashCode(),
-            Intent(Intent.ACTION_DELETE, Uri.parse("package:$packageName"))
+            Intent(Intent.ACTION_DELETE, "package:$packageName".toUri())
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
             pendingIntentFlags(),
         )
 
     private fun pendingIntentFlags(): Int =
-        PendingIntent.FLAG_UPDATE_CURRENT or
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0
+        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
 
     private fun ensureChannel() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
-            return
-        }
         notificationManager?.createNotificationChannel(
             NotificationChannel(
                 CHANNEL_ID,

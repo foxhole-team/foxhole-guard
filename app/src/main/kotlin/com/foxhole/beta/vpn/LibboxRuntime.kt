@@ -93,9 +93,7 @@ private fun sanitizedConfigFingerprint(configJson: String): String {
     val autoDetect = "\"auto_detect_interface\":true"
     val normalized = configJson.replace(Regex("\\s+"), "")
     return buildString {
-        append("config hash=")
-        append(configJson.hashCode())
-        append(" dnsLocal=")
+        append("config dnsLocal=")
         append(normalized.contains(dnsLocal))
         append(" dnsRemote=")
         append(normalized.contains(dnsRemote))
@@ -1007,9 +1005,6 @@ internal class DefaultNetworkMonitor(
     }
 
     override fun bindSocketToDefaultNetwork(fd: Int) {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
-            return
-        }
         val network =
             runCatching { requireNetwork() }
                 .getOrElse {
