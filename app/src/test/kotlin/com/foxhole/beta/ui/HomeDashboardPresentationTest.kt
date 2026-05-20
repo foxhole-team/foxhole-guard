@@ -1045,7 +1045,7 @@ class HomeDashboardPresentationTest {
                 activeVpnNetworkAvailable = true,
             ),
         )
-        assertTrue(
+        assertFalse(
             isTrafficMapRuntimeAvailable(
                 connection =
                     ConnectionSnapshot(
@@ -1061,6 +1061,18 @@ class HomeDashboardPresentationTest {
                 activeVpnNetworkAvailable = true,
             ),
         )
+        val activeLocalFirewallSettings =
+            Settings(
+                ui = UiSettings(trafficMapEnabled = true),
+                expert =
+                    ExpertSettings(
+                        firewallEnabled = true,
+                        blockedPackagesEnabled = true,
+                        blockedPackages = listOf("org.mozilla.firefox"),
+                        blockAppsAlways = true,
+                    ),
+                statistics = StatisticsSettings(enabled = true, countryTrafficEnabled = true),
+            )
         assertTrue(
             isTrafficMapRuntimeAvailable(
                 connection =
@@ -1068,12 +1080,7 @@ class HomeDashboardPresentationTest {
                         state = ConnectionState.CONNECTED,
                         profileId = FoxholeVpnService.LOCAL_GUARD_PROFILE_ID,
                     ),
-                settings =
-                    Settings(
-                        ui = UiSettings(trafficMapEnabled = true),
-                        expert = ExpertSettings(firewallEnabled = true),
-                        statistics = StatisticsSettings(enabled = true, countryTrafficEnabled = true),
-                    ),
+                settings = activeLocalFirewallSettings,
                 activeVpnNetworkAvailable = false,
             ),
         )

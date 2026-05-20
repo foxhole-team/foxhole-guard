@@ -142,6 +142,7 @@
     <string name="error_tcp_runtime_readiness_failed">TCP VPN target is unavailable on the current network. Try again or choose another protocol.</string>
     <string name="error_dns_probe_failed">Connectivity validation failed after runtime start</string>
     <string name="error_private_dns_unknown_unsupported">Current Android Private DNS mode is unknown and cannot be used safely in tunnel mode. Set Private DNS to Off, Automatic, or a hostname and reconnect.</string>
+    <string name="error_system_dns_private_dns_conflict">Turn Android Private DNS off before enabling System DNS protection. FoxHole left networking unchanged.</string>
     <string name="vpn_permission_denied">Secure connection permission was denied</string>
     <string name="vpn_permission_revoked">Secure connection permission was revoked</string>
     <string name="notification_channel_name">Foxhole</string>

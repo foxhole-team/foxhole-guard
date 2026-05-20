@@ -702,6 +702,19 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
             stopService(commandStartId)
             return
         }
+        if (mode == LocalGuardMode.DNS && !PrivateDnsSettings.current(this).isSupportedForSystemDnsProtection()) {
+            container.diagnosticsLogger.record(
+                "dns",
+                "system dns protection skipped: android private dns active",
+            )
+            container.settingsRepository.updateSystemDnsProtectionEnabled(false)
+            disconnect(
+                message = getString(R.string.error_system_dns_private_dns_conflict),
+                commandStartId = commandStartId,
+                suppressLocalGuard = true,
+            )
+            return
+        }
         if (isSameLocalGuardRuntimeActive(mode)) {
             container.diagnosticsLogger.record(
                 "connection",

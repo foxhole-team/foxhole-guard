@@ -682,7 +682,7 @@ class RuntimeConfigAssemblerTest {
             ).localGuardModeOrNull(),
         )
         assertEquals(
-            LocalGuardMode.JOURNAL,
+            null,
             Settings(
                 expert =
                     ExpertSettings(
@@ -759,11 +759,11 @@ class RuntimeConfigAssemblerTest {
     }
 
     @Test
-    fun `firewall escalates local guard to journal for persistent logging or country traffic stats`() {
+    fun `firewall logging only features do not start full-device local guard`() {
         val firewall = ExpertSettings(firewallEnabled = true)
 
         assertEquals(
-            LocalGuardMode.JOURNAL,
+            null,
             Settings(
                 expert = firewall.copy(networkActivityPersistentLogging = true),
             ).localGuardModeOrNull(),
@@ -776,10 +776,19 @@ class RuntimeConfigAssemblerTest {
             ).localGuardModeOrNull(),
         )
         assertEquals(
-            LocalGuardMode.JOURNAL,
+            null,
             Settings(
                 expert = firewall,
                 statistics = StatisticsSettings(enabled = true, countryTrafficEnabled = true),
+            ).localGuardModeOrNull(),
+        )
+        assertEquals(
+            LocalGuardMode.DNS,
+            Settings(
+                expert = firewall.copy(
+                    systemDnsProtectionEnabled = true,
+                    networkActivityPersistentLogging = true,
+                ),
             ).localGuardModeOrNull(),
         )
     }
@@ -809,8 +818,12 @@ class RuntimeConfigAssemblerTest {
         assertTrue(rules.any { rule -> rule["action"]?.jsonPrimitive?.content == "hijack-dns" })
         assertFalse(tunInbound.containsKey("include_package"))
         assertEquals(
-            listOf("94.140.14.14/32", "94.140.15.15/32"),
+            listOf("172.19.0.2/32"),
             tunInbound["route_address"]!!.jsonArray.map { it.jsonPrimitive.content },
+        )
+        assertEquals(
+            listOf("172.19.0.1/30"),
+            tunInbound["address"]!!.jsonArray.map { it.jsonPrimitive.content },
         )
 
         val adGuardServer =
@@ -821,7 +834,7 @@ class RuntimeConfigAssemblerTest {
     }
 
     @Test
-    fun `system dns protection combines with permanent firewall app blocking`() {
+    fun `permanent firewall app blocking keeps local guard package scoped when system dns is enabled`() {
         val settings =
             Settings(
                 expert =
@@ -834,9 +847,9 @@ class RuntimeConfigAssemblerTest {
                     ),
             )
 
-        assertEquals(LocalGuardMode.JOURNAL, settings.localGuardModeOrNull())
+        assertEquals(LocalGuardMode.FIREWALL, settings.localGuardModeOrNull())
 
-        val config = parse(assembler.assembleLocalGuard(settings, LocalGuardMode.JOURNAL))
+        val config = parse(assembler.assembleLocalGuard(settings, LocalGuardMode.FIREWALL))
         val dns = config["dns"]!!.jsonObject
         val route = config["route"]!!.jsonObject
         val rules = route["rules"]!!.jsonArray.map { it.jsonObject }
@@ -845,7 +858,10 @@ class RuntimeConfigAssemblerTest {
         assertEquals("dns-remote", dns["final"]!!.jsonPrimitive.content)
         assertEquals("dns-remote", route["default_domain_resolver"]!!.jsonPrimitive.content)
         assertEquals("direct", route["final"]!!.jsonPrimitive.content)
-        assertFalse(tunInbound.containsKey("include_package"))
+        assertEquals(
+            listOf("org.mozilla.firefox"),
+            tunInbound["include_package"]!!.jsonArray.map { it.jsonPrimitive.content },
+        )
         assertTrue(rules.any { rule -> rule["action"]?.jsonPrimitive?.content == "hijack-dns" })
         assertTrue(
             rules.any { rule ->

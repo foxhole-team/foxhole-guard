@@ -143,6 +143,7 @@
     <string name="error_tcp_runtime_readiness_failed">TCP-цель VPN недоступна в текущей сети. Попробуйте еще раз или выберите другой протокол.</string>
     <string name="error_dns_probe_failed">После старта службы подключения не прошла проверка связи</string>
     <string name="error_private_dns_unknown_unsupported">Текущий режим частного DNS Android неизвестен, его нельзя безопасно использовать в режиме «Туннель». Переключите частный DNS на «Выключено» или «Автоматически» либо укажите имя узла и подключитесь снова.</string>
+    <string name="error_system_dns_private_dns_conflict">Перед включением системной DNS-защиты выключите частный DNS Android. FoxHole оставил сеть без изменений.</string>
     <string name="vpn_permission_denied">Разрешение на защищенное подключение отклонено</string>
     <string name="vpn_permission_revoked">Разрешение на защищенное подключение отозвано</string>
     <string name="notification_channel_name">FoxHole</string>

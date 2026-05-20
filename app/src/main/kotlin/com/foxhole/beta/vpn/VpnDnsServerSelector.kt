@@ -29,11 +29,14 @@ internal object VpnDnsServerSelector {
         configJson: String?,
         fallbackServerAddress: String?,
     ): List<String> {
+        val localTunDns = fallbackServerAddress?.takeIf { it.isNotBlank() }
+        if (localTunDns != null && isLocalGuardConfig(configJson)) {
+            return listOf(localTunDns)
+        }
         val remoteDnsServers = remoteDnsServerAddresses(configJson).filter { it.isNotBlank() }.distinct()
         if (remoteDnsServers.isNotEmpty()) {
             return remoteDnsServers
         }
-        val localTunDns = fallbackServerAddress?.takeIf { it.isNotBlank() }
         if (localTunDns != null) {
             return listOf(localTunDns)
         }
@@ -58,6 +61,27 @@ internal object VpnDnsServerSelector {
                         ?: server["address"]?.jsonPrimitive?.content?.let(::extractIpLiteral)
                 }.distinct()
         }.getOrDefault(emptyList())
+
+    private fun isLocalGuardConfig(configJson: String?): Boolean =
+        runCatching {
+            if (configJson == null) {
+                return false
+            }
+            val root = json.parseToJsonElement(configJson).jsonObject
+            val outboundTags =
+                root["outbounds"]
+                    ?.jsonArray
+                    ?.mapNotNull { outbound -> outbound.jsonObject["tag"]?.jsonPrimitive?.content }
+                    ?.toSet()
+                    .orEmpty()
+            outboundTags.isNotEmpty() &&
+                outboundTags.all { tag -> tag == "direct" || tag == "block" } &&
+                root["route"]
+                    ?.jsonObject
+                    ?.get("final")
+                    ?.jsonPrimitive
+                    ?.content == "direct"
+        }.getOrDefault(false)
 
     private fun extractIpLiteral(endpoint: String): String? =
         extractHost(endpoint)?.takeIf(::isIpLiteral)

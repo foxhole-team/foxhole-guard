@@ -60,4 +60,12 @@ class PrivateDnsModeTest {
         assertEquals(true, PrivateDnsMode.STRICT.isSupportedForTunnelMode())
         assertEquals(false, PrivateDnsMode.UNKNOWN.isSupportedForTunnelMode())
     }
+
+    @Test
+    fun `system dns protection only supports private dns off`() {
+        assertEquals(true, PrivateDnsMode.OFF.isSupportedForSystemDnsProtection())
+        assertEquals(false, PrivateDnsMode.OPPORTUNISTIC.isSupportedForSystemDnsProtection())
+        assertEquals(false, PrivateDnsMode.STRICT.isSupportedForSystemDnsProtection())
+        assertEquals(false, PrivateDnsMode.UNKNOWN.isSupportedForSystemDnsProtection())
+    }
 }

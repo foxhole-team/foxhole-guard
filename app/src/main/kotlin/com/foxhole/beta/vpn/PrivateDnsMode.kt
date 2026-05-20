@@ -20,6 +20,8 @@ data class PrivateDnsState(
 internal fun PrivateDnsMode.isSupportedForTunnelMode(): Boolean =
     this == PrivateDnsMode.OFF || this == PrivateDnsMode.OPPORTUNISTIC || this == PrivateDnsMode.STRICT
 
+internal fun PrivateDnsMode.isSupportedForSystemDnsProtection(): Boolean = this == PrivateDnsMode.OFF
+
 internal object PrivateDnsSettings {
     fun current(context: Context): PrivateDnsMode = currentState(context).mode
 

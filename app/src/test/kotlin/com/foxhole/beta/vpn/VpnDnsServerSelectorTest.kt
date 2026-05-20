@@ -27,6 +27,32 @@ class VpnDnsServerSelectorTest {
     }
 
     @Test
+    fun `local guard advertises local tun dns before remote resolver`() {
+        val selected =
+            VpnDnsServerSelector.advertisedDnsServerAddresses(
+                configJson =
+                    """
+                    {
+                      "outbounds": [
+                        { "tag": "direct", "type": "direct" },
+                        { "tag": "block", "type": "block" }
+                      ],
+                      "dns": {
+                        "servers": [
+                          { "tag": "dns-local", "type": "local" },
+                          { "tag": "dns-remote", "type": "udp", "server": "94.140.14.14" }
+                        ]
+                      },
+                      "route": { "final": "direct" }
+                    }
+                    """.trimIndent(),
+                fallbackServerAddress = "172.19.0.2",
+            )
+
+        assertEquals(listOf("172.19.0.2"), selected)
+    }
+
+    @Test
     fun `falls back to legacy remote address host when local tun dns is unavailable`() {
         val selected =
             VpnDnsServerSelector.advertisedDnsServerAddress(

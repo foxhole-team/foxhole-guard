@@ -33,6 +33,8 @@ import com.foxhole.beta.core.model.TunStack
 import com.foxhole.beta.core.model.V2RayApiSettings
 import com.foxhole.beta.core.model.isUdpTransport
 import com.foxhole.beta.vpn.ACTIVE_CONNECTION_STATES
+import com.foxhole.beta.vpn.PrivateDnsSettings
+import com.foxhole.beta.vpn.isSupportedForSystemDnsProtection
 import com.foxhole.beta.vpn.localGuardModeOrNull
 import kotlinx.coroutines.launch
 import android.provider.Settings as AndroidSettings
@@ -370,6 +372,12 @@ internal fun HomeViewModel.onFirewallEnabledChangedInternal(value: Boolean) {
 
 internal fun HomeViewModel.onSystemDnsProtectionChangedInternal(value: Boolean) {
     viewModelScope.launch {
+        if (value && !PrivateDnsSettings.current(getApplication<Application>()).isSupportedForSystemDnsProtection()) {
+            container.settingsRepository.updateSystemDnsProtectionEnabled(false)
+            container.connectionController.syncLocalGuard()
+            snackbars.tryEmit(errorBanner(R.string.error_system_dns_private_dns_conflict))
+            return@launch
+        }
         container.settingsRepository.updateSystemDnsProtectionEnabled(value)
         if (value) {
             requestNotificationPermission.tryEmit(Unit)

@@ -594,13 +594,14 @@ class RuntimeConfigAssembler(
             put("stack", settings.traffic.tunStack.configValue)
             if (mode == LocalGuardMode.DNS) {
                 putJsonArray("route_address") {
-                    add(JsonPrimitive("$ADGUARD_DNS_PRIMARY/32"))
-                    add(JsonPrimitive("$ADGUARD_DNS_SECONDARY/32"))
+                    add(JsonPrimitive("$LOCAL_GUARD_DNS_SERVER_ADDRESS/32"))
                 }
             }
             putJsonArray("address") {
-                add(JsonPrimitive("172.19.0.1/30"))
-                add(JsonPrimitive("fdfe:dcba:9876::1/126"))
+                add(JsonPrimitive(LOCAL_GUARD_TUN_ADDRESS))
+                if (mode != LocalGuardMode.DNS) {
+                    add(JsonPrimitive("fdfe:dcba:9876::1/126"))
+                }
             }
             if (
                 mode == LocalGuardMode.FIREWALL &&
@@ -1818,8 +1819,9 @@ class RuntimeConfigAssembler(
         const val RUNTIME_LOOPBACK_PROXY_INBOUND_TAG = "foxhole-runtime-proxy-in"
         const val FOXHOLE_REMOTE_DNS_SERVER = "1.1.1.1"
         const val FOXHOLE_DOH_ADDRESS = "https://1.1.1.1/dns-query"
+        const val LOCAL_GUARD_TUN_ADDRESS = "172.19.0.1/30"
+        const val LOCAL_GUARD_DNS_SERVER_ADDRESS = "172.19.0.2"
         const val ADGUARD_DNS_PRIMARY = "94.140.14.14"
-        const val ADGUARD_DNS_SECONDARY = "94.140.15.15"
         const val MOBILE_TCP_KEEP_ALIVE = "30s"
         const val MOBILE_TCP_KEEP_ALIVE_INTERVAL = "15s"
         const val SITE_KEYWORD_PREFIX = "kw:"
