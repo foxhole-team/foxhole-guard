@@ -59,9 +59,20 @@ interface FoxholeDiagnosticsDependencies {
     val diagnosticsLogger: DiagnosticsLogger
 }
 
+interface FoxholeProfileMaintenanceDependencies {
+    val profileRepository: ProfileRepository
+    val diagnosticsLogger: DiagnosticsLogger
+}
+
 class FoxholeAppGraph(
     context: Context,
-) : FoxholeStartupDependencies, FoxholeHomeDependencies, FoxholeRuntimeDependencies, FoxholeTileDependencies, FoxholeRefreshWorkerDependencies, FoxholeDiagnosticsDependencies {
+) : FoxholeStartupDependencies,
+    FoxholeHomeDependencies,
+    FoxholeRuntimeDependencies,
+    FoxholeTileDependencies,
+    FoxholeRefreshWorkerDependencies,
+    FoxholeDiagnosticsDependencies,
+    FoxholeProfileMaintenanceDependencies {
     private val appContext = context.applicationContext
     private val coreModule = FoxholeCoreGraphModule(appContext)
     private val dataModule = FoxholeDataGraphModule(appContext, coreModule)

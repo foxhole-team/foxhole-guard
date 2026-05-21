@@ -452,12 +452,19 @@ class ProfileRepository(
                 }
             }
         }
-        if (!secretStore.delete(entity.secretRef)) {
-            diagnosticsLogger.record("profile", "profile secret cleanup failed")
-        }
+        cleanupProfileSecret(entity.secretRef)
         settingsRepository.updateSmartProfileExcludedProtocolOptionIds(profileId, emptySet())
         persistCachedActiveProfile(if (nextActiveId != null) requireProfile(nextActiveId!!) else null)
         diagnosticsLogger.record("profile", "profile deleted")
+    }
+
+    suspend fun cleanupOrphanProfileSecrets(): Int {
+        val activeSecretRefs = dao.getAllProfiles().map(ProfileEntity::secretRef).toSet()
+        val deletedCount = secretStore.deleteOrphans(activeSecretRefs)
+        if (deletedCount > 0) {
+            diagnosticsLogger.record("profile", "orphan profile secret cleanup removed $deletedCount entries")
+        }
+        return deletedCount
     }
 
     suspend fun setActiveProfile(profileId: Long) {
@@ -1050,6 +1057,20 @@ class ProfileRepository(
             "profile",
             "profile secret cleanup failed for $secretRef: ${error.message ?: error.javaClass.simpleName}",
         )
+    }
+
+    private suspend fun cleanupProfileSecret(secretRef: String) {
+        runCatching { secretStore.delete(secretRef) }
+            .onSuccess { deleted ->
+                if (!deleted) {
+                    recordSecretCleanupFailure(
+                        secretRef,
+                        IllegalStateException("profile secret cleanup returned false"),
+                    )
+                }
+            }.onFailure { error ->
+                recordSecretCleanupFailure(secretRef, error)
+            }
     }
 
     private suspend fun loadSubscriptionGroup(sourceUrl: String): List<SubscriptionGroupMember> {

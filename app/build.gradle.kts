@@ -194,6 +194,11 @@ val verifyReleaseBuildConfigDefaults by tasks.registering {
 
 tasks.matching { task -> task.name == "assembleRelease" }.configureEach {
     finalizedBy(verifyReleaseContainsBundledLibbox)
+    finalizedBy(verifyReleaseBuildConfigDefaults)
+}
+
+tasks.named("check") {
+    dependsOn(verifyReleaseBuildConfigDefaults)
 }
 
 android {
@@ -204,7 +209,7 @@ android {
         applicationId = "com.foxhole.beta"
         minSdk = 26
         targetSdk = 37
-        versionCode = 1
+        versionCode = 2
         versionName = "1.0.0-beta1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
@@ -398,6 +403,30 @@ tasks.register<JavaExec>("detekt") {
     }
 }
 
+val verifyDetektBaseline by tasks.registering {
+    group = "verification"
+    description = "Fail when detekt baseline grows without an intentional threshold update."
+
+    val detektBaseline = rootProject.file("config/detekt/baseline.xml")
+    val maxBaselineIssues = 743
+    inputs.file(detektBaseline)
+
+    doLast {
+        val issueCount = "<ID>".toRegex().findAll(detektBaseline.readText()).count()
+        require(issueCount <= maxBaselineIssues) {
+            "Detekt baseline grew to $issueCount issues; max allowed is $maxBaselineIssues"
+        }
+    }
+}
+
+tasks.named("detekt") {
+    finalizedBy(verifyDetektBaseline)
+}
+
+tasks.named("check") {
+    dependsOn(verifyDetektBaseline)
+}
+
 val jacocoExcludes =
     listOf(
         "**/R.class",
@@ -469,7 +498,7 @@ tasks.register<JacocoCoverageVerification>("jacocoDebugUnitTestCoverageVerificat
     violationRules {
         rule {
             limit {
-                minimum = "0.01".toBigDecimal()
+                minimum = "0.18".toBigDecimal()
             }
         }
     }

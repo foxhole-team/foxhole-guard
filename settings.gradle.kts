@@ -18,7 +18,11 @@ dependencyResolutionManagement {
     repositories {
         mavenCentral()
         maven("https://maven.google.com")
-        maven("https://jitpack.io")
+        maven("https://jitpack.io") {
+            content {
+                includeGroup("com.github.Dimezis")
+            }
+        }
     }
 }
 

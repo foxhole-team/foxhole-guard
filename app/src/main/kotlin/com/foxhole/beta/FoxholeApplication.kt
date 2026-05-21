@@ -10,6 +10,7 @@ import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
+import com.foxhole.beta.core.data.ProfileSecretCleanupWorker
 import com.foxhole.beta.core.model.AppLocale
 import com.foxhole.beta.core.model.SubscriptionRefreshInterval
 import com.foxhole.beta.core.profile.PROFILE_EXPORT_DIR_NAME
@@ -57,11 +58,28 @@ class FoxholeApplication : Application() {
         if (settings.lastActiveProfile == null) {
             startupDependencies.profileRepository.getActiveProfile()
         }
+        startupDependencies.profileRepository.cleanupOrphanProfileSecrets()
         applyAppLocale(settings.ui.locale)
+        applyProfileSecretCleanupSchedule()
         applySubscriptionRefreshSchedule(
             enabled = settings.connection.autoRefreshSubscriptions,
             interval = settings.connection.subscriptionRefreshInterval,
         )
+    }
+
+    private fun applyProfileSecretCleanupSchedule() {
+        WorkManager.getInstance(this).enqueueUniquePeriodicWork(
+            ProfileSecretCleanupWorker.WORK_NAME,
+            ExistingPeriodicWorkPolicy.UPDATE,
+            PeriodicWorkRequestBuilder<ProfileSecretCleanupWorker>(
+                PROFILE_SECRET_CLEANUP_INTERVAL_HOURS,
+                TimeUnit.HOURS,
+            ).build(),
+        )
+    }
+
+    private companion object {
+        const val PROFILE_SECRET_CLEANUP_INTERVAL_HOURS = 24L
     }
 }
 

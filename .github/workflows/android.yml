@@ -48,13 +48,13 @@ jobs:
         run: ./gradlew --no-daemon --console=plain --version
 
       - name: static analysis, release lint gate, unit tests, and coverage
-        run: ./gradlew --no-daemon --console=plain --stacktrace detekt lintDebug lintRelease lintVitalRelease testDebugUnitTest jacocoDebugUnitTestReport jacocoDebugUnitTestCoverageVerification
+        run: ./gradlew --no-daemon --console=plain --stacktrace detekt verifyDetektBaseline lintDebug lintRelease lintVitalRelease testDebugUnitTest jacocoDebugUnitTestReport jacocoDebugUnitTestCoverageVerification verifyReleaseBuildConfigDefaults
 
       - name: build connected and benchmark test artifacts
         run: ./gradlew --no-daemon --console=plain --stacktrace assembleDebug assembleDebugAndroidTest :macrobenchmark:assembleAndroidTest
 
       - name: build release
-        run: ./gradlew --no-daemon --console=plain --stacktrace -Pfoxhole.splitApks=true assembleRelease
+        run: ./gradlew --no-daemon --console=plain --stacktrace -Pfoxhole.splitApks=true assembleRelease verifyReleaseBuildConfigDefaults
 
       - name: verify AdGuard DNS assets in app builds
         run: scripts/verify-adguard-dns-assets.sh app/build/outputs/apk/debug/*.apk app/build/outputs/apk/release/*.apk
@@ -63,9 +63,7 @@ jobs:
         run: ./gradlew --no-daemon --console=plain --stacktrace :app:cyclonedxDirectBom
 
       - name: secret scan
-        run: |
-          go install github.com/zricethezav/gitleaks/v8@v8.24.2
-          "$(go env GOPATH)/bin/gitleaks" dir . -c .gitleaks.toml --redact --no-banner
+        run: scripts/run-gitleaks-scan.sh
 
       - name: mandatory dependency vulnerability scan
         run: scripts/run-osv-source-scan.sh

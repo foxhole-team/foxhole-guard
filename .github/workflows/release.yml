@@ -74,13 +74,13 @@ jobs:
           } >> "$GITHUB_ENV"
 
       - name: release quality gates
-        run: ./gradlew --no-daemon --console=plain --stacktrace detekt lintVitalRelease testDebugUnitTest
+        run: ./gradlew --no-daemon --console=plain --stacktrace detekt verifyDetektBaseline lintDebug lintRelease lintVitalRelease testDebugUnitTest jacocoDebugUnitTestReport jacocoDebugUnitTestCoverageVerification verifyReleaseBuildConfigDefaults
 
       - name: mandatory dependency vulnerability scan
         run: scripts/run-osv-source-scan.sh
 
       - name: build release
-        run: ./gradlew --no-daemon --console=plain --stacktrace -Pfoxhole.splitApks=true validateSigningRelease assembleRelease
+        run: ./gradlew --no-daemon --console=plain --stacktrace -Pfoxhole.splitApks=true validateSigningRelease assembleRelease verifyReleaseBuildConfigDefaults
 
       - name: verify AdGuard DNS assets in release APKs
         run: scripts/verify-adguard-dns-assets.sh app/build/outputs/apk/release/*.apk
