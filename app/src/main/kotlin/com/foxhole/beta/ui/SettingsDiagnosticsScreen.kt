@@ -82,7 +82,7 @@ fun DiagnosticsScreen(
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     var networkLogVisible by rememberSaveable { mutableStateOf(false) }
-    var networkLogSanitize by rememberSaveable { mutableStateOf(true) }
+    var sanitizeNetworkLogPrivateData by rememberSaveable { mutableStateOf(true) }
     var foxholeLogVisible by rememberSaveable { mutableStateOf(false) }
     var appChangesLogVisible by rememberSaveable { mutableStateOf(false) }
     var appChangesEnableVisible by rememberSaveable { mutableStateOf(false) }
@@ -122,6 +122,8 @@ fun DiagnosticsScreen(
         onFirewallEnabledChanged = onFirewallEnabledChanged,
         onDiagnosticsRetentionSelected = onDiagnosticsRetentionSelected,
         onRawLiveDiagnosticsChanged = onRawLiveDiagnosticsChanged,
+        sanitizeNetworkLogPrivateData = sanitizeNetworkLogPrivateData,
+        onSanitizeNetworkLogPrivateDataChanged = { sanitizeNetworkLogPrivateData = it },
         onOpenNetworkLog = { networkLogVisible = true },
         onOpenFoxholeLog = { foxholeLogVisible = true },
         onOpenAppChangesLog = {
@@ -136,8 +138,7 @@ fun DiagnosticsScreen(
     if (networkLogVisible) {
         NetworkActivityLogDialog(
             entries = networkEntries,
-            sanitizeEntries = networkLogSanitize,
-            onSanitizeEntriesChanged = { networkLogSanitize = it },
+            sanitizeEntries = sanitizeNetworkLogPrivateData,
             onDismiss = { networkLogVisible = false },
             onSave = { title, sanitize ->
                 pendingSavedLog =
@@ -221,7 +222,6 @@ private fun FoxholeAppLogDialog(
 private fun NetworkActivityLogDialog(
     entries: List<DiagnosticEntry>,
     sanitizeEntries: Boolean,
-    onSanitizeEntriesChanged: (Boolean) -> Unit,
     onDismiss: () -> Unit,
     onSave: (String, Boolean) -> Unit,
 ) {
@@ -239,7 +239,6 @@ private fun NetworkActivityLogDialog(
         entries = entries,
         notice = stringResource(R.string.logs_network_activity_notice),
         sanitizeEntries = sanitizeEntries,
-        onSanitizeEntriesChanged = onSanitizeEntriesChanged,
         onDismiss = onDismiss,
         confirmLabel = confirmLabel,
         onConfirm = { onSave(title, sanitizeEntries) },
@@ -274,6 +273,8 @@ private fun DiagnosticsScreenContent(
     onFirewallEnabledChanged: (Boolean) -> Unit,
     onDiagnosticsRetentionSelected: (DiagnosticsRetention) -> Unit,
     onRawLiveDiagnosticsChanged: (Boolean) -> Unit,
+    sanitizeNetworkLogPrivateData: Boolean,
+    onSanitizeNetworkLogPrivateDataChanged: (Boolean) -> Unit,
     onOpenNetworkLog: () -> Unit,
     onOpenFoxholeLog: () -> Unit,
     onOpenAppChangesLog: () -> Unit,
@@ -329,6 +330,22 @@ private fun DiagnosticsScreenContent(
                                 onNetworkActivityPersistentLoggingChanged(enabled)
                             }
                         },
+                        grouped = true,
+                    )
+                    SettingsControlGroupDivider()
+                    SettingSwitchRow(
+                        title = stringResource(R.string.logs_sanitize_private_data_title),
+                        checked = sanitizeNetworkLogPrivateData,
+                        summary =
+                        stringResource(
+                            if (sanitizeNetworkLogPrivateData) {
+                                R.string.logs_sanitize_private_data_summary_on
+                            } else {
+                                R.string.logs_sanitize_private_data_summary_off
+                            },
+                        ),
+                        leadingIcon = Icons.Outlined.Public,
+                        onCheckedChange = onSanitizeNetworkLogPrivateDataChanged,
                         grouped = true,
                     )
                     SettingsControlGroupDivider()

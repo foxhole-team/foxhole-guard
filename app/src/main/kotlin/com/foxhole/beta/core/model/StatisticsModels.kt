@@ -31,6 +31,7 @@ data class ProfileTrafficUiItem(
     val profileId: Long,
     val profileName: String,
     val protocolHint: ProtocolHint,
+    val protocolOptionId: String? = null,
     val transport: TransportProtocol = TransportProtocol.UNKNOWN,
     val rxBytes: Long,
     val txBytes: Long,

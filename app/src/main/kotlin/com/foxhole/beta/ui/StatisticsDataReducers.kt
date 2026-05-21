@@ -72,6 +72,9 @@ internal fun profileStatisticsDetail(
     val preference = state.settings.smartProfilePreferences.firstOrNull { preference -> preference.profileId == item.profileId }
     val memoriesByOptionId = preference?.protocolMemories.orEmpty().associateBy(SmartProfileProtocolMemory::optionId)
     val selectedOptionId = profile?.selectedProtocolOptionId ?: optionList.firstOrNull(ProfileProtocolOption::isSelected)?.id
+    val profileProtocolTraffic =
+        protocolTrafficItems(state)
+            .filter { traffic -> traffic.profileId == item.profileId }
     val configuredProtocolDetails =
         optionList
             .filter { option -> option.protocolHint != ProtocolHint.UNKNOWN }
@@ -88,26 +91,30 @@ internal fun profileStatisticsDetail(
                         )
                     }
                 val trafficForProtocol =
-                    if (
-                        option.id == selectedOptionId ||
-                        (selectedOptionId == null && option.protocolHint == item.protocolHint) ||
-                        (selectedOptionId == null && item.protocolHint == ProtocolHint.UNKNOWN && optionList.size == 1)
-                    ) {
-                        item
-                    } else {
-                        null
-                    }
+                    profileProtocolTraffic
+                        .trafficForProtocolOption(option = option, selectedOptionId = selectedOptionId)
+                        .ifEmpty {
+                            if (option.id == selectedOptionId) {
+                                listOf(item)
+                            } else {
+                                emptyList()
+                            }
+                        }
                 ProfileProtocolDetail(
                     label = option.displayName.ifBlank { protocolDisplayName(option.protocolHint) },
                     protocolHint = option.protocolHint,
                     successCount = memory?.successCount?.coerceAtLeast(0) ?: 0,
                     failureCount = memory?.failureCount?.coerceAtLeast(0) ?: 0,
-                    rxBytes = trafficForProtocol?.rxBytes ?: 0L,
-                    txBytes = trafficForProtocol?.txBytes ?: 0L,
+                    rxBytes = trafficForProtocol.sumOf(ProfileTrafficUiItem::rxBytes),
+                    txBytes = trafficForProtocol.sumOf(ProfileTrafficUiItem::txBytes),
                     avgLatencyMs = latency,
                     minLatencyMs = latency,
                     maxLatencyMs = latency,
-                    lastUsedAt = lastUsed ?: trafficForProtocol?.updatedAt?.takeIf { updatedAt -> updatedAt > 0L },
+                    lastUsedAt =
+                        maxOfNotNull(
+                            lastUsed,
+                            trafficForProtocol.mapNotNull { traffic -> traffic.updatedAt.takeIf { it > 0L } }.maxOrNull(),
+                        ),
                 )
             }
     val memoryOnlyDetails =
@@ -190,6 +197,26 @@ internal fun profileStatisticsDetail(
     )
 }
 
+private fun List<ProfileTrafficUiItem>.trafficForProtocolOption(
+    option: ProfileProtocolOption,
+    selectedOptionId: String?,
+): List<ProfileTrafficUiItem> {
+    val keyedTraffic = filter { traffic -> traffic.protocolOptionId == option.id }
+    if (keyedTraffic.isNotEmpty()) {
+        return keyedTraffic
+    }
+    val unkeyedTraffic =
+        filter { traffic ->
+            traffic.protocolOptionId == null &&
+                traffic.protocolHint == option.protocolHint
+        }
+    return if (unkeyedTraffic.isNotEmpty() && (selectedOptionId == null || option.id == selectedOptionId)) {
+        unkeyedTraffic
+    } else {
+        emptyList()
+    }
+}
+
 internal fun statisticsUiState(
     state: SettingsRouteUiState,
     retention: StatisticsRetention,
@@ -221,6 +248,7 @@ internal fun protocolTrafficItems(state: SettingsRouteUiState): List<ProfileTraf
                 profileId = total.profileId,
                 profileName = total.profileName,
                 protocolHint = total.protocolHint,
+                protocolOptionId = total.protocolOptionId,
                 transport = total.transport,
                 rxBytes = total.rxTotalBytes,
                 txBytes = total.txTotalBytes,
@@ -245,6 +273,7 @@ internal fun protocolTrafficItems(state: SettingsRouteUiState): List<ProfileTraf
                     profileId = activeProfile.id,
                     profileName = activeProfile.name,
                     protocolHint = liveProtocol,
+                    protocolOptionId = activeProfile.selectedProtocolOptionId,
                     transport = TransportProtocol.UNKNOWN,
                     rxBytes = liveTraffic.rxTotalBytes,
                     txBytes = liveTraffic.txTotalBytes,

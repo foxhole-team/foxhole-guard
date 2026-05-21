@@ -1,26 +1,19 @@
-Foxhole is a simple Android client for connecting to and managing sing-box profiles.
+Foxhole is an Android client for connecting to and managing sing-box profiles with support for a VPN tunnel, local proxy, split routing, and optional routing of selected apps' TCP traffic through the Tor network inside the VPN.
 
-It supports Tunnel, Split Tunnel (per-app and per-domain), Proxy, and LAN Proxy, along with profile import from files, clipboard, QR codes, and HTTPS subscriptions.
-
-No ads. No analytics. No telemetry.
+The app can run connections in VPN tunnel and local proxy modes, configure split routing for apps and domains, and use basic traffic restriction rules.
 
 Key features:
 
-* Modes: Tunnel, Split Tunnel, Proxy
-* LAN Proxy over Wi-Fi for access from other devices
-* Proxy authentication
-* Domain-based routing rules
-* Profile import: file, clipboard, QR code, HTTPS subscriptions
-* Support for Foxhole Smart Config and automatic protocol selection (Smart start)
-* Local traffic statistics
-* Subscription expiration display
-* Encrypted local profile storage
-
-Smart start automatically selects the most reliable protocol by testing available options and using local history.
-It takes into account connection success rate, latency, and recent failures. All processing is performed on-device.
-
-Permission note:
-Foxhole uses QUERY_ALL_PACKAGES to show installed apps for Split Tunnel include/exclude routing, local installed-app inventory/security review, and optional per-app traffic statistics. Usage Access (PACKAGE_USAGE_STATS) is requested only when per-app traffic statistics are enabled. Package lists, local risk signals, traffic statistics, diagnostics, and Smart start history stay on-device unless you explicitly export or share them.
+* VPN tunnel and local proxy mode
+* split routing for apps and domains
+* optional TCP traffic routing through the Tor network
+* LAN proxy over Wi-Fi
+* proxy authentication
+* domain-based routing rules
+* profile import from files, QR codes, clipboard, and HTTPS subscriptions
+* local traffic statistics
+* subscription expiration display
+* encrypted local profile storage
 
 Supported protocols:
 
@@ -31,3 +24,18 @@ Supported protocols:
 * Hysteria2
 * WireGuard
 * Outline
+
+
+Smart start selects a suitable connection option from the available protocol options. Selection is based on local history of successful and failed connections, latency, network state, and the last working option. This data is not sent to the developer or shared with third-party servers.
+
+Tor network:
+The app includes optional TCP traffic routing through the Tor network. UDP traffic is not sent through the Tor network. If Tor routing is enabled inside the VPN, selected TCP traffic goes through the Tor network, while UDP traffic stays on the regular VPN route or is blocked depending on settings.
+
+Tor is a trademark of The Tor Project. Foxhole is not a product of The Tor Project and is not endorsed, sponsored, or affiliated with The Tor Project.
+
+Permissions and privacy:
+QUERY_ALL_PACKAGES is used to choose apps that are included in or excluded from VPN/proxy routing, for the local installed-app overview, and for optional per-app traffic statistics.
+PACKAGE_USAGE_STATS is requested only when per-app statistics are enabled. Package lists, local risk signals, statistics, diagnostics, and Smart start history stay on the device unless the user explicitly exports or shares them.
+
+Network requests:
+Foxhole contains no ads, analytics, or telemetry. The app may make network requests for features selected by the user: loading HTTPS subscriptions, checking connection health, and getting current IP address information through a configurable endpoint. These requests are needed for VPN/proxy operation and connection validation.

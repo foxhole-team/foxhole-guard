@@ -94,6 +94,11 @@ class SettingsStatisticsScreenTest {
             330L,
             statistics.transports.single { item -> item.transport == TransportProtocol.UDP }.totalBytes,
         )
+
+        val detail = profileStatisticsDetail(state = state, item = statistics.profileTraffic.single())
+        assertEquals(480L, detail.totalBytes)
+        assertEquals(150L, detail.protocols.single { item -> item.label == "VLESS" }.totalBytes)
+        assertEquals(330L, detail.protocols.single { item -> item.label == "Hysteria2" }.totalBytes)
     }
 
     @Test

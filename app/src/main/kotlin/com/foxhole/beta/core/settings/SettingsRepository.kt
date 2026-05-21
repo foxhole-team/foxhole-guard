@@ -782,6 +782,10 @@ class SettingsRepository(
                         current.traffic
                     },
                 privacyRoute = current.privacyRoute.copy(mode = value),
+                ui =
+                    current.ui.copy(
+                        showTorQuickLaunch = current.ui.showTorQuickLaunch || value == PrivacyRouteMode.TOR_OVER_VPN,
+                    ),
             )
         }
 

@@ -425,6 +425,40 @@ class HomeDashboardPresentationTest {
     }
 
     @Test
+    fun `connected network model shows connection skeleton during manual network refresh`() {
+        val ipInfo =
+            IpInfo(
+                ip = "203.0.113.10",
+                countryCode = "NL",
+                countryName = "Netherlands",
+                city = "Amsterdam",
+                isp = "Example",
+                fetchedAt = 1_000L,
+            )
+        val model =
+            resolveHomeDashboardNetworkModel(
+                state =
+                    HomeRouteUiState(
+                        profilesLoaded = true,
+                        ipInfoLoading = true,
+                        connection =
+                            ConnectionSnapshot(
+                                state = ConnectionState.CONNECTED,
+                                profileId = 1L,
+                                lastChangeAt = 500L,
+                            ),
+                    ),
+                visibleIpInfo = ipInfo,
+                deviceInternetAvailable = true,
+            )
+
+        assertEquals(ipInfo, model.visibleIpInfo)
+        assertTrue(model.showLoading)
+        assertTrue(model.showIpInfoLoading)
+        assertTrue(model.showConnectionDetailsLoading)
+    }
+
+    @Test
     fun `connected smart metrics refresh keeps current vpn data without skeleton`() {
         val ipInfo =
             IpInfo(
@@ -1045,7 +1079,7 @@ class HomeDashboardPresentationTest {
                 activeVpnNetworkAvailable = true,
             ),
         )
-        assertFalse(
+        assertTrue(
             isTrafficMapRuntimeAvailable(
                 connection =
                     ConnectionSnapshot(
@@ -1084,7 +1118,7 @@ class HomeDashboardPresentationTest {
                 activeVpnNetworkAvailable = false,
             ),
         )
-        assertFalse(
+        assertTrue(
             isTrafficMapRuntimeAvailable(
                 connection =
                     ConnectionSnapshot(

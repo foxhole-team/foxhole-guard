@@ -16,13 +16,8 @@ internal fun LocalGuardMode.runtimeProfileName(): String =
     }
 
 internal fun Settings.localGuardModeOrNull(): LocalGuardMode? {
-    val persistentAppBlocking =
-        expert.firewallEnabled &&
-            expert.blockAppsAlways &&
-            expert.blockedPackagesEnabled &&
-            expert.blockedPackages.any(String::isNotBlank)
     return when {
-        persistentAppBlocking -> LocalGuardMode.FIREWALL
+        expert.firewallEnabled -> LocalGuardMode.FIREWALL
         expert.systemDnsProtectionEnabled -> LocalGuardMode.DNS
         else -> null
     }

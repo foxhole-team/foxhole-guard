@@ -320,10 +320,12 @@ class HomeViewModel(
                     activeProfile = resolvedActiveProfile,
                     connection = connectionStreams.connection,
                 )
+            val reconnectPromptActive =
+                reconnectState.promptUntilElapsedMs > 0L &&
+                    SystemClock.elapsedRealtime() <= reconnectState.promptUntilElapsedMs
             val profileReconnectRequired =
                 profileReconnectRequiredRaw &&
-                    reconnectState.promptUntilElapsedMs > 0L &&
-                    SystemClock.elapsedRealtime() <= reconnectState.promptUntilElapsedMs
+                    reconnectPromptActive
             val runtimeReconnectRequired =
                 reconnectState.runtimeReconnectRequired &&
                     connectionStreams.connection.state in ACTIVE_CONNECTION_STATES
@@ -354,7 +356,7 @@ class HomeViewModel(
                 torOperation = localStreams.torOperation,
                 torTransitionPrompt = localStreams.torTransitionPrompt,
                 profileReconnectPromptUntilElapsedMs =
-                if (profileReconnectRequired) {
+                if (profileReconnectRequired || (runtimeReconnectRequired && reconnectPromptActive)) {
                     reconnectState.promptUntilElapsedMs
                 } else {
                     0L
@@ -598,6 +600,8 @@ class HomeViewModel(
     internal var connectedIpRefreshJob: Job? = null
     internal var profileLatencyRefreshJob: Job? = null
     internal var runtimeReloadPendingJob: Job? = null
+    internal var routeModeRestartPromptJob: Job? = null
+    internal var routeModeRestartBaseline: Pair<TrafficMode, PerAppRoutingMode>? = null
     internal var torOperationTimeoutJob: Job? = null
     internal var profileReconnectPromptJob: Job? = null
     internal var autoConnectJob: Job? = null
@@ -1530,6 +1534,7 @@ class HomeViewModel(
         internal const val CONNECTED_LATENCY_FIRST_DELAY_MS = 350L
         internal const val CONNECTED_LATENCY_REFRESH_INTERVAL_MS = 15_000L
         internal const val CONNECTED_LATENCY_TIMEOUT_MS = 2_500L
+        internal const val CONNECTED_LATENCY_TOTAL_TIMEOUT_MS = 8_000L
         internal const val CONNECTED_SERVER_PING_TIMEOUT_MS = 1_200L
         internal const val PROFILE_RECONNECT_PROMPT_WINDOW_MS = 13_000L
         internal const val RUNTIME_RELOAD_PENDING_TIMEOUT_MS = 1_500L

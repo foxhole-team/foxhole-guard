@@ -820,13 +820,13 @@ class RuntimeConfigAssemblerTest {
     }
 
     @Test
-    fun `kill switch preference does not create a local guard mode`() {
+    fun `kill switch preference does not override firewall local guard mode`() {
         assertEquals(
             null,
             Settings(expert = ExpertSettings(killSwitchEnabled = true)).localGuardModeOrNull(),
         )
         assertEquals(
-            null,
+            LocalGuardMode.FIREWALL,
             Settings(
                 expert =
                     ExpertSettings(
@@ -836,7 +836,7 @@ class RuntimeConfigAssemblerTest {
             ).localGuardModeOrNull(),
         )
         assertEquals(
-            null,
+            LocalGuardMode.FIREWALL,
             Settings(
                 expert =
                     ExpertSettings(
@@ -862,7 +862,7 @@ class RuntimeConfigAssemblerTest {
     }
 
     @Test
-    fun `firewall local guard starts only when permanent app blocking is active`() {
+    fun `firewall local guard starts when firewall is enabled and keeps permanent app blocking scoped`() {
         val blockedApps =
             ExpertSettings(
                 blockedPackagesEnabled = true,
@@ -875,7 +875,7 @@ class RuntimeConfigAssemblerTest {
             Settings(expert = blockedApps).localGuardModeOrNull(),
         )
         assertEquals(
-            null,
+            LocalGuardMode.FIREWALL,
             Settings(
                 expert =
                     blockedApps.copy(
@@ -905,39 +905,39 @@ class RuntimeConfigAssemblerTest {
     }
 
     @Test
-    fun `firewall alone does not start full-device local guard`() {
+    fun `firewall alone starts full-device local guard`() {
         val firewall = ExpertSettings(firewallEnabled = true)
 
         val settings = Settings(expert = firewall)
-        assertEquals(null, settings.localGuardModeOrNull())
+        assertEquals(LocalGuardMode.FIREWALL, settings.localGuardModeOrNull())
     }
 
     @Test
-    fun `firewall logging only features do not start full-device local guard`() {
+    fun `firewall logging features keep firewall local guard active`() {
         val firewall = ExpertSettings(firewallEnabled = true)
 
         assertEquals(
-            null,
+            LocalGuardMode.FIREWALL,
             Settings(
                 expert = firewall.copy(networkActivityPersistentLogging = true),
             ).localGuardModeOrNull(),
         )
         assertEquals(
-            null,
+            LocalGuardMode.FIREWALL,
             Settings(
                 ui = UiSettings(trafficMapEnabled = true),
                 expert = firewall,
             ).localGuardModeOrNull(),
         )
         assertEquals(
-            null,
+            LocalGuardMode.FIREWALL,
             Settings(
                 expert = firewall,
                 statistics = StatisticsSettings(enabled = true, countryTrafficEnabled = true),
             ).localGuardModeOrNull(),
         )
         assertEquals(
-            LocalGuardMode.DNS,
+            LocalGuardMode.FIREWALL,
             Settings(
                 expert = firewall.copy(
                     systemDnsProtectionEnabled = true,

@@ -36,6 +36,7 @@ import com.foxhole.beta.vpn.ACTIVE_CONNECTION_STATES
 import com.foxhole.beta.vpn.PrivateDnsSettings
 import com.foxhole.beta.vpn.isSupportedForSystemDnsProtection
 import com.foxhole.beta.vpn.localGuardModeOrNull
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import android.provider.Settings as AndroidSettings
 
@@ -183,7 +184,11 @@ internal fun HomeViewModel.onTunStackSelectedInternal(value: TunStack) {
 }
 
 internal fun HomeViewModel.onTrafficModeSelectedInternal(value: TrafficMode) {
-    viewModelScope.launch {
+    val current = container.settingsRepository.settings.value.traffic.mode
+    if (current == value) {
+        return
+    }
+    updateRouteModeSettingAndPromptRestart {
         container.settingsRepository.updateTrafficMode(value)
     }
 }
@@ -517,7 +522,11 @@ internal fun HomeViewModel.onAllowPrivateOutboundHostsChangedInternal(value: Boo
 }
 
 internal fun HomeViewModel.onPerAppRoutingModeSelectedInternal(value: PerAppRoutingMode) {
-    updateAppRoutingSettingAndPromptReconnect {
+    val current = container.settingsRepository.settings.value.expert.perAppRoutingMode
+    if (current == value) {
+        return
+    }
+    updateRouteModeSettingAndPromptRestart {
         container.settingsRepository.updatePerAppRoutingMode(value)
     }
 }
@@ -662,6 +671,55 @@ private fun HomeViewModel.updateAppRoutingSettingAndPromptReconnect(
             clearRuntimeReloadPending()
         }
     }
+}
+
+private fun HomeViewModel.updateRouteModeSettingAndPromptRestart(
+    updateAction: suspend () -> Unit,
+) {
+    viewModelScope.launch {
+        val currentSettings = container.settingsRepository.current()
+        val targetProfileId = activeRuntimeProfileIdForReload()
+        val activeRuntime =
+            targetProfileId != null &&
+                container.connectionController.snapshot.value.state in HomeViewModel.ACTIVE_CONNECTION_STATES
+        if (!activeRuntime) {
+            updateAction()
+            clearRouteModeRestartPrompt()
+            clearRuntimeReconnectRequired()
+            return@launch
+        }
+        val baseline =
+            routeModeRestartBaseline
+                ?: (currentSettings.traffic.mode to currentSettings.expert.perAppRoutingMode).also { routeModeRestartBaseline = it }
+        updateAction()
+        markRuntimeReconnectRequired()
+        markProfileReconnectPromptWindow()
+        scheduleRouteModeRestartRevert(baseline)
+    }
+}
+
+private fun HomeViewModel.scheduleRouteModeRestartRevert(
+    baseline: Pair<TrafficMode, PerAppRoutingMode>,
+) {
+    routeModeRestartPromptJob?.cancel()
+    routeModeRestartPromptJob =
+        viewModelScope.launch {
+            delay(HomeViewModel.PROFILE_RECONNECT_PROMPT_WINDOW_MS)
+            if (routeModeRestartBaseline == baseline && !reconnectInProgressMutable.value) {
+                container.settingsRepository.updatePerAppRoutingMode(baseline.second)
+                container.settingsRepository.updateTrafficMode(baseline.first)
+                clearRuntimeReconnectRequired()
+                profileReconnectPromptUntilMutable.value = 0L
+                routeModeRestartBaseline = null
+            }
+            routeModeRestartPromptJob = null
+        }
+}
+
+internal fun HomeViewModel.clearRouteModeRestartPrompt() {
+    routeModeRestartPromptJob?.cancel()
+    routeModeRestartPromptJob = null
+    routeModeRestartBaseline = null
 }
 
 internal fun HomeViewModel.onSiteRoutingActionSelectedInternal(value: RoutingRuleAction) {

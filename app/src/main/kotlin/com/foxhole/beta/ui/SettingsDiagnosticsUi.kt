@@ -47,7 +47,6 @@ internal fun LiveLogsDialog(
     onDismiss: () -> Unit,
     notice: String? = null,
     sanitizeEntries: Boolean = false,
-    onSanitizeEntriesChanged: ((Boolean) -> Unit)? = null,
     confirmLabel: String? = null,
     onConfirm: (() -> Unit)? = null,
 ) {
@@ -92,12 +91,6 @@ internal fun LiveLogsDialog(
                             color = MaterialTheme.colorScheme.onSurface,
                         )
                     }
-                }
-                onSanitizeEntriesChanged?.let { onSanitizeChanged ->
-                    LiveLogSanitizerSwitch(
-                        sanitizeEntries = sanitizeEntries,
-                        onSanitizeEntriesChanged = onSanitizeChanged,
-                    )
                 }
                 if (visibleEntries.isEmpty()) {
                     Surface(
@@ -164,27 +157,6 @@ internal fun LiveLogsDialog(
                 onClick = onDismiss,
             )
         },
-    )
-}
-
-@Composable
-private fun LiveLogSanitizerSwitch(
-    sanitizeEntries: Boolean,
-    onSanitizeEntriesChanged: (Boolean) -> Unit,
-) {
-    val summary =
-        stringResource(
-            if (sanitizeEntries) {
-                R.string.logs_sanitize_private_data_summary_on
-            } else {
-                R.string.logs_sanitize_private_data_summary_off
-            },
-        )
-    SettingSwitchRow(
-        title = stringResource(R.string.logs_sanitize_private_data_title),
-        checked = sanitizeEntries,
-        summary = summary,
-        onCheckedChange = onSanitizeEntriesChanged,
     )
 }
 

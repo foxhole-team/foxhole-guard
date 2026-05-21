@@ -478,24 +478,18 @@ private fun AppGridTile(
                     modifier = Modifier.align(Alignment.Center).size(68.dp),
                 )
                 Surface(
-                    modifier = Modifier.align(Alignment.TopEnd).size(48.dp),
-                    shape = MaterialTheme.shapes.large,
-                    color = Color.Transparent,
+                    modifier = Modifier.align(Alignment.TopEnd).size(32.dp),
+                    shape = CircleShape,
+                    color = MaterialTheme.colorScheme.error,
+                    contentColor = MaterialTheme.colorScheme.onError,
                     onClick = onRemove,
                 ) {
-                    Box(contentAlignment = Alignment.TopEnd) {
-                        Surface(
-                            modifier = Modifier.align(Alignment.TopEnd).size(28.dp),
-                            shape = MaterialTheme.shapes.large,
-                            color = MaterialTheme.colorScheme.error,
-                            contentColor = MaterialTheme.colorScheme.onError,
-                        ) {
-                            Icon(
-                                imageVector = Icons.Outlined.Close,
-                                contentDescription = stringResource(R.string.delete_label),
-                                modifier = Modifier.padding(6.dp),
-                            )
-                        }
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = Icons.Outlined.Close,
+                            contentDescription = stringResource(R.string.delete_label),
+                            modifier = Modifier.size(18.dp),
+                        )
                     }
                 }
             }

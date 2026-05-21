@@ -119,6 +119,7 @@ internal fun HomeViewModel.requestReconnectInternal(profileId: Long) {
             return
         }
     }
+    clearRouteModeRestartPrompt()
     if (uiState.value.settings.traffic.mode == TrafficMode.PROXY) {
         reconnect(profileId)
         return
@@ -137,6 +138,7 @@ internal fun HomeViewModel.requestReconnectInternal(profileId: Long) {
 }
 
 internal fun HomeViewModel.reconnectInternal(profileId: Long) {
+    clearRouteModeRestartPrompt()
     val previousReconnectJob = reconnectJob
     previousReconnectJob?.cancel()
     val nextReconnectJob = viewModelScope.launch {
@@ -955,8 +957,10 @@ private suspend fun HomeViewModel.refreshSmartProfileMetricsPassive(
     )
     val latencyResult =
         runCatchingUnlessCancelled {
-            withTimeoutOrNull(HomeViewModel.CONNECTED_LATENCY_TIMEOUT_MS) {
-                container.connectionController.measureCurrentConnectionLatency()
+            withTimeoutOrNull(HomeViewModel.CONNECTED_LATENCY_TOTAL_TIMEOUT_MS) {
+                container.connectionController.measureCurrentConnectionLatency(
+                    timeoutMs = HomeViewModel.CONNECTED_LATENCY_TIMEOUT_MS,
+                )
             } ?: error("dashboard latency timed out")
         }
     latencyResult.onSuccess { latencyMs ->
@@ -1940,8 +1944,10 @@ internal fun HomeViewModel.scheduleActiveProfileLatencyRefreshInternal(
                         ) ?: return@launch
                     val latencyResult =
                         runCatchingUnlessCancelled {
-                            withTimeoutOrNull(HomeViewModel.CONNECTED_LATENCY_TIMEOUT_MS) {
-                                container.connectionController.measureCurrentConnectionLatency()
+                            withTimeoutOrNull(HomeViewModel.CONNECTED_LATENCY_TOTAL_TIMEOUT_MS) {
+                                container.connectionController.measureCurrentConnectionLatency(
+                                    timeoutMs = HomeViewModel.CONNECTED_LATENCY_TIMEOUT_MS,
+                                )
                             } ?: error("dashboard latency timed out")
                         }
                     val measuredLatency = latencyResult.getOrNull()

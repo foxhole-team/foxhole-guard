@@ -515,6 +515,7 @@ internal fun resolveHomeDashboardNetworkModel(
         state.shouldShowHomeNetworkConnectionDetailsLoading(
             showConnectionStatus = showConnectionStatus,
             routeTransitionRunning = routeTransitionRunning,
+            explicitIpInfoLoading = state.ipInfoLoading,
         )
     return HomeDashboardNetworkModel(
         visibleIpInfo = dashboardIpInfo,
@@ -566,12 +567,14 @@ private fun HomeRouteUiState.shouldShowHomeNetworkIpInfoLoading(
 private fun HomeRouteUiState.shouldShowHomeNetworkConnectionDetailsLoading(
     showConnectionStatus: Boolean,
     routeTransitionRunning: Boolean,
+    explicitIpInfoLoading: Boolean,
 ): Boolean =
     showConnectionStatus &&
         (
             reconnectInProgress ||
                 shouldShowVpnTransitionLoading(routeTransitionRunning) ||
-                routeTransitionRunning
+                routeTransitionRunning ||
+                explicitIpInfoLoading
             )
 
 private fun HomeRouteUiState.shouldShowVpnTransitionLoading(routeTransitionRunning: Boolean): Boolean =
