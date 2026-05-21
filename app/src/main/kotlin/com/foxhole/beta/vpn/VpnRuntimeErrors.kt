@@ -25,7 +25,7 @@ private fun knownRuntimeCompatibilityDescription(message: String): String? {
     val normalized = message.lowercase()
     return when {
         hasAll(normalized, "tor", "udp") && hasAny(normalized, "not support", "unsupported") ->
-            "TOR mode does not support UDP for this profile; switch TOR UDP policy to Proxy or Block."
+            "Tor mode does not support UDP for this profile; switch Tor UDP policy to Proxy or Block."
         hasAny(normalized, "fakeip", "fake-ip") && hasAll(normalized, "strict", "private dns") ->
             "Strict Private DNS is incompatible with FakeIP DNS mode; use Secure DNS Auto/Remote mode."
         hasAll(normalized, "firewall") &&

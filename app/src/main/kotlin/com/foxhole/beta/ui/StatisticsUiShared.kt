@@ -3,11 +3,9 @@ package com.foxhole.beta.ui
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.foxhole.beta.R
-import com.foxhole.beta.core.model.StatisticsRefreshInterval
 import com.foxhole.beta.core.model.StatisticsRetention
 import kotlin.math.roundToInt
 
@@ -39,14 +37,6 @@ internal fun statisticsRetentionLabel(value: StatisticsRetention): String =
             StatisticsRetention.MONTHS_3 -> R.string.statistics_retention_months_3
             StatisticsRetention.FOREVER -> R.string.statistics_retention_forever
         },
-    )
-
-@Composable
-internal fun statisticsRefreshIntervalLabel(value: StatisticsRefreshInterval): String =
-    pluralStringResource(
-        R.plurals.statistics_refresh_interval_seconds,
-        value.seconds,
-        value.seconds,
     )
 
 internal fun List<Long>.averageOrNull(): Long? =

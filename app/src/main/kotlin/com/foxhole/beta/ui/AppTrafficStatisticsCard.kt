@@ -242,7 +242,6 @@ internal fun AppTrafficDetail(
                     row.txBytes,
                     formatBytes(context, row.txBytes),
                 ),
-                metricIfPositive(stringResource(R.string.statistics_app_samples), appSamples.size),
                 appSamples.maxOfOrNull(AppTrafficWindow::startedAtMs)
                     ?.let { stringResource(R.string.statistics_last_activity) to it.formatLastActivity() },
             ),
@@ -257,13 +256,7 @@ internal fun AppTrafficDetail(
             ChartLegend()
         }
         val loadedConnectionRows = connectionRows ?: return@Column
-        if (loadedConnectionRows.isEmpty()) {
-            Text(
-                text = stringResource(R.string.statistics_app_detail_connections_unavailable),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        } else {
+        if (loadedConnectionRows.isNotEmpty()) {
             Text(
                 text = stringResource(R.string.statistics_app_detail_top_destinations),
                 style = MaterialTheme.typography.titleSmall,

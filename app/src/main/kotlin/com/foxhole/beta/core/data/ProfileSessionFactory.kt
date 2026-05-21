@@ -98,7 +98,7 @@ internal class ProfileSessionFactory(
         privateDnsState: PrivateDnsState? = null,
     ): VpnSession {
         val settings = settingsRepository.current()
-        require(settings.privacyRoute.enabled) { "TOR route is disabled" }
+        require(settings.privacyRoute.enabled) { "Tor route is disabled" }
         val correlationId = newRuntimeCorrelationId()
         val dnsFilterRuntimePaths =
             if (settings.dns.bundledAdGuardFilterEnabled()) {
@@ -134,7 +134,7 @@ internal class ProfileSessionFactory(
             }.getOrThrow()
         return VpnSession(
             profileId = FoxholeVpnService.TOR_ONLY_PROFILE_ID,
-            profileName = "TOR",
+            profileName = "Tor",
             protocolHint = ProtocolHint.SING_BOX,
             configJson = assembled,
             correlationId = correlationId,

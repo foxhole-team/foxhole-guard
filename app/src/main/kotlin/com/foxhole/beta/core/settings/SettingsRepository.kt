@@ -1054,8 +1054,6 @@ class SettingsRepository(
                         perAppRoutingMode =
                             when {
                                 normalizedSelectedPackages.isEmpty() -> PerAppRoutingMode.FULL_TUNNEL
-                                it.expert.perAppRoutingMode == PerAppRoutingMode.FULL_TUNNEL ->
-                                    PerAppRoutingMode.INCLUDE_SELECTED_APPS
                                 else -> it.expert.perAppRoutingMode
                             },
                     ),
@@ -1598,7 +1596,7 @@ class SettingsRepository(
                         .mapNotNull { items -> items.maxByOrNull(ProfileTrafficTotal::updatedAt) }
                         .sortedByDescending(ProfileTrafficTotal::updatedAt),
                 installedAppInventoryAudit = installedAppInventoryAudit.normalized(),
-                appTrafficStatsEnabled = if (schemaVersion < SETTINGS_SCHEMA_VERSION) false else appTrafficStatsEnabled,
+                appTrafficStatsEnabled = if (schemaVersion < SETTINGS_SCHEMA_VERSION) true else appTrafficStatsEnabled,
                 usageTrackingStartedAt = usageTrackingStartedAt.takeIf { it > 0L } ?: System.currentTimeMillis(),
             )
         }
@@ -1658,6 +1656,7 @@ class SettingsRepository(
 
     private fun StatisticsSettings.normalized(resetOptionalMetrics: Boolean = false): StatisticsSettings =
         copy(
+            enabled = if (resetOptionalMetrics) true else enabled,
             retention =
                 when (retention) {
                     StatisticsRetention.WEEK,
@@ -1675,14 +1674,14 @@ class SettingsRepository(
                     -> refreshInterval
                 },
             profileTrafficEnabled = if (resetOptionalMetrics) true else profileTrafficEnabled,
-            vpnProtocolsEnabled = if (resetOptionalMetrics) false else vpnProtocolsEnabled,
-            profileComparisonsEnabled = if (resetOptionalMetrics) false else profileComparisonsEnabled,
-            transportsEnabled = if (resetOptionalMetrics) false else transportsEnabled,
-            appTrafficEnabled = if (resetOptionalMetrics) false else appTrafficEnabled,
-            dnsFilteringEnabled = if (resetOptionalMetrics) false else dnsFilteringEnabled,
-            countryTrafficEnabled = if (resetOptionalMetrics) false else countryTrafficEnabled,
-            anomalyMetricsEnabled = if (resetOptionalMetrics) false else anomalyMetricsEnabled,
-            appChangesEnabled = if (resetOptionalMetrics) false else appChangesEnabled,
+            vpnProtocolsEnabled = if (resetOptionalMetrics) true else vpnProtocolsEnabled,
+            profileComparisonsEnabled = if (resetOptionalMetrics) true else profileComparisonsEnabled,
+            transportsEnabled = if (resetOptionalMetrics) true else transportsEnabled,
+            appTrafficEnabled = if (resetOptionalMetrics) true else appTrafficEnabled,
+            dnsFilteringEnabled = if (resetOptionalMetrics) true else dnsFilteringEnabled,
+            countryTrafficEnabled = if (resetOptionalMetrics) true else countryTrafficEnabled,
+            anomalyMetricsEnabled = if (resetOptionalMetrics) true else anomalyMetricsEnabled,
+            appChangesEnabled = if (resetOptionalMetrics) true else appChangesEnabled,
         )
 
     private fun InstalledAppInventoryAudit.normalized(): InstalledAppInventoryAudit =

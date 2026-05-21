@@ -7,6 +7,8 @@ import org.junit.Test
 class SubscriptionRefreshScheduleTest {
     @Test
     fun `refresh interval hours stay mapped to selectable schedule values`() {
+        assertEquals(1L, subscriptionRefreshIntervalHours(SubscriptionRefreshInterval.HOURS_1))
+        assertEquals(3L, subscriptionRefreshIntervalHours(SubscriptionRefreshInterval.HOURS_3))
         assertEquals(6L, subscriptionRefreshIntervalHours(SubscriptionRefreshInterval.HOURS_6))
         assertEquals(12L, subscriptionRefreshIntervalHours(SubscriptionRefreshInterval.HOURS_12))
         assertEquals(24L, subscriptionRefreshIntervalHours(SubscriptionRefreshInterval.HOURS_24))

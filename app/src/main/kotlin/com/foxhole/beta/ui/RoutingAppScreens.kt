@@ -38,7 +38,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -193,7 +192,7 @@ fun RoutingAppsScreen(
                     leadingIcon = Icons.Outlined.Apps,
                     apps = selectedApps,
                     emptyText = stringResource(R.string.split_tunnel_requires_apps),
-                    headerActionLabel = stringResource(R.string.choose_label),
+                    headerActionLabel = stringResource(R.string.add_label),
                     headerActionTag = "routing_apps_add_exception_action",
                     onHeaderAction = onOpenPicker,
                     onRemove = { app ->
@@ -239,7 +238,7 @@ fun RoutingAppsScreen(
                     leadingIcon = Icons.Outlined.Block,
                     apps = blockedApps,
                     emptyText = "",
-                    headerActionLabel = stringResource(R.string.choose_label),
+                    headerActionLabel = stringResource(R.string.add_label),
                     headerActionTag = "routing_apps_blocked_add_exception_action",
                     onHeaderAction = onOpenBlockedPicker,
                     onRemove = { app ->
@@ -344,9 +343,11 @@ internal fun AppGridSectionContent(
                 }
             }
             if (headerActionLabel != null && onHeaderAction != null) {
-                TextButton(
+                Button(
                     onClick = onHeaderAction,
                     modifier = headerActionTag?.let { Modifier.testTag(it) } ?: Modifier,
+                    colors = foxholeDropdownColoredButtonColors(),
+                    border = foxholeDropdownColoredButtonBorder(),
                 ) {
                     Icon(
                         Icons.Outlined.Add,

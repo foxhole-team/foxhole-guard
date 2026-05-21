@@ -346,6 +346,20 @@ internal fun Settings.requiresStrictRuntimeProxyIpRefresh(snapshot: ConnectionSn
                 }
             )
 
+internal fun Settings.shouldPublishRuntimeProxyIpInfoToDashboard(snapshot: ConnectionSnapshot): Boolean =
+    !(
+        privacyRoute.mode == PrivacyRouteMode.TOR_OVER_VPN &&
+            snapshot.state in ACTIVE_CONNECTION_STATES &&
+            snapshot.trafficMode == TrafficMode.TUNNEL &&
+            snapshot.profileId != null &&
+            snapshot.profileId != FoxholeVpnService.LOCAL_GUARD_PROFILE_ID &&
+            snapshot.profileId != FoxholeVpnService.TOR_ONLY_PROFILE_ID &&
+            when (privacyRoute.scope) {
+                PrivacyRouteScope.ALL_APPS -> true
+                PrivacyRouteScope.SELECTED_APPS -> privacyRoute.selectedPackages.any(String::isNotBlank)
+            }
+    )
+
 private fun ConnectionSnapshot.requiresRuntimeProxyForActiveTunnelIpRefresh(): Boolean =
     appOwnedRequestPath() == AppOwnedRequestPath.NORMAL_PROCESS &&
         state in ACTIVE_CONNECTION_STATES &&

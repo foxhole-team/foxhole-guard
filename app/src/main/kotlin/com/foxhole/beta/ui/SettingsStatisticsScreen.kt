@@ -49,7 +49,6 @@ fun StatisticsScreen(
 ) {
     var settingsVisible by rememberSaveable { mutableStateOf(false) }
     var retentionMenuExpanded by rememberSaveable { mutableStateOf(false) }
-    var refreshIntervalMenuExpanded by rememberSaveable { mutableStateOf(false) }
     var allAppsVisible by rememberSaveable { mutableStateOf(false) }
     var allCountriesVisible by rememberSaveable { mutableStateOf(false) }
     var allAnomaliesVisible by rememberSaveable { mutableStateOf(false) }
@@ -123,6 +122,7 @@ fun StatisticsScreen(
                 Icon(
                     imageVector = Icons.Outlined.Settings,
                     contentDescription = stringResource(R.string.statistics_settings_content_description),
+                    tint = MaterialTheme.colorScheme.onBackground,
                 )
             }
         },
@@ -217,13 +217,10 @@ fun StatisticsScreen(
             usageAccessGranted = usageAccessGranted,
             dnsFilteringAvailable = dnsFilteringAvailable,
             retentionMenuExpanded = retentionMenuExpanded,
-            refreshIntervalMenuExpanded = refreshIntervalMenuExpanded,
             actions = StatisticsSettingsDialogActions(
                 onRetentionMenuExpandedChange = { retentionMenuExpanded = it },
-                onRefreshIntervalMenuExpandedChange = { refreshIntervalMenuExpanded = it },
                 onStatisticsEnabledChanged = onStatisticsEnabledChanged,
                 onStatisticsRetentionSelected = onStatisticsRetentionSelected,
-                onStatisticsRefreshIntervalSelected = onStatisticsRefreshIntervalSelected,
                 onStatisticsMetricEnabledChanged = onStatisticsMetricEnabledChanged,
                 onAppTrafficStatsEnabledChanged = onAppTrafficStatsEnabledChanged,
                 onUsageAccessRequired = {

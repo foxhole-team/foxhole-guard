@@ -18,7 +18,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.foxhole.beta.R
 import com.foxhole.beta.core.model.StatisticsMetric
-import com.foxhole.beta.core.model.StatisticsRefreshInterval
 import com.foxhole.beta.core.model.StatisticsRetention
 import com.foxhole.beta.core.model.StatisticsSettings
 
@@ -30,7 +29,6 @@ internal fun StatisticsSettingsDialog(
     usageAccessGranted: Boolean,
     dnsFilteringAvailable: Boolean,
     retentionMenuExpanded: Boolean,
-    refreshIntervalMenuExpanded: Boolean,
     actions: StatisticsSettingsDialogActions,
 ) {
     AlertDialog(
@@ -45,7 +43,6 @@ internal fun StatisticsSettingsDialog(
                     state = state,
                     statisticsSettings = statisticsSettings,
                     retentionMenuExpanded = retentionMenuExpanded,
-                    refreshIntervalMenuExpanded = refreshIntervalMenuExpanded,
                     actions = actions,
                 )
                 SettingsControlGroup {
@@ -85,10 +82,8 @@ internal fun StatisticsSettingsDialog(
 
 internal data class StatisticsSettingsDialogActions(
     val onRetentionMenuExpandedChange: (Boolean) -> Unit,
-    val onRefreshIntervalMenuExpandedChange: (Boolean) -> Unit,
     val onStatisticsEnabledChanged: (Boolean) -> Unit,
     val onStatisticsRetentionSelected: (StatisticsRetention) -> Unit,
-    val onStatisticsRefreshIntervalSelected: (StatisticsRefreshInterval) -> Unit,
     val onStatisticsMetricEnabledChanged: (StatisticsMetric, Boolean) -> Unit,
     val onAppTrafficStatsEnabledChanged: (Boolean) -> Unit,
     val onUsageAccessRequired: () -> Unit,
@@ -101,7 +96,6 @@ private fun StatisticsStorageSettingsGroup(
     state: SettingsRouteUiState,
     statisticsSettings: StatisticsSettings,
     retentionMenuExpanded: Boolean,
-    refreshIntervalMenuExpanded: Boolean,
     actions: StatisticsSettingsDialogActions,
 ) {
     SettingsControlGroup {
@@ -124,20 +118,6 @@ private fun StatisticsStorageSettingsGroup(
             label = { statisticsRetentionLabel(it) },
             onSelect = actions.onStatisticsRetentionSelected,
             leadingIcon = Icons.Outlined.Storage,
-            grouped = true,
-        )
-        SettingsControlGroupDivider()
-        DropdownSettingRow(
-            title = stringResource(R.string.statistics_refresh_interval_title),
-            value = statisticsRefreshIntervalLabel(state.settings.statistics.refreshInterval),
-            expanded = refreshIntervalMenuExpanded,
-            onExpandedChange = actions.onRefreshIntervalMenuExpandedChange,
-            values = StatisticsRefreshInterval.entries,
-            selected = state.settings.statistics.refreshInterval,
-            label = { statisticsRefreshIntervalLabel(it) },
-            onSelect = actions.onStatisticsRefreshIntervalSelected,
-            summary = stringResource(R.string.statistics_refresh_interval_summary),
-            leadingIcon = Icons.Outlined.BarChart,
             grouped = true,
         )
     }

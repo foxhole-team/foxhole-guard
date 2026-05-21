@@ -1351,7 +1351,7 @@ fun PrivacyRouteSettingsScreen(
                         leadingIcon = Icons.Outlined.Apps,
                         apps = selectedApps,
                         emptyText = stringResource(R.string.privacy_route_selected_apps_empty),
-                        headerActionLabel = stringResource(R.string.choose_label),
+                        headerActionLabel = stringResource(R.string.add_label),
                         headerActionTag = "privacy_route_apps_choose_action",
                         onHeaderAction = onOpenPrivacyRouteApps,
                         onRemove = { app ->
@@ -1614,6 +1614,8 @@ private fun domainStrategyIcon(value: DomainStrategy): ImageVector =
 private fun subscriptionRefreshIntervalLabel(value: SubscriptionRefreshInterval): String =
     stringResource(
         when (value) {
+            SubscriptionRefreshInterval.HOURS_1 -> R.string.auto_refresh_subscriptions_interval_1h
+            SubscriptionRefreshInterval.HOURS_3 -> R.string.auto_refresh_subscriptions_interval_3h
             SubscriptionRefreshInterval.HOURS_6 -> R.string.auto_refresh_subscriptions_interval_6h
             SubscriptionRefreshInterval.HOURS_12 -> R.string.auto_refresh_subscriptions_interval_12h
             SubscriptionRefreshInterval.HOURS_24 -> R.string.auto_refresh_subscriptions_interval_24h

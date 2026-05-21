@@ -766,9 +766,13 @@ fun HomeScreen(
                                     Icons.Outlined.FileUpload,
                                     contentDescription = null,
                                     modifier = Modifier.size(dashboardSecondaryActionIconSize),
+                                    tint = autoTone,
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Text(stringResource(R.string.import_label))
+                                Text(
+                                    text = stringResource(R.string.import_label),
+                                    color = autoTone,
+                                )
                             }
                             FoxholeDropdownMenu(
                                 expanded = importMenuExpanded,
@@ -779,7 +783,11 @@ fun HomeScreen(
                                 FoxholeDropdownItem(
                                     modifier = Modifier.testTag("home_import_from_clipboard_action"),
                                     leadingContent = {
-                                        Icon(Icons.Outlined.ContentPaste, contentDescription = null)
+                                        Icon(
+                                            Icons.Outlined.ContentPaste,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary,
+                                        )
                                     },
                                     onClick = {
                                         importMenuExpanded = false
@@ -794,7 +802,11 @@ fun HomeScreen(
                                 FoxholeDropdownItem(
                                     modifier = Modifier.testTag("home_import_from_file_action"),
                                     leadingContent = {
-                                        Icon(Icons.Outlined.FileUpload, contentDescription = null)
+                                        Icon(
+                                            Icons.Outlined.FileUpload,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary,
+                                        )
                                     },
                                     onClick = {
                                         importMenuExpanded = false
@@ -809,7 +821,11 @@ fun HomeScreen(
                                 FoxholeDropdownItem(
                                     modifier = Modifier.testTag("home_import_from_qr_action"),
                                     leadingContent = {
-                                        Icon(Icons.Outlined.QrCodeScanner, contentDescription = null)
+                                        Icon(
+                                            Icons.Outlined.QrCodeScanner,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary,
+                                        )
                                     },
                                     onClick = {
                                         importMenuExpanded = false

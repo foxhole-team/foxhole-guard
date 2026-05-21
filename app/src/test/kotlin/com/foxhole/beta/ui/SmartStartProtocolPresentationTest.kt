@@ -287,9 +287,9 @@ class SmartStartProtocolPresentationTest {
         assertEquals("Enable expert settings?", stringValue(enStrings, "expert_unlock_confirm_title"))
         assertEquals("Enable expert settings", stringValue(enStrings, "show_advanced_settings_title"))
         assertEquals("BETA", stringValue(enStrings, "beta_badge"))
-        assertEquals("VPN protocol analysis", stringValue(enStrings, "smart_start_first_analysis_title"))
+        assertEquals("First VPN protocol analysis", stringValue(enStrings, "smart_start_first_analysis_title"))
         assertEquals(
-            "Foxhole will run a quick analysis of available VPN protocols. After it finds the three best options, future connections will use only those.",
+            "A quick analysis of available VPN protocols will run. After the three best are found, connection will use them",
             stringValue(enStrings, "smart_start_first_analysis_body"),
         )
         assertEquals("Continue", stringValue(enStrings, "smart_start_first_analysis_continue"))
@@ -353,9 +353,9 @@ class SmartStartProtocolPresentationTest {
         assertEquals("Включить экспертные настройки?", stringValue(ruStrings, "expert_unlock_confirm_title"))
         assertEquals("Включить экспертные настройки", stringValue(ruStrings, "show_advanced_settings_title"))
         assertEquals("BETA", stringValue(ruStrings, "beta_badge"))
-        assertEquals("Анализ протоколов VPN", stringValue(ruStrings, "smart_start_first_analysis_title"))
+        assertEquals("Первый анализ протоколов VPN", stringValue(ruStrings, "smart_start_first_analysis_title"))
         assertEquals(
-            "Будет выполнен быстрый анализ доступных протоколов VPN. После определения трех лучших, подключение будет выполняться только по ним.",
+            "Будет выполнен быстрый анализ доступных протоколов VPN. После определения трех лучших, подключение будет выполняться по ним",
             stringValue(ruStrings, "smart_start_first_analysis_body"),
         )
         assertEquals("Продолжить", stringValue(ruStrings, "smart_start_first_analysis_continue"))

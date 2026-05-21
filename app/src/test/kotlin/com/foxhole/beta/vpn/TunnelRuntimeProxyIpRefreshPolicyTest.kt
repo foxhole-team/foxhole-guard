@@ -47,6 +47,39 @@ class TunnelRuntimeProxyIpRefreshPolicyTest {
     }
 
     @Test
+    fun `tor over vpn runtime proxy ip does not replace dashboard vpn ip`() {
+        val settings =
+            Settings(
+                privacyRoute = PrivacyRouteSettings(
+                    mode = PrivacyRouteMode.TOR_OVER_VPN,
+                    scope = PrivacyRouteScope.SELECTED_APPS,
+                    selectedPackages = listOf("org.tor.browser"),
+                ),
+            )
+        val snapshot =
+            ConnectionSnapshot(
+                state = ConnectionState.CONNECTED,
+                trafficMode = TrafficMode.TUNNEL,
+                profileId = 42L,
+                protocolHint = ProtocolHint.VLESS,
+            )
+
+        assertFalse(settings.shouldPublishRuntimeProxyIpInfoToDashboard(snapshot))
+    }
+
+    @Test
+    fun `tor only runtime proxy ip remains dashboard ip`() {
+        val snapshot =
+            ConnectionSnapshot(
+                state = ConnectionState.CONNECTED,
+                trafficMode = TrafficMode.TUNNEL,
+                profileId = FoxholeVpnService.TOR_ONLY_PROFILE_ID,
+            )
+
+        assertTrue(Settings().shouldPublishRuntimeProxyIpInfoToDashboard(snapshot))
+    }
+
+    @Test
     fun `normal vpn requires runtime proxy ip refresh when app control plane is outside tunnel`() {
         val snapshot =
             ConnectionSnapshot(

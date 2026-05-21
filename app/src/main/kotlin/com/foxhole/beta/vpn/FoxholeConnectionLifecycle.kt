@@ -67,7 +67,7 @@ internal class FoxholeConnectionLifecycle(
 
     suspend fun connectTorOnly(statusMessage: String?) {
         val settings = settingsRepository.current()
-        require(settings.privacyRoute.enabled) { "TOR route is disabled" }
+        require(settings.privacyRoute.enabled) { "Tor route is disabled" }
         if (snapshot.value.state !in ACTIVE_CONNECTION_STATES) {
             disconnectStaleVpnBeforeConnectIfNeeded()
             FoxholeConnectionServiceContract.stopInactiveServices(
@@ -75,14 +75,14 @@ internal class FoxholeConnectionLifecycle(
                 activeMode = TrafficMode.TUNNEL,
             )
         }
-        diagnosticsLogger.record("connection", "direct TOR connect requested")
+        diagnosticsLogger.record("connection", "direct Tor connect requested")
         FoxholeVpnRuntimeBridge.updateIpInfo(null)
         FoxholeVpnRuntimeBridge.update(
             ConnectionSnapshot(
                 state = ConnectionState.CONNECTING,
                 trafficMode = TrafficMode.TUNNEL,
                 profileId = FoxholeVpnService.TOR_ONLY_PROFILE_ID,
-                profileName = "TOR",
+                profileName = "Tor",
                 message = statusMessage,
             ),
         )

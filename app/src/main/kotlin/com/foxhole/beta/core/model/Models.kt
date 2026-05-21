@@ -128,6 +128,8 @@ enum class SmartStartTransportPriority {
 
 @Serializable
 enum class SubscriptionRefreshInterval(val hours: Long) {
+    HOURS_1(1),
+    HOURS_3(3),
     HOURS_6(6),
     HOURS_12(12),
     HOURS_24(24),
@@ -421,18 +423,18 @@ data class ExpertSettings(
 
 @Serializable
 data class StatisticsSettings(
-    val enabled: Boolean = false,
+    val enabled: Boolean = true,
     val retention: StatisticsRetention = StatisticsRetention.FOREVER,
     val refreshInterval: StatisticsRefreshInterval = StatisticsRefreshInterval.SECONDS_3,
     val profileTrafficEnabled: Boolean = true,
-    val vpnProtocolsEnabled: Boolean = false,
-    val profileComparisonsEnabled: Boolean = false,
-    val transportsEnabled: Boolean = false,
-    val appTrafficEnabled: Boolean = false,
-    val dnsFilteringEnabled: Boolean = false,
-    val countryTrafficEnabled: Boolean = false,
-    val anomalyMetricsEnabled: Boolean = false,
-    val appChangesEnabled: Boolean = false,
+    val vpnProtocolsEnabled: Boolean = true,
+    val profileComparisonsEnabled: Boolean = true,
+    val transportsEnabled: Boolean = true,
+    val appTrafficEnabled: Boolean = true,
+    val dnsFilteringEnabled: Boolean = true,
+    val countryTrafficEnabled: Boolean = true,
+    val anomalyMetricsEnabled: Boolean = true,
+    val appChangesEnabled: Boolean = true,
 )
 
 @Serializable
@@ -506,7 +508,7 @@ data class Settings(
     val smartProfilePreferences: List<SmartProfilePreference> = emptyList(),
     val profileTrafficTotals: List<ProfileTrafficTotal> = emptyList(),
     val installedAppInventoryAudit: InstalledAppInventoryAudit = InstalledAppInventoryAudit(),
-    val appTrafficStatsEnabled: Boolean = false,
+    val appTrafficStatsEnabled: Boolean = true,
     val usageTrackingStartedAt: Long = System.currentTimeMillis(),
 )
 

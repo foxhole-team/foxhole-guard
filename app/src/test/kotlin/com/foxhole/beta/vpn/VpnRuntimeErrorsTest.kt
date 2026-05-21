@@ -28,7 +28,7 @@ class VpnRuntimeErrorsTest {
         val error = IllegalStateException("tor udp is not supported")
 
         assertEquals(
-            "TOR mode does not support UDP for this profile; switch TOR UDP policy to Proxy or Block.",
+            "Tor mode does not support UDP for this profile; switch Tor UDP policy to Proxy or Block.",
             describeVpnRuntimeFailure(error),
         )
     }

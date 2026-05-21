@@ -180,11 +180,11 @@ class RuntimeConfigAssembler(
         dnsFilterRuntimePaths: DnsFilterRuntimePaths? = null,
     ): String {
         validate(settings.expert)
-        require(settings.privacyRoute.enabled) { "TOR route is disabled" }
+        require(settings.privacyRoute.enabled) { "Tor route is disabled" }
         require(
             settings.privacyRoute.scope == PrivacyRouteScope.ALL_APPS ||
                 settings.privacyRoute.selectedPackages.any(String::isNotBlank),
-        ) { "direct TOR route has no selected apps" }
+        ) { "direct Tor route has no selected apps" }
         val dns =
             buildFoxholeDnsConfig(
                 strategy = settings.traffic.domainStrategy.configValue,

@@ -900,8 +900,17 @@ internal suspend fun FoxholeVpnService.refreshValidatedTunnelIpInfoBestEffortInt
     }
         .onSuccess { info ->
             if (canPublishValidationResult(sessionSnapshot)) {
-                FoxholeVpnRuntimeBridge.updateIpInfo(info)
-                container.diagnosticsLogger.record("ip", "validated tunnel ip refresh published to dashboard")
+                val settings = container.settingsRepository.current()
+                val snapshot = FoxholeVpnRuntimeBridge.snapshot.value
+                if (settings.shouldPublishRuntimeProxyIpInfoToDashboard(snapshot)) {
+                    FoxholeVpnRuntimeBridge.updateIpInfo(info)
+                    container.diagnosticsLogger.record("ip", "validated tunnel ip refresh published to dashboard")
+                } else {
+                    container.diagnosticsLogger.record(
+                        "ip",
+                        "validated tunnel ip refresh kept out of dashboard while tor route is inside vpn",
+                    )
+                }
             } else {
                 container.diagnosticsLogger.record(
                     "ip",
