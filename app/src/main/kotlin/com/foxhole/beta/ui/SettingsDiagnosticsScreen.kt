@@ -53,6 +53,7 @@ import com.foxhole.beta.core.model.DiagnosticsRetention
 import com.foxhole.beta.core.model.InstalledAppChangeType
 import com.foxhole.beta.core.model.InstalledAppInventoryChange
 import com.foxhole.beta.core.model.InstalledAppRiskLevel
+import com.foxhole.beta.core.model.NetworkActivityEvent
 import com.foxhole.beta.core.model.StatisticsMetric
 import com.foxhole.beta.core.security.labelRes
 import com.foxhole.beta.ui.theme.LocalFoxholeSemanticColors
@@ -75,6 +76,7 @@ fun DiagnosticsScreen(
     onNetworkActivityPersistentLoggingChanged: (Boolean) -> Unit,
     onFirewallEnabledChanged: (Boolean) -> Unit,
     onDiagnosticsRetentionSelected: (DiagnosticsRetention) -> Unit,
+    onSanitizeNetworkActivityPrivateDataChanged: (Boolean) -> Unit,
     onRawLiveDiagnosticsChanged: (Boolean) -> Unit,
     onStatisticsMetricEnabledChanged: (StatisticsMetric, Boolean) -> Unit,
     onOpenSecurityAppMonitorSettings: () -> Unit,
@@ -82,7 +84,6 @@ fun DiagnosticsScreen(
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     var networkLogVisible by rememberSaveable { mutableStateOf(false) }
-    var sanitizeNetworkLogPrivateData by rememberSaveable { mutableStateOf(true) }
     var foxholeLogVisible by rememberSaveable { mutableStateOf(false) }
     var appChangesLogVisible by rememberSaveable { mutableStateOf(false) }
     var appChangesEnableVisible by rememberSaveable { mutableStateOf(false) }
@@ -103,9 +104,13 @@ fun DiagnosticsScreen(
             strings = saveStrings,
         )
     val networkEntries =
-        remember(state.diagnosticEntries) {
-            state.diagnosticEntries.filter { it.tag == NETWORK_ACTIVITY_TAG }
+        remember(state.networkActivityEvents, context) {
+            networkActivityDiagnosticEntries(state.networkActivityEvents, context)
         }
+            .ifEmpty {
+                state.diagnosticEntries.filter { it.tag == NETWORK_ACTIVITY_TAG }
+            }
+    val sanitizeNetworkLogPrivateData = state.settings.expert.sanitizeNetworkActivityPrivateData
     val foxholeEntries =
         remember(state.diagnosticEntries) {
             state.diagnosticEntries.filterNot { it.tag == NETWORK_ACTIVITY_TAG }
@@ -123,7 +128,7 @@ fun DiagnosticsScreen(
         onDiagnosticsRetentionSelected = onDiagnosticsRetentionSelected,
         onRawLiveDiagnosticsChanged = onRawLiveDiagnosticsChanged,
         sanitizeNetworkLogPrivateData = sanitizeNetworkLogPrivateData,
-        onSanitizeNetworkLogPrivateDataChanged = { sanitizeNetworkLogPrivateData = it },
+        onSanitizeNetworkLogPrivateDataChanged = onSanitizeNetworkActivityPrivateDataChanged,
         onOpenNetworkLog = { networkLogVisible = true },
         onOpenFoxholeLog = { foxholeLogVisible = true },
         onOpenAppChangesLog = {
@@ -243,6 +248,44 @@ private fun NetworkActivityLogDialog(
         confirmLabel = confirmLabel,
         onConfirm = { onSave(title, sanitizeEntries) },
     )
+}
+
+private fun networkActivityDiagnosticEntries(
+    events: List<NetworkActivityEvent>,
+    context: Context,
+): List<DiagnosticEntry> =
+    events.map { event ->
+        DiagnosticEntry(
+            timestamp = event.timestampMs,
+            tag = NETWORK_ACTIVITY_TAG,
+            message = event.toNetworkActivityDiagnosticMessage(context),
+        )
+    }
+
+private fun NetworkActivityEvent.toNetworkActivityDiagnosticMessage(context: Context): String =
+    buildString {
+        append("App connection: ")
+        append(
+            buildList {
+                if (packageNames.isNotEmpty()) {
+                    add("packages=${packageNames.joinToString()}")
+                }
+                add("protocol=${protocol.ifBlank { "?" }}")
+                add("remote=${remoteEndpointLabel()}")
+                countryCode?.takeIf(String::isNotBlank)?.let { country -> add("country=$country") }
+                add("rx=${formatBytes(context, bytesRx.coerceAtLeast(0L))}")
+                add("tx=${formatBytes(context, bytesTx.coerceAtLeast(0L))}")
+                add("total=${formatBytes(context, totalBytes.coerceAtLeast(0L))}")
+                profileId?.let { id -> add("profileId=$id") }
+                sessionId?.takeIf(String::isNotBlank)?.let { session -> add("sessionId=$session") }
+            }.joinToString(separator = " • "),
+        )
+    }
+
+private fun NetworkActivityEvent.remoteEndpointLabel(): String {
+    val host = remoteHost.ifBlank { "?" }
+    val port = remotePort?.takeIf { value -> value in 1..65535 } ?: return host
+    return "$host:$port"
 }
 
 @Composable

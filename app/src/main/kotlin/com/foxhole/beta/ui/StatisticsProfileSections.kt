@@ -57,7 +57,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.foxhole.beta.R
 import com.foxhole.beta.core.model.AppTrafficWindow
-import com.foxhole.beta.core.model.DnsSettings
 import com.foxhole.beta.core.model.Profile
 import com.foxhole.beta.core.model.ProfileComparisonSideUiItem
 import com.foxhole.beta.core.model.ProfileComparisonUiItem
@@ -757,78 +756,64 @@ internal fun ProfileStatisticsDetail(
 ) {
     val context = LocalContext.current
     val detail = profileStatisticsDetail(state, item)
+    val connectedProtocols =
+        remember(detail.protocols) {
+            detail.protocols
+                .filter { protocol -> protocol.totalAttempts > 0 || protocol.totalBytes > 0L || protocol.lastUsedAt != null }
+                .sortedWith(
+                    compareByDescending<ProfileProtocolDetail> { protocol -> protocol.totalBytes }
+                        .thenByDescending { protocol -> protocol.totalAttempts }
+                        .thenBy { protocol -> protocol.label.lowercase(Locale.getDefault()) },
+                )
+        }
+    val protocolSelectionKey = remember(connectedProtocols) { connectedProtocols.joinToString("|", transform = ProfileProtocolDetail::label) }
+    var selectedDetailKey by rememberSaveable(item.profileId, protocolSelectionKey) {
+        mutableStateOf(PROFILE_DETAIL_OVERALL_KEY)
+    }
+    val selectedProtocol = connectedProtocols.firstOrNull { protocol -> protocol.label == selectedDetailKey }
     Column(
         modifier = Modifier
             .heightIn(max = 520.dp)
             .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        DetailMetricGrid(
-            metrics =
-            listOfNotNull(
-                metricIfPositive(
-                    stringResource(R.string.statistics_total_traffic),
-                    detail.totalBytes,
-                    formatBytes(context, detail.totalBytes),
-                ),
-                metricIfPositive(stringResource(R.string.statistics_vpn_sessions), detail.totalAttempts),
-                metricIfPositive(stringResource(R.string.statistics_successful_connections), detail.successCount),
-                metricIfPositive(stringResource(R.string.statistics_errors), detail.failureCount),
-                detail.avgLatencyMs?.let { stringResource(R.string.statistics_average_latency) to it.formatLatency() },
-                detail.minLatencyMs?.let { stringResource(R.string.statistics_min_latency) to it.formatLatency() },
-                detail.maxLatencyMs?.let { stringResource(R.string.statistics_max_latency) to it.formatLatency() },
-                detail.lastActivityAt?.let { stringResource(R.string.statistics_last_activity) to it.formatLastActivity() },
-            ),
-        )
-        if (detail.protocols.isNotEmpty()) {
-            val connectedProtocols =
-                remember(detail.protocols) {
-                    detail.protocols
-                        .filter { protocol -> protocol.totalAttempts > 0 || protocol.totalBytes > 0L || protocol.lastUsedAt != null }
-                        .sortedWith(
-                            compareByDescending<ProfileProtocolDetail> { protocol -> protocol.totalBytes }
-                                .thenByDescending { protocol -> protocol.totalAttempts }
-                                .thenBy { protocol -> protocol.label.lowercase(Locale.getDefault()) },
-                        )
-                }
-            var selectedDetailKey by rememberSaveable(item.profileId, connectedProtocols.size) {
-                mutableStateOf(PROFILE_DETAIL_OVERALL_KEY)
-            }
-            val selectedProtocol =
-                connectedProtocols.firstOrNull { protocol -> protocol.label == selectedDetailKey }
-            if (connectedProtocols.isEmpty()) {
+        if (connectedProtocols.isEmpty()) {
+            ProfileOverallDetailGrid(detail = detail)
+            if (detail.protocols.isNotEmpty()) {
                 EmptySectionText(text = stringResource(R.string.statistics_protocols_empty))
-            } else {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    val overallSummary =
-                        listOf(
-                            stringResource(R.string.statistics_success_rate) to formatPercent(detail.successRate),
-                            stringResource(R.string.statistics_error_rate) to formatPercent(detail.errorRate),
-                        ).joinToString(" • ") { (label, value) -> "$label: $value" }
-                    Text(
-                        text = stringResource(R.string.statistics_profile_protocols_title),
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.SemiBold,
+            }
+        } else {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                val overallSummary =
+                    listOf(
+                        stringResource(R.string.statistics_success_rate) to formatPercent(detail.successRate),
+                        stringResource(R.string.statistics_error_rate) to formatPercent(detail.errorRate),
+                    ).joinToString(" • ") { (label, value) -> "$label: $value" }
+                Text(
+                    text = stringResource(R.string.statistics_profile_protocols_title),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    ProfileDetailUsageRow(
+                        title = stringResource(R.string.statistics_profile_overall_tab),
+                        summary = overallSummary,
+                        trailing = formatBytes(context, detail.totalBytes),
+                        selected = selectedDetailKey == PROFILE_DETAIL_OVERALL_KEY,
+                        onClick = { selectedDetailKey = PROFILE_DETAIL_OVERALL_KEY },
                     )
-                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        ProfileDetailUsageRow(
-                            title = stringResource(R.string.statistics_profile_overall_tab),
-                            summary = overallSummary,
-                            trailing = formatBytes(context, detail.totalBytes),
-                            selected = selectedDetailKey == PROFILE_DETAIL_OVERALL_KEY,
-                            onClick = { selectedDetailKey = PROFILE_DETAIL_OVERALL_KEY },
+                    connectedProtocols.forEach { protocol ->
+                        ProfileProtocolUsageRow(
+                            protocol = protocol,
+                            selected = protocol.label == selectedProtocol?.label,
+                            onClick = { selectedDetailKey = protocol.label },
                         )
-                        connectedProtocols.forEach { protocol ->
-                            ProfileProtocolUsageRow(
-                                protocol = protocol,
-                                selected = protocol.label == selectedProtocol?.label,
-                                onClick = { selectedDetailKey = protocol.label },
-                            )
-                        }
                     }
-                    if (selectedProtocol != null) {
-                        ProfileProtocolDetailPanel(protocol = selectedProtocol)
-                    }
+                }
+                if (selectedProtocol != null) {
+                    ProfileProtocolDetailPanel(protocol = selectedProtocol)
+                } else {
+                    ProfileOverallDetailGrid(detail = detail)
                 }
             }
         }
@@ -845,6 +830,28 @@ internal fun ProfileStatisticsDetail(
             comparisons.forEach { comparison -> ProfileComparisonCard(item = comparison) }
         }
     }
+}
+
+@Composable
+private fun ProfileOverallDetailGrid(detail: ProfileStatisticsDetailModel) {
+    val context = LocalContext.current
+    DetailMetricGrid(
+        metrics =
+        listOfNotNull(
+            metricIfPositive(
+                stringResource(R.string.statistics_total_traffic),
+                detail.totalBytes,
+                formatBytes(context, detail.totalBytes),
+            ),
+            metricIfPositive(stringResource(R.string.statistics_vpn_sessions), detail.totalAttempts),
+            metricIfPositive(stringResource(R.string.statistics_successful_connections), detail.successCount),
+            metricIfPositive(stringResource(R.string.statistics_errors), detail.failureCount),
+            detail.avgLatencyMs?.let { stringResource(R.string.statistics_average_latency) to it.formatLatency() },
+            detail.minLatencyMs?.let { stringResource(R.string.statistics_min_latency) to it.formatLatency() },
+            detail.maxLatencyMs?.let { stringResource(R.string.statistics_max_latency) to it.formatLatency() },
+            detail.lastActivityAt?.let { stringResource(R.string.statistics_last_activity) to it.formatLastActivity() },
+        ),
+    )
 }
 
 @Composable
@@ -990,7 +997,7 @@ internal fun AppConnectionRowView(connection: AppConnectionRow) {
         )
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(
-                text = connection.remote,
+                text = connection.remoteHost,
                 style = MaterialTheme.typography.bodySmall,
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 1,
@@ -1000,7 +1007,10 @@ internal fun AppConnectionRowView(connection: AppConnectionRow) {
                 text =
                 listOfNotNull(
                     connection.countryName,
-                    connection.city ?: stringResource(R.string.statistics_app_detail_city_unknown),
+                    connection.city,
+                    connection.remotePort?.let { port ->
+                        stringResource(R.string.statistics_app_detail_port, port)
+                    },
                     connection.protocol,
                     pluralStringResource(
                         R.plurals.statistics_app_detail_connection_count,
@@ -1241,9 +1251,6 @@ internal fun Profile.statisticsProtocolHints(): List<ProtocolHint> {
     val optionHints = protocolOptions.map(ProfileProtocolOption::protocolHint)
     return (optionHints + protocolHint).distinct()
 }
-
-internal fun DnsSettings.adGuardFilteringEnabled(): Boolean =
-    filteringEnabled && (blockAds || blockTrackers || blockAppTelemetry || blockMaliciousDomains)
 
 internal fun Profile.runtimeProtocolHint(): ProtocolHint =
     selectedProtocolOptionId

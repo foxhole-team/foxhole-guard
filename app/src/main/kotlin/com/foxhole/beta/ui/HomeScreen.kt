@@ -234,11 +234,16 @@ fun HomeScreen(
     val dashboardSelectedLatencyMs = dashboardLatencyPresentation.latencyMs
     val dashboardSelectedLatencyDown = dashboardLatencyPresentation.isDown
     val dashboardSelectedLatencyUnavailable = dashboardLatencyPresentation.isUnavailable
+    val dashboardLatencyPillVisible =
+        dashboardSelectedLatencyMs != null ||
+            dashboardSelectedLatencyDown ||
+            dashboardSelectedLatencyUnavailable
     val dashboardProtocolPresentation = dashboardProtocolModel.presentation
     val dashboardSelectedServerPingMs = dashboardProtocolModel.selectedServerPingMs
     val dashboardSelectedServerPingUnavailable = dashboardProtocolModel.selectedServerPingUnavailable
     val dashboardConnectionDetailsReady = dashboardProtocolModel.connectionDetailsReady
     val dashboardConnectionMetricsLoading = dashboardProtocolModel.connectionMetricsLoading
+    val dashboardLatencySkeletonVisible = dashboardConnectionMetricsLoading && dashboardLatencyPillVisible
     val protocolMetricsAnalysisState =
         remember(state, dashboardProtocolPresentation) {
             homeProtocolMetricsAnalysisState(state, dashboardProtocolPresentation)
@@ -631,6 +636,11 @@ fun HomeScreen(
                                             !isSmartDashboardProfile,
                                     trailing = {
                                         when {
+                                            dashboardLatencySkeletonVisible ->
+                                                ProtocolLatencyLoadingPill(
+                                                    compact = true,
+                                                    showLabel = true,
+                                                )
                                             dashboardSelectedLatencyMs != null ->
                                                 ProtocolLatencyPill(
                                                     latencyMs = dashboardSelectedLatencyMs,
@@ -647,11 +657,6 @@ fun HomeScreen(
                                                 ProtocolLatencyPill(
                                                     compact = true,
                                                     isUnavailable = true,
-                                                    showLabel = true,
-                                                )
-                                            dashboardConnectionMetricsLoading ->
-                                                ProtocolLatencyLoadingPill(
-                                                    compact = true,
                                                     showLabel = true,
                                                 )
                                             else -> Unit

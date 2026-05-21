@@ -12,6 +12,7 @@ import com.foxhole.beta.core.model.AutoConnectReasonCode
 import com.foxhole.beta.core.model.CachedActiveProfile
 import com.foxhole.beta.core.model.ClashApiSettings
 import com.foxhole.beta.core.model.ConnectionSettings
+import com.foxhole.beta.core.model.DEFAULT_DNS_FILTER_UPDATE_URL
 import com.foxhole.beta.core.model.DashboardCard
 import com.foxhole.beta.core.model.DiagnosticsRetention
 import com.foxhole.beta.core.model.DnsSettings
@@ -189,6 +190,7 @@ class SettingsRepository(
                         newAppQuarantineEnabled = current.expert.newAppQuarantineEnabled,
                         networkActivityLogging = current.expert.networkActivityLogging,
                         networkActivityPersistentLogging = current.expert.networkActivityPersistentLogging,
+                        sanitizeNetworkActivityPrivateData = current.expert.sanitizeNetworkActivityPrivateData,
                         diagnosticsRetention = current.expert.diagnosticsRetention,
                         smartStartReplayLogging = current.expert.smartStartReplayLogging && BuildConfig.DEBUG,
                         allowInsecureTls = current.expert.allowInsecureTls,
@@ -956,6 +958,9 @@ class SettingsRepository(
     suspend fun updateNetworkActivityPersistentLogging(value: Boolean) =
         update { it.copy(expert = it.expert.copy(networkActivityPersistentLogging = value)) }
 
+    suspend fun updateSanitizeNetworkActivityPrivateData(value: Boolean) =
+        update { it.copy(expert = it.expert.copy(sanitizeNetworkActivityPrivateData = value)) }
+
     suspend fun updateSmartStartReplayLogging(value: Boolean) =
         update { it.copy(expert = it.expert.copy(smartStartReplayLogging = value && BuildConfig.DEBUG)) }
 
@@ -1648,6 +1653,7 @@ class SettingsRepository(
                 systemDnsProtectionEnabled = normalized.systemDnsProtectionEnabled,
                 networkActivityLogging = normalized.networkActivityLogging,
                 networkActivityPersistentLogging = normalized.networkActivityPersistentLogging,
+                sanitizeNetworkActivityPrivateData = normalized.sanitizeNetworkActivityPrivateData,
                 diagnosticsRetention = normalized.diagnosticsRetention,
                 smartStartReplayLogging = normalized.smartStartReplayLogging && BuildConfig.DEBUG,
                 allowInsecureTls = normalized.allowInsecureTls,
@@ -1727,6 +1733,7 @@ class SettingsRepository(
                     .map { value -> value.removePrefix("*.").removePrefix(".").lowercase() }
                     .filter { value -> value.isNotBlank() && value.length <= 253 }
                     .distinct(),
+            dnsFilterUpdateUrl = normalizeDnsFilterUpdateUrl(dnsFilterUpdateUrl),
             filtersUpdatedAt = filtersUpdatedAt?.takeIf { it > 0L },
         )
 
@@ -1871,6 +1878,29 @@ private fun normalizedDnsServer(value: String): String {
         .removeSuffix("/dns-query")
         .trim()
         .ifBlank { DEFAULT_DNS_SERVER }
+}
+
+internal fun normalizeDnsFilterUpdateUrl(value: String): String =
+    runCatching {
+        val url = value.trim().ensurePublicHttpsUrl()
+        when {
+            url.isOfficialFoxholeDnsRepositoryUrl() -> DEFAULT_DNS_FILTER_UPDATE_URL
+            url.isOfficialFoxholeDnsPagesDirectoryUrl() -> DEFAULT_DNS_FILTER_UPDATE_URL
+            url.pathSegments.lastOrNull().orEmpty().endsWith(".json", ignoreCase = true) -> url.toString()
+            else -> url.newBuilder().addPathSegment("manifest.json").build().toString()
+        }
+    }.getOrDefault(DEFAULT_DNS_FILTER_UPDATE_URL)
+
+private fun okhttp3.HttpUrl.isOfficialFoxholeDnsRepositoryUrl(): Boolean {
+    val normalizedPath = encodedPath.trim('/').removeSuffix(".git")
+    return host.equals("github.com", ignoreCase = true) &&
+        normalizedPath.equals("foxhole-repo/foxhole-dns", ignoreCase = true)
+}
+
+private fun okhttp3.HttpUrl.isOfficialFoxholeDnsPagesDirectoryUrl(): Boolean {
+    val normalizedPath = encodedPath.trim('/').removeSuffix("/")
+    return host.equals("foxhole-repo.github.io", ignoreCase = true) &&
+        normalizedPath.equals("foxhole-dns", ignoreCase = true)
 }
 
 private const val DEFAULT_DNS_SERVER = "1.1.1.1"
@@ -2033,6 +2063,18 @@ internal fun Settings.rememberedSmartProfileDownOptionIdsByProfileId(
                 ?.let { downOptionIds -> preference.profileId to downOptionIds }
         }.toMap()
 
+internal fun Settings.rememberedSmartProfileLatencyUnavailableByProfileId(
+    networkFingerprint: String?,
+    now: Long = System.currentTimeMillis(),
+): Map<Long, Set<String>> =
+    smartProfilePreferences
+        .mapNotNull { preference ->
+            preference
+                .rememberedSmartProfileLatencyUnavailableOptionIds(networkFingerprint = networkFingerprint, now = now)
+                .takeIf(Set<String>::isNotEmpty)
+                ?.let { unavailableOptionIds -> preference.profileId to unavailableOptionIds }
+        }.toMap()
+
 internal fun SmartProfilePreference.rememberedSmartProfileDownOptionIds(
     networkFingerprint: String?,
     now: Long = System.currentTimeMillis(),
@@ -2048,6 +2090,24 @@ internal fun SmartProfilePreference.rememberedSmartProfileDownOptionIds(
             val scopedDown = scopedMemories[optionId].freshRememberedDown(now)
             val globalDown = globalMemories[optionId].freshRememberedDown(now)
             scopedDown || globalDown
+        }.toSet()
+}
+
+internal fun SmartProfilePreference.rememberedSmartProfileLatencyUnavailableOptionIds(
+    networkFingerprint: String?,
+    now: Long = System.currentTimeMillis(),
+): Set<String> {
+    val scopedMemories =
+        networkMemory(networkFingerprint)
+            ?.protocolMemories
+            ?.associateBy(SmartProfileProtocolMemory::optionId)
+            .orEmpty()
+    val globalMemories = protocolMemories.associateBy(SmartProfileProtocolMemory::optionId)
+    return (scopedMemories.keys + globalMemories.keys)
+        .filter { optionId ->
+            val scopedUnavailable = scopedMemories[optionId].freshRememberedLatencyUnavailable(now)
+            val globalUnavailable = globalMemories[optionId].freshRememberedLatencyUnavailable(now)
+            scopedUnavailable || globalUnavailable
         }.toSet()
 }
 
@@ -2167,6 +2227,22 @@ private fun SmartProfileProtocolMemory?.freshRememberedDown(
     val failureIsLatest = successAt == null || failureAt >= successAt
     val cooldownActive = memory.cooldownUntilAt?.let { cooldownUntil -> cooldownUntil > now } == true
     return failureIsLatest && (cooldownActive || now - failureAt <= retentionMs)
+}
+
+private fun SmartProfileProtocolMemory?.freshRememberedLatencyUnavailable(
+    now: Long,
+    retentionMs: Long = SMART_START_REMEMBERED_LATENCY_RETENTION_MS,
+): Boolean {
+    val memory = this ?: return false
+    if (memory.lastLatencyMs?.takeIf { it > 0L } != null) {
+        return false
+    }
+    if (memory.lastReasonCode != AutoConnectReasonCode.LATENCY_ENDPOINT_BLOCKED) {
+        return false
+    }
+    val successAt = memory.lastSuccessAt?.takeIf { it > 0L } ?: return false
+    val failureAt = memory.lastFailureAt?.takeIf { it > 0L }
+    return (failureAt == null || successAt >= failureAt) && now - successAt <= retentionMs
 }
 
 private fun SmartProfileProtocolMemory?.freshRememberedServerPing(

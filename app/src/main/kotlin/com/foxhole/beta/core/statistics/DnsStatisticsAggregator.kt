@@ -13,6 +13,7 @@ fun dnsProtectionSummary(
     val allowed = trafficWindows.sumOf(TrafficWindow::allowedDns).coerceAtLeast(0)
     val categories = enabledDnsProtectionCategories(dnsSettings)
     val categoryRows = splitDnsBlockedByCategory(blocked, categories)
+    val domainRows = dnsProtectionDomainRows(trafficWindows)
     val totalAppBytes = appRows.sumOf(AppTrafficRow::totalBytes).coerceAtLeast(1L)
     val appDnsRows =
         if (blocked <= 0 || appRows.isEmpty()) {
@@ -55,11 +56,31 @@ fun dnsProtectionSummary(
         allowedQueries = allowed,
         categoryRows = categoryRows,
         appRows = appDnsRows,
+        domainRows = domainRows,
         quality = ChartDataQuality.REAL,
         categoryQuality = ChartDataQuality.SYNTHETIC,
         appQuality = ChartDataQuality.ESTIMATED,
+        domainQuality = ChartDataQuality.REAL,
     )
 }
+
+fun dnsProtectionDomainRows(trafficWindows: List<TrafficWindow>): List<DnsProtectionDomainRow> =
+    trafficWindows
+        .asSequence()
+        .flatMap { window -> window.blockedDnsDomains.asSequence() }
+        .filter { (domain, count) -> domain.isNotBlank() && count > 0L }
+        .groupBy({ (domain, _) -> domain }, { (_, count) -> count })
+        .map { (domain, counts) ->
+            DnsProtectionDomainRow(
+                domain = domain,
+                blockedQueries = counts.sum(),
+                quality = ChartDataQuality.REAL,
+            )
+        }
+        .sortedWith(
+            compareByDescending<DnsProtectionDomainRow> { row -> row.blockedQueries }
+                .thenBy { row -> row.domain },
+        )
 
 fun dnsTimelineChartModel(
     buckets: List<TrafficBucket>,
@@ -122,13 +143,15 @@ fun dnsTimelineChartModel(
 }
 
 fun enabledDnsProtectionCategories(settings: DnsSettings): List<DnsProtectionCategory> =
-    buildList {
-        if (settings.blockAds) add(DnsProtectionCategory.ADS)
-        if (settings.blockTrackers) add(DnsProtectionCategory.TRACKERS)
-        if (settings.blockAppTelemetry) add(DnsProtectionCategory.TELEMETRY)
-        if (settings.blockMaliciousDomains) add(DnsProtectionCategory.MALICIOUS)
-    }.ifEmpty {
-        DnsProtectionCategory.entries
+    if (!settings.filteringEnabled) {
+        emptyList()
+    } else {
+        buildList {
+            if (settings.blockAds) add(DnsProtectionCategory.ADS)
+            if (settings.blockTrackers) add(DnsProtectionCategory.TRACKERS)
+            if (settings.blockAppTelemetry) add(DnsProtectionCategory.TELEMETRY)
+            if (settings.blockMaliciousDomains) add(DnsProtectionCategory.MALICIOUS)
+        }
     }
 
 fun splitDnsBlockedByCategory(

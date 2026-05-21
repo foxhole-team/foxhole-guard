@@ -51,6 +51,22 @@ class HomeDashboardTextPolicyTest {
     }
 
     @Test
+    fun `country line uses country code instead of unknown when country name is missing`() {
+        val ipInfo =
+            IpInfo(
+                ip = "203.0.113.7",
+                countryCode = "NL",
+                countryName = null,
+                city = "Amsterdam",
+                isp = "Example ISP",
+                fetchedAt = 1L,
+            )
+
+        assertEquals("🇳🇱 NL", formatCountryLine(ipInfo, unknownCountry = "Unknown"))
+        assertEquals("Amsterdam", buildCityLine(ipInfo))
+    }
+
+    @Test
     fun `dashboard dns mode line keeps only selected mode`() {
         assertEquals("Default", dashboardDnsModeLabel(SecureDnsMode.PLAIN))
         assertEquals("DOH", dashboardDnsModeLabel(SecureDnsMode.DOH))

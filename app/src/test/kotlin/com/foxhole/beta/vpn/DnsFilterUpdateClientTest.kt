@@ -1,0 +1,181 @@
+package com.foxhole.beta.vpn
+
+import com.foxhole.beta.BuildConfig
+import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
+import okhttp3.Interceptor
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Protocol
+import okhttp3.Response
+import okhttp3.ResponseBody.Companion.toResponseBody
+import org.junit.Assert.assertArrayEquals
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
+import org.junit.Test
+import java.net.InetAddress
+import java.security.KeyPair
+import java.security.KeyPairGenerator
+import java.security.Signature
+import java.security.spec.ECGenParameterSpec
+import java.time.Instant
+import java.util.Base64
+
+class DnsFilterUpdateClientTest {
+    private val json = Json { explicitNulls = false }
+
+    @Test
+    fun `installs rule set only after signed manifest and artifact verification`() =
+        runBlocking {
+            val keyPair = testKeyPair()
+            val ruleSetBytes = testRuleSetBytes()
+            val manifest =
+                testManifest(
+                    size = ruleSetBytes.size.toLong(),
+                    sha256 = ruleSetBytes.sha256Hex(),
+                )
+            val manifestBytes = json.encodeToString(manifest).toByteArray(Charsets.UTF_8)
+            val signatureBytes = keyPair.sign(manifestBytes)
+            val store = RecordingRuleSetStore()
+            val client =
+                DnsFilterUpdateClient(
+                    httpClient = testHttpClient(manifestBytes, signatureBytes, ruleSetBytes),
+                    json = json,
+                    publicKeyPem = keyPair.publicKeyPem(),
+                    resolver = { listOf(InetAddress.getByName("8.8.8.8")) },
+                )
+
+            val result = client.update(MANIFEST_URL, store)
+
+            assertEquals(DnsFilterUpdateStatus.UPDATED, result.status)
+            assertEquals("/verified/adguard-dns-filter.srs", result.installedPath)
+            assertEquals(manifest.source.commit, result.sourceCommit)
+            assertArrayEquals(ruleSetBytes, store.ruleSetBytes)
+            assertEquals(manifest, store.manifest)
+        }
+
+    @Test
+    fun `rejects manifest with invalid signature and keeps local store untouched`() =
+        runBlocking {
+            val keyPair = testKeyPair()
+            val ruleSetBytes = testRuleSetBytes()
+            val manifest =
+                testManifest(
+                    size = ruleSetBytes.size.toLong(),
+                    sha256 = ruleSetBytes.sha256Hex(),
+                )
+            val manifestBytes = json.encodeToString(manifest).toByteArray(Charsets.UTF_8)
+            val store = RecordingRuleSetStore()
+            val client =
+                DnsFilterUpdateClient(
+                    httpClient = testHttpClient(manifestBytes, byteArrayOf(0x30, 0x00), ruleSetBytes),
+                    json = json,
+                    publicKeyPem = keyPair.publicKeyPem(),
+                    resolver = { listOf(InetAddress.getByName("8.8.8.8")) },
+                )
+
+            val result = client.update(MANIFEST_URL, store)
+
+            assertEquals(DnsFilterUpdateStatus.FAILED, result.status)
+            assertEquals(false, result.retryable)
+            assertNull(store.ruleSetBytes)
+        }
+
+    private class RecordingRuleSetStore : DnsFilterRuleSetStore {
+        var ruleSetBytes: ByteArray? = null
+        var manifest: DnsFilterManifest? = null
+
+        override suspend fun installVerifiedDnsRuleSet(
+            ruleSetBytes: ByteArray,
+            manifest: DnsFilterManifest,
+        ): String {
+            this.ruleSetBytes = ruleSetBytes
+            this.manifest = manifest
+            return "/verified/adguard-dns-filter.srs"
+        }
+    }
+
+    private fun testHttpClient(
+        manifestBytes: ByteArray,
+        signatureBytes: ByteArray,
+        ruleSetBytes: ByteArray,
+    ): OkHttpClient =
+        OkHttpClient
+            .Builder()
+            .addInterceptor(
+                Interceptor { chain ->
+                    val body =
+                        when (chain.request().url.encodedPath) {
+                            "/foxhole/manifest.json" -> manifestBytes
+                            "/foxhole/manifest.json.sig" -> signatureBytes
+                            "/foxhole/adguard-dns-filter.srs" -> ruleSetBytes
+                            else -> error("unexpected request: ${chain.request().url}")
+                        }.toResponseBody("application/octet-stream".toMediaType())
+                    Response.Builder()
+                        .request(chain.request())
+                        .protocol(Protocol.HTTP_1_1)
+                        .code(200)
+                        .message("OK")
+                        .body(body)
+                        .build()
+                },
+            ).build()
+
+    private fun testManifest(
+        size: Long,
+        sha256: String,
+    ): DnsFilterManifest =
+        DnsFilterManifest(
+            schema = 1,
+            name = "foxhole-adguard-dns-filter",
+            format = "sing-box-srs",
+            generatedAt = Instant.now().toString(),
+            source =
+                DnsFilterManifestSource(
+                    name = "AdGuardSDNSFilter",
+                    repo = "https://github.com/AdguardTeam/AdGuardSDNSFilter.git",
+                    commit = "0123456789abcdef0123456789abcdef01234567",
+                    license = "GPL-3.0",
+                    inputPath = "Filters/filter.txt",
+                    inputSha256 = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                ),
+            artifact =
+                DnsFilterManifestArtifact(
+                    file = "adguard-dns-filter.srs",
+                    size = size,
+                    sha256 = sha256,
+                ),
+            compatibility =
+                DnsFilterManifestCompatibility(
+                    singBoxVersion = BuildConfig.LIBBOX_SOURCE_VERSION,
+                    minAppVersion = "0.0.1",
+                ),
+        )
+
+    private fun testRuleSetBytes(): ByteArray =
+        byteArrayOf('S'.code.toByte(), 'R'.code.toByte(), 'S'.code.toByte(), 2) +
+            ByteArray(32) { index -> index.toByte() }
+
+    private fun testKeyPair(): KeyPair {
+        val generator = KeyPairGenerator.getInstance("EC")
+        generator.initialize(ECGenParameterSpec("secp256r1"))
+        return generator.generateKeyPair()
+    }
+
+    private fun KeyPair.sign(bytes: ByteArray): ByteArray =
+        Signature.getInstance("SHA256withECDSA")
+            .apply {
+                initSign(private)
+                update(bytes)
+            }.sign()
+
+    private fun KeyPair.publicKeyPem(): String =
+        "-----BEGIN PUBLIC KEY-----\n" +
+            Base64.getMimeEncoder(64, "\n".toByteArray()).encodeToString(public.encoded) +
+            "\n-----END PUBLIC KEY-----"
+
+    private companion object {
+        const val MANIFEST_URL = "https://updates.example.org/foxhole/manifest.json"
+    }
+}

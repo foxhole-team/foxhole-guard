@@ -452,21 +452,8 @@ private suspend fun HomeViewModel.runColdSmartStartScan(
     }
     val winner = MultiProtocolProfileSupport.fastestSuccessfulProbe(results)
     if (winner != null) {
-        val recommendedIds =
-            recommendedProtocolIdsFromProbeResults(results)
-                .ifEmpty {
-                    recomputeRecommendedProtocolIds(
-                        profileId = profileId,
-                        candidates = candidates,
-                        networkFingerprint = networkFingerprint,
-                        excludeOptionIds =
-                        results
-                            .asSequence()
-                            .filterNot(AutoConnectProbeResult::success)
-                            .map { result -> result.candidate.optionId }
-                            .toSet(),
-                    )
-                }.ifEmpty { listOf(winner.candidate.optionId) }
+        val measuredRecommendedIds = recommendedProtocolIdsFromProbeResults(results)
+        val recommendedIds = measuredRecommendedIds.ifEmpty { listOf(winner.candidate.optionId) }
         container.settingsRepository.recordSmartProfileBaseline(
             profileId = profileId,
             recommendedProtocolIds = recommendedIds,
@@ -682,12 +669,12 @@ private suspend fun HomeViewModel.recomputeRecommendedProtocolIds(
     )
 }
 
-private fun recommendedProtocolIdsFromProbeResults(results: List<AutoConnectProbeResult>): List<String> =
+internal fun recommendedProtocolIdsFromProbeResults(results: List<AutoConnectProbeResult>): List<String> =
     results
         .asSequence()
-        .filter(AutoConnectProbeResult::success)
+        .filter { result -> result.success && result.displayLatencyMs != null }
         .sortedWith(
-            compareBy<AutoConnectProbeResult> { result -> result.displayLatencyMs ?: result.rankingLatencyMs }
+            compareBy<AutoConnectProbeResult> { result -> result.displayLatencyMs ?: Long.MAX_VALUE }
                 .thenBy { result -> result.candidate.optionId },
         )
         .map { result -> result.candidate.optionId }
@@ -764,7 +751,6 @@ internal fun HomeViewModel.refreshSmartProfileMetricsInternal(profileId: Long) {
                         profile = profile,
                         candidates = candidates,
                         networkFingerprint = networkFingerprint,
-                        enabledProtocolSetHash = enabledProtocolSetHash,
                         selectedOptionId = selectedOptionId,
                     )
                     restoredConnection = true
@@ -825,19 +811,6 @@ internal fun HomeViewModel.refreshSmartProfileMetricsInternal(profileId: Long) {
                 }
                 val recommendedIds =
                     recommendedProtocolIdsFromProbeResults(results)
-                        .ifEmpty {
-                            recomputeRecommendedProtocolIds(
-                                profileId = profileId,
-                                candidates = candidates,
-                                networkFingerprint = networkFingerprint,
-                                excludeOptionIds =
-                                results
-                                    .asSequence()
-                                    .filterNot(AutoConnectProbeResult::success)
-                                    .map { result -> result.candidate.optionId }
-                                    .toSet(),
-                            )
-                        }
                 if (recommendedIds.isNotEmpty()) {
                     container.settingsRepository.recordSmartProfileBaseline(
                         profileId = profileId,
@@ -858,7 +831,6 @@ internal fun HomeViewModel.refreshSmartProfileMetricsInternal(profileId: Long) {
                         .mapNotNull { optionId ->
                             results.firstOrNull { result -> result.success && result.candidate.optionId == optionId }
                         }.firstOrNull()
-                        ?: MultiProtocolProfileSupport.fastestSuccessfulProbe(results)
                 if (winner != null && winner.candidate.optionId != selectedOptionId) {
                     val recommendationDurationMs = 8_000L
                     recommendedProtocolMutable.value =
@@ -935,7 +907,6 @@ private suspend fun HomeViewModel.refreshSmartProfileMetricsPassive(
     profile: Profile,
     candidates: List<AutoConnectProbeCandidate>,
     networkFingerprint: NetworkFingerprint?,
-    enabledProtocolSetHash: String,
     selectedOptionId: String?,
 ) {
     val activeOptionId =
@@ -1011,40 +982,9 @@ private suspend fun HomeViewModel.refreshSmartProfileMetricsPassive(
                 networkFingerprint = networkFingerprint?.key,
             )
         }
-    val recommendedIds =
-        recomputeRecommendedProtocolIds(
-            profileId = profileId,
-            candidates = candidates,
-            networkFingerprint = networkFingerprint,
-        )
-    if (recommendedIds.isNotEmpty()) {
-        container.settingsRepository.recordSmartProfileBaseline(
-            profileId = profileId,
-            recommendedProtocolIds = recommendedIds,
-            enabledProtocolSetHash = enabledProtocolSetHash,
-        )
-        updateRecommendedProtocolUi(profileId, profile, recommendedIds)
-    }
-    val recommended = recommendedProtocolMutable.value?.takeIf { recommendation -> recommendation.profileId == profileId }
-    if (recommended != null && recommended.optionId != activeCandidate.optionId) {
-        val recommendationDurationMs = 8_000L
-        snackbars.emit(
-            FoxholeBannerEvent(
-                message =
-                getApplication<Application>().getString(
-                    R.string.protocol_metrics_recommendation,
-                    recommended.displayName,
-                ),
-                tone = FoxholeBannerTone.INFO,
-                actionLabel = getApplication<Application>().getString(R.string.connect),
-                action = FoxholeBannerAction.ACCEPT_PROTOCOL_RECOMMENDATION,
-                durationMillis = recommendationDurationMs,
-                expiresAtElapsedMs = SystemClock.elapsedRealtime() + recommendationDurationMs,
-            ),
-        )
-    } else {
-        emitSuccess(getApplication<Application>().getString(R.string.protocol_metrics_refreshed))
-    }
+    recommendedProtocolMutable.value =
+        recommendedProtocolMutable.value?.takeUnless { recommendation -> recommendation.profileId == profileId }
+    emitSuccess(getApplication<Application>().getString(R.string.protocol_metrics_refreshed))
 }
 
 internal fun HomeViewModel.cancelSmartProfileMetricsRefreshInternal(restoreConnection: Boolean) {
@@ -2088,6 +2028,8 @@ private suspend fun HomeViewModel.recordConnectedProtocolSmartStartMemory(
 }
 
 internal fun HomeViewModel.clearProfileLatencyRefreshInternal() {
+    postConnectLatencyRefreshJob?.cancel()
+    postConnectLatencyRefreshJob = null
     profileLatencyRefreshJob?.cancel()
     profileLatencyRefreshJob = null
     setDashboardConnectionMetricsLoading(false)

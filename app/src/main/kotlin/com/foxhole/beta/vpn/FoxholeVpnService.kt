@@ -37,6 +37,8 @@ import com.foxhole.beta.core.model.isUdpTransport
 import com.foxhole.beta.core.network.IpInfoFetchMode
 import com.foxhole.beta.core.network.mergeIpInfo
 import com.foxhole.beta.core.settings.AppTrafficStatsRecorder
+import com.foxhole.beta.core.traffic.LibboxDnsRuntimeStatsTracker
+import com.foxhole.beta.core.traffic.RuntimeNetworkActivityContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -110,6 +112,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
     internal val trafficSampler = TrafficStatsSampler()
     internal val anomalyTrafficAggregator = TrafficWindowAggregator()
     internal val anomalyNetworkTypeProvider by lazy { AndroidNetworkTypeProvider(applicationContext) }
+    internal val dnsRuntimeStatsTracker by lazy { LibboxDnsRuntimeStatsTracker(container.diagnosticsLogger) }
     internal val appTrafficStatsRecorder by lazy {
         AppTrafficStatsRecorder(
             anomalyRepository = container.anomalyRepository,
@@ -120,6 +123,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
     internal var activeLocalGuardMode: LocalGuardMode? = null
     internal var trafficJob: Job? = null
     internal var trafficMapCountryTrackingJob: Job? = null
+    internal var dnsRuntimeStatsJob: Job? = null
     internal var immediateTrafficSampleJob: Job? = null
     internal var geoRefreshJob: Job? = null
     internal var ipv4EnrichmentJob: Job? = null
@@ -1246,11 +1250,36 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
     internal fun startTrafficUpdates() {
         stopTrafficUpdates()
         DnsRuntimeStats.reset()
-        if (destinationCountryTrackingRuntimeEnabled(container.settingsRepository.settings.value)) {
+        val settings = container.settingsRepository.settings.value
+        if (destinationCountryTrackingRuntimeEnabled(settings)) {
             trafficMapCountryTrackingJob =
                 container.trafficMapRepository.startDestinationCountryTracking(
                     scope = scope,
                     runtimeAvailable = flowOf(true),
+                )
+        }
+        if (dnsRuntimeStatsRuntimeEnabled(settings) || networkActivityStatsRuntimeEnabled(settings)) {
+            dnsRuntimeStatsJob =
+                dnsRuntimeStatsTracker.start(
+                    scope = scope,
+                    enabled = {
+                        dnsRuntimeStatsRuntimeEnabled(container.settingsRepository.settings.value) ||
+                            networkActivityStatsRuntimeEnabled(container.settingsRepository.settings.value)
+                    },
+                    networkActivityEnabled = {
+                        networkActivityStatsRuntimeEnabled(container.settingsRepository.settings.value)
+                    },
+                    networkActivityContext = {
+                        RuntimeNetworkActivityContext(
+                            profileId = activeSession?.profileId,
+                            sessionId = activeSession?.correlationId,
+                        )
+                    },
+                    onNetworkActivityEvent = { event ->
+                        scope.launch(Dispatchers.IO) {
+                            container.anomalyRepository.recordNetworkActivityEvent(event)
+                        }
+                    },
                 )
         }
         FoxholeVpnRuntimeBridge.updateTraffic(trafficSampler.sample(resetRateBaseline = true))
@@ -1284,6 +1313,8 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         trafficJob = null
         trafficMapCountryTrackingJob?.cancel()
         trafficMapCountryTrackingJob = null
+        dnsRuntimeStatsJob?.cancel()
+        dnsRuntimeStatsJob = null
         container.trafficMapRepository.clearDestinationCountryBytes()
         anomalyTrafficAggregator.reset()
         DnsRuntimeStats.reset()
@@ -1326,6 +1357,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
                 destinationCountries = container.trafficMapRepository.currentDestinationCountryBytes(),
                 blockedDns = dnsDelta.blocked,
                 allowedDns = dnsDelta.allowed,
+                blockedDnsDomains = dnsDelta.blockedDomains,
             )
         val window =
             anomalyTrafficAggregator.aggregate(
@@ -1725,6 +1757,12 @@ private fun destinationCountryTrackingRuntimeEnabled(settings: Settings): Boolea
             settings.statistics.countryTrafficEnabled ||
                 (settings.statistics.anomalyMetricsEnabled && settings.anomaly.analyzeDestinationCountries)
             )
+
+private fun dnsRuntimeStatsRuntimeEnabled(settings: Settings): Boolean =
+    settings.statistics.enabled && settings.statistics.dnsFilteringEnabled
+
+private fun networkActivityStatsRuntimeEnabled(settings: Settings): Boolean =
+    settings.expert.networkActivityLogging
 
 internal interface VpnCoreRuntime {
     suspend fun start(session: VpnSession, host: RuntimeServiceHost): Result<Unit>

@@ -990,7 +990,7 @@ private fun SelectionCountBadge(count: Int) {
 private fun foxholeDropdownColoredButtonColors() =
     ButtonDefaults.buttonColors(
         containerColor = LocalFoxholeUiPalette.current.valuePillContainerColor,
-        contentColor = MaterialTheme.colorScheme.onSurface,
+        contentColor = LocalFoxholeUiPalette.current.valuePillContentColor,
     )
 
 @Composable

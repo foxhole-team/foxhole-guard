@@ -11,6 +11,7 @@ import androidx.lifecycle.viewModelScope
 import com.foxhole.beta.R
 import com.foxhole.beta.core.model.ConnectionState
 import com.foxhole.beta.core.model.InstalledAppOption
+import com.foxhole.beta.core.model.IpInfo
 import com.foxhole.beta.core.model.PrivacyRouteMode
 import com.foxhole.beta.core.model.Profile
 import com.foxhole.beta.core.model.RoutingPresetSource
@@ -81,12 +82,14 @@ internal fun HomeViewModel.refreshIpInfoInternalInternal(
     fetchMode: IpInfoFetchMode,
     minimumLoadingDurationMs: Long = 0L,
     reason: IpInfoRefreshReason = IpInfoRefreshReason.FOREGROUND,
+    onPublished: (suspend (IpInfo) -> Unit)? = null,
 ) {
     val refreshToken = invalidateIpInfoRefreshes()
     ipInfoRefreshJob =
         viewModelScope.launch {
             val target = ipInfoRefreshTargetForSnapshot(container.connectionController.snapshot.value)
             activeIpInfoRefreshReason = reason
+            var publishedInfo = false
             container.diagnosticsLogger.record(
                 "ip",
                 "dashboard refresh started id=$refreshToken reason=${reason.name.lowercase()} mode=${fetchMode.name.lowercase()} target=${target.name.lowercase()} showLoading=$showLoading clearExistingIp=$clearExistingIp",
@@ -118,10 +121,12 @@ internal fun HomeViewModel.refreshIpInfoInternalInternal(
                         FoxholeVpnRuntimeBridge.updateIpInfo(info)
                         publishTorIpInfoFromDashboardRefresh(info)
                     }
+                    publishedInfo = true
                     container.diagnosticsLogger.record(
                         "ip",
                         "geo refreshed id=$refreshToken reason=${reason.name.lowercase()} target=${target.name.lowercase()}",
                     )
+                    onPublished?.invoke(info)
                 }
             } catch (cancelled: CancellationException) {
                 container.diagnosticsLogger.record(
@@ -148,6 +153,17 @@ internal fun HomeViewModel.refreshIpInfoInternalInternal(
                 if (showLoading && ipInfoRefreshToken == refreshToken) {
                     ipInfoLoadingMutable.value = false
                 }
+                if (
+                    reason == IpInfoRefreshReason.POST_CONNECT &&
+                    !publishedInfo &&
+                    ipInfoRefreshToken == refreshToken
+                ) {
+                    container.diagnosticsLogger.record(
+                        "latency",
+                        "post-connect latency scheduled after ip refresh finished without publication",
+                    )
+                    schedulePostConnectLatencyRefreshAfterIp(reason)
+                }
                 container.diagnosticsLogger.record(
                     "ip",
                     "dashboard refresh finished id=$refreshToken reason=${reason.name.lowercase()} loading=${ipInfoLoadingMutable.value}",
@@ -164,12 +180,8 @@ private suspend fun HomeViewModel.refreshIpInfoForReason(
     fetchMode: IpInfoFetchMode,
     reason: IpInfoRefreshReason,
 ): com.foxhole.beta.core.model.IpInfo {
-    val attempts =
-        if (reason == IpInfoRefreshReason.TOR_ROUTE) {
-            HomeViewModel.TOR_IP_REFRESH_ATTEMPTS
-        } else {
-            1
-        }
+    val attempts = ipInfoRefreshAttemptsForReason(reason)
+    val retryDelayMs = ipInfoRefreshRetryDelayMsForReason(reason)
     var lastError: Throwable? = null
     repeat(attempts) { attemptIndex ->
         val infoResult = runCatching { container.connectionController.refreshIpInfo(fetchMode = fetchMode) }
@@ -186,19 +198,43 @@ private suspend fun HomeViewModel.refreshIpInfoForReason(
         if (reason == IpInfoRefreshReason.TOR_ROUTE && info != null) {
             lastError = IllegalStateException("tor route ip not ready")
         }
-        if (reason == IpInfoRefreshReason.TOR_ROUTE) {
+        if (attempts > 1) {
             container.diagnosticsLogger.record(
                 "ip",
-                "tor ip refresh attempt ${attemptIndex + 1}/$attempts not ready: ${lastError?.javaClass?.simpleName.orEmpty()}",
+                "${reason.name.lowercase()} ip refresh attempt ${attemptIndex + 1}/$attempts not ready: ${lastError?.javaClass?.simpleName.orEmpty()}",
             )
         }
         if (attemptIndex < attempts - 1) {
-            delay(HomeViewModel.TOR_IP_REFRESH_RETRY_DELAY_MS)
+            delay(retryDelayMs)
         }
     }
     lastError?.let { throw it }
     error("ip refresh failed")
 }
+
+internal fun ipInfoRefreshAttemptsForReason(reason: IpInfoRefreshReason): Int =
+    when (reason) {
+        IpInfoRefreshReason.POST_CONNECT,
+        IpInfoRefreshReason.RESTORED_VPN,
+        -> HomeViewModel.CONNECTED_IP_REFRESH_ATTEMPTS
+        IpInfoRefreshReason.TOR_ROUTE -> HomeViewModel.TOR_IP_REFRESH_ATTEMPTS
+        IpInfoRefreshReason.MANUAL,
+        IpInfoRefreshReason.FOREGROUND,
+        IpInfoRefreshReason.POST_UPDATE,
+        -> 1
+    }
+
+internal fun ipInfoRefreshRetryDelayMsForReason(reason: IpInfoRefreshReason): Long =
+    when (reason) {
+        IpInfoRefreshReason.POST_CONNECT,
+        IpInfoRefreshReason.RESTORED_VPN,
+        -> HomeViewModel.CONNECTED_IP_REFRESH_RETRY_DELAY_MS
+        IpInfoRefreshReason.TOR_ROUTE -> HomeViewModel.TOR_IP_REFRESH_RETRY_DELAY_MS
+        IpInfoRefreshReason.MANUAL,
+        IpInfoRefreshReason.FOREGROUND,
+        IpInfoRefreshReason.POST_UPDATE,
+        -> 0L
+    }
 
 internal suspend fun HomeViewModel.getResolvedConfigInternal(
     profileId: Long,
@@ -670,7 +706,28 @@ internal fun HomeViewModel.scheduleConnectedIpRefreshInternal(
                 fetchMode = ipInfoFetchModeForRefreshReason(reason),
                 minimumLoadingDurationMs = 0L,
                 reason = reason,
+                onPublished = {
+                    schedulePostConnectLatencyRefreshAfterIp(reason)
+                },
             )
+        }
+}
+
+private fun HomeViewModel.schedulePostConnectLatencyRefreshAfterIp(reason: IpInfoRefreshReason) {
+    if (reason != IpInfoRefreshReason.POST_CONNECT) {
+        return
+    }
+    postConnectLatencyRefreshJob?.cancel()
+    postConnectLatencyRefreshJob =
+        viewModelScope.launch {
+            delay(HomeViewModel.POST_CONNECT_LATENCY_AFTER_IP_DELAY_MS)
+            postConnectLatencyRefreshJob = null
+            if (
+                container.connectionController.snapshot.value.state == ConnectionState.CONNECTED &&
+                !autoConnectUiStateMutable.value.running
+            ) {
+                scheduleActiveProfileLatencyRefresh(showLoading = false, refreshImmediately = true)
+            }
         }
 }
 

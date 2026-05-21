@@ -24,9 +24,11 @@ data class DnsProtectionSummary(
     val allowedQueries: Int,
     val categoryRows: List<DnsProtectionCategoryRow>,
     val appRows: List<DnsProtectionAppRow>,
+    val domainRows: List<DnsProtectionDomainRow> = emptyList(),
     val quality: ChartDataQuality = ChartDataQuality.REAL,
     val categoryQuality: ChartDataQuality = ChartDataQuality.SYNTHETIC,
     val appQuality: ChartDataQuality = ChartDataQuality.ESTIMATED,
+    val domainQuality: ChartDataQuality = ChartDataQuality.REAL,
 ) {
     val totalQueries: Int get() = blockedQueries + allowedQueries
     val blockRatio: Float get() = if (totalQueries == 0) 0f else blockedQueries.toFloat() / totalQueries.toFloat()
@@ -46,6 +48,12 @@ data class DnsProtectionCategoryRow(
     val category: DnsProtectionCategory,
     val blockedQueries: Int,
     val quality: ChartDataQuality = ChartDataQuality.SYNTHETIC,
+)
+
+data class DnsProtectionDomainRow(
+    val domain: String,
+    val blockedQueries: Long,
+    val quality: ChartDataQuality = ChartDataQuality.REAL,
 )
 
 enum class DnsProtectionCategory {

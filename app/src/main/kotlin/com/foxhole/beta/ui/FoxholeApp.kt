@@ -8,7 +8,6 @@ import android.view.ViewOutlineProvider
 import android.widget.FrameLayout
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.animateColorAsState
@@ -20,6 +19,8 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -83,7 +84,6 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavDestination
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
@@ -106,6 +106,7 @@ import eightbitlab.com.blurview.BlurTarget
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.min
+import kotlin.math.roundToInt
 
 private object AppRoute {
     const val HOME = "home"
@@ -722,6 +723,7 @@ fun FoxholeApp(
                         onNetworkActivityPersistentLoggingChanged = viewModel::onNetworkActivityPersistentLoggingChanged,
                         onFirewallEnabledChanged = viewModel::onFirewallEnabledChanged,
                         onDiagnosticsRetentionSelected = viewModel::onDiagnosticsRetentionSelected,
+                        onSanitizeNetworkActivityPrivateDataChanged = viewModel::onSanitizeNetworkActivityPrivateDataChanged,
                         onRawLiveDiagnosticsChanged = viewModel::onRawLiveDiagnosticsChanged,
                         onStatisticsMetricEnabledChanged = viewModel::onStatisticsMetricEnabledChanged,
                         onOpenSecurityAppMonitorSettings = { navController.navigate(AppRoute.SECURITY_APP_MONITOR) },
@@ -840,7 +842,7 @@ private fun FoxholeBottomBar(
     val externalDockView =
         remember(overlayHost, blurTarget) {
             if (overlayHost != null && blurTarget != null) {
-                FoxholeBottomDockBlurView(overlayHost.context)
+                FoxholeBottomDockBlurView(overlayHost.context, selectedSection)
             } else {
                 null
             }
@@ -902,8 +904,9 @@ private fun FoxholeBottomBar(
 
 private class FoxholeBottomDockBlurView(
     context: Context,
+    initialSelectedSection: AppSection,
 ) : FrameLayout(context) {
-    val selectedSectionState = mutableStateOf(AppSection.DASHBOARD)
+    val selectedSectionState = mutableStateOf(initialSelectedSection)
     val themeModeState = mutableStateOf(ThemeMode.SYSTEM)
     val onSectionSelectedState = mutableStateOf<(AppSection) -> Unit>({})
     private val outlineBackground = GradientDrawable()
@@ -1249,7 +1252,7 @@ private fun rootExit(): ExitTransition =
             ),
     )
 
-private fun AnimatedContentTransitionScope<NavBackStackEntry>.detailForwardEnter(): EnterTransition =
+private fun detailForwardEnter(): EnterTransition =
     fadeIn(
         animationSpec =
             tween(
@@ -1257,8 +1260,8 @@ private fun AnimatedContentTransitionScope<NavBackStackEntry>.detailForwardEnter
                 easing = LinearOutSlowInEasing,
             ),
     ) +
-        slideIntoContainer(
-            towards = AnimatedContentTransitionScope.SlideDirection.Start,
+        slideInHorizontally(
+            initialOffsetX = { fullWidth -> detailTransitionOffsetPx(fullWidth) },
             animationSpec =
                 tween(
                     durationMillis = DETAIL_TRANSITION_MS,
@@ -1266,7 +1269,7 @@ private fun AnimatedContentTransitionScope<NavBackStackEntry>.detailForwardEnter
                 ),
         )
 
-private fun AnimatedContentTransitionScope<NavBackStackEntry>.detailForwardExit(): ExitTransition =
+private fun detailForwardExit(): ExitTransition =
     fadeOut(
         animationSpec =
             tween(
@@ -1274,8 +1277,8 @@ private fun AnimatedContentTransitionScope<NavBackStackEntry>.detailForwardExit(
                 easing = FastOutLinearInEasing,
             ),
     ) +
-        slideOutOfContainer(
-            towards = AnimatedContentTransitionScope.SlideDirection.Start,
+        slideOutHorizontally(
+            targetOffsetX = { fullWidth -> -detailTransitionOffsetPx(fullWidth) },
             animationSpec =
                 tween(
                     durationMillis = DETAIL_TRANSITION_MS,
@@ -1283,7 +1286,7 @@ private fun AnimatedContentTransitionScope<NavBackStackEntry>.detailForwardExit(
                 ),
         )
 
-private fun AnimatedContentTransitionScope<NavBackStackEntry>.detailBackEnter(): EnterTransition =
+private fun detailBackEnter(): EnterTransition =
     fadeIn(
         animationSpec =
             tween(
@@ -1291,8 +1294,8 @@ private fun AnimatedContentTransitionScope<NavBackStackEntry>.detailBackEnter():
                 easing = LinearOutSlowInEasing,
             ),
     ) +
-        slideIntoContainer(
-            towards = AnimatedContentTransitionScope.SlideDirection.End,
+        slideInHorizontally(
+            initialOffsetX = { fullWidth -> -detailTransitionOffsetPx(fullWidth) },
             animationSpec =
                 tween(
                     durationMillis = DETAIL_TRANSITION_MS,
@@ -1300,7 +1303,7 @@ private fun AnimatedContentTransitionScope<NavBackStackEntry>.detailBackEnter():
                 ),
         )
 
-private fun AnimatedContentTransitionScope<NavBackStackEntry>.detailBackExit(): ExitTransition =
+private fun detailBackExit(): ExitTransition =
     fadeOut(
         animationSpec =
             tween(
@@ -1308,14 +1311,19 @@ private fun AnimatedContentTransitionScope<NavBackStackEntry>.detailBackExit(): 
                 easing = FastOutLinearInEasing,
             ),
     ) +
-        slideOutOfContainer(
-            towards = AnimatedContentTransitionScope.SlideDirection.End,
+        slideOutHorizontally(
+            targetOffsetX = { fullWidth -> detailTransitionOffsetPx(fullWidth) },
             animationSpec =
                 tween(
                     durationMillis = DETAIL_TRANSITION_MS,
                     easing = FastOutSlowInEasing,
                 ),
         )
+
+internal fun detailTransitionOffsetPx(fullWidthPx: Int): Int =
+    (fullWidthPx * DETAIL_TRANSITION_OFFSET_FRACTION)
+        .roundToInt()
+        .coerceAtLeast(1)
 
 private fun NavHostController.navigateToProfilesRoot() {
     val currentRoute = currentDestination?.route
@@ -1362,4 +1370,5 @@ private const val ROOT_FADE_OUT_MS = 90
 private const val ROOT_FADE_IN_MS = 150
 private const val DETAIL_FADE_IN_MS = 120
 private const val DETAIL_FADE_OUT_MS = 90
-private const val DETAIL_TRANSITION_MS = 280
+private const val DETAIL_TRANSITION_MS = 220
+private const val DETAIL_TRANSITION_OFFSET_FRACTION = 0.18f

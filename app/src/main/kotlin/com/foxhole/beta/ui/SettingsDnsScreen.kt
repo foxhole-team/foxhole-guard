@@ -56,6 +56,8 @@ fun DnsSettingsScreen(
     var domainStrategyExpanded by rememberSaveable { mutableStateOf(false) }
     var serverDialog by rememberSaveable { mutableStateOf(false) }
     var domainBypassDialog by rememberSaveable { mutableStateOf(false) }
+    var filterUpdateSourceDialog by rememberSaveable { mutableStateOf(false) }
+    var autoUpdateConsent by rememberSaveable { mutableStateOf(false) }
     var autoUpdateWarning by rememberSaveable { mutableStateOf(false) }
     val refreshInProgress = state.dnsFilterRefreshInProgress
 
@@ -136,6 +138,7 @@ fun DnsSettingsScreen(
                     leadingIcon = Icons.Outlined.Security,
                     enabled = dns.filteringEnabled,
                     onCheckedChange = { enabled -> updateDns(dns.copy(blockMaliciousDomains = enabled)) },
+                    titleMaxLines = 2,
                     grouped = true,
                 )
                 SettingsControlGroupDivider()
@@ -149,10 +152,25 @@ fun DnsSettingsScreen(
                         if (!enabled) {
                             autoUpdateWarning = true
                         } else {
-                            updateDns(dns.copy(autoUpdateFilters = true))
+                            autoUpdateConsent = true
                         }
                     },
                     summaryMaxLines = 3,
+                    grouped = true,
+                )
+                SettingsControlGroupDivider()
+                SettingValueRow(
+                    title = stringResource(R.string.dns_filter_update_source_title),
+                    value = dnsFilterUpdateSourceLabel(dns.dnsFilterUpdateUrl),
+                    summary = stringResource(R.string.dns_filter_update_source_summary),
+                    leadingIcon = Icons.Outlined.Public,
+                    onClick =
+                        if (dns.filteringEnabled) {
+                            { filterUpdateSourceDialog = true }
+                        } else {
+                            null
+                        },
+                    summaryMaxLines = Int.MAX_VALUE,
                     grouped = true,
                 )
                 SettingsControlGroupDivider()
@@ -297,6 +315,32 @@ fun DnsSettingsScreen(
         )
     }
 
+    if (filterUpdateSourceDialog) {
+        TextValueDialog(
+            title = stringResource(R.string.dns_filter_update_source_title),
+            icon = Icons.Outlined.Public,
+            initialValue = dns.dnsFilterUpdateUrl,
+            singleLine = true,
+            onDismiss = { filterUpdateSourceDialog = false },
+            onConfirm = { value -> updateDns(dns.copy(dnsFilterUpdateUrl = value)) },
+        )
+    }
+
+    if (autoUpdateConsent) {
+        ConfirmDialog(
+            title = stringResource(R.string.dns_auto_update_consent_title),
+            body = stringResource(R.string.dns_auto_update_consent_body),
+            confirmLabel = stringResource(R.string.enable_label),
+            dismissLabel = stringResource(R.string.close),
+            icon = Icons.Outlined.Refresh,
+            onDismiss = { autoUpdateConsent = false },
+            onConfirm = {
+                autoUpdateConsent = false
+                updateDns(dns.copy(autoUpdateFilters = true))
+            },
+        )
+    }
+
     if (autoUpdateWarning) {
         ConfirmDialog(
             title = stringResource(R.string.dns_auto_update_warning_title),
@@ -312,6 +356,13 @@ fun DnsSettingsScreen(
         )
     }
 }
+
+private fun dnsFilterUpdateSourceLabel(value: String): String =
+    value
+        .removePrefix("https://")
+        .removePrefix("http://")
+        .substringBefore('/')
+        .ifBlank { value }
 
 @Composable
 private fun DnsDomainBypassDialog(

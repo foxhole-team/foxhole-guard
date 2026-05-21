@@ -21,6 +21,7 @@ import androidx.core.content.getSystemService
 import com.foxhole.beta.BuildConfig
 import com.foxhole.beta.R
 import com.foxhole.beta.core.anomaly.DnsRuntimeStats
+import com.foxhole.beta.core.anomaly.isDnsRuntimeLogMessage
 import com.foxhole.beta.core.diagnostics.DiagnosticSanitizer
 import com.foxhole.beta.core.diagnostics.DiagnosticsLogger
 import com.foxhole.beta.core.model.NetworkActivityEvent
@@ -1206,11 +1207,7 @@ private fun pruneLibboxDiagnosticThrottle(now: Long) {
 }
 
 private fun shouldRecordDnsRuntimeStats(message: String): Boolean {
-    val trimmed = message.trimStart()
-    return trimmed.startsWith("rejected ", ignoreCase = true) ||
-        trimmed.contains(" rejected ", ignoreCase = true) ||
-        trimmed.startsWith("exchanged ", ignoreCase = true) ||
-        trimmed.startsWith("cached ", ignoreCase = true)
+    return isDnsRuntimeLogMessage(message)
 }
 
 private fun shouldSummarizeLibboxDiagnostic(message: String): Boolean {

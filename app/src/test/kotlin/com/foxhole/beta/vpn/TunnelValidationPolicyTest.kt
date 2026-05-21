@@ -115,11 +115,11 @@ class TunnelValidationPolicyTest {
     }
 
     @Test
-    fun `android validated vpn network requires healthy tunnel activity evidence`() {
+    fun `android validated vpn network accepts platform validation without activity evidence`() {
         assertTrue(
             acceptsAndroidValidatedVpnNetwork(
                 androidValidated = true,
-                evidence = TunnelValidationEvidence(hasSuccessfulTunnelActivity = true),
+                evidence = null,
             ),
         )
         assertFalse(
@@ -128,7 +128,7 @@ class TunnelValidationPolicyTest {
                 evidence = TunnelValidationEvidence(hasSuccessfulTunnelActivity = true),
             ),
         )
-        assertFalse(
+        assertTrue(
             acceptsAndroidValidatedVpnNetwork(
                 androidValidated = true,
                 evidence = TunnelValidationEvidence(hasSuccessfulTunnelActivity = false),

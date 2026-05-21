@@ -1,19 +1,21 @@
-Foxhole is an Android client for connecting to and managing sing-box profiles with support for a VPN tunnel, local proxy, split routing, and optional routing of selected apps' TCP traffic through the Tor network inside the VPN.
+Foxhole is an Android client for connecting to and managing sing-box profiles with support for v2raytun-format subscriptions, VPN tunnel mode, local proxy mode, split routing, and optional routing of selected apps' TCP traffic through the Tor network inside the VPN.
 
-The app can run connections in VPN tunnel and local proxy modes, configure split routing for apps and domains, and use basic traffic restriction rules.
+The app can run connections in VPN tunnel and local proxy modes, configure split routing for apps and domains, use DNS filtering, and apply basic traffic restriction rules.
 
 Key features:
 
 * VPN tunnel and local proxy mode
 * split routing for apps and domains
 * optional TCP traffic routing through the Tor network
+* local DNS filtering
+* DNS filtering exceptions for apps and domains
 * LAN proxy over Wi-Fi
 * proxy authentication
 * domain-based routing rules
 * profile import from files, QR codes, clipboard, and HTTPS subscriptions
 * local traffic statistics
 * subscription expiration display
-* encrypted local profile storage
+* encrypted local VPN profile storage
 
 Supported protocols:
 
@@ -25,7 +27,6 @@ Supported protocols:
 * WireGuard
 * Outline
 
-
 Smart start selects a suitable connection option from the available protocol options. Selection is based on local history of successful and failed connections, latency, network state, and the last working option. This data is not sent to the developer or shared with third-party servers.
 
 Tor network:
@@ -33,9 +34,19 @@ The app includes optional TCP traffic routing through the Tor network. UDP traff
 
 Tor is a trademark of The Tor Project. Foxhole is not a product of The Tor Project and is not endorsed, sponsored, or affiliated with The Tor Project.
 
+DNS filtering:
+Foxhole can use a local DNS rule set to block ad, tracker, telemetry, and potentially malicious domains. The app includes a bundled fallback filter. The user can enable filter updates from the public Foxhole repository. The updated rule set is built in CI from the open AdGuard DNS filter, published with a manifest file, and verified by the app using signature, size, and SHA-256 before use.
+
+The downloaded file is DNS filtering data for sing-box, not executable code. If signature or checksum verification fails, Foxhole does not use the downloaded file and continues with the bundled or last verified filter. The user can disable DNS filtering and add exceptions for apps or domains.
+
+Foxhole is not a product of AdGuard and is not affiliated with AdGuard Software Ltd.
+
 Permissions and privacy:
-QUERY_ALL_PACKAGES is used to choose apps that are included in or excluded from VPN/proxy routing, for the local installed-app overview, and for optional per-app traffic statistics.
-PACKAGE_USAGE_STATS is requested only when per-app statistics are enabled. Package lists, local risk signals, statistics, diagnostics, and Smart start history stay on the device unless the user explicitly exports or shares them.
+QUERY_ALL_PACKAGES is used to choose apps that are included in or excluded from VPN/proxy routing, to configure DNS exceptions, for the local installed-app overview, and for optional per-app traffic statistics.
+
+PACKAGE_USAGE_STATS is requested only when per-app statistics are enabled. Package lists, local risk signals, statistics, diagnostics, Smart start history, user DNS exceptions, and DNS filtering state stay on the device unless the user explicitly exports or sends them.
 
 Network requests:
-Foxhole contains no ads, analytics, or telemetry. The app may make network requests for features selected by the user: loading HTTPS subscriptions, checking connection health, and getting current IP address information through a configurable endpoint. These requests are needed for VPN/proxy operation and connection validation.
+Foxhole contains no ads, analytics, or telemetry. The app may make network requests for features selected by the user: loading HTTPS subscriptions, checking connection health, obtaining current IP address information through a configurable endpoint, operating the selected DNS server, and optionally downloading an updated DNS rule set from the public Foxhole repository.
+
+These requests are needed for VPN/proxy operation, connection checks, and user-selected features. Foxhole does not send the developer installed app lists, custom DNS exceptions, DNS logs, or DNS filtering statistics.

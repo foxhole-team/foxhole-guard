@@ -671,7 +671,7 @@ class ProfileRepository(
     suspend fun verifyBundledDnsFilters() {
         dnsFilterAssetInstaller.prepare()
         settingsRepository.markDnsFiltersUpdated()
-        diagnosticsLogger.record("dns", "bundled filter list verified")
+        diagnosticsLogger.record("dns", "local DNS filter list verified")
     }
 
     @Suppress("LongMethod", "CyclomaticComplexMethod")

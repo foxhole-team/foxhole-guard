@@ -646,23 +646,6 @@ internal class LibboxReflection(
             destinationHost
                 .takeIf(String::isNotBlank)
                 ?.let(countryResolver::countryCodeForDestination)
-        if (packageNames.isNotEmpty() && destinationHost.isNotBlank()) {
-            val context = networkActivityContext()
-            onNetworkActivityEvent(
-                NetworkActivityEvent(
-                    timestampMs = System.currentTimeMillis(),
-                    packageNames = packageNames,
-                    protocol = protocolLabel(protocol),
-                    remoteHost = destinationHost,
-                    remotePort = destinationPort.takeIf { port -> port in 1..65535 },
-                    countryCode = countryCode,
-                    bytesRx = 0L,
-                    bytesTx = 0L,
-                    profileId = context.profileId,
-                    sessionId = context.sessionId,
-                ),
-            )
-        }
         val throttleKey =
             listOf(protocol, packageNames.joinToString(","), destinationHost, destinationPort)
                 .joinToString("|")

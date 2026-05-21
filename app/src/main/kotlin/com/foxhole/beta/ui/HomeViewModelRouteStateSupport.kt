@@ -6,6 +6,8 @@ import com.foxhole.beta.core.model.Settings
 import com.foxhole.beta.core.settings.preferredLastKnownGoodOptionId
 import com.foxhole.beta.core.settings.rememberedSmartProfileDownOptionIds
 import com.foxhole.beta.core.settings.rememberedSmartProfileDownOptionIdsByProfileId
+import com.foxhole.beta.core.settings.rememberedSmartProfileLatencyUnavailableByProfileId
+import com.foxhole.beta.core.settings.rememberedSmartProfileLatencyUnavailableOptionIds
 import com.foxhole.beta.core.settings.rememberedSmartProfileServerPingByOptionId
 import com.foxhole.beta.core.settings.rememberedSmartProfileServerPingByProfileId
 import com.foxhole.beta.core.settings.rememberedSmartStartLatencyByOptionId
@@ -30,10 +32,17 @@ internal fun buildHomeRouteUiState(
     val activeProfileLatencyUnavailable =
         state.activeProfile
             ?.let { activeProfile ->
-                profileOptionLatencyUnavailable
-                    .filter { key -> key.profileId == activeProfile.id }
-                    .map(ProfileOptionLatencyKey::optionId)
-                    .toSet()
+                val liveUnavailable =
+                    profileOptionLatencyUnavailable
+                        .filter { key -> key.profileId == activeProfile.id }
+                        .map(ProfileOptionLatencyKey::optionId)
+                        .toSet()
+                val rememberedUnavailable =
+                    state.settings
+                        .smartProfilePreference(activeProfile.id)
+                        ?.rememberedSmartProfileLatencyUnavailableOptionIds(currentNetworkFingerprintKey)
+                        .orEmpty()
+                liveUnavailable + rememberedUnavailable
             }.orEmpty()
     val activeProfileDownOptionIds =
         state.activeProfile
@@ -109,14 +118,17 @@ internal fun buildHomeRouteUiState(
     val activeRecommendedProtocolOptionIds =
         state.activeProfile
             ?.let { activeProfile ->
+                val evidenceOptionIds = activeKnownLatenciesByOptionId.keys
                 val baseline =
                     state.settings
                         .smartProfilePreference(activeProfile.id)
                         ?.recommendedProtocolIds
+                        ?.filter(evidenceOptionIds::contains)
                         .orEmpty()
                 val transient =
                     protocolMetrics.recommendation
                         ?.takeIf { recommendation -> recommendation.profileId == activeProfile.id }
+                        ?.takeIf { recommendation -> recommendation.optionId in evidenceOptionIds }
                         ?.optionId
                 (baseline + listOfNotNull(transient)).toSet()
             }.orEmpty()
@@ -145,11 +157,7 @@ internal fun buildHomeRouteUiState(
         protocolMetricsRefreshingOptionId =
             state.activeProfile?.id?.let(protocolMetrics.refreshingOptionIdByProfileId::get)
                 ?: autoConnect.currentOptionId.takeIf { autoConnectRefreshingActiveProfile },
-        recommendedProtocolOptionId =
-            protocolMetrics.recommendation
-                ?.takeIf { recommendation -> recommendation.profileId == state.activeProfile?.id }
-                ?.optionId
-                ?: activeRecommendedProtocolOptionIds.firstOrNull(),
+        recommendedProtocolOptionId = activeRecommendedProtocolOptionIds.firstOrNull(),
         recommendedProtocolOptionIds = activeRecommendedProtocolOptionIds,
         favoriteProtocolOptionId = activeFavoriteProtocolOptionId,
         smartStartRememberedLatenciesByOptionId = smartStartRememberedLatenciesByOptionId,
@@ -244,8 +252,16 @@ internal fun buildProfilesRouteUiState(
     val liveLatenciesByProfileId =
         liveSmartProfileLatenciesByProfileId(profileOptionLatencies)
     val latencyUnavailableByProfileId =
-        liveSmartProfileLatencyUnavailableByProfileId(
-            profileOptionLatencyUnavailable = profileOptionLatencyUnavailable,
+        smartProfileLatencyUnavailableByProfileId(
+            rememberedLatencyUnavailableByProfileId =
+                state.settings.rememberedSmartProfileLatencyUnavailableByProfileId(
+                    networkFingerprint = networkFingerprintKey,
+                ),
+            liveLatencyUnavailableByProfileId =
+                liveSmartProfileLatencyUnavailableByProfileId(
+                    profileOptionLatencyUnavailable = profileOptionLatencyUnavailable,
+                    liveLatenciesByProfileId = liveLatenciesByProfileId,
+                ),
             liveLatenciesByProfileId = liveLatenciesByProfileId,
         )
     val mergedLatenciesByProfileId =
@@ -255,9 +271,17 @@ internal fun buildProfilesRouteUiState(
             latencyUnavailableByProfileId = latencyUnavailableByProfileId,
         )
     val recommendedProtocolOptionByProfileId =
-        smartProfileRecommendedOptionByProfileId(state.settings, protocolMetrics.recommendation)
+        smartProfileRecommendedOptionByProfileId(
+            settings = state.settings,
+            recommendation = protocolMetrics.recommendation,
+            latenciesByProfileId = mergedLatenciesByProfileId,
+        )
     val recommendedProtocolOptionsByProfileId =
-        smartProfileRecommendedOptionsByProfileId(state.settings, protocolMetrics.recommendation)
+        smartProfileRecommendedOptionsByProfileId(
+            settings = state.settings,
+            recommendation = protocolMetrics.recommendation,
+            latenciesByProfileId = mergedLatenciesByProfileId,
+        )
     val favoriteProtocolOptionByProfileId =
         smartProfileFavoriteOptionByProfileId(
             settings = state.settings,
@@ -282,26 +306,32 @@ internal fun buildProfilesRouteUiState(
 private fun smartProfileRecommendedOptionByProfileId(
     settings: Settings,
     recommendation: ProtocolRecommendationState?,
+    latenciesByProfileId: Map<Long, Map<String, Long>>,
 ): Map<Long, String> =
     settings.smartProfilePreferences
         .mapNotNull { preference ->
-            preference.recommendedProtocolIds.firstOrNull()?.let { optionId ->
+            val evidenceOptionIds = latenciesByProfileId[preference.profileId].orEmpty().keys
+            preference.recommendedProtocolIds.firstOrNull(evidenceOptionIds::contains)?.let { optionId ->
                 preference.profileId to optionId
             }
         }.toMap() +
         recommendation
+            ?.takeIf { state -> state.optionId in latenciesByProfileId[state.profileId].orEmpty() }
             ?.let { state -> mapOf(state.profileId to state.optionId) }
             .orEmpty()
 
 private fun smartProfileRecommendedOptionsByProfileId(
     settings: Settings,
     recommendation: ProtocolRecommendationState?,
+    latenciesByProfileId: Map<Long, Map<String, Long>>,
 ): Map<Long, Set<String>> =
     settings.smartProfilePreferences
         .associate { preference ->
-            preference.profileId to preference.recommendedProtocolIds.toSet()
+            val evidenceOptionIds = latenciesByProfileId[preference.profileId].orEmpty().keys
+            preference.profileId to preference.recommendedProtocolIds.filter(evidenceOptionIds::contains).toSet()
         } +
         recommendation
+            ?.takeIf { state -> state.optionId in latenciesByProfileId[state.profileId].orEmpty() }
             ?.let { state -> mapOf(state.profileId to setOf(state.optionId)) }
             .orEmpty()
 
@@ -363,6 +393,18 @@ private fun liveSmartProfileLatencyUnavailableByProfileId(
         .groupBy(ProfileOptionLatencyKey::profileId, ProfileOptionLatencyKey::optionId)
         .mapValues { (profileId, values) ->
             values
+                .filterNot(liveLatenciesByProfileId[profileId].orEmpty()::containsKey)
+                .toSet()
+        }
+
+private fun smartProfileLatencyUnavailableByProfileId(
+    rememberedLatencyUnavailableByProfileId: Map<Long, Set<String>>,
+    liveLatencyUnavailableByProfileId: Map<Long, Set<String>>,
+    liveLatenciesByProfileId: Map<Long, Map<String, Long>>,
+): Map<Long, Set<String>> =
+    (rememberedLatencyUnavailableByProfileId.keys + liveLatencyUnavailableByProfileId.keys)
+        .associateWith { profileId ->
+            (rememberedLatencyUnavailableByProfileId[profileId].orEmpty() + liveLatencyUnavailableByProfileId[profileId].orEmpty())
                 .filterNot(liveLatenciesByProfileId[profileId].orEmpty()::containsKey)
                 .toSet()
         }

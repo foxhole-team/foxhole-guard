@@ -85,8 +85,7 @@ internal fun acceptsAndroidValidatedVpnNetwork(
     context: TunnelValidationPolicyContext = TunnelValidationPolicyContext(),
 ): Boolean =
     androidValidated &&
-        evidence?.hasSuccessfulTunnelActivity == true &&
-        evidence.fatalRuntimeMessage == null &&
+        evidence?.fatalRuntimeMessage == null &&
         acceptsTunnelValidationProbe(
             kind = TunnelValidationProbeKind.ANDROID_VALIDATED_VPN_NETWORK,
             context = context,

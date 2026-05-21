@@ -13,9 +13,11 @@ import androidx.work.WorkManager
 import com.foxhole.beta.core.data.ProfileSecretCleanupWorker
 import com.foxhole.beta.core.model.AppLocale
 import com.foxhole.beta.core.model.SubscriptionRefreshInterval
+import com.foxhole.beta.core.model.dnsRuleSetFilteringEnabled
 import com.foxhole.beta.core.profile.PROFILE_EXPORT_DIR_NAME
 import com.foxhole.beta.core.profile.cleanupProfileExportArtifacts
 import com.foxhole.beta.core.settings.readFastStoredAppLocale
+import com.foxhole.beta.vpn.DnsFilterUpdateWorker
 import com.foxhole.beta.vpn.SubscriptionRefreshWorker
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -64,6 +66,9 @@ class FoxholeApplication : Application() {
         applySubscriptionRefreshSchedule(
             enabled = settings.connection.autoRefreshSubscriptions,
             interval = settings.connection.subscriptionRefreshInterval,
+        )
+        applyDnsFilterUpdateSchedule(
+            enabled = settings.dns.autoUpdateFilters && settings.dns.dnsRuleSetFilteringEnabled(),
         )
     }
 
@@ -114,6 +119,35 @@ internal fun Context.applySubscriptionRefreshSchedule(
 }
 
 internal fun subscriptionRefreshIntervalHours(interval: SubscriptionRefreshInterval): Long = interval.hours
+
+internal fun Context.applyDnsFilterUpdateSchedule(enabled: Boolean) {
+    val workManager = WorkManager.getInstance(this)
+    if (!enabled) {
+        workManager.cancelUniqueWork(DnsFilterUpdateWorker.WORK_NAME)
+        return
+    }
+    val work =
+        PeriodicWorkRequestBuilder<DnsFilterUpdateWorker>(
+            DNS_FILTER_UPDATE_INTERVAL_HOURS,
+            TimeUnit.HOURS,
+        )
+            .setConstraints(
+                Constraints.Builder()
+                    .setRequiredNetworkType(NetworkType.CONNECTED)
+                    .build(),
+            ).setBackoffCriteria(
+                BackoffPolicy.EXPONENTIAL,
+                10,
+                TimeUnit.MINUTES,
+            ).build()
+    workManager.enqueueUniquePeriodicWork(
+        DnsFilterUpdateWorker.WORK_NAME,
+        ExistingPeriodicWorkPolicy.UPDATE,
+        work,
+    )
+}
+
+internal const val DNS_FILTER_UPDATE_INTERVAL_HOURS = 72L
 
 internal fun applyAppLocale(locale: AppLocale) {
     val locales =

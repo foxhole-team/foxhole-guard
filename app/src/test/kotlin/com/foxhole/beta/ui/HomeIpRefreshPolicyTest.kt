@@ -54,6 +54,28 @@ class HomeIpRefreshPolicyTest {
     }
 
     @Test
+    fun `post connect refresh retries while runtime proxy settles`() {
+        assertEquals(HomeViewModel.CONNECTED_IP_REFRESH_ATTEMPTS, ipInfoRefreshAttemptsForReason(IpInfoRefreshReason.POST_CONNECT))
+        assertEquals(
+            HomeViewModel.CONNECTED_IP_REFRESH_RETRY_DELAY_MS,
+            ipInfoRefreshRetryDelayMsForReason(IpInfoRefreshReason.POST_CONNECT),
+        )
+        assertEquals(HomeViewModel.TOR_IP_REFRESH_ATTEMPTS, ipInfoRefreshAttemptsForReason(IpInfoRefreshReason.TOR_ROUTE))
+        assertEquals(1, ipInfoRefreshAttemptsForReason(IpInfoRefreshReason.MANUAL))
+    }
+
+    @Test
+    fun `post connect refresh is silent and schedules latency five seconds after ip`() {
+        assertFalse(
+            shouldClearExistingIpForRefresh(
+                reason = IpInfoRefreshReason.POST_CONNECT,
+                clearExistingIp = true,
+            ),
+        )
+        assertEquals(5_000L, HomeViewModel.POST_CONNECT_LATENCY_AFTER_IP_DELAY_MS)
+    }
+
+    @Test
     fun `automatic dashboard refreshes use quick fetch mode`() {
         assertEquals(IpInfoFetchMode.FULL, ipInfoFetchModeForRefreshReason(IpInfoRefreshReason.MANUAL))
         assertEquals(IpInfoFetchMode.ENTRY_QUICK, ipInfoFetchModeForRefreshReason(IpInfoRefreshReason.POST_CONNECT))

@@ -1,10 +1,12 @@
 package com.foxhole.beta.ui
 
+import com.foxhole.beta.core.model.AutoConnectReasonCode
 import com.foxhole.beta.core.model.ConnectionState
 import com.foxhole.beta.core.model.LatencyProbeMethod
 import com.foxhole.beta.core.model.ProtocolHint
 import com.foxhole.beta.core.model.SmartProfilePreference
 import com.foxhole.beta.core.profile.AutoConnectProbeCandidate
+import com.foxhole.beta.core.profile.AutoConnectProbeResult
 import com.foxhole.beta.core.smart.AdaptiveProtocolCandidateScore
 import com.foxhole.beta.vpn.FoxholeVpnService
 import org.junit.Assert.assertEquals
@@ -349,6 +351,70 @@ class HomeAutoConnectWaitPolicyTest {
         assertEquals(
             listOf("vless", "outline", "trojan"),
             state.candidates.map(AutoConnectProbeCandidate::optionId),
+        )
+    }
+
+    @Test
+    fun `recommendations require measured display latency`() {
+        val vless = candidate("vless")
+        val trojan = candidate("trojan")
+        val wireguard = candidate("wireguard")
+
+        assertEquals(
+            listOf("trojan"),
+            recommendedProtocolIdsFromProbeResults(
+                listOf(
+                    AutoConnectProbeResult(
+                        candidate = vless,
+                        success = true,
+                        latencyMs = 350L,
+                        rankingLatencyMs = 350L,
+                        displayLatencyMs = null,
+                        reasonCode = AutoConnectReasonCode.LATENCY_ENDPOINT_BLOCKED,
+                    ),
+                    AutoConnectProbeResult(
+                        candidate = wireguard,
+                        success = true,
+                        latencyMs = 80L,
+                        rankingLatencyMs = 80L,
+                        displayLatencyMs = null,
+                        reasonCode = AutoConnectReasonCode.LATENCY_ENDPOINT_BLOCKED,
+                    ),
+                    AutoConnectProbeResult(
+                        candidate = trojan,
+                        success = true,
+                        latencyMs = 220L,
+                        displayLatencyMs = 220L,
+                    ),
+                ),
+            ),
+        )
+    }
+
+    @Test
+    fun `all unavailable latency probes do not fabricate a recommendation`() {
+        assertEquals(
+            emptyList<String>(),
+            recommendedProtocolIdsFromProbeResults(
+                listOf(
+                    AutoConnectProbeResult(
+                        candidate = candidate("vless"),
+                        success = true,
+                        latencyMs = 340L,
+                        rankingLatencyMs = 340L,
+                        displayLatencyMs = null,
+                        reasonCode = AutoConnectReasonCode.LATENCY_ENDPOINT_BLOCKED,
+                    ),
+                    AutoConnectProbeResult(
+                        candidate = candidate("wireguard"),
+                        success = true,
+                        latencyMs = 90L,
+                        rankingLatencyMs = 90L,
+                        displayLatencyMs = null,
+                        reasonCode = AutoConnectReasonCode.LATENCY_ENDPOINT_BLOCKED,
+                    ),
+                ),
+            ),
         )
     }
 

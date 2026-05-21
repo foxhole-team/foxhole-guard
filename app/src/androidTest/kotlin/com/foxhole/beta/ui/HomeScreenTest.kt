@@ -370,6 +370,12 @@ class HomeScreenTest {
         composeRule.waitUntil(timeoutMillis = 5_000) {
             composeRule.onAllNodesWithTag("settings_screen").fetchSemanticsNodes().isNotEmpty()
         }
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            val app = InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as FoxholeApplication
+            runBlocking {
+                app.container.settingsRepository.settings.first().ui.showExpertSettings
+            }
+        }
         composeRule.onNodeWithTag("settings_screen").performScrollToNode(hasTestTag("settings_expert_action"))
         composeRule.waitUntil(timeoutMillis = 5_000) {
             composeRule.onAllNodesWithTag("settings_expert_action").fetchSemanticsNodes().isNotEmpty()

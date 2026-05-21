@@ -93,4 +93,39 @@ class ConnectionNotificationSupportTest {
             FoxholeVpnRuntimeBridge.setHighFrequencyTrafficUpdates(previousHighFrequency)
         }
     }
+
+    @Test
+    fun `runtime ip update keeps known location when same address refresh is partial`() {
+        val previousIpInfo = FoxholeVpnRuntimeBridge.ipInfo.value
+        val rich =
+            IpInfo(
+                ip = "198.51.100.10",
+                ipv4 = "198.51.100.10",
+                countryCode = "NL",
+                countryName = "Netherlands",
+                city = "Amsterdam",
+                isp = "Foxhole Test ISP",
+                fetchedAt = 1234L,
+            )
+        val partial =
+            rich.copy(
+                countryCode = null,
+                countryName = null,
+                city = null,
+                isp = null,
+                fetchedAt = 2234L,
+            )
+
+        try {
+            FoxholeVpnRuntimeBridge.updateIpInfo(rich)
+            FoxholeVpnRuntimeBridge.updateIpInfo(partial)
+
+            assertEquals(
+                rich.copy(fetchedAt = partial.fetchedAt),
+                FoxholeVpnRuntimeBridge.ipInfo.value,
+            )
+        } finally {
+            FoxholeVpnRuntimeBridge.updateIpInfo(previousIpInfo)
+        }
+    }
 }

@@ -19,6 +19,7 @@ data class TrafficAggregationContext(
     val reconnects: Int = 0,
     val blockedDns: Int = 0,
     val allowedDns: Int = 0,
+    val blockedDnsDomains: Map<String, Long> = emptyMap(),
 )
 
 class TrafficWindowAggregator(
@@ -78,6 +79,7 @@ class TrafficWindowAggregator(
                 reconnects = reconnectsInWindow.coerceAtLeast(context.reconnects),
                 latencyMs = context.latencyMs?.takeIf { it > 0 },
                 destinationCountries = destinationCountryDeltas,
+                blockedDnsDomains = context.blockedDnsDomains.sanitizedDnsDomainCounts(),
             )
         reconnectsInWindow = 0
         return window
@@ -124,3 +126,24 @@ internal fun countryByteDeltas(
     current
         .mapValues { (country, bytes) -> bytes - (previous?.get(country) ?: 0L) }
         .filterValues { bytes -> bytes > 0L }
+
+private fun Map<String, Long>.sanitizedDnsDomainCounts(): Map<String, Long> =
+    entries
+        .asSequence()
+        .mapNotNull { (domain, count) ->
+            val normalized = domain.trim().trimEnd('.').lowercase(Locale.US)
+            if (
+                count > 0L &&
+                normalized.isNotBlank() &&
+                normalized.length <= MAX_DNS_DOMAIN_LENGTH &&
+                normalized.all { char -> char.isLetterOrDigit() || char == '-' || char == '_' || char == '.' }
+            ) {
+                normalized to count
+            } else {
+                null
+            }
+        }
+        .groupBy({ it.first }, { it.second })
+        .mapValues { (_, counts) -> counts.sum() }
+
+private const val MAX_DNS_DOMAIN_LENGTH = 253

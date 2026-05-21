@@ -170,6 +170,7 @@ internal fun AppTrafficDetail(
     samples: List<AppTrafficWindow>,
     networkActivityEvents: List<NetworkActivityEvent>,
     ipInfo: com.foxhole.beta.core.model.IpInfo?,
+    showPrivateNetworkDetails: Boolean,
 ) {
     val context = LocalContext.current
     val appContext = remember(context) { context.applicationContext }
@@ -184,7 +185,12 @@ internal fun AppTrafficDetail(
         networkActivityEvents,
         ipInfo,
         resolver,
+        showPrivateNetworkDetails,
     ) {
+        if (!showPrivateNetworkDetails) {
+            value = emptyList()
+            return@produceState
+        }
         val packageName = row.packageName
         val events = networkActivityEvents
         val currentIpInfo = ipInfo
@@ -206,7 +212,7 @@ internal fun AppTrafficDetail(
                 LazyColumn(modifier = Modifier.heightIn(max = 520.dp)) {
                     items(
                         connectionRows.orEmpty(),
-                        key = { connection -> "${connection.remote}:${connection.protocol}" },
+                        key = { connection -> connection.stableKey },
                     ) { connection ->
                         AppConnectionRowView(connection = connection)
                     }
@@ -256,7 +262,13 @@ internal fun AppTrafficDetail(
             ChartLegend()
         }
         val loadedConnectionRows = connectionRows ?: return@Column
-        if (loadedConnectionRows.isNotEmpty()) {
+        if (!showPrivateNetworkDetails && networkActivityEvents.isNotEmpty()) {
+            Text(
+                text = stringResource(R.string.statistics_app_detail_private_data_hidden),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        } else if (loadedConnectionRows.isNotEmpty()) {
             Text(
                 text = stringResource(R.string.statistics_app_detail_top_destinations),
                 style = MaterialTheme.typography.titleSmall,
@@ -275,7 +287,8 @@ internal fun AppTrafficDetail(
 }
 
 internal data class AppConnectionRow(
-    val remote: String,
+    val remoteHost: String,
+    val remotePort: Int?,
     val ipAddress: String,
     val countryCode: String?,
     val countryName: String?,
@@ -284,7 +297,9 @@ internal data class AppConnectionRow(
     val count: Int,
     val bytes: Long,
     val lastSeenAt: Long,
-)
+) {
+    val stableKey: String get() = listOf(remoteHost, remotePort.orEmptyKey(), protocol).joinToString("|")
+}
 
 internal fun appConnectionRows(
     packageName: String,
@@ -292,17 +307,37 @@ internal fun appConnectionRows(
     resolver: TorGeoIpCountryResolver,
     ipInfo: com.foxhole.beta.core.model.IpInfo?,
 ): List<AppConnectionRow> =
-    appConnectionEventRows(packageName, events, resolver, ipInfo)
-        .groupBy { row -> row.remote to row.protocol }
+    appConnectionRows(
+        packageName = packageName,
+        events = events,
+        countryCodeForDestination = resolver::countryCodeForDestination,
+        ipInfo = ipInfo,
+    )
+
+internal fun appConnectionRows(
+    packageName: String,
+    events: List<NetworkActivityEvent>,
+    countryCodeForDestination: (String) -> String?,
+    ipInfo: com.foxhole.beta.core.model.IpInfo?,
+): List<AppConnectionRow> =
+    appConnectionEventRows(
+        packageName = packageName,
+        events = events,
+        countryCodeForDestination = countryCodeForDestination,
+        ipInfo = ipInfo,
+    )
+        .filter { row -> row.bytes > 0L }
+        .groupBy { row -> AppConnectionGroupKey(row.remoteHost, row.remotePort, row.protocol) }
         .map { (key, rows) ->
             val latest = rows.maxBy(AppConnectionRow::lastSeenAt)
             AppConnectionRow(
-                remote = key.first,
+                remoteHost = key.remoteHost,
+                remotePort = key.remotePort,
                 ipAddress = latest.ipAddress,
                 countryCode = latest.countryCode,
                 countryName = latest.countryName,
                 city = latest.city,
-                protocol = key.second,
+                protocol = key.protocol,
                 count = rows.size,
                 bytes = rows.sumOf(AppConnectionRow::bytes),
                 lastSeenAt = rows.maxOf(AppConnectionRow::lastSeenAt),
@@ -320,20 +355,29 @@ internal fun appConnectionEventRows(
     resolver: TorGeoIpCountryResolver,
     ipInfo: com.foxhole.beta.core.model.IpInfo?,
 ): List<AppConnectionRow> =
+    appConnectionEventRows(
+        packageName = packageName,
+        events = events,
+        countryCodeForDestination = resolver::countryCodeForDestination,
+        ipInfo = ipInfo,
+    )
+
+internal fun appConnectionEventRows(
+    packageName: String,
+    events: List<NetworkActivityEvent>,
+    countryCodeForDestination: (String) -> String?,
+    ipInfo: com.foxhole.beta.core.model.IpInfo?,
+): List<AppConnectionRow> =
     events
         .asSequence()
         .filter { event -> packageName in event.packageNames }
         .mapNotNull { event ->
             val remoteHost = event.remoteHost.takeIf(String::isNotBlank) ?: return@mapNotNull null
-            val remote =
-                event.remotePort
-                    ?.takeIf { port -> port in 1..65535 }
-                    ?.let { port -> "$remoteHost:$port" }
-                    ?: remoteHost
+            val remotePort = event.remotePort?.takeIf { port -> port in 1..65535 }
             val ipAddress = remoteHost.connectionHost()
             val countryCode =
                 event.countryCode
-                    ?: resolver.countryCodeForDestination(remoteHost)
+                    ?: countryCodeForDestination(remoteHost)
                     ?: ipInfo?.takeIf { info ->
                         ipAddress == info.ip || ipAddress == info.ipv4 || ipAddress == info.ipv6
                     }?.countryCode
@@ -343,7 +387,8 @@ internal fun appConnectionEventRows(
                     ?.takeIf { info -> ipAddress == info.ip || ipAddress == info.ipv4 || ipAddress == info.ipv6 }
                     ?.city
             AppConnectionRow(
-                remote = remote,
+                remoteHost = remoteHost,
+                remotePort = remotePort,
                 ipAddress = ipAddress,
                 countryCode = countryCode,
                 countryName = countryName,
@@ -356,3 +401,11 @@ internal fun appConnectionEventRows(
         }
         .sortedByDescending(AppConnectionRow::lastSeenAt)
         .toList()
+
+private data class AppConnectionGroupKey(
+    val remoteHost: String,
+    val remotePort: Int?,
+    val protocol: String,
+)
+
+private fun Int?.orEmptyKey(): String = this?.toString().orEmpty()

@@ -184,6 +184,7 @@ data class DiagnosticsRouteUiState(
     val activeProfile: Profile? = null,
     val traffic: TrafficSnapshot = TrafficSnapshot(),
     val diagnosticEntries: List<DiagnosticEntry> = emptyList(),
+    val networkActivityEvents: List<NetworkActivityEvent> = emptyList(),
 )
 
 internal fun HomeUiState.toHomeRouteUiState(
@@ -322,6 +323,7 @@ internal fun HomeUiState.toDiagnosticsRouteUiState(): DiagnosticsRouteUiState =
         activeProfile = activeProfile,
         traffic = traffic,
         diagnosticEntries = diagnosticEntries,
+        networkActivityEvents = networkActivityEvents,
     )
 
 internal fun ProfilesRouteUiState.profile(profileId: Long): Profile? = profiles.firstOrNull { it.id == profileId }

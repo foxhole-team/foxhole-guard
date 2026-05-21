@@ -10,6 +10,7 @@ import com.foxhole.beta.core.network.IpInfoRepository
 import com.foxhole.beta.core.network.NetworkFingerprintProvider
 import com.foxhole.beta.core.settings.SettingsRepository
 import com.foxhole.beta.core.traffic.TrafficMapRepository
+import com.foxhole.beta.vpn.DnsFilterUpdateRepository
 import com.foxhole.beta.vpn.FoxholeConnectionController
 import com.foxhole.beta.vpn.RuntimeConfigAssembler
 
@@ -22,6 +23,7 @@ interface FoxholeStartupDependencies {
 interface FoxholeHomeDependencies {
     val settingsRepository: SettingsRepository
     val profileRepository: ProfileRepository
+    val dnsFilterUpdateRepository: DnsFilterUpdateRepository
     val routingRepository: RoutingRepository
     val connectionController: FoxholeConnectionController
     val diagnosticsLogger: DiagnosticsLogger
@@ -55,6 +57,10 @@ interface FoxholeRefreshWorkerDependencies {
     val diagnosticsLogger: DiagnosticsLogger
 }
 
+interface FoxholeDnsFilterUpdateDependencies {
+    val dnsFilterUpdateRepository: DnsFilterUpdateRepository
+}
+
 interface FoxholeDiagnosticsDependencies {
     val diagnosticsLogger: DiagnosticsLogger
 }
@@ -71,6 +77,7 @@ class FoxholeAppGraph(
     FoxholeRuntimeDependencies,
     FoxholeTileDependencies,
     FoxholeRefreshWorkerDependencies,
+    FoxholeDnsFilterUpdateDependencies,
     FoxholeDiagnosticsDependencies,
     FoxholeProfileMaintenanceDependencies {
     private val appContext = context.applicationContext
@@ -88,5 +95,6 @@ class FoxholeAppGraph(
     override val ipInfoRepository: IpInfoRepository by lazy { runtimeModule.ipInfoRepository }
     override val networkFingerprintProvider: NetworkFingerprintProvider by lazy { runtimeModule.networkFingerprintProvider }
     override val profileRepository: ProfileRepository by lazy { dataModule.profileRepository }
+    override val dnsFilterUpdateRepository: DnsFilterUpdateRepository by lazy { dataModule.dnsFilterUpdateRepository }
     override val connectionController: FoxholeConnectionController by lazy { runtimeModule.connectionController }
 }

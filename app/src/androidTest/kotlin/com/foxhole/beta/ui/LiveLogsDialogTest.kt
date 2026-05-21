@@ -69,13 +69,9 @@ class LiveLogsDialogTest {
     }
 
     @Test
-    fun sanitizeToggleControlsNetworkLogPreview() {
+    fun sanitizeFlagControlsNetworkLogPreview() {
         composeRule.setContent {
             FoxholeTheme(themeMode = ThemeMode.LIGHT) {
-                val sanitize =
-                    androidx.compose.runtime.remember {
-                        androidx.compose.runtime.mutableStateOf(true)
-                    }
                 LiveLogsDialog(
                     title = "Network activity journal",
                     entries =
@@ -86,8 +82,7 @@ class LiveLogsDialogTest {
                                 message = "App connection: app=Chrome • remote=1.1.1.1:443",
                             ),
                         ),
-                    sanitizeEntries = sanitize.value,
-                    onSanitizeEntriesChanged = { sanitize.value = it },
+                    sanitizeEntries = true,
                     onDismiss = {},
                 )
             }
@@ -95,9 +90,5 @@ class LiveLogsDialogTest {
 
         composeRule.onNodeWithText("Remote: [redacted]").assertIsDisplayed()
         composeRule.onAllNodesWithText("Remote: 1.1.1.1:443").assertCountEquals(0)
-
-        composeRule.onNodeWithText("Hide private data").performClick()
-
-        composeRule.onNodeWithText("Remote: 1.1.1.1:443").assertIsDisplayed()
     }
 }

@@ -5,6 +5,7 @@ import android.content.Intent
 import androidx.lifecycle.viewModelScope
 import com.foxhole.beta.R
 import com.foxhole.beta.applyAppLocale
+import com.foxhole.beta.applyDnsFilterUpdateSchedule
 import com.foxhole.beta.applySubscriptionRefreshSchedule
 import com.foxhole.beta.core.model.AnomalyHistoryRetention
 import com.foxhole.beta.core.model.AnomalySensitivity
@@ -31,8 +32,10 @@ import com.foxhole.beta.core.model.ThemeMode
 import com.foxhole.beta.core.model.TrafficMode
 import com.foxhole.beta.core.model.TunStack
 import com.foxhole.beta.core.model.V2RayApiSettings
+import com.foxhole.beta.core.model.dnsRuleSetFilteringEnabled
 import com.foxhole.beta.core.model.isUdpTransport
 import com.foxhole.beta.vpn.ACTIVE_CONNECTION_STATES
+import com.foxhole.beta.vpn.DnsFilterUpdateStatus
 import com.foxhole.beta.vpn.PrivateDnsSettings
 import com.foxhole.beta.vpn.isSupportedForSystemDnsProtection
 import com.foxhole.beta.vpn.localGuardModeOrNull
@@ -214,6 +217,10 @@ internal fun HomeViewModel.onDomainStrategySelectedInternal(value: DomainStrateg
 internal fun HomeViewModel.onDnsSettingsChangedInternal(value: DnsSettings) {
     updateRuntimeSettingAndMaybeReconnect {
         container.settingsRepository.updateDnsSettings(value)
+        val dnsSettings = container.settingsRepository.current().dns
+        getApplication<Application>().applyDnsFilterUpdateSchedule(
+            enabled = dnsSettings.autoUpdateFilters && dnsSettings.dnsRuleSetFilteringEnabled(),
+        )
     }
 }
 
@@ -238,10 +245,18 @@ internal fun HomeViewModel.onDnsFilterManualRefreshInternal() {
     viewModelScope.launch {
         dnsFilterRefreshInProgressMutable.value = true
         try {
-            runCatching { container.profileRepository.verifyBundledDnsFilters() }
+            runCatching { container.dnsFilterUpdateRepository.refreshNow(requireAutoEnabled = false) }
                 .onSuccess {
-                    container.settingsRepository.markDnsFiltersUpdated()
-                    emitSuccess(getApplication<Application>().getString(R.string.dns_filter_refresh_complete))
+                    when (it.status) {
+                        DnsFilterUpdateStatus.UPDATED ->
+                            emitSuccess(getApplication<Application>().getString(R.string.dns_filter_refresh_complete))
+                        DnsFilterUpdateStatus.SKIPPED -> {
+                            container.profileRepository.verifyBundledDnsFilters()
+                            emitSuccess(getApplication<Application>().getString(R.string.dns_filter_refresh_complete))
+                        }
+                        DnsFilterUpdateStatus.FAILED ->
+                            emitError(getApplication<Application>().getString(R.string.dns_filter_refresh_failed))
+                    }
                 }
                 .onFailure { error ->
                     container.diagnosticsLogger.record(
@@ -414,6 +429,12 @@ internal fun HomeViewModel.onNetworkActivityPersistentLoggingChangedInternal(val
         }
         container.settingsRepository.updateNetworkActivityPersistentLogging(value)
         syncLocalGuardWithPermissionRequest()
+    }
+}
+
+internal fun HomeViewModel.onSanitizeNetworkActivityPrivateDataChangedInternal(value: Boolean) {
+    viewModelScope.launch {
+        container.settingsRepository.updateSanitizeNetworkActivityPrivateData(value)
     }
 }
 

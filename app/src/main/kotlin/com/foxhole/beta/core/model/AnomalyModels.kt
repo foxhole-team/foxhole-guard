@@ -74,6 +74,7 @@ data class TrafficWindow(
     val reconnects: Int,
     val latencyMs: Int?,
     val destinationCountries: Map<String, Long>,
+    val blockedDnsDomains: Map<String, Long> = emptyMap(),
 ) {
     val totalBytes: Long get() = rxBytes + txBytes
 }

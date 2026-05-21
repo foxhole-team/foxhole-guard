@@ -777,6 +777,24 @@ internal fun IpInfo.withDnsServers(
         remoteDnsServers = remoteDnsServers,
     )
 
+internal fun IpInfo.retainKnownLocationFrom(previous: IpInfo?): IpInfo {
+    if (previous == null || !samePrimaryAddress(previous)) {
+        return this
+    }
+    return copy(
+        countryCode = countryCode ?: previous.countryCode,
+        countryName = countryName ?: previous.countryName,
+        city = city?.takeIf(String::isNotBlank) ?: previous.city,
+        isp = isp?.takeIf(String::isNotBlank) ?: previous.isp,
+    )
+}
+
+private fun IpInfo.samePrimaryAddress(other: IpInfo): Boolean =
+    primaryAddressKey() == other.primaryAddressKey()
+
+private fun IpInfo.primaryAddressKey(): String =
+    ipv4 ?: ip
+
 object FoxholeVpnRuntimeBridge {
     private val snapshotMutable = MutableStateFlow(ConnectionSnapshot())
     private val ipInfoMutable = MutableStateFlow<IpInfo?>(null)
@@ -814,7 +832,7 @@ object FoxholeVpnRuntimeBridge {
                     ipv4 = value.ipv4 ?: previous?.ipv4,
                     localDnsServers = value.localDnsServers.ifEmpty { previous?.localDnsServers.orEmpty() },
                     remoteDnsServers = value.remoteDnsServers.ifEmpty { previous?.remoteDnsServers.orEmpty() },
-                )
+                ).retainKnownLocationFrom(previous)
             }
     }
 
@@ -828,7 +846,7 @@ object FoxholeVpnRuntimeBridge {
                     ipv4 = value.ipv4 ?: previous?.ipv4,
                     localDnsServers = value.localDnsServers.ifEmpty { previous?.localDnsServers.orEmpty() },
                     remoteDnsServers = value.remoteDnsServers.ifEmpty { previous?.remoteDnsServers.orEmpty() },
-                )
+                ).retainKnownLocationFrom(previous)
             }
     }
 

@@ -93,6 +93,34 @@ class TunnelRuntimeProxyIpRefreshPolicyTest {
     }
 
     @Test
+    fun `strict dashboard ip refresh can fall back to vpn-bound path after android validation`() {
+        val snapshot =
+            ConnectionSnapshot(
+                state = ConnectionState.CONNECTED,
+                trafficMode = TrafficMode.TUNNEL,
+                profileId = 42L,
+                protocolHint = ProtocolHint.VLESS,
+            )
+
+        assertTrue(Settings().requiresStrictRuntimeProxyIpRefresh(snapshot))
+        assertTrue(Settings().canUseVpnBoundIpRefreshFallback(snapshot, androidValidatedVpnNetwork = true))
+    }
+
+    @Test
+    fun `strict dashboard ip refresh does not fall back without android validation`() {
+        val snapshot =
+            ConnectionSnapshot(
+                state = ConnectionState.CONNECTED,
+                trafficMode = TrafficMode.TUNNEL,
+                profileId = 42L,
+                protocolHint = ProtocolHint.VLESS,
+            )
+
+        assertTrue(Settings().requiresStrictRuntimeProxyIpRefresh(snapshot))
+        assertFalse(Settings().canUseVpnBoundIpRefreshFallback(snapshot, androidValidatedVpnNetwork = false))
+    }
+
+    @Test
     fun `local guard does not require strict runtime proxy ip refresh`() {
         val snapshot =
             ConnectionSnapshot(

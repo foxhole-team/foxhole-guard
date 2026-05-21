@@ -224,7 +224,7 @@ internal class TunnelValidationGateway(
                 preferIpv4Validation = preferIpv4Validation,
             )
         } catch (error: IOException) {
-            if (settings.requiresStrictRuntimeProxyIpRefresh(currentSnapshot)) {
+            if (!settings.canUseVpnBoundIpRefreshFallback(currentSnapshot, isVpnNetworkValidated(vpnNetwork))) {
                 throw error
             }
             fetchActiveTunnelIpInfoOnProcessPathAfterRuntimeProxyFailure(
@@ -235,7 +235,7 @@ internal class TunnelValidationGateway(
                 error = error,
             )
         } catch (error: IllegalStateException) {
-            if (settings.requiresStrictRuntimeProxyIpRefresh(currentSnapshot)) {
+            if (!settings.canUseVpnBoundIpRefreshFallback(currentSnapshot, isVpnNetworkValidated(vpnNetwork))) {
                 throw error
             }
             fetchActiveTunnelIpInfoOnProcessPathAfterRuntimeProxyFailure(
@@ -246,7 +246,7 @@ internal class TunnelValidationGateway(
                 error = error,
             )
         } catch (error: IllegalArgumentException) {
-            if (settings.requiresStrictRuntimeProxyIpRefresh(currentSnapshot)) {
+            if (!settings.canUseVpnBoundIpRefreshFallback(currentSnapshot, isVpnNetworkValidated(vpnNetwork))) {
                 throw error
             }
             fetchActiveTunnelIpInfoOnProcessPathAfterRuntimeProxyFailure(
@@ -257,6 +257,11 @@ internal class TunnelValidationGateway(
                 error = error,
             )
         }
+
+    private fun isVpnNetworkValidated(network: Network): Boolean =
+        connectivityManager
+            .getNetworkCapabilities(network)
+            ?.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED) == true
 
     private suspend fun fetchActiveTunnelIpInfoOnProcessPathAfterRuntimeProxyFailure(
         endpoint: String,
@@ -345,6 +350,11 @@ internal fun Settings.requiresStrictRuntimeProxyIpRefresh(snapshot: ConnectionSn
                     PrivacyRouteScope.SELECTED_APPS -> privacyRoute.selectedPackages.any(String::isNotBlank)
                 }
             )
+
+internal fun Settings.canUseVpnBoundIpRefreshFallback(
+    snapshot: ConnectionSnapshot,
+    androidValidatedVpnNetwork: Boolean,
+): Boolean = !requiresStrictRuntimeProxyIpRefresh(snapshot) || androidValidatedVpnNetwork
 
 internal fun Settings.shouldPublishRuntimeProxyIpInfoToDashboard(snapshot: ConnectionSnapshot): Boolean =
     !(

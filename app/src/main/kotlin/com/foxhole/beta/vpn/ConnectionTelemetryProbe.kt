@@ -7,6 +7,7 @@ import com.foxhole.beta.core.model.ConnectionSnapshot
 import com.foxhole.beta.core.model.LatencyProbeMethod
 import com.foxhole.beta.core.model.RuntimeFailureCode
 import com.foxhole.beta.core.model.RuntimeFailureException
+import com.foxhole.beta.core.model.Settings
 import com.foxhole.beta.core.model.TrafficMode
 import com.foxhole.beta.core.network.IpInfoRepository
 import com.foxhole.beta.core.settings.SettingsRepository
@@ -31,48 +32,75 @@ internal class ConnectionTelemetryProbe(
 ) {
     suspend fun measureCurrentConnectionLatency(timeoutMs: Long): Long {
         val settings = settingsRepository.current()
-        val trafficMode = activeTrafficModeForLatency()
-        val proxyAccess = if (trafficMode == TrafficMode.PROXY) settings.preferredAppProxyAccess() else null
-        val tunnelConnected = trafficMode == TrafficMode.TUNNEL && snapshot.value.state in ACTIVE_CONNECTION_STATES
-        val method = effectiveLatencyProbeMethod(trafficMode, settings.connection.latencyProbeMethod)
+        val currentSnapshot = snapshot.value
+        val trafficMode = activeTrafficModeForLatency(currentSnapshot)
+        val tunnelConnected = trafficMode == TrafficMode.TUNNEL && currentSnapshot.state in ACTIVE_CONNECTION_STATES
+        val useRuntimeProxyForTunnel =
+            shouldUseRuntimeProxyForTunnelLatency(
+                trafficMode = trafficMode,
+                snapshot = currentSnapshot,
+                settings = settings,
+            )
+        val proxyAccess =
+            when {
+                trafficMode == TrafficMode.PROXY -> settings.preferredAppProxyAccess()
+                useRuntimeProxyForTunnel -> settings.tunnelRuntimeProxyAccess()
+                else -> null
+            }
+        val methods =
+            latencyProbeMethodOrder(
+                trafficMode = trafficMode,
+                configuredMethod = settings.connection.latencyProbeMethod,
+                useRuntimeProxyForTunnel = useRuntimeProxyForTunnel,
+            )
         val successfulLatencies = mutableListOf<Long>()
         var lastFailure: Throwable? = null
-        latencyProbeEndpoints().forEach { endpoint ->
-            val attempt =
-                runCatching {
-                    when {
-                        trafficMode == TrafficMode.TUNNEL && tunnelConnected -> {
-                            val vpnNetwork = requireVpnNetworkForLatency()
-                            measureTunnelLatency(
-                                endpoint = endpoint,
-                                timeoutMs = timeoutMs,
-                                network = tunnelValidationRequestNetwork(vpnNetwork),
-                                resolverNetwork = currentUpstreamNetwork(),
-                                interfaceName = currentVpnInterfaceName(vpnNetwork),
-                                method = method,
-                            )
+        methods.forEach { method ->
+            latencyProbeEndpoints().forEach { endpoint ->
+                val attempt =
+                    runCatching {
+                        when {
+                            trafficMode == TrafficMode.TUNNEL && tunnelConnected && useRuntimeProxyForTunnel ->
+                                ipInfoRepository.probeLatency(
+                                    endpoint = endpoint,
+                                    callTimeoutMs = timeoutMs,
+                                    proxy = proxyAccess,
+                                    resolverNetwork = currentUpstreamNetwork(),
+                                )
+                            trafficMode == TrafficMode.TUNNEL && tunnelConnected -> {
+                                val vpnNetwork = requireVpnNetworkForLatency()
+                                measureTunnelLatency(
+                                    endpoint = endpoint,
+                                    timeoutMs = timeoutMs,
+                                    network = tunnelValidationRequestNetwork(vpnNetwork),
+                                    resolverNetwork = currentUpstreamNetwork(),
+                                    interfaceName = currentVpnInterfaceName(vpnNetwork),
+                                    method = method,
+                                )
+                            }
+                            else ->
+                                ipInfoRepository.probeLatency(
+                                    endpoint = endpoint,
+                                    callTimeoutMs = timeoutMs,
+                                    proxy = proxyAccess,
+                                )
                         }
-                        else ->
-                            ipInfoRepository.probeLatency(
-                                endpoint = endpoint,
-                                callTimeoutMs = timeoutMs,
-                                proxy = proxyAccess,
-                            )
                     }
+                if (attempt.isSuccess) {
+                    successfulLatencies += attempt.getOrThrow()
+                } else {
+                    lastFailure = attempt.exceptionOrNull()
                 }
-            if (attempt.isSuccess) {
-                successfulLatencies += attempt.getOrThrow()
-            } else {
-                lastFailure = attempt.exceptionOrNull()
             }
+            representativeLatencyMs(successfulLatencies)?.let { return it }
         }
         return representativeLatencyMs(successfulLatencies) ?: throw latencyProbeFailure(lastFailure)
     }
 
-    private fun activeTrafficModeForLatency(): TrafficMode =
-        snapshot.value.state
+    private fun activeTrafficModeForLatency(currentSnapshot: ConnectionSnapshot): TrafficMode =
+        currentSnapshot.state
             .takeIf { it in ACTIVE_CONNECTION_STATES }
-            ?.let { snapshot.value.trafficMode }
+            ?.let { currentSnapshot.trafficMode }
             ?: throw RuntimeFailureException(
                 RuntimeFailureCode.ACTIVE_CONNECTION_REQUIRED,
                 "active connection is required for latency measurement",
@@ -204,6 +232,32 @@ internal fun effectiveLatencyProbeMethod(
         TrafficMode.TUNNEL -> configuredMethod
         TrafficMode.PROXY -> LatencyProbeMethod.HTTP
     }
+
+internal fun latencyProbeMethodOrder(
+    trafficMode: TrafficMode,
+    configuredMethod: LatencyProbeMethod,
+    useRuntimeProxyForTunnel: Boolean = false,
+): List<LatencyProbeMethod> {
+    val primary = effectiveLatencyProbeMethod(trafficMode, configuredMethod)
+    if (trafficMode == TrafficMode.PROXY || useRuntimeProxyForTunnel) {
+        return listOf(LatencyProbeMethod.HTTP)
+    }
+    val fallbackMethods =
+        listOf(
+            LatencyProbeMethod.HTTP,
+            LatencyProbeMethod.TCP,
+        )
+    return (listOf(primary) + fallbackMethods).distinct()
+}
+
+internal fun shouldUseRuntimeProxyForTunnelLatency(
+    trafficMode: TrafficMode,
+    snapshot: ConnectionSnapshot,
+    settings: Settings,
+): Boolean =
+    trafficMode == TrafficMode.TUNNEL &&
+        snapshot.state in ACTIVE_CONNECTION_STATES &&
+        settings.requiresStrictRuntimeProxyIpRefresh(snapshot)
 
 internal fun icmpPingCommand(
     host: String,

@@ -480,6 +480,7 @@ fun ProfilesScreen(
                             showInsecureTlsBadge = false,
                             reserveTrailingSpace = false,
                             expand = true,
+                            highlightSelectedOption = false,
                             leadingContent =
                                 if (isSmartProfile) {
                                     {
@@ -1264,6 +1265,7 @@ fun ProfileDetailScreen(
                         requiresInsecureTls = profile.requiresInsecureTls,
                         reserveTrailingSpace = false,
                         expand = true,
+                        highlightSelectedOption = false,
                         leadingContent =
                             if (MultiProtocolProfileSupport.hasMultipleSupportedOptions(profile)) {
                                 {

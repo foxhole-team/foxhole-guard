@@ -679,7 +679,7 @@ class HomeDashboardPresentationTest {
     }
 
     @Test
-    fun `network model shows loading for connected tunnel without resolved ip`() {
+    fun `network model does not keep skeleton forever for connected tunnel without resolved ip`() {
         val model =
             resolveHomeDashboardNetworkModel(
                 state =
@@ -698,8 +698,8 @@ class HomeDashboardPresentationTest {
             )
 
         assertTrue(model.showConnectionStatus)
-        assertTrue(model.showLoading)
-        assertTrue(model.showIpInfoLoading)
+        assertFalse(model.showLoading)
+        assertFalse(model.showIpInfoLoading)
         assertFalse(model.showConnectionDetailsLoading)
     }
 
@@ -733,8 +733,8 @@ class HomeDashboardPresentationTest {
 
         assertEquals(null, model.visibleIpInfo)
         assertTrue(model.showConnectionStatus)
-        assertTrue(model.showLoading)
-        assertTrue(model.showIpInfoLoading)
+        assertFalse(model.showLoading)
+        assertFalse(model.showIpInfoLoading)
     }
 
     @Test

@@ -31,6 +31,7 @@ import com.foxhole.beta.core.model.StatisticsMetric
 import com.foxhole.beta.core.model.StatisticsRefreshInterval
 import com.foxhole.beta.core.model.StatisticsRetention
 import com.foxhole.beta.core.model.TrafficMapUiState
+import com.foxhole.beta.core.model.dnsRuleSetFilteringEnabled
 
 @Composable
 @Suppress("ComplexCondition", "CyclomaticComplexMethod", "LongMethod", "UnusedParameter")
@@ -101,7 +102,7 @@ fun StatisticsScreen(
         }
     }
     val firewallEnabled = state.settings.expert.firewallEnabled
-    val dnsFilteringAvailable = state.settings.dns.adGuardFilteringEnabled()
+    val dnsFilteringAvailable = state.settings.dns.dnsRuleSetFilteringEnabled()
     val appStatsEnabled =
         statisticsSettings.enabled &&
             statisticsSettings.appTrafficEnabled &&
@@ -133,7 +134,7 @@ fun StatisticsScreen(
             }
         } else {
             if (statisticsSettings.profileTrafficEnabled) {
-                item(key = "profile-traffic") {
+                item(key = "profile-traffic", contentType = "statistics-card") {
                     ProfileTrafficOverviewCard(
                         statistics = statistics,
                         state = state,
@@ -143,22 +144,22 @@ fun StatisticsScreen(
                 }
             }
             if (statisticsSettings.vpnProtocolsEnabled && statistics.vpnProtocols.isNotEmpty()) {
-                item(key = "protocols") {
+                item(key = "protocols", contentType = "statistics-card") {
                     ProtocolStatisticsSection(items = statistics.vpnProtocols)
                 }
             }
             if (statisticsSettings.profileComparisonsEnabled && statistics.profileComparisons.isNotEmpty()) {
-                item(key = "profile-comparisons") {
+                item(key = "profile-comparisons", contentType = "statistics-card") {
                     ProfileComparisonsSection(items = statistics.profileComparisons)
                 }
             }
             if (statisticsSettings.transportsEnabled && statistics.transports.isNotEmpty()) {
-                item(key = "transports") {
+                item(key = "transports", contentType = "statistics-card") {
                     TransportStatisticsSection(items = statistics.transports)
                 }
             }
             if (statisticsSettings.dnsFilteringEnabled && dnsFilteringAvailable) {
-                item(key = "dns-protection") {
+                item(key = "dns-protection", contentType = "statistics-card") {
                     DnsProtectionCard(
                         summary = dnsSummary,
                         range = dnsRange,
@@ -167,7 +168,7 @@ fun StatisticsScreen(
                 }
             }
             if (statisticsSettings.anomalyMetricsEnabled && anomalyEventsForRange.isNotEmpty()) {
-                item(key = "anomalies") {
+                item(key = "anomalies", contentType = "statistics-card") {
                     AnomalyStatisticsCard(
                         events = anomalyEventsForRange,
                         totalEventsCount = state.anomalyEvents.size,
@@ -179,7 +180,7 @@ fun StatisticsScreen(
                 }
             }
             if (statisticsSettings.appTrafficEnabled && appStatsSwitchChecked) {
-                item(key = "app-statistics") {
+                item(key = "app-statistics", contentType = "statistics-card") {
                     AppTrafficStatisticsCard(
                         rows = topApps,
                         samples = appSamplesForRange,
@@ -196,7 +197,7 @@ fun StatisticsScreen(
                 }
             }
             if (statisticsSettings.countryTrafficEnabled && firewallEnabled && topCountryRows.isNotEmpty()) {
-                item(key = "country-traffic") {
+                item(key = "country-traffic", contentType = "statistics-card") {
                     CountryTrafficCard(
                         state = trafficMapState,
                         rows = topCountryRows,
@@ -280,6 +281,7 @@ fun StatisticsScreen(
                     samples = state.appTrafficWindows,
                     networkActivityEvents = state.networkActivityEvents,
                     ipInfo = state.ipInfo,
+                    showPrivateNetworkDetails = !state.settings.expert.sanitizeNetworkActivityPrivateData,
                 )
             },
             confirmButton = {},

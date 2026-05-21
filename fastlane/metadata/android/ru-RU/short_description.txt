@@ -1,1 +1,1 @@
-Foxhole - Android-клиент для sing-box с tunnel, split tunnel, proxy и LAN proxy и Smart start
+Foxhole - VPN и прокси-клиент для sing-box

@@ -226,7 +226,7 @@ internal fun DnsCategoryDonutChart(summary: DnsProtectionSummary) {
 
 @Composable
 internal fun DnsTrafficShareRings(summary: DnsProtectionSummary) {
-    val metrics = remember(summary.appRows) { dnsTrafficShareMetrics(summary) }
+    val metrics = remember(summary.appRows, summary.categoryRows) { dnsTrafficShareMetrics(summary) }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(
             text = stringResource(R.string.statistics_dns_traffic_share_title),

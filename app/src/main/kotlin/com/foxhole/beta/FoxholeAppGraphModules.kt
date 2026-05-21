@@ -16,6 +16,8 @@ import com.foxhole.beta.core.traffic.LibboxTrafficMapConnectionSource
 import com.foxhole.beta.core.traffic.TrafficMapRepository
 import com.foxhole.beta.vpn.AndroidLanProxyAddressProvider
 import com.foxhole.beta.vpn.DnsFilterAssetInstaller
+import com.foxhole.beta.vpn.DnsFilterUpdateClient
+import com.foxhole.beta.vpn.DnsFilterUpdateRepository
 import com.foxhole.beta.vpn.FoxholeConnectionController
 import com.foxhole.beta.vpn.RuntimeConfigAssembler
 import com.foxhole.beta.vpn.TorRuntimeInstaller
@@ -66,7 +68,16 @@ internal class FoxholeDataGraphModule(
     val importParser: ProfileImportParser by lazy { ProfileImportParser(core.json) }
     val routingRepository: RoutingRepository by lazy { RoutingRepository(profileDatabase, core.httpClient, core.json) }
     val torRuntimeInstaller: TorRuntimeInstaller by lazy { TorRuntimeInstaller(appContext) }
-    val dnsFilterAssetInstaller: DnsFilterAssetInstaller by lazy { DnsFilterAssetInstaller(appContext) }
+    val dnsFilterAssetInstaller: DnsFilterAssetInstaller by lazy { DnsFilterAssetInstaller(appContext, core.json) }
+    val dnsFilterUpdateClient: DnsFilterUpdateClient by lazy { DnsFilterUpdateClient(core.httpClient, core.json) }
+    val dnsFilterUpdateRepository: DnsFilterUpdateRepository by lazy {
+        DnsFilterUpdateRepository(
+            settingsRepository = core.settingsRepository,
+            client = dnsFilterUpdateClient,
+            store = dnsFilterAssetInstaller,
+            diagnosticsLogger = core.diagnosticsLogger,
+        )
+    }
     val runtimeConfigAssembler: RuntimeConfigAssembler by lazy {
         RuntimeConfigAssembler(core.json, AndroidLanProxyAddressProvider(appContext))
     }

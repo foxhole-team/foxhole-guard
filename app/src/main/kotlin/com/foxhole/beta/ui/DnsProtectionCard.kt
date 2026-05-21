@@ -1,19 +1,28 @@
 package com.foxhole.beta.ui
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Dns
 import androidx.compose.material.icons.outlined.Public
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -36,6 +45,12 @@ internal fun DnsProtectionCard(
 ) {
     val context = LocalContext.current
     var rangeExpanded by rememberSaveable { mutableStateOf(false) }
+    var allBlockedAppsVisible by rememberSaveable { mutableStateOf(false) }
+    var allBlockedDomainsVisible by rememberSaveable { mutableStateOf(false) }
+    val blockedAppRows = summary.appRows
+    val topBlockedAppRows = remember(blockedAppRows) { blockedAppRows.take(STATISTICS_TOP_PREVIEW_LIMIT) }
+    val blockedDomainRows = summary.domainRows
+    val topBlockedDomainRows = remember(blockedDomainRows) { blockedDomainRows.take(STATISTICS_TOP_PREVIEW_LIMIT) }
     StatisticsSectionCard(
         icon = Icons.Outlined.Public,
         title = stringResource(R.string.statistics_dns_filtering_title),
@@ -48,6 +63,12 @@ internal fun DnsProtectionCard(
             )
         },
     ) {
+        Text(
+            text = stringResource(R.string.statistics_dns_active_list),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.primary,
+            fontWeight = FontWeight.SemiBold,
+        )
         Text(
             text = stringResource(R.string.statistics_dns_real_summary),
             style = MaterialTheme.typography.labelSmall,
@@ -69,7 +90,7 @@ internal fun DnsProtectionCard(
         )
         if (summary.categoryRows.isNotEmpty()) {
             Text(
-                text = stringResource(R.string.statistics_dns_categories_title),
+                text = stringResource(R.string.statistics_dns_traffic_share_title),
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.SemiBold,
             )
@@ -78,31 +99,126 @@ internal fun DnsProtectionCard(
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            DnsCategoryDonutChart(summary = summary)
-            if (summary.appRows.isNotEmpty()) {
-                DnsTrafficShareRings(summary = summary)
-            }
-            DnsCategoryTable(rows = summary.categoryRows)
+            DnsTrafficShareGrid(summary = summary)
         }
-        if (summary.appRows.isNotEmpty()) {
+        if (blockedAppRows.isNotEmpty()) {
             Text(
                 text = stringResource(R.string.statistics_dns_apps_estimated),
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.SemiBold,
             )
-            DnsProtectionChart(rows = summary.appRows.take(STATISTICS_TOP_PREVIEW_LIMIT))
             Text(
                 text = stringResource(R.string.statistics_dns_app_drop_legend),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                summary.appRows.take(STATISTICS_TOP_PREVIEW_LIMIT).forEach { row ->
+                topBlockedAppRows.forEach { row ->
                     DnsProtectionAppRowView(row = row, totalBytesText = formatBytes(context, row.totalBytes))
+                }
+            }
+            if (blockedAppRows.size > STATISTICS_TOP_PREVIEW_LIMIT) {
+                TextButton(onClick = { allBlockedAppsVisible = true }) {
+                    Text(stringResource(R.string.show_all_label))
+                }
+            }
+        }
+        if (blockedDomainRows.isNotEmpty()) {
+            Text(
+                text = stringResource(R.string.statistics_dns_domains_title),
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Text(
+                text = stringResource(R.string.statistics_dns_domains_summary),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                topBlockedDomainRows.forEach { row ->
+                    DnsProtectionDomainRowView(row = row)
+                }
+            }
+            if (blockedDomainRows.size > STATISTICS_TOP_PREVIEW_LIMIT) {
+                TextButton(onClick = { allBlockedDomainsVisible = true }) {
+                    Text(stringResource(R.string.show_all_label))
                 }
             }
         }
     }
+
+    if (allBlockedAppsVisible) {
+        AlertDialog(
+            onDismissRequest = { allBlockedAppsVisible = false },
+            title = { Text(stringResource(R.string.statistics_dns_all_apps_title)) },
+            text = {
+                LazyColumn(modifier = Modifier.heightIn(max = 520.dp)) {
+                    items(
+                        blockedAppRows,
+                        key = DnsProtectionAppRow::packageName,
+                    ) { row ->
+                        DnsProtectionAppRowView(row = row, totalBytesText = formatBytes(context, row.totalBytes))
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                FoxholeDialogDismissButton(onClick = { allBlockedAppsVisible = false })
+            },
+        )
+    }
+
+    if (allBlockedDomainsVisible) {
+        AlertDialog(
+            onDismissRequest = { allBlockedDomainsVisible = false },
+            title = { Text(stringResource(R.string.statistics_dns_all_domains_title)) },
+            text = {
+                LazyColumn(modifier = Modifier.heightIn(max = 520.dp)) {
+                    items(
+                        blockedDomainRows,
+                        key = DnsProtectionDomainRow::domain,
+                    ) { row ->
+                        DnsProtectionDomainRowView(row = row)
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                FoxholeDialogDismissButton(onClick = { allBlockedDomainsVisible = false })
+            },
+        )
+    }
+}
+
+@Composable
+internal fun DnsTrafficShareGrid(summary: DnsProtectionSummary) {
+    val metrics = remember(summary.appRows, summary.categoryRows) { dnsTrafficShareMetrics(summary) }
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        metrics.chunked(2).forEach { rowMetrics ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                rowMetrics.forEach { metric ->
+                    DnsTrafficShareGridCell(metric = metric, modifier = Modifier.weight(1f))
+                }
+                repeat(2 - rowMetrics.size) {
+                    Box(modifier = Modifier.weight(1f))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DnsTrafficShareGridCell(
+    metric: DnsTrafficShareMetric,
+    modifier: Modifier = Modifier,
+) {
+    DnsTrafficShareRing(
+        metric = metric,
+        modifier = modifier,
+    )
 }
 
 @Composable
@@ -201,6 +317,44 @@ internal fun DnsProtectionAppRowView(
                 textAlign = TextAlign.End,
             )
         }
+    }
+}
+
+@Composable
+internal fun DnsProtectionDomainRowView(row: DnsProtectionDomainRow) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 7.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            imageVector = Icons.Outlined.Dns,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(22.dp),
+        )
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(
+                text = row.domain,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = stringResource(R.string.statistics_dns_domain_quality_real),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        Text(
+            text = stringResource(R.string.statistics_dns_blocked_domain_value, row.blockedQueries),
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.SemiBold,
+            textAlign = TextAlign.End,
+        )
     }
 }
 

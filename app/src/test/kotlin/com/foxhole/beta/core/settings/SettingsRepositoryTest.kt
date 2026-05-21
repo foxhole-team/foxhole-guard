@@ -5,7 +5,9 @@ import com.foxhole.beta.core.model.AppLocale
 import com.foxhole.beta.core.model.AutoConnectReasonCode
 import com.foxhole.beta.core.model.ConnectionSettings
 import com.foxhole.beta.core.model.DashboardCard
+import com.foxhole.beta.core.model.DEFAULT_DNS_FILTER_UPDATE_URL
 import com.foxhole.beta.core.model.DiagnosticsRetention
+import com.foxhole.beta.core.model.DnsSettings
 import com.foxhole.beta.core.model.ExpertSettings
 import com.foxhole.beta.core.model.LatencyProbeMethod
 import com.foxhole.beta.core.model.NETWORK_FINGERPRINT_SCHEMA_CURRENT
@@ -81,6 +83,34 @@ class SettingsRepositoryTest {
     @Test
     fun `uses default when endpoint blank`() {
         assertEquals(BuildConfig.DEFAULT_IP_INFO_ENDPOINT, normalizeIpInfoEndpoint("  "))
+    }
+
+    @Test
+    fun `dns filter updates are opt in and use official manifest by default`() {
+        val dns = DnsSettings()
+
+        assertFalse(dns.autoUpdateFilters)
+        assertEquals(DEFAULT_DNS_FILTER_UPDATE_URL, dns.dnsFilterUpdateUrl)
+    }
+
+    @Test
+    fun `dns filter update source accepts official repository and directory urls`() {
+        assertEquals(
+            DEFAULT_DNS_FILTER_UPDATE_URL,
+            normalizeDnsFilterUpdateUrl("https://github.com/foxhole-repo/foxhole-dns.git"),
+        )
+        assertEquals(
+            DEFAULT_DNS_FILTER_UPDATE_URL,
+            normalizeDnsFilterUpdateUrl("https://github.com/foxhole-repo/foxhole-dns"),
+        )
+        assertEquals(
+            DEFAULT_DNS_FILTER_UPDATE_URL,
+            normalizeDnsFilterUpdateUrl("https://foxhole-repo.github.io/foxhole-dns"),
+        )
+        assertEquals(
+            "https://example.org/rules/manifest.json",
+            normalizeDnsFilterUpdateUrl("https://example.org/rules"),
+        )
     }
 
     @Test
@@ -335,6 +365,19 @@ class SettingsRepositoryTest {
             ).withExpertSettingsVisibility(visible = true)
 
         assertTrue(visible.expert.networkActivityLogging)
+    }
+
+    @Test
+    fun `network activity private data hiding defaults on and stays user controlled`() {
+        val hidden =
+            Settings(
+                ui = UiSettings(showExpertSettings = true),
+                expert = ExpertSettings(unlockedAt = 1234L, sanitizeNetworkActivityPrivateData = false),
+            ).withExpertSettingsVisibility(visible = false)
+
+        assertTrue(ExpertSettings().sanitizeNetworkActivityPrivateData)
+        assertFalse(hidden.expert.sanitizeNetworkActivityPrivateData)
+        assertEquals(1234L, hidden.expert.unlockedAt)
     }
 
     @Test
@@ -717,6 +760,38 @@ class SettingsRepositoryTest {
                 networkFingerprint = null,
                 now = now,
             ),
+        )
+    }
+
+    @Test
+    fun `settings expose remembered latency unavailable without turning it into no data`() {
+        val now = 9_500_000L
+        val preference =
+            SmartProfilePreference(
+                profileId = 7L,
+                protocolMemories =
+                    listOf(
+                        SmartProfileProtocolMemory(
+                            optionId = "vless",
+                            lastSuccessAt = now - 1_000L,
+                            lastLatencyMs = null,
+                            lastReasonCode = AutoConnectReasonCode.LATENCY_ENDPOINT_BLOCKED,
+                        ),
+                        SmartProfileProtocolMemory(
+                            optionId = "trojan",
+                            lastSuccessAt = now - 2_000L,
+                            lastLatencyMs = 170L,
+                            lastReasonCode = null,
+                        ),
+                    ),
+            )
+        val settings = Settings(smartProfilePreferences = listOf(preference))
+
+        assertEquals(setOf("vless"), preference.rememberedSmartProfileLatencyUnavailableOptionIds(networkFingerprint = null, now = now))
+        assertEquals(mapOf("trojan" to 170L), preference.rememberedSmartStartLatencyByOptionId(networkFingerprint = null, now = now))
+        assertEquals(
+            mapOf(7L to setOf("vless")),
+            settings.rememberedSmartProfileLatencyUnavailableByProfileId(networkFingerprint = null, now = now),
         )
     }
 

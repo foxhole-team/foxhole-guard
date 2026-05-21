@@ -1,5 +1,6 @@
 package com.foxhole.beta.ui
 
+import com.foxhole.beta.core.model.AutoConnectReasonCode
 import com.foxhole.beta.core.model.ConnectionSnapshot
 import com.foxhole.beta.core.model.ConnectionState
 import com.foxhole.beta.core.model.Profile
@@ -629,6 +630,62 @@ class HomeDashboardProtocolPresentationTest {
 
         assertEquals(setOf("vless"), resolved.smartProfileLatencyUnavailable(1L))
         assertNull(resolved.smartStartRememberedLatency(1L)["vless"])
+    }
+
+    @Test
+    fun `profiles route renders remembered latency blocked state as unavailable not no data`() {
+        val now = System.currentTimeMillis()
+        val activeProfile =
+            profile(
+                selectedProtocolOptionId = "vless",
+                protocolOptions =
+                    listOf(
+                        option("vless", ProtocolHint.VLESS),
+                        option("trojan", ProtocolHint.TROJAN),
+                    ),
+            )
+        val state =
+            HomeUiState(
+                profiles = listOf(activeProfile),
+                activeProfile = activeProfile,
+                settings =
+                    Settings(
+                        smartProfilePreferences =
+                            listOf(
+                                SmartProfilePreference(
+                                    profileId = 1L,
+                                    recommendedProtocolIds = listOf("vless", "trojan"),
+                                    protocolMemories =
+                                        listOf(
+                                            SmartProfileProtocolMemory(
+                                                optionId = "vless",
+                                                lastSuccessAt = now - 1_000L,
+                                                lastLatencyMs = null,
+                                                lastReasonCode = AutoConnectReasonCode.LATENCY_ENDPOINT_BLOCKED,
+                                            ),
+                                            SmartProfileProtocolMemory(
+                                                optionId = "trojan",
+                                                lastSuccessAt = now - 1_000L,
+                                                lastLatencyMs = 180L,
+                                            ),
+                                        ),
+                                ),
+                            ),
+                    ),
+            )
+
+        val resolved =
+            buildProfilesRouteUiState(
+                state = state,
+                autoConnect = AutoConnectUiState(),
+                protocolMetrics = ProtocolMetricsUiState(),
+                networkFingerprintKey = null,
+            )
+
+        assertEquals(setOf("vless"), resolved.smartProfileLatencyUnavailable(1L))
+        assertEquals(mapOf("trojan" to 180L), resolved.smartStartRememberedLatency(1L))
+        assertEquals(mapOf(1L to "trojan"), resolved.recommendedProtocolOptionByProfileId)
+        assertEquals(mapOf(1L to setOf("trojan")), resolved.recommendedProtocolOptionsByProfileId)
     }
 
     @Test

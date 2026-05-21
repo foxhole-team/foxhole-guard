@@ -8,11 +8,14 @@ internal fun HomeViewModel.scheduleForegroundDashboardRefreshIfStale() {
     val now = SystemClock.elapsedRealtime()
     if (now - lastForegroundDashboardRefreshElapsedMs < HomeViewModel.FOREGROUND_DASHBOARD_REFRESH_MIN_INTERVAL_MS) {
         container.diagnosticsLogger.record("ip", "foreground dashboard refresh skipped: throttled")
+        if (profileLatencyRefreshJob == null) {
+            scheduleActiveProfileLatencyRefresh(showLoading = false, refreshImmediately = true)
+        }
         return
     }
     lastForegroundDashboardRefreshElapsedMs = now
     scheduleConnectedIpRefresh(reason = IpInfoRefreshReason.FOREGROUND, clearExistingIp = false)
-    scheduleActiveProfileLatencyRefresh(showLoading = false)
+    scheduleActiveProfileLatencyRefresh(showLoading = false, refreshImmediately = true)
 }
 
 internal fun HomeTorOperationUiState.canAcceptTorIp(ipInfo: IpInfo): Boolean {

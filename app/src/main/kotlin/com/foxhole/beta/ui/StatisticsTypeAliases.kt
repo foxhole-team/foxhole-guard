@@ -6,5 +6,6 @@ typealias CountryTrafficUiRow = com.foxhole.beta.core.statistics.CountryTrafficU
 typealias DnsProtectionAppRow = com.foxhole.beta.core.statistics.DnsProtectionAppRow
 typealias DnsProtectionCategory = com.foxhole.beta.core.statistics.DnsProtectionCategory
 typealias DnsProtectionCategoryRow = com.foxhole.beta.core.statistics.DnsProtectionCategoryRow
+typealias DnsProtectionDomainRow = com.foxhole.beta.core.statistics.DnsProtectionDomainRow
 typealias DnsProtectionSummary = com.foxhole.beta.core.statistics.DnsProtectionSummary
 typealias StatisticsDisplayRange = com.foxhole.beta.core.statistics.StatisticsDisplayRange

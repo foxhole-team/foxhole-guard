@@ -6,6 +6,8 @@ import kotlinx.serialization.Serializable
 const val SETTINGS_SCHEMA_VERSION = 16
 const val NETWORK_FINGERPRINT_SCHEMA_CURRENT = 2
 const val NETWORK_FINGERPRINT_SCHEMA_LEGACY = 1
+const val DEFAULT_DNS_FILTER_UPDATE_URL = "https://foxhole-repo.github.io/foxhole-dns/manifest.json"
+const val DNS_FILTER_REPOSITORY_URL = "https://github.com/foxhole-repo/foxhole-dns"
 
 @Serializable
 enum class ProfileSourceType {
@@ -312,11 +314,15 @@ data class DnsSettings(
     val blockTrackers: Boolean = true,
     val blockAppTelemetry: Boolean = true,
     val blockMaliciousDomains: Boolean = true,
-    val autoUpdateFilters: Boolean = true,
+    val autoUpdateFilters: Boolean = false,
+    val dnsFilterUpdateUrl: String = DEFAULT_DNS_FILTER_UPDATE_URL,
     val appBypassPackages: List<String> = emptyList(),
     val domainBypassRules: List<String> = emptyList(),
     val filtersUpdatedAt: Long? = null,
 )
+
+fun DnsSettings.dnsRuleSetFilteringEnabled(): Boolean =
+    filteringEnabled && (blockAds || blockTrackers || blockAppTelemetry || blockMaliciousDomains)
 
 @Serializable
 data class NetworkRulesSettings(
@@ -403,6 +409,7 @@ data class ExpertSettings(
     val systemDnsProtectionEnabled: Boolean = false,
     val networkActivityLogging: Boolean = false,
     val networkActivityPersistentLogging: Boolean = false,
+    val sanitizeNetworkActivityPrivateData: Boolean = true,
     val diagnosticsRetention: DiagnosticsRetention = DiagnosticsRetention.HOURS_24,
     val rawLiveDiagnostics: Boolean = false,
     val smartStartReplayLogging: Boolean = false,

@@ -202,7 +202,7 @@ class HomeRuntimeBehaviorTest {
     }
 
     @Test
-    fun connectedWithoutResolvedIpKeepsNetworkLoadingUntilVpnIpResolves() {
+    fun connectedWithoutResolvedIpDoesNotKeepNetworkLoadingForever() {
         waitUntilNetworkBlockSettles()
 
         composeRule.runOnUiThread {
@@ -219,9 +219,9 @@ class HomeRuntimeBehaviorTest {
 
         scrollToNetworkBlock()
         composeRule.waitUntil(timeoutMillis = 3_000) {
-            composeRule.onAllNodesWithTag("home_network_loading").fetchSemanticsNodes().isNotEmpty()
+            composeRule.onAllNodesWithTag("home_network_loading").fetchSemanticsNodes().isEmpty()
         }
-        composeRule.onNodeWithTag("home_network_loading").assertIsDisplayed()
+        composeRule.onNodeWithTag("home_network_primary_ip", useUnmergedTree = true).assertTextEquals("-")
         composeRule
             .onAllNodesWithText(
                 InstrumentationRegistry.getInstrumentation().targetContext.getString(R.string.home_network_unavailable),

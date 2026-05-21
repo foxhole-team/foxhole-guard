@@ -598,6 +598,7 @@ class HomeViewModel(
     internal var pendingPostConnectIpRefresh: Boolean = false
     internal var lastForegroundDashboardRefreshElapsedMs: Long = 0L
     internal var connectedIpRefreshJob: Job? = null
+    internal var postConnectLatencyRefreshJob: Job? = null
     internal var profileLatencyRefreshJob: Job? = null
     internal var runtimeReloadPendingJob: Job? = null
     internal var routeModeRestartPromptJob: Job? = null
@@ -692,15 +693,14 @@ class HomeViewModel(
                     clearRuntimeReloadPending()
                     clearRuntimeReconnectRequired()
                     clearTorOperation()
+                    postConnectLatencyRefreshJob?.cancel()
+                    postConnectLatencyRefreshJob = null
                     clearProfileLatencyRefresh()
                     clearProtocolLatencyState()
                     setDashboardConnectionMetricsLoading(false)
                 }
                 if (shouldRefreshConnectedIp) {
                     scheduleConnectedIpRefresh()
-                    if (dashboardVisible && !autoConnectUiStateMutable.value.running) {
-                        scheduleActiveProfileLatencyRefresh()
-                    }
                 } else if (shouldRefreshIdleIp && !autoConnectUiStateMutable.value.running) {
                     startIpInfoRefresh(
                         reportFailures = false,
@@ -760,12 +760,22 @@ class HomeViewModel(
         if (runtimeState == ConnectionState.CONNECTED) {
             scheduleForegroundDashboardRefreshIfStale()
         } else {
+            val showEntrySkeleton =
+                shouldShowDisconnectedEntryIpRefreshSkeleton(
+                    currentIpInfo = container.connectionController.ipInfo.value,
+                    connectionState = runtimeState,
+                )
             startIpInfoRefresh(
                 reportFailures = false,
-                showLoading = false,
+                showLoading = showEntrySkeleton,
                 clearExistingIp = false,
                 fetchMode = IpInfoFetchMode.ENTRY_QUICK,
-                minimumLoadingDurationMs = 0L,
+                minimumLoadingDurationMs =
+                    if (showEntrySkeleton) {
+                        AUTO_IP_REFRESH_MIN_LOADING_MS
+                    } else {
+                        0L
+                    },
             )
         }
     }
@@ -1109,9 +1119,11 @@ class HomeViewModel(
 
     fun onNetworkActivityLoggingChanged(value: Boolean) = onNetworkActivityLoggingChangedInternal(value)
 
-    fun onNetworkActivityPersistentLoggingChanged(value: Boolean) = onNetworkActivityPersistentLoggingChangedInternal(
-        value
-    )
+    fun onNetworkActivityPersistentLoggingChanged(value: Boolean) =
+        onNetworkActivityPersistentLoggingChangedInternal(value)
+
+    fun onSanitizeNetworkActivityPrivateDataChanged(value: Boolean) =
+        onSanitizeNetworkActivityPrivateDataChangedInternal(value)
 
     fun onSmartStartReplayLoggingChanged(value: Boolean) = onSmartStartReplayLoggingChangedInternal(value)
 
@@ -1310,6 +1322,7 @@ class HomeViewModel(
         fetchMode: IpInfoFetchMode,
         minimumLoadingDurationMs: Long,
         reason: IpInfoRefreshReason = IpInfoRefreshReason.FOREGROUND,
+        onPublished: (suspend (IpInfo) -> Unit)? = null,
     ) = refreshIpInfoInternalInternal(
         reportFailures = reportFailures,
         showLoading = showLoading,
@@ -1317,6 +1330,7 @@ class HomeViewModel(
         fetchMode = fetchMode,
         minimumLoadingDurationMs = minimumLoadingDurationMs,
         reason = reason,
+        onPublished = onPublished,
     )
 
     suspend fun getResolvedConfig(
@@ -1526,6 +1540,9 @@ class HomeViewModel(
 
     companion object {
         internal const val CONNECTED_IP_REFRESH_DELAY_MS = 250L
+        internal const val CONNECTED_IP_REFRESH_ATTEMPTS = 4
+        internal const val CONNECTED_IP_REFRESH_RETRY_DELAY_MS = 1_500L
+        internal const val POST_CONNECT_LATENCY_AFTER_IP_DELAY_MS = 5_000L
         internal const val PROFILE_PRELOAD_TIMEOUT_MS = 2_500L
         internal const val MANUAL_IP_REFRESH_MIN_LOADING_MS = 666L
         internal const val AUTO_IP_REFRESH_MIN_LOADING_MS = 450L

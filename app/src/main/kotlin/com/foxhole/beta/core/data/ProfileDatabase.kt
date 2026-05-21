@@ -226,6 +226,7 @@ data class TrafficWindowEntity(
     val reconnects: Int,
     val latencyMs: Int?,
     val destinationCountries: Map<String, Long>,
+    val blockedDnsDomains: Map<String, Long>,
 ) {
     fun toDomain(): TrafficWindow =
         TrafficWindow(
@@ -242,6 +243,7 @@ data class TrafficWindowEntity(
             reconnects = reconnects,
             latencyMs = latencyMs,
             destinationCountries = destinationCountries,
+            blockedDnsDomains = blockedDnsDomains,
         )
 
     companion object {
@@ -261,6 +263,7 @@ data class TrafficWindowEntity(
                 reconnects = window.reconnects,
                 latencyMs = window.latencyMs,
                 destinationCountries = window.destinationCountries,
+                blockedDnsDomains = window.blockedDnsDomains,
             )
     }
 }
@@ -1125,7 +1128,7 @@ class RoomValueConverters {
         ProtocolMetricEventEntity::class,
         NetworkActivityEventEntity::class,
     ],
-    version = 5,
+    version = 6,
     exportSchema = true,
 )
 @TypeConverters(RoomValueConverters::class)
@@ -1399,6 +1402,13 @@ abstract class ProfileDatabase : RoomDatabase() {
                 }
             }
 
+        private val MIGRATION_5_6 =
+            object : Migration(5, 6) {
+                override fun migrate(db: SupportSQLiteDatabase) {
+                    db.execSQL("alter table `traffic_windows` add column `blockedDnsDomains` text not null default '{}'")
+                }
+            }
+
         fun create(context: Context): ProfileDatabase {
             val appContext = context.applicationContext
             val passphrase = DatabasePassphraseStore(appContext).readOrCreate()
@@ -1414,6 +1424,7 @@ abstract class ProfileDatabase : RoomDatabase() {
                     MIGRATION_2_3,
                     MIGRATION_3_4,
                     MIGRATION_4_5,
+                    MIGRATION_5_6,
                 ).fallbackToDestructiveMigration(false).build()
             migrateLegacyPlaintextDatabase(appContext, database)
             return database

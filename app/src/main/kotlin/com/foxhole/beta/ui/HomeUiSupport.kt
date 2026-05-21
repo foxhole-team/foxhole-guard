@@ -153,6 +153,14 @@ internal enum class HomeModeOption {
 internal fun shouldAutoRefreshIpOnForeground(connectionState: ConnectionState): Boolean =
     connectionState != ConnectionState.CONNECTING && connectionState != ConnectionState.RECONNECTING
 
+internal fun shouldShowDisconnectedEntryIpRefreshSkeleton(
+    currentIpInfo: IpInfo?,
+    connectionState: ConnectionState,
+): Boolean =
+    currentIpInfo == null &&
+        connectionState !in ACTIVE_CONNECTION_STATES &&
+        shouldAutoRefreshIpOnForeground(connectionState)
+
 internal fun shouldShowIpInfoLoading(
     currentIpInfo: IpInfo?,
     explicitLoading: Boolean,
@@ -551,7 +559,6 @@ private fun HomeRouteUiState.shouldShowHomeNetworkIpInfoLoading(
                 reconnectInProgress ||
                     (routeTransitionRunning && hasDashboardRouteProfile()) ||
                     shouldShowVpnTransitionLoading(routeTransitionRunning) ||
-                    shouldShowConnectedRouteLoading(routeTransitionRunning, dashboardIpInfo) ||
                     shouldShowDashboardNetworkLoading(
                         visibleIpInfo = dashboardIpInfo,
                         explicitLoading = ipInfoLoading,
@@ -581,15 +588,6 @@ private fun HomeRouteUiState.shouldShowVpnTransitionLoading(routeTransitionRunni
     routeTransitionRunning &&
         connection.state in setOf(ConnectionState.CONNECTING, ConnectionState.RECONNECTING) &&
         hasDashboardRouteProfile()
-
-private fun HomeRouteUiState.shouldShowConnectedRouteLoading(
-    routeTransitionRunning: Boolean,
-    dashboardIpInfo: IpInfo?,
-): Boolean =
-    !routeTransitionRunning &&
-        connection.state == ConnectionState.CONNECTED &&
-        hasDashboardRouteProfile() &&
-        dashboardIpInfo == null
 
 private fun HomeRouteUiState.hasDashboardRouteProfile(): Boolean =
     connection.trafficMode in setOf(TrafficMode.TUNNEL, TrafficMode.PROXY) &&
@@ -1211,7 +1209,7 @@ internal fun formatCountryLine(
     ipInfo: IpInfo,
     unknownCountry: String,
 ): String {
-    val country = ipInfo.countryName ?: unknownCountry
+    val country = ipInfo.countryName ?: ipInfo.countryCode ?: unknownCountry
     return "${countryEmoji(ipInfo.countryCode)} $country"
 }
 

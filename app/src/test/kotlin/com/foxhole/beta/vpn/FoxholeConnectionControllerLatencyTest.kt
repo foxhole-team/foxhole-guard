@@ -1,9 +1,14 @@
 package com.foxhole.beta.vpn
 
+import com.foxhole.beta.core.model.ConnectionSnapshot
+import com.foxhole.beta.core.model.ConnectionState
 import com.foxhole.beta.core.model.LatencyProbeMethod
+import com.foxhole.beta.core.model.Settings
 import com.foxhole.beta.core.model.TrafficMode
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class FoxholeConnectionControllerLatencyTest {
@@ -71,6 +76,54 @@ class FoxholeConnectionControllerLatencyTest {
             LatencyProbeMethod.HTTP,
             effectiveLatencyProbeMethod(TrafficMode.PROXY, LatencyProbeMethod.ICMP),
         )
+    }
+
+    @Test
+    fun `tunnel latency falls back to http and tcp when configured probe is blocked`() {
+        assertEquals(
+            listOf(LatencyProbeMethod.ICMP, LatencyProbeMethod.HTTP, LatencyProbeMethod.TCP),
+            latencyProbeMethodOrder(TrafficMode.TUNNEL, LatencyProbeMethod.ICMP),
+        )
+    }
+
+    @Test
+    fun `proxy latency only uses http probe path`() {
+        assertEquals(
+            listOf(LatencyProbeMethod.HTTP),
+            latencyProbeMethodOrder(TrafficMode.PROXY, LatencyProbeMethod.ICMP),
+        )
+    }
+
+    @Test
+    fun `strict tunnel latency uses runtime proxy http path`() {
+        val snapshot =
+            ConnectionSnapshot(
+                state = ConnectionState.CONNECTED,
+                trafficMode = TrafficMode.TUNNEL,
+                profileId = 42L,
+            )
+
+        assertTrue(shouldUseRuntimeProxyForTunnelLatency(TrafficMode.TUNNEL, snapshot, Settings()))
+        assertEquals(
+            listOf(LatencyProbeMethod.HTTP),
+            latencyProbeMethodOrder(
+                trafficMode = TrafficMode.TUNNEL,
+                configuredMethod = LatencyProbeMethod.ICMP,
+                useRuntimeProxyForTunnel = true,
+            ),
+        )
+    }
+
+    @Test
+    fun `idle tunnel latency does not use runtime proxy path`() {
+        val snapshot =
+            ConnectionSnapshot(
+                state = ConnectionState.IDLE,
+                trafficMode = TrafficMode.TUNNEL,
+                profileId = 42L,
+            )
+
+        assertFalse(shouldUseRuntimeProxyForTunnelLatency(TrafficMode.TUNNEL, snapshot, Settings()))
     }
 
     @Test
