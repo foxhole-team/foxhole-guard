@@ -1623,18 +1623,16 @@ internal fun HomeViewModel.initializeAutoConnectUiInternal(candidates: List<Auto
             currentOptionId = candidates.firstOrNull()?.optionId,
             currentProtocolHint = candidates.firstOrNull()?.protocolHint,
             currentDisplayName = candidates.firstOrNull()?.displayName,
-            options =
-            candidates.mapIndexed { index, candidate ->
+            options = candidates.mapIndexed { index, candidate ->
                 AutoConnectProbeOptionUiState(
                     optionId = candidate.optionId,
                     displayName = candidate.displayName,
                     protocolHint = candidate.protocolHint,
-                    status =
-                        if (index == 0) {
-                            AutoConnectProbeStatus.TESTING
-                        } else {
-                            AutoConnectProbeStatus.PENDING
-                        },
+                    status = if (index == 0) {
+                        AutoConnectProbeStatus.TESTING
+                    } else {
+                        AutoConnectProbeStatus.PENDING
+                    },
                 )
             },
         )

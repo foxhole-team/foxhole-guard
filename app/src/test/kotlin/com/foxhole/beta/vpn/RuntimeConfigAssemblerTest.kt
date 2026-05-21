@@ -328,6 +328,60 @@ class RuntimeConfigAssemblerTest {
     }
 
     @Test
+    fun `tor over vpn selected apps keeps full-device tun capture with blocked packages`() {
+        val config =
+            parse(
+                assembler.assemble(
+                    baseConfigJson = baseConfigWithRules("profile.example"),
+                    settings =
+                        Settings(
+                            privacyRoute =
+                                com.foxhole.beta.core.model.PrivacyRouteSettings(
+                                    mode = PrivacyRouteMode.TOR_OVER_VPN,
+                                    scope = PrivacyRouteScope.SELECTED_APPS,
+                                    selectedPackages = listOf("org.mozilla.firefox"),
+                                ),
+                            expert =
+                                ExpertSettings(
+                                    blockedPackagesEnabled = true,
+                                    blockedPackages = listOf("com.bank.app"),
+                                ),
+                        ),
+                    activePreset = null,
+                    torRuntimePaths = TorRuntimePaths(executablePath = "/tor", dataDirectory = "/tor-data"),
+                    vpnProtocolHint = ProtocolHint.VLESS,
+                ),
+            )
+
+        val route = config["route"]!!.jsonObject
+        val tunInbound = config["inbounds"]!!.jsonArray.first().jsonObject
+        val packageRules =
+            route["rules"]!!
+                .jsonArray
+                .map { it.jsonObject }
+                .filter { it["package_name"] != null }
+
+        assertFalse(tunInbound.containsKey("include_package"))
+        assertEquals(
+            listOf(BuildConfig.APPLICATION_ID),
+            tunInbound["exclude_package"]!!.jsonArray.map { it.jsonPrimitive.content },
+        )
+        assertTrue(
+            packageRules.any { rule ->
+                rule["package_name"]!!.jsonArray.single().jsonPrimitive.content == "org.mozilla.firefox" &&
+                    rule["network"]!!.jsonPrimitive.content == "tcp" &&
+                    rule["outbound"]!!.jsonPrimitive.content == "tor-over-vpn"
+            },
+        )
+        assertTrue(
+            packageRules.any { rule ->
+                rule["package_name"]!!.jsonArray.single().jsonPrimitive.content == "com.bank.app" &&
+                    rule["outbound"]!!.jsonPrimitive.content == "block"
+            },
+        )
+    }
+
+    @Test
     fun `tor privacy route selected apps without packages leaves ordinary proxy route untouched`() {
         val config =
             parse(

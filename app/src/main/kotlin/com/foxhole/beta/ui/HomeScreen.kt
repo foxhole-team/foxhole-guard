@@ -903,6 +903,13 @@ fun HomeScreen(
                                                 stringResource(R.string.home_network_ip_label),
                                                 stringResource(R.string.home_network_provider_label),
                                             ),
+                                        icons =
+                                            listOf(
+                                                Icons.Outlined.Language,
+                                                Icons.Outlined.LocationCity,
+                                                Icons.Outlined.Public,
+                                                Icons.Outlined.Business,
+                                            ),
                                         modifier =
                                             Modifier
                                                 .weight(if (showNetworkRouteDetails) 1f else 2f)

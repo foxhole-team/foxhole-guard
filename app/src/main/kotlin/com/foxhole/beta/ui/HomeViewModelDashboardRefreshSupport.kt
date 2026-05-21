@@ -26,16 +26,15 @@ internal suspend fun HomeViewModel.publishTorIpInfoFromDashboardRefresh(info: Ip
     val torRouteVisible =
         state.connection.profileId == FoxholeVpnService.TOR_ONLY_PROFILE_ID ||
             state.settings.privacyRoute.enabled
-    if (!torRouteVisible) {
-        return false
+    val accepted =
+        torRouteVisible &&
+            (!state.torOperation.active || state.torOperation.canAcceptTorIp(info))
+    if (accepted) {
+        torIpInfoMutable.value = info
+        if (state.torOperation.active) {
+            emitTorConnectedBanner(info)
+            clearTorOperation()
+        }
     }
-    if (state.torOperation.active && !state.torOperation.canAcceptTorIp(info)) {
-        return false
-    }
-    torIpInfoMutable.value = info
-    if (state.torOperation.active) {
-        emitTorConnectedBanner(info)
-        clearTorOperation()
-    }
-    return true
+    return accepted
 }

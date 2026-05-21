@@ -1177,52 +1177,11 @@ internal suspend fun FoxholeVpnService.probeConnectivityEndpointsOverLocalProxyI
     proxy: com.foxhole.beta.core.network.HttpProxyAccess,
     callTimeoutMs: Long,
 ) {
-    var lastFailure: Throwable? = null
     if (proxy.type == ProxyAccessType.HTTP) {
-        connectivityProbeEndpoints().forEach { endpoint ->
-            val result =
-                runCatchingUnlessCancelled {
-                    container.ipInfoRepository.probeLatency(
-                        endpoint = endpoint,
-                        callTimeoutMs = callTimeoutMs,
-                        proxy = proxy,
-                    )
-                }
-            if (result.isSuccess) {
-                container.diagnosticsLogger.record("health", "proxy payload ok: $endpoint elapsed_ms=${result.getOrThrow()}")
-                return
-            }
-            lastFailure = result.exceptionOrNull()
-            container.diagnosticsLogger.record(
-                "health",
-                "proxy payload failed: $endpoint reason=${lastFailure?.message.orEmpty()}",
-            )
-        }
-        throw (lastFailure ?: error("proxy payload probe failed"))
+        probeHttpProxyPayloadEndpoints(proxy = proxy, callTimeoutMs = callTimeoutMs)
+    } else {
+        probeProxyConnectivityEndpoints(proxy = proxy, callTimeoutMs = callTimeoutMs)
     }
-    connectivityProbeEndpoints().forEach { endpoint ->
-        val result =
-            runCatchingUnlessCancelled {
-                container.ipInfoRepository.probe(
-                    endpoint = endpoint,
-                    callTimeoutMs = callTimeoutMs,
-                    proxy = proxy,
-                )
-            }
-        if (result.isSuccess) {
-            container.diagnosticsLogger.record("health", "proxy probe ok: $endpoint")
-            return
-        }
-        lastFailure = result.exceptionOrNull()
-        container.diagnosticsLogger.record(
-            "health",
-            "proxy probe failed: $endpoint reason=${lastFailure?.message.orEmpty()}",
-        )
-        if (!currentCoroutineContext().isActive) {
-            throw (lastFailure ?: error("proxy probe cancelled"))
-        }
-    }
-    throw (lastFailure ?: error("proxy probe failed"))
 }
 
 private const val TUNNEL_RUNTIME_PROXY_VALIDATION_CALL_TIMEOUT_MS = 5_000L

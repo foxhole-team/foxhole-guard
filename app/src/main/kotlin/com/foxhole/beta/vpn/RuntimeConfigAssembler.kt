@@ -1127,13 +1127,9 @@ class RuntimeConfigAssembler(
     private fun shouldBlockUnsupportedUdp(
         base: JsonObject,
         vpnProtocolHint: ProtocolHint?,
-    ): Boolean {
-        if (vpnProtocolHint?.isUdpTransport() == true) {
-            return false
-        }
-        val outbound = base.primaryProxyOutbound() ?: return false
-        return outbound.stringField("network") == "tcp"
-    }
+    ): Boolean =
+        vpnProtocolHint?.isUdpTransport() != true &&
+            base.primaryProxyOutbound()?.stringField("network") == "tcp"
 
     private fun packageNetworkRouteRule(
         packageNames: List<String>,
@@ -1881,32 +1877,44 @@ class RuntimeConfigAssembler(
 
     private fun isFoxholeManagedRouteRule(rule: JsonObject): Boolean {
         val action = rule["action"]?.jsonPrimitive?.contentOrNull ?: return false
-        return when {
-            action == "sniff" ->
-                rule.keys.all { it == "action" }
-            action == "hijack-dns" &&
-                foxholeHijackMatch(rule) ->
-                rule.keys.all { it in setOf("protocol", "port", "action") }
-            action == "route" &&
-                rule["inbound"]?.jsonArray?.singleOrNull()?.jsonPrimitive?.contentOrNull == RUNTIME_LOOPBACK_PROXY_INBOUND_TAG &&
-                rule["network"]?.jsonPrimitive?.contentOrNull == "tcp" &&
-                rule["outbound"]?.jsonPrimitive?.contentOrNull in setOf("proxy", TOR_OVER_VPN_OUTBOUND_TAG) ->
-                rule.keys.all { it in setOf("inbound", "network", "action", "outbound") }
-            action == "route" &&
-                rule["outbound"]?.jsonPrimitive?.contentOrNull == "direct" &&
-                rule["ip_is_private"]?.jsonPrimitive?.contentOrNull == "true" ->
-                rule.keys.all { it in setOf("ip_is_private", "action", "outbound") }
-            action == "route" &&
-                rule["network"]?.jsonPrimitive?.contentOrNull == "udp" &&
-                rule["outbound"]?.jsonPrimitive?.contentOrNull == "block" ->
-                rule.keys.all { it in setOf("network", "action", "outbound") }
-            action == "route" &&
-                rule["outbound"]?.jsonPrimitive?.contentOrNull in setOf("proxy", "direct", "block") &&
-                rule["package_name"] != null ->
-                rule.keys.all { it in setOf("package_name", "action", "outbound") }
+        return when (action) {
+            "sniff" -> rule.keys.all { it == "action" }
+            "hijack-dns" -> isFoxholeManagedHijackDnsRule(rule)
+            "route" -> isFoxholeManagedRouteActionRule(rule)
             else -> false
         }
     }
+
+    private fun isFoxholeManagedHijackDnsRule(rule: JsonObject): Boolean =
+        foxholeHijackMatch(rule) &&
+            rule.keys.all { it in setOf("protocol", "port", "action") }
+
+    private fun isFoxholeManagedRouteActionRule(rule: JsonObject): Boolean =
+        isFoxholeManagedRuntimeLoopbackRule(rule) ||
+            isFoxholeManagedPrivateDirectRule(rule) ||
+            isFoxholeManagedUdpBlockRule(rule) ||
+            isFoxholeManagedPackageRouteRule(rule)
+
+    private fun isFoxholeManagedRuntimeLoopbackRule(rule: JsonObject): Boolean =
+        rule["inbound"]?.jsonArray?.singleOrNull()?.jsonPrimitive?.contentOrNull == RUNTIME_LOOPBACK_PROXY_INBOUND_TAG &&
+            rule["network"]?.jsonPrimitive?.contentOrNull == "tcp" &&
+            rule["outbound"]?.jsonPrimitive?.contentOrNull in setOf("proxy", TOR_OVER_VPN_OUTBOUND_TAG) &&
+            rule.keys.all { it in setOf("inbound", "network", "action", "outbound") }
+
+    private fun isFoxholeManagedPrivateDirectRule(rule: JsonObject): Boolean =
+        rule["outbound"]?.jsonPrimitive?.contentOrNull == "direct" &&
+            rule["ip_is_private"]?.jsonPrimitive?.contentOrNull == "true" &&
+            rule.keys.all { it in setOf("ip_is_private", "action", "outbound") }
+
+    private fun isFoxholeManagedUdpBlockRule(rule: JsonObject): Boolean =
+        rule["network"]?.jsonPrimitive?.contentOrNull == "udp" &&
+            rule["outbound"]?.jsonPrimitive?.contentOrNull == "block" &&
+            rule.keys.all { it in setOf("network", "action", "outbound") }
+
+    private fun isFoxholeManagedPackageRouteRule(rule: JsonObject): Boolean =
+        rule["outbound"]?.jsonPrimitive?.contentOrNull in setOf("proxy", "direct", "block") &&
+            rule["package_name"] != null &&
+            rule.keys.all { it in setOf("package_name", "action", "outbound") }
 
     private fun foxholeHijackMatch(rule: JsonObject): Boolean {
         val protocol = rule["protocol"]?.jsonPrimitive?.contentOrNull

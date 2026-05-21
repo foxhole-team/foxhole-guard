@@ -15,7 +15,6 @@ import com.foxhole.beta.core.model.PrivacyRouteMode
 import com.foxhole.beta.core.model.Profile
 import com.foxhole.beta.core.model.RoutingPresetSource
 import com.foxhole.beta.core.model.RoutingRuleAction
-import com.foxhole.beta.core.model.TrafficMode
 import com.foxhole.beta.core.model.isUdpTransport
 import com.foxhole.beta.core.network.IpInfoFetchMode
 import com.foxhole.beta.vpn.FoxholeVpnRuntimeBridge
@@ -173,15 +172,14 @@ private suspend fun HomeViewModel.refreshIpInfoForReason(
         }
     var lastError: Throwable? = null
     repeat(attempts) { attemptIndex ->
-        val info =
-            try {
-                container.connectionController.refreshIpInfo(fetchMode = fetchMode)
-            } catch (cancelled: CancellationException) {
-                throw cancelled
-            } catch (error: Throwable) {
-                lastError = error
-                null
+        val infoResult = runCatching { container.connectionController.refreshIpInfo(fetchMode = fetchMode) }
+        val info = infoResult.getOrNull()
+        infoResult.exceptionOrNull()?.let { error ->
+            if (error is CancellationException) {
+                throw error
             }
+            lastError = error
+        }
         if (info != null && (reason != IpInfoRefreshReason.TOR_ROUTE || canAcceptTorRouteIpRefresh(info))) {
             return info
         }
@@ -198,32 +196,9 @@ private suspend fun HomeViewModel.refreshIpInfoForReason(
             delay(HomeViewModel.TOR_IP_REFRESH_RETRY_DELAY_MS)
         }
     }
-    throw lastError ?: IllegalStateException("ip refresh failed")
+    lastError?.let { throw it }
+    error("ip refresh failed")
 }
-
-private fun HomeViewModel.canAcceptTorRouteIpRefresh(info: com.foxhole.beta.core.model.IpInfo): Boolean {
-    val state = uiState.value
-    val torRouteVisible =
-        state.connection.profileId == FoxholeVpnService.TOR_ONLY_PROFILE_ID ||
-            state.settings.privacyRoute.enabled
-    if (!torRouteVisible) {
-        return false
-    }
-    return !state.torOperation.active || state.torOperation.canAcceptTorIp(info)
-}
-
-private fun com.foxhole.beta.core.model.ConnectionSnapshot.shouldPublishDeviceIpInfoFromDashboardRefresh(): Boolean =
-    state !in HomeViewModel.ACTIVE_CONNECTION_STATES ||
-        trafficMode != TrafficMode.TUNNEL ||
-        profileId == FoxholeVpnService.LOCAL_GUARD_PROFILE_ID
-
-private fun shouldPublishDashboardIpRefresh(
-    startedTarget: IpInfoRefreshTarget,
-    currentTarget: IpInfoRefreshTarget,
-    reason: IpInfoRefreshReason,
-): Boolean =
-    reason == IpInfoRefreshReason.TOR_ROUTE ||
-        startedTarget == currentTarget
 
 internal suspend fun HomeViewModel.getResolvedConfigInternal(
     profileId: Long,

@@ -91,7 +91,12 @@ class IpInfoRepository(
     ) {
         withContext(Dispatchers.IO) {
             if (proxy?.type == ProxyAccessType.HTTP) {
-                executeHttpProxyTunnel(endpoint, callTimeoutMs, proxy, resolverNetwork = resolverNetwork).let { response ->
+                executeHttpProxyTunnel(
+                    endpoint = endpoint,
+                    callTimeoutMs = callTimeoutMs,
+                    proxy = proxy,
+                    resolverNetwork = resolverNetwork,
+                ).let { response ->
                     require(response.isSuccessful) { "connectivity probe failed: ${response.code}" }
                 }
             } else {
@@ -132,7 +137,12 @@ class IpInfoRepository(
     ): Long =
         withContext(Dispatchers.IO) {
             if (proxy?.type == ProxyAccessType.HTTP) {
-                executeHttpProxyTunnel(endpoint, callTimeoutMs, proxy, resolverNetwork = resolverNetwork).let { response ->
+                executeHttpProxyTunnel(
+                    endpoint = endpoint,
+                    callTimeoutMs = callTimeoutMs,
+                    proxy = proxy,
+                    resolverNetwork = resolverNetwork,
+                ).let { response ->
                     require(response.isSuccessful) { "connectivity probe failed: ${response.code}" }
                     response.elapsedMs
                 }
@@ -262,7 +272,14 @@ class IpInfoRepository(
             require(response.isSuccessful) { "ip info request failed: ${response.code}" }
             return parseIpInfoResponse(response.body, json)
         }
-        return execute(endpoint, callTimeoutMs, network, addressFamilyPreference, proxy, resolverNetwork).use { response ->
+        return execute(
+            endpoint = endpoint,
+            callTimeoutMs = callTimeoutMs,
+            network = network,
+            addressFamilyPreference = addressFamilyPreference,
+            proxy = proxy,
+            resolverNetwork = resolverNetwork,
+        ).use { response ->
             require(response.isSuccessful) { "ip info request failed: ${response.code}" }
             parseIpInfoResponse(response.body?.string().orEmpty(), json)
         }
@@ -392,7 +409,12 @@ class IpInfoRepository(
                 endpoint
                     .ensurePublicHttpsUrl()
                     .requirePublicHttpsUrl(resolveHost = true) { hostname ->
-                        resolveAddresses(hostname, network = null, preference = addressFamilyPreference, resolverNetwork = resolverNetwork)
+                        resolveAddresses(
+                            hostname = hostname,
+                            network = null,
+                            preference = addressFamilyPreference,
+                            resolverNetwork = resolverNetwork,
+                        )
                     }
             val target = HttpProxyTunnelTarget(url.host, url.port)
             val timeout = (callTimeoutMs ?: FULL_CALL_TIMEOUT_MS).coerceIn(1L, Int.MAX_VALUE.toLong()).toInt()
@@ -416,7 +438,12 @@ class IpInfoRepository(
                         "proxy tunnel TLS hostname verification failed"
                     }
                     val tlsOutput = tlsSocket.getOutputStream()
-                    tlsOutput.write(proxyTunnelGetRequest(url.encodedPathWithQuery(), target).toByteArray(Charsets.ISO_8859_1))
+                    tlsOutput.write(
+                        proxyTunnelGetRequest(
+                            path = url.encodedPathWithQuery(),
+                            target = target,
+                        ).toByteArray(Charsets.ISO_8859_1),
+                    )
                     tlsOutput.flush()
                     val input = tlsSocket.getInputStream()
                     val responseHead = readHttpResponseHead(input)
@@ -631,19 +658,26 @@ private fun readHttpResponseHead(input: InputStream): HttpResponseHead {
 private fun readHttpResponseBody(
     input: InputStream,
     head: HttpResponseHead,
+): ByteArray =
+    when {
+        head.code == 204 || head.code == 304 || head.code in 100..199 -> ByteArray(0)
+        head.firstHeader("transfer-encoding")?.contains("chunked", ignoreCase = true) == true ->
+            readChunkedHttpBody(input)
+        else ->
+            readHttpResponseBodyWithLength(input, head)
+    }
+
+private fun readHttpResponseBodyWithLength(
+    input: InputStream,
+    head: HttpResponseHead,
 ): ByteArray {
-    if (head.code == 204 || head.code == 304 || head.code in 100..199) {
-        return ByteArray(0)
-    }
-    if (head.firstHeader("transfer-encoding")?.contains("chunked", ignoreCase = true) == true) {
-        return readChunkedHttpBody(input)
-    }
     val contentLength = head.firstHeader("content-length")?.toIntOrNull()
-    if (contentLength != null) {
+    return if (contentLength != null) {
         require(contentLength <= HTTP_TUNNEL_MAX_BODY_BYTES) { "http response body too large" }
-        return input.readExactBytesBounded(contentLength)
+        input.readExactBytesBounded(contentLength)
+    } else {
+        input.readUntilEofBounded(HTTP_TUNNEL_MAX_BODY_BYTES)
     }
-    return input.readUntilEofBounded(HTTP_TUNNEL_MAX_BODY_BYTES)
 }
 
 private fun readChunkedHttpBody(input: InputStream): ByteArray {

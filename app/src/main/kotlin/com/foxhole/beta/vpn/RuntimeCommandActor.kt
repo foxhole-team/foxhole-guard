@@ -212,14 +212,15 @@ internal class RuntimeCommandActor(
                 val removedPending = pending.removeIf { queued ->
                     queued.priority < RuntimeCommandPriority.STOP.value && queued.reason == command.reason
                 }
+                val coalescedDetails =
+                    listOf(
+                        "running_reason=${running.command.reason}",
+                        "removed_pending=$removedPending",
+                    ).joinToString(" • ")
                 recordCommandEvent(
                     headline = "runtime normal command coalesced",
                     command = command,
-                    extra =
-                        listOf(
-                            "running_reason=${running.command.reason}",
-                            "removed_pending=$removedPending",
-                        ).joinToString(" • "),
+                    extra = coalescedDetails,
                 )
                 RuntimeActorReceiveResult.KEEP_RUNNING
             }
@@ -300,15 +301,20 @@ internal class RuntimeCommandActor(
         recordCommandEvent(
             headline = "runtime priority command coalesced",
             command = command,
-            extra =
-                listOf(
-                    "running_priority=${running.command.priorityName}",
-                    "running_reason=${running.command.reason}",
-                    "removed_pending=$removedPendingPriority",
-                ).joinToString(" • "),
+            extra = priorityCoalescedDetails(running, removedPendingPriority),
         )
         return RuntimeActorReceiveResult.KEEP_RUNNING
     }
+
+    private fun priorityCoalescedDetails(
+        running: RunningRuntimeCommand,
+        removedPendingPriority: Boolean,
+    ): String =
+        listOf(
+            "running_priority=${running.command.priorityName}",
+            "running_reason=${running.command.reason}",
+            "removed_pending=$removedPendingPriority",
+        ).joinToString(" • ")
 
     private suspend fun drainPreemptedJobs(drainingPreemptedJobs: MutableList<Job>) {
         drainingPreemptedJobs.removeAll(Job::isCompleted)

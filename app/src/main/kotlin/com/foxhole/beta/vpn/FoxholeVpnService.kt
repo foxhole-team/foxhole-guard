@@ -700,26 +700,13 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
     ) {
         val settings = container.settingsRepository.current()
         val desiredMode = settings.localGuardModeOrNull()
-        if (desiredMode == null || desiredMode != mode) {
-            disconnect(commandStartId = commandStartId, suppressLocalGuard = true)
-            return
-        }
-        if (!hasVpnPermission()) {
-            container.diagnosticsLogger.record("connection", "local guard skipped: missing vpn permission")
-            stopService(commandStartId)
-            return
-        }
-        if (mode == LocalGuardMode.DNS && !PrivateDnsSettings.current(this).isSupportedForSystemDnsProtection()) {
-            container.diagnosticsLogger.record(
-                "dns",
-                "system dns protection skipped: android private dns active",
-            )
-            container.settingsRepository.updateSystemDnsProtectionEnabled(false)
-            disconnect(
-                message = getString(R.string.error_system_dns_private_dns_conflict),
+        if (
+            handleLocalGuardPreflight(
+                desiredMode = desiredMode,
+                mode = mode,
                 commandStartId = commandStartId,
-                suppressLocalGuard = true,
             )
+        ) {
             return
         }
         if (isSameLocalGuardRuntimeActive(mode)) {
@@ -807,6 +794,41 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
             fail(error?.let { describeVpnRuntimeFailure(it) } ?: getString(R.string.error_runtime_missing), commandStartId)
         }
     }
+
+    private suspend fun handleLocalGuardPreflight(
+        desiredMode: LocalGuardMode?,
+        mode: LocalGuardMode,
+        commandStartId: Int,
+    ): Boolean =
+        when {
+            desiredMode == null || desiredMode != mode -> {
+                disconnect(commandStartId = commandStartId, suppressLocalGuard = true)
+                true
+            }
+            !hasVpnPermission() -> {
+                container.diagnosticsLogger.record("connection", "local guard skipped: missing vpn permission")
+                stopService(commandStartId)
+                true
+            }
+            shouldBlockSystemDnsLocalGuard(mode) -> {
+                container.diagnosticsLogger.record(
+                    "dns",
+                    "system dns protection skipped: android private dns active",
+                )
+                container.settingsRepository.updateSystemDnsProtectionEnabled(false)
+                disconnect(
+                    message = getString(R.string.error_system_dns_private_dns_conflict),
+                    commandStartId = commandStartId,
+                    suppressLocalGuard = true,
+                )
+                true
+            }
+            else -> false
+        }
+
+    private fun shouldBlockSystemDnsLocalGuard(mode: LocalGuardMode): Boolean =
+        mode == LocalGuardMode.DNS &&
+            !PrivateDnsSettings.current(this).isSupportedForSystemDnsProtection()
 
     internal fun fail(
         message: String,
@@ -932,19 +954,21 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
             container.connectionController.markCurrentRuntimeApplied()
             container.diagnosticsLogger.record("connection", "runtime reloaded, tunnel validation required")
             val connectedSnapshot = snapshot.state == ConnectionState.CONNECTED
+            val nextState = if (connectedSnapshot) ConnectionState.CONNECTED else ConnectionState.RECONNECTING
+            val nextMessage =
+                if (connectedSnapshot) {
+                    snapshot.message
+                } else {
+                    getString(R.string.status_reconnecting)
+                }
             FoxholeVpnRuntimeBridge.update(
                 snapshot.copy(
-                    state = if (connectedSnapshot) ConnectionState.CONNECTED else ConnectionState.RECONNECTING,
+                    state = nextState,
                     profileId = session.profileId,
                     profileName = session.profileName,
                     protocolHint = session.protocolHint,
                     protocolOptionId = session.protocolOptionId,
-                    message =
-                        if (connectedSnapshot) {
-                            snapshot.message
-                        } else {
-                            getString(R.string.status_reconnecting)
-                        },
+                    message = nextMessage,
                 ),
                 refreshLastChangeAt = !connectedSnapshot,
             )
@@ -1697,8 +1721,10 @@ private fun FoxholeVpnService.appTrafficStatsRuntimeEnabled(settings: Settings):
 
 private fun destinationCountryTrackingRuntimeEnabled(settings: Settings): Boolean =
     settings.statistics.enabled &&
-        (settings.statistics.countryTrafficEnabled ||
-            (settings.statistics.anomalyMetricsEnabled && settings.anomaly.analyzeDestinationCountries))
+        (
+            settings.statistics.countryTrafficEnabled ||
+                (settings.statistics.anomalyMetricsEnabled && settings.anomaly.analyzeDestinationCountries)
+            )
 
 internal interface VpnCoreRuntime {
     suspend fun start(session: VpnSession, host: RuntimeServiceHost): Result<Unit>

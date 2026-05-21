@@ -39,6 +39,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AccessTime
 import androidx.compose.material.icons.outlined.Apps
 import androidx.compose.material.icons.outlined.ContentCopy
+import androidx.compose.material.icons.outlined.Dns
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.Language
@@ -50,6 +51,7 @@ import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Router
 import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material.icons.outlined.Speed
+import androidx.compose.material.icons.outlined.SwapVert
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.HorizontalDivider
@@ -1375,29 +1377,34 @@ private fun HomeRouteUiState.torIpPresentation(loading: Boolean): HomeTorIpPrese
 }
 
 private fun HomeRouteUiState.visibleTorIpInfo(): IpInfo? {
-    val torRouteVisible =
-        connection.profileId == FoxholeVpnService.TOR_ONLY_PROFILE_ID ||
-            settings.privacyRoute.enabled
-    val info =
-        when {
-            connection.profileId == FoxholeVpnService.TOR_ONLY_PROFILE_ID -> torIpInfo ?: ipInfo
-            settings.privacyRoute.enabled -> torIpInfo
-            else -> null
-        }
-    val requiredFetchedAt =
-        when {
-            torOperation.active -> torOperation.startedAt
-            connection.profileId == FoxholeVpnService.TOR_ONLY_PROFILE_ID -> connection.lastChangeAt
-            else -> 0L
-        }
+    val info = visibleTorRouteIpInfo()
+    val requiredFetchedAt = requiredTorRouteFetchedAt()
     return when {
         info == null -> null
-        !torRouteVisible -> null
+        !torRouteVisible() -> null
         torOperation.active && info == torIpInfo -> info
         info.fetchedAt >= requiredFetchedAt -> info
         else -> null
     }
 }
+
+private fun HomeRouteUiState.torRouteVisible(): Boolean =
+    connection.profileId == FoxholeVpnService.TOR_ONLY_PROFILE_ID ||
+        settings.privacyRoute.enabled
+
+private fun HomeRouteUiState.visibleTorRouteIpInfo(): IpInfo? =
+    when {
+        connection.profileId == FoxholeVpnService.TOR_ONLY_PROFILE_ID -> torIpInfo ?: ipInfo
+        settings.privacyRoute.enabled -> torIpInfo
+        else -> null
+    }
+
+private fun HomeRouteUiState.requiredTorRouteFetchedAt(): Long =
+    when {
+        torOperation.active -> torOperation.startedAt
+        connection.profileId == FoxholeVpnService.TOR_ONLY_PROFILE_ID -> connection.lastChangeAt
+        else -> 0L
+    }
 
 @Composable
 private fun HomeFirewallFeatureDialogContent(state: HomeRouteUiState) {
@@ -2020,6 +2027,7 @@ private fun HomeProfileLoadingLine(
 internal fun HomeNetworkLoadingBlock(
     title: String,
     labels: List<String>,
+    icons: List<ImageVector?> = emptyList(),
     modifier: Modifier = Modifier,
     valueWidth: Dp = HomeNetworkValueLoadingWidth,
     loadingColor: Color = MaterialTheme.colorScheme.surfaceVariant,
@@ -2032,6 +2040,7 @@ internal fun HomeNetworkLoadingBlock(
         labels.forEachIndexed { index, label ->
             HomeNetworkLoadingLine(
                 label = label,
+                icon = icons.getOrNull(index),
                 valueWidth = valueWidth,
                 loadingColor = loadingColor,
             )
@@ -2056,6 +2065,13 @@ internal fun HomeConnectionStatusLoadingBlock(
                 stringResource(R.string.home_network_transport_type_label),
                 stringResource(R.string.home_network_connect_time_label),
         ),
+        icons =
+            listOf(
+                Icons.Outlined.Speed,
+                Icons.Outlined.Dns,
+                Icons.Outlined.SwapVert,
+                Icons.Outlined.AccessTime,
+            ),
         modifier = modifier,
         valueWidth = HomeNetworkMetricValueLoadingWidth,
         loadingColor = loadingColor,
@@ -2065,6 +2081,7 @@ internal fun HomeConnectionStatusLoadingBlock(
 @Composable
 private fun HomeNetworkLoadingLine(
     label: String,
+    icon: ImageVector?,
     valueWidth: Dp,
     loadingColor: Color,
 ) {
@@ -2073,19 +2090,33 @@ private fun HomeNetworkLoadingLine(
         horizontalArrangement = Arrangement.spacedBy(4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(
-            text = label,
+        Row(
             modifier = Modifier.weight(1f),
-            style =
-                MaterialTheme.typography.labelSmall.copy(
-                    fontSize = 11.sp,
-                    lineHeight = 12.sp,
-                    fontWeight = FontWeight.SemiBold,
-                ),
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
+            horizontalArrangement = Arrangement.spacedBy(5.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            icon?.let {
+                Icon(
+                    imageVector = it,
+                    contentDescription = null,
+                    modifier = Modifier.size(13.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.78f),
+                )
+            }
+            Text(
+                text = label,
+                modifier = Modifier.weight(1f),
+                style =
+                    MaterialTheme.typography.labelSmall.copy(
+                        fontSize = 11.sp,
+                        lineHeight = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                    ),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
         Box(
             modifier = Modifier.weight(1f),
             contentAlignment = Alignment.CenterEnd,

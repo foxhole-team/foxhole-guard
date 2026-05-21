@@ -214,8 +214,9 @@ class FoxholeConnectionController(
                 } else {
                     diagnosticsLogger.record(
                         "connection",
-                        "active tunnel snapshot kept during foreground grace; vpn network temporarily missing",
+                        "active tunnel snapshot failed closed after foreground grace; vpn network missing",
                     )
+                    failClosedMissingActiveVpnNetwork()
                     false
                 }
             }
@@ -232,6 +233,17 @@ class FoxholeConnectionController(
 
             else -> restoreActiveVpnNetwork(vpnNetwork)
         }
+    }
+
+    private suspend fun failClosedMissingActiveVpnNetwork() {
+        clearAppliedRuntime()
+        FoxholeVpnRuntimeBridge.clearTransientState()
+        FoxholeVpnRuntimeBridge.update(
+            failClosedMissingActiveVpnNetworkSnapshot(
+                trafficMode = settingsRepository.current().traffic.mode,
+                message = context.getString(R.string.error_runtime_stopped),
+            ),
+        )
     }
 
     private suspend fun awaitVpnNetworkForActiveSnapshot(
@@ -552,6 +564,16 @@ private fun ConnectionSnapshot.isStaleTunnelSnapshotWithoutVpn(vpnNetwork: Netwo
     trafficMode == TrafficMode.TUNNEL &&
         state in STALE_VPN_SNAPSHOT_STATES &&
         vpnNetwork == null
+
+internal fun failClosedMissingActiveVpnNetworkSnapshot(
+    trafficMode: TrafficMode,
+    message: String,
+): ConnectionSnapshot =
+    ConnectionSnapshot(
+        state = ConnectionState.ERROR,
+        trafficMode = trafficMode,
+        message = message,
+    )
 
 internal val ACTIVE_CONNECTION_STATES =
     setOf(

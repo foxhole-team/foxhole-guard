@@ -1227,34 +1227,66 @@ private fun shouldSummarizeLibboxDiagnostic(message: String): Boolean {
 
 private fun libboxHighVolumeThrottleKey(message: String): String? {
     val lower = message.lowercase(Locale.ROOT)
-    if (lower.contains("error") || lower.contains("warn") || lower.contains("panic")) {
-        return null
-    }
-    return when {
-        "dns: exchange" in lower ||
-            "dns: exchanged" in lower ||
-            "dns: cached" in lower ->
-            "libbox:dns"
-        "inbound packet connection" in lower ||
-            "inbound connection" in lower ->
-            "libbox:inbound"
-        "router: found package name" in lower ||
-            "router: found user id" in lower ->
-            "libbox:router-identity"
-        "router: match" in lower ||
-            "router: sniffed" in lower ->
-            "libbox:router-match"
-        "outbound/" in lower && "connection to" in lower ->
-            "libbox:outbound"
-        "connection upload" in lower ||
-            "connection download" in lower ->
-            "libbox:connection-close"
-        lower.startsWith("trace[") ->
-            "libbox:trace"
-        else ->
-            null
+    return lower
+        .takeUnless { it.containsAny(LIBBOX_HIGH_VOLUME_SEVERITY_TERMS) }
+        ?.let(::matchingLibboxHighVolumeThrottleKey)
+}
+
+private fun matchingLibboxHighVolumeThrottleKey(lowercaseMessage: String): String? =
+    LIBBOX_HIGH_VOLUME_THROTTLE_RULES
+        .firstOrNull { rule -> rule.matches(lowercaseMessage) }
+        ?.key
+
+private fun String.containsAny(tokens: Iterable<String>): Boolean =
+    tokens.any { token -> token in this }
+
+private data class LibboxHighVolumeThrottleRule(
+    val key: String,
+    val anyTerms: List<String> = emptyList(),
+    val allTerms: List<String> = emptyList(),
+    val startsWith: String? = null,
+) {
+    fun matches(message: String): Boolean {
+        val matchesAnyTerm = anyTerms.isNotEmpty() && message.containsAny(anyTerms)
+        val matchesAllTerms = allTerms.isNotEmpty() && allTerms.all { term -> term in message }
+        val matchesPrefix = startsWith?.let(message::startsWith) == true
+        return matchesAnyTerm || matchesAllTerms || matchesPrefix
     }
 }
+
+private val LIBBOX_HIGH_VOLUME_SEVERITY_TERMS = listOf("error", "warn", "panic")
+
+private val LIBBOX_HIGH_VOLUME_THROTTLE_RULES =
+    listOf(
+        LibboxHighVolumeThrottleRule(
+            key = "libbox:dns",
+            anyTerms = listOf("dns: exchange", "dns: exchanged", "dns: cached"),
+        ),
+        LibboxHighVolumeThrottleRule(
+            key = "libbox:inbound",
+            anyTerms = listOf("inbound packet connection", "inbound connection"),
+        ),
+        LibboxHighVolumeThrottleRule(
+            key = "libbox:router-identity",
+            anyTerms = listOf("router: found package name", "router: found user id"),
+        ),
+        LibboxHighVolumeThrottleRule(
+            key = "libbox:router-match",
+            anyTerms = listOf("router: match", "router: sniffed"),
+        ),
+        LibboxHighVolumeThrottleRule(
+            key = "libbox:outbound",
+            allTerms = listOf("outbound/", "connection to"),
+        ),
+        LibboxHighVolumeThrottleRule(
+            key = "libbox:connection-close",
+            anyTerms = listOf("connection upload", "connection download"),
+        ),
+        LibboxHighVolumeThrottleRule(
+            key = "libbox:trace",
+            startsWith = "trace[",
+        ),
+    )
 
 private fun Iterable<String>.stablePackageHash(): Int =
     map(String::trim)

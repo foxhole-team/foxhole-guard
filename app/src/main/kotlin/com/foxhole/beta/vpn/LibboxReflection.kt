@@ -525,12 +525,12 @@ internal class LibboxReflection(
         destinationPort: Int,
     ): Boolean {
         val context = networkActivityContext()
-        if (context.trafficMode != TrafficMode.TUNNEL || context.runtimeProxyPort != destinationPort) {
-            return false
-        }
-        val sourceAddress = sourceHost.toInetAddressOrNull() ?: return false
-        val destinationAddress = destinationHost.toInetAddressOrNull() ?: return false
-        return sourceAddress.isLoopbackAddress && destinationAddress.isLoopbackAddress
+        val sourceAddress = sourceHost.toInetAddressOrNull()
+        val destinationAddress = destinationHost.toInetAddressOrNull()
+        return context.trafficMode == TrafficMode.TUNNEL &&
+            context.runtimeProxyPort == destinationPort &&
+            sourceAddress?.isLoopbackAddress == true &&
+            destinationAddress?.isLoopbackAddress == true
     }
 
     private fun resolveConnectionOwnerFromProcNet(
