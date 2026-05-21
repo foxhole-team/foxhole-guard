@@ -1,11 +1,6 @@
 package com.foxhole.beta.ui
 
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -15,15 +10,8 @@ import com.foxhole.beta.core.model.StatisticsRetention
 import kotlin.math.roundToInt
 
 @Composable
-internal fun rememberOneShotVisible(key: String): Boolean {
-    var visible by rememberSaveable(key) { mutableStateOf(false) }
-    LaunchedEffect(key) {
-        if (!visible) {
-            visible = true
-        }
-    }
-    return visible
-}
+@Suppress("UnusedParameter")
+internal fun rememberOneShotVisible(key: String): Boolean = true
 
 internal val COMPACT_PROTOCOL_GRID_WIDTH = 360.dp
 internal const val PROFILE_DETAIL_OVERALL_KEY = "__overall__"

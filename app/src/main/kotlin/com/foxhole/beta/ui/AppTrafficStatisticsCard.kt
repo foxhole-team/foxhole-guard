@@ -23,6 +23,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -39,6 +40,8 @@ import com.foxhole.beta.core.model.NetworkActivityEvent
 import com.foxhole.beta.core.statistics.ChartColorToken
 import com.foxhole.beta.core.traffic.TorGeoIpCountryResolver
 import com.foxhole.beta.ui.statistics.charts.chartColor
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 @Composable
 internal fun AppTrafficStatisticsCard(
@@ -169,16 +172,31 @@ internal fun AppTrafficDetail(
     ipInfo: com.foxhole.beta.core.model.IpInfo?,
 ) {
     val context = LocalContext.current
-    val resolver = remember(context) { TorGeoIpCountryResolver(context) }
+    val appContext = remember(context) { context.applicationContext }
+    val resolver = remember(appContext) { TorGeoIpCountryResolver(appContext) }
     var allConnectionsVisible by rememberSaveable { mutableStateOf(false) }
-    val appSamples = samples.filter { sample -> sample.packageName == row.packageName }
-    val connectionRows = remember(row.packageName, networkActivityEvents, ipInfo) {
-        appConnectionRows(
-            packageName = row.packageName,
-            events = networkActivityEvents,
-            resolver = resolver,
-            ipInfo = ipInfo,
-        )
+    val appSamples = remember(row.packageName, samples) {
+        samples.filter { sample -> sample.packageName == row.packageName }
+    }
+    val connectionRows by produceState<List<AppConnectionRow>?>(
+        initialValue = null,
+        row.packageName,
+        networkActivityEvents,
+        ipInfo,
+        resolver,
+    ) {
+        val packageName = row.packageName
+        val events = networkActivityEvents
+        val currentIpInfo = ipInfo
+        value =
+            withContext(Dispatchers.Default) {
+                appConnectionRows(
+                    packageName = packageName,
+                    events = events,
+                    resolver = resolver,
+                    ipInfo = currentIpInfo,
+                )
+            }
     }
     if (allConnectionsVisible) {
         AlertDialog(
@@ -187,7 +205,7 @@ internal fun AppTrafficDetail(
             text = {
                 LazyColumn(modifier = Modifier.heightIn(max = 520.dp)) {
                     items(
-                        connectionRows,
+                        connectionRows.orEmpty(),
                         key = { connection -> "${connection.remote}:${connection.protocol}" },
                     ) { connection ->
                         AppConnectionRowView(connection = connection)
@@ -238,7 +256,8 @@ internal fun AppTrafficDetail(
             AppTrafficMiniChart(samples = appSamples)
             ChartLegend()
         }
-        if (connectionRows.isEmpty()) {
+        val loadedConnectionRows = connectionRows ?: return@Column
+        if (loadedConnectionRows.isEmpty()) {
             Text(
                 text = stringResource(R.string.statistics_app_detail_connections_unavailable),
                 style = MaterialTheme.typography.bodySmall,
@@ -250,10 +269,10 @@ internal fun AppTrafficDetail(
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.SemiBold,
             )
-            connectionRows.take(STATISTICS_TOP_PREVIEW_LIMIT).forEach { connection ->
+            loadedConnectionRows.take(STATISTICS_TOP_PREVIEW_LIMIT).forEach { connection ->
                 AppConnectionRowView(connection = connection)
             }
-            if (connectionRows.size > STATISTICS_TOP_PREVIEW_LIMIT) {
+            if (loadedConnectionRows.size > STATISTICS_TOP_PREVIEW_LIMIT) {
                 TextButton(onClick = { allConnectionsVisible = true }) {
                     Text(stringResource(R.string.show_all_label))
                 }

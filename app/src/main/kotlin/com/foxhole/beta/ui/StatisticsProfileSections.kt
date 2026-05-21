@@ -137,12 +137,20 @@ internal fun ProfileTrafficList(
         return
     }
     val context = LocalContext.current
+    val previewItems =
+        remember(items) {
+            items
+                .sortedByDescending(ProfileTrafficUiItem::totalBytes)
+                .take(PROFILE_TRAFFIC_PREVIEW_LIMIT)
+        }
+    val detailsByProfileId =
+        remember(previewItems, state.profiles, state.settings.smartProfilePreferences) {
+            previewItems.associate { item -> item.profileId to profileStatisticsDetail(state, item) }
+        }
     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        items
-            .sortedByDescending(ProfileTrafficUiItem::totalBytes)
-            .take(PROFILE_TRAFFIC_PREVIEW_LIMIT)
+        previewItems
             .forEachIndexed { index, item ->
-                val detail = profileStatisticsDetail(state, item)
+                val detail = detailsByProfileId.getValue(item.profileId)
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -196,7 +204,7 @@ internal fun ProfileTrafficList(
                         )
                     }
                 }
-                if (index != minOf(items.size, PROFILE_TRAFFIC_PREVIEW_LIMIT) - 1) {
+                if (index != previewItems.lastIndex) {
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.32f))
                 }
             }
@@ -386,8 +394,9 @@ internal fun ProtocolStatisticsSection(items: List<ProtocolStatisticsUiItem>) {
         } else {
             BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
                 val columns = if (maxWidth >= COMPACT_PROTOCOL_GRID_WIDTH) 3 else 2
+                val rows = remember(items, columns) { items.chunked(columns) }
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items.chunked(columns).forEach { rowItems ->
+                    rows.forEach { rowItems ->
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(8.dp),

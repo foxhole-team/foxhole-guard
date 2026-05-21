@@ -65,9 +65,10 @@ fun StatisticsScreen(
     val retention = state.settings.statistics.retention
     val dashboard = state.statisticsDashboard
     val dashboardNowMs = dashboard.nowMs
+    val statisticsNowMs = dashboardNowMs.toStatisticsUiNowBucket()
     val statistics = dashboard.statistics
     val appRows = dashboard.appRows
-    val topApps = appRows.take(APP_TRAFFIC_CHART_LIMIT)
+    val topApps = remember(appRows) { appRows.take(APP_TRAFFIC_CHART_LIMIT) }
     val countryRows = dashboard.countryRows
     val topCountryLimit =
         if (countryRows.size > STATISTICS_TOP_PREVIEW_LIMIT) {
@@ -75,21 +76,22 @@ fun StatisticsScreen(
         } else {
             STATISTICS_TOP_PREVIEW_LIMIT
         }
-    val topCountryRows = countryRows.take(topCountryLimit)
-    val dnsSummary =
+    val topCountryRows = remember(countryRows, topCountryLimit) { countryRows.take(topCountryLimit) }
+    val dnsSummary = remember(state.trafficWindows, appRows, dnsRange, state.settings.dns, statisticsNowMs) {
         dnsProtectionSummary(
             trafficWindows = state.trafficWindows,
             appRows = appRows,
             retention = dnsRange.toStatisticsRetention(),
             displayRange = dnsRange,
             dnsSettings = state.settings.dns,
-            nowMs = dashboardNowMs,
+            nowMs = statisticsNowMs,
         )
-    val anomalyEventsForRange = remember(state.anomalyEvents, anomalyRange, dashboardNowMs) {
-        state.anomalyEvents.filterForDisplayRange(anomalyRange, dashboardNowMs, AnomalyEvent::createdAtMs)
     }
-    val appSamplesForRange = remember(state.appTrafficWindows, appTrafficRange, dashboardNowMs) {
-        state.appTrafficWindows.filterForDisplayRange(appTrafficRange, dashboardNowMs, AppTrafficWindow::startedAtMs)
+    val anomalyEventsForRange = remember(state.anomalyEvents, anomalyRange, statisticsNowMs) {
+        state.anomalyEvents.filterForDisplayRange(anomalyRange, statisticsNowMs, AnomalyEvent::createdAtMs)
+    }
+    val appSamplesForRange = remember(state.appTrafficWindows, appTrafficRange, statisticsNowMs) {
+        state.appTrafficWindows.filterForDisplayRange(appTrafficRange, statisticsNowMs, AppTrafficWindow::startedAtMs)
     }
     val appStatsSwitchChecked = state.settings.appTrafficStatsEnabled
     val usageAccessGranted = rememberUsageAccessGranted()
@@ -181,7 +183,7 @@ fun StatisticsScreen(
                     AppTrafficStatisticsCard(
                         rows = topApps,
                         samples = appSamplesForRange,
-                        nowMs = dashboardNowMs,
+                        nowMs = statisticsNowMs,
                         allRowsCount = appRows.size,
                         enabled = appStatsEnabled,
                         usageAccessGranted = usageAccessGranted,
@@ -350,3 +352,7 @@ fun StatisticsScreen(
         )
     }
 }
+
+private const val STATISTICS_UI_NOW_BUCKET_MS = 60_000L
+
+private fun Long.toStatisticsUiNowBucket(): Long = (this / STATISTICS_UI_NOW_BUCKET_MS) * STATISTICS_UI_NOW_BUCKET_MS
