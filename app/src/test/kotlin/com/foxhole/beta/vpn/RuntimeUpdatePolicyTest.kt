@@ -20,4 +20,36 @@ class RuntimeUpdatePolicyTest {
         assertEquals(60_000L, RuntimeUpdatePolicy.notificationHealthProbeIntervalMs(ConnectivityHealthState.ONLINE))
         assertEquals(10_000L, RuntimeUpdatePolicy.notificationHealthProbeIntervalMs(ConnectivityHealthState.CHECKING))
     }
+
+    @Test
+    fun `offline health probes use exponential backoff capped for cpu savings`() {
+        assertEquals(
+            10_000L,
+            RuntimeUpdatePolicy.notificationHealthProbeIntervalMs(
+                ConnectivityHealthState.OFFLINE,
+                consecutiveFailures = 0,
+            ),
+        )
+        assertEquals(
+            15_000L,
+            RuntimeUpdatePolicy.notificationHealthProbeIntervalMs(
+                ConnectivityHealthState.OFFLINE,
+                consecutiveFailures = 1,
+            ),
+        )
+        assertEquals(
+            30_000L,
+            RuntimeUpdatePolicy.notificationHealthProbeIntervalMs(
+                ConnectivityHealthState.OFFLINE,
+                consecutiveFailures = 2,
+            ),
+        )
+        assertEquals(
+            120_000L,
+            RuntimeUpdatePolicy.notificationHealthProbeIntervalMs(
+                ConnectivityHealthState.OFFLINE,
+                consecutiveFailures = 10,
+            ),
+        )
+    }
 }

@@ -961,12 +961,22 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
                             state = ConnectivityHealthState.CHECKING,
                             resetFailures = true,
                         )
-                        delay(RuntimeUpdatePolicy.notificationHealthProbeIntervalMs(notificationConnectivityHealthState))
+                        delay(
+                            RuntimeUpdatePolicy.notificationHealthProbeIntervalMs(
+                                notificationConnectivityHealthState,
+                                consecutiveNotificationHealthFailures,
+                            ),
+                        )
                         continue
                     }
                     if (!defaultNetworkAvailable) {
                         markNotificationConnectivityOffline()
-                        delay(RuntimeUpdatePolicy.notificationHealthProbeIntervalMs(notificationConnectivityHealthState))
+                        delay(
+                            RuntimeUpdatePolicy.notificationHealthProbeIntervalMs(
+                                notificationConnectivityHealthState,
+                                consecutiveNotificationHealthFailures,
+                            ),
+                        )
                         continue
                     }
                     val probeSucceeded = runNotificationConnectivityProbe(session)
@@ -989,7 +999,12 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
                             updateNotificationConnectivityHealth(ConnectivityHealthState.CHECKING)
                         }
                     }
-                    delay(RuntimeUpdatePolicy.notificationHealthProbeIntervalMs(notificationConnectivityHealthState))
+                    delay(
+                        RuntimeUpdatePolicy.notificationHealthProbeIntervalMs(
+                            notificationConnectivityHealthState,
+                            consecutiveNotificationHealthFailures,
+                        ),
+                    )
                 }
             }
     }
@@ -1092,7 +1107,8 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
             state = ConnectivityHealthState.OFFLINE,
             force = true,
         )
-        consecutiveNotificationHealthFailures = NOTIFICATION_HEALTH_FAILURE_THRESHOLD
+        consecutiveNotificationHealthFailures =
+            maxOf(consecutiveNotificationHealthFailures, NOTIFICATION_HEALTH_FAILURE_THRESHOLD)
     }
 
     private fun updateNotificationConnectivityHealth(

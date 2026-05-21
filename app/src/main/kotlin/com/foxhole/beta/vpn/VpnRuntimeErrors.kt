@@ -17,5 +17,27 @@ internal fun unwrapVpnRuntimeFailure(error: Throwable): Throwable {
 
 internal fun describeVpnRuntimeFailure(error: Throwable): String {
     val root = unwrapVpnRuntimeFailure(error)
-    return root.message?.trim().takeIf { !it.isNullOrEmpty() } ?: root.javaClass.simpleName
+    val raw = root.message?.trim().takeIf { !it.isNullOrEmpty() } ?: root.javaClass.simpleName
+    return knownRuntimeCompatibilityDescription(raw) ?: raw
 }
+
+private fun knownRuntimeCompatibilityDescription(message: String): String? {
+    val normalized = message.lowercase()
+    return when {
+        hasAll(normalized, "tor", "udp") && hasAny(normalized, "not support", "unsupported") ->
+            "TOR mode does not support UDP for this profile; switch TOR UDP policy to Proxy or Block."
+        hasAny(normalized, "fakeip", "fake-ip") && hasAll(normalized, "strict", "private dns") ->
+            "Strict Private DNS is incompatible with FakeIP DNS mode; use Secure DNS Auto/Remote mode."
+        hasAll(normalized, "firewall") &&
+            hasAny(normalized, "proxy", "tproxy") &&
+            hasAny(normalized, "unsupported", "not available") ->
+            "Firewall app rules are unavailable in the current proxy mode; use Tunnel mode for per-app firewall."
+        else -> null
+    }
+}
+
+private fun hasAll(message: String, vararg tokens: String): Boolean =
+    tokens.all { token -> message.contains(token) }
+
+private fun hasAny(message: String, vararg tokens: String): Boolean =
+    tokens.any { token -> message.contains(token) }

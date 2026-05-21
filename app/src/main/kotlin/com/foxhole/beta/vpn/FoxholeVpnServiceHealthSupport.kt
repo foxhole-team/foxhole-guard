@@ -35,7 +35,12 @@ internal fun FoxholeVpnService.startNotificationHealthMonitoring() {
                     }
                     else -> updateHealthAfterProbe(runNotificationConnectivityProbe())
                 }
-                delay(RuntimeUpdatePolicy.notificationHealthProbeIntervalMs(notificationConnectivityHealthState))
+                delay(
+                    RuntimeUpdatePolicy.notificationHealthProbeIntervalMs(
+                        notificationConnectivityHealthState,
+                        consecutiveNotificationHealthFailures,
+                    ),
+                )
             }
         }
 }

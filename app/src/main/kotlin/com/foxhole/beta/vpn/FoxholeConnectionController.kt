@@ -602,7 +602,8 @@ internal fun FoxholeVpnService.markNotificationConnectivityOfflineInternal() {
         state = ConnectivityHealthState.OFFLINE,
         force = true,
     )
-    consecutiveNotificationHealthFailures = FoxholeVpnService.NOTIFICATION_HEALTH_FAILURE_THRESHOLD
+    consecutiveNotificationHealthFailures =
+        maxOf(consecutiveNotificationHealthFailures, FoxholeVpnService.NOTIFICATION_HEALTH_FAILURE_THRESHOLD)
 }
 
 internal fun FoxholeVpnService.updateNotificationConnectivityHealthInternal(

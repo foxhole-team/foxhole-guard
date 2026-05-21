@@ -490,6 +490,7 @@ tasks.register("verifyRequiredBehaviorTests") {
                 "com.foxhole.beta.vpn.AppOwnedRequestPathTest",
                 "com.foxhole.beta.vpn.FoxholeConnectionControllerLatencyTest",
                 "com.foxhole.beta.vpn.RuntimeConfigAssemblerTest",
+                "com.foxhole.beta.vpn.RuntimeUpdatePolicyTest",
                 "com.foxhole.beta.vpn.TunnelValidationPolicyTest",
                 "com.foxhole.beta.vpn.VpnDnsServerSelectorTest",
                 "com.foxhole.beta.vpn.VpnRuntimeErrorsTest",
