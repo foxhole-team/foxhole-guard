@@ -1405,7 +1405,9 @@ abstract class ProfileDatabase : RoomDatabase() {
         private val MIGRATION_5_6 =
             object : Migration(5, 6) {
                 override fun migrate(db: SupportSQLiteDatabase) {
-                    db.execSQL("alter table `traffic_windows` add column `blockedDnsDomains` text not null default '{}'")
+                    db.execSQL(
+                        "alter table `traffic_windows` add column `blockedDnsDomains` text not null default '{}'",
+                    )
                 }
             }
 

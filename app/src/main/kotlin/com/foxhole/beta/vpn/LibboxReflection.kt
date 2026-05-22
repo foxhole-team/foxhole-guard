@@ -11,7 +11,6 @@ import android.util.Base64
 import android.util.Log
 import androidx.core.content.getSystemService
 import com.foxhole.beta.BuildConfig
-import com.foxhole.beta.core.model.NetworkActivityEvent
 import com.foxhole.beta.core.model.TrafficMode
 import com.foxhole.beta.core.traffic.TorGeoIpCountryResolver
 import java.io.File
@@ -34,7 +33,6 @@ internal class LibboxReflection(
     private val diagnosticsLogger: RuntimeDiagnosticsSink,
     private val isNetworkActivityLoggingEnabled: () -> Boolean,
     private val networkActivityContext: () -> NetworkActivityContext = { NetworkActivityContext() },
-    private val onNetworkActivityEvent: (NetworkActivityEvent) -> Unit = {},
 ) : LibboxRuntimeNative {
     private val setupDone = AtomicBoolean(false)
     private val appContext = context.applicationContext

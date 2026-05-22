@@ -131,26 +131,23 @@ class DnsFilterUpdateClientTest {
             name = "foxhole-adguard-dns-filter",
             format = "sing-box-srs",
             generatedAt = Instant.now().toString(),
-            source =
-                DnsFilterManifestSource(
-                    name = "AdGuardSDNSFilter",
-                    repo = "https://github.com/AdguardTeam/AdGuardSDNSFilter.git",
-                    commit = "0123456789abcdef0123456789abcdef01234567",
-                    license = "GPL-3.0",
-                    inputPath = "Filters/filter.txt",
-                    inputSha256 = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-                ),
-            artifact =
-                DnsFilterManifestArtifact(
-                    file = "adguard-dns-filter.srs",
-                    size = size,
-                    sha256 = sha256,
-                ),
-            compatibility =
-                DnsFilterManifestCompatibility(
-                    singBoxVersion = BuildConfig.LIBBOX_SOURCE_VERSION,
-                    minAppVersion = "0.0.1",
-                ),
+            source = DnsFilterManifestSource(
+                name = "AdGuardSDNSFilter",
+                repo = "https://github.com/AdguardTeam/AdGuardSDNSFilter.git",
+                commit = "0123456789abcdef0123456789abcdef01234567",
+                license = "GPL-3.0",
+                inputPath = "Filters/filter.txt",
+                inputSha256 = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            ),
+            artifact = DnsFilterManifestArtifact(
+                file = "adguard-dns-filter.srs",
+                size = size,
+                sha256 = sha256,
+            ),
+            compatibility = DnsFilterManifestCompatibility(
+                singBoxVersion = BuildConfig.LIBBOX_SOURCE_VERSION,
+                minAppVersion = "0.0.1",
+            ),
         )
 
     private fun testRuleSetBytes(): ByteArray =

@@ -2233,16 +2233,15 @@ private fun SmartProfileProtocolMemory?.freshRememberedLatencyUnavailable(
     now: Long,
     retentionMs: Long = SMART_START_REMEMBERED_LATENCY_RETENTION_MS,
 ): Boolean {
-    val memory = this ?: return false
-    if (memory.lastLatencyMs?.takeIf { it > 0L } != null) {
-        return false
-    }
-    if (memory.lastReasonCode != AutoConnectReasonCode.LATENCY_ENDPOINT_BLOCKED) {
-        return false
-    }
-    val successAt = memory.lastSuccessAt?.takeIf { it > 0L } ?: return false
-    val failureAt = memory.lastFailureAt?.takeIf { it > 0L }
-    return (failureAt == null || successAt >= failureAt) && now - successAt <= retentionMs
+    val memory = this
+    val successAt = memory?.lastSuccessAt?.takeIf { it > 0L }
+    val failureAt = memory?.lastFailureAt?.takeIf { it > 0L }
+    return memory != null &&
+        memory.lastLatencyMs?.takeIf { it > 0L } == null &&
+        memory.lastReasonCode == AutoConnectReasonCode.LATENCY_ENDPOINT_BLOCKED &&
+        successAt != null &&
+        (failureAt == null || successAt >= failureAt) &&
+        now - successAt <= retentionMs
 }
 
 private fun SmartProfileProtocolMemory?.freshRememberedServerPing(

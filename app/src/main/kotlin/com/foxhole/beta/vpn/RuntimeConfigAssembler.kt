@@ -25,6 +25,7 @@ import com.foxhole.beta.core.model.TrafficMode
 import com.foxhole.beta.core.model.TrafficSettings
 import com.foxhole.beta.core.model.TunStack
 import com.foxhole.beta.core.model.V2RayApiSettings
+import com.foxhole.beta.core.model.dnsRuleSetFilteringEnabled
 import com.foxhole.beta.core.model.isUdpTransport
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
@@ -109,6 +110,7 @@ class RuntimeConfigAssembler(
         settings: Settings,
         mode: LocalGuardMode,
     ): String {
+        val localDnsCaptureEnabled = settings.localGuardDnsCaptureEnabled(mode)
         val dnsSettings =
             if (settings.expert.systemDnsProtectionEnabled) {
                 settings.dns.systemDnsProtectionSettings()
@@ -123,17 +125,20 @@ class RuntimeConfigAssembler(
                 finalTag =
                     if (settings.expert.systemDnsProtectionEnabled) {
                         DNS_REMOTE_TAG
+                    } else if (!localDnsCaptureEnabled) {
+                        DNS_REMOTE_TAG
                     } else {
                         DNS_DIRECT_TAG
                     },
-                includeRemote = settings.expert.systemDnsProtectionEnabled,
-                remoteDetourTag = "direct",
+                includeRemote = true,
+                remoteDetourTag = null,
             )
         val route =
             buildJsonObject {
                 val rules =
                     buildJsonArray {
-                        if (settings.expert.systemDnsProtectionEnabled || mode == LocalGuardMode.JOURNAL) {
+                        if (localDnsCaptureEnabled) {
+                            add(blockPrivateDnsValidationRule())
                             hijackDnsRules().forEach(::add)
                         }
                         if (mode != LocalGuardMode.DNS && settings.expert.blockAppsAlways) {
@@ -144,6 +149,8 @@ class RuntimeConfigAssembler(
                 put("final", "direct")
                 val defaultResolver =
                     if (settings.expert.systemDnsProtectionEnabled) {
+                        DNS_REMOTE_TAG
+                    } else if (!localDnsCaptureEnabled) {
                         DNS_REMOTE_TAG
                     } else {
                         resolverForRoute(dns, buildJsonObject {})
@@ -170,6 +177,13 @@ class RuntimeConfigAssembler(
             },
         )
     }
+
+    private fun Settings.localGuardDnsCaptureEnabled(mode: LocalGuardMode): Boolean =
+        expert.systemDnsProtectionEnabled ||
+            (
+                mode != LocalGuardMode.DNS &&
+                    dns.dnsRuleSetFilteringEnabled()
+            )
 
     internal fun assembleTorOnly(
         settings: Settings,
@@ -1541,7 +1555,7 @@ class RuntimeConfigAssembler(
         extraServers: List<JsonObject> = emptyList(),
         finalTag: String = DNS_REMOTE_TAG,
         includeRemote: Boolean = true,
-        remoteDetourTag: String = "proxy",
+        remoteDetourTag: String? = "proxy",
     ): JsonObject =
         buildJsonObject {
             put(
@@ -1561,7 +1575,7 @@ class RuntimeConfigAssembler(
                             foxholeRemoteDnsServer(
                                 dnsSettings = dnsSettings,
                                 privateDnsState = privateDnsState,
-                                detourTag = remoteDetourTag.takeIf { dnsSettings.dnsThroughVpn },
+                                detourTag = remoteDetourTag?.takeIf { dnsSettings.dnsThroughVpn },
                             ),
                         )
                     }
@@ -1785,6 +1799,14 @@ class RuntimeConfigAssembler(
                 put("action", "hijack-dns")
             },
         )
+
+    private fun blockPrivateDnsValidationRule(): JsonObject =
+        buildJsonObject {
+            put("network", "tcp")
+            put("port", 853)
+            put("action", "route")
+            put("outbound", "block")
+        }
 
     private fun bypassLanRule(): JsonObject =
         buildJsonObject {

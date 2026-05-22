@@ -515,6 +515,29 @@ internal fun HomeStatusBadge(
 }
 
 @Composable
+internal fun HomeTopStatusLoadingBlock(
+    accentColor: Color,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.spacedBy(9.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        HomeAnalysisSignal(
+            tint = accentColor,
+            modifier = Modifier.offset(x = HomeConnectingStatusSignalOffset),
+        )
+        FoxholeSkeletonBlock(
+            modifier =
+                Modifier
+                    .width(118.dp)
+                    .height(18.dp),
+        )
+    }
+}
+
+@Composable
 private fun SmartConnectionBadge(color: Color) {
     Surface(
         modifier = Modifier.offset(y = (-3).dp),
@@ -1264,7 +1287,7 @@ private fun HomeTorConnectedTable(
     onRenewTorIp: () -> Unit,
 ) {
     val durationText = rememberTorConnectionDurationText(state) ?: "-"
-    val torIpPresentation = state.torIpPresentation(loading = loading)
+    val torIpPresentation = resolveHomeTorIpPresentation(state = state, loading = loading)
     val selectedApps = remember(state.installedApps, state.settings.privacyRoute.selectedPackages) {
         resolveSelectedApps(
             installedApps = state.installedApps,
@@ -1351,7 +1374,7 @@ private fun HomeTorConnectedTable(
     }
 }
 
-private data class HomeTorIpPresentation(
+internal data class HomeTorIpPresentation(
     val ipText: String,
     val countryText: String,
     val cityText: String,
@@ -1359,8 +1382,11 @@ private data class HomeTorIpPresentation(
     val hasIp: Boolean,
 )
 
-private fun HomeRouteUiState.torIpPresentation(loading: Boolean): HomeTorIpPresentation {
-    val info = visibleTorIpInfo()
+internal fun resolveHomeTorIpPresentation(
+    state: HomeRouteUiState,
+    loading: Boolean,
+): HomeTorIpPresentation {
+    val info = state.visibleTorIpInfo()
     val ipText = info?.let(::primaryVisibleIp) ?: "-"
     val countryText =
         info?.let { ipInfo ->
@@ -1371,7 +1397,7 @@ private fun HomeRouteUiState.torIpPresentation(loading: Boolean): HomeTorIpPrese
         ipText = ipText,
         countryText = countryText,
         cityText = info?.city?.takeIf(String::isNotBlank) ?: "-",
-        loading = loading || (info == null && connection.state in ACTIVE_CONNECTION_STATES),
+        loading = info == null && (loading || state.connection.state in ACTIVE_CONNECTION_STATES),
         hasIp = ipText != "-",
     )
 }
@@ -1384,6 +1410,7 @@ private fun HomeRouteUiState.visibleTorIpInfo(): IpInfo? {
         !torRouteVisible() -> null
         torOperation.active && info == torIpInfo -> info
         info.fetchedAt >= requiredFetchedAt -> info
+        connection.state in ACTIVE_CONNECTION_STATES -> info
         else -> null
     }
 }

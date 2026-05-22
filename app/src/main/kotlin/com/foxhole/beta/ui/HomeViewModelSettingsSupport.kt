@@ -570,6 +570,15 @@ internal fun HomeViewModel.onPrivacyRouteModeSelectedInternal(value: PrivacyRout
             )
         return
     }
+    if (value == PrivacyRouteMode.OFF && isTorOnlyRuntimeActive(container.connectionController.snapshot.value)) {
+        viewModelScope.launch {
+            clearTorOperation()
+            torIpInfoMutable.value = null
+            container.settingsRepository.updatePrivacyRouteMode(value)
+            container.connectionController.disconnect(suppressLocalGuard = false)
+        }
+        return
+    }
     val privacyRoute = container.settingsRepository.settings.value.privacyRoute
     val routeScopeReady =
         when (privacyRoute.scope) {
@@ -582,7 +591,7 @@ internal fun HomeViewModel.onPrivacyRouteModeSelectedInternal(value: PrivacyRout
         clearTorOperation()
         torIpInfoMutable.value = null
     }
-    updateRuntimeSettingAndMaybeReload {
+    updateRuntimeSettingAndMaybeReconnect {
         container.settingsRepository.updatePrivacyRouteMode(value)
         val settings = container.settingsRepository.settings.value
         if (value == PrivacyRouteMode.TOR_OVER_VPN && settings.privacyRoute.scope == PrivacyRouteScope.ALL_APPS) {

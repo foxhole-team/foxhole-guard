@@ -737,25 +737,16 @@ internal fun HomeViewModel.refreshSmartProfileMetricsInternal(profileId: Long) {
                     container.connectionController.snapshot.value.profileId == profileId
                 val profile = container.profileRepository.getProfile(profileId) ?: error("profile not found")
                 val networkFingerprint = currentNetworkFingerprintForSmartRules()
-                val candidates = fullScanAutoConnectCandidates(profileId, profile)
+                val candidates =
+                    smartProfileMetricsAnalysisCandidates(
+                        fullScanAutoConnectCandidates(profileId, profile),
+                    )
                 require(canStartAutoConnect(candidates)) {
                     getApplication<Application>().getString(R.string.auto_connect_requires_supported_profile)
                 }
                 val enabledProtocolSetHash =
                     smartStartEnabledProtocolSetHash(candidates.map(AutoConnectProbeCandidate::optionId))
                 selectedOptionId = resolveDashboardLatencyOptionId(profile)
-                if (initiallyActive) {
-                    protocolMetricsRestoreOnCancel = false
-                    refreshSmartProfileMetricsPassive(
-                        profileId = profileId,
-                        profile = profile,
-                        candidates = candidates,
-                        networkFingerprint = networkFingerprint,
-                        selectedOptionId = selectedOptionId,
-                    )
-                    restoredConnection = true
-                    return@launch
-                }
                 protocolMetricsRefreshingOptionIdByProfileIdMutable.value =
                     protocolMetricsRefreshingOptionIdByProfileIdMutable.value +
                     (profileId to candidates.first().optionId)
@@ -902,99 +893,9 @@ internal fun HomeViewModel.refreshSmartProfileMetricsInternal(profileId: Long) {
         }
 }
 
-private suspend fun HomeViewModel.refreshSmartProfileMetricsPassive(
-    profileId: Long,
-    profile: Profile,
-    candidates: List<AutoConnectProbeCandidate>,
-    networkFingerprint: NetworkFingerprint?,
-    selectedOptionId: String?,
-) {
-    val activeOptionId =
-        selectedOptionId
-            ?: profile.selectedProtocolOptionId?.takeIf(String::isNotBlank)
-            ?: candidates.first().optionId
-    val activeCandidate = candidates.firstOrNull { candidate -> candidate.optionId == activeOptionId } ?: candidates.first()
-    protocolMetricsRefreshingOptionIdByProfileIdMutable.value =
-        protocolMetricsRefreshingOptionIdByProfileIdMutable.value + (profileId to activeCandidate.optionId)
-    protocolMetricsRefreshingProfileIdsMutable.value =
-        protocolMetricsRefreshingProfileIdsMutable.value + profileId
-    setDashboardConnectionMetricsLoading(false)
-    container.diagnosticsLogger.recordStructured(
-        "auto-connect",
-        "manual metrics refresh passive: active vpn preserved",
-        "profile_id=$profileId",
-        "option=${activeCandidate.optionId}",
-        "protocol=${activeCandidate.protocolHint.name.lowercase()}",
-    )
-    val latencyResult =
-        runCatchingUnlessCancelled {
-            withTimeoutOrNull(HomeViewModel.CONNECTED_LATENCY_TOTAL_TIMEOUT_MS) {
-                container.connectionController.measureCurrentConnectionLatency(
-                    timeoutMs = HomeViewModel.CONNECTED_LATENCY_TIMEOUT_MS,
-                )
-            } ?: error("dashboard latency timed out")
-        }
-    latencyResult.onSuccess { latencyMs ->
-        cacheProtocolLatency(
-            profileId = profileId,
-            optionId = activeCandidate.optionId,
-            latencyMs = latencyMs,
-        )
-        recordConnectedProtocolSmartStartMemory(
-            profile = profile,
-            optionId = activeCandidate.optionId,
-            protocolHint = activeCandidate.protocolHint,
-            latencyMs = latencyMs,
-            reasonCode = null,
-            countTowardOutcomeHistory = true,
-        )
-    }.onFailure { error ->
-        markProtocolLatencyUnavailable(
-            profileId = profileId,
-            optionId = activeCandidate.optionId,
-        )
-        recordConnectedProtocolSmartStartMemory(
-            profile = profile,
-            optionId = activeCandidate.optionId,
-            protocolHint = activeCandidate.protocolHint,
-            latencyMs = null,
-            reasonCode = AutoConnectReasonCode.LATENCY_ENDPOINT_BLOCKED,
-            countTowardOutcomeHistory = true,
-        )
-        container.diagnosticsLogger.record("latency", "passive metrics latency unavailable: ${error.message.orEmpty()}")
-    }
-    measureAndCacheProtocolServerPing(
-        profileId = profileId,
-        optionId = activeCandidate.optionId,
-        protocolHint = activeCandidate.protocolHint,
-        networkFingerprint = networkFingerprint?.key,
-    )
-    candidates
-        .asSequence()
-        .filterNot { candidate -> candidate.optionId == activeCandidate.optionId }
-        .forEach { candidate ->
-            protocolMetricsRefreshingOptionIdByProfileIdMutable.value =
-                protocolMetricsRefreshingOptionIdByProfileIdMutable.value + (profileId to candidate.optionId)
-            measureAndCacheProtocolServerPing(
-                profileId = profileId,
-                optionId = candidate.optionId,
-                protocolHint = candidate.protocolHint,
-                networkFingerprint = networkFingerprint?.key,
-            )
-        }
-    recommendedProtocolMutable.value =
-        recommendedProtocolMutable.value?.takeUnless { recommendation -> recommendation.profileId == profileId }
-    emitSuccess(getApplication<Application>().getString(R.string.protocol_metrics_refreshed))
-}
-
 internal fun HomeViewModel.cancelSmartProfileMetricsRefreshInternal(restoreConnection: Boolean) {
-    val passiveConnectedRefresh =
-        protocolMetricsRefreshJob != null &&
-            !autoConnectUiStateMutable.value.running &&
-            container.connectionController.snapshot.value.state in HomeViewModel.ACTIVE_CONNECTION_STATES
-    val shouldRestoreConnection = restoreConnection && !passiveConnectedRefresh
-    protocolMetricsRestoreOnCancel = shouldRestoreConnection
-    if (!shouldRestoreConnection) {
+    protocolMetricsRestoreOnCancel = restoreConnection
+    if (!restoreConnection) {
         protocolMetricsRefreshingProfileIdsMutable.value = emptySet()
         protocolMetricsRefreshingOptionIdByProfileIdMutable.value = emptyMap()
         setDashboardConnectionMetricsLoading(false)
@@ -1830,12 +1731,18 @@ internal fun HomeViewModel.clearProtocolLatencyStateInternal(
         }
 }
 
-@Suppress("LongMethod", "ReturnCount")
+@Suppress("CyclomaticComplexMethod", "LongMethod", "ReturnCount")
 internal fun HomeViewModel.scheduleActiveProfileLatencyRefreshInternal(
     showLoading: Boolean = true,
     refreshImmediately: Boolean = false,
     clearSelectedMetrics: Boolean = false,
 ) {
+    if (!container.connectionController.snapshot.value.shouldRefreshDashboardConnectionMetrics()) {
+        profileLatencyRefreshJob?.cancel()
+        profileLatencyRefreshJob = null
+        setDashboardConnectionMetricsLoading(false)
+        return
+    }
     val activeProfile = uiState.value.activeProfile ?: return
     val selectedOptionId =
         resolveDashboardLatencyOptionId(

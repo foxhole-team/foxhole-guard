@@ -374,21 +374,32 @@ fun ProfilesScreen(
                         )
                     }
                 }
+            val profileStartSwipeAction =
+                when {
+                    showInlineRefreshAction -> {
+                        FoxholeSwipeAction(
+                            icon = Icons.Outlined.Refresh,
+                            contentDescription = stringResource(R.string.refresh),
+                            tint = MaterialTheme.colorScheme.primary,
+                            onClick = { onRefreshProfile(profile.id) },
+                        )
+                    }
+                    !isSelected && !exportMode -> {
+                        FoxholeSwipeAction(
+                            icon = Icons.Outlined.Check,
+                            contentDescription = stringResource(R.string.use_profile),
+                            tint = FoxholePositiveAccent,
+                            onClick = { onSetActiveProfile(profile.id) },
+                        )
+                    }
+                    else -> null
+                }
             FoxholeSwipeActions(
                 key = profileSwipeKey,
                 actions = profileSwipeActions,
                 revealed = revealedProfileSwipeKey == profileSwipeKey,
                 onRevealChange = { revealed -> revealedProfileSwipeKey = profileSwipeKey.takeIf { revealed } },
-                onSwipeRight =
-                    when {
-                        showInlineRefreshAction -> {
-                            { onRefreshProfile(profile.id) }
-                        }
-                        !isSelected && !exportMode -> {
-                            { onSetActiveProfile(profile.id) }
-                        }
-                        else -> null
-                    },
+                startAction = profileStartSwipeAction,
             ) {
                 FoxholeCard(
                     onClick = {

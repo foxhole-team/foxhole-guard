@@ -473,9 +473,13 @@ private fun HomeRouteUiState.resolveDashboardProfileLatencyState(
 }
 
 private fun HomeRouteUiState.shouldShowDashboardProfileLatency(): Boolean =
-    reconnectInProgress ||
-        connection.state in DASHBOARD_LATENCY_ACTIVE_STATES ||
-        autoConnect.running
+    if (connection.profileId == FoxholeVpnService.LOCAL_GUARD_PROFILE_ID && !autoConnect.running) {
+        false
+    } else {
+        reconnectInProgress ||
+            connection.state in DASHBOARD_LATENCY_ACTIVE_STATES ||
+            autoConnect.running
+    }
 
 private fun HomeRouteUiState.activeConnectedAutoConnectOptionId(): String? =
     autoConnect.currentOptionId?.takeIf { optionId ->
@@ -553,23 +557,27 @@ private fun HomeRouteUiState.shouldShowHomeNetworkIpInfoLoading(
     deviceInternetAvailable: Boolean?,
 ): Boolean {
     val manualRefreshNeedsSkeleton = ipInfoLoading
-    val missingIpNeedsSkeleton =
-        dashboardIpInfo == null &&
-            (
-                reconnectInProgress ||
-                    (routeTransitionRunning && hasDashboardRouteProfile()) ||
-                    shouldShowVpnTransitionLoading(routeTransitionRunning) ||
-                    shouldShowDashboardNetworkLoading(
-                        visibleIpInfo = dashboardIpInfo,
-                        explicitLoading = ipInfoLoading,
-                        connectionState = connection.state,
-                        autoConnectRunning = routeTransitionRunning,
-                        deviceInternetAvailable = deviceInternetAvailable,
-                        appLoaded = profilesLoaded,
-                    )
-                )
+    val missingIpCanShowSkeleton =
+        shouldShowLocalGuardNetworkLoading(deviceInternetAvailable) ||
+            reconnectInProgress ||
+            (routeTransitionRunning && hasDashboardRouteProfile()) ||
+            shouldShowVpnTransitionLoading(routeTransitionRunning) ||
+            shouldShowDashboardNetworkLoading(
+                visibleIpInfo = dashboardIpInfo,
+                explicitLoading = ipInfoLoading,
+                connectionState = connection.state,
+                autoConnectRunning = routeTransitionRunning,
+                deviceInternetAvailable = deviceInternetAvailable,
+                appLoaded = profilesLoaded,
+            )
+    val missingIpNeedsSkeleton = dashboardIpInfo == null && missingIpCanShowSkeleton
     return manualRefreshNeedsSkeleton || missingIpNeedsSkeleton
 }
+
+private fun HomeRouteUiState.shouldShowLocalGuardNetworkLoading(deviceInternetAvailable: Boolean?): Boolean =
+    connection.profileId == FoxholeVpnService.LOCAL_GUARD_PROFILE_ID &&
+        settings.localGuardModeOrNull() != null &&
+        deviceInternetAvailable != false
 
 private fun HomeRouteUiState.shouldShowHomeNetworkConnectionDetailsLoading(
     showConnectionStatus: Boolean,
@@ -813,6 +821,14 @@ internal fun homeTopStatusState(state: HomeRouteUiState): ConnectionState =
         else -> state.connection.state
     }
 
+internal fun shouldShowHomeTopStatusLoading(state: HomeRouteUiState): Boolean =
+    !state.profilesLoaded ||
+        (
+            state.settings.localGuardModeOrNull() != null &&
+                state.connection.state == ConnectionState.IDLE &&
+                state.connection.profileId != FoxholeVpnService.LOCAL_GUARD_PROFILE_ID
+            )
+
 internal fun resolveDashboardLatencyOptionId(
     activeProfile: Profile?,
     connection: ConnectionSnapshot? = null,
@@ -969,6 +985,9 @@ internal fun shouldRenderDashboardConnectionDetails(
 }
 
 internal fun resolveDashboardLatencyPresentation(state: HomeRouteUiState): HomeDashboardLatencyPresentation {
+    if (state.connection.profileId == FoxholeVpnService.LOCAL_GUARD_PROFILE_ID && !state.autoConnect.running) {
+        return HomeDashboardLatencyPresentation()
+    }
     if (state.autoConnect.running) {
         return autoConnectDashboardLatencyPresentation(state.autoConnect)
     }

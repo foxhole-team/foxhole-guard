@@ -305,6 +305,7 @@ private fun AppChangesJournalEnableDialog(
 }
 
 @Composable
+@Suppress("LongMethod")
 private fun DiagnosticsScreenContent(
     state: DiagnosticsRouteUiState,
     snackbarHostState: SnackbarHostState,

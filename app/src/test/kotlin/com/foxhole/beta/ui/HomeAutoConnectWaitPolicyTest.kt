@@ -418,6 +418,22 @@ class HomeAutoConnectWaitPolicyTest {
         )
     }
 
+    @Test
+    fun `manual smart profile metrics analysis keeps every protocol candidate`() {
+        val candidates =
+            listOf(
+                candidate("vless"),
+                candidate("trojan"),
+                candidate("wireguard"),
+                candidate("vless"),
+            )
+
+        assertEquals(
+            listOf("vless", "trojan", "wireguard"),
+            smartProfileMetricsAnalysisCandidates(candidates).map(AutoConnectProbeCandidate::optionId),
+        )
+    }
+
     private fun candidate(optionId: String): AutoConnectProbeCandidate =
         AutoConnectProbeCandidate(
             profileId = 1L,

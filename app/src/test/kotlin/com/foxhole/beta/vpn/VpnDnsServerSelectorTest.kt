@@ -27,7 +27,7 @@ class VpnDnsServerSelectorTest {
     }
 
     @Test
-    fun `local guard advertises local tun dns before remote resolver`() {
+    fun `local guard advertises remote resolver when DNS is captured`() {
         val selected =
             VpnDnsServerSelector.advertisedDnsServerAddresses(
                 configJson =
@@ -43,13 +43,44 @@ class VpnDnsServerSelectorTest {
                           { "tag": "dns-remote", "type": "udp", "server": "94.140.14.14" }
                         ]
                       },
-                      "route": { "final": "direct" }
+                      "route": {
+                        "rules": [
+                          { "action": "hijack-dns", "port": 53 }
+                        ],
+                        "final": "direct"
+                      }
                     }
                     """.trimIndent(),
                 fallbackServerAddress = "172.19.0.2",
             )
 
-        assertEquals(listOf("172.19.0.2"), selected)
+        assertEquals(listOf("94.140.14.14"), selected)
+    }
+
+    @Test
+    fun `local guard advertises remote dns when DNS is not captured`() {
+        val selected =
+            VpnDnsServerSelector.advertisedDnsServerAddresses(
+                configJson =
+                    """
+                    {
+                      "outbounds": [
+                        { "tag": "direct", "type": "direct" },
+                        { "tag": "block", "type": "block" }
+                      ],
+                      "dns": {
+                        "servers": [
+                          { "tag": "dns-local", "type": "local" },
+                          { "tag": "dns-remote", "type": "udp", "server": "1.1.1.1" }
+                        ]
+                      },
+                      "route": { "rules": [], "final": "direct" }
+                    }
+                    """.trimIndent(),
+                fallbackServerAddress = "172.19.0.2",
+            )
+
+        assertEquals(listOf("1.1.1.1"), selected)
     }
 
     @Test

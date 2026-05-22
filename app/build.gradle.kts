@@ -96,6 +96,14 @@ val releaseSigningStoreType = releaseSigningValue("storeType", "FOXHOLE_RELEASE_
 val bundledLibbox = file("libs/libbox.aar")
 val bundledLegacyLibbox = file("libs/libbox-legacy.aar")
 val bundledLibboxVersionStamp = file("libs/libbox.version")
+val bundledTorVersion =
+    file("src/main/assets/tor/arm64-v8a/.version")
+        .takeIf(File::isFile)
+        ?.readText()
+        ?.trim()
+        ?.substringAfterLast('-')
+        ?.takeIf(String::isNotBlank)
+        ?: "unknown"
 val buildLibboxScript = rootProject.file("scripts/build-libbox.sh")
 val releaseSigningReady =
     !releaseSigningStoreFilePath.isNullOrBlank() &&
@@ -221,6 +229,7 @@ android {
         buildConfigField("String", "DEFAULT_IP_INFO_ENDPOINT", "\"https://ipwho.is/\"")
         buildConfigField("String", "DEFAULT_SUPPORT_BOT_HANDLE", "\"@foxhole_repo_support_bot\"")
         buildConfigField("String", "LIBBOX_SOURCE_VERSION", "\"1.13.11\"")
+        buildConfigField("String", "TOR_BUNDLE_VERSION", "\"$bundledTorVersion\"")
     }
 
     ksp {

@@ -1,3 +1,5 @@
+@file:Suppress("ImportOrdering")
+
 package com.foxhole.beta.core.settings
 
 import com.foxhole.beta.BuildConfig
@@ -787,8 +789,20 @@ class SettingsRepositoryTest {
             )
         val settings = Settings(smartProfilePreferences = listOf(preference))
 
-        assertEquals(setOf("vless"), preference.rememberedSmartProfileLatencyUnavailableOptionIds(networkFingerprint = null, now = now))
-        assertEquals(mapOf("trojan" to 170L), preference.rememberedSmartStartLatencyByOptionId(networkFingerprint = null, now = now))
+        assertEquals(
+            setOf("vless"),
+            preference.rememberedSmartProfileLatencyUnavailableOptionIds(
+                networkFingerprint = null,
+                now = now,
+            ),
+        )
+        assertEquals(
+            mapOf("trojan" to 170L),
+            preference.rememberedSmartStartLatencyByOptionId(
+                networkFingerprint = null,
+                now = now,
+            ),
+        )
         assertEquals(
             mapOf(7L to setOf("vless")),
             settings.rememberedSmartProfileLatencyUnavailableByProfileId(networkFingerprint = null, now = now),

@@ -132,12 +132,7 @@ private fun Map<String, Long>.sanitizedDnsDomainCounts(): Map<String, Long> =
         .asSequence()
         .mapNotNull { (domain, count) ->
             val normalized = domain.trim().trimEnd('.').lowercase(Locale.US)
-            if (
-                count > 0L &&
-                normalized.isNotBlank() &&
-                normalized.length <= MAX_DNS_DOMAIN_LENGTH &&
-                normalized.all { char -> char.isLetterOrDigit() || char == '-' || char == '_' || char == '.' }
-            ) {
+            if (isValidDnsDomainCount(normalized, count)) {
                 normalized to count
             } else {
                 null
@@ -145,5 +140,14 @@ private fun Map<String, Long>.sanitizedDnsDomainCounts(): Map<String, Long> =
         }
         .groupBy({ it.first }, { it.second })
         .mapValues { (_, counts) -> counts.sum() }
+
+private fun isValidDnsDomainCount(
+    normalizedDomain: String,
+    count: Long,
+): Boolean =
+    count > 0L &&
+        normalizedDomain.isNotBlank() &&
+        normalizedDomain.length <= MAX_DNS_DOMAIN_LENGTH &&
+        normalizedDomain.all { char -> char.isLetterOrDigit() || char == '-' || char == '_' || char == '.' }
 
 private const val MAX_DNS_DOMAIN_LENGTH = 253

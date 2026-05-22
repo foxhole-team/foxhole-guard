@@ -1,7 +1,10 @@
 package com.foxhole.beta.ui
 
+import com.foxhole.beta.core.model.ConnectionSnapshot
 import com.foxhole.beta.core.model.ConnectionState
+import com.foxhole.beta.core.model.TrafficMode
 import com.foxhole.beta.core.network.IpInfoFetchMode
+import com.foxhole.beta.vpn.FoxholeVpnService
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -55,12 +58,18 @@ class HomeIpRefreshPolicyTest {
 
     @Test
     fun `post connect refresh retries while runtime proxy settles`() {
-        assertEquals(HomeViewModel.CONNECTED_IP_REFRESH_ATTEMPTS, ipInfoRefreshAttemptsForReason(IpInfoRefreshReason.POST_CONNECT))
+        assertEquals(
+            HomeViewModel.CONNECTED_IP_REFRESH_ATTEMPTS,
+            ipInfoRefreshAttemptsForReason(IpInfoRefreshReason.POST_CONNECT),
+        )
         assertEquals(
             HomeViewModel.CONNECTED_IP_REFRESH_RETRY_DELAY_MS,
             ipInfoRefreshRetryDelayMsForReason(IpInfoRefreshReason.POST_CONNECT),
         )
-        assertEquals(HomeViewModel.TOR_IP_REFRESH_ATTEMPTS, ipInfoRefreshAttemptsForReason(IpInfoRefreshReason.TOR_ROUTE))
+        assertEquals(
+            HomeViewModel.TOR_IP_REFRESH_ATTEMPTS,
+            ipInfoRefreshAttemptsForReason(IpInfoRefreshReason.TOR_ROUTE),
+        )
         assertEquals(1, ipInfoRefreshAttemptsForReason(IpInfoRefreshReason.MANUAL))
     }
 
@@ -83,5 +92,34 @@ class HomeIpRefreshPolicyTest {
         assertEquals(IpInfoFetchMode.ENTRY_QUICK, ipInfoFetchModeForRefreshReason(IpInfoRefreshReason.FOREGROUND))
         assertEquals(IpInfoFetchMode.ENTRY_QUICK, ipInfoFetchModeForRefreshReason(IpInfoRefreshReason.RESTORED_VPN))
         assertEquals(IpInfoFetchMode.ENTRY_QUICK, ipInfoFetchModeForRefreshReason(IpInfoRefreshReason.TOR_ROUTE))
+    }
+
+    @Test
+    fun `manual network refresh failure is silent for local guard firewall`() {
+        assertFalse(
+            ConnectionSnapshot(
+                state = ConnectionState.CONNECTED,
+                trafficMode = TrafficMode.TUNNEL,
+                profileId = FoxholeVpnService.LOCAL_GUARD_PROFILE_ID,
+            ).shouldReportManualDashboardIpRefreshFailures(),
+        )
+        assertTrue(
+            ConnectionSnapshot(
+                state = ConnectionState.CONNECTED,
+                trafficMode = TrafficMode.TUNNEL,
+                profileId = 7L,
+            ).shouldReportManualDashboardIpRefreshFailures(),
+        )
+    }
+
+    @Test
+    fun `manual network refresh failure is silent for standalone tor runtime`() {
+        assertFalse(
+            ConnectionSnapshot(
+                state = ConnectionState.CONNECTED,
+                trafficMode = TrafficMode.TUNNEL,
+                profileId = FoxholeVpnService.TOR_ONLY_PROFILE_ID,
+            ).shouldReportManualDashboardIpRefreshFailures(),
+        )
     }
 }

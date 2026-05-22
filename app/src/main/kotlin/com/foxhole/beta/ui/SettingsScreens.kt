@@ -148,19 +148,38 @@ fun SettingsHomeScreen(
     val repositoryOpenFailed = stringResource(R.string.open_repository_failed)
     val supportChannelOpenFailed = stringResource(R.string.support_channel_open_failed)
     val expertVisible = state.settings.ui.showExpertSettings
+    var aboutDialogVisible by rememberSaveable { mutableStateOf(false) }
     var expertUnlockClickCount by rememberSaveable(expertVisible) { mutableIntStateOf(0) }
     var expertUnlockConfirmVisible by rememberSaveable { mutableStateOf(false) }
-    val onRepositoryClick = {
-        if (!openFoxholeRepository(context)) {
-            scope.launch {
-                snackbarHostState.showBanner(
-                    repositoryOpenFailed,
-                    FoxholeBannerTone.ERROR,
-                )
-            }
+    val showRepositoryOpenError: () -> Unit = {
+        scope.launch {
+            snackbarHostState.showBanner(
+                repositoryOpenFailed,
+                FoxholeBannerTone.ERROR,
+            )
         }
     }
-    val onSupportBotClick = {
+    val onRepositoryClick: () -> Unit = {
+        if (!openFoxholeRepository(context)) {
+            showRepositoryOpenError()
+        }
+    }
+    val onSingBoxClick: () -> Unit = {
+        if (!openSingBoxRepository(context)) {
+            showRepositoryOpenError()
+        }
+    }
+    val onTorClick: () -> Unit = {
+        if (!openTorRepository(context)) {
+            showRepositoryOpenError()
+        }
+    }
+    val onAdGuardDnsClick: () -> Unit = {
+        if (!openAdGuardDnsFilterRepository(context)) {
+            showRepositoryOpenError()
+        }
+    }
+    val onSupportBotClick: () -> Unit = {
         if (!openSupportChannel(context)) {
             scope.launch {
                 snackbarHostState.showBanner(
@@ -195,15 +214,22 @@ fun SettingsHomeScreen(
             onOpenRoutingSites = onOpenRoutingSites,
             onOpenSmartStart = onOpenSmartStart,
             onOpenApplication = onOpenApplication,
+            onOpenAbout = { aboutDialogVisible = true },
             onOpenExpert = onOpenExpert,
             onOpenDiagnostics = onOpenDiagnostics,
             onOpenStatistics = onOpenStatistics,
         )
-        settingsHomeFooterItem(
+    }
+    if (aboutDialogVisible) {
+        AboutSettingsDialog(
             appVersion = state.appVersion,
             onRepositoryClick = onRepositoryClick,
             onSupportBotClick = onSupportBotClick,
-            onClick = onVersionClick,
+            onSingBoxClick = onSingBoxClick,
+            onTorClick = onTorClick,
+            onAdGuardDnsClick = onAdGuardDnsClick,
+            onVersionClick = onVersionClick,
+            onDismiss = { aboutDialogVisible = false },
         )
     }
     if (expertUnlockConfirmVisible) {
@@ -217,6 +243,7 @@ fun SettingsHomeScreen(
             onDismiss = { expertUnlockConfirmVisible = false },
             onConfirm = {
                 expertUnlockConfirmVisible = false
+                aboutDialogVisible = false
                 onUnlockExpertSettings()
             },
         )
@@ -234,6 +261,7 @@ private fun LazyListScope.settingsHomeNavigationItems(
     onOpenRoutingSites: () -> Unit,
     onOpenSmartStart: () -> Unit,
     onOpenApplication: () -> Unit,
+    onOpenAbout: () -> Unit,
     onOpenExpert: () -> Unit,
     onOpenDiagnostics: () -> Unit,
     onOpenStatistics: () -> Unit,
@@ -315,24 +343,16 @@ private fun LazyListScope.settingsHomeNavigationItems(
                 summary = stringResource(R.string.settings_home_statistics_summary),
                 onClick = onOpenStatistics,
             )
+            SettingsGroupDivider()
+            SettingsGroupedNavigationRow(
+                modifier = Modifier.testTag("settings_about_action"),
+                icon = Icons.Outlined.Info,
+                title = stringResource(R.string.about_settings_title),
+                summary = stringResource(R.string.about_settings_summary),
+                summaryMaxLines = Int.MAX_VALUE,
+                onClick = onOpenAbout,
+            )
         }
-    }
-}
-
-private fun LazyListScope.settingsHomeFooterItem(
-    appVersion: String,
-    onRepositoryClick: () -> Unit,
-    onSupportBotClick: () -> Unit,
-    onClick: () -> Unit,
-) {
-    item {
-        SettingsFooterVersionText(
-            text = stringResource(R.string.settings_footer_version, appVersion),
-            summary = stringResource(R.string.settings_home_version_summary_hidden),
-            onRepositoryClick = onRepositoryClick,
-            onSupportBotClick = onSupportBotClick,
-            onClick = onClick,
-        )
     }
 }
 

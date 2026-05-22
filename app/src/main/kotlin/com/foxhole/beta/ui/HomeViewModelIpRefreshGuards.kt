@@ -10,6 +10,15 @@ internal fun ConnectionSnapshot.shouldPublishDeviceIpInfoFromDashboardRefresh():
         trafficMode != TrafficMode.TUNNEL ||
         profileId == FoxholeVpnService.LOCAL_GUARD_PROFILE_ID
 
+internal fun ConnectionSnapshot.shouldRefreshDashboardConnectionMetrics(): Boolean =
+    state in HomeViewModel.ACTIVE_CONNECTION_STATES &&
+        profileId != FoxholeVpnService.LOCAL_GUARD_PROFILE_ID &&
+        profileId != FoxholeVpnService.TOR_ONLY_PROFILE_ID
+
+internal fun ConnectionSnapshot.shouldReportManualDashboardIpRefreshFailures(): Boolean =
+    profileId != FoxholeVpnService.LOCAL_GUARD_PROFILE_ID &&
+        profileId != FoxholeVpnService.TOR_ONLY_PROFILE_ID
+
 internal fun shouldPublishDashboardIpRefresh(
     startedTarget: IpInfoRefreshTarget,
     currentTarget: IpInfoRefreshTarget,

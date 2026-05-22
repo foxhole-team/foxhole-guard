@@ -12,15 +12,14 @@ class DnsFilterUpdateRepository(
 ) {
     suspend fun refreshNow(requireAutoEnabled: Boolean): DnsFilterUpdateResult {
         val dnsSettings = settingsRepository.current().dns
-        if (!dnsSettings.dnsRuleSetFilteringEnabled()) {
-            diagnosticsLogger.record("dns", "filter update skipped: DNS rule-set filtering disabled")
-            return DnsFilterUpdateResult(status = DnsFilterUpdateStatus.SKIPPED, reason = "filtering disabled")
-        }
-        if (requireAutoEnabled && !dnsSettings.autoUpdateFilters) {
-            diagnosticsLogger.record("dns", "filter update skipped: automatic updates disabled")
-            return DnsFilterUpdateResult(status = DnsFilterUpdateStatus.SKIPPED, reason = "automatic updates disabled")
-        }
-        val result = client.update(dnsSettings.dnsFilterUpdateUrl, store)
+        val result =
+            when {
+                !dnsSettings.dnsRuleSetFilteringEnabled() ->
+                    DnsFilterUpdateResult(status = DnsFilterUpdateStatus.SKIPPED, reason = "filtering disabled")
+                requireAutoEnabled && !dnsSettings.autoUpdateFilters ->
+                    DnsFilterUpdateResult(status = DnsFilterUpdateStatus.SKIPPED, reason = "automatic updates disabled")
+                else -> client.update(dnsSettings.dnsFilterUpdateUrl, store)
+            }
         when (result.status) {
             DnsFilterUpdateStatus.UPDATED -> {
                 settingsRepository.markDnsFiltersUpdated()

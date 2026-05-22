@@ -2,7 +2,9 @@ package com.foxhole.beta.ui
 
 import com.foxhole.beta.core.model.ConnectionSnapshot
 import com.foxhole.beta.core.model.ConnectionState
+import com.foxhole.beta.core.model.ExpertSettings
 import com.foxhole.beta.core.model.IpInfo
+import com.foxhole.beta.core.model.Settings
 import com.foxhole.beta.core.model.TrafficMode
 import com.foxhole.beta.vpn.FoxholeVpnService
 import org.junit.Assert.assertEquals
@@ -182,6 +184,48 @@ class HomeIpLoadingPolicyTest {
                 ),
             ),
         )
+    }
+
+    @Test
+    fun `manual refresh skips connection metrics for local guard firewall`() {
+        assertFalse(
+            ConnectionSnapshot(
+                state = ConnectionState.CONNECTED,
+                trafficMode = TrafficMode.TUNNEL,
+                profileId = FoxholeVpnService.LOCAL_GUARD_PROFILE_ID,
+            ).shouldRefreshDashboardConnectionMetrics(),
+        )
+        assertTrue(
+            ConnectionSnapshot(
+                state = ConnectionState.CONNECTED,
+                trafficMode = TrafficMode.TUNNEL,
+                profileId = 7L,
+            ).shouldRefreshDashboardConnectionMetrics(),
+        )
+    }
+
+    @Test
+    fun `local guard firewall shows network skeleton until device ip is refreshed`() {
+        val model =
+            resolveHomeDashboardNetworkModel(
+                state = HomeRouteUiState(
+                    profilesLoaded = true,
+                    settings = Settings(
+                        expert = ExpertSettings(firewallEnabled = true),
+                    ),
+                    connection = ConnectionSnapshot(
+                        state = ConnectionState.CONNECTED,
+                        trafficMode = TrafficMode.TUNNEL,
+                        profileId = FoxholeVpnService.LOCAL_GUARD_PROFILE_ID,
+                    ),
+                ),
+                visibleIpInfo = null,
+                deviceInternetAvailable = true,
+            )
+
+        assertTrue(model.showLoading)
+        assertTrue(model.showIpInfoLoading)
+        assertFalse(model.showConnectionDetailsLoading)
     }
 
     @Test

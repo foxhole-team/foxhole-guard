@@ -194,6 +194,7 @@ fun HomeScreen(
     val autoTone = foxholeSystemAwareAccentColor(fallback = MaterialTheme.colorScheme.primary)
     val torOperationTone = Color(0xFFE89B3C)
     val topStatusState = homeTopStatusState(state)
+    val topStatusLoading = shouldShowHomeTopStatusLoading(state)
     val statusTone =
         if (state.torOperation.active) {
             torOperationTone
@@ -472,7 +473,12 @@ fun HomeScreen(
                                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                                         verticalAlignment = Alignment.CenterVertically,
                                     ) {
-                                        if (state.autoConnect.running || state.protocolMetricsRefreshing) {
+                                        if (topStatusLoading) {
+                                            HomeTopStatusLoadingBlock(
+                                                accentColor = statusTone,
+                                                modifier = Modifier.weight(1f),
+                                            )
+                                        } else if (state.autoConnect.running || state.protocolMetricsRefreshing) {
                                             HomeAutoConnectStatusLine(
                                                 state =
                                                     if (state.autoConnect.running) {

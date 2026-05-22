@@ -1104,12 +1104,10 @@ internal fun FoxholeSaveAction(
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = FoxholePositiveAccent,
             )
             Text(
                 text = label,
                 modifier = Modifier.padding(start = 8.dp),
-                color = MaterialTheme.colorScheme.onSurface,
             )
         }
         return
@@ -1123,7 +1121,6 @@ internal fun FoxholeSaveAction(
         Icon(
             imageVector = icon,
             contentDescription = stringResource(R.string.save),
-            tint = FoxholePositiveAccent,
         )
     }
 }

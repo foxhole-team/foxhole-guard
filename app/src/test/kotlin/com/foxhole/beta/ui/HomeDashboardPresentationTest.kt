@@ -48,6 +48,52 @@ class HomeDashboardPresentationTest {
     }
 
     @Test
+    fun `top status uses skeleton while startup state is still restoring`() {
+        assertTrue(
+            shouldShowHomeTopStatusLoading(
+                HomeRouteUiState(
+                    profilesLoaded = false,
+                    connection = ConnectionSnapshot(state = ConnectionState.IDLE),
+                ),
+            ),
+        )
+        assertFalse(
+            shouldShowHomeTopStatusLoading(
+                HomeRouteUiState(
+                    profilesLoaded = true,
+                    connection = ConnectionSnapshot(state = ConnectionState.IDLE),
+                ),
+            ),
+        )
+    }
+
+    @Test
+    fun `top status uses skeleton while local guard runtime is being restored`() {
+        assertTrue(
+            shouldShowHomeTopStatusLoading(
+                HomeRouteUiState(
+                    profilesLoaded = true,
+                    settings = Settings(expert = ExpertSettings(firewallEnabled = true)),
+                    connection = ConnectionSnapshot(state = ConnectionState.IDLE),
+                ),
+            ),
+        )
+        assertFalse(
+            shouldShowHomeTopStatusLoading(
+                HomeRouteUiState(
+                    profilesLoaded = true,
+                    settings = Settings(expert = ExpertSettings(firewallEnabled = true)),
+                    connection =
+                        ConnectionSnapshot(
+                            state = ConnectionState.CONNECTED,
+                            profileId = FoxholeVpnService.LOCAL_GUARD_PROFILE_ID,
+                        ),
+                ),
+            ),
+        )
+    }
+
+    @Test
     fun `protocol model merges remembered current and running smart start metrics`() {
         val state =
             HomeRouteUiState(
@@ -119,6 +165,38 @@ class HomeDashboardPresentationTest {
         assertEquals(emptySet<String>(), model.downOptionIds)
         assertEquals(emptySet<String>(), model.latencyUnavailableOptionIds)
         assertFalse(model.showSmartStartLatency)
+        assertFalse(model.connectionMetricsLoading)
+    }
+
+    @Test
+    fun `protocol model hides profile latency while local guard firewall is connected`() {
+        val model =
+            resolveHomeDashboardProtocolModel(
+                HomeRouteUiState(
+                    activeProfile = smartProfile(),
+                    connection =
+                        ConnectionSnapshot(
+                            state = ConnectionState.CONNECTED,
+                            profileId = FoxholeVpnService.LOCAL_GUARD_PROFILE_ID,
+                            protocolHint = ProtocolHint.SING_BOX,
+                        ),
+                    selectedProtocolLatencyMs = 220L,
+                    smartStartRememberedLatenciesByOptionId = mapOf("vless" to 120L),
+                    protocolDownOptionIds = setOf("vless"),
+                    protocolLatencyUnavailableOptionIds = setOf("trojan"),
+                    protocolServerPingsByOptionId = mapOf("vless" to 88L),
+                    dashboardConnectionMetricsLoading = true,
+                ),
+            )
+
+        assertEquals(null, model.latencyPresentation.latencyMs)
+        assertFalse(model.latencyPresentation.isDown)
+        assertFalse(model.latencyPresentation.isUnavailable)
+        assertEquals(emptyMap<String, Long>(), model.latenciesByOptionId)
+        assertEquals(emptySet<String>(), model.downOptionIds)
+        assertEquals(emptySet<String>(), model.latencyUnavailableOptionIds)
+        assertFalse(model.showSmartStartLatency)
+        assertFalse(model.connectionDetailsReady)
         assertFalse(model.connectionMetricsLoading)
     }
 
@@ -787,6 +865,39 @@ class HomeDashboardPresentationTest {
         assertTrue(model.showLoading)
         assertTrue(model.showIpInfoLoading)
         assertFalse(model.showConnectionDetailsLoading)
+    }
+
+    @Test
+    fun `tor ip presentation keeps known ip visible while refresh is loading`() {
+        val ipInfo =
+            IpInfo(
+                ip = "185.220.101.12",
+                countryCode = "DE",
+                countryName = "Germany",
+                city = "Berlin",
+                isp = "Tor exit",
+                fetchedAt = 1_000L,
+            )
+        val presentation =
+            resolveHomeTorIpPresentation(
+                state =
+                    HomeRouteUiState(
+                        torIpInfo = ipInfo,
+                        connection =
+                            ConnectionSnapshot(
+                                state = ConnectionState.CONNECTED,
+                                profileId = FoxholeVpnService.TOR_ONLY_PROFILE_ID,
+                                lastChangeAt = 2_000L,
+                            ),
+                    ),
+                loading = true,
+            )
+
+        assertEquals("185.220.101.12", presentation.ipText)
+        assertTrue(presentation.countryText.endsWith("Germany"))
+        assertEquals("Berlin", presentation.cityText)
+        assertTrue(presentation.hasIp)
+        assertFalse(presentation.loading)
     }
 
     @Test

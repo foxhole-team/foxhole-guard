@@ -117,7 +117,10 @@ internal class LibboxDnsRuntimeStatsTracker(
                 }
             runCatching<Unit> { client.connect() }
                 .onFailure { error ->
-                    diagnosticsLogger.record("dns", "runtime stats stream connect failed: ${error.javaClass.simpleName}")
+                    diagnosticsLogger.record(
+                        "dns",
+                        "runtime stats stream connect failed: ${error.javaClass.simpleName}",
+                    )
                     close(error)
                 }
             awaitClose {
@@ -184,7 +187,7 @@ internal data class RuntimeConnectionEndpoint(
 )
 
 private fun Connection.stableRuntimeConnectionId(): String =
-    id.takeIf(String::isNotBlank) ?: "${network}|${source}|${destination}|${createdAt}"
+    id.takeIf(String::isNotBlank) ?: "$network|$source|$destination|$createdAt"
 
 private fun Connection.runtimeTrafficTotals(): RuntimeConnectionTrafficTotals =
     RuntimeConnectionTrafficTotals(
@@ -206,56 +209,55 @@ private fun Connection.toNetworkActivityEvent(
             ?.distinct()
             ?.sorted()
             .orEmpty()
-    if (packageNames.isEmpty()) {
-        return null
-    }
     val destinationEndpoint = destination.orEmpty().toRuntimeEndpoint()
-    val remoteHost = destinationEndpoint.host.takeIf(String::isNotBlank) ?: return null
+    val remoteHost = destinationEndpoint.host.takeIf(String::isNotBlank)
     val bytesTx = currentTotals.bytesTx.deltaFrom(previousTotals?.bytesTx)
     val bytesRx = currentTotals.bytesRx.deltaFrom(previousTotals?.bytesRx)
-    if (bytesTx + bytesRx <= 0L) {
-        return null
+    return if (packageNames.isNotEmpty() && remoteHost != null && bytesTx + bytesRx > 0L) {
+        NetworkActivityEvent(
+            timestampMs = System.currentTimeMillis(),
+            packageNames = packageNames,
+            protocol = network.orEmpty().ifBlank { protocol.orEmpty() }.ifBlank { "?" }.uppercase(Locale.ROOT),
+            remoteHost = remoteHost,
+            remotePort = destinationEndpoint.port,
+            countryCode = null,
+            bytesRx = bytesRx,
+            bytesTx = bytesTx,
+            profileId = context.profileId,
+            sessionId = context.sessionId,
+        )
+    } else {
+        null
     }
-    return NetworkActivityEvent(
-        timestampMs = System.currentTimeMillis(),
-        packageNames = packageNames,
-        protocol = network.orEmpty().ifBlank { protocol.orEmpty() }.ifBlank { "?" }.uppercase(Locale.ROOT),
-        remoteHost = remoteHost,
-        remotePort = destinationEndpoint.port,
-        countryCode = null,
-        bytesRx = bytesRx,
-        bytesTx = bytesTx,
-        profileId = context.profileId,
-        sessionId = context.sessionId,
-    )
 }
 
 internal fun String.toRuntimeEndpoint(): RuntimeConnectionEndpoint {
     val value = trim()
-    if (value.isBlank()) {
-        return RuntimeConnectionEndpoint(host = "", port = null)
+    return when {
+        value.isBlank() -> RuntimeConnectionEndpoint(host = "", port = null)
+        value.startsWith("[") ->
+            value.toBracketedRuntimeEndpoint() ?: RuntimeConnectionEndpoint(host = value, port = null)
+        value.count { it == ':' } == 1 ->
+            value.toHostPortRuntimeEndpoint() ?: RuntimeConnectionEndpoint(host = value, port = null)
+        else -> RuntimeConnectionEndpoint(host = value, port = null)
     }
-    if (value.startsWith("[")) {
-        val bracketEnd = value.indexOf(']')
-        if (bracketEnd > 1) {
-            val host = value.substring(1, bracketEnd)
-            val port =
-                value.substring(bracketEnd + 1)
-                    .removePrefix(":")
-                    .toIntOrNull()
-                    ?.takeIf { it in 1..65535 }
-            return RuntimeConnectionEndpoint(host = host, port = port)
-        }
-    }
-    val colonCount = value.count { it == ':' }
-    if (colonCount == 1) {
-        val host = value.substringBeforeLast(':')
-        val port = value.substringAfterLast(':').toIntOrNull()?.takeIf { it in 1..65535 }
-        if (host.isNotBlank() && port != null) {
-            return RuntimeConnectionEndpoint(host = host, port = port)
-        }
-    }
-    return RuntimeConnectionEndpoint(host = value, port = null)
+}
+
+private fun String.toBracketedRuntimeEndpoint(): RuntimeConnectionEndpoint? {
+    val bracketEnd = indexOf(']')
+    val host = substring(1, bracketEnd.coerceAtLeast(1))
+    val port =
+        substring(bracketEnd + 1)
+            .removePrefix(":")
+            .toIntOrNull()
+            ?.takeIf { it in 1..65535 }
+    return RuntimeConnectionEndpoint(host = host, port = port).takeIf { bracketEnd > 1 }
+}
+
+private fun String.toHostPortRuntimeEndpoint(): RuntimeConnectionEndpoint? {
+    val host = substringBeforeLast(':')
+    val port = substringAfterLast(':').toIntOrNull()?.takeIf { it in 1..65535 }
+    return RuntimeConnectionEndpoint(host = host, port = port).takeIf { host.isNotBlank() && port != null }
 }
 
 private fun Long.deltaFrom(previous: Long?): Long =

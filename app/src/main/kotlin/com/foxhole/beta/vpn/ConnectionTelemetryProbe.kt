@@ -30,6 +30,7 @@ internal class ConnectionTelemetryProbe(
     private val currentUpstreamNetwork: () -> Network?,
     private val currentVpnInterfaceName: (Network) -> String?,
 ) {
+    @Suppress("CyclomaticComplexMethod")
     suspend fun measureCurrentConnectionLatency(timeoutMs: Long): Long {
         val settings = settingsRepository.current()
         val currentSnapshot = snapshot.value

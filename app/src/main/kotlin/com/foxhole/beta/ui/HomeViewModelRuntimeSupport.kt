@@ -1,3 +1,5 @@
+@file:Suppress("TooManyFunctions")
+
 package com.foxhole.beta.ui
 
 import android.app.Application
@@ -46,7 +48,8 @@ internal fun HomeViewModel.importPresetTextInternal(
 }
 
 internal fun HomeViewModel.refreshIpInfoInternal() {
-    if (container.connectionController.snapshot.value.state in HomeViewModel.ACTIVE_CONNECTION_STATES) {
+    val snapshot = container.connectionController.snapshot.value
+    if (snapshot.shouldRefreshDashboardConnectionMetrics()) {
         scheduleActiveProfileLatencyRefresh(
             showLoading = true,
             refreshImmediately = true,
@@ -54,7 +57,7 @@ internal fun HomeViewModel.refreshIpInfoInternal() {
         )
     }
     startIpInfoRefresh(
-        reportFailures = true,
+        reportFailures = snapshot.shouldReportManualDashboardIpRefreshFailures(),
         showLoading = true,
         clearExistingIp = false,
         fetchMode = IpInfoFetchMode.FULL,
@@ -482,13 +485,23 @@ internal suspend fun HomeViewModel.maybeReloadActiveRuntimeInternal(): Boolean {
 
 internal fun HomeViewModel.activeRuntimeProfileIdForReload(): Long? {
     val snapshot = container.connectionController.snapshot.value
-    snapshot.profileId
-        ?.takeIf { profileId ->
-            profileId == FoxholeVpnService.TOR_ONLY_PROFILE_ID &&
-                snapshot.state in HomeViewModel.ACTIVE_CONNECTION_STATES
-        }?.let { return it }
-    return uiState.value.activeProfile?.id
+    return resolveActiveRuntimeProfileIdForReload(
+        snapshot = snapshot,
+        activeProfileId = uiState.value.activeProfile?.id,
+    )
 }
+
+internal fun resolveActiveRuntimeProfileIdForReload(
+    snapshot: com.foxhole.beta.core.model.ConnectionSnapshot,
+    activeProfileId: Long?,
+): Long? =
+    when {
+        snapshot.state !in HomeViewModel.ACTIVE_CONNECTION_STATES -> null
+        snapshot.profileId == FoxholeVpnService.TOR_ONLY_PROFILE_ID -> FoxholeVpnService.TOR_ONLY_PROFILE_ID
+        snapshot.profileId == FoxholeVpnService.LOCAL_GUARD_PROFILE_ID -> null
+        snapshot.profileId == activeProfileId -> activeProfileId
+        else -> null
+    }
 
 internal fun HomeViewModel.connectInternal(
     profileId: Long,
@@ -724,7 +737,8 @@ private fun HomeViewModel.schedulePostConnectLatencyRefreshAfterIp(reason: IpInf
             postConnectLatencyRefreshJob = null
             if (
                 container.connectionController.snapshot.value.state == ConnectionState.CONNECTED &&
-                !autoConnectUiStateMutable.value.running
+                !autoConnectUiStateMutable.value.running &&
+                container.connectionController.snapshot.value.shouldRefreshDashboardConnectionMetrics()
             ) {
                 scheduleActiveProfileLatencyRefresh(showLoading = false, refreshImmediately = true)
             }

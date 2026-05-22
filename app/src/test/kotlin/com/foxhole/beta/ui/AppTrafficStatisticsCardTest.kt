@@ -11,19 +11,18 @@ class AppTrafficStatisticsCardTest {
         val rows =
             appConnectionRows(
                 packageName = "org.example.browser",
-                events =
-                    listOf(
-                        event(remoteHost = "149.154.167.41", remotePort = 443, bytesRx = 120, bytesTx = 30),
-                        event(remoteHost = "149.154.167.41", remotePort = 443, bytesRx = 80, bytesTx = 20),
-                        event(remoteHost = "149.154.167.42", remotePort = 443, bytesRx = 0, bytesTx = 0),
-                        event(
-                            packageNames = listOf("org.example.other"),
-                            remoteHost = "149.154.167.43",
-                            remotePort = 443,
-                            bytesRx = 500,
-                            bytesTx = 500,
-                        ),
+                events = listOf(
+                    event(remoteHost = "149.154.167.41", remotePort = 443, bytesRx = 120, bytesTx = 30),
+                    event(remoteHost = "149.154.167.41", remotePort = 443, bytesRx = 80, bytesTx = 20),
+                    event(remoteHost = "149.154.167.42", remotePort = 443, bytesRx = 0, bytesTx = 0),
+                    event(
+                        packageNames = listOf("org.example.other"),
+                        remoteHost = "149.154.167.43",
+                        remotePort = 443,
+                        bytesRx = 500,
+                        bytesTx = 500,
                     ),
+                ),
                 countryCodeForDestination = { "GB" },
                 ipInfo = null,
             )
@@ -44,11 +43,10 @@ class AppTrafficStatisticsCardTest {
         val rows =
             appConnectionRows(
                 packageName = "org.example.browser",
-                events =
-                    listOf(
-                        event(remoteHost = "203.0.113.10", remotePort = 443, bytesRx = 40, bytesTx = 10),
-                        event(remoteHost = "203.0.113.10", remotePort = 853, bytesRx = 30, bytesTx = 10),
-                    ),
+                events = listOf(
+                    event(remoteHost = "203.0.113.10", remotePort = 443, bytesRx = 40, bytesTx = 10),
+                    event(remoteHost = "203.0.113.10", remotePort = 853, bytesRx = 30, bytesTx = 10),
+                ),
                 countryCodeForDestination = { null },
                 ipInfo = null,
             )

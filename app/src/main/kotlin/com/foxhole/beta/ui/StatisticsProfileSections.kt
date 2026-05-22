@@ -766,7 +766,13 @@ internal fun ProfileStatisticsDetail(
                         .thenBy { protocol -> protocol.label.lowercase(Locale.getDefault()) },
                 )
         }
-    val protocolSelectionKey = remember(connectedProtocols) { connectedProtocols.joinToString("|", transform = ProfileProtocolDetail::label) }
+    val protocolSelectionKey =
+        remember(connectedProtocols) {
+            connectedProtocols.joinToString(
+                separator = "|",
+                transform = ProfileProtocolDetail::label,
+            )
+        }
     var selectedDetailKey by rememberSaveable(item.profileId, protocolSelectionKey) {
         mutableStateOf(PROFILE_DETAIL_OVERALL_KEY)
     }

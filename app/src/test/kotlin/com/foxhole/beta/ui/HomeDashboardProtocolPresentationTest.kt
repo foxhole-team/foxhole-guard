@@ -11,6 +11,7 @@ import com.foxhole.beta.core.model.Settings
 import com.foxhole.beta.core.model.SmartProfilePreference
 import com.foxhole.beta.core.model.SmartProfileProtocolMemory
 import com.foxhole.beta.core.settings.smartStartEnabledProtocolSetHash
+import com.foxhole.beta.vpn.FoxholeVpnService
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -794,6 +795,34 @@ class HomeDashboardProtocolPresentationTest {
         assertEquals(426L, resolved.latencyMs)
         assertFalse(resolved.isUnavailable)
         assertFalse(resolved.isDown)
+    }
+
+    @Test
+    fun `local guard firewall does not show stale vpn profile latency`() {
+        val resolved =
+            resolveDashboardLatencyPresentation(
+                HomeRouteUiState(
+                    activeProfile =
+                        profile(
+                            selectedProtocolOptionId = "outline",
+                            protocolOptions = listOf(option("outline", ProtocolHint.OUTLINE)),
+                        ),
+                    connection =
+                        ConnectionSnapshot(
+                            state = ConnectionState.CONNECTED,
+                            profileId = FoxholeVpnService.LOCAL_GUARD_PROFILE_ID,
+                            protocolHint = ProtocolHint.SING_BOX,
+                        ),
+                    selectedProtocolLatencyMs = 426L,
+                    smartStartRememberedLatenciesByOptionId = mapOf("outline" to 426L),
+                    protocolDownOptionIds = setOf("outline"),
+                    selectedProtocolLatencyUnavailable = true,
+                ),
+            )
+
+        assertNull(resolved.latencyMs)
+        assertFalse(resolved.isDown)
+        assertFalse(resolved.isUnavailable)
     }
 
     @Test

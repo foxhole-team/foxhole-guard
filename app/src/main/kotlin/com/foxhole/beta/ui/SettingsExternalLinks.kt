@@ -9,18 +9,17 @@ import android.os.Build
 import androidx.core.net.toUri
 
 internal fun openFoxholeRepository(context: Context): Boolean {
-    val intent =
-        Intent(Intent.ACTION_VIEW, FOXHOLE_REPOSITORY_URL.toUri())
-            .addCategory(Intent.CATEGORY_BROWSABLE)
-    return try {
-        context.startActivity(intent)
-        true
-    } catch (_: ActivityNotFoundException) {
-        false
-    } catch (_: SecurityException) {
-        false
-    }
+    return openExternalUrl(context, FOXHOLE_REPOSITORY_URL)
 }
+
+internal fun openSingBoxRepository(context: Context): Boolean =
+    openExternalUrl(context, SING_BOX_REPOSITORY_URL)
+
+internal fun openTorRepository(context: Context): Boolean =
+    openExternalUrl(context, TOR_REPOSITORY_URL)
+
+internal fun openAdGuardDnsFilterRepository(context: Context): Boolean =
+    openExternalUrl(context, ADGUARD_DNS_FILTER_REPOSITORY_URL)
 
 internal fun installedSupportAppPackage(packageManager: PackageManager): String? =
     SUPPORT_APP_PACKAGE_CANDIDATES.firstOrNull { packageName ->
@@ -65,7 +64,27 @@ private fun supportChannelBrowserUri(): Uri = "https://t.me/$FOXHOLE_SUPPORT_CHA
 
 private fun supportChannelAppUri(): Uri = "tg://resolve?domain=$FOXHOLE_SUPPORT_CHANNEL".toUri()
 
+private fun openExternalUrl(
+    context: Context,
+    url: String,
+): Boolean {
+    val intent =
+        Intent(Intent.ACTION_VIEW, url.toUri())
+            .addCategory(Intent.CATEGORY_BROWSABLE)
+    return try {
+        context.startActivity(intent)
+        true
+    } catch (_: ActivityNotFoundException) {
+        false
+    } catch (_: SecurityException) {
+        false
+    }
+}
+
 private const val FOXHOLE_REPOSITORY_URL = "https://github.com/foxhole-repo/foxhole-app"
+private const val SING_BOX_REPOSITORY_URL = "https://github.com/SagerNet/sing-box"
+private const val TOR_REPOSITORY_URL = "https://github.com/torproject/tor"
+private const val ADGUARD_DNS_FILTER_REPOSITORY_URL = "https://github.com/AdguardTeam/AdGuardSDNSFilter"
 private const val FOXHOLE_SUPPORT_CHANNEL = "foxhole_repo"
 private val SUPPORT_APP_PACKAGE_CANDIDATES =
     listOf(

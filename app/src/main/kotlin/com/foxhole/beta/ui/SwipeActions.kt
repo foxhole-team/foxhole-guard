@@ -1,8 +1,15 @@
 package com.foxhole.beta.ui
 
-import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.AnimationSpec
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.AnchoredDraggableDefaults
+import androidx.compose.foundation.gestures.AnchoredDraggableState
+import androidx.compose.foundation.gestures.DraggableAnchors
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.TargetedFlingBehavior
+import androidx.compose.foundation.gestures.anchoredDraggable
+import androidx.compose.foundation.gestures.animateTo
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -16,9 +23,11 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -34,10 +43,12 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import com.foxhole.beta.R
+import kotlin.math.roundToInt
 
 internal data class FoxholeSwipeAction(
     val icon: ImageVector,
@@ -54,6 +65,7 @@ internal fun FoxholeSwipeActions(
     modifier: Modifier = Modifier,
     revealed: Boolean? = null,
     onRevealChange: ((Boolean) -> Unit)? = null,
+    startAction: FoxholeSwipeAction? = null,
     onSwipeRight: (() -> Unit)? = null,
     content: @Composable () -> Unit,
 ) {
@@ -71,28 +83,22 @@ internal fun FoxholeSwipeActions(
         }
     }
     val haptic = LocalHapticFeedback.current
-    val density = LocalDensity.current
-    val actionWidth = (actions.size * 48).dp + 12.dp
-    val defaultActionLabel = stringResource(R.string.action_label)
+    val startSwipeAction = startAction?.onClick ?: onSwipeRight
+    val dragSession =
+        rememberSwipeActionsDragSession(
+            key = key,
+            actionCount = actions.size,
+            isRevealed = isRevealed,
+            startSwipeAction = startSwipeAction,
+            setRevealed = ::setRevealed,
+        )
     val accessibilityActions =
-        actions.map { action ->
-            CustomAccessibilityAction(
-                label = action.contentDescription.ifBlank { defaultActionLabel },
-            ) {
-                setRevealed(false)
-                action.onClick()
-                true
-            }
-        }
-    val contentOffset by animateDpAsState(
-        targetValue = if (isRevealed) -actionWidth else 0.dp,
-        animationSpec =
-            tween(
-                durationMillis = FoxholeMotionTokens.StandardDurationMs,
-                easing = FoxholeMotionTokens.NavigationIndicatorEasing,
-            ),
-        label = "swipe_action_offset",
-    )
+        swipeActionsAccessibilityActions(
+            startAction = startAction,
+            actions = actions,
+            setRevealed = ::setRevealed,
+        )
+
     Box(
         modifier =
             modifier
@@ -101,54 +107,22 @@ internal fun FoxholeSwipeActions(
                     customActions = accessibilityActions
                 },
     ) {
+        if (startAction != null) {
+            SwipeActionsStartBackground(
+                action = startAction,
+                modifier = Modifier.align(Alignment.CenterStart),
+            )
+        }
         SwipeActionsBackground(
             actions = actions,
             onAction = {},
-                exposeTestTags = false,
-                modifier = Modifier.align(Alignment.CenterEnd),
-            )
-        Box(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .offset { with(density) { IntOffset(x = contentOffset.roundToPx(), y = 0) } }
-                    .pointerInput(key, isRevealed, onSwipeRight) {
-                        var dragDistance = 0f
-                        detectHorizontalDragGestures(
-                            onDragStart = { dragDistance = 0f },
-                            onHorizontalDrag = { change, dragAmount ->
-                                dragDistance += dragAmount
-                                change.consume()
-                            },
-                            onDragEnd = {
-                                when {
-                                    dragDistance <= -actionWidth.toPx() * SWIPE_ACTION_REVEAL_THRESHOLD_FRACTION -> {
-                                        setRevealed(true)
-                                        haptic.performHapticFeedback(HapticFeedbackType.GestureThresholdActivate)
-                                    }
-                                    dragDistance >= actionWidth.toPx() * SWIPE_ACTION_REVEAL_THRESHOLD_FRACTION &&
-                                        onSwipeRight != null -> {
-                                        setRevealed(false)
-                                        haptic.performHapticFeedback(HapticFeedbackType.Confirm)
-                                        onSwipeRight()
-                                    }
-                                    dragDistance >= actionWidth.toPx() * SWIPE_ACTION_REVEAL_THRESHOLD_FRACTION &&
-                                        isRevealed -> {
-                                        setRevealed(false)
-                                        haptic.performHapticFeedback(HapticFeedbackType.GestureEnd)
-                                    }
-                                }
-                                dragDistance = 0f
-                            },
-                            onDragCancel = { dragDistance = 0f },
-                        )
-                    },
-        ) {
-            content()
-        }
+            exposeTestTags = false,
+            modifier = Modifier.align(Alignment.CenterEnd),
+        )
+        SwipeActionsGestureContent(dragSession = dragSession, content = content)
         if (isRevealed) {
             SwipeActionsDismissOverlay(
-                actionWidth = actionWidth,
+                actionWidth = dragSession.actionWidth,
                 onDismiss = {
                     setRevealed(false)
                     haptic.performHapticFeedback(HapticFeedbackType.GestureEnd)
@@ -170,6 +144,202 @@ internal fun FoxholeSwipeActions(
         }
     }
 }
+
+private enum class SwipeActionsValue {
+    Settled,
+    EndRevealed,
+    StartAction,
+}
+
+private data class SwipeActionsDragSession(
+    val state: AnchoredDraggableState<SwipeActionsValue>,
+    val actionWidth: Dp,
+    val contentOffset: Int,
+    val flingBehavior: TargetedFlingBehavior,
+)
+
+@Composable
+private fun rememberSwipeActionsDragSession(
+    key: Any,
+    actionCount: Int,
+    isRevealed: Boolean,
+    startSwipeAction: (() -> Unit)?,
+    setRevealed: (Boolean) -> Unit,
+): SwipeActionsDragSession {
+    val haptic = LocalHapticFeedback.current
+    val density = LocalDensity.current
+    val actionWidth = (actionCount * 48).dp + 12.dp
+    val actionWidthPx = with(density) { actionWidth.toPx() }
+    val startActionWidthPx = with(density) { 72.dp.toPx() }
+    val currentStartSwipeAction by rememberUpdatedState(startSwipeAction)
+    val dragState =
+        rememberSaveable(key, saver = AnchoredDraggableState.Saver()) {
+            AnchoredDraggableState(SwipeActionsValue.Settled)
+        }
+    val settleAnimationSpec = swipeActionsSettleAnimationSpec()
+    val flingBehavior =
+        AnchoredDraggableDefaults.flingBehavior(
+            state = dragState,
+            positionalThreshold = { distance -> distance * SWIPE_ACTION_REVEAL_THRESHOLD_FRACTION },
+            animationSpec = settleAnimationSpec,
+        )
+    SyncSwipeActionsAnchors(
+        dragState = dragState,
+        actionWidthPx = actionWidthPx,
+        startActionWidthPx = startActionWidthPx,
+        startSwipeEnabled = startSwipeAction != null,
+        isRevealed = isRevealed,
+    )
+    SyncSwipeActionsSettledValue(
+        dragState = dragState,
+        isRevealed = isRevealed,
+        settleAnimationSpec = settleAnimationSpec,
+        setRevealed = setRevealed,
+        onStartSwipeAction = { currentStartSwipeAction?.invoke() },
+        haptic = haptic,
+    )
+    return SwipeActionsDragSession(
+        state = dragState,
+        actionWidth = actionWidth,
+        contentOffset = dragState.offset.takeUnless { it.isNaN() }?.roundToInt() ?: 0,
+        flingBehavior = flingBehavior,
+    )
+}
+
+@Composable
+private fun swipeActionsAccessibilityActions(
+    startAction: FoxholeSwipeAction?,
+    actions: List<FoxholeSwipeAction>,
+    setRevealed: (Boolean) -> Unit,
+): List<CustomAccessibilityAction> {
+    val defaultActionLabel = stringResource(R.string.action_label)
+    return buildList {
+        startAction?.let { action ->
+            add(swipeAccessibilityAction(action, defaultActionLabel, setRevealed))
+        }
+        actions.mapTo(this) { action ->
+            swipeAccessibilityAction(action, defaultActionLabel, setRevealed)
+        }
+    }
+}
+
+private fun swipeAccessibilityAction(
+    action: FoxholeSwipeAction,
+    defaultLabel: String,
+    setRevealed: (Boolean) -> Unit,
+): CustomAccessibilityAction =
+    CustomAccessibilityAction(
+        label = action.contentDescription.ifBlank { defaultLabel },
+    ) {
+        setRevealed(false)
+        action.onClick()
+        true
+    }
+
+@Composable
+private fun SyncSwipeActionsAnchors(
+    dragState: AnchoredDraggableState<SwipeActionsValue>,
+    actionWidthPx: Float,
+    startActionWidthPx: Float,
+    startSwipeEnabled: Boolean,
+    isRevealed: Boolean,
+) {
+    LaunchedEffect(actionWidthPx, startActionWidthPx, startSwipeEnabled) {
+        dragState.updateAnchors(
+            DraggableAnchors {
+                SwipeActionsValue.Settled at 0f
+                SwipeActionsValue.EndRevealed at -actionWidthPx
+                if (startSwipeEnabled) {
+                    SwipeActionsValue.StartAction at startActionWidthPx
+                }
+            },
+            newTarget = if (isRevealed) SwipeActionsValue.EndRevealed else SwipeActionsValue.Settled,
+        )
+    }
+}
+
+@Composable
+private fun SyncSwipeActionsSettledValue(
+    dragState: AnchoredDraggableState<SwipeActionsValue>,
+    isRevealed: Boolean,
+    settleAnimationSpec: AnimationSpec<Float>,
+    setRevealed: (Boolean) -> Unit,
+    onStartSwipeAction: () -> Unit,
+    haptic: androidx.compose.ui.hapticfeedback.HapticFeedback,
+) {
+    LaunchedEffect(isRevealed) {
+        val target = if (isRevealed) SwipeActionsValue.EndRevealed else SwipeActionsValue.Settled
+        if (dragState.settledValue != target && dragState.targetValue != target) {
+            dragState.animateTo(target, settleAnimationSpec)
+        }
+    }
+    LaunchedEffect(dragState.settledValue) {
+        handleSwipeActionsSettledValue(
+            dragState = dragState,
+            isRevealed = isRevealed,
+            settleAnimationSpec = settleAnimationSpec,
+            setRevealed = setRevealed,
+            onStartSwipeAction = onStartSwipeAction,
+            haptic = haptic,
+        )
+    }
+}
+
+private suspend fun handleSwipeActionsSettledValue(
+    dragState: AnchoredDraggableState<SwipeActionsValue>,
+    isRevealed: Boolean,
+    settleAnimationSpec: AnimationSpec<Float>,
+    setRevealed: (Boolean) -> Unit,
+    onStartSwipeAction: () -> Unit,
+    haptic: androidx.compose.ui.hapticfeedback.HapticFeedback,
+) {
+    when (dragState.settledValue) {
+        SwipeActionsValue.EndRevealed -> {
+            if (!isRevealed) {
+                setRevealed(true)
+                haptic.performHapticFeedback(HapticFeedbackType.GestureThresholdActivate)
+            }
+        }
+        SwipeActionsValue.StartAction -> {
+            setRevealed(false)
+            haptic.performHapticFeedback(HapticFeedbackType.Confirm)
+            onStartSwipeAction()
+            dragState.animateTo(SwipeActionsValue.Settled, settleAnimationSpec)
+        }
+        SwipeActionsValue.Settled -> {
+            if (isRevealed) {
+                setRevealed(false)
+                haptic.performHapticFeedback(HapticFeedbackType.GestureEnd)
+            }
+        }
+    }
+}
+
+@Composable
+private fun SwipeActionsGestureContent(
+    dragSession: SwipeActionsDragSession,
+    content: @Composable () -> Unit,
+) {
+    Box(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .offset { IntOffset(x = dragSession.contentOffset, y = 0) }
+                .anchoredDraggable(
+                    state = dragSession.state,
+                    orientation = Orientation.Horizontal,
+                    flingBehavior = dragSession.flingBehavior,
+                ),
+    ) {
+        content()
+    }
+}
+
+private fun swipeActionsSettleAnimationSpec(): AnimationSpec<Float> =
+    tween(
+        durationMillis = FoxholeMotionTokens.StandardDurationMs,
+        easing = FoxholeMotionTokens.NavigationIndicatorEasing,
+    )
 
 @Composable
 private fun SwipeActionsDismissOverlay(
@@ -203,6 +373,25 @@ private fun SwipeActionsDismissOverlay(
                     )
                 }
     )
+}
+
+@Composable
+private fun SwipeActionsStartBackground(
+    action: FoxholeSwipeAction,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier.padding(start = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.Start),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            imageVector = action.icon,
+            contentDescription = action.contentDescription.ifBlank { stringResource(R.string.action_label) },
+            tint = action.tint ?: MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(28.dp),
+        )
+    }
 }
 
 @Composable

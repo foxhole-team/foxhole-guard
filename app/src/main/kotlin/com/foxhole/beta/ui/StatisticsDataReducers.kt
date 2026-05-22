@@ -110,11 +110,10 @@ internal fun profileStatisticsDetail(
                     avgLatencyMs = latency,
                     minLatencyMs = latency,
                     maxLatencyMs = latency,
-                    lastUsedAt =
-                        maxOfNotNull(
-                            lastUsed,
-                            trafficForProtocol.mapNotNull { traffic -> traffic.updatedAt.takeIf { it > 0L } }.maxOrNull(),
-                        ),
+                    lastUsedAt = maxOfNotNull(
+                        lastUsed,
+                        trafficForProtocol.mapNotNull { traffic -> traffic.updatedAt.takeIf { it > 0L } }.maxOrNull(),
+                    ),
                 )
             }
     val memoryOnlyDetails =

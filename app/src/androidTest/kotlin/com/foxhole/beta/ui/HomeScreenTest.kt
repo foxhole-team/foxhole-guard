@@ -203,6 +203,28 @@ class HomeScreenTest {
     }
 
     @Test
+    fun profilesRowSwipeRightSelectsInactiveProfile() {
+        val app = InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as FoxholeApplication
+        prepareSelectableProfiles()
+        val targetProfileId =
+            runBlocking {
+                app.container.profileRepository.profiles
+                    .first()
+                    .first { profile -> profile.name == "Selection B" }
+                    .id
+            }
+
+        composeRule.onNodeWithTag("home_profiles_action").performClick()
+        composeRule.onNodeWithTag("profiles_profile_row_${targetProfileId}").performTouchInput { swipeRight() }
+
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            runBlocking {
+                app.container.profileRepository.activeProfile.first()?.id == targetProfileId
+            }
+        }
+    }
+
+    @Test
     fun singleProfileEditOpensConfigFormWithoutStuckLoading() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val app = context.applicationContext as FoxholeApplication
@@ -252,7 +274,7 @@ class HomeScreenTest {
     @Test
     fun settingsFooterShowsGithubRepositoryAction() {
         composeRule.onNodeWithTag("bottom_nav_settings").performClick()
-        composeRule.onNodeWithTag("settings_screen").performScrollToNode(hasTestTag("settings_github_repository_action"))
+        openAboutSettingsDialog()
         composeRule.onNodeWithTag("settings_github_repository_action").assertIsDisplayed()
     }
 
@@ -263,6 +285,7 @@ class HomeScreenTest {
         waitForSettingsHomeExpertActionHidden()
         tapFooterVersionCardUntilUnlockDialog()
         composeRule.onNodeWithTag("confirm_dialog_confirm_button").performClick()
+        waitForAboutDialogClosed()
         assertSettingsHomeExpertActionDisplayed()
 
         composeRule.onNodeWithTag("settings_expert_action").performClick()
@@ -272,6 +295,7 @@ class HomeScreenTest {
         composeRule.onAllNodesWithTag("settings_expert_action").assertCountEquals(0)
         tapFooterVersionCardUntilUnlockDialog()
         composeRule.onNodeWithTag("confirm_dialog_confirm_button").performClick()
+        waitForAboutDialogClosed()
         assertSettingsHomeExpertActionDisplayed()
     }
 
@@ -282,7 +306,7 @@ class HomeScreenTest {
         waitForSettingsHomeExpertActionVisible()
         composeRule.onNodeWithTag("settings_screen").performScrollToNode(hasTestTag("settings_expert_action"))
         composeRule.onNodeWithTag("settings_expert_action").assertIsDisplayed()
-        composeRule.onNodeWithTag("settings_screen").performScrollToNode(hasTestTag("settings_footer_version_card"))
+        openAboutSettingsDialog()
         repeat(5) {
             composeRule.onNodeWithTag("settings_footer_version_card").performClick()
         }
@@ -347,8 +371,7 @@ class HomeScreenTest {
     }
 
     private fun tapFooterVersionCardUntilUnlockDialog() {
-        composeRule.onNodeWithTag("settings_screen").performScrollToNode(hasTestTag("settings_footer_version_card"))
-        composeRule.onNodeWithTag("settings_screen").performTouchInput { swipeUp() }
+        openAboutSettingsDialog()
         composeRule.waitForIdle()
         repeat(5) {
             composeRule.onNodeWithTag("settings_footer_version_card").performClick()
@@ -357,6 +380,23 @@ class HomeScreenTest {
         composeRule.waitUntil(timeoutMillis = 5_000) {
             composeRule.onAllNodesWithTag("confirm_dialog_confirm_button").fetchSemanticsNodes().isNotEmpty()
         }
+    }
+
+    private fun openAboutSettingsDialog() {
+        composeRule
+            .onNodeWithTag("settings_screen")
+            .performScrollToNode(hasTestTag("settings_about_action"))
+        composeRule.onNodeWithTag("settings_about_action").tapNearTop()
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            composeRule.onAllNodesWithTag("settings_about_dialog").fetchSemanticsNodes().isNotEmpty()
+        }
+    }
+
+    private fun waitForAboutDialogClosed() {
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            composeRule.onAllNodesWithTag("settings_about_dialog").fetchSemanticsNodes().isEmpty()
+        }
+        composeRule.waitForIdle()
     }
 
     private fun waitForSettingsHomeExpertActionHidden() {
@@ -376,9 +416,11 @@ class HomeScreenTest {
                 app.container.settingsRepository.settings.first().ui.showExpertSettings
             }
         }
-        composeRule.onNodeWithTag("settings_screen").performScrollToNode(hasTestTag("settings_expert_action"))
         composeRule.waitUntil(timeoutMillis = 5_000) {
-            composeRule.onAllNodesWithTag("settings_expert_action").fetchSemanticsNodes().isNotEmpty()
+            runCatching {
+                composeRule.onNodeWithTag("settings_screen").performScrollToNode(hasTestTag("settings_expert_action"))
+                composeRule.onAllNodesWithTag("settings_expert_action").fetchSemanticsNodes().isNotEmpty()
+            }.getOrDefault(false)
         }
     }
 

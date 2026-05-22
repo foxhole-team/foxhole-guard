@@ -38,6 +38,7 @@ import com.foxhole.beta.R
 import kotlin.math.roundToLong
 
 @Composable
+@Suppress("LongMethod")
 internal fun DnsProtectionCard(
     summary: DnsProtectionSummary,
     range: StatisticsDisplayRange,

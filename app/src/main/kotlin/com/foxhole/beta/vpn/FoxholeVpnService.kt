@@ -95,11 +95,6 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
                         }
                         ?: NetworkActivityContext()
                 },
-                onNetworkActivityEvent = { event ->
-                    scope.launch(Dispatchers.IO) {
-                        container.anomalyRepository.recordNetworkActivityEvent(event)
-                    }
-                },
             ).also { runtimeInstance = it }
     private var commandActorInstance: RuntimeCommandActor? = null
     internal val commandActor: RuntimeCommandActor
@@ -151,6 +146,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
                     capabilities = connectivityManager.getNetworkCapabilities(network),
                 )
                 upstreamNetworkHandles += network.networkHandle
+                updateActiveVpnUnderlyingNetwork(network)
                 runtime.onDefaultNetworkAvailable()
                 val snapshot = FoxholeVpnRuntimeBridge.snapshot.value
                 if (snapshot.state == ConnectionState.RECONNECTING) {
@@ -178,6 +174,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
                         message = "upstream switched",
                         capabilities = connectivityManager.getNetworkCapabilities(fallbackUpstream),
                     )
+                    updateActiveVpnUnderlyingNetwork(fallbackUpstream)
                     runtime.onDefaultNetworkAvailable()
                     val snapshot = FoxholeVpnRuntimeBridge.snapshot.value
                     if (snapshot.state == ConnectionState.RECONNECTING) {
@@ -197,6 +194,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
                     message = "upstream lost",
                     capabilities = connectivityManager.getNetworkCapabilities(network),
                 )
+                updateActiveVpnUnderlyingNetwork(null)
                 runtime.onDefaultNetworkLost()
                 validationJob?.cancel()
                 validationJob = null
@@ -766,10 +764,14 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
                 isSmartStartConnection = analysisMessage != null,
             ),
         )
+        registerNetworkCallbackIfNeeded()
+        registerDefaultNetworkCallbackIfNeeded()
         acquireRuntimeWakeLock()
+        startNotificationHealthMonitoring()
         val result = startRuntimeWithHealthMetrics(session = session, owner = "local_guard")
         if (result.isSuccess) {
             registerVpnNetworkCallbackIfNeeded()
+            updateActiveVpnUnderlyingNetwork(currentUpstreamNetworkOrNull())
             if (mode == LocalGuardMode.DNS) {
                 FoxholeVpnRuntimeBridge.updateTraffic(TrafficSnapshot())
             } else {
@@ -788,11 +790,13 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
                     isSmartStartConnection = analysisMessage != null,
                 ),
             )
+            startGeoRefresh()
             container.diagnosticsLogger.record("connection", "local guard started mode=${mode.name.lowercase()}")
             RuntimeResumeStateStore.markLocalGuardRuntime(this, mode)
             updateNotification()
         } else {
             activeLocalGuardMode = null
+            stopNotificationHealthMonitoring()
             releaseRuntimeWakeLock()
             val error = result.exceptionOrNull()
             fail(error?.let { describeVpnRuntimeFailure(it) } ?: getString(R.string.error_runtime_missing), commandStartId)
@@ -1111,6 +1115,24 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         registration
             .onSuccess { networkCallbackRegistered = true }
             .onFailure { container.diagnosticsLogger.record("connection", "network callback registration failed") }
+    }
+
+    internal fun updateActiveVpnUnderlyingNetwork(network: Network?) {
+        if (activeSession == null && activeLocalGuardMode == null) {
+            return
+        }
+        runCatching {
+            setUnderlyingNetworks(network?.let { arrayOf(it) } ?: emptyArray())
+        }.onSuccess { updated ->
+            container.diagnosticsLogger.recordStructured(
+                "network",
+                "VPN underlying network updated",
+                "available=${network != null}",
+                "updated=$updated",
+            )
+        }.onFailure {
+            container.diagnosticsLogger.record("network", "vpn underlying network update failed")
+        }
     }
 
     internal fun registerVpnNetworkCallbackIfNeeded() {

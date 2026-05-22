@@ -772,12 +772,15 @@ class RuntimeConfigAssemblerTest {
         val tunInbound = config["inbounds"]!!.jsonArray.single().jsonObject
 
         assertEquals(listOf("direct", "block"), outbounds)
-        assertEquals("dns-direct", dns["final"]!!.jsonPrimitive.content)
-        assertEquals("dns-direct", route["default_domain_resolver"]!!.jsonPrimitive.content)
+        assertEquals("dns-remote", dns["final"]!!.jsonPrimitive.content)
+        assertEquals("dns-remote", route["default_domain_resolver"]!!.jsonPrimitive.content)
         assertEquals("direct", route["final"]!!.jsonPrimitive.content)
         assertEquals(false, tunInbound["strict_route"]!!.jsonPrimitive.content.toBoolean())
-        assertFalse(dnsServers.any { server -> server["tag"]!!.jsonPrimitive.content == "dns-remote" })
-        assertFalse(dnsServers.any { server -> server["detour"]?.jsonPrimitive?.content == "proxy" })
+        assertTrue(route["rules"]!!.jsonArray.map { it.jsonObject }.none { rule ->
+            rule["action"]?.jsonPrimitive?.content == "hijack-dns"
+        })
+        assertTrue(dnsServers.any { server -> server["tag"]!!.jsonPrimitive.content == "dns-remote" })
+        assertFalse(dnsServers.any { server -> server["detour"] != null })
         assertEquals("org.mozilla.firefox", tunInbound["include_package"]!!.jsonArray.single().jsonPrimitive.content)
         assertTrue(
             route["rules"]!!.jsonArray.map { it.jsonObject }.any { rule ->
@@ -785,6 +788,31 @@ class RuntimeConfigAssemblerTest {
                     rule["outbound"]?.jsonPrimitive?.content == "block"
             },
         )
+    }
+
+    @Test
+    fun `local firewall guard captures DNS only when rule set filtering is enabled`() {
+        val settings =
+            Settings(
+                dns = DnsSettings(filteringEnabled = true),
+                expert = ExpertSettings(firewallEnabled = true),
+            )
+
+        val config = parse(assembler.assembleLocalGuard(settings, LocalGuardMode.FIREWALL))
+        val dns = config["dns"]!!.jsonObject
+        val route = config["route"]!!.jsonObject
+        val rules = route["rules"]!!.jsonArray.map { it.jsonObject }
+        val dnsServers = dns["servers"]!!.jsonArray.map { it.jsonObject }
+
+        assertEquals("dns-direct", dns["final"]!!.jsonPrimitive.content)
+        assertEquals("dns-direct", route["default_domain_resolver"]!!.jsonPrimitive.content)
+        assertTrue(dnsServers.any { server -> server["tag"]!!.jsonPrimitive.content == "dns-remote" })
+        assertTrue(rules.any { rule ->
+            rule["network"]?.jsonPrimitive?.content == "tcp" &&
+                rule["port"]?.jsonPrimitive?.content == "853" &&
+                rule["outbound"]?.jsonPrimitive?.content == "block"
+        })
+        assertTrue(rules.any { rule -> rule["action"]?.jsonPrimitive?.content == "hijack-dns" })
     }
 
     @Test
@@ -1045,15 +1073,15 @@ class RuntimeConfigAssemblerTest {
         val dnsServers = dns["servers"]!!.jsonArray.map { it.jsonObject }
         val tunInbound = config["inbounds"]!!.jsonArray.single().jsonObject
 
-        assertEquals("dns-direct", dns["final"]!!.jsonPrimitive.content)
-        assertEquals("dns-direct", route["default_domain_resolver"]!!.jsonPrimitive.content)
+        assertEquals("dns-remote", dns["final"]!!.jsonPrimitive.content)
+        assertEquals("dns-remote", route["default_domain_resolver"]!!.jsonPrimitive.content)
         assertEquals("direct", route["final"]!!.jsonPrimitive.content)
         assertEquals(false, tunInbound["strict_route"]!!.jsonPrimitive.content.toBoolean())
-        assertFalse(dnsServers.any { server -> server["tag"]!!.jsonPrimitive.content == "dns-remote" })
+        assertTrue(dnsServers.any { server -> server["tag"]!!.jsonPrimitive.content == "dns-remote" })
         assertFalse(dnsServers.any { server -> server["detour"]?.jsonPrimitive?.content == "proxy" })
         assertFalse(tunInbound.containsKey("include_package"))
         assertTrue(rules.any { rule -> rule["package_name"]?.jsonArray?.single()?.jsonPrimitive?.content == "org.mozilla.firefox" })
-        assertTrue(rules.any { rule -> rule["action"]?.jsonPrimitive?.content == "hijack-dns" })
+        assertTrue(rules.none { rule -> rule["action"]?.jsonPrimitive?.content == "hijack-dns" })
     }
 
     @Test

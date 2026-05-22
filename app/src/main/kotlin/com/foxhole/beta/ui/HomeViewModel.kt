@@ -765,17 +765,18 @@ class HomeViewModel(
                     currentIpInfo = container.connectionController.ipInfo.value,
                     connectionState = runtimeState,
                 )
+            val minimumLoadingDurationMs =
+                if (showEntrySkeleton) {
+                    AUTO_IP_REFRESH_MIN_LOADING_MS
+                } else {
+                    0L
+                }
             startIpInfoRefresh(
                 reportFailures = false,
                 showLoading = showEntrySkeleton,
                 clearExistingIp = false,
                 fetchMode = IpInfoFetchMode.ENTRY_QUICK,
-                minimumLoadingDurationMs =
-                    if (showEntrySkeleton) {
-                        AUTO_IP_REFRESH_MIN_LOADING_MS
-                    } else {
-                        0L
-                    },
+                minimumLoadingDurationMs = minimumLoadingDurationMs,
             )
         }
     }

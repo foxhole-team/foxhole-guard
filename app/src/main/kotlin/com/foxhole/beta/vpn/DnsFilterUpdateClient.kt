@@ -111,11 +111,19 @@ class DnsFilterUpdateClient(
                         .callTimeout(DNS_FILTER_CALL_TIMEOUT_MS, TimeUnit.MILLISECONDS)
                         .build()
                 val manifestBytes = guardedClient.getBytes(manifestHttpUrl, MAX_MANIFEST_BYTES, "manifest")
-                val signatureBytes = guardedClient.getBytes(manifestHttpUrl.signatureUrl(), MAX_SIGNATURE_BYTES, "manifest signature")
+                val signatureBytes =
+                    guardedClient.getBytes(
+                        manifestHttpUrl.signatureUrl(),
+                        MAX_SIGNATURE_BYTES,
+                        "manifest signature",
+                    )
                 requireVerifiedManifestSignature(manifestBytes, signatureBytes)
                 val manifest = json.decodeFromString<DnsFilterManifest>(manifestBytes.toString(Charsets.UTF_8))
                 manifest.requireValid()
-                val artifactUrl = requireNotNull(manifestHttpUrl.resolve(manifest.artifact.file)) { "invalid artifact url" }
+                val artifactUrl =
+                    requireNotNull(manifestHttpUrl.resolve(manifest.artifact.file)) {
+                        "invalid artifact url"
+                    }
                 val artifactBytes = guardedClient.getBytes(artifactUrl, MAX_RULE_SET_BYTES, "rule set")
                 artifactBytes.requireValidArtifact(manifest.artifact)
                 val installedPath = store.installVerifiedDnsRuleSet(artifactBytes, manifest)
@@ -175,7 +183,11 @@ class DnsFilterUpdateClient(
         require(artifact.size in MIN_RULE_SET_BYTES..MAX_RULE_SET_BYTES) { "unexpected artifact size" }
         require(artifact.sha256.isSha256Hex()) { "invalid artifact sha256" }
         require(compatibility.singBoxVersion == BuildConfig.LIBBOX_SOURCE_VERSION) { "unsupported sing-box version" }
-        require(compareAppVersions(currentVersionName, compatibility.minAppVersion) >= 0) { "app version is too old for rule set" }
+        require(
+            compareAppVersions(currentVersionName, compatibility.minAppVersion) >= 0,
+        ) {
+            "app version is too old for rule set"
+        }
         runCatching { Instant.parse(generatedAt) }
             .getOrElse { throw IllegalArgumentException("invalid generated_at") }
             .also { generatedAtInstant ->

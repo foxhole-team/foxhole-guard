@@ -75,11 +75,6 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
                         }
                         ?: NetworkActivityContext()
                 },
-                onNetworkActivityEvent = { event ->
-                    scope.launch(Dispatchers.IO) {
-                        container.anomalyRepository.recordNetworkActivityEvent(event)
-                    }
-                },
             ).also { runtimeInstance = it }
     private var commandActorInstance: RuntimeCommandActor? = null
     private val commandActor: RuntimeCommandActor

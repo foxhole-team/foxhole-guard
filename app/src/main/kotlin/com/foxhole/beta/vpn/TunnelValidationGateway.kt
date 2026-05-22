@@ -21,6 +21,7 @@ import com.foxhole.beta.core.settings.SettingsRepository
 import kotlinx.coroutines.flow.StateFlow
 import java.io.IOException
 
+@Suppress("TooManyFunctions")
 internal class TunnelValidationGateway(
     context: Context,
     private val profileRepository: ProfileRepository,
@@ -91,6 +92,7 @@ internal class TunnelValidationGateway(
             fetchMode = fetchMode,
             requestNetwork = requestNetwork,
             requireRequestNetwork = localGuardRuntimeActive,
+            allowLocalFallback = !localGuardRuntimeActive,
             proxy = proxyAccess,
         ).withDnsServers(
             localDnsServers = connectivityManager.dnsServerAddresses(dnsNetwork),
@@ -103,6 +105,7 @@ internal class TunnelValidationGateway(
         fetchMode: IpInfoFetchMode,
         requestNetwork: Network?,
         requireRequestNetwork: Boolean,
+        allowLocalFallback: Boolean,
         proxy: HttpProxyAccess?,
     ): IpInfo =
         when {
@@ -113,7 +116,13 @@ internal class TunnelValidationGateway(
                     proxy = proxy,
                     mode = fetchMode,
                 )
-            requestNetwork != null -> fetchDeviceIpInfoFromNetwork(endpoint, fetchMode, requestNetwork)
+            requestNetwork != null ->
+                fetchDeviceIpInfoFromNetwork(
+                    endpoint = endpoint,
+                    fetchMode = fetchMode,
+                    requestNetwork = requestNetwork,
+                    allowLocalFallback = allowLocalFallback,
+                )
             requireRequestNetwork -> error("upstream network unavailable")
             else -> fetchDeviceIpInfoFromDefaultNetwork(endpoint, fetchMode)
         }
@@ -122,6 +131,7 @@ internal class TunnelValidationGateway(
         endpoint: String,
         fetchMode: IpInfoFetchMode,
         requestNetwork: Network,
+        allowLocalFallback: Boolean,
     ): IpInfo =
         runCatching {
             ipInfoRepository.fetch(
@@ -131,6 +141,9 @@ internal class TunnelValidationGateway(
                 mode = fetchMode,
             )
         }.getOrElse { error ->
+            if (!allowLocalFallback) {
+                throw error
+            }
             localDeviceIpInfo(requestNetwork)
                 ?.also {
                     diagnosticsLogger.record(
@@ -357,18 +370,19 @@ internal fun Settings.canUseVpnBoundIpRefreshFallback(
 ): Boolean = !requiresStrictRuntimeProxyIpRefresh(snapshot) || androidValidatedVpnNetwork
 
 internal fun Settings.shouldPublishRuntimeProxyIpInfoToDashboard(snapshot: ConnectionSnapshot): Boolean =
-    !(
-        privacyRoute.mode == PrivacyRouteMode.TOR_OVER_VPN &&
-            snapshot.state in ACTIVE_CONNECTION_STATES &&
-            snapshot.trafficMode == TrafficMode.TUNNEL &&
-            snapshot.profileId != null &&
-            snapshot.profileId != FoxholeVpnService.LOCAL_GUARD_PROFILE_ID &&
-            snapshot.profileId != FoxholeVpnService.TOR_ONLY_PROFILE_ID &&
-            when (privacyRoute.scope) {
-                PrivacyRouteScope.ALL_APPS -> true
-                PrivacyRouteScope.SELECTED_APPS -> privacyRoute.selectedPackages.any(String::isNotBlank)
-            }
-    )
+    !shouldHoldRuntimeProxyIpInfoForTorOverVpn(snapshot)
+
+private fun Settings.shouldHoldRuntimeProxyIpInfoForTorOverVpn(snapshot: ConnectionSnapshot): Boolean =
+    privacyRoute.mode == PrivacyRouteMode.TOR_OVER_VPN &&
+        snapshot.state in ACTIVE_CONNECTION_STATES &&
+        snapshot.trafficMode == TrafficMode.TUNNEL &&
+        snapshot.profileId != null &&
+        snapshot.profileId != FoxholeVpnService.LOCAL_GUARD_PROFILE_ID &&
+        snapshot.profileId != FoxholeVpnService.TOR_ONLY_PROFILE_ID &&
+        when (privacyRoute.scope) {
+            PrivacyRouteScope.ALL_APPS -> true
+            PrivacyRouteScope.SELECTED_APPS -> privacyRoute.selectedPackages.any(String::isNotBlank)
+        }
 
 private fun ConnectionSnapshot.requiresRuntimeProxyForActiveTunnelIpRefresh(): Boolean =
     appOwnedRequestPath() == AppOwnedRequestPath.NORMAL_PROCESS &&

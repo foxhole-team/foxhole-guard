@@ -61,3 +61,8 @@ internal object SmartStartAutoConnectRunner {
         fullScanCandidates
             .distinctBy(AutoConnectProbeCandidate::optionId)
 }
+
+internal fun smartProfileMetricsAnalysisCandidates(
+    fullScanCandidates: List<AutoConnectProbeCandidate>,
+): List<AutoConnectProbeCandidate> =
+    fullScanCandidates.distinctBy(AutoConnectProbeCandidate::optionId)

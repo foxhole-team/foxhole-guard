@@ -164,6 +164,7 @@ internal fun buildHomeRouteUiState(
     )
 }
 
+@Suppress("LongMethod")
 internal fun buildProfilesRouteUiState(
     state: HomeUiState,
     autoConnect: AutoConnectUiState,

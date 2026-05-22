@@ -6,6 +6,8 @@ import com.foxhole.beta.core.model.Profile
 import com.foxhole.beta.core.model.ProfileProtocolOption
 import com.foxhole.beta.core.model.ProfileSourceType
 import com.foxhole.beta.core.model.ProtocolHint
+import com.foxhole.beta.core.model.TrafficMode
+import com.foxhole.beta.vpn.FoxholeVpnService
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -131,6 +133,62 @@ class HomeReconnectPolicyTest {
                     connection = ConnectionSnapshot(state = ConnectionState.IDLE),
                     reconnectInProgress = true,
                 ),
+            ),
+        )
+    }
+
+    @Test
+    fun `runtime reload target ignores local guard and inactive profiles`() {
+        assertEquals(
+            7L,
+            resolveActiveRuntimeProfileIdForReload(
+                snapshot =
+                    ConnectionSnapshot(
+                        state = ConnectionState.CONNECTED,
+                        trafficMode = TrafficMode.TUNNEL,
+                        profileId = 7L,
+                    ),
+                activeProfileId = 7L,
+            ),
+        )
+        assertEquals(
+            null,
+            resolveActiveRuntimeProfileIdForReload(
+                snapshot =
+                    ConnectionSnapshot(
+                        state = ConnectionState.CONNECTED,
+                        trafficMode = TrafficMode.TUNNEL,
+                        profileId = FoxholeVpnService.LOCAL_GUARD_PROFILE_ID,
+                    ),
+                activeProfileId = 7L,
+            ),
+        )
+        assertEquals(
+            null,
+            resolveActiveRuntimeProfileIdForReload(
+                snapshot =
+                    ConnectionSnapshot(
+                        state = ConnectionState.IDLE,
+                        trafficMode = TrafficMode.TUNNEL,
+                        profileId = 7L,
+                    ),
+                activeProfileId = 7L,
+            ),
+        )
+    }
+
+    @Test
+    fun `standalone tor runtime remains a reload target while active`() {
+        assertEquals(
+            FoxholeVpnService.TOR_ONLY_PROFILE_ID,
+            resolveActiveRuntimeProfileIdForReload(
+                snapshot =
+                    ConnectionSnapshot(
+                        state = ConnectionState.CONNECTED,
+                        trafficMode = TrafficMode.TUNNEL,
+                        profileId = FoxholeVpnService.TOR_ONLY_PROFILE_ID,
+                    ),
+                activeProfileId = null,
             ),
         )
     }

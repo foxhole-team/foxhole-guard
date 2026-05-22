@@ -24,7 +24,6 @@ import com.foxhole.beta.core.anomaly.DnsRuntimeStats
 import com.foxhole.beta.core.anomaly.isDnsRuntimeLogMessage
 import com.foxhole.beta.core.diagnostics.DiagnosticSanitizer
 import com.foxhole.beta.core.diagnostics.DiagnosticsLogger
-import com.foxhole.beta.core.model.NetworkActivityEvent
 import com.foxhole.beta.core.model.TrafficMode
 import com.foxhole.beta.core.model.VpnSession
 import kotlinx.coroutines.Dispatchers
@@ -42,14 +41,12 @@ internal fun createVpnRuntime(
     diagnosticsLogger: DiagnosticsLogger,
     isNetworkActivityLoggingEnabled: () -> Boolean,
     networkActivityContext: () -> NetworkActivityContext = { NetworkActivityContext() },
-    onNetworkActivityEvent: (NetworkActivityEvent) -> Unit = {},
 ): VpnCoreRuntime =
     ReflectiveLibboxRuntime(
         context = context,
         diagnosticsLogger = diagnosticsLogger,
         isNetworkActivityLoggingEnabled = isNetworkActivityLoggingEnabled,
         networkActivityContext = networkActivityContext,
-        onNetworkActivityEvent = onNetworkActivityEvent,
     )
 
 internal data class NetworkActivityContext(
@@ -72,7 +69,6 @@ private fun buildLibboxRuntimeDependencies(
     diagnosticsLogger: DiagnosticsLogger,
     isNetworkActivityLoggingEnabled: () -> Boolean,
     networkActivityContext: () -> NetworkActivityContext,
-    onNetworkActivityEvent: (NetworkActivityEvent) -> Unit,
 ): LibboxRuntimeDependencies {
     val diagnosticsSink = DiagnosticsLoggerRuntimeDiagnosticsSink(diagnosticsLogger)
     val reflection =
@@ -81,7 +77,6 @@ private fun buildLibboxRuntimeDependencies(
             diagnosticsLogger = diagnosticsSink,
             isNetworkActivityLoggingEnabled = isNetworkActivityLoggingEnabled,
             networkActivityContext = networkActivityContext,
-            onNetworkActivityEvent = onNetworkActivityEvent,
         )
     return LibboxRuntimeDependencies(
         diagnosticsLogger = diagnosticsSink,
@@ -159,14 +154,12 @@ internal class ReflectiveLibboxRuntime(
         diagnosticsLogger: DiagnosticsLogger,
         isNetworkActivityLoggingEnabled: () -> Boolean,
         networkActivityContext: () -> NetworkActivityContext,
-        onNetworkActivityEvent: (NetworkActivityEvent) -> Unit,
     ) : this(
         buildLibboxRuntimeDependencies(
             context = context,
             diagnosticsLogger = diagnosticsLogger,
             isNetworkActivityLoggingEnabled = isNetworkActivityLoggingEnabled,
             networkActivityContext = networkActivityContext,
-            onNetworkActivityEvent = onNetworkActivityEvent,
         ),
     )
 

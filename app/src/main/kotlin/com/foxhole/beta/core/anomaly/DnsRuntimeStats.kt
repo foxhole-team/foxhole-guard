@@ -94,14 +94,16 @@ private fun String.isAllowedDnsRuntimeLog(): Boolean {
 }
 
 private fun String.blockedDnsRuntimeDomainOrNull(): String? {
-    if (!startsWith("rejected ")) {
-        return null
-    }
-    val tokens = removePrefix("rejected").trimStart().split(DNS_LOG_TOKEN_SEPARATOR, limit = 3)
-    if (tokens.size < 2 || tokens[0] !in DNS_QUERY_TYPE_TOKENS) {
-        return null
-    }
-    return tokens[1].normalizedDnsRuntimeDomainOrNull()
+    val tokens =
+        takeIf { it.startsWith("rejected ") }
+            ?.removePrefix("rejected")
+            ?.trimStart()
+            ?.split(DNS_LOG_TOKEN_SEPARATOR, limit = 3)
+            .orEmpty()
+    return tokens
+        .getOrNull(1)
+        ?.takeIf { tokens.getOrNull(0) in DNS_QUERY_TYPE_TOKENS }
+        ?.normalizedDnsRuntimeDomainOrNull()
 }
 
 private fun String.isFoxholeDnsRuleSetBlockLog(): Boolean =
@@ -118,13 +120,11 @@ private fun String.dnsRuntimePayload(): String {
 
 private fun String.normalizedDnsRuntimeDomainOrNull(): String? {
     val normalized = trim().trimEnd('.').lowercase(Locale.US)
-    if (normalized.isBlank() || normalized.length > MAX_DNS_DOMAIN_LENGTH) {
-        return null
-    }
-    if (normalized.any { char -> !(char.isLetterOrDigit() || char == '-' || char == '_' || char == '.') }) {
-        return null
-    }
-    return normalized
+    val valid =
+        normalized.isNotBlank() &&
+            normalized.length <= MAX_DNS_DOMAIN_LENGTH &&
+            normalized.all { char -> char.isLetterOrDigit() || char == '-' || char == '_' || char == '.' }
+    return normalized.takeIf { valid }
 }
 
 private val DNS_LOG_TOKEN_SEPARATOR = Regex("\\s+")
