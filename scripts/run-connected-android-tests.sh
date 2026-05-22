@@ -23,7 +23,7 @@ readonly DEFAULT_REQUIRED_TEST_SPECS=(
   "com.foxhole.beta.ui.HomeScreenTest#opensUniversalImportMenuFromHomeAction"
   "com.foxhole.beta.ui.HomeScreenTest#settingsHomeShowsApplicationsAndSitesShortcuts"
   "com.foxhole.beta.ui.HomeScreenTest#settingsFooterShowsGithubRepositoryAction"
-  "com.foxhole.beta.ui.HomeScreenTest#hiddenExpertSettingsCanBeRestoredFromVersionCard"
+  "com.foxhole.beta.ui.HomeScreenTest#hiddenExpertSettingsAreNotRestoredFromVersionCard"
   "com.foxhole.beta.ui.HomeScreenTest#versionCardDoesNothingWhenExpertSettingsAreAlreadyVisible"
   "com.foxhole.beta.ui.HomeScreenTest#screenshotToggleUpdatesWindowSecureFlag"
   "com.foxhole.beta.ui.HomeScreenTest#appSettingsExposeScreenshotToggleAndUpdateWindowSecureFlag"
