@@ -199,6 +199,10 @@
     <string name="subscription_dashboard_active_until_label">Активен до:</string>
     <string name="subscription_profile_active_until_label">Активен до:</string>
     <string name="auto_connect">Смарт старт</string>
+    <string name="smart_start_enable_title">Включить Смарт старт</string>
+    <string name="smart_start_enable_summary">Если выключено, функционал Смарт старт будет недоступен. Используйте ручной выбор протоколов.</string>
+    <string name="smart_start_disabled_hint">Смарт старт выключен. Используйте ручной выбор протоколов.</string>
+    <string name="smart_start_disabled_message">Смарт старт отключён. Используйте ручной выбор протоколов.</string>
     <string name="smart_start_settings_title">Смарт старт</string>
     <string name="smart_start_settings_summary">Таймауты при анализе протоколов VPN</string>
     <string name="smart_start_settings_unavailable_hint">Настройки станут доступны при добавлении поддерживаемых конфигураций VPN</string>

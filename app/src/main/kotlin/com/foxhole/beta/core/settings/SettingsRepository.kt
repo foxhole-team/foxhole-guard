@@ -217,6 +217,9 @@ class SettingsRepository(
     suspend fun updateLatencyProbeMethod(value: LatencyProbeMethod) =
         update { it.copy(connection = it.connection.copy(latencyProbeMethod = value)) }
 
+    suspend fun updateSmartStartEnabled(value: Boolean) =
+        update { it.copy(connection = it.connection.copy(smartStartEnabled = value)) }
+
     suspend fun updateSmartStartProtocolSelectionTimeoutSeconds(value: Int) =
         update {
             it.copy(
@@ -794,6 +797,14 @@ class SettingsRepository(
     suspend fun updatePrivacyRouteScope(value: PrivacyRouteScope) =
         update { current ->
             current.copy(
+                connection =
+                    current.connection.copy(
+                        safeModeEnabled =
+                            current.connection.safeModeEnabled &&
+                                value == PrivacyRouteScope.SELECTED_APPS &&
+                                !current.privacyRoute.enabled &&
+                                current.privacyRoute.selectedPackages.isEmpty(),
+                    ),
                 privacyRoute = current.privacyRoute.copy(scope = value),
             )
         }
@@ -801,6 +812,10 @@ class SettingsRepository(
     suspend fun updatePrivacyRouteBypassVpnTunnel(value: Boolean) =
         update { current ->
             current.copy(
+                connection =
+                    current.connection.copy(
+                        safeModeEnabled = current.connection.safeModeEnabled && !value,
+                    ),
                 traffic =
                     if (value && current.privacyRoute.enabled) {
                         current.traffic.copy(mode = TrafficMode.TUNNEL)
@@ -816,10 +831,18 @@ class SettingsRepository(
 
     suspend fun updatePrivacyRouteSelectedPackages(value: List<String>) =
         update { current ->
+            val selectedPackages = value.filterNot { it == BuildConfig.APPLICATION_ID }
             current.copy(
+                connection =
+                    current.connection.copy(
+                        safeModeEnabled =
+                            current.connection.safeModeEnabled &&
+                                selectedPackages.isEmpty() &&
+                                !current.privacyRoute.enabled,
+                    ),
                 privacyRoute =
                     current.privacyRoute.copy(
-                        selectedPackages = value.filterNot { it == BuildConfig.APPLICATION_ID },
+                        selectedPackages = selectedPackages,
                     ),
             )
         }

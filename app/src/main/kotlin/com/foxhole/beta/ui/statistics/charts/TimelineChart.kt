@@ -65,7 +65,7 @@ fun TimelineChart(
                     bottom = size.height - 18.dp.toPx(),
                     yMax = model.yAxis.max.coerceAtLeast(1.0),
                 )
-            drawTimelineGrid(tokens, geometry)
+            drawTimelineGrid(model, tokens, geometry)
             model.series.forEach { series ->
                 val color = colorsBySeries[series.id] ?: return@forEach
                 drawTimelineSeries(
@@ -93,18 +93,53 @@ private data class TimelineChartGeometry(
 }
 
 private fun DrawScope.drawTimelineGrid(
+    model: ChartModel,
     tokens: ChartTokens,
     geometry: TimelineChartGeometry,
 ) {
-    listOf(0f, 0.5f, 1f).forEach { ratio ->
+    val dash = PathEffect.dashPathEffect(floatArrayOf(8f, 8f))
+    val yRange = (model.yAxis.max - model.yAxis.min).coerceAtLeast(1.0)
+    val yTicks = model.yAxis.ticks.ifEmpty {
+        listOf(
+            com.foxhole.beta.core.statistics.ChartTick(model.yAxis.min, ""),
+            com.foxhole.beta.core.statistics.ChartTick(model.yAxis.min + yRange / 2.0, ""),
+            com.foxhole.beta.core.statistics.ChartTick(model.yAxis.max, ""),
+        )
+    }
+    yTicks.forEach { tick ->
+        val ratio = ((tick.value - model.yAxis.min) / yRange).toFloat().coerceIn(0f, 1f)
         val y = geometry.bottom - geometry.chartHeight * ratio
         drawLine(
             color = tokens.gridColor,
             start = Offset(geometry.left, y),
             end = Offset(geometry.right, y),
-            pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 8f)),
+            pathEffect = dash,
         )
     }
+    model.xAxis.ticks
+        .filter { tick -> tick.major }
+        .forEach { tick ->
+            val x =
+                timestampToChartX(
+                    timestampMs = tick.value.toLong(),
+                    rangeStartMs = model.xAxis.min.toLong(),
+                    rangeEndMs = model.xAxis.max.toLong(),
+                    left = geometry.left,
+                    right = geometry.right,
+                ).coerceIn(geometry.left, geometry.right)
+            drawLine(
+                color = tokens.gridColor,
+                start = Offset(x, geometry.top),
+                end = Offset(x, geometry.bottom),
+                pathEffect = dash,
+            )
+        }
+    drawLine(
+        color = tokens.axisColor,
+        start = Offset(geometry.left, geometry.top),
+        end = Offset(geometry.left, geometry.bottom),
+        strokeWidth = 1.dp.toPx(),
+    )
     drawLine(
         color = tokens.axisColor,
         start = Offset(geometry.left, geometry.bottom),

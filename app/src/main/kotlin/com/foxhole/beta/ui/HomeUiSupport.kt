@@ -309,7 +309,13 @@ internal fun shouldShowAutoConnectAction(activeProfile: Profile?): Boolean =
                 )
     } == true
 
+internal fun isDashboardSmartStartControlsEnabled(settings: Settings): Boolean =
+    settings.connection.smartStartEnabled && settings.ui.smartStartDashboardControlsEnabled
+
 internal fun shouldShowSmartStartFirstAnalysisInfo(state: HomeRouteUiState): Boolean {
+    if (!state.settings.connection.smartStartEnabled) {
+        return false
+    }
     val profile = state.activeProfile?.takeIf(MultiProtocolProfileSupport::hasMultipleSupportedOptions)
     return profile?.let { smartProfile ->
         val candidates =

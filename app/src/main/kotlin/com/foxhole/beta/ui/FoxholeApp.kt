@@ -694,6 +694,7 @@ fun FoxholeApp(
                         onShowExpertSettingsChanged = viewModel::onShowExpertSettingsChanged,
                         onShowFirewallStatusChanged = viewModel::onShowFirewallStatusChanged,
                         onShowTorQuickLaunchChanged = viewModel::onShowTorQuickLaunchChanged,
+                        onSmartStartEnabledChanged = viewModel::onSmartStartEnabledChanged,
                         onSmartStartDashboardControlsEnabledChanged = viewModel::onSmartStartDashboardControlsEnabledChanged,
                     )
                 }

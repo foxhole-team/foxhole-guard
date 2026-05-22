@@ -802,6 +802,8 @@ class HomeViewModel(
             PendingConnectAction.AUTO_CONNECT ->
                 if (request.protocolOptionId != null) {
                     connect(request.profileId, protocolOptionId = request.protocolOptionId)
+                } else if (!uiState.value.settings.connection.smartStartEnabled) {
+                    snackbars.tryEmit(infoBanner(R.string.smart_start_disabled_message))
                 } else {
                     startAutoConnect(request.profileId)
                 }
@@ -1097,6 +1099,8 @@ class HomeViewModel(
     fun onTrafficCardEnabledChanged(value: Boolean) = onTrafficCardEnabledChangedInternal(value)
 
     fun onShowTorQuickLaunchChanged(value: Boolean) = onShowTorQuickLaunchChangedInternal(value)
+
+    fun onSmartStartEnabledChanged(value: Boolean) = onSmartStartEnabledChangedInternal(value)
 
     fun onSmartStartDashboardControlsEnabledChanged(value: Boolean) =
         onSmartStartDashboardControlsEnabledChangedInternal(value)

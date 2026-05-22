@@ -198,6 +198,10 @@
     <string name="subscription_dashboard_active_until_label">Active Until:</string>
     <string name="subscription_profile_active_until_label">Active until:</string>
     <string name="auto_connect">Smart start</string>
+    <string name="smart_start_enable_title">Enable Smart start</string>
+    <string name="smart_start_enable_summary">When off, Smart start features are unavailable. Use manual protocol selection.</string>
+    <string name="smart_start_disabled_hint">Smart start is off. Use manual protocol selection.</string>
+    <string name="smart_start_disabled_message">Smart start is disabled. Use manual protocol selection.</string>
     <string name="smart_start_settings_title">Smart start</string>
     <string name="smart_start_settings_summary">VPN protocol analysis timeouts</string>
     <string name="smart_start_settings_unavailable_hint">Settings become available after you add supported VPN configurations</string>

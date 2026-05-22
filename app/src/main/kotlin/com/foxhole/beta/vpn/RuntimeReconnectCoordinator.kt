@@ -2,6 +2,7 @@ package com.foxhole.beta.vpn
 
 import com.foxhole.beta.R
 import com.foxhole.beta.core.model.AutoConnectReasonCode
+import com.foxhole.beta.core.model.ConnectionSettings
 import com.foxhole.beta.core.model.ConnectionSnapshot
 import com.foxhole.beta.core.model.ConnectionState
 import com.foxhole.beta.core.model.Settings
@@ -32,15 +33,16 @@ internal fun FoxholeVpnService.scheduleAutoReconnect(reason: String) {
     val nextAttempt = reconnectState.attempts + 1
     val connectionSettings = container.settingsRepository.settings.value.connection
     val autoReconnectEnabled = connectionSettings.autoReconnect
+    val smartStartSubscriptionRecoveryEnabled = connectionSettings.smartStartSubscriptionRecoveryAvailable()
     val maxAttempts =
-        if (connectionSettings.smartStartV2RayTunSubscriptionsEnabled) {
+        if (smartStartSubscriptionRecoveryEnabled) {
             connectionSettings.smartStartSubscriptionRetryAttempts
         } else {
             RuntimeAutoReconnectPolicy.MAX_ATTEMPTS
         }
     val retryDelaySeconds =
         connectionSettings.smartStartSubscriptionRetryDelaySeconds
-            .takeIf { connectionSettings.smartStartV2RayTunSubscriptionsEnabled }
+            .takeIf { smartStartSubscriptionRecoveryEnabled }
     if (RuntimeAutoReconnectPolicy.shouldSchedule(autoReconnectEnabled, nextAttempt, maxAttempts)) {
         scheduleAutoReconnectAttempt(reconnectState, session, reason, nextAttempt, retryDelaySeconds)
     } else if (autoReconnectEnabled && reconnectState.attempts == maxAttempts) {
@@ -109,7 +111,7 @@ private fun FoxholeVpnService.scheduleSmartStartFailoverAttempt(
     reconnectState.job =
         scope.launch(Dispatchers.Default) {
             recordSmartStartProtocolDownAfterReconnectExhausted(session, reason, exhaustedAttempts)
-            if (!container.settingsRepository.current().connection.smartStartFailoverEnabled) {
+            if (!container.settingsRepository.current().connection.smartStartFailoverAvailable()) {
                 container.diagnosticsLogger.record("connection", "smart start failover skipped because setting is disabled")
                 return@launch
             }
@@ -204,6 +206,12 @@ private fun FoxholeVpnService.autoReconnectState(): VpnAutoReconnectState =
         vpnAutoReconnectStates.getOrPut(this) { VpnAutoReconnectState() }
     }
 
+private fun ConnectionSettings.smartStartFailoverAvailable(): Boolean =
+    smartStartEnabled && smartStartFailoverEnabled
+
+private fun ConnectionSettings.smartStartSubscriptionRecoveryAvailable(): Boolean =
+    smartStartEnabled && smartStartV2RayTunSubscriptionsEnabled
+
 private suspend fun FoxholeVpnService.reconnectIfStillEnabled(
     session: VpnSession,
     reason: String,
@@ -244,7 +252,7 @@ private suspend fun FoxholeVpnService.reconnectSmartStartFallbackIfStillEnabled(
     exhaustedAttempts: Int,
 ) {
     val settings = container.settingsRepository.current()
-    if (!settings.connection.autoReconnect || !settings.connection.smartStartFailoverEnabled) {
+    if (!settings.connection.autoReconnect || !settings.connection.smartStartFailoverAvailable()) {
         container.diagnosticsLogger.record("connection", "smart start failover skipped because setting is disabled")
         return
     }

@@ -273,6 +273,7 @@ data class ConnectionSettings(
     val subscriptionRefreshInterval: SubscriptionRefreshInterval = SubscriptionRefreshInterval.HOURS_6,
     val ipInfoEndpoint: String = "",
     val latencyProbeMethod: LatencyProbeMethod = LatencyProbeMethod.HTTP,
+    val smartStartEnabled: Boolean = false,
     val smartStartProtocolSelectionTimeoutSeconds: Int = SMART_START_PROTOCOL_TIMEOUT_DEFAULT_SECONDS,
     val smartStartRefreshSelectionTimeoutSeconds: Int = SMART_START_REFRESH_TIMEOUT_DEFAULT_SECONDS,
     val smartStartTransportPriority: SmartStartTransportPriority = SmartStartTransportPriority.ALL,

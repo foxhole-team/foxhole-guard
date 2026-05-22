@@ -790,11 +790,19 @@ internal fun ProfileStatisticsDetail(
             }
         } else {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                val overallSummary =
+                val overallSummaryLines =
                     listOf(
                         stringResource(R.string.statistics_success_rate) to formatPercent(detail.successRate),
                         stringResource(R.string.statistics_error_rate) to formatPercent(detail.errorRate),
-                    ).joinToString(" • ") { (label, value) -> "$label: $value" }
+                        detail.lastActivityAt?.let {
+                            stringResource(R.string.statistics_last_activity) to it.formatLastActivity()
+                        },
+                    ).filterNotNull()
+                if (selectedProtocol != null) {
+                    ProfileProtocolDetailPanel(protocol = selectedProtocol)
+                } else {
+                    ProfileOverallDetailGrid(detail = detail)
+                }
                 Text(
                     text = stringResource(R.string.statistics_profile_protocols_title),
                     style = MaterialTheme.typography.titleSmall,
@@ -803,7 +811,7 @@ internal fun ProfileStatisticsDetail(
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     ProfileDetailUsageRow(
                         title = stringResource(R.string.statistics_profile_overall_tab),
-                        summary = overallSummary,
+                        summaryLines = overallSummaryLines,
                         trailing = formatBytes(context, detail.totalBytes),
                         selected = selectedDetailKey == PROFILE_DETAIL_OVERALL_KEY,
                         onClick = { selectedDetailKey = PROFILE_DETAIL_OVERALL_KEY },
@@ -815,11 +823,6 @@ internal fun ProfileStatisticsDetail(
                             onClick = { selectedDetailKey = protocol.label },
                         )
                     }
-                }
-                if (selectedProtocol != null) {
-                    ProfileProtocolDetailPanel(protocol = selectedProtocol)
-                } else {
-                    ProfileOverallDetailGrid(detail = detail)
                 }
             }
         }
@@ -863,7 +866,7 @@ private fun ProfileOverallDetailGrid(detail: ProfileStatisticsDetailModel) {
 @Composable
 internal fun ProfileDetailUsageRow(
     title: String,
-    summary: String,
+    summaryLines: List<Pair<String, String>>,
     trailing: String,
     selected: Boolean,
     onClick: () -> Unit,
@@ -918,13 +921,19 @@ internal fun ProfileDetailUsageRow(
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
-                Text(
-                    text = summary,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = summaryColor,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                if (summaryLines.isNotEmpty()) {
+                    Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                        summaryLines.forEach { (label, value) ->
+                            Text(
+                                text = "$label: $value",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = summaryColor,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                    }
+                }
             }
             Text(
                 text = trailing,
@@ -943,14 +952,15 @@ internal fun ProfileProtocolUsageRow(
     onClick: () -> Unit,
 ) {
     val context = LocalContext.current
-    val summary =
+    val summaryLines =
         listOfNotNull(
             protocol.lastUsedAt?.let { stringResource(R.string.statistics_last_activity) to it.formatLastActivity() },
             stringResource(R.string.statistics_success_rate) to formatPercent(protocol.successRate),
-        ).joinToString(" • ") { (label, value) -> "$label: $value" }
+            stringResource(R.string.statistics_error_rate) to formatPercent(protocol.errorRate),
+        )
     ProfileDetailUsageRow(
         title = protocol.label,
-        summary = summary,
+        summaryLines = summaryLines,
         trailing = formatBytes(context, protocol.totalBytes),
         selected = selected,
         onClick = onClick,

@@ -116,8 +116,8 @@ internal fun buildHomeRouteUiState(
             }.orEmpty()
     val activeKnownLatenciesByOptionId = smartStartRememberedLatenciesByOptionId + activeProfileLatencies
     val activeRecommendedProtocolOptionIds =
-        state.activeProfile
-            ?.let { activeProfile ->
+        if (state.settings.connection.smartStartEnabled) {
+            state.activeProfile?.let { activeProfile ->
                 val evidenceOptionIds = activeKnownLatenciesByOptionId.keys
                 val baseline =
                     state.settings
@@ -132,14 +132,20 @@ internal fun buildHomeRouteUiState(
                         ?.optionId
                 (baseline + listOfNotNull(transient)).toSet()
             }.orEmpty()
+        } else {
+            emptySet()
+        }
     val activeFavoriteProtocolOptionId =
-        state.activeProfile
-            ?.let { activeProfile ->
+        if (state.settings.connection.smartStartEnabled) {
+            state.activeProfile?.let { activeProfile ->
                 fastestProtocolOptionId(activeKnownLatenciesByOptionId)
                     ?: state.settings
                         .smartProfilePreference(activeProfile.id)
                         ?.preferredLastKnownGoodOptionId(currentNetworkFingerprintKey)
             }
+        } else {
+            null
+        }
     val autoConnectRefreshingActiveProfile = autoConnect.running && state.activeProfile != null
     return state.toHomeRouteUiState(
         autoConnect = autoConnect,

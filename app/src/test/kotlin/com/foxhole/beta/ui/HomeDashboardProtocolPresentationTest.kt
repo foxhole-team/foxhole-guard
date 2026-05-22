@@ -1,6 +1,7 @@
 package com.foxhole.beta.ui
 
 import com.foxhole.beta.core.model.AutoConnectReasonCode
+import com.foxhole.beta.core.model.ConnectionSettings
 import com.foxhole.beta.core.model.ConnectionSnapshot
 import com.foxhole.beta.core.model.ConnectionState
 import com.foxhole.beta.core.model.Profile
@@ -10,6 +11,7 @@ import com.foxhole.beta.core.model.ProtocolHint
 import com.foxhole.beta.core.model.Settings
 import com.foxhole.beta.core.model.SmartProfilePreference
 import com.foxhole.beta.core.model.SmartProfileProtocolMemory
+import com.foxhole.beta.core.model.UiSettings
 import com.foxhole.beta.core.settings.smartStartEnabledProtocolSetHash
 import com.foxhole.beta.vpn.FoxholeVpnService
 import org.junit.Assert.assertEquals
@@ -76,7 +78,29 @@ class HomeDashboardProtocolPresentationTest {
             shouldShowSmartStartFirstAnalysisInfo(
                 HomeRouteUiState(
                     activeProfile = activeProfile,
-                    settings = Settings(),
+                    settings = Settings(connection = ConnectionSettings(smartStartEnabled = true)),
+                ),
+            ),
+        )
+    }
+
+    @Test
+    fun `smart start first analysis info is hidden when Smart start is disabled`() {
+        val activeProfile =
+            profile(
+                selectedProtocolOptionId = "outline",
+                protocolOptions =
+                    listOf(
+                        option("outline", ProtocolHint.OUTLINE),
+                        option("trojan", ProtocolHint.TROJAN),
+                    ),
+            )
+
+        assertFalse(
+            shouldShowSmartStartFirstAnalysisInfo(
+                HomeRouteUiState(
+                    activeProfile = activeProfile,
+                    settings = Settings(connection = ConnectionSettings(smartStartEnabled = false)),
                 ),
             ),
         )
@@ -101,6 +125,7 @@ class HomeDashboardProtocolPresentationTest {
                     activeProfile = activeProfile,
                     settings =
                         Settings(
+                            connection = ConnectionSettings(smartStartEnabled = true),
                             smartProfilePreferences =
                                 listOf(
                                     SmartProfilePreference(
@@ -276,6 +301,34 @@ class HomeDashboardProtocolPresentationTest {
             )
 
         assertTrue(shouldShowAutoConnectAction(activeProfile))
+    }
+
+    @Test
+    fun `dashboard Smart start controls require master toggle`() {
+        assertFalse(
+            isDashboardSmartStartControlsEnabled(
+                Settings(
+                    connection = ConnectionSettings(smartStartEnabled = false),
+                    ui = UiSettings(smartStartDashboardControlsEnabled = true),
+                ),
+            ),
+        )
+        assertFalse(
+            isDashboardSmartStartControlsEnabled(
+                Settings(
+                    connection = ConnectionSettings(smartStartEnabled = true),
+                    ui = UiSettings(smartStartDashboardControlsEnabled = false),
+                ),
+            ),
+        )
+        assertTrue(
+            isDashboardSmartStartControlsEnabled(
+                Settings(
+                    connection = ConnectionSettings(smartStartEnabled = true),
+                    ui = UiSettings(smartStartDashboardControlsEnabled = true),
+                ),
+            ),
+        )
     }
 
     @Test

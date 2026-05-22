@@ -349,15 +349,18 @@ class ProfileRuntimeSessionAndroidTest {
                 Log.d(TEST_TAG, "manual smart TCP Tor skipped: subscription input missing")
                 return@runBlocking
             }
+            val requireSuccess = requireLiveSmartSuccess()
             if (!ensureVpnPermission(app)) {
                 Log.d(TEST_TAG, "manual smart TCP Tor skipped: vpn permission missing")
+                if (requireSuccess) {
+                    assertTrue("vpn permission missing for required live TCP Tor test", false)
+                }
                 return@runBlocking
             }
             val targetProtocols =
                 requestedSmartProbeProtocols(
                     defaultProtocols = setOf(ProtocolHint.VLESS, ProtocolHint.TROJAN, ProtocolHint.SHADOWSOCKS, ProtocolHint.OUTLINE),
                 )
-            val requireSuccess = requireLiveSmartSuccess()
             resetRelevantSettings(app)
             clearProfiles(app)
 
@@ -818,6 +821,7 @@ class ProfileRuntimeSessionAndroidTest {
 
     private suspend fun resetRelevantSettings(app: FoxholeApplication) {
         with(app.container.settingsRepository) {
+            updateSafeModeEnabled(false)
             updateAutoReconnect(false)
             updateTrafficMode(TrafficMode.TUNNEL)
             updatePerAppRoutingMode(PerAppRoutingMode.FULL_TUNNEL)
@@ -832,6 +836,7 @@ class ProfileRuntimeSessionAndroidTest {
 
     private suspend fun baselineRuntimeSettings(app: FoxholeApplication) {
         with(app.container.settingsRepository) {
+            updateSafeModeEnabled(false)
             updateAutoReconnect(false)
             updateTrafficMode(TrafficMode.TUNNEL)
             updateTunStack(TunStack.SYSTEM)

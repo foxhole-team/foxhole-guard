@@ -59,6 +59,10 @@ private suspend inline fun <T> runCatchingUnlessCancelled(crossinline block: sus
 
 internal fun HomeViewModel.onAutoConnectActiveProfileInternal() {
     val state = uiState.value
+    if (!state.settings.connection.smartStartEnabled) {
+        snackbars.tryEmit(infoBanner(R.string.smart_start_disabled_message))
+        return
+    }
     val networkOverride = currentNetworkProfileOverride(state)
     val profile = networkOverride?.profile ?: state.activeProfile
     val profileId = profile?.id ?: return
@@ -191,6 +195,10 @@ private fun ConnectionSnapshot?.isConnectedSmartStartWinner(
         (this.protocolOptionId == null || this.protocolOptionId == protocolOptionId)
 
 internal fun HomeViewModel.startAutoConnectInternal(profileId: Long) {
+    if (!uiState.value.settings.connection.smartStartEnabled) {
+        snackbars.tryEmit(infoBanner(R.string.smart_start_disabled_message))
+        return
+    }
     val previousAutoConnectJob = autoConnectJob
     val nextAutoConnectJob =
         viewModelScope.launch(start = CoroutineStart.LAZY) {
@@ -286,7 +294,11 @@ private fun HomeViewModel.refreshDashboardAfterSmartStartIfConnected() {
 
 private suspend fun HomeViewModel.refreshSubscriptionBeforeSmartStartIfNeeded(profile: Profile): Profile {
     val settings = uiState.value.settings.connection
-    if (profile.sourceType != ProfileSourceType.SUBSCRIPTION_URL || !settings.smartStartV2RayTunSubscriptionsEnabled) {
+    if (
+        profile.sourceType != ProfileSourceType.SUBSCRIPTION_URL ||
+        !settings.smartStartEnabled ||
+        !settings.smartStartV2RayTunSubscriptionsEnabled
+    ) {
         return profile
     }
     val attempts =

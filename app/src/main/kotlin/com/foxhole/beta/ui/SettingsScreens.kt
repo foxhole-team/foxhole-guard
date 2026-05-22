@@ -525,11 +525,12 @@ fun SmartStartSettingsScreen(
     var retryAttemptsExpanded by rememberSaveable { mutableStateOf(false) }
     var retryDelayExpanded by rememberSaveable { mutableStateOf(false) }
     var clearSmartStartConfirmVisible by rememberSaveable { mutableStateOf(false) }
-    val smartStartSettingsEnabled = state.hasSmartProfile
+    val smartStartEnabled = state.settings.connection.smartStartEnabled
+    val smartStartSettingsEnabled = smartStartEnabled && state.hasSmartProfile
     val subscriptionRefreshEnabled = state.hasSubscriptionProfile
     val subscriptionRetrySettingsEnabled =
-        subscriptionRefreshEnabled && state.settings.connection.smartStartV2RayTunSubscriptionsEnabled
-    val supportedConfigurationsAvailable = smartStartSettingsEnabled || subscriptionRefreshEnabled
+        smartStartEnabled && subscriptionRefreshEnabled && state.settings.connection.smartStartV2RayTunSubscriptionsEnabled
+    val supportedConfigurationsAvailable = state.hasSmartProfile || subscriptionRefreshEnabled
 
     SettingsScaffold(
         title = stringResource(R.string.smart_start_settings_title),
@@ -564,10 +565,17 @@ fun SmartStartSettingsScreen(
                 )
             }
         }
-        if (!supportedConfigurationsAvailable) {
+        if (!smartStartEnabled || !supportedConfigurationsAvailable) {
             item {
                 Text(
-                    text = stringResource(R.string.smart_start_settings_unavailable_hint),
+                    text =
+                        stringResource(
+                            if (smartStartEnabled) {
+                                R.string.smart_start_settings_unavailable_hint
+                            } else {
+                                R.string.smart_start_disabled_hint
+                            },
+                        ),
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 2.dp),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -580,9 +588,10 @@ fun SmartStartSettingsScreen(
                 SettingSwitchRow(
                     title = stringResource(R.string.smart_start_v2raytun_subscriptions_title),
                     checked =
-                        subscriptionRefreshEnabled &&
+                        smartStartEnabled &&
+                            subscriptionRefreshEnabled &&
                             state.settings.connection.smartStartV2RayTunSubscriptionsEnabled,
-                    enabled = subscriptionRefreshEnabled,
+                    enabled = smartStartEnabled && subscriptionRefreshEnabled,
                     onCheckedChange = onSmartStartV2RayTunSubscriptionsEnabledChanged,
                     summary = stringResource(R.string.smart_start_v2raytun_subscriptions_summary),
                     leadingIcon = Icons.Outlined.Refresh,
@@ -696,7 +705,7 @@ fun SmartStartSettingsScreen(
                     title = stringResource(R.string.smart_start_clear_data_title),
                     summary = stringResource(R.string.smart_start_clear_data_summary),
                     summaryMaxLines = 3,
-                    enabled = supportedConfigurationsAvailable,
+                    enabled = smartStartEnabled && supportedConfigurationsAvailable,
                     onClick = { clearSmartStartConfirmVisible = true },
                 )
             }
@@ -1408,6 +1417,7 @@ fun ApplicationSettingsScreen(
     onShowExpertSettingsChanged: (Boolean) -> Unit,
     onShowFirewallStatusChanged: (Boolean) -> Unit,
     onShowTorQuickLaunchChanged: (Boolean) -> Unit,
+    onSmartStartEnabledChanged: (Boolean) -> Unit,
     onSmartStartDashboardControlsEnabledChanged: (Boolean) -> Unit,
 ) {
     val systemThemeLabel = stringResource(R.string.theme_mode_system)
@@ -1473,6 +1483,16 @@ fun ApplicationSettingsScreen(
                     checked = state.settings.connection.autoStartOnBoot,
                     leadingIcon = Icons.Outlined.PhoneAndroid,
                     onCheckedChange = onAutoStartChanged,
+                    grouped = true,
+                )
+                SettingsControlGroupDivider()
+                SettingSwitchRow(
+                    title = stringResource(R.string.smart_start_enable_title),
+                    checked = state.settings.connection.smartStartEnabled,
+                    summary = stringResource(R.string.smart_start_enable_summary),
+                    leadingIcon = Icons.Outlined.Speed,
+                    onCheckedChange = onSmartStartEnabledChanged,
+                    summaryMaxLines = Int.MAX_VALUE,
                     grouped = true,
                 )
                 SettingsControlGroupDivider()

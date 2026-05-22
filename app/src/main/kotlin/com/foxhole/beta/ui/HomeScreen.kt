@@ -249,7 +249,7 @@ fun HomeScreen(
         remember(state, dashboardProtocolPresentation) {
             homeProtocolMetricsAnalysisState(state, dashboardProtocolPresentation)
         }
-    val smartStartDashboardControlsEnabled = state.settings.ui.smartStartDashboardControlsEnabled
+    val smartStartDashboardControlsEnabled = isDashboardSmartStartControlsEnabled(state.settings)
     var activeReorderCard by rememberSaveable { mutableStateOf<DashboardCard?>(null) }
     var dashboardCardOrder by remember {
         mutableStateOf(normalizedDashboardCardOrder(state.settings.ui.dashboardCardOrder))

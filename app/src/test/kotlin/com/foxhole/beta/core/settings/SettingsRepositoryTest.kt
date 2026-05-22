@@ -234,6 +234,7 @@ class SettingsRepositoryTest {
         assertEquals(SMART_START_PROTOCOL_TIMEOUT_DEFAULT_SECONDS, connection.smartStartProtocolSelectionTimeoutSeconds)
         assertEquals(SMART_START_REFRESH_TIMEOUT_DEFAULT_SECONDS, connection.smartStartRefreshSelectionTimeoutSeconds)
         assertEquals(SmartStartTransportPriority.ALL, connection.smartStartTransportPriority)
+        assertFalse(connection.smartStartEnabled)
         assertTrue(connection.smartStartV2RayTunSubscriptionsEnabled)
         assertTrue(connection.smartStartFailoverEnabled)
         assertEquals(SMART_START_SUBSCRIPTION_RETRY_ATTEMPTS_DEFAULT, connection.smartStartSubscriptionRetryAttempts)

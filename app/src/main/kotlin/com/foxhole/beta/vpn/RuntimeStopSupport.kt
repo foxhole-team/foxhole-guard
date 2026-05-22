@@ -13,10 +13,42 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 
 internal const val RUNTIME_STOP_TIMEOUT_MS = 3_000L
 internal const val RUNTIME_START_TIMEOUT_MS = 20_000L
-internal const val TOR_RUNTIME_START_TIMEOUT_MS = 75_000L
+internal const val TOR_RUNTIME_START_TIMEOUT_MS = 240_000L
+
+internal fun runtimeStartTimeoutMsForSession(session: VpnSession): Long =
+    if (session.profileId == FoxholeVpnService.TOR_ONLY_PROFILE_ID || session.configJson.hasTorOutbound()) {
+        TOR_RUNTIME_START_TIMEOUT_MS
+    } else {
+        RUNTIME_START_TIMEOUT_MS
+    }
+
+private fun String.hasTorOutbound(): Boolean =
+    runCatching {
+        runtimeStopJson
+            .parseToJsonElement(this)
+            .jsonObject["outbounds"]
+            ?.jsonArray
+            .orEmpty()
+            .map { it.jsonObject }
+            .any { outbound ->
+                outbound["type"]?.jsonPrimitive?.contentOrNull == "tor" ||
+                    outbound["tag"]?.jsonPrimitive?.contentOrNull == "tor-over-vpn"
+            }
+    }.getOrDefault(false)
+
+private val runtimeStopJson =
+    Json {
+        ignoreUnknownKeys = true
+        explicitNulls = false
+    }
 
 data class RuntimeStopPolicy(
     val closeTunFdImmediately: Boolean = true,

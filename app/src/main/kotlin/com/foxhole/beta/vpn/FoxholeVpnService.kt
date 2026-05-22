@@ -377,12 +377,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         owner: String,
     ): Result<Unit> {
         val runtimeStartAtMs = SystemClock.elapsedRealtime()
-        val runtimeStartTimeoutMs =
-            if (session.profileId == TOR_ONLY_PROFILE_ID) {
-                TOR_RUNTIME_START_TIMEOUT_MS
-            } else {
-                RUNTIME_START_TIMEOUT_MS
-            }
+        val runtimeStartTimeoutMs = runtimeStartTimeoutMsForSession(session)
         val result =
             runtime.startFailClosed(
                 session = session,

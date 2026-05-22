@@ -15,6 +15,7 @@ import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTouchInput
@@ -275,6 +276,7 @@ class HomeScreenTest {
     fun settingsFooterShowsGithubRepositoryAction() {
         composeRule.onNodeWithTag("bottom_nav_settings").performClick()
         openAboutSettingsDialog()
+        composeRule.onNodeWithTag("settings_github_repository_action").performScrollTo()
         composeRule.onNodeWithTag("settings_github_repository_action").assertIsDisplayed()
     }
 
@@ -307,6 +309,7 @@ class HomeScreenTest {
         composeRule.onNodeWithTag("settings_screen").performScrollToNode(hasTestTag("settings_expert_action"))
         composeRule.onNodeWithTag("settings_expert_action").assertIsDisplayed()
         openAboutSettingsDialog()
+        composeRule.onNodeWithTag("settings_footer_version_card").performScrollTo()
         repeat(5) {
             composeRule.onNodeWithTag("settings_footer_version_card").performClick()
         }
@@ -372,6 +375,7 @@ class HomeScreenTest {
 
     private fun tapFooterVersionCardUntilUnlockDialog() {
         openAboutSettingsDialog()
+        composeRule.onNodeWithTag("settings_footer_version_card").performScrollTo()
         composeRule.waitForIdle()
         repeat(5) {
             composeRule.onNodeWithTag("settings_footer_version_card").performClick()

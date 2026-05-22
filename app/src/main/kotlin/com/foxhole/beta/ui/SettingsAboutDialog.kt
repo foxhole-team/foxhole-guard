@@ -65,13 +65,6 @@ internal fun AboutSettingsDialog(
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(14.dp),
             ) {
-                SettingsFooterVersionText(
-                    text = stringResource(R.string.settings_footer_version, appVersion),
-                    summary = stringResource(R.string.settings_home_version_summary_hidden),
-                    onRepositoryClick = onRepositoryClick,
-                    onSupportBotClick = onSupportBotClick,
-                    onClick = onVersionClick,
-                )
                 AboutDialogSectionTitle(text = stringResource(R.string.about_core_versions_title))
                 AboutDialogLinkRow(
                     title = stringResource(R.string.about_sing_box_title),
@@ -99,6 +92,13 @@ internal fun AboutSettingsDialog(
                 )
                 AboutDialogSectionTitle(text = stringResource(R.string.about_licenses_title))
                 AboutDialogLicenseList()
+                SettingsFooterVersionText(
+                    text = stringResource(R.string.settings_footer_version, appVersion),
+                    summary = stringResource(R.string.settings_home_version_summary_hidden),
+                    onRepositoryClick = onRepositoryClick,
+                    onSupportBotClick = onSupportBotClick,
+                    onClick = onVersionClick,
+                )
             }
         },
         confirmButton = {},

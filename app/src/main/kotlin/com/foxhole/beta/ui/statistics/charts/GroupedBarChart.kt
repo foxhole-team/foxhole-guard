@@ -32,14 +32,39 @@ fun GroupedBarChart(
             val bottom = size.height - 18.dp.toPx()
             val chartHeight = (bottom - top).coerceAtLeast(1f)
             val yMax = model.yAxis.max.coerceAtLeast(1.0)
-            drawLine(
-                color = tokens.gridColor,
-                start = Offset(0f, top),
-                end = Offset(size.width, top),
-                pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 8f)),
-            )
             val pointsCount = model.series.maxOfOrNull { series -> series.points.size }?.coerceAtLeast(1) ?: 1
             val slotWidth = size.width / pointsCount.toFloat()
+            val dash = PathEffect.dashPathEffect(floatArrayOf(8f, 8f))
+            listOf(0f, 0.25f, 0.5f, 0.75f, 1f).forEach { ratio ->
+                val y = bottom - chartHeight * ratio
+                drawLine(
+                    color = tokens.gridColor,
+                    start = Offset(0f, y),
+                    end = Offset(size.width, y),
+                    pathEffect = dash,
+                )
+            }
+            for (index in 0..pointsCount) {
+                val x = (slotWidth * index).coerceIn(0f, size.width)
+                drawLine(
+                    color = tokens.gridColor,
+                    start = Offset(x, top),
+                    end = Offset(x, bottom),
+                    pathEffect = dash,
+                )
+            }
+            drawLine(
+                color = tokens.axisColor,
+                start = Offset(0f, top),
+                end = Offset(0f, bottom),
+                strokeWidth = 1.dp.toPx(),
+            )
+            drawLine(
+                color = tokens.axisColor,
+                start = Offset(0f, bottom),
+                end = Offset(size.width, bottom),
+                strokeWidth = 1.dp.toPx(),
+            )
             val seriesWidth = slotWidth * 0.68f
             val barWidth = (seriesWidth / model.series.size.coerceAtLeast(1)).coerceIn(2.dp.toPx(), 14.dp.toPx())
             val radius = tokens.barCornerRadius.toPx()

@@ -351,6 +351,21 @@ internal fun HomeViewModel.onShowTorQuickLaunchChangedInternal(value: Boolean) {
     }
 }
 
+internal fun HomeViewModel.onSmartStartEnabledChangedInternal(value: Boolean) {
+    viewModelScope.launch {
+        if (!value) {
+            val autoConnectRunning = autoConnectUiStateMutable.value.running
+            cancelAutoConnect(clearUiOnly = true)
+            if (autoConnectRunning) {
+                container.connectionController.disconnect(suppressLocalGuard = false)
+            }
+            cancelSmartProfileMetricsRefreshInternal(restoreConnection = false)
+            recommendedProtocolMutable.value = null
+        }
+        container.settingsRepository.updateSmartStartEnabled(value)
+    }
+}
+
 internal fun HomeViewModel.onSmartStartDashboardControlsEnabledChangedInternal(value: Boolean) {
     viewModelScope.launch {
         container.settingsRepository.updateSmartStartDashboardControlsEnabled(value)

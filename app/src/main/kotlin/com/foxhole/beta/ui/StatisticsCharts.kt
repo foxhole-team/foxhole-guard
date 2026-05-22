@@ -47,6 +47,10 @@ import java.util.Locale
 import kotlin.math.max
 import kotlin.math.roundToInt
 
+private const val DECIMAL_MEGABYTE_BYTES = 1_000_000L
+private const val TIMELINE_TRAFFIC_SCALE_STEP_BYTES = 100L * DECIMAL_MEGABYTE_BYTES
+private const val MAX_TIMELINE_TRAFFIC_TICKS = 8
+
 @Composable
 internal fun CountryVerticalBarChart(
     points: List<CountryTrafficUiRow>,
@@ -736,11 +740,31 @@ internal fun timelineTrafficTicks(
     context: Context,
     yMax: Long,
 ): List<com.foxhole.beta.core.statistics.ChartTick> =
-    listOf(
-        com.foxhole.beta.core.statistics.ChartTick(0.0, "0"),
-        com.foxhole.beta.core.statistics.ChartTick((yMax / 2L).toDouble(), formatBytes(context, yMax / 2L)),
-        com.foxhole.beta.core.statistics.ChartTick(yMax.toDouble(), formatBytes(context, yMax)),
-    )
+    timelineTrafficTickValues(yMax).map { value ->
+        com.foxhole.beta.core.statistics.ChartTick(
+            value = value.toDouble(),
+            label = if (value == 0L) "0" else formatBytes(context, value),
+        )
+    }
+
+internal fun timelineTrafficTickValues(yMax: Long): List<Long> {
+    val boundedMax = niceTrafficScale(yMax)
+    val step = timelineTrafficTickStep(boundedMax)
+    val ticks =
+        generateSequence(0L) { previous -> previous + step }
+            .takeWhile { value -> value <= boundedMax }
+            .toMutableList()
+    if (ticks.lastOrNull() != boundedMax) {
+        ticks += boundedMax
+    }
+    return ticks
+}
+
+private fun timelineTrafficTickStep(yMax: Long): Long {
+    val targetIntervals = (MAX_TIMELINE_TRAFFIC_TICKS - 1).coerceAtLeast(1).toLong()
+    val rawStep = divideRoundUp(yMax, targetIntervals)
+    return roundUpToTimelineTrafficStep(rawStep)
+}
 
 internal fun niceTimelineTrafficScale(maxBytes: Long): Long =
     niceTrafficScale(maxBytes.coerceAtLeast(MIN_TIMELINE_TRAFFIC_SCALE_BYTES))
@@ -749,7 +773,20 @@ internal fun niceTimelineTrafficScale(maxBytes: Long): Long =
 internal fun statisticsCountryChartColors(): List<Color> = chartCountryColors()
 
 internal fun niceTrafficScale(maxBytes: Long): Long {
-    return com.foxhole.beta.core.statistics.niceBytesScale(maxBytes)
+    return roundUpToTimelineTrafficStep(maxBytes.coerceAtLeast(TIMELINE_TRAFFIC_SCALE_STEP_BYTES))
 }
+
+private fun roundUpToTimelineTrafficStep(value: Long): Long =
+    divideRoundUp(value, TIMELINE_TRAFFIC_SCALE_STEP_BYTES) * TIMELINE_TRAFFIC_SCALE_STEP_BYTES
+
+private fun divideRoundUp(
+    value: Long,
+    divisor: Long,
+): Long =
+    if (value <= 0L) {
+        0L
+    } else {
+        1L + (value - 1L) / divisor
+    }
 
 internal fun formatPercent(value: Float): String = "${(value.coerceIn(0f, 1f) * 100f).roundToInt()}%"
