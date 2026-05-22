@@ -8,13 +8,17 @@ import androidx.compose.material.icons.outlined.Dns
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.QueryStats
 import androidx.compose.material.icons.outlined.Shield
+import androidx.compose.material.icons.outlined.WarningAmber
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import com.foxhole.beta.BuildConfig
 import com.foxhole.beta.R
@@ -22,6 +26,7 @@ import com.foxhole.beta.core.model.AnomalyHistoryRetention
 import com.foxhole.beta.core.model.AnomalySensitivity
 
 @Composable
+@Suppress("CyclomaticComplexMethod", "LongMethod")
 fun SecuritySettingsScreen(
     state: SettingsRouteUiState,
     snackbarHostState: SnackbarHostState,
@@ -39,6 +44,32 @@ fun SecuritySettingsScreen(
 ) {
     var sensitivityExpanded by rememberSaveable { mutableStateOf(false) }
     var retentionExpanded by rememberSaveable { mutableStateOf(false) }
+    var pendingSecurityToggle by rememberSaveable { mutableStateOf<SecurityToggleTarget?>(null) }
+    fun applySecurityToggle(
+        target: SecurityToggleTarget,
+        enabled: Boolean,
+    ) {
+        when (target) {
+            SecurityToggleTarget.FIREWALL -> onFirewallEnabledChanged(enabled)
+            SecurityToggleTarget.SYSTEM_DNS -> onSystemDnsProtectionChanged(enabled)
+            SecurityToggleTarget.APP_MONITORING -> onInstalledAppMonitoringChanged(enabled)
+            SecurityToggleTarget.NEW_APP_QUARANTINE -> onNewAppQuarantineChanged(enabled)
+            SecurityToggleTarget.ANOMALY -> onAnomalyEnabledChanged(enabled)
+            SecurityToggleTarget.ANOMALY_NOTIFY -> onNotifyUnusualTrafficChanged(enabled)
+            SecurityToggleTarget.ANOMALY_BACKGROUND -> onAnalyzeBackgroundTrafficChanged(enabled)
+            SecurityToggleTarget.ANOMALY_COUNTRIES -> onAnalyzeDestinationCountriesChanged(enabled)
+        }
+    }
+    fun requestSecurityToggle(
+        target: SecurityToggleTarget,
+        enabled: Boolean,
+    ) {
+        if (enabled) {
+            pendingSecurityToggle = target
+        } else {
+            applySecurityToggle(target, false)
+        }
+    }
     SettingsScaffold(
         title = stringResource(R.string.security_settings_title),
         snackbarHostState = snackbarHostState,
@@ -64,10 +95,18 @@ fun SecuritySettingsScreen(
         item {
             SecurityProtectionControlGroup(
                 state = state,
-                onFirewallEnabledChanged = onFirewallEnabledChanged,
-                onSystemDnsProtectionChanged = onSystemDnsProtectionChanged,
-                onInstalledAppMonitoringChanged = onInstalledAppMonitoringChanged,
-                onNewAppQuarantineChanged = onNewAppQuarantineChanged,
+                onFirewallEnabledChanged = { value ->
+                    requestSecurityToggle(SecurityToggleTarget.FIREWALL, value)
+                },
+                onSystemDnsProtectionChanged = { value ->
+                    requestSecurityToggle(SecurityToggleTarget.SYSTEM_DNS, value)
+                },
+                onInstalledAppMonitoringChanged = { value ->
+                    requestSecurityToggle(SecurityToggleTarget.APP_MONITORING, value)
+                },
+                onNewAppQuarantineChanged = { value ->
+                    requestSecurityToggle(SecurityToggleTarget.NEW_APP_QUARANTINE, value)
+                },
             )
         }
         item {
@@ -77,7 +116,7 @@ fun SecuritySettingsScreen(
                     checked = state.settings.anomaly.enabled,
                     summary = stringResource(R.string.anomaly_enabled_summary),
                     leadingIcon = Icons.Outlined.QueryStats,
-                    onCheckedChange = onAnomalyEnabledChanged,
+                    onCheckedChange = { value -> requestSecurityToggle(SecurityToggleTarget.ANOMALY, value) },
                     summaryMaxLines = 4,
                     grouped = true,
                 )
@@ -87,7 +126,7 @@ fun SecuritySettingsScreen(
                     checked = state.settings.anomaly.notifyUnusualTraffic,
                     summary = stringResource(R.string.anomaly_notify_summary),
                     leadingIcon = Icons.Outlined.Notifications,
-                    onCheckedChange = onNotifyUnusualTrafficChanged,
+                    onCheckedChange = { value -> requestSecurityToggle(SecurityToggleTarget.ANOMALY_NOTIFY, value) },
                     enabled = state.settings.anomaly.enabled,
                     summaryMaxLines = Int.MAX_VALUE,
                     grouped = true,
@@ -112,7 +151,9 @@ fun SecuritySettingsScreen(
                     checked = state.settings.anomaly.analyzeBackgroundTraffic,
                     summary = stringResource(R.string.anomaly_background_summary),
                     leadingIcon = Icons.Outlined.QueryStats,
-                    onCheckedChange = onAnalyzeBackgroundTrafficChanged,
+                    onCheckedChange = { value ->
+                        requestSecurityToggle(SecurityToggleTarget.ANOMALY_BACKGROUND, value)
+                    },
                     enabled = state.settings.anomaly.enabled,
                     summaryMaxLines = Int.MAX_VALUE,
                     grouped = true,
@@ -123,7 +164,9 @@ fun SecuritySettingsScreen(
                     checked = state.settings.anomaly.analyzeDestinationCountries,
                     summary = stringResource(R.string.anomaly_countries_summary),
                     leadingIcon = Icons.Outlined.QueryStats,
-                    onCheckedChange = onAnalyzeDestinationCountriesChanged,
+                    onCheckedChange = { value ->
+                        requestSecurityToggle(SecurityToggleTarget.ANOMALY_COUNTRIES, value)
+                    },
                     enabled = state.settings.anomaly.enabled,
                     summaryMaxLines = Int.MAX_VALUE,
                     grouped = true,
@@ -145,6 +188,65 @@ fun SecuritySettingsScreen(
             }
         }
     }
+    pendingSecurityToggle?.let { target ->
+        SecurityEarlyDevelopmentWarningDialog(
+            onConfirm = {
+                applySecurityToggle(target, true)
+                pendingSecurityToggle = null
+            },
+            onDismiss = { pendingSecurityToggle = null },
+        )
+    }
+}
+
+private enum class SecurityToggleTarget {
+    FIREWALL,
+    SYSTEM_DNS,
+    APP_MONITORING,
+    NEW_APP_QUARANTINE,
+    ANOMALY,
+    ANOMALY_NOTIFY,
+    ANOMALY_BACKGROUND,
+    ANOMALY_COUNTRIES,
+}
+
+@Composable
+private fun SecurityEarlyDevelopmentWarningDialog(
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        modifier = Modifier.foxholeDialogChrome(),
+        shape = FoxholeDialogShape,
+        title = {
+            FoxholeDialogTitle(
+                title = stringResource(R.string.security_toggle_warning_title),
+                icon = Icons.Outlined.WarningAmber,
+                iconTint = MaterialTheme.colorScheme.error,
+                iconContainerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.42f),
+            )
+        },
+        text = {
+            Text(
+                text = stringResource(R.string.security_toggle_warning_body),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        },
+        confirmButton = {
+            FoxholeDialogConfirmButton(
+                onClick = onConfirm,
+                label = stringResource(R.string.enable_label),
+            )
+        },
+        dismissButton = {
+            FoxholeDialogDismissButton(
+                onClick = onDismiss,
+                label = stringResource(R.string.cancel),
+            )
+        },
+    )
 }
 
 @Composable

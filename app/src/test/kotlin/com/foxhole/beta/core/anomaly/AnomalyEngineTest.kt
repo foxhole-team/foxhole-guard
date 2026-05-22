@@ -15,7 +15,13 @@ import org.junit.Test
 
 class AnomalyEngineTest {
     private val engine = AnomalyEngine()
-    private val enabledSettings = AnomalySettings(enabled = true)
+    private val enabledSettings =
+        AnomalySettings(
+            enabled = true,
+            notifyUnusualTraffic = true,
+            analyzeBackgroundTraffic = true,
+            analyzeDestinationCountries = true,
+        )
 
     @Test
     fun `disabled anomaly analysis stays silent`() {

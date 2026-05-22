@@ -442,7 +442,7 @@ data class StatisticsSettings(
     val dnsFilteringEnabled: Boolean = true,
     val countryTrafficEnabled: Boolean = true,
     val anomalyMetricsEnabled: Boolean = true,
-    val appChangesEnabled: Boolean = true,
+    val appChangesEnabled: Boolean = false,
 )
 
 @Serializable

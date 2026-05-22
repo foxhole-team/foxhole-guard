@@ -53,10 +53,10 @@ enum class AnomalyHistoryRetention(val retentionHours: Int) {
 @Serializable
 data class AnomalySettings(
     val enabled: Boolean = false,
-    val notifyUnusualTraffic: Boolean = true,
+    val notifyUnusualTraffic: Boolean = false,
     val sensitivity: AnomalySensitivity = AnomalySensitivity.NORMAL,
-    val analyzeBackgroundTraffic: Boolean = true,
-    val analyzeDestinationCountries: Boolean = true,
+    val analyzeBackgroundTraffic: Boolean = false,
+    val analyzeDestinationCountries: Boolean = false,
     val historyRetention: AnomalyHistoryRetention = AnomalyHistoryRetention.DAYS_7,
 )
 

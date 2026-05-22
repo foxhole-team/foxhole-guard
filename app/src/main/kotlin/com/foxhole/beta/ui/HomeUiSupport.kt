@@ -180,6 +180,7 @@ internal fun shouldShowPendingNetworkLoading(
         visibleIpInfo != null -> false
         deviceInternetAvailable == false -> false
         explicitLoading -> true
+        !appLoaded && connectionState !in ACTIVE_CONNECTION_STATES && shouldAutoRefreshIpOnForeground(connectionState) -> true
         autoConnectRunning || connectionState in setOf(ConnectionState.CONNECTING, ConnectionState.RECONNECTING) -> true
         else -> false
     }

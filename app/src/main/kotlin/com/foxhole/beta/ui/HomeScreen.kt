@@ -458,7 +458,7 @@ fun HomeScreen(
                             Column(
                                 modifier =
                                     Modifier
-                                        .padding(start = 8.dp)
+                                        .padding(start = 2.dp)
                                         .weight(1f)
                                         .foxholeAnimateContentSize(),
                                 verticalArrangement = Arrangement.Center,

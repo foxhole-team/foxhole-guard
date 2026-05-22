@@ -98,6 +98,7 @@ private fun DrawScope.drawTimelineGrid(
     geometry: TimelineChartGeometry,
 ) {
     val dash = PathEffect.dashPathEffect(floatArrayOf(8f, 8f))
+    val gridStrokeWidth = 1.dp.toPx()
     val yRange = (model.yAxis.max - model.yAxis.min).coerceAtLeast(1.0)
     val yTicks = model.yAxis.ticks.ifEmpty {
         listOf(
@@ -113,6 +114,7 @@ private fun DrawScope.drawTimelineGrid(
             color = tokens.gridColor,
             start = Offset(geometry.left, y),
             end = Offset(geometry.right, y),
+            strokeWidth = gridStrokeWidth,
             pathEffect = dash,
         )
     }
@@ -131,6 +133,7 @@ private fun DrawScope.drawTimelineGrid(
                 color = tokens.gridColor,
                 start = Offset(x, geometry.top),
                 end = Offset(x, geometry.bottom),
+                strokeWidth = gridStrokeWidth,
                 pathEffect = dash,
             )
         }

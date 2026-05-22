@@ -298,6 +298,8 @@
     <string name="security_system_dns_protection_summary">Replaces system DNS with AdGuard DNS through local protection. Works with or without Firewall</string>
     <string name="security_development_warning_title">Basic network protection</string>
     <string name="security_development_warning_body">Foxhole can block known malicious domains, show unusual network activity, track newly installed apps, and flag risky Android capabilities. IMPORTANT: the app does not scan files, inspect APKs, or remove malware</string>
+    <string name="security_toggle_warning_title">Warning</string>
+    <string name="security_toggle_warning_body">These settings are in an early stage of development and may interrupt connections. Use them with caution.</string>
     <string name="security_firewall_enable_action">Enable Firewall</string>
     <string name="security_app_install_monitor_title">New app monitor</string>
     <string name="security_app_install_monitor_summary">Locally shows installer source, risk level, Accessibility service, notification access, device admin, VPN, overlay, battery ignore, autostart, unknown installer, and system-like app names</string>

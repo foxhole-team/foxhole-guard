@@ -303,6 +303,8 @@
     <string name="security_system_dns_protection_summary">Заменяет системные DNS на AdGuard DNS через локальную защиту. Работает с фаерволом и без него</string>
     <string name="security_development_warning_title">Базовая защита сети</string>
     <string name="security_development_warning_body">Foxhole может блокировать известные вредоносные домены, показывать необычную сетевую активность, отслеживать новые приложения и отмечать рискованные Android-возможности. ВАЖНО: приложение не сканирует файлы, не проверяет APK и не удаляет вредоносные программы</string>
+    <string name="security_toggle_warning_title">Внимание</string>
+    <string name="security_toggle_warning_body">Эти настройки находятся в ранней стадии разработки и могут вызывать обрывы подключений. Используйте с осторожностью.</string>
     <string name="security_firewall_enable_action">Включить фаервол</string>
     <string name="security_app_install_monitor_title">Контроль новых приложений</string>
     <string name="security_app_install_monitor_summary">Локально показывает источник установки, уровень риска, службу специальных возможностей, доступ к уведомлениям, администрирование устройства, VPN, оверлей, игнорирование батареи, автозапуск, неизвестный установщик и имена под системные приложения</string>

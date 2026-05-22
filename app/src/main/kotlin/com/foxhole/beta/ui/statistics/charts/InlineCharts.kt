@@ -173,12 +173,18 @@ fun VerticalValueBarChart(
         val chartTop = 8.dp.toPx()
         val chartBottom = size.height - 4.dp.toPx()
         val chartHeight = (chartBottom - chartTop).coerceAtLeast(1f)
-        drawLine(
-            color = tokens.gridColor,
-            start = Offset(0f, chartTop),
-            end = Offset(size.width, chartTop),
-            pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 8f)),
-        )
+        val dash = PathEffect.dashPathEffect(floatArrayOf(8f, 8f))
+        val gridStrokeWidth = 1.dp.toPx()
+        listOf(0f, 0.5f, 1f).forEach { ratio ->
+            val y = chartBottom - chartHeight * ratio
+            drawLine(
+                color = tokens.gridColor,
+                start = Offset(0f, y),
+                end = Offset(size.width, y),
+                strokeWidth = gridStrokeWidth,
+                pathEffect = dash,
+            )
+        }
         val slotWidth = size.width / values.size.coerceAtLeast(1).toFloat()
         val barWidth = (slotWidth * 0.48f).coerceAtMost(18.dp.toPx())
         val radius = CornerRadius(tokens.barCornerRadius.toPx(), tokens.barCornerRadius.toPx())

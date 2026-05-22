@@ -74,7 +74,8 @@ import com.foxhole.beta.core.model.TrafficMapUiState
 import com.foxhole.beta.core.model.TransportProtocol
 import com.foxhole.beta.core.model.TransportStatisticsUiItem
 import com.foxhole.beta.ui.statistics.charts.AnimatedSplitDonutChart
-import com.foxhole.beta.ui.statistics.charts.SplitOutcomeBar
+import com.foxhole.beta.ui.statistics.charts.SegmentedBarSegment
+import com.foxhole.beta.ui.statistics.charts.SegmentedLinearBar
 import java.util.Locale
 import kotlin.math.max
 
@@ -612,9 +613,13 @@ internal fun TransportStatisticsSection(items: List<TransportStatisticsUiItem>) 
         if (items.isEmpty()) {
             EmptySectionText(text = stringResource(R.string.statistics_transports_empty))
         } else {
+            val totalBytes = items.sumOf(TransportStatisticsUiItem::totalBytes).coerceAtLeast(1L)
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 items.forEach { item ->
-                    TransportRow(item = item)
+                    TransportRow(
+                        item = item,
+                        usageShare = item.totalBytes.toFloat() / totalBytes.toFloat(),
+                    )
                 }
             }
         }
@@ -622,17 +627,20 @@ internal fun TransportStatisticsSection(items: List<TransportStatisticsUiItem>) 
 }
 
 @Composable
-internal fun TransportRow(item: TransportStatisticsUiItem) {
+internal fun TransportRow(
+    item: TransportStatisticsUiItem,
+    usageShare: Float,
+) {
     val context = LocalContext.current
+    val usageText = formatPercent(usageShare)
     val barDescription =
-        "${transportLabel(item.transport)} ${
-            stringResource(
-                R.string.statistics_profile_protocol_metrics,
-                formatPercent(item.successRate),
-                formatPercent(item.errorRate),
-                formatBytes(context, item.totalBytes),
-            )
-        }"
+        "${transportLabel(item.transport)} $usageText ${formatBytes(context, item.totalBytes)}"
+    val barColor =
+        when (item.transport) {
+            TransportProtocol.TCP -> MaterialTheme.colorScheme.primary
+            TransportProtocol.UDP -> MaterialTheme.colorScheme.tertiary
+            TransportProtocol.UNKNOWN -> MaterialTheme.colorScheme.onSurfaceVariant
+        }
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -644,20 +652,34 @@ internal fun TransportRow(item: TransportStatisticsUiItem) {
             style = MaterialTheme.typography.bodyMedium,
             fontWeight = FontWeight.SemiBold,
         )
-        SplitOutcomeBar(
-            successRate = item.successRate,
-            errorRate = item.errorRate,
+        SegmentedLinearBar(
+            segments =
+            listOf(
+                SegmentedBarSegment(
+                    color = barColor,
+                    ratio = usageShare,
+                    minVisibleWidth = 3.dp,
+                ),
+            ),
             contentDescription = barDescription,
             modifier = Modifier
                 .weight(1f)
                 .height(10.dp),
         )
-        Text(
-            text = formatBytes(context, item.totalBytes),
-            style = MaterialTheme.typography.labelMedium,
-            fontWeight = FontWeight.SemiBold,
-            textAlign = TextAlign.End,
-        )
+        Column(horizontalAlignment = Alignment.End) {
+            Text(
+                text = usageText,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.SemiBold,
+                textAlign = TextAlign.End,
+            )
+            Text(
+                text = formatBytes(context, item.totalBytes),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.End,
+            )
+        }
     }
 }
 
@@ -756,6 +778,7 @@ internal fun ProfileStatisticsDetail(
 ) {
     val context = LocalContext.current
     val detail = profileStatisticsDetail(state, item)
+    val profile = state.profiles.firstOrNull { profile -> profile.id == item.profileId }
     val connectedProtocols =
         remember(detail.protocols) {
             detail.protocols
@@ -783,9 +806,10 @@ internal fun ProfileStatisticsDetail(
             .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        if (connectedProtocols.isEmpty()) {
+        val showProtocolSwitcher = shouldShowProfileProtocolSwitcher(profile, connectedProtocols.size)
+        if (connectedProtocols.isEmpty() || !showProtocolSwitcher) {
             ProfileOverallDetailGrid(detail = detail)
-            if (detail.protocols.isNotEmpty()) {
+            if (connectedProtocols.isEmpty() && detail.protocols.isNotEmpty()) {
                 EmptySectionText(text = stringResource(R.string.statistics_protocols_empty))
             }
         } else {

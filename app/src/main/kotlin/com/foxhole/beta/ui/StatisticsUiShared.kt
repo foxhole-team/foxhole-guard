@@ -6,7 +6,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.foxhole.beta.R
+import com.foxhole.beta.core.model.Profile
 import com.foxhole.beta.core.model.StatisticsRetention
+import com.foxhole.beta.core.profile.MultiProtocolProfileSupport
 import kotlin.math.roundToInt
 
 @Composable
@@ -27,6 +29,13 @@ internal val DASHBOARD_DISPLAY_RANGES =
     )
 
 internal fun dashboardStatisticsDisplayRanges(): List<StatisticsDisplayRange> = DASHBOARD_DISPLAY_RANGES
+
+internal fun shouldShowProfileProtocolSwitcher(
+    profile: Profile?,
+    connectedProtocolCount: Int,
+): Boolean =
+    connectedProtocolCount > 0 &&
+        profile?.let(MultiProtocolProfileSupport::hasMultipleSupportedOptions) == true
 
 @Composable
 internal fun statisticsRetentionLabel(value: StatisticsRetention): String =

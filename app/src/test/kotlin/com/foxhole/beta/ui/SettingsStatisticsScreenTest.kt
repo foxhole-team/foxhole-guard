@@ -19,6 +19,20 @@ import org.junit.Test
 
 class SettingsStatisticsScreenTest {
     @Test
+    fun `security related settings default to off`() {
+        val settings = Settings()
+
+        assertFalse(settings.expert.firewallEnabled)
+        assertFalse(settings.expert.systemDnsProtectionEnabled)
+        assertFalse(settings.expert.newAppQuarantineEnabled)
+        assertFalse(settings.statistics.appChangesEnabled)
+        assertFalse(settings.anomaly.enabled)
+        assertFalse(settings.anomaly.notifyUnusualTraffic)
+        assertFalse(settings.anomaly.analyzeBackgroundTraffic)
+        assertFalse(settings.anomaly.analyzeDestinationCountries)
+    }
+
+    @Test
     fun `smart profile statistics keep tcp protocol traffic separate before profile summary`() {
         val profile =
             Profile(
@@ -99,6 +113,42 @@ class SettingsStatisticsScreenTest {
         assertEquals(480L, detail.totalBytes)
         assertEquals(150L, detail.protocols.single { item -> item.label == "VLESS" }.totalBytes)
         assertEquals(330L, detail.protocols.single { item -> item.label == "Hysteria2" }.totalBytes)
+    }
+
+    @Test
+    fun `profile detail protocol switcher is hidden for single protocol profiles`() {
+        val singleProfile =
+            Profile(
+                id = 7L,
+                name = "Single",
+                sourceType = ProfileSourceType.RAW_SINGBOX_JSON,
+                secretRef = "secret",
+                protocolHint = ProtocolHint.VLESS,
+                lastUpdatedAt = null,
+                lastEtag = null,
+                isActive = true,
+            )
+        val smartProfile =
+            singleProfile.copy(
+                protocolOptions = listOf(
+                    ProfileProtocolOption(
+                        id = "vless",
+                        displayName = "VLESS",
+                        protocolHint = ProtocolHint.VLESS,
+                        isSelected = true,
+                    ),
+                    ProfileProtocolOption(
+                        id = "hysteria",
+                        displayName = "Hysteria2",
+                        protocolHint = ProtocolHint.HYSTERIA2,
+                    ),
+                ),
+                selectedProtocolOptionId = "vless",
+            )
+
+        assertFalse(shouldShowProfileProtocolSwitcher(singleProfile, connectedProtocolCount = 1))
+        assertTrue(shouldShowProfileProtocolSwitcher(smartProfile, connectedProtocolCount = 1))
+        assertFalse(shouldShowProfileProtocolSwitcher(smartProfile, connectedProtocolCount = 0))
     }
 
     @Test

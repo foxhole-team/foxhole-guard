@@ -25,8 +25,8 @@ data class ChartTokens(
 fun chartVisualTokens(): ChartTokens {
     val colorScheme = MaterialTheme.colorScheme
     return ChartTokens(
-        gridColor = colorScheme.outlineVariant.copy(alpha = 0.32f),
-        axisColor = colorScheme.onSurfaceVariant.copy(alpha = 0.58f),
+        gridColor = colorScheme.onSurfaceVariant.copy(alpha = 0.46f),
+        axisColor = colorScheme.onSurfaceVariant.copy(alpha = 0.72f),
         trackColor = colorScheme.surfaceVariant.copy(alpha = 0.42f),
         ringTrackColor = colorScheme.onSurface.copy(alpha = 0.16f),
         lineStrokeWidth = 2.dp,

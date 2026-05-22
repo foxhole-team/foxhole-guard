@@ -304,8 +304,8 @@ class HomeIpLoadingPolicyTest {
     }
 
     @Test
-    fun `does not tie disconnected network loading to profile loading`() {
-        assertFalse(
+    fun `shows startup network loading while disconnected profile state loads`() {
+        assertTrue(
             shouldShowPendingNetworkLoading(
                 visibleIpInfo = null,
                 explicitLoading = false,
