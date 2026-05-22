@@ -167,6 +167,7 @@ internal fun shouldShowIpInfoLoading(
     connectionState: ConnectionState,
 ): Boolean = explicitLoading
 
+@Suppress("UNUSED_PARAMETER")
 internal fun shouldShowPendingNetworkLoading(
     visibleIpInfo: IpInfo?,
     explicitLoading: Boolean,
@@ -179,7 +180,6 @@ internal fun shouldShowPendingNetworkLoading(
         visibleIpInfo != null -> false
         deviceInternetAvailable == false -> false
         explicitLoading -> true
-        !appLoaded -> true
         autoConnectRunning || connectionState in setOf(ConnectionState.CONNECTING, ConnectionState.RECONNECTING) -> true
         else -> false
     }

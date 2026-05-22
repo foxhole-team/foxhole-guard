@@ -14,7 +14,6 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -911,10 +910,8 @@ internal fun SettingsFooterVersionText(
     summary: String,
     onRepositoryClick: () -> Unit,
     onSupportBotClick: () -> Unit,
-    onClick: () -> Unit,
 ) {
     val shape = MaterialTheme.shapes.large
-    val versionInteractionSource = remember { MutableInteractionSource() }
     Column(
         modifier =
             Modifier
@@ -926,11 +923,6 @@ internal fun SettingsFooterVersionText(
                 Modifier
                     .fillMaxWidth()
                     .clip(shape)
-                    .clickable(
-                        interactionSource = versionInteractionSource,
-                        indication = null,
-                        onClick = onClick,
-                    )
                     .testTag("settings_footer_version_card"),
             contentAlignment = Alignment.Center,
         ) {

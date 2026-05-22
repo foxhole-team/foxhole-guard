@@ -562,10 +562,33 @@ internal fun HomeViewModel.onPerAppRoutingModeSelectedInternal(value: PerAppRout
     if (current == value) {
         return
     }
+    val targetProfileId = activeRuntimeProfileIdForReload()
+    val activeRuntime =
+        targetProfileId != null &&
+            container.connectionController.snapshot.value.state in HomeViewModel.ACTIVE_CONNECTION_STATES
+    if (shouldDisconnectWhenDisablingActiveSplitTunnel(current, value, activeRuntime)) {
+        viewModelScope.launch {
+            container.settingsRepository.updatePerAppRoutingMode(value)
+            clearRouteModeRestartPrompt()
+            clearRuntimeReconnectRequired()
+            clearRuntimeReloadPending()
+            container.connectionController.disconnect(suppressLocalGuard = false)
+        }
+        return
+    }
     updateRouteModeSettingAndPromptRestart {
         container.settingsRepository.updatePerAppRoutingMode(value)
     }
 }
+
+internal fun shouldDisconnectWhenDisablingActiveSplitTunnel(
+    currentMode: PerAppRoutingMode,
+    nextMode: PerAppRoutingMode,
+    activeRuntime: Boolean,
+): Boolean =
+    activeRuntime &&
+        currentMode != PerAppRoutingMode.FULL_TUNNEL &&
+        nextMode == PerAppRoutingMode.FULL_TUNNEL
 
 internal fun HomeViewModel.onSelectedPackagesChangedInternal(value: List<String>) {
     updateAppRoutingSettingAndPromptReconnect {

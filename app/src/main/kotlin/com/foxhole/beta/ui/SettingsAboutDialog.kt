@@ -5,27 +5,25 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AccountTree
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Dns
-import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Shield
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -33,39 +31,67 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.foxhole.beta.BuildConfig
 import com.foxhole.beta.R
+import kotlinx.coroutines.launch
 
 @Composable
-internal fun AboutSettingsDialog(
+internal fun AboutSettingsScreen(
     appVersion: String,
-    onRepositoryClick: () -> Unit,
-    onSupportBotClick: () -> Unit,
-    onSingBoxClick: () -> Unit,
-    onTorClick: () -> Unit,
-    onAdGuardDnsClick: () -> Unit,
-    onVersionClick: () -> Unit,
-    onDismiss: () -> Unit,
+    snackbarHostState: SnackbarHostState,
+    onNavigateUp: () -> Unit,
 ) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        modifier = Modifier
-            .foxholeDialogChrome()
-            .testTag("settings_about_dialog"),
-        shape = FoxholeDialogShape,
-        title = {
-            FoxholeDialogTitle(
-                title = stringResource(R.string.about_settings_title),
-                icon = Icons.Outlined.Info,
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val repositoryOpenFailed = stringResource(R.string.open_repository_failed)
+    val supportChannelOpenFailed = stringResource(R.string.support_channel_open_failed)
+    val showRepositoryOpenError: () -> Unit = {
+        scope.launch {
+            snackbarHostState.showBanner(
+                repositoryOpenFailed,
+                FoxholeBannerTone.ERROR,
             )
-        },
-        text = {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(max = 560.dp)
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(14.dp),
-            ) {
+        }
+    }
+    val onRepositoryClick: () -> Unit = {
+        if (!openFoxholeRepository(context)) {
+            showRepositoryOpenError()
+        }
+    }
+    val onSingBoxClick: () -> Unit = {
+        if (!openSingBoxRepository(context)) {
+            showRepositoryOpenError()
+        }
+    }
+    val onTorClick: () -> Unit = {
+        if (!openTorRepository(context)) {
+            showRepositoryOpenError()
+        }
+    }
+    val onAdGuardDnsClick: () -> Unit = {
+        if (!openAdGuardDnsFilterRepository(context)) {
+            showRepositoryOpenError()
+        }
+    }
+    val onSupportBotClick: () -> Unit = {
+        if (!openSupportChannel(context)) {
+            scope.launch {
+                snackbarHostState.showBanner(
+                    supportChannelOpenFailed,
+                    FoxholeBannerTone.ERROR,
+                )
+            }
+        }
+    }
+
+    SettingsScaffold(
+        title = stringResource(R.string.about_settings_title),
+        snackbarHostState = snackbarHostState,
+        onNavigateUp = onNavigateUp,
+        tag = "settings_about_screen",
+    ) {
+        item {
+            SettingsControlGroup {
                 AboutDialogSectionTitle(text = stringResource(R.string.about_core_versions_title))
+                SettingsControlGroupDivider()
                 AboutDialogLinkRow(
                     title = stringResource(R.string.about_sing_box_title),
                     value = BuildConfig.LIBBOX_SOURCE_VERSION,
@@ -74,6 +100,7 @@ internal fun AboutSettingsDialog(
                     testTag = "settings_about_sing_box_repository_action",
                     onClick = onSingBoxClick,
                 )
+                SettingsControlGroupDivider()
                 AboutDialogLinkRow(
                     title = stringResource(R.string.about_tor_title),
                     value = BuildConfig.TOR_BUNDLE_VERSION,
@@ -82,6 +109,7 @@ internal fun AboutSettingsDialog(
                     testTag = "settings_about_tor_repository_action",
                     onClick = onTorClick,
                 )
+                SettingsControlGroupDivider()
                 AboutDialogLinkRow(
                     title = stringResource(R.string.about_adguard_dns_title),
                     value = stringResource(R.string.about_adguard_dns_value),
@@ -90,28 +118,33 @@ internal fun AboutSettingsDialog(
                     testTag = "settings_about_adguard_dns_repository_action",
                     onClick = onAdGuardDnsClick,
                 )
-                AboutDialogSectionTitle(text = stringResource(R.string.about_licenses_title))
-                AboutDialogLicenseList()
-                SettingsFooterVersionText(
-                    text = stringResource(R.string.settings_footer_version, appVersion),
-                    summary = stringResource(R.string.settings_home_version_summary_hidden),
-                    onRepositoryClick = onRepositoryClick,
-                    onSupportBotClick = onSupportBotClick,
-                    onClick = onVersionClick,
-                )
             }
-        },
-        confirmButton = {},
-        dismissButton = {
-            FoxholeDialogDismissButton(onClick = onDismiss)
-        },
-    )
+        }
+        item {
+            SettingsControlGroup {
+                AboutDialogSectionTitle(text = stringResource(R.string.about_licenses_title))
+                SettingsControlGroupDivider()
+                AboutDialogLicenseList()
+            }
+        }
+        item {
+            SettingsFooterVersionText(
+                text = stringResource(R.string.settings_footer_version, appVersion),
+                summary = stringResource(R.string.settings_home_version_summary_hidden),
+                onRepositoryClick = onRepositoryClick,
+                onSupportBotClick = onSupportBotClick,
+            )
+        }
+    }
 }
 
 @Composable
 private fun AboutDialogSectionTitle(text: String) {
     Text(
         text = text,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 10.dp),
         style = MaterialTheme.typography.titleSmall,
         color = MaterialTheme.colorScheme.onSurface,
         fontWeight = FontWeight.SemiBold,
@@ -190,7 +223,9 @@ private fun AboutDialogLinkRow(
 @Composable
 private fun AboutDialogLicenseList() {
     Column(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Text(

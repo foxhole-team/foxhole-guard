@@ -304,8 +304,8 @@ class HomeIpLoadingPolicyTest {
     }
 
     @Test
-    fun `shows startup pending network loading while disconnected app is still loading and ip is empty`() {
-        assertTrue(
+    fun `does not tie disconnected network loading to profile loading`() {
+        assertFalse(
             shouldShowPendingNetworkLoading(
                 visibleIpInfo = null,
                 explicitLoading = false,

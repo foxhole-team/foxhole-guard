@@ -849,7 +849,7 @@ class HomeDashboardPresentationTest {
     }
 
     @Test
-    fun `network model shows startup skeleton before profiles load`() {
+    fun `network model does not wait on profile loading while disconnected`() {
         val model =
             resolveHomeDashboardNetworkModel(
                 state =
@@ -862,8 +862,8 @@ class HomeDashboardPresentationTest {
             )
 
         assertFalse(model.showConnectionStatus)
-        assertTrue(model.showLoading)
-        assertTrue(model.showIpInfoLoading)
+        assertFalse(model.showLoading)
+        assertFalse(model.showIpInfoLoading)
         assertFalse(model.showConnectionDetailsLoading)
     }
 

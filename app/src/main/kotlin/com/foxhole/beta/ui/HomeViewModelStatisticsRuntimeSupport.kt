@@ -19,7 +19,6 @@ internal fun HomeViewModel.onStatisticsUiVisibilityChangedInternal(visible: Bool
     if (visible && runtimeAllowed) {
         viewModelScope.launch {
             loadInstalledApps()
-            sampleAppTrafficStats()
         }
     }
     if (visible && container.settingsRepository.settings.value.statistics.appChangesEnabled) {
@@ -39,7 +38,6 @@ internal fun HomeViewModel.onStatisticsEnabledChangedInternal(value: Boolean) {
         syncAppTrafficStatsSampler(runtimeAllowed)
         if (value && runtimeAllowed) {
             loadInstalledApps()
-            sampleAppTrafficStats()
         }
         if (value && container.settingsRepository.settings.value.statistics.appChangesEnabled) {
             recordInstalledAppInventoryFromLoadedApps()
@@ -78,7 +76,6 @@ internal fun HomeViewModel.onStatisticsMetricEnabledChangedInternal(
         syncAppTrafficStatsSampler(runtimeAllowed)
         if (value && metric == StatisticsMetric.APP_TRAFFIC && runtimeAllowed) {
             loadInstalledApps()
-            sampleAppTrafficStats()
         }
         if (value && metric == StatisticsMetric.APP_CHANGES) {
             recordInstalledAppInventoryFromLoadedApps()
@@ -100,7 +97,6 @@ internal fun HomeViewModel.onAppTrafficStatsEnabledChangedInternal(value: Boolea
         syncAppTrafficStatsSampler(runtimeAllowed)
         if (value && runtimeAllowed) {
             loadInstalledApps()
-            sampleAppTrafficStats()
         }
     }
 }

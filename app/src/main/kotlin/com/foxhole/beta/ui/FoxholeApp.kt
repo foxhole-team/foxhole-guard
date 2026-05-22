@@ -130,6 +130,7 @@ private object AppRoute {
     const val ROUTING_SITES = "settings/routing/sites"
     const val SMART_START = "settings/smart-start"
     const val APPLICATION = "settings/application"
+    const val ABOUT = "settings/about"
     const val EXPERT = "settings/expert"
     const val DIAGNOSTICS = "settings/diagnostics"
     const val STATISTICS = "settings/statistics"
@@ -456,7 +457,7 @@ fun FoxholeApp(
                         onOpenExpert = { navController.navigate(AppRoute.EXPERT) },
                         onOpenDiagnostics = { navController.navigate(AppRoute.DIAGNOSTICS) },
                         onOpenStatistics = { navController.navigate(AppRoute.STATISTICS) },
-                        onUnlockExpertSettings = viewModel::unlockExpertSettings,
+                        onOpenAbout = { navController.navigate(AppRoute.ABOUT) },
                     )
                 }
                 composable(AppRoute.SMART_START) {
@@ -465,6 +466,7 @@ fun FoxholeApp(
                         state = state,
                         snackbarHostState = snackbarHostState,
                         onNavigateUp = navController::navigateUp,
+                        onSmartStartEnabledChanged = viewModel::onSmartStartEnabledChanged,
                         onSmartStartProtocolSelectionTimeoutChanged = viewModel::onSmartStartProtocolSelectionTimeoutChanged,
                         onSmartStartRefreshSelectionTimeoutChanged = viewModel::onSmartStartRefreshSelectionTimeoutChanged,
                         onSmartStartTransportPrioritySelected = viewModel::onSmartStartTransportPrioritySelected,
@@ -694,8 +696,15 @@ fun FoxholeApp(
                         onShowExpertSettingsChanged = viewModel::onShowExpertSettingsChanged,
                         onShowFirewallStatusChanged = viewModel::onShowFirewallStatusChanged,
                         onShowTorQuickLaunchChanged = viewModel::onShowTorQuickLaunchChanged,
-                        onSmartStartEnabledChanged = viewModel::onSmartStartEnabledChanged,
                         onSmartStartDashboardControlsEnabledChanged = viewModel::onSmartStartDashboardControlsEnabledChanged,
+                    )
+                }
+                composable(AppRoute.ABOUT) {
+                    val state by viewModel.settingsRouteState.collectAsStateWithLifecycle()
+                    AboutSettingsScreen(
+                        appVersion = state.appVersion,
+                        snackbarHostState = snackbarHostState,
+                        onNavigateUp = navController::navigateUp,
                     )
                 }
                 composable(AppRoute.EXPERT) {

@@ -1,7 +1,5 @@
 package com.foxhole.beta.ui
 
-import android.content.ClipboardManager
-import android.text.format.DateFormat
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -50,7 +48,6 @@ import androidx.compose.material.icons.outlined.Speed
 import androidx.compose.material.icons.outlined.SwapVert
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material.icons.outlined.VpnKey
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -62,10 +59,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -73,7 +68,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -116,12 +110,7 @@ import com.foxhole.beta.ui.FoxholeLazyScaffold
 import com.foxhole.beta.ui.FoxholePreferenceCard
 import com.foxhole.beta.ui.UsageTotalsCard
 import com.foxhole.beta.ui.theme.LocalFoxholeUiPalette
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import java.util.Date
-
-private const val EXPERT_UNLOCK_TAP_COUNT = 5
 
 @Suppress("LongParameterList")
 @Composable
@@ -141,63 +130,9 @@ fun SettingsHomeScreen(
     onOpenExpert: () -> Unit,
     onOpenDiagnostics: () -> Unit,
     onOpenStatistics: () -> Unit,
-    onUnlockExpertSettings: () -> Unit,
+    onOpenAbout: () -> Unit,
 ) {
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-    val repositoryOpenFailed = stringResource(R.string.open_repository_failed)
-    val supportChannelOpenFailed = stringResource(R.string.support_channel_open_failed)
     val expertVisible = state.settings.ui.showExpertSettings
-    var aboutDialogVisible by rememberSaveable { mutableStateOf(false) }
-    var expertUnlockClickCount by rememberSaveable(expertVisible) { mutableIntStateOf(0) }
-    var expertUnlockConfirmVisible by rememberSaveable { mutableStateOf(false) }
-    val showRepositoryOpenError: () -> Unit = {
-        scope.launch {
-            snackbarHostState.showBanner(
-                repositoryOpenFailed,
-                FoxholeBannerTone.ERROR,
-            )
-        }
-    }
-    val onRepositoryClick: () -> Unit = {
-        if (!openFoxholeRepository(context)) {
-            showRepositoryOpenError()
-        }
-    }
-    val onSingBoxClick: () -> Unit = {
-        if (!openSingBoxRepository(context)) {
-            showRepositoryOpenError()
-        }
-    }
-    val onTorClick: () -> Unit = {
-        if (!openTorRepository(context)) {
-            showRepositoryOpenError()
-        }
-    }
-    val onAdGuardDnsClick: () -> Unit = {
-        if (!openAdGuardDnsFilterRepository(context)) {
-            showRepositoryOpenError()
-        }
-    }
-    val onSupportBotClick: () -> Unit = {
-        if (!openSupportChannel(context)) {
-            scope.launch {
-                snackbarHostState.showBanner(
-                    supportChannelOpenFailed,
-                    FoxholeBannerTone.ERROR,
-                )
-            }
-        }
-    }
-    val onVersionClick = {
-        if (!expertVisible) {
-            expertUnlockClickCount += 1
-            if (expertUnlockClickCount >= EXPERT_UNLOCK_TAP_COUNT) {
-                expertUnlockClickCount = 0
-                expertUnlockConfirmVisible = true
-            }
-        }
-    }
     SettingsScaffold(
         title = stringResource(R.string.settings),
         snackbarHostState = snackbarHostState,
@@ -214,38 +149,10 @@ fun SettingsHomeScreen(
             onOpenRoutingSites = onOpenRoutingSites,
             onOpenSmartStart = onOpenSmartStart,
             onOpenApplication = onOpenApplication,
-            onOpenAbout = { aboutDialogVisible = true },
+            onOpenAbout = onOpenAbout,
             onOpenExpert = onOpenExpert,
             onOpenDiagnostics = onOpenDiagnostics,
             onOpenStatistics = onOpenStatistics,
-        )
-    }
-    if (aboutDialogVisible) {
-        AboutSettingsDialog(
-            appVersion = state.appVersion,
-            onRepositoryClick = onRepositoryClick,
-            onSupportBotClick = onSupportBotClick,
-            onSingBoxClick = onSingBoxClick,
-            onTorClick = onTorClick,
-            onAdGuardDnsClick = onAdGuardDnsClick,
-            onVersionClick = onVersionClick,
-            onDismiss = { aboutDialogVisible = false },
-        )
-    }
-    if (expertUnlockConfirmVisible) {
-        ConfirmDialog(
-            title = stringResource(R.string.expert_unlock_confirm_title),
-            body = stringResource(R.string.expert_unlock_confirm_body),
-            confirmLabel = stringResource(R.string.enable_label),
-            dismissLabel = stringResource(R.string.cancel),
-            icon = Icons.Outlined.Shield,
-            iconTint = MaterialTheme.colorScheme.primary,
-            onDismiss = { expertUnlockConfirmVisible = false },
-            onConfirm = {
-                expertUnlockConfirmVisible = false
-                aboutDialogVisible = false
-                onUnlockExpertSettings()
-            },
         )
     }
 }
@@ -504,11 +411,13 @@ private fun SettingsGroupDivider() {
     )
 }
 
+@Suppress("LongMethod")
 @Composable
 fun SmartStartSettingsScreen(
     state: SettingsRouteUiState,
     snackbarHostState: SnackbarHostState,
     onNavigateUp: () -> Unit,
+    onSmartStartEnabledChanged: (Boolean) -> Unit,
     onSmartStartProtocolSelectionTimeoutChanged: (Int) -> Unit,
     onSmartStartRefreshSelectionTimeoutChanged: (Int) -> Unit,
     onSmartStartTransportPrioritySelected: (SmartStartTransportPriority) -> Unit,
@@ -560,6 +469,16 @@ fun SmartStartSettingsScreen(
                     summary = stringResource(R.string.auto_reconnect_summary),
                     leadingIcon = Icons.Outlined.Refresh,
                     onCheckedChange = onAutoReconnectChanged,
+                    summaryMaxLines = Int.MAX_VALUE,
+                    grouped = true,
+                )
+                SettingsControlGroupDivider()
+                SettingSwitchRow(
+                    title = stringResource(R.string.smart_start_enable_title),
+                    checked = state.settings.connection.smartStartEnabled,
+                    summary = stringResource(R.string.smart_start_enable_summary),
+                    leadingIcon = Icons.Outlined.Speed,
+                    onCheckedChange = onSmartStartEnabledChanged,
                     summaryMaxLines = Int.MAX_VALUE,
                     grouped = true,
                 )
@@ -1417,7 +1336,6 @@ fun ApplicationSettingsScreen(
     onShowExpertSettingsChanged: (Boolean) -> Unit,
     onShowFirewallStatusChanged: (Boolean) -> Unit,
     onShowTorQuickLaunchChanged: (Boolean) -> Unit,
-    onSmartStartEnabledChanged: (Boolean) -> Unit,
     onSmartStartDashboardControlsEnabledChanged: (Boolean) -> Unit,
 ) {
     val systemThemeLabel = stringResource(R.string.theme_mode_system)
@@ -1483,16 +1401,6 @@ fun ApplicationSettingsScreen(
                     checked = state.settings.connection.autoStartOnBoot,
                     leadingIcon = Icons.Outlined.PhoneAndroid,
                     onCheckedChange = onAutoStartChanged,
-                    grouped = true,
-                )
-                SettingsControlGroupDivider()
-                SettingSwitchRow(
-                    title = stringResource(R.string.smart_start_enable_title),
-                    checked = state.settings.connection.smartStartEnabled,
-                    summary = stringResource(R.string.smart_start_enable_summary),
-                    leadingIcon = Icons.Outlined.Speed,
-                    onCheckedChange = onSmartStartEnabledChanged,
-                    summaryMaxLines = Int.MAX_VALUE,
                     grouped = true,
                 )
                 SettingsControlGroupDivider()

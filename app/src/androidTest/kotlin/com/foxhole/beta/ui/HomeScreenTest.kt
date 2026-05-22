@@ -3,6 +3,7 @@ package com.foxhole.beta.ui
 import android.view.WindowManager
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertHasNoClickAction
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
@@ -275,29 +276,27 @@ class HomeScreenTest {
     @Test
     fun settingsFooterShowsGithubRepositoryAction() {
         composeRule.onNodeWithTag("bottom_nav_settings").performClick()
-        openAboutSettingsDialog()
+        openAboutSettingsScreen()
         composeRule.onNodeWithTag("settings_github_repository_action").performScrollTo()
         composeRule.onNodeWithTag("settings_github_repository_action").assertIsDisplayed()
     }
 
     @Test
-    fun hiddenExpertSettingsCanBeRestoredFromVersionCard() {
+    fun hiddenExpertSettingsAreNotRestoredFromVersionCard() {
         setExpertSettingsVisible(visible = false)
         composeRule.onNodeWithTag("bottom_nav_settings").performClick()
         waitForSettingsHomeExpertActionHidden()
-        tapFooterVersionCardUntilUnlockDialog()
-        composeRule.onNodeWithTag("confirm_dialog_confirm_button").performClick()
-        waitForAboutDialogClosed()
-        assertSettingsHomeExpertActionDisplayed()
-
-        composeRule.onNodeWithTag("settings_expert_action").performClick()
+        openAboutSettingsScreen()
+        composeRule.onNodeWithTag("settings_footer_version_card").performScrollTo()
+        composeRule.onNodeWithTag("settings_footer_version_card").assertHasNoClickAction()
+        composeRule.onAllNodesWithText(
+            InstrumentationRegistry.getInstrumentation().targetContext.getString(R.string.expert_unlock_confirm_title),
+        ).assertCountEquals(0)
         composeRule.activityRule.scenario.onActivity { activity -> activity.onBackPressedDispatcher.onBackPressed() }
+        waitForAboutScreenClosed()
+        waitForSettingsHomeExpertActionHidden()
 
-        setExpertSettingsVisible(visible = false)
-        composeRule.onAllNodesWithTag("settings_expert_action").assertCountEquals(0)
-        tapFooterVersionCardUntilUnlockDialog()
-        composeRule.onNodeWithTag("confirm_dialog_confirm_button").performClick()
-        waitForAboutDialogClosed()
+        setExpertSettingsVisible(visible = true)
         assertSettingsHomeExpertActionDisplayed()
     }
 
@@ -308,15 +307,15 @@ class HomeScreenTest {
         waitForSettingsHomeExpertActionVisible()
         composeRule.onNodeWithTag("settings_screen").performScrollToNode(hasTestTag("settings_expert_action"))
         composeRule.onNodeWithTag("settings_expert_action").assertIsDisplayed()
-        openAboutSettingsDialog()
+        openAboutSettingsScreen()
         composeRule.onNodeWithTag("settings_footer_version_card").performScrollTo()
-        repeat(5) {
-            composeRule.onNodeWithTag("settings_footer_version_card").performClick()
-        }
+        composeRule.onNodeWithTag("settings_footer_version_card").assertHasNoClickAction()
 
         composeRule.onAllNodesWithText(
             InstrumentationRegistry.getInstrumentation().targetContext.getString(R.string.expert_unlock_confirm_title),
         ).assertCountEquals(0)
+        composeRule.activityRule.scenario.onActivity { activity -> activity.onBackPressedDispatcher.onBackPressed() }
+        waitForAboutScreenClosed()
         composeRule.onNodeWithTag("settings_screen").performScrollToNode(hasTestTag("settings_expert_action"))
         composeRule.onNodeWithTag("settings_expert_action").assertIsDisplayed()
     }
@@ -373,32 +372,19 @@ class HomeScreenTest {
         composeRule.waitForIdle()
     }
 
-    private fun tapFooterVersionCardUntilUnlockDialog() {
-        openAboutSettingsDialog()
-        composeRule.onNodeWithTag("settings_footer_version_card").performScrollTo()
-        composeRule.waitForIdle()
-        repeat(5) {
-            composeRule.onNodeWithTag("settings_footer_version_card").performClick()
-            composeRule.waitForIdle()
-        }
-        composeRule.waitUntil(timeoutMillis = 5_000) {
-            composeRule.onAllNodesWithTag("confirm_dialog_confirm_button").fetchSemanticsNodes().isNotEmpty()
-        }
-    }
-
-    private fun openAboutSettingsDialog() {
+    private fun openAboutSettingsScreen() {
         composeRule
             .onNodeWithTag("settings_screen")
             .performScrollToNode(hasTestTag("settings_about_action"))
         composeRule.onNodeWithTag("settings_about_action").tapNearTop()
         composeRule.waitUntil(timeoutMillis = 5_000) {
-            composeRule.onAllNodesWithTag("settings_about_dialog").fetchSemanticsNodes().isNotEmpty()
+            composeRule.onAllNodesWithTag("settings_about_screen").fetchSemanticsNodes().isNotEmpty()
         }
     }
 
-    private fun waitForAboutDialogClosed() {
+    private fun waitForAboutScreenClosed() {
         composeRule.waitUntil(timeoutMillis = 5_000) {
-            composeRule.onAllNodesWithTag("settings_about_dialog").fetchSemanticsNodes().isEmpty()
+            composeRule.onAllNodesWithTag("settings_about_screen").fetchSemanticsNodes().isEmpty()
         }
         composeRule.waitForIdle()
     }

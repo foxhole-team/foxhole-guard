@@ -2,6 +2,7 @@ package com.foxhole.beta.ui
 
 import com.foxhole.beta.core.model.ConnectionSnapshot
 import com.foxhole.beta.core.model.ConnectionState
+import com.foxhole.beta.core.model.PerAppRoutingMode
 import com.foxhole.beta.core.model.Profile
 import com.foxhole.beta.core.model.ProfileProtocolOption
 import com.foxhole.beta.core.model.ProfileSourceType
@@ -189,6 +190,38 @@ class HomeReconnectPolicyTest {
                         profileId = FoxholeVpnService.TOR_ONLY_PROFILE_ID,
                     ),
                 activeProfileId = null,
+            ),
+        )
+    }
+
+    @Test
+    fun `disabling active split tunnel disconnects instead of prompting restart`() {
+        assertTrue(
+            shouldDisconnectWhenDisablingActiveSplitTunnel(
+                currentMode = PerAppRoutingMode.INCLUDE_SELECTED_APPS,
+                nextMode = PerAppRoutingMode.FULL_TUNNEL,
+                activeRuntime = true,
+            ),
+        )
+        assertTrue(
+            shouldDisconnectWhenDisablingActiveSplitTunnel(
+                currentMode = PerAppRoutingMode.EXCLUDE_SELECTED_APPS,
+                nextMode = PerAppRoutingMode.FULL_TUNNEL,
+                activeRuntime = true,
+            ),
+        )
+        assertFalse(
+            shouldDisconnectWhenDisablingActiveSplitTunnel(
+                currentMode = PerAppRoutingMode.INCLUDE_SELECTED_APPS,
+                nextMode = PerAppRoutingMode.FULL_TUNNEL,
+                activeRuntime = false,
+            ),
+        )
+        assertFalse(
+            shouldDisconnectWhenDisablingActiveSplitTunnel(
+                currentMode = PerAppRoutingMode.FULL_TUNNEL,
+                nextMode = PerAppRoutingMode.INCLUDE_SELECTED_APPS,
+                activeRuntime = true,
             ),
         )
     }
