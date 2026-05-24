@@ -2,7 +2,7 @@ package com.foxhole.beta.ui
 
 import androidx.compose.animation.core.AnimationSpec
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.AnchoredDraggableDefaults
 import androidx.compose.foundation.gestures.AnchoredDraggableState
 import androidx.compose.foundation.gestures.DraggableAnchors
@@ -10,8 +10,6 @@ import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.TargetedFlingBehavior
 import androidx.compose.foundation.gestures.anchoredDraggable
 import androidx.compose.foundation.gestures.animateTo
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -19,23 +17,24 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
@@ -43,10 +42,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.zIndex
 import com.foxhole.beta.R
 import kotlin.math.roundToInt
 
@@ -69,7 +66,7 @@ internal fun FoxholeSwipeActions(
     onSwipeRight: (() -> Unit)? = null,
     content: @Composable () -> Unit,
 ) {
-    if (actions.isEmpty()) {
+    if (actions.isEmpty() && startAction == null && onSwipeRight == null) {
         content()
         return
     }
@@ -113,22 +110,16 @@ internal fun FoxholeSwipeActions(
                 modifier = Modifier.align(Alignment.CenterStart),
             )
         }
-        SwipeActionsBackground(
-            actions = actions,
-            onAction = {},
-            exposeTestTags = false,
-            modifier = Modifier.align(Alignment.CenterEnd),
-        )
-        SwipeActionsGestureContent(dragSession = dragSession, content = content)
-        if (isRevealed) {
-            SwipeActionsDismissOverlay(
-                actionWidth = dragSession.actionWidth,
-                onDismiss = {
-                    setRevealed(false)
-                    haptic.performHapticFeedback(HapticFeedbackType.GestureEnd)
-                },
-                modifier = Modifier.matchParentSize().zIndex(1f),
+        if (actions.isNotEmpty()) {
+            SwipeActionsBackground(
+                actions = actions,
+                onAction = {},
+                exposeTestTags = false,
+                modifier = Modifier.align(Alignment.CenterEnd),
             )
+        }
+        SwipeActionsGestureContent(dragSession = dragSession, content = content)
+        if (isRevealed && actions.isNotEmpty()) {
             SwipeActionsBackground(
                 actions = actions,
                 onAction = {
@@ -136,10 +127,7 @@ internal fun FoxholeSwipeActions(
                     haptic.performHapticFeedback(HapticFeedbackType.Confirm)
                 },
                 exposeTestTags = true,
-                modifier =
-                    Modifier
-                        .align(Alignment.CenterEnd)
-                        .zIndex(2f),
+                modifier = Modifier.align(Alignment.CenterEnd),
             )
         }
     }
@@ -153,7 +141,6 @@ private enum class SwipeActionsValue {
 
 private data class SwipeActionsDragSession(
     val state: AnchoredDraggableState<SwipeActionsValue>,
-    val actionWidth: Dp,
     val contentOffset: Int,
     val flingBehavior: TargetedFlingBehavior,
 )
@@ -168,7 +155,8 @@ private fun rememberSwipeActionsDragSession(
 ): SwipeActionsDragSession {
     val haptic = LocalHapticFeedback.current
     val density = LocalDensity.current
-    val actionWidth = (actionCount * 48).dp + 12.dp
+    val endSwipeEnabled = actionCount > 0
+    val actionWidth = if (endSwipeEnabled) (actionCount * 48).dp + 12.dp else 0.dp
     val actionWidthPx = with(density) { actionWidth.toPx() }
     val startActionWidthPx = with(density) { 72.dp.toPx() }
     val currentStartSwipeAction by rememberUpdatedState(startSwipeAction)
@@ -187,12 +175,14 @@ private fun rememberSwipeActionsDragSession(
         dragState = dragState,
         actionWidthPx = actionWidthPx,
         startActionWidthPx = startActionWidthPx,
+        endSwipeEnabled = endSwipeEnabled,
         startSwipeEnabled = startSwipeAction != null,
         isRevealed = isRevealed,
     )
     SyncSwipeActionsSettledValue(
         dragState = dragState,
         isRevealed = isRevealed,
+        endSwipeEnabled = endSwipeEnabled,
         settleAnimationSpec = settleAnimationSpec,
         setRevealed = setRevealed,
         onStartSwipeAction = { currentStartSwipeAction?.invoke() },
@@ -200,7 +190,6 @@ private fun rememberSwipeActionsDragSession(
     )
     return SwipeActionsDragSession(
         state = dragState,
-        actionWidth = actionWidth,
         contentOffset = dragState.offset.takeUnless { it.isNaN() }?.roundToInt() ?: 0,
         flingBehavior = flingBehavior,
     )
@@ -241,19 +230,22 @@ private fun SyncSwipeActionsAnchors(
     dragState: AnchoredDraggableState<SwipeActionsValue>,
     actionWidthPx: Float,
     startActionWidthPx: Float,
+    endSwipeEnabled: Boolean,
     startSwipeEnabled: Boolean,
     isRevealed: Boolean,
 ) {
-    LaunchedEffect(actionWidthPx, startActionWidthPx, startSwipeEnabled) {
+    LaunchedEffect(actionWidthPx, startActionWidthPx, endSwipeEnabled, startSwipeEnabled) {
         dragState.updateAnchors(
             DraggableAnchors {
                 SwipeActionsValue.Settled at 0f
-                SwipeActionsValue.EndRevealed at -actionWidthPx
+                if (endSwipeEnabled) {
+                    SwipeActionsValue.EndRevealed at -actionWidthPx
+                }
                 if (startSwipeEnabled) {
                     SwipeActionsValue.StartAction at startActionWidthPx
                 }
             },
-            newTarget = if (isRevealed) SwipeActionsValue.EndRevealed else SwipeActionsValue.Settled,
+            newTarget = if (isRevealed && endSwipeEnabled) SwipeActionsValue.EndRevealed else SwipeActionsValue.Settled,
         )
     }
 }
@@ -262,13 +254,14 @@ private fun SyncSwipeActionsAnchors(
 private fun SyncSwipeActionsSettledValue(
     dragState: AnchoredDraggableState<SwipeActionsValue>,
     isRevealed: Boolean,
+    endSwipeEnabled: Boolean,
     settleAnimationSpec: AnimationSpec<Float>,
     setRevealed: (Boolean) -> Unit,
     onStartSwipeAction: () -> Unit,
     haptic: androidx.compose.ui.hapticfeedback.HapticFeedback,
 ) {
-    LaunchedEffect(isRevealed) {
-        val target = if (isRevealed) SwipeActionsValue.EndRevealed else SwipeActionsValue.Settled
+    LaunchedEffect(isRevealed, endSwipeEnabled) {
+        val target = if (isRevealed && endSwipeEnabled) SwipeActionsValue.EndRevealed else SwipeActionsValue.Settled
         if (dragState.settledValue != target && dragState.targetValue != target) {
             dragState.animateTo(target, settleAnimationSpec)
         }
@@ -342,40 +335,6 @@ private fun swipeActionsSettleAnimationSpec(): AnimationSpec<Float> =
     )
 
 @Composable
-private fun SwipeActionsDismissOverlay(
-    actionWidth: androidx.compose.ui.unit.Dp,
-    onDismiss: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Box(
-        modifier =
-            modifier
-                .clickable(
-                    interactionSource = remember(onDismiss) { MutableInteractionSource() },
-                    indication = null,
-                    onClick = onDismiss,
-                )
-                .pointerInput(onDismiss) {
-                    var dragDistance = 0f
-                    val closeThreshold = (size.width - actionWidth.toPx()).coerceAtLeast(0f) * SWIPE_ACTION_CLOSE_THRESHOLD_FRACTION
-                    detectHorizontalDragGestures(
-                        onDragStart = { dragDistance = 0f },
-                        onHorizontalDrag = { change, dragAmount ->
-                            dragDistance += dragAmount
-                            if (dragDistance > closeThreshold) {
-                                change.consume()
-                                onDismiss()
-                                dragDistance = 0f
-                            }
-                        },
-                        onDragEnd = { dragDistance = 0f },
-                        onDragCancel = { dragDistance = 0f },
-                    )
-                }
-    )
-}
-
-@Composable
 private fun SwipeActionsStartBackground(
     action: FoxholeSwipeAction,
     modifier: Modifier = Modifier,
@@ -402,19 +361,39 @@ private fun SwipeActionsBackground(
     modifier: Modifier = Modifier,
 ) {
     Row(
-        modifier = modifier.padding(end = 8.dp),
+        modifier =
+            modifier
+                .clip(RoundedCornerShape(16.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.54f))
+                .padding(horizontal = 6.dp, vertical = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.End),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         actions.forEach { action ->
+            val destructive = action.tint == MaterialTheme.colorScheme.error
             IconButton(
                 onClick = {
                     onAction()
                     action.onClick()
                 },
+                colors =
+                    IconButtonDefaults.iconButtonColors(
+                        containerColor =
+                            if (destructive) {
+                                MaterialTheme.colorScheme.errorContainer
+                            } else {
+                                MaterialTheme.colorScheme.secondaryContainer
+                            },
+                        contentColor =
+                            if (destructive) {
+                                MaterialTheme.colorScheme.onErrorContainer
+                            } else {
+                                action.tint ?: MaterialTheme.colorScheme.onSecondaryContainer
+                            },
+                    ),
                 modifier =
                     Modifier
-                        .size(48.dp)
+                        .size(44.dp)
                         .then(
                             if (exposeTestTags) {
                                 action.testTag?.let { Modifier.testTag(it) } ?: Modifier
@@ -426,12 +405,16 @@ private fun SwipeActionsBackground(
                 Icon(
                     imageVector = action.icon,
                     contentDescription = action.contentDescription.ifBlank { stringResource(R.string.action_label) },
-                    tint = action.tint ?: MaterialTheme.colorScheme.onSurfaceVariant,
+                    tint =
+                        if (destructive) {
+                            MaterialTheme.colorScheme.onErrorContainer
+                        } else {
+                            action.tint ?: MaterialTheme.colorScheme.onSecondaryContainer
+                        },
                 )
             }
         }
     }
 }
 
-private const val SWIPE_ACTION_CLOSE_THRESHOLD_FRACTION = 0.08f
 private const val SWIPE_ACTION_REVEAL_THRESHOLD_FRACTION = 0.45f

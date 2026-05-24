@@ -5,6 +5,7 @@ import android.app.NotificationManager
 import android.app.Service
 import android.content.Intent
 import com.foxhole.beta.FoxholeRuntimeDependencies
+import com.foxhole.beta.core.model.ConnectionState
 import com.foxhole.beta.core.model.NotificationSnapshot
 
 internal fun Service.handleForegroundRuntimeCommand(
@@ -41,23 +42,51 @@ internal fun Service.handleForegroundRuntimeCommand(
         FoxholeConnectionServiceContract.NOTIFICATION_ID,
         buildNotification(currentNotificationSnapshot()),
     )
-    if (isFailClosedRuntimeServiceCommand(intent?.action)) {
-        launchPriorityCommand(
-            RuntimeCommandPriority.KILL,
-            "fail_closed:${intent?.action ?: "null"}",
-        ) { failClosedTeardown(startId, intent?.action) }
-        return Service.START_NOT_STICKY
+    val action = intent?.action
+    when {
+        action == null -> {
+            val snapshot = FoxholeVpnRuntimeBridge.snapshot.value
+            if (snapshot.state in NULL_INTENT_ACTIVE_STATES) {
+                container.diagnosticsLogger.record(
+                    "connection",
+                    "runtime service null intent ignored while runtime active",
+                )
+            } else {
+                launchCommand("null_intent_reconcile") {
+                    disconnectWithOptions(
+                        startId,
+                        true,
+                        false,
+                    )
+                }
+            }
+        }
+        isFailClosedRuntimeServiceCommand(action) -> {
+            launchPriorityCommand(
+                RuntimeCommandPriority.KILL,
+                "fail_closed:$action",
+            ) { failClosedTeardown(startId, action) }
+        }
+        else -> {
+            handleRuntimeServiceCommand(
+                intent = intent,
+                startId = startId,
+                container = container,
+                launchCommand = launchCommand,
+                launchPriorityCommand = launchPriorityCommand,
+                connect = connect,
+                disconnect = disconnectWithOptions,
+                reload = reload,
+                startLocalGuard = startLocalGuard,
+            )
+        }
     }
-    handleRuntimeServiceCommand(
-        intent = intent,
-        startId = startId,
-        container = container,
-        launchCommand = launchCommand,
-        launchPriorityCommand = launchPriorityCommand,
-        connect = connect,
-        disconnect = disconnectWithOptions,
-        reload = reload,
-        startLocalGuard = startLocalGuard,
-    )
     return Service.START_NOT_STICKY
 }
+
+private val NULL_INTENT_ACTIVE_STATES =
+    setOf(
+        ConnectionState.CONNECTING,
+        ConnectionState.CONNECTED,
+        ConnectionState.RECONNECTING,
+    )

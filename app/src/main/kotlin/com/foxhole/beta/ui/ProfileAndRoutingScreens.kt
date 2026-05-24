@@ -114,7 +114,9 @@ import com.foxhole.beta.ui.FoxholePreferenceCard
 import com.foxhole.beta.ui.FoxholeScaffold
 import com.foxhole.beta.ui.FoxholeSearchField
 import com.foxhole.beta.ui.FoxholeValuePill
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -381,7 +383,7 @@ fun ProfilesScreen(
                             icon = Icons.Outlined.Refresh,
                             contentDescription = stringResource(R.string.refresh),
                             tint = MaterialTheme.colorScheme.primary,
-                            onClick = { onRefreshProfile(profile.id) },
+                            onClick = { refreshProfileId = profile.id },
                         )
                     }
                     !isSelected && !exportMode -> {
@@ -1534,37 +1536,56 @@ fun ProfileConfigEditScreen(
     var saving by rememberSaveable { mutableStateOf(false) }
     var showSaveDialog by rememberSaveable { mutableStateOf(false) }
     var fieldDialog by remember { mutableStateOf<ProfileFieldDialogState?>(null) }
+    var loadJob by remember(profile?.id) { mutableStateOf<Job?>(null) }
+    val initialProtocolOptionId =
+        profile?.let { currentProfile ->
+            MultiProtocolProfileSupport.selectedOption(currentProfile)?.id
+        }
+
+    fun isCurrentEditorLoad(
+        profileId: Long,
+        protocolOptionId: String?,
+    ): Boolean = profile?.id == profileId && editorProtocolOptionId == protocolOptionId
 
     fun loadEditorConfig(
         currentProfile: Profile,
         protocolOptionId: String?,
     ) {
+        loadJob?.cancel()
         sourceConfig = null
         draft = null
         loadError = null
         editorProtocolOptionId = protocolOptionId
-        scope.launch {
+        val requestedProfileId = currentProfile.id
+        val requestedProtocolOptionId = protocolOptionId
+        loadJob = scope.launch {
             runCatching {
                 val loadedConfig =
                     withTimeoutOrNull(ProfileConfigLoadTimeoutMs) {
-                        onLoadConfig(currentProfile.id, protocolOptionId)
+                        onLoadConfig(requestedProfileId, requestedProtocolOptionId)
                     } ?: error(loadTimeoutMessage)
                 loadedConfig to codec.decode(loadedConfig)
             }
                 .onSuccess { (loadedConfig, loadedDraft) ->
+                    if (!isCurrentEditorLoad(requestedProfileId, requestedProtocolOptionId)) {
+                        return@onSuccess
+                    }
                     sourceConfig = loadedConfig
                     draft = loadedDraft
-                }.onFailure {
-                    loadError = it.message ?: "failed to load config"
+                }.onFailure { error ->
+                    if (error is CancellationException || !isCurrentEditorLoad(requestedProfileId, requestedProtocolOptionId)) {
+                        return@onFailure
+                    }
+                    loadError = error.message ?: "failed to load config"
                 }
         }
     }
 
-    LaunchedEffect(profile?.id) {
+    LaunchedEffect(profile?.id, initialProtocolOptionId) {
         val currentProfile = profile ?: return@LaunchedEffect
         loadEditorConfig(
             currentProfile = currentProfile,
-            protocolOptionId = MultiProtocolProfileSupport.selectedOption(currentProfile)?.id,
+            protocolOptionId = initialProtocolOptionId,
         )
     }
 

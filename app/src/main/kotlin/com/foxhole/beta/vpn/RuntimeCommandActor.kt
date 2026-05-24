@@ -43,7 +43,7 @@ internal class RuntimeCommandActor(
             capacity = COMMAND_BUFFER_CAPACITY,
             onBufferOverflow = BufferOverflow.DROP_OLDEST,
         )
-    private val priorityCommands = Channel<QueuedRuntimeCommand>(PRIORITY_COMMAND_BUFFER_CAPACITY)
+    private val priorityCommands = Channel<QueuedRuntimeCommand>(Channel.UNLIMITED)
     private val closed = AtomicBoolean(false)
 
     @Volatile
@@ -284,29 +284,47 @@ internal class RuntimeCommandActor(
         command: QueuedRuntimeCommand,
         pending: PriorityQueue<QueuedRuntimeCommand>,
         drainingPreemptedJobs: MutableList<Job>,
-    ): RuntimeActorReceiveResult {
-        if (command.shouldPreempt(running.command)) {
-            preemptRunningCommand(
-                running = running,
-                command = command,
-                pending = pending,
-                drainingPreemptedJobs = drainingPreemptedJobs,
-            )
-            return RuntimeActorReceiveResult.CLEAR_RUNNING
-        }
-        val removedPendingPriority =
-            pending.removeIf { queued ->
-                queued.priority >= RuntimeCommandPriority.STOP.value &&
-                    queued.priority <= command.priority &&
-                    queued.reason == command.reason
+    ): RuntimeActorReceiveResult =
+        when {
+            command.shouldPreempt(running.command) -> {
+                preemptRunningCommand(
+                    running = running,
+                    command = command,
+                    pending = pending,
+                    drainingPreemptedJobs = drainingPreemptedJobs,
+                )
+                RuntimeActorReceiveResult.CLEAR_RUNNING
             }
-        recordCommandEvent(
-            headline = "runtime priority command coalesced",
-            command = command,
-            extra = priorityCoalescedDetails(running, removedPendingPriority),
-        )
-        return RuntimeActorReceiveResult.KEEP_RUNNING
-    }
+            !command.isCoalescedByRunning(running.command) -> {
+                val removedSupersededPriority =
+                    pending.removeIf { queued -> command.supersedesBufferedPriority(queued) }
+                pending.offer(command)
+                val queuedDetails =
+                    listOf(
+                        "running_priority=${running.command.priorityName}",
+                        "running_reason=${running.command.reason}",
+                        "removed_pending=$removedSupersededPriority",
+                    ).joinToString(" • ")
+                recordCommandEvent(
+                    headline = "runtime priority command queued",
+                    command = command,
+                    extra = queuedDetails,
+                )
+                RuntimeActorReceiveResult.KEEP_RUNNING
+            }
+            else -> {
+                val removedPendingPriority =
+                    pending.removeIf { queued ->
+                        command.supersedesBufferedPriority(queued)
+                    }
+                recordCommandEvent(
+                    headline = "runtime priority command coalesced",
+                    command = command,
+                    extra = priorityCoalescedDetails(running, removedPendingPriority),
+                )
+                RuntimeActorReceiveResult.KEEP_RUNNING
+            }
+        }
 
     private fun QueuedRuntimeCommand.shouldPreempt(running: QueuedRuntimeCommand): Boolean =
         priority > running.priority ||
@@ -315,6 +333,17 @@ internal class RuntimeCommandActor(
                     running.priority == RuntimeCommandPriority.SWITCH.value &&
                     reason != running.reason
                 )
+
+    private fun QueuedRuntimeCommand.isCoalescedByRunning(running: QueuedRuntimeCommand): Boolean =
+        when (running.priority) {
+            RuntimeCommandPriority.KILL.value ->
+                priority <= running.priority
+            RuntimeCommandPriority.STOP.value ->
+                priority == RuntimeCommandPriority.STOP.value
+            RuntimeCommandPriority.SWITCH.value ->
+                priority == RuntimeCommandPriority.SWITCH.value && reason == running.reason
+            else -> false
+        }
 
     private fun priorityCoalescedDetails(
         running: RunningRuntimeCommand,
@@ -431,9 +460,14 @@ internal class RuntimeCommandActor(
 
     private fun QueuedRuntimeCommand.supersedesBufferedPriority(queued: QueuedRuntimeCommand): Boolean =
         when (priority) {
+            RuntimeCommandPriority.KILL.value ->
+                queued.priority >= RuntimeCommandPriority.STOP.value &&
+                    queued.priority <= priority
             RuntimeCommandPriority.SWITCH.value ->
                 queued.priority <= priority &&
                     queued.priority >= RuntimeCommandPriority.STOP.value
+            RuntimeCommandPriority.STOP.value ->
+                queued.priority == RuntimeCommandPriority.STOP.value
             else ->
                 queued.priority <= priority && queued.reason == reason
         }
@@ -515,7 +549,6 @@ internal class RuntimeCommandActor(
 
     private companion object {
         const val COMMAND_BUFFER_CAPACITY = 64
-        const val PRIORITY_COMMAND_BUFFER_CAPACITY = 16
         const val MAX_PENDING_NORMAL_COMMANDS = 16
         const val PREEMPTED_CLEANUP_DRAIN_TIMEOUT_MS = 1_500L
     }

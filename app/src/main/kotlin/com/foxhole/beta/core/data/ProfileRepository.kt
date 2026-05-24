@@ -847,6 +847,12 @@ class ProfileRepository(
                             id = member.entity.id,
                             name = member.entity.name,
                             protocolHint = member.entity.toDomain().protocolHint,
+                            stableFingerprint =
+                                stableSubscriptionProfileFingerprint(
+                                    protocolHint = member.entity.toDomain().protocolHint,
+                                    normalizedConfigJson = member.storedSecret.resolvedConfigJson,
+                                    protocolOptions = member.storedSecret.protocolOptions,
+                                ),
                         )
                     },
                 importedProfiles =
@@ -854,6 +860,12 @@ class ProfileRepository(
                         ImportedSubscriptionProfile(
                             displayName = imported.displayName,
                             protocolHint = imported.protocolHint,
+                            stableFingerprint =
+                                stableSubscriptionProfileFingerprint(
+                                    protocolHint = imported.protocolHint,
+                                    normalizedConfigJson = imported.normalizedConfigJson,
+                                    protocolOptions = imported.protocolOptions,
+                                ),
                         )
                     },
             )
@@ -1189,6 +1201,12 @@ class ProfileRepository(
                             id = member.entity.id,
                             name = member.entity.name,
                             protocolHint = member.entity.toDomain().protocolHint,
+                            stableFingerprint =
+                                stableSubscriptionProfileFingerprint(
+                                    protocolHint = member.entity.toDomain().protocolHint,
+                                    normalizedConfigJson = member.storedSecret.resolvedConfigJson,
+                                    protocolOptions = member.storedSecret.protocolOptions,
+                                ),
                         )
                     },
                 importedProfiles =
@@ -1196,6 +1214,12 @@ class ProfileRepository(
                         ImportedSubscriptionProfile(
                             displayName = imported.displayName,
                             protocolHint = imported.protocolHint,
+                            stableFingerprint =
+                                stableSubscriptionProfileFingerprint(
+                                    protocolHint = imported.protocolHint,
+                                    normalizedConfigJson = imported.normalizedConfigJson,
+                                    protocolOptions = imported.protocolOptions,
+                                ),
                         )
                     },
             )

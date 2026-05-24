@@ -25,8 +25,8 @@ class RuntimeServiceCommandSupportTest {
     }
 
     @Test
-    fun `null and unknown commands fail closed`() {
-        assertTrue(isFailClosedRuntimeServiceCommand(null))
+    fun `unknown commands fail closed but null lifecycle intents do not`() {
+        assertFalse(isFailClosedRuntimeServiceCommand(null))
         assertTrue(isFailClosedRuntimeServiceCommand("com.foxhole.beta.action.UNKNOWN"))
 
         assertFalse(isFailClosedRuntimeServiceCommand(FoxholeConnectionServiceContract.ACTION_CONNECT))

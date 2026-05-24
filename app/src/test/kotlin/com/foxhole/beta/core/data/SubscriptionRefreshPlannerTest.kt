@@ -99,6 +99,71 @@ class SubscriptionRefreshPlannerTest {
     }
 
     @Test
+    fun `matches renamed profiles by stable fingerprint before display name`() {
+        val plan =
+            planSubscriptionRefresh(
+                existingProfiles =
+                    listOf(
+                        ExistingSubscriptionProfile(
+                            id = 10L,
+                            name = "old name",
+                            protocolHint = ProtocolHint.VLESS,
+                            stableFingerprint = "node-a",
+                        ),
+                    ),
+                importedProfiles =
+                    listOf(
+                        ImportedSubscriptionProfile(
+                            displayName = "new name",
+                            protocolHint = ProtocolHint.VLESS,
+                            stableFingerprint = "node-a",
+                        ),
+                    ),
+            )
+
+        assertEquals(listOf(10L), plan.assignments.map(SubscriptionRefreshAssignment::existingProfileId))
+        assertEquals(emptyList<Long>(), plan.deletedProfileIds)
+    }
+
+    @Test
+    fun `duplicate display names do not reassign different fingerprints`() {
+        val plan =
+            planSubscriptionRefresh(
+                existingProfiles =
+                    listOf(
+                        ExistingSubscriptionProfile(
+                            id = 10L,
+                            name = "edge",
+                            protocolHint = ProtocolHint.VLESS,
+                            stableFingerprint = "node-a",
+                        ),
+                        ExistingSubscriptionProfile(
+                            id = 11L,
+                            name = "edge",
+                            protocolHint = ProtocolHint.VLESS,
+                            stableFingerprint = "node-b",
+                        ),
+                    ),
+                importedProfiles =
+                    listOf(
+                        ImportedSubscriptionProfile(
+                            displayName = "edge",
+                            protocolHint = ProtocolHint.VLESS,
+                            stableFingerprint = "node-b",
+                        ),
+                        ImportedSubscriptionProfile(
+                            displayName = "edge",
+                            protocolHint = ProtocolHint.VLESS,
+                            stableFingerprint = "node-a",
+                        ),
+                    ),
+            )
+
+        assertEquals(listOf(11L, 10L), plan.assignments.map(SubscriptionRefreshAssignment::existingProfileId))
+        assertEquals(emptyList<Long>(), plan.deletedProfileIds)
+    }
+
+    @Test
     fun `fallback matching skips profiles already consumed by exact key`() {
         val plan =
             planSubscriptionRefresh(

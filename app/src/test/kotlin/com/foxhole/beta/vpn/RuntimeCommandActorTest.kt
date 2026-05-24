@@ -240,6 +240,37 @@ class RuntimeCommandActorTest {
         }
 
     @Test
+    fun `stop requested during switch runs after switch completes`() =
+        runBlocking {
+            val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+            val actor = actor(scope)
+            val switchStarted = CompletableDeferred<Unit>()
+            val releaseSwitch = CompletableDeferred<Unit>()
+            val stopCompleted = CompletableDeferred<Unit>()
+            val events = Collections.synchronizedList(mutableListOf<String>())
+
+            actor.launch(RuntimeCommandPriority.SWITCH, reason = "connect:1:default") {
+                events += "switch-start"
+                switchStarted.complete(Unit)
+                releaseSwitch.await()
+                events += "switch-end"
+            }
+            withTimeout(1_000L) { switchStarted.await() }
+
+            actor.launch(RuntimeCommandPriority.STOP, reason = "fail_disconnect") {
+                events += "stop"
+                stopCompleted.complete(Unit)
+            }
+            delay(50L)
+            assertEquals(listOf("switch-start"), events.toList())
+
+            releaseSwitch.complete(Unit)
+            withTimeout(1_000L) { stopCompleted.await() }
+            assertEquals(listOf("switch-start", "switch-end", "stop"), events.toList())
+            actor.close()
+        }
+
+    @Test
     fun `second stop while stop is running is coalesced without emergency kill`() =
         runBlocking {
             val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -562,7 +593,7 @@ class RuntimeCommandActorTest {
         }
 
     @Test
-    fun `priority command reject logs queue full instead of closed when buffer is full`() =
+    fun `critical priority commands are not rejected under burst`() =
         runBlocking {
             val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
             val currentStarted = CompletableDeferred<Unit>()
@@ -593,19 +624,19 @@ class RuntimeCommandActorTest {
             }
             withTimeout(1_000L) { killStarted.await() }
 
-            repeat(17) { index ->
+            repeat(100) { index ->
+                actor.launch(RuntimeCommandPriority.STOP, reason = "disconnect-$index") {
+                }
+                actor.launch(RuntimeCommandPriority.SWITCH, reason = "connect:$index:default") {
+                }
                 actor.launch(RuntimeCommandPriority.KILL, reason = "kill-$index") {
                 }
             }
+            delay(100L)
 
-            val rejected =
-                diagnostics.first { event ->
-                    event.headline == "runtime command rejected" &&
-                        event.details.contains("reason=kill-16")
-                }
-            assertTrue(rejected.details.contains("closed=false"))
-            assertTrue(rejected.details.contains("queue_full=true"))
-            assertTrue(rejected.details.contains("buffer_rejected=true"))
+            assertFalse(
+                diagnostics.any { event -> event.headline == "runtime command rejected" },
+            )
 
             releaseKill.complete(Unit)
             actor.close()

@@ -7,11 +7,13 @@ internal data class ExistingSubscriptionProfile(
     val id: Long,
     val name: String,
     val protocolHint: ProtocolHint,
+    val stableFingerprint: String? = null,
 )
 
 internal data class ImportedSubscriptionProfile(
     val displayName: String,
     val protocolHint: ProtocolHint,
+    val stableFingerprint: String? = null,
 )
 
 internal data class SubscriptionRefreshAssignment(
@@ -33,6 +35,12 @@ internal fun planSubscriptionRefresh(
     val orderedExisting = existingProfiles.sortedBy(ExistingSubscriptionProfile::id)
     val activeExistingIds = orderedExisting.mapTo(LinkedHashSet()) { it.id }
     val fallbackQueue = ArrayDeque(orderedExisting)
+    val existingByFingerprint =
+        orderedExisting
+            .mapNotNull { profile -> profile.stableFingerprint?.let { fingerprint -> fingerprint to profile } }
+            .groupBy({ it.first }, { it.second })
+            .mapValues { (_, profiles) -> ArrayDeque(profiles) }
+            .toMutableMap()
     val existingByKey =
         orderedExisting
             .groupBy { it.matchKey() }
@@ -42,7 +50,9 @@ internal fun planSubscriptionRefresh(
     val assignments =
         importedProfiles.map { imported ->
             val matched =
-                existingByKey[imported.matchKey()]?.removeFirstActive(activeExistingIds)
+                imported.stableFingerprint
+                    ?.let { fingerprint -> existingByFingerprint[fingerprint]?.removeFirstActive(activeExistingIds) }
+                    ?: existingByKey[imported.matchKey()]?.removeFirstActive(activeExistingIds)
                     ?: fallbackQueue.removeFirstActive(activeExistingIds)
             SubscriptionRefreshAssignment(
                 existingProfileId = matched?.id,

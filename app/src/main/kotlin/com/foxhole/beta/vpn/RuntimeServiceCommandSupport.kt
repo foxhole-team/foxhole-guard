@@ -109,7 +109,7 @@ internal fun isPriorityRuntimeServiceCommand(action: String?): Boolean =
         action == FoxholeConnectionServiceContract.ACTION_START_LOCAL_GUARD
 
 internal fun isFailClosedRuntimeServiceCommand(action: String?): Boolean =
-    action !in KNOWN_RUNTIME_SERVICE_ACTIONS
+    action != null && action !in KNOWN_RUNTIME_SERVICE_ACTIONS
 
 private suspend fun restoreLastActiveConnection(
     container: FoxholeRuntimeDependencies,
