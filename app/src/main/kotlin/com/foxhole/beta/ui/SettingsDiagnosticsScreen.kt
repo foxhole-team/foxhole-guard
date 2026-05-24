@@ -31,6 +31,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -113,34 +114,34 @@ fun DiagnosticsScreen(
             strings = saveStrings,
         )
     val sanitizeNetworkLogPrivateData = state.settings.expert.sanitizeNetworkActivityPrivateData
-    val networkEntries =
-        remember(
-            state.networkActivityEvents,
-            state.diagnosticEntries,
-            state.ipInfo,
-            sanitizeNetworkLogPrivateData,
-            context,
-            countryResolver,
-        ) {
-            networkActivityDiagnosticEntries(
-                events = state.networkActivityEvents,
-                context = context,
-                countryResolver = countryResolver,
-                ipInfo = state.ipInfo,
+    val fallbackNetworkEntries =
+        remember(state.diagnosticEntries, sanitizeNetworkLogPrivateData) {
+            fallbackNetworkDiagnosticEntries(
+                entries = state.diagnosticEntries,
                 sanitizePrivateData = sanitizeNetworkLogPrivateData,
             )
         }
-            .ifEmpty {
-                state.diagnosticEntries
-                    .filter { it.tag == NETWORK_ACTIVITY_TAG }
-                    .map { entry ->
-                        if (sanitizeNetworkLogPrivateData) {
-                            entry.copy(message = DiagnosticSanitizer.sanitizeForExport(entry.message))
-                        } else {
-                            entry
-                        }
-                    }
-            }
+    val networkEntries by produceState<List<DiagnosticEntry>>(
+        fallbackNetworkEntries,
+        state.networkActivityEvents,
+        state.diagnosticEntries,
+        state.ipInfo,
+        sanitizeNetworkLogPrivateData,
+        appContext,
+        countryResolver,
+    ) {
+        value = fallbackNetworkEntries
+        value =
+            withContext(Dispatchers.Default) {
+                networkActivityDiagnosticEntries(
+                    events = state.networkActivityEvents,
+                    context = appContext,
+                    countryResolver = countryResolver,
+                    ipInfo = state.ipInfo,
+                    sanitizePrivateData = sanitizeNetworkLogPrivateData,
+                )
+            }.ifEmpty { fallbackNetworkEntries }
+    }
     val foxholeEntries =
         remember(state.diagnosticEntries) {
             state.diagnosticEntries.filterNot { it.tag == NETWORK_ACTIVITY_TAG }
@@ -320,6 +321,20 @@ private fun networkActivityDiagnosticEntries(
             ),
         )
     }
+
+private fun fallbackNetworkDiagnosticEntries(
+    entries: List<DiagnosticEntry>,
+    sanitizePrivateData: Boolean,
+): List<DiagnosticEntry> =
+    entries
+        .filter { it.tag == NETWORK_ACTIVITY_TAG }
+        .map { entry ->
+            if (sanitizePrivateData) {
+                entry.copy(message = DiagnosticSanitizer.sanitizeForExport(entry.message))
+            } else {
+                entry
+            }
+        }
 
 internal fun NetworkActivityEvent.toNetworkActivityDiagnosticMessage(
     formatBytes: (Long) -> String,
