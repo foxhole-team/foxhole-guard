@@ -423,7 +423,7 @@ class RuntimeConfigAssembler(
                 "reality=${reality?.enabledField(default = true) == true}",
                 "flow=${outbound?.containsKey("flow") == true}",
                 "packet=${outbound?.stringField("packet_encoding") ?: "default"}",
-                "network=${outbound?.stringField("network") ?: "default"}",
+                "network=${outbound?.networkField() ?: "default"}",
                 "bind_interface=${outbound?.stringField("bind_interface") ?: "none"}",
                 "runtime_inbound=${runtimeInbound?.stringField("type") ?: "missing"}",
                 "dns_remote=${dnsServers.any { it.jsonObject.stringField("tag") == DNS_REMOTE_TAG }}",
@@ -484,6 +484,19 @@ class RuntimeConfigAssembler(
 
     private fun JsonObject.stringField(key: String): String? =
         this[key]?.jsonPrimitive?.contentOrNull?.trim()?.takeIf(String::isNotBlank)
+
+    private fun JsonObject.networkField(): String? =
+        networkValues()?.joinToString(",")
+
+    private fun JsonObject.networkValues(): List<String>? =
+        when (val value = this["network"]) {
+            is JsonArray -> value.mapNotNull { it.jsonPrimitive.contentOrNull?.trim()?.takeIf(String::isNotBlank) }
+            is JsonPrimitive -> value.contentOrNull?.trim()?.takeIf(String::isNotBlank)?.let(::listOf)
+            else -> null
+        }?.takeIf { it.isNotEmpty() }
+
+    private fun JsonObject.isTcpOnlyNetwork(): Boolean =
+        networkValues() == listOf("tcp")
 
     private fun JsonObject.enabledField(default: Boolean): Boolean =
         stringField("enabled")?.toBooleanStrictOrNull() ?: default
@@ -845,12 +858,22 @@ class RuntimeConfigAssembler(
         }
 
     private fun patchTcpReliabilityOutbound(outbound: JsonObject): JsonObject {
-        if (!outbound.requiresTcpReliabilityPatch()) {
+        val tcpReliabilityPatch = outbound.requiresTcpReliabilityPatch()
+        val vlessUdpRelayPatch = outbound.requiresVlessUdpRelayPatch()
+        if (!tcpReliabilityPatch && !vlessUdpRelayPatch) {
             return outbound
         }
         return buildJsonObject {
-            outbound.forEach { (key, value) -> put(key, value) }
-            if (outbound["disable_tcp_keep_alive"]?.jsonPrimitive?.contentOrNull != "true") {
+            outbound.forEach { (key, value) ->
+                if (vlessUdpRelayPatch && key == "network") {
+                    return@forEach
+                }
+                put(key, value)
+            }
+            if (vlessUdpRelayPatch && !outbound.containsKey("packet_encoding")) {
+                put("packet_encoding", "xudp")
+            }
+            if (tcpReliabilityPatch && outbound["disable_tcp_keep_alive"]?.jsonPrimitive?.contentOrNull != "true") {
                 if (!outbound.containsKey("tcp_keep_alive")) {
                     put("tcp_keep_alive", MOBILE_TCP_KEEP_ALIVE)
                 }
@@ -874,6 +897,16 @@ class RuntimeConfigAssembler(
         return type in TCP_RELIABILITY_OUTBOUND_TYPES &&
             !containsKey("detour") &&
             transportType in TCP_RELIABILITY_TRANSPORT_TYPES
+    }
+
+    private fun JsonObject.requiresVlessUdpRelayPatch(): Boolean {
+        if (this["type"]?.jsonPrimitive?.contentOrNull?.lowercase() != "vless") {
+            return false
+        }
+        if (!isTcpOnlyNetwork()) {
+            return false
+        }
+        return stringField("packet_encoding")?.lowercase() in setOf(null, "xudp", "packetaddr")
     }
 
     private fun patchDns(
@@ -1160,7 +1193,7 @@ class RuntimeConfigAssembler(
         vpnProtocolHint: ProtocolHint?,
     ): Boolean =
         vpnProtocolHint?.isUdpTransport() != true &&
-            base.primaryProxyOutbound()?.stringField("network") == "tcp"
+            base.primaryProxyOutbound()?.isTcpOnlyNetwork() == true
 
     private fun packageNetworkRouteRule(
         packageNames: List<String>,

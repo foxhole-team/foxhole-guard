@@ -523,7 +523,7 @@ class RuntimeConfigAssemblerTest {
     }
 
     @Test
-    fun `tcp only proxy outbound rejects browser udp before sniff`() {
+    fun `vless tcp outbound enables xudp udp relay for browser quic`() {
         val config =
             parse(
                 assembler.assemble(
@@ -545,6 +545,47 @@ class RuntimeConfigAssemblerTest {
                     settings = Settings(),
                     activePreset = null,
                     vpnProtocolHint = ProtocolHint.VLESS,
+                ),
+            )
+
+        val outbounds = config["outbounds"]!!.jsonArray.map { it.jsonObject }
+        val vless = outbounds.single { it["type"]?.jsonPrimitive?.content == "vless" }
+        val rules = config["route"]!!.jsonObject["rules"]!!.jsonArray.map { it.jsonObject }
+
+        assertFalse(vless.containsKey("network"))
+        assertEquals("xudp", vless["packet_encoding"]!!.jsonPrimitive.content)
+        assertFalse(
+            rules.any {
+                it["network"]?.jsonPrimitive?.content == "udp" &&
+                    it["action"]?.jsonPrimitive?.content == "reject"
+            },
+        )
+        assertTrue(assembler.redactedRuntimeShape(config.toString()).contains("route_udp_reject=false"))
+    }
+
+    @Test
+    fun `tcp only non-vless outbound rejects browser udp before sniff`() {
+        val config =
+            parse(
+                assembler.assemble(
+                    baseConfigJson =
+                        baseConfigWithOutbounds(
+                            buildJsonArray {
+                                add(
+                                    buildJsonObject {
+                                        put("type", "trojan")
+                                        put("tag", "proxy")
+                                        put("server", "edge.example")
+                                        put("server_port", 443)
+                                        put("password", "secret")
+                                        put("network", "tcp")
+                                    },
+                                )
+                            },
+                        ),
+                    settings = Settings(),
+                    activePreset = null,
+                    vpnProtocolHint = ProtocolHint.TROJAN,
                 ),
             )
 
