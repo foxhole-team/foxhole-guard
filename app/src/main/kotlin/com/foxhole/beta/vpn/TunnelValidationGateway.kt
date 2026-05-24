@@ -322,20 +322,6 @@ internal class TunnelValidationGateway(
         if (!settings.canUseVpnBoundIpRefreshFallback(currentSnapshot, androidValidatedVpnNetwork)) {
             throw error
         }
-        if (androidValidatedVpnNetwork && appOwnedRequestPath() == AppOwnedRequestPath.NORMAL_PROCESS) {
-            currentTunnelIpInfo()?.let { cachedInfo ->
-                diagnosticsLogger.record(
-                    "ip",
-                    "validated tunnel ip refresh reused cached dashboard ip after runtime proxy failure: ${error.javaClass.simpleName}",
-                )
-                return cachedInfo
-            }
-            diagnosticsLogger.record(
-                "ip",
-                "validated tunnel ip refresh skipped app-owned vpn process path after runtime proxy failure: ${error.javaClass.simpleName}",
-            )
-            throw error
-        }
         return fetchActiveTunnelIpInfoOnProcessPathAfterRuntimeProxyFailure(
             endpoint = endpoint,
             fetchMode = fetchMode,
