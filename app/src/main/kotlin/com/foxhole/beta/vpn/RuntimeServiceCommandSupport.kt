@@ -44,7 +44,7 @@ internal fun handleRuntimeServiceCommand(
             val suppressLocalGuard = intent.getBooleanExtra(FoxholeConnectionServiceContract.EXTRA_SUPPRESS_LOCAL_GUARD, false)
             val preserveSmartStartAnalysis =
                 intent.getBooleanExtra(FoxholeConnectionServiceContract.EXTRA_PRESERVE_SMART_START_ANALYSIS, false)
-            launchPriorityCommand(RuntimeCommandPriority.STOP, "disconnect") {
+            launchPriorityCommand(RuntimeCommandPriority.USER_STOP, "disconnect") {
                 disconnect(startId, suppressLocalGuard, preserveSmartStartAnalysis)
             }
         }

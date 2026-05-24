@@ -53,11 +53,11 @@ internal class TunnelValidationPolicy(
                     when (kind) {
                         TunnelValidationProbeKind.VPN_IP_REFRESH,
                         TunnelValidationProbeKind.VPN_VALIDATION_ENDPOINT,
+                        TunnelValidationProbeKind.VALIDATED_VPN_LITERAL_IP_ENDPOINT,
+                        TunnelValidationProbeKind.ANDROID_VALIDATED_VPN_NETWORK,
+                        -> true
                         TunnelValidationProbeKind.TUNNEL_RUNTIME_PROXY_IP_REFRESH,
                         TunnelValidationProbeKind.TUNNEL_RUNTIME_PROXY_VALIDATION_ENDPOINT,
-                        TunnelValidationProbeKind.VALIDATED_VPN_LITERAL_IP_ENDPOINT,
-                        -> true
-                        TunnelValidationProbeKind.ANDROID_VALIDATED_VPN_NETWORK,
                         TunnelValidationProbeKind.DNS_INDEPENDENT_LITERAL_IP,
                         -> null
                     }

@@ -66,6 +66,7 @@ internal object TunnelValidationEvidenceClassifier {
     ): Boolean =
         when {
             isNetworkActivityEntry(tag, message) -> true
+            isVpnBoundValidationSuccessEntry(tag, message) -> true
             tag == "libbox" ->
                 message.contains("inbound/tun[") && message.contains("connection to") ||
                     isOutboundTunnelActivityMessage(message)
@@ -77,7 +78,21 @@ internal object TunnelValidationEvidenceClassifier {
         message: String,
     ): Boolean =
         isNetworkActivityEntry(tag, message) ||
+            isVpnBoundValidationSuccessEntry(tag, message) ||
             tag == "libbox" && isOutboundTunnelActivityMessage(message)
+
+    private fun isVpnBoundValidationSuccessEntry(
+        tag: String,
+        message: String,
+    ): Boolean =
+        tag == "dns" &&
+            (
+                message.contains("vpn network passed in-process ip refresh") ||
+                    message.contains("vpn network passed validation endpoint probe") ||
+                    message.contains("vpn-bound literal public endpoint accepted") ||
+                    message.contains("android validated vpn network accepted") ||
+                    message.contains("validated tunnel grace retry passed")
+                )
 
     private fun isOutboundTunnelActivityMessage(message: String): Boolean =
         message.contains("outbound/") && message.contains("outbound connection to") ||

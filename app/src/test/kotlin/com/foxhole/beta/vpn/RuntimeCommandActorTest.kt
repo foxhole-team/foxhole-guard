@@ -180,32 +180,34 @@ class RuntimeCommandActorTest {
         }
 
     @Test
-    fun `switch preempts stop so latest user transition wins`() =
+    fun `switch waits while user stop is running`() =
         runBlocking {
             val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-            val killReasons = Collections.synchronizedList(mutableListOf<String>())
-            val actor = actor(scope, killReasons)
+            val actor = actor(scope)
             val stopStarted = CompletableDeferred<Unit>()
-            val stopCancelled = CompletableDeferred<Unit>()
+            val releaseStop = CompletableDeferred<Unit>()
             val switchCompleted = CompletableDeferred<Unit>()
+            val events = Collections.synchronizedList(mutableListOf<String>())
 
-            actor.launch(RuntimeCommandPriority.STOP, reason = "disconnect") {
-                try {
-                    stopStarted.complete(Unit)
-                    awaitCancellation()
-                } finally {
-                    stopCancelled.complete(Unit)
-                }
+            actor.launch(RuntimeCommandPriority.USER_STOP, reason = "disconnect") {
+                events += "stop-start"
+                stopStarted.complete(Unit)
+                releaseStop.await()
+                events += "stop-end"
             }
             withTimeout(1_000L) { stopStarted.await() }
 
             actor.launch(RuntimeCommandPriority.SWITCH, reason = "connect:1:default") {
+                events += "switch"
                 switchCompleted.complete(Unit)
             }
 
-            withTimeout(1_000L) { stopCancelled.await() }
+            delay(50L)
+            assertEquals(listOf("stop-start"), events.toList())
+
+            releaseStop.complete(Unit)
             withTimeout(1_000L) { switchCompleted.await() }
-            assertEquals(listOf("priority_command_preempt:connect:1:default"), killReasons.toList())
+            assertEquals(listOf("stop-start", "stop-end", "switch"), events.toList())
             actor.close()
         }
 
@@ -240,33 +242,36 @@ class RuntimeCommandActorTest {
         }
 
     @Test
-    fun `stop requested during switch runs after switch completes`() =
+    fun `user stop requested during switch preempts current switch`() =
         runBlocking {
             val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-            val actor = actor(scope)
+            val killReasons = Collections.synchronizedList(mutableListOf<String>())
+            val actor = actor(scope, killReasons)
             val switchStarted = CompletableDeferred<Unit>()
-            val releaseSwitch = CompletableDeferred<Unit>()
+            val switchCancelled = CompletableDeferred<Unit>()
             val stopCompleted = CompletableDeferred<Unit>()
             val events = Collections.synchronizedList(mutableListOf<String>())
 
             actor.launch(RuntimeCommandPriority.SWITCH, reason = "connect:1:default") {
-                events += "switch-start"
-                switchStarted.complete(Unit)
-                releaseSwitch.await()
-                events += "switch-end"
+                try {
+                    events += "switch-start"
+                    switchStarted.complete(Unit)
+                    awaitCancellation()
+                } finally {
+                    switchCancelled.complete(Unit)
+                }
             }
             withTimeout(1_000L) { switchStarted.await() }
 
-            actor.launch(RuntimeCommandPriority.STOP, reason = "fail_disconnect") {
+            actor.launch(RuntimeCommandPriority.USER_STOP, reason = "disconnect") {
                 events += "stop"
                 stopCompleted.complete(Unit)
             }
-            delay(50L)
-            assertEquals(listOf("switch-start"), events.toList())
 
-            releaseSwitch.complete(Unit)
+            withTimeout(1_000L) { switchCancelled.await() }
             withTimeout(1_000L) { stopCompleted.await() }
-            assertEquals(listOf("switch-start", "switch-end", "stop"), events.toList())
+            assertEquals(listOf("switch-start", "stop"), events.toList())
+            assertEquals(listOf("priority_command_preempt:disconnect"), killReasons.toList())
             actor.close()
         }
 

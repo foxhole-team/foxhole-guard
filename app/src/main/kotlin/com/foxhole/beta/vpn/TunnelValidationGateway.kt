@@ -30,6 +30,7 @@ internal class TunnelValidationGateway(
     private val ipInfoRepository: IpInfoRepository,
     private val diagnosticsLogger: DiagnosticsLogger,
     private val snapshot: StateFlow<ConnectionSnapshot>,
+    private val currentTunnelIpInfo: () -> IpInfo?,
     private val currentVpnNetwork: () -> Network?,
     private val currentUpstreamNetwork: () -> Network?,
 ) {
@@ -236,47 +237,114 @@ internal class TunnelValidationGateway(
         preferIpv4Validation: Boolean,
         currentSnapshot: ConnectionSnapshot,
     ): IpInfo =
-        try {
+        fetchActiveTunnelIpInfo(
+            settings = settings,
+            endpoint = endpoint,
+            fetchMode = fetchMode,
+            vpnNetwork = vpnNetwork,
+            preferIpv4Validation = preferIpv4Validation,
+            currentSnapshot = currentSnapshot,
+            androidValidatedVpnNetwork = isVpnNetworkValidated(vpnNetwork),
+        )
+
+    private suspend fun fetchActiveTunnelIpInfo(
+        settings: Settings,
+        endpoint: String,
+        fetchMode: IpInfoFetchMode,
+        vpnNetwork: Network,
+        preferIpv4Validation: Boolean,
+        currentSnapshot: ConnectionSnapshot,
+        androidValidatedVpnNetwork: Boolean,
+    ): IpInfo {
+        val effectiveFetchMode = validatedTunnelIpRefreshFetchMode(fetchMode, androidValidatedVpnNetwork)
+        if (effectiveFetchMode != fetchMode) {
+            diagnosticsLogger.record(
+                "ip",
+                "active tunnel ip refresh using quick mode after android validation",
+            )
+        }
+        return try {
             fetchActiveTunnelIpInfoViaRuntimeProxy(
                 settings = settings,
                 endpoint = endpoint,
-                fetchMode = fetchMode,
+                fetchMode = effectiveFetchMode,
                 preferIpv4Validation = preferIpv4Validation,
             )
         } catch (error: IOException) {
-            if (!settings.canUseVpnBoundIpRefreshFallback(currentSnapshot, isVpnNetworkValidated(vpnNetwork))) {
-                throw error
-            }
-            fetchActiveTunnelIpInfoOnProcessPathAfterRuntimeProxyFailure(
+            recoverActiveTunnelIpInfoAfterRuntimeProxyFailure(
+                settings = settings,
+                currentSnapshot = currentSnapshot,
+                androidValidatedVpnNetwork = androidValidatedVpnNetwork,
                 endpoint = endpoint,
-                fetchMode = fetchMode,
+                fetchMode = effectiveFetchMode,
                 vpnNetwork = vpnNetwork,
                 preferIpv4Validation = preferIpv4Validation,
                 error = error,
             )
         } catch (error: IllegalStateException) {
-            if (!settings.canUseVpnBoundIpRefreshFallback(currentSnapshot, isVpnNetworkValidated(vpnNetwork))) {
-                throw error
-            }
-            fetchActiveTunnelIpInfoOnProcessPathAfterRuntimeProxyFailure(
+            recoverActiveTunnelIpInfoAfterRuntimeProxyFailure(
+                settings = settings,
+                currentSnapshot = currentSnapshot,
+                androidValidatedVpnNetwork = androidValidatedVpnNetwork,
                 endpoint = endpoint,
-                fetchMode = fetchMode,
+                fetchMode = effectiveFetchMode,
                 vpnNetwork = vpnNetwork,
                 preferIpv4Validation = preferIpv4Validation,
                 error = error,
             )
         } catch (error: IllegalArgumentException) {
-            if (!settings.canUseVpnBoundIpRefreshFallback(currentSnapshot, isVpnNetworkValidated(vpnNetwork))) {
-                throw error
-            }
-            fetchActiveTunnelIpInfoOnProcessPathAfterRuntimeProxyFailure(
+            recoverActiveTunnelIpInfoAfterRuntimeProxyFailure(
+                settings = settings,
+                currentSnapshot = currentSnapshot,
+                androidValidatedVpnNetwork = androidValidatedVpnNetwork,
                 endpoint = endpoint,
-                fetchMode = fetchMode,
+                fetchMode = effectiveFetchMode,
                 vpnNetwork = vpnNetwork,
                 preferIpv4Validation = preferIpv4Validation,
                 error = error,
             )
         }
+    }
+
+    private suspend fun recoverActiveTunnelIpInfoAfterRuntimeProxyFailure(
+        settings: Settings,
+        currentSnapshot: ConnectionSnapshot,
+        androidValidatedVpnNetwork: Boolean,
+        endpoint: String,
+        fetchMode: IpInfoFetchMode,
+        vpnNetwork: Network,
+        preferIpv4Validation: Boolean,
+        error: Exception,
+    ): IpInfo {
+        if (error is CancellationException) {
+            throw error
+        }
+        if (!settings.canUseVpnBoundIpRefreshFallback(currentSnapshot, androidValidatedVpnNetwork)) {
+            throw error
+        }
+        if (androidValidatedVpnNetwork && appOwnedRequestPath() == AppOwnedRequestPath.NORMAL_PROCESS) {
+            currentTunnelIpInfo()?.let { cachedInfo ->
+                diagnosticsLogger.record(
+                    "ip",
+                    "validated tunnel ip refresh reused cached dashboard ip after runtime proxy failure: ${error.javaClass.simpleName}",
+                )
+                return cachedInfo
+            }
+            diagnosticsLogger.record(
+                "ip",
+                "validated tunnel ip refresh skipped app-owned vpn process path after runtime proxy failure: ${error.javaClass.simpleName}",
+            )
+            throw error
+        }
+        return fetchActiveTunnelIpInfoOnProcessPathAfterRuntimeProxyFailure(
+            endpoint = endpoint,
+            fetchMode = fetchMode,
+            vpnNetwork = vpnNetwork,
+            preferIpv4Validation = preferIpv4Validation,
+            allowCachedFallback = androidValidatedVpnNetwork,
+            error = error,
+        )
+    }
 
     private fun isVpnNetworkValidated(network: Network): Boolean =
         connectivityManager
@@ -288,18 +356,34 @@ internal class TunnelValidationGateway(
         fetchMode: IpInfoFetchMode,
         vpnNetwork: Network,
         preferIpv4Validation: Boolean,
+        allowCachedFallback: Boolean,
         error: Exception,
     ): IpInfo {
         diagnosticsLogger.record(
             "ip",
             "runtime local proxy ip refresh failed, retrying vpn process path: ${error.javaClass.simpleName}",
         )
-        return fetchActiveTunnelIpInfoOnProcessPath(
-            endpoint = endpoint,
-            fetchMode = fetchMode,
-            vpnNetwork = vpnNetwork,
-            preferIpv4Validation = preferIpv4Validation,
-        )
+        return runCatching {
+            fetchActiveTunnelIpInfoOnProcessPath(
+                endpoint = endpoint,
+                fetchMode = fetchMode,
+                vpnNetwork = vpnNetwork,
+                preferIpv4Validation = preferIpv4Validation,
+            )
+        }.recoverCatching { processError ->
+            if (processError is CancellationException) {
+                throw processError
+            }
+            if (!allowCachedFallback) {
+                throw processError
+            }
+            currentTunnelIpInfo()?.also {
+                diagnosticsLogger.record(
+                    "ip",
+                    "validated tunnel ip refresh reused cached dashboard ip after process path failure: ${processError.javaClass.simpleName}",
+                )
+            } ?: throw processError
+        }.getOrThrow()
     }
 
     private suspend fun fetchActiveTunnelIpInfoOnProcessPath(
@@ -375,6 +459,16 @@ internal fun Settings.canUseVpnBoundIpRefreshFallback(
     snapshot: ConnectionSnapshot,
     androidValidatedVpnNetwork: Boolean,
 ): Boolean = !requiresStrictRuntimeProxyIpRefresh(snapshot) || androidValidatedVpnNetwork
+
+internal fun validatedTunnelIpRefreshFetchMode(
+    requestedMode: IpInfoFetchMode,
+    androidValidatedVpnNetwork: Boolean,
+): IpInfoFetchMode =
+    if (androidValidatedVpnNetwork && requestedMode == IpInfoFetchMode.FULL) {
+        IpInfoFetchMode.ENTRY_QUICK
+    } else {
+        requestedMode
+    }
 
 internal fun shouldUseLocalDeviceIpFallback(
     error: Throwable,

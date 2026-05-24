@@ -11,10 +11,10 @@ class TunnelValidationPolicyTest {
     fun `accepts vpn-bound reachability probes as tunnel validation`() {
         assertTrue(acceptsTunnelValidationProbe(TunnelValidationProbeKind.VPN_IP_REFRESH))
         assertTrue(acceptsTunnelValidationProbe(TunnelValidationProbeKind.VPN_VALIDATION_ENDPOINT))
-        assertTrue(acceptsTunnelValidationProbe(TunnelValidationProbeKind.TUNNEL_RUNTIME_PROXY_IP_REFRESH))
-        assertTrue(acceptsTunnelValidationProbe(TunnelValidationProbeKind.TUNNEL_RUNTIME_PROXY_VALIDATION_ENDPOINT))
         assertTrue(acceptsTunnelValidationProbe(TunnelValidationProbeKind.VALIDATED_VPN_LITERAL_IP_ENDPOINT))
-        assertFalse(acceptsTunnelValidationProbe(TunnelValidationProbeKind.ANDROID_VALIDATED_VPN_NETWORK))
+        assertTrue(acceptsTunnelValidationProbe(TunnelValidationProbeKind.ANDROID_VALIDATED_VPN_NETWORK))
+        assertFalse(acceptsTunnelValidationProbe(TunnelValidationProbeKind.TUNNEL_RUNTIME_PROXY_IP_REFRESH))
+        assertFalse(acceptsTunnelValidationProbe(TunnelValidationProbeKind.TUNNEL_RUNTIME_PROXY_VALIDATION_ENDPOINT))
     }
 
     @Test
@@ -118,8 +118,8 @@ class TunnelValidationPolicyTest {
     }
 
     @Test
-    fun `android validated vpn network does not prove tunnel validation by itself`() {
-        assertFalse(
+    fun `android validated vpn network proves system vpn-bound reachability without proxy evidence`() {
+        assertTrue(
             acceptsAndroidValidatedVpnNetwork(
                 androidValidated = true,
                 evidence = null,
@@ -131,7 +131,7 @@ class TunnelValidationPolicyTest {
                 evidence = TunnelValidationEvidence(hasSuccessfulTunnelActivity = true),
             ),
         )
-        assertFalse(
+        assertTrue(
             acceptsAndroidValidatedVpnNetwork(
                 androidValidated = true,
                 evidence = TunnelValidationEvidence(hasSuccessfulTunnelActivity = false),

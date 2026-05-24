@@ -65,6 +65,7 @@ class FoxholeConnectionController(
             ipInfoRepository = ipInfoRepository,
             diagnosticsLogger = diagnosticsLogger,
             snapshot = snapshot,
+            currentTunnelIpInfo = { ipInfo.value },
             currentVpnNetwork = { currentVpnNetwork() },
             currentUpstreamNetwork = { currentUpstreamNetwork() },
         )

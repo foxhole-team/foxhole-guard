@@ -19,6 +19,7 @@ internal enum class RuntimeCommandPriority(val value: Int) {
     NORMAL(10),
     STOP(100),
     SWITCH(500),
+    USER_STOP(800),
     KILL(1_000),
 }
 
@@ -338,6 +339,9 @@ internal class RuntimeCommandActor(
         when (running.priority) {
             RuntimeCommandPriority.KILL.value ->
                 priority <= running.priority
+            RuntimeCommandPriority.USER_STOP.value ->
+                priority == RuntimeCommandPriority.USER_STOP.value ||
+                    priority == RuntimeCommandPriority.STOP.value
             RuntimeCommandPriority.STOP.value ->
                 priority == RuntimeCommandPriority.STOP.value
             RuntimeCommandPriority.SWITCH.value ->
@@ -461,6 +465,9 @@ internal class RuntimeCommandActor(
     private fun QueuedRuntimeCommand.supersedesBufferedPriority(queued: QueuedRuntimeCommand): Boolean =
         when (priority) {
             RuntimeCommandPriority.KILL.value ->
+                queued.priority >= RuntimeCommandPriority.STOP.value &&
+                    queued.priority <= priority
+            RuntimeCommandPriority.USER_STOP.value ->
                 queued.priority >= RuntimeCommandPriority.STOP.value &&
                     queued.priority <= priority
             RuntimeCommandPriority.SWITCH.value ->

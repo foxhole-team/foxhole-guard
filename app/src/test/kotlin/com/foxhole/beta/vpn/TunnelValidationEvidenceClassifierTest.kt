@@ -167,4 +167,44 @@ class TunnelValidationEvidenceClassifierTest {
         assertTrue(evidence.hasOutboundTunnelActivity)
         assertEquals(null, evidence.fatalRuntimeMessage)
     }
+
+    @Test
+    fun `vpn-bound validation success counts as tunnel activity evidence`() {
+        val evidence =
+            TunnelValidationEvidenceClassifier.classify(
+                entries =
+                    listOf(
+                        DiagnosticEntry(
+                            timestamp = 1_000L,
+                            tag = "dns",
+                            message = "vpn network passed in-process ip refresh",
+                        ),
+                    ),
+                sinceMs = 900L,
+            )
+
+        assertTrue(evidence.hasSuccessfulTunnelActivity)
+        assertTrue(evidence.hasOutboundTunnelActivity)
+        assertEquals(null, evidence.fatalRuntimeMessage)
+    }
+
+    @Test
+    fun `android vpn validation success counts as tunnel activity evidence`() {
+        val evidence =
+            TunnelValidationEvidenceClassifier.classify(
+                entries =
+                    listOf(
+                        DiagnosticEntry(
+                            timestamp = 1_000L,
+                            tag = "dns",
+                            message = "android validated vpn network accepted",
+                        ),
+                    ),
+                sinceMs = 900L,
+            )
+
+        assertTrue(evidence.hasSuccessfulTunnelActivity)
+        assertTrue(evidence.hasOutboundTunnelActivity)
+        assertEquals(null, evidence.fatalRuntimeMessage)
+    }
 }

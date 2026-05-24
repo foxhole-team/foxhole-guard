@@ -182,6 +182,9 @@ private suspend fun HomeViewModel.awaitReconnectConnectionOutcome(): ConnectionS
         }
     if (outcome == null) {
         container.diagnosticsLogger.record("connection", "manual reconnect status wait timed out")
+        setDashboardConnectionMetricsLoading(false)
+        container.connectionController.disconnect(suppressLocalGuard = true)
+        error("Connection timed out")
     }
     return outcome
 }
@@ -1761,12 +1764,19 @@ internal fun HomeViewModel.scheduleActiveProfileLatencyRefreshInternal(
         setDashboardConnectionMetricsLoading(false)
         return
     }
-    val activeProfile = uiState.value.activeProfile ?: return
+    val activeProfile =
+        uiState.value.activeProfile ?: run {
+            setDashboardConnectionMetricsLoading(false)
+            return
+        }
     val selectedOptionId =
         resolveDashboardLatencyOptionId(
             activeProfile = activeProfile,
             connection = container.connectionController.snapshot.value,
-        ) ?: return
+        ) ?: run {
+            setDashboardConnectionMetricsLoading(false)
+            return
+        }
     if (shouldSkipSpeedTestsOnCurrentNetwork()) {
         profileLatencyRefreshJob?.cancel()
         profileLatencyRefreshJob = null

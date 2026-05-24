@@ -8,6 +8,8 @@ import com.foxhole.beta.core.model.PrivacyRouteSettings
 import com.foxhole.beta.core.model.ProtocolHint
 import com.foxhole.beta.core.model.Settings
 import com.foxhole.beta.core.model.TrafficMode
+import com.foxhole.beta.core.network.IpInfoFetchMode
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -118,6 +120,31 @@ class TunnelRuntimeProxyIpRefreshPolicyTest {
 
         assertTrue(Settings().requiresStrictRuntimeProxyIpRefresh(snapshot))
         assertFalse(Settings().canUseVpnBoundIpRefreshFallback(snapshot, androidValidatedVpnNetwork = false))
+    }
+
+    @Test
+    fun `android validated tunnel dashboard refresh uses quick fetch mode`() {
+        assertEquals(
+            IpInfoFetchMode.ENTRY_QUICK,
+            validatedTunnelIpRefreshFetchMode(
+                requestedMode = IpInfoFetchMode.FULL,
+                androidValidatedVpnNetwork = true,
+            ),
+        )
+        assertEquals(
+            IpInfoFetchMode.FULL,
+            validatedTunnelIpRefreshFetchMode(
+                requestedMode = IpInfoFetchMode.FULL,
+                androidValidatedVpnNetwork = false,
+            ),
+        )
+        assertEquals(
+            IpInfoFetchMode.ENTRY_QUICK,
+            validatedTunnelIpRefreshFetchMode(
+                requestedMode = IpInfoFetchMode.ENTRY_QUICK,
+                androidValidatedVpnNetwork = true,
+            ),
+        )
     }
 
     @Test
