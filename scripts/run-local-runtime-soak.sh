@@ -193,6 +193,14 @@ capture_browser_window_state() {
   } > "$out_file" 2>&1
 }
 
+runtime_vpn_ip_refresh_ok_seen() {
+  local logcat_file="$1"
+  local instrumentation_log="$2"
+  grep -Eq \
+    'liveSmartBackground (initialIpRefresh=ok|tick .*ipRefresh=ok:)' \
+    "$logcat_file" "$instrumentation_log" 2>/dev/null
+}
+
 tap_screen_percent() {
   local serial="$1"
   local x_percent="$2"
@@ -327,7 +335,7 @@ run_instrumentation_round() {
   instrument_pid="$!"
 
   while kill -0 "$instrument_pid" >/dev/null 2>&1 && [[ "$waited" -lt "$BROWSER_WAIT_SECONDS" ]]; do
-    if grep -q 'liveSmartBackground initialIpRefresh=ok' "$logcat_file" "$round_dir/instrumentation.log" 2>/dev/null; then
+    if runtime_vpn_ip_refresh_ok_seen "$logcat_file" "$round_dir/instrumentation.log"; then
       echo "connected_hold_seen_at=$(date -Is)" > "$round_dir/browser-checks.started"
       printf 'label\turl\tstatus\tscreenshot_bytes\tverdict_image\n' > "$round_dir/browser-verdict.tsv"
       browser_check "$serial" "$round_dir" "google" "$GOOGLE_CHECK_URL" || browser_status=1
@@ -343,6 +351,9 @@ run_instrumentation_round() {
   done
   if [[ ! -e "$round_dir/browser-checks.started" && ! -e "$round_dir/browser-checks.skipped" ]]; then
     echo "browser checks skipped: connected hold was not observed within ${BROWSER_WAIT_SECONDS}s" > "$round_dir/browser-checks.skipped"
+    if [[ "$REQUIRE_SUCCESS" == "1" ]]; then
+      browser_status=1
+    fi
   fi
 
   set +e
