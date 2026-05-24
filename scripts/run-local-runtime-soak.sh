@@ -21,7 +21,7 @@ readonly REQUIRE_SUCCESS="${FOXHOLE_SOAK_REQUIRE_SUCCESS:-1}"
 readonly ALLOW_INSECURE_TLS="${FOXHOLE_SOAK_ALLOW_INSECURE_TLS:-0}"
 readonly KEEP_APP_VISIBLE="${FOXHOLE_SOAK_KEEP_APP_VISIBLE:-1}"
 readonly GOOGLE_CHECK_URL="${FOXHOLE_SOAK_GOOGLE_URL:-https://www.google.com/}"
-readonly IP_CHECK_URL="${FOXHOLE_SOAK_IP_URL:-http://1.1.1.1/cdn-cgi/trace}"
+readonly IP_CHECK_URL="${FOXHOLE_SOAK_IP_URL:-https://cloudflare.com/cdn-cgi/trace}"
 readonly SPEC="${TEST_CLASS}#${TEST_METHOD}"
 
 usage() {
@@ -42,7 +42,7 @@ Common environment:
   FOXHOLE_SOAK_BROWSER_SNAPSHOT_SECONDS=5,15,30      Browser screenshot times after URL launch; last sample is verdict image.
   FOXHOLE_SOAK_REQUIRE_SUCCESS=1                     Fail the pass on runtime/IP/traffic evidence problems.
   FOXHOLE_SOAK_GOOGLE_URL=https://www.google.com/    Browser Google smoke URL.
-  FOXHOLE_SOAK_IP_URL=http://1.1.1.1/cdn-cgi/trace   Browser IP smoke URL; literal IP avoids DNS-provider false negatives.
+  FOXHOLE_SOAK_IP_URL=https://cloudflare.com/cdn-cgi/trace  Browser IP smoke URL; Cloudflare trace exposes the public IP.
   FOXHOLE_SOAK_BROWSER_PREPARE=1                     Warm Chrome before instrumentation so browser checks avoid UiAutomation conflict.
   FOXHOLE_SOAK_ALLOW_INSECURE_TLS=0                  Preserve strict subscription TLS by default.
   FOXHOLE_SOAK_TEST_METHOD=$TEST_METHOD
