@@ -30,7 +30,6 @@ internal class TunnelValidationGateway(
     private val ipInfoRepository: IpInfoRepository,
     private val diagnosticsLogger: DiagnosticsLogger,
     private val snapshot: StateFlow<ConnectionSnapshot>,
-    private val currentTunnelIpInfo: () -> IpInfo?,
     private val currentVpnNetwork: () -> Network?,
     private val currentUpstreamNetwork: () -> Network?,
 ) {
@@ -327,7 +326,6 @@ internal class TunnelValidationGateway(
             fetchMode = fetchMode,
             vpnNetwork = vpnNetwork,
             preferIpv4Validation = preferIpv4Validation,
-            allowCachedFallback = androidValidatedVpnNetwork,
             error = error,
         )
     }
@@ -342,7 +340,6 @@ internal class TunnelValidationGateway(
         fetchMode: IpInfoFetchMode,
         vpnNetwork: Network,
         preferIpv4Validation: Boolean,
-        allowCachedFallback: Boolean,
         error: Exception,
     ): IpInfo {
         diagnosticsLogger.record(
@@ -360,15 +357,11 @@ internal class TunnelValidationGateway(
             if (processError is CancellationException) {
                 throw processError
             }
-            if (!allowCachedFallback) {
-                throw processError
-            }
-            currentTunnelIpInfo()?.also {
-                diagnosticsLogger.record(
-                    "ip",
-                    "validated tunnel ip refresh reused cached dashboard ip after process path failure: ${processError.javaClass.simpleName}",
-                )
-            } ?: throw processError
+            diagnosticsLogger.record(
+                "ip",
+                "vpn process path ip refresh failed after runtime proxy failure: ${processError.javaClass.simpleName}",
+            )
+            throw processError
         }.getOrThrow()
     }
 
