@@ -11,13 +11,14 @@ readonly HOLD_MS="${FOXHOLE_SOAK_HOLD_MS:-900000}"
 readonly PROBE_INTERVAL_MS="${FOXHOLE_SOAK_PROBE_INTERVAL_MS:-60000}"
 readonly ROUNDS="${FOXHOLE_SOAK_ROUNDS:-0}"
 readonly DURATION_SECONDS="${FOXHOLE_SOAK_DURATION_SECONDS:-28800}"
-readonly BROWSER_SETTLE_SECONDS="${FOXHOLE_SOAK_BROWSER_SETTLE_SECONDS:-8}"
+readonly BROWSER_SETTLE_SECONDS="${FOXHOLE_SOAK_BROWSER_SETTLE_SECONDS:-12}"
 readonly BROWSER_WAIT_SECONDS="${FOXHOLE_SOAK_BROWSER_WAIT_SECONDS:-180}"
+readonly BROWSER_PREPARE="${FOXHOLE_SOAK_BROWSER_PREPARE:-1}"
 readonly REQUIRE_SUCCESS="${FOXHOLE_SOAK_REQUIRE_SUCCESS:-1}"
 readonly ALLOW_INSECURE_TLS="${FOXHOLE_SOAK_ALLOW_INSECURE_TLS:-0}"
 readonly KEEP_APP_VISIBLE="${FOXHOLE_SOAK_KEEP_APP_VISIBLE:-1}"
-readonly GOOGLE_CHECK_URL="${FOXHOLE_SOAK_GOOGLE_URL:-https://www.google.com/generate_204}"
-readonly IP_CHECK_URL="${FOXHOLE_SOAK_IP_URL:-http://1.1.1.1/cdn-cgi/trace}"
+readonly GOOGLE_CHECK_URL="${FOXHOLE_SOAK_GOOGLE_URL:-https://www.google.com/}"
+readonly IP_CHECK_URL="${FOXHOLE_SOAK_IP_URL:-https://1.1.1.1/cdn-cgi/trace}"
 readonly SPEC="${TEST_CLASS}#${TEST_METHOD}"
 
 usage() {
@@ -34,13 +35,15 @@ Common environment:
   FOXHOLE_SOAK_PROBE_INTERVAL_MS=60000               In-app vpn-bound probe interval.
   FOXHOLE_SOAK_BROWSER_WAIT_SECONDS=180              Wait for connected hold before browser checks.
   FOXHOLE_SOAK_REQUIRE_SUCCESS=1                     Fail the pass on runtime/IP/traffic evidence problems.
-  FOXHOLE_SOAK_IP_URL=http://1.1.1.1/cdn-cgi/trace  Browser IP smoke URL; literal IP avoids DNS-provider false negatives.
+  FOXHOLE_SOAK_GOOGLE_URL=https://www.google.com/    Browser Google smoke URL.
+  FOXHOLE_SOAK_IP_URL=https://1.1.1.1/cdn-cgi/trace  Browser IP smoke URL; literal IP avoids DNS-provider false negatives.
+  FOXHOLE_SOAK_BROWSER_PREPARE=1                     Warm Chrome before instrumentation so browser checks avoid UiAutomation conflict.
   FOXHOLE_SOAK_ALLOW_INSECURE_TLS=0                  Preserve strict subscription TLS by default.
   FOXHOLE_SOAK_TEST_METHOD=$TEST_METHOD
 
 Output:
   $OUTPUT_ROOT/<serial>/summary.tsv
-  $OUTPUT_ROOT/<serial>/round-0001/{instrumentation.log,logcat.txt,browser-*.png,browser-*.xml}
+  $OUTPUT_ROOT/<serial>/round-0001/{instrumentation.log,logcat.txt,browser-*.png,browser-*-connectivity.txt}
 EOF
 }
 
@@ -140,10 +143,16 @@ instrumentation_log_failed() {
   return 1
 }
 
-capture_screen_and_ui() {
+capture_screen() {
   local serial="$1"
   local prefix="$2"
   adb_device "$serial" exec-out screencap -p > "${prefix}.png" 2> "${prefix}.screencap.err" || true
+}
+
+capture_screen_and_ui() {
+  local serial="$1"
+  local prefix="$2"
+  capture_screen "$serial" "$prefix"
   adb_device "$serial" shell uiautomator dump "/sdcard/foxhole-soak-ui.xml" >/dev/null 2>&1 || true
   adb_device "$serial" pull "/sdcard/foxhole-soak-ui.xml" "${prefix}.xml" >/dev/null 2>&1 || true
   adb_device "$serial" shell rm -f "/sdcard/foxhole-soak-ui.xml" >/dev/null 2>&1 || true
@@ -180,19 +189,34 @@ browser_check() {
     echo "browser_check label=$label url=$url"
     adb_device "$serial" shell am start -a android.intent.action.VIEW -d "$url"
     sleep "$BROWSER_SETTLE_SECONDS"
-    adb_device "$serial" shell dumpsys activity top | sed -n '1,120p' || true
+    adb_device "$serial" shell dumpsys activity top | sed -n '1,180p' || true
   } > "$round_dir/browser-${label}.log" 2>&1
-  capture_screen_and_ui "$serial" "$round_dir/browser-${label}"
-  dismiss_browser_first_run_if_visible "$serial" "$round_dir/browser-${label}"
-  if [[ ! -s "$round_dir/browser-${label}.xml" ]] || grep -Eiq 'Make Chrome your own|Use without an account|Stay signed out|Add account to device' "$round_dir/browser-${label}.xml" 2>/dev/null; then
+  capture_screen "$serial" "$round_dir/browser-${label}"
+  adb_device "$serial" shell dumpsys connectivity > "$round_dir/browser-${label}-connectivity.txt" 2>&1 || true
+}
+
+prepare_browser() {
+  local serial="$1"
+  local out_dir="$2"
+  [[ "$BROWSER_PREPARE" == "1" ]] || return 0
+  {
+    echo "browser_prepare url=$IP_CHECK_URL"
+    adb_device "$serial" shell am start -a android.intent.action.VIEW -d "$IP_CHECK_URL"
+    sleep "$BROWSER_SETTLE_SECONDS"
+    adb_device "$serial" shell dumpsys activity top | sed -n '1,180p' || true
+  } > "$out_dir/browser-prepare.log" 2>&1
+  capture_screen_and_ui "$serial" "$out_dir/browser-prepare"
+  dismiss_browser_first_run_if_visible "$serial" "$out_dir/browser-prepare"
+  if [[ ! -s "$out_dir/browser-prepare.xml" ]] || grep -Eiq 'Make Chrome your own|Use without an account|Stay signed out|Add account to device' "$out_dir/browser-prepare.xml" 2>/dev/null; then
     {
-      echo "browser_check_retry_after_first_run label=$label url=$url"
-      adb_device "$serial" shell am start -a android.intent.action.VIEW -d "$url"
+      echo "browser_prepare_retry url=$IP_CHECK_URL"
+      adb_device "$serial" shell am start -a android.intent.action.VIEW -d "$IP_CHECK_URL"
       sleep "$BROWSER_SETTLE_SECONDS"
-      adb_device "$serial" shell dumpsys activity top | sed -n '1,120p' || true
-    } >> "$round_dir/browser-${label}.log" 2>&1
-    capture_screen_and_ui "$serial" "$round_dir/browser-${label}"
+      adb_device "$serial" shell dumpsys activity top | sed -n '1,180p' || true
+    } >> "$out_dir/browser-prepare.log" 2>&1
+    capture_screen_and_ui "$serial" "$out_dir/browser-prepare"
   fi
+  adb_device "$serial" shell am force-stop com.android.chrome >/dev/null 2>&1 || true
 }
 
 run_instrumentation_round() {
@@ -263,6 +287,7 @@ run_device_soak() {
   mkdir -p "$device_dir"
   collect_device_info "$serial" "$device_dir"
   install_apks "$serial" "$device_dir" "$app_apk" "$test_apk"
+  prepare_browser "$serial" "$device_dir"
   printf 'round\tstarted_at\tended_at\tstatus\tround_dir\n' > "$summary"
 
   started="$(date +%s)"

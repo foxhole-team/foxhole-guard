@@ -431,6 +431,7 @@ class RuntimeConfigAssembler(
                 "route_auto_detect=${route?.stringField("auto_detect_interface") ?: "missing"}",
                 "route_default_interface=${route?.stringField("default_interface") ?: "none"}",
                 "route_udp_block=${route?.hasUdpBlockRule() == true}",
+                "route_udp_reject=${route?.hasUdpRejectRule() == true}",
             ).joinToString(" ")
         }.getOrElse { error ->
             "outbound_shape unavailable error=${error.javaClass.simpleName}"
@@ -473,6 +474,12 @@ class RuntimeConfigAssembler(
         this["rules"]?.jsonArray.orEmpty().any { rule ->
             val value = rule.jsonObject
             value.stringField("network") == "udp" && value.stringField("outbound") == "block"
+        }
+
+    private fun JsonObject.hasUdpRejectRule(): Boolean =
+        this["rules"]?.jsonArray.orEmpty().any { rule ->
+            val value = rule.jsonObject
+            value.stringField("network") == "udp" && value.stringField("action") == "reject"
         }
 
     private fun JsonObject.stringField(key: String): String? =
@@ -955,17 +962,25 @@ class RuntimeConfigAssembler(
             buildJsonArray {
                 appRules.forEach(::add)
                 add(runtimeProxyRouteRule(runtimeProxyOutboundTag(privacyRouteActive, splitPlan)))
+                if (blockUnsupportedUdp) {
+                    if (settings.dns.interceptDnsRequests) {
+                        hijackDnsRules().forEach(::add)
+                    }
+                    if (expert.bypassLan) {
+                        add(bypassLanRule())
+                    }
+                    add(unsupportedUdpRejectRule())
+                }
                 if (expert.sniff) {
                     add(sniffRule())
                 }
-                if (settings.dns.interceptDnsRequests) {
-                    hijackDnsRules().forEach(::add)
-                }
-                if (expert.bypassLan) {
-                    add(bypassLanRule())
-                }
-                if (blockUnsupportedUdp) {
-                    add(udpRouteRule("block"))
+                if (!blockUnsupportedUdp) {
+                    if (settings.dns.interceptDnsRequests) {
+                        hijackDnsRules().forEach(::add)
+                    }
+                    if (expert.bypassLan) {
+                        add(bypassLanRule())
+                    }
                 }
                 privacyRouteRules.forEach(::add)
                 if (activePreset?.enabled == true && activePreset.overrideMode == RoutingPresetOverrideMode.FORCE_LOCAL) {
@@ -1130,6 +1145,14 @@ class RuntimeConfigAssembler(
             put("network", "udp")
             put("action", "route")
             put("outbound", outboundTag)
+        }
+
+    private fun unsupportedUdpRejectRule(): JsonObject =
+        buildJsonObject {
+            put("network", "udp")
+            put("action", "reject")
+            put("method", "default")
+            put("no_drop", true)
         }
 
     private fun shouldBlockUnsupportedUdp(
@@ -1897,6 +1920,7 @@ class RuntimeConfigAssembler(
             "sniff" -> rule.keys.all { it == "action" }
             "hijack-dns" -> isFoxholeManagedHijackDnsRule(rule)
             "route" -> isFoxholeManagedRouteActionRule(rule)
+            "reject" -> isFoxholeManagedUdpRejectRule(rule)
             else -> false
         }
     }
@@ -1926,6 +1950,12 @@ class RuntimeConfigAssembler(
         rule["network"]?.jsonPrimitive?.contentOrNull == "udp" &&
             rule["outbound"]?.jsonPrimitive?.contentOrNull == "block" &&
             rule.keys.all { it in setOf("network", "action", "outbound") }
+
+    private fun isFoxholeManagedUdpRejectRule(rule: JsonObject): Boolean =
+        rule["network"]?.jsonPrimitive?.contentOrNull == "udp" &&
+            rule["method"]?.jsonPrimitive?.contentOrNull == "default" &&
+            rule["no_drop"]?.jsonPrimitive?.contentOrNull == "true" &&
+            rule.keys.all { it in setOf("network", "action", "method", "no_drop") }
 
     private fun isFoxholeManagedPackageRouteRule(rule: JsonObject): Boolean =
         rule["outbound"]?.jsonPrimitive?.contentOrNull in setOf("proxy", "direct", "block") &&

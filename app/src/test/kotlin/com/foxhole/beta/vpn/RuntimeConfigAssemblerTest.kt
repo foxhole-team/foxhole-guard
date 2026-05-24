@@ -523,7 +523,7 @@ class RuntimeConfigAssemblerTest {
     }
 
     @Test
-    fun `tcp only proxy outbound blocks browser udp fallback`() {
+    fun `tcp only proxy outbound rejects browser udp before sniff`() {
         val config =
             parse(
                 assembler.assemble(
@@ -548,18 +548,21 @@ class RuntimeConfigAssemblerTest {
                 ),
             )
 
-        val udpBlock =
-            config["route"]!!
-                .jsonObject["rules"]!!
-                .jsonArray
-                .map { it.jsonObject }
-                .single {
-                    it["network"]?.jsonPrimitive?.content == "udp" &&
-                        it["outbound"]?.jsonPrimitive?.content == "block" &&
-                        it["package_name"] == null
-                }
+        val rules = config["route"]!!.jsonObject["rules"]!!.jsonArray.map { it.jsonObject }
+        val udpRejectIndex =
+            rules.indexOfFirst {
+                it["network"]?.jsonPrimitive?.content == "udp" &&
+                    it["action"]?.jsonPrimitive?.content == "reject"
+            }
+        val sniffIndex =
+            rules.indexOfFirst { it["action"]?.jsonPrimitive?.content == "sniff" }
 
-        assertEquals("route", udpBlock["action"]!!.jsonPrimitive.content)
+        assertTrue(udpRejectIndex >= 0)
+        assertTrue(sniffIndex >= 0)
+        assertTrue(udpRejectIndex < sniffIndex)
+        val udpReject = rules[udpRejectIndex]
+        assertEquals("default", udpReject["method"]!!.jsonPrimitive.content)
+        assertEquals("true", udpReject["no_drop"]!!.jsonPrimitive.content)
     }
 
     @Test
