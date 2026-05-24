@@ -12,7 +12,7 @@ class TunnelValidationPolicyTest {
         assertTrue(acceptsTunnelValidationProbe(TunnelValidationProbeKind.VPN_IP_REFRESH))
         assertTrue(acceptsTunnelValidationProbe(TunnelValidationProbeKind.VPN_VALIDATION_ENDPOINT))
         assertTrue(acceptsTunnelValidationProbe(TunnelValidationProbeKind.VALIDATED_VPN_LITERAL_IP_ENDPOINT))
-        assertFalse(acceptsTunnelValidationProbe(TunnelValidationProbeKind.ANDROID_VALIDATED_VPN_NETWORK))
+        assertTrue(acceptsTunnelValidationProbe(TunnelValidationProbeKind.ANDROID_VALIDATED_VPN_NETWORK))
         assertFalse(acceptsTunnelValidationProbe(TunnelValidationProbeKind.TUNNEL_RUNTIME_PROXY_IP_REFRESH))
         assertFalse(acceptsTunnelValidationProbe(TunnelValidationProbeKind.TUNNEL_RUNTIME_PROXY_VALIDATION_ENDPOINT))
     }
@@ -118,8 +118,8 @@ class TunnelValidationPolicyTest {
     }
 
     @Test
-    fun `android validated vpn network alone is not tunnel validation`() {
-        assertFalse(
+    fun `android validated vpn network is accepted as system vpn-bound validation`() {
+        assertTrue(
             acceptsAndroidValidatedVpnNetwork(
                 androidValidated = true,
                 evidence = null,
@@ -131,7 +131,7 @@ class TunnelValidationPolicyTest {
                 evidence = TunnelValidationEvidence(hasSuccessfulTunnelActivity = true),
             ),
         )
-        assertFalse(
+        assertTrue(
             acceptsAndroidValidatedVpnNetwork(
                 androidValidated = true,
                 evidence = TunnelValidationEvidence(hasSuccessfulTunnelActivity = false),
