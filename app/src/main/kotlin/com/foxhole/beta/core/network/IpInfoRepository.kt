@@ -4,6 +4,7 @@ import android.net.Network
 import android.util.Log
 import com.foxhole.beta.BuildConfig
 import com.foxhole.beta.core.model.IpInfo
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
@@ -196,10 +197,14 @@ class IpInfoRepository(
                         "fetch candidate incomplete host=${candidate.ipInfoHostLabel()} quality=${info.fullIpInfoQualityScore()}",
                     )
                 }
-                lastFailure = result.exceptionOrNull()
-                if (lastFailure != null) {
+                val failure = result.exceptionOrNull()
+                if (failure is CancellationException) {
+                    throw failure
+                }
+                lastFailure = failure
+                if (failure != null) {
                     diagnosticLog(
-                        "fetch candidate failed host=${candidate.ipInfoHostLabel()} error=${lastFailure?.javaClass?.simpleName.orEmpty()}: ${lastFailure?.message.orEmpty()}",
+                        "fetch candidate failed host=${candidate.ipInfoHostLabel()} error=${failure.javaClass.simpleName}: ${failure.message.orEmpty()}",
                     )
                 }
             }
@@ -414,11 +419,18 @@ class IpInfoRepository(
             val startedAt = System.nanoTime()
             Socket().use { rawSocket ->
                 rawSocket.soTimeout = timeout
-                rawSocket.connect(InetSocketAddress(proxy.host, proxy.port), timeout)
+                httpProxyTunnelStage("local_connect") {
+                    rawSocket.connect(InetSocketAddress(proxy.host, proxy.port), timeout)
+                }
                 val output = rawSocket.getOutputStream()
-                output.write(proxyConnectRequest(target, proxy).toByteArray(Charsets.ISO_8859_1))
-                output.flush()
-                val connectHead = readHttpResponseHead(rawSocket.getInputStream())
+                httpProxyTunnelStage("connect_write") {
+                    output.write(proxyConnectRequest(target, proxy).toByteArray(Charsets.ISO_8859_1))
+                    output.flush()
+                }
+                val connectHead =
+                    httpProxyTunnelStage("connect_response") {
+                        readHttpResponseHead(rawSocket.getInputStream())
+                    }
                 require(connectHead.code in 200..299) { "proxy CONNECT failed: ${connectHead.code}" }
 
                 val sslSocket =
@@ -426,21 +438,31 @@ class IpInfoRepository(
                         .createSocket(rawSocket, url.host, url.port, true) as SSLSocket
                 sslSocket.soTimeout = timeout
                 sslSocket.use { tlsSocket ->
-                    tlsSocket.startHandshake()
+                    httpProxyTunnelStage("tls_handshake") {
+                        tlsSocket.startHandshake()
+                    }
                     require(HttpsURLConnection.getDefaultHostnameVerifier().verify(url.host, tlsSocket.session)) {
                         "proxy tunnel TLS hostname verification failed"
                     }
                     val tlsOutput = tlsSocket.getOutputStream()
-                    tlsOutput.write(
-                        proxyTunnelGetRequest(
-                            path = url.encodedPathWithQuery(),
-                            target = target,
-                        ).toByteArray(Charsets.ISO_8859_1),
-                    )
-                    tlsOutput.flush()
+                    httpProxyTunnelStage("request_write") {
+                        tlsOutput.write(
+                            proxyTunnelGetRequest(
+                                path = url.encodedPathWithQuery(),
+                                target = target,
+                            ).toByteArray(Charsets.ISO_8859_1),
+                        )
+                        tlsOutput.flush()
+                    }
                     val input = tlsSocket.getInputStream()
-                    val responseHead = readHttpResponseHead(input)
-                    val body = String(readHttpResponseBody(input, responseHead), Charsets.UTF_8)
+                    val responseHead =
+                        httpProxyTunnelStage("response_head") {
+                            readHttpResponseHead(input)
+                        }
+                    val body =
+                        httpProxyTunnelStage("response_body") {
+                            String(readHttpResponseBody(input, responseHead), Charsets.UTF_8)
+                        }
                     HttpProxyTunnelResponse(
                         code = responseHead.code,
                         body = body,
@@ -585,6 +607,18 @@ private data class HttpResponseHead(
 ) {
     fun firstHeader(name: String): String? = headers[name.lowercase()]?.firstOrNull()
 }
+
+private inline fun <T> httpProxyTunnelStage(
+    stage: String,
+    block: () -> T,
+): T =
+    try {
+        block()
+    } catch (error: IOException) {
+        throw IOException("proxy tunnel $stage failed: ${error.message.orEmpty()}", error)
+    } catch (error: IllegalStateException) {
+        throw IllegalStateException("proxy tunnel $stage failed: ${error.message.orEmpty()}", error)
+    }
 
 private fun proxyConnectRequest(
     target: HttpProxyTunnelTarget,

@@ -230,7 +230,7 @@ class DiagnosticSanitizerTest {
             DiagnosticSanitizer.sanitizeForExport(
                 """
                 {"outbounds":[{"server":"edge.example.com","uuid":"11111111-1111-1111-1111-111111111111","password":"hunter2","privateKey":"wg-private","publicKey":"wg-public","pbk":"reality-public","sid":"abcd","shortId":"ef","serverName":"sni.example.com"}]}
-                remote=1.2.3.4:443 package=com.bank.app sessionId=session-a profileId=42 address=203.0.113.4 asn=AS64500
+                remote=1.2.3.4:443 package=com.bank.app sessionId=session-a profileId=42 address=203.0.113.4 asn=AS64500 cert=obfs-secret fingerprint=bridge-fingerprint
                 """.trimIndent(),
             )
 
@@ -248,6 +248,8 @@ class DiagnosticSanitizerTest {
             "session-a",
             "203.0.113.4",
             "AS64500",
+            "obfs-secret",
+            "bridge-fingerprint",
         ).forEach { rawValue ->
             assertFalse("leaked $rawValue in $sanitized", sanitized.contains(rawValue))
         }
@@ -258,6 +260,8 @@ class DiagnosticSanitizerTest {
         assertTrue(sanitized.contains("sessionId=[redacted]"))
         assertTrue(sanitized.contains("address=[redacted]"))
         assertTrue(sanitized.contains("asn=[redacted]"))
+        assertTrue(sanitized.contains("cert=[redacted]"))
+        assertTrue(sanitized.contains("fingerprint=[redacted]"))
     }
 
     @Test

@@ -183,10 +183,7 @@ class RuntimeConfigAssemblerTest {
         assertEquals("tor", tor["type"]!!.jsonPrimitive.content)
         assertEquals("proxy", tor["detour"]!!.jsonPrimitive.content)
         assertEquals("/data/app/com.foxhole.beta/lib/arm64/libTor.so", tor["executable_path"]!!.jsonPrimitive.content)
-        assertEquals(
-            listOf("--defaults-torrc", "/data/user/0/com.foxhole.beta/files/tor-data/arm64-v8a/torrc-defaults"),
-            tor["extra_args"]!!.jsonArray.map { it.jsonPrimitive.content },
-        )
+        assertFalse(tor.containsKey("extra_args"))
         assertEquals("/data/user/0/com.foxhole.beta/files/tor-data/arm64-v8a", tor["data_directory"]!!.jsonPrimitive.content)
         val torrc = tor["torrc"]!!.jsonObject
         assertEquals("1", torrc["ClientOnly"]!!.jsonPrimitive.content)

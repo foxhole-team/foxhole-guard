@@ -79,7 +79,7 @@ internal class LibboxReflection(
             call(options, "setTempPath", tempDir.absolutePath)
             call(options, "setFixAndroidStack", true)
             call(options, "setCommandServerListenPort", 0)
-            call(options, "setDebug", BuildConfig.DEBUG)
+            call(options, "setDebug", false)
             call(options, "setLogMaxLines", LIBBOX_LOG_MAX_LINES)
             callStatic("setLocale", Locale.getDefault().toLanguageTag().replace("-", "_"))
             callStatic("setup", options)

@@ -1013,6 +1013,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
             activeSession?.profileId
                 ?: profileIdHint.takeIf { it > 0L || it == TOR_ONLY_PROFILE_ID }
                 ?: return
+        val previousSession = activeSession
         val snapshot = FoxholeVpnRuntimeBridge.snapshot.value
         if (snapshot.state !in setOf(ConnectionState.CONNECTING, ConnectionState.CONNECTED, ConnectionState.RECONNECTING)) {
             return
@@ -1074,10 +1075,110 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
             val error = result.exceptionOrNull()
             val message = error?.let(::describeVpnRuntimeFailure) ?: "unknown"
             container.diagnosticsLogger.record("connection", "runtime reload failed: $message")
+            if (
+                restorePreviousRuntimeAfterReloadFailure(
+                    previousSession = previousSession,
+                    failedSession = session,
+                    previousSnapshot = snapshot,
+                    message = message,
+                    transitionGeneration = transitionGeneration,
+                )
+            ) {
+                return
+            }
             if (!recoverRuntimeAfterReloadFailure(session, snapshot, message, transitionGeneration)) {
                 fail(message)
             }
         }
+    }
+
+    private suspend fun restorePreviousRuntimeAfterReloadFailure(
+        previousSession: VpnSession?,
+        failedSession: VpnSession,
+        previousSnapshot: ConnectionSnapshot,
+        message: String,
+        transitionGeneration: Long,
+    ): Boolean {
+        var restored = false
+        val restoreSession = previousSession
+        if (shouldAttemptRuntimeReloadRestore(previousSession, failedSession) && restoreSession != null) {
+            restored =
+                restorePreviousRuntimeConfigAfterReloadFailure(
+                    restoreSession = restoreSession,
+                    previousSnapshot = previousSnapshot,
+                    message = message,
+                    transitionGeneration = transitionGeneration,
+                )
+        }
+        return restored
+    }
+
+    private suspend fun restorePreviousRuntimeConfigAfterReloadFailure(
+        restoreSession: VpnSession,
+        previousSnapshot: ConnectionSnapshot,
+        message: String,
+        transitionGeneration: Long,
+    ): Boolean {
+        var restored = true
+        if (isCurrentRuntimeTransition(transitionGeneration, "reload_restore")) {
+            container.diagnosticsLogger.record(
+                "connection",
+                "runtime reload restore previous config requested after: $message",
+            )
+            val restoreResult = runtime.reload(restoreSession, this)
+            val staleRestore = !isCurrentRuntimeTransition(transitionGeneration, "reload_restore_result")
+            restored =
+                staleRestore ||
+                handlePreviousRuntimeConfigRestoreResult(restoreResult, restoreSession, previousSnapshot)
+        }
+        return restored
+    }
+
+    private fun handlePreviousRuntimeConfigRestoreResult(
+        restoreResult: Result<Unit>,
+        restoreSession: VpnSession,
+        previousSnapshot: ConnectionSnapshot,
+    ): Boolean {
+        var restored = false
+        if (restoreResult.isFailure) {
+            val restoreMessage = restoreResult.exceptionOrNull()?.let(::describeVpnRuntimeFailure) ?: "unknown"
+            container.diagnosticsLogger.record(
+                "connection",
+                "runtime reload restore previous config failed: $restoreMessage",
+            )
+        } else {
+            publishPreviousRuntimeConfigRestoreSuccess(restoreSession, previousSnapshot)
+            restored = true
+        }
+        return restored
+    }
+
+    private fun publishPreviousRuntimeConfigRestoreSuccess(
+        restoreSession: VpnSession,
+        previousSnapshot: ConnectionSnapshot,
+    ) {
+        activeSession = restoreSession
+        container.diagnosticsLogger.record(
+            "connection",
+            "runtime reload restored previous config, tunnel validation required",
+        )
+        FoxholeVpnRuntimeBridge.requestImmediateTrafficSample()
+        FoxholeVpnRuntimeBridge.update(
+            previousSnapshot.copy(
+                state = ConnectionState.RECONNECTING,
+                profileId = restoreSession.profileId,
+                profileName = restoreSession.profileName,
+                protocolHint = restoreSession.protocolHint,
+                protocolOptionId = restoreSession.protocolOptionId,
+                message = getString(R.string.status_reconnecting),
+            ),
+        )
+        updateNotification()
+        scheduleValidation(
+            session = restoreSession,
+            failOnFailure = true,
+            onSuccess = { vpnNetwork -> onTunnelValidated(restoreSession, vpnNetwork) },
+        )
     }
 
     private suspend fun recoverRuntimeAfterReloadFailure(
@@ -1864,6 +1965,14 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         private const val ACTION_NATIVE_RUNTIME_STOP = "libbox_service_stop"
     }
 }
+
+internal fun shouldAttemptRuntimeReloadRestore(
+    previousSession: VpnSession?,
+    failedSession: VpnSession,
+): Boolean =
+    previousSession != null &&
+        previousSession.profileId == failedSession.profileId &&
+        previousSession.configJson != failedSession.configJson
 
 private fun FoxholeVpnService.isSameLocalGuardRuntimeActive(mode: LocalGuardMode): Boolean {
     val snapshot = FoxholeVpnRuntimeBridge.snapshot.value

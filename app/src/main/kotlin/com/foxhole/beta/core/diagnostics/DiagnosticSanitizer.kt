@@ -35,7 +35,7 @@ internal object DiagnosticSanitizer {
 
     private const val SENSITIVE_FIELD_NAMES =
         "password|token|secret|uuid|private_key|public_key|privatekey|publickey|" +
-            "pbk|sid|short_id|shortid|server_name|servername|sni|" +
+            "pbk|sid|short_id|shortid|server_name|servername|sni|cert|fingerprint|" +
             "host|server|domain|endpoint|address|ip|ipv4|ipv6|country|city|isp|asn|" +
             "uid|user[_-]?id|app|apps|application|package[_-]?name|package[_-]?names|packages|package|pkg|" +
             "profile[_-]?id|profileid|profile[_-]?name|option[_-]?id|optionid|session[_-]?id|sessionid|local|remote|" +

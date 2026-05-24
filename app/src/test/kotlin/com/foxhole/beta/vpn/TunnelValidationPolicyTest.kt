@@ -1,6 +1,7 @@
 package com.foxhole.beta.vpn
 
 import com.foxhole.beta.core.model.ProtocolHint
+import kotlinx.coroutines.CancellationException
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -10,6 +11,8 @@ class TunnelValidationPolicyTest {
     fun `accepts vpn-bound reachability probes as tunnel validation`() {
         assertTrue(acceptsTunnelValidationProbe(TunnelValidationProbeKind.VPN_IP_REFRESH))
         assertTrue(acceptsTunnelValidationProbe(TunnelValidationProbeKind.VPN_VALIDATION_ENDPOINT))
+        assertTrue(acceptsTunnelValidationProbe(TunnelValidationProbeKind.TUNNEL_RUNTIME_PROXY_IP_REFRESH))
+        assertTrue(acceptsTunnelValidationProbe(TunnelValidationProbeKind.TUNNEL_RUNTIME_PROXY_VALIDATION_ENDPOINT))
         assertTrue(acceptsTunnelValidationProbe(TunnelValidationProbeKind.VALIDATED_VPN_LITERAL_IP_ENDPOINT))
         assertFalse(acceptsTunnelValidationProbe(TunnelValidationProbeKind.ANDROID_VALIDATED_VPN_NETWORK))
     }
@@ -142,6 +145,28 @@ class TunnelValidationPolicyTest {
                         hasSuccessfulTunnelActivity = true,
                         fatalRuntimeMessage = "authentication failed",
                     ),
+            ),
+        )
+    }
+
+    @Test
+    fun `cancelled dashboard ip refresh never falls back to local device address`() {
+        assertFalse(
+            shouldUseLocalDeviceIpFallback(
+                error = CancellationException("connect superseded refresh"),
+                allowLocalFallback = true,
+            ),
+        )
+        assertFalse(
+            shouldUseLocalDeviceIpFallback(
+                error = IllegalStateException("network unavailable"),
+                allowLocalFallback = false,
+            ),
+        )
+        assertTrue(
+            shouldUseLocalDeviceIpFallback(
+                error = IllegalStateException("network unavailable"),
+                allowLocalFallback = true,
             ),
         )
     }

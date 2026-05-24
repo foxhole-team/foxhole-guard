@@ -3,6 +3,7 @@ package com.foxhole.beta.ui
 import com.foxhole.beta.core.model.ConnectionSnapshot
 import com.foxhole.beta.core.model.ConnectionState
 import com.foxhole.beta.core.model.PerAppRoutingMode
+import com.foxhole.beta.core.model.PrivacyRouteMode
 import com.foxhole.beta.core.model.Profile
 import com.foxhole.beta.core.model.ProfileProtocolOption
 import com.foxhole.beta.core.model.ProfileSourceType
@@ -190,6 +191,28 @@ class HomeReconnectPolicyTest {
                         profileId = FoxholeVpnService.TOR_ONLY_PROFILE_ID,
                     ),
                 activeProfileId = null,
+            ),
+        )
+    }
+
+    @Test
+    fun `tor over vpn mode changes hot reload instead of reconnecting tunnel`() {
+        assertTrue(
+            shouldUseHotReloadForPrivacyRouteModeChange(
+                nextMode = PrivacyRouteMode.TOR_OVER_VPN,
+                torOnlyRuntimeActive = false,
+            ),
+        )
+        assertTrue(
+            shouldUseHotReloadForPrivacyRouteModeChange(
+                nextMode = PrivacyRouteMode.OFF,
+                torOnlyRuntimeActive = false,
+            ),
+        )
+        assertFalse(
+            shouldUseHotReloadForPrivacyRouteModeChange(
+                nextMode = PrivacyRouteMode.OFF,
+                torOnlyRuntimeActive = true,
             ),
         )
     }

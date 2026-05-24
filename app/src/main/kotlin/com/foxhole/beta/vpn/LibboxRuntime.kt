@@ -1135,12 +1135,18 @@ private fun recordLibboxDebugMessage(
     diagnosticsLogger: RuntimeDiagnosticsSink,
     message: String,
 ) {
-    val throttleKey = libboxHighVolumeThrottleKey(message)
-    if (throttleKey == null) {
-        logLibboxDebugMessage(message)
-        diagnosticsLogger.record("libbox", message)
-        return
+    if (!shouldDropRoutineLibboxVerboseMessage(message)) {
+        val outputMessage = libboxDiagnosticOutputMessage(message)
+        if (outputMessage != null) {
+            logLibboxDebugMessage(outputMessage)
+            diagnosticsLogger.record("libbox", outputMessage)
+        }
     }
+}
+
+private fun libboxDiagnosticOutputMessage(message: String): String? {
+    val throttleKey = libboxHighVolumeThrottleKey(message)
+    var outputMessage: String? = message.takeIf { throttleKey == null }
     val summarize = shouldSummarizeLibboxDiagnostic(message)
     val windowMs =
         if (summarize) {
@@ -1148,24 +1154,23 @@ private fun recordLibboxDebugMessage(
         } else {
             LIBBOX_HIGH_VOLUME_DIAGNOSTICS_WINDOW_MS
         }
-    val outputKey =
-        if (summarize) {
-            "summary:$throttleKey"
-        } else {
-            throttleKey
-        }
-    if (!shouldEmitLibboxDiagnostic(outputKey, windowMs)) {
-        return
+    if (throttleKey != null && shouldEmitLibboxDiagnostic(throttleKey.outputKey(summarize), windowMs)) {
+        outputMessage =
+            if (summarize) {
+                "high-volume libbox logs suppressed category=${throttleKey.removePrefix("libbox:")}; raw trace omitted"
+            } else {
+                message
+            }
     }
-    val outputMessage =
-        if (summarize) {
-            "high-volume libbox logs suppressed category=${throttleKey.removePrefix("libbox:")}; raw trace omitted"
-        } else {
-            message
-        }
-    logLibboxDebugMessage(outputMessage)
-    diagnosticsLogger.record("libbox", outputMessage)
+    return outputMessage
 }
+
+private fun String.outputKey(summarize: Boolean): String =
+    if (summarize) {
+        "summary:$this"
+    } else {
+        this
+    }
 
 private fun logLibboxDebugMessage(message: String) {
     if (BuildConfig.ENABLE_DIAGNOSTIC_LOGCAT) {
@@ -1213,6 +1218,14 @@ private fun shouldSummarizeLibboxDiagnostic(message: String): Boolean {
         "connection_or_process_cells_from_inbuf" in lower ||
         "conn_read_callback" in lower ||
         "tor_tls_" in lower
+}
+
+private fun shouldDropRoutineLibboxVerboseMessage(message: String): Boolean {
+    val lower = message.lowercase(Locale.ROOT)
+    if (lower.containsAny(LIBBOX_HIGH_VOLUME_SEVERITY_TERMS)) {
+        return false
+    }
+    return lower.startsWith("debug[") || lower.startsWith("trace[")
 }
 
 private fun libboxHighVolumeThrottleKey(message: String): String? {

@@ -3,6 +3,8 @@ package com.foxhole.beta.vpn
 internal enum class TunnelValidationProbeKind {
     VPN_IP_REFRESH,
     VPN_VALIDATION_ENDPOINT,
+    TUNNEL_RUNTIME_PROXY_IP_REFRESH,
+    TUNNEL_RUNTIME_PROXY_VALIDATION_ENDPOINT,
     VALIDATED_VPN_LITERAL_IP_ENDPOINT,
     DNS_INDEPENDENT_LITERAL_IP,
     ANDROID_VALIDATED_VPN_NETWORK,
@@ -51,6 +53,8 @@ internal class TunnelValidationPolicy(
                     when (kind) {
                         TunnelValidationProbeKind.VPN_IP_REFRESH,
                         TunnelValidationProbeKind.VPN_VALIDATION_ENDPOINT,
+                        TunnelValidationProbeKind.TUNNEL_RUNTIME_PROXY_IP_REFRESH,
+                        TunnelValidationProbeKind.TUNNEL_RUNTIME_PROXY_VALIDATION_ENDPOINT,
                         TunnelValidationProbeKind.VALIDATED_VPN_LITERAL_IP_ENDPOINT,
                         -> true
                         TunnelValidationProbeKind.ANDROID_VALIDATED_VPN_NETWORK,

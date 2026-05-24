@@ -899,6 +899,62 @@ class HomeDashboardPresentationTest {
     }
 
     @Test
+    fun `network model hides local device address during reconnect even when freshly fetched`() {
+        val localDeviceIp =
+            IpInfo(
+                ip = "10.13.13.110",
+                countryCode = null,
+                countryName = "Local network",
+                city = null,
+                isp = "Wi-Fi",
+                fetchedAt = 3_000L,
+            )
+        val model =
+            resolveHomeDashboardNetworkModel(
+                state =
+                    HomeRouteUiState(
+                        profilesLoaded = true,
+                        connection =
+                            ConnectionSnapshot(
+                                state = ConnectionState.RECONNECTING,
+                                trafficMode = TrafficMode.TUNNEL,
+                                profileId = 42L,
+                                lastChangeAt = 2_000L,
+                            ),
+                    ),
+                visibleIpInfo = localDeviceIp,
+                deviceInternetAvailable = true,
+            )
+
+        assertEquals(null, model.visibleIpInfo)
+        assertTrue(model.showConnectionStatus)
+        assertFalse(model.showIpInfoLoading)
+    }
+
+    @Test
+    fun `network model does not show ip skeleton during reconnect without route ip`() {
+        val model =
+            resolveHomeDashboardNetworkModel(
+                state =
+                    HomeRouteUiState(
+                        profilesLoaded = true,
+                        connection =
+                            ConnectionSnapshot(
+                                state = ConnectionState.RECONNECTING,
+                                trafficMode = TrafficMode.TUNNEL,
+                                profileId = 42L,
+                                lastChangeAt = 2_000L,
+                            ),
+                    ),
+                visibleIpInfo = null,
+                deviceInternetAvailable = true,
+            )
+
+        assertTrue(model.showConnectionStatus)
+        assertFalse(model.showIpInfoLoading)
+    }
+
+    @Test
     fun `network model shows startup skeleton while disconnected profile state loads`() {
         val model =
             resolveHomeDashboardNetworkModel(
@@ -951,7 +1007,7 @@ class HomeDashboardPresentationTest {
     }
 
     @Test
-    fun `network model hides stale ip during route transition`() {
+    fun `network model hides stale ip during route transition without ip skeleton`() {
         val ipInfo =
             IpInfo(
                 ip = "203.0.113.10",
@@ -981,7 +1037,7 @@ class HomeDashboardPresentationTest {
         assertEquals(R.string.home_network_connection_info_title, model.titleRes)
         assertTrue(model.showConnectionStatus)
         assertTrue(model.showLoading)
-        assertTrue(model.showIpInfoLoading)
+        assertFalse(model.showIpInfoLoading)
         assertTrue(model.showConnectionDetailsLoading)
     }
 
@@ -1018,6 +1074,74 @@ class HomeDashboardPresentationTest {
         assertTrue(model.showLoading)
         assertFalse(model.showIpInfoLoading)
         assertTrue(model.showConnectionDetailsLoading)
+    }
+
+    @Test
+    fun `network model hides stale upstream ip after route error`() {
+        val ipInfo =
+            IpInfo(
+                ip = "198.51.100.20",
+                countryCode = "US",
+                countryName = "United States",
+                city = "New York",
+                isp = "Device network",
+                fetchedAt = 1_000L,
+            )
+        val model =
+            resolveHomeDashboardNetworkModel(
+                state =
+                    HomeRouteUiState(
+                        connection =
+                            ConnectionSnapshot(
+                                state = ConnectionState.ERROR,
+                                trafficMode = TrafficMode.TUNNEL,
+                                profileId = 42L,
+                                lastChangeAt = 2_000L,
+                            ),
+                    ),
+                visibleIpInfo = ipInfo,
+                deviceInternetAvailable = true,
+            )
+
+        assertEquals(null, model.visibleIpInfo)
+        assertEquals(R.string.home_network_current_ip_title, model.titleRes)
+        assertFalse(model.showConnectionStatus)
+        assertFalse(model.showLoading)
+        assertFalse(model.showIpInfoLoading)
+    }
+
+    @Test
+    fun `network model can show fresh manual ip after route error`() {
+        val ipInfo =
+            IpInfo(
+                ip = "198.51.100.20",
+                countryCode = "US",
+                countryName = "United States",
+                city = "New York",
+                isp = "Device network",
+                fetchedAt = 2_100L,
+            )
+        val model =
+            resolveHomeDashboardNetworkModel(
+                state =
+                    HomeRouteUiState(
+                        connection =
+                            ConnectionSnapshot(
+                                state = ConnectionState.ERROR,
+                                trafficMode = TrafficMode.TUNNEL,
+                                profileId = 42L,
+                                lastChangeAt = 2_000L,
+                            ),
+                    ),
+                visibleIpInfo = ipInfo,
+                deviceInternetAvailable = true,
+            )
+
+        assertEquals(ipInfo, model.visibleIpInfo)
+        assertEquals(R.string.home_network_current_ip_title, model.titleRes)
+        assertFalse(model.showConnectionStatus)
+        assertFalse(model.showLoading)
+        assertFalse(model.showIpInfoLoading)
     }
 
     @Test

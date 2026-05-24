@@ -46,6 +46,8 @@ import com.foxhole.beta.vpn.ACTIVE_CONNECTION_STATES
 import com.foxhole.beta.vpn.FoxholeVpnService
 import com.foxhole.beta.vpn.LocalGuardMode
 import com.foxhole.beta.vpn.localGuardModeOrNull
+import java.net.Inet6Address
+import java.net.InetAddress
 
 internal data class HomeProxySurface(
     val label: String,
@@ -151,7 +153,11 @@ internal enum class HomeModeOption {
 }
 
 internal fun shouldAutoRefreshIpOnForeground(connectionState: ConnectionState): Boolean =
-    connectionState != ConnectionState.CONNECTING && connectionState != ConnectionState.RECONNECTING
+    connectionState !in setOf(
+        ConnectionState.CONNECTING,
+        ConnectionState.RECONNECTING,
+        ConnectionState.ERROR,
+    )
 
 internal fun shouldShowIpInfoLoading(
     currentIpInfo: IpInfo?,
@@ -173,7 +179,7 @@ internal fun shouldShowPendingNetworkLoading(
         deviceInternetAvailable == false -> false
         explicitLoading -> true
         !appLoaded && shouldAutoRefreshIpOnForeground(connectionState) -> true
-        autoConnectRunning || connectionState in setOf(ConnectionState.CONNECTING, ConnectionState.RECONNECTING) -> true
+        autoConnectRunning -> false
         else -> false
     }
 
@@ -239,7 +245,7 @@ internal fun shouldAutoRefreshIpAfterDisconnect(
     currentState: ConnectionState,
 ): Boolean =
     previousState in ACTIVE_CONNECTION_STATES &&
-        currentState !in ACTIVE_CONNECTION_STATES
+        currentState == ConnectionState.IDLE
 
 internal enum class IpInfoRefreshReason {
     MANUAL,
@@ -618,9 +624,6 @@ private fun HomeRouteUiState.shouldShowHomeNetworkIpInfoLoading(
             routeTransitionRunning = routeTransitionRunning,
             explicitIpInfoLoading = ipInfoLoading,
         ) ||
-            reconnectInProgress ||
-            (routeTransitionRunning && hasDashboardRouteProfile()) ||
-            shouldShowVpnTransitionLoading(routeTransitionRunning) ||
             shouldShowDashboardNetworkLoading(
                 visibleIpInfo = dashboardIpInfo,
                 explicitLoading = ipInfoLoading,
@@ -682,39 +685,14 @@ private fun HomeRouteUiState.hasRealTunnelConnectionStatus(): Boolean =
                 hasDashboardRouteProfile()
             )
 
+private fun HomeRouteUiState.hasFailedDashboardRoute(): Boolean =
+    connection.state == ConnectionState.ERROR &&
+        connection.trafficMode in setOf(TrafficMode.TUNNEL, TrafficMode.PROXY) &&
+        connection.profileId != null &&
+        connection.profileId != FoxholeVpnService.LOCAL_GUARD_PROFILE_ID
+
 private fun HomeRouteUiState.dashboardVisibleIpInfo(visibleIpInfo: IpInfo?): IpInfo? {
-    if (visibleIpInfo == null) {
-        return visibleIpInfo
-    }
-    if (homeAnalysisOnlyRunning()) {
-        return visibleIpInfo
-    }
-    if (shouldPinVpnIpDuringTorOperation()) {
-        return visibleIpInfo
-    }
-    val protocolSearchRunning = autoConnect.running
-    val routeTransitionActive =
-        reconnectInProgress ||
-            (
-                connection.state in setOf(ConnectionState.CONNECTING, ConnectionState.RECONNECTING) &&
-                    hasDashboardRouteProfile()
-                )
-    if (routeTransitionActive) {
-        return visibleIpInfo.takeIf { info -> info.isFreshForRouteTransition(connection.lastChangeAt) }
-    }
-    val routeRuntimeActive =
-        connection.state in ACTIVE_CONNECTION_STATES &&
-            hasDashboardRouteProfile()
-    if (routeRuntimeActive) {
-        return visibleIpInfo.takeIf { info ->
-            val freshForConnectedRoute =
-                info.fetchedAt >= connection.lastChangeAt ||
-                    (!ipInfoLoading && info.isFreshForConnectedRouteSettle(connection.lastChangeAt))
-            (protocolSearchRunning && info.isFreshForRouteTransition(connection.lastChangeAt)) ||
-                freshForConnectedRoute
-        }
-    }
-    return visibleIpInfo
+    return visibleIpInfo?.takeIf { shouldKeepDashboardIpInfo(it) }
 }
 
 private fun HomeRouteUiState.shouldPinVpnIpDuringTorOperation(): Boolean =
@@ -723,11 +701,61 @@ private fun HomeRouteUiState.shouldPinVpnIpDuringTorOperation(): Boolean =
         connection.state == ConnectionState.CONNECTED &&
         hasDashboardRouteProfile()
 
+private fun HomeRouteUiState.shouldKeepDashboardIpInfo(info: IpInfo): Boolean =
+    when {
+        homeAnalysisOnlyRunning() -> true
+        shouldPinVpnIpDuringTorOperation() -> true
+        hasFailedDashboardRoute() -> info.isPublicFreshForRouteTransition(connection.lastChangeAt)
+        hasActiveDashboardRouteTransition() -> info.isPublicFreshForRouteTransition(connection.lastChangeAt)
+        hasActiveDashboardRouteRuntime() -> shouldKeepActiveDashboardRouteIpInfo(info)
+        else -> true
+    }
+
+private fun HomeRouteUiState.hasActiveDashboardRouteTransition(): Boolean =
+    reconnectInProgress ||
+        (
+            connection.state in setOf(ConnectionState.CONNECTING, ConnectionState.RECONNECTING) &&
+                hasDashboardRouteProfile()
+            )
+
+private fun HomeRouteUiState.hasActiveDashboardRouteRuntime(): Boolean =
+    connection.state in ACTIVE_CONNECTION_STATES &&
+        hasDashboardRouteProfile()
+
+private fun HomeRouteUiState.shouldKeepActiveDashboardRouteIpInfo(info: IpInfo): Boolean {
+    val freshForConnectedRoute =
+        info.fetchedAt >= connection.lastChangeAt ||
+            (!ipInfoLoading && info.isFreshForConnectedRouteSettle(connection.lastChangeAt))
+    return !info.isLocalInterfaceAddress() &&
+        (
+            (autoConnect.running && info.isFreshForRouteTransition(connection.lastChangeAt)) ||
+                freshForConnectedRoute
+            )
+}
+
+private fun IpInfo.isPublicFreshForRouteTransition(lastChangeAt: Long): Boolean =
+    !isLocalInterfaceAddress() && isFreshForRouteTransition(lastChangeAt)
+
 private fun IpInfo.isFreshForRouteTransition(lastChangeAt: Long): Boolean =
     lastChangeAt <= 0L || fetchedAt >= lastChangeAt
 
 private fun IpInfo.isFreshForConnectedRouteSettle(lastChangeAt: Long): Boolean =
     lastChangeAt <= 0L || fetchedAt >= lastChangeAt - CONNECTED_ROUTE_IP_INFO_SETTLE_GRACE_MS
+
+private fun IpInfo.isLocalInterfaceAddress(): Boolean {
+    val address = runCatching { InetAddress.getByName(ip.substringBefore('%')) }.getOrNull() ?: return false
+    return address.isNonPublicLocalAddress() || address.isUniqueLocalIpv6Address()
+}
+
+private fun InetAddress.isNonPublicLocalAddress(): Boolean =
+    isAnyLocalAddress ||
+        isLoopbackAddress ||
+        isLinkLocalAddress ||
+        isSiteLocalAddress
+
+private fun InetAddress.isUniqueLocalIpv6Address(): Boolean =
+    this is Inet6Address &&
+        address.firstOrNull()?.toInt()?.let { firstByte -> (firstByte and 0xfe) == 0xfc } == true
 
 private const val CONNECTED_ROUTE_IP_INFO_SETTLE_GRACE_MS = 250L
 

@@ -238,6 +238,14 @@ class HomeAutoConnectWaitPolicyTest {
     }
 
     @Test
+    fun `connected dashboard latency rejects timeout-shaped values`() {
+        assertTrue(shouldUseConnectedDashboardLatency(1L))
+        assertTrue(shouldUseConnectedDashboardLatency(999L))
+        assertFalse(shouldUseConnectedDashboardLatency(1_000L))
+        assertFalse(shouldUseConnectedDashboardLatency(2_181L))
+    }
+
+    @Test
     fun `auto connect retries high warmup latency before recording display latency`() {
         assertFalse(shouldRetryAutoConnectLatencyMeasurement(349L))
         assertTrue(shouldRetryAutoConnectLatencyMeasurement(350L))

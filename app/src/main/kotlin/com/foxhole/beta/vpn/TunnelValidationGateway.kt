@@ -18,6 +18,7 @@ import com.foxhole.beta.core.network.HttpProxyAccess
 import com.foxhole.beta.core.network.IpInfoFetchMode
 import com.foxhole.beta.core.network.IpInfoRepository
 import com.foxhole.beta.core.settings.SettingsRepository
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.StateFlow
 import java.io.IOException
 
@@ -141,7 +142,7 @@ internal class TunnelValidationGateway(
                 mode = fetchMode,
             )
         }.getOrElse { error ->
-            if (!allowLocalFallback) {
+            if (!shouldUseLocalDeviceIpFallback(error, allowLocalFallback)) {
                 throw error
             }
             localDeviceIpInfo(requestNetwork)
@@ -165,6 +166,9 @@ internal class TunnelValidationGateway(
                 mode = fetchMode,
             )
         }.recoverCatching { error ->
+            if (error is CancellationException) {
+                throw error
+            }
             val upstreamNetwork = currentUpstreamNetwork() ?: throw error
             diagnosticsLogger.record(
                 "ip",
@@ -177,6 +181,9 @@ internal class TunnelValidationGateway(
                 mode = fetchMode,
             )
         }.getOrElse { error ->
+            if (!shouldUseLocalDeviceIpFallback(error, allowLocalFallback = true)) {
+                throw error
+            }
             localDeviceIpInfo(connectivityManager.activeNetwork)
                 ?.also {
                     diagnosticsLogger.record(
@@ -368,6 +375,11 @@ internal fun Settings.canUseVpnBoundIpRefreshFallback(
     snapshot: ConnectionSnapshot,
     androidValidatedVpnNetwork: Boolean,
 ): Boolean = !requiresStrictRuntimeProxyIpRefresh(snapshot) || androidValidatedVpnNetwork
+
+internal fun shouldUseLocalDeviceIpFallback(
+    error: Throwable,
+    allowLocalFallback: Boolean,
+): Boolean = allowLocalFallback && error !is CancellationException
 
 internal fun Settings.shouldPublishRuntimeProxyIpInfoToDashboard(snapshot: ConnectionSnapshot): Boolean =
     !shouldHoldRuntimeProxyIpInfoForTorOverVpn(snapshot)

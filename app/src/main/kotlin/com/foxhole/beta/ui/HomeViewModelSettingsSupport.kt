@@ -628,7 +628,8 @@ internal fun HomeViewModel.onPrivacyRouteModeSelectedInternal(value: PrivacyRout
             )
         return
     }
-    if (value == PrivacyRouteMode.OFF && isTorOnlyRuntimeActive(container.connectionController.snapshot.value)) {
+    val snapshot = container.connectionController.snapshot.value
+    if (!shouldUseHotReloadForPrivacyRouteModeChange(value, isTorOnlyRuntimeActive(snapshot))) {
         viewModelScope.launch {
             clearTorOperation()
             torIpInfoMutable.value = null
@@ -649,7 +650,7 @@ internal fun HomeViewModel.onPrivacyRouteModeSelectedInternal(value: PrivacyRout
         clearTorOperation()
         torIpInfoMutable.value = null
     }
-    updateRuntimeSettingAndMaybeReconnect {
+    updateRuntimeSettingAndMaybeReload {
         container.settingsRepository.updatePrivacyRouteMode(value)
         val settings = container.settingsRepository.settings.value
         if (value == PrivacyRouteMode.TOR_OVER_VPN && settings.privacyRoute.scope == PrivacyRouteScope.ALL_APPS) {
@@ -671,6 +672,12 @@ private fun HomeViewModel.shouldBlockTorOverUdpVpnEnable(): Boolean {
     val protocolHint = snapshot.protocolHint ?: state.activeProfile?.protocolOptionOrDefault(null)?.protocolHint
     return protocolHint?.isUdpTransport() == true
 }
+
+internal fun shouldUseHotReloadForPrivacyRouteModeChange(
+    nextMode: PrivacyRouteMode,
+    torOnlyRuntimeActive: Boolean,
+): Boolean =
+    nextMode != PrivacyRouteMode.OFF || !torOnlyRuntimeActive
 
 internal fun HomeViewModel.onPrivacyRouteScopeSelectedInternal(value: PrivacyRouteScope) {
     updateRuntimeSettingAndMaybeReload {

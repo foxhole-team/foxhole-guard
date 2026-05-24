@@ -68,10 +68,10 @@ class HomeIpLoadingPolicyTest {
     @Test
     fun `auto refreshes ip on foreground when disconnected`() {
         assertTrue(shouldAutoRefreshIpOnForeground(ConnectionState.IDLE))
-        assertTrue(shouldAutoRefreshIpOnForeground(ConnectionState.ERROR))
         assertTrue(shouldAutoRefreshIpOnForeground(ConnectionState.CONNECTED))
         assertFalse(shouldAutoRefreshIpOnForeground(ConnectionState.CONNECTING))
         assertFalse(shouldAutoRefreshIpOnForeground(ConnectionState.RECONNECTING))
+        assertFalse(shouldAutoRefreshIpOnForeground(ConnectionState.ERROR))
     }
 
     @Test
@@ -102,7 +102,7 @@ class HomeIpLoadingPolicyTest {
                 currentState = ConnectionState.IDLE,
             ),
         )
-        assertTrue(
+        assertFalse(
             shouldAutoRefreshIpAfterDisconnect(
                 previousState = ConnectionState.CONNECTING,
                 currentState = ConnectionState.ERROR,
@@ -232,29 +232,29 @@ class HomeIpLoadingPolicyTest {
     }
 
     @Test
-    fun `shows pending network loading while tunnel is connecting`() {
-        assertTrue(
+    fun `does not show ip skeleton just because tunnel is connecting`() {
+        assertFalse(
             shouldShowPendingNetworkLoading(
                 visibleIpInfo = null,
                 explicitLoading = false,
                 connectionState = ConnectionState.CONNECTING,
                 autoConnectRunning = false,
                 deviceInternetAvailable = true,
-                appLoaded = false,
+                appLoaded = true,
             ),
         )
     }
 
     @Test
-    fun `shows pending network loading while smart start is running`() {
-        assertTrue(
+    fun `does not show ip skeleton just because smart start is running`() {
+        assertFalse(
             shouldShowPendingNetworkLoading(
                 visibleIpInfo = null,
                 explicitLoading = false,
                 connectionState = ConnectionState.IDLE,
                 autoConnectRunning = true,
                 deviceInternetAvailable = true,
-                appLoaded = false,
+                appLoaded = true,
             ),
         )
     }

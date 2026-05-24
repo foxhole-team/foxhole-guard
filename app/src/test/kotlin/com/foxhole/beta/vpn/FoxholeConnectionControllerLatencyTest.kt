@@ -43,6 +43,38 @@ class FoxholeConnectionControllerLatencyTest {
     }
 
     @Test
+    fun `runtime validation uses responsive lightweight endpoint before fallback endpoints`() {
+        assertEquals(
+            listOf(
+                "https://cp.cloudflare.com/generate_204",
+                "https://www.gstatic.com/generate_204",
+                "https://1.1.1.1/cdn-cgi/trace",
+                "https://www.google.com/generate_204",
+            ),
+            runtimeValidationProbeEndpoints(
+                fallbackEndpoints = FoxholeVpnService.CONNECTIVITY_PROBE_ENDPOINTS,
+            ),
+        )
+    }
+
+    @Test
+    fun `runtime validation does not duplicate bootstrap fallback endpoint`() {
+        assertEquals(
+            listOf(
+                "https://cp.cloudflare.com/generate_204",
+                "https://www.gstatic.com/generate_204",
+                "https://1.1.1.1/cdn-cgi/trace",
+            ),
+            runtimeValidationProbeEndpoints(
+                fallbackEndpoints = listOf(
+                    "https://cp.cloudflare.com/generate_204",
+                    "https://www.gstatic.com/generate_204",
+                ),
+            ),
+        )
+    }
+
+    @Test
     fun `representative latency is null when there are no successful probes`() {
         assertNull(representativeLatencyMs(emptyList()))
     }

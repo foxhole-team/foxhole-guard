@@ -1816,7 +1816,7 @@ internal fun HomeViewModel.scheduleActiveProfileLatencyRefreshInternal(
                             } ?: error("dashboard latency timed out")
                         }
                     val measuredLatency = latencyResult.getOrNull()
-                    if (measuredLatency != null) {
+                    if (measuredLatency != null && shouldUseConnectedDashboardLatency(measuredLatency)) {
                         cacheProtocolLatency(
                             profileId = activeProfile.id,
                             optionId = selectedOptionId,
@@ -1832,6 +1832,12 @@ internal fun HomeViewModel.scheduleActiveProfileLatencyRefreshInternal(
                         )
                     } else {
                         val error = latencyResult.exceptionOrNull()
+                        val unavailableReason =
+                            if (measuredLatency != null) {
+                                "latency=${measuredLatency}ms over dashboard display limit"
+                            } else {
+                                error?.message.orEmpty()
+                            }
                         markProtocolLatencyUnavailable(
                             profileId = activeProfile.id,
                             optionId = selectedOptionId,
@@ -1844,7 +1850,7 @@ internal fun HomeViewModel.scheduleActiveProfileLatencyRefreshInternal(
                             reasonCode = AutoConnectReasonCode.LATENCY_ENDPOINT_BLOCKED,
                             countTowardOutcomeHistory = waitingForInitialSample,
                         )
-                        container.diagnosticsLogger.record("latency", "dashboard latency unavailable: ${error?.message.orEmpty()}")
+                        container.diagnosticsLogger.record("latency", "dashboard latency unavailable: $unavailableReason")
                     }
                     if (!shouldMeasureProtocolServerPing(refreshTarget.protocolHint)) {
                         container.diagnosticsLogger.record("latency", "dashboard server ping skipped: unsupported for udp transport")
@@ -2058,6 +2064,9 @@ internal fun resolveAutoConnectFallbackRankingLatency(
 
 internal fun shouldRetryAutoConnectLatencyMeasurement(warmupLatencyMs: Long): Boolean =
     warmupLatencyMs >= HomeViewModel.AUTO_CONNECT_LATENCY_MEASUREMENT_RETRY_THRESHOLD_MS
+
+internal fun shouldUseConnectedDashboardLatency(latencyMs: Long): Boolean =
+    latencyMs in 1L..MAX_UI_LATENCY_MS
 
 internal fun remainingAutoConnectBudgetMs(
     startedAtElapsedMs: Long,

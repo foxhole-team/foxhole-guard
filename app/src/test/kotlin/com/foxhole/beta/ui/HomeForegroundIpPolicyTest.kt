@@ -7,9 +7,9 @@ import org.junit.Test
 
 class HomeForegroundIpPolicyTest {
     @Test
-    fun `foreground auto refresh runs when app is disconnected`() {
+    fun `foreground auto refresh runs when app is idle`() {
         assertTrue(shouldAutoRefreshIpOnForeground(ConnectionState.IDLE))
-        assertTrue(shouldAutoRefreshIpOnForeground(ConnectionState.ERROR))
+        assertFalse(shouldAutoRefreshIpOnForeground(ConnectionState.ERROR))
     }
 
     @Test
