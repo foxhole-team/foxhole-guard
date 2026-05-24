@@ -34,6 +34,7 @@ import com.foxhole.beta.core.model.TunStack
 import com.foxhole.beta.core.model.V2RayApiSettings
 import com.foxhole.beta.core.model.dnsRuleSetFilteringEnabled
 import com.foxhole.beta.core.model.isUdpTransport
+import com.foxhole.beta.core.network.IpInfoFetchMode
 import com.foxhole.beta.vpn.ACTIVE_CONNECTION_STATES
 import com.foxhole.beta.vpn.DnsFilterUpdateStatus
 import com.foxhole.beta.vpn.PrivateDnsSettings
@@ -402,6 +403,9 @@ internal fun HomeViewModel.onFirewallEnabledChangedInternal(value: Boolean) {
             requestNotificationPermission.tryEmit(Unit)
         }
         syncLocalGuardWithPermissionRequest()
+        if (value) {
+            refreshLocalGuardDashboardIpAfterSettingsChange()
+        }
     }
 }
 
@@ -464,6 +468,22 @@ internal suspend fun HomeViewModel.syncLocalGuardWithPermissionRequest() {
         return
     }
     container.connectionController.syncLocalGuard()
+}
+
+private suspend fun HomeViewModel.refreshLocalGuardDashboardIpAfterSettingsChange() {
+    delay(HomeViewModel.CONNECTED_IP_REFRESH_DELAY_MS)
+    if (container.settingsRepository.current().localGuardModeOrNull() == null) {
+        return
+    }
+    val missingIpInfo = uiState.value.ipInfo == null
+    startIpInfoRefresh(
+        reportFailures = false,
+        showLoading = true,
+        clearExistingIp = false,
+        fetchMode = if (missingIpInfo) IpInfoFetchMode.FULL else IpInfoFetchMode.ENTRY_QUICK,
+        minimumLoadingDurationMs = HomeViewModel.AUTO_IP_REFRESH_MIN_LOADING_MS,
+        reason = IpInfoRefreshReason.POST_UPDATE,
+    )
 }
 
 internal fun HomeViewModel.onSmartStartReplayLoggingChangedInternal(value: Boolean) {

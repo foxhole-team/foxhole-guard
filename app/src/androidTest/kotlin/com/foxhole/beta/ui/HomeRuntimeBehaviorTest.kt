@@ -94,20 +94,20 @@ class HomeRuntimeBehaviorTest {
             .around(composeRule)
 
     @Test
-    fun coldStartWhileDisconnectedRefreshesIpSilentlyWithoutLoading() {
-        composeRule.waitUntil(timeoutMillis = 20_000) {
-            composeRule.onAllNodesWithTag("home_network_loading").fetchSemanticsNodes().isEmpty()
+    fun coldStartWhileDisconnectedShowsStartupIpSkeletonWithoutUnavailableState() {
+        scrollToNetworkBlock()
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            composeRule.onAllNodesWithTag("home_network_loading").fetchSemanticsNodes().isNotEmpty()
         }
 
         assertTrue(
             app().container.diagnosticsLogger.entries.value.any {
                 it.tag == "ip" &&
-                    it.message.contains("mode=entry_quick") &&
+                    it.message.contains("mode=full") &&
+                    it.message.contains("showLoading=true") &&
                     it.message.contains("clearExistingIp=false")
             },
         )
-        composeRule.onNodeWithTag("home_dashboard_list").performScrollToNode(hasTestTag("home_network_primary_ip"))
-        composeRule.onNodeWithTag("home_network_primary_ip", useUnmergedTree = true).assertIsDisplayed()
         composeRule
             .onAllNodesWithText(
                 InstrumentationRegistry.getInstrumentation().targetContext.getString(R.string.home_network_unavailable),
@@ -329,12 +329,40 @@ class HomeRuntimeBehaviorTest {
     }
 
     private fun waitUntilNetworkBlockSettles() {
+        val viewModel =
+            ViewModelProvider(
+                composeRule.activity,
+                HomeViewModel.factory(app()),
+            )[HomeViewModel::class.java]
+        val expectedIp = "198.51.100.11"
+        composeRule.runOnUiThread {
+            viewModel.invalidateIpInfoRefreshes()
+            FoxholeVpnRuntimeBridge.update(
+                ConnectionSnapshot(
+                    state = ConnectionState.IDLE,
+                    trafficMode = TrafficMode.TUNNEL,
+                ),
+            )
+            FoxholeVpnRuntimeBridge.updateIpInfo(testIpInfo(expectedIp))
+        }
         scrollToNetworkBlock()
-        composeRule.waitUntil(timeoutMillis = 20_000) {
-            composeRule.onAllNodesWithTag("home_network_loading").fetchSemanticsNodes().isEmpty()
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            composeRule.onAllNodesWithTag("home_network_loading").fetchSemanticsNodes().isEmpty() &&
+                textOfOrNull("home_network_primary_ip") == expectedIp
         }
         scrollToNetworkBlock()
     }
+
+    private fun testIpInfo(ip: String): IpInfo =
+        IpInfo(
+            ip = ip,
+            ipv4 = ip,
+            countryCode = "US",
+            countryName = "United States",
+            city = "New York",
+            isp = "Instrumentation ISP",
+            fetchedAt = System.currentTimeMillis(),
+        )
 
     private fun scrollToNetworkBlock() {
         runCatching {

@@ -172,6 +172,7 @@ internal fun shouldShowPendingNetworkLoading(
         visibleIpInfo != null -> false
         deviceInternetAvailable == false -> false
         explicitLoading -> true
+        !appLoaded && shouldAutoRefreshIpOnForeground(connectionState) -> true
         autoConnectRunning || connectionState in setOf(ConnectionState.CONNECTING, ConnectionState.RECONNECTING) -> true
         else -> false
     }
@@ -556,7 +557,11 @@ private fun HomeRouteUiState.shouldShowHomeNetworkIpInfoLoading(
 ): Boolean {
     val manualRefreshNeedsSkeleton = ipInfoLoading
     val missingIpCanShowSkeleton =
-        shouldShowLocalGuardNetworkLoading(deviceInternetAvailable) ||
+        shouldShowLocalGuardNetworkLoading(
+            deviceInternetAvailable = deviceInternetAvailable,
+            routeTransitionRunning = routeTransitionRunning,
+            explicitIpInfoLoading = ipInfoLoading,
+        ) ||
             reconnectInProgress ||
             (routeTransitionRunning && hasDashboardRouteProfile()) ||
             shouldShowVpnTransitionLoading(routeTransitionRunning) ||
@@ -572,10 +577,15 @@ private fun HomeRouteUiState.shouldShowHomeNetworkIpInfoLoading(
     return manualRefreshNeedsSkeleton || missingIpNeedsSkeleton
 }
 
-private fun HomeRouteUiState.shouldShowLocalGuardNetworkLoading(deviceInternetAvailable: Boolean?): Boolean =
+private fun HomeRouteUiState.shouldShowLocalGuardNetworkLoading(
+    deviceInternetAvailable: Boolean?,
+    routeTransitionRunning: Boolean,
+    explicitIpInfoLoading: Boolean,
+): Boolean =
     connection.profileId == FoxholeVpnService.LOCAL_GUARD_PROFILE_ID &&
         settings.localGuardModeOrNull() != null &&
-        deviceInternetAvailable != false
+        deviceInternetAvailable != false &&
+        (explicitIpInfoLoading || routeTransitionRunning)
 
 private fun HomeRouteUiState.shouldShowHomeNetworkConnectionDetailsLoading(
     showConnectionStatus: Boolean,

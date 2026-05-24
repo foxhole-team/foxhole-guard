@@ -17,6 +17,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.net.InetAddress
 import java.nio.charset.StandardCharsets
 import java.util.Base64
 
@@ -25,7 +26,7 @@ class SubscriptionFetchUseCaseTest {
     fun `returns not modified without reading body`() =
         runBlocking {
             val useCase =
-                SubscriptionFetchUseCase(
+                fetchUseCase(
                     scriptedClient("https://example.com/sub" to TestResponse.notModified()),
                 )
 
@@ -58,7 +59,7 @@ class SubscriptionFetchUseCaseTest {
                             ),
                     ),
                 )
-            val useCase = SubscriptionFetchUseCase(OkHttpClient.Builder().addInterceptor(interceptor).build())
+            val useCase = fetchUseCase(OkHttpClient.Builder().addInterceptor(interceptor).build())
 
             val response =
                 useCase.fetchSubscriptionResponse(
@@ -77,7 +78,7 @@ class SubscriptionFetchUseCaseTest {
     @Test
     fun `rejects oversized subscription body`() {
         val useCase =
-            SubscriptionFetchUseCase(
+            fetchUseCase(
                 scriptedClient("https://example.com/sub" to TestResponse.oversized()),
             )
 
@@ -99,7 +100,7 @@ class SubscriptionFetchUseCaseTest {
     @Test
     fun `rejects redirect to private host`() {
         val useCase =
-            SubscriptionFetchUseCase(
+            fetchUseCase(
                 scriptedClient("https://example.com/sub" to TestResponse.redirect("https://10.0.0.1/private")),
             )
 
@@ -122,7 +123,7 @@ class SubscriptionFetchUseCaseTest {
     fun `http subscriptions require explicit allowance`() =
         runBlocking {
             val useCase =
-                SubscriptionFetchUseCase(
+                fetchUseCase(
                     scriptedClient("http://example.com/sub" to TestResponse.ok("payload")),
                 )
 
@@ -154,6 +155,17 @@ class SubscriptionFetchUseCaseTest {
             .followSslRedirects(false)
             .addInterceptor(ScriptedResponseInterceptor(routes.toMap()))
             .build()
+
+    private fun fetchUseCase(client: OkHttpClient): SubscriptionFetchUseCase =
+        SubscriptionFetchUseCase(
+            httpClient = client,
+            resolver = { host ->
+                when (host) {
+                    "example.com" -> listOf(InetAddress.getByName("93.184.216.34"))
+                    else -> InetAddress.getAllByName(host).toList()
+                }
+            },
+        )
 
     private class ScriptedResponseInterceptor(
         private val routes: Map<String, TestResponse>,

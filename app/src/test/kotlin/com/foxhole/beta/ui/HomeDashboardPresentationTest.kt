@@ -849,7 +849,7 @@ class HomeDashboardPresentationTest {
     }
 
     @Test
-    fun `network model keeps startup silent while disconnected profile state loads`() {
+    fun `network model shows startup skeleton while disconnected profile state loads`() {
         val model =
             resolveHomeDashboardNetworkModel(
                 state =
@@ -862,8 +862,8 @@ class HomeDashboardPresentationTest {
         )
 
         assertFalse(model.showConnectionStatus)
-        assertFalse(model.showLoading)
-        assertFalse(model.showIpInfoLoading)
+        assertTrue(model.showLoading)
+        assertTrue(model.showIpInfoLoading)
         assertFalse(model.showConnectionDetailsLoading)
     }
 
@@ -1240,6 +1240,7 @@ class HomeDashboardPresentationTest {
                     Settings(
                         ui = UiSettings(trafficMapEnabled = true),
                         expert = ExpertSettings(firewallEnabled = true),
+                        statistics = StatisticsSettings(enabled = true, countryTrafficEnabled = true),
                     ),
                 activeVpnNetworkAvailable = false,
             ),

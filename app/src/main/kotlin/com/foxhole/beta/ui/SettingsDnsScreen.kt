@@ -59,6 +59,7 @@ fun DnsSettingsScreen(
     var filterUpdateSourceDialog by rememberSaveable { mutableStateOf(false) }
     var autoUpdateConsent by rememberSaveable { mutableStateOf(false) }
     var autoUpdateWarning by rememberSaveable { mutableStateOf(false) }
+    var refreshAfterEnablePrompt by rememberSaveable { mutableStateOf(false) }
     val refreshInProgress = state.dnsFilterRefreshInProgress
 
     fun updateDns(next: DnsSettings) {
@@ -78,7 +79,12 @@ fun DnsSettingsScreen(
                     checked = dns.filteringEnabled,
                     summary = stringResource(R.string.dns_protection_summary),
                     leadingIcon = Icons.Outlined.Security,
-                    onCheckedChange = { enabled -> updateDns(dns.copy(filteringEnabled = enabled)) },
+                    onCheckedChange = { enabled ->
+                        updateDns(dns.copy(filteringEnabled = enabled))
+                        if (enabled) {
+                            refreshAfterEnablePrompt = true
+                        }
+                    },
                     summaryMaxLines = Int.MAX_VALUE,
                     grouped = true,
                 )
@@ -337,6 +343,21 @@ fun DnsSettingsScreen(
             onConfirm = {
                 autoUpdateConsent = false
                 updateDns(dns.copy(autoUpdateFilters = true))
+            },
+        )
+    }
+
+    if (refreshAfterEnablePrompt) {
+        ConfirmDialog(
+            title = stringResource(R.string.dns_filter_refresh_after_enable_title),
+            body = stringResource(R.string.dns_filter_refresh_after_enable_body),
+            confirmLabel = stringResource(R.string.refresh),
+            dismissLabel = stringResource(R.string.close),
+            icon = Icons.Outlined.Refresh,
+            onDismiss = { refreshAfterEnablePrompt = false },
+            onConfirm = {
+                refreshAfterEnablePrompt = false
+                onDnsFilterManualRefresh()
             },
         )
     }

@@ -170,6 +170,7 @@ internal fun AppTrafficDetail(
     samples: List<AppTrafficWindow>,
     networkActivityEvents: List<NetworkActivityEvent>,
     ipInfo: com.foxhole.beta.core.model.IpInfo?,
+    networkActivityLoggingEnabled: Boolean,
     showPrivateNetworkDetails: Boolean,
 ) {
     val context = LocalContext.current
@@ -262,7 +263,13 @@ internal fun AppTrafficDetail(
             ChartLegend()
         }
         val loadedConnectionRows = connectionRows ?: return@Column
-        if (!showPrivateNetworkDetails && networkActivityEvents.isNotEmpty()) {
+        if (!networkActivityLoggingEnabled) {
+            Text(
+                text = stringResource(R.string.statistics_app_detail_network_log_disabled),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        } else if (!showPrivateNetworkDetails && networkActivityEvents.isNotEmpty()) {
             Text(
                 text = stringResource(R.string.statistics_app_detail_private_data_hidden),
                 style = MaterialTheme.typography.bodySmall,

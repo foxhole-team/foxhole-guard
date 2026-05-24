@@ -95,7 +95,6 @@ class IpInfoRepository(
                     endpoint = endpoint,
                     callTimeoutMs = callTimeoutMs,
                     proxy = proxy,
-                    resolverNetwork = resolverNetwork,
                 ).let { response ->
                     require(response.isSuccessful) { "connectivity probe failed: ${response.code}" }
                 }
@@ -141,7 +140,6 @@ class IpInfoRepository(
                     endpoint = endpoint,
                     callTimeoutMs = callTimeoutMs,
                     proxy = proxy,
-                    resolverNetwork = resolverNetwork,
                 ).let { response ->
                     require(response.isSuccessful) { "connectivity probe failed: ${response.code}" }
                     response.elapsedMs
@@ -266,8 +264,6 @@ class IpInfoRepository(
                     endpoint = endpoint,
                     callTimeoutMs = callTimeoutMs,
                     proxy = proxy,
-                    addressFamilyPreference = addressFamilyPreference,
-                    resolverNetwork = resolverNetwork,
                 )
             require(response.isSuccessful) { "ip info request failed: ${response.code}" }
             return parseIpInfoResponse(response.body, json)
@@ -321,12 +317,7 @@ class IpInfoRepository(
         proxy: HttpProxyAccess? = null,
         resolverNetwork: Network? = null,
     ) = run {
-        val url =
-            endpoint
-                .ensurePublicHttpsUrl()
-                .requirePublicHttpsUrl(resolveHost = true) { hostname ->
-                    resolveAddresses(hostname, network, AddressFamilyPreference.ANY, resolverNetwork)
-                }
+        val url = endpoint.ensurePublicHttpsUrl()
         val request = Request.Builder().url(url).get().build()
         val effectiveClient =
             if (callTimeoutMs == null && network == null && addressFamilyPreference == AddressFamilyPreference.ANY && proxy == null) {
@@ -401,21 +392,9 @@ class IpInfoRepository(
         endpoint: String,
         callTimeoutMs: Long?,
         proxy: HttpProxyAccess,
-        addressFamilyPreference: AddressFamilyPreference = AddressFamilyPreference.ANY,
-        resolverNetwork: Network? = null,
     ): HttpProxyTunnelResponse =
         withContext(Dispatchers.IO) {
-            val url =
-                endpoint
-                    .ensurePublicHttpsUrl()
-                    .requirePublicHttpsUrl(resolveHost = true) { hostname ->
-                        resolveAddresses(
-                            hostname = hostname,
-                            network = null,
-                            preference = addressFamilyPreference,
-                            resolverNetwork = resolverNetwork,
-                        )
-                    }
+            val url = endpoint.ensurePublicHttpsUrl()
             val target = HttpProxyTunnelTarget(url.host, url.port)
             val timeout = (callTimeoutMs ?: FULL_CALL_TIMEOUT_MS).coerceIn(1L, Int.MAX_VALUE.toLong()).toInt()
             val startedAt = System.nanoTime()
@@ -548,6 +527,7 @@ class IpInfoRepository(
         val FALLBACK_ENDPOINTS =
             listOf(
                 BuildConfig.DEFAULT_IP_INFO_ENDPOINT,
+                "https://1.1.1.1/cdn-cgi/trace",
                 "https://ipinfo.io/json",
                 "https://ifconfig.co/json",
                 "https://api64.ipify.org?format=json",
@@ -793,6 +773,7 @@ internal fun parseIpInfoResponse(
     body: String,
     json: Json,
 ): IpInfo {
+    parseCloudflareTraceResponse(body)?.let { return it }
     val objectValue = json.parseToJsonElement(body).jsonObject
     require(objectValue.boolean("success") != false) {
         objectValue.string("message") ?: "ip info request failed"
@@ -823,6 +804,32 @@ internal fun parseIpInfoResponse(
                 ?: objectValue.string("org")
                 ?: connection?.string("isp")
                 ?: connection?.string("org"),
+        fetchedAt = System.currentTimeMillis(),
+    )
+}
+
+private fun parseCloudflareTraceResponse(body: String): IpInfo? {
+    val values =
+        body
+            .lineSequence()
+            .mapNotNull { line ->
+                val separator = line.indexOf('=')
+                if (separator <= 0) {
+                    null
+                } else {
+                    line.substring(0, separator) to line.substring(separator + 1)
+                }
+            }.toMap()
+    val ip = values["ip"]?.takeIf(String::isNotBlank) ?: return null
+    val countryCode = values["loc"]?.takeIf { value -> value.length == ISO_COUNTRY_CODE_LENGTH }
+    return IpInfo(
+        ip = ip,
+        ipv4 = ip.takeIf(::isIpv4Address),
+        ipv6 = ip.takeIf(::isIpv6Address),
+        countryCode = countryCode,
+        countryName = null,
+        city = null,
+        isp = null,
         fetchedAt = System.currentTimeMillis(),
     )
 }

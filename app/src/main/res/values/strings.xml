@@ -427,6 +427,7 @@
     <string name="statistics_app_detail_all_destinations">All connection addresses</string>
     <string name="statistics_app_detail_city_unknown">City unknown</string>
     <string name="statistics_app_detail_port">Port %1$d</string>
+    <string name="statistics_app_detail_network_log_disabled">Connection addresses, ports, countries, and endpoint traffic appear here after Network activity log is enabled in Diagnostics. App traffic totals stay local; the network log records sanitized connection metadata for detailed troubleshooting.</string>
     <string name="statistics_app_detail_private_data_hidden">Private network addresses are hidden. Turn off Hide private data in Logs to show connection IPs, ports, countries, cities, and traffic volume.</string>
     <plurals name="statistics_app_detail_connection_count">
         <item quantity="one">%1$d time</item>
@@ -581,6 +582,8 @@
     <string name="dns_filter_update_source_summary">Manifest URL for optional signed DNS rule-set updates. The default is the official Foxhole DNS repository.</string>
     <string name="dns_auto_update_consent_title">Enable DNS filter updates?</string>
     <string name="dns_auto_update_consent_body">Foxhole will periodically contact the public Foxhole DNS repository to download an updated DNS rule set. The request does not include installed apps, DNS logs, or custom exceptions. The server can see the IP address and request time.</string>
+    <string name="dns_filter_refresh_after_enable_title">Download fresh DNS filters now?</string>
+    <string name="dns_filter_refresh_after_enable_body">Foxhole can check the public Foxhole DNS repository now and load the latest verified AdGuard DNS rule set. If you skip this, the bundled filter stays active and you can refresh it later from DNS update status.</string>
     <string name="dns_auto_update_warning_title">Disable DNS filter updates?</string>
     <string name="dns_auto_update_warning_body">Foxhole will keep using the bundled or last verified DNS rule set. New tracker and malicious domains may be blocked later.</string>
     <string name="dns_filter_list_status_title">DNS update status</string>

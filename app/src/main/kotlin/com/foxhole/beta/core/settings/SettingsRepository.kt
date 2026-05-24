@@ -1619,7 +1619,7 @@ class SettingsRepository(
                         resetScreenshotBlocking = resetDefaults,
                         storedSchemaVersion = schemaVersion,
                     ),
-                statistics = statistics.normalized(resetOptionalMetrics = schemaVersion < SETTINGS_SCHEMA_VERSION),
+                statistics = statistics.normalized(),
                 smartProfilePreferences = normalizeSmartProfilePreferences(smartProfilePreferences),
                 profileTrafficTotals =
                     profileTrafficTotals
@@ -1628,7 +1628,7 @@ class SettingsRepository(
                         .mapNotNull { items -> items.maxByOrNull(ProfileTrafficTotal::updatedAt) }
                         .sortedByDescending(ProfileTrafficTotal::updatedAt),
                 installedAppInventoryAudit = installedAppInventoryAudit.normalized(),
-                appTrafficStatsEnabled = if (schemaVersion < SETTINGS_SCHEMA_VERSION) true else appTrafficStatsEnabled,
+                appTrafficStatsEnabled = appTrafficStatsEnabled,
                 usageTrackingStartedAt = usageTrackingStartedAt.takeIf { it > 0L } ?: System.currentTimeMillis(),
             )
         }
@@ -1687,9 +1687,8 @@ class SettingsRepository(
         }
     }
 
-    private fun StatisticsSettings.normalized(resetOptionalMetrics: Boolean = false): StatisticsSettings =
+    private fun StatisticsSettings.normalized(): StatisticsSettings =
         copy(
-            enabled = if (resetOptionalMetrics) true else enabled,
             retention =
                 when (retention) {
                     StatisticsRetention.WEEK,
@@ -1706,15 +1705,6 @@ class SettingsRepository(
                     StatisticsRefreshInterval.SECONDS_10,
                     -> refreshInterval
                 },
-            profileTrafficEnabled = if (resetOptionalMetrics) true else profileTrafficEnabled,
-            vpnProtocolsEnabled = if (resetOptionalMetrics) true else vpnProtocolsEnabled,
-            profileComparisonsEnabled = if (resetOptionalMetrics) true else profileComparisonsEnabled,
-            transportsEnabled = if (resetOptionalMetrics) true else transportsEnabled,
-            appTrafficEnabled = if (resetOptionalMetrics) true else appTrafficEnabled,
-            dnsFilteringEnabled = if (resetOptionalMetrics) true else dnsFilteringEnabled,
-            countryTrafficEnabled = if (resetOptionalMetrics) true else countryTrafficEnabled,
-            anomalyMetricsEnabled = if (resetOptionalMetrics) true else anomalyMetricsEnabled,
-            appChangesEnabled = if (resetOptionalMetrics) true else appChangesEnabled,
         )
 
     private fun InstalledAppInventoryAudit.normalized(): InstalledAppInventoryAudit =

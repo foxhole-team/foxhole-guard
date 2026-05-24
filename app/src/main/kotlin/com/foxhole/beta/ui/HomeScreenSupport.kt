@@ -524,9 +524,13 @@ internal fun HomeTopStatusLoadingBlock(
         horizontalArrangement = Arrangement.spacedBy(9.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        HomeAnalysisSignal(
-            tint = accentColor,
-            modifier = Modifier.offset(x = HomeConnectingStatusSignalOffset),
+        FoxholeSkeletonBlock(
+            modifier =
+                Modifier
+                    .offset(x = HomeConnectingStatusSignalOffset)
+                    .width(HomeTriangleIndicatorSize + (HomeTriangleIndicatorCanvasBleed * 2))
+                    .height(HomeTriangleIndicatorSize),
+            color = accentColor.copy(alpha = 0.16f),
         )
         FoxholeSkeletonBlock(
             modifier =

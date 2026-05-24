@@ -712,11 +712,17 @@ internal fun HomeViewModel.scheduleConnectedIpRefreshInternal(
                 invalidateIpInfoRefreshes()
             }
             pendingPostConnectIpRefresh = false
+            val fetchMode =
+                if (container.connectionController.ipInfo.value == null) {
+                    IpInfoFetchMode.FULL
+                } else {
+                    ipInfoFetchModeForRefreshReason(reason)
+                }
             startIpInfoRefresh(
                 reportFailures = false,
                 showLoading = false,
                 clearExistingIp = clearExistingIp,
-                fetchMode = ipInfoFetchModeForRefreshReason(reason),
+                fetchMode = fetchMode,
                 minimumLoadingDurationMs = 0L,
                 reason = reason,
                 onPublished = {

@@ -120,6 +120,31 @@ class IpInfoRepositoryTest {
         assertEquals("AS60068 Datacamp Limited", parsed.isp)
     }
 
+    @Test
+    fun `parses cloudflare trace schema`() {
+        val parsed =
+            parseIpInfoResponse(
+                body =
+                    """
+                    fl=1272f65
+                    h=1.1.1.1
+                    ip=84.17.54.10
+                    ts=1779634208.000
+                    loc=NL
+                    tls=TLSv1.3
+                    """.trimIndent(),
+                json = json,
+            )
+
+        assertEquals("84.17.54.10", parsed.ip)
+        assertEquals("84.17.54.10", parsed.ipv4)
+        assertNull(parsed.ipv6)
+        assertEquals("NL", parsed.countryCode)
+        assertNull(parsed.countryName)
+        assertNull(parsed.city)
+        assertNull(parsed.isp)
+    }
+
     @Test(expected = IllegalArgumentException::class)
     fun `rejects unsuccessful schema responses`() {
         parseIpInfoResponse(
@@ -233,7 +258,7 @@ class IpInfoRepositoryTest {
 
         assertTrue(candidates.isNotEmpty())
         assertEquals("https://ipwho.is/", candidates.first())
-        assertEquals("https://ipinfo.io/json", candidates[1])
+        assertEquals("https://1.1.1.1/cdn-cgi/trace", candidates[1])
         assertTrue(candidates.size > 1)
     }
 

@@ -309,7 +309,11 @@ fun ProfilesScreen(
                     enabled = state.profiles.isNotEmpty(),
                     modifier = Modifier.testTag("profiles_export_action"),
                 ) {
-                    Icon(Icons.Outlined.FileDownload, contentDescription = stringResource(R.string.export_label))
+                    Icon(
+                        Icons.Outlined.FileDownload,
+                        contentDescription = stringResource(R.string.export_label),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
             }
         },

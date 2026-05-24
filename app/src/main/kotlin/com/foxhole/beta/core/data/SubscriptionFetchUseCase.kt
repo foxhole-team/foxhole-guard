@@ -2,6 +2,7 @@ package com.foxhole.beta.core.data
 
 import com.foxhole.beta.BuildConfig
 import com.foxhole.beta.core.importer.SubscriptionMetadataParser
+import com.foxhole.beta.core.network.RemoteHostResolver
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.HttpUrl
@@ -20,6 +21,7 @@ internal data class SubscriptionResponse(
 
 internal class SubscriptionFetchUseCase(
     private val httpClient: OkHttpClient,
+    private val resolver: RemoteHostResolver? = null,
 ) {
     private val defaultClient: OkHttpClient by lazy {
         httpClient.withBoundedRemoteFetchTimeouts()
@@ -76,6 +78,7 @@ internal class SubscriptionFetchUseCase(
                 initialUrl = safeUrl,
                 allowHttp = allowHttp,
                 maxBytes = MAX_SUBSCRIPTION_BYTES,
+                resolver = resolver,
             ) { url ->
                 buildSubscriptionRequest(safeUrl = url, lastEtag = lastEtag)
             }

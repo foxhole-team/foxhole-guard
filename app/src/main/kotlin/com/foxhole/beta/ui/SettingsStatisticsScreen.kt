@@ -281,6 +281,7 @@ fun StatisticsScreen(
                     samples = state.appTrafficWindows,
                     networkActivityEvents = state.networkActivityEvents,
                     ipInfo = state.ipInfo,
+                    networkActivityLoggingEnabled = state.settings.expert.networkActivityLogging,
                     showPrivateNetworkDetails = !state.settings.expert.sanitizeNetworkActivityPrivateData,
                 )
             },

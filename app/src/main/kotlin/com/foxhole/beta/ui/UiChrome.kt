@@ -237,19 +237,18 @@ private const val TOP_CHROME_SCRIM_LIGHT_ALPHA = 0.24f
 private const val TOP_CHROME_FROST_DARK_ALPHA = 0.018f
 private const val TOP_CHROME_FROST_LIGHT_ALPHA = 0.030f
 private const val TOP_CHROME_MIN_SCROLL_ALPHA = 0.64f
-private const val BOTTOM_DOCK_CONTAINER_DARK_ALPHA = 0.88f
-private const val BOTTOM_DOCK_CONTAINER_LIGHT_ALPHA = 0.92f
-private const val BOTTOM_DOCK_BORDER_ALPHA = 0.14f
+private const val BOTTOM_DOCK_CONTAINER_DARK_ALPHA = 0.54f
+private const val BOTTOM_DOCK_CONTAINER_LIGHT_ALPHA = 0.68f
+private const val BOTTOM_DOCK_BORDER_ALPHA = 0.24f
 
 internal fun foxholeTopChromeBackgroundColor(): Int = Color.Transparent.toArgb()
 
 @Composable
 internal fun foxholeBottomDockBackgroundColor(): Int {
-    return when (LocalFoxholeThemeMode.current) {
-        ThemeMode.SYSTEM -> LocalFoxholeUiPalette.current.bottomBarContainerColor
-        ThemeMode.DARK -> Color(0xFF050506)
-        ThemeMode.LIGHT -> Color(0xFFECECEA)
-    }.toArgb()
+    val dark = LocalFoxholeDarkTheme.current
+    return MaterialTheme.colorScheme.surface
+        .copy(alpha = if (dark) BOTTOM_DOCK_CONTAINER_DARK_ALPHA else BOTTOM_DOCK_CONTAINER_LIGHT_ALPHA)
+        .toArgb()
 }
 
 @Composable
@@ -1302,13 +1301,7 @@ internal fun FoxholeBottomDockGlassLayer(
     val dark = LocalFoxholeDarkTheme.current
     val scheme = MaterialTheme.colorScheme
     val containerColor =
-        if (LocalFoxholeThemeMode.current == ThemeMode.SYSTEM) {
-            LocalFoxholeUiPalette.current.bottomBarContainerColor
-        } else if (dark) {
-            scheme.background.copy(alpha = BOTTOM_DOCK_CONTAINER_DARK_ALPHA)
-        } else {
-            scheme.surface.copy(alpha = BOTTOM_DOCK_CONTAINER_LIGHT_ALPHA)
-        }
+        scheme.surface.copy(alpha = if (dark) BOTTOM_DOCK_CONTAINER_DARK_ALPHA else BOTTOM_DOCK_CONTAINER_LIGHT_ALPHA)
     val frostColor =
         if (dark) {
             Color.White.copy(alpha = 0.020f)

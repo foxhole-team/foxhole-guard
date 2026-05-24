@@ -431,17 +431,17 @@ data class ExpertSettings(
 
 @Serializable
 data class StatisticsSettings(
-    val enabled: Boolean = true,
+    val enabled: Boolean = false,
     val retention: StatisticsRetention = StatisticsRetention.FOREVER,
     val refreshInterval: StatisticsRefreshInterval = StatisticsRefreshInterval.SECONDS_3,
-    val profileTrafficEnabled: Boolean = true,
-    val vpnProtocolsEnabled: Boolean = true,
-    val profileComparisonsEnabled: Boolean = true,
-    val transportsEnabled: Boolean = true,
-    val appTrafficEnabled: Boolean = true,
-    val dnsFilteringEnabled: Boolean = true,
-    val countryTrafficEnabled: Boolean = true,
-    val anomalyMetricsEnabled: Boolean = true,
+    val profileTrafficEnabled: Boolean = false,
+    val vpnProtocolsEnabled: Boolean = false,
+    val profileComparisonsEnabled: Boolean = false,
+    val transportsEnabled: Boolean = false,
+    val appTrafficEnabled: Boolean = false,
+    val dnsFilteringEnabled: Boolean = false,
+    val countryTrafficEnabled: Boolean = false,
+    val anomalyMetricsEnabled: Boolean = false,
     val appChangesEnabled: Boolean = false,
 )
 
@@ -516,7 +516,7 @@ data class Settings(
     val smartProfilePreferences: List<SmartProfilePreference> = emptyList(),
     val profileTrafficTotals: List<ProfileTrafficTotal> = emptyList(),
     val installedAppInventoryAudit: InstalledAppInventoryAudit = InstalledAppInventoryAudit(),
-    val appTrafficStatsEnabled: Boolean = true,
+    val appTrafficStatsEnabled: Boolean = false,
     val usageTrackingStartedAt: Long = System.currentTimeMillis(),
 )
 

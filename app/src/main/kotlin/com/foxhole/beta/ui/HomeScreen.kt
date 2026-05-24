@@ -114,6 +114,7 @@ import com.foxhole.beta.core.model.ProtocolHint
 import com.foxhole.beta.core.model.ProxyInboundSettings
 import com.foxhole.beta.core.model.TrafficMapUiState
 import com.foxhole.beta.core.model.TrafficMode
+import com.foxhole.beta.core.model.UiSettings
 import com.foxhole.beta.ui.theme.LocalFoxholeUiPalette
 import com.foxhole.beta.ui.BottomDockOverlayPadding
 import com.foxhole.beta.ui.FoxholeCard
@@ -265,11 +266,13 @@ fun HomeScreen(
         card: DashboardCard,
         steps: Int,
     ): Boolean {
-        val nextOrder = reorderedDashboardCards(
-            order = dashboardCardOrder,
-            card = card,
-            steps = steps,
-        )
+        val nextOrder =
+            reorderedDashboardCards(
+                order = dashboardCardOrder,
+                visibleOrder = visibleDashboardCardOrder(dashboardCardOrder, state.settings.ui),
+                card = card,
+                steps = steps,
+            )
         if (nextOrder != null) {
             dashboardCardOrder = nextOrder
             onDashboardCardOrderChanged(nextOrder)
@@ -1395,6 +1398,7 @@ private fun DashboardCardDragContainer(
     val density = LocalDensity.current
     val fallbackMoveDistancePx = with(density) { DashboardCardReorderFallbackMoveDistance.toPx() }
     var dragOffset by remember(card) { mutableFloatStateOf(0f) }
+    var blockedReorderDirection by remember(card) { mutableStateOf(0) }
     var cardHeightPx by remember(card) { mutableFloatStateOf(0f) }
     val active = activeCard == card
     val dragShape = MaterialTheme.shapes.large
@@ -1402,6 +1406,12 @@ private fun DashboardCardDragContainer(
     val moveThresholdPx =
         (moveDistancePx * DASHBOARD_CARD_REORDER_THRESHOLD_FRACTION)
             .coerceAtLeast(fallbackMoveDistancePx)
+    val displayDragOffset =
+        dashboardCardDisplayDragOffset(
+            offset = dragOffset,
+            blockedDirection = blockedReorderDirection,
+            thresholdPx = moveThresholdPx,
+        )
 
     Box(
         modifier =
@@ -1411,7 +1421,7 @@ private fun DashboardCardDragContainer(
                     cardHeightPx = coordinates.size.height.toFloat()
                 }
                 .graphicsLayer {
-                    translationY = if (active) dragOffset else 0f
+                    translationY = if (active) displayDragOffset else 0f
                     val scale = if (active) 1.018f else 1f
                     scaleX = scale
                     scaleY = scale
@@ -1424,42 +1434,101 @@ private fun DashboardCardDragContainer(
                     detectDragGesturesAfterLongPress(
                         onDragStart = {
                             dragOffset = 0f
+                            blockedReorderDirection = 0
                             onActiveCardChange(card)
                             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                         },
                         onDragCancel = {
                             dragOffset = 0f
+                            blockedReorderDirection = 0
                             onActiveCardChange(null)
                         },
                         onDragEnd = {
                             dragOffset = 0f
+                            blockedReorderDirection = 0
                             onActiveCardChange(null)
                         },
                         onDrag = { change, dragAmount ->
                             change.consume()
-                            dragOffset += dragAmount.y
-                            while (dragOffset > moveThresholdPx) {
-                                if (!onMove(card, 1)) {
-                                    dragOffset = moveThresholdPx
-                                    break
-                                }
-                                dragOffset -= moveDistancePx
-                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            }
-                            while (dragOffset < -moveThresholdPx) {
-                                if (!onMove(card, -1)) {
-                                    dragOffset = -moveThresholdPx
-                                    break
-                                }
-                                dragOffset += moveDistancePx
-                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            }
+                            val nextState =
+                                updateDashboardCardDragState(
+                                    offset = dragOffset,
+                                    blockedDirection = blockedReorderDirection,
+                                    dragDelta = dragAmount.y,
+                                    moveThresholdPx = moveThresholdPx,
+                                    moveDistancePx = moveDistancePx,
+                                    onMove = { direction -> onMove(card, direction) },
+                                    onMoved = { haptic.performHapticFeedback(HapticFeedbackType.LongPress) },
+                                )
+                            dragOffset = nextState.offset
+                            blockedReorderDirection = nextState.blockedDirection
                         },
                     )
                 },
     ) {
         content()
     }
+}
+
+private data class DashboardCardDragState(
+    val offset: Float,
+    val blockedDirection: Int,
+)
+
+private fun updateDashboardCardDragState(
+    offset: Float,
+    blockedDirection: Int,
+    dragDelta: Float,
+    moveThresholdPx: Float,
+    moveDistancePx: Float,
+    onMove: (Int) -> Boolean,
+    onMoved: () -> Unit,
+): DashboardCardDragState {
+    var nextOffset = offset + dragDelta
+    var nextBlockedDirection =
+        when {
+            blockedDirection > 0 && nextOffset < moveThresholdPx -> 0
+            blockedDirection < 0 && nextOffset > -moveThresholdPx -> 0
+            else -> blockedDirection
+        }
+    while (nextBlockedDirection != 1 && nextOffset > moveThresholdPx) {
+        if (!onMove(1)) {
+            nextBlockedDirection = 1
+            break
+        }
+        nextOffset -= moveDistancePx
+        onMoved()
+    }
+    while (nextBlockedDirection != -1 && nextOffset < -moveThresholdPx) {
+        if (!onMove(-1)) {
+            nextBlockedDirection = -1
+            break
+        }
+        nextOffset += moveDistancePx
+        onMoved()
+    }
+    return DashboardCardDragState(offset = nextOffset, blockedDirection = nextBlockedDirection)
+}
+
+private fun dashboardCardDisplayDragOffset(
+    offset: Float,
+    blockedDirection: Int,
+    thresholdPx: Float,
+): Float {
+    val displayOffset =
+        if (blockedDirection == 0 || thresholdPx <= 0f) {
+            offset
+        } else {
+            val direction = blockedDirection.coerceIn(-1, 1).toFloat()
+            val directedOffset = offset * direction
+            if (directedOffset <= thresholdPx) {
+                offset
+            } else {
+                val overflow = directedOffset - thresholdPx
+                direction * (thresholdPx + overflow * DASHBOARD_CARD_EDGE_RESISTANCE_FRACTION)
+            }
+        }
+    return displayOffset
 }
 
 @Composable
@@ -1513,24 +1582,38 @@ private fun normalizedDashboardCardOrder(order: List<DashboardCard>): List<Dashb
 
 private fun reorderedDashboardCards(
     order: List<DashboardCard>,
+    visibleOrder: List<DashboardCard>,
     card: DashboardCard,
     steps: Int,
 ): List<DashboardCard>? {
-    val from = order.indexOf(card)
-    if (steps == 0 || from < 0) {
-        return null
-    }
-
-    val to = (from + steps).coerceIn(0, order.lastIndex)
-    return if (from == to) {
-        null
-    } else {
-        order.toMutableList().apply {
-            removeAt(from)
-            add(to, card)
-        }
+    val fromVisible = visibleOrder.indexOf(card)
+    val toVisible = fromVisible + steps
+    val target = visibleOrder.getOrNull(toVisible)
+    return when {
+        steps == 0 || fromVisible < 0 || target == null || target == card -> null
+        else ->
+            order.toMutableList().apply {
+                remove(card)
+                val targetIndex = indexOf(target)
+                val insertionIndex = if (steps > 0) targetIndex + 1 else targetIndex
+                add(insertionIndex.coerceIn(0, size), card)
+            }
     }
 }
+
+private fun visibleDashboardCardOrder(
+    order: List<DashboardCard>,
+    uiSettings: UiSettings,
+): List<DashboardCard> =
+    order.filter { card ->
+        when (card) {
+            DashboardCard.TRAFFIC_MAP -> uiSettings.trafficMapEnabled
+            DashboardCard.PROFILES -> true
+            DashboardCard.ACTIONS -> true
+            DashboardCard.NETWORK -> uiSettings.networkCardEnabled
+            DashboardCard.TRAFFIC -> uiSettings.trafficCardEnabled
+        }
+    }
 
 private fun Modifier.dashboardCardZIndex(
     activeCard: DashboardCard?,
@@ -1542,6 +1625,7 @@ private fun Modifier.dashboardCardZIndex(
 
 private const val DASHBOARD_CARD_ACTIVE_Z_INDEX = 100f
 private const val DASHBOARD_CARD_REORDER_THRESHOLD_FRACTION = 0.5f
+private const val DASHBOARD_CARD_EDGE_RESISTANCE_FRACTION = 0.18f
 private val DashboardCardReorderFallbackMoveDistance = 96.dp
 private val ImportMenuWidthChrome = 62.dp
 private val ImportMenuMinWidth = 188.dp

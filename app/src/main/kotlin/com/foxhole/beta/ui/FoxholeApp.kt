@@ -69,6 +69,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.ComposeView
@@ -843,34 +844,21 @@ private fun FoxholeBottomBar(
     val cornerRadiusPx = with(density) { 28.dp.toPx() }
     val themeMode = LocalFoxholeThemeMode.current
     val backgroundColor = foxholeBottomDockBackgroundColor()
+    val borderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.24f).toArgb()
+    val borderWidthPx = with(density) { 1.dp.roundToPx() }
     val navigationBottomPadding = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val windowWidth = with(density) { LocalWindowInfo.current.containerSize.width.toDp() }
     val dockWidth = (windowWidth * 0.62f).coerceIn(180.dp, 248.dp)
     val dockWidthPx = with(density) { dockWidth.roundToPx() }
     val dockHeightPx = with(density) { 60.dp.roundToPx() }
     val dockBottomMarginPx = with(density) { (navigationBottomPadding + 10.dp).roundToPx() }
-    val externalDockView =
-        remember(overlayHost, blurTarget) {
-            if (overlayHost != null && blurTarget != null) {
-                FoxholeBottomDockBlurView(overlayHost.context, selectedSection)
-            } else {
-                null
-            }
-        }
-    DisposableEffect(externalDockView, overlayHost) {
-        if (externalDockView != null && overlayHost != null) {
-            overlayHost.addView(externalDockView)
-            onDispose {
-                overlayHost.removeView(externalDockView)
-            }
-        } else {
-            onDispose {}
-        }
-    }
+    val externalDockView = rememberExternalBottomDockView(overlayHost, blurTarget, selectedSection)
     SideEffect {
         externalDockView?.apply {
             configureBackground(
                 backgroundColor = backgroundColor,
+                borderColor = borderColor,
+                borderWidthPx = borderWidthPx,
                 cornerRadiusPx = cornerRadiusPx,
             )
             selectedSectionState.value = selectedSection
@@ -900,8 +888,8 @@ private fun FoxholeBottomBar(
                 Modifier
                     .width(dockWidth)
                     .height(60.dp),
-            shape = MaterialTheme.shapes.large,
-            borderColor = LocalFoxholeUiPalette.current.bottomBarBorderColor,
+            shape = MaterialTheme.shapes.extraLarge,
+            borderColor = MaterialTheme.colorScheme.outlineVariant,
         ) {
             FoxholeBottomBarDockContent(
                 selectedSection = selectedSection,
@@ -910,6 +898,31 @@ private fun FoxholeBottomBar(
             )
         }
     }
+}
+
+@Composable
+private fun rememberExternalBottomDockView(
+    overlayHost: ViewGroup?,
+    blurTarget: BlurTarget?,
+    selectedSection: AppSection,
+): FoxholeBottomDockBlurView? {
+    val externalDockView =
+        remember(overlayHost, blurTarget) {
+            if (overlayHost != null && blurTarget != null) {
+                FoxholeBottomDockBlurView(overlayHost.context, selectedSection)
+            } else {
+                null
+            }
+        }
+    DisposableEffect(externalDockView, overlayHost) {
+        if (externalDockView != null && overlayHost != null) {
+            overlayHost.addView(externalDockView)
+            onDispose { overlayHost.removeView(externalDockView) }
+        } else {
+            onDispose {}
+        }
+    }
+    return externalDockView
 }
 
 private class FoxholeBottomDockBlurView(
@@ -946,11 +959,14 @@ private class FoxholeBottomDockBlurView(
 
     fun configureBackground(
         backgroundColor: Int,
+        borderColor: Int,
+        borderWidthPx: Int,
         cornerRadiusPx: Float,
     ) {
         outlineBackground.shape = GradientDrawable.RECTANGLE
         outlineBackground.cornerRadius = cornerRadiusPx
         outlineBackground.setColor(backgroundColor)
+        outlineBackground.setStroke(borderWidthPx, borderColor)
         background = outlineBackground
         outlineProvider = ViewOutlineProvider.BACKGROUND
         clipToOutline = true

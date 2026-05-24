@@ -175,11 +175,33 @@ class HomeIpLoadingPolicyTest {
     }
 
     @Test
-    fun `local guard firewall shows network skeleton until device ip is refreshed`() {
+    fun `local guard firewall shows network skeleton only during active device ip refresh`() {
+        val idleModel =
+            resolveHomeDashboardNetworkModel(
+                state = HomeRouteUiState(
+                    profilesLoaded = true,
+                    settings = Settings(
+                        expert = ExpertSettings(firewallEnabled = true),
+                    ),
+                    connection = ConnectionSnapshot(
+                        state = ConnectionState.CONNECTED,
+                        trafficMode = TrafficMode.TUNNEL,
+                        profileId = FoxholeVpnService.LOCAL_GUARD_PROFILE_ID,
+                    ),
+                ),
+                visibleIpInfo = null,
+                deviceInternetAvailable = true,
+            )
+
+        assertFalse(idleModel.showLoading)
+        assertFalse(idleModel.showIpInfoLoading)
+        assertFalse(idleModel.showConnectionDetailsLoading)
+
         val model =
             resolveHomeDashboardNetworkModel(
                 state = HomeRouteUiState(
                     profilesLoaded = true,
+                    ipInfoLoading = true,
                     settings = Settings(
                         expert = ExpertSettings(firewallEnabled = true),
                     ),
@@ -274,8 +296,8 @@ class HomeIpLoadingPolicyTest {
     }
 
     @Test
-    fun `keeps startup network silent while disconnected profile state loads`() {
-        assertFalse(
+    fun `shows startup network skeleton while disconnected profile state loads`() {
+        assertTrue(
             shouldShowPendingNetworkLoading(
                 visibleIpInfo = null,
                 explicitLoading = false,
