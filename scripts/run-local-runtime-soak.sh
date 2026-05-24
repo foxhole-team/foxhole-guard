@@ -128,6 +128,17 @@ stop_pid() {
   wait "$pid" >/dev/null 2>&1 || true
 }
 
+instrumentation_log_failed() {
+  local log_file="$1"
+  if grep -Eq 'FAILURES!!!|INSTRUMENTATION_STATUS_CODE: -2|Tests run: .*Failures: [1-9]|Tests run: .*Errors: [1-9]|Process crashed' "$log_file"; then
+    return 0
+  fi
+  if ! grep -Eq 'OK \([0-9]+ tests?\)' "$log_file"; then
+    return 0
+  fi
+  return 1
+}
+
 capture_screen_and_ui() {
   local serial="$1"
   local prefix="$2"
@@ -198,6 +209,9 @@ run_instrumentation_round() {
   wait "$instrument_pid"
   status=$?
   set -e
+  if instrumentation_log_failed "$round_dir/instrumentation.log"; then
+    status=1
+  fi
 
   adb_device "$serial" shell dumpsys activity services "$APP_PACKAGE" > "$round_dir/services.txt" 2>&1 || true
   adb_device "$serial" shell dumpsys connectivity > "$round_dir/connectivity.txt" 2>&1 || true
