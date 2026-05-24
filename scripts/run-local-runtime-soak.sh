@@ -148,6 +148,28 @@ capture_screen_and_ui() {
   adb_device "$serial" shell rm -f "/sdcard/foxhole-soak-ui.xml" >/dev/null 2>&1 || true
 }
 
+tap_screen_percent() {
+  local serial="$1"
+  local x_percent="$2"
+  local y_percent="$3"
+  local size width height
+  size="$(adb_device "$serial" shell wm size 2>/dev/null | sed -nE 's/.*Physical size: ([0-9]+)x([0-9]+).*/\1 \2/p' | tail -n 1)"
+  read -r width height <<< "$size"
+  [[ -n "${width:-}" && -n "${height:-}" ]] || return 0
+  adb_device "$serial" shell input tap "$((width * x_percent / 100))" "$((height * y_percent / 100))" >/dev/null 2>&1 || true
+}
+
+dismiss_browser_first_run_if_visible() {
+  local serial="$1"
+  local prefix="$2"
+  if grep -Eiq 'Make Chrome your own|Use without an account|Add account to device' "${prefix}.xml" 2>/dev/null; then
+    tap_screen_percent "$serial" 50 88
+    sleep 2
+    tap_screen_percent "$serial" 50 90
+    sleep 2
+  fi
+}
+
 browser_check() {
   local serial="$1"
   local round_dir="$2"
@@ -160,6 +182,16 @@ browser_check() {
     adb_device "$serial" shell dumpsys activity top | sed -n '1,120p' || true
   } > "$round_dir/browser-${label}.log" 2>&1
   capture_screen_and_ui "$serial" "$round_dir/browser-${label}"
+  dismiss_browser_first_run_if_visible "$serial" "$round_dir/browser-${label}"
+  if grep -Eiq 'Make Chrome your own|Use without an account|Add account to device' "$round_dir/browser-${label}.xml" 2>/dev/null; then
+    {
+      echo "browser_check_retry_after_first_run label=$label url=$url"
+      adb_device "$serial" shell am start -a android.intent.action.VIEW -d "$url"
+      sleep "$BROWSER_SETTLE_SECONDS"
+      adb_device "$serial" shell dumpsys activity top | sed -n '1,120p' || true
+    } >> "$round_dir/browser-${label}.log" 2>&1
+    capture_screen_and_ui "$serial" "$round_dir/browser-${label}"
+  fi
 }
 
 run_instrumentation_round() {
