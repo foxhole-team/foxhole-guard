@@ -474,19 +474,32 @@ private fun dnsFilterStatusLabel(updatedAt: Long?): String =
     if (updatedAt == null) {
         stringResource(R.string.dns_filter_status_never)
     } else {
-        val elapsedMinutes = ((System.currentTimeMillis() - updatedAt).coerceAtLeast(0L) / 60_000L).coerceAtLeast(1L)
-        when {
-            elapsedMinutes < 60L -> {
-                val minutes = elapsedMinutes.toInt()
-                pluralStringResource(R.plurals.dns_filter_status_minutes, minutes, minutes)
-            }
-            elapsedMinutes < 24L * 60L -> {
-                val hours = (elapsedMinutes / 60L).toInt().coerceIn(1, 23)
-                pluralStringResource(R.plurals.dns_filter_status_hours, hours, hours)
-            }
-            else -> {
-                val days = (elapsedMinutes / (24L * 60L)).toInt().coerceAtLeast(1)
-                pluralStringResource(R.plurals.dns_filter_status_days, days, days)
-            }
+        when (val age = resolveDnsFilterStatusAge(updatedAt = updatedAt, nowMs = System.currentTimeMillis())) {
+            is DnsFilterStatusAge.Minutes ->
+                pluralStringResource(R.plurals.dns_filter_status_minutes, age.value, age.value)
+            is DnsFilterStatusAge.Hours ->
+                pluralStringResource(R.plurals.dns_filter_status_hours, age.value, age.value)
+            is DnsFilterStatusAge.Days ->
+                pluralStringResource(R.plurals.dns_filter_status_days, age.value, age.value)
         }
     }
+
+internal sealed interface DnsFilterStatusAge {
+    val value: Int
+
+    data class Minutes(override val value: Int) : DnsFilterStatusAge
+    data class Hours(override val value: Int) : DnsFilterStatusAge
+    data class Days(override val value: Int) : DnsFilterStatusAge
+}
+
+internal fun resolveDnsFilterStatusAge(
+    updatedAt: Long,
+    nowMs: Long,
+): DnsFilterStatusAge {
+    val elapsedMinutes = ((nowMs - updatedAt).coerceAtLeast(0L) / 60_000L).coerceAtLeast(1L)
+    return when {
+        elapsedMinutes < 60L -> DnsFilterStatusAge.Minutes(elapsedMinutes.toInt().coerceIn(1, 59))
+        elapsedMinutes < 24L * 60L -> DnsFilterStatusAge.Hours((elapsedMinutes / 60L).toInt().coerceIn(1, 4))
+        else -> DnsFilterStatusAge.Days((elapsedMinutes / (24L * 60L)).toInt().coerceIn(1, 6))
+    }
+}

@@ -34,7 +34,7 @@ internal class LibboxDnsRuntimeStatsTracker(
         enabled: () -> Boolean,
         networkActivityEnabled: () -> Boolean = { false },
         networkActivityContext: () -> RuntimeNetworkActivityContext = { RuntimeNetworkActivityContext() },
-        onNetworkActivityEvent: (NetworkActivityEvent) -> Unit = {},
+        onNetworkActivityEvents: (List<NetworkActivityEvent>) -> Unit = {},
     ): Job =
         scope.launch(Dispatchers.IO) {
             while (isActive && enabled()) {
@@ -42,7 +42,7 @@ internal class LibboxDnsRuntimeStatsTracker(
                     enabled = enabled,
                     networkActivityEnabled = networkActivityEnabled,
                     networkActivityContext = networkActivityContext,
-                    onNetworkActivityEvent = onNetworkActivityEvent,
+                    onNetworkActivityEvents = onNetworkActivityEvents,
                 )
                     .catch {
                         diagnosticsLogger.record("dns", "runtime stats stream failed")
@@ -57,7 +57,7 @@ internal class LibboxDnsRuntimeStatsTracker(
         enabled: () -> Boolean,
         networkActivityEnabled: () -> Boolean,
         networkActivityContext: () -> RuntimeNetworkActivityContext,
-        onNetworkActivityEvent: (NetworkActivityEvent) -> Unit,
+        onNetworkActivityEvents: (List<NetworkActivityEvent>) -> Unit,
     ) =
         callbackFlow<Unit> {
             val lock = Any()
@@ -102,14 +102,17 @@ internal class LibboxDnsRuntimeStatsTracker(
                 launch(Dispatchers.IO) {
                     while (isActive) {
                         if (enabled()) {
-                            synchronized(lock) {
-                                recordRuntimeConnections(
-                                    connections = connections,
-                                    trafficTotals = trafficTotals,
-                                    networkActivityEnabled = networkActivityEnabled,
-                                    networkActivityContext = networkActivityContext,
-                                    onNetworkActivityEvent = onNetworkActivityEvent,
-                                )
+                            val networkActivityEvents =
+                                synchronized(lock) {
+                                    recordRuntimeConnections(
+                                        connections = connections,
+                                        trafficTotals = trafficTotals,
+                                        networkActivityEnabled = networkActivityEnabled,
+                                        networkActivityContext = networkActivityContext,
+                                    )
+                                }
+                            if (networkActivityEvents.isNotEmpty()) {
+                                onNetworkActivityEvents(networkActivityEvents)
                             }
                         }
                         delay(SAMPLE_INTERVAL_MS)
@@ -134,13 +137,13 @@ internal class LibboxDnsRuntimeStatsTracker(
         trafficTotals: MutableMap<String, RuntimeConnectionTrafficTotals>,
         networkActivityEnabled: () -> Boolean,
         networkActivityContext: () -> RuntimeNetworkActivityContext,
-        onNetworkActivityEvent: (NetworkActivityEvent) -> Unit,
-    ) {
+    ): List<NetworkActivityEvent> {
         val iterator = connections.iterator()
         var count = 0
         val activeActivityIds = mutableSetOf<String>()
         val shouldRecordActivity = networkActivityEnabled()
         val activityContext by lazy(networkActivityContext)
+        val activityEvents = mutableListOf<NetworkActivityEvent>()
         while (iterator.hasNext() && count < MAX_TRACKED_CONNECTIONS) {
             count += 1
             val connection = iterator.next()
@@ -156,15 +159,18 @@ internal class LibboxDnsRuntimeStatsTracker(
                     context = activityContext,
                     previousTotals = previousTotals,
                     currentTotals = currentTotals,
-                )?.let(onNetworkActivityEvent)
+                )?.takeIf { activityEvents.size < MAX_NETWORK_ACTIVITY_EVENTS_PER_SAMPLE }
+                    ?.let(activityEvents::add)
             }
         }
         trafficTotals.keys.retainAll(activeActivityIds)
+        return activityEvents
     }
 
     private companion object {
         const val DNS_OUTBOUND_TYPE = "dns"
         const val MAX_TRACKED_CONNECTIONS = 2_000
+        const val MAX_NETWORK_ACTIVITY_EVENTS_PER_SAMPLE = 256
         const val RECONNECT_DELAY_MS = 1_000L
         const val SAMPLE_INTERVAL_MS = 3_000L
         const val STATUS_INTERVAL_NANOS = 1_000_000_000L

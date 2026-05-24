@@ -36,6 +36,8 @@ class AnomalyRepository(
     private val baselineStore: BaselineStore = BaselineStore(dao),
     private val nowProvider: () -> Long = System::currentTimeMillis,
 ) {
+    private var lastNetworkActivityCleanupAt = 0L
+
     val recentEvents: Flow<List<AnomalyEvent>> =
         settingsRepository.settings
             .flatMapLatest { settings ->
@@ -77,6 +79,7 @@ class AnomalyRepository(
                 } else {
                     dao.observeRecentNetworkActivityEvents(
                         cutoff = statisticsRetentionCutoff(nowProvider(), settings.statistics.retention),
+                        limit = NETWORK_ACTIVITY_UI_LIMIT,
                     )
                         .map { entities -> entities.map(NetworkActivityEventEntity::toDomain) }
                 }
@@ -165,11 +168,19 @@ class AnomalyRepository(
     }
 
     suspend fun recordNetworkActivityEvent(event: NetworkActivityEvent) {
-        if (event.packageNames.isEmpty() || event.remoteHost.isBlank()) {
+        recordNetworkActivityEvents(listOf(event))
+    }
+
+    suspend fun recordNetworkActivityEvents(events: List<NetworkActivityEvent>) {
+        val retainedEvents =
+            events.filter { event ->
+                event.packageNames.isNotEmpty() && event.remoteHost.isNotBlank()
+            }
+        if (retainedEvents.isEmpty()) {
             return
         }
-        dao.insertNetworkActivityEvent(NetworkActivityEventEntity.from(event))
-        cleanupExpired(settingsRepository.current())
+        dao.insertNetworkActivityEvents(retainedEvents.map(NetworkActivityEventEntity::from))
+        cleanupNetworkActivityIfDue(settingsRepository.current())
     }
 
     suspend fun clearTrafficStatistics() {
@@ -260,8 +271,19 @@ class AnomalyRepository(
         dao.deleteNetworkActivityEventsBefore(statisticsCutoff)
     }
 
+    private suspend fun cleanupNetworkActivityIfDue(settings: Settings) {
+        val now = nowProvider()
+        if (now - lastNetworkActivityCleanupAt < NETWORK_ACTIVITY_CLEANUP_INTERVAL_MS) {
+            return
+        }
+        lastNetworkActivityCleanupAt = now
+        dao.deleteNetworkActivityEventsBefore(statisticsRetentionCutoff(now, settings.statistics.retention))
+    }
+
     companion object {
         private const val HISTORY_LIMIT = 96
+        private const val NETWORK_ACTIVITY_UI_LIMIT = 1_000
+        private const val NETWORK_ACTIVITY_CLEANUP_INTERVAL_MS = 60L * 1000L
         private const val HOUR_MS = 60L * 60L * 1000L
         private const val NOTIFICATION_COOLDOWN_MS = 6L * 60L * 60L * 1000L
         private const val ANOMALY_LOG_TAG = "anomaly"

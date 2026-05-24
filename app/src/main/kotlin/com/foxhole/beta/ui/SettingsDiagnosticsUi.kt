@@ -55,6 +55,7 @@ internal fun LiveLogsDialog(
     val visibleEntries =
         remember(entries, sanitizeEntries) {
             entries
+                .takeLast(MAX_VISIBLE_LOG_DIALOG_ENTRIES)
                 .asReversed()
                 .map { entry ->
                     if (sanitizeEntries) {
@@ -126,7 +127,10 @@ internal fun LiveLogsDialog(
                                     .testTag(LIVE_LOGS_LIST_TAG),
                             userScrollEnabled = true,
                         ) {
-                            itemsIndexed(visibleEntries) { index, entry ->
+                            itemsIndexed(
+                                items = visibleEntries,
+                                key = { _, entry -> "${entry.timestamp}:${entry.tag}:${entry.message.hashCode()}" },
+                            ) { index, entry ->
                                 PlainLiveLogEntry(
                                     entry = entry,
                                     timeFormat = timeFormat,
@@ -293,3 +297,5 @@ internal const val LIVE_LOGS_NETWORK_NOTICE_TAG = "live_logs_network_notice"
 internal const val LIVE_LOGS_EMPTY_STATE_TAG = "live_logs_empty_state"
 internal const val LIVE_LOGS_LIST_TAG = "live_logs_list"
 internal const val LIVE_LOGS_CLOSE_ACTION_TAG = "live_logs_close_action"
+
+private const val MAX_VISIBLE_LOG_DIALOG_ENTRIES = 500

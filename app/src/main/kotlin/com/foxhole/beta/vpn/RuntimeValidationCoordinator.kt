@@ -211,12 +211,20 @@ internal fun FoxholeVpnService.scheduleValidationInternal(
                 container.diagnosticsLogger.record("dns", "post-start probe passed")
                 onSuccess(validation.getOrThrow())
             } else {
-                val message = validation.exceptionOrNull()?.message ?: getString(R.string.error_dns_probe_failed)
+                val error = validation.exceptionOrNull()
+                val message = error?.message ?: getString(R.string.error_dns_probe_failed)
                 container.diagnosticsLogger.record("dns", "post-start probe failed: $message")
                 if (failOnFailure) {
+                    val reasonCode =
+                        when {
+                            error is TunnelConnectivityProbeTimeoutException -> AutoConnectReasonCode.VALIDATION_TIMEOUT
+                            error?.message?.contains("timed out", ignoreCase = true) == true -> AutoConnectReasonCode.VALIDATION_TIMEOUT
+                            error?.message == getString(R.string.error_dns_probe_failed) -> AutoConnectReasonCode.DNS_FAILURE
+                            else -> AutoConnectReasonCode.VALIDATION_TIMEOUT
+                        }
                     fail(
                         message = message,
-                        reasonCode = AutoConnectReasonCode.DNS_FAILURE,
+                        reasonCode = reasonCode,
                     )
                 } else {
                     scheduleAutoReconnect(reason = "post_network_validation_failed")

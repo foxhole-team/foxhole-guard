@@ -34,6 +34,19 @@ data class DiagnosticEntry(
     val message: String,
 )
 
+internal const val MAX_LIVE_DIAGNOSTIC_ENTRIES = 1_000
+
+internal fun trimLiveDiagnosticEntries(
+    entries: List<DiagnosticEntry>,
+    now: Long,
+    retention: DiagnosticsRetention,
+): List<DiagnosticEntry> {
+    val cutoff = now - retention.retentionHours * 60L * 60L * 1000L
+    return entries
+        .filter { it.timestamp >= cutoff }
+        .takeLast(minOf(retention.maxEntries, MAX_LIVE_DIAGNOSTIC_ENTRIES))
+}
+
 internal fun liveDiagnosticMessage(
     message: String,
     allowRawLiveDiagnostics: Boolean,
@@ -127,6 +140,15 @@ class DiagnosticsLogger(
                 if (previousAt != null && now - previousAt < windowMs) {
                     false
                 } else {
+                    throttledKeys.remove(throttleKey)
+                    while (throttledKeys.size >= MAX_THROTTLED_KEYS) {
+                        val iterator = throttledKeys.entries.iterator()
+                        if (!iterator.hasNext()) {
+                            break
+                        }
+                        iterator.next()
+                        iterator.remove()
+                    }
                     throttledKeys[throttleKey] = now
                     true
                 }
@@ -173,27 +195,37 @@ class DiagnosticsLogger(
             return
         }
         val now = nowProvider()
+        val retention = currentRetention()
         synchronized(entriesLock) {
-            entriesMutable.value = prune(entriesMutable.value, now).sanitizeLiveEntriesIfNeeded()
+            entriesMutable.value = trimLiveDiagnosticEntries(entriesMutable.value, now, retention).sanitizeLiveEntriesIfNeeded()
         }
     }
 
     fun snapshotForExport(sanitize: Boolean = true): String {
         val now = nowProvider()
         val retention = currentRetention()
+        val persistedSnapshot =
+            runCatching { sessionStore.loadRecentEntries(now, retention) }
+                .getOrElse { error ->
+                    publishPersistenceFailure(error)
+                    emptyList()
+                }
         val snapshot =
             synchronized(entriesLock) {
                 val liveSnapshot = prune(entriesMutable.value, now, retention)
+                val exportSnapshot = prune(mergeEntries(persistedSnapshot, liveSnapshot), now, retention)
                 val prepared =
                     if (sanitize) {
-                        liveSnapshot.map { entry ->
+                        exportSnapshot.map { entry ->
                             entry.copy(message = DiagnosticSanitizer.sanitizeForExport(entry.message))
                         }
                     } else {
-                        liveSnapshot
+                        exportSnapshot
                     }
                 if (sanitize) {
-                    entriesMutable.value = prepared
+                    entriesMutable.value =
+                        trimLiveDiagnosticEntries(entriesMutable.value, now, retention)
+                            .map { entry -> entry.copy(message = DiagnosticSanitizer.sanitizeForExport(entry.message)) }
                 }
                 prepared
             }
@@ -276,7 +308,7 @@ class DiagnosticsLogger(
                                 second = entriesMutable.value,
                             )
                         entriesMutable.value =
-                            prune(merged, now, retention)
+                            trimLiveDiagnosticEntries(merged, now, retention)
                                 .let { entries ->
                                     if (allowRawLiveDiagnostics) {
                                         entries
@@ -297,7 +329,7 @@ class DiagnosticsLogger(
         retention: DiagnosticsRetention,
     ) {
         synchronized(entriesLock) {
-            entriesMutable.value = (prune(entriesMutable.value, now, retention) + entry).takeLast(retention.maxEntries)
+            entriesMutable.value = trimLiveDiagnosticEntries(entriesMutable.value + entry, now, retention)
         }
     }
 
@@ -492,6 +524,7 @@ class DiagnosticsLogger(
     companion object {
         private const val LOG_TAG = "FoxholeDiag"
         private const val THROTTLE_TTL_MS = 30 * 60 * 1000L
+        private const val MAX_THROTTLED_KEYS = 4_096
         private const val MAX_PENDING_PERSISTENCE_ENTRIES = 1_024
         private const val MAX_PERSISTENCE_BATCH_SIZE = 128
         private const val PERSISTENCE_BATCH_DELAY_MS = 250L

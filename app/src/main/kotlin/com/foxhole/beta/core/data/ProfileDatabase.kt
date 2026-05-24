@@ -847,6 +847,9 @@ interface AnomalyDao {
     suspend fun insertNetworkActivityEvent(entity: NetworkActivityEventEntity): Long
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertNetworkActivityEvents(entities: List<NetworkActivityEventEntity>)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertTrafficBaseline(entity: TrafficBaselineEntity)
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
@@ -1021,8 +1024,18 @@ interface AnomalyDao {
     @Query("select * from traffic_windows where startedAtMs >= :cutoff order by startedAtMs desc")
     fun observeRecentTrafficWindows(cutoff: Long): Flow<List<TrafficWindowEntity>>
 
-    @Query("select * from network_activity_events where timestampMs >= :cutoff order by timestampMs desc, id desc")
-    fun observeRecentNetworkActivityEvents(cutoff: Long): Flow<List<NetworkActivityEventEntity>>
+    @Query(
+        """
+        select * from network_activity_events
+        where timestampMs >= :cutoff
+        order by timestampMs desc, id desc
+        limit :limit
+        """,
+    )
+    fun observeRecentNetworkActivityEvents(
+        cutoff: Long,
+        limit: Int,
+    ): Flow<List<NetworkActivityEventEntity>>
 
     @Query("select * from traffic_baselines where baselineKey = :key limit 1")
     suspend fun getTrafficBaseline(key: String): TrafficBaselineEntity?

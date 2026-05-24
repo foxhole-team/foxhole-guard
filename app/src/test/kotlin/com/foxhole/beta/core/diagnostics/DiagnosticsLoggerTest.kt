@@ -1,5 +1,7 @@
 package com.foxhole.beta.core.diagnostics
 
+import com.foxhole.beta.core.model.DiagnosticsRetention
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -32,5 +34,28 @@ class DiagnosticsLoggerTest {
 
         assertTrue(liveMessage.contains("edge.example.com"))
         assertTrue(liveMessage.contains("11111111-1111-1111-1111-111111111111"))
+    }
+
+    @Test
+    fun `live diagnostic entries are capped below long retention limits`() {
+        val entries =
+            (1..1_500).map { index ->
+                DiagnosticEntry(
+                    timestamp = index.toLong(),
+                    tag = "activity",
+                    message = "entry=$index",
+                )
+            }
+
+        val retained =
+            trimLiveDiagnosticEntries(
+                entries = entries,
+                now = 1_500L,
+                retention = DiagnosticsRetention.DAYS_30,
+            )
+
+        assertEquals(MAX_LIVE_DIAGNOSTIC_ENTRIES, retained.size)
+        assertEquals("entry=501", retained.first().message)
+        assertEquals("entry=1500", retained.last().message)
     }
 }

@@ -1418,9 +1418,9 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
                             sessionId = activeSession?.correlationId,
                         )
                     },
-                    onNetworkActivityEvent = { event ->
+                    onNetworkActivityEvents = { events ->
                         scope.launch(Dispatchers.IO) {
-                            container.anomalyRepository.recordNetworkActivityEvent(event)
+                            container.anomalyRepository.recordNetworkActivityEvents(events)
                         }
                     },
                 )
