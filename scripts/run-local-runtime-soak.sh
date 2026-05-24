@@ -13,12 +13,15 @@ readonly ROUNDS="${FOXHOLE_SOAK_ROUNDS:-0}"
 readonly DURATION_SECONDS="${FOXHOLE_SOAK_DURATION_SECONDS:-28800}"
 readonly BROWSER_SETTLE_SECONDS="${FOXHOLE_SOAK_BROWSER_SETTLE_SECONDS:-12}"
 readonly BROWSER_WAIT_SECONDS="${FOXHOLE_SOAK_BROWSER_WAIT_SECONDS:-180}"
+readonly BROWSER_RETRY_SECONDS="${FOXHOLE_SOAK_BROWSER_RETRY_SECONDS:-10}"
+readonly BROWSER_MIN_SCREENSHOT_BYTES="${FOXHOLE_SOAK_BROWSER_MIN_SCREENSHOT_BYTES:-50000}"
+readonly BROWSER_SNAPSHOT_SECONDS="${FOXHOLE_SOAK_BROWSER_SNAPSHOT_SECONDS:-5,15,30}"
 readonly BROWSER_PREPARE="${FOXHOLE_SOAK_BROWSER_PREPARE:-1}"
 readonly REQUIRE_SUCCESS="${FOXHOLE_SOAK_REQUIRE_SUCCESS:-1}"
 readonly ALLOW_INSECURE_TLS="${FOXHOLE_SOAK_ALLOW_INSECURE_TLS:-0}"
 readonly KEEP_APP_VISIBLE="${FOXHOLE_SOAK_KEEP_APP_VISIBLE:-1}"
 readonly GOOGLE_CHECK_URL="${FOXHOLE_SOAK_GOOGLE_URL:-https://www.google.com/}"
-readonly IP_CHECK_URL="${FOXHOLE_SOAK_IP_URL:-https://1.1.1.1/cdn-cgi/trace}"
+readonly IP_CHECK_URL="${FOXHOLE_SOAK_IP_URL:-http://1.1.1.1/cdn-cgi/trace}"
 readonly SPEC="${TEST_CLASS}#${TEST_METHOD}"
 
 usage() {
@@ -34,16 +37,19 @@ Common environment:
   FOXHOLE_SOAK_HOLD_MS=900000                        Runtime hold inside each instrumentation pass.
   FOXHOLE_SOAK_PROBE_INTERVAL_MS=60000               In-app vpn-bound probe interval.
   FOXHOLE_SOAK_BROWSER_WAIT_SECONDS=180              Wait for connected hold before browser checks.
+  FOXHOLE_SOAK_BROWSER_RETRY_SECONDS=10              Extra wait before retry capture when a screenshot looks blank.
+  FOXHOLE_SOAK_BROWSER_MIN_SCREENSHOT_BYTES=50000    0 disables the browser screenshot blank-screen guard.
+  FOXHOLE_SOAK_BROWSER_SNAPSHOT_SECONDS=5,15,30      Browser screenshot times after URL launch; last sample is verdict image.
   FOXHOLE_SOAK_REQUIRE_SUCCESS=1                     Fail the pass on runtime/IP/traffic evidence problems.
   FOXHOLE_SOAK_GOOGLE_URL=https://www.google.com/    Browser Google smoke URL.
-  FOXHOLE_SOAK_IP_URL=https://1.1.1.1/cdn-cgi/trace  Browser IP smoke URL; literal IP avoids DNS-provider false negatives.
+  FOXHOLE_SOAK_IP_URL=http://1.1.1.1/cdn-cgi/trace   Browser IP smoke URL; literal IP avoids DNS-provider false negatives.
   FOXHOLE_SOAK_BROWSER_PREPARE=1                     Warm Chrome before instrumentation so browser checks avoid UiAutomation conflict.
   FOXHOLE_SOAK_ALLOW_INSECURE_TLS=0                  Preserve strict subscription TLS by default.
   FOXHOLE_SOAK_TEST_METHOD=$TEST_METHOD
 
 Output:
   $OUTPUT_ROOT/<serial>/summary.tsv
-  $OUTPUT_ROOT/<serial>/round-0001/{instrumentation.log,logcat.txt,browser-*.png,browser-*-connectivity.txt}
+  $OUTPUT_ROOT/<serial>/round-0001/{instrumentation.log,logcat.txt,browser-verdict.tsv,browser-*.png,browser-*-connectivity.txt}
 EOF
 }
 
@@ -158,6 +164,35 @@ capture_screen_and_ui() {
   adb_device "$serial" shell rm -f "/sdcard/foxhole-soak-ui.xml" >/dev/null 2>&1 || true
 }
 
+browser_screenshot_too_small() {
+  local image="$1"
+  local log_file="$2"
+  local bytes
+  [[ "$BROWSER_MIN_SCREENSHOT_BYTES" != "0" ]] || return 1
+  bytes="$(wc -c < "$image" 2>/dev/null || printf '0')"
+  echo "screenshot_bytes=$bytes min=$BROWSER_MIN_SCREENSHOT_BYTES image=$image" >> "$log_file"
+  [[ "$bytes" -lt "$BROWSER_MIN_SCREENSHOT_BYTES" ]]
+}
+
+browser_screenshot_bytes() {
+  local image="$1"
+  wc -c < "$image" 2>/dev/null || printf '0'
+}
+
+capture_browser_window_state() {
+  local serial="$1"
+  local out_file="$2"
+  {
+    echo "window_focus:"
+    adb_device "$serial" shell dumpsys window | grep -E 'mCurrentFocus|mFocusedApp' || true
+    echo
+    echo "resumed_activity:"
+    adb_device "$serial" shell dumpsys activity activities \
+      | grep -E 'ResumedActivity|topResumedActivity|mResumedActivity|Chrome|chrome' \
+      | tail -n 120 || true
+  } > "$out_file" 2>&1
+}
+
 tap_screen_percent() {
   local serial="$1"
   local x_percent="$2"
@@ -185,14 +220,60 @@ browser_check() {
   local round_dir="$2"
   local label="$3"
   local url="$4"
+  local log_file="$round_dir/browser-${label}.log"
+  local prefix="$round_dir/browser-${label}"
+  local sample final_prefix final_image status=0 elapsed=0
+  local -a samples
+  mapfile -t samples < <(printf '%s\n' "$BROWSER_SNAPSHOT_SECONDS" | csv_to_lines)
   {
     echo "browser_check label=$label url=$url"
-    adb_device "$serial" shell am start -a android.intent.action.VIEW -d "$url"
+    adb_device "$serial" shell am force-stop com.android.chrome >/dev/null 2>&1 || true
+    sleep 1
+    if ! adb_device "$serial" shell am start -W -a android.intent.action.VIEW -d "$url" -p com.android.chrome; then
+      echo "browser_start=failed"
+      status=1
+    else
+      echo "browser_start=ok"
+    fi
+  } > "$log_file" 2>&1
+  final_prefix="$prefix"
+  for sample in "${samples[@]}"; do
+    [[ "$sample" =~ ^[0-9]+$ ]] || continue
+    if [[ "$sample" -gt "$elapsed" ]]; then
+      sleep "$((sample - elapsed))"
+      elapsed="$sample"
+    fi
+    final_prefix="${prefix}-t$(printf '%02d' "$sample")"
+    capture_screen "$serial" "$final_prefix"
+  done
+  if [[ "${#samples[@]}" -eq 0 ]]; then
     sleep "$BROWSER_SETTLE_SECONDS"
-    adb_device "$serial" shell dumpsys activity top | sed -n '1,180p' || true
-  } > "$round_dir/browser-${label}.log" 2>&1
-  capture_screen "$serial" "$round_dir/browser-${label}"
+    capture_screen "$serial" "$prefix"
+  fi
+  final_image="${final_prefix}.png"
+  capture_browser_window_state "$serial" "$round_dir/browser-${label}-window.txt"
+  if browser_screenshot_too_small "$final_image" "$log_file"; then
+    echo "screenshot_guard=retry reason=too-small" >> "$log_file"
+    sleep "$BROWSER_RETRY_SECONDS"
+    capture_screen "$serial" "${prefix}-retry"
+    if browser_screenshot_too_small "${prefix}-retry.png" "$log_file"; then
+      echo "screenshot_guard=failed reason=too-small" >> "$log_file"
+      status=1
+    else
+      echo "screenshot_guard=passed_after_retry" >> "$log_file"
+      final_image="${prefix}-retry.png"
+    fi
+  else
+    echo "screenshot_guard=passed" >> "$log_file"
+  fi
   adb_device "$serial" shell dumpsys connectivity > "$round_dir/browser-${label}-connectivity.txt" 2>&1 || true
+  printf '%s\t%s\t%s\t%s\t%s\n' \
+    "$label" \
+    "$url" \
+    "$status" \
+    "$(browser_screenshot_bytes "$final_image")" \
+    "$final_image" >> "$round_dir/browser-verdict.tsv"
+  return "$status"
 }
 
 prepare_browser() {
@@ -225,6 +306,7 @@ run_instrumentation_round() {
   local subscription_url="$3"
   local logcat_file="$4"
   local status=0
+  local browser_status=0
   local instrument_pid=""
   local waited=0
 
@@ -247,8 +329,9 @@ run_instrumentation_round() {
   while kill -0 "$instrument_pid" >/dev/null 2>&1 && [[ "$waited" -lt "$BROWSER_WAIT_SECONDS" ]]; do
     if grep -q 'liveSmartBackground initialIpRefresh=ok' "$logcat_file" "$round_dir/instrumentation.log" 2>/dev/null; then
       echo "connected_hold_seen_at=$(date -Is)" > "$round_dir/browser-checks.started"
-      browser_check "$serial" "$round_dir" "google" "$GOOGLE_CHECK_URL"
-      browser_check "$serial" "$round_dir" "ip" "$IP_CHECK_URL"
+      printf 'label\turl\tstatus\tscreenshot_bytes\tverdict_image\n' > "$round_dir/browser-verdict.tsv"
+      browser_check "$serial" "$round_dir" "google" "$GOOGLE_CHECK_URL" || browser_status=1
+      browser_check "$serial" "$round_dir" "ip" "$IP_CHECK_URL" || browser_status=1
       break
     fi
     if grep -q 'liveSmartBackground connectFailed' "$logcat_file" "$round_dir/instrumentation.log" 2>/dev/null; then
@@ -267,6 +350,9 @@ run_instrumentation_round() {
   status=$?
   set -e
   if instrumentation_log_failed "$round_dir/instrumentation.log"; then
+    status=1
+  fi
+  if [[ "$browser_status" -ne 0 ]]; then
     status=1
   fi
 

@@ -607,6 +607,71 @@ class RuntimeConfigAssemblerTest {
     }
 
     @Test
+    fun `selector default tcp only non-vless outbound rejects browser udp`() {
+        val config =
+            parse(
+                assembler.assemble(
+                    baseConfigJson =
+                        baseConfigWithOutbounds(
+                            buildJsonArray {
+                                add(
+                                    buildJsonObject {
+                                        put("type", "vless")
+                                        put("tag", "vless-direct")
+                                        put("server", "vless.example")
+                                        put("server_port", 443)
+                                        put("uuid", "11111111-1111-1111-1111-111111111111")
+                                        put("network", "tcp")
+                                    },
+                                )
+                                add(
+                                    buildJsonObject {
+                                        put("type", "trojan")
+                                        put("tag", "trojan-direct")
+                                        put("server", "trojan.example")
+                                        put("server_port", 443)
+                                        put("password", "secret")
+                                        put("network", "tcp")
+                                    },
+                                )
+                                add(
+                                    buildJsonObject {
+                                        put("type", "selector")
+                                        put("tag", "proxy")
+                                        put("default", "trojan-direct")
+                                        putJsonArray("outbounds") {
+                                            add(JsonPrimitive("vless-direct"))
+                                            add(JsonPrimitive("trojan-direct"))
+                                        }
+                                    },
+                                )
+                            },
+                        ),
+                    settings = Settings(),
+                    activePreset = null,
+                    vpnProtocolHint = ProtocolHint.TROJAN,
+                ),
+            )
+
+        val rules = config["route"]!!.jsonObject["rules"]!!.jsonArray.map { it.jsonObject }
+        val udpRejectIndex =
+            rules.indexOfFirst {
+                it["network"]?.jsonPrimitive?.content == "udp" &&
+                    it["action"]?.jsonPrimitive?.content == "reject"
+            }
+        val sniffIndex =
+            rules.indexOfFirst { it["action"]?.jsonPrimitive?.content == "sniff" }
+        val shape = assembler.redactedRuntimeShape(config.toString())
+
+        assertTrue(udpRejectIndex >= 0)
+        assertTrue(sniffIndex >= 0)
+        assertTrue(udpRejectIndex < sniffIndex)
+        assertTrue(shape, shape.contains("type=trojan"))
+        assertTrue(shape, shape.contains("selector=true"))
+        assertTrue(shape, shape.contains("route_udp_reject=true"))
+    }
+
+    @Test
     fun `full-device tunnel excludes app control plane from vpn capture`() {
         val config = parse(assembler.assemble(baseConfigWithRules("profile.example"), Settings(), null))
         val tunInbound = config["inbounds"]!!.jsonArray.first().jsonObject
