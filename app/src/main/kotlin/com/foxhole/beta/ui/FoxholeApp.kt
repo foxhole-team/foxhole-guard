@@ -694,6 +694,7 @@ fun FoxholeApp(
                         onNetworkCardEnabledChanged = viewModel::onNetworkCardEnabledChanged,
                         onTrafficCardEnabledChanged = viewModel::onTrafficCardEnabledChanged,
                         onTrafficMapEnabledChanged = viewModel::onTrafficMapEnabledChanged,
+                        onEnableTrafficMapSupportSettings = viewModel::enableTrafficMapSupportSettings,
                         onShowExpertSettingsChanged = viewModel::onShowExpertSettingsChanged,
                         onShowFirewallStatusChanged = viewModel::onShowFirewallStatusChanged,
                         onShowTorQuickLaunchChanged = viewModel::onShowTorQuickLaunchChanged,

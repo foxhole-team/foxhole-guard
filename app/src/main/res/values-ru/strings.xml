@@ -23,6 +23,10 @@
     <string name="traffic_map_device_location_icon">Местоположение устройства на основе ip адреса</string>
     <string name="traffic_map_live_requires_firewall">Ожидание активного фаервола</string>
     <string name="traffic_map_waiting_connections">Виджет в режиме ожидания</string>
+    <string name="traffic_map_support_prompt_title">Включить данные для карты?</string>
+    <string name="traffic_map_support_prompt_body">Карта в дашборде берет живые подключения из VPN. Для локального фаервола, статистики стран и деталей подключений включите статистику стран и журнал сетевой активности.</string>
+    <string name="traffic_map_support_prompt_confirm">Включить сейчас</string>
+    <string name="traffic_map_support_enabled">Данные для карты включены</string>
     <string name="traffic_map_country_header">Страна</string>
     <string name="traffic_map_sessions_header">Сеансов</string>
     <string name="traffic_map_total_header">Всего</string>

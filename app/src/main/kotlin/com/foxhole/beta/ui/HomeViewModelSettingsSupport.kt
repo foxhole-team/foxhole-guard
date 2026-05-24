@@ -27,6 +27,7 @@ import com.foxhole.beta.core.model.RoutingPresetOverrideMode
 import com.foxhole.beta.core.model.RoutingPresetSource
 import com.foxhole.beta.core.model.RoutingRuleAction
 import com.foxhole.beta.core.model.SmartStartTransportPriority
+import com.foxhole.beta.core.model.StatisticsMetric
 import com.foxhole.beta.core.model.SubscriptionRefreshInterval
 import com.foxhole.beta.core.model.ThemeMode
 import com.foxhole.beta.core.model.TrafficMode
@@ -331,6 +332,18 @@ internal fun HomeViewModel.onTrafficMapEnabledChangedInternal(value: Boolean) {
     viewModelScope.launch {
         container.settingsRepository.updateTrafficMapEnabled(value)
         syncLocalGuardWithPermissionRequest()
+    }
+}
+
+internal fun HomeViewModel.enableTrafficMapSupportSettingsInternal() {
+    viewModelScope.launch {
+        container.settingsRepository.updateTrafficMapEnabled(true)
+        container.settingsRepository.updateStatisticsEnabled(true)
+        container.settingsRepository.updateStatisticsMetricEnabled(StatisticsMetric.COUNTRY_TRAFFIC, true)
+        container.settingsRepository.updateNetworkActivityLogging(true)
+        container.connectionController.syncLocalGuard()
+        syncLocalGuardWithPermissionRequest()
+        emitInfo(getApplication<Application>().getString(R.string.traffic_map_support_enabled))
     }
 }
 

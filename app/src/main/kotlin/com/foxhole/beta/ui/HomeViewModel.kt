@@ -1116,6 +1116,8 @@ class HomeViewModel(
 
     fun onTrafficMapEnabledChanged(value: Boolean) = onTrafficMapEnabledChangedInternal(value)
 
+    fun enableTrafficMapSupportSettings() = enableTrafficMapSupportSettingsInternal()
+
     fun onNetworkCardEnabledChanged(value: Boolean) = onNetworkCardEnabledChangedInternal(value)
 
     fun onTrafficCardEnabledChanged(value: Boolean) = onTrafficCardEnabledChangedInternal(value)

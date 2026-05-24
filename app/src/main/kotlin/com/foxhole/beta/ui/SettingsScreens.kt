@@ -97,6 +97,7 @@ import com.foxhole.beta.core.model.SMART_START_PROTOCOL_TIMEOUT_MIN_SECONDS
 import com.foxhole.beta.core.model.SMART_START_REFRESH_TIMEOUT_MIN_SECONDS
 import com.foxhole.beta.core.model.SMART_START_TIMEOUT_MAX_SECONDS
 import com.foxhole.beta.core.model.SMART_START_TIMEOUT_STEP_SECONDS
+import com.foxhole.beta.core.model.Settings
 import com.foxhole.beta.core.model.SmartStartTransportPriority
 import com.foxhole.beta.core.model.SubscriptionRefreshInterval
 import com.foxhole.beta.core.model.ThemeMode
@@ -1333,6 +1334,7 @@ fun ApplicationSettingsScreen(
     onNetworkCardEnabledChanged: (Boolean) -> Unit,
     onTrafficCardEnabledChanged: (Boolean) -> Unit,
     onTrafficMapEnabledChanged: (Boolean) -> Unit,
+    onEnableTrafficMapSupportSettings: () -> Unit,
     onShowExpertSettingsChanged: (Boolean) -> Unit,
     onShowFirewallStatusChanged: (Boolean) -> Unit,
     onShowTorQuickLaunchChanged: (Boolean) -> Unit,
@@ -1360,6 +1362,7 @@ fun ApplicationSettingsScreen(
     }
     var themeMenuExpanded by rememberSaveable { mutableStateOf(false) }
     var localeMenuExpanded by rememberSaveable { mutableStateOf(false) }
+    var trafficMapSupportPromptVisible by rememberSaveable { mutableStateOf(false) }
 
     SettingsScaffold(
         title = stringResource(R.string.app_settings),
@@ -1447,7 +1450,12 @@ fun ApplicationSettingsScreen(
                     checked = state.settings.ui.trafficMapEnabled,
                     summary = stringResource(R.string.traffic_map_setting_summary),
                     leadingIcon = Icons.Outlined.Map,
-                    onCheckedChange = onTrafficMapEnabledChanged,
+                    onCheckedChange = { enabled ->
+                        onTrafficMapEnabledChanged(enabled)
+                        if (enabled && state.settings.trafficMapSupportPromptNeeded()) {
+                            trafficMapSupportPromptVisible = true
+                        }
+                    },
                     summaryMaxLines = Int.MAX_VALUE,
                     grouped = true,
                 )
@@ -1474,7 +1482,27 @@ fun ApplicationSettingsScreen(
             }
         }
     }
+
+    if (trafficMapSupportPromptVisible) {
+        ConfirmDialog(
+            title = stringResource(R.string.traffic_map_support_prompt_title),
+            body = stringResource(R.string.traffic_map_support_prompt_body),
+            confirmLabel = stringResource(R.string.traffic_map_support_prompt_confirm),
+            dismissLabel = stringResource(R.string.close),
+            icon = Icons.Outlined.Map,
+            onDismiss = { trafficMapSupportPromptVisible = false },
+            onConfirm = {
+                trafficMapSupportPromptVisible = false
+                onEnableTrafficMapSupportSettings()
+            },
+        )
+    }
 }
+
+private fun Settings.trafficMapSupportPromptNeeded(): Boolean =
+    !expert.networkActivityLogging ||
+        !statistics.enabled ||
+        !statistics.countryTrafficEnabled
 
 @Composable
 private fun privacyRouteScopeLabel(value: PrivacyRouteScope): String =

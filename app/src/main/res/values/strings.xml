@@ -22,6 +22,10 @@
     <string name="traffic_map_device_location_icon">Device location based on IP address</string>
     <string name="traffic_map_live_requires_firewall">Waiting for active firewall</string>
     <string name="traffic_map_waiting_connections">Widget is waiting</string>
+    <string name="traffic_map_support_prompt_title">Enable traffic map helpers?</string>
+    <string name="traffic_map_support_prompt_body">The dashboard map uses live VPN connections. For local Firewall mode, country totals, and connection details, also enable country statistics and the network activity journal.</string>
+    <string name="traffic_map_support_prompt_confirm">Enable now</string>
+    <string name="traffic_map_support_enabled">Traffic map helpers enabled</string>
     <string name="traffic_map_country_header">Country</string>
     <string name="traffic_map_sessions_header">Sessions</string>
     <string name="traffic_map_total_header">Total</string>
