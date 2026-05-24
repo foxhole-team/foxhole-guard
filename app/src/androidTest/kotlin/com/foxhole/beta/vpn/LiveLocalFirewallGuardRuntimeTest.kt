@@ -10,6 +10,7 @@ import com.foxhole.beta.core.model.StatisticsMetric
 import com.foxhole.beta.core.model.TrafficMode
 import com.foxhole.beta.ui.HomeViewModel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -36,6 +37,7 @@ class LiveLocalFirewallGuardRuntimeTest {
             app.container.settingsRepository.updateNetworkActivityLogging(false)
             app.container.settingsRepository.updateNetworkActivityPersistentLogging(false)
             app.container.settingsRepository.updateStatisticsEnabled(false)
+            app.container.settingsRepository.updateTrafficMapEnabled(false)
             app.container.settingsRepository.updateAppTrafficStatsEnabled(false)
             app.container.settingsRepository.updateBlockedPackages(emptyList())
             app.container.settingsRepository.updateBlockAppsAlways(false)
@@ -45,15 +47,23 @@ class LiveLocalFirewallGuardRuntimeTest {
             waitForNoFoxholeVpn(app)
 
             val blockedPackage = firstInstalledPackageExcept(app.packageName)
-            val viewModel = HomeViewModel(app)
             app.container.settingsRepository.updateStatisticsEnabled(true)
             app.container.settingsRepository.updateStatisticsMetricEnabled(StatisticsMetric.APP_TRAFFIC, true)
             app.container.settingsRepository.updateStatisticsMetricEnabled(StatisticsMetric.COUNTRY_TRAFFIC, true)
+            app.container.settingsRepository.updateTrafficMapEnabled(true)
             app.container.settingsRepository.updateAppTrafficStatsEnabled(true)
             app.container.settingsRepository.updateNetworkActivityLogging(true)
             app.container.settingsRepository.updateNetworkActivityPersistentLogging(true)
             app.container.settingsRepository.updateBlockedPackages(listOf(blockedPackage))
             app.container.settingsRepository.updateBlockAppsAlways(true)
+            val viewModel = HomeViewModel(app)
+            var latestTrafficMapState = viewModel.trafficMapUiState.value
+            val trafficMapCollectionJob =
+                launch {
+                    viewModel.trafficMapUiState.collect { state ->
+                        latestTrafficMapState = state
+                    }
+                }
             app.container.settingsRepository.updateFirewallEnabled(true)
             app.container.connectionController.syncLocalGuard()
 
@@ -79,9 +89,10 @@ class LiveLocalFirewallGuardRuntimeTest {
             assertTrue(
                 "traffic map did not become available for active local firewall guard",
                 waitForCondition(timeoutMs = 10_000L) {
-                    viewModel.trafficMapUiState.value.isAvailable
+                    latestTrafficMapState.isAvailable
                 },
             )
+            trafficMapCollectionJob.cancel()
             assertTrue(
                 "local guard start diagnostic missing",
                 app.container.diagnosticsLogger.entries.value.any {
@@ -105,6 +116,7 @@ class LiveLocalFirewallGuardRuntimeTest {
             app.container.settingsRepository.updateFirewallEnabled(false)
             app.container.settingsRepository.updateNetworkActivityLogging(false)
             app.container.settingsRepository.updateNetworkActivityPersistentLogging(false)
+            app.container.settingsRepository.updateTrafficMapEnabled(false)
         }
 
     private suspend fun waitForNoFoxholeVpn(app: FoxholeApplication) {
