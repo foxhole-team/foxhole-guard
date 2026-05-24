@@ -650,6 +650,9 @@ internal suspend fun FoxholeVpnService.tryAcceptEarlyAndroidValidatedVpnNetwork(
     context: TunnelValidationPolicyContext,
     session: VpnSession? = null,
 ): Boolean {
+    if (!acceptsTunnelValidationProbe(TunnelValidationProbeKind.ANDROID_VALIDATED_VPN_NETWORK, context)) {
+        return false
+    }
     val accepted =
         withTimeoutOrNull(FoxholeVpnService.CONNECTIVITY_LITERAL_PROBE_EARLY_WINDOW_MS) {
             while (currentCoroutineContext().isActive) {

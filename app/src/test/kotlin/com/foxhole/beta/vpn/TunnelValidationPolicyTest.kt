@@ -11,7 +11,7 @@ class TunnelValidationPolicyTest {
         assertTrue(acceptsTunnelValidationProbe(TunnelValidationProbeKind.VPN_IP_REFRESH))
         assertTrue(acceptsTunnelValidationProbe(TunnelValidationProbeKind.VPN_VALIDATION_ENDPOINT))
         assertTrue(acceptsTunnelValidationProbe(TunnelValidationProbeKind.VALIDATED_VPN_LITERAL_IP_ENDPOINT))
-        assertTrue(acceptsTunnelValidationProbe(TunnelValidationProbeKind.ANDROID_VALIDATED_VPN_NETWORK))
+        assertFalse(acceptsTunnelValidationProbe(TunnelValidationProbeKind.ANDROID_VALIDATED_VPN_NETWORK))
     }
 
     @Test
@@ -115,8 +115,8 @@ class TunnelValidationPolicyTest {
     }
 
     @Test
-    fun `android validated vpn network accepts platform validation without activity evidence`() {
-        assertTrue(
+    fun `android validated vpn network does not prove tunnel validation by itself`() {
+        assertFalse(
             acceptsAndroidValidatedVpnNetwork(
                 androidValidated = true,
                 evidence = null,
@@ -128,7 +128,7 @@ class TunnelValidationPolicyTest {
                 evidence = TunnelValidationEvidence(hasSuccessfulTunnelActivity = true),
             ),
         )
-        assertTrue(
+        assertFalse(
             acceptsAndroidValidatedVpnNetwork(
                 androidValidated = true,
                 evidence = TunnelValidationEvidence(hasSuccessfulTunnelActivity = false),

@@ -32,7 +32,10 @@ internal fun handleRuntimeServiceCommand(
             val profileId = intent.getLongExtra(FoxholeConnectionServiceContract.EXTRA_PROFILE_ID, -1L)
             val protocolOptionId = intent.getStringExtra(FoxholeConnectionServiceContract.EXTRA_PROTOCOL_OPTION_ID)
             val previousVpnNetworkHandle = intent.previousVpnNetworkHandleOrNull()
-            launchCommand("connect:$profileId:${protocolOptionId ?: "default"}") {
+            launchPriorityCommand(
+                RuntimeCommandPriority.SWITCH,
+                "connect:$profileId:${protocolOptionId ?: "default"}",
+            ) {
                 connect(profileId, startId, protocolOptionId, previousVpnNetworkHandle)
             }
         }
@@ -88,15 +91,22 @@ internal fun handleRuntimeServiceCommand(
                 intent.getStringExtra(FoxholeConnectionServiceContract.EXTRA_LOCAL_GUARD_MODE)
                     ?.let { raw -> runCatching { LocalGuardMode.valueOf(raw) }.getOrNull() }
                     ?: LocalGuardMode.FIREWALL
-            launchCommand("local_guard:${mode.name.lowercase()}") { startLocalGuard(mode, startId) }
+            launchPriorityCommand(
+                RuntimeCommandPriority.SWITCH,
+                "local_guard:${mode.name.lowercase()}",
+            ) {
+                startLocalGuard(mode, startId)
+            }
         }
     }
 }
 
 internal fun isPriorityRuntimeServiceCommand(action: String?): Boolean =
-    action == FoxholeConnectionServiceContract.ACTION_DISCONNECT ||
+    action == FoxholeConnectionServiceContract.ACTION_CONNECT ||
+        action == FoxholeConnectionServiceContract.ACTION_DISCONNECT ||
         action == FoxholeConnectionServiceContract.ACTION_KILL ||
-        action == FoxholeConnectionServiceContract.ACTION_KILL_TOR
+        action == FoxholeConnectionServiceContract.ACTION_KILL_TOR ||
+        action == FoxholeConnectionServiceContract.ACTION_START_LOCAL_GUARD
 
 internal fun isFailClosedRuntimeServiceCommand(action: String?): Boolean =
     action !in KNOWN_RUNTIME_SERVICE_ACTIONS

@@ -886,6 +886,8 @@ internal fun homeStatusLabel(
     when {
         routeState.torOperation.kind == HomeTorOperationKind.CHANGING_LOCATION ->
             stringResource(R.string.home_status_tor_changing_location)
+        routeState.torOperation.kind == HomeTorOperationKind.BOOTSTRAPPING ->
+            stringResource(R.string.home_status_tor_bootstrapping)
         routeState.torOperation.kind == HomeTorOperationKind.CONNECTING ->
             stringResource(R.string.home_status_tor_connecting)
         state == ConnectionState.CONNECTED &&

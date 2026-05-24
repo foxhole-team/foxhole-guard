@@ -1207,6 +1207,7 @@ private fun HomeTorOperationLog(state: HomeRouteUiState) {
     val text =
         when (state.torOperation.kind) {
             HomeTorOperationKind.CHANGING_LOCATION -> stringResource(R.string.privacy_route_modal_log_changing_ip)
+            HomeTorOperationKind.BOOTSTRAPPING -> stringResource(R.string.privacy_route_modal_log_bootstrapping)
             HomeTorOperationKind.CONNECTING -> stringResource(R.string.privacy_route_modal_log_connecting)
             HomeTorOperationKind.NONE ->
                 if (state.connection.profileId == FoxholeVpnService.TOR_ONLY_PROFILE_ID) {

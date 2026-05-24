@@ -193,7 +193,7 @@ internal class FoxholeConnectionLifecycle(
     }
 }
 
-private const val STALE_VPN_DISCONNECT_TIMEOUT_MS = 10_000L
+private const val STALE_VPN_DISCONNECT_TIMEOUT_MS = 1_500L
 private const val STALE_VPN_DISCONNECT_POLL_MS = 250L
 
 private fun Profile.runtimeProtocolOption(protocolOptionId: String?) =

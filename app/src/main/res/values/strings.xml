@@ -9,6 +9,7 @@
     <string name="home_status_analysis">Analysis</string>
     <string name="home_status_tor_changing_location">Changing Tor network location</string>
     <string name="home_status_tor_connecting">Connecting to Tor network</string>
+    <string name="home_status_tor_bootstrapping">Bootstrapping Tor network</string>
     <string name="home_network_title">Network</string>
     <string name="home_traffic_title">Traffic</string>
     <string name="home_session_traffic_title">Current session</string>
@@ -504,10 +505,10 @@
     <string name="anomaly_reason_dns_blocks">DNS filter blocked %1$s and allowed %2$s queries; blocked share %3$s.</string>
     <string name="anomaly_reason_reconnects">VPN reconnected %1$s times in one statistics window.</string>
     <string name="anomaly_reason_latency">Tunnel latency shifted to %1$s ms; deviation score %2$s.</string>
-    <string name="anomaly_reason_privacy_route">Traffic looks like privacy routing while privacy route is off: share %1$s.</string>
-    <string name="anomaly_notification_red_flag_title">Red flag: traffic anomaly</string>
-    <string name="anomaly_notification_orange_flag_title">Orange flag: traffic anomaly</string>
-    <string name="anomaly_notification_yellow_flag_title">Yellow flag: traffic anomaly</string>
+    <string name="anomaly_reason_privacy_route">Traffic pattern changed while privacy routing is off: share %1$s.</string>
+    <string name="anomaly_notification_red_flag_title">Warning: unusual traffic</string>
+    <string name="anomaly_notification_orange_flag_title">Attention: traffic changed</string>
+    <string name="anomaly_notification_yellow_flag_title">Information: traffic changed</string>
     <string name="statistics_errors_percent">Errors: %1$s</string>
     <string name="statistics_error_rate">Error rate</string>
     <string name="statistics_success_rate">Success rate</string>
@@ -931,6 +932,8 @@
     <string name="privacy_route_modal_in_progress">In progress</string>
     <string name="privacy_route_modal_log_changing_ip">Requesting a new Tor exit path through sing-box hot reload. The VPN interface stays active while the Tor IP is refreshed.</string>
     <string name="privacy_route_modal_log_connecting">Preparing the Tor outbound and applying routing through sing-box. The VPN interface stays active; Foxhole will refresh Tor IP after bootstrap.</string>
+    <string name="privacy_route_modal_log_bootstrapping">Tor is still bootstrapping. This can take longer on restricted networks; Foxhole will keep checking the route.</string>
+    <string name="privacy_route_bootstrap_timeout">Tor did not finish bootstrapping in time. Try again or switch to another route.</string>
     <string name="privacy_route_modal_log_tor_only_connected">Tor-only tunnel is active. Device traffic is routed through the local Tor outbound.</string>
     <string name="privacy_route_modal_log_connected">Tor route is active inside the current VPN runtime. Selected TCP traffic is routed through the local Tor outbound.</string>
     <string name="privacy_route_connected_banner">Tor connected: %1$s, %2$s</string>

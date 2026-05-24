@@ -180,6 +180,66 @@ class RuntimeCommandActorTest {
         }
 
     @Test
+    fun `switch preempts stop so latest user transition wins`() =
+        runBlocking {
+            val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+            val killReasons = Collections.synchronizedList(mutableListOf<String>())
+            val actor = actor(scope, killReasons)
+            val stopStarted = CompletableDeferred<Unit>()
+            val stopCancelled = CompletableDeferred<Unit>()
+            val switchCompleted = CompletableDeferred<Unit>()
+
+            actor.launch(RuntimeCommandPriority.STOP, reason = "disconnect") {
+                try {
+                    stopStarted.complete(Unit)
+                    awaitCancellation()
+                } finally {
+                    stopCancelled.complete(Unit)
+                }
+            }
+            withTimeout(1_000L) { stopStarted.await() }
+
+            actor.launch(RuntimeCommandPriority.SWITCH, reason = "connect:1:default") {
+                switchCompleted.complete(Unit)
+            }
+
+            withTimeout(1_000L) { stopCancelled.await() }
+            withTimeout(1_000L) { switchCompleted.await() }
+            assertEquals(listOf("priority_command_preempt:connect:1:default"), killReasons.toList())
+            actor.close()
+        }
+
+    @Test
+    fun `new switch preempts running switch with different target`() =
+        runBlocking {
+            val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+            val killReasons = Collections.synchronizedList(mutableListOf<String>())
+            val actor = actor(scope, killReasons)
+            val firstStarted = CompletableDeferred<Unit>()
+            val firstCancelled = CompletableDeferred<Unit>()
+            val secondCompleted = CompletableDeferred<Unit>()
+
+            actor.launch(RuntimeCommandPriority.SWITCH, reason = "connect:1:default") {
+                try {
+                    firstStarted.complete(Unit)
+                    awaitCancellation()
+                } finally {
+                    firstCancelled.complete(Unit)
+                }
+            }
+            withTimeout(1_000L) { firstStarted.await() }
+
+            actor.launch(RuntimeCommandPriority.SWITCH, reason = "local_guard:firewall") {
+                secondCompleted.complete(Unit)
+            }
+
+            withTimeout(1_000L) { firstCancelled.await() }
+            withTimeout(1_000L) { secondCompleted.await() }
+            assertEquals(listOf("priority_command_preempt:local_guard:firewall"), killReasons.toList())
+            actor.close()
+        }
+
+    @Test
     fun `second stop while stop is running is coalesced without emergency kill`() =
         runBlocking {
             val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -315,6 +375,45 @@ class RuntimeCommandActorTest {
 
             releaseCurrentCleanup.complete(Unit)
             withTimeout(1_000L) { nextStarted.await() }
+            actor.close()
+        }
+
+    @Test
+    fun `normal command after preempted stuck cleanup starts after bounded drain`() =
+        runBlocking {
+            val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+            val actor = actor(scope)
+            val currentStarted = CompletableDeferred<Unit>()
+            val releaseCurrentCleanup = CompletableDeferred<Unit>()
+            val currentCleanupFinished = CompletableDeferred<Unit>()
+            val stopCompleted = CompletableDeferred<Unit>()
+            val nextStarted = CompletableDeferred<Unit>()
+
+            actor.launch(RuntimeCommandPriority.NORMAL, reason = "connect") {
+                try {
+                    currentStarted.complete(Unit)
+                    delay(5_000L)
+                } finally {
+                    withContext(NonCancellable) {
+                        releaseCurrentCleanup.await()
+                        currentCleanupFinished.complete(Unit)
+                    }
+                }
+            }
+            withTimeout(1_000L) { currentStarted.await() }
+
+            actor.launch(RuntimeCommandPriority.STOP, reason = "disconnect") {
+                stopCompleted.complete(Unit)
+            }
+            withTimeout(1_000L) { stopCompleted.await() }
+
+            actor.launch(RuntimeCommandPriority.NORMAL, reason = "restore") {
+                nextStarted.complete(Unit)
+            }
+
+            withTimeout(2_500L) { nextStarted.await() }
+            releaseCurrentCleanup.complete(Unit)
+            withTimeout(1_000L) { currentCleanupFinished.await() }
             actor.close()
         }
 

@@ -52,9 +52,10 @@ internal class TunnelValidationPolicy(
                         TunnelValidationProbeKind.VPN_IP_REFRESH,
                         TunnelValidationProbeKind.VPN_VALIDATION_ENDPOINT,
                         TunnelValidationProbeKind.VALIDATED_VPN_LITERAL_IP_ENDPOINT,
-                        TunnelValidationProbeKind.ANDROID_VALIDATED_VPN_NETWORK,
                         -> true
-                        TunnelValidationProbeKind.DNS_INDEPENDENT_LITERAL_IP -> null
+                        TunnelValidationProbeKind.ANDROID_VALIDATED_VPN_NETWORK,
+                        TunnelValidationProbeKind.DNS_INDEPENDENT_LITERAL_IP,
+                        -> null
                     }
                 },
             )

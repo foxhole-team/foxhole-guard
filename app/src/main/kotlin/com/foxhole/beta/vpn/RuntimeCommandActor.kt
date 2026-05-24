@@ -9,6 +9,7 @@ import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.selects.select
+import kotlinx.coroutines.withTimeoutOrNull
 import java.util.PriorityQueue
 import java.util.concurrent.CancellationException
 import java.util.concurrent.atomic.AtomicBoolean
@@ -17,6 +18,7 @@ import java.util.concurrent.atomic.AtomicLong
 internal enum class RuntimeCommandPriority(val value: Int) {
     NORMAL(10),
     STOP(100),
+    SWITCH(500),
     KILL(1_000),
 }
 
@@ -283,7 +285,7 @@ internal class RuntimeCommandActor(
         pending: PriorityQueue<QueuedRuntimeCommand>,
         drainingPreemptedJobs: MutableList<Job>,
     ): RuntimeActorReceiveResult {
-        if (command.priority > running.command.priority) {
+        if (command.shouldPreempt(running.command)) {
             preemptRunningCommand(
                 running = running,
                 command = command,
@@ -306,6 +308,14 @@ internal class RuntimeCommandActor(
         return RuntimeActorReceiveResult.KEEP_RUNNING
     }
 
+    private fun QueuedRuntimeCommand.shouldPreempt(running: QueuedRuntimeCommand): Boolean =
+        priority > running.priority ||
+            (
+                priority == RuntimeCommandPriority.SWITCH.value &&
+                    running.priority == RuntimeCommandPriority.SWITCH.value &&
+                    reason != running.reason
+                )
+
     private fun priorityCoalescedDetails(
         running: RunningRuntimeCommand,
         removedPendingPriority: Boolean,
@@ -322,7 +332,18 @@ internal class RuntimeCommandActor(
             return
         }
         record("runtime waiting for preempted cleanup", "count=${drainingPreemptedJobs.size}")
-        drainingPreemptedJobs.forEach { job -> job.join() }
+        val completed =
+            withTimeoutOrNull(PREEMPTED_CLEANUP_DRAIN_TIMEOUT_MS) {
+                drainingPreemptedJobs.forEach { job -> job.join() }
+                true
+            } == true
+        if (!completed) {
+            record(
+                "runtime preempted cleanup timed out",
+                "count=${drainingPreemptedJobs.count { job -> !job.isCompleted }}",
+                "timeout_ms=$PREEMPTED_CLEANUP_DRAIN_TIMEOUT_MS",
+            )
+        }
         drainingPreemptedJobs.clear()
     }
 
@@ -342,11 +363,18 @@ internal class RuntimeCommandActor(
         drainingPreemptedJobs: MutableList<Job>,
     ) {
         val removedNormalCommands = pending.removeIf { queued -> queued.priority < RuntimeCommandPriority.STOP.value }
+        val removedSupersededPriorityCommands =
+            pending.removeIf { queued ->
+                command.supersedesBufferedPriority(queued)
+            }
         val removedBufferedNormalCommands = clearBufferedNormalCommands()
+        val extra =
+            "cleared_normal=${removedNormalCommands || removedBufferedNormalCommands > 0}, " +
+                "cleared_priority=$removedSupersededPriorityCommands"
         recordCommandEvent(
             headline = "runtime priority command queued",
             command = command,
-            extra = "cleared_normal=${removedNormalCommands || removedBufferedNormalCommands > 0}",
+            extra = extra,
         )
         if (running.job.isActive) {
             running.job.cancel()
@@ -384,7 +412,7 @@ internal class RuntimeCommandActor(
         val retained = mutableListOf<QueuedRuntimeCommand>()
         while (true) {
             val queued = priorityCommands.tryReceive().getOrNull() ?: break
-            if (queued.priority <= command.priority && queued.reason == command.reason) {
+            if (command.supersedesBufferedPriority(queued)) {
                 removed = true
             } else {
                 retained += queued
@@ -400,6 +428,15 @@ internal class RuntimeCommandActor(
         }
         return removed
     }
+
+    private fun QueuedRuntimeCommand.supersedesBufferedPriority(queued: QueuedRuntimeCommand): Boolean =
+        when (priority) {
+            RuntimeCommandPriority.SWITCH.value ->
+                queued.priority <= priority &&
+                    queued.priority >= RuntimeCommandPriority.STOP.value
+            else ->
+                queued.priority <= priority && queued.reason == reason
+        }
 
     @Suppress("TooGenericExceptionCaught")
     private suspend fun runCommandSafely(command: QueuedRuntimeCommand) {
@@ -480,5 +517,6 @@ internal class RuntimeCommandActor(
         const val COMMAND_BUFFER_CAPACITY = 64
         const val PRIORITY_COMMAND_BUFFER_CAPACITY = 16
         const val MAX_PENDING_NORMAL_COMMANDS = 16
+        const val PREEMPTED_CLEANUP_DRAIN_TIMEOUT_MS = 1_500L
     }
 }

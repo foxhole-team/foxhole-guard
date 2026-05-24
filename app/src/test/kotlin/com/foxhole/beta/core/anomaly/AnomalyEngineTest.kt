@@ -138,6 +138,31 @@ class AnomalyEngineTest {
     }
 
     @Test
+    fun `attention level anomaly logs without system notification by default`() {
+        val assessment =
+            AnomalyAssessment(
+                signals = emptyList(),
+                score = 75,
+                severity = AnomalySeverity.NOTIFICATION,
+            )
+
+        assertTrue(assessment.shouldLogActivity)
+        assertFalse(assessment.shouldNotify)
+    }
+
+    @Test
+    fun `warning level anomaly can show system notification`() {
+        val assessment =
+            AnomalyAssessment(
+                signals = emptyList(),
+                score = 90,
+                severity = AnomalySeverity.HIGH,
+            )
+
+        assertTrue(assessment.shouldNotify)
+    }
+
+    @Test
     fun `baseline history is expected to exclude current anomaly window`() {
         val baselineOnlyHistory = appHistory(txBytes = 100_000)
         val contaminatedHistory = baselineOnlyHistory + appWindow(packageName = "com.cloud", txBytes = 8_000_000)

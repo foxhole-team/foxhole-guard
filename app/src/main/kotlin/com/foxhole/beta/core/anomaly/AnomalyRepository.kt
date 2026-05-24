@@ -187,6 +187,9 @@ class AnomalyRepository(
         if (assessment.signals.isEmpty()) {
             return
         }
+        if (!assessment.shouldLogActivity) {
+            return
+        }
         diagnosticsLogger.record(
             tag = ANOMALY_LOG_TAG,
             message =
@@ -197,9 +200,6 @@ class AnomalyRepository(
                     append(assessment.signals.joinToString { it.type.name.lowercase(Locale.US) })
                 },
         )
-        if (!assessment.shouldLogActivity) {
-            return
-        }
         val strongest = assessment.signals.maxByOrNull(AnomalySignal::severity) ?: return
         val packageName = strongest.evidence["package"]
         val notificationShown =
@@ -263,7 +263,7 @@ class AnomalyRepository(
     companion object {
         private const val HISTORY_LIMIT = 96
         private const val HOUR_MS = 60L * 60L * 1000L
-        private const val NOTIFICATION_COOLDOWN_MS = 30L * 60L * 1000L
+        private const val NOTIFICATION_COOLDOWN_MS = 6L * 60L * 60L * 1000L
         private const val ANOMALY_LOG_TAG = "anomaly"
     }
 }

@@ -23,8 +23,17 @@ internal fun HomeViewModel.markTorOperationInternal(kind: HomeTorOperationKind) 
         viewModelScope.launch {
             delay(HomeViewModel.TOR_OPERATION_MIN_VISIBLE_MS)
             maybeFinishTorOperation(startedAt)
-            delay(HomeViewModel.TOR_OPERATION_TIMEOUT_MS)
-            clearTorOperation()
+            delay(
+                (HomeViewModel.TOR_OPERATION_BOOTSTRAP_NOTICE_MS - HomeViewModel.TOR_OPERATION_MIN_VISIBLE_MS)
+                    .coerceAtLeast(0L),
+            )
+            markTorBootstrappingIfStillConnecting(kind, startedAt)
+            maybeFinishTorOperation(startedAt)
+            delay(
+                (HomeViewModel.TOR_OPERATION_TIMEOUT_MS - HomeViewModel.TOR_OPERATION_BOOTSTRAP_NOTICE_MS)
+                    .coerceAtLeast(0L),
+            )
+            failTorOperationIfStillActive(startedAt)
         }
 }
 
@@ -44,6 +53,28 @@ private suspend fun HomeViewModel.maybeFinishTorOperation(startedAt: Long) {
         return
     }
     maybeFinishTorOperationInternal(torOperation, container.connectionController.ipInfo.value)
+}
+
+private fun HomeViewModel.markTorBootstrappingIfStillConnecting(
+    requestedKind: HomeTorOperationKind,
+    startedAt: Long,
+) {
+    if (requestedKind != HomeTorOperationKind.CONNECTING) {
+        return
+    }
+    val current = torOperationMutable.value
+    if (current.startedAt == startedAt && current.kind == HomeTorOperationKind.CONNECTING) {
+        torOperationMutable.value = current.copy(kind = HomeTorOperationKind.BOOTSTRAPPING)
+    }
+}
+
+private suspend fun HomeViewModel.failTorOperationIfStillActive(startedAt: Long) {
+    val current = torOperationMutable.value
+    if (current.startedAt != startedAt || !current.active) {
+        return
+    }
+    emitError(getApplication<Application>().getString(R.string.privacy_route_bootstrap_timeout))
+    clearTorOperation()
 }
 
 private fun HomeTorOperationUiState.canPublishTorIp(ipInfo: IpInfo): Boolean {

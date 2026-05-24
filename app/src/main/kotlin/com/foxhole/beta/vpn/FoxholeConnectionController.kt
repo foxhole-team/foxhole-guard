@@ -282,7 +282,6 @@ class FoxholeConnectionController(
                     "connection",
                     when {
                         validation.ipInfo != null -> "active vpn restore passed vpn-bound ip validation"
-                        validation.androidValidated -> "active vpn restore accepted validated android vpn network"
                         else -> "active vpn restore passed vpn-bound endpoint validation"
                     },
                 )
@@ -328,15 +327,6 @@ class FoxholeConnectionController(
             )
             probeRestoredVpnConnectivityEndpoint(vpnNetwork)
             RestoredVpnValidation(ipInfo = null)
-        }.recoverCatching { probeError ->
-            if (!isRestoredVpnNetworkValidatedByAndroid(vpnNetwork)) {
-                throw probeError
-            }
-            diagnosticsLogger.record(
-                "connection",
-                "active vpn restore accepted android validated vpn network after app probe failed: ${probeError.message.orEmpty()}",
-            )
-            RestoredVpnValidation(ipInfo = null, androidValidated = true)
         }
 
     private suspend fun refreshRestoredVpnIpInfo(vpnNetwork: Network): IpInfo {
@@ -537,11 +527,6 @@ class FoxholeConnectionController(
             connectivityManager.getNetworkCapabilities(network)?.isFoxholeVpnNetwork(context) == true
         }
 
-    private fun isRestoredVpnNetworkValidatedByAndroid(vpnNetwork: Network): Boolean =
-        connectivityManager
-            .getNetworkCapabilities(vpnNetwork)
-            ?.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED) == true
-
     private fun currentUpstreamNetwork(): Network? =
         ConnectivityNetworkRegistry.snapshot(context).firstOrNull { network ->
             connectivityManager.getNetworkCapabilities(network)?.let(::isUpstreamNetwork) == true
@@ -557,7 +542,6 @@ class FoxholeConnectionController(
 
 private data class RestoredVpnValidation(
     val ipInfo: IpInfo?,
-    val androidValidated: Boolean = false,
 )
 
 private fun ConnectionSnapshot.isStaleTunnelSnapshotWithoutVpn(vpnNetwork: Network?): Boolean =

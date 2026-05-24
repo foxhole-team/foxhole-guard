@@ -17,7 +17,7 @@ data class AnomalyAssessment(
     val severity: AnomalySeverity,
 ) {
     val shouldLogActivity: Boolean get() = severity != AnomalySeverity.SILENT
-    val shouldNotify: Boolean get() = severity == AnomalySeverity.NOTIFICATION || severity == AnomalySeverity.HIGH
+    val shouldNotify: Boolean get() = severity == AnomalySeverity.HIGH
 }
 
 data class AnomalyHistory(
@@ -288,7 +288,7 @@ class DnsBlockRatioSpikeDetector : AnomalyDetector {
             AnomalySignal(
                 type = AnomalyType.DNS_BLOCK_RATIO_SPIKE,
                 severity = severity.coerceIn(0.0, 1.0),
-                reason = "DNS blocking ratio increased compared with baseline",
+                reason = "DNS filter blocked more requests than usual",
                 evidence =
                     mapOf(
                         "blocked_ratio" to "%.2f".format(Locale.US, currentRatio),
@@ -321,7 +321,7 @@ class ReconnectStormDetector : AnomalyDetector {
             AnomalySignal(
                 type = AnomalyType.RECONNECT_STORM,
                 severity = severity,
-                reason = "VPN reconnected unusually often in a short window",
+                reason = "VPN reconnected several times in a short period",
                 evidence =
                     mapOf(
                         "reconnects" to context.current.reconnects.toString(),

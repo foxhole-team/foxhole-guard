@@ -49,6 +49,7 @@ data class AutoConnectUiState(
 enum class HomeTorOperationKind {
     NONE,
     CONNECTING,
+    BOOTSTRAPPING,
     CHANGING_LOCATION,
 }
 

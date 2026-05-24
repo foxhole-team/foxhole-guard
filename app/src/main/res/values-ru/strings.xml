@@ -10,6 +10,7 @@
     <string name="home_status_analysis">Анализ</string>
     <string name="home_status_tor_changing_location">Смена локации в сети Tor</string>
     <string name="home_status_tor_connecting">Подключение к сети Tor</string>
+    <string name="home_status_tor_bootstrapping">Подготовка сети Tor</string>
     <string name="home_network_title">Сеть</string>
     <string name="home_traffic_title">Трафик</string>
     <string name="home_session_traffic_title">Текущая сессия</string>
@@ -515,10 +516,10 @@
     <string name="anomaly_reason_dns_blocks">DNS-фильтр заблокировал %1$s и разрешил %2$s запросов; доля блокировок %3$s.</string>
     <string name="anomaly_reason_reconnects">VPN переподключился %1$s раз в одном окне статистики.</string>
     <string name="anomaly_reason_latency">Задержка туннеля сдвинулась до %1$s мс; оценка отклонения %2$s.</string>
-    <string name="anomaly_reason_privacy_route">Трафик похож на privacy route, хотя privacy route выключен: доля %1$s.</string>
-    <string name="anomaly_notification_red_flag_title">Красный флаг: аномалия трафика</string>
-    <string name="anomaly_notification_orange_flag_title">Оранжевый флаг: аномалия трафика</string>
-    <string name="anomaly_notification_yellow_flag_title">Желтый флаг: аномалия трафика</string>
+    <string name="anomaly_reason_privacy_route">Маршрут трафика изменился, хотя privacy route выключен: доля %1$s.</string>
+    <string name="anomaly_notification_red_flag_title">Предупреждение: необычный трафик</string>
+    <string name="anomaly_notification_orange_flag_title">Внимание: трафик изменился</string>
+    <string name="anomaly_notification_yellow_flag_title">Информация: изменение трафика</string>
     <string name="statistics_errors_percent">Ошибки: %1$s</string>
     <string name="statistics_error_rate">Доля ошибок</string>
     <string name="statistics_success_rate">Доля успеха</string>
@@ -964,6 +965,8 @@
     <string name="privacy_route_modal_in_progress">В процессе</string>
     <string name="privacy_route_modal_log_changing_ip">Запрашиваем новый выходной маршрут Tor через горячую перезагрузку sing-box. VPN-интерфейс остается активным, IP Tor обновится после проверки.</string>
     <string name="privacy_route_modal_log_connecting">Готовим Tor исходящий маршрут и применяем маршрут через sing-box. VPN-интерфейс не закрывается; после запуска Foxhole обновит IP Tor.</string>
+    <string name="privacy_route_modal_log_bootstrapping">Tor всё ещё готовит маршрут. В ограниченных сетях это может занять больше времени; Foxhole продолжит проверять подключение.</string>
+    <string name="privacy_route_bootstrap_timeout">Tor не завершил подготовку маршрута вовремя. Повторите попытку или выберите другой маршрут.</string>
     <string name="privacy_route_modal_log_tor_only_connected">Только Tor-туннель активен. Трафик устройства идет через локальный Tor исходящий маршрут.</string>
     <string name="privacy_route_modal_log_connected">Маршрут Tor активен внутри текущей службы VPN. Выбранный TCP-трафик идет через локальный Tor исходящий маршрут.</string>
     <string name="privacy_route_connected_banner">Tor подключен: %1$s, %2$s</string>

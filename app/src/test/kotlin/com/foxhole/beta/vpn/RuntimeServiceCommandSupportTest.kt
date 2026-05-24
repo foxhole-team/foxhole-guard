@@ -9,15 +9,16 @@ import org.junit.Test
 
 class RuntimeServiceCommandSupportTest {
     @Test
-    fun `disconnect command is dispatched as priority teardown`() {
+    fun `user runtime transitions and teardown commands are priority commands`() {
+        assertTrue(isPriorityRuntimeServiceCommand(FoxholeConnectionServiceContract.ACTION_CONNECT))
         assertTrue(isPriorityRuntimeServiceCommand(FoxholeConnectionServiceContract.ACTION_DISCONNECT))
         assertTrue(isPriorityRuntimeServiceCommand(FoxholeConnectionServiceContract.ACTION_KILL))
         assertTrue(isPriorityRuntimeServiceCommand(FoxholeConnectionServiceContract.ACTION_KILL_TOR))
+        assertTrue(isPriorityRuntimeServiceCommand(FoxholeConnectionServiceContract.ACTION_START_LOCAL_GUARD))
     }
 
     @Test
-    fun `connect reload and restore commands stay serialized`() {
-        assertFalse(isPriorityRuntimeServiceCommand(FoxholeConnectionServiceContract.ACTION_CONNECT))
+    fun `background maintenance commands stay serialized`() {
         assertFalse(isPriorityRuntimeServiceCommand(FoxholeConnectionServiceContract.ACTION_RELOAD))
         assertFalse(isPriorityRuntimeServiceCommand(FoxholeConnectionServiceContract.ACTION_RESTORE))
         assertFalse(isPriorityRuntimeServiceCommand(null))

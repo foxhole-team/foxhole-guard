@@ -67,7 +67,7 @@ internal class FoxholeDataGraphModule(
     val secretStore: EncryptedProfileSecretStore by lazy { EncryptedProfileSecretStore(appContext, core.json) }
     val importParser: ProfileImportParser by lazy { ProfileImportParser(core.json) }
     val routingRepository: RoutingRepository by lazy { RoutingRepository(profileDatabase, core.httpClient, core.json) }
-    val torRuntimeInstaller: TorRuntimeInstaller by lazy { TorRuntimeInstaller(appContext) }
+    val torRuntimeInstaller: TorRuntimeInstaller by lazy { TorRuntimeInstaller(appContext, core.diagnosticsLogger) }
     val dnsFilterAssetInstaller: DnsFilterAssetInstaller by lazy { DnsFilterAssetInstaller(appContext, core.json) }
     val dnsFilterUpdateClient: DnsFilterUpdateClient by lazy { DnsFilterUpdateClient(core.httpClient, core.json) }
     val dnsFilterUpdateRepository: DnsFilterUpdateRepository by lazy {

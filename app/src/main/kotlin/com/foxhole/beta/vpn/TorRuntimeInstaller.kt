@@ -2,6 +2,7 @@ package com.foxhole.beta.vpn
 
 import android.content.Context
 import android.os.Build
+import com.foxhole.beta.core.diagnostics.DiagnosticsLogger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -38,6 +39,7 @@ class TorRuntimeUnavailableException(message: String) : IllegalStateException(me
 
 class TorRuntimeInstaller(
     context: Context,
+    private val diagnosticsLogger: DiagnosticsLogger? = null,
 ) {
     private val appContext = context.applicationContext
     private val installMutex = Mutex()
@@ -51,7 +53,13 @@ class TorRuntimeInstaller(
                 val assetAbi =
                     Build.SUPPORTED_ABIS
                         .firstOrNull { abi -> torExecutableAssetName("tor/$abi") != null }
-                        ?: throw TorRuntimeUnavailableException("Tor Expert Bundle asset is missing for this device ABI")
+                        ?: run {
+                            recordTorPreflight(
+                                "asset_abi=missing",
+                                "supported_abis=${Build.SUPPORTED_ABIS.joinToString(",")}",
+                            )
+                            throw TorRuntimeUnavailableException("Tor Expert Bundle asset is missing for this device ABI")
+                        }
                 val assetRoot = "tor/$assetAbi"
                 val targetRoot = File(appContext.filesDir, "tor/$assetAbi")
                 val assetVersion = readAssetText("$assetRoot/.version").orEmpty()
@@ -67,14 +75,40 @@ class TorRuntimeInstaller(
                 }
                 val executable =
                     nativeTorExecutable()
-                        ?: throw TorRuntimeUnavailableException("Tor native executable is missing for this device ABI")
+                        ?: run {
+                            recordTorPreflight(
+                                "asset_abi=$assetAbi",
+                                "asset_version=${assetVersion.ifBlank { "unknown" }}",
+                                "native_tor=false",
+                            )
+                            throw TorRuntimeUnavailableException("Tor native executable is missing for this device ABI")
+                        }
                 if (!executable.isFile || !executable.ensureExecutable()) {
+                    recordTorPreflight(
+                        "asset_abi=$assetAbi",
+                        "asset_version=${assetVersion.ifBlank { "unknown" }}",
+                        "native_tor=true",
+                        "native_tor_executable=false",
+                    )
                     throw TorRuntimeUnavailableException("Tor executable could not be prepared")
                 }
                 val dataDirectory = File(appContext.filesDir, "tor-data/$assetAbi").apply { mkdirs() }
                 val geoIpFile = copyTorDataFile(targetRoot, dataDirectory, "geoip")
                 val geoIpv6File = copyTorDataFile(targetRoot, dataDirectory, "geoip6")
                 val torrcDefaultsFile = writeRuntimeTorrcDefaults(targetRoot, dataDirectory)
+                recordTorPreflight(
+                    "asset_abi=$assetAbi",
+                    "asset_version=${assetVersion.ifBlank { "unknown" }}",
+                    "native_tor=true",
+                    "native_tor_executable=${executable.canExecute()}",
+                    "lyrebird_native=${nativePluggableTransportExists("lyrebird")}",
+                    "conjure_native=${nativePluggableTransportExists("conjure-client")}",
+                    "torrc_defaults=${torrcDefaultsFile?.isFile == true}",
+                    "bridge_count=${torrcDefaultsFile.bridgeCount()}",
+                    "geoip=${geoIpFile?.isFile == true}",
+                    "geoip6=${geoIpv6File?.isFile == true}",
+                    "data_dir_writable=${dataDirectory.canWrite()}",
+                )
                 TorRuntimePaths(
                     executablePath = executable.absolutePath,
                     dataDirectory = dataDirectory.absolutePath,
@@ -176,6 +210,11 @@ class TorRuntimeInstaller(
         return File("")
     }
 
+    private fun nativePluggableTransportExists(name: String): Boolean {
+        val nativeName = TOR_NATIVE_PLUGGABLE_TRANSPORT_NAMES[name].orEmpty()
+        return nativeName.isNotBlank() && File(appContext.applicationInfo.nativeLibraryDir, nativeName).isFile
+    }
+
     @Suppress("ReturnCount")
     private fun defaultBridgeTorrcLines(
         targetRoot: File,
@@ -271,6 +310,21 @@ class TorRuntimeInstaller(
             return
         }
         writeText(content)
+    }
+
+    private fun File?.bridgeCount(): Int =
+        this
+            ?.takeIf(File::isFile)
+            ?.readLines()
+            ?.count { line -> line.startsWith("Bridge ") }
+            ?: 0
+
+    private fun recordTorPreflight(vararg details: String) {
+        diagnosticsLogger?.recordStructured(
+            tag = "tor",
+            headline = "tor runtime preflight",
+            *details,
+        )
     }
 
     private companion object {

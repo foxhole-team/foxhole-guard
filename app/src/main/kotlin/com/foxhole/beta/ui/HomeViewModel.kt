@@ -1561,7 +1561,8 @@ class HomeViewModel(
         internal const val PROFILE_RECONNECT_PROMPT_WINDOW_MS = 13_000L
         internal const val RUNTIME_RELOAD_PENDING_TIMEOUT_MS = 1_500L
         internal const val TOR_OPERATION_MIN_VISIBLE_MS = 3_500L
-        internal const val TOR_OPERATION_TIMEOUT_MS = 20_000L
+        internal const val TOR_OPERATION_BOOTSTRAP_NOTICE_MS = 20_000L
+        internal const val TOR_OPERATION_TIMEOUT_MS = 240_000L
         internal const val TOR_IP_REFRESH_ATTEMPTS = 6
         internal const val TOR_IP_REFRESH_RETRY_DELAY_MS = 1_000L
         internal const val AUTO_CONNECT_CONNECTION_TIMEOUT_MS =
