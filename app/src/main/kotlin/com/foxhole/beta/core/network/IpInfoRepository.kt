@@ -164,6 +164,7 @@ class IpInfoRepository(
         withContext(Dispatchers.IO) {
             val strategy = resolveFetchStrategy(endpoint, callTimeoutMs, mode)
             var lastFailure: Throwable? = null
+            var bestFullCandidate: IpInfo? = null
             strategy.endpointCandidates.forEach { candidate ->
                 currentCoroutineContext().ensureActive()
                 diagnosticLog(
@@ -185,13 +186,26 @@ class IpInfoRepository(
                         }
                     }
                 if (result.isSuccess) {
-                    diagnosticLog("fetch candidate succeeded host=${candidate.ipInfoHostLabel()}")
-                    return@withContext result.getOrThrow()
+                    val info = result.getOrThrow()
+                    bestFullCandidate = selectBetterFullIpInfoCandidate(bestFullCandidate, info)
+                    if (shouldStopIpInfoCandidateScan(mode, info)) {
+                        diagnosticLog("fetch candidate succeeded host=${candidate.ipInfoHostLabel()}")
+                        return@withContext info
+                    }
+                    diagnosticLog(
+                        "fetch candidate incomplete host=${candidate.ipInfoHostLabel()} quality=${info.fullIpInfoQualityScore()}",
+                    )
                 }
                 lastFailure = result.exceptionOrNull()
-                diagnosticLog(
-                    "fetch candidate failed host=${candidate.ipInfoHostLabel()} error=${lastFailure?.javaClass?.simpleName.orEmpty()}: ${lastFailure?.message.orEmpty()}",
-                )
+                if (lastFailure != null) {
+                    diagnosticLog(
+                        "fetch candidate failed host=${candidate.ipInfoHostLabel()} error=${lastFailure?.javaClass?.simpleName.orEmpty()}: ${lastFailure?.message.orEmpty()}",
+                    )
+                }
+            }
+            bestFullCandidate?.let { candidate ->
+                diagnosticLog("fetch candidate best-effort quality=${candidate.fullIpInfoQualityScore()}")
+                return@withContext candidate
             }
             throw lastFailure ?: IllegalStateException("ip info request failed")
         }
@@ -859,6 +873,32 @@ internal fun mergeBestEffortIpInfo(
         ipv4 = ipv4.getOrNull(),
         ipv6 = ipv6.getOrNull(),
     )
+
+internal fun shouldStopIpInfoCandidateScan(
+    mode: IpInfoFetchMode,
+    info: IpInfo,
+): Boolean =
+    mode != IpInfoFetchMode.FULL || info.hasFullIpInfoLocation()
+
+internal fun selectBetterFullIpInfoCandidate(
+    current: IpInfo?,
+    candidate: IpInfo,
+): IpInfo =
+    current?.takeIf { it.fullIpInfoQualityScore() >= candidate.fullIpInfoQualityScore() } ?: candidate
+
+private fun IpInfo.hasFullIpInfoLocation(): Boolean =
+    (countryName?.isNotBlank() == true || countryCode?.isNotBlank() == true) &&
+        city?.isNotBlank() == true
+
+internal fun IpInfo.fullIpInfoQualityScore(): Int =
+    listOf(
+        countryName?.takeIf(String::isNotBlank) ?: countryCode?.takeIf(String::isNotBlank),
+        city?.takeIf(String::isNotBlank),
+        isp?.takeIf(String::isNotBlank),
+        ipv4?.takeIf(String::isNotBlank),
+        ipv6?.takeIf(String::isNotBlank),
+        ip.takeIf(String::isNotBlank),
+    ).count { it != null }
 
 private fun Map<String, JsonElement>.string(key: String): String? = this[key]?.jsonPrimitive?.contentOrNull
 

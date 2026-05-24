@@ -2,6 +2,7 @@ package com.foxhole.beta.ui
 
 import com.foxhole.beta.core.model.ConnectionSnapshot
 import com.foxhole.beta.core.model.ConnectionState
+import com.foxhole.beta.core.model.IpInfo
 import com.foxhole.beta.core.model.TrafficMode
 import com.foxhole.beta.core.network.IpInfoFetchMode
 import com.foxhole.beta.vpn.FoxholeVpnService
@@ -57,6 +58,15 @@ class HomeIpRefreshPolicyTest {
     }
 
     @Test
+    fun `network change refresh starts immediately to avoid skeleton blink`() {
+        assertEquals(0L, connectedIpRefreshStartDelayMs(IpInfoRefreshReason.NETWORK_CHANGE))
+        assertEquals(
+            HomeViewModel.CONNECTED_IP_REFRESH_DELAY_MS,
+            connectedIpRefreshStartDelayMs(IpInfoRefreshReason.POST_CONNECT),
+        )
+    }
+
+    @Test
     fun `post connect refresh retries while runtime proxy settles`() {
         assertEquals(
             HomeViewModel.CONNECTED_IP_REFRESH_ATTEMPTS,
@@ -91,7 +101,89 @@ class HomeIpRefreshPolicyTest {
         assertEquals(IpInfoFetchMode.ENTRY_QUICK, ipInfoFetchModeForRefreshReason(IpInfoRefreshReason.POST_UPDATE))
         assertEquals(IpInfoFetchMode.ENTRY_QUICK, ipInfoFetchModeForRefreshReason(IpInfoRefreshReason.FOREGROUND))
         assertEquals(IpInfoFetchMode.ENTRY_QUICK, ipInfoFetchModeForRefreshReason(IpInfoRefreshReason.RESTORED_VPN))
+        assertEquals(IpInfoFetchMode.ENTRY_QUICK, ipInfoFetchModeForRefreshReason(IpInfoRefreshReason.NETWORK_CHANGE))
         assertEquals(IpInfoFetchMode.ENTRY_QUICK, ipInfoFetchModeForRefreshReason(IpInfoRefreshReason.TOR_ROUTE))
+    }
+
+    @Test
+    fun `dashboard refresh upgrades incomplete geo data to full fetch`() {
+        val snapshot = ConnectionSnapshot(state = ConnectionState.IDLE)
+        val ipOnly =
+            IpInfo(
+                ip = "203.0.113.7",
+                ipv4 = "203.0.113.7",
+                countryCode = null,
+                countryName = null,
+                city = null,
+                isp = null,
+                fetchedAt = 1_000L,
+            )
+
+        assertTrue(
+            shouldUseFullDashboardIpRefresh(
+                reason = IpInfoRefreshReason.FOREGROUND,
+                snapshot = snapshot,
+                currentIpInfo = ipOnly,
+            ),
+        )
+        assertTrue(
+            shouldShowDashboardIpRefreshLoading(
+                reason = IpInfoRefreshReason.FOREGROUND,
+                snapshot = snapshot,
+                currentIpInfo = ipOnly,
+            ),
+        )
+    }
+
+    @Test
+    fun `post connect refresh upgrades stale previous route ip to full fetch`() {
+        val snapshot =
+            ConnectionSnapshot(
+                state = ConnectionState.CONNECTED,
+                trafficMode = TrafficMode.TUNNEL,
+                profileId = 7L,
+                lastChangeAt = 2_000L,
+            )
+        val previousRouteIp =
+            IpInfo(
+                ip = "203.0.113.7",
+                ipv4 = "203.0.113.7",
+                countryCode = "US",
+                countryName = "United States",
+                city = "New York",
+                isp = "Example ISP",
+                fetchedAt = 1_000L,
+            )
+        val freshRouteIp = previousRouteIp.copy(fetchedAt = 2_000L)
+
+        assertTrue(
+            shouldUseFullDashboardIpRefresh(
+                reason = IpInfoRefreshReason.POST_CONNECT,
+                snapshot = snapshot,
+                currentIpInfo = previousRouteIp,
+            ),
+        )
+        assertTrue(
+            shouldShowDashboardIpRefreshLoading(
+                reason = IpInfoRefreshReason.POST_CONNECT,
+                snapshot = snapshot,
+                currentIpInfo = previousRouteIp,
+            ),
+        )
+        assertFalse(
+            shouldUseFullDashboardIpRefresh(
+                reason = IpInfoRefreshReason.POST_CONNECT,
+                snapshot = snapshot,
+                currentIpInfo = freshRouteIp,
+            ),
+        )
+        assertFalse(
+            shouldShowDashboardIpRefreshLoading(
+                reason = IpInfoRefreshReason.POST_CONNECT,
+                snapshot = snapshot,
+                currentIpInfo = freshRouteIp,
+            ),
+        )
     }
 
     @Test

@@ -675,12 +675,32 @@ class HomeViewModel(
         }
         viewModelScope.launch {
             var previousState: ConnectionState? = null
+            var previousUpstreamNetworkRevision: Long? = null
+            var pendingUpstreamNetworkRevision: Long? = null
             container.connectionController.snapshot.collect { snapshot ->
                 val currentState = snapshot.state
+                val currentUpstreamNetworkRevision = snapshot.upstreamNetworkRevision
+                val previousRevision = previousUpstreamNetworkRevision
+                val upstreamNetworkRevisionAdvanced =
+                    previousRevision != null &&
+                        currentUpstreamNetworkRevision > previousRevision
+                if (upstreamNetworkRevisionAdvanced && currentState != ConnectionState.CONNECTED) {
+                    pendingUpstreamNetworkRevision = currentUpstreamNetworkRevision
+                }
                 val shouldRefreshConnectedIp =
                     shouldAutoRefreshIpAfterConnect(
                         previousState = previousState,
                         currentState = currentState,
+                    )
+                val shouldRefreshNetworkChangedIp =
+                    shouldAutoRefreshIpAfterUpstreamNetworkChange(
+                        connectionState = currentState,
+                        previousRevision = previousRevision,
+                        currentRevision = currentUpstreamNetworkRevision,
+                    ) || shouldAutoRefreshIpAfterPendingUpstreamNetworkChange(
+                        connectionState = currentState,
+                        pendingRevision = pendingUpstreamNetworkRevision,
+                        currentRevision = currentUpstreamNetworkRevision,
                     )
                 val shouldRefreshIdleIp =
                     shouldAutoRefreshIpAfterDisconnect(
@@ -688,27 +708,37 @@ class HomeViewModel(
                         currentState = currentState,
                     )
                 previousState = currentState
+                previousUpstreamNetworkRevision = currentUpstreamNetworkRevision
                 if (currentState !in ACTIVE_CONNECTION_STATES) {
                     invalidateIpInfoRefreshes()
                     clearRuntimeReloadPending()
                     clearRuntimeReconnectRequired()
                     clearTorOperation()
+                    pendingUpstreamNetworkRevision = null
                     postConnectLatencyRefreshJob?.cancel()
                     postConnectLatencyRefreshJob = null
                     clearProfileLatencyRefresh()
                     clearProtocolLatencyState()
                     setDashboardConnectionMetricsLoading(false)
                 }
-                if (shouldRefreshConnectedIp) {
+                if (shouldRefreshNetworkChangedIp && !autoConnectUiStateMutable.value.running) {
+                    pendingUpstreamNetworkRevision = null
+                    scheduleConnectedIpRefresh(
+                        reason = IpInfoRefreshReason.NETWORK_CHANGE,
+                        clearExistingIp = false,
+                        showLoading = true,
+                        minimumLoadingDurationMs = AUTO_IP_REFRESH_MIN_LOADING_MS,
+                    )
+                } else if (shouldRefreshConnectedIp) {
                     scheduleConnectedIpRefresh()
                 } else if (shouldRefreshIdleIp && !autoConnectUiStateMutable.value.running) {
-                    val showIdleLoading = container.connectionController.ipInfo.value == null
+                    val showIdleLoading = true
                     startIpInfoRefresh(
                         reportFailures = false,
                         showLoading = showIdleLoading,
                         clearExistingIp = false,
-                        fetchMode = if (showIdleLoading) IpInfoFetchMode.FULL else IpInfoFetchMode.ENTRY_QUICK,
-                        minimumLoadingDurationMs = if (showIdleLoading) AUTO_IP_REFRESH_MIN_LOADING_MS else 0L,
+                        fetchMode = IpInfoFetchMode.FULL,
+                        minimumLoadingDurationMs = AUTO_IP_REFRESH_MIN_LOADING_MS,
                     )
                 }
             }
@@ -761,7 +791,8 @@ class HomeViewModel(
         if (runtimeState == ConnectionState.CONNECTED) {
             scheduleForegroundDashboardRefreshIfStale()
         } else {
-            val showIdleLoading = uiState.value.ipInfo == null
+            val currentIpInfo = uiState.value.ipInfo
+            val showIdleLoading = currentIpInfo == null || !currentIpInfo.hasDashboardLocationDetails()
             startIpInfoRefresh(
                 reportFailures = false,
                 showLoading = showIdleLoading,
@@ -1458,7 +1489,14 @@ class HomeViewModel(
     internal fun scheduleConnectedIpRefresh(
         reason: IpInfoRefreshReason = IpInfoRefreshReason.POST_CONNECT,
         clearExistingIp: Boolean = false,
-    ) = scheduleConnectedIpRefreshInternal(reason = reason, clearExistingIp = clearExistingIp)
+        showLoading: Boolean = false,
+        minimumLoadingDurationMs: Long = 0L,
+    ) = scheduleConnectedIpRefreshInternal(
+        reason = reason,
+        clearExistingIp = clearExistingIp,
+        showLoading = showLoading,
+        minimumLoadingDurationMs = minimumLoadingDurationMs,
+    )
 
     internal fun scheduleDashboardRefreshAfterRuntimeReload() {
         if (container.connectionController.snapshot.value.state != ConnectionState.CONNECTED) {

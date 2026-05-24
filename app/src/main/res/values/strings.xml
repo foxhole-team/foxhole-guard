@@ -85,7 +85,7 @@
     <string name="home_network_city_label">City:</string>
     <string name="home_network_ip_label">IP:</string>
     <string name="home_network_provider_label">Provider:</string>
-    <string name="home_network_server_ping_label">Server ping:</string>
+    <string name="home_network_server_ping_label">Tunnel ping:</string>
     <string name="home_network_dns_label">DNS:</string>
     <string name="home_network_transport_type_label">Type:</string>
     <string name="home_network_connect_time_label">Time:</string>
@@ -243,7 +243,7 @@
     <string name="auto_connect_probe_timeout">Protocol test timed out</string>
     <string name="auto_connect_ip_unavailable">Connection was established, but IP validation did not finish in time</string>
     <string name="auto_connect_failed">No working protocol found</string>
-    <string name="auto_connect_success">Selected: %1$s. Latency: %2$d ms</string>
+    <string name="auto_connect_success_text">Selected: %1$s. Latency: %2$s</string>
     <string name="auto_connect_success_unavailable">Selected: %1$s. Connected</string>
     <string name="smart_profile_tag">Smart</string>
     <string name="v2raytun_profile_tag">v2raytun</string>
@@ -286,6 +286,8 @@
     <string name="latency_quality_failed">Down</string>
     <string name="latency_pill_label">Latency</string>
     <string name="latency_pill_value">%1$d ms</string>
+    <string name="latency_pill_value_over_max">%1$d+ ms</string>
+    <string name="latency_unit_ms">ms</string>
     <string name="latency_pill_down">down</string>
     <string name="latency_pill_unavailable">unavailable</string>
     <string name="reconnect_required">Reconnect required</string>

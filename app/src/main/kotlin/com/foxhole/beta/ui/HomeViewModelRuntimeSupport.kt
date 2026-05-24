@@ -219,6 +219,7 @@ internal fun ipInfoRefreshAttemptsForReason(reason: IpInfoRefreshReason): Int =
     when (reason) {
         IpInfoRefreshReason.POST_CONNECT,
         IpInfoRefreshReason.RESTORED_VPN,
+        IpInfoRefreshReason.NETWORK_CHANGE,
         -> HomeViewModel.CONNECTED_IP_REFRESH_ATTEMPTS
         IpInfoRefreshReason.TOR_ROUTE -> HomeViewModel.TOR_IP_REFRESH_ATTEMPTS
         IpInfoRefreshReason.MANUAL,
@@ -231,6 +232,7 @@ internal fun ipInfoRefreshRetryDelayMsForReason(reason: IpInfoRefreshReason): Lo
     when (reason) {
         IpInfoRefreshReason.POST_CONNECT,
         IpInfoRefreshReason.RESTORED_VPN,
+        IpInfoRefreshReason.NETWORK_CHANGE,
         -> HomeViewModel.CONNECTED_IP_REFRESH_RETRY_DELAY_MS
         IpInfoRefreshReason.TOR_ROUTE -> HomeViewModel.TOR_IP_REFRESH_RETRY_DELAY_MS
         IpInfoRefreshReason.MANUAL,
@@ -696,11 +698,13 @@ internal fun HomeViewModel.invalidateIpInfoRefreshesInternal(): Long {
 internal fun HomeViewModel.scheduleConnectedIpRefreshInternal(
     reason: IpInfoRefreshReason = IpInfoRefreshReason.POST_CONNECT,
     clearExistingIp: Boolean = false,
+    showLoading: Boolean = false,
+    minimumLoadingDurationMs: Long = 0L,
 ) {
     connectedIpRefreshJob?.cancel()
     connectedIpRefreshJob =
         viewModelScope.launch {
-            delay(HomeViewModel.CONNECTED_IP_REFRESH_DELAY_MS)
+            connectedIpRefreshStartDelayMs(reason).takeIf { it > 0L }?.let { delay(it) }
             if (container.connectionController.snapshot.value.state != ConnectionState.CONNECTED) {
                 return@launch
             }
@@ -712,18 +716,39 @@ internal fun HomeViewModel.scheduleConnectedIpRefreshInternal(
                 invalidateIpInfoRefreshes()
             }
             pendingPostConnectIpRefresh = false
+            val snapshot = container.connectionController.snapshot.value
+            val currentIpInfo = container.connectionController.ipInfo.value
             val fetchMode =
-                if (container.connectionController.ipInfo.value == null) {
+                if (
+                    shouldUseFullDashboardIpRefresh(
+                        reason = reason,
+                        snapshot = snapshot,
+                        currentIpInfo = currentIpInfo,
+                    )
+                ) {
                     IpInfoFetchMode.FULL
                 } else {
                     ipInfoFetchModeForRefreshReason(reason)
                 }
+            val effectiveShowLoading =
+                showLoading ||
+                    shouldShowDashboardIpRefreshLoading(
+                        reason = reason,
+                        snapshot = snapshot,
+                        currentIpInfo = currentIpInfo,
+                    )
+            val effectiveMinimumLoadingDurationMs =
+                if (effectiveShowLoading && minimumLoadingDurationMs <= 0L) {
+                    HomeViewModel.AUTO_IP_REFRESH_MIN_LOADING_MS
+                } else {
+                    minimumLoadingDurationMs
+                }
             startIpInfoRefresh(
                 reportFailures = false,
-                showLoading = false,
+                showLoading = effectiveShowLoading,
                 clearExistingIp = clearExistingIp,
                 fetchMode = fetchMode,
-                minimumLoadingDurationMs = 0L,
+                minimumLoadingDurationMs = effectiveMinimumLoadingDurationMs,
                 reason = reason,
                 onPublished = {
                     schedulePostConnectLatencyRefreshAfterIp(reason)
@@ -731,6 +756,12 @@ internal fun HomeViewModel.scheduleConnectedIpRefreshInternal(
             )
         }
 }
+
+internal fun connectedIpRefreshStartDelayMs(reason: IpInfoRefreshReason): Long =
+    when (reason) {
+        IpInfoRefreshReason.NETWORK_CHANGE -> 0L
+        else -> HomeViewModel.CONNECTED_IP_REFRESH_DELAY_MS
+    }
 
 private fun HomeViewModel.schedulePostConnectLatencyRefreshAfterIp(reason: IpInfoRefreshReason) {
     if (reason != IpInfoRefreshReason.POST_CONNECT) {

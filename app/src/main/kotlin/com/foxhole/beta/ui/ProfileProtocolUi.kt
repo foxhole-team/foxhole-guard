@@ -97,6 +97,14 @@ private val CompactProtocolSelectorMaxWidth = 300.dp
 private val RegularProtocolSelectorMinWidth = 166.dp
 private val RegularProtocolSelectorMaxWidth = 320.dp
 
+@Composable
+internal fun latencyPillValueText(latencyMs: Long): String =
+    if (isLatencyOverDisplayMax(latencyMs)) {
+        stringResource(R.string.latency_pill_value_over_max, MAX_UI_LATENCY_MS)
+    } else {
+        stringResource(R.string.latency_pill_value, boundedDisplayLatencyMs(latencyMs))
+    }
+
 @Suppress("LongParameterList", "CyclomaticComplexMethod")
 @Composable
 internal fun ProtocolMetadataRow(
@@ -670,7 +678,7 @@ internal fun ProtocolLatencyPill(
         when {
             showLabel && latencyMs != null && !isDown && !isUnavailable -> {
                 val label = stringResource(R.string.latency_pill_label)
-                val value = stringResource(R.string.latency_pill_value, boundedDisplayLatencyMs(latencyMs))
+                val value = latencyPillValueText(latencyMs)
                 buildAnnotatedString {
                     pushStyle(
                         SpanStyle(
@@ -685,7 +693,7 @@ internal fun ProtocolLatencyPill(
             }
             isDown -> AnnotatedString(stringResource(R.string.latency_pill_down))
             isUnavailable -> AnnotatedString(stringResource(R.string.latency_pill_unavailable))
-            latencyMs != null -> AnnotatedString(stringResource(R.string.latency_pill_value, boundedDisplayLatencyMs(latencyMs)))
+            latencyMs != null -> AnnotatedString(latencyPillValueText(latencyMs))
             else -> AnnotatedString(stringResource(R.string.latency_pill_unavailable))
         }
     Surface(

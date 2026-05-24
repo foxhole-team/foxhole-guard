@@ -670,6 +670,7 @@ data class ConnectionSnapshot(
     val message: String? = null,
     val reasonCode: AutoConnectReasonCode? = null,
     val isSmartStartConnection: Boolean = false,
+    val upstreamNetworkRevision: Long = 0L,
     val lastChangeAt: Long = System.currentTimeMillis(),
 )
 

@@ -145,6 +145,54 @@ class IpInfoRepositoryTest {
         assertNull(parsed.isp)
     }
 
+    @Test
+    fun `full fetch keeps scanning after incomplete geo candidate`() {
+        val ipOnly =
+            IpInfo(
+                ip = "84.17.54.10",
+                ipv4 = "84.17.54.10",
+                countryCode = null,
+                countryName = null,
+                city = null,
+                isp = null,
+                fetchedAt = 1L,
+            )
+        val countryOnly = ipOnly.copy(countryCode = "NL")
+        val fullGeo = countryOnly.copy(countryName = "Netherlands", city = "Amsterdam")
+
+        assertFalse(shouldStopIpInfoCandidateScan(IpInfoFetchMode.FULL, ipOnly))
+        assertFalse(shouldStopIpInfoCandidateScan(IpInfoFetchMode.FULL, countryOnly))
+        assertTrue(shouldStopIpInfoCandidateScan(IpInfoFetchMode.FULL, fullGeo))
+        assertTrue(shouldStopIpInfoCandidateScan(IpInfoFetchMode.ENTRY_QUICK, ipOnly))
+    }
+
+    @Test
+    fun `best full fetch candidate prefers location detail over ip only`() {
+        val ipOnly =
+            IpInfo(
+                ip = "84.17.54.10",
+                ipv4 = "84.17.54.10",
+                countryCode = null,
+                countryName = null,
+                city = null,
+                isp = null,
+                fetchedAt = 1L,
+            )
+        val cityCandidate =
+            IpInfo(
+                ip = "84.17.54.10",
+                ipv4 = "84.17.54.10",
+                countryCode = "NL",
+                countryName = "Netherlands",
+                city = "Amsterdam",
+                isp = null,
+                fetchedAt = 2L,
+            )
+
+        assertEquals(cityCandidate, selectBetterFullIpInfoCandidate(ipOnly, cityCandidate))
+        assertEquals(cityCandidate, selectBetterFullIpInfoCandidate(cityCandidate, ipOnly))
+    }
+
     @Test(expected = IllegalArgumentException::class)
     fun `rejects unsuccessful schema responses`() {
         parseIpInfoResponse(

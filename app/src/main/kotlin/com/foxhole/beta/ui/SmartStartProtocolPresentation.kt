@@ -98,7 +98,15 @@ internal fun classifyVpnLatency(
 
 internal fun boundedDisplayLatencyMs(latencyMs: Long): Long = latencyMs.coerceIn(1L, MAX_UI_LATENCY_MS)
 
+internal fun isLatencyOverDisplayMax(latencyMs: Long): Boolean = latencyMs > MAX_UI_LATENCY_MS
+
+internal fun displayLatencyText(
+    latencyMs: Long,
+    unit: String,
+): String =
+    "${boundedDisplayLatencyMs(latencyMs)}${if (isLatencyOverDisplayMax(latencyMs)) "+" else ""} $unit"
+
 private const val VPN_FAST_MAX_MS = 250L
 private const val VPN_NORMAL_MAX_MS = 750L
 private const val VPN_SLOW_MAX_MS = 1_500L
-private const val MAX_UI_LATENCY_MS = 999L
+internal const val MAX_UI_LATENCY_MS = 999L

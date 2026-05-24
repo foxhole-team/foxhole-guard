@@ -94,6 +94,56 @@ class HomeDashboardPresentationTest {
     }
 
     @Test
+    fun `connected tunnel refreshes dashboard ip when upstream network revision changes`() {
+        assertTrue(
+            shouldAutoRefreshIpAfterUpstreamNetworkChange(
+                connectionState = ConnectionState.CONNECTED,
+                previousRevision = 2L,
+                currentRevision = 3L,
+            ),
+        )
+        assertFalse(
+            shouldAutoRefreshIpAfterUpstreamNetworkChange(
+                connectionState = ConnectionState.CONNECTING,
+                previousRevision = 2L,
+                currentRevision = 3L,
+            ),
+        )
+        assertFalse(
+            shouldAutoRefreshIpAfterUpstreamNetworkChange(
+                connectionState = ConnectionState.CONNECTED,
+                previousRevision = null,
+                currentRevision = 3L,
+            ),
+        )
+    }
+
+    @Test
+    fun `connected tunnel consumes pending upstream network revision after reconnect`() {
+        assertTrue(
+            shouldAutoRefreshIpAfterPendingUpstreamNetworkChange(
+                connectionState = ConnectionState.CONNECTED,
+                pendingRevision = 4L,
+                currentRevision = 4L,
+            ),
+        )
+        assertFalse(
+            shouldAutoRefreshIpAfterPendingUpstreamNetworkChange(
+                connectionState = ConnectionState.RECONNECTING,
+                pendingRevision = 4L,
+                currentRevision = 4L,
+            ),
+        )
+        assertFalse(
+            shouldAutoRefreshIpAfterPendingUpstreamNetworkChange(
+                connectionState = ConnectionState.CONNECTED,
+                pendingRevision = null,
+                currentRevision = 4L,
+            ),
+        )
+    }
+
+    @Test
     fun `protocol model merges remembered current and running smart start metrics`() {
         val state =
             HomeRouteUiState(

@@ -149,6 +149,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
                 )
                 upstreamNetworkHandles += network.networkHandle
                 updateActiveVpnUnderlyingNetwork(network)
+                publishUpstreamNetworkChange(network, reason = "available")
                 runtime.onDefaultNetworkAvailable()
                 val snapshot = FoxholeVpnRuntimeBridge.snapshot.value
                 if (snapshot.state == ConnectionState.RECONNECTING) {
@@ -177,6 +178,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
                         capabilities = connectivityManager.getNetworkCapabilities(fallbackUpstream),
                     )
                     updateActiveVpnUnderlyingNetwork(fallbackUpstream)
+                    publishUpstreamNetworkChange(fallbackUpstream, reason = "switched")
                     runtime.onDefaultNetworkAvailable()
                     val snapshot = FoxholeVpnRuntimeBridge.snapshot.value
                     if (snapshot.state == ConnectionState.RECONNECTING) {
@@ -197,6 +199,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
                     capabilities = connectivityManager.getNetworkCapabilities(network),
                 )
                 updateActiveVpnUnderlyingNetwork(null)
+                publishUpstreamNetworkChange(null, reason = "lost")
                 runtime.onDefaultNetworkLost()
                 validationJob?.cancel()
                 validationJob = null
@@ -1227,6 +1230,31 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
             container.diagnosticsLogger.record("network", "vpn underlying network update failed")
         }
     }
+
+    private fun publishUpstreamNetworkChange(
+        network: Network?,
+        reason: String,
+    ) {
+        val snapshot = FoxholeVpnRuntimeBridge.snapshot.value
+        if (!snapshot.shouldPublishUpstreamNetworkChange()) {
+            return
+        }
+        val nextRevision = snapshot.upstreamNetworkRevision + 1L
+        FoxholeVpnRuntimeBridge.update(snapshot.copy(upstreamNetworkRevision = nextRevision))
+        container.diagnosticsLogger.recordStructured(
+            "network",
+            "upstream network refresh signal",
+            "reason=$reason",
+            "available=${network != null}",
+            "revision=$nextRevision",
+        )
+    }
+
+    private fun ConnectionSnapshot.shouldPublishUpstreamNetworkChange(): Boolean =
+        state in setOf(ConnectionState.CONNECTED, ConnectionState.RECONNECTING) &&
+            trafficMode == TrafficMode.TUNNEL &&
+            profileId != null &&
+            profileId != FoxholeVpnService.LOCAL_GUARD_PROFILE_ID
 
     internal fun registerVpnNetworkCallbackIfNeeded() {
         if (vpnNetworkCallbackRegistered) {

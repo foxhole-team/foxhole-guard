@@ -247,6 +247,7 @@ internal enum class IpInfoRefreshReason {
     POST_CONNECT,
     POST_UPDATE,
     RESTORED_VPN,
+    NETWORK_CHANGE,
     TOR_ROUTE,
 }
 
@@ -278,6 +279,7 @@ internal fun ipInfoFetchModeForRefreshReason(reason: IpInfoRefreshReason): IpInf
         IpInfoRefreshReason.POST_CONNECT,
         IpInfoRefreshReason.POST_UPDATE,
         IpInfoRefreshReason.RESTORED_VPN,
+        IpInfoRefreshReason.NETWORK_CHANGE,
         IpInfoRefreshReason.TOR_ROUTE,
         -> IpInfoFetchMode.ENTRY_QUICK
     }
@@ -290,8 +292,65 @@ internal fun shouldClearExistingIpForRefresh(
         reason !in setOf(
             IpInfoRefreshReason.POST_CONNECT,
             IpInfoRefreshReason.RESTORED_VPN,
+            IpInfoRefreshReason.NETWORK_CHANGE,
             IpInfoRefreshReason.TOR_ROUTE,
         )
+
+internal fun shouldUseFullDashboardIpRefresh(
+    reason: IpInfoRefreshReason,
+    snapshot: ConnectionSnapshot,
+    currentIpInfo: IpInfo?,
+): Boolean {
+    if (currentIpInfo == null || !currentIpInfo.hasDashboardLocationDetails()) {
+        return true
+    }
+    return reason in setOf(
+        IpInfoRefreshReason.POST_CONNECT,
+        IpInfoRefreshReason.RESTORED_VPN,
+    ) &&
+        snapshot.isPrimaryConnectionRuntime() &&
+        !currentIpInfo.isFreshForConnectedRouteSettle(snapshot.lastChangeAt)
+}
+
+internal fun shouldShowDashboardIpRefreshLoading(
+    reason: IpInfoRefreshReason,
+    snapshot: ConnectionSnapshot,
+    currentIpInfo: IpInfo?,
+): Boolean =
+    when (reason) {
+        IpInfoRefreshReason.MANUAL,
+        IpInfoRefreshReason.NETWORK_CHANGE,
+        -> true
+        IpInfoRefreshReason.POST_CONNECT,
+        IpInfoRefreshReason.RESTORED_VPN,
+        -> shouldUseFullDashboardIpRefresh(reason, snapshot, currentIpInfo)
+        IpInfoRefreshReason.FOREGROUND,
+        IpInfoRefreshReason.POST_UPDATE,
+        IpInfoRefreshReason.TOR_ROUTE,
+        -> currentIpInfo == null || !currentIpInfo.hasDashboardLocationDetails()
+    }
+
+internal fun IpInfo.hasDashboardLocationDetails(): Boolean =
+    (countryName?.isNotBlank() == true || countryCode?.isNotBlank() == true) &&
+        city?.isNotBlank() == true
+
+internal fun shouldAutoRefreshIpAfterUpstreamNetworkChange(
+    connectionState: ConnectionState,
+    previousRevision: Long?,
+    currentRevision: Long,
+): Boolean =
+    connectionState == ConnectionState.CONNECTED &&
+        previousRevision != null &&
+        currentRevision > previousRevision
+
+internal fun shouldAutoRefreshIpAfterPendingUpstreamNetworkChange(
+    connectionState: ConnectionState,
+    pendingRevision: Long?,
+    currentRevision: Long,
+): Boolean =
+    connectionState == ConnectionState.CONNECTED &&
+        pendingRevision != null &&
+        currentRevision >= pendingRevision
 
 internal fun shouldShowAutoConnectAction(activeProfile: Profile?): Boolean =
     activeProfile?.let { profile ->
@@ -435,9 +494,6 @@ internal fun resolveHomeDashboardProtocolModel(state: HomeRouteUiState): HomeDas
             selectedLatencyMs = latencyState.presentation.latencyMs,
             selectedLatencyDown = latencyState.presentation.isDown,
             selectedLatencyUnavailable = latencyState.presentation.isUnavailable,
-            selectedServerPingMs = selectedServerPingMs,
-            selectedServerPingUnavailable = selectedServerPingUnavailable,
-            selectedServerPingUnsupported = protocolPresentation.protocolHint.isUdpTransport(),
         ),
         connectionMetricsLoading = latencyState.connectionMetricsLoading,
     )
@@ -982,16 +1038,11 @@ internal fun shouldRenderDashboardConnectionDetails(
     selectedLatencyMs: Long?,
     selectedLatencyDown: Boolean,
     selectedLatencyUnavailable: Boolean,
-    selectedServerPingMs: Long?,
-    selectedServerPingUnavailable: Boolean,
-    selectedServerPingUnsupported: Boolean,
 ): Boolean {
     if (connectionState != ConnectionState.CONNECTED || activeProfile == null) {
         return false
     }
-    val latencyReady = selectedLatencyMs != null || selectedLatencyDown || selectedLatencyUnavailable
-    val serverPingReady = selectedServerPingMs != null || selectedServerPingUnavailable || selectedServerPingUnsupported
-    return latencyReady && serverPingReady
+    return selectedLatencyMs != null || selectedLatencyDown || selectedLatencyUnavailable
 }
 
 internal fun resolveDashboardLatencyPresentation(state: HomeRouteUiState): HomeDashboardLatencyPresentation {

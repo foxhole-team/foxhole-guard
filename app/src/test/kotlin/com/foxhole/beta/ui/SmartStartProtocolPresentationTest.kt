@@ -123,6 +123,7 @@ class SmartStartProtocolPresentationTest {
         assertEquals(1L, boundedDisplayLatencyMs(0L))
         assertEquals(430L, boundedDisplayLatencyMs(430L))
         assertEquals(999L, boundedDisplayLatencyMs(2_181L))
+        assertEquals("999+ ms", displayLatencyText(2_181L, "ms"))
     }
 
     @Test

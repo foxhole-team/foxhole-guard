@@ -86,7 +86,7 @@
     <string name="home_network_city_label">Город:</string>
     <string name="home_network_ip_label">IP:</string>
     <string name="home_network_provider_label">Провайдер:</string>
-    <string name="home_network_server_ping_label">Пинг сервера:</string>
+    <string name="home_network_server_ping_label">Пинг туннеля:</string>
     <string name="home_network_dns_label">DNS:</string>
     <string name="home_network_transport_type_label">Тип:</string>
     <string name="home_network_connect_time_label">Время:</string>
@@ -248,7 +248,7 @@
     <string name="auto_connect_probe_timeout">Тест протокола превысил время ожидания</string>
     <string name="auto_connect_ip_unavailable">Подключение установлено, но IP-проверка не завершилась вовремя</string>
     <string name="auto_connect_failed">Не найден рабочий протокол</string>
-    <string name="auto_connect_success">Выбран: %1$s. Задержка: %2$d мс</string>
+    <string name="auto_connect_success_text">Выбран: %1$s. Задержка: %2$s</string>
     <string name="auto_connect_success_unavailable">Выбран: %1$s. Подключено</string>
     <string name="smart_profile_tag">Смарт</string>
     <string name="v2raytun_profile_tag">v2raytun</string>
@@ -291,6 +291,8 @@
     <string name="latency_quality_failed">down</string>
     <string name="latency_pill_label">Задержка</string>
     <string name="latency_pill_value">%1$d мс</string>
+    <string name="latency_pill_value_over_max">%1$d+ мс</string>
+    <string name="latency_unit_ms">мс</string>
     <string name="latency_pill_down">down</string>
     <string name="latency_pill_unavailable">Недоступно</string>
     <string name="reconnect_required">Требуется переподключение</string>

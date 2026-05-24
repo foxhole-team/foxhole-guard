@@ -621,10 +621,16 @@ private suspend fun HomeViewModel.commitAutoConnectWinner(
     container.connectionController.clearSmartStartAnalysisStatus()
     emitSuccess(
         result.displayLatencyMs?.let { latencyMs ->
+            val latencyText =
+                if (isLatencyOverDisplayMax(latencyMs)) {
+                    getApplication<Application>().getString(R.string.latency_pill_value_over_max, MAX_UI_LATENCY_MS)
+                } else {
+                    getApplication<Application>().getString(R.string.latency_pill_value, boundedDisplayLatencyMs(latencyMs))
+                }
             getApplication<Application>().getString(
-                R.string.auto_connect_success,
+                R.string.auto_connect_success_text,
                 result.candidate.displayName,
-                boundedDisplayLatencyMs(latencyMs),
+                latencyText,
             )
         } ?: getApplication<Application>().getString(
             R.string.auto_connect_success_unavailable,

@@ -721,6 +721,182 @@ class ProfileRuntimeSessionAndroidTest {
     }
 
     @Test
+    fun manualSmartSubscriptionVlessNetworkSwitchRefresh() {
+        if (InstrumentationRegistry.getArguments().getString("foxhole.liveSmartVlessNetworkSwitch") != "1") {
+            Log.d(TEST_TAG, "manual smart VLESS network switch refresh skipped")
+            return
+        }
+        runBlocking {
+            val app = ApplicationProvider.getApplicationContext<FoxholeApplication>()
+            val subscriptionUrl =
+                InstrumentationRegistry
+                    .getArguments()
+                    .getString("foxhole.smartSubscriptionUrl")
+                    ?.trim()
+                    ?.takeIf { it.startsWith("https://", ignoreCase = true) }
+            if (subscriptionUrl == null) {
+                Log.d(TEST_TAG, "manual smart VLESS network switch refresh skipped: https url arg missing")
+                return@runBlocking
+            }
+            if (!ensureVpnPermission(app)) {
+                Log.d(TEST_TAG, "manual smart VLESS network switch refresh skipped: vpn permission missing")
+                return@runBlocking
+            }
+
+            resetRelevantSettings(app)
+            clearProfiles(app)
+            val imported =
+                app.container.profileRepository.importProfile(
+                    rawInput = subscriptionUrl,
+                    preferredName = "Live Smart Network Switch",
+                    allowInsecureTlsForProfile =
+                        InstrumentationRegistry
+                            .getArguments()
+                            .getString("foxhole.allowInsecureTlsForLiveSubscription") == "1",
+                )
+            app.container.connectionController.setActiveProfile(imported.id)
+            val selectedTarget =
+                app.container.profileRepository.profiles
+                    .first()
+                    .flatMap { profile ->
+                        profile
+                            .runtimeProbeTargets()
+                            .filter { target -> target.protocolHint == ProtocolHint.VLESS }
+                            .map { target -> profile to target }
+                    }
+                    .firstOrNull()
+            if (selectedTarget == null) {
+                assertTrue("smart subscription did not expose a VLESS target", false)
+                return@runBlocking
+            }
+
+            shell("am start -n ${app.packageName}/com.foxhole.beta.MainActivity")
+            delay(1_000)
+
+            val (profile, target) = selectedTarget
+            disconnectAndWaitForIdle(app)
+            baselineRuntimeSettings(app)
+            app.container.connectionController.setActiveProfile(profile.id)
+            val startedAt = System.currentTimeMillis()
+            Log.d(
+                TEST_TAG,
+                "liveSmartNetworkSwitch start profileId=${profile.id} protocol=vless optionId=${target.optionId.orEmpty()}",
+            )
+            app.container.connectionController.connect(profile.id, protocolOptionId = target.optionId)
+            val terminalState =
+                withTimeoutOrNull(liveSmartTerminalTimeoutMs(ProtocolHint.VLESS)) {
+                    waitForActiveConnectionAttempt(app)
+                    waitForTerminalState(app)
+                }
+            assertEquals(ConnectionState.CONNECTED, terminalState)
+            val initialIpRefresh = runVpnBoundIpRefresh(app)
+            Log.d(TEST_TAG, "liveSmartNetworkSwitch initialIpRefresh=$initialIpRefresh")
+            assertTrue("initial vpn-bound ip refresh failed: $initialIpRefresh", initialIpRefresh.startsWith("ok:"))
+
+            val switchStartedAt = System.currentTimeMillis()
+            var wifiEnabled = false
+            try {
+                Log.d(TEST_TAG, "liveSmartNetworkSwitch disabling wifi")
+                shell("svc wifi disable")
+                val serviceSignal =
+                    waitForDiagnosticMessage(
+                        app = app,
+                        sinceMs = switchStartedAt,
+                        timeoutMs = 45_000L,
+                    ) { message ->
+                        message.contains("upstream network refresh signal") &&
+                            (message.contains("reason=switched") || message.contains("reason=available"))
+                    }
+                val dashboardRefresh =
+                    waitForDiagnosticMessage(
+                        app = app,
+                        sinceMs = switchStartedAt,
+                        timeoutMs = 30_000L,
+                    ) { message ->
+                        message.contains("dashboard refresh started") &&
+                            message.contains("reason=network_change") &&
+                            message.contains("target=vpn_bound") &&
+                            message.contains("showLoading=true")
+                    }
+                val cellularDashboardResult =
+                    waitForDiagnosticMessage(
+                        app = app,
+                        sinceMs = switchStartedAt,
+                        timeoutMs = 8_000L,
+                    ) { message ->
+                        message.contains("geo refreshed") &&
+                            message.contains("reason=network_change") &&
+                            message.contains("target=vpn_bound")
+                    }
+                Log.d(
+                    TEST_TAG,
+                    "liveSmartNetworkSwitch cellularResult serviceSignal=$serviceSignal dashboardRefresh=$dashboardRefresh dashboardResult=$cellularDashboardResult",
+                )
+                assertTrue(
+                    diagnosticMessagesSince(app, switchStartedAt).joinToString(separator = "\n") { it.take(240) },
+                    serviceSignal && dashboardRefresh,
+                )
+
+                val wifiReturnStartedAt = System.currentTimeMillis()
+                Log.d(TEST_TAG, "liveSmartNetworkSwitch enabling wifi")
+                shell("svc wifi enable")
+                wifiEnabled = true
+                val wifiServiceSignal =
+                    waitForDiagnosticMessage(
+                        app = app,
+                        sinceMs = wifiReturnStartedAt,
+                        timeoutMs = 45_000L,
+                    ) { message ->
+                        message.contains("upstream network refresh signal") &&
+                            message.contains("reason=available")
+                    }
+                val wifiDashboardRefresh =
+                    waitForDiagnosticMessage(
+                        app = app,
+                        sinceMs = wifiReturnStartedAt,
+                        timeoutMs = 30_000L,
+                    ) { message ->
+                        message.contains("dashboard refresh started") &&
+                            message.contains("reason=network_change") &&
+                            message.contains("target=vpn_bound") &&
+                            message.contains("showLoading=true")
+                    }
+                val wifiDashboardResult =
+                    waitForDiagnosticMessage(
+                        app = app,
+                        sinceMs = wifiReturnStartedAt,
+                        timeoutMs = 45_000L,
+                    ) { message ->
+                        message.contains("geo refreshed") &&
+                            message.contains("reason=network_change") &&
+                            message.contains("target=vpn_bound")
+                    }
+                Log.d(
+                    TEST_TAG,
+                    "liveSmartNetworkSwitch wifiResult serviceSignal=$wifiServiceSignal dashboardRefresh=$wifiDashboardRefresh dashboardResult=$wifiDashboardResult",
+                )
+                assertTrue(
+                    diagnosticMessagesSince(app, wifiReturnStartedAt).joinToString(separator = "\n") { it.take(240) },
+                    wifiServiceSignal && wifiDashboardRefresh && wifiDashboardResult,
+                )
+            } finally {
+                if (!wifiEnabled) {
+                    Log.d(TEST_TAG, "liveSmartNetworkSwitch restoring wifi")
+                    shell("svc wifi enable")
+                }
+                delay(3_000)
+                disconnectAndWaitForIdle(app)
+            }
+            val evidence =
+                TunnelValidationEvidenceClassifier.classify(
+                    entries = app.container.diagnosticsLogger.entries.value,
+                    sinceMs = startedAt,
+                )
+            assertTrue("fatal runtime evidence: ${evidence.fatalRuntimeMessage.orEmpty()}", evidence.fatalRuntimeMessage == null)
+        }
+    }
+
+    @Test
     fun restoreBaselineRuntimeSettingsWhenRequested() {
         if (InstrumentationRegistry.getArguments().getString("foxhole.restoreRuntimeBaseline") != "1") {
             Log.d(TEST_TAG, "restore runtime baseline skipped")
@@ -919,6 +1095,26 @@ class ProfileRuntimeSessionAndroidTest {
         }
         return predicate()
     }
+
+    private suspend fun waitForDiagnosticMessage(
+        app: FoxholeApplication,
+        sinceMs: Long,
+        timeoutMs: Long,
+        predicate: (String) -> Boolean,
+    ): Boolean =
+        waitUntil(timeoutMs = timeoutMs) {
+            diagnosticMessagesSince(app, sinceMs).any(predicate)
+        }
+
+    private fun diagnosticMessagesSince(
+        app: FoxholeApplication,
+        sinceMs: Long,
+    ): List<String> =
+        app.container.diagnosticsLogger.entries.value
+            .asSequence()
+            .filter { entry -> entry.timestamp >= sinceMs }
+            .map { entry -> entry.message }
+            .toList()
 
     private suspend fun runWarmupProbe(
         app: FoxholeApplication,

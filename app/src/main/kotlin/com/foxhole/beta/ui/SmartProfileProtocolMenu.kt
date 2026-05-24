@@ -264,6 +264,7 @@ private fun rememberSmartProfileMenuWidth(
     val vpnLatencyLabel = smartProfileLatencyColumnLabel(latencyProbeMethod)
     val unavailableMetric = stringResource(R.string.smart_profile_metric_unavailable)
     val downMetric = stringResource(R.string.latency_pill_down)
+    val latencyUnit = stringResource(R.string.latency_unit_ms)
     val neverUpdatedLabel = stringResource(R.string.smart_profile_metrics_never_updated)
     val refreshHint =
         stringResource(
@@ -342,7 +343,7 @@ private fun rememberSmartProfileMenuWidth(
     ): String =
         when {
             down -> downMetric
-            latencyMs != null -> "${boundedDisplayLatencyMs(latencyMs)} ms"
+            latencyMs != null -> displayLatencyText(latencyMs, latencyUnit)
             unavailable -> unavailableMetric
             else -> unavailableMetric
         }
@@ -455,11 +456,11 @@ private fun rememberSmartProfileMenuWidth(
     val rowWidthPx =
         options.maxOfOrNull { option ->
             val included = option.id !in excludedOptionIds
-            val latencyMs = latencyByOptionId[option.id]
-            val latencyDown = option.id in unavailableOptionIds
-            val latencyUnavailable = option.id in latencyUnavailableOptionIds
-            val recommended = option.id in recommendedOptionIds && !latencyDown
-            val favorite = option.id == favoriteOptionId
+            val latencyMs = latencyByOptionId[option.id].takeIf { included }
+            val latencyDown = included && option.id in unavailableOptionIds
+            val latencyUnavailable = included && option.id in latencyUnavailableOptionIds
+            val recommended = included && option.id in recommendedOptionIds && !latencyDown
+            val favorite = included && option.id == favoriteOptionId
             val favoriteBadgeWidth = if (favorite) with(density) { 14.dp.toPx() } else 0f
             val recommendedBadgeWidth =
                 if (recommended) {
@@ -483,8 +484,9 @@ private fun rememberSmartProfileMenuWidth(
                     }
             if (menuLayout.showDetailedMetrics) {
                 val serverValue = metricText(
-                    latencyMs = serverPingByOptionId[option.id],
+                    latencyMs = serverPingByOptionId[option.id].takeIf { included },
                     unavailable =
+                        included &&
                         option.id in serverPingUnavailableOptionIds &&
                             option.id !in serverPingByOptionId,
                 )
@@ -637,12 +639,12 @@ private fun SmartProfileProtocolMenuContent(
             val included = option.id !in excludedOptionIds
             val includedCount = options.count { candidate -> candidate.id !in excludedOptionIds }
             val active = option.id == activeOptionId
-            val latencyMs = latencyByOptionId[option.id]
-            val latencyDown = option.id in unavailableOptionIds
-            val latencyUnavailable = option.id in latencyUnavailableOptionIds
-            val recommended = option.id in recommendedOptionIds && !latencyDown
+            val latencyMs = latencyByOptionId[option.id].takeIf { included }
+            val latencyDown = included && option.id in unavailableOptionIds
+            val latencyUnavailable = included && option.id in latencyUnavailableOptionIds
+            val recommended = included && option.id in recommendedOptionIds && !latencyDown
             val topRecommended = recommended && option.id == recommendedOptionId
-            val favorite = option.id == favoriteOptionId
+            val favorite = included && option.id == favoriteOptionId
             val includedSelection = included && active
             val refreshingSelection = metricsRefreshing && option.id == refreshingOptionId
             val selectionTone = foxholeSystemAwareAccentColor(fallback = FoxholeInfoAccent)
@@ -701,8 +703,9 @@ private fun SmartProfileProtocolMenuContent(
                         recommended = recommended,
                         topRecommended = topRecommended,
                         favorite = favorite,
-                        serverPingMs = serverPingByOptionId[option.id],
+                        serverPingMs = serverPingByOptionId[option.id].takeIf { included },
                         serverPingUnavailable =
+                            included &&
                             option.id in serverPingUnavailableOptionIds &&
                                 option.id !in serverPingByOptionId,
                         latencyMs = latencyMs,
@@ -1625,7 +1628,7 @@ private fun SmartProfileMetricCell(
         when {
             down -> stringResource(R.string.latency_pill_down)
             unavailable -> stringResource(R.string.smart_profile_metric_unavailable)
-            latencyMs != null -> stringResource(R.string.latency_pill_value, boundedDisplayLatencyMs(latencyMs))
+            latencyMs != null -> latencyPillValueText(latencyMs)
             else -> stringResource(R.string.smart_profile_metric_unavailable)
         }
     val tone =

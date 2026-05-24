@@ -552,15 +552,12 @@ class HomeDashboardProtocolPresentationTest {
                 selectedLatencyMs = null,
                 selectedLatencyDown = false,
                 selectedLatencyUnavailable = false,
-                selectedServerPingMs = 87L,
-                selectedServerPingUnavailable = false,
-                selectedServerPingUnsupported = false,
             ),
         )
     }
 
     @Test
-    fun `connected dashboard renders when latency and server ping states are complete`() {
+    fun `connected dashboard renders when tunnel latency state is complete`() {
         assertTrue(
             shouldRenderDashboardConnectionDetails(
                 connectionState = ConnectionState.CONNECTED,
@@ -568,9 +565,6 @@ class HomeDashboardProtocolPresentationTest {
                 selectedLatencyMs = 430L,
                 selectedLatencyDown = false,
                 selectedLatencyUnavailable = false,
-                selectedServerPingMs = null,
-                selectedServerPingUnavailable = false,
-                selectedServerPingUnsupported = true,
             ),
         )
     }

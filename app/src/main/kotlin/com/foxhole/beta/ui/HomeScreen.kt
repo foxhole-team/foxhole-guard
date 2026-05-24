@@ -241,8 +241,6 @@ fun HomeScreen(
             dashboardSelectedLatencyDown ||
             dashboardSelectedLatencyUnavailable
     val dashboardProtocolPresentation = dashboardProtocolModel.presentation
-    val dashboardSelectedServerPingMs = dashboardProtocolModel.selectedServerPingMs
-    val dashboardSelectedServerPingUnavailable = dashboardProtocolModel.selectedServerPingUnavailable
     val dashboardConnectionDetailsReady = dashboardProtocolModel.connectionDetailsReady
     val dashboardConnectionMetricsLoading = dashboardProtocolModel.connectionMetricsLoading
     val dashboardLatencySkeletonVisible = dashboardConnectionMetricsLoading && dashboardLatencyPillVisible
@@ -907,16 +905,17 @@ fun HomeScreen(
                                             verticalArrangement = Arrangement.spacedBy(2.dp),
                                         ) {
                                             val connectionMetricsAvailable = state.connection.state == ConnectionState.CONNECTED
-                                            val serverPingText =
+                                            val tunnelLatencyText =
                                                 when {
                                                     !connectionMetricsAvailable -> stringResource(R.string.smart_start_protocol_status_no_data)
-                                                    dashboardSelectedServerPingMs != null ->
-                                                        stringResource(
-                                                            R.string.latency_pill_value,
-                                                            boundedDisplayLatencyMs(dashboardSelectedServerPingMs),
-                                                        )
-                                                    dashboardSelectedServerPingUnavailable -> stringResource(R.string.latency_pill_unavailable)
-                                                    else -> stringResource(R.string.smart_profile_metric_unavailable)
+                                                    dashboardSelectedLatencyDown ->
+                                                        stringResource(R.string.latency_pill_down)
+                                                    dashboardSelectedLatencyMs != null ->
+                                                        latencyPillValueText(dashboardSelectedLatencyMs)
+                                                    dashboardSelectedLatencyUnavailable ->
+                                                        stringResource(R.string.latency_pill_unavailable)
+                                                    else ->
+                                                        stringResource(R.string.smart_profile_metric_unavailable)
                                                 }
                                             val remoteDnsServer =
                                                 networkIpInfo?.remoteDnsServers?.firstOrNull { server -> server.isNotBlank() }
@@ -942,8 +941,8 @@ fun HomeScreen(
                                             HomeNetworkDetailLine(
                                                 icon = Icons.Outlined.Speed,
                                                 label = stringResource(R.string.home_network_server_ping_label),
-                                                value = serverPingText,
-                                                valueMonospace = connectionMetricsAvailable && dashboardSelectedServerPingMs != null,
+                                                value = tunnelLatencyText,
+                                                valueMonospace = connectionMetricsAvailable && dashboardSelectedLatencyMs != null,
                                             )
                                             HomeNetworkSubtleDivider()
                                             HomeNetworkDetailLine(
