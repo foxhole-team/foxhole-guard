@@ -704,7 +704,7 @@ class HomeViewModel(
                 } else if (shouldRefreshIdleIp && !autoConnectUiStateMutable.value.running) {
                     startIpInfoRefresh(
                         reportFailures = false,
-                        showLoading = true,
+                        showLoading = false,
                         clearExistingIp = false,
                         fetchMode = IpInfoFetchMode.ENTRY_QUICK,
                         minimumLoadingDurationMs = 0L,
@@ -760,23 +760,12 @@ class HomeViewModel(
         if (runtimeState == ConnectionState.CONNECTED) {
             scheduleForegroundDashboardRefreshIfStale()
         } else {
-            val showEntrySkeleton =
-                shouldShowDisconnectedEntryIpRefreshSkeleton(
-                    currentIpInfo = container.connectionController.ipInfo.value,
-                    connectionState = runtimeState,
-                )
-            val minimumLoadingDurationMs =
-                if (showEntrySkeleton) {
-                    AUTO_IP_REFRESH_MIN_LOADING_MS
-                } else {
-                    0L
-                }
             startIpInfoRefresh(
                 reportFailures = false,
-                showLoading = showEntrySkeleton,
+                showLoading = false,
                 clearExistingIp = false,
                 fetchMode = IpInfoFetchMode.ENTRY_QUICK,
-                minimumLoadingDurationMs = minimumLoadingDurationMs,
+                minimumLoadingDurationMs = 0L,
             )
         }
     }

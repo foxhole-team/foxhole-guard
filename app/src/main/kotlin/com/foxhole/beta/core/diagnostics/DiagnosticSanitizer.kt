@@ -34,9 +34,11 @@ internal object DiagnosticSanitizer {
     }
 
     private const val SENSITIVE_FIELD_NAMES =
-        "password|token|secret|uuid|private_key|public_key|sni|host|server|domain|endpoint|country|city|isp|" +
+        "password|token|secret|uuid|private_key|public_key|privatekey|publickey|" +
+            "pbk|sid|short_id|shortid|server_name|servername|sni|" +
+            "host|server|domain|endpoint|address|ip|ipv4|ipv6|country|city|isp|asn|" +
             "uid|user[_-]?id|app|apps|application|package[_-]?name|package[_-]?names|packages|package|pkg|" +
-            "profile[_-]?id|profileid|profile[_-]?name|option[_-]?id|optionid|local|remote|" +
+            "profile[_-]?id|profileid|profile[_-]?name|option[_-]?id|optionid|session[_-]?id|sessionid|local|remote|" +
             "source[_-]?host|sourcehost|destination[_-]?host|destinationhost|query|raw_input|config|resolved_config"
     private val KEY_VALUE_SENSITIVE_FIELD_REGEX =
         Regex("""(?i)(?<![\w-])($SENSITIVE_FIELD_NAMES)(\s*(?:=>|=|:)\s*)("[^"]*"|'[^']*'|[^\s&]+)""")

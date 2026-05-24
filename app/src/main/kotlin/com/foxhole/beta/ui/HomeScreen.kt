@@ -64,6 +64,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -190,7 +191,6 @@ fun HomeScreen(
             }
         }
     val darkTheme = MaterialTheme.colorScheme.background.luminance() < 0.3f
-    val uiPalette = LocalFoxholeUiPalette.current
     val autoTone = foxholeSystemAwareAccentColor(fallback = MaterialTheme.colorScheme.primary)
     val torOperationTone = Color(0xFFE89B3C)
     val topStatusState = homeTopStatusState(state)
@@ -387,6 +387,7 @@ fun HomeScreen(
     }
     val dashboardListState = rememberLazyListState()
     val topChromeScrimProgress = rememberFoxholeTopChromeScrimProgress(dashboardListState)
+    val connectionHeaderScrolled by remember { derivedStateOf { topChromeScrimProgress() > 0.01f } }
 
     FoxholeScaffold(
         title = stringResource(R.string.app_name),
@@ -418,126 +419,28 @@ fun HomeScreen(
             verticalArrangement = Arrangement.spacedBy(ScreenSectionSpacing),
         ) {
             item {
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = MaterialTheme.shapes.large,
-                    color = uiPalette.cardContainerColor,
-                    tonalElevation = 0.dp,
-                    shadowElevation = 0.dp,
-                ) {
-                    Column(modifier = Modifier.fillMaxWidth()) {
-                        Row(
-                            modifier =
-                                Modifier
-                                    .fillMaxWidth()
-                                    .heightIn(min = HomeTopStatusInnerSurfaceMinHeight)
-                                    .padding(
-                                        horizontal = HomeTopStatusInnerHorizontalPadding,
-                                        vertical = HomeTopStatusInnerVerticalPadding,
-                                    ),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Box(
-                                modifier = Modifier.size(40.dp),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                Surface(
-                                    modifier = Modifier.size(30.dp),
-                                    shape = MaterialTheme.shapes.large,
-                                    color = statusTone.copy(alpha = 0.13f),
-                                ) {
-                                    Spacer(modifier = Modifier.fillMaxSize())
-                                }
-                                Image(
-                                    painter = painterResource(R.drawable.foxhole_logo),
-                                    contentDescription = stringResource(R.string.app_name),
-                                    modifier = Modifier.size(34.dp),
-                                )
-                            }
-                            Column(
-                                modifier =
-                                    Modifier
-                                        .padding(start = 2.dp)
-                                        .weight(1f)
-                                        .foxholeAnimateContentSize(),
-                                verticalArrangement = Arrangement.Center,
-                            ) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                ) {
-                                    Row(
-                                        modifier = Modifier.weight(1f),
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                    ) {
-                                        if (topStatusLoading) {
-                                            HomeTopStatusLoadingBlock(
-                                                accentColor = statusTone,
-                                                modifier = Modifier.weight(1f),
-                                            )
-                                        } else if (state.autoConnect.running || state.protocolMetricsRefreshing) {
-                                            HomeAutoConnectStatusLine(
-                                                state =
-                                                    if (state.autoConnect.running) {
-                                                        state.autoConnect
-                                                    } else {
-                                                        protocolMetricsAnalysisState
-                                                    },
-                                                modifier = Modifier.weight(1f),
-                                                textStyle = MaterialTheme.typography.titleMedium,
-                                            )
-                                        } else {
-                                            HomeStatusBadge(
-                                                state = topStatusState,
-                                                label = homeStatusLabel(state, topStatusState),
-                                                textStyle = MaterialTheme.typography.titleMedium,
-                                                accentColor = statusTone,
-                                                loading =
-                                                    state.torOperation.active ||
-                                                        topStatusState in setOf(
-                                                            ConnectionState.CONNECTING,
-                                                            ConnectionState.RECONNECTING,
-                                                        ),
-                                                smartMarker =
-                                                    state.connection.isSmartStartConnection &&
-                                                        topStatusState in setOf(
-                                                            ConnectionState.CONNECTED,
-                                                            ConnectionState.CONNECTING,
-                                                            ConnectionState.RECONNECTING,
-                                                        ),
-                                            )
-                                        }
-                                    }
-                                    Column(horizontalAlignment = Alignment.End) {
-                                        HomeModeDropdown(
-                                            selected = modeOption,
-                                            values = homeModeOptions,
-                                            onSelect = { selectedMode ->
-                                                applyHomeModeSelection(
-                                                    mode = selectedMode,
-                                                    onTrafficModeSelected = onTrafficModeSelected,
-                                                    onPerAppRoutingModeSelected = onPerAppRoutingModeSelected,
-                                                    selectedPackages = state.settings.expert.selectedPackages,
-                                                    currentPerAppRoutingMode = state.settings.expert.perAppRoutingMode,
-                                                )
-                                            },
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                        HomeConnectionFeatureIndicators(
-                            indicators = connectionFeatureIndicators,
-                            onIndicatorClick = { feature -> selectedConnectionFeature = feature },
-                            modifier =
-                                Modifier
-                                    .padding(start = 8.dp, end = 8.dp, bottom = 8.dp),
+                HomeConnectionHeader(
+                    state = state,
+                    topStatusState = topStatusState,
+                    topStatusLoading = topStatusLoading,
+                    statusTone = statusTone,
+                    protocolMetricsAnalysisState = protocolMetricsAnalysisState,
+                    modeOption = modeOption,
+                    homeModeOptions = homeModeOptions,
+                    connectionFeatureIndicators = connectionFeatureIndicators,
+                    scrolled = connectionHeaderScrolled,
+                    darkTheme = darkTheme,
+                    onModeSelected = { selectedMode ->
+                        applyHomeModeSelection(
+                            mode = selectedMode,
+                            onTrafficModeSelected = onTrafficModeSelected,
+                            onPerAppRoutingModeSelected = onPerAppRoutingModeSelected,
+                            selectedPackages = state.settings.expert.selectedPackages,
+                            currentPerAppRoutingMode = state.settings.expert.perAppRoutingMode,
                         )
-                    }
-                }
+                    },
+                    onConnectionFeatureClick = { feature -> selectedConnectionFeature = feature },
+                )
             }
             dashboardCardOrder.forEach { card ->
                 when (card) {
@@ -1333,6 +1236,149 @@ fun HomeScreen(
             onConfirmMoveTorIntoVpn = onConfirmMoveTorIntoVpn,
             onConfirmKeepTorOnDeviceAndStartVpn = onConfirmKeepTorOnDeviceAndStartVpn,
         )
+    }
+}
+
+@Composable
+@Suppress("LongMethod", "LongParameterList")
+private fun HomeConnectionHeader(
+    state: HomeRouteUiState,
+    topStatusState: ConnectionState,
+    topStatusLoading: Boolean,
+    statusTone: Color,
+    protocolMetricsAnalysisState: AutoConnectUiState,
+    modeOption: HomeModeOption,
+    homeModeOptions: List<HomeModeOption>,
+    connectionFeatureIndicators: List<HomeConnectionFeatureIndicator>,
+    scrolled: Boolean,
+    darkTheme: Boolean,
+    onModeSelected: (HomeModeOption) -> Unit,
+    onConnectionFeatureClick: (HomeConnectionFeature) -> Unit,
+) {
+    val headerContainer =
+        MaterialTheme.colorScheme.surface.copy(
+            alpha =
+                when {
+                    scrolled -> 0.92f
+                    darkTheme -> 0.54f
+                    else -> 0.68f
+                },
+        )
+    val headerBorder =
+        BorderStroke(
+            width = 1.dp,
+            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = if (scrolled) 0.34f else 0.24f),
+        )
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.extraLarge,
+        color = headerContainer,
+        tonalElevation = 0.dp,
+        shadowElevation = 0.dp,
+        border = headerBorder,
+    ) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = HomeTopStatusInnerSurfaceMinHeight)
+                        .padding(
+                            horizontal = HomeTopStatusInnerHorizontalPadding,
+                            vertical = HomeTopStatusInnerVerticalPadding,
+                        ),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Box(
+                    modifier = Modifier.size(40.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Surface(
+                        modifier = Modifier.size(30.dp),
+                        shape = MaterialTheme.shapes.large,
+                        color = statusTone.copy(alpha = 0.13f),
+                    ) {
+                        Spacer(modifier = Modifier.fillMaxSize())
+                    }
+                    Image(
+                        painter = painterResource(R.drawable.foxhole_logo),
+                        contentDescription = stringResource(R.string.app_name),
+                        modifier = Modifier.size(34.dp),
+                    )
+                }
+                Column(
+                    modifier =
+                        Modifier
+                            .padding(start = 2.dp)
+                            .weight(1f)
+                            .foxholeAnimateContentSize(),
+                    verticalArrangement = Arrangement.Center,
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Row(
+                            modifier = Modifier.weight(1f),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            if (topStatusLoading) {
+                                HomeTopStatusLoadingBlock(
+                                    accentColor = statusTone,
+                                    modifier = Modifier.weight(1f),
+                                )
+                            } else if (state.autoConnect.running || state.protocolMetricsRefreshing) {
+                                HomeAutoConnectStatusLine(
+                                    state =
+                                        if (state.autoConnect.running) {
+                                            state.autoConnect
+                                        } else {
+                                            protocolMetricsAnalysisState
+                                        },
+                                    modifier = Modifier.weight(1f),
+                                    textStyle = MaterialTheme.typography.titleMedium,
+                                )
+                            } else {
+                                HomeStatusBadge(
+                                    state = topStatusState,
+                                    label = homeStatusLabel(state, topStatusState),
+                                    textStyle = MaterialTheme.typography.titleMedium,
+                                    accentColor = statusTone,
+                                    loading =
+                                        state.torOperation.active ||
+                                            topStatusState in setOf(
+                                                ConnectionState.CONNECTING,
+                                                ConnectionState.RECONNECTING,
+                                            ),
+                                    smartMarker =
+                                        state.connection.isSmartStartConnection &&
+                                            topStatusState in setOf(
+                                                ConnectionState.CONNECTED,
+                                                ConnectionState.CONNECTING,
+                                                ConnectionState.RECONNECTING,
+                                            ),
+                                )
+                            }
+                        }
+                        Column(horizontalAlignment = Alignment.End) {
+                            HomeModeDropdown(
+                                selected = modeOption,
+                                values = homeModeOptions,
+                                onSelect = onModeSelected,
+                            )
+                        }
+                    }
+                }
+            }
+            HomeConnectionFeatureIndicators(
+                indicators = connectionFeatureIndicators,
+                onIndicatorClick = onConnectionFeatureClick,
+                modifier = Modifier.padding(start = 8.dp, end = 8.dp, bottom = 8.dp),
+            )
+        }
     }
 }
 

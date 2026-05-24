@@ -184,6 +184,7 @@ data class DiagnosticsRouteUiState(
     val settings: Settings = Settings(),
     val activeProfile: Profile? = null,
     val traffic: TrafficSnapshot = TrafficSnapshot(),
+    val ipInfo: IpInfo? = null,
     val diagnosticEntries: List<DiagnosticEntry> = emptyList(),
     val networkActivityEvents: List<NetworkActivityEvent> = emptyList(),
 )
@@ -323,6 +324,7 @@ internal fun HomeUiState.toDiagnosticsRouteUiState(): DiagnosticsRouteUiState =
         settings = settings,
         activeProfile = activeProfile,
         traffic = traffic,
+        ipInfo = ipInfo,
         diagnosticEntries = diagnosticEntries,
         networkActivityEvents = networkActivityEvents,
     )

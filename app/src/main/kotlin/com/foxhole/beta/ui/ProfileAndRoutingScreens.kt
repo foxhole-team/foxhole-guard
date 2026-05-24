@@ -9,6 +9,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -78,6 +79,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
@@ -270,6 +272,14 @@ fun ProfilesScreen(
         title = stringResource(R.string.profile_list_title),
         snackbarHostState = snackbarHostState,
         onNavigateUp = onNavigateUp,
+        modifier =
+            Modifier.pointerInput(revealedProfileSwipeKey) {
+                if (revealedProfileSwipeKey != null) {
+                    detectTapGestures(
+                        onTap = { revealedProfileSwipeKey = null },
+                    )
+                }
+            },
         actions = {
             SettingsHelpAction(
                 title = stringResource(R.string.help_profiles_subscriptions_title),

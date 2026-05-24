@@ -2,7 +2,6 @@ package com.foxhole.beta.ui
 
 import androidx.compose.animation.core.AnimationSpec
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.AnchoredDraggableDefaults
 import androidx.compose.foundation.gestures.AnchoredDraggableState
 import androidx.compose.foundation.gestures.DraggableAnchors
@@ -17,10 +16,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -31,7 +28,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -79,7 +75,6 @@ internal fun FoxholeSwipeActions(
             onRevealChange(value)
         }
     }
-    val haptic = LocalHapticFeedback.current
     val startSwipeAction = startAction?.onClick ?: onSwipeRight
     val dragSession =
         rememberSwipeActionsDragSession(
@@ -113,23 +108,12 @@ internal fun FoxholeSwipeActions(
         if (actions.isNotEmpty()) {
             SwipeActionsBackground(
                 actions = actions,
-                onAction = {},
-                exposeTestTags = false,
+                onAction = { setRevealed(false) },
+                exposeTestTags = isRevealed,
                 modifier = Modifier.align(Alignment.CenterEnd),
             )
         }
         SwipeActionsGestureContent(dragSession = dragSession, content = content)
-        if (isRevealed && actions.isNotEmpty()) {
-            SwipeActionsBackground(
-                actions = actions,
-                onAction = {
-                    setRevealed(false)
-                    haptic.performHapticFeedback(HapticFeedbackType.Confirm)
-                },
-                exposeTestTags = true,
-                modifier = Modifier.align(Alignment.CenterEnd),
-            )
-        }
     }
 }
 
@@ -361,39 +345,19 @@ private fun SwipeActionsBackground(
     modifier: Modifier = Modifier,
 ) {
     Row(
-        modifier =
-            modifier
-                .clip(RoundedCornerShape(16.dp))
-                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.54f))
-                .padding(horizontal = 6.dp, vertical = 4.dp),
+        modifier = modifier.padding(end = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.End),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         actions.forEach { action ->
-            val destructive = action.tint == MaterialTheme.colorScheme.error
             IconButton(
                 onClick = {
                     onAction()
                     action.onClick()
                 },
-                colors =
-                    IconButtonDefaults.iconButtonColors(
-                        containerColor =
-                            if (destructive) {
-                                MaterialTheme.colorScheme.errorContainer
-                            } else {
-                                MaterialTheme.colorScheme.secondaryContainer
-                            },
-                        contentColor =
-                            if (destructive) {
-                                MaterialTheme.colorScheme.onErrorContainer
-                            } else {
-                                action.tint ?: MaterialTheme.colorScheme.onSecondaryContainer
-                            },
-                    ),
                 modifier =
                     Modifier
-                        .size(44.dp)
+                        .size(48.dp)
                         .then(
                             if (exposeTestTags) {
                                 action.testTag?.let { Modifier.testTag(it) } ?: Modifier
@@ -405,12 +369,7 @@ private fun SwipeActionsBackground(
                 Icon(
                     imageVector = action.icon,
                     contentDescription = action.contentDescription.ifBlank { stringResource(R.string.action_label) },
-                    tint =
-                        if (destructive) {
-                            MaterialTheme.colorScheme.onErrorContainer
-                        } else {
-                            action.tint ?: MaterialTheme.colorScheme.onSecondaryContainer
-                        },
+                    tint = action.tint ?: MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }

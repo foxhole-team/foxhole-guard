@@ -75,36 +75,6 @@ class HomeIpLoadingPolicyTest {
     }
 
     @Test
-    fun `shows entry ip refresh skeleton only when disconnected ip is missing`() {
-        assertTrue(
-            shouldShowDisconnectedEntryIpRefreshSkeleton(
-                currentIpInfo = null,
-                connectionState = ConnectionState.IDLE,
-            ),
-        )
-        assertFalse(
-            shouldShowDisconnectedEntryIpRefreshSkeleton(
-                currentIpInfo =
-                IpInfo(
-                    ip = "203.0.113.7",
-                    countryCode = null,
-                    countryName = null,
-                    city = null,
-                    isp = null,
-                    fetchedAt = 1L,
-                ),
-                connectionState = ConnectionState.IDLE,
-            ),
-        )
-        assertFalse(
-            shouldShowDisconnectedEntryIpRefreshSkeleton(
-                currentIpInfo = null,
-                connectionState = ConnectionState.CONNECTED,
-            ),
-        )
-    }
-
-    @Test
     fun `restored vpn refresh keeps existing ip visible`() {
         assertFalse(
             shouldClearExistingIpForRefresh(
@@ -304,8 +274,8 @@ class HomeIpLoadingPolicyTest {
     }
 
     @Test
-    fun `shows startup network loading while disconnected profile state loads`() {
-        assertTrue(
+    fun `keeps startup network silent while disconnected profile state loads`() {
+        assertFalse(
             shouldShowPendingNetworkLoading(
                 visibleIpInfo = null,
                 explicitLoading = false,

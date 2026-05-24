@@ -535,10 +535,13 @@
     <string name="save_raw_log">Save raw</string>
     <string name="log_file_saved">Log saved.</string>
     <string name="log_file_save_failed">Failed to save log.</string>
-    <string name="logs_network_activity_notice">Network activity is logged only while Foxhole VPN is running. It is stored locally encrypted and shows time, app, package, protocol, local address, and remote address when Android can identify them</string>
+    <string name="logs_network_activity_notice">Network activity is logged only while Foxhole VPN is running. It is stored locally encrypted and shows time, app, protocol, destination country, endpoint, port, and real traffic volume when Android can identify them.</string>
     <string name="logs_sanitize_private_data_title">Hide private data</string>
-    <string name="logs_sanitize_private_data_summary_on">IP addresses, hosts, ports, package names, and profile details are hidden in the journal and app statistics details.</string>
+    <string name="logs_sanitize_private_data_summary_on">Exact IPs, hosts, package names, profile IDs, and session IDs are replaced with stable aliases. Countries, ports, and traffic volume stay visible for support debugging.</string>
     <string name="logs_sanitize_private_data_summary_off">Raw mode: IP addresses, hosts, ports, package names, countries, cities, profile details, and traffic volume are visible in the journal and app statistics.</string>
+    <string name="logs_raw_network_activity_warning_title">Show raw network activity?</string>
+    <string name="logs_raw_network_activity_warning_body">Raw network activity can contain real IP addresses, hosts, app package names, profile IDs, session IDs, countries, and traffic volume. Use it only when a developer explicitly asks for raw data.</string>
+    <string name="logs_raw_network_activity_warning_confirm">Show raw</string>
     <string name="logs_empty">Logs will appear after the next event</string>
     <string name="send_log_to_bot">Send</string>
     <string name="share_archive">Share</string>

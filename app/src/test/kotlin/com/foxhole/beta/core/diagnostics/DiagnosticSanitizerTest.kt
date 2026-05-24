@@ -225,6 +225,42 @@ class DiagnosticSanitizerTest {
     }
 
     @Test
+    fun `redacts reality wireguard and correlation fields outside profile uris`() {
+        val sanitized =
+            DiagnosticSanitizer.sanitizeForExport(
+                """
+                {"outbounds":[{"server":"edge.example.com","uuid":"11111111-1111-1111-1111-111111111111","password":"hunter2","privateKey":"wg-private","publicKey":"wg-public","pbk":"reality-public","sid":"abcd","shortId":"ef","serverName":"sni.example.com"}]}
+                remote=1.2.3.4:443 package=com.bank.app sessionId=session-a profileId=42 address=203.0.113.4 asn=AS64500
+                """.trimIndent(),
+            )
+
+        listOf(
+            "edge.example.com",
+            "11111111-1111-1111-1111-111111111111",
+            "hunter2",
+            "wg-private",
+            "wg-public",
+            "reality-public",
+            "abcd",
+            "sni.example.com",
+            "1.2.3.4",
+            "com.bank.app",
+            "session-a",
+            "203.0.113.4",
+            "AS64500",
+        ).forEach { rawValue ->
+            assertFalse("leaked $rawValue in $sanitized", sanitized.contains(rawValue))
+        }
+        assertTrue(sanitized.contains("\"pbk\":\"[redacted]\""))
+        assertTrue(sanitized.contains("\"sid\":\"[redacted]\""))
+        assertTrue(sanitized.contains("\"shortId\":\"[redacted]\""))
+        assertTrue(sanitized.contains("\"serverName\":\"[redacted]\""))
+        assertTrue(sanitized.contains("sessionId=[redacted]"))
+        assertTrue(sanitized.contains("address=[redacted]"))
+        assertTrue(sanitized.contains("asn=[redacted]"))
+    }
+
+    @Test
     fun `sanitizer is idempotent across persistence and export boundaries`() {
         val first =
             DiagnosticSanitizer.sanitizeForPersistence(

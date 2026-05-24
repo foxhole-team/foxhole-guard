@@ -550,10 +550,13 @@
     <string name="save_raw_log">Сохранить сырой</string>
     <string name="log_file_saved">Лог сохранен.</string>
     <string name="log_file_save_failed">Не удалось сохранить лог.</string>
-    <string name="logs_network_activity_notice">Журнал сетевой активности ведется только пока работает VPN Foxhole. Он хранится локально в зашифрованном виде и показывает время, приложение, пакет, протокол, локальный адрес и удаленный адрес, когда Android может их определить</string>
+    <string name="logs_network_activity_notice">Журнал сетевой активности ведется только пока работает VPN Foxhole. Он хранится локально в зашифрованном виде и показывает время, приложение, протокол, страну назначения, endpoint, порт и реальный объем трафика, когда Android может их определить.</string>
     <string name="logs_sanitize_private_data_title">Скрывать приватные данные</string>
-    <string name="logs_sanitize_private_data_summary_on">IP-адреса, хосты, порты, имена пакетов и детали профиля скрыты в журнале и деталях статистики приложений</string>
+    <string name="logs_sanitize_private_data_summary_on">Точные IP, хосты, имена пакетов, ID профилей и ID сессий заменяются стабильными алиасами. Страны, порты и объем трафика остаются видимыми для отладки.</string>
     <string name="logs_sanitize_private_data_summary_off">Сырой режим: IP-адреса, хосты, порты, имена пакетов, страны, города, детали профиля и объём трафика видны в журнале и статистике приложений</string>
+    <string name="logs_raw_network_activity_warning_title">Показать сырой сетевой журнал?</string>
+    <string name="logs_raw_network_activity_warning_body">Сырой журнал сетевой активности может содержать реальные IP-адреса, хосты, имена пакетов приложений, ID профилей, ID сессий, страны и объем трафика. Используйте его только если разработчик отдельно попросил сырые данные.</string>
+    <string name="logs_raw_network_activity_warning_confirm">Показать сырой</string>
     <string name="logs_empty">Логи появятся после следующего события</string>
     <string name="send_log_to_bot">Отправить</string>
     <string name="share_archive">Поделиться</string>

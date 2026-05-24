@@ -48,7 +48,7 @@ class DiagnosticsExportFormatterTest {
         assertTrue(payload.contains("CPU ABI: arm64-v8a, armeabi-v7a"))
         assertTrue(payload.contains("Diagnostics Retention: 3 days"))
         assertTrue(payload.contains("App Network Activity Logging: disabled"))
-        assertTrue(payload.contains("[profile] server=[redacted] ip=[ip] token=[redacted]"))
+        assertTrue(payload.contains("[profile] server=[redacted] ip=[redacted] token=[redacted]"))
         assertFalse(payload.contains("example.com"))
         assertFalse(payload.contains("79.120.30.76"))
         assertFalse(payload.contains("secret"))

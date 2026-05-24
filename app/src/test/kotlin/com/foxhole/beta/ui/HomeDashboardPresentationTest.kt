@@ -849,7 +849,7 @@ class HomeDashboardPresentationTest {
     }
 
     @Test
-    fun `network model shows startup skeleton while disconnected profile state loads`() {
+    fun `network model keeps startup silent while disconnected profile state loads`() {
         val model =
             resolveHomeDashboardNetworkModel(
                 state =
@@ -859,11 +859,11 @@ class HomeDashboardPresentationTest {
                     ),
                 visibleIpInfo = null,
                 deviceInternetAvailable = true,
-            )
+        )
 
         assertFalse(model.showConnectionStatus)
-        assertTrue(model.showLoading)
-        assertTrue(model.showIpInfoLoading)
+        assertFalse(model.showLoading)
+        assertFalse(model.showIpInfoLoading)
         assertFalse(model.showConnectionDetailsLoading)
     }
 

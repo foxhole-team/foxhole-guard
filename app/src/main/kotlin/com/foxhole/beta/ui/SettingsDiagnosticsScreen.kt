@@ -53,21 +53,27 @@ import com.foxhole.beta.core.model.DiagnosticsRetention
 import com.foxhole.beta.core.model.InstalledAppChangeType
 import com.foxhole.beta.core.model.InstalledAppInventoryChange
 import com.foxhole.beta.core.model.InstalledAppRiskLevel
+import com.foxhole.beta.core.model.IpInfo
 import com.foxhole.beta.core.model.NetworkActivityEvent
 import com.foxhole.beta.core.model.StatisticsMetric
 import com.foxhole.beta.core.security.labelRes
+import com.foxhole.beta.core.statistics.countryDisplayName
+import com.foxhole.beta.core.statistics.normalizedCountryCode
+import com.foxhole.beta.core.traffic.TorGeoIpCountryResolver
 import com.foxhole.beta.ui.theme.LocalFoxholeSemanticColors
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.security.MessageDigest
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.UUID
 
 @Composable
+@Suppress("LongMethod")
 fun DiagnosticsScreen(
     state: DiagnosticsRouteUiState,
     snackbarHostState: SnackbarHostState,
@@ -87,8 +93,11 @@ fun DiagnosticsScreen(
     var foxholeLogVisible by rememberSaveable { mutableStateOf(false) }
     var appChangesLogVisible by rememberSaveable { mutableStateOf(false) }
     var appChangesEnableVisible by rememberSaveable { mutableStateOf(false) }
+    var rawNetworkLogWarningVisible by rememberSaveable { mutableStateOf(false) }
     var retentionMenuExpanded by rememberSaveable { mutableStateOf(false) }
     var pendingSavedLog by remember { mutableStateOf<SavedLogPayload?>(null) }
+    val appContext = remember(context) { context.applicationContext }
+    val countryResolver = remember(appContext) { TorGeoIpCountryResolver(appContext) }
     val saveStrings =
         SavedLogStrings(
             saved = stringResource(R.string.log_file_saved),
@@ -103,14 +112,35 @@ fun DiagnosticsScreen(
             clearPendingLog = { pendingSavedLog = null },
             strings = saveStrings,
         )
+    val sanitizeNetworkLogPrivateData = state.settings.expert.sanitizeNetworkActivityPrivateData
     val networkEntries =
-        remember(state.networkActivityEvents, context) {
-            networkActivityDiagnosticEntries(state.networkActivityEvents, context)
+        remember(
+            state.networkActivityEvents,
+            state.diagnosticEntries,
+            state.ipInfo,
+            sanitizeNetworkLogPrivateData,
+            context,
+            countryResolver,
+        ) {
+            networkActivityDiagnosticEntries(
+                events = state.networkActivityEvents,
+                context = context,
+                countryResolver = countryResolver,
+                ipInfo = state.ipInfo,
+                sanitizePrivateData = sanitizeNetworkLogPrivateData,
+            )
         }
             .ifEmpty {
-                state.diagnosticEntries.filter { it.tag == NETWORK_ACTIVITY_TAG }
+                state.diagnosticEntries
+                    .filter { it.tag == NETWORK_ACTIVITY_TAG }
+                    .map { entry ->
+                        if (sanitizeNetworkLogPrivateData) {
+                            entry.copy(message = DiagnosticSanitizer.sanitizeForExport(entry.message))
+                        } else {
+                            entry
+                        }
+                    }
             }
-    val sanitizeNetworkLogPrivateData = state.settings.expert.sanitizeNetworkActivityPrivateData
     val foxholeEntries =
         remember(state.diagnosticEntries) {
             state.diagnosticEntries.filterNot { it.tag == NETWORK_ACTIVITY_TAG }
@@ -128,7 +158,13 @@ fun DiagnosticsScreen(
         onDiagnosticsRetentionSelected = onDiagnosticsRetentionSelected,
         onRawLiveDiagnosticsChanged = onRawLiveDiagnosticsChanged,
         sanitizeNetworkLogPrivateData = sanitizeNetworkLogPrivateData,
-        onSanitizeNetworkLogPrivateDataChanged = onSanitizeNetworkActivityPrivateDataChanged,
+        onSanitizeNetworkLogPrivateDataChanged = { sanitize ->
+            if (sanitize) {
+                onSanitizeNetworkActivityPrivateDataChanged(true)
+            } else {
+                rawNetworkLogWarningVisible = true
+            }
+        },
         onOpenNetworkLog = { networkLogVisible = true },
         onOpenFoxholeLog = { foxholeLogVisible = true },
         onOpenAppChangesLog = {
@@ -145,11 +181,11 @@ fun DiagnosticsScreen(
             entries = networkEntries,
             sanitizeEntries = sanitizeNetworkLogPrivateData,
             onDismiss = { networkLogVisible = false },
-            onSave = { title, sanitize ->
+            onSave = { title, _ ->
                 pendingSavedLog =
                     SavedLogPayload(
                         filename = "foxhole-network-activity-${System.currentTimeMillis()}.log",
-                        text = formatPlainLog(title, networkEntries, sanitize = sanitize),
+                        text = formatPlainLog(title, networkEntries, sanitize = false),
                     )
                 textLogSaver.launch(pendingSavedLog?.filename ?: "foxhole-network-activity.log")
             },
@@ -169,6 +205,21 @@ fun DiagnosticsScreen(
         InstalledAppChangesJournalDialog(
             changes = state.settings.installedAppInventoryAudit.recentChanges,
             onDismiss = { appChangesLogVisible = false },
+        )
+    }
+
+    if (rawNetworkLogWarningVisible) {
+        ConfirmDialog(
+            title = stringResource(R.string.logs_raw_network_activity_warning_title),
+            body = stringResource(R.string.logs_raw_network_activity_warning_body),
+            confirmLabel = stringResource(R.string.logs_raw_network_activity_warning_confirm),
+            dismissLabel = stringResource(R.string.cancel),
+            icon = Icons.Outlined.Public,
+            onDismiss = { rawNetworkLogWarningVisible = false },
+            onConfirm = {
+                rawNetworkLogWarningVisible = false
+                onSanitizeNetworkActivityPrivateDataChanged(false)
+            },
         )
     }
 
@@ -243,7 +294,7 @@ private fun NetworkActivityLogDialog(
         title = title,
         entries = entries,
         notice = stringResource(R.string.logs_network_activity_notice),
-        sanitizeEntries = sanitizeEntries,
+        sanitizeEntries = false,
         onDismiss = onDismiss,
         confirmLabel = confirmLabel,
         onConfirm = { onSave(title, sanitizeEntries) },
@@ -253,39 +304,122 @@ private fun NetworkActivityLogDialog(
 private fun networkActivityDiagnosticEntries(
     events: List<NetworkActivityEvent>,
     context: Context,
+    countryResolver: TorGeoIpCountryResolver,
+    ipInfo: IpInfo?,
+    sanitizePrivateData: Boolean,
 ): List<DiagnosticEntry> =
     events.map { event ->
         DiagnosticEntry(
             timestamp = event.timestampMs,
             tag = NETWORK_ACTIVITY_TAG,
-            message = event.toNetworkActivityDiagnosticMessage(context),
+            message = event.toNetworkActivityDiagnosticMessage(
+                formatBytes = { bytes -> formatBytes(context, bytes) },
+                countryCodeForDestination = countryResolver::countryCodeForDestination,
+                ipInfo = ipInfo,
+                sanitizePrivateData = sanitizePrivateData,
+            ),
         )
     }
 
-private fun NetworkActivityEvent.toNetworkActivityDiagnosticMessage(context: Context): String =
+internal fun NetworkActivityEvent.toNetworkActivityDiagnosticMessage(
+    formatBytes: (Long) -> String,
+    countryCodeForDestination: (String) -> String? = { null },
+    ipInfo: IpInfo? = null,
+    sanitizePrivateData: Boolean = true,
+): String =
     buildString {
         append("App connection: ")
         append(
             buildList {
                 if (packageNames.isNotEmpty()) {
-                    add("packages=${packageNames.joinToString()}")
+                    add("packages=${packageNames.networkActivityPackagesLabel(sanitizePrivateData)}")
                 }
                 add("protocol=${protocol.ifBlank { "?" }}")
-                add("remote=${remoteEndpointLabel()}")
-                countryCode?.takeIf(String::isNotBlank)?.let { country -> add("country=$country") }
-                add("rx=${formatBytes(context, bytesRx.coerceAtLeast(0L))}")
-                add("tx=${formatBytes(context, bytesTx.coerceAtLeast(0L))}")
-                add("total=${formatBytes(context, totalBytes.coerceAtLeast(0L))}")
-                profileId?.let { id -> add("profileId=$id") }
-                sessionId?.takeIf(String::isNotBlank)?.let { session -> add("sessionId=$session") }
+                add("endpoint=${remoteEndpointLabel(sanitizePrivateData)}")
+                remotePort?.takeIf { port -> port in 1..65535 }?.let { port -> add("port=$port") }
+                add(
+                    "country=${
+                        networkActivityCountryLabel(
+                            countryCodeForDestination = countryCodeForDestination,
+                            ipInfo = ipInfo,
+                        )
+                    }",
+                )
+                add("rx=${formatBytes(bytesRx.coerceAtLeast(0L))}")
+                add("tx=${formatBytes(bytesTx.coerceAtLeast(0L))}")
+                add("total=${formatBytes(totalBytes.coerceAtLeast(0L))}")
+                profileId?.let { id ->
+                    add("profile=${if (sanitizePrivateData) stableDiagnosticAlias("profile", id.toString()) else id}")
+                }
+                sessionId?.takeIf(String::isNotBlank)?.let { session ->
+                    add("session=${if (sanitizePrivateData) stableDiagnosticAlias("session", session) else session}")
+                }
             }.joinToString(separator = " • "),
         )
     }
 
-private fun NetworkActivityEvent.remoteEndpointLabel(): String {
+private fun NetworkActivityEvent.remoteEndpointLabel(sanitizePrivateData: Boolean): String {
     val host = remoteHost.ifBlank { "?" }
-    val port = remotePort?.takeIf { value -> value in 1..65535 } ?: return host
-    return "$host:$port"
+    return if (sanitizePrivateData) {
+        host.privateEndpointAlias()
+    } else {
+        host
+    }
+}
+
+private fun NetworkActivityEvent.networkActivityCountryLabel(
+    countryCodeForDestination: (String) -> String?,
+    ipInfo: IpInfo?,
+): String {
+    val remote = remoteHost.connectionHost()
+    val resolvedCode =
+        normalizedCountryCode(countryCode)
+            ?: normalizedCountryCode(countryCodeForDestination(remoteHost))
+            ?: normalizedCountryCode(
+                ipInfo
+                    ?.takeIf { info -> remote == info.ip || remote == info.ipv4 || remote == info.ipv6 }
+                    ?.countryCode,
+            )
+    return resolvedCode
+        ?.let { code -> "${countryEmoji(code)} ${countryDisplayName(code)} ($code)" }
+        ?: "${countryEmoji(null)} Unknown"
+}
+
+private fun List<String>.networkActivityPackagesLabel(sanitizePrivateData: Boolean): String =
+    if (sanitizePrivateData) {
+        joinToString { packageName -> stableDiagnosticAlias("pkg", packageName) }
+    } else {
+        joinToString()
+    }
+
+private fun String.privateEndpointAlias(): String {
+    if (isBlank() || this == "?") {
+        return "?"
+    }
+    return stableDiagnosticAlias(if (looksLikeIpLiteral()) "ip" else "host", this)
+}
+
+private fun String.looksLikeIpLiteral(): Boolean =
+    all { character -> character.isDigit() || character == '.' } ||
+        any { character -> character == ':' } &&
+        all { character ->
+            character.isDigit() ||
+                character in 'a'..'f' ||
+                character in 'A'..'F' ||
+                character == ':' ||
+                character == '.'
+        }
+
+private fun stableDiagnosticAlias(
+    kind: String,
+    rawValue: String,
+): String {
+    val digest =
+        MessageDigest
+            .getInstance("SHA-256")
+            .digest("$kind:$rawValue".toByteArray(Charsets.UTF_8))
+    val suffix = digest.take(2).joinToString(separator = "") { byte -> "%02x".format(byte.toInt() and 0xff) }
+    return "[$kind#$suffix]"
 }
 
 @Composable
@@ -632,9 +766,21 @@ private fun createPlainLogFile(
     sanitize: Boolean = true,
 ): File {
     val targetDir = File(context.cacheDir, "diagnostics-export").apply { mkdirs() }
+    cleanupExpiredPlainDiagnosticsExports(targetDir)
     val file = File(targetDir, "$filenamePrefix-${UUID.randomUUID()}.log")
     file.writeText(formatPlainLog(title, entries, sanitize = sanitize), Charsets.UTF_8)
     return file
+}
+
+internal fun cleanupExpiredPlainDiagnosticsExports(
+    targetDir: File,
+    nowMs: Long = System.currentTimeMillis(),
+) {
+    val cutoff = nowMs - DIAGNOSTICS_EXPORT_TTL_MS
+    targetDir
+        .listFiles()
+        ?.filter { file -> file.isFile && file.lastModified() < cutoff }
+        ?.forEach(File::delete)
 }
 
 private fun sharePlainLogIntent(
@@ -691,3 +837,4 @@ private val NetworkActivityRetentionValues =
     )
 
 private const val NETWORK_ACTIVITY_TAG = "activity"
+private const val DIAGNOSTICS_EXPORT_TTL_MS = 5 * 60 * 1000L
