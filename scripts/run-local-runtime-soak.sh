@@ -17,7 +17,7 @@ readonly REQUIRE_SUCCESS="${FOXHOLE_SOAK_REQUIRE_SUCCESS:-1}"
 readonly ALLOW_INSECURE_TLS="${FOXHOLE_SOAK_ALLOW_INSECURE_TLS:-0}"
 readonly KEEP_APP_VISIBLE="${FOXHOLE_SOAK_KEEP_APP_VISIBLE:-1}"
 readonly GOOGLE_CHECK_URL="${FOXHOLE_SOAK_GOOGLE_URL:-https://www.google.com/generate_204}"
-readonly IP_CHECK_URL="${FOXHOLE_SOAK_IP_URL:-https://api.ipify.org/}"
+readonly IP_CHECK_URL="${FOXHOLE_SOAK_IP_URL:-http://1.1.1.1/cdn-cgi/trace}"
 readonly SPEC="${TEST_CLASS}#${TEST_METHOD}"
 
 usage() {
@@ -34,6 +34,7 @@ Common environment:
   FOXHOLE_SOAK_PROBE_INTERVAL_MS=60000               In-app vpn-bound probe interval.
   FOXHOLE_SOAK_BROWSER_WAIT_SECONDS=180              Wait for connected hold before browser checks.
   FOXHOLE_SOAK_REQUIRE_SUCCESS=1                     Fail the pass on runtime/IP/traffic evidence problems.
+  FOXHOLE_SOAK_IP_URL=http://1.1.1.1/cdn-cgi/trace  Browser IP smoke URL; literal IP avoids DNS-provider false negatives.
   FOXHOLE_SOAK_ALLOW_INSECURE_TLS=0                  Preserve strict subscription TLS by default.
   FOXHOLE_SOAK_TEST_METHOD=$TEST_METHOD
 
@@ -162,7 +163,7 @@ tap_screen_percent() {
 dismiss_browser_first_run_if_visible() {
   local serial="$1"
   local prefix="$2"
-  if grep -Eiq 'Make Chrome your own|Use without an account|Add account to device' "${prefix}.xml" 2>/dev/null; then
+  if [[ ! -s "${prefix}.xml" ]] || grep -Eiq 'Make Chrome your own|Use without an account|Stay signed out|Add account to device' "${prefix}.xml" 2>/dev/null; then
     tap_screen_percent "$serial" 50 88
     sleep 2
     tap_screen_percent "$serial" 50 90
@@ -183,7 +184,7 @@ browser_check() {
   } > "$round_dir/browser-${label}.log" 2>&1
   capture_screen_and_ui "$serial" "$round_dir/browser-${label}"
   dismiss_browser_first_run_if_visible "$serial" "$round_dir/browser-${label}"
-  if grep -Eiq 'Make Chrome your own|Use without an account|Add account to device' "$round_dir/browser-${label}.xml" 2>/dev/null; then
+  if [[ ! -s "$round_dir/browser-${label}.xml" ]] || grep -Eiq 'Make Chrome your own|Use without an account|Stay signed out|Add account to device' "$round_dir/browser-${label}.xml" 2>/dev/null; then
     {
       echo "browser_check_retry_after_first_run label=$label url=$url"
       adb_device "$serial" shell am start -a android.intent.action.VIEW -d "$url"
@@ -257,7 +258,7 @@ run_device_soak() {
   local subscription_url="$4"
   local device_dir="$OUTPUT_ROOT/$serial"
   local summary="$device_dir/summary.tsv"
-  local started epoch_now round status logcat_pid round_dir
+  local started epoch_now round status logcat_pid round_dir failed_rounds=0
 
   mkdir -p "$device_dir"
   collect_device_info "$serial" "$device_dir"
@@ -293,6 +294,7 @@ run_device_soak() {
 
     if [[ "$status" -ne 0 ]]; then
       touch "$round_dir/FAILED"
+      failed_rounds=1
     fi
     round=$((round + 1))
   done
@@ -301,6 +303,7 @@ run_device_soak() {
     install_apks "$serial" "$device_dir/reinstall-after-soak" "$app_apk" "$test_apk"
     adb_device "$serial" shell monkey -p "$APP_PACKAGE" 1 > "$device_dir/relaunch.log" 2>&1 || true
   fi
+  return "$failed_rounds"
 }
 
 main() {
