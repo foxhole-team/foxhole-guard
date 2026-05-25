@@ -311,7 +311,7 @@ class IpInfoRepositoryTest {
     }
 
     @Test
-    fun `entry quick mode keeps primary plus one fallback endpoint`() {
+    fun `entry quick mode keeps primary plus lightweight fallback endpoints`() {
         val repository =
             IpInfoRepository(
                 client = okhttp3.OkHttpClient(),
@@ -325,7 +325,9 @@ class IpInfoRepositoryTest {
             )
 
         assertEquals("https://example.com/ip", candidates.first())
-        assertEquals(2, candidates.size)
+        assertEquals("https://api.ipify.org?format=json", candidates[1])
+        assertEquals("https://cloudflare.com/cdn-cgi/trace", candidates[2])
+        assertEquals(3, candidates.size)
     }
 
     @Test

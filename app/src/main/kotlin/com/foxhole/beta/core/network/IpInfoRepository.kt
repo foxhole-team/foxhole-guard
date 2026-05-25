@@ -486,8 +486,14 @@ class IpInfoRepository(
 
     private fun quickEndpoints(endpoint: String): List<String> {
         val primary = primaryEndpoint(endpoint)
-        val fallback = FALLBACK_ENDPOINTS.firstOrNull { candidate -> !candidate.equals(primary, ignoreCase = true) }
-        return listOfNotNull(primary, fallback)
+        return buildList {
+            add(primary)
+            QUICK_FALLBACK_ENDPOINTS.forEach { candidate ->
+                if (!candidate.equals(primary, ignoreCase = true) && candidate !in this) {
+                    add(candidate)
+                }
+            }
+        }
     }
 
     internal fun effectiveEndpointCandidates(
@@ -568,6 +574,11 @@ class IpInfoRepository(
                 "https://ifconfig.co/json",
                 "https://api64.ipify.org?format=json",
                 "https://api.ipify.org?format=json",
+            )
+        val QUICK_FALLBACK_ENDPOINTS =
+            listOf(
+                "https://api.ipify.org?format=json",
+                "https://cloudflare.com/cdn-cgi/trace",
             )
         val IPV4_FALLBACK_ENDPOINTS =
             listOf(
