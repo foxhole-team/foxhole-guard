@@ -87,15 +87,39 @@ internal fun HomeViewModel.refreshIpInfoInternalInternal(
     reason: IpInfoRefreshReason = IpInfoRefreshReason.FOREGROUND,
     onPublished: (suspend (IpInfo) -> Unit)? = null,
 ) {
-    val refreshToken = invalidateIpInfoRefreshes()
+    val requestSnapshot = container.connectionController.snapshot.value
+    val requestTarget = ipInfoRefreshTargetForSnapshot(requestSnapshot)
+    val requestGeneration = ipInfoRefreshGenerationForSnapshot(requestSnapshot)
+    val decision =
+        ipRefreshCoordinator.request(
+            target = requestTarget,
+            reason = reason,
+            generation = requestGeneration,
+        )
+    if (decision is IpRefreshDecision.Coalesced) {
+        container.diagnosticsLogger.record(
+            "ip",
+            "dashboard refresh coalesced active=${decision.activeToken} active_reason=${decision.activeReason.name.lowercase()} reason=${reason.name.lowercase()} target=${decision.target.name.lowercase()} generation=${decision.generation}",
+        )
+        return
+    }
+    val startDecision = decision as IpRefreshDecision.Start
+    val refreshToken = startDecision.token
+    ipInfoRefreshToken = refreshToken
+    if (startDecision.supersededActive) {
+        ipInfoRefreshJob?.cancel()
+        ipInfoRefreshJob = null
+        activeIpInfoRefreshReason = null
+        ipInfoLoadingMutable.value = false
+    }
     ipInfoRefreshJob =
         viewModelScope.launch {
-            val target = ipInfoRefreshTargetForSnapshot(container.connectionController.snapshot.value)
+            val target = startDecision.target
             activeIpInfoRefreshReason = reason
             var publishedInfo = false
             container.diagnosticsLogger.record(
                 "ip",
-                "dashboard refresh started id=$refreshToken reason=${reason.name.lowercase()} mode=${fetchMode.name.lowercase()} target=${target.name.lowercase()} showLoading=$showLoading clearExistingIp=$clearExistingIp",
+                "dashboard refresh started id=$refreshToken reason=${reason.name.lowercase()} mode=${fetchMode.name.lowercase()} target=${target.name.lowercase()} generation=${startDecision.generation} showLoading=$showLoading clearExistingIp=$clearExistingIp",
             )
             if (showLoading) {
                 ipInfoLoadingMutable.value = true
@@ -106,7 +130,7 @@ internal fun HomeViewModel.refreshIpInfoInternalInternal(
             }
             try {
                 val info = refreshIpInfoForReason(fetchMode = fetchMode, reason = reason)
-                if (ipInfoRefreshToken == refreshToken) {
+                if (ipRefreshCoordinator.isCurrent(refreshToken)) {
                     val currentTarget = ipInfoRefreshTargetForSnapshot(container.connectionController.snapshot.value)
                     if (!shouldPublishDashboardIpRefresh(target, currentTarget, reason)) {
                         container.diagnosticsLogger.record(
@@ -146,20 +170,20 @@ internal fun HomeViewModel.refreshIpInfoInternalInternal(
                     emitError(getApplication<Application>().getString(R.string.ip_info_failed))
                 }
             } finally {
-                if (showLoading && ipInfoRefreshToken == refreshToken) {
+                if (showLoading && ipRefreshCoordinator.isCurrent(refreshToken)) {
                     val elapsedLoadingMs = SystemClock.elapsedRealtime() - loadingStartedAtMs
                     val remainingLoadingMs = minimumLoadingDurationMs - elapsedLoadingMs
                     if (remainingLoadingMs > 0L) {
                         runCatching { delay(remainingLoadingMs) }
                     }
                 }
-                if (showLoading && ipInfoRefreshToken == refreshToken) {
+                if (showLoading && ipRefreshCoordinator.isCurrent(refreshToken)) {
                     ipInfoLoadingMutable.value = false
                 }
                 if (
                     reason == IpInfoRefreshReason.POST_CONNECT &&
                     !publishedInfo &&
-                    ipInfoRefreshToken == refreshToken
+                    ipRefreshCoordinator.isCurrent(refreshToken)
                 ) {
                     container.diagnosticsLogger.record(
                         "latency",
@@ -171,7 +195,8 @@ internal fun HomeViewModel.refreshIpInfoInternalInternal(
                     "ip",
                     "dashboard refresh finished id=$refreshToken reason=${reason.name.lowercase()} loading=${ipInfoLoadingMutable.value}",
                 )
-                if (ipInfoRefreshToken == refreshToken) {
+                if (ipRefreshCoordinator.isCurrent(refreshToken)) {
+                    ipRefreshCoordinator.complete(refreshToken)
                     ipInfoRefreshJob = null
                     activeIpInfoRefreshReason = null
                 }
@@ -691,7 +716,7 @@ internal fun HomeViewModel.invalidateIpInfoRefreshesInternal(): Long {
     ipInfoRefreshJob = null
     activeIpInfoRefreshReason = null
     ipInfoLoadingMutable.value = false
-    ipInfoRefreshToken += 1
+    ipInfoRefreshToken = ipRefreshCoordinator.cancelAll()
     return ipInfoRefreshToken
 }
 
@@ -711,9 +736,8 @@ internal fun HomeViewModel.scheduleConnectedIpRefreshInternal(
             if (ipInfoRefreshJob != null) {
                 container.diagnosticsLogger.record(
                     "ip",
-                    "post-connect refresh replacing active refresh reason=${activeIpInfoRefreshReason?.name?.lowercase().orEmpty()}",
+                    "connected refresh requested while active refresh is running reason=${activeIpInfoRefreshReason?.name?.lowercase().orEmpty()}",
                 )
-                invalidateIpInfoRefreshes()
             }
             pendingPostConnectIpRefresh = false
             val snapshot = container.connectionController.snapshot.value

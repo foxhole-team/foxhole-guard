@@ -592,6 +592,7 @@ class HomeViewModel(
     val requestVpnPermission = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     val requestNotificationPermission = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     internal var pendingConnectRequest: PendingConnectRequest? = null
+    internal val ipRefreshCoordinator = IpRefreshCoordinator()
     internal var ipInfoRefreshJob: Job? = null
     internal var ipInfoRefreshToken: Long = 0L
     internal var activeIpInfoRefreshReason: IpInfoRefreshReason? = null
