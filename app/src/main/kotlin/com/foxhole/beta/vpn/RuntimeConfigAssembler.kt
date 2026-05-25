@@ -899,15 +899,10 @@ class RuntimeConfigAssembler(
             transportType in TCP_RELIABILITY_TRANSPORT_TYPES
     }
 
-    private fun JsonObject.requiresVlessUdpRelayPatch(): Boolean {
-        if (this["type"]?.jsonPrimitive?.contentOrNull?.lowercase() != "vless") {
-            return false
-        }
-        if (!isTcpOnlyNetwork()) {
-            return false
-        }
-        return stringField("packet_encoding")?.lowercase() in setOf(null, "xudp", "packetaddr")
-    }
+    private fun JsonObject.requiresVlessUdpRelayPatch(): Boolean =
+        this["type"]?.jsonPrimitive?.contentOrNull?.lowercase() == "vless" &&
+            isTcpOnlyNetwork() &&
+            stringField("packet_encoding")?.lowercase() in setOf(null, "xudp", "packetaddr")
 
     private fun patchDns(
         existing: JsonObject?,

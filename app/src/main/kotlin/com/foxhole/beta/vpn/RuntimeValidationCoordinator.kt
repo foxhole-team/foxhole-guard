@@ -1174,11 +1174,6 @@ internal suspend fun FoxholeVpnService.runNotificationConnectivityProbeInternal(
             }.isSuccess
     }
 
-private const val TUNNEL_RUNTIME_PROXY_VALIDATION_CALL_TIMEOUT_MS = 5_000L
-private const val TUNNEL_RUNTIME_PROXY_VALIDATION_IP_REFRESH_TIMEOUT_MS = 3_500L
-private const val TUNNEL_RUNTIME_PROXY_VALIDATION_WARMUP_TIMEOUT_MS = 36_000L
-private const val TUNNEL_RUNTIME_PROXY_VALIDATION_EXTRA_TIMEOUT_MS = 36_000L
-private const val TUNNEL_RUNTIME_PROXY_VALIDATION_RETRY_DELAY_MS = 700L
 private val RUNTIME_VALIDATION_BOOTSTRAP_ENDPOINTS =
     listOf(
         "https://cp.cloudflare.com/generate_204",
