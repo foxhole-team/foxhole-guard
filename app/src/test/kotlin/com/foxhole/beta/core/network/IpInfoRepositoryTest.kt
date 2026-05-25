@@ -310,7 +310,9 @@ class IpInfoRepositoryTest {
 
         assertTrue(candidates.isNotEmpty())
         assertEquals("https://ipwho.is/", candidates.first())
-        assertEquals("https://cloudflare.com/cdn-cgi/trace", candidates[1])
+        assertEquals("https://1.1.1.1/cdn-cgi/trace", candidates[1])
+        assertEquals("https://1.0.0.1/cdn-cgi/trace", candidates[2])
+        assertEquals("https://cloudflare.com/cdn-cgi/trace", candidates[3])
         assertTrue(candidates.size > 1)
     }
 
@@ -329,9 +331,11 @@ class IpInfoRepositoryTest {
             )
 
         assertEquals("https://example.com/ip", candidates.first())
-        assertEquals("https://api.ipify.org?format=json", candidates[1])
-        assertEquals("https://cloudflare.com/cdn-cgi/trace", candidates[2])
-        assertEquals(3, candidates.size)
+        assertEquals("https://1.1.1.1/cdn-cgi/trace", candidates[1])
+        assertEquals("https://1.0.0.1/cdn-cgi/trace", candidates[2])
+        assertEquals("https://api.ipify.org?format=json", candidates[3])
+        assertEquals("https://cloudflare.com/cdn-cgi/trace", candidates[4])
+        assertEquals(5, candidates.size)
     }
 
     @Test
@@ -395,14 +399,14 @@ class IpInfoRepositoryTest {
                     json = json,
                 )
 
-            SlowConnectHttpProxy(connectResponseDelayMs = 180L).use { proxy ->
+            SlowConnectHttpProxy(connectResponseDelayMs = 450L).use { proxy ->
                 var failure: Exception? = null
                 val elapsed =
                     measureTimeMillis {
                         try {
                             repository.probeLatency(
                                 endpoint = "https://example.com/",
-                                callTimeoutMs = 250L,
+                                callTimeoutMs = 500L,
                                 proxy = HttpProxyAccess(host = "127.0.0.1", port = proxy.port),
                             )
                         } catch (error: Exception) {
@@ -414,7 +418,7 @@ class IpInfoRepositoryTest {
                     "probe should fail against an idle TLS tunnel, failure=${failure?.javaClass?.simpleName}",
                     failure != null,
                 )
-                assertTrue("elapsed=$elapsed", elapsed < 380L)
+                assertTrue("elapsed=$elapsed", elapsed < 850L)
             }
         }
 

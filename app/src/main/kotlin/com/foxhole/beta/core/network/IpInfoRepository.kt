@@ -63,6 +63,8 @@ enum class IpInfoFetchMode {
     ENTRY_QUICK,
 }
 
+internal const val DNS_INDEPENDENT_IP_INFO_ENDPOINT = "https://1.1.1.1/cdn-cgi/trace"
+
 class IpInfoRepository(
     private val client: OkHttpClient,
     private val json: Json,
@@ -396,7 +398,10 @@ class IpInfoRepository(
                             }
                         }
                     } else {
-                        network?.let { socketFactory(it.socketFactory) }
+                        network?.let {
+                            proxy(Proxy.NO_PROXY)
+                            socketFactory(it.socketFactory)
+                        }
                     }
                     if (proxy == null) {
                         dns(
@@ -603,6 +608,8 @@ class IpInfoRepository(
         val FALLBACK_ENDPOINTS =
             listOf(
                 BuildConfig.DEFAULT_IP_INFO_ENDPOINT,
+                DNS_INDEPENDENT_IP_INFO_ENDPOINT,
+                "https://1.0.0.1/cdn-cgi/trace",
                 "https://cloudflare.com/cdn-cgi/trace",
                 "https://ipinfo.io/json",
                 "https://ifconfig.co/json",
@@ -611,11 +618,15 @@ class IpInfoRepository(
             )
         val QUICK_FALLBACK_ENDPOINTS =
             listOf(
+                DNS_INDEPENDENT_IP_INFO_ENDPOINT,
+                "https://1.0.0.1/cdn-cgi/trace",
                 "https://api.ipify.org?format=json",
                 "https://cloudflare.com/cdn-cgi/trace",
             )
         val IPV4_FALLBACK_ENDPOINTS =
             listOf(
+                DNS_INDEPENDENT_IP_INFO_ENDPOINT,
+                "https://1.0.0.1/cdn-cgi/trace",
                 "https://api.ipify.org?format=json",
             )
         val IPV6_FALLBACK_ENDPOINTS =

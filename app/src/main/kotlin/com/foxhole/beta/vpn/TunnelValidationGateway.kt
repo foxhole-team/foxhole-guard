@@ -5,6 +5,7 @@ import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
 import androidx.core.content.getSystemService
+import com.foxhole.beta.BuildConfig
 import com.foxhole.beta.core.data.ProfileRepository
 import com.foxhole.beta.core.diagnostics.DiagnosticsLogger
 import com.foxhole.beta.core.model.ConnectionSnapshot
@@ -13,6 +14,7 @@ import com.foxhole.beta.core.model.PrivacyRouteMode
 import com.foxhole.beta.core.model.PrivacyRouteScope
 import com.foxhole.beta.core.model.Settings
 import com.foxhole.beta.core.model.TrafficMode
+import com.foxhole.beta.core.network.DNS_INDEPENDENT_IP_INFO_ENDPOINT
 import com.foxhole.beta.core.network.HttpProxyAccess
 import com.foxhole.beta.core.network.IpInfoFetchMode
 import com.foxhole.beta.core.network.IpInfoRepository
@@ -192,17 +194,24 @@ internal class TunnelValidationGateway(
         androidValidatedVpnNetwork: Boolean,
     ): IpInfo {
         val effectiveFetchMode = validatedTunnelIpRefreshFetchMode(fetchMode, androidValidatedVpnNetwork)
+        val effectiveEndpoint = activeTunnelIpRefreshEndpoint(endpoint, androidValidatedVpnNetwork)
         if (effectiveFetchMode != fetchMode) {
             diagnosticsLogger.record(
                 "ip",
                 "active tunnel ip refresh using quick mode after android validation",
             )
         }
+        if (effectiveEndpoint != endpoint) {
+            diagnosticsLogger.record(
+                "ip",
+                "active tunnel ip refresh using dns-independent endpoint after android validation",
+            )
+        }
         return if (settings.shouldPreferVpnBoundIpRefresh(currentSnapshot, androidValidatedVpnNetwork)) {
             fetchActiveTunnelIpInfoWithVpnBoundPreference(
                 settings = settings,
                 currentSnapshot = currentSnapshot,
-                endpoint = endpoint,
+                endpoint = effectiveEndpoint,
                 fetchMode = effectiveFetchMode,
                 vpnNetwork = vpnNetwork,
                 preferIpv4Validation = preferIpv4Validation,
@@ -212,7 +221,7 @@ internal class TunnelValidationGateway(
                 settings = settings,
                 currentSnapshot = currentSnapshot,
                 androidValidatedVpnNetwork = androidValidatedVpnNetwork,
-                endpoint = endpoint,
+                endpoint = effectiveEndpoint,
                 fetchMode = effectiveFetchMode,
                 vpnNetwork = vpnNetwork,
                 preferIpv4Validation = preferIpv4Validation,
@@ -578,6 +587,21 @@ internal fun validatedTunnelIpRefreshFetchMode(
     } else {
         requestedMode
     }
+
+internal fun activeTunnelIpRefreshEndpoint(
+    configuredEndpoint: String,
+    androidValidatedVpnNetwork: Boolean,
+): String {
+    if (!androidValidatedVpnNetwork) {
+        return configuredEndpoint
+    }
+    val normalized = configuredEndpoint.trim().ifBlank { BuildConfig.DEFAULT_IP_INFO_ENDPOINT }
+    return if (normalized.equals(BuildConfig.DEFAULT_IP_INFO_ENDPOINT, ignoreCase = true)) {
+        DNS_INDEPENDENT_IP_INFO_ENDPOINT
+    } else {
+        configuredEndpoint
+    }
+}
 
 internal fun Settings.shouldPublishRuntimeProxyIpInfoToDashboard(snapshot: ConnectionSnapshot): Boolean =
     !shouldHoldRuntimeProxyIpInfoForTorOverVpn(snapshot)

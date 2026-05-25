@@ -1,5 +1,6 @@
 package com.foxhole.beta.vpn
 
+import com.foxhole.beta.BuildConfig
 import com.foxhole.beta.core.model.ConnectionSnapshot
 import com.foxhole.beta.core.model.ConnectionState
 import com.foxhole.beta.core.model.PrivacyRouteMode
@@ -8,6 +9,7 @@ import com.foxhole.beta.core.model.PrivacyRouteSettings
 import com.foxhole.beta.core.model.ProtocolHint
 import com.foxhole.beta.core.model.Settings
 import com.foxhole.beta.core.model.TrafficMode
+import com.foxhole.beta.core.network.DNS_INDEPENDENT_IP_INFO_ENDPOINT
 import com.foxhole.beta.core.network.IpInfoFetchMode
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -182,6 +184,44 @@ class TunnelRuntimeProxyIpRefreshPolicyTest {
             validatedTunnelIpRefreshFetchMode(
                 requestedMode = IpInfoFetchMode.ENTRY_QUICK,
                 androidValidatedVpnNetwork = true,
+            ),
+        )
+    }
+
+    @Test
+    fun `android validated tunnel dashboard refresh uses dns independent default endpoint`() {
+        assertEquals(
+            DNS_INDEPENDENT_IP_INFO_ENDPOINT,
+            activeTunnelIpRefreshEndpoint(
+                configuredEndpoint = "",
+                androidValidatedVpnNetwork = true,
+            ),
+        )
+        assertEquals(
+            DNS_INDEPENDENT_IP_INFO_ENDPOINT,
+            activeTunnelIpRefreshEndpoint(
+                configuredEndpoint = BuildConfig.DEFAULT_IP_INFO_ENDPOINT,
+                androidValidatedVpnNetwork = true,
+            ),
+        )
+    }
+
+    @Test
+    fun `custom active tunnel dashboard ip endpoint stays primary`() {
+        val customEndpoint = "https://example.com/ip"
+
+        assertEquals(
+            customEndpoint,
+            activeTunnelIpRefreshEndpoint(
+                configuredEndpoint = customEndpoint,
+                androidValidatedVpnNetwork = true,
+            ),
+        )
+        assertEquals(
+            customEndpoint,
+            activeTunnelIpRefreshEndpoint(
+                configuredEndpoint = customEndpoint,
+                androidValidatedVpnNetwork = false,
             ),
         )
     }

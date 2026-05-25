@@ -788,22 +788,51 @@ internal suspend fun FoxholeVpnService.refreshValidatedTunnelIpInfoBestEffortInt
         return
     }
     runCatchingUnlessCancelled {
-        val endpoint = container.settingsRepository.current().connection.ipInfoEndpoint
+        val settings = container.settingsRepository.current()
+        val snapshot = FoxholeVpnRuntimeBridge.snapshot.value
+        val androidValidatedVpnNetwork = isVpnNetworkValidated(vpnNetwork)
+        val endpoint = activeTunnelIpRefreshEndpoint(
+            configuredEndpoint = settings.connection.ipInfoEndpoint,
+            androidValidatedVpnNetwork = androidValidatedVpnNetwork,
+        )
         val remoteDnsServers = VpnDnsServerSelector.remoteDnsServerAddresses(sessionSnapshot?.configJson)
-        val info =
-            if (shouldPreferIpv4TunnelValidation(sessionSnapshot?.protocolHint, sessionSnapshot?.configJson)) {
-                refreshTunnelRuntimeProxyIpv4Info(
+        val preferIpv4Validation =
+            shouldPreferIpv4TunnelValidation(sessionSnapshot?.protocolHint, sessionSnapshot?.configJson)
+        val info = if (settings.shouldPreferVpnBoundIpRefresh(snapshot, androidValidatedVpnNetwork)) {
+            val requestNetwork = tunnelValidationRequestNetwork(vpnNetwork)
+            val resolverNetwork = currentUpstreamNetworkOrNull()
+            if (preferIpv4Validation) {
+                container.ipInfoRepository.fetchIpv4(
+                    endpoint = endpoint,
                     callTimeoutMs = FoxholeVpnService.CONNECTIVITY_PROBE_CALL_TIMEOUT_MS,
-                ) ?: error("runtime proxy ipv4 refresh failed")
+                    network = requestNetwork,
+                    resolverNetwork = resolverNetwork,
+                ) ?: error("vpn ipv4 refresh failed")
             } else {
                 container.ipInfoRepository.fetch(
                     endpoint = endpoint,
                     callTimeoutMs = FoxholeVpnService.CONNECTIVITY_PROBE_CALL_TIMEOUT_MS,
-                    proxy = container.settingsRepository.current().tunnelRuntimeProxyAccess(),
-                    resolverNetwork = currentUpstreamNetworkOrNull(),
+                    network = requestNetwork,
+                    resolverNetwork = resolverNetwork,
                     mode = IpInfoFetchMode.ENTRY_QUICK,
                 )
             }
+        } else if (preferIpv4Validation) {
+            container.ipInfoRepository.fetchIpv4(
+                endpoint = endpoint,
+                callTimeoutMs = FoxholeVpnService.CONNECTIVITY_PROBE_CALL_TIMEOUT_MS,
+                proxy = settings.tunnelRuntimeProxyAccess(),
+                resolverNetwork = currentUpstreamNetworkOrNull(),
+            ) ?: error("runtime proxy ipv4 refresh failed")
+        } else {
+            container.ipInfoRepository.fetch(
+                endpoint = endpoint,
+                callTimeoutMs = FoxholeVpnService.CONNECTIVITY_PROBE_CALL_TIMEOUT_MS,
+                proxy = settings.tunnelRuntimeProxyAccess(),
+                resolverNetwork = currentUpstreamNetworkOrNull(),
+                mode = IpInfoFetchMode.ENTRY_QUICK,
+            )
+        }
         info.withDnsServers(
             localDnsServers = connectivityManager.dnsServerAddresses(vpnNetwork),
             remoteDnsServers = remoteDnsServers,
