@@ -254,9 +254,8 @@ internal suspend fun FoxholeVpnService.validateTunnelConnectivityInternal(
                 PrivateDnsSettings.current(this@validateTunnelConnectivityInternal),
             )
         val preferIpv4Validation = shouldPreferIpv4TunnelValidation(activeProtocolHint, currentSession?.configJson)
-        val validationTimeoutMs =
-            FoxholeVpnService.CONNECTIVITY_PROBE_TOTAL_TIMEOUT_MS +
-                maxTunnelValidationGraceTimeoutMs(activeProtocolHint)
+        val validationProbePlan = runtimeValidationProbePlan(currentSession)
+        val validationTimeoutMs = validationProbePlan.totalTimeoutMs
         val validationDiagnostics = runtimeValidationDiagnosticFields(currentSession)
         container.diagnosticsLogger.recordStructured(
             "dns",
@@ -275,14 +274,14 @@ internal suspend fun FoxholeVpnService.validateTunnelConnectivityInternal(
         )
         val result =
             TunnelConnectivityProbe.run(
-                attempts = FoxholeVpnService.CONNECTIVITY_PROBE_ATTEMPTS,
-                initialDelayMs = FoxholeVpnService.CONNECTIVITY_PROBE_INITIAL_DELAY_MS,
-                retryDelayMs = FoxholeVpnService.CONNECTIVITY_PROBE_RETRY_DELAY_MS,
+                attempts = validationProbePlan.attempts,
+                initialDelayMs = validationProbePlan.initialDelayMs,
+                retryDelayMs = validationProbePlan.retryDelayMs,
                 timeoutMs = validationTimeoutMs,
                 onFailure = { attemptIndex, error ->
                     container.diagnosticsLogger.record(
                         "dns",
-                        "probe attempt ${attemptIndex + 1}/${FoxholeVpnService.CONNECTIVITY_PROBE_ATTEMPTS} failed: ${error.message.orEmpty()}",
+                        "probe attempt ${attemptIndex + 1}/${validationProbePlan.attempts} failed: ${error.message.orEmpty()}",
                     )
                 },
             ) {
@@ -352,7 +351,7 @@ internal suspend fun FoxholeVpnService.validateTunnelConnectivityInternal(
                     val dnsIndependentValidation =
                         runCatchingUnlessCancelled {
                             probeDnsIndependentConnectivityFallback(
-                                callTimeoutMs = FoxholeVpnService.CONNECTIVITY_PROBE_CALL_TIMEOUT_MS,
+                                callTimeoutMs = validationProbePlan.callTimeoutMs,
                                 network = requestNetwork,
                             )
                         }
@@ -374,7 +373,7 @@ internal suspend fun FoxholeVpnService.validateTunnelConnectivityInternal(
                 val earlyEndpointProbe =
                     runCatchingUnlessCancelled {
                         probeConnectivityEndpoints(
-                            callTimeoutMs = FoxholeVpnService.CONNECTIVITY_LITERAL_PROBE_CALL_TIMEOUT_MS,
+                            callTimeoutMs = validationProbePlan.literalCallTimeoutMs,
                             network = requestNetwork,
                             resolverNetwork = resolverNetwork,
                             preferIpv4 = preferIpv4Validation,
@@ -399,14 +398,14 @@ internal suspend fun FoxholeVpnService.validateTunnelConnectivityInternal(
                             if (preferIpv4Validation) {
                                 container.ipInfoRepository.fetchIpv4(
                                     endpoint = endpoint,
-                                    callTimeoutMs = FoxholeVpnService.CONNECTIVITY_PROBE_CALL_TIMEOUT_MS,
+                                    callTimeoutMs = validationProbePlan.callTimeoutMs,
                                     network = requestNetwork,
                                     resolverNetwork = resolverNetwork,
                                 ) ?: error("vpn ipv4 refresh failed")
                             } else {
                                 container.ipInfoRepository.fetch(
                                     endpoint = endpoint,
-                                    callTimeoutMs = FoxholeVpnService.CONNECTIVITY_PROBE_CALL_TIMEOUT_MS,
+                                    callTimeoutMs = validationProbePlan.callTimeoutMs,
                                     network = requestNetwork,
                                     resolverNetwork = resolverNetwork,
                                     mode = IpInfoFetchMode.ENTRY_QUICK,
@@ -422,7 +421,7 @@ internal suspend fun FoxholeVpnService.validateTunnelConnectivityInternal(
                         val ipv4Info =
                             container.ipInfoRepository.fetchIpv4(
                                 endpoint = endpoint,
-                                callTimeoutMs = FoxholeVpnService.CONNECTIVITY_PROBE_CALL_TIMEOUT_MS,
+                                callTimeoutMs = validationProbePlan.callTimeoutMs,
                                 network = requestNetwork,
                                 resolverNetwork = resolverNetwork,
                             ) ?: throw primaryError
@@ -457,7 +456,7 @@ internal suspend fun FoxholeVpnService.validateTunnelConnectivityInternal(
                 val literalEndpointProbe =
                     runCatchingUnlessCancelled {
                         probeDnsIndependentConnectivityFallback(
-                            callTimeoutMs = FoxholeVpnService.CONNECTIVITY_PROBE_CALL_TIMEOUT_MS,
+                            callTimeoutMs = validationProbePlan.literalCallTimeoutMs,
                             network = requestNetwork,
                         )
                     }
@@ -475,7 +474,7 @@ internal suspend fun FoxholeVpnService.validateTunnelConnectivityInternal(
                 val endpointProbe =
                     runCatchingUnlessCancelled {
                         probeConnectivityEndpoints(
-                            callTimeoutMs = FoxholeVpnService.CONNECTIVITY_PROBE_CALL_TIMEOUT_MS,
+                            callTimeoutMs = validationProbePlan.callTimeoutMs,
                             network = requestNetwork,
                             resolverNetwork = resolverNetwork,
                             preferIpv4 = preferIpv4Validation,

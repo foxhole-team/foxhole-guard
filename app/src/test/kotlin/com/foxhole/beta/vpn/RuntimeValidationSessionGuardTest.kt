@@ -2,6 +2,7 @@ package com.foxhole.beta.vpn
 
 import com.foxhole.beta.core.model.ProtocolHint
 import com.foxhole.beta.core.model.VpnSession
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -24,6 +25,35 @@ class RuntimeValidationSessionGuardTest {
         assertFalse(session.copy(protocolOptionId = "trojan").matchesRuntimeValidationSession(session))
     }
 
+    @Test
+    fun `ordinary sessions use the bounded default validation probe plan`() {
+        val plan = runtimeValidationProbePlan(session())
+
+        assertEquals(FoxholeVpnService.CONNECTIVITY_PROBE_ATTEMPTS, plan.attempts)
+        assertEquals(FoxholeVpnService.CONNECTIVITY_PROBE_CALL_TIMEOUT_MS, plan.callTimeoutMs)
+        assertEquals(
+            FoxholeVpnService.CONNECTIVITY_PROBE_TOTAL_TIMEOUT_MS +
+                maxTunnelValidationGraceTimeoutMs(ProtocolHint.VLESS),
+            plan.totalTimeoutMs,
+        )
+    }
+
+    @Test
+    fun `tor over vpn sessions get an extended validation probe plan`() {
+        val torConfigJson = """{"outbounds":[{"tag":"proxy","type":"selector"},{"tag":"tor-over-vpn","type":"tor"}]}"""
+        val plan =
+            runtimeValidationProbePlan(
+                session(configJson = torConfigJson),
+            )
+        val ordinaryTotalTimeoutMs =
+            FoxholeVpnService.CONNECTIVITY_PROBE_TOTAL_TIMEOUT_MS +
+                maxTunnelValidationGraceTimeoutMs(ProtocolHint.VLESS)
+
+        assertTrue(plan.attempts > FoxholeVpnService.CONNECTIVITY_PROBE_ATTEMPTS)
+        assertTrue(plan.callTimeoutMs > FoxholeVpnService.CONNECTIVITY_PROBE_CALL_TIMEOUT_MS)
+        assertTrue(plan.totalTimeoutMs > ordinaryTotalTimeoutMs)
+    }
+
     private fun session() =
         VpnSession(
             profileId = 42L,
@@ -33,4 +63,6 @@ class RuntimeValidationSessionGuardTest {
             configJson = "{}",
             correlationId = "session-1",
         )
+
+    private fun session(configJson: String) = session().copy(configJson = configJson)
 }
