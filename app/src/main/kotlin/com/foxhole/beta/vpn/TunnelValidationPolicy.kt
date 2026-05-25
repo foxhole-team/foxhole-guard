@@ -7,7 +7,6 @@ internal enum class TunnelValidationProbeKind {
     TUNNEL_RUNTIME_PROXY_VALIDATION_ENDPOINT,
     VALIDATED_VPN_LITERAL_IP_ENDPOINT,
     DNS_INDEPENDENT_LITERAL_IP,
-    ANDROID_VALIDATED_VPN_NETWORK,
 }
 
 internal data class TunnelValidationPolicyContext(
@@ -54,7 +53,6 @@ internal class TunnelValidationPolicy(
                         TunnelValidationProbeKind.VPN_IP_REFRESH,
                         TunnelValidationProbeKind.VPN_VALIDATION_ENDPOINT,
                         TunnelValidationProbeKind.VALIDATED_VPN_LITERAL_IP_ENDPOINT,
-                        TunnelValidationProbeKind.ANDROID_VALIDATED_VPN_NETWORK,
                         -> true
                         TunnelValidationProbeKind.TUNNEL_RUNTIME_PROXY_IP_REFRESH,
                         TunnelValidationProbeKind.TUNNEL_RUNTIME_PROXY_VALIDATION_ENDPOINT,
@@ -84,14 +82,9 @@ internal fun acceptsValidatedVpnLiteralIpEndpointProbe(
             context = context,
         )
 
+@Suppress("UNUSED_PARAMETER")
 internal fun acceptsAndroidValidatedVpnNetwork(
     androidValidated: Boolean,
     evidence: TunnelValidationEvidence?,
     context: TunnelValidationPolicyContext = TunnelValidationPolicyContext(),
-): Boolean =
-    androidValidated &&
-        evidence?.fatalRuntimeMessage == null &&
-        acceptsTunnelValidationProbe(
-            kind = TunnelValidationProbeKind.ANDROID_VALIDATED_VPN_NETWORK,
-            context = context,
-        )
+): Boolean = false

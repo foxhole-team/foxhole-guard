@@ -1,6 +1,7 @@
 package com.foxhole.beta.vpn
 
 import android.content.Context
+import com.foxhole.beta.R
 import com.foxhole.beta.core.data.ProfileRepository
 import com.foxhole.beta.core.data.RoutingRepository
 import com.foxhole.beta.core.diagnostics.DiagnosticsLogger
@@ -35,7 +36,7 @@ internal class FoxholeConnectionLifecycle(
         val settings = settingsRepository.current()
         val runtimeProtocolOption = profile.runtimeProtocolOption(protocolOptionId)
         if (snapshot.value.state !in ACTIVE_CONNECTION_STATES) {
-            disconnectStaleVpnBeforeConnectIfNeeded()
+            abortIfStaleVpnCannotBeReleasedBeforeConnect()
             FoxholeConnectionServiceContract.stopInactiveServices(
                 context = context,
                 activeMode = settings.traffic.mode,
@@ -69,7 +70,7 @@ internal class FoxholeConnectionLifecycle(
         val settings = settingsRepository.current()
         require(settings.privacyRoute.enabled) { "Tor route is disabled" }
         if (snapshot.value.state !in ACTIVE_CONNECTION_STATES) {
-            disconnectStaleVpnBeforeConnectIfNeeded()
+            abortIfStaleVpnCannotBeReleasedBeforeConnect()
             FoxholeConnectionServiceContract.stopInactiveServices(
                 context = context,
                 activeMode = TrafficMode.TUNNEL,
@@ -94,9 +95,26 @@ internal class FoxholeConnectionLifecycle(
         )
     }
 
-    private suspend fun disconnectStaleVpnBeforeConnectIfNeeded() {
+    private suspend fun abortIfStaleVpnCannotBeReleasedBeforeConnect() {
+        if (!disconnectStaleVpnBeforeConnectIfNeeded()) {
+            val message = context.getString(R.string.error_runtime_stopped)
+            diagnosticsLogger.record("connection", "connect aborted: stale vpn network still active")
+            clearAppliedRuntime()
+            FoxholeVpnRuntimeBridge.clearTransientState()
+            FoxholeVpnRuntimeBridge.update(
+                ConnectionSnapshot(
+                    state = ConnectionState.ERROR,
+                    trafficMode = settingsRepository.current().traffic.mode,
+                    message = message,
+                ),
+            )
+            error(message)
+        }
+    }
+
+    private suspend fun disconnectStaleVpnBeforeConnectIfNeeded(): Boolean {
         if (!hasActiveVpnNetwork()) {
-            return
+            return true
         }
         diagnosticsLogger.record("connection", "stale vpn network found before connect; disconnecting")
         FoxholeConnectionServiceContract.startForegroundService(
@@ -109,9 +127,21 @@ internal class FoxholeConnectionLifecycle(
         while (hasActiveVpnNetwork() && System.currentTimeMillis() < deadline) {
             delay(STALE_VPN_DISCONNECT_POLL_MS)
         }
-        if (hasActiveVpnNetwork()) {
-            diagnosticsLogger.record("connection", "stale vpn network still active before connect")
+        if (!hasActiveVpnNetwork()) {
+            return true
         }
+        diagnosticsLogger.record("connection", "stale vpn network still active before connect; issuing fail-closed kill")
+        FoxholeConnectionServiceContract.startForegroundService(
+            context = context,
+            mode = TrafficMode.TUNNEL,
+            action = FoxholeConnectionServiceContract.ACTION_KILL,
+            suppressLocalGuard = true,
+        )
+        val killDeadline = System.currentTimeMillis() + STALE_VPN_DISCONNECT_TIMEOUT_MS
+        while (hasActiveVpnNetwork() && System.currentTimeMillis() < killDeadline) {
+            delay(STALE_VPN_DISCONNECT_POLL_MS)
+        }
+        return !hasActiveVpnNetwork()
     }
 
     fun disconnect(

@@ -1,6 +1,5 @@
 package com.foxhole.beta.vpn
 
-import com.foxhole.beta.BuildConfig
 import com.foxhole.beta.core.model.ClashApiSettings
 import com.foxhole.beta.core.model.DiagnosticsRetention
 import com.foxhole.beta.core.model.DnsSettings
@@ -1424,14 +1423,11 @@ class RuntimeConfigAssembler(
 
     private fun ExpertSettings.vpnExcludedPackages(): List<String> =
         when (perAppRoutingMode) {
-            PerAppRoutingMode.EXCLUDE_SELECTED_APPS -> appControlPlaneExcludedPackages(selectedPackages)
-            PerAppRoutingMode.FULL_TUNNEL -> appControlPlaneExcludedPackages(emptyList())
+            PerAppRoutingMode.EXCLUDE_SELECTED_APPS -> normalizedRuntimePackages(selectedPackages)
+            PerAppRoutingMode.FULL_TUNNEL -> emptyList()
             PerAppRoutingMode.INCLUDE_SELECTED_APPS,
             -> emptyList()
         }
-
-    private fun appControlPlaneExcludedPackages(packageNames: List<String>): List<String> =
-        normalizedRuntimePackages(packageNames + BuildConfig.APPLICATION_ID)
 
     private fun normalizedRuntimePackages(packageNames: List<String>): List<String> =
         packageNames

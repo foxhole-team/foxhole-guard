@@ -490,7 +490,7 @@ class HomeDashboardPresentationTest {
     }
 
     @Test
-    fun `network model keeps data steady while dashboard connection metrics refresh is active`() {
+    fun `network model shows server info skeleton while dashboard connection metrics refresh is active`() {
         val ipInfo =
             IpInfo(
                 ip = "203.0.113.10",
@@ -518,9 +518,9 @@ class HomeDashboardPresentationTest {
         assertEquals(ipInfo, model.visibleIpInfo)
         assertEquals(R.string.home_network_connection_info_title, model.titleRes)
         assertTrue(model.showConnectionStatus)
-        assertFalse(model.showLoading)
+        assertTrue(model.showLoading)
         assertFalse(model.showIpInfoLoading)
-        assertFalse(model.showConnectionDetailsLoading)
+        assertTrue(model.showConnectionDetailsLoading)
     }
 
     @Test
@@ -770,7 +770,7 @@ class HomeDashboardPresentationTest {
 
         assertEquals(ipInfo, model.visibleIpInfo)
         assertFalse(model.showIpInfoLoading)
-        assertFalse(model.showConnectionDetailsLoading)
+        assertTrue(model.showConnectionDetailsLoading)
     }
 
     @Test

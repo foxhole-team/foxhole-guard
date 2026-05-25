@@ -189,7 +189,7 @@ class TunnelValidationEvidenceClassifierTest {
     }
 
     @Test
-    fun `android vpn validation success counts as tunnel activity evidence`() {
+    fun `android vpn validation success does not count as tunnel activity evidence`() {
         val evidence =
             TunnelValidationEvidenceClassifier.classify(
                 entries =
@@ -203,8 +203,8 @@ class TunnelValidationEvidenceClassifierTest {
                 sinceMs = 900L,
             )
 
-        assertTrue(evidence.hasSuccessfulTunnelActivity)
-        assertTrue(evidence.hasOutboundTunnelActivity)
+        assertFalse(evidence.hasSuccessfulTunnelActivity)
+        assertFalse(evidence.hasOutboundTunnelActivity)
         assertEquals(null, evidence.fatalRuntimeMessage)
     }
 }

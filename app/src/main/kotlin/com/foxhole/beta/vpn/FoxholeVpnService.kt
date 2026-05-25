@@ -1953,7 +1953,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         internal const val CONNECTIVITY_PROBE_INITIAL_DELAY_MS = 150L
         internal const val CONNECTIVITY_PROBE_RETRY_DELAY_MS = 500L
         internal const val CONNECTIVITY_PROBE_CALL_TIMEOUT_MS = 2_500L
-        internal const val CONNECTIVITY_PROBE_TOTAL_TIMEOUT_MS = 10_000L
+        internal const val CONNECTIVITY_PROBE_TOTAL_TIMEOUT_MS = 24_000L
         internal const val CONNECTIVITY_PROBE_GRACE_MAX_TIMEOUT_MS = com.foxhole.beta.vpn.CONNECTIVITY_PROBE_GRACE_MAX_TIMEOUT_MS
         internal const val CONNECTIVITY_LITERAL_PROBE_EARLY_WINDOW_MS = 900L
         internal const val CONNECTIVITY_LITERAL_PROBE_POLL_MS = 100L

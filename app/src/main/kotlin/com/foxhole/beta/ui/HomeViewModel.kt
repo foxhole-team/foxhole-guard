@@ -1611,7 +1611,7 @@ class HomeViewModel(
         internal const val AUTO_CONNECT_LATENCY_MEASUREMENT_RETRY_DELAY_MS = 160L
         internal const val AUTO_CONNECT_PROTOCOL_TRANSITION_SETTLE_MS = 90L
         internal const val AUTO_CONNECT_RESULT_SETTLE_MS = 500L
-        internal const val AUTO_CONNECT_TOTAL_TIMEOUT_MS = 110_000L
+        internal const val AUTO_CONNECT_TOTAL_TIMEOUT_MS = 140_000L
         internal const val AUTO_CONNECT_MAX_ATTEMPTS = SmartStartController.AUTO_CONNECT_MAX_ATTEMPTS
         internal const val PROTOCOL_METRICS_PROBE_TIMEOUT_MS = 12_000L
         internal const val APP_TRAFFIC_BACKGROUND_SAMPLE_INTERVAL_MS = 60_000L

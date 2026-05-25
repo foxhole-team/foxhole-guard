@@ -309,18 +309,8 @@ internal suspend fun FoxholeVpnService.validateTunnelConnectivityInternal(
                 if (androidValidatedEarly) {
                     container.diagnosticsLogger.record(
                         "dns",
-                        "vpn network has Android validation; collecting tunnel evidence before connected state",
+                        "vpn network has Android validation; still requiring vpn-bound tunnel validation",
                     )
-                    if (
-                        tryAcceptEarlyAndroidValidatedVpnNetwork(
-                            vpnNetwork = vpnNetwork,
-                            validationStartedAt = validationStartedAt,
-                            context = validationPolicyContext,
-                            session = currentSession,
-                        )
-                    ) {
-                        return@run vpnNetwork
-                    }
                 }
                 if (
                     activeProtocolHint?.isUdpTransport() == true &&
@@ -439,10 +429,31 @@ internal suspend fun FoxholeVpnService.validateTunnelConnectivityInternal(
                 container.diagnosticsLogger.record(
                     "dns",
                     if (androidValidated) {
-                        "vpn network validated by android; vpn-bound ip refresh failed, probing validation endpoints: $ipErrorMessage"
+                        "vpn network validated by android; vpn-bound ip refresh failed, probing literal public endpoints: $ipErrorMessage"
                     } else {
-                        "vpn-bound ip refresh failed before android validation; probing dns readiness: $ipErrorMessage"
+                        "vpn-bound ip refresh failed before android validation; probing literal public endpoints: $ipErrorMessage"
                     },
+                )
+                val literalEndpointProbe =
+                    runCatchingUnlessCancelled {
+                        probeDnsIndependentConnectivityFallback(
+                            callTimeoutMs = FoxholeVpnService.CONNECTIVITY_PROBE_CALL_TIMEOUT_MS,
+                            network = requestNetwork,
+                        )
+                    }
+                if (literalEndpointProbe.isSuccess) {
+                    container.diagnosticsLogger.record(
+                        "dns",
+                        "vpn-bound literal public endpoint accepted after ip refresh failed",
+                    )
+                    scope.launch(Dispatchers.IO) {
+                        refreshValidatedTunnelIpInfoBestEffort(vpnNetwork, currentSession)
+                    }
+                    return@run vpnNetwork
+                }
+                container.diagnosticsLogger.record(
+                    "dns",
+                    "vpn-bound literal public endpoint failed before validation endpoints: ${literalEndpointProbe.exceptionOrNull()?.message.orEmpty()}",
                 )
                 val endpointProbe =
                     runCatchingUnlessCancelled {
@@ -454,53 +465,6 @@ internal suspend fun FoxholeVpnService.validateTunnelConnectivityInternal(
                         )
                     }
                 if (endpointProbe.isFailure) {
-                    val dnsIndependentFallback =
-                        runCatchingUnlessCancelled {
-                            probeDnsIndependentConnectivityFallback(
-                                callTimeoutMs = FoxholeVpnService.CONNECTIVITY_PROBE_CALL_TIMEOUT_MS,
-                                network = requestNetwork,
-                            )
-                        }
-                    if (dnsIndependentFallback.isSuccess) {
-                        if (acceptsTunnelValidationProbe(
-                                TunnelValidationProbeKind.DNS_INDEPENDENT_LITERAL_IP,
-                                validationPolicyContext,
-                            )
-                        ) {
-                            container.diagnosticsLogger.record(
-                                "dns",
-                                "dns-independent public reachability probe accepted for strict private dns",
-                            )
-                            scope.launch(Dispatchers.IO) {
-                                refreshValidatedTunnelIpInfoBestEffort(vpnNetwork, currentSession)
-                            }
-                            return@run vpnNetwork
-                        } else if (acceptsValidatedVpnLiteralIpEndpointProbe(
-                                androidValidated = androidValidated,
-                                evidence = evidence,
-                                context = validationPolicyContext,
-                            )
-                        ) {
-                            container.diagnosticsLogger.record(
-                                "dns",
-                                "vpn-bound literal public endpoint accepted after android validation",
-                            )
-                            scope.launch(Dispatchers.IO) {
-                                refreshValidatedTunnelIpInfoBestEffort(vpnNetwork, currentSession)
-                            }
-                            return@run vpnNetwork
-                        } else {
-                            container.diagnosticsLogger.record(
-                                "dns",
-                                "dns-independent public reachability probe passed but is not accepted as tunnel validation",
-                            )
-                        }
-                    } else {
-                        container.diagnosticsLogger.record(
-                            "dns",
-                            "dns-independent public reachability probe failed: ${dnsIndependentFallback.exceptionOrNull()?.message.orEmpty()}",
-                        )
-                    }
                     val gracePolicy = selectTunnelValidationGracePolicy(activeProtocolHint, evidence)
                     if (gracePolicy != null) {
                         container.diagnosticsLogger.recordStructured(
@@ -529,16 +493,10 @@ internal suspend fun FoxholeVpnService.validateTunnelConnectivityInternal(
                     if (!androidValidated) {
                         throw (ipRefresh.exceptionOrNull() ?: endpointProbe.exceptionOrNull() ?: IllegalStateException("vpn ip refresh failed"))
                     }
-                    if (acceptsAndroidValidatedVpnNetwork(androidValidated, evidence, validationPolicyContext)) {
-                        container.diagnosticsLogger.record(
-                            "dns",
-                            "android validated vpn network accepted after endpoint probes failed",
-                        )
-                        scope.launch(Dispatchers.IO) {
-                            refreshValidatedTunnelIpInfoBestEffort(vpnNetwork, currentSession)
-                        }
-                        return@run vpnNetwork
-                    }
+                    container.diagnosticsLogger.record(
+                        "dns",
+                        "android validated vpn network is not accepted without vpn-bound reachability",
+                    )
                     evidence?.let {
                         container.diagnosticsLogger.record(
                             "dns",
@@ -596,47 +554,6 @@ internal suspend fun FoxholeVpnService.validateTunnelConnectivityInternal(
         )
         Result.failure(IllegalStateException(getString(R.string.error_dns_probe_failed)))
     }
-
-@Suppress("ReturnCount")
-internal suspend fun FoxholeVpnService.tryAcceptEarlyAndroidValidatedVpnNetwork(
-    vpnNetwork: Network,
-    validationStartedAt: Long,
-    context: TunnelValidationPolicyContext,
-    session: VpnSession? = null,
-): Boolean {
-    if (!acceptsTunnelValidationProbe(TunnelValidationProbeKind.ANDROID_VALIDATED_VPN_NETWORK, context)) {
-        return false
-    }
-    val accepted =
-        withTimeoutOrNull(FoxholeVpnService.CONNECTIVITY_LITERAL_PROBE_EARLY_WINDOW_MS) {
-            while (currentCoroutineContext().isActive) {
-                val currentEvidence = inspectValidatedTunnelEvidence(validationStartedAt)
-                if (
-                    acceptsAndroidValidatedVpnNetwork(
-                        androidValidated = isVpnNetworkValidated(vpnNetwork),
-                        evidence = currentEvidence,
-                        context = context,
-                    )
-                ) {
-                    return@withTimeoutOrNull true
-                }
-                delay(FoxholeVpnService.CONNECTIVITY_LITERAL_PROBE_POLL_MS)
-            }
-            false
-        } ?: return false
-
-    if (!accepted) {
-        return false
-    }
-    container.diagnosticsLogger.record(
-        "dns",
-        "android validated vpn network accepted",
-    )
-    scope.launch(Dispatchers.IO) {
-        refreshValidatedTunnelIpInfoBestEffort(vpnNetwork, session)
-    }
-    return true
-}
 
 @Suppress("ReturnCount")
 internal suspend fun FoxholeVpnService.tryAcceptEarlyValidatedVpnLiteralEndpoint(
@@ -1129,15 +1046,39 @@ internal suspend fun FoxholeVpnService.runNotificationConnectivityProbeInternal(
                         if (runtimeProxyProbe.isSuccess) {
                             return@runCatchingUnlessCancelled
                         }
+                        val requestNetwork = tunnelValidationRequestNetwork(vpnNetwork)
+                        container.diagnosticsLogger.record(
+                            "health",
+                            "proxy notification probe failed, retrying vpn-bound literal public endpoint: ${runtimeProxyProbe.exceptionOrNull()?.message.orEmpty()}",
+                        )
+                        val literalProbe =
+                            runCatchingUnlessCancelled {
+                                probeDnsIndependentConnectivityFallback(
+                                    callTimeoutMs = FoxholeVpnService.CONNECTIVITY_LITERAL_PROBE_CALL_TIMEOUT_MS,
+                                    network = requestNetwork,
+                                )
+                            }
+                        if (literalProbe.isSuccess) {
+                            container.diagnosticsLogger.record(
+                                "health",
+                                "vpn-bound literal public endpoint accepted after proxy notification probe failed",
+                            )
+                            return@runCatchingUnlessCancelled
+                        }
+                        container.diagnosticsLogger.record(
+                            "health",
+                            "vpn-bound literal public endpoint failed after proxy notification probe failed: ${literalProbe.exceptionOrNull()?.message.orEmpty()}",
+                        )
                         if (settings.requiresStrictRuntimeProxyIpRefresh(FoxholeVpnRuntimeBridge.snapshot.value)) {
                             if (isVpnNetworkValidated(vpnNetwork)) {
                                 container.diagnosticsLogger.record(
                                     "health",
-                                    "proxy notification probe failed, but android validated vpn network is healthy",
+                                    "proxy notification probe failed despite android validated vpn network",
                                 )
-                                return@runCatchingUnlessCancelled
                             }
-                            throw (runtimeProxyProbe.exceptionOrNull() ?: IllegalStateException("runtime proxy probe failed"))
+                            throw (literalProbe.exceptionOrNull()
+                                ?: runtimeProxyProbe.exceptionOrNull()
+                                ?: IllegalStateException("runtime proxy probe failed"))
                         }
                         container.diagnosticsLogger.record(
                             "health",
@@ -1150,7 +1091,7 @@ internal suspend fun FoxholeVpnService.runNotificationConnectivityProbeInternal(
                             )
                         probeConnectivityEndpoints(
                             callTimeoutMs = FoxholeVpnService.NOTIFICATION_HEALTH_PROBE_TIMEOUT_MS,
-                            network = tunnelValidationRequestNetwork(vpnNetwork),
+                            network = requestNetwork,
                             resolverNetwork = currentUpstreamNetworkOrNull(),
                             preferIpv4 = preferIpv4Validation,
                         )
