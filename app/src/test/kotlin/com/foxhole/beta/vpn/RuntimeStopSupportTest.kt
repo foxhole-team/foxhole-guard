@@ -148,6 +148,109 @@ class RuntimeStopSupportTest {
         }
 
     @Test
+    fun `detached force kill marks native cleanup unresolved`() =
+        runBlocking {
+            val fixture = runtimeFixture()
+            fixture.runtime.start(testSession(), FakeRuntimeHost()).getOrThrow()
+            fixture.operationMutex.lock()
+            try {
+                fixture.runtime.forceKill("test_busy")
+            } finally {
+                fixture.operationMutex.unlock()
+            }
+
+            val snapshot = fixture.runtime.nativeSnapshot()
+
+            assertTrue(snapshot.cleanupUnresolved)
+            assertEquals(RuntimeState.KILLING, snapshot.nativeState)
+            assertEquals("test_busy", snapshot.lastStopReason)
+            assertTrue(snapshot.lastCloseDetached)
+        }
+
+    @Test
+    fun `start after unresolved cleanup is rejected before native start`() =
+        runBlocking {
+            val fixture = runtimeFixture()
+            fixture.runtime.start(testSession(), FakeRuntimeHost()).getOrThrow()
+            fixture.operationMutex.lock()
+            try {
+                fixture.runtime.forceKill("test_busy")
+            } finally {
+                fixture.operationMutex.unlock()
+            }
+
+            val result = fixture.runtime.start(testSession(), FakeRuntimeHost())
+
+            assertTrue(result.isFailure)
+            assertEquals(RUNTIME_CLEANUP_UNRESOLVED_MESSAGE, result.exceptionOrNull()?.message)
+            assertEquals(1, fixture.native.startServerCalls.get())
+            assertTrue(fixture.diagnostics.contains("native operation blocked by unresolved cleanup"))
+        }
+
+    @Test
+    fun `stop timeout marks native cleanup unresolved`() =
+        runBlocking {
+            val fixture = runtimeFixture(NativeBlockPoint.CLOSE_SERVICE)
+            fixture.runtime.start(testSession(), FakeRuntimeHost()).getOrThrow()
+
+            val result =
+                fixture.runtime.stop(
+                    RuntimeStopPolicy(
+                        closeTunFdImmediately = true,
+                        closeServiceTimeoutMs = 10L,
+                        closeServerTimeoutMs = 10L,
+                        totalGracefulTimeoutMs = 10L,
+                        forceKillAfterTimeout = true,
+                    ),
+                )
+            fixture.native.releaseBlocked()
+
+            val snapshot = fixture.runtime.nativeSnapshot()
+
+            assertTrue(result.escalatedToKill)
+            assertTrue(result.tunClosed)
+            assertTrue(snapshot.cleanupUnresolved)
+            assertEquals(RuntimeState.KILLING, snapshot.nativeState)
+            assertEquals("stop_timeout", snapshot.lastStopReason)
+        }
+
+    @Test
+    fun `reload after unresolved cleanup is rejected before config check`() =
+        runBlocking {
+            val fixture = runtimeFixture()
+            fixture.runtime.start(testSession(), FakeRuntimeHost()).getOrThrow()
+            fixture.operationMutex.lock()
+            try {
+                fixture.runtime.forceKill("test_busy")
+            } finally {
+                fixture.operationMutex.unlock()
+            }
+
+            val result = fixture.runtime.reload(testSession(), FakeRuntimeHost())
+
+            assertTrue(result.isFailure)
+            assertEquals(RUNTIME_CLEANUP_UNRESOLVED_MESSAGE, result.exceptionOrNull()?.message)
+            assertEquals(1, fixture.native.checkConfigCalls.get())
+        }
+
+    @Test
+    fun `native snapshot exposes generation state and cleanup flags`() =
+        runBlocking {
+            val fixture = runtimeFixture()
+
+            fixture.runtime.start(testSession(), FakeRuntimeHost()).getOrThrow()
+            val running = fixture.runtime.nativeSnapshot()
+            fixture.runtime.stop()
+            val stopped = fixture.runtime.nativeSnapshot()
+
+            assertTrue(running.nativeGeneration > 0L)
+            assertEquals(RuntimeState.RUNNING, running.nativeState)
+            assertFalse(running.cleanupUnresolved)
+            assertEquals(RuntimeState.IDLE, stopped.nativeState)
+            assertFalse(stopped.cleanupUnresolved)
+        }
+
+    @Test
     fun `native callback skips stale server after rechecking inside lock`() {
         val diagnostics = FakeRuntimeDiagnosticsSink()
         val operationMutex = Mutex()
@@ -238,11 +341,14 @@ private enum class NativeBlockPoint {
     START_SERVER,
     CHECK_CONFIG,
     START_OR_RELOAD_SERVICE,
+    CLOSE_SERVICE,
 }
 
 private class FakeLibboxRuntimeNative(
     private val blockPoint: NativeBlockPoint? = null,
 ) : LibboxRuntimeNative {
+    val startServerCalls = AtomicInteger(0)
+    val checkConfigCalls = AtomicInteger(0)
     val startOrReloadServiceCalls = AtomicInteger(0)
     val resetNetworkCalls = AtomicInteger(0)
 
@@ -273,14 +379,18 @@ private class FakeLibboxRuntimeNative(
     override fun newCommandServer(handler: Any, platform: Any): Any = server
 
     override fun startServer(commandServer: Any) {
+        startServerCalls.incrementAndGet()
         blockIf(NativeBlockPoint.START_SERVER)
     }
 
     override fun closeServer(commandServer: Any) = Unit
 
-    override fun closeService(commandServer: Any) = Unit
+    override fun closeService(commandServer: Any) {
+        blockIf(NativeBlockPoint.CLOSE_SERVICE)
+    }
 
     override fun checkConfig(commandServer: Any, config: String) {
+        checkConfigCalls.incrementAndGet()
         blockIf(NativeBlockPoint.CHECK_CONFIG)
     }
 

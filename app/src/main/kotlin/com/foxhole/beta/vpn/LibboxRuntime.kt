@@ -141,6 +141,14 @@ internal inline fun withRunningServerIfIdle(
     }
 }
 
+private data class NativeRuntimeOwnershipState(
+    val generation: Long = 0L,
+    val state: RuntimeState = RuntimeState.IDLE,
+    val cleanupUnresolved: Boolean = false,
+    val lastStopReason: String? = null,
+    val lastCloseDetached: Boolean = false,
+)
+
 @Suppress("LargeClass")
 internal class ReflectiveLibboxRuntime(
     private val diagnosticsLogger: RuntimeDiagnosticsSink,
@@ -171,6 +179,7 @@ internal class ReflectiveLibboxRuntime(
 
     private val commandServerRef = AtomicReference<Any?>(null)
     private val fileDescriptorRef = AtomicReference<ParcelFileDescriptor?>(null)
+    private val ownershipState = AtomicReference(NativeRuntimeOwnershipState())
     private val runtimeGenerationGuard = RuntimeGenerationGuard(diagnosticsLogger)
 
     @Volatile
@@ -182,14 +191,17 @@ internal class ReflectiveLibboxRuntime(
     @Volatile
     private var currentDnsServerAddress: String? = null
 
-    override suspend fun start(session: VpnSession, host: RuntimeServiceHost): Result<Unit> =
-        operationMutex.withLock {
+    override suspend fun start(session: VpnSession, host: RuntimeServiceHost): Result<Unit> {
+        cleanupUnresolvedFailure("start")?.let { return Result.failure(it) }
+        return operationMutex.withLock {
+            cleanupUnresolvedFailure("start_locked")?.let { return@withLock Result.failure(it) }
             startLocked(
                 session = session,
                 host = host,
                 generation = nextRuntimeGeneration("start"),
             )
         }
+    }
 
     private suspend fun startLocked(
         session: VpnSession,
@@ -210,7 +222,9 @@ internal class ReflectiveLibboxRuntime(
                         forceKillAfterTimeout = true,
                     ),
                 )
+                cleanupUnresolvedFailure("start_replace_stop")?.let { throw it }
                 ensureRuntimeGenerationCurrent(generation)
+                markNativeState(RuntimeState.STARTING, generation)
                 reflection.setupIfNeeded()
                 ensureRuntimeGenerationCurrent(generation)
 
@@ -254,15 +268,18 @@ internal class ReflectiveLibboxRuntime(
                 ensureRuntimeGenerationCurrent(generation)
                 commandServerRef.set(newServer)
                 newServer = null
+                markNativeState(RuntimeState.RUNNING, generation)
                 diagnosticsLogger.record("libbox", "runtime started")
             }
             Result.success(Unit)
         } catch (cancelled: CancellationException) {
-            cleanupFailedStart(newServer)
+            val cleanupOk = cleanupFailedStart(newServer)
+            markStartFailure(generation = generation, cleanupOk = cleanupOk, reason = "start_cancelled")
             diagnosticsLogger.record("runtime", "start cancelled: ${cancelled.message.orEmpty()}")
             throw cancelled
         } catch (error: Throwable) {
-            cleanupFailedStart(newServer)
+            val cleanupOk = cleanupFailedStart(newServer)
+            markStartFailure(generation = generation, cleanupOk = cleanupOk, reason = "start_failed")
             val normalized = unwrapVpnRuntimeFailure(error)
             diagnosticsLogger.record("runtime", "start failed: ${describeVpnRuntimeFailure(normalized)}")
             logRuntimeFailure("libbox start failed", normalized)
@@ -270,14 +287,17 @@ internal class ReflectiveLibboxRuntime(
         }
     }
 
-    override suspend fun reload(session: VpnSession, host: RuntimeServiceHost): Result<Unit> =
-        operationMutex.withLock {
+    override suspend fun reload(session: VpnSession, host: RuntimeServiceHost): Result<Unit> {
+        cleanupUnresolvedFailure("reload")?.let { return Result.failure(it) }
+        return operationMutex.withLock {
+            cleanupUnresolvedFailure("reload_locked")?.let { return@withLock Result.failure(it) }
             reloadLocked(
                 session = session,
                 host = host,
                 generation = nextRuntimeGeneration("reload"),
             )
         }
+    }
 
     private suspend fun reloadLocked(
         session: VpnSession,
@@ -290,6 +310,7 @@ internal class ReflectiveLibboxRuntime(
             }
             val server = commandServerRef.get() ?: error("android: runtime is not running")
             withContext(Dispatchers.IO) {
+                markNativeState(RuntimeState.RELOADING, generation)
                 currentHost = host
                 currentConfig = session.configJson
                 diagnosticsLogger.record("runtime", "reload ${sanitizedConfigFingerprint(session.configJson)}")
@@ -297,13 +318,16 @@ internal class ReflectiveLibboxRuntime(
                 ensureRuntimeGenerationCurrent(generation)
                 reflection.startOrReloadService(server, session.configJson)
                 ensureRuntimeGenerationCurrent(generation)
+                markNativeState(RuntimeState.RUNNING, generation)
             }
             diagnosticsLogger.record("libbox", "runtime reloaded")
             Result.success(Unit)
         } catch (cancelled: CancellationException) {
+            markReloadFailure(generation)
             diagnosticsLogger.record("runtime", "reload cancelled: ${cancelled.message.orEmpty()}")
             throw cancelled
         } catch (error: Throwable) {
+            markReloadFailure(generation)
             val normalized = unwrapVpnRuntimeFailure(error)
             diagnosticsLogger.record("runtime", "reload failed: ${describeVpnRuntimeFailure(normalized)}")
             logRuntimeFailure("libbox reload failed", normalized)
@@ -312,7 +336,8 @@ internal class ReflectiveLibboxRuntime(
 
     override suspend fun stop(policy: RuntimeStopPolicy): RuntimeStopResult {
         val startedAt = elapsedRealtime()
-        nextRuntimeGeneration("stop")
+        val generation = nextRuntimeGeneration("stop")
+        markNativeState(RuntimeState.STOPPING, generation)
         val preclosedTun =
             if (policy.closeTunFdImmediately) {
                 closeTunFdNow()
@@ -412,8 +437,19 @@ internal class ReflectiveLibboxRuntime(
                     "reason=stop_timeout",
                     "elapsed_ms=$elapsedMs",
                 )
-                killLocked("stop_timeout")
+                val killResult = killLocked("stop_timeout")
+                if (!closeServiceOk || !closeServerOk || killResult.closeDetached) {
+                    markCleanupUnresolved(
+                        state = RuntimeState.KILLING,
+                        reason = "stop_timeout",
+                        closeDetached = true,
+                    )
+                } else {
+                    markCleanupResolved(RuntimeState.IDLE, reason = "stop_timeout")
+                }
                 diagnosticsLogger.record("runtime", "force_kill_end")
+            } else {
+                markCleanupResolved(RuntimeState.IDLE)
             }
             RuntimeStopResult(
                 closeServiceOk = closeServiceOk,
@@ -425,7 +461,8 @@ internal class ReflectiveLibboxRuntime(
         }
 
     override suspend fun forceKill(reason: String): RuntimeKillResult {
-        nextRuntimeGeneration("kill:$reason")
+        val generation = nextRuntimeGeneration("kill:$reason")
+        markNativeState(RuntimeState.KILLING, generation, reason = reason)
         val preclosedTun = closeTunFdNow()
         if (operationMutex.tryLock()) {
             return try {
@@ -459,6 +496,7 @@ internal class ReflectiveLibboxRuntime(
         preclosedTun: Boolean? = null,
     ): RuntimeKillResult =
         withContext(Dispatchers.IO) {
+            markNativeState(RuntimeState.KILLING, reason = reason)
             val server = commandServerRef.getAndSet(null)
             currentConfig = null
             currentHost = null
@@ -475,6 +513,11 @@ internal class ReflectiveLibboxRuntime(
                     "reason=$reason",
                     "server_detached=${server != null}",
                     "tun_closed=$tunClosed",
+                )
+                markCleanupUnresolved(
+                    state = RuntimeState.KILLING,
+                    reason = reason,
+                    closeDetached = true,
                 )
                 return@withContext RuntimeKillResult(
                     reason = reason,
@@ -505,6 +548,15 @@ internal class ReflectiveLibboxRuntime(
                     }
                 closeDetached = !serviceClosed || !serverClosed
             }
+            if (closeDetached) {
+                markCleanupUnresolved(
+                    state = RuntimeState.KILLING,
+                    reason = reason,
+                    closeDetached = true,
+                )
+            } else {
+                markCleanupResolved(RuntimeState.IDLE, reason = reason)
+            }
             diagnosticsLogger.recordStructured(
                 "runtime",
                 "runtime force kill",
@@ -528,6 +580,114 @@ internal class ReflectiveLibboxRuntime(
     private suspend fun ensureRuntimeGenerationCurrent(generation: Long) =
         runtimeGenerationGuard.ensureCurrent(generation)
 
+    private fun cleanupUnresolvedFailure(operation: String): RuntimeCleanupUnresolvedException? {
+        val ownership = ownershipState.get()
+        if (!ownership.cleanupUnresolved) {
+            return null
+        }
+        diagnosticsLogger.recordStructured(
+            "runtime",
+            "native operation blocked by unresolved cleanup",
+            "operation=$operation",
+            "state=${ownership.state.name.lowercase()}",
+            "generation=${ownership.generation}",
+            ownership.lastStopReason?.let { "reason=$it" },
+            "close_detached=${ownership.lastCloseDetached}",
+        )
+        return RuntimeCleanupUnresolvedException()
+    }
+
+    private fun markNativeState(
+        state: RuntimeState,
+        generation: Long = runtimeGenerationGuard.current(),
+        reason: String? = null,
+    ) {
+        updateOwnership { current ->
+            if (current.cleanupUnresolved && state != RuntimeState.KILLING) {
+                current
+            } else {
+                current.copy(
+                    generation = generation,
+                    state = state,
+                    lastStopReason = reason ?: current.lastStopReason,
+                )
+            }
+        }
+    }
+
+    private fun markCleanupResolved(
+        state: RuntimeState,
+        reason: String? = null,
+        generation: Long = runtimeGenerationGuard.current(),
+    ) {
+        ownershipState.set(
+            NativeRuntimeOwnershipState(
+                generation = generation,
+                state = state,
+                cleanupUnresolved = false,
+                lastStopReason = reason,
+                lastCloseDetached = false,
+            ),
+        )
+    }
+
+    private fun markCleanupUnresolved(
+        state: RuntimeState,
+        reason: String,
+        closeDetached: Boolean,
+    ) {
+        updateOwnership { current ->
+            current.copy(
+                generation = runtimeGenerationGuard.current(),
+                state = state,
+                cleanupUnresolved = true,
+                lastStopReason = reason,
+                lastCloseDetached = current.lastCloseDetached || closeDetached,
+            )
+        }
+    }
+
+    private fun updateOwnership(transform: (NativeRuntimeOwnershipState) -> NativeRuntimeOwnershipState) {
+        while (true) {
+            val current = ownershipState.get()
+            val next = transform(current)
+            if (ownershipState.compareAndSet(current, next)) {
+                return
+            }
+        }
+    }
+
+    private fun markStartFailure(
+        generation: Long,
+        cleanupOk: Boolean,
+        reason: String,
+    ) {
+        if (cleanupOk) {
+            if (!ownershipState.get().cleanupUnresolved) {
+                markCleanupResolved(RuntimeState.IDLE, reason = reason, generation = generation)
+            }
+        } else {
+            markCleanupUnresolved(
+                state = RuntimeState.ERROR,
+                reason = reason,
+                closeDetached = true,
+            )
+        }
+    }
+
+    private fun markReloadFailure(generation: Long) {
+        if (ownershipState.get().cleanupUnresolved) {
+            return
+        }
+        val nextState =
+            if (commandServerRef.get() != null) {
+                RuntimeState.RUNNING
+            } else {
+                RuntimeState.ERROR
+            }
+        markNativeState(nextState, generation)
+    }
+
     private suspend fun closeNativeServerPart(
         server: Any,
         label: String,
@@ -544,14 +704,21 @@ internal class ReflectiveLibboxRuntime(
         return closed
     }
 
-    override fun nativeSnapshot(): NativeRuntimeSnapshot =
-        NativeRuntimeSnapshot(
+    override fun nativeSnapshot(): NativeRuntimeSnapshot {
+        val ownership = ownershipState.get()
+        return NativeRuntimeSnapshot(
             hasCommandServer = commandServerRef.get() != null,
             hasTunFileDescriptor = fileDescriptorRef.get() != null,
             hasHost = currentHost != null,
             hasConfig = currentConfig != null,
             dnsServerAddress = currentDnsServerAddress,
+            nativeGeneration = ownership.generation,
+            nativeState = ownership.state,
+            cleanupUnresolved = ownership.cleanupUnresolved,
+            lastStopReason = ownership.lastStopReason,
+            lastCloseDetached = ownership.lastCloseDetached,
         )
+    }
 
     override fun onDefaultNetworkAvailable() {
         defaultNetworkMonitor.dispatchListenerUpdate()
@@ -868,20 +1035,24 @@ internal class ReflectiveLibboxRuntime(
         )
     }
 
-    private suspend fun cleanupFailedStart(newServer: Any?) {
+    private suspend fun cleanupFailedStart(newServer: Any?): Boolean {
+        var cleanupOk = true
         runCatching {
             newServer?.let { server ->
-                runBlockingRuntimeClose(500L) { reflection.closeService(server) }
-                runBlockingRuntimeClose(500L) { reflection.closeServer(server) }
+                val serviceClosed = runBlockingRuntimeClose(500L) { reflection.closeService(server) }
+                val serverClosed = runBlockingRuntimeClose(500L) { reflection.closeServer(server) }
+                cleanupOk = serviceClosed && serverClosed
             }
         }.onFailure {
+            cleanupOk = false
             diagnosticsLogger.record("libbox", "failed-start server cleanup failed")
         }
-        closeTunFdNow()
+        val tunClosed = closeTunFdNow()
         currentConfig = null
         currentHost = null
         currentDnsServerAddress = null
         defaultNetworkMonitor.stop()
+        return cleanupOk && tunClosed
     }
 
     private fun closeTunFdNow(): Boolean {

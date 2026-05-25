@@ -82,6 +82,11 @@ data class NativeRuntimeSnapshot(
     val hasHost: Boolean,
     val hasConfig: Boolean,
     val dnsServerAddress: String?,
+    val nativeGeneration: Long,
+    val nativeState: RuntimeState,
+    val cleanupUnresolved: Boolean,
+    val lastStopReason: String?,
+    val lastCloseDetached: Boolean,
 ) {
     companion object {
         val NONE =
@@ -91,9 +96,20 @@ data class NativeRuntimeSnapshot(
                 hasHost = false,
                 hasConfig = false,
                 dnsServerAddress = null,
+                nativeGeneration = 0L,
+                nativeState = RuntimeState.IDLE,
+                cleanupUnresolved = false,
+                lastStopReason = null,
+                lastCloseDetached = false,
             )
     }
 }
+
+internal const val RUNTIME_CLEANUP_UNRESOLVED_MESSAGE =
+    "Runtime cleanup is unresolved; restart FoxHole before reconnecting"
+
+internal class RuntimeCleanupUnresolvedException :
+    IllegalStateException(RUNTIME_CLEANUP_UNRESOLVED_MESSAGE)
 
 enum class RuntimeState {
     IDLE,

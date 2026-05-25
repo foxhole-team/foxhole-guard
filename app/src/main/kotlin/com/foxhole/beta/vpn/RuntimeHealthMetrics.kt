@@ -20,6 +20,11 @@ internal data class RuntimeResourceSnapshot(
     val hasHost: Boolean,
     val hasConfig: Boolean,
     val dnsServerAddress: String?,
+    val nativeGeneration: Long,
+    val nativeState: RuntimeState,
+    val cleanupUnresolved: Boolean,
+    val lastStopReason: String?,
+    val lastCloseDetached: Boolean,
 )
 
 @Suppress("TooManyFunctions")
@@ -166,6 +171,11 @@ internal object RuntimeHealthMetrics {
             "native_host=${snapshot.hasHost}",
             "native_config=${snapshot.hasConfig}",
             snapshot.dnsServerAddress?.let { "dns=$it" },
+            "native_generation=${snapshot.nativeGeneration}",
+            "native_state=${snapshot.nativeState.name.lowercase()}",
+            "cleanup_unresolved=${snapshot.cleanupUnresolved}",
+            snapshot.lastStopReason?.let { "last_stop_reason=$it" },
+            "last_close_detached=${snapshot.lastCloseDetached}",
             "queue_running=${commandQueue.running}",
             commandQueue.runningPriority?.let { "queue_priority=$it" },
             commandQueue.runningReason?.let { "queue_reason=$it" },
@@ -219,6 +229,11 @@ internal object RuntimeHealthMetrics {
             hasHost = nativeSnapshot.hasHost,
             hasConfig = nativeSnapshot.hasConfig,
             dnsServerAddress = nativeSnapshot.dnsServerAddress,
+            nativeGeneration = nativeSnapshot.nativeGeneration,
+            nativeState = nativeSnapshot.nativeState,
+            cleanupUnresolved = nativeSnapshot.cleanupUnresolved,
+            lastStopReason = nativeSnapshot.lastStopReason,
+            lastCloseDetached = nativeSnapshot.lastCloseDetached,
         )
     }
 
