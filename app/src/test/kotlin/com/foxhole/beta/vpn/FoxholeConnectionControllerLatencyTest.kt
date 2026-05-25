@@ -119,6 +119,14 @@ class FoxholeConnectionControllerLatencyTest {
     }
 
     @Test
+    fun `tcp tunnel latency falls back to icmp when socket binding is blocked`() {
+        assertEquals(
+            listOf(LatencyProbeMethod.TCP, LatencyProbeMethod.HTTP, LatencyProbeMethod.ICMP),
+            latencyProbeMethodOrder(TrafficMode.TUNNEL, LatencyProbeMethod.TCP),
+        )
+    }
+
+    @Test
     fun `proxy latency only uses http probe path`() {
         assertEquals(
             listOf(LatencyProbeMethod.HTTP),
@@ -144,6 +152,13 @@ class FoxholeConnectionControllerLatencyTest {
                 useRuntimeProxyForTunnel = true,
             ),
         )
+    }
+
+    @Test
+    fun `runtime proxy tunnel latency attempt is bounded before vpn fallback`() {
+        assertEquals(2_000L, runtimeProxyTunnelLatencyCallTimeoutMs(8_000L))
+        assertEquals(500L, runtimeProxyTunnelLatencyCallTimeoutMs(500L))
+        assertEquals(1L, runtimeProxyTunnelLatencyCallTimeoutMs(0L))
     }
 
     @Test

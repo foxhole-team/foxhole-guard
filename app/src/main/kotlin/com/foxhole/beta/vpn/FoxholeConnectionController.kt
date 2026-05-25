@@ -77,6 +77,11 @@ class FoxholeConnectionController(
             currentVpnNetwork = { currentVpnNetwork() },
             currentUpstreamNetwork = { currentUpstreamNetwork() },
             currentVpnInterfaceName = { network -> connectivityManager.getLinkProperties(network)?.interfaceName },
+            isVpnNetworkValidated = { network ->
+                connectivityManager
+                    .getNetworkCapabilities(network)
+                    ?.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED) == true
+            },
         )
 
     suspend fun connect(

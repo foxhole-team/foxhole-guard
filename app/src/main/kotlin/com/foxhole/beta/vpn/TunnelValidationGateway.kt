@@ -20,6 +20,7 @@ import com.foxhole.beta.core.network.IpInfoRepository
 import com.foxhole.beta.core.settings.SettingsRepository
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.withTimeoutOrNull
 import java.io.IOException
 
 @Suppress("TooManyFunctions")
@@ -35,6 +36,7 @@ internal class TunnelValidationGateway(
 ) {
     private val appContext = context.applicationContext
     private val connectivityManager by lazy { context.getSystemService<ConnectivityManager>()!! }
+    private var activeTunnelIpInfoCache: ActiveTunnelIpInfoCache? = null
 
     suspend fun refreshIpInfo(fetchMode: IpInfoFetchMode): IpInfo {
         val settings = settingsRepository.current()
@@ -262,15 +264,17 @@ internal class TunnelValidationGateway(
                 "active tunnel ip refresh using quick mode after android validation",
             )
         }
-        return try {
-            fetchActiveTunnelIpInfoViaRuntimeProxy(
+        return if (settings.shouldPreferVpnBoundIpRefresh(currentSnapshot, androidValidatedVpnNetwork)) {
+            fetchActiveTunnelIpInfoWithVpnBoundPreference(
                 settings = settings,
+                currentSnapshot = currentSnapshot,
                 endpoint = endpoint,
                 fetchMode = effectiveFetchMode,
+                vpnNetwork = vpnNetwork,
                 preferIpv4Validation = preferIpv4Validation,
             )
-        } catch (error: IOException) {
-            recoverActiveTunnelIpInfoAfterRuntimeProxyFailure(
+        } else {
+            fetchActiveTunnelIpInfoWithRuntimeProxyPreference(
                 settings = settings,
                 currentSnapshot = currentSnapshot,
                 androidValidatedVpnNetwork = androidValidatedVpnNetwork,
@@ -278,31 +282,131 @@ internal class TunnelValidationGateway(
                 fetchMode = effectiveFetchMode,
                 vpnNetwork = vpnNetwork,
                 preferIpv4Validation = preferIpv4Validation,
-                error = error,
-            )
-        } catch (error: IllegalStateException) {
-            recoverActiveTunnelIpInfoAfterRuntimeProxyFailure(
-                settings = settings,
-                currentSnapshot = currentSnapshot,
-                androidValidatedVpnNetwork = androidValidatedVpnNetwork,
-                endpoint = endpoint,
-                fetchMode = effectiveFetchMode,
-                vpnNetwork = vpnNetwork,
-                preferIpv4Validation = preferIpv4Validation,
-                error = error,
-            )
-        } catch (error: IllegalArgumentException) {
-            recoverActiveTunnelIpInfoAfterRuntimeProxyFailure(
-                settings = settings,
-                currentSnapshot = currentSnapshot,
-                androidValidatedVpnNetwork = androidValidatedVpnNetwork,
-                endpoint = endpoint,
-                fetchMode = effectiveFetchMode,
-                vpnNetwork = vpnNetwork,
-                preferIpv4Validation = preferIpv4Validation,
-                error = error,
             )
         }
+    }
+
+    private suspend fun fetchActiveTunnelIpInfoWithVpnBoundPreference(
+        settings: Settings,
+        currentSnapshot: ConnectionSnapshot,
+        endpoint: String,
+        fetchMode: IpInfoFetchMode,
+        vpnNetwork: Network,
+        preferIpv4Validation: Boolean,
+    ): IpInfo =
+        runCatching {
+            fetchActiveTunnelIpInfoOnProcessPathWithTimeout(
+                endpoint = endpoint,
+                fetchMode = fetchMode,
+                vpnNetwork = vpnNetwork,
+                preferIpv4Validation = preferIpv4Validation,
+            ).also { info -> rememberActiveTunnelIpInfo(currentSnapshot, info) }
+        }.recoverCatching { processError ->
+            fetchActiveTunnelIpInfoViaRuntimeProxyAfterProcessFailure(
+                settings = settings,
+                endpoint = endpoint,
+                fetchMode = fetchMode,
+                preferIpv4Validation = preferIpv4Validation,
+                processError = processError,
+            )
+        }.recoverCatching { refreshError ->
+            recoverCachedActiveTunnelIpInfo(
+                currentSnapshot = currentSnapshot,
+                error = refreshError,
+            )
+        }.getOrThrow()
+
+    private suspend fun fetchActiveTunnelIpInfoViaRuntimeProxyAfterProcessFailure(
+        settings: Settings,
+        endpoint: String,
+        fetchMode: IpInfoFetchMode,
+        preferIpv4Validation: Boolean,
+        processError: Throwable,
+    ): IpInfo {
+        if (processError is CancellationException) {
+            throw processError
+        }
+        diagnosticsLogger.record(
+            "ip",
+            "validated vpn-bound ip refresh failed, trying runtime proxy path: ${processError.javaClass.simpleName}",
+        )
+        return fetchActiveTunnelIpInfoViaRuntimeProxy(
+            settings = settings,
+            endpoint = endpoint,
+            fetchMode = fetchMode,
+            preferIpv4Validation = preferIpv4Validation,
+        )
+    }
+
+    private suspend fun fetchActiveTunnelIpInfoWithRuntimeProxyPreference(
+        settings: Settings,
+        currentSnapshot: ConnectionSnapshot,
+        androidValidatedVpnNetwork: Boolean,
+        endpoint: String,
+        fetchMode: IpInfoFetchMode,
+        vpnNetwork: Network,
+        preferIpv4Validation: Boolean,
+    ): IpInfo =
+        runCatching {
+            try {
+                fetchActiveTunnelIpInfoViaRuntimeProxy(
+                    settings = settings,
+                    endpoint = endpoint,
+                    fetchMode = fetchMode,
+                    preferIpv4Validation = preferIpv4Validation,
+                )
+            } catch (error: IOException) {
+                recoverActiveTunnelIpInfoAfterRuntimeProxyFailure(
+                    settings = settings,
+                    currentSnapshot = currentSnapshot,
+                    androidValidatedVpnNetwork = androidValidatedVpnNetwork,
+                    endpoint = endpoint,
+                    fetchMode = fetchMode,
+                    vpnNetwork = vpnNetwork,
+                    preferIpv4Validation = preferIpv4Validation,
+                    error = error,
+                )
+            } catch (error: IllegalStateException) {
+                recoverActiveTunnelIpInfoAfterRuntimeProxyFailure(
+                    settings = settings,
+                    currentSnapshot = currentSnapshot,
+                    androidValidatedVpnNetwork = androidValidatedVpnNetwork,
+                    endpoint = endpoint,
+                    fetchMode = fetchMode,
+                    vpnNetwork = vpnNetwork,
+                    preferIpv4Validation = preferIpv4Validation,
+                    error = error,
+                )
+            } catch (error: IllegalArgumentException) {
+                recoverActiveTunnelIpInfoAfterRuntimeProxyFailure(
+                    settings = settings,
+                    currentSnapshot = currentSnapshot,
+                    androidValidatedVpnNetwork = androidValidatedVpnNetwork,
+                    endpoint = endpoint,
+                    fetchMode = fetchMode,
+                    vpnNetwork = vpnNetwork,
+                    preferIpv4Validation = preferIpv4Validation,
+                    error = error,
+                )
+            }
+        }.recoverCatching { refreshError ->
+            recoverCachedActiveTunnelIpInfo(
+                currentSnapshot = currentSnapshot,
+                error = refreshError,
+            )
+        }.getOrThrow()
+
+    private fun recoverCachedActiveTunnelIpInfo(
+        currentSnapshot: ConnectionSnapshot,
+        error: Throwable,
+    ): IpInfo {
+        if (error is CancellationException) {
+            throw error
+        }
+        return cachedActiveTunnelIpInfoOrThrow(
+            currentSnapshot = currentSnapshot,
+            error = error,
+        )
     }
 
     private suspend fun recoverActiveTunnelIpInfoAfterRuntimeProxyFailure(
@@ -322,6 +426,7 @@ internal class TunnelValidationGateway(
             throw error
         }
         return fetchActiveTunnelIpInfoOnProcessPathAfterRuntimeProxyFailure(
+            currentSnapshot = currentSnapshot,
             endpoint = endpoint,
             fetchMode = fetchMode,
             vpnNetwork = vpnNetwork,
@@ -336,6 +441,7 @@ internal class TunnelValidationGateway(
             ?.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED) == true
 
     private suspend fun fetchActiveTunnelIpInfoOnProcessPathAfterRuntimeProxyFailure(
+        currentSnapshot: ConnectionSnapshot,
         endpoint: String,
         fetchMode: IpInfoFetchMode,
         vpnNetwork: Network,
@@ -347,12 +453,12 @@ internal class TunnelValidationGateway(
             "runtime local proxy ip refresh failed, retrying vpn process path: ${error.javaClass.simpleName}",
         )
         return runCatching {
-            fetchActiveTunnelIpInfoOnProcessPath(
+            fetchActiveTunnelIpInfoOnProcessPathWithTimeout(
                 endpoint = endpoint,
                 fetchMode = fetchMode,
                 vpnNetwork = vpnNetwork,
                 preferIpv4Validation = preferIpv4Validation,
-            )
+            ).also { info -> rememberActiveTunnelIpInfo(currentSnapshot, info) }
         }.recoverCatching { processError ->
             if (processError is CancellationException) {
                 throw processError
@@ -364,6 +470,21 @@ internal class TunnelValidationGateway(
             throw processError
         }.getOrThrow()
     }
+
+    private suspend fun fetchActiveTunnelIpInfoOnProcessPathWithTimeout(
+        endpoint: String,
+        fetchMode: IpInfoFetchMode,
+        vpnNetwork: Network,
+        preferIpv4Validation: Boolean,
+    ): IpInfo =
+        withTimeoutOrNull(ACTIVE_TUNNEL_VPN_BOUND_IP_REFRESH_TOTAL_TIMEOUT_MS) {
+            fetchActiveTunnelIpInfoOnProcessPath(
+                endpoint = endpoint,
+                fetchMode = fetchMode,
+                vpnNetwork = vpnNetwork,
+                preferIpv4Validation = preferIpv4Validation,
+            )
+        } ?: error("vpn-bound ip refresh timed out")
 
     private suspend fun fetchActiveTunnelIpInfoOnProcessPath(
         endpoint: String,
@@ -389,6 +510,38 @@ internal class TunnelValidationGateway(
                 mode = fetchMode,
             )
         }
+    }
+
+    private fun rememberActiveTunnelIpInfo(
+        currentSnapshot: ConnectionSnapshot,
+        info: IpInfo,
+    ) {
+        activeTunnelIpInfoCache =
+            ActiveTunnelIpInfoCache(
+                key = currentSnapshot.activeTunnelIpInfoCacheKey(),
+                info = info,
+                updatedAtMs = System.currentTimeMillis(),
+            )
+    }
+
+    private fun cachedActiveTunnelIpInfoOrThrow(
+        currentSnapshot: ConnectionSnapshot,
+        error: Throwable,
+    ): IpInfo {
+        val now = System.currentTimeMillis()
+        val cached =
+            activeTunnelIpInfoCache
+                ?.takeIf { cache -> cache.key == currentSnapshot.activeTunnelIpInfoCacheKey() }
+                ?.takeIf { cache -> now - cache.updatedAtMs <= ACTIVE_TUNNEL_IP_REFRESH_CACHE_MAX_AGE_MS }
+                ?.info
+        if (cached != null) {
+            diagnosticsLogger.record(
+                "ip",
+                "active tunnel ip refresh reused last vpn-bound result after ${error.javaClass.simpleName}",
+            )
+            return cached
+        }
+        throw error
     }
 
     private suspend fun fetchActiveTunnelIpInfoViaRuntimeProxy(
@@ -419,9 +572,30 @@ internal class TunnelValidationGateway(
 
     private companion object {
         const val DASHBOARD_IP_REFRESH_CALL_TIMEOUT_MS = 2_500L
-        const val ACTIVE_TUNNEL_RUNTIME_PROXY_IP_REFRESH_CALL_TIMEOUT_MS = 6_000L
+        const val ACTIVE_TUNNEL_VPN_BOUND_IP_REFRESH_TOTAL_TIMEOUT_MS = 7_500L
+        const val ACTIVE_TUNNEL_RUNTIME_PROXY_IP_REFRESH_CALL_TIMEOUT_MS = 4_000L
+        const val ACTIVE_TUNNEL_IP_REFRESH_CACHE_MAX_AGE_MS = 10 * 60 * 1_000L
     }
 }
+
+private data class ActiveTunnelIpInfoCache(
+    val key: ActiveTunnelIpInfoCacheKey,
+    val info: IpInfo,
+    val updatedAtMs: Long,
+)
+
+private data class ActiveTunnelIpInfoCacheKey(
+    val profileId: Long?,
+    val protocolOptionId: String?,
+    val connectedAtMs: Long,
+)
+
+private fun ConnectionSnapshot.activeTunnelIpInfoCacheKey(): ActiveTunnelIpInfoCacheKey =
+    ActiveTunnelIpInfoCacheKey(
+        profileId = profileId,
+        protocolOptionId = protocolOptionId,
+        connectedAtMs = lastChangeAt,
+    )
 
 internal fun Settings.requiresStrictRuntimeProxyIpRefresh(snapshot: ConnectionSnapshot): Boolean =
     snapshot.requiresRuntimeProxyForActiveTunnelIpRefresh() ||
@@ -439,6 +613,14 @@ internal fun Settings.canUseVpnBoundIpRefreshFallback(
     snapshot: ConnectionSnapshot,
     androidValidatedVpnNetwork: Boolean,
 ): Boolean = !requiresStrictRuntimeProxyIpRefresh(snapshot) || androidValidatedVpnNetwork
+
+internal fun Settings.shouldPreferVpnBoundIpRefresh(
+    snapshot: ConnectionSnapshot,
+    androidValidatedVpnNetwork: Boolean,
+): Boolean =
+    androidValidatedVpnNetwork &&
+        canUseVpnBoundIpRefreshFallback(snapshot, androidValidatedVpnNetwork = true) &&
+        snapshot.profileId != FoxholeVpnService.TOR_ONLY_PROFILE_ID
 
 internal fun validatedTunnelIpRefreshFetchMode(
     requestedMode: IpInfoFetchMode,

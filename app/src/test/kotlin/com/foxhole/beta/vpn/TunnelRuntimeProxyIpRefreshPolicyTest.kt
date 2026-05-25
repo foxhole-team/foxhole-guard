@@ -109,6 +109,31 @@ class TunnelRuntimeProxyIpRefreshPolicyTest {
     }
 
     @Test
+    fun `validated ordinary vpn refresh prefers vpn-bound path before runtime proxy`() {
+        val snapshot =
+            ConnectionSnapshot(
+                state = ConnectionState.CONNECTED,
+                trafficMode = TrafficMode.TUNNEL,
+                profileId = 42L,
+                protocolHint = ProtocolHint.VLESS,
+            )
+
+        assertTrue(Settings().shouldPreferVpnBoundIpRefresh(snapshot, androidValidatedVpnNetwork = true))
+    }
+
+    @Test
+    fun `tor only refresh keeps runtime proxy path preferred`() {
+        val snapshot =
+            ConnectionSnapshot(
+                state = ConnectionState.CONNECTED,
+                trafficMode = TrafficMode.TUNNEL,
+                profileId = FoxholeVpnService.TOR_ONLY_PROFILE_ID,
+            )
+
+        assertFalse(Settings().shouldPreferVpnBoundIpRefresh(snapshot, androidValidatedVpnNetwork = true))
+    }
+
+    @Test
     fun `strict dashboard ip refresh does not fall back without android validation`() {
         val snapshot =
             ConnectionSnapshot(

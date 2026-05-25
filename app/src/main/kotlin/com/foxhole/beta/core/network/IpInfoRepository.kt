@@ -10,6 +10,7 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.booleanOrNull
@@ -27,6 +28,7 @@ import okhttp3.Response
 import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.io.InputStream
+import java.io.InterruptedIOException
 import java.net.Authenticator
 import java.net.Inet4Address
 import java.net.Inet6Address
@@ -147,8 +149,10 @@ class IpInfoRepository(
                 }
             } else {
                 measureTimeMillis {
-                    execute(endpoint, callTimeoutMs, network, proxy = proxy, resolverNetwork = resolverNetwork).use { response ->
-                        require(response.isSuccessful) { "connectivity probe failed: ${response.code}" }
+                    withBoundedCallTimeout(callTimeoutMs) {
+                        execute(endpoint, callTimeoutMs, network, proxy = proxy, resolverNetwork = resolverNetwork).use { response ->
+                            require(response.isSuccessful) { "connectivity probe failed: ${response.code}" }
+                        }
                     }
                 }.coerceAtLeast(1L)
             }
@@ -173,17 +177,19 @@ class IpInfoRepository(
                 )
                 val result =
                     runCatching {
-                        if (strategy.includeFamilyProbes) {
-                            fetchSingleWithFamilyFallbacks(candidate, strategy.callTimeoutMs, network, proxy, resolverNetwork)
-                        } else {
-                            fetchSingle(
-                                endpoint = candidate,
-                                callTimeoutMs = strategy.callTimeoutMs,
-                                network = network,
-                                addressFamilyPreference = AddressFamilyPreference.ANY,
-                                proxy = proxy,
-                                resolverNetwork = resolverNetwork,
-                            )
+                        withBoundedCallTimeout(strategy.callTimeoutMs) {
+                            if (strategy.includeFamilyProbes) {
+                                fetchSingleWithFamilyFallbacks(candidate, strategy.callTimeoutMs, network, proxy, resolverNetwork)
+                            } else {
+                                fetchSingle(
+                                    endpoint = candidate,
+                                    callTimeoutMs = strategy.callTimeoutMs,
+                                    network = network,
+                                    addressFamilyPreference = AddressFamilyPreference.ANY,
+                                    proxy = proxy,
+                                    resolverNetwork = resolverNetwork,
+                                )
+                            }
                         }
                     }
                 if (result.isSuccess) {
@@ -310,8 +316,18 @@ class IpInfoRepository(
     ): IpInfo? {
         familyEndpoints(endpoint, addressFamilyPreference).forEach { candidate ->
             currentCoroutineContext().ensureActive()
+            val result =
+                runCatching {
+                    withBoundedCallTimeout(callTimeoutMs) {
+                        fetchSingle(candidate, callTimeoutMs, network, addressFamilyPreference, proxy, resolverNetwork)
+                    }
+                }
+            val failure = result.exceptionOrNull()
+            if (failure is CancellationException) {
+                throw failure
+            }
             val info =
-                runCatching { fetchSingle(candidate, callTimeoutMs, network, addressFamilyPreference, proxy, resolverNetwork) }
+                result
                     .getOrNull()
                     ?.takeIf { value ->
                         when (addressFamilyPreference) {
@@ -325,6 +341,14 @@ class IpInfoRepository(
             }
         }
         return null
+    }
+
+    private suspend fun <T> withBoundedCallTimeout(
+        callTimeoutMs: Long?,
+        block: suspend () -> T,
+    ): T {
+        val timeoutMs = callTimeoutMs?.coerceAtLeast(1L) ?: return block()
+        return withTimeoutOrNull(timeoutMs) { block() } ?: throw InterruptedIOException("timeout")
     }
 
     @Suppress("CyclomaticComplexMethod", "NestedBlockDepth")
