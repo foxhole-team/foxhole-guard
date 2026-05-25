@@ -1,7 +1,3 @@
-import org.cyclonedx.gradle.CyclonedxAggregateTask
-import org.cyclonedx.gradle.CyclonedxDirectTask
-import org.cyclonedx.model.Component
-
 buildscript {
     repositories {
         mavenCentral()
@@ -33,8 +29,10 @@ buildscript {
     }
 }
 
-plugins {
-    id("org.cyclonedx.bom") version "3.2.4"
+val enableSbom = providers.gradleProperty("foxhole.sbom").map(String::toBoolean).orElse(false)
+
+if (enableSbom.get()) {
+    apply(from = layout.projectDirectory.file("gradle/sbom.gradle.kts"))
 }
 
 allprojects {
@@ -66,30 +64,4 @@ allprojects {
             }
         }
     }
-    tasks.withType<CyclonedxDirectTask>().configureEach {
-        projectType.set(Component.Type.APPLICATION)
-        includeConfigs.set(listOf("releaseRuntimeClasspath"))
-        skipConfigs.set(listOf(".*[Tt]est.*", ".*[Bb]enchmark.*", ".*[Ll]int.*", ".*[Kk]sp.*"))
-        includeBuildEnvironment.set(false)
-        includeMetadataResolution.set(false)
-        jsonOutput.unsetConvention()
-        resolvedDependencies.setFrom(emptyList<Any>())
-        outputs.upToDateWhen { false }
-    }
-}
-
-subprojects {
-    if (name == "macrobenchmark") {
-        tasks.withType<CyclonedxDirectTask>().configureEach {
-            enabled = false
-        }
-    }
-}
-
-tasks.withType<CyclonedxAggregateTask>().configureEach {
-    projectType.set(Component.Type.APPLICATION)
-    componentName.set("foxhole-android")
-    componentGroup.set("com.foxhole")
-    componentVersion.set("1.0.0-beta1")
-    includeBuildSystem.set(true)
 }

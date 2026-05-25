@@ -86,7 +86,7 @@ jobs:
         run: scripts/verify-adguard-dns-assets.sh app/build/outputs/apk/release/*.apk
 
       - name: generate sbom
-        run: ./gradlew --no-daemon --console=plain --stacktrace :app:cyclonedxDirectBom
+        run: ./gradlew --no-daemon --console=plain --stacktrace cyclonedxBom -Pfoxhole.sbom=true
 
       - name: verify signed release APKs
         id: release_apk

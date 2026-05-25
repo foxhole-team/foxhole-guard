@@ -47,20 +47,20 @@ jobs:
       - name: verify wrapper
         run: ./gradlew --no-daemon --console=plain --version
 
+      - name: enumerate gradle tasks
+        run: ./gradlew --no-daemon --console=plain --stacktrace tasks
+
       - name: static analysis, release lint gate, unit tests, and coverage
-        run: ./gradlew --no-daemon --console=plain --stacktrace detekt verifyDetektBaseline lintDebug lintRelease lintVitalRelease testDebugUnitTest jacocoDebugUnitTestReport jacocoDebugUnitTestCoverageVerification verifyReleaseBuildConfigDefaults
+        run: ./gradlew --no-daemon --console=plain --stacktrace :app:detekt verifyDetektBaseline :app:lintDebug :app:lintRelease :app:lintVitalRelease :app:testDebugUnitTest jacocoDebugUnitTestReport jacocoDebugUnitTestCoverageVerification verifyReleaseBuildConfigDefaults
 
       - name: build connected and benchmark test artifacts
-        run: ./gradlew --no-daemon --console=plain --stacktrace assembleDebug assembleDebugAndroidTest :macrobenchmark:assembleAndroidTest
+        run: ./gradlew --no-daemon --console=plain --stacktrace :app:assembleDebug assembleDebugAndroidTest :macrobenchmark:assembleAndroidTest
 
       - name: build release
-        run: ./gradlew --no-daemon --console=plain --stacktrace -Pfoxhole.splitApks=true assembleRelease verifyReleaseBuildConfigDefaults
+        run: ./gradlew --no-daemon --console=plain --stacktrace -Pfoxhole.releaseProbe=true -Pfoxhole.splitApks=true :app:assembleRelease verifyReleaseBuildConfigDefaults
 
       - name: verify AdGuard DNS assets in app builds
         run: scripts/verify-adguard-dns-assets.sh app/build/outputs/apk/debug/*.apk app/build/outputs/apk/release/*.apk
-
-      - name: generate sbom
-        run: ./gradlew --no-daemon --console=plain --stacktrace :app:cyclonedxDirectBom
 
       - name: secret scan
         run: scripts/run-gitleaks-scan.sh
@@ -79,6 +79,31 @@ jobs:
             macrobenchmark/build/reports
             macrobenchmark/build/outputs
             build/reports
+
+  sbom:
+    name: sbom
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: checkout
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8
+        with:
+          submodules: recursive
+
+      - name: setup android libbox build
+        uses: ./.github/actions/setup-android-libbox
+
+      - name: generate sbom
+        run: ./gradlew --no-daemon --console=plain --stacktrace cyclonedxBom -Pfoxhole.sbom=true
+
+      - name: upload sbom report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: android-sbom
+          path: |
+            build/reports
+            app/build/reports
 
   connected-tests:
     name: emulator UI/regression connected tests
