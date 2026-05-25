@@ -681,7 +681,7 @@ private fun HomeRouteUiState.homeNetworkTitleRes(
 private fun HomeRouteUiState.hasRealTunnelConnectionStatus(): Boolean {
     val routeStatusRunning =
         connection.state in setOf(ConnectionState.CONNECTING, ConnectionState.CONNECTED, ConnectionState.RECONNECTING) ||
-            (autoConnect.running && activeProfile != null && connection.state !in ACTIVE_CONNECTION_STATES)
+            (autoConnect.running && connection.state !in ACTIVE_CONNECTION_STATES)
     return reconnectInProgress || (routeStatusRunning && hasDashboardRouteProfile())
 }
 

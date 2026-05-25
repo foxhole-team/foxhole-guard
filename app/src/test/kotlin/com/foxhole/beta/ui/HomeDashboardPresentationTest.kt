@@ -987,6 +987,38 @@ class HomeDashboardPresentationTest {
     }
 
     @Test
+    fun `network model keeps connection details skeleton before smart profile loads`() {
+        val model =
+            resolveHomeDashboardNetworkModel(
+                state =
+                    HomeRouteUiState(
+                        profilesLoaded = true,
+                        activeProfile = null,
+                        autoConnect =
+                            AutoConnectUiState(
+                                running = true,
+                                currentOptionId = "vless",
+                            ),
+                        connection =
+                            ConnectionSnapshot(
+                                state = ConnectionState.IDLE,
+                                trafficMode = TrafficMode.TUNNEL,
+                                profileId = null,
+                                lastChangeAt = 2_000L,
+                            ),
+                    ),
+                visibleIpInfo = null,
+                deviceInternetAvailable = true,
+            )
+
+        assertTrue(model.showConnectionStatus)
+        assertTrue(model.showConnectionDetailsLoading)
+        assertTrue(model.showLoading)
+        assertFalse(model.showIpInfoLoading)
+        assertEquals(R.string.home_network_connection_info_title, model.titleRes)
+    }
+
+    @Test
     fun `network model shows startup skeleton while disconnected profile state loads`() {
         val model =
             resolveHomeDashboardNetworkModel(

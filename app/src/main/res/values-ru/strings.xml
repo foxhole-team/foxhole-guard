@@ -441,6 +441,7 @@
     <string name="statistics_app_detail_city_unknown">Город неизвестен</string>
     <string name="statistics_app_detail_port">Порт %1$d</string>
     <string name="statistics_app_detail_network_log_disabled">IP-адреса подключений, порты, страны и трафик по endpoint появятся здесь после включения сетевого журнала в Диагностике. Общая статистика приложений остаётся локальной, а журнал пишет очищенные сетевые метаданные для детальной отладки.</string>
+    <string name="statistics_app_detail_enable_network_log_action">Включить сейчас</string>
     <string name="statistics_app_detail_private_data_hidden">Приватные сетевые адреса скрыты. Отключите «Скрывать приватные данные» в Журналах, чтобы показать IP, порты, страны, города и объём трафика по подключениям.</string>
     <plurals name="statistics_app_detail_connection_count">
         <item quantity="one">%1$d раз</item>

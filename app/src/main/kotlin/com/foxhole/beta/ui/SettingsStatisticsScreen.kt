@@ -45,6 +45,7 @@ fun StatisticsScreen(
     onStatisticsRefreshIntervalSelected: (StatisticsRefreshInterval) -> Unit,
     onStatisticsMetricEnabledChanged: (StatisticsMetric, Boolean) -> Unit,
     onAppTrafficStatsEnabledChanged: (Boolean) -> Unit,
+    onNetworkActivityLoggingChanged: (Boolean) -> Unit,
     onFirewallEnabledChanged: (Boolean) -> Unit,
     onClearUsage: () -> Unit,
 ) {
@@ -283,6 +284,7 @@ fun StatisticsScreen(
                     ipInfo = state.ipInfo,
                     networkActivityLoggingEnabled = state.settings.expert.networkActivityLogging,
                     showPrivateNetworkDetails = !state.settings.expert.sanitizeNetworkActivityPrivateData,
+                    onEnableNetworkActivityLogging = { onNetworkActivityLoggingChanged(true) },
                 )
             },
             confirmButton = {},

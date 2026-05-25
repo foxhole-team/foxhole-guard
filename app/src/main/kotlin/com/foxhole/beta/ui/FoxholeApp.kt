@@ -761,6 +761,7 @@ fun FoxholeApp(
                         onStatisticsRefreshIntervalSelected = viewModel::onStatisticsRefreshIntervalSelected,
                         onStatisticsMetricEnabledChanged = viewModel::onStatisticsMetricEnabledChanged,
                         onAppTrafficStatsEnabledChanged = viewModel::onAppTrafficStatsEnabledChanged,
+                        onNetworkActivityLoggingChanged = viewModel::onNetworkActivityLoggingChanged,
                         onFirewallEnabledChanged = viewModel::onFirewallEnabledChanged,
                         onClearUsage = viewModel::resetUsageTracking,
                     )

@@ -434,6 +434,7 @@
     <string name="statistics_app_detail_city_unknown">City unknown</string>
     <string name="statistics_app_detail_port">Port %1$d</string>
     <string name="statistics_app_detail_network_log_disabled">Connection addresses, ports, countries, and endpoint traffic appear here after Network activity log is enabled in Diagnostics. App traffic totals stay local; the network log records sanitized connection metadata for detailed troubleshooting.</string>
+    <string name="statistics_app_detail_enable_network_log_action">Enable now</string>
     <string name="statistics_app_detail_private_data_hidden">Private network addresses are hidden. Turn off Hide private data in Logs to show connection IPs, ports, countries, cities, and traffic volume.</string>
     <plurals name="statistics_app_detail_connection_count">
         <item quantity="one">%1$d time</item>

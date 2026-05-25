@@ -172,6 +172,7 @@ internal fun AppTrafficDetail(
     ipInfo: com.foxhole.beta.core.model.IpInfo?,
     networkActivityLoggingEnabled: Boolean,
     showPrivateNetworkDetails: Boolean,
+    onEnableNetworkActivityLogging: () -> Unit,
 ) {
     val context = LocalContext.current
     val appContext = remember(context) { context.applicationContext }
@@ -269,6 +270,9 @@ internal fun AppTrafficDetail(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            TextButton(onClick = onEnableNetworkActivityLogging) {
+                Text(stringResource(R.string.statistics_app_detail_enable_network_log_action))
+            }
         } else if (!showPrivateNetworkDetails && networkActivityEvents.isNotEmpty()) {
             Text(
                 text = stringResource(R.string.statistics_app_detail_private_data_hidden),
