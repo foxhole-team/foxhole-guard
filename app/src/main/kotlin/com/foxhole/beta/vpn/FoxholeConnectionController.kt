@@ -623,13 +623,20 @@ internal fun FoxholeVpnService.currentVpnNetworkOrNullInternal(excludedHandle: L
             network.networkHandle != excludedHandle
     }
 
-internal fun FoxholeVpnService.currentUpstreamNetworkOrNullInternal(excludedHandle: Long? = null): Network? =
-    connectivityManager.activeNetwork
-        ?.takeUnless { network -> network.networkHandle == excludedHandle }
-        ?.takeIf(::isUpstreamNetwork)
-        ?: currentNetworkSnapshot().firstOrNull { network ->
-            network.networkHandle != excludedHandle && isUpstreamNetwork(network)
+internal fun FoxholeVpnService.currentUpstreamNetworkOrNullInternal(excludedHandle: Long? = null): Network? {
+    val snapshot = currentNetworkSnapshot()
+    val trackedUpstreamNetworks =
+        upstreamNetworkHandles.mapNotNull { handle ->
+            snapshot.firstOrNull { network -> network.networkHandle == handle }
         }
+    return connectivityManager.preferredNonVpnInternetNetwork(
+        candidates = trackedUpstreamNetworks,
+        excludedHandle = excludedHandle,
+    ) ?: connectivityManager.preferredNonVpnInternetNetwork(
+        candidates = snapshot,
+        excludedHandle = excludedHandle,
+    )
+}
 
 @Suppress("DEPRECATION")
 private fun FoxholeVpnService.currentNetworkSnapshot(): List<Network> =

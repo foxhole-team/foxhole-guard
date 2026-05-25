@@ -102,9 +102,15 @@ class HomeIpLoadingPolicyTest {
                 currentState = ConnectionState.IDLE,
             ),
         )
-        assertFalse(
+        assertTrue(
             shouldAutoRefreshIpAfterDisconnect(
                 previousState = ConnectionState.CONNECTING,
+                currentState = ConnectionState.ERROR,
+            ),
+        )
+        assertFalse(
+            shouldAutoRefreshIpAfterDisconnect(
+                previousState = ConnectionState.IDLE,
                 currentState = ConnectionState.ERROR,
             ),
         )
@@ -175,7 +181,7 @@ class HomeIpLoadingPolicyTest {
     }
 
     @Test
-    fun `local guard firewall shows network skeleton only during active device ip refresh`() {
+    fun `local guard firewall shows network skeleton until current public ip resolves`() {
         val idleModel =
             resolveHomeDashboardNetworkModel(
                 state = HomeRouteUiState(
@@ -193,8 +199,8 @@ class HomeIpLoadingPolicyTest {
                 deviceInternetAvailable = true,
             )
 
-        assertFalse(idleModel.showLoading)
-        assertFalse(idleModel.showIpInfoLoading)
+        assertTrue(idleModel.showLoading)
+        assertTrue(idleModel.showIpInfoLoading)
         assertFalse(idleModel.showConnectionDetailsLoading)
 
         val model =
@@ -232,8 +238,8 @@ class HomeIpLoadingPolicyTest {
     }
 
     @Test
-    fun `does not show ip skeleton just because tunnel is connecting`() {
-        assertFalse(
+    fun `shows ip skeleton while tunnel is connecting without a resolved route ip`() {
+        assertTrue(
             shouldShowPendingNetworkLoading(
                 visibleIpInfo = null,
                 explicitLoading = false,
@@ -246,8 +252,8 @@ class HomeIpLoadingPolicyTest {
     }
 
     @Test
-    fun `does not show ip skeleton just because smart start is running`() {
-        assertFalse(
+    fun `shows ip skeleton while smart start is running without a resolved route ip`() {
+        assertTrue(
             shouldShowPendingNetworkLoading(
                 visibleIpInfo = null,
                 explicitLoading = false,
@@ -310,8 +316,8 @@ class HomeIpLoadingPolicyTest {
     }
 
     @Test
-    fun `does not keep pending network loading after app loaded when ip is empty`() {
-        assertFalse(
+    fun `keeps pending network loading after app loaded while internet exists and ip is empty`() {
+        assertTrue(
             shouldShowPendingNetworkLoading(
                 visibleIpInfo = null,
                 explicitLoading = false,
@@ -382,6 +388,17 @@ class HomeIpLoadingPolicyTest {
                 autoConnectRunning = false,
                 deviceInternetAvailable = true,
                 appLoaded = true,
+            ),
+        )
+    }
+
+    @Test
+    fun `network change refresh stays in the background`() {
+        assertFalse(
+            shouldShowDashboardIpRefreshLoading(
+                reason = IpInfoRefreshReason.NETWORK_CHANGE,
+                snapshot = ConnectionSnapshot(state = ConnectionState.CONNECTED, profileId = 7L),
+                currentIpInfo = null,
             ),
         )
     }

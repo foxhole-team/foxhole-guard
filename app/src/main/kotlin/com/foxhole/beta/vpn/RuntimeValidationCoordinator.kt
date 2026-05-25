@@ -324,6 +324,29 @@ internal suspend fun FoxholeVpnService.validateTunnelConnectivityInternal(
                 ) {
                     return@run vpnNetwork
                 }
+                if (androidValidatedEarly && activeProtocolHint?.isUdpTransport() == true) {
+                    val validatedLiteralEndpointProbe =
+                        runCatchingUnlessCancelled {
+                            probeDnsIndependentConnectivityFallback(
+                                callTimeoutMs = FoxholeVpnService.CONNECTIVITY_LITERAL_PROBE_CALL_TIMEOUT_MS,
+                                network = requestNetwork,
+                            )
+                        }
+                    if (validatedLiteralEndpointProbe.isSuccess) {
+                        container.diagnosticsLogger.record(
+                            "dns",
+                            "vpn-bound literal public endpoint accepted before hostname validation",
+                        )
+                        scope.launch(Dispatchers.IO) {
+                            refreshValidatedTunnelIpInfoBestEffort(vpnNetwork, currentSession)
+                        }
+                        return@run vpnNetwork
+                    }
+                    container.diagnosticsLogger.record(
+                        "dns",
+                        "vpn-bound literal public endpoint failed before hostname validation: ${validatedLiteralEndpointProbe.exceptionOrNull()?.message.orEmpty()}",
+                    )
+                }
                 if (acceptsTunnelValidationProbe(
                         TunnelValidationProbeKind.DNS_INDEPENDENT_LITERAL_IP,
                         validationPolicyContext,
@@ -1229,6 +1252,7 @@ internal fun FoxholeVpnService.onConnectionStartedInternal(
     val analysisStatus = getString(R.string.notification_status_analysis)
     resetAutoReconnectState()
     RuntimeResumeStateStore.markProfileRuntime(this, trafficMode, session)
+    runtimeNetworkActivityLoggingSuspended = false
     if (trafficJob == null) {
         trafficSampler.start()
         startTrafficUpdates()

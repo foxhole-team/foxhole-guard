@@ -726,8 +726,8 @@ class HomeViewModel(
                     scheduleConnectedIpRefresh(
                         reason = IpInfoRefreshReason.NETWORK_CHANGE,
                         clearExistingIp = false,
-                        showLoading = true,
-                        minimumLoadingDurationMs = AUTO_IP_REFRESH_MIN_LOADING_MS,
+                        showLoading = false,
+                        minimumLoadingDurationMs = 0L,
                     )
                 } else if (shouldRefreshConnectedIp) {
                     scheduleConnectedIpRefresh()

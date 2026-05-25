@@ -97,7 +97,7 @@ class HomeRuntimeBehaviorTest {
     fun coldStartWhileDisconnectedShowsStartupIpSkeletonWithoutUnavailableState() {
         scrollToNetworkBlock()
         composeRule.waitUntil(timeoutMillis = 5_000) {
-            composeRule.onAllNodesWithTag("home_network_loading").fetchSemanticsNodes().isNotEmpty()
+            networkLoadingVisible() || networkPrimaryIpText()?.let { it != "-" } == true
         }
 
         assertTrue(
@@ -202,7 +202,7 @@ class HomeRuntimeBehaviorTest {
     }
 
     @Test
-    fun connectedWithoutResolvedIpDoesNotKeepNetworkLoadingForever() {
+    fun connectedWithoutResolvedIpKeepsNetworkLoadingUntilValidIpArrives() {
         waitUntilNetworkBlockSettles()
 
         composeRule.runOnUiThread {
@@ -218,14 +218,9 @@ class HomeRuntimeBehaviorTest {
         }
 
         scrollToNetworkBlock()
-        composeRule.waitUntil(timeoutMillis = CONNECTED_WITHOUT_IP_LOADING_TIMEOUT_MS) {
-            composeRule.onAllNodesWithTag("home_network_loading").fetchSemanticsNodes().isEmpty()
-        }
-        scrollToNetworkBlock()
-        composeRule.waitUntil(timeoutMillis = NETWORK_VALUE_SETTLE_TIMEOUT_MS) {
-            textOfOrNull("home_network_primary_ip") == "-"
-        }
-        composeRule.onNodeWithTag("home_network_primary_ip", useUnmergedTree = true).assertTextEquals("-")
+        composeRule.waitUntil(timeoutMillis = 5_000) { networkLoadingVisible() }
+        composeRule.onNodeWithTag("home_network_loading").assertIsDisplayed()
+        composeRule.onAllNodesWithTag("home_network_primary_ip", useUnmergedTree = true).assertCountEquals(0)
         composeRule
             .onAllNodesWithText(
                 InstrumentationRegistry.getInstrumentation().targetContext.getString(R.string.home_network_unavailable),
@@ -271,7 +266,9 @@ class HomeRuntimeBehaviorTest {
             FoxholeVpnRuntimeBridge.updateIpInfo(null)
         }
 
-        composeRule.onNodeWithTag("home_network_primary_ip", useUnmergedTree = true).assertTextEquals("-")
+        composeRule.waitUntil(timeoutMillis = 3_000) { networkLoadingVisible() }
+        composeRule.onNodeWithTag("home_network_loading").assertIsDisplayed()
+        composeRule.onAllNodesWithTag("home_network_primary_ip", useUnmergedTree = true).assertCountEquals(0)
         composeRule.waitUntil(timeoutMillis = 3_000) {
             composeRule.onAllNodesWithTag("home_connection_status_loading").fetchSemanticsNodes().isNotEmpty()
         }
@@ -385,8 +382,10 @@ class HomeRuntimeBehaviorTest {
 
     private fun rateString(bytesPerSecond: Long): String = "${bytesString(bytesPerSecond)}/s"
 
-    private fun textOf(tag: String): String =
-        textOfOrNull(tag) ?: error("no node text for tag=$tag")
+    private fun networkLoadingVisible(): Boolean =
+        composeRule.onAllNodesWithTag("home_network_loading").fetchSemanticsNodes().isNotEmpty()
+
+    private fun networkPrimaryIpText(): String? = textOfOrNull("home_network_primary_ip")
 
     private fun textOfOrNull(tag: String): String? =
         textValuesOf(tag).firstOrNull()
@@ -439,9 +438,4 @@ class HomeRuntimeBehaviorTest {
 
     private fun app(): FoxholeApplication =
         InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as FoxholeApplication
-
-    private companion object {
-        private const val CONNECTED_WITHOUT_IP_LOADING_TIMEOUT_MS = 12_000L
-        private const val NETWORK_VALUE_SETTLE_TIMEOUT_MS = 5_000L
-    }
 }

@@ -65,6 +65,8 @@ private val userInputStrategies: List<UserInputImportStrategy> =
         WireGuardTextStrategy(),
         RawXrayJsonStrategy(),
         RawSingBoxJsonStrategy(),
+        Hysteria2YamlStrategy(),
+        EmbeddedShareUriStrategy(),
         DirectNodeLinesStrategy(),
     )
 
@@ -178,6 +180,55 @@ private inner class RawSingBoxJsonStrategy : UserInputImportStrategy {
                     allowPrivateOutboundHosts = context.allowPrivateOutboundHosts,
                     allowInsecureTls = context.allowInsecureTls,
                 ),
+        )
+    }
+}
+
+private inner class Hysteria2YamlStrategy : UserInputImportStrategy {
+    override val id = ProfileImportStrategyId.DIRECT_NODE_LINES
+
+    override fun tryParse(context: UserInputStrategyContext): ParsedImport? {
+        val node =
+            parseHysteria2YamlClientConfig(
+                raw = context.input,
+                allowPrivateOutboundHosts = context.allowPrivateOutboundHosts,
+                allowInsecureTls = context.allowInsecureTls,
+            ) ?: return null
+        return ParsedImport(
+            sourceType = ProfileSourceType.SHARE_URI,
+            protocolHint = node.protocolHint,
+            displayName = node.displayName,
+            normalizedConfigJson =
+                buildConfigFromNodes(
+                    listOf(node),
+                    allowPrivateOutboundHosts = context.allowPrivateOutboundHosts,
+                ),
+            nodesCount = 1,
+            subscriptionExpiresAt = node.subscriptionExpiresAt,
+        )
+    }
+}
+
+private inner class EmbeddedShareUriStrategy : UserInputImportStrategy {
+    override val id = ProfileImportStrategyId.DIRECT_NODE_LINES
+
+    override fun tryParse(context: UserInputStrategyContext): ParsedImport? {
+        val candidate = extractSingleShareUriCandidate(context.input) ?: return null
+        if (context.input.startsWith(candidate, ignoreCase = true)) {
+            return null
+        }
+        val node = parseSingleNode(candidate, context.allowPrivateOutboundHosts, context.allowInsecureTls)
+        return ParsedImport(
+            sourceType = ProfileSourceType.SHARE_URI,
+            protocolHint = node.protocolHint,
+            displayName = node.displayName,
+            normalizedConfigJson =
+                buildConfigFromNodes(
+                    listOf(node),
+                    allowPrivateOutboundHosts = context.allowPrivateOutboundHosts,
+                ),
+            nodesCount = 1,
+            subscriptionExpiresAt = node.subscriptionExpiresAt,
         )
     }
 }

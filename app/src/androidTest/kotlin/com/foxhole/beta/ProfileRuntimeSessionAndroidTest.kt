@@ -505,13 +505,20 @@ class ProfileRuntimeSessionAndroidTest {
             val (profile, target) = selectedTarget
             assertEquals(imported.id, profile.id)
             val blockedPackage = firstInstalledPackageExcept(app.packageName)
+            val args = InstrumentationRegistry.getArguments()
+            val loggingEnabled = args.getString("foxhole.localGuardSwitchLogging") != "0"
+            val blockAppsAlways = args.getString("foxhole.localGuardSwitchBlockAppsAlways") != "0"
 
             try {
-                app.container.settingsRepository.updateNetworkActivityLogging(true)
-                app.container.settingsRepository.updateNetworkActivityPersistentLogging(true)
+                app.container.settingsRepository.updateNetworkActivityLogging(loggingEnabled)
+                app.container.settingsRepository.updateNetworkActivityPersistentLogging(loggingEnabled)
                 app.container.settingsRepository.updateBlockedPackages(listOf(blockedPackage))
-                app.container.settingsRepository.updateBlockAppsAlways(true)
+                app.container.settingsRepository.updateBlockAppsAlways(blockAppsAlways)
                 app.container.settingsRepository.updateFirewallEnabled(true)
+                Log.d(
+                    TEST_TAG,
+                    "liveSmartLocalGuardSwitch settings logging=$loggingEnabled blockAppsAlways=$blockAppsAlways blockedPackage=$blockedPackage",
+                )
                 app.container.connectionController.syncLocalGuard()
                 assertTrue(
                     "local guard did not start before VPN switch",

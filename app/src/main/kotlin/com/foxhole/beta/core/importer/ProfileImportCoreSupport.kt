@@ -73,7 +73,22 @@ companion object {
     internal val SMART_CONFIG_EXPIRE_REGEX = Regex("""(?:^|[;\s])expire=(\d{10,13})(?:$|[;\s])""")
     internal val SMART_CONFIG_PROFILE_ID_REGEX = Regex("""(?:^|[;\s])profile_id=([^;\s]+)(?:$|[;\s])""")
     internal val SUBSCRIPTION_URL_REGEX = Regex("""(?<![A-Za-z0-9+.-])https?://[^\s<>"']+""", RegexOption.IGNORE_CASE)
+    internal val SHARE_URI_REGEX =
+        Regex(
+            """(?<![A-Za-z0-9+.-])(?:vless|trojan|naive\+https|naive|ss|outline|vmess|hy2|hysteria2)://[^\s<>"']+""",
+            RegexOption.IGNORE_CASE,
+        )
 }
+
+internal fun extractShareUriCandidates(input: String): List<String> =
+    SHARE_URI_REGEX
+        .findAll(input)
+        .map { match -> match.value.trimEnd('.', ',', ';', ')', ']', '}', '>') }
+        .distinct()
+        .toList()
+
+internal fun extractSingleShareUriCandidate(input: String): String? =
+    extractShareUriCandidates(input).singleOrNull()
 
 internal fun decodeBase64IfNeeded(value: String): String {
     return runCatching { decodeBase64Url(value) }.getOrElse { value }

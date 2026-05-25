@@ -1080,10 +1080,8 @@ internal class DefaultNetworkMonitor(
         }
     }
 
-    private fun preferredNetwork(): Network? {
-        connectivity.activeNetwork?.takeIf(::isUpstreamNetwork)?.let { return it }
-        return ConnectivityNetworkRegistry.snapshot(appContext).firstOrNull(::isUpstreamNetwork)
-    }
+    private fun preferredNetwork(): Network? =
+        connectivity.preferredNonVpnInternetNetwork(ConnectivityNetworkRegistry.snapshot(appContext))
 
     private fun isUpstreamNetwork(network: Network): Boolean = isNonVpnNetwork(connectivity, network)
 
@@ -1113,12 +1111,7 @@ internal class DefaultNetworkMonitor(
 internal fun isNonVpnNetwork(
     connectivity: ConnectivityManager,
     network: Network,
-): Boolean {
-    val capabilities = connectivity.getNetworkCapabilities(network) ?: return false
-    return capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
-        capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_RESTRICTED) &&
-        !capabilities.hasTransport(NetworkCapabilities.TRANSPORT_VPN)
-}
+): Boolean = connectivity.isNonVpnInternetNetwork(network)
 
 private fun logRuntimeFailure(
     message: String,

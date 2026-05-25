@@ -67,6 +67,24 @@ class HomeDashboardTextPolicyTest {
     }
 
     @Test
+    fun `visible ip text skips local addresses`() {
+        val ipInfo =
+            IpInfo(
+                ip = "10.13.13.110",
+                ipv4 = "192.168.1.20",
+                ipv6 = "2001:db8::7",
+                countryCode = "NL",
+                countryName = "Netherlands",
+                city = "Amsterdam",
+                isp = "Example ISP",
+                fetchedAt = 1L,
+            )
+
+        assertEquals("2001:db8::7", primaryVisibleIp(ipInfo))
+        assertEquals(null, secondaryVisibleIp(ipInfo))
+    }
+
+    @Test
     fun `dashboard dns mode line keeps only selected mode`() {
         assertEquals("Default", dashboardDnsModeLabel(SecureDnsMode.PLAIN))
         assertEquals("DOH", dashboardDnsModeLabel(SecureDnsMode.DOH))

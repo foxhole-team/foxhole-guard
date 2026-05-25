@@ -348,6 +348,83 @@ class ProfileImportParserTest {
     }
 
     @Test
+    fun `extracts vless uri from formatted text document`() {
+        val parsed =
+            parser.parseUserInput(
+                """
+                ASAX private-proxy VLESS Reality client config
+
+                URI:
+                vless://11111111-1111-1111-1111-111111111111@axn666.nl:8443?type=tcp&security=reality&encryption=none&flow=xtls-rprx-vision&sni=www.cloudflare.com&fp=chrome&pbk=public-key&sid=3025ae2cbf30b735&spx=%2F#asax-private-proxy-vless-20260525
+
+                Client fields:
+                address=axn666.nl
+                port=8443
+                """.trimIndent(),
+            )
+
+        val root = json.parseToJsonElement(parsed.normalizedConfigJson!!).jsonObject
+        val outbound = root["outbounds"]!!.jsonArray.first().jsonObject
+        val tls = outbound["tls"]!!.jsonObject
+
+        assertEquals(ProfileSourceType.SHARE_URI, parsed.sourceType)
+        assertEquals(ProtocolHint.VLESS, parsed.protocolHint)
+        assertEquals("asax-private-proxy-vless-20260525", parsed.displayName)
+        assertEquals("axn666.nl", outbound["server"]!!.jsonPrimitive.content)
+        assertEquals("8443", outbound["server_port"]!!.jsonPrimitive.content)
+        assertEquals("xtls-rprx-vision", outbound["flow"]!!.jsonPrimitive.content)
+        assertEquals("www.cloudflare.com", tls["server_name"]!!.jsonPrimitive.content)
+        assertEquals("public-key", tls["reality"]!!.jsonObject["public_key"]!!.jsonPrimitive.content)
+    }
+
+    @Test
+    fun `parses hysteria2 client yaml document`() {
+        val parsed =
+            parser.parseUserInput(
+                """
+                # ASAX private-proxy Hysteria2 client config.
+                server: axn666.nl:443
+                auth: client-secret
+
+                tls:
+                  sni: axn666.nl
+                  insecure: false
+                  pinSHA256: 95:20:0B:4C:DF:80:5E:D1:58:C3:33:30:42:37:D5:96:51:F4:3E:17:4C:8B:D5:C6:E6:2E:60:0A:75:32:C1:49
+
+                obfs:
+                  type: salamander
+                  salamander:
+                    password: obfs-secret
+
+                transport:
+                  type: udp
+
+                congestion:
+                  type: bbr
+                """.trimIndent(),
+            )
+
+        val root = json.parseToJsonElement(parsed.normalizedConfigJson!!).jsonObject
+        val outbound = root["outbounds"]!!.jsonArray.first().jsonObject
+        val tls = outbound["tls"]!!.jsonObject
+        val obfs = outbound["obfs"]!!.jsonObject
+
+        assertEquals(ProfileSourceType.SHARE_URI, parsed.sourceType)
+        assertEquals(ProtocolHint.HYSTERIA2, parsed.protocolHint)
+        assertEquals("axn666.nl", parsed.displayName)
+        assertEquals("hysteria2", outbound["type"]!!.jsonPrimitive.content)
+        assertEquals("axn666.nl", outbound["server"]!!.jsonPrimitive.content)
+        assertEquals("443", outbound["server_port"]!!.jsonPrimitive.content)
+        assertEquals("client-secret", outbound["password"]!!.jsonPrimitive.content)
+        assertEquals("udp", outbound["network"]!!.jsonPrimitive.content)
+        assertEquals("axn666.nl", tls["server_name"]!!.jsonPrimitive.content)
+        assertEquals(false, tls.containsKey("insecure"))
+        assertEquals("salamander", obfs["type"]!!.jsonPrimitive.content)
+        assertEquals("obfs-secret", obfs["password"]!!.jsonPrimitive.content)
+        assertEquals(false, outbound.containsKey("obfs_password"))
+    }
+
+    @Test
     fun `rejects unsupported xray transport instead of silently dropping to tcp`() {
         val error =
             runCatching {

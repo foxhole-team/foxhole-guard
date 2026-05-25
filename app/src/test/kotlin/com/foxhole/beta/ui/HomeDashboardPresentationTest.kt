@@ -807,7 +807,7 @@ class HomeDashboardPresentationTest {
     }
 
     @Test
-    fun `network model does not keep skeleton forever for connected tunnel without resolved ip`() {
+    fun `network model keeps skeleton for connected tunnel until route ip resolves`() {
         val model =
             resolveHomeDashboardNetworkModel(
                 state =
@@ -826,8 +826,8 @@ class HomeDashboardPresentationTest {
             )
 
         assertTrue(model.showConnectionStatus)
-        assertFalse(model.showLoading)
-        assertFalse(model.showIpInfoLoading)
+        assertTrue(model.showLoading)
+        assertTrue(model.showIpInfoLoading)
         assertFalse(model.showConnectionDetailsLoading)
     }
 
@@ -861,8 +861,8 @@ class HomeDashboardPresentationTest {
 
         assertEquals(null, model.visibleIpInfo)
         assertTrue(model.showConnectionStatus)
-        assertFalse(model.showLoading)
-        assertFalse(model.showIpInfoLoading)
+        assertTrue(model.showLoading)
+        assertTrue(model.showIpInfoLoading)
     }
 
     @Test
@@ -928,11 +928,57 @@ class HomeDashboardPresentationTest {
 
         assertEquals(null, model.visibleIpInfo)
         assertTrue(model.showConnectionStatus)
+        assertTrue(model.showIpInfoLoading)
+    }
+
+    @Test
+    fun `network model never shows local device address while disconnected`() {
+        val localDeviceIp =
+            IpInfo(
+                ip = "10.13.13.110",
+                countryCode = null,
+                countryName = "Local network",
+                city = null,
+                isp = "Wi-Fi",
+                fetchedAt = 3_000L,
+            )
+        val model =
+            resolveHomeDashboardNetworkModel(
+                state =
+                    HomeRouteUiState(
+                        profilesLoaded = true,
+                        connection = ConnectionSnapshot(state = ConnectionState.IDLE),
+                    ),
+                visibleIpInfo = localDeviceIp,
+                deviceInternetAvailable = true,
+            )
+
+        assertEquals(null, model.visibleIpInfo)
+        assertFalse(model.showConnectionStatus)
+        assertTrue(model.showIpInfoLoading)
+    }
+
+    @Test
+    fun `network model shows dashes instead of skeleton only when internet is offline`() {
+        val model =
+            resolveHomeDashboardNetworkModel(
+                state =
+                    HomeRouteUiState(
+                        profilesLoaded = true,
+                        connection = ConnectionSnapshot(state = ConnectionState.IDLE),
+                    ),
+                visibleIpInfo = null,
+                deviceInternetAvailable = false,
+            )
+
+        assertEquals(null, model.visibleIpInfo)
+        assertFalse(model.showConnectionStatus)
+        assertFalse(model.showLoading)
         assertFalse(model.showIpInfoLoading)
     }
 
     @Test
-    fun `network model does not show ip skeleton during reconnect without route ip`() {
+    fun `network model shows ip skeleton during reconnect without route ip`() {
         val model =
             resolveHomeDashboardNetworkModel(
                 state =
@@ -951,7 +997,7 @@ class HomeDashboardPresentationTest {
             )
 
         assertTrue(model.showConnectionStatus)
-        assertFalse(model.showIpInfoLoading)
+        assertTrue(model.showIpInfoLoading)
     }
 
     @Test
@@ -982,7 +1028,7 @@ class HomeDashboardPresentationTest {
         assertTrue(model.showConnectionStatus)
         assertTrue(model.showConnectionDetailsLoading)
         assertTrue(model.showLoading)
-        assertFalse(model.showIpInfoLoading)
+        assertTrue(model.showIpInfoLoading)
         assertEquals(R.string.home_network_connection_info_title, model.titleRes)
     }
 
@@ -1014,7 +1060,7 @@ class HomeDashboardPresentationTest {
         assertTrue(model.showConnectionStatus)
         assertTrue(model.showConnectionDetailsLoading)
         assertTrue(model.showLoading)
-        assertFalse(model.showIpInfoLoading)
+        assertTrue(model.showIpInfoLoading)
         assertEquals(R.string.home_network_connection_info_title, model.titleRes)
     }
 
@@ -1071,7 +1117,7 @@ class HomeDashboardPresentationTest {
     }
 
     @Test
-    fun `network model hides stale ip during route transition without ip skeleton`() {
+    fun `network model hides stale ip during route transition behind ip skeleton`() {
         val ipInfo =
             IpInfo(
                 ip = "203.0.113.10",
@@ -1101,7 +1147,7 @@ class HomeDashboardPresentationTest {
         assertEquals(R.string.home_network_connection_info_title, model.titleRes)
         assertTrue(model.showConnectionStatus)
         assertTrue(model.showLoading)
-        assertFalse(model.showIpInfoLoading)
+        assertTrue(model.showIpInfoLoading)
         assertTrue(model.showConnectionDetailsLoading)
     }
 
@@ -1170,8 +1216,8 @@ class HomeDashboardPresentationTest {
         assertEquals(null, model.visibleIpInfo)
         assertEquals(R.string.home_network_current_ip_title, model.titleRes)
         assertFalse(model.showConnectionStatus)
-        assertFalse(model.showLoading)
-        assertFalse(model.showIpInfoLoading)
+        assertTrue(model.showLoading)
+        assertTrue(model.showIpInfoLoading)
     }
 
     @Test

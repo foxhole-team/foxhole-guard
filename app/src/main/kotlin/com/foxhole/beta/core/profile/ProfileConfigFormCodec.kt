@@ -139,8 +139,8 @@ class ProfileConfigFormCodec(
                     path = transport?.get("path")?.jsonPrimitive?.contentOrNull.orEmpty(),
                     serviceName = transport?.get("service_name")?.jsonPrimitive?.contentOrNull.orEmpty(),
                 ),
-            obfs = outbound["obfs"]?.jsonPrimitive?.contentOrNull.orEmpty(),
-            obfsPassword = outbound["obfs_password"]?.jsonPrimitive?.contentOrNull.orEmpty(),
+            obfs = hysteria2ObfsType(outbound["obfs"]),
+            obfsPassword = hysteria2ObfsPassword(outbound),
             upMbps = outbound["up_mbps"]?.jsonPrimitive?.contentOrNull.orEmpty(),
             downMbps = outbound["down_mbps"]?.jsonPrimitive?.contentOrNull.orEmpty(),
             privateKey = outbound["private_key"]?.jsonPrimitive?.contentOrNull.orEmpty(),
@@ -244,8 +244,7 @@ class ProfileConfigFormCodec(
                 map["server"] = JsonPrimitive(draft.server.trim())
                 map["server_port"] = JsonPrimitive(port)
                 map["password"] = JsonPrimitive(draft.password.trim())
-                map.putStringOrRemove("obfs", draft.obfs)
-                map.putStringOrRemove("obfs_password", draft.obfsPassword)
+                map.putHysteria2ObfsOrRemove(draft.obfs, draft.obfsPassword)
                 map.putIntStringOrRemove("up_mbps", draft.upMbps)
                 map.putIntStringOrRemove("down_mbps", draft.downMbps)
             }
@@ -523,6 +522,19 @@ class ProfileConfigFormCodec(
             else -> null
         }
 
+    private fun hysteria2ObfsType(element: JsonElement?): String =
+        when (element) {
+            is JsonObject -> element["type"]?.jsonPrimitive?.contentOrNull.orEmpty()
+            is JsonPrimitive -> element.contentOrNull.orEmpty()
+            else -> ""
+        }
+
+    private fun hysteria2ObfsPassword(outbound: JsonObject): String =
+        when (val obfs = outbound["obfs"]) {
+            is JsonObject -> obfs["password"]?.jsonPrimitive?.contentOrNull.orEmpty()
+            else -> outbound["obfs_password"]?.jsonPrimitive?.contentOrNull.orEmpty()
+        }
+
     private fun Boolean?.toOnOffLabel(): String =
         when (this) {
             true -> "on"
@@ -562,6 +574,28 @@ class ProfileConfigFormCodec(
         } else {
             put(key, JsonPrimitive(normalized.toIntOrNull() ?: error("$key must be a number")))
         }
+    }
+
+    private fun MutableMap<String, JsonElement>.putHysteria2ObfsOrRemove(
+        type: String,
+        password: String,
+    ) {
+        val normalizedType = type.trim()
+        val normalizedPassword = password.trim()
+        remove("obfs_password")
+        if (normalizedType.isBlank() && normalizedPassword.isBlank()) {
+            remove("obfs")
+            return
+        }
+        put(
+            "obfs",
+            buildJsonObject {
+                put("type", normalizedType.ifBlank { "salamander" })
+                if (normalizedPassword.isNotBlank()) {
+                    put("password", normalizedPassword)
+                }
+            },
+        )
     }
 
     private fun MutableMap<String, JsonElement>.putOptionalBoolean(

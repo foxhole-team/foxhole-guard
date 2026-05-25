@@ -116,6 +116,34 @@ class ProfileConfigFormCodecTest {
     }
 
     @Test
+    fun `decode and encode hysteria2 obfs object`() {
+        val config =
+            parser.parseUserInput(
+                "hysteria2://secret@hy2.example.com:443?obfs=salamander&obfs-password=obfs-secret#hy2",
+            ).normalizedConfigJson!!
+
+        val draft = codec.decode(config)
+
+        assertEquals("hysteria2", draft.type)
+        assertEquals("salamander", draft.obfs)
+        assertEquals("obfs-secret", draft.obfsPassword)
+
+        val encoded =
+            json.parseToJsonElement(
+                codec.encode(
+                    config,
+                    draft.copy(obfsPassword = "next-secret"),
+                ),
+            ).jsonObject
+        val outbound = encoded["outbounds"]!!.jsonArray.first().jsonObject
+        val obfs = outbound["obfs"]!!.jsonObject
+
+        assertEquals("salamander", obfs["type"]!!.jsonPrimitive.content)
+        assertEquals("next-secret", obfs["password"]!!.jsonPrimitive.content)
+        assertTrue(!outbound.containsKey("obfs_password"))
+    }
+
+    @Test
     fun `encode tls expert presets`() {
         val config =
             parser.parseUserInput(

@@ -94,3 +94,38 @@ internal object ConnectivityNetworkRegistry {
             allNetworks
     }
 }
+
+internal fun ConnectivityManager.preferredNonVpnInternetNetwork(
+    candidates: Iterable<Network>,
+    excludedHandle: Long? = null,
+): Network? {
+    activeNetwork
+        ?.takeUnless { network -> network.networkHandle == excludedHandle }
+        ?.takeIf(::isNonVpnInternetNetwork)
+        ?.let { return it }
+    return candidates
+        .asSequence()
+        .distinctBy { network -> network.networkHandle }
+        .filter { network -> network.networkHandle != excludedHandle && isNonVpnInternetNetwork(network) }
+        .maxByOrNull { network -> upstreamNetworkPreferenceScore(getNetworkCapabilities(network)) }
+}
+
+internal fun ConnectivityManager.isNonVpnInternetNetwork(network: Network): Boolean {
+    val capabilities = getNetworkCapabilities(network) ?: return false
+    return capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
+        capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_RESTRICTED) &&
+        !capabilities.hasTransport(NetworkCapabilities.TRANSPORT_VPN)
+}
+
+private fun upstreamNetworkPreferenceScore(capabilities: NetworkCapabilities?): Int {
+    if (capabilities == null) {
+        return Int.MIN_VALUE
+    }
+    return buildList {
+        if (capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)) add(100)
+        if (capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) add(50)
+        if (capabilities.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)) add(45)
+        if (capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED)) add(25)
+        if (capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)) add(10)
+    }.sum()
+}

@@ -83,7 +83,10 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
             runtimeInstance ?: createVpnRuntime(
                 context = applicationContext,
                 diagnosticsLogger = container.diagnosticsLogger,
-                isNetworkActivityLoggingEnabled = { container.settingsRepository.settings.value.expert.networkActivityLogging },
+                isNetworkActivityLoggingEnabled = {
+                    container.settingsRepository.settings.value.expert.networkActivityLogging &&
+                        !runtimeNetworkActivityLoggingSuspended
+                },
                 networkActivityContext = {
                     activeSession
                         ?.let { session ->
@@ -135,6 +138,8 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
     internal var lastDefaultNetworkSummary: String? = null
     internal val upstreamNetworkHandles = mutableSetOf<Long>()
     internal var activeVpnNetworkHandle: Long? = null
+    internal val ignoredVpnNetworkLossHandles = mutableSetOf<Long>()
+    internal var runtimeNetworkActivityLoggingSuspended = false
     internal val runtimeTransitionGeneration = AtomicLong(0L)
 
     internal val networkCallback =
@@ -240,6 +245,14 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
                     message = "vpn network lost",
                     capabilities = connectivityManager.getNetworkCapabilities(network),
                 )
+                if (ignoredVpnNetworkLossHandles.remove(lostHandle)) {
+                    container.diagnosticsLogger.recordStructured(
+                        "connection",
+                        "ignored expected vpn network loss",
+                        "lost_handle=$lostHandle",
+                    )
+                    return
+                }
                 if (trackedHandle == null || trackedHandle == lostHandle) {
                     handleVpnNetworkLost(lostHandle, reason = "vpn_network_lost")
                     return
@@ -452,6 +465,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         }
         if (result.isSuccess) {
             container.connectionController.markCurrentRuntimeApplied()
+            requestPostHandoffRuntimeNetworkReset(previousVpnNetworkHandle)
             requestTcpRuntimeNetworkReset(tcpReadinessTarget)
             when (trafficMode) {
                 TrafficMode.TUNNEL -> {
@@ -528,7 +542,8 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         if (!isCurrentRuntimeTransition(transitionGeneration, "connect_session_loaded")) {
             return
         }
-        stopActiveLocalGuardBeforeTunnelConnect()
+        val localGuardVpnNetworkHandle = stopActiveLocalGuardBeforeTunnelConnect()
+        val validationExcludedVpnNetworkHandle = previousVpnNetworkHandle ?: localGuardVpnNetworkHandle
         activeSession = session
         activeLocalGuardMode = null
         container.diagnosticsLogger.recordStructured(
@@ -574,7 +589,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
             session = session,
             trafficMode = trafficMode,
             tcpReadinessTarget = tcpReadinessTarget,
-            previousVpnNetworkHandle = previousVpnNetworkHandle,
+            previousVpnNetworkHandle = validationExcludedVpnNetworkHandle,
             commandStartId = commandStartId,
             transitionGeneration = transitionGeneration,
         )
@@ -609,12 +624,27 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         return false
     }
 
-    private suspend fun stopActiveLocalGuardBeforeTunnelConnect() {
-        val localGuardMode = activeLocalGuardMode ?: return
+    private fun requestPostHandoffRuntimeNetworkReset(previousVpnNetworkHandle: Long?) {
+        if (previousVpnNetworkHandle == null) {
+            return
+        }
+        container.diagnosticsLogger.record(
+            "runtime",
+            "runtime default network reset requested after vpn handoff",
+        )
+        updateActiveVpnUnderlyingNetwork(currentUpstreamNetworkOrNull())
+        runtime.onDefaultNetworkAvailable()
+    }
+
+    private suspend fun stopActiveLocalGuardBeforeTunnelConnect(): Long? {
+        val localGuardMode = activeLocalGuardMode ?: return null
+        val localGuardVpnNetworkHandle = activeVpnNetworkHandle ?: currentVpnNetworkOrNull()?.networkHandle
         container.diagnosticsLogger.record(
             "connection",
             "local guard handoff to tunnel mode=${localGuardMode.name.lowercase()}",
         )
+        runtimeNetworkActivityLoggingSuspended = true
+        localGuardVpnNetworkHandle?.let(ignoredVpnNetworkLossHandles::add)
         stopTrafficUpdates()
         stopAppTrafficStatsUpdates()
         stopGeoRefresh()
@@ -622,9 +652,14 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         validationJob?.cancel()
         validationJob = null
         stopRuntimeFailClosed(reason = "local_guard_handoff")
+        runtimeInstance = null
+        container.diagnosticsLogger.record("runtime", "vpn runtime instance reset after local guard handoff")
+        container.diagnosticsLogger.record("runtime", "network activity logging suspended for vpn handoff validation")
         releaseRuntimeWakeLock()
         activeLocalGuardMode = null
+        activeVpnNetworkHandle = null
         FoxholeVpnRuntimeBridge.updateTraffic(trafficSampler.reset())
+        return localGuardVpnNetworkHandle
     }
 
     private suspend fun stopActiveTunnelBeforeLocalGuard(mode: LocalGuardMode) {
@@ -646,6 +681,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         activeSession = null
         activeLocalGuardMode = null
         activeVpnNetworkHandle = null
+        runtimeNetworkActivityLoggingSuspended = false
         RuntimeResumeStateStore.clear(this)
         container.connectionController.clearAppliedRuntime()
         FoxholeVpnRuntimeBridge.updateTraffic(trafficSampler.reset())
@@ -728,6 +764,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         activeSession = null
         activeLocalGuardMode = null
         activeVpnNetworkHandle = null
+        runtimeNetworkActivityLoggingSuspended = false
         RuntimeResumeStateStore.clear(this)
         container.connectionController.clearAppliedRuntime()
         FoxholeVpnRuntimeBridge.updateTraffic(trafficSampler.reset())
@@ -775,6 +812,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
             return
         }
         if (isSameLocalGuardRuntimeActive(mode)) {
+            runtimeNetworkActivityLoggingSuspended = false
             container.diagnosticsLogger.record(
                 "connection",
                 "local guard already active mode=${mode.name.lowercase()}",
@@ -808,6 +846,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
             releaseRuntimeWakeLock()
             activeLocalGuardMode = null
             activeVpnNetworkHandle = null
+            runtimeNetworkActivityLoggingSuspended = false
         }
         FoxholeConnectionServiceContract.stopInactiveServices(context = this, activeMode = TrafficMode.TUNNEL)
         val session =
@@ -825,6 +864,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
                 .takeIf { previousSnapshot.isSmartStartConnection && it == analysisStatus }
         activeSession = null
         activeLocalGuardMode = mode
+        runtimeNetworkActivityLoggingSuspended = false
         FoxholeVpnRuntimeBridge.clearTransientState(clearIpInfo = false)
         FoxholeVpnRuntimeBridge.update(
             ConnectionSnapshot(
@@ -971,6 +1011,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         activeSession = null
         activeLocalGuardMode = null
         activeVpnNetworkHandle = null
+        runtimeNetworkActivityLoggingSuspended = false
         RuntimeResumeStateStore.clear(this)
         val failClosedMessage =
             if (action == ACTION_NATIVE_RUNTIME_STOP && hadActiveRuntime) {
@@ -996,6 +1037,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         activeSession = null
         activeLocalGuardMode = null
         activeVpnNetworkHandle = null
+        runtimeNetworkActivityLoggingSuspended = false
         container.connectionController.clearAppliedRuntime()
         FoxholeVpnRuntimeBridge.updateTraffic(trafficSampler.reset())
         FoxholeVpnRuntimeBridge.clearTransientState()
@@ -1326,6 +1368,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
                 "VPN underlying network updated",
                 "available=${network != null}",
                 "updated=$updated",
+                "network=${describeNetworkCapabilities(connectivityManager.getNetworkCapabilities(network))}",
             )
         }.onFailure {
             container.diagnosticsLogger.record("network", "vpn underlying network update failed")

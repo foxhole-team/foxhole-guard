@@ -178,9 +178,7 @@ internal fun shouldShowPendingNetworkLoading(
         visibleIpInfo != null -> false
         deviceInternetAvailable == false -> false
         explicitLoading -> true
-        !appLoaded && shouldAutoRefreshIpOnForeground(connectionState) -> true
-        autoConnectRunning -> false
-        else -> false
+        else -> true
     }
 
 internal fun shouldShowDashboardNetworkLoading(
@@ -245,7 +243,7 @@ internal fun shouldAutoRefreshIpAfterDisconnect(
     currentState: ConnectionState,
 ): Boolean =
     previousState in ACTIVE_CONNECTION_STATES &&
-        currentState == ConnectionState.IDLE
+        currentState in setOf(ConnectionState.IDLE, ConnectionState.ERROR)
 
 internal enum class IpInfoRefreshReason {
     MANUAL,
@@ -324,9 +322,8 @@ internal fun shouldShowDashboardIpRefreshLoading(
     currentIpInfo: IpInfo?,
 ): Boolean =
     when (reason) {
-        IpInfoRefreshReason.MANUAL,
-        IpInfoRefreshReason.NETWORK_CHANGE,
-        -> true
+        IpInfoRefreshReason.MANUAL -> true
+        IpInfoRefreshReason.NETWORK_CHANGE -> false
         IpInfoRefreshReason.POST_CONNECT,
         IpInfoRefreshReason.RESTORED_VPN,
         -> shouldUseFullDashboardIpRefresh(reason, snapshot, currentIpInfo)
@@ -618,13 +615,27 @@ private fun HomeRouteUiState.shouldShowHomeNetworkIpInfoLoading(
     routeTransitionRunning: Boolean,
     deviceInternetAvailable: Boolean?,
 ): Boolean {
-    val manualRefreshNeedsSkeleton = ipInfoLoading
+    val activeRouteNeedsIp =
+        dashboardIpInfo == null &&
+            (
+                routeTransitionRunning ||
+                    hasActiveDashboardRouteRuntime()
+                )
+    val failedRouteNeedsDeviceIp =
+        dashboardIpInfo == null &&
+            hasFailedDashboardRoute() &&
+            deviceInternetAvailable != false
+    val manualRefreshNeedsSkeleton =
+        ipInfoLoading &&
+            (deviceInternetAvailable != false || hasDashboardRouteProfile())
     val missingIpCanShowSkeleton =
-        shouldShowLocalGuardNetworkLoading(
-            deviceInternetAvailable = deviceInternetAvailable,
-            routeTransitionRunning = routeTransitionRunning,
-            explicitIpInfoLoading = ipInfoLoading,
-        ) ||
+        activeRouteNeedsIp ||
+            failedRouteNeedsDeviceIp ||
+            shouldShowLocalGuardNetworkLoading(
+                deviceInternetAvailable = deviceInternetAvailable,
+                routeTransitionRunning = routeTransitionRunning,
+                explicitIpInfoLoading = ipInfoLoading,
+            ) ||
             shouldShowDashboardNetworkLoading(
                 visibleIpInfo = dashboardIpInfo,
                 explicitLoading = ipInfoLoading,
@@ -706,6 +717,7 @@ private fun HomeRouteUiState.shouldPinVpnIpDuringTorOperation(): Boolean =
 
 private fun HomeRouteUiState.shouldKeepDashboardIpInfo(info: IpInfo): Boolean =
     when {
+        !info.hasVisiblePublicAddress() -> false
         homeAnalysisOnlyRunning() -> true
         shouldPinVpnIpDuringTorOperation() -> true
         hasFailedDashboardRoute() -> info.isPublicFreshForRouteTransition(connection.lastChangeAt)
@@ -729,15 +741,12 @@ private fun HomeRouteUiState.shouldKeepActiveDashboardRouteIpInfo(info: IpInfo):
     val freshForConnectedRoute =
         info.fetchedAt >= connection.lastChangeAt ||
             (!ipInfoLoading && info.isFreshForConnectedRouteSettle(connection.lastChangeAt))
-    return !info.isLocalInterfaceAddress() &&
-        (
-            (autoConnect.running && info.isFreshForRouteTransition(connection.lastChangeAt)) ||
-                freshForConnectedRoute
-            )
+    return (autoConnect.running && info.isFreshForRouteTransition(connection.lastChangeAt)) ||
+        freshForConnectedRoute
 }
 
 private fun IpInfo.isPublicFreshForRouteTransition(lastChangeAt: Long): Boolean =
-    !isLocalInterfaceAddress() && isFreshForRouteTransition(lastChangeAt)
+    hasVisiblePublicAddress() && isFreshForRouteTransition(lastChangeAt)
 
 private fun IpInfo.isFreshForRouteTransition(lastChangeAt: Long): Boolean =
     lastChangeAt <= 0L || fetchedAt >= lastChangeAt
@@ -745,9 +754,18 @@ private fun IpInfo.isFreshForRouteTransition(lastChangeAt: Long): Boolean =
 private fun IpInfo.isFreshForConnectedRouteSettle(lastChangeAt: Long): Boolean =
     lastChangeAt <= 0L || fetchedAt >= lastChangeAt - CONNECTED_ROUTE_IP_INFO_SETTLE_GRACE_MS
 
-private fun IpInfo.isLocalInterfaceAddress(): Boolean {
-    val address = runCatching { InetAddress.getByName(ip.substringBefore('%')) }.getOrNull() ?: return false
-    return address.isNonPublicLocalAddress() || address.isUniqueLocalIpv6Address()
+private fun IpInfo.hasVisiblePublicAddress(): Boolean =
+    visibleIpCandidates().any { candidate -> candidate.isPublicInternetAddress() }
+
+private fun IpInfo.visibleIpCandidates(): List<String> =
+    listOfNotNull(ipv4, ip, ipv6)
+        .map { it.trim() }
+        .filter { it.isNotBlank() }
+        .distinct()
+
+private fun String.isPublicInternetAddress(): Boolean {
+    val address = runCatching { InetAddress.getByName(substringBefore('%')) }.getOrNull() ?: return true
+    return !address.isNonPublicLocalAddress() && !address.isUniqueLocalIpv6Address() && !address.isMulticastAddress
 }
 
 private fun InetAddress.isNonPublicLocalAddress(): Boolean =
@@ -1326,7 +1344,8 @@ internal fun formatCountryLine(
 
 internal fun buildCityLine(ipInfo: IpInfo): String = ipInfo.city?.takeIf { it.isNotBlank() } ?: "-"
 
-internal fun primaryVisibleIp(ipInfo: IpInfo): String = ipInfo.ipv4 ?: ipInfo.ip
+internal fun primaryVisibleIp(ipInfo: IpInfo): String =
+    ipInfo.visibleIpCandidates().firstOrNull { candidate -> candidate.isPublicInternetAddress() } ?: "-"
 
 @Suppress("UNUSED_PARAMETER")
 @Composable
@@ -1347,7 +1366,8 @@ internal fun dashboardDnsModeLabel(
 
 internal fun secondaryVisibleIp(ipInfo: IpInfo): String? {
     val primary = primaryVisibleIp(ipInfo)
-    return ipInfo.ipv6?.takeIf { it != primary }
+    return ipInfo.visibleIpCandidates()
+        .firstOrNull { candidate -> candidate != primary && candidate.isPublicInternetAddress() }
 }
 
 internal fun remoteVisibleDnsServers(ipInfo: IpInfo?): List<String> = visibleDnsServers(

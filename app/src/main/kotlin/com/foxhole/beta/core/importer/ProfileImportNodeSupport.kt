@@ -387,8 +387,7 @@ internal fun parseHysteria2Uri(
                     )
                 }
             }
-            query["obfs"]?.takeIf { it.isNotBlank() }?.let { put("obfs", it) }
-            query["obfs-password"]?.takeIf { it.isNotBlank() }?.let { put("obfs_password", it) }
+            buildHysteria2Obfs(query["obfs"], query["obfs-password"])?.let { put("obfs", it) }
             query["upmbps"]?.toIntOrNull()?.let { put("up_mbps", it) }
             query["downmbps"]?.toIntOrNull()?.let { put("down_mbps", it) }
         }
@@ -398,6 +397,143 @@ internal fun parseHysteria2Uri(
         outbound = outbound,
         subscriptionExpiresAt = subscriptionExpirationFromQuery(uri.rawQuery),
     )
+}
+
+internal fun parseHysteria2YamlClientConfig(
+    raw: String,
+    allowPrivateOutboundHosts: Boolean,
+    allowInsecureTls: Boolean,
+): ProxyNode? {
+    if (looksLikeJson(raw) || raw.contains("[Interface]", ignoreCase = true)) {
+        return null
+    }
+    val fields = parseYamlScalarPaths(raw)
+    val serverValue = fields["server"] ?: return null
+    if (serverValue.startsWith("hysteria2://", ignoreCase = true) || serverValue.startsWith("hy2://", ignoreCase = true)) {
+        return parseHysteria2Uri(serverValue, allowPrivateOutboundHosts, allowInsecureTls)
+    }
+    val password = fields["auth"] ?: fields["auth.password"] ?: fields["auth_str"] ?: return null
+    val endpoint = parseRemoteEndpoint(serverValue.substringBefore(',').trim(), defaultPort = 443)
+    val host = endpoint.host
+    validateOutboundHost(host, allowPrivateOutboundHosts)
+    val port = endpoint.port ?: 443
+    val displayName = fields["name"]?.takeIf(String::isNotBlank) ?: host
+    val tlsSni = fields["tls.sni"]?.takeIf(String::isNotBlank) ?: host
+    val insecureTls = fields["tls.insecure"]?.toFlexibleBoolean() ?: false
+    require(allowInsecureTls || !insecureTls) { "INSECURE TLS is not allowed" }
+    val outbound =
+        buildJsonObject {
+            put("type", "hysteria2")
+            put("tag", tagFor(displayName))
+            put("server", host)
+            put("server_port", port)
+            put("password", password)
+            fields["transport.type"]?.trim()?.lowercase()?.takeIf { it in setOf("tcp", "udp") }?.let { put("network", it) }
+            putJsonObject("tls") {
+                put("enabled", true)
+                put("server_name", tlsSni)
+                if (insecureTls) {
+                    put("insecure", true)
+                }
+            }
+            buildHysteria2Obfs(
+                type = fields["obfs.type"],
+                password = fields["obfs.salamander.password"] ?: fields["obfs.password"],
+            )?.let { put("obfs", it) }
+            parseHysteriaBandwidthMbps(fields["bandwidth.up"] ?: fields["upmbps"])?.let { put("up_mbps", it) }
+            parseHysteriaBandwidthMbps(fields["bandwidth.down"] ?: fields["downmbps"])?.let { put("down_mbps", it) }
+        }
+    return ProxyNode(
+        displayName = displayName,
+        protocolHint = ProtocolHint.HYSTERIA2,
+        outbound = outbound,
+    )
+}
+
+private fun buildHysteria2Obfs(
+    type: String?,
+    password: String?,
+): JsonObject? {
+    val normalizedType = type?.trim()?.takeIf(String::isNotBlank)
+    val normalizedPassword = password?.trim()?.takeIf(String::isNotBlank)
+    if (normalizedType == null && normalizedPassword == null) {
+        return null
+    }
+    return buildJsonObject {
+        put("type", normalizedType ?: "salamander")
+        normalizedPassword?.let { put("password", it) }
+    }
+}
+
+private fun parseYamlScalarPaths(raw: String): Map<String, String> {
+    val values = linkedMapOf<String, String>()
+    val stack = mutableListOf<Pair<Int, String>>()
+    raw.lineSequence().forEach { sourceLine ->
+        val line = sourceLine.stripYamlComment()
+        val trimmed = line.trim()
+        if (trimmed.isBlank() || trimmed.startsWith("- ")) {
+            return@forEach
+        }
+        val separatorIndex = trimmed.indexOf(':')
+        if (separatorIndex <= 0) {
+            return@forEach
+        }
+        val indent = line.indexOfFirst { !it.isWhitespace() }.takeIf { it >= 0 } ?: 0
+        while (stack.isNotEmpty() && indent <= stack.last().first) {
+            stack.removeAt(stack.lastIndex)
+        }
+        val key = trimmed.substring(0, separatorIndex).trim().lowercase()
+        val value = trimmed.substring(separatorIndex + 1).unquoteYamlScalar()
+        val path = (stack.map { it.second } + key).joinToString(".")
+        if (value.isBlank()) {
+            stack += indent to key
+        } else {
+            values[path] = value
+        }
+    }
+    return values
+}
+
+private fun String.stripYamlComment(): String {
+    var inSingleQuote = false
+    var inDoubleQuote = false
+    forEachIndexed { index, char ->
+        when (char) {
+            '\'' -> if (!inDoubleQuote) inSingleQuote = !inSingleQuote
+            '"' -> if (!inSingleQuote) inDoubleQuote = !inDoubleQuote
+            '#' -> {
+                if (!inSingleQuote && !inDoubleQuote && (index == 0 || this[index - 1].isWhitespace())) {
+                    return substring(0, index)
+                }
+            }
+        }
+    }
+    return this
+}
+
+private fun String.unquoteYamlScalar(): String {
+    val trimmed = trim()
+    return when {
+        trimmed.length >= 2 && trimmed.first() == '"' && trimmed.last() == '"' -> trimmed.substring(1, trimmed.lastIndex)
+        trimmed.length >= 2 && trimmed.first() == '\'' && trimmed.last() == '\'' -> trimmed.substring(1, trimmed.lastIndex)
+        else -> trimmed
+    }
+}
+
+private fun parseHysteriaBandwidthMbps(value: String?): Int? {
+    val trimmed = value?.trim()?.lowercase()?.takeIf(String::isNotBlank) ?: return null
+    val match = Regex("""^(\d+(?:\.\d+)?)\s*([kmgt]?)(?:bps|b|bit/s|bits/s)?$""").matchEntire(trimmed)
+        ?: return trimmed.toIntOrNull()
+    val amount = match.groupValues[1].toDoubleOrNull() ?: return null
+    val multiplier =
+        when (match.groupValues[2]) {
+            "k" -> 0.001
+            "m", "" -> 1.0
+            "g" -> 1_000.0
+            "t" -> 1_000_000.0
+            else -> return null
+        }
+    return (amount * multiplier).toInt().takeIf { it > 0 }
 }
 
 internal fun parseWireGuardConfig(
