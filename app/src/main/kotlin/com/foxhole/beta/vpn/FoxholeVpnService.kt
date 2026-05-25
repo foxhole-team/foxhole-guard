@@ -39,6 +39,7 @@ import com.foxhole.beta.core.network.mergeIpInfo
 import com.foxhole.beta.core.settings.AppTrafficStatsRecorder
 import com.foxhole.beta.core.traffic.LibboxDnsRuntimeStatsTracker
 import com.foxhole.beta.core.traffic.RuntimeNetworkActivityContext
+import com.foxhole.beta.core.traffic.TorGeoIpCountryResolver
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -112,6 +113,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
     internal val anomalyTrafficAggregator = TrafficWindowAggregator()
     internal val anomalyNetworkTypeProvider by lazy { AndroidNetworkTypeProvider(applicationContext) }
     internal val dnsRuntimeStatsTracker by lazy { LibboxDnsRuntimeStatsTracker(container.diagnosticsLogger) }
+    private val runtimeCountryResolver by lazy { TorGeoIpCountryResolver(applicationContext) }
     internal val appTrafficStatsRecorder by lazy {
         AppTrafficStatsRecorder(
             anomalyRepository = container.anomalyRepository,
@@ -1562,6 +1564,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
                             sessionId = activeSession?.correlationId,
                         )
                     },
+                    countryCodeForDestination = runtimeCountryResolver::countryCodeForDestination,
                     onNetworkActivityEvents = { events ->
                         scope.launch(Dispatchers.IO) {
                             container.anomalyRepository.recordNetworkActivityEvents(events)

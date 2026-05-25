@@ -718,18 +718,6 @@ class RuntimeConfigAssembler(
                     add(JsonPrimitive("fdfe:dcba:9876::1/126"))
                 }
             }
-            if (
-                mode == LocalGuardMode.FIREWALL &&
-                settings.expert.blockAppsAlways &&
-                settings.expert.blockedPackagesEnabled
-            ) {
-                val packages = normalizedRuntimePackages(settings.expert.blockedPackages)
-                if (packages.isNotEmpty()) {
-                    putJsonArray("include_package") {
-                        packages.forEach { add(JsonPrimitive(it)) }
-                    }
-                }
-            }
         }
 
     private fun torOnlyTunInbound(settings: Settings): JsonObject =

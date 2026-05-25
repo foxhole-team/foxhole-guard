@@ -880,7 +880,7 @@ class RuntimeConfigAssemblerTest {
         })
         assertTrue(dnsServers.any { server -> server["tag"]!!.jsonPrimitive.content == "dns-remote" })
         assertFalse(dnsServers.any { server -> server["detour"] != null })
-        assertEquals("org.mozilla.firefox", tunInbound["include_package"]!!.jsonArray.single().jsonPrimitive.content)
+        assertFalse(tunInbound.containsKey("include_package"))
         assertTrue(
             route["rules"]!!.jsonArray.map { it.jsonObject }.any { rule ->
                 rule["package_name"]?.jsonArray?.single()?.jsonPrimitive?.content == "org.mozilla.firefox" &&
@@ -915,7 +915,7 @@ class RuntimeConfigAssemblerTest {
     }
 
     @Test
-    fun `local firewall guard blocks explicitly selected apps only`() {
+    fun `local firewall guard blocks selected apps without Android package allowlist`() {
         val settings =
             Settings(
                 expert =
@@ -931,10 +931,7 @@ class RuntimeConfigAssemblerTest {
         val tunInbound = config["inbounds"]!!.jsonArray.single().jsonObject
         val route = config["route"]!!.jsonObject
 
-        assertEquals(
-            listOf("org.mozilla.firefox"),
-            tunInbound["include_package"]!!.jsonArray.map { it.jsonPrimitive.content },
-        )
+        assertFalse(tunInbound.containsKey("include_package"))
         assertFalse(tunInbound.containsKey("exclude_package"))
         assertEquals(false, tunInbound["strict_route"]!!.jsonPrimitive.content.toBoolean())
         assertEquals("direct", route["final"]!!.jsonPrimitive.content)
@@ -953,7 +950,7 @@ class RuntimeConfigAssemblerTest {
             Settings(expert = ExpertSettings(killSwitchEnabled = true)).localGuardModeOrNull(),
         )
         assertEquals(
-            LocalGuardMode.FIREWALL,
+            null,
             Settings(
                 expert =
                     ExpertSettings(
@@ -989,7 +986,7 @@ class RuntimeConfigAssemblerTest {
     }
 
     @Test
-    fun `firewall local guard starts when firewall is enabled and keeps permanent app blocking scoped`() {
+    fun `firewall local guard starts only when permanent app blocking is active`() {
         val blockedApps =
             ExpertSettings(
                 blockedPackagesEnabled = true,
@@ -1002,7 +999,7 @@ class RuntimeConfigAssemblerTest {
             Settings(expert = blockedApps).localGuardModeOrNull(),
         )
         assertEquals(
-            LocalGuardMode.FIREWALL,
+            null,
             Settings(
                 expert =
                     blockedApps.copy(
@@ -1032,11 +1029,11 @@ class RuntimeConfigAssemblerTest {
     }
 
     @Test
-    fun `firewall alone starts full-device local guard`() {
+    fun `firewall alone does not start full-device local guard`() {
         val firewall = ExpertSettings(firewallEnabled = true)
 
         val settings = Settings(expert = firewall)
-        assertEquals(LocalGuardMode.FIREWALL, settings.localGuardModeOrNull())
+        assertEquals(null, settings.localGuardModeOrNull())
     }
 
     @Test
@@ -1115,7 +1112,7 @@ class RuntimeConfigAssemblerTest {
     }
 
     @Test
-    fun `permanent firewall app blocking keeps local guard package scoped when system dns is enabled`() {
+    fun `permanent firewall app blocking avoids Android package allowlist when system dns is enabled`() {
         val settings =
             Settings(
                 expert =
@@ -1139,10 +1136,8 @@ class RuntimeConfigAssemblerTest {
         assertEquals("dns-remote", dns["final"]!!.jsonPrimitive.content)
         assertEquals("dns-remote", route["default_domain_resolver"]!!.jsonPrimitive.content)
         assertEquals("direct", route["final"]!!.jsonPrimitive.content)
-        assertEquals(
-            listOf("org.mozilla.firefox"),
-            tunInbound["include_package"]!!.jsonArray.map { it.jsonPrimitive.content },
-        )
+        assertFalse(tunInbound.containsKey("include_package"))
+        assertFalse(tunInbound.containsKey("exclude_package"))
         assertTrue(rules.any { rule -> rule["action"]?.jsonPrimitive?.content == "hijack-dns" })
         assertTrue(
             rules.any { rule ->

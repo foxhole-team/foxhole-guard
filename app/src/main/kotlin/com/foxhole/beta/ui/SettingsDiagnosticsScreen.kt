@@ -387,17 +387,17 @@ private fun NetworkActivityEvent.networkActivityCountryLabel(
     ipInfo: IpInfo?,
 ): String {
     val remote = remoteHost.connectionHost()
+    val matchingIpInfo =
+        ipInfo
+            ?.takeIf { info -> remote == info.ip || remote == info.ipv4 || remote == info.ipv6 }
     val resolvedCode =
         normalizedCountryCode(countryCode)
             ?: normalizedCountryCode(countryCodeForDestination(remoteHost))
-            ?: normalizedCountryCode(
-                ipInfo
-                    ?.takeIf { info -> remote == info.ip || remote == info.ipv4 || remote == info.ipv6 }
-                    ?.countryCode,
-            )
+            ?: normalizedCountryCode(matchingIpInfo?.countryCode)
+    val city = matchingIpInfo?.city?.takeIf(String::isNotBlank) ?: "City unknown"
     return resolvedCode
-        ?.let { code -> "${countryEmoji(code)} ${countryDisplayName(code)} ($code)" }
-        ?: "${countryEmoji(null)} Unknown"
+        ?.let { code -> "${countryEmoji(code)} ${countryDisplayName(code)} ($code) • $city" }
+        ?: "${countryEmoji(null)} Unknown • $city"
 }
 
 private fun List<String>.networkActivityPackagesLabel(sanitizePrivateData: Boolean): String =

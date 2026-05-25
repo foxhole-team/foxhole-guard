@@ -34,6 +34,7 @@ internal class LibboxDnsRuntimeStatsTracker(
         enabled: () -> Boolean,
         networkActivityEnabled: () -> Boolean = { false },
         networkActivityContext: () -> RuntimeNetworkActivityContext = { RuntimeNetworkActivityContext() },
+        countryCodeForDestination: (String) -> String? = { null },
         onNetworkActivityEvents: (List<NetworkActivityEvent>) -> Unit = {},
     ): Job =
         scope.launch(Dispatchers.IO) {
@@ -42,6 +43,7 @@ internal class LibboxDnsRuntimeStatsTracker(
                     enabled = enabled,
                     networkActivityEnabled = networkActivityEnabled,
                     networkActivityContext = networkActivityContext,
+                    countryCodeForDestination = countryCodeForDestination,
                     onNetworkActivityEvents = onNetworkActivityEvents,
                 )
                     .catch {
@@ -57,6 +59,7 @@ internal class LibboxDnsRuntimeStatsTracker(
         enabled: () -> Boolean,
         networkActivityEnabled: () -> Boolean,
         networkActivityContext: () -> RuntimeNetworkActivityContext,
+        countryCodeForDestination: (String) -> String?,
         onNetworkActivityEvents: (List<NetworkActivityEvent>) -> Unit,
     ) =
         callbackFlow<Unit> {
@@ -109,6 +112,7 @@ internal class LibboxDnsRuntimeStatsTracker(
                                         trafficTotals = trafficTotals,
                                         networkActivityEnabled = networkActivityEnabled,
                                         networkActivityContext = networkActivityContext,
+                                        countryCodeForDestination = countryCodeForDestination,
                                     )
                                 }
                             if (networkActivityEvents.isNotEmpty()) {
@@ -137,6 +141,7 @@ internal class LibboxDnsRuntimeStatsTracker(
         trafficTotals: MutableMap<String, RuntimeConnectionTrafficTotals>,
         networkActivityEnabled: () -> Boolean,
         networkActivityContext: () -> RuntimeNetworkActivityContext,
+        countryCodeForDestination: (String) -> String?,
     ): List<NetworkActivityEvent> {
         val iterator = connections.iterator()
         var count = 0
@@ -159,6 +164,7 @@ internal class LibboxDnsRuntimeStatsTracker(
                     context = activityContext,
                     previousTotals = previousTotals,
                     currentTotals = currentTotals,
+                    countryCodeForDestination = countryCodeForDestination,
                 )?.takeIf { activityEvents.size < MAX_NETWORK_ACTIVITY_EVENTS_PER_SAMPLE }
                     ?.let(activityEvents::add)
             }
@@ -205,6 +211,7 @@ private fun Connection.toNetworkActivityEvent(
     context: RuntimeNetworkActivityContext,
     previousTotals: RuntimeConnectionTrafficTotals?,
     currentTotals: RuntimeConnectionTrafficTotals,
+    countryCodeForDestination: (String) -> String?,
 ): NetworkActivityEvent? {
     val packageNames =
         processInfo
@@ -226,7 +233,7 @@ private fun Connection.toNetworkActivityEvent(
             protocol = network.orEmpty().ifBlank { protocol.orEmpty() }.ifBlank { "?" }.uppercase(Locale.ROOT),
             remoteHost = remoteHost,
             remotePort = destinationEndpoint.port,
-            countryCode = null,
+            countryCode = countryCodeForDestination(remoteHost),
             bytesRx = bytesRx,
             bytesTx = bytesTx,
             profileId = context.profileId,

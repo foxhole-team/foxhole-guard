@@ -17,8 +17,28 @@ internal fun LocalGuardMode.runtimeProfileName(): String =
 
 internal fun Settings.localGuardModeOrNull(): LocalGuardMode? {
     return when {
-        expert.firewallEnabled -> LocalGuardMode.FIREWALL
+        localFirewallGuardRequired() -> LocalGuardMode.FIREWALL
         expert.systemDnsProtectionEnabled -> LocalGuardMode.DNS
         else -> null
     }
 }
+
+private fun Settings.localFirewallGuardRequired(): Boolean {
+    if (!expert.firewallEnabled) {
+        return false
+    }
+    val statisticsCaptureRequired =
+        statistics.enabled && (
+            statistics.countryTrafficEnabled ||
+                statistics.anomalyMetricsEnabled && anomaly.analyzeDestinationCountries
+            )
+    return permanentAppBlockingRequired() ||
+        expert.networkActivityPersistentLogging ||
+        ui.trafficMapEnabled ||
+        statisticsCaptureRequired
+}
+
+private fun Settings.permanentAppBlockingRequired(): Boolean =
+    expert.blockAppsAlways &&
+        expert.blockedPackagesEnabled &&
+        expert.blockedPackages.any(String::isNotBlank)

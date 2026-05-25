@@ -55,10 +55,33 @@ class AppTrafficStatisticsCardTest {
         assertEquals(listOf(50L, 40L), rows.map(AppConnectionRow::bytes))
     }
 
+    @Test
+    fun `app connection rows prefer stored country code for journal destinations`() {
+        val rows =
+            appConnectionRows(
+                packageName = "org.example.browser",
+                events = listOf(
+                    event(
+                        remoteHost = "149.154.167.41",
+                        remotePort = 443,
+                        countryCode = "NL",
+                        bytesRx = 40,
+                        bytesTx = 10,
+                    ),
+                ),
+                countryCodeForDestination = { "GB" },
+                ipInfo = null,
+            )
+
+        assertEquals("NL", rows.single().countryCode)
+        assertEquals(countryDisplayName("NL"), rows.single().countryName)
+    }
+
     private fun event(
         packageNames: List<String> = listOf("org.example.browser"),
         remoteHost: String,
         remotePort: Int?,
+        countryCode: String? = null,
         bytesRx: Long,
         bytesTx: Long,
     ): NetworkActivityEvent =
@@ -68,7 +91,7 @@ class AppTrafficStatisticsCardTest {
             protocol = "TCP",
             remoteHost = remoteHost,
             remotePort = remotePort,
-            countryCode = null,
+            countryCode = countryCode,
             bytesRx = bytesRx,
             bytesTx = bytesTx,
             profileId = 1L,

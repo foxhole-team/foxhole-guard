@@ -73,7 +73,14 @@ class HomeDashboardPresentationTest {
             shouldShowHomeTopStatusLoading(
                 HomeRouteUiState(
                     profilesLoaded = true,
-                    settings = Settings(expert = ExpertSettings(firewallEnabled = true)),
+                    settings =
+                        Settings(
+                            expert =
+                                ExpertSettings(
+                                    firewallEnabled = true,
+                                    networkActivityPersistentLogging = true,
+                                ),
+                        ),
                     connection = ConnectionSnapshot(state = ConnectionState.IDLE),
                 ),
             ),
@@ -82,7 +89,14 @@ class HomeDashboardPresentationTest {
             shouldShowHomeTopStatusLoading(
                 HomeRouteUiState(
                     profilesLoaded = true,
-                    settings = Settings(expert = ExpertSettings(firewallEnabled = true)),
+                    settings =
+                        Settings(
+                            expert =
+                                ExpertSettings(
+                                    firewallEnabled = true,
+                                    networkActivityPersistentLogging = true,
+                                ),
+                        ),
                     connection =
                         ConnectionSnapshot(
                             state = ConnectionState.CONNECTED,
@@ -1066,7 +1080,7 @@ class HomeDashboardPresentationTest {
     }
 
     @Test
-    fun `network model shows startup skeleton while disconnected profile state loads`() {
+    fun `network model stays dashed while disconnected profile state loads`() {
         val model =
             resolveHomeDashboardNetworkModel(
                 state =
@@ -1079,8 +1093,8 @@ class HomeDashboardPresentationTest {
         )
 
         assertFalse(model.showConnectionStatus)
-        assertTrue(model.showLoading)
-        assertTrue(model.showIpInfoLoading)
+        assertFalse(model.showLoading)
+        assertFalse(model.showIpInfoLoading)
         assertFalse(model.showConnectionDetailsLoading)
     }
 
@@ -1188,7 +1202,7 @@ class HomeDashboardPresentationTest {
     }
 
     @Test
-    fun `network model hides stale upstream ip after route error`() {
+    fun `network model hides stale upstream ip after route error without starting skeleton`() {
         val ipInfo =
             IpInfo(
                 ip = "198.51.100.20",
@@ -1217,8 +1231,8 @@ class HomeDashboardPresentationTest {
         assertEquals(null, model.visibleIpInfo)
         assertEquals(R.string.home_network_current_ip_title, model.titleRes)
         assertFalse(model.showConnectionStatus)
-        assertTrue(model.showLoading)
-        assertTrue(model.showIpInfoLoading)
+        assertFalse(model.showLoading)
+        assertFalse(model.showIpInfoLoading)
     }
 
     @Test

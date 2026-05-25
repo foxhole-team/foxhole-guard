@@ -1039,13 +1039,15 @@ internal fun ProfileProtocolDetailPanel(protocol: ProfileProtocolDetail) {
 @Composable
 internal fun AppConnectionRowView(connection: AppConnectionRow) {
     val context = LocalContext.current
+    val countryName = connection.countryName ?: stringResource(R.string.statistics_app_detail_country_unknown)
+    val cityName = connection.city ?: stringResource(R.string.statistics_app_detail_city_unknown)
     Row(
         modifier = Modifier.fillMaxWidth().padding(vertical = 7.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            text = connection.countryCode?.countryFlagEmoji().orEmpty(),
+            text = countryEmoji(connection.countryCode),
             style = MaterialTheme.typography.titleMedium,
             modifier = Modifier.width(28.dp),
             textAlign = TextAlign.Center,
@@ -1061,8 +1063,8 @@ internal fun AppConnectionRowView(connection: AppConnectionRow) {
             Text(
                 text =
                 listOfNotNull(
-                    connection.countryName,
-                    connection.city,
+                    countryName,
+                    cityName,
                     connection.remotePort?.let { port ->
                         stringResource(R.string.statistics_app_detail_port, port)
                     },

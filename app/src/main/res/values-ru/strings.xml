@@ -437,6 +437,8 @@
     <string name="statistics_apps_top_title">Топ 5 приложений по расходу трафика</string>
     <string name="statistics_app_detail_top_destinations">Топ 5 сетевых адресов подключения приложения</string>
     <string name="statistics_app_detail_all_destinations">Все сетевые адреса подключения</string>
+    <string name="statistics_app_detail_network_journal_title">Сетевой журнал</string>
+    <string name="statistics_app_detail_country_unknown">Страна неизвестна</string>
     <string name="statistics_app_detail_city_unknown">Город неизвестен</string>
     <string name="statistics_app_detail_port">Порт %1$d</string>
     <string name="statistics_app_detail_title">Траффик приложения</string>

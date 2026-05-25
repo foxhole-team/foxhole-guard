@@ -302,8 +302,8 @@ class HomeIpLoadingPolicyTest {
     }
 
     @Test
-    fun `shows startup network skeleton while disconnected profile state loads`() {
-        assertTrue(
+    fun `keeps startup network card quiet while disconnected profile state loads`() {
+        assertFalse(
             shouldShowPendingNetworkLoading(
                 visibleIpInfo = null,
                 explicitLoading = false,

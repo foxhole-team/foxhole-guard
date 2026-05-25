@@ -180,7 +180,6 @@ internal fun shouldShowPendingNetworkLoading(
         explicitLoading -> true
         connectionState in setOf(ConnectionState.CONNECTING, ConnectionState.RECONNECTING) -> true
         autoConnectRunning -> true
-        !appLoaded -> true
         else -> false
     }
 

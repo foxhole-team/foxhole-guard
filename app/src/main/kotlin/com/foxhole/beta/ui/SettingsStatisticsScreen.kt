@@ -288,7 +288,10 @@ fun StatisticsScreen(
                     ipInfo = state.ipInfo,
                     networkActivityLoggingEnabled = state.settings.expert.networkActivityLogging,
                     showPrivateNetworkDetails = !state.settings.expert.sanitizeNetworkActivityPrivateData,
-                    onOpenNetworkActivityLogSettings = onOpenNetworkActivityLogSettings,
+                    onOpenNetworkActivityLogSettings = {
+                        selectedApp = null
+                        onOpenNetworkActivityLogSettings()
+                    },
                 )
             },
             confirmButton = {},

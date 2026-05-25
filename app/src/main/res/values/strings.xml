@@ -430,6 +430,8 @@
     <string name="statistics_apps_top_title">Top 5 apps by traffic usage</string>
     <string name="statistics_app_detail_top_destinations">Top 5 app connection network addresses</string>
     <string name="statistics_app_detail_all_destinations">All connection addresses</string>
+    <string name="statistics_app_detail_network_journal_title">Network journal</string>
+    <string name="statistics_app_detail_country_unknown">Country unknown</string>
     <string name="statistics_app_detail_city_unknown">City unknown</string>
     <string name="statistics_app_detail_port">Port %1$d</string>
     <string name="statistics_app_detail_title">Application traffic</string>

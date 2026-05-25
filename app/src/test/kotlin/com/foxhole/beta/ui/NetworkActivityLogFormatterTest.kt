@@ -68,6 +68,7 @@ class NetworkActivityLogFormatterTest {
 
         assertTrue(message.contains("country=\uD83C\uDDF3\uD83C\uDDF1"))
         assertTrue(message.contains("(NL)"))
+        assertTrue(message.contains("Amsterdam"))
     }
 
     @Test

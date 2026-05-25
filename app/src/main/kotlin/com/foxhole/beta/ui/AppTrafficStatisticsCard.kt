@@ -5,9 +5,11 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -15,6 +17,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Apps
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
@@ -240,16 +243,6 @@ internal fun AppTrafficDetail(
                     row.totalBytes,
                     formatBytes(context, row.totalBytes),
                 ),
-                metricIfPositive(
-                    stringResource(R.string.traffic_received),
-                    row.rxBytes,
-                    formatBytes(context, row.rxBytes),
-                ),
-                metricIfPositive(
-                    stringResource(R.string.traffic_sent),
-                    row.txBytes,
-                    formatBytes(context, row.txBytes),
-                ),
                 appSamples.maxOfOrNull(AppTrafficWindow::startedAtMs)
                     ?.let { stringResource(R.string.statistics_last_activity) to it.formatLastActivity() },
             ),
@@ -263,16 +256,23 @@ internal fun AppTrafficDetail(
             AppTrafficMiniChart(samples = appSamples)
             ChartLegend()
         }
-        val loadedConnectionRows = connectionRows ?: return@Column
+        val loadedConnectionRows = connectionRows
+        Text(
+            text = stringResource(R.string.statistics_app_detail_network_journal_title),
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.SemiBold,
+        )
         if (!networkActivityLoggingEnabled) {
             Text(
                 text = stringResource(R.string.statistics_app_detail_network_log_disabled),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            TextButton(onClick = onOpenNetworkActivityLogSettings) {
+            Button(onClick = onOpenNetworkActivityLogSettings) {
                 Text(stringResource(R.string.statistics_app_detail_open_network_log_settings_action))
             }
+        } else if (loadedConnectionRows == null) {
+            AppConnectionRowsLoadingBlock()
         } else if (!showPrivateNetworkDetails && networkActivityEvents.isNotEmpty()) {
             Text(
                 text = stringResource(R.string.statistics_app_detail_private_data_hidden),
@@ -292,6 +292,43 @@ internal fun AppTrafficDetail(
                 TextButton(onClick = { allConnectionsVisible = true }) {
                     Text(stringResource(R.string.show_all_label))
                 }
+            }
+        } else {
+            EmptySectionText(text = stringResource(R.string.statistics_no_data))
+        }
+    }
+}
+
+@Composable
+private fun AppConnectionRowsLoadingBlock() {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        repeat(3) { index ->
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                FoxholeSkeletonBlock(modifier = Modifier.size(28.dp))
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(5.dp),
+                ) {
+                    FoxholeSkeletonBlock(
+                        modifier = Modifier
+                            .fillMaxWidth(if (index == 0) 0.78f else 0.62f)
+                            .height(10.dp),
+                    )
+                    FoxholeSkeletonBlock(
+                        modifier = Modifier
+                            .fillMaxWidth(if (index == 1) 0.88f else 0.72f)
+                            .height(8.dp),
+                    )
+                }
+                FoxholeSkeletonBlock(
+                    modifier = Modifier
+                        .width(48.dp)
+                        .height(10.dp),
+                )
             }
         }
     }
