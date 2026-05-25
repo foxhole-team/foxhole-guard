@@ -55,7 +55,7 @@ class DiagnosticsLoggerTest {
             )
 
         assertEquals(MAX_LIVE_DIAGNOSTIC_ENTRIES, retained.size)
-        assertEquals("entry=501", retained.first().message)
+        assertEquals("entry=1001", retained.first().message)
         assertEquals("entry=1500", retained.last().message)
     }
 }

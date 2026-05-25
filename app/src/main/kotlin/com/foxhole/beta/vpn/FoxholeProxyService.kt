@@ -39,6 +39,7 @@ import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.util.concurrent.atomic.AtomicLong
 
 @Suppress("TooGenericExceptionCaught")
 private suspend inline fun <T> runCatchingUnlessCancelled(crossinline block: suspend () -> T): Result<T> =
@@ -107,6 +108,7 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
     private var lastDefaultNetworkSummary: String? = null
     private var autoReconnectJob: Job? = null
     private var autoReconnectAttempts = 0
+    private val runtimeTransitionGeneration = AtomicLong(0L)
 
     private val defaultNetworkCallback =
         object : ConnectivityManager.NetworkCallback() {
@@ -201,6 +203,7 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
             runCatching { connectivityManager.unregisterNetworkCallback(defaultNetworkCallback) }
             defaultNetworkCallbackRegistered = false
         }
+        recordRuntimeResourceSnapshot(event = "service_destroy_after_callbacks_unregistered")
     }
 
     override fun onBind(intent: Intent): IBinder? = null
@@ -230,6 +233,7 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
             stopService(commandStartId)
             return
         }
+        runtimeTransitionGeneration.incrementAndGet()
         FoxholeConnectionServiceContract.stopInactiveServices(context = this, activeMode = trafficMode)
         val session =
             runCatching { container.profileRepository.getSession(profileId, protocolOptionIdOverride) }
@@ -277,6 +281,9 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
             elapsedMs = SystemClock.elapsedRealtime() - runtimeStartAtMs,
             diagnosticsLogger = container.diagnosticsLogger,
         )
+        recordRuntimeResourceSnapshot(
+            event = if (result.isSuccess) "start_success" else "start_failure",
+        )
         if (!currentCoroutineContext().isActive) {
             container.diagnosticsLogger.record("connection", "runtime start cancelled after native return")
             return
@@ -311,6 +318,7 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
         commandStartId: Int? = null,
         preserveSmartStartAnalysis: Boolean = false,
     ) {
+        runtimeTransitionGeneration.incrementAndGet()
         val session = activeSession
         val previousSnapshot = FoxholeVpnRuntimeBridge.snapshot.value
         if (
@@ -381,12 +389,33 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
         launchCommand("fail_disconnect") { disconnect(message, commandStartId) }
     }
 
-    private suspend fun stopRuntimeFailClosed(reason: String): RuntimeStopResult =
-        runtime.stopFailClosed(
+    private suspend fun stopRuntimeFailClosed(reason: String): RuntimeStopResult {
+        val result =
+            runtime.stopFailClosed(
+                owner = "proxy",
+                reason = reason,
+                diagnosticsLogger = container.diagnosticsLogger,
+            )
+        recordRuntimeResourceSnapshot(
+            event = if (result.graceful) "stop_success:$reason" else "stop_escalated:$reason",
+        )
+        return result
+    }
+
+    private fun recordRuntimeResourceSnapshot(event: String) {
+        RuntimeHealthMetrics.recordResourceSnapshot(
             owner = "proxy",
-            reason = reason,
+            event = event,
+            runtimeGeneration = runtimeTransitionGeneration.get(),
+            commandQueue = commandActorInstance?.queueSnapshot() ?: RuntimeCommandQueueSnapshot.EMPTY,
+            nativeSnapshot = runtimeInstance?.nativeSnapshot() ?: NativeRuntimeSnapshot.NONE,
+            activeNetworkCallbacks = activeNetworkCallbackCount(),
             diagnosticsLogger = container.diagnosticsLogger,
         )
+    }
+
+    private fun activeNetworkCallbackCount(): Int =
+        if (defaultNetworkCallbackRegistered) 1 else 0
 
     private suspend fun failClosedTeardown(
         commandStartId: Int,

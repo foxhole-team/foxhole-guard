@@ -16,6 +16,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.util.Collections
 
+@Suppress("LargeClass")
 class RuntimeCommandActorTest {
     @Test
     fun `normal commands run sequentially`() =
@@ -46,6 +47,34 @@ class RuntimeCommandActorTest {
             withTimeout(1_000L) { secondStarted.await() }
 
             assertEquals(listOf("first-start", "first-end", "second-start"), events.toList())
+            actor.close()
+        }
+
+    @Test
+    fun `queue snapshot exposes running and queued command depth`() =
+        runBlocking {
+            val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+            val actor = actor(scope)
+            val currentStarted = CompletableDeferred<Unit>()
+            val releaseCurrent = CompletableDeferred<Unit>()
+
+            actor.launch(RuntimeCommandPriority.NORMAL, reason = "connect") {
+                currentStarted.complete(Unit)
+                releaseCurrent.await()
+            }
+            withTimeout(1_000L) { currentStarted.await() }
+            actor.launch(RuntimeCommandPriority.NORMAL, reason = "reload") {
+            }
+            delay(100L)
+
+            val snapshot = actor.queueSnapshot()
+
+            assertTrue(snapshot.running)
+            assertEquals("normal", snapshot.runningPriority)
+            assertEquals("connect", snapshot.runningReason)
+            assertTrue(snapshot.commandQueueDepth >= 2)
+
+            releaseCurrent.complete(Unit)
             actor.close()
         }
 

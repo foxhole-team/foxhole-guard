@@ -82,7 +82,18 @@ data class NativeRuntimeSnapshot(
     val hasHost: Boolean,
     val hasConfig: Boolean,
     val dnsServerAddress: String?,
-)
+) {
+    companion object {
+        val NONE =
+            NativeRuntimeSnapshot(
+                hasCommandServer = false,
+                hasTunFileDescriptor = false,
+                hasHost = false,
+                hasConfig = false,
+                dnsServerAddress = null,
+            )
+    }
+}
 
 enum class RuntimeState {
     IDLE,

@@ -366,6 +366,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
             runCatching { connectivityManager.unregisterNetworkCallback(defaultNetworkCallback) }
             defaultNetworkCallbackRegistered = false
         }
+        recordRuntimeResourceSnapshot(event = "service_destroy_after_callbacks_unregistered")
     }
 
     override fun onRevoke() {
@@ -413,8 +414,30 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
             elapsedMs = SystemClock.elapsedRealtime() - runtimeStartAtMs,
             diagnosticsLogger = container.diagnosticsLogger,
         )
+        recordRuntimeResourceSnapshot(
+            event = if (result.isSuccess) "start_success" else "start_failure",
+        )
         return result
     }
+
+    private fun recordRuntimeResourceSnapshot(event: String) {
+        RuntimeHealthMetrics.recordResourceSnapshot(
+            owner = "vpn",
+            event = event,
+            runtimeGeneration = runtimeTransitionGeneration.get(),
+            commandQueue = commandActorInstance?.queueSnapshot() ?: RuntimeCommandQueueSnapshot.EMPTY,
+            nativeSnapshot = runtimeInstance?.nativeSnapshot() ?: NativeRuntimeSnapshot.NONE,
+            activeNetworkCallbacks = activeNetworkCallbackCount(),
+            diagnosticsLogger = container.diagnosticsLogger,
+        )
+    }
+
+    private fun activeNetworkCallbackCount(): Int =
+        listOf(
+            networkCallbackRegistered,
+            vpnNetworkCallbackRegistered,
+            defaultNetworkCallbackRegistered,
+        ).count { registered -> registered }
 
     private fun delegateConnectToForegroundService(
         profileId: Long,
@@ -690,11 +713,15 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
     }
 
     private suspend fun stopRuntimeFailClosed(reason: String): RuntimeStopResult {
-        return runtime.stopFailClosed(
+        val result = runtime.stopFailClosed(
             owner = "vpn",
             reason = reason,
             diagnosticsLogger = container.diagnosticsLogger,
         )
+        recordRuntimeResourceSnapshot(
+            event = if (result.graceful) "stop_success:$reason" else "stop_escalated:$reason",
+        )
+        return result
     }
 
     @Suppress("CyclomaticComplexMethod")
@@ -1386,7 +1413,10 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
             return
         }
         val nextRevision = snapshot.upstreamNetworkRevision + 1L
-        FoxholeVpnRuntimeBridge.update(snapshot.copy(upstreamNetworkRevision = nextRevision))
+        FoxholeVpnRuntimeBridge.update(
+            snapshot.copy(upstreamNetworkRevision = nextRevision),
+            refreshLastChangeAt = false,
+        )
         container.diagnosticsLogger.recordStructured(
             "network",
             "upstream network refresh signal",
@@ -2077,13 +2107,7 @@ internal interface VpnCoreRuntime {
         )
 
     fun nativeSnapshot(): NativeRuntimeSnapshot =
-        NativeRuntimeSnapshot(
-            hasCommandServer = false,
-            hasTunFileDescriptor = false,
-            hasHost = false,
-            hasConfig = false,
-            dnsServerAddress = null,
-        )
+        NativeRuntimeSnapshot.NONE
 
     fun currentDnsServerAddress(): String? = null
 

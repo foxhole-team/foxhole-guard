@@ -34,7 +34,7 @@ data class DiagnosticEntry(
     val message: String,
 )
 
-internal const val MAX_LIVE_DIAGNOSTIC_ENTRIES = 1_000
+internal const val MAX_LIVE_DIAGNOSTIC_ENTRIES = 500
 
 internal fun trimLiveDiagnosticEntries(
     entries: List<DiagnosticEntry>,

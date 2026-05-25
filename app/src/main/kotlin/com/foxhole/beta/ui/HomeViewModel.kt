@@ -1498,28 +1498,19 @@ class HomeViewModel(
     )
 
     internal fun scheduleDashboardRefreshAfterRuntimeReload() {
-        if (container.connectionController.snapshot.value.state != ConnectionState.CONNECTED) {
+        val snapshot = container.connectionController.snapshot.value
+        if (snapshot.state != ConnectionState.CONNECTED) {
             return
         }
         val refreshReason =
-            if (shouldRefreshTorRouteIpAfterRuntimeReload()) {
-                IpInfoRefreshReason.TOR_ROUTE
-            } else {
-                IpInfoRefreshReason.POST_UPDATE
-            }
+            runtimeReloadIpRefreshReason(
+                snapshot = snapshot,
+                settings = uiState.value.settings,
+            )
         scheduleConnectedIpRefresh(reason = refreshReason, clearExistingIp = false)
         if (dashboardVisible && !autoConnectUiStateMutable.value.running) {
             scheduleActiveProfileLatencyRefresh(showLoading = false)
         }
-    }
-
-    private fun shouldRefreshTorRouteIpAfterRuntimeReload(): Boolean {
-        val state = uiState.value
-        val snapshot = container.connectionController.snapshot.value
-        return snapshot.profileId != FoxholeVpnService.TOR_ONLY_PROFILE_ID &&
-            snapshot.state == ConnectionState.CONNECTED &&
-            state.settings.privacyRoute.enabled &&
-            !state.settings.privacyRoute.bypassVpnTunnel
     }
 
     internal fun markRuntimeReloadPending() = markRuntimeReloadPendingInternal()

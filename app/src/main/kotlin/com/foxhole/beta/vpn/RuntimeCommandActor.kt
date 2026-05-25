@@ -13,7 +13,9 @@ import kotlinx.coroutines.withTimeoutOrNull
 import java.util.PriorityQueue
 import java.util.concurrent.CancellationException
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
+import java.util.concurrent.atomic.AtomicReference
 
 internal enum class RuntimeCommandPriority(val value: Int) {
     NORMAL(10),
@@ -31,6 +33,34 @@ internal fun interface RuntimeCommandDiagnosticsRecorder {
     )
 }
 
+internal data class RuntimeCommandQueueSnapshot(
+    val closed: Boolean,
+    val normalBuffered: Int,
+    val priorityBuffered: Int,
+    val pending: Int,
+    val running: Boolean,
+    val runningPriority: String?,
+    val runningReason: String?,
+    val lastSequence: Long,
+) {
+    val commandQueueDepth: Int
+        get() = normalBuffered + priorityBuffered + pending + if (running) 1 else 0
+
+    companion object {
+        val EMPTY =
+            RuntimeCommandQueueSnapshot(
+                closed = true,
+                normalBuffered = 0,
+                priorityBuffered = 0,
+                pending = 0,
+                running = false,
+                runningPriority = null,
+                runningReason = null,
+                lastSequence = 0L,
+            )
+    }
+}
+
 @Suppress("TooManyFunctions")
 internal class RuntimeCommandActor(
     private val scope: CoroutineScope,
@@ -46,6 +76,10 @@ internal class RuntimeCommandActor(
         )
     private val priorityCommands = Channel<QueuedRuntimeCommand>(Channel.UNLIMITED)
     private val closed = AtomicBoolean(false)
+    private val normalBuffered = AtomicInteger(0)
+    private val priorityBuffered = AtomicInteger(0)
+    private val pendingDepth = AtomicInteger(0)
+    private val runningSnapshot = AtomicReference<RunningRuntimeCommandSnapshot?>(null)
 
     @Volatile
     private var currentJob: Job? = null
@@ -92,6 +126,13 @@ internal class RuntimeCommandActor(
             } else {
                 normalCommands.trySend(command)
             }
+        if (sendResult.isSuccess) {
+            if (priority.value >= RuntimeCommandPriority.STOP.value) {
+                priorityBuffered.incrementAndGet()
+            } else {
+                normalBuffered.incrementAndGet()
+            }
+        }
         if (!sendResult.isSuccess) {
             record(
                 "runtime command rejected",
@@ -110,6 +151,20 @@ internal class RuntimeCommandActor(
         }
     }
 
+    fun queueSnapshot(): RuntimeCommandQueueSnapshot {
+        val running = runningSnapshot.get()
+        return RuntimeCommandQueueSnapshot(
+            closed = closed.get(),
+            normalBuffered = normalBuffered.get().coerceAtLeast(0),
+            priorityBuffered = priorityBuffered.get().coerceAtLeast(0),
+            pending = pendingDepth.get().coerceAtLeast(0),
+            running = running != null,
+            runningPriority = running?.priorityName,
+            runningReason = running?.reason,
+            lastSequence = sequence.get(),
+        )
+    }
+
     fun close() {
         closed.set(true)
         record("runtime command actor closing")
@@ -117,6 +172,7 @@ internal class RuntimeCommandActor(
         priorityCommands.close()
         worker.cancel()
         currentJob?.cancel()
+        runningSnapshot.set(null)
     }
 
     @Suppress("NestedBlockDepth")
@@ -129,6 +185,7 @@ internal class RuntimeCommandActor(
                     if (currentJob == active.job) {
                         currentJob = null
                     }
+                    runningSnapshot.set(null)
                     RuntimeActorReceiveResult.CLEAR_RUNNING
                 }
                 priorityCommands.onReceiveCatching { result ->
@@ -155,8 +212,8 @@ internal class RuntimeCommandActor(
             val active = running
             if (active == null) {
                 val next =
-                    priorityCommands.tryReceive().getOrNull()
-                        ?: pending.poll()
+                    priorityCommands.tryReceive().getOrNull()?.also(::onCommandReceived)
+                        ?: pending.poll()?.also { pendingDepth.set(pending.size) }
                         ?: receiveNextCommand()
                 if (next == null) {
                     acceptingCommands = false
@@ -183,10 +240,13 @@ internal class RuntimeCommandActor(
     }
 
     private suspend fun receiveNextCommand(): QueuedRuntimeCommand? {
-        priorityCommands.tryReceive().getOrNull()?.let { return it }
+        priorityCommands.tryReceive().getOrNull()?.let { command ->
+            onCommandReceived(command)
+            return command
+        }
         return select {
-            priorityCommands.onReceiveCatching { result -> result.getOrNull() }
-            normalCommands.onReceiveCatching { result -> result.getOrNull() }
+            priorityCommands.onReceiveCatching { result -> result.getOrNull()?.also(::onCommandReceived) }
+            normalCommands.onReceiveCatching { result -> result.getOrNull()?.also(::onCommandReceived) }
         }
     }
 
@@ -197,6 +257,9 @@ internal class RuntimeCommandActor(
         drainingPreemptedJobs: MutableList<Job>,
     ): RuntimeActorReceiveResult {
         val command = result.getOrNull()
+        if (command != null) {
+            onCommandReceived(command)
+        }
         return when {
             command == null -> {
                 running.job.cancel()
@@ -215,6 +278,7 @@ internal class RuntimeCommandActor(
                 val removedPending = pending.removeIf { queued ->
                     queued.priority < RuntimeCommandPriority.STOP.value && queued.reason == command.reason
                 }
+                pendingDepth.set(pending.size)
                 val coalescedDetails =
                     listOf(
                         "running_reason=${running.command.reason}",
@@ -229,6 +293,7 @@ internal class RuntimeCommandActor(
             }
             else -> {
                 val result = enqueuePendingNormalCommand(command, pending)
+                pendingDepth.set(pending.size)
                 val extraDetails =
                     buildList {
                         if (result.coalesced) {
@@ -263,6 +328,7 @@ internal class RuntimeCommandActor(
                 false
             }
         pending.offer(command)
+        pendingDepth.set(pending.size)
         return PendingNormalCommandResult(
             coalesced = coalesced,
             droppedOldest = droppedOldest,
@@ -300,6 +366,7 @@ internal class RuntimeCommandActor(
                 val removedSupersededPriority =
                     pending.removeIf { queued -> command.supersedesBufferedPriority(queued) }
                 pending.offer(command)
+                pendingDepth.set(pending.size)
                 val queuedDetails =
                     listOf(
                         "running_priority=${running.command.priorityName}",
@@ -318,6 +385,7 @@ internal class RuntimeCommandActor(
                     pending.removeIf { queued ->
                         command.supersedesBufferedPriority(queued)
                     }
+                pendingDepth.set(pending.size)
                 recordCommandEvent(
                     headline = "runtime priority command coalesced",
                     command = command,
@@ -386,6 +454,12 @@ internal class RuntimeCommandActor(
                 runCommandSafely(command)
             }
         currentJob = job
+        runningSnapshot.set(
+            RunningRuntimeCommandSnapshot(
+                priorityName = command.priorityName,
+                reason = command.reason,
+            ),
+        )
         return RunningRuntimeCommand(job = job, command = command)
     }
 
@@ -400,6 +474,7 @@ internal class RuntimeCommandActor(
             pending.removeIf { queued ->
                 command.supersedesBufferedPriority(queued)
             }
+        pendingDepth.set(pending.size)
         val removedBufferedNormalCommands = clearBufferedNormalCommands()
         val extra =
             "cleared_normal=${removedNormalCommands || removedBufferedNormalCommands > 0}, " +
@@ -414,6 +489,7 @@ internal class RuntimeCommandActor(
             if (currentJob == running.job) {
                 currentJob = null
             }
+            runningSnapshot.set(null)
             drainingPreemptedJobs += running.job
             recordCommandEvent(
                 headline = "runtime command preempted",
@@ -430,12 +506,14 @@ internal class RuntimeCommandActor(
             )
         }
         pending.offer(command)
+        pendingDepth.set(pending.size)
     }
 
     private fun clearBufferedNormalCommands(): Int {
         var removed = 0
         while (normalCommands.tryReceive().isSuccess) {
             removed += 1
+            normalBuffered.decrementAndGet()
         }
         return removed
     }
@@ -445,6 +523,7 @@ internal class RuntimeCommandActor(
         val retained = mutableListOf<QueuedRuntimeCommand>()
         while (true) {
             val queued = priorityCommands.tryReceive().getOrNull() ?: break
+            priorityBuffered.decrementAndGet()
             if (command.supersedesBufferedPriority(queued)) {
                 removed = true
             } else {
@@ -457,9 +536,19 @@ internal class RuntimeCommandActor(
                     headline = "runtime priority command dropped during coalesce restore",
                     command = queued,
                 )
+            } else {
+                priorityBuffered.incrementAndGet()
             }
         }
         return removed
+    }
+
+    private fun onCommandReceived(command: QueuedRuntimeCommand) {
+        if (command.priority >= RuntimeCommandPriority.STOP.value) {
+            priorityBuffered.decrementAndGet()
+        } else {
+            normalBuffered.decrementAndGet()
+        }
     }
 
     private fun QueuedRuntimeCommand.supersedesBufferedPriority(queued: QueuedRuntimeCommand): Boolean =
@@ -541,6 +630,11 @@ internal class RuntimeCommandActor(
     private data class RunningRuntimeCommand(
         val job: Job,
         val command: QueuedRuntimeCommand,
+    )
+
+    private data class RunningRuntimeCommandSnapshot(
+        val priorityName: String,
+        val reason: String,
     )
 
     private data class PendingNormalCommandResult(

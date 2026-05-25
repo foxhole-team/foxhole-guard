@@ -2,6 +2,7 @@ package com.foxhole.beta
 
 import android.app.Application
 import android.content.Context
+import android.os.StrictMode
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.os.LocaleListCompat
 import androidx.work.BackoffPolicy
@@ -37,6 +38,7 @@ class FoxholeApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        installDebugStrictMode()
         appGraph = FoxholeAppGraph(this)
         applyAppLocale(readFastStoredAppLocale(this))
 
@@ -69,6 +71,25 @@ class FoxholeApplication : Application() {
         )
         applyDnsFilterUpdateSchedule(
             enabled = settings.dns.autoUpdateFilters && settings.dns.dnsRuleSetFilteringEnabled(),
+        )
+    }
+
+    private fun installDebugStrictMode() {
+        if (!BuildConfig.DEBUG && !BuildConfig.ENABLE_DIAGNOSTIC_LOGCAT) {
+            return
+        }
+        StrictMode.setThreadPolicy(
+            StrictMode.ThreadPolicy.Builder()
+                .detectAll()
+                .penaltyLog()
+                .build(),
+        )
+        StrictMode.setVmPolicy(
+            StrictMode.VmPolicy.Builder()
+                .detectLeakedClosableObjects()
+                .detectActivityLeaks()
+                .penaltyLog()
+                .build(),
         )
     }
 

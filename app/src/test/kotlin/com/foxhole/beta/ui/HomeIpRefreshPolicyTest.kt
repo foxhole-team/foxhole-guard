@@ -3,6 +3,9 @@ package com.foxhole.beta.ui
 import com.foxhole.beta.core.model.ConnectionSnapshot
 import com.foxhole.beta.core.model.ConnectionState
 import com.foxhole.beta.core.model.IpInfo
+import com.foxhole.beta.core.model.PrivacyRouteMode
+import com.foxhole.beta.core.model.PrivacyRouteSettings
+import com.foxhole.beta.core.model.Settings
 import com.foxhole.beta.core.model.TrafficMode
 import com.foxhole.beta.core.network.IpInfoFetchMode
 import com.foxhole.beta.vpn.FoxholeVpnService
@@ -212,6 +215,77 @@ class HomeIpRefreshPolicyTest {
                 trafficMode = TrafficMode.TUNNEL,
                 profileId = FoxholeVpnService.TOR_ONLY_PROFILE_ID,
             ).shouldReportManualDashboardIpRefreshFailures(),
+        )
+    }
+
+    @Test
+    fun `standalone tor reload uses tor route refresh policy`() {
+        val snapshot =
+            ConnectionSnapshot(
+                state = ConnectionState.CONNECTED,
+                trafficMode = TrafficMode.TUNNEL,
+                profileId = FoxholeVpnService.TOR_ONLY_PROFILE_ID,
+            )
+        val reason =
+            runtimeReloadIpRefreshReason(
+                snapshot = snapshot,
+                settings = Settings(),
+            )
+
+        assertEquals(IpInfoRefreshReason.TOR_ROUTE, reason)
+        assertEquals(HomeViewModel.TOR_IP_REFRESH_ATTEMPTS, ipInfoRefreshAttemptsForReason(reason))
+        assertEquals(HomeViewModel.TOR_IP_REFRESH_RETRY_DELAY_MS, ipInfoRefreshRetryDelayMsForReason(reason))
+    }
+
+    @Test
+    fun `runtime reload refresh policy keeps tor over vpn strict and ordinary vpn soft`() {
+        val vpnSnapshot =
+            ConnectionSnapshot(
+                state = ConnectionState.CONNECTED,
+                trafficMode = TrafficMode.TUNNEL,
+                profileId = 7L,
+            )
+
+        assertEquals(
+            IpInfoRefreshReason.TOR_ROUTE,
+            runtimeReloadIpRefreshReason(
+                snapshot = vpnSnapshot,
+                settings =
+                    Settings(
+                        privacyRoute = PrivacyRouteSettings(mode = PrivacyRouteMode.TOR_OVER_VPN),
+                    ),
+            ),
+        )
+        assertEquals(
+            IpInfoRefreshReason.POST_UPDATE,
+            runtimeReloadIpRefreshReason(vpnSnapshot, Settings()),
+        )
+    }
+
+    @Test
+    fun `tor route refresh rejects same ip during identity change`() {
+        val operation =
+            HomeTorOperationUiState(
+                kind = HomeTorOperationKind.CHANGING_LOCATION,
+                startedAt = 2_000L,
+                startedIpAddress = "1.1.1.1",
+            )
+        val sameIpAfterReload =
+            IpInfo(
+                ip = "1.1.1.1",
+                ipv4 = "1.1.1.1",
+                countryCode = "US",
+                countryName = "United States",
+                city = "Los Angeles",
+                isp = "Example Tor exit",
+                fetchedAt = 2_500L,
+            )
+
+        assertFalse(operation.canAcceptTorIp(sameIpAfterReload))
+        assertTrue(
+            operation.canAcceptTorIp(
+                sameIpAfterReload.copy(ip = "9.9.9.9", ipv4 = "9.9.9.9"),
+            ),
         )
     }
 }

@@ -257,6 +257,29 @@ internal enum class IpInfoRefreshReason {
     TOR_ROUTE,
 }
 
+internal fun runtimeReloadIpRefreshReason(
+    snapshot: ConnectionSnapshot,
+    settings: Settings,
+): IpInfoRefreshReason =
+    if (shouldUseTorRouteIpRefreshAfterRuntimeReload(snapshot = snapshot, settings = settings)) {
+        IpInfoRefreshReason.TOR_ROUTE
+    } else {
+        IpInfoRefreshReason.POST_UPDATE
+    }
+
+internal fun shouldUseTorRouteIpRefreshAfterRuntimeReload(
+    snapshot: ConnectionSnapshot,
+    settings: Settings,
+): Boolean {
+    if (snapshot.state != ConnectionState.CONNECTED) {
+        return false
+    }
+    if (snapshot.profileId == FoxholeVpnService.TOR_ONLY_PROFILE_ID) {
+        return true
+    }
+    return settings.privacyRoute.enabled && !settings.privacyRoute.bypassVpnTunnel
+}
+
 internal enum class IpInfoRefreshTarget {
     VPN_BOUND,
     UPSTREAM,
