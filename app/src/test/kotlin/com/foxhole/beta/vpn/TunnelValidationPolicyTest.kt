@@ -10,13 +10,13 @@ class TunnelValidationPolicyTest {
     fun `accepts vpn-bound reachability probes as tunnel validation`() {
         assertTrue(acceptsTunnelValidationProbe(TunnelValidationProbeKind.VPN_IP_REFRESH))
         assertTrue(acceptsTunnelValidationProbe(TunnelValidationProbeKind.VPN_VALIDATION_ENDPOINT))
-        assertTrue(acceptsTunnelValidationProbe(TunnelValidationProbeKind.VALIDATED_VPN_LITERAL_IP_ENDPOINT))
+        assertFalse(acceptsTunnelValidationProbe(TunnelValidationProbeKind.VALIDATED_VPN_LITERAL_IP_ENDPOINT))
         assertFalse(acceptsTunnelValidationProbe(TunnelValidationProbeKind.TUNNEL_RUNTIME_PROXY_IP_REFRESH))
         assertFalse(acceptsTunnelValidationProbe(TunnelValidationProbeKind.TUNNEL_RUNTIME_PROXY_VALIDATION_ENDPOINT))
     }
 
     @Test
-    fun `literal ip validation requires private dns opt-in and evidence`() {
+    fun `literal ip validation is diagnostic only`() {
         assertFalse(
             acceptsTunnelValidationProbe(
                 kind = TunnelValidationProbeKind.DNS_INDEPENDENT_LITERAL_IP,
@@ -41,7 +41,7 @@ class TunnelValidationPolicyTest {
                     ),
             ),
         )
-        assertTrue(
+        assertFalse(
             acceptsTunnelValidationProbe(
                 kind = TunnelValidationProbeKind.DNS_INDEPENDENT_LITERAL_IP,
                 context =
@@ -54,7 +54,7 @@ class TunnelValidationPolicyTest {
     }
 
     @Test
-    fun `strict private dns mode opts in but does not prove literal ip validation`() {
+    fun `strict private dns mode does not make literal ip validation sufficient`() {
         val strictContext = tunnelValidationPolicyContextFor(PrivateDnsMode.STRICT)
 
         assertFalse(
@@ -63,7 +63,7 @@ class TunnelValidationPolicyTest {
                 context = strictContext,
             ),
         )
-        assertTrue(
+        assertFalse(
             acceptsTunnelValidationProbe(
                 kind = TunnelValidationProbeKind.DNS_INDEPENDENT_LITERAL_IP,
                 context =
@@ -84,8 +84,8 @@ class TunnelValidationPolicyTest {
     }
 
     @Test
-    fun `validated vpn literal ip endpoint requires android validation and healthy tunnel evidence`() {
-        assertTrue(
+    fun `validated vpn literal ip endpoint is not enough for tunnel acceptance`() {
+        assertFalse(
             acceptsValidatedVpnLiteralIpEndpointProbe(
                 androidValidated = true,
                 evidence = TunnelValidationEvidence(hasSuccessfulTunnelActivity = true),

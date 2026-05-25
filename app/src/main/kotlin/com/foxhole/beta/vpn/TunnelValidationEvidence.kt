@@ -89,7 +89,6 @@ internal object TunnelValidationEvidenceClassifier {
             (
                 message.contains("vpn network passed in-process ip refresh") ||
                     message.contains("vpn network passed validation endpoint probe") ||
-                    message.contains("vpn-bound literal public endpoint accepted") ||
                     message.contains("validated tunnel grace retry passed")
                 )
 

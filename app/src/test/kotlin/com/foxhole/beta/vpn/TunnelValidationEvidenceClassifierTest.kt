@@ -207,4 +207,24 @@ class TunnelValidationEvidenceClassifierTest {
         assertFalse(evidence.hasOutboundTunnelActivity)
         assertEquals(null, evidence.fatalRuntimeMessage)
     }
+
+    @Test
+    fun `literal public endpoint probe does not count as tunnel activity evidence`() {
+        val evidence =
+            TunnelValidationEvidenceClassifier.classify(
+                entries =
+                    listOf(
+                        DiagnosticEntry(
+                            timestamp = 1_000L,
+                            tag = "dns",
+                            message = "vpn-bound literal public endpoint passed after ip refresh failed but is not accepted as tunnel validation",
+                        ),
+                    ),
+                sinceMs = 900L,
+            )
+
+        assertFalse(evidence.hasSuccessfulTunnelActivity)
+        assertFalse(evidence.hasOutboundTunnelActivity)
+        assertEquals(null, evidence.fatalRuntimeMessage)
+    }
 }

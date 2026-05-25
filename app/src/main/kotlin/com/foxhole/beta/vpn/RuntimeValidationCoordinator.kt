@@ -335,17 +335,14 @@ internal suspend fun FoxholeVpnService.validateTunnelConnectivityInternal(
                     if (validatedLiteralEndpointProbe.isSuccess) {
                         container.diagnosticsLogger.record(
                             "dns",
-                            "vpn-bound literal public endpoint accepted before hostname validation",
+                            "vpn-bound literal public endpoint passed before hostname validation but is not accepted as tunnel validation",
                         )
-                        scope.launch(Dispatchers.IO) {
-                            refreshValidatedTunnelIpInfoBestEffort(vpnNetwork, currentSession)
-                        }
-                        return@run vpnNetwork
+                    } else {
+                        container.diagnosticsLogger.record(
+                            "dns",
+                            "vpn-bound literal public endpoint failed before hostname validation: ${validatedLiteralEndpointProbe.exceptionOrNull()?.message.orEmpty()}",
+                        )
                     }
-                    container.diagnosticsLogger.record(
-                        "dns",
-                        "vpn-bound literal public endpoint failed before hostname validation: ${validatedLiteralEndpointProbe.exceptionOrNull()?.message.orEmpty()}",
-                    )
                 }
                 if (acceptsTunnelValidationProbe(
                         TunnelValidationProbeKind.DNS_INDEPENDENT_LITERAL_IP,
@@ -467,17 +464,14 @@ internal suspend fun FoxholeVpnService.validateTunnelConnectivityInternal(
                 if (literalEndpointProbe.isSuccess) {
                     container.diagnosticsLogger.record(
                         "dns",
-                        "vpn-bound literal public endpoint accepted after ip refresh failed",
+                        "vpn-bound literal public endpoint passed after ip refresh failed but is not accepted as tunnel validation",
                     )
-                    scope.launch(Dispatchers.IO) {
-                        refreshValidatedTunnelIpInfoBestEffort(vpnNetwork, currentSession)
-                    }
-                    return@run vpnNetwork
+                } else {
+                    container.diagnosticsLogger.record(
+                        "dns",
+                        "vpn-bound literal public endpoint failed before validation endpoints: ${literalEndpointProbe.exceptionOrNull()?.message.orEmpty()}",
+                    )
                 }
-                container.diagnosticsLogger.record(
-                    "dns",
-                    "vpn-bound literal public endpoint failed before validation endpoints: ${literalEndpointProbe.exceptionOrNull()?.message.orEmpty()}",
-                )
                 val endpointProbe =
                     runCatchingUnlessCancelled {
                         probeConnectivityEndpoints(
