@@ -162,10 +162,7 @@ internal object FoxholeConnectionServiceContract {
         TrafficMode.entries
             .filterNot { it == activeMode }
             .forEach { mode ->
-                ContextCompat.startForegroundService(
-                    context,
-                    Intent(context, serviceClass(mode)).setAction(ACTION_KILL),
-                )
+                context.stopService(Intent(context, serviceClass(mode)))
             }
     }
 
