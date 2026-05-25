@@ -678,12 +678,12 @@ private fun HomeRouteUiState.homeNetworkTitleRes(
         else -> R.string.home_network_current_ip_title
     }
 
-private fun HomeRouteUiState.hasRealTunnelConnectionStatus(): Boolean =
-    reconnectInProgress ||
-        (
-            connection.state in setOf(ConnectionState.CONNECTING, ConnectionState.CONNECTED, ConnectionState.RECONNECTING) &&
-                hasDashboardRouteProfile()
-            )
+private fun HomeRouteUiState.hasRealTunnelConnectionStatus(): Boolean {
+    val routeStatusRunning =
+        connection.state in setOf(ConnectionState.CONNECTING, ConnectionState.CONNECTED, ConnectionState.RECONNECTING) ||
+            (autoConnect.running && activeProfile != null && connection.state !in ACTIVE_CONNECTION_STATES)
+    return reconnectInProgress || (routeStatusRunning && hasDashboardRouteProfile())
+}
 
 private fun HomeRouteUiState.hasFailedDashboardRoute(): Boolean =
     connection.state == ConnectionState.ERROR &&
