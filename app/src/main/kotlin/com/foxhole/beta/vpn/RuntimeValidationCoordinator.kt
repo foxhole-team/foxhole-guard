@@ -1099,9 +1099,11 @@ internal suspend fun FoxholeVpnService.runNotificationConnectivityProbeInternal(
                                     "proxy notification probe failed despite android validated vpn network",
                                 )
                             }
-                            throw (literalProbe.exceptionOrNull()
-                                ?: runtimeProxyProbe.exceptionOrNull()
-                                ?: IllegalStateException("runtime proxy probe failed"))
+                            val strictProbeError =
+                                literalProbe.exceptionOrNull()
+                                    ?: runtimeProxyProbe.exceptionOrNull()
+                                    ?: IllegalStateException("runtime proxy probe failed")
+                            throw strictProbeError
                         }
                         container.diagnosticsLogger.record(
                             "health",

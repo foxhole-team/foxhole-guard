@@ -815,6 +815,12 @@ class RuntimeConfigAssembler(
             put("type", "tor")
             put("tag", TOR_OVER_VPN_OUTBOUND_TAG)
             put("executable_path", paths.executablePath)
+            paths.torrcDefaultsFilePath?.let { defaultsPath ->
+                putJsonArray("extra_args") {
+                    add(JsonPrimitive("--defaults-torrc"))
+                    add(JsonPrimitive(defaultsPath))
+                }
+            }
             put("data_directory", paths.dataDirectory)
             putJsonObject("torrc") {
                 put("ClientOnly", "1")

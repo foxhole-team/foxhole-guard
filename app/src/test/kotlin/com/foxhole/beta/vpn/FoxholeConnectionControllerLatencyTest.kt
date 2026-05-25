@@ -155,6 +155,69 @@ class FoxholeConnectionControllerLatencyTest {
     }
 
     @Test
+    fun `validated ordinary tunnel latency prefers vpn bound public probes`() {
+        val snapshot =
+            ConnectionSnapshot(
+                state = ConnectionState.CONNECTED,
+                trafficMode = TrafficMode.TUNNEL,
+                profileId = 42L,
+            )
+
+        assertTrue(shouldUseRuntimeProxyForTunnelLatency(TrafficMode.TUNNEL, snapshot, Settings()))
+        assertTrue(
+            shouldPreferVpnBoundTunnelLatency(
+                settings = Settings(),
+                snapshot = snapshot,
+                androidValidatedVpnNetwork = true,
+            ),
+        )
+        assertEquals(
+            listOf(LatencyProbeMethod.ICMP, LatencyProbeMethod.HTTP, LatencyProbeMethod.TCP),
+            latencyProbeMethodOrder(
+                trafficMode = TrafficMode.TUNNEL,
+                configuredMethod = LatencyProbeMethod.ICMP,
+                useRuntimeProxyForTunnel = false,
+            ),
+        )
+    }
+
+    @Test
+    fun `unvalidated strict tunnel latency keeps runtime proxy path`() {
+        val snapshot =
+            ConnectionSnapshot(
+                state = ConnectionState.CONNECTED,
+                trafficMode = TrafficMode.TUNNEL,
+                profileId = 42L,
+            )
+
+        assertFalse(
+            shouldPreferVpnBoundTunnelLatency(
+                settings = Settings(),
+                snapshot = snapshot,
+                androidValidatedVpnNetwork = false,
+            ),
+        )
+    }
+
+    @Test
+    fun `standalone tor tunnel latency does not prefer vpn bound probes`() {
+        val snapshot =
+            ConnectionSnapshot(
+                state = ConnectionState.CONNECTED,
+                trafficMode = TrafficMode.TUNNEL,
+                profileId = FoxholeVpnService.TOR_ONLY_PROFILE_ID,
+            )
+
+        assertFalse(
+            shouldPreferVpnBoundTunnelLatency(
+                settings = Settings(),
+                snapshot = snapshot,
+                androidValidatedVpnNetwork = true,
+            ),
+        )
+    }
+
+    @Test
     fun `runtime proxy tunnel latency attempt is bounded before vpn fallback`() {
         assertEquals(2_000L, runtimeProxyTunnelLatencyCallTimeoutMs(8_000L))
         assertEquals(500L, runtimeProxyTunnelLatencyCallTimeoutMs(500L))

@@ -84,13 +84,10 @@
     <string name="home_network_profile_info_title">Статус соединения</string>
     <string name="home_network_unavailable">Данные недоступны</string>
     <string name="home_network_country_label">Страна:</string>
-    <string name="home_network_local_network">Локальная сеть</string>
-    <string name="home_network_wifi_provider">Wi-Fi</string>
-    <string name="home_network_cellular_provider">Сотовая сеть</string>
     <string name="home_network_city_label">Город:</string>
     <string name="home_network_ip_label">IP:</string>
     <string name="home_network_provider_label">Провайдер:</string>
-    <string name="home_network_server_ping_label">Пинг туннеля:</string>
+    <string name="home_network_server_ping_label">Пинг сервера:</string>
     <string name="home_network_dns_label">DNS:</string>
     <string name="home_network_transport_type_label">Тип:</string>
     <string name="home_network_connect_time_label">Время:</string>
@@ -442,8 +439,10 @@
     <string name="statistics_app_detail_all_destinations">Все сетевые адреса подключения</string>
     <string name="statistics_app_detail_city_unknown">Город неизвестен</string>
     <string name="statistics_app_detail_port">Порт %1$d</string>
-    <string name="statistics_app_detail_network_log_disabled">IP-адреса подключений, порты, страны и трафик по endpoint появятся здесь после включения сетевого журнала в Диагностике. Общая статистика приложений остаётся локальной, а журнал пишет очищенные сетевые метаданные для детальной отладки.</string>
+    <string name="statistics_app_detail_title">Траффик приложения</string>
+    <string name="statistics_app_detail_network_log_disabled">Для включения журнала подключений приложения включите журнал сетевой активности в Диагностике.</string>
     <string name="statistics_app_detail_enable_network_log_action">Включить сейчас</string>
+    <string name="statistics_app_detail_open_network_log_settings_action">Настройки журнала</string>
     <string name="statistics_app_detail_private_data_hidden">Приватные сетевые адреса скрыты. Отключите «Скрывать приватные данные» в Журналах, чтобы показать IP, порты, страны, города и объём трафика по подключениям.</string>
     <plurals name="statistics_app_detail_connection_count">
         <item quantity="one">%1$d раз</item>

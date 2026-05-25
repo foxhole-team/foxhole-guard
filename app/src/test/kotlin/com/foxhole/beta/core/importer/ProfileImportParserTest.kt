@@ -418,6 +418,10 @@ class ProfileImportParserTest {
         assertEquals("client-secret", outbound["password"]!!.jsonPrimitive.content)
         assertEquals("udp", outbound["network"]!!.jsonPrimitive.content)
         assertEquals("axn666.nl", tls["server_name"]!!.jsonPrimitive.content)
+        assertEquals(
+            listOf("lSALTN+AXtFYwzMwQjfVllH0PhdMi9XG5i5gCnUywUk="),
+            tls["certificate_public_key_sha256"]!!.jsonArray.map { it.jsonPrimitive.content },
+        )
         assertEquals(false, tls.containsKey("insecure"))
         assertEquals("salamander", obfs["type"]!!.jsonPrimitive.content)
         assertEquals("obfs-secret", obfs["password"]!!.jsonPrimitive.content)
@@ -1361,14 +1365,26 @@ class ProfileImportParserTest {
     fun `parses hysteria2 uri`() {
         val parsed =
             parser.parseUserInput(
-                "hy2://password@example.org:443?sni=edge.example.org&insecure=0#h2",
+                "hy2://password@example.org:443" +
+                    "?sni=edge.example.org&insecure=0&mport=8443-8445&hop_interval=30s" +
+                    "&pinSHA256=95:20:0B:4C:DF:80:5E:D1:58:C3:33:30:42:37:D5:96" +
+                    ":51:F4:3E:17:4C:8B:D5:C6:E6:2E:60:0A:75:32:C1:49#h2",
             )
 
         val root = json.parseToJsonElement(parsed.normalizedConfigJson!!).jsonObject
         val outbounds = root["outbounds"]!!.jsonArray
+        val outbound = outbounds.first().jsonObject
+        val tls = outbound["tls"]!!.jsonObject
 
         assertEquals(ProtocolHint.HYSTERIA2, parsed.protocolHint)
-        assertEquals("hysteria2", outbounds.first().jsonObject["type"]!!.jsonPrimitive.content)
+        assertEquals("hysteria2", outbound["type"]!!.jsonPrimitive.content)
+        assertEquals(null, outbound["server_port"])
+        assertEquals(listOf("8443:8445"), outbound["server_ports"]!!.jsonArray.map { it.jsonPrimitive.content })
+        assertEquals("30s", outbound["hop_interval"]!!.jsonPrimitive.content)
+        assertEquals(
+            listOf("lSALTN+AXtFYwzMwQjfVllH0PhdMi9XG5i5gCnUywUk="),
+            tls["certificate_public_key_sha256"]!!.jsonArray.map { it.jsonPrimitive.content },
+        )
     }
 
     @Test

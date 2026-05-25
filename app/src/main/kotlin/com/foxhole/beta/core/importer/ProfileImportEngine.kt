@@ -184,6 +184,7 @@ private inner class RawSingBoxJsonStrategy : UserInputImportStrategy {
     }
 }
 
+@Suppress("Indentation")
 private inner class Hysteria2YamlStrategy : UserInputImportStrategy {
     override val id = ProfileImportStrategyId.DIRECT_NODE_LINES
 
@@ -209,6 +210,7 @@ private inner class Hysteria2YamlStrategy : UserInputImportStrategy {
     }
 }
 
+@Suppress("Indentation", "ReturnCount")
 private inner class EmbeddedShareUriStrategy : UserInputImportStrategy {
     override val id = ProfileImportStrategyId.DIRECT_NODE_LINES
 

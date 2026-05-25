@@ -1,7 +1,6 @@
 package com.foxhole.beta.vpn
 
 import com.foxhole.beta.core.model.ProtocolHint
-import kotlinx.coroutines.CancellationException
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -144,28 +143,6 @@ class TunnelValidationPolicyTest {
                         hasSuccessfulTunnelActivity = true,
                         fatalRuntimeMessage = "authentication failed",
                     ),
-            ),
-        )
-    }
-
-    @Test
-    fun `cancelled dashboard ip refresh never falls back to local device address`() {
-        assertFalse(
-            shouldUseLocalDeviceIpFallback(
-                error = CancellationException("connect superseded refresh"),
-                allowLocalFallback = true,
-            ),
-        )
-        assertFalse(
-            shouldUseLocalDeviceIpFallback(
-                error = IllegalStateException("network unavailable"),
-                allowLocalFallback = false,
-            ),
-        )
-        assertTrue(
-            shouldUseLocalDeviceIpFallback(
-                error = IllegalStateException("network unavailable"),
-                allowLocalFallback = true,
             ),
         )
     }

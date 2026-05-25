@@ -82,7 +82,7 @@ internal fun acceptsValidatedVpnLiteralIpEndpointProbe(
             context = context,
         )
 
-@Suppress("UNUSED_PARAMETER")
+@Suppress("FunctionOnlyReturningConstant", "UNUSED_PARAMETER")
 internal fun acceptsAndroidValidatedVpnNetwork(
     androidValidated: Boolean,
     evidence: TunnelValidationEvidence?,

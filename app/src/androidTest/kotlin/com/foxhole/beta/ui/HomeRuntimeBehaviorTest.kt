@@ -94,20 +94,18 @@ class HomeRuntimeBehaviorTest {
             .around(composeRule)
 
     @Test
-    fun coldStartWhileDisconnectedShowsStartupIpSkeletonWithoutUnavailableState() {
+    fun coldStartWhileDisconnectedRefreshesIpInBackgroundWithoutUnavailableState() {
         scrollToNetworkBlock()
-        composeRule.waitUntil(timeoutMillis = 5_000) {
-            networkLoadingVisible() || networkPrimaryIpText()?.let { it != "-" } == true
-        }
-
-        assertTrue(
+        composeRule.waitUntil(timeoutMillis = 10_000) {
             app().container.diagnosticsLogger.entries.value.any {
                 it.tag == "ip" &&
-                    it.message.contains("mode=full") &&
-                    it.message.contains("showLoading=true") &&
+                    it.message.contains("reason=foreground") &&
+                    it.message.contains("mode=entry_quick") &&
+                    it.message.contains("showLoading=false") &&
                     it.message.contains("clearExistingIp=false")
-            },
-        )
+            }
+        }
+        composeRule.onAllNodesWithTag("home_network_loading").assertCountEquals(0)
         composeRule
             .onAllNodesWithText(
                 InstrumentationRegistry.getInstrumentation().targetContext.getString(R.string.home_network_unavailable),

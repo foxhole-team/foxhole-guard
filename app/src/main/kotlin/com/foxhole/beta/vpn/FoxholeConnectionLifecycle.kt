@@ -113,35 +113,40 @@ internal class FoxholeConnectionLifecycle(
     }
 
     private suspend fun disconnectStaleVpnBeforeConnectIfNeeded(): Boolean {
-        if (!hasActiveVpnNetwork()) {
-            return true
+        suspend fun waitForStaleVpnNetworkToClear(): Boolean {
+            val deadline = System.currentTimeMillis() + STALE_VPN_DISCONNECT_TIMEOUT_MS
+            while (hasActiveVpnNetwork() && System.currentTimeMillis() < deadline) {
+                delay(STALE_VPN_DISCONNECT_POLL_MS)
+            }
+            return !hasActiveVpnNetwork()
         }
-        diagnosticsLogger.record("connection", "stale vpn network found before connect; disconnecting")
-        FoxholeConnectionServiceContract.startForegroundService(
-            context = context,
-            mode = TrafficMode.TUNNEL,
-            action = FoxholeConnectionServiceContract.ACTION_DISCONNECT,
-            suppressLocalGuard = true,
-        )
-        val deadline = System.currentTimeMillis() + STALE_VPN_DISCONNECT_TIMEOUT_MS
-        while (hasActiveVpnNetwork() && System.currentTimeMillis() < deadline) {
-            delay(STALE_VPN_DISCONNECT_POLL_MS)
+
+        var vpnCleared = !hasActiveVpnNetwork()
+        if (!vpnCleared) {
+            diagnosticsLogger.record("connection", "stale vpn network found before connect; disconnecting")
+            FoxholeConnectionServiceContract.startForegroundService(
+                context = context,
+                mode = TrafficMode.TUNNEL,
+                action = FoxholeConnectionServiceContract.ACTION_DISCONNECT,
+                suppressLocalGuard = true,
+            )
+            vpnCleared = waitForStaleVpnNetworkToClear()
         }
-        if (!hasActiveVpnNetwork()) {
-            return true
+
+        if (!vpnCleared) {
+            diagnosticsLogger.record(
+                "connection",
+                "stale vpn network still active before connect; issuing fail-closed kill",
+            )
+            FoxholeConnectionServiceContract.startForegroundService(
+                context = context,
+                mode = TrafficMode.TUNNEL,
+                action = FoxholeConnectionServiceContract.ACTION_KILL,
+                suppressLocalGuard = true,
+            )
+            vpnCleared = waitForStaleVpnNetworkToClear()
         }
-        diagnosticsLogger.record("connection", "stale vpn network still active before connect; issuing fail-closed kill")
-        FoxholeConnectionServiceContract.startForegroundService(
-            context = context,
-            mode = TrafficMode.TUNNEL,
-            action = FoxholeConnectionServiceContract.ACTION_KILL,
-            suppressLocalGuard = true,
-        )
-        val killDeadline = System.currentTimeMillis() + STALE_VPN_DISCONNECT_TIMEOUT_MS
-        while (hasActiveVpnNetwork() && System.currentTimeMillis() < killDeadline) {
-            delay(STALE_VPN_DISCONNECT_POLL_MS)
-        }
-        return !hasActiveVpnNetwork()
+        return vpnCleared
     }
 
     fun disconnect(

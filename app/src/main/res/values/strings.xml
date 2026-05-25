@@ -83,13 +83,10 @@
     <string name="home_network_profile_info_title">Connection status</string>
     <string name="home_network_unavailable">Data unavailable</string>
     <string name="home_network_country_label">Country:</string>
-    <string name="home_network_local_network">Local network</string>
-    <string name="home_network_wifi_provider">Wi-Fi</string>
-    <string name="home_network_cellular_provider">Cellular</string>
     <string name="home_network_city_label">City:</string>
     <string name="home_network_ip_label">IP:</string>
     <string name="home_network_provider_label">Provider:</string>
-    <string name="home_network_server_ping_label">Tunnel ping:</string>
+    <string name="home_network_server_ping_label">Server ping:</string>
     <string name="home_network_dns_label">DNS:</string>
     <string name="home_network_transport_type_label">Type:</string>
     <string name="home_network_connect_time_label">Time:</string>
@@ -435,8 +432,10 @@
     <string name="statistics_app_detail_all_destinations">All connection addresses</string>
     <string name="statistics_app_detail_city_unknown">City unknown</string>
     <string name="statistics_app_detail_port">Port %1$d</string>
-    <string name="statistics_app_detail_network_log_disabled">Connection addresses, ports, countries, and endpoint traffic appear here after Network activity log is enabled in Diagnostics. App traffic totals stay local; the network log records sanitized connection metadata for detailed troubleshooting.</string>
+    <string name="statistics_app_detail_title">Application traffic</string>
+    <string name="statistics_app_detail_network_log_disabled">To enable the app connection journal, turn on Network activity log in Diagnostics.</string>
     <string name="statistics_app_detail_enable_network_log_action">Enable now</string>
+    <string name="statistics_app_detail_open_network_log_settings_action">Journal settings</string>
     <string name="statistics_app_detail_private_data_hidden">Private network addresses are hidden. Turn off Hide private data in Logs to show connection IPs, ports, countries, cities, and traffic volume.</string>
     <plurals name="statistics_app_detail_connection_count">
         <item quantity="one">%1$d time</item>

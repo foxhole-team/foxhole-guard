@@ -106,7 +106,7 @@ class HomeIpRefreshPolicyTest {
     }
 
     @Test
-    fun `dashboard refresh upgrades incomplete geo data to full fetch`() {
+    fun `foreground dashboard refresh upgrades incomplete geo data silently`() {
         val snapshot = ConnectionSnapshot(state = ConnectionState.IDLE)
         val ipOnly =
             IpInfo(
@@ -119,14 +119,14 @@ class HomeIpRefreshPolicyTest {
                 fetchedAt = 1_000L,
             )
 
-        assertTrue(
+        assertFalse(
             shouldUseFullDashboardIpRefresh(
                 reason = IpInfoRefreshReason.FOREGROUND,
                 snapshot = snapshot,
                 currentIpInfo = ipOnly,
             ),
         )
-        assertTrue(
+        assertFalse(
             shouldShowDashboardIpRefreshLoading(
                 reason = IpInfoRefreshReason.FOREGROUND,
                 snapshot = snapshot,

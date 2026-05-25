@@ -905,14 +905,14 @@ fun HomeScreen(
                                             verticalArrangement = Arrangement.spacedBy(2.dp),
                                         ) {
                                             val connectionMetricsAvailable = state.connection.state == ConnectionState.CONNECTED
-                                            val tunnelLatencyText =
+                                            val serverPingText =
                                                 when {
                                                     !connectionMetricsAvailable -> stringResource(R.string.smart_start_protocol_status_no_data)
-                                                    dashboardSelectedLatencyDown ->
-                                                        stringResource(R.string.latency_pill_down)
-                                                    dashboardSelectedLatencyMs != null ->
-                                                        latencyPillValueText(dashboardSelectedLatencyMs)
-                                                    dashboardSelectedLatencyUnavailable ->
+                                                    dashboardProtocolModel.selectedServerPingMs != null ->
+                                                        latencyPillValueText(
+                                                            dashboardProtocolModel.selectedServerPingMs,
+                                                        )
+                                                    dashboardProtocolModel.selectedServerPingUnavailable ->
                                                         stringResource(R.string.latency_pill_unavailable)
                                                     else ->
                                                         stringResource(R.string.smart_profile_metric_unavailable)
@@ -941,8 +941,8 @@ fun HomeScreen(
                                             HomeNetworkDetailLine(
                                                 icon = Icons.Outlined.Speed,
                                                 label = stringResource(R.string.home_network_server_ping_label),
-                                                value = tunnelLatencyText,
-                                                valueMonospace = connectionMetricsAvailable && dashboardSelectedLatencyMs != null,
+                                                value = serverPingText,
+                                                valueMonospace = connectionMetricsAvailable && dashboardProtocolModel.selectedServerPingMs != null,
                                             )
                                             HomeNetworkSubtleDivider()
                                             HomeNetworkDetailLine(

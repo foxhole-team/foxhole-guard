@@ -46,6 +46,7 @@ fun StatisticsScreen(
     onStatisticsMetricEnabledChanged: (StatisticsMetric, Boolean) -> Unit,
     onAppTrafficStatsEnabledChanged: (Boolean) -> Unit,
     onNetworkActivityLoggingChanged: (Boolean) -> Unit,
+    onOpenNetworkActivityLogSettings: () -> Unit,
     onFirewallEnabledChanged: (Boolean) -> Unit,
     onClearUsage: () -> Unit,
 ) {
@@ -278,7 +279,7 @@ fun StatisticsScreen(
     if (selectedAppRow != null) {
         AlertDialog(
             onDismissRequest = { selectedApp = null },
-            title = { Text(selectedAppRow.label) },
+            title = { Text(stringResource(R.string.statistics_app_detail_title)) },
             text = {
                 AppTrafficDetail(
                     row = selectedAppRow,
@@ -287,7 +288,7 @@ fun StatisticsScreen(
                     ipInfo = state.ipInfo,
                     networkActivityLoggingEnabled = state.settings.expert.networkActivityLogging,
                     showPrivateNetworkDetails = !state.settings.expert.sanitizeNetworkActivityPrivateData,
-                    onEnableNetworkActivityLogging = { onNetworkActivityLoggingChanged(true) },
+                    onOpenNetworkActivityLogSettings = onOpenNetworkActivityLogSettings,
                 )
             },
             confirmButton = {},

@@ -762,6 +762,7 @@ fun FoxholeApp(
                         onStatisticsMetricEnabledChanged = viewModel::onStatisticsMetricEnabledChanged,
                         onAppTrafficStatsEnabledChanged = viewModel::onAppTrafficStatsEnabledChanged,
                         onNetworkActivityLoggingChanged = viewModel::onNetworkActivityLoggingChanged,
+                        onOpenNetworkActivityLogSettings = { navController.navigate(AppRoute.DIAGNOSTICS) },
                         onFirewallEnabledChanged = viewModel::onFirewallEnabledChanged,
                         onClearUsage = viewModel::resetUsageTracking,
                     )

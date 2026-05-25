@@ -181,7 +181,7 @@ class HomeIpLoadingPolicyTest {
     }
 
     @Test
-    fun `local guard firewall shows network skeleton until current public ip resolves`() {
+    fun `local guard firewall stays dashed until explicit public ip refresh resolves`() {
         val idleModel =
             resolveHomeDashboardNetworkModel(
                 state = HomeRouteUiState(
@@ -199,8 +199,8 @@ class HomeIpLoadingPolicyTest {
                 deviceInternetAvailable = true,
             )
 
-        assertTrue(idleModel.showLoading)
-        assertTrue(idleModel.showIpInfoLoading)
+        assertFalse(idleModel.showLoading)
+        assertFalse(idleModel.showIpInfoLoading)
         assertFalse(idleModel.showConnectionDetailsLoading)
 
         val model =
@@ -316,8 +316,8 @@ class HomeIpLoadingPolicyTest {
     }
 
     @Test
-    fun `keeps pending network loading after app loaded while internet exists and ip is empty`() {
-        assertTrue(
+    fun `does not keep pending network loading after app loaded while internet exists and ip is empty`() {
+        assertFalse(
             shouldShowPendingNetworkLoading(
                 visibleIpInfo = null,
                 explicitLoading = false,

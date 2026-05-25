@@ -43,22 +43,45 @@ internal class ConnectionTelemetryProbe(
                 snapshot = currentSnapshot,
                 settings = settings,
             )
+        val vpnNetwork = if (tunnelConnected) currentVpnNetwork() else null
+        val preferVpnBoundLatency =
+            vpnNetwork != null &&
+                shouldPreferVpnBoundTunnelLatency(
+                    settings = settings,
+                    snapshot = currentSnapshot,
+                    androidValidatedVpnNetwork = isVpnNetworkValidated(vpnNetwork),
+                )
         val proxyAccess = latencyProxyAccess(settings, trafficMode, useRuntimeProxyForTunnel)
-        return if (tunnelConnected && useRuntimeProxyForTunnel) {
-            measureRuntimeProxyTunnelLatencyWithFallback(
-                timeoutMs = timeoutMs,
-                settings = settings,
-                currentSnapshot = currentSnapshot,
-                proxyAccess = proxyAccess,
-            )
-        } else {
-            measureLatencyWithConfiguredMethods(
-                timeoutMs = timeoutMs,
-                settings = settings,
-                trafficMode = trafficMode,
-                tunnelConnected = tunnelConnected,
-                proxyAccess = proxyAccess,
-            )
+        return when {
+            tunnelConnected && preferVpnBoundLatency -> {
+                val methods =
+                    latencyProbeMethodOrder(
+                        trafficMode = TrafficMode.TUNNEL,
+                        configuredMethod = settings.connection.latencyProbeMethod,
+                        useRuntimeProxyForTunnel = false,
+                    )
+                measureVpnBoundLatencyMethods(
+                    timeoutMs = timeoutMs,
+                    vpnNetwork = checkNotNull(vpnNetwork),
+                    methods = methods,
+                    attempts = LatencyProbeAttempts(),
+                )
+            }
+            tunnelConnected && useRuntimeProxyForTunnel ->
+                measureRuntimeProxyTunnelLatencyWithFallback(
+                    timeoutMs = timeoutMs,
+                    settings = settings,
+                    currentSnapshot = currentSnapshot,
+                    proxyAccess = proxyAccess,
+                )
+            else ->
+                measureLatencyWithConfiguredMethods(
+                    timeoutMs = timeoutMs,
+                    settings = settings,
+                    trafficMode = trafficMode,
+                    tunnelConnected = tunnelConnected,
+                    proxyAccess = proxyAccess,
+                )
         }
     }
 
@@ -389,6 +412,15 @@ internal fun shouldUseRuntimeProxyForTunnelLatency(
     trafficMode == TrafficMode.TUNNEL &&
         snapshot.state in ACTIVE_CONNECTION_STATES &&
         settings.requiresStrictRuntimeProxyIpRefresh(snapshot)
+
+internal fun shouldPreferVpnBoundTunnelLatency(
+    settings: Settings,
+    snapshot: ConnectionSnapshot,
+    androidValidatedVpnNetwork: Boolean,
+): Boolean =
+    snapshot.trafficMode == TrafficMode.TUNNEL &&
+        snapshot.state in ACTIVE_CONNECTION_STATES &&
+        settings.shouldPreferVpnBoundIpRefresh(snapshot, androidValidatedVpnNetwork)
 
 internal fun runtimeProxyTunnelLatencyCallTimeoutMs(timeoutMs: Long): Long =
     timeoutMs

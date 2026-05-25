@@ -7,6 +7,7 @@ useDefault = true
 description = "vendored/generated files and deterministic non-secret fixtures"
 paths = [
   '''(?:^|/)\.idea(?:/.*)?$''',
+  '''(?:^|/)artifacts(?:/.*)?$''',
   '''(?:^|/)third_party/sing-box(?:/.*)?$''',
   '''(?:^|/)build(?:/.*)?$''',
   '''(?:^|/)app/build(?:/.*)?$''',

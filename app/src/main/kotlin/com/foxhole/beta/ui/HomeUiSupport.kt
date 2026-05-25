@@ -178,7 +178,10 @@ internal fun shouldShowPendingNetworkLoading(
         visibleIpInfo != null -> false
         deviceInternetAvailable == false -> false
         explicitLoading -> true
-        else -> true
+        connectionState in setOf(ConnectionState.CONNECTING, ConnectionState.RECONNECTING) -> true
+        autoConnectRunning -> true
+        !appLoaded -> true
+        else -> false
     }
 
 internal fun shouldShowDashboardNetworkLoading(
@@ -306,7 +309,11 @@ internal fun shouldUseFullDashboardIpRefresh(
     currentIpInfo: IpInfo?,
 ): Boolean {
     if (currentIpInfo == null || !currentIpInfo.hasDashboardLocationDetails()) {
-        return true
+        return reason in setOf(
+            IpInfoRefreshReason.POST_CONNECT,
+            IpInfoRefreshReason.RESTORED_VPN,
+            IpInfoRefreshReason.TOR_ROUTE,
+        )
     }
     return reason in setOf(
         IpInfoRefreshReason.POST_CONNECT,
@@ -329,8 +336,8 @@ internal fun shouldShowDashboardIpRefreshLoading(
         -> shouldUseFullDashboardIpRefresh(reason, snapshot, currentIpInfo)
         IpInfoRefreshReason.FOREGROUND,
         IpInfoRefreshReason.POST_UPDATE,
-        IpInfoRefreshReason.TOR_ROUTE,
-        -> currentIpInfo == null || !currentIpInfo.hasDashboardLocationDetails()
+        -> false
+        IpInfoRefreshReason.TOR_ROUTE -> currentIpInfo == null || !currentIpInfo.hasDashboardLocationDetails()
     }
 
 internal fun IpInfo.hasDashboardLocationDetails(): Boolean =
@@ -617,25 +624,12 @@ private fun HomeRouteUiState.shouldShowHomeNetworkIpInfoLoading(
 ): Boolean {
     val activeRouteNeedsIp =
         dashboardIpInfo == null &&
-            (
-                routeTransitionRunning ||
-                    hasActiveDashboardRouteRuntime()
-                )
-    val failedRouteNeedsDeviceIp =
-        dashboardIpInfo == null &&
-            hasFailedDashboardRoute() &&
-            deviceInternetAvailable != false
+            routeTransitionRunning
     val manualRefreshNeedsSkeleton =
         ipInfoLoading &&
             (deviceInternetAvailable != false || hasDashboardRouteProfile())
     val missingIpCanShowSkeleton =
         activeRouteNeedsIp ||
-            failedRouteNeedsDeviceIp ||
-            shouldShowLocalGuardNetworkLoading(
-                deviceInternetAvailable = deviceInternetAvailable,
-                routeTransitionRunning = routeTransitionRunning,
-                explicitIpInfoLoading = ipInfoLoading,
-            ) ||
             shouldShowDashboardNetworkLoading(
                 visibleIpInfo = dashboardIpInfo,
                 explicitLoading = ipInfoLoading,
@@ -647,16 +641,6 @@ private fun HomeRouteUiState.shouldShowHomeNetworkIpInfoLoading(
     val missingIpNeedsSkeleton = dashboardIpInfo == null && missingIpCanShowSkeleton
     return manualRefreshNeedsSkeleton || missingIpNeedsSkeleton
 }
-
-private fun HomeRouteUiState.shouldShowLocalGuardNetworkLoading(
-    deviceInternetAvailable: Boolean?,
-    routeTransitionRunning: Boolean,
-    explicitIpInfoLoading: Boolean,
-): Boolean =
-    connection.profileId == FoxholeVpnService.LOCAL_GUARD_PROFILE_ID &&
-        settings.localGuardModeOrNull() != null &&
-        deviceInternetAvailable != false &&
-        (explicitIpInfoLoading || routeTransitionRunning)
 
 private fun HomeRouteUiState.shouldShowHomeNetworkConnectionDetailsLoading(
     showConnectionStatus: Boolean,

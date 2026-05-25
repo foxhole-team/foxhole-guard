@@ -17,6 +17,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
+import java.util.Base64
 
 internal open class ProfileImportNodeSupport(
     json: Json,
@@ -354,6 +355,7 @@ internal fun parseVmessUri(
     )
 }
 
+@Suppress("CyclomaticComplexMethod")
 internal fun parseHysteria2Uri(
     value: String,
     allowPrivateOutboundHosts: Boolean,
@@ -364,13 +366,21 @@ internal fun parseHysteria2Uri(
     val host = uri.host ?: error("missing host")
     validateOutboundHost(host, allowPrivateOutboundHosts)
     val port = uri.port.takeIf { it > 0 } ?: 443
+    val serverPorts = parseHysteriaServerPorts(query["server_ports"] ?: query["mport"])
     val displayName = displayNameFromUri(uri, host)
     val outbound =
         buildJsonObject {
             put("type", "hysteria2")
             put("tag", tagFor(displayName))
             put("server", host)
-            put("server_port", port)
+            if (serverPorts.isEmpty()) {
+                put("server_port", port)
+            } else {
+                put("server_ports", buildStringArray(serverPorts))
+            }
+            query
+                .firstNonBlank("hop_interval", "hopinterval", "hop-interval")
+                ?.let { put("hop_interval", it) }
             put("password", uri.userInfo ?: error("missing password"))
             putJsonObject("tls") {
                 put("enabled", true)
@@ -386,6 +396,9 @@ internal fun parseHysteria2Uri(
                         buildStringArray(alpn.split(',').map(String::trim).filter(String::isNotBlank)),
                     )
                 }
+                parseHysteriaCertificatePins(query.firstNonBlank("pinsha256", "pin-sha256"))
+                    .takeIf(List<String>::isNotEmpty)
+                    ?.let { pins -> put("certificate_public_key_sha256", buildStringArray(pins)) }
             }
             buildHysteria2Obfs(query["obfs"], query["obfs-password"])?.let { put("obfs", it) }
             query["upmbps"]?.toIntOrNull()?.let { put("up_mbps", it) }
@@ -399,6 +412,7 @@ internal fun parseHysteria2Uri(
     )
 }
 
+@Suppress("CyclomaticComplexMethod", "ReturnCount")
 internal fun parseHysteria2YamlClientConfig(
     raw: String,
     allowPrivateOutboundHosts: Boolean,
@@ -417,6 +431,11 @@ internal fun parseHysteria2YamlClientConfig(
     val host = endpoint.host
     validateOutboundHost(host, allowPrivateOutboundHosts)
     val port = endpoint.port ?: 443
+    val serverPorts =
+        parseHysteriaServerPorts(
+            fields.firstNonBlank("server_ports", "serverports", "ports", "mport")
+                ?: serverValue.substringAfter(',', missingDelimiterValue = ""),
+        )
     val displayName = fields["name"]?.takeIf(String::isNotBlank) ?: host
     val tlsSni = fields["tls.sni"]?.takeIf(String::isNotBlank) ?: host
     val insecureTls = fields["tls.insecure"]?.toFlexibleBoolean() ?: false
@@ -426,15 +445,29 @@ internal fun parseHysteria2YamlClientConfig(
             put("type", "hysteria2")
             put("tag", tagFor(displayName))
             put("server", host)
-            put("server_port", port)
+            if (serverPorts.isEmpty()) {
+                put("server_port", port)
+            } else {
+                put("server_ports", buildStringArray(serverPorts))
+            }
+            fields
+                .firstNonBlank("hop_interval", "hopinterval", "hop-interval")
+                ?.let { put("hop_interval", it) }
             put("password", password)
-            fields["transport.type"]?.trim()?.lowercase()?.takeIf { it in setOf("tcp", "udp") }?.let { put("network", it) }
+            fields["transport.type"]
+                ?.trim()
+                ?.lowercase()
+                ?.takeIf { it in setOf("tcp", "udp") }
+                ?.let { put("network", it) }
             putJsonObject("tls") {
                 put("enabled", true)
                 put("server_name", tlsSni)
                 if (insecureTls) {
                     put("insecure", true)
                 }
+                parseHysteriaCertificatePins(fields.firstNonBlank("tls.pinsha256", "tls.pin-sha256"))
+                    .takeIf(List<String>::isNotEmpty)
+                    ?.let { pins -> put("certificate_public_key_sha256", buildStringArray(pins)) }
             }
             buildHysteria2Obfs(
                 type = fields["obfs.type"],
@@ -462,6 +495,53 @@ private fun buildHysteria2Obfs(
     return buildJsonObject {
         put("type", normalizedType ?: "salamander")
         normalizedPassword?.let { put("password", it) }
+    }
+}
+
+private fun Map<String, String>.firstNonBlank(vararg keys: String): String? =
+    keys.firstNotNullOfOrNull { key -> this[key]?.trim()?.takeIf(String::isNotBlank) }
+
+private fun parseHysteriaServerPorts(value: String?): List<String> =
+    value
+        ?.split(',', ';', ' ', '\n', '\t')
+        .orEmpty()
+        .mapNotNull { item ->
+            val normalized = item.trim().replace('-', ':').takeIf(String::isNotBlank) ?: return@mapNotNull null
+            normalized.takeIf(::isHysteriaServerPortRange)
+        }
+        .distinct()
+
+private fun isHysteriaServerPortRange(candidate: String): Boolean =
+    candidate.matches(hysteriaServerPortsPattern) &&
+        candidate
+            .split(':')
+            .all { part ->
+                part
+                    .toIntOrNull()
+                    ?.let { port -> port in 1..65535 } == true
+            }
+
+private fun parseHysteriaCertificatePins(value: String?): List<String> =
+    value
+        ?.split(',', ';', ' ', '\n', '\t')
+        .orEmpty()
+        .mapNotNull { item -> normalizeHysteriaCertificatePin(item) }
+        .distinct()
+
+private fun normalizeHysteriaCertificatePin(value: String): String? {
+    val trimmed = value.trim()
+    if (trimmed.isBlank()) {
+        return null
+    }
+    val hex = trimmed.replace(":", "").replace("-", "")
+    return if (hex.length == 64 && hex.all { char -> char.isDigit() || char.lowercaseChar() in 'a'..'f' }) {
+        val bytes =
+            hex.chunked(2)
+                .map { octet -> octet.toInt(16).toByte() }
+                .toByteArray()
+        Base64.getEncoder().encodeToString(bytes)
+    } else {
+        trimmed
     }
 }
 
@@ -502,7 +582,7 @@ private fun String.stripYamlComment(): String {
             '\'' -> if (!inDoubleQuote) inSingleQuote = !inSingleQuote
             '"' -> if (!inSingleQuote) inDoubleQuote = !inDoubleQuote
             '#' -> {
-                if (!inSingleQuote && !inDoubleQuote && (index == 0 || this[index - 1].isWhitespace())) {
+                if (isYamlCommentStart(index, inSingleQuote, inDoubleQuote)) {
                     return substring(0, index)
                 }
             }
@@ -511,11 +591,25 @@ private fun String.stripYamlComment(): String {
     return this
 }
 
+private fun String.isYamlCommentStart(
+    index: Int,
+    inSingleQuote: Boolean,
+    inDoubleQuote: Boolean,
+): Boolean =
+    !inSingleQuote &&
+        !inDoubleQuote &&
+        (
+            index == 0 ||
+                this[index - 1].isWhitespace()
+            )
+
 private fun String.unquoteYamlScalar(): String {
     val trimmed = trim()
     return when {
-        trimmed.length >= 2 && trimmed.first() == '"' && trimmed.last() == '"' -> trimmed.substring(1, trimmed.lastIndex)
-        trimmed.length >= 2 && trimmed.first() == '\'' && trimmed.last() == '\'' -> trimmed.substring(1, trimmed.lastIndex)
+        trimmed.length >= 2 && trimmed.first() == '"' && trimmed.last() == '"' ->
+            trimmed.substring(1, trimmed.lastIndex)
+        trimmed.length >= 2 && trimmed.first() == '\'' && trimmed.last() == '\'' ->
+            trimmed.substring(1, trimmed.lastIndex)
         else -> trimmed
     }
 }
@@ -523,18 +617,27 @@ private fun String.unquoteYamlScalar(): String {
 private fun parseHysteriaBandwidthMbps(value: String?): Int? {
     val trimmed = value?.trim()?.lowercase()?.takeIf(String::isNotBlank) ?: return null
     val match = Regex("""^(\d+(?:\.\d+)?)\s*([kmgt]?)(?:bps|b|bit/s|bits/s)?$""").matchEntire(trimmed)
-        ?: return trimmed.toIntOrNull()
-    val amount = match.groupValues[1].toDoubleOrNull() ?: return null
-    val multiplier =
-        when (match.groupValues[2]) {
-            "k" -> 0.001
-            "m", "" -> 1.0
-            "g" -> 1_000.0
-            "t" -> 1_000_000.0
-            else -> return null
+    return if (match == null) {
+        trimmed.toIntOrNull()
+    } else {
+        val amount = match.groupValues[1].toDoubleOrNull()
+        val multiplier =
+            when (match.groupValues[2]) {
+                "k" -> 0.001
+                "m", "" -> 1.0
+                "g" -> 1_000.0
+                "t" -> 1_000_000.0
+                else -> null
+            }
+        if (amount != null && multiplier != null) {
+            (amount * multiplier).toInt().takeIf { it > 0 }
+        } else {
+            null
         }
-    return (amount * multiplier).toInt().takeIf { it > 0 }
+    }
 }
+
+private val hysteriaServerPortsPattern = Regex("""\d{1,5}(:\d{1,5})?""")
 
 internal fun parseWireGuardConfig(
     raw: String,

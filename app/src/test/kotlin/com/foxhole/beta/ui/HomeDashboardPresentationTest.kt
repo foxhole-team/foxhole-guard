@@ -807,7 +807,7 @@ class HomeDashboardPresentationTest {
     }
 
     @Test
-    fun `network model keeps skeleton for connected tunnel until route ip resolves`() {
+    fun `network model shows dashes for connected tunnel when route ip is missing without active refresh`() {
         val model =
             resolveHomeDashboardNetworkModel(
                 state =
@@ -823,11 +823,11 @@ class HomeDashboardPresentationTest {
                     ),
                 visibleIpInfo = null,
                 deviceInternetAvailable = true,
-            )
+        )
 
         assertTrue(model.showConnectionStatus)
-        assertTrue(model.showLoading)
-        assertTrue(model.showIpInfoLoading)
+        assertFalse(model.showLoading)
+        assertFalse(model.showIpInfoLoading)
         assertFalse(model.showConnectionDetailsLoading)
     }
 
@@ -861,8 +861,8 @@ class HomeDashboardPresentationTest {
 
         assertEquals(null, model.visibleIpInfo)
         assertTrue(model.showConnectionStatus)
-        assertTrue(model.showLoading)
-        assertTrue(model.showIpInfoLoading)
+        assertFalse(model.showLoading)
+        assertFalse(model.showIpInfoLoading)
     }
 
     @Test
@@ -955,11 +955,12 @@ class HomeDashboardPresentationTest {
 
         assertEquals(null, model.visibleIpInfo)
         assertFalse(model.showConnectionStatus)
-        assertTrue(model.showIpInfoLoading)
+        assertFalse(model.showLoading)
+        assertFalse(model.showIpInfoLoading)
     }
 
     @Test
-    fun `network model shows dashes instead of skeleton only when internet is offline`() {
+    fun `network model shows dashes instead of skeleton when idle ip is missing`() {
         val model =
             resolveHomeDashboardNetworkModel(
                 state =
