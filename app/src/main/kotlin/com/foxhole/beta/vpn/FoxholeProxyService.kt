@@ -39,7 +39,6 @@ import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.util.concurrent.atomic.AtomicLong
 
 @Suppress("TooGenericExceptionCaught")
 private suspend inline fun <T> runCatchingUnlessCancelled(crossinline block: suspend () -> T): Result<T> =
@@ -77,14 +76,14 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
                         ?: NetworkActivityContext()
                 },
             ).also { runtimeInstance = it }
-    private var commandActorInstance: RuntimeCommandActor? = null
-    private val commandActor: RuntimeCommandActor
+    private var runtimeSupervisorInstance: RuntimeSupervisor? = null
+    private val runtimeSupervisor: RuntimeSupervisor
         get() =
-            commandActorInstance ?: RuntimeCommandActor(
+            runtimeSupervisorInstance ?: RuntimeSupervisor(
                 scope = scope,
                 diagnosticsLogger = container.diagnosticsLogger,
                 emergencyKill = { reason -> runtime.forceKill(reason) },
-            ).also { commandActorInstance = it }
+            ).also { runtimeSupervisorInstance = it }
     private val runtimeWakeLock by lazy {
         RuntimeWakeLock(
             context = applicationContext,
@@ -108,7 +107,6 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
     private var lastDefaultNetworkSummary: String? = null
     private var autoReconnectJob: Job? = null
     private var autoReconnectAttempts = 0
-    private val runtimeTransitionGeneration = AtomicLong(0L)
 
     private val defaultNetworkCallback =
         object : ConnectivityManager.NetworkCallback() {
@@ -182,7 +180,7 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
         stopGeoRefresh()
         stopNotificationHealthMonitoring()
         cancelScheduledAutoReconnect(resetAttempts = true)
-        commandActorInstance?.close()
+        runtimeSupervisorInstance?.close()
         runtimeInstance?.let { runtime ->
             stopRuntimeAfterServiceDestroy(
                 runtime = runtime,
@@ -233,7 +231,7 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
             stopService(commandStartId)
             return
         }
-        runtimeTransitionGeneration.incrementAndGet()
+        runtimeSupervisor.beginTransition("proxy_connect")
         FoxholeConnectionServiceContract.stopInactiveServices(context = this, activeMode = trafficMode)
         val session =
             runCatching { container.profileRepository.getSession(profileId, protocolOptionIdOverride) }
@@ -318,7 +316,7 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
         commandStartId: Int? = null,
         preserveSmartStartAnalysis: Boolean = false,
     ) {
-        runtimeTransitionGeneration.incrementAndGet()
+        runtimeSupervisor.beginTransition(if (message == null) "proxy_disconnect" else "proxy_disconnect_error")
         val session = activeSession
         val previousSnapshot = FoxholeVpnRuntimeBridge.snapshot.value
         if (
@@ -406,8 +404,8 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
         RuntimeHealthMetrics.recordResourceSnapshot(
             owner = "proxy",
             event = event,
-            runtimeGeneration = runtimeTransitionGeneration.get(),
-            commandQueue = commandActorInstance?.queueSnapshot() ?: RuntimeCommandQueueSnapshot.EMPTY,
+            runtimeGeneration = runtimeSupervisorInstance?.currentGeneration() ?: 0L,
+            commandQueue = runtimeSupervisorInstance?.queueSnapshot() ?: RuntimeCommandQueueSnapshot.EMPTY,
             nativeSnapshot = runtimeInstance?.nativeSnapshot() ?: NativeRuntimeSnapshot.NONE,
             activeNetworkCallbacks = activeNetworkCallbackCount(),
             diagnosticsLogger = container.diagnosticsLogger,
@@ -548,7 +546,7 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
         reason: String,
         block: suspend () -> Unit,
     ) {
-        commandActor.launch(RuntimeCommandPriority.NORMAL, reason = reason, block = block)
+        runtimeSupervisor.launch(RuntimeCommandPriority.NORMAL, reason = reason, block = block)
     }
 
     private fun launchPriorityCommand(
@@ -556,7 +554,7 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
         reason: String,
         block: suspend () -> Unit,
     ) {
-        commandActor.launch(priority, reason = reason, block = block)
+        runtimeSupervisor.launch(priority, reason = reason, block = block)
     }
 
     private fun scheduleAutoReconnect(reason: String) {

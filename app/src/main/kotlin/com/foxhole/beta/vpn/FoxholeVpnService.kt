@@ -57,7 +57,6 @@ import java.net.DatagramSocket
 import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.net.Socket
-import java.util.concurrent.atomic.AtomicLong
 
 class FoxholeVpnService : VpnService(), RuntimeServiceHost {
     internal val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -101,14 +100,14 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
                         ?: NetworkActivityContext()
                 },
             ).also { runtimeInstance = it }
-    private var commandActorInstance: RuntimeCommandActor? = null
-    internal val commandActor: RuntimeCommandActor
+    private var runtimeSupervisorInstance: RuntimeSupervisor? = null
+    internal val runtimeSupervisor: RuntimeSupervisor
         get() =
-            commandActorInstance ?: RuntimeCommandActor(
+            runtimeSupervisorInstance ?: RuntimeSupervisor(
                 scope = scope,
                 diagnosticsLogger = container.diagnosticsLogger,
                 emergencyKill = { reason -> runtime.forceKill(reason) },
-            ).also { commandActorInstance = it }
+            ).also { runtimeSupervisorInstance = it }
     internal val trafficSampler = TrafficStatsSampler()
     internal val anomalyTrafficAggregator = TrafficWindowAggregator()
     internal val anomalyNetworkTypeProvider by lazy { AndroidNetworkTypeProvider(applicationContext) }
@@ -142,7 +141,6 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
     internal var activeVpnNetworkHandle: Long? = null
     internal val ignoredVpnNetworkLossHandles = mutableSetOf<Long>()
     internal var runtimeNetworkActivityLoggingSuspended = false
-    internal val runtimeTransitionGeneration = AtomicLong(0L)
 
     internal val networkCallback =
         object : ConnectivityManager.NetworkCallback() {
@@ -337,7 +335,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         cancelScheduledAutoReconnect(resetAttempts = true)
         validationJob?.cancel()
         validationJob = null
-        commandActorInstance?.close()
+        runtimeSupervisorInstance?.close()
         runtimeInstance?.let { runtime ->
             stopRuntimeAfterServiceDestroy(
                 runtime = runtime,
@@ -424,8 +422,8 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         RuntimeHealthMetrics.recordResourceSnapshot(
             owner = "vpn",
             event = event,
-            runtimeGeneration = runtimeTransitionGeneration.get(),
-            commandQueue = commandActorInstance?.queueSnapshot() ?: RuntimeCommandQueueSnapshot.EMPTY,
+            runtimeGeneration = runtimeSupervisorInstance?.currentGeneration() ?: 0L,
+            commandQueue = runtimeSupervisorInstance?.queueSnapshot() ?: RuntimeCommandQueueSnapshot.EMPTY,
             nativeSnapshot = runtimeInstance?.nativeSnapshot() ?: NativeRuntimeSnapshot.NONE,
             activeNetworkCallbacks = activeNetworkCallbackCount(),
             diagnosticsLogger = container.diagnosticsLogger,
@@ -621,33 +619,14 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
     }
 
     private fun beginRuntimeTransition(reason: String): Long {
-        val generation = runtimeTransitionGeneration.incrementAndGet()
-        container.diagnosticsLogger.recordStructured(
-            "runtime",
-            "runtime transition generation advanced",
-            "generation=$generation",
-            "reason=$reason",
-        )
-        return generation
+        return runtimeSupervisor.beginTransition(reason)
     }
 
     private fun isCurrentRuntimeTransition(
         generation: Long,
         owner: String,
-    ): Boolean {
-        val current = runtimeTransitionGeneration.get()
-        if (generation == current) {
-            return true
-        }
-        container.diagnosticsLogger.recordStructured(
-            "runtime",
-            "stale runtime transition ignored",
-            "owner=$owner",
-            "generation=$generation",
-            "current=$current",
-        )
-        return false
-    }
+    ): Boolean =
+        runtimeSupervisor.isCurrentTransition(generation = generation, owner = owner)
 
     private fun requestPostHandoffRuntimeNetworkReset(previousVpnNetworkHandle: Long?) {
         if (previousVpnNetworkHandle == null) {
@@ -1328,7 +1307,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         reason: String,
         block: suspend () -> Unit,
     ) {
-        commandActor.launch(RuntimeCommandPriority.NORMAL, reason = reason, block = block)
+        runtimeSupervisor.launch(RuntimeCommandPriority.NORMAL, reason = reason, block = block)
     }
 
     internal fun launchPriorityCommand(
@@ -1336,7 +1315,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         reason: String,
         block: suspend () -> Unit,
     ) {
-        commandActor.launch(priority, reason = reason, block = block)
+        runtimeSupervisor.launch(priority, reason = reason, block = block)
     }
 
     internal fun stopService(commandStartId: Int?) {
