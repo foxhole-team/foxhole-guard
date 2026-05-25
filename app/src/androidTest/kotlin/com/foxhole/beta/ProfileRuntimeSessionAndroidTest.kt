@@ -15,6 +15,7 @@ import com.foxhole.beta.core.model.PrivacyRouteMode
 import com.foxhole.beta.core.model.PrivacyRouteScope
 import com.foxhole.beta.core.model.ProtocolHint
 import com.foxhole.beta.core.model.Settings
+import com.foxhole.beta.core.model.StatisticsMetric
 import com.foxhole.beta.core.model.TrafficMode
 import com.foxhole.beta.core.model.TunStack
 import com.foxhole.beta.vpn.FoxholeConnectionServiceContract
@@ -1144,6 +1145,7 @@ class ProfileRuntimeSessionAndroidTest {
             updateAllowPrivateOutboundHosts(false)
             updateStrictRoute(true)
         }
+        disableLocalGuardSettings(app)
     }
 
     private suspend fun baselineRuntimeSettings(app: FoxholeApplication) {
@@ -1160,6 +1162,25 @@ class ProfileRuntimeSessionAndroidTest {
             updateAllowPrivateOutboundHosts(false)
             updateStrictRoute(true)
             updatePreferIpv6(false)
+        }
+        disableLocalGuardSettings(app)
+    }
+
+    private suspend fun disableLocalGuardSettings(app: FoxholeApplication) {
+        with(app.container.settingsRepository) {
+            updateFirewallEnabled(false)
+            updateTrafficMapEnabled(false)
+            updateStatisticsEnabled(false)
+            updateStatisticsMetricEnabled(StatisticsMetric.COUNTRY_TRAFFIC, false)
+            updateStatisticsMetricEnabled(StatisticsMetric.ANOMALIES, false)
+            updateAnomalyEnabled(false)
+            updateAnalyzeDestinationCountries(false)
+            updateNetworkActivityLogging(false)
+            updateNetworkActivityPersistentLogging(false)
+            updateSystemDnsProtectionEnabled(false)
+            updateBlockedPackages(emptyList())
+            updateBlockedPackagesEnabled(false)
+            updateBlockAppsAlways(false)
         }
     }
 
