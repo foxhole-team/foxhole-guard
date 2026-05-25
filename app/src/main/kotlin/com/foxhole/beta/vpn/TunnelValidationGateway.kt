@@ -402,14 +402,14 @@ internal class TunnelValidationGateway(
         return if (preferIpv4Validation) {
             ipInfoRepository.fetchIpv4(
                 endpoint = endpoint,
-                callTimeoutMs = DASHBOARD_IP_REFRESH_CALL_TIMEOUT_MS,
+                callTimeoutMs = ACTIVE_TUNNEL_RUNTIME_PROXY_IP_REFRESH_CALL_TIMEOUT_MS,
                 proxy = proxy,
                 resolverNetwork = resolverNetwork,
             ) ?: error("runtime proxy ipv4 refresh failed")
         } else {
             ipInfoRepository.fetch(
                 endpoint = endpoint,
-                callTimeoutMs = DASHBOARD_IP_REFRESH_CALL_TIMEOUT_MS,
+                callTimeoutMs = ACTIVE_TUNNEL_RUNTIME_PROXY_IP_REFRESH_CALL_TIMEOUT_MS,
                 proxy = proxy,
                 resolverNetwork = resolverNetwork,
                 mode = fetchMode,
@@ -419,6 +419,7 @@ internal class TunnelValidationGateway(
 
     private companion object {
         const val DASHBOARD_IP_REFRESH_CALL_TIMEOUT_MS = 2_500L
+        const val ACTIVE_TUNNEL_RUNTIME_PROXY_IP_REFRESH_CALL_TIMEOUT_MS = 6_000L
     }
 }
 
