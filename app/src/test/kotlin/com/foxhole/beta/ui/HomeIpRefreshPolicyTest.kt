@@ -245,15 +245,18 @@ class HomeIpRefreshPolicyTest {
                 trafficMode = TrafficMode.TUNNEL,
                 profileId = 7L,
             )
+        val torOverVpnSettings =
+            Settings(
+                privacyRoute = PrivacyRouteSettings(
+                    mode = PrivacyRouteMode.TOR_OVER_VPN,
+                ),
+            )
 
         assertEquals(
             IpInfoRefreshReason.TOR_ROUTE,
             runtimeReloadIpRefreshReason(
                 snapshot = vpnSnapshot,
-                settings =
-                    Settings(
-                        privacyRoute = PrivacyRouteSettings(mode = PrivacyRouteMode.TOR_OVER_VPN),
-                    ),
+                settings = torOverVpnSettings,
             ),
         )
         assertEquals(

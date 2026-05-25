@@ -270,15 +270,12 @@ internal fun runtimeReloadIpRefreshReason(
 internal fun shouldUseTorRouteIpRefreshAfterRuntimeReload(
     snapshot: ConnectionSnapshot,
     settings: Settings,
-): Boolean {
-    if (snapshot.state != ConnectionState.CONNECTED) {
-        return false
+): Boolean =
+    when {
+        snapshot.state != ConnectionState.CONNECTED -> false
+        snapshot.profileId == FoxholeVpnService.TOR_ONLY_PROFILE_ID -> true
+        else -> settings.privacyRoute.enabled && !settings.privacyRoute.bypassVpnTunnel
     }
-    if (snapshot.profileId == FoxholeVpnService.TOR_ONLY_PROFILE_ID) {
-        return true
-    }
-    return settings.privacyRoute.enabled && !settings.privacyRoute.bypassVpnTunnel
-}
 
 internal enum class IpInfoRefreshTarget {
     VPN_BOUND,

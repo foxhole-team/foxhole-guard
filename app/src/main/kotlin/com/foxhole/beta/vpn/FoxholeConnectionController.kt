@@ -42,6 +42,7 @@ class FoxholeConnectionController(
     val ipInfo: StateFlow<IpInfo?> = FoxholeVpnRuntimeBridge.ipInfo
     val deviceIpInfo: StateFlow<IpInfo?> = FoxholeVpnRuntimeBridge.deviceIpInfo
     val traffic: StateFlow<TrafficSnapshot> = FoxholeVpnRuntimeBridge.traffic
+    internal val runtimeUiState: StateFlow<RuntimeUiState> = FoxholeVpnRuntimeBridge.runtimeUiState
     private val appliedRuntimeSignatureMutable = MutableStateFlow<Int?>(null)
     val appliedRuntimeSignature: StateFlow<Int?> = appliedRuntimeSignatureMutable
     private val lifecycle =
@@ -718,6 +719,7 @@ object FoxholeVpnRuntimeBridge {
     private val trafficMutable = MutableStateFlow(TrafficSnapshot())
     private val highFrequencyTrafficUpdatesMutable = MutableStateFlow(false)
     private val immediateTrafficSampleRequestsMutable = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    private val runtimeUiStateMutable = MutableStateFlow(RuntimeUiState())
 
     val snapshot: StateFlow<ConnectionSnapshot> = snapshotMutable
     val ipInfo: StateFlow<IpInfo?> = ipInfoMutable
@@ -725,6 +727,7 @@ object FoxholeVpnRuntimeBridge {
     val traffic: StateFlow<TrafficSnapshot> = trafficMutable
     val highFrequencyTrafficUpdates: StateFlow<Boolean> = highFrequencyTrafficUpdatesMutable
     val immediateTrafficSampleRequests: SharedFlow<Unit> = immediateTrafficSampleRequestsMutable
+    internal val runtimeUiState: StateFlow<RuntimeUiState> = runtimeUiStateMutable
 
     fun update(
         value: ConnectionSnapshot,
@@ -736,6 +739,7 @@ object FoxholeVpnRuntimeBridge {
             } else {
                 value
             }
+        publishRuntimeUiState()
     }
 
     fun updateIpInfo(value: IpInfo?) {
@@ -750,6 +754,7 @@ object FoxholeVpnRuntimeBridge {
                     remoteDnsServers = value.remoteDnsServers.ifEmpty { previous?.remoteDnsServers.orEmpty() },
                 ).retainKnownLocationFrom(previous)
             }
+        publishRuntimeUiState()
     }
 
     fun updateDeviceIpInfo(value: IpInfo?) {
@@ -764,10 +769,12 @@ object FoxholeVpnRuntimeBridge {
                     remoteDnsServers = value.remoteDnsServers.ifEmpty { previous?.remoteDnsServers.orEmpty() },
                 ).retainKnownLocationFrom(previous)
             }
+        publishRuntimeUiState()
     }
 
     fun updateTraffic(value: TrafficSnapshot) {
         trafficMutable.value = value
+        publishRuntimeUiState()
     }
 
     fun setHighFrequencyTrafficUpdates(enabled: Boolean) {
@@ -784,5 +791,17 @@ object FoxholeVpnRuntimeBridge {
         }
         trafficMutable.value = TrafficSnapshot()
         highFrequencyTrafficUpdatesMutable.value = false
+        publishRuntimeUiState()
+    }
+
+    private fun publishRuntimeUiState() {
+        runtimeUiStateMutable.value =
+            runtimeUiStateFromBridge(
+                previous = runtimeUiStateMutable.value,
+                snapshot = snapshotMutable.value,
+                ipInfo = ipInfoMutable.value,
+                deviceIpInfo = deviceIpInfoMutable.value,
+                traffic = trafficMutable.value,
+            )
     }
 }
