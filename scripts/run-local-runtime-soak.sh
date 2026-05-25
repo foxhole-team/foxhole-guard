@@ -247,10 +247,26 @@ tap_screen_percent() {
   adb_device "$serial" shell input tap "$((width * x_percent / 100))" "$((height * y_percent / 100))" >/dev/null 2>&1 || true
 }
 
+browser_blocking_ui_visible() {
+  local xml_file="$1"
+  local window_file="${2:-}"
+  local first_run_pattern
+  local chooser_pattern
+  first_run_pattern='Make Chrome your own|Use without an account|Stay signed out|Add account to device|Welcome to (Chrome|Brave|Firefox)|Set .*default|Make .*default|Start browsing|Turn on sync|Sign in to|Help improve|Connect to Tor|Configure connection'
+  chooser_pattern='Complete action using|Open with'
+  if [[ -s "$xml_file" ]] && grep -Eiq "$first_run_pattern|$chooser_pattern" "$xml_file" 2>/dev/null; then
+    return 0
+  fi
+  if [[ -n "$window_file" && -s "$window_file" ]] && grep -Eiq 'ResolverActivity|ChooserActivity|GrantPermissionsActivity' "$window_file" 2>/dev/null; then
+    return 0
+  fi
+  return 1
+}
+
 dismiss_browser_first_run_if_visible() {
   local serial="$1"
   local prefix="$2"
-  if [[ ! -s "${prefix}.xml" ]] || grep -Eiq 'Make Chrome your own|Use without an account|Stay signed out|Add account to device' "${prefix}.xml" 2>/dev/null; then
+  if [[ ! -s "${prefix}.xml" ]] || browser_blocking_ui_visible "${prefix}.xml"; then
     tap_screen_percent "$serial" 50 88
     sleep 2
     tap_screen_percent "$serial" 50 90
@@ -266,7 +282,7 @@ browser_check() {
   local log_file="$round_dir/browser-${label}.log"
   local prefix="$round_dir/browser-${label}"
   local package_name
-  local sample final_prefix final_image status=0 elapsed=0
+  local sample final_prefix final_image status=0 elapsed=0 captured=0
   local -a samples
   mapfile -t samples < <(printf '%s\n' "$BROWSER_SNAPSHOT_SECONDS" | csv_to_lines)
   package_name="$(browser_package "$serial" || true)"
@@ -290,18 +306,28 @@ browser_check() {
     fi
     final_prefix="${prefix}-t$(printf '%02d' "$sample")"
     capture_screen "$serial" "$final_prefix"
+    captured=1
   done
-  if [[ "${#samples[@]}" -eq 0 ]]; then
+  if [[ "$captured" == "0" ]]; then
     sleep "$BROWSER_SETTLE_SECONDS"
-    capture_screen "$serial" "$prefix"
+    capture_screen_and_ui "$serial" "$prefix"
+  else
+    capture_screen_and_ui "$serial" "$final_prefix"
   fi
   final_image="${final_prefix}.png"
   capture_browser_window_state "$serial" "$round_dir/browser-${label}-window.txt"
+  if browser_blocking_ui_visible "${final_prefix}.xml" "$round_dir/browser-${label}-window.txt"; then
+    echo "browser_guard=failed reason=blocking-ui" >> "$log_file"
+    status=1
+  fi
   if browser_screenshot_too_small "$final_image" "$log_file"; then
     echo "screenshot_guard=retry reason=too-small" >> "$log_file"
     sleep "$BROWSER_RETRY_SECONDS"
-    capture_screen "$serial" "${prefix}-retry"
-    if browser_screenshot_too_small "${prefix}-retry.png" "$log_file"; then
+    capture_screen_and_ui "$serial" "${prefix}-retry"
+    if browser_blocking_ui_visible "${prefix}-retry.xml" "$round_dir/browser-${label}-window.txt"; then
+      echo "browser_guard=failed_after_retry reason=blocking-ui" >> "$log_file"
+      status=1
+    elif browser_screenshot_too_small "${prefix}-retry.png" "$log_file"; then
       echo "screenshot_guard=failed reason=too-small" >> "$log_file"
       status=1
     else
@@ -335,7 +361,7 @@ prepare_browser() {
   } > "$out_dir/browser-prepare.log" 2>&1
   capture_screen_and_ui "$serial" "$out_dir/browser-prepare"
   dismiss_browser_first_run_if_visible "$serial" "$out_dir/browser-prepare"
-  if [[ ! -s "$out_dir/browser-prepare.xml" ]] || grep -Eiq 'Make Chrome your own|Use without an account|Stay signed out|Add account to device' "$out_dir/browser-prepare.xml" 2>/dev/null; then
+  if [[ ! -s "$out_dir/browser-prepare.xml" ]] || browser_blocking_ui_visible "$out_dir/browser-prepare.xml"; then
     {
       echo "browser_prepare_retry url=$IP_CHECK_URL package=${package_name:-default}"
       start_browser_url "$serial" "$package_name" "$IP_CHECK_URL" 0

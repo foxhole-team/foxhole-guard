@@ -218,6 +218,9 @@ internal fun CountryTrafficCard(
     rows: List<CountryTrafficUiRow>,
     totalRowsCount: Int,
     enabled: Boolean,
+    networkActivityLoggingEnabled: Boolean,
+    onEnableFirewall: () -> Unit,
+    onEnableNetworkActivityLogging: () -> Unit,
     onShowAll: () -> Unit,
 ) {
     Card(
@@ -239,6 +242,18 @@ internal fun CountryTrafficCard(
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                TextButton(onClick = onEnableFirewall) {
+                    Text(stringResource(R.string.statistics_country_enable_firewall_action))
+                }
+            } else if (!networkActivityLoggingEnabled && rows.isEmpty()) {
+                Text(
+                    text = stringResource(R.string.statistics_country_network_log_disabled),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                TextButton(onClick = onEnableNetworkActivityLogging) {
+                    Text(stringResource(R.string.statistics_app_detail_enable_network_log_action))
+                }
             } else if (rows.isEmpty()) {
                 EmptySectionText(text = stringResource(R.string.traffic_map_waiting_connections))
             } else {

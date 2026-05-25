@@ -197,13 +197,16 @@ fun StatisticsScreen(
                     )
                 }
             }
-            if (statisticsSettings.countryTrafficEnabled && firewallEnabled && topCountryRows.isNotEmpty()) {
+            if (shouldShowCountryTrafficCard(statisticsSettings)) {
                 item(key = "country-traffic", contentType = "statistics-card") {
                     CountryTrafficCard(
                         state = trafficMapState,
                         rows = topCountryRows,
                         totalRowsCount = countryRows.size,
                         enabled = state.settings.statistics.countryTrafficEnabled && firewallEnabled,
+                        networkActivityLoggingEnabled = state.settings.expert.networkActivityLogging,
+                        onEnableFirewall = { onFirewallEnabledChanged(true) },
+                        onEnableNetworkActivityLogging = { onNetworkActivityLoggingChanged(true) },
                         onShowAll = { allCountriesVisible = true },
                     )
                 }
@@ -354,6 +357,9 @@ fun StatisticsScreen(
         )
     }
 }
+
+internal fun shouldShowCountryTrafficCard(statisticsSettings: com.foxhole.beta.core.model.StatisticsSettings): Boolean =
+    statisticsSettings.countryTrafficEnabled
 
 private const val STATISTICS_UI_NOW_BUCKET_MS = 60_000L
 

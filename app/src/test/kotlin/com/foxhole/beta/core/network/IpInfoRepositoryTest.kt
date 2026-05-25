@@ -1,14 +1,18 @@
 package com.foxhole.beta.core.network
 
 import com.foxhole.beta.core.model.IpInfo
+import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
-import java.net.InetAddress
-import java.net.UnknownHostException
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.net.InetAddress
+import java.net.ServerSocket
+import java.net.Socket
+import java.net.UnknownHostException
+import kotlin.system.measureTimeMillis
 
 class IpInfoRepositoryTest {
     private val json =
@@ -371,6 +375,50 @@ class IpInfoRepositoryTest {
     }
 
     @Test
+    fun `http proxy tunnel timeout budget counts elapsed time`() {
+        val budget =
+            HttpProxyTunnelTimeoutBudget(
+                timeoutMs = 200L,
+                startedAtNanos = 1_000_000L,
+                nowNanos = { 151_000_000L },
+            )
+
+        assertEquals(50, budget.remainingMs())
+    }
+
+    @Test
+    fun `http proxy tunnel latency uses one total timeout across stages`() =
+        runBlocking {
+            val repository =
+                IpInfoRepository(
+                    client = okhttp3.OkHttpClient(),
+                    json = json,
+                )
+
+            SlowConnectHttpProxy(connectResponseDelayMs = 180L).use { proxy ->
+                var failure: Exception? = null
+                val elapsed =
+                    measureTimeMillis {
+                        try {
+                            repository.probeLatency(
+                                endpoint = "https://example.com/",
+                                callTimeoutMs = 250L,
+                                proxy = HttpProxyAccess(host = "127.0.0.1", port = proxy.port),
+                            )
+                        } catch (error: Exception) {
+                            failure = error
+                        }
+                    }
+
+                assertTrue(
+                    "probe should fail against an idle TLS tunnel, failure=${failure?.javaClass?.simpleName}",
+                    failure != null,
+                )
+                assertTrue("elapsed=$elapsed", elapsed < 380L)
+            }
+        }
+
+    @Test
     fun `address resolver prefers public resolver before bound network dns`() {
         val publicAddress = InetAddress.getByName("93.184.216.34")
         var networkLookupCount = 0
@@ -407,5 +455,54 @@ class IpInfoRepositoryTest {
         val ordered = listOf(ipv6Address, ipv4Address).preferIpv4()
 
         assertEquals(listOf(ipv4Address, ipv6Address), ordered)
+    }
+}
+
+private class SlowConnectHttpProxy(
+    private val connectResponseDelayMs: Long,
+) : AutoCloseable {
+    private val server = ServerSocket(0, 1, InetAddress.getLoopbackAddress())
+    private var acceptedSocket: Socket? = null
+    val port: Int = server.localPort
+
+    private val worker =
+        Thread {
+            runCatching {
+                server.accept().use { socket ->
+                    acceptedSocket = socket
+                    socket.soTimeout = 2_000
+                    readProxyRequestHead(socket)
+                    Thread.sleep(connectResponseDelayMs)
+                    socket
+                        .getOutputStream()
+                        .write("HTTP/1.1 200 Connection Established\r\n\r\n".toByteArray(Charsets.ISO_8859_1))
+                    socket.getOutputStream().flush()
+                    Thread.sleep(2_000)
+                }
+            }
+        }.apply {
+            isDaemon = true
+            start()
+        }
+
+    override fun close() {
+        runCatching { acceptedSocket?.close() }
+        runCatching { server.close() }
+        worker.join(500)
+    }
+}
+
+private fun readProxyRequestHead(socket: Socket) {
+    val input = socket.getInputStream()
+    var tail = 0
+    repeat(16 * 1024) {
+        val value = input.read()
+        if (value == -1) {
+            return
+        }
+        tail = (tail shl 8) or (value and 0xff)
+        if (tail == 0x0D0A0D0A) {
+            return
+        }
     }
 }

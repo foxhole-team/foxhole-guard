@@ -420,6 +420,8 @@
     <string name="statistics_country_traffic_top_title">Топ 5 стран по трафику</string>
     <string name="statistics_country_traffic_legend">Размер трафика: %1$s</string>
     <string name="statistics_country_all_title">Все страны</string>
+    <string name="statistics_country_enable_firewall_action">Включить Фаервол</string>
+    <string name="statistics_country_network_log_disabled">Страны подключений и детали карты появятся после включения сетевого журнала в Диагностике. Журнал остаётся локальным и хранит очищенные метаданные подключений.</string>
     <plurals name="statistics_country_connections">
         <item quantity="one">%1$d соединение</item>
         <item quantity="few">%1$d соединения</item>

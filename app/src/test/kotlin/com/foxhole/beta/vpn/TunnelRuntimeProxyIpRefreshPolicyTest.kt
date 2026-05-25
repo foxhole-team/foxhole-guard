@@ -148,6 +148,20 @@ class TunnelRuntimeProxyIpRefreshPolicyTest {
     }
 
     @Test
+    fun `strict dashboard ip refresh does not recover cached vpn result without android validation`() {
+        val snapshot =
+            ConnectionSnapshot(
+                state = ConnectionState.CONNECTED,
+                trafficMode = TrafficMode.TUNNEL,
+                profileId = 42L,
+                protocolHint = ProtocolHint.VLESS,
+            )
+
+        assertFalse(Settings().canRecoverCachedActiveTunnelIpInfo(snapshot, androidValidatedVpnNetwork = false))
+        assertTrue(Settings().canRecoverCachedActiveTunnelIpInfo(snapshot, androidValidatedVpnNetwork = true))
+    }
+
+    @Test
     fun `android validated tunnel dashboard refresh uses quick fetch mode`() {
         assertEquals(
             IpInfoFetchMode.ENTRY_QUICK,

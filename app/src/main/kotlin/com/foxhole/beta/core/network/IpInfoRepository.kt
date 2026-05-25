@@ -439,13 +439,20 @@ class IpInfoRepository(
         withContext(Dispatchers.IO) {
             val url = endpoint.ensurePublicHttpsUrl()
             val target = HttpProxyTunnelTarget(url.host, url.port)
-            val timeout = (callTimeoutMs ?: FULL_CALL_TIMEOUT_MS).coerceIn(1L, Int.MAX_VALUE.toLong()).toInt()
             val startedAt = System.nanoTime()
+            val timeoutBudget =
+                HttpProxyTunnelTimeoutBudget(
+                    timeoutMs = callTimeoutMs ?: FULL_CALL_TIMEOUT_MS,
+                    startedAtNanos = startedAt,
+                )
             Socket().use { rawSocket ->
-                rawSocket.soTimeout = timeout
                 httpProxyTunnelStage("local_connect") {
-                    rawSocket.connect(InetSocketAddress(proxy.host, proxy.port), timeout)
+                    rawSocket.connect(InetSocketAddress(proxy.host, proxy.port), timeoutBudget.remainingMs())
                 }
+                val rawInput =
+                    DeadlineInputStream(rawSocket.getInputStream(), timeoutBudget) { timeout ->
+                        rawSocket.soTimeout = timeout
+                    }
                 val output = rawSocket.getOutputStream()
                 httpProxyTunnelStage("connect_write") {
                     output.write(proxyConnectRequest(target, proxy).toByteArray(Charsets.ISO_8859_1))
@@ -453,21 +460,25 @@ class IpInfoRepository(
                 }
                 val connectHead =
                     httpProxyTunnelStage("connect_response") {
-                        readHttpResponseHead(rawSocket.getInputStream())
+                        readHttpResponseHead(rawInput)
                     }
                 require(connectHead.code in 200..299) { "proxy CONNECT failed: ${connectHead.code}" }
 
                 val sslSocket =
                     (SSLSocketFactory.getDefault() as SSLSocketFactory)
                         .createSocket(rawSocket, url.host, url.port, true) as SSLSocket
-                sslSocket.soTimeout = timeout
                 sslSocket.use { tlsSocket ->
                     httpProxyTunnelStage("tls_handshake") {
+                        tlsSocket.soTimeout = timeoutBudget.remainingMs()
                         tlsSocket.startHandshake()
                     }
                     require(HttpsURLConnection.getDefaultHostnameVerifier().verify(url.host, tlsSocket.session)) {
                         "proxy tunnel TLS hostname verification failed"
                     }
+                    val input =
+                        DeadlineInputStream(tlsSocket.getInputStream(), timeoutBudget) { timeout ->
+                            tlsSocket.soTimeout = timeout
+                        }
                     val tlsOutput = tlsSocket.getOutputStream()
                     httpProxyTunnelStage("request_write") {
                         tlsOutput.write(
@@ -478,7 +489,6 @@ class IpInfoRepository(
                         )
                         tlsOutput.flush()
                     }
-                    val input = tlsSocket.getInputStream()
                     val responseHead =
                         httpProxyTunnelStage("response_head") {
                             readHttpResponseHead(input)
@@ -641,6 +651,46 @@ private data class HttpResponseHead(
     val headers: Map<String, List<String>>,
 ) {
     fun firstHeader(name: String): String? = headers[name.lowercase()]?.firstOrNull()
+}
+
+internal class HttpProxyTunnelTimeoutBudget(
+    timeoutMs: Long,
+    private val startedAtNanos: Long = System.nanoTime(),
+    private val nowNanos: () -> Long = System::nanoTime,
+) {
+    private val totalTimeoutMs = timeoutMs.coerceAtLeast(1L)
+
+    fun remainingMs(): Int {
+        val elapsedMs = ((nowNanos() - startedAtNanos) / 1_000_000L).coerceAtLeast(0L)
+        val remainingMs = totalTimeoutMs - elapsedMs
+        if (remainingMs <= 0L) {
+            throw InterruptedIOException("timeout")
+        }
+        return remainingMs
+            .coerceAtMost(Int.MAX_VALUE.toLong())
+            .toInt()
+            .coerceAtLeast(1)
+    }
+}
+
+private class DeadlineInputStream(
+    private val delegate: InputStream,
+    private val timeoutBudget: HttpProxyTunnelTimeoutBudget,
+    private val applyTimeout: (Int) -> Unit,
+) : InputStream() {
+    override fun read(): Int {
+        applyTimeout(timeoutBudget.remainingMs())
+        return delegate.read()
+    }
+
+    override fun read(
+        buffer: ByteArray,
+        offset: Int,
+        length: Int,
+    ): Int {
+        applyTimeout(timeoutBudget.remainingMs())
+        return delegate.read(buffer, offset, length)
+    }
 }
 
 private inline fun <T> httpProxyTunnelStage(

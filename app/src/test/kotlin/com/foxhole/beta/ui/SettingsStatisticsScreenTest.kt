@@ -237,6 +237,12 @@ class SettingsStatisticsScreenTest {
     }
 
     @Test
+    fun `country traffic card remains visible for empty support state`() {
+        assertTrue(shouldShowCountryTrafficCard(StatisticsSettings(countryTrafficEnabled = true)))
+        assertFalse(shouldShowCountryTrafficCard(StatisticsSettings(countryTrafficEnabled = false)))
+    }
+
+    @Test
     fun `extended statistics mode follows usage access availability`() {
         val state =
             SettingsRouteUiState(

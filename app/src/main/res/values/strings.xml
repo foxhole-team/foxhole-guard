@@ -415,6 +415,8 @@
     <string name="statistics_country_traffic_top_title">Top 5 countries by traffic</string>
     <string name="statistics_country_traffic_legend">Traffic size: %1$s</string>
     <string name="statistics_country_all_title">All countries</string>
+    <string name="statistics_country_enable_firewall_action">Enable Firewall</string>
+    <string name="statistics_country_network_log_disabled">Connection countries and map details appear after the Network activity log is enabled in Diagnostics. The journal stays local and stores sanitized connection metadata.</string>
     <plurals name="statistics_country_connections">
         <item quantity="one">%1$d connection</item>
         <item quantity="other">%1$d connections</item>

@@ -392,15 +392,23 @@ internal class TunnelValidationGateway(
         }.recoverCatching { refreshError ->
             recoverCachedActiveTunnelIpInfo(
                 currentSnapshot = currentSnapshot,
+                allowCachedRecovery = settings.canRecoverCachedActiveTunnelIpInfo(
+                    snapshot = currentSnapshot,
+                    androidValidatedVpnNetwork = androidValidatedVpnNetwork,
+                ),
                 error = refreshError,
             )
         }.getOrThrow()
 
     private fun recoverCachedActiveTunnelIpInfo(
         currentSnapshot: ConnectionSnapshot,
+        allowCachedRecovery: Boolean = true,
         error: Throwable,
     ): IpInfo {
         if (error is CancellationException) {
+            throw error
+        }
+        if (!allowCachedRecovery) {
             throw error
         }
         return cachedActiveTunnelIpInfoOrThrow(
@@ -613,6 +621,11 @@ internal fun Settings.canUseVpnBoundIpRefreshFallback(
     snapshot: ConnectionSnapshot,
     androidValidatedVpnNetwork: Boolean,
 ): Boolean = !requiresStrictRuntimeProxyIpRefresh(snapshot) || androidValidatedVpnNetwork
+
+internal fun Settings.canRecoverCachedActiveTunnelIpInfo(
+    snapshot: ConnectionSnapshot,
+    androidValidatedVpnNetwork: Boolean,
+): Boolean = canUseVpnBoundIpRefreshFallback(snapshot, androidValidatedVpnNetwork)
 
 internal fun Settings.shouldPreferVpnBoundIpRefresh(
     snapshot: ConnectionSnapshot,
