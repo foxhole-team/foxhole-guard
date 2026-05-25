@@ -306,7 +306,7 @@ class IpInfoRepositoryTest {
 
         assertTrue(candidates.isNotEmpty())
         assertEquals("https://ipwho.is/", candidates.first())
-        assertEquals("https://1.1.1.1/cdn-cgi/trace", candidates[1])
+        assertEquals("https://cloudflare.com/cdn-cgi/trace", candidates[1])
         assertTrue(candidates.size > 1)
     }
 

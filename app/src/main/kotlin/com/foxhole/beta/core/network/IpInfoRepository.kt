@@ -563,7 +563,7 @@ class IpInfoRepository(
         val FALLBACK_ENDPOINTS =
             listOf(
                 BuildConfig.DEFAULT_IP_INFO_ENDPOINT,
-                "https://1.1.1.1/cdn-cgi/trace",
+                "https://cloudflare.com/cdn-cgi/trace",
                 "https://ipinfo.io/json",
                 "https://ifconfig.co/json",
                 "https://api64.ipify.org?format=json",
