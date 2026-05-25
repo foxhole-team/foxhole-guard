@@ -514,11 +514,15 @@ internal class ReflectiveLibboxRuntime(
                     "server_detached=${server != null}",
                     "tun_closed=$tunClosed",
                 )
-                markCleanupUnresolved(
-                    state = RuntimeState.KILLING,
-                    reason = reason,
-                    closeDetached = true,
-                )
+                if (server != null) {
+                    markCleanupUnresolved(
+                        state = RuntimeState.KILLING,
+                        reason = reason,
+                        closeDetached = true,
+                    )
+                } else {
+                    markCleanupResolved(RuntimeState.IDLE, reason = reason)
+                }
                 return@withContext RuntimeKillResult(
                     reason = reason,
                     tunClosed = tunClosed,

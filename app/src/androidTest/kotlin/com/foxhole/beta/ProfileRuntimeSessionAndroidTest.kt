@@ -2,6 +2,7 @@ package com.foxhole.beta
 
 import android.content.Intent
 import android.net.VpnService
+import android.os.Debug
 import android.util.Base64
 import android.util.Log
 import androidx.test.core.app.ApplicationProvider
@@ -31,7 +32,9 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Assume.assumeTrue
 import org.junit.Test
@@ -244,13 +247,20 @@ class ProfileRuntimeSessionAndroidTest {
         }
         runBlocking {
             val app = ApplicationProvider.getApplicationContext<FoxholeApplication>()
+            val requireSuccess = requireLiveSmartSuccess()
             val subscriptionInput = smartSubscriptionInput()
             if (subscriptionInput == null) {
                 Log.d(TEST_TAG, "manual smart subscription skipped: subscription input missing")
+                if (requireSuccess) {
+                    assertTrue("smart subscription input missing for required live test", false)
+                }
                 return@runBlocking
             }
             if (!ensureVpnPermission(app)) {
                 Log.d(TEST_TAG, "manual smart subscription skipped: vpn permission missing")
+                if (requireSuccess) {
+                    assertTrue("vpn permission missing for required live smart test", false)
+                }
                 return@runBlocking
             }
             val targetProtocols = requestedSmartProbeProtocols()
@@ -325,7 +335,7 @@ class ProfileRuntimeSessionAndroidTest {
                             TEST_TAG,
                             "liveSmart result profileId=${profile.id} protocol=${target.protocolHint.name.lowercase()} terminalState=$terminalStateLabel ipRefresh=$ipRefreshResult message=$snapshotMessage fatal=$fatalMessage successTraffic=${evidence.hasSuccessfulTunnelActivity}",
                         )
-                        if (requireLiveSmartSuccess()) {
+                        if (requireSuccess) {
                             assertEquals(ConnectionState.CONNECTED.name, terminalStateLabel)
                             assertTrue(evidence.hasSuccessfulTunnelActivity)
                             assertTrue(fatalMessage.isEmpty())
@@ -904,6 +914,125 @@ class ProfileRuntimeSessionAndroidTest {
     }
 
     @Test
+    fun manualSmartSubscriptionRuntimeStressCycles() {
+        if (InstrumentationRegistry.getArguments().getString("foxhole.liveRuntimeStress") != "1") {
+            Log.d(TEST_TAG, "manual runtime stress skipped")
+            return
+        }
+        runBlocking {
+            val app = ApplicationProvider.getApplicationContext<FoxholeApplication>()
+            val requireSuccess = requireLiveSmartSuccess()
+            val subscriptionInput = smartSubscriptionInput()
+            if (subscriptionInput == null) {
+                Log.d(TEST_TAG, "manual runtime stress skipped: subscription input missing")
+                if (requireSuccess) {
+                    assertTrue("smart subscription input missing for required runtime stress", false)
+                }
+                return@runBlocking
+            }
+            if (!ensureVpnPermission(app)) {
+                Log.d(TEST_TAG, "manual runtime stress skipped: vpn permission missing")
+                if (requireSuccess) {
+                    assertTrue("vpn permission missing for required runtime stress", false)
+                }
+                return@runBlocking
+            }
+            val cycleCount = longArgument("foxhole.runtimeStressCycles", 50L).toInt().coerceIn(1, 200)
+            val targetProtocols = requestedSmartProbeProtocols(defaultProtocols = setOf(ProtocolHint.VLESS))
+            val samples = mutableListOf<RuntimeStressResourceSample>()
+
+            resetRelevantSettings(app)
+            clearProfiles(app)
+            val imported =
+                app.container.profileRepository.importProfile(
+                    rawInput = subscriptionInput,
+                    preferredName = "Live Runtime Stress",
+                    allowInsecureTlsForProfile =
+                        InstrumentationRegistry
+                            .getArguments()
+                            .getString("foxhole.allowInsecureTlsForLiveSubscription") == "1",
+                )
+            app.container.connectionController.setActiveProfile(imported.id)
+            val selectedTarget =
+                app.container.profileRepository.profiles
+                    .first()
+                    .flatMap { profile ->
+                        profile
+                            .runtimeProbeTargets()
+                            .filter { target -> target.protocolHint in targetProtocols }
+                            .map { target -> profile to target }
+                    }.firstOrNull()
+            if (selectedTarget == null) {
+                if (requireSuccess) {
+                    assertTrue("smart subscription did not expose requested stress target", false)
+                }
+                return@runBlocking
+            }
+            val (profile, target) = selectedTarget
+
+            try {
+                disconnectAndWaitForIdle(app)
+                baselineRuntimeSettings(app)
+                repeat(cycleCount) { index ->
+                    val cycle = index + 1
+                    app.container.connectionController.setActiveProfile(profile.id)
+                    val startedAt = System.currentTimeMillis()
+                    Log.d(
+                        TEST_TAG,
+                        "liveRuntimeStress cycleStart=$cycle/$cycleCount profileId=${profile.id} protocol=${target.protocolHint.name.lowercase()} optionId=${target.optionId.orEmpty()}",
+                    )
+                    app.container.connectionController.connect(profile.id, protocolOptionId = target.optionId)
+                    val terminalState =
+                        withTimeoutOrNull(liveSmartTerminalTimeoutMs(target.protocolHint)) {
+                            waitForActiveConnectionAttempt(app)
+                            waitForTerminalState(app)
+                        }
+                    val ipRefreshResult =
+                        if (terminalState == ConnectionState.CONNECTED) {
+                            runVpnBoundIpRefresh(app)
+                        } else {
+                            "skipped"
+                        }
+                    val evidence =
+                        TunnelValidationEvidenceClassifier.classify(
+                            entries = app.container.diagnosticsLogger.entries.value,
+                            sinceMs = startedAt,
+                        )
+                    Log.d(
+                        TEST_TAG,
+                        "liveRuntimeStress cycleConnected=$cycle terminalState=${terminalState?.name ?: "TIMEOUT"} ipRefresh=$ipRefreshResult fatal=${evidence.fatalRuntimeMessage.orEmpty().take(200)} successTraffic=${evidence.hasSuccessfulTunnelActivity}",
+                    )
+                    if (requireSuccess) {
+                        assertEquals(ConnectionState.CONNECTED, terminalState)
+                        assertTrue("cycle $cycle vpn-bound ip refresh failed: $ipRefreshResult", ipRefreshResult.startsWith("ok:"))
+                        assertTrue("cycle $cycle fatal runtime evidence: ${evidence.fatalRuntimeMessage.orEmpty()}", evidence.fatalRuntimeMessage == null)
+                        assertTrue("cycle $cycle tunnel traffic evidence missing", evidence.hasSuccessfulTunnelActivity)
+                    }
+
+                    disconnectAndWaitForIdle(app)
+                    val stopDetails = waitForRuntimeStopDisconnectDetails(app, sinceMs = startedAt)
+                    FoxholeConnectionServiceContract.stopAllServices(app)
+                    waitUntil(timeoutMs = 20_000L) {
+                        !hasFoxholeRuntimeServices(app) && !hasActiveFoxholeVpnNetwork(app)
+                    }
+                    val callbackDetails = waitForRuntimeCallbackCleanupDetails(app, sinceMs = startedAt)
+                    val sample = captureRuntimeStressResourceSample(app, cycle, stopDetails, callbackDetails)
+                    samples += sample
+                    assertRuntimeStoppedAfterCycle(sample)
+                    Log.d(
+                        TEST_TAG,
+                        "liveRuntimeStress cycleStopped=$cycle rssKb=${sample.rssKb ?: "unknown"} pssKb=${sample.pssKb ?: "unknown"} nativeHeapKb=${sample.nativeHeapKb ?: "unknown"} javaHeapKb=${sample.javaHeapKb} threads=${sample.threadCount} event=${sample.latestRuntimeEvent.orEmpty()} nativeServer=${sample.hasNativeServer} tunFd=${sample.hasTunFileDescriptor} callbacks=${sample.networkCallbacks} cleanupUnresolved=${sample.cleanupUnresolved}",
+                    )
+                }
+                assertRuntimeStressMemoryStable(samples)
+            } finally {
+                disconnectAndWaitForIdle(app)
+                FoxholeConnectionServiceContract.stopAllServices(app)
+            }
+        }
+    }
+
+    @Test
     fun restoreBaselineRuntimeSettingsWhenRequested() {
         if (InstrumentationRegistry.getArguments().getString("foxhole.restoreRuntimeBaseline") != "1") {
             Log.d(TEST_TAG, "restore runtime baseline skipped")
@@ -1225,9 +1354,13 @@ class ProfileRuntimeSessionAndroidTest {
     }
 
     private fun readDeviceTextFile(path: String): String? =
-        shell("[ -s ${path.shellSingleQuoted()} ] && cat ${path.shellSingleQuoted()} || true")
-            .trim()
-            .takeIf(String::isNotBlank)
+        runCatching { File(path).takeIf { it.isFile && it.canRead() }?.readText() }
+            .getOrNull()
+            ?.trim()
+            ?.takeIf(String::isNotBlank)
+            ?: shell("cat ${path.shellSingleQuoted()} 2>/dev/null || true")
+                .trim()
+                .takeIf(String::isNotBlank)
 
     private fun String.shellSingleQuoted(): String = "'${replace("'", "'\\''")}'"
 
@@ -1277,6 +1410,187 @@ class ProfileRuntimeSessionAndroidTest {
             onSuccess = { ipInfo -> "ok:${ipInfo.ipv4 ?: ipInfo.ipv6 ?: "unknown"}" },
             onFailure = { error -> "fail:${error.javaClass.simpleName}:${error.message.orEmpty().take(80)}" },
         )
+
+    private fun captureRuntimeStressResourceSample(
+        app: FoxholeApplication,
+        cycle: Int,
+        stopDetails: Map<String, String>,
+        callbackDetails: Map<String, String>,
+    ): RuntimeStressResourceSample {
+        val runtime = Runtime.getRuntime()
+        return RuntimeStressResourceSample(
+            cycle = cycle,
+            rssKb = readProcStatusKb("VmRSS"),
+            pssKb = readCurrentPssKb(),
+            nativeHeapKb = runCatching { Debug.getNativeHeapAllocatedSize() / BYTES_PER_KB }.getOrNull(),
+            javaHeapKb = ((runtime.totalMemory() - runtime.freeMemory()) / BYTES_PER_KB).coerceAtLeast(0L),
+            threadCount = runCatching { Thread.getAllStackTraces().size }.getOrDefault(-1),
+            owner = stopDetails["owner"],
+            latestRuntimeEvent = stopDetails["event"],
+            callbackCleanupEvent = callbackDetails["event"],
+            networkCallbacks = callbackDetails["network_callbacks"]?.toIntOrNull(),
+            hasNativeServer = stopDetails["native_server"]?.toBooleanStrictOrNull(),
+            hasTunFileDescriptor = stopDetails["tun_fd"]?.toBooleanStrictOrNull(),
+            hasNativeHost = stopDetails["native_host"]?.toBooleanStrictOrNull(),
+            hasNativeConfig = stopDetails["native_config"]?.toBooleanStrictOrNull(),
+            nativeState = stopDetails["native_state"],
+            cleanupUnresolved = stopDetails["cleanup_unresolved"]?.toBooleanStrictOrNull(),
+            lastCloseDetached = stopDetails["last_close_detached"]?.toBooleanStrictOrNull(),
+            nativeGeneration = stopDetails["native_generation"]?.toLongOrNull(),
+            hasRuntimeService = hasFoxholeRuntimeServices(app),
+            hasActiveVpnNetwork = hasActiveFoxholeVpnNetwork(app),
+        )
+    }
+
+    private fun assertRuntimeStoppedAfterCycle(sample: RuntimeStressResourceSample) {
+        assertNotNull("cycle ${sample.cycle} missing runtime health snapshot", sample.latestRuntimeEvent)
+        assertFalse("cycle ${sample.cycle} left a FoxHole runtime service active", sample.hasRuntimeService)
+        assertFalse("cycle ${sample.cycle} left a FoxHole VPN network active", sample.hasActiveVpnNetwork)
+        assertEquals("cycle ${sample.cycle} stop snapshot owner mismatch", "vpn", sample.owner)
+        assertEquals("cycle ${sample.cycle} stop snapshot event mismatch", "stop_success:disconnect", sample.latestRuntimeEvent)
+        assertFalse("cycle ${sample.cycle} left native server attached event=${sample.latestRuntimeEvent}", sample.hasNativeServer == true)
+        assertFalse("cycle ${sample.cycle} left TUN fd attached event=${sample.latestRuntimeEvent}", sample.hasTunFileDescriptor == true)
+        assertFalse("cycle ${sample.cycle} left native host attached event=${sample.latestRuntimeEvent}", sample.hasNativeHost == true)
+        assertFalse("cycle ${sample.cycle} left native config attached event=${sample.latestRuntimeEvent}", sample.hasNativeConfig == true)
+        assertEquals("cycle ${sample.cycle} native state was not idle", "idle", sample.nativeState)
+        assertFalse("cycle ${sample.cycle} left unresolved native cleanup event=${sample.latestRuntimeEvent}", sample.cleanupUnresolved == true)
+        assertFalse("cycle ${sample.cycle} detached close after disconnect event=${sample.latestRuntimeEvent}", sample.lastCloseDetached == true)
+        assertEquals(
+            "cycle ${sample.cycle} callback cleanup snapshot event mismatch",
+            "service_destroy_after_callbacks_unregistered",
+            sample.callbackCleanupEvent,
+        )
+        assertEquals("cycle ${sample.cycle} leaked network callbacks event=${sample.callbackCleanupEvent}", 0, sample.networkCallbacks ?: 0)
+    }
+
+    private fun assertRuntimeStressMemoryStable(samples: List<RuntimeStressResourceSample>) {
+        val rssSamples = samples.mapNotNull { it.rssKb }
+        if (rssSamples.size < 3) {
+            return
+        }
+        val strictlyMonotonicGrowth = rssSamples.zipWithNext().all { (before, after) -> after > before }
+        assertFalse("runtime stress RSS grew monotonically: $rssSamples", strictlyMonotonicGrowth)
+        val first = rssSamples.first()
+        val last = rssSamples.last()
+        val maxDeltaKb = maxOf(RUNTIME_STRESS_RSS_DELTA_LIMIT_KB, first / 2)
+        assertTrue(
+            "runtime stress RSS delta too high firstKb=$first lastKb=$last samples=$rssSamples",
+            last <= first + maxDeltaKb,
+        )
+    }
+
+    private suspend fun waitForRuntimeStopDisconnectDetails(
+        app: FoxholeApplication,
+        sinceMs: Long,
+    ): Map<String, String> {
+        var details: Map<String, String>? = null
+        waitUntil(timeoutMs = 20_000L) {
+            details = latestRuntimeHealthDetails(app, sinceMs, requiredEvent = "stop_success:disconnect")
+            details != null
+        }
+        return details.orEmpty()
+    }
+
+    private suspend fun waitForRuntimeCallbackCleanupDetails(
+        app: FoxholeApplication,
+        sinceMs: Long,
+    ): Map<String, String> {
+        var details: Map<String, String>? = null
+        waitUntil(timeoutMs = 20_000L) {
+            details =
+                latestRuntimeHealthDetails(
+                    app = app,
+                    sinceMs = sinceMs,
+                    requiredEvent = "service_destroy_after_callbacks_unregistered",
+                )
+            details != null
+        }
+        return details.orEmpty()
+    }
+
+    private fun latestRuntimeHealthDetails(
+        app: FoxholeApplication,
+        sinceMs: Long,
+        requiredEvent: String,
+    ): Map<String, String>? =
+        app.container.diagnosticsLogger.entries.value
+            .asReversed()
+            .firstNotNullOfOrNull { entry ->
+                if (entry.timestamp < sinceMs || entry.tag != "runtime-health" || !entry.message.startsWith("runtime resource snapshot")) {
+                    return@firstNotNullOfOrNull null
+                }
+                parseRuntimeHealthDetails(entry.message)
+                    .takeIf { details -> details["event"] == requiredEvent }
+            }
+
+    private fun parseRuntimeHealthDetails(message: String): Map<String, String> =
+        message
+            .substringAfter(": ", missingDelimiterValue = "")
+            .split(" • ")
+            .mapNotNull { raw ->
+                val key = raw.substringBefore("=", missingDelimiterValue = "").trim()
+                val value = raw.substringAfter("=", missingDelimiterValue = "").trim()
+                if (key.isBlank() || value.isBlank()) {
+                    null
+                } else {
+                    key to value
+                }
+            }.toMap()
+
+    private fun readCurrentPssKb(): Long? =
+        runCatching {
+            val memoryInfo = Debug.MemoryInfo()
+            Debug.getMemoryInfo(memoryInfo)
+            memoryInfo.totalPss.takeIf { it >= 0 }?.toLong()
+        }.getOrNull()
+
+    private fun readProcStatusKb(label: String): Long? =
+        runCatching {
+            File("/proc/self/status").useLines { lines ->
+                lines.firstNotNullOfOrNull { line ->
+                    if (line.startsWith(label)) {
+                        line
+                            .substringAfter(':')
+                            .trim()
+                            .substringBefore(' ')
+                            .toLongOrNull()
+                    } else {
+                        null
+                    }
+                }
+            }
+        }.getOrNull()
+
+    private fun hasFoxholeRuntimeServices(app: FoxholeApplication): Boolean {
+        val services = shell("dumpsys activity services ${app.packageName}")
+        return services.contains("FoxholeVpnService") || services.contains("FoxholeProxyService")
+    }
+
+    private fun hasActiveFoxholeVpnNetwork(app: FoxholeApplication): Boolean =
+        shell("dumpsys connectivity").contains("VPN CONNECTED extra: VPN:${app.packageName}")
+
+    private data class RuntimeStressResourceSample(
+        val cycle: Int,
+        val rssKb: Long?,
+        val pssKb: Long?,
+        val nativeHeapKb: Long?,
+        val javaHeapKb: Long,
+        val threadCount: Int,
+        val owner: String?,
+        val latestRuntimeEvent: String?,
+        val callbackCleanupEvent: String?,
+        val networkCallbacks: Int?,
+        val hasNativeServer: Boolean?,
+        val hasTunFileDescriptor: Boolean?,
+        val hasNativeHost: Boolean?,
+        val hasNativeConfig: Boolean?,
+        val nativeState: String?,
+        val cleanupUnresolved: Boolean?,
+        val lastCloseDetached: Boolean?,
+        val nativeGeneration: Long?,
+        val hasRuntimeService: Boolean,
+        val hasActiveVpnNetwork: Boolean,
+    )
 
     private data class RuntimeProbeTarget(
         val protocolHint: ProtocolHint,
@@ -1330,6 +1644,8 @@ class ProfileRuntimeSessionAndroidTest {
         private const val DEFAULT_SMART_SUBSCRIPTION_DEVICE_PATH = "/data/local/tmp/foxhole-subscription.raw"
         private const val VPN_PERMISSION_REQUEST_CODE = 7301
         private const val LIVE_DIRECT_LINK_TERMINAL_TIMEOUT_MS = 150_000L
+        private const val BYTES_PER_KB = 1024L
+        private const val RUNTIME_STRESS_RSS_DELTA_LIMIT_KB = 250L * 1024L
         private data class DirectLinkCase(
             val label: String,
             val rawLink: String,

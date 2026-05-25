@@ -168,6 +168,29 @@ class RuntimeStopSupportTest {
         }
 
     @Test
+    fun `detached force kill without native server keeps cleanup resolved`() =
+        runBlocking {
+            val fixture = runtimeFixture()
+            fixture.operationMutex.lock()
+            val result =
+                try {
+                    fixture.runtime.forceKill("idle_busy")
+                } finally {
+                    fixture.operationMutex.unlock()
+                }
+
+            val snapshot = fixture.runtime.nativeSnapshot()
+
+            assertFalse(result.serverDetached)
+            assertFalse(result.closeDetached)
+            assertFalse(snapshot.cleanupUnresolved)
+            assertEquals(RuntimeState.IDLE, snapshot.nativeState)
+            assertEquals("idle_busy", snapshot.lastStopReason)
+            assertFalse(snapshot.lastCloseDetached)
+            assertTrue(fixture.diagnostics.contains("force_kill_lock_busy"))
+        }
+
+    @Test
     fun `start after unresolved cleanup is rejected before native start`() =
         runBlocking {
             val fixture = runtimeFixture()
