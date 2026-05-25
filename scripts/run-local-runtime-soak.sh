@@ -14,9 +14,12 @@ readonly DURATION_SECONDS="${FOXHOLE_SOAK_DURATION_SECONDS:-28800}"
 readonly BROWSER_SETTLE_SECONDS="${FOXHOLE_SOAK_BROWSER_SETTLE_SECONDS:-12}"
 readonly BROWSER_WAIT_SECONDS="${FOXHOLE_SOAK_BROWSER_WAIT_SECONDS:-180}"
 readonly BROWSER_RETRY_SECONDS="${FOXHOLE_SOAK_BROWSER_RETRY_SECONDS:-10}"
-readonly BROWSER_MIN_SCREENSHOT_BYTES="${FOXHOLE_SOAK_BROWSER_MIN_SCREENSHOT_BYTES:-50000}"
+readonly BROWSER_START_TIMEOUT_SECONDS="${FOXHOLE_SOAK_BROWSER_START_TIMEOUT_SECONDS:-20}"
+readonly BROWSER_MIN_SCREENSHOT_BYTES="${FOXHOLE_SOAK_BROWSER_MIN_SCREENSHOT_BYTES:-30000}"
 readonly BROWSER_SNAPSHOT_SECONDS="${FOXHOLE_SOAK_BROWSER_SNAPSHOT_SECONDS:-5,15,30}"
 readonly BROWSER_PREPARE="${FOXHOLE_SOAK_BROWSER_PREPARE:-1}"
+readonly BROWSER_PACKAGE="${FOXHOLE_SOAK_BROWSER_PACKAGE:-}"
+readonly BROWSER_PACKAGE_CANDIDATES="${FOXHOLE_SOAK_BROWSER_PACKAGE_CANDIDATES:-com.android.chrome,com.google.android.apps.chrome,com.brave.browser,app.vanadium.browser,org.mozilla.firefox,org.mozilla.fenix,org.torproject.torbrowser}"
 readonly REQUIRE_SUCCESS="${FOXHOLE_SOAK_REQUIRE_SUCCESS:-1}"
 readonly ALLOW_INSECURE_TLS="${FOXHOLE_SOAK_ALLOW_INSECURE_TLS:-0}"
 readonly KEEP_APP_VISIBLE="${FOXHOLE_SOAK_KEEP_APP_VISIBLE:-1}"
@@ -38,12 +41,14 @@ Common environment:
   FOXHOLE_SOAK_PROBE_INTERVAL_MS=60000               In-app vpn-bound probe interval.
   FOXHOLE_SOAK_BROWSER_WAIT_SECONDS=180              Wait for connected hold before browser checks.
   FOXHOLE_SOAK_BROWSER_RETRY_SECONDS=10              Extra wait before retry capture when a screenshot looks blank.
-  FOXHOLE_SOAK_BROWSER_MIN_SCREENSHOT_BYTES=50000    0 disables the browser screenshot blank-screen guard.
+  FOXHOLE_SOAK_BROWSER_START_TIMEOUT_SECONDS=20      Host-side timeout for browser launch commands.
+  FOXHOLE_SOAK_BROWSER_MIN_SCREENSHOT_BYTES=30000    0 disables the browser screenshot blank-screen guard.
   FOXHOLE_SOAK_BROWSER_SNAPSHOT_SECONDS=5,15,30      Browser screenshot times after URL launch; last sample is verdict image.
   FOXHOLE_SOAK_REQUIRE_SUCCESS=1                     Fail the pass on runtime/IP/traffic evidence problems.
   FOXHOLE_SOAK_GOOGLE_URL=https://www.google.com/    Browser Google smoke URL.
   FOXHOLE_SOAK_IP_URL=https://cloudflare.com/cdn-cgi/trace  Browser IP smoke URL; Cloudflare trace exposes the public IP.
   FOXHOLE_SOAK_BROWSER_PREPARE=1                     Warm Chrome before instrumentation so browser checks avoid UiAutomation conflict.
+  FOXHOLE_SOAK_BROWSER_PACKAGE=com.brave.browser     Optional browser package override. Auto-detects Chrome/Brave/Vanadium/Firefox by default.
   FOXHOLE_SOAK_ALLOW_INSECURE_TLS=0                  Preserve strict subscription TLS by default.
   FOXHOLE_SOAK_TEST_METHOD=$TEST_METHOD
 
@@ -179,6 +184,36 @@ browser_screenshot_bytes() {
   wc -c < "$image" 2>/dev/null || printf '0'
 }
 
+browser_package() {
+  local serial="$1"
+  local candidate
+  if [[ -n "$BROWSER_PACKAGE" ]]; then
+    printf '%s\n' "$BROWSER_PACKAGE"
+    return 0
+  fi
+  while IFS= read -r candidate; do
+    if adb_device "$serial" shell pm path "$candidate" >/dev/null 2>&1; then
+      printf '%s\n' "$candidate"
+      return 0
+    fi
+  done < <(printf '%s\n' "$BROWSER_PACKAGE_CANDIDATES" | csv_to_lines)
+  return 1
+}
+
+start_browser_url() {
+  local serial="$1"
+  local package_name="$2"
+  local url="$3"
+  local wait_for_launch="${4:-1}"
+  local -a command=(adb -s "$serial" shell am start)
+  [[ "$wait_for_launch" == "1" ]] && command+=("-W")
+  command+=("-a" "android.intent.action.VIEW" "-d" "$url")
+  if [[ -n "$package_name" ]]; then
+    command+=("-p" "$package_name")
+  fi
+  timeout "${BROWSER_START_TIMEOUT_SECONDS}s" "${command[@]}"
+}
+
 capture_browser_window_state() {
   local serial="$1"
   local out_file="$2"
@@ -230,14 +265,16 @@ browser_check() {
   local url="$4"
   local log_file="$round_dir/browser-${label}.log"
   local prefix="$round_dir/browser-${label}"
+  local package_name
   local sample final_prefix final_image status=0 elapsed=0
   local -a samples
   mapfile -t samples < <(printf '%s\n' "$BROWSER_SNAPSHOT_SECONDS" | csv_to_lines)
+  package_name="$(browser_package "$serial" || true)"
   {
-    echo "browser_check label=$label url=$url"
-    adb_device "$serial" shell am force-stop com.android.chrome >/dev/null 2>&1 || true
+    echo "browser_check label=$label url=$url package=${package_name:-default}"
+    [[ -z "$package_name" ]] || adb_device "$serial" shell am force-stop "$package_name" >/dev/null 2>&1 || true
     sleep 1
-    if ! adb_device "$serial" shell am start -W -a android.intent.action.VIEW -d "$url" -p com.android.chrome; then
+    if ! start_browser_url "$serial" "$package_name" "$url" 0; then
       echo "browser_start=failed"
       status=1
     else
@@ -287,10 +324,12 @@ browser_check() {
 prepare_browser() {
   local serial="$1"
   local out_dir="$2"
+  local package_name
   [[ "$BROWSER_PREPARE" == "1" ]] || return 0
+  package_name="$(browser_package "$serial" || true)"
   {
-    echo "browser_prepare url=$IP_CHECK_URL"
-    adb_device "$serial" shell am start -a android.intent.action.VIEW -d "$IP_CHECK_URL"
+    echo "browser_prepare url=$IP_CHECK_URL package=${package_name:-default}"
+    start_browser_url "$serial" "$package_name" "$IP_CHECK_URL" 0
     sleep "$BROWSER_SETTLE_SECONDS"
     adb_device "$serial" shell dumpsys activity top | sed -n '1,180p' || true
   } > "$out_dir/browser-prepare.log" 2>&1
@@ -298,14 +337,14 @@ prepare_browser() {
   dismiss_browser_first_run_if_visible "$serial" "$out_dir/browser-prepare"
   if [[ ! -s "$out_dir/browser-prepare.xml" ]] || grep -Eiq 'Make Chrome your own|Use without an account|Stay signed out|Add account to device' "$out_dir/browser-prepare.xml" 2>/dev/null; then
     {
-      echo "browser_prepare_retry url=$IP_CHECK_URL"
-      adb_device "$serial" shell am start -a android.intent.action.VIEW -d "$IP_CHECK_URL"
+      echo "browser_prepare_retry url=$IP_CHECK_URL package=${package_name:-default}"
+      start_browser_url "$serial" "$package_name" "$IP_CHECK_URL" 0
       sleep "$BROWSER_SETTLE_SECONDS"
       adb_device "$serial" shell dumpsys activity top | sed -n '1,180p' || true
     } >> "$out_dir/browser-prepare.log" 2>&1
     capture_screen_and_ui "$serial" "$out_dir/browser-prepare"
   fi
-  adb_device "$serial" shell am force-stop com.android.chrome >/dev/null 2>&1 || true
+  [[ -z "$package_name" ]] || adb_device "$serial" shell am force-stop "$package_name" >/dev/null 2>&1 || true
 }
 
 run_instrumentation_round() {

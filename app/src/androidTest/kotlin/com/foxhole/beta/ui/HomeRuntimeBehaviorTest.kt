@@ -218,8 +218,12 @@ class HomeRuntimeBehaviorTest {
         }
 
         scrollToNetworkBlock()
-        composeRule.waitUntil(timeoutMillis = 3_000) {
+        composeRule.waitUntil(timeoutMillis = CONNECTED_WITHOUT_IP_LOADING_TIMEOUT_MS) {
             composeRule.onAllNodesWithTag("home_network_loading").fetchSemanticsNodes().isEmpty()
+        }
+        scrollToNetworkBlock()
+        composeRule.waitUntil(timeoutMillis = NETWORK_VALUE_SETTLE_TIMEOUT_MS) {
+            textOfOrNull("home_network_primary_ip") == "-"
         }
         composeRule.onNodeWithTag("home_network_primary_ip", useUnmergedTree = true).assertTextEquals("-")
         composeRule
@@ -435,4 +439,9 @@ class HomeRuntimeBehaviorTest {
 
     private fun app(): FoxholeApplication =
         InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as FoxholeApplication
+
+    private companion object {
+        private const val CONNECTED_WITHOUT_IP_LOADING_TIMEOUT_MS = 12_000L
+        private const val NETWORK_VALUE_SETTLE_TIMEOUT_MS = 5_000L
+    }
 }

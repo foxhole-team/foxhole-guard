@@ -240,8 +240,13 @@ class HomeScreenTest {
             }
 
         composeRule.onNodeWithTag("home_profiles_action").performClick()
+        val editActionTag = "profiles_profile_edit_action_${targetProfileId}"
         composeRule.onNodeWithTag("profiles_profile_row_${targetProfileId}").performTouchInput { swipeLeft() }
-        composeRule.onNodeWithTag("profiles_profile_edit_action_${targetProfileId}").performClick()
+        composeRule.waitForIdle()
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            composeRule.onAllNodesWithTag(editActionTag).fetchSemanticsNodes().isNotEmpty()
+        }
+        composeRule.onNodeWithTag(editActionTag).assertIsDisplayed().performClick()
 
         val serverLabel = context.getString(R.string.profile_editor_server)
         composeRule.waitUntil(timeoutMillis = 10_000) {
