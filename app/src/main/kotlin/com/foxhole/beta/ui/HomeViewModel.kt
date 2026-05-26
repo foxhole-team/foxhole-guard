@@ -94,6 +94,7 @@ class HomeViewModel(
     internal val ipInfoLoadingMutable = MutableStateFlow(false)
     internal val torIpInfoMutable = MutableStateFlow<com.foxhole.beta.core.model.IpInfo?>(null)
     internal val dashboardConnectionMetricsLoadingMutable = MutableStateFlow(false)
+    internal val statisticsVisibleMutable = MutableStateFlow(false)
     internal var dashboardConnectionMetricsLoadingStartedAtMs = 0L
 
     internal fun setDashboardConnectionMetricsLoading(value: Boolean) {
@@ -291,7 +292,7 @@ class HomeViewModel(
             container.anomalyRepository.recentTrafficWindows,
             reconnectState,
         ) { diagnosticEntries, anomalyEvents, appActivityStreams, trafficWindows, reconnectState ->
-            HomeActivityStreams(
+            homeActivityStreamsPreview(
                 diagnosticEntries = diagnosticEntries,
                 anomalyEvents = anomalyEvents,
                 appTrafficWindows = appActivityStreams.appTrafficWindows,
@@ -553,15 +554,20 @@ class HomeViewModel(
             dnsFilterRefreshInProgressMutable,
             trafficMapUiState,
             appTrafficUsageAccessGrantedMutable,
-        ) { state, dnsFilterRefreshInProgress, trafficMapState, usageAccessGranted ->
+            statisticsVisibleMutable,
+        ) { state, dnsFilterRefreshInProgress, trafficMapState, usageAccessGranted, statisticsVisible ->
             val routeState = state.toSettingsRouteUiState(dnsFilterRefreshInProgress = dnsFilterRefreshInProgress)
             routeState.copy(
                 statisticsDashboard =
-                buildStatisticsDashboardUiState(
-                    state = routeState,
-                    trafficMapState = trafficMapState,
-                    usageAccessGranted = usageAccessGranted,
-                ),
+                if (statisticsVisible) {
+                    buildStatisticsDashboardUiState(
+                        state = routeState,
+                        trafficMapState = trafficMapState,
+                        usageAccessGranted = usageAccessGranted,
+                    )
+                } else {
+                    StatisticsDashboardUiState()
+                },
             )
         }
             .flowOn(Dispatchers.Default)

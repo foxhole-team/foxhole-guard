@@ -10,6 +10,7 @@ import kotlinx.coroutines.launch
 
 internal fun HomeViewModel.onStatisticsUiVisibilityChangedInternal(visible: Boolean) {
     statisticsVisible = visible
+    statisticsVisibleMutable.value = visible
     onTrafficUiVisibilityChangedInternal(dashboardVisible || statisticsVisible)
     val runtimeAllowed =
         appTrafficStatsRuntimeAllowed(

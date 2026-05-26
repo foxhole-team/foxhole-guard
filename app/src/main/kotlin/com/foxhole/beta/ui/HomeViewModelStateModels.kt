@@ -166,6 +166,50 @@ internal data class HomeActivityStreams(
     val reconnectState: HomeReconnectStreams,
 )
 
+internal const val DIAGNOSTICS_PREVIEW_LIMIT = 500
+internal const val ANOMALY_EVENTS_UI_LIMIT = 200
+internal const val APP_TRAFFIC_WINDOWS_UI_LIMIT = 120
+internal const val NETWORK_ACTIVITY_EVENTS_UI_LIMIT = 200
+internal const val TRAFFIC_WINDOWS_UI_LIMIT = 120
+
+internal fun homeActivityStreamsPreview(
+    diagnosticEntries: List<DiagnosticEntry>,
+    anomalyEvents: List<AnomalyEvent>,
+    appTrafficWindows: List<AppTrafficWindow>,
+    networkActivityEvents: List<NetworkActivityEvent>,
+    trafficWindows: List<TrafficWindow>,
+    reconnectState: HomeReconnectStreams,
+): HomeActivityStreams {
+    val previewNetworkActivityEvents =
+        networkActivityEvents.takeLatest(
+            NETWORK_ACTIVITY_EVENTS_UI_LIMIT,
+            NetworkActivityEvent::timestampMs,
+        )
+    return HomeActivityStreams(
+        diagnosticEntries = diagnosticEntries.takeLatest(DIAGNOSTICS_PREVIEW_LIMIT, DiagnosticEntry::timestamp),
+        anomalyEvents = anomalyEvents.takeLatest(ANOMALY_EVENTS_UI_LIMIT, AnomalyEvent::createdAtMs),
+        appTrafficWindows = appTrafficWindows.takeLatest(APP_TRAFFIC_WINDOWS_UI_LIMIT, AppTrafficWindow::startedAtMs),
+        networkActivityEvents = previewNetworkActivityEvents,
+        trafficWindows = trafficWindows.takeLatest(TRAFFIC_WINDOWS_UI_LIMIT, TrafficWindow::startedAtMs),
+        reconnectState = reconnectState,
+    )
+}
+
+private fun <T> List<T>.takeLatest(
+    limit: Int,
+    timestamp: (T) -> Long,
+): List<T> {
+    if (size <= limit) {
+        return this
+    }
+    val descending = size < 2 || timestamp(this[0]) >= timestamp(this[size - 1])
+    return if (descending) {
+        take(limit)
+    } else {
+        takeLast(limit)
+    }
+}
+
 internal enum class PendingConnectAction {
     MANUAL,
     AUTO_CONNECT,

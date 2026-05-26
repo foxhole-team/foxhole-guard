@@ -79,7 +79,7 @@ class AnomalyRepository(
                 } else {
                     dao.observeRecentNetworkActivityEvents(
                         cutoff = statisticsRetentionCutoff(nowProvider(), settings.statistics.retention),
-                        limit = NETWORK_ACTIVITY_UI_LIMIT,
+                        limit = NETWORK_ACTIVITY_PREVIEW_LIMIT,
                     )
                         .map { entities -> entities.map(NetworkActivityEventEntity::toDomain) }
                 }
@@ -282,7 +282,7 @@ class AnomalyRepository(
 
     companion object {
         private const val HISTORY_LIMIT = 96
-        private const val NETWORK_ACTIVITY_UI_LIMIT = 1_000
+        private const val NETWORK_ACTIVITY_PREVIEW_LIMIT = 200
         private const val NETWORK_ACTIVITY_CLEANUP_INTERVAL_MS = 60L * 1000L
         private const val HOUR_MS = 60L * 60L * 1000L
         private const val NOTIFICATION_COOLDOWN_MS = 6L * 60L * 60L * 1000L
