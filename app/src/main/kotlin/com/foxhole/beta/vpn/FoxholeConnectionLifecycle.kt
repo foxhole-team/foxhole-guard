@@ -43,7 +43,7 @@ internal class FoxholeConnectionLifecycle(
             )
         }
         diagnosticsLogger.record("connection", "connect requested")
-        FoxholeVpnRuntimeBridge.updateIpInfo(null)
+        FoxholeVpnRuntimeBridge.markIpInfoRefreshPending(RuntimeIpRefreshReason.POST_CONNECT)
         FoxholeVpnRuntimeBridge.update(
             ConnectionSnapshot(
                 state = ConnectionState.CONNECTING,
@@ -77,7 +77,7 @@ internal class FoxholeConnectionLifecycle(
             )
         }
         diagnosticsLogger.record("connection", "direct Tor connect requested")
-        FoxholeVpnRuntimeBridge.updateIpInfo(null)
+        FoxholeVpnRuntimeBridge.markIpInfoRefreshPending(RuntimeIpRefreshReason.POST_CONNECT)
         FoxholeVpnRuntimeBridge.update(
             ConnectionSnapshot(
                 state = ConnectionState.CONNECTING,

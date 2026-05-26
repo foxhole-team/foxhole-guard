@@ -56,7 +56,7 @@ class FoxholeVpnRuntimeBridgeTest {
     }
 
     @Test
-    fun `runtime ui state keeps previous tunnel ip when legacy bridge clears active ip`() {
+    fun `runtime ui state marks previous tunnel ip loading without clearing bridge ip`() {
         val previousSnapshot = FoxholeVpnRuntimeBridge.snapshot.value
         val previousIpInfo = FoxholeVpnRuntimeBridge.ipInfo.value
         val previousDeviceIpInfo = FoxholeVpnRuntimeBridge.deviceIpInfo.value
@@ -73,11 +73,43 @@ class FoxholeVpnRuntimeBridgeTest {
             )
             FoxholeVpnRuntimeBridge.updateIpInfo(tunnelIp)
 
-            FoxholeVpnRuntimeBridge.updateIpInfo(null)
+            FoxholeVpnRuntimeBridge.markIpInfoRefreshPending(RuntimeIpRefreshReason.POST_CONNECT)
 
             val panel = FoxholeVpnRuntimeBridge.runtimeUiState.value.ip.tunnel as RuntimeIpPanelState.Loading
+            assertEquals(tunnelIp, FoxholeVpnRuntimeBridge.ipInfo.value)
             assertEquals(tunnelIp, panel.previous)
-            assertEquals(RuntimeIpRefreshReason.LEGACY_BRIDGE, panel.reason)
+            assertEquals(RuntimeIpRefreshReason.POST_CONNECT, panel.reason)
+        } finally {
+            FoxholeVpnRuntimeBridge.update(previousSnapshot, refreshLastChangeAt = false)
+            FoxholeVpnRuntimeBridge.updateIpInfo(previousIpInfo)
+            FoxholeVpnRuntimeBridge.updateDeviceIpInfo(previousDeviceIpInfo)
+        }
+    }
+
+    @Test
+    fun `runtime ui state clears pending loading when new tunnel ip arrives`() {
+        val previousSnapshot = FoxholeVpnRuntimeBridge.snapshot.value
+        val previousIpInfo = FoxholeVpnRuntimeBridge.ipInfo.value
+        val previousDeviceIpInfo = FoxholeVpnRuntimeBridge.deviceIpInfo.value
+        val tunnelIp = ipInfo("203.0.113.10")
+        val refreshedIp = ipInfo("198.51.100.20")
+        try {
+            FoxholeVpnRuntimeBridge.update(
+                ConnectionSnapshot(
+                    state = ConnectionState.CONNECTED,
+                    trafficMode = TrafficMode.TUNNEL,
+                    profileId = 42L,
+                    lastChangeAt = 500L,
+                ),
+                refreshLastChangeAt = false,
+            )
+            FoxholeVpnRuntimeBridge.updateIpInfo(tunnelIp)
+            FoxholeVpnRuntimeBridge.markIpInfoRefreshPending(RuntimeIpRefreshReason.POST_CONNECT)
+
+            FoxholeVpnRuntimeBridge.updateIpInfo(refreshedIp)
+
+            val panel = FoxholeVpnRuntimeBridge.runtimeUiState.value.ip.tunnel as RuntimeIpPanelState.Ready
+            assertEquals(refreshedIp, panel.info)
         } finally {
             FoxholeVpnRuntimeBridge.update(previousSnapshot, refreshLastChangeAt = false)
             FoxholeVpnRuntimeBridge.updateIpInfo(previousIpInfo)

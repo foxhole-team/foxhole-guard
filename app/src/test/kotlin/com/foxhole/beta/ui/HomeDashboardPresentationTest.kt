@@ -1132,7 +1132,7 @@ class HomeDashboardPresentationTest {
     }
 
     @Test
-    fun `network model hides stale ip during route transition behind ip skeleton`() {
+    fun `network model keeps previous ip during route transition while details load`() {
         val ipInfo =
             IpInfo(
                 ip = "203.0.113.10",
@@ -1158,11 +1158,11 @@ class HomeDashboardPresentationTest {
                 deviceInternetAvailable = true,
             )
 
-        assertEquals(null, model.visibleIpInfo)
+        assertEquals(ipInfo, model.visibleIpInfo)
         assertEquals(R.string.home_network_connection_info_title, model.titleRes)
         assertTrue(model.showConnectionStatus)
         assertTrue(model.showLoading)
-        assertTrue(model.showIpInfoLoading)
+        assertFalse(model.showIpInfoLoading)
         assertTrue(model.showConnectionDetailsLoading)
     }
 

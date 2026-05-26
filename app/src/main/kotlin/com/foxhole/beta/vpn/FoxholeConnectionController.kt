@@ -720,6 +720,7 @@ object FoxholeVpnRuntimeBridge {
     private val highFrequencyTrafficUpdatesMutable = MutableStateFlow(false)
     private val immediateTrafficSampleRequestsMutable = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     private val runtimeUiStateMutable = MutableStateFlow(RuntimeUiState())
+    private var pendingIpRefreshReason: RuntimeIpRefreshReason? = null
 
     val snapshot: StateFlow<ConnectionSnapshot> = snapshotMutable
     val ipInfo: StateFlow<IpInfo?> = ipInfoMutable
@@ -743,6 +744,7 @@ object FoxholeVpnRuntimeBridge {
     }
 
     fun updateIpInfo(value: IpInfo?) {
+        pendingIpRefreshReason = null
         ipInfoMutable.value =
             if (value == null) {
                 null
@@ -754,6 +756,15 @@ object FoxholeVpnRuntimeBridge {
                     remoteDnsServers = value.remoteDnsServers.ifEmpty { previous?.remoteDnsServers.orEmpty() },
                 ).retainKnownLocationFrom(previous)
             }
+        publishRuntimeUiState()
+    }
+
+    fun markIpInfoRefreshPending() {
+        markIpInfoRefreshPending(RuntimeIpRefreshReason.LEGACY_BRIDGE)
+    }
+
+    internal fun markIpInfoRefreshPending(reason: RuntimeIpRefreshReason) {
+        pendingIpRefreshReason = reason
         publishRuntimeUiState()
     }
 
@@ -786,6 +797,7 @@ object FoxholeVpnRuntimeBridge {
     }
 
     fun clearTransientState(clearIpInfo: Boolean = true) {
+        pendingIpRefreshReason = null
         if (clearIpInfo) {
             ipInfoMutable.value = null
         }
@@ -802,6 +814,7 @@ object FoxholeVpnRuntimeBridge {
                 ipInfo = ipInfoMutable.value,
                 deviceIpInfo = deviceIpInfoMutable.value,
                 traffic = trafficMutable.value,
+                pendingIpRefreshReason = pendingIpRefreshReason,
             )
     }
 }

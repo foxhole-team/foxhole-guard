@@ -252,6 +252,41 @@ class HomeIpLoadingPolicyTest {
     }
 
     @Test
+    fun `keeps previous route ip visible while tunnel refresh is pending`() {
+        val previousIp =
+            IpInfo(
+                ip = "8.8.8.8",
+                ipv4 = "8.8.8.8",
+                countryCode = "US",
+                countryName = "United States",
+                city = "Mountain View",
+                isp = "Example ISP",
+                fetchedAt = 1_000L,
+            )
+
+        val model =
+            resolveHomeDashboardNetworkModel(
+                state = HomeRouteUiState(
+                    profilesLoaded = true,
+                    ipInfo = previousIp,
+                    connection = ConnectionSnapshot(
+                        state = ConnectionState.CONNECTING,
+                        trafficMode = TrafficMode.TUNNEL,
+                        profileId = 7L,
+                        lastChangeAt = 5_000L,
+                    ),
+                ),
+                visibleIpInfo = previousIp,
+                deviceInternetAvailable = true,
+            )
+
+        assertEquals(previousIp, model.visibleIpInfo)
+        assertTrue(model.showLoading)
+        assertFalse(model.showIpInfoLoading)
+        assertTrue(model.showConnectionDetailsLoading)
+    }
+
+    @Test
     fun `shows ip skeleton while smart start is running without a resolved route ip`() {
         assertTrue(
             shouldShowPendingNetworkLoading(

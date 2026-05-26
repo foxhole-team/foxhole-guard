@@ -247,7 +247,7 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
             "sessionId=${session.correlationId}",
             "mode=${trafficMode.name.lowercase()}",
         )
-        FoxholeVpnRuntimeBridge.updateIpInfo(null)
+        FoxholeVpnRuntimeBridge.markIpInfoRefreshPending(RuntimeIpRefreshReason.POST_CONNECT)
         FoxholeVpnRuntimeBridge.update(
             ConnectionSnapshot(
                 state = ConnectionState.CONNECTING,

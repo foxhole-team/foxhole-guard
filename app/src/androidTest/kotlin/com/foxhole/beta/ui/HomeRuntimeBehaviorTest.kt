@@ -204,6 +204,7 @@ class HomeRuntimeBehaviorTest {
         waitUntilNetworkBlockSettles()
 
         composeRule.runOnUiThread {
+            FoxholeVpnRuntimeBridge.clearTransientState(clearIpInfo = true)
             FoxholeVpnRuntimeBridge.update(
                 ConnectionSnapshot(
                     state = ConnectionState.CONNECTED,
@@ -212,7 +213,7 @@ class HomeRuntimeBehaviorTest {
                     profileName = "Instrumentation",
                 ),
             )
-            FoxholeVpnRuntimeBridge.updateIpInfo(null)
+            FoxholeVpnRuntimeBridge.markIpInfoRefreshPending()
         }
 
         scrollToNetworkBlock()
@@ -261,12 +262,12 @@ class HomeRuntimeBehaviorTest {
                     profileName = "Instrumentation",
                 ),
             )
-            FoxholeVpnRuntimeBridge.updateIpInfo(null)
+            FoxholeVpnRuntimeBridge.markIpInfoRefreshPending()
         }
 
-        composeRule.waitUntil(timeoutMillis = 3_000) { networkLoadingVisible() }
-        composeRule.onNodeWithTag("home_network_loading").assertIsDisplayed()
-        composeRule.onAllNodesWithTag("home_network_primary_ip", useUnmergedTree = true).assertCountEquals(0)
+        composeRule.waitUntil(timeoutMillis = 3_000) { textOfOrNull("home_network_primary_ip") == previousIp }
+        composeRule.onNodeWithTag("home_network_primary_ip").assertTextEquals(previousIp)
+        composeRule.onAllNodesWithTag("home_network_loading", useUnmergedTree = true).assertCountEquals(0)
         composeRule.waitUntil(timeoutMillis = 3_000) {
             composeRule.onAllNodesWithTag("home_connection_status_loading").fetchSemanticsNodes().isNotEmpty()
         }

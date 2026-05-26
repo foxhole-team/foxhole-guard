@@ -131,6 +131,7 @@ internal fun runtimeUiStateFromBridge(
     ipInfo: IpInfo?,
     deviceIpInfo: IpInfo?,
     traffic: TrafficSnapshot,
+    pendingIpRefreshReason: RuntimeIpRefreshReason? = null,
 ): RuntimeUiState {
     val error = snapshot.runtimeError()
     val phase = snapshot.runtimePhase(error)
@@ -142,6 +143,7 @@ internal fun runtimeUiStateFromBridge(
             info = deviceIpInfo,
             previous = previous.ip.device,
             phase = phase,
+            pendingRefreshReason = pendingIpRefreshReason,
         )
     val tunnelPanel =
         bridgeIpPanel(
@@ -150,6 +152,7 @@ internal fun runtimeUiStateFromBridge(
             info = ipInfo.takeUnless { target == RuntimeIpRefreshTarget.TOR },
             previous = previous.ip.tunnel,
             phase = phase,
+            pendingRefreshReason = pendingIpRefreshReason,
         )
     val torPanel =
         bridgeIpPanel(
@@ -158,6 +161,7 @@ internal fun runtimeUiStateFromBridge(
             info = ipInfo.takeIf { target == RuntimeIpRefreshTarget.TOR },
             previous = previous.ip.tor,
             phase = phase,
+            pendingRefreshReason = pendingIpRefreshReason,
         )
     val ipState =
         RuntimeIpState(
@@ -184,19 +188,24 @@ private fun bridgeIpPanel(
     info: IpInfo?,
     previous: RuntimeIpPanelState,
     phase: RuntimePhase,
+    pendingRefreshReason: RuntimeIpRefreshReason?,
 ): RuntimeIpPanelState {
-    if (info != null) {
-        return RuntimeIpPanelState.Ready(target = target, info = info)
-    }
     val previousInfo = previous.previousOrReadyInfo
-    return if (target == activeTarget && phase.isActiveRuntimePhase()) {
-        RuntimeIpPanelState.Loading(
-            target = target,
-            previous = previousInfo,
-            reason = RuntimeIpRefreshReason.LEGACY_BRIDGE,
-        )
-    } else {
-        RuntimeIpPanelState.Hidden
+    return when {
+        target == activeTarget && pendingRefreshReason != null && phase.isActiveRuntimePhase() ->
+            RuntimeIpPanelState.Loading(
+                target = target,
+                previous = info ?: previousInfo,
+                reason = pendingRefreshReason,
+            )
+        info != null -> RuntimeIpPanelState.Ready(target = target, info = info)
+        target == activeTarget && phase.isActiveRuntimePhase() ->
+            RuntimeIpPanelState.Loading(
+                target = target,
+                previous = previousInfo,
+                reason = RuntimeIpRefreshReason.LEGACY_BRIDGE,
+            )
+        else -> RuntimeIpPanelState.Hidden
     }
 }
 

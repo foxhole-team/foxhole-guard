@@ -602,7 +602,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
                 fail(getString(R.string.error_tcp_runtime_readiness_failed), commandStartId)
                 return
             }
-        FoxholeVpnRuntimeBridge.updateIpInfo(null)
+        FoxholeVpnRuntimeBridge.markIpInfoRefreshPending(RuntimeIpRefreshReason.POST_CONNECT)
         FoxholeVpnRuntimeBridge.update(
             ConnectionSnapshot(
                 state = ConnectionState.CONNECTING,
@@ -1273,7 +1273,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
             activeVpnNetworkHandle = null
             activeSession = session
             FoxholeVpnRuntimeBridge.updateTraffic(trafficSampler.reset())
-            FoxholeVpnRuntimeBridge.updateIpInfo(null)
+            FoxholeVpnRuntimeBridge.markIpInfoRefreshPending(RuntimeIpRefreshReason.POST_UPDATE)
             FoxholeVpnRuntimeBridge.update(
                 previousSnapshot.copy(
                     state = ConnectionState.RECONNECTING,

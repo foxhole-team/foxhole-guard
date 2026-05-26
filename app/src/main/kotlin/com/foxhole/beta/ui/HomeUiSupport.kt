@@ -724,7 +724,7 @@ private fun HomeRouteUiState.shouldKeepDashboardIpInfo(info: IpInfo): Boolean =
         homeAnalysisOnlyRunning() -> true
         shouldPinVpnIpDuringTorOperation() -> true
         hasFailedDashboardRoute() -> info.isPublicFreshForRouteTransition(connection.lastChangeAt)
-        hasActiveDashboardRouteTransition() -> info.isPublicFreshForRouteTransition(connection.lastChangeAt)
+        hasActiveDashboardRouteTransition() -> true
         hasActiveDashboardRouteRuntime() -> shouldKeepActiveDashboardRouteIpInfo(info)
         else -> true
     }
