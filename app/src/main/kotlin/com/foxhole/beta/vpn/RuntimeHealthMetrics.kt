@@ -1,8 +1,14 @@
 package com.foxhole.beta.vpn
 
 import android.os.Debug
+import android.os.Looper
 import com.foxhole.beta.BuildConfig
 import com.foxhole.beta.core.diagnostics.DiagnosticsLogger
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.concurrent.atomic.AtomicLong
 
@@ -25,6 +31,7 @@ internal data class RuntimeResourceSnapshot(
     val cleanupUnresolved: Boolean,
     val lastStopReason: String?,
     val lastCloseDetached: Boolean,
+    val skippedExpensiveFields: Boolean,
 )
 
 @Suppress("TooManyFunctions")
@@ -152,7 +159,119 @@ internal object RuntimeHealthMetrics {
                 commandQueueDepth = commandQueue.commandQueueDepth,
                 activeNetworkCallbacks = activeNetworkCallbacks,
                 nativeSnapshot = nativeSnapshot,
+                skipExpensiveFields = isMainThread(),
             )
+        recordSnapshot(
+            diagnosticsLogger = diagnosticsLogger,
+            owner = owner,
+            event = event,
+            commandQueue = commandQueue,
+            snapshot = snapshot,
+        )
+    }
+
+    fun recordResourceSnapshotAsync(
+        scope: CoroutineScope,
+        dispatcher: CoroutineDispatcher = Dispatchers.IO,
+        owner: String,
+        event: String,
+        runtimeGeneration: Long,
+        commandQueue: RuntimeCommandQueueSnapshot,
+        nativeSnapshot: NativeRuntimeSnapshot,
+        activeNetworkCallbacks: Int,
+        diagnosticsLogger: DiagnosticsLogger,
+    ) {
+        if (!BuildConfig.DEBUG && !BuildConfig.ENABLE_DIAGNOSTIC_LOGCAT) {
+            return
+        }
+        scope.launch(dispatcher) {
+            val snapshot =
+                captureResourceSnapshot(
+                    runtimeGeneration = runtimeGeneration,
+                    commandQueueDepth = commandQueue.commandQueueDepth,
+                    activeNetworkCallbacks = activeNetworkCallbacks,
+                    nativeSnapshot = nativeSnapshot,
+                    dispatcher = dispatcher,
+                )
+            recordSnapshot(
+                diagnosticsLogger = diagnosticsLogger,
+                owner = owner,
+                event = event,
+                commandQueue = commandQueue,
+                snapshot = snapshot,
+            )
+        }
+    }
+
+    suspend fun captureResourceSnapshot(
+        runtimeGeneration: Long,
+        commandQueueDepth: Int,
+        activeNetworkCallbacks: Int,
+        nativeSnapshot: NativeRuntimeSnapshot,
+        dispatcher: CoroutineDispatcher = Dispatchers.IO,
+    ): RuntimeResourceSnapshot =
+        withContext(dispatcher) {
+            captureResourceSnapshot(
+                runtimeGeneration = runtimeGeneration,
+                commandQueueDepth = commandQueueDepth,
+                activeNetworkCallbacks = activeNetworkCallbacks,
+                nativeSnapshot = nativeSnapshot,
+                skipExpensiveFields = false,
+            )
+        }
+
+    internal fun captureResourceSnapshot(
+        runtimeGeneration: Long,
+        commandQueueDepth: Int,
+        activeNetworkCallbacks: Int,
+        nativeSnapshot: NativeRuntimeSnapshot,
+        skipExpensiveFields: Boolean,
+    ): RuntimeResourceSnapshot {
+        val runtime = Runtime.getRuntime()
+        val nativeHeapKb =
+            if (skipExpensiveFields) {
+                null
+            } else {
+                runCatching {
+                    Debug.getNativeHeapAllocatedSize() / BYTES_PER_KB
+                }.getOrNull()
+            }
+        val threadCount =
+            if (skipExpensiveFields) {
+                -1
+            } else {
+                runCatching { Thread.getAllStackTraces().size }.getOrDefault(-1)
+            }
+        return RuntimeResourceSnapshot(
+            rssKb = if (skipExpensiveFields) null else readStatusMemoryKb("VmRSS"),
+            pssKb = if (skipExpensiveFields) null else readPssKb(),
+            nativeHeapKb = nativeHeapKb,
+            javaHeapKb = ((runtime.totalMemory() - runtime.freeMemory()) / BYTES_PER_KB).coerceAtLeast(0L),
+            threadCount = threadCount,
+            runtimeGeneration = runtimeGeneration,
+            commandQueueDepth = commandQueueDepth.coerceAtLeast(0),
+            activeNetworkCallbacks = activeNetworkCallbacks.coerceAtLeast(0),
+            hasCommandServer = nativeSnapshot.hasCommandServer,
+            hasTunFileDescriptor = nativeSnapshot.hasTunFileDescriptor,
+            hasHost = nativeSnapshot.hasHost,
+            hasConfig = nativeSnapshot.hasConfig,
+            dnsServerAddress = nativeSnapshot.dnsServerAddress,
+            nativeGeneration = nativeSnapshot.nativeGeneration,
+            nativeState = nativeSnapshot.nativeState,
+            cleanupUnresolved = nativeSnapshot.cleanupUnresolved,
+            lastStopReason = nativeSnapshot.lastStopReason,
+            lastCloseDetached = nativeSnapshot.lastCloseDetached,
+            skippedExpensiveFields = skipExpensiveFields,
+        )
+    }
+
+    private fun recordSnapshot(
+        diagnosticsLogger: DiagnosticsLogger,
+        owner: String,
+        event: String,
+        commandQueue: RuntimeCommandQueueSnapshot,
+        snapshot: RuntimeResourceSnapshot,
+    ) {
         diagnosticsLogger.recordStructured(
             "runtime-health",
             "runtime resource snapshot",
@@ -176,6 +295,7 @@ internal object RuntimeHealthMetrics {
             "cleanup_unresolved=${snapshot.cleanupUnresolved}",
             snapshot.lastStopReason?.let { "last_stop_reason=$it" },
             "last_close_detached=${snapshot.lastCloseDetached}",
+            "skipped_expensive_fields=${snapshot.skippedExpensiveFields}",
             "queue_running=${commandQueue.running}",
             commandQueue.runningPriority?.let { "queue_priority=$it" },
             commandQueue.runningReason?.let { "queue_reason=$it" },
@@ -208,35 +328,6 @@ internal object RuntimeHealthMetrics {
         )
     }
 
-    private fun captureResourceSnapshot(
-        runtimeGeneration: Long,
-        commandQueueDepth: Int,
-        activeNetworkCallbacks: Int,
-        nativeSnapshot: NativeRuntimeSnapshot,
-    ): RuntimeResourceSnapshot {
-        val runtime = Runtime.getRuntime()
-        return RuntimeResourceSnapshot(
-            rssKb = readStatusMemoryKb("VmRSS"),
-            pssKb = readPssKb(),
-            nativeHeapKb = runCatching { Debug.getNativeHeapAllocatedSize() / BYTES_PER_KB }.getOrNull(),
-            javaHeapKb = ((runtime.totalMemory() - runtime.freeMemory()) / BYTES_PER_KB).coerceAtLeast(0L),
-            threadCount = runCatching { Thread.getAllStackTraces().size }.getOrDefault(-1),
-            runtimeGeneration = runtimeGeneration,
-            commandQueueDepth = commandQueueDepth.coerceAtLeast(0),
-            activeNetworkCallbacks = activeNetworkCallbacks.coerceAtLeast(0),
-            hasCommandServer = nativeSnapshot.hasCommandServer,
-            hasTunFileDescriptor = nativeSnapshot.hasTunFileDescriptor,
-            hasHost = nativeSnapshot.hasHost,
-            hasConfig = nativeSnapshot.hasConfig,
-            dnsServerAddress = nativeSnapshot.dnsServerAddress,
-            nativeGeneration = nativeSnapshot.nativeGeneration,
-            nativeState = nativeSnapshot.nativeState,
-            cleanupUnresolved = nativeSnapshot.cleanupUnresolved,
-            lastStopReason = nativeSnapshot.lastStopReason,
-            lastCloseDetached = nativeSnapshot.lastCloseDetached,
-        )
-    }
-
     private fun readPssKb(): Long? =
         runCatching {
             val memoryInfo = Debug.MemoryInfo()
@@ -260,6 +351,10 @@ internal object RuntimeHealthMetrics {
                 }
             }
         }.getOrNull()
+
+    private fun isMainThread(): Boolean =
+        runCatching { Looper.getMainLooper().thread === Thread.currentThread() }
+            .getOrDefault(false)
 
     private const val BYTES_PER_KB = 1024L
     private const val PROC_SELF_STATUS = "/proc/self/status"

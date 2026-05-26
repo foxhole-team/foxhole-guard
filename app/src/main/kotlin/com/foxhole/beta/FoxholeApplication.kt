@@ -34,7 +34,7 @@ class FoxholeApplication : Application() {
     internal val container: FoxholeAppGraph
         get() = appGraph
 
-    private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     override fun onCreate() {
         super.onCreate()
@@ -75,7 +75,7 @@ class FoxholeApplication : Application() {
     }
 
     private fun installDebugStrictMode() {
-        if (!BuildConfig.DEBUG && !BuildConfig.ENABLE_DIAGNOSTIC_LOGCAT) {
+        if (!BuildConfig.ENABLE_STRICT_MODE) {
             return
         }
         StrictMode.setThreadPolicy(

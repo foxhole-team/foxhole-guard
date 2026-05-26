@@ -72,6 +72,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.runningFold
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 
 class HomeViewModel(
@@ -618,12 +619,16 @@ class HomeViewModel(
 
     init {
         viewModelScope.launch {
-            runCatching { container.settingsRepository.warmUp() }
+            val settingsResult = runCatching {
+                withContext(Dispatchers.IO) { container.settingsRepository.warmUp() }
+            }
+            settingsResult
                 .onFailure {
                     snackbars.emit(errorBanner(R.string.settings_secure_storage_failed))
                 }
-            val settings = container.settingsRepository.settings.value
-            appTrafficUsageAccessGrantedMutable.value = appTrafficStatsRecorder.hasUsageAccess()
+            val settings = settingsResult.getOrNull() ?: container.settingsRepository.settings.value
+            appTrafficUsageAccessGrantedMutable.value =
+                withContext(Dispatchers.IO) { appTrafficStatsRecorder.hasUsageAccess() }
             syncAppTrafficStatsSampler(appTrafficStatsRuntimeAllowed(settings))
         }
         viewModelScope.launch {
@@ -636,9 +641,14 @@ class HomeViewModel(
             val loaded =
                 try {
                     kotlinx.coroutines.withTimeoutOrNull(PROFILE_PRELOAD_TIMEOUT_MS) {
-                        container.profileRepository.ensureActiveProfileInvariant()
-                        startupActiveProfileMutable.value = container.profileRepository.getActiveProfile()
-                        container.profileRepository.profiles.first()
+                        val activeProfile =
+                            withContext(Dispatchers.IO) {
+                                container.profileRepository.ensureActiveProfileInvariant()
+                                val profile = container.profileRepository.getActiveProfile()
+                                container.profileRepository.profiles.first()
+                                profile
+                            }
+                        startupActiveProfileMutable.value = activeProfile
                         true
                     } == true
                 } catch (error: kotlinx.coroutines.CancellationException) {

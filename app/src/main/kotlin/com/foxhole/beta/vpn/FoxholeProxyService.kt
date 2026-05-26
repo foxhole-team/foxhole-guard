@@ -201,7 +201,7 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
             runCatching { connectivityManager.unregisterNetworkCallback(defaultNetworkCallback) }
             defaultNetworkCallbackRegistered = false
         }
-        recordRuntimeResourceSnapshot(event = "service_destroy_after_callbacks_unregistered")
+        recordRuntimeResourceSnapshot(event = "service_destroy_after_callbacks_unregistered", async = false)
     }
 
     override fun onBind(intent: Intent): IBinder? = null
@@ -400,16 +400,37 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
         return result
     }
 
-    private fun recordRuntimeResourceSnapshot(event: String) {
-        RuntimeHealthMetrics.recordResourceSnapshot(
-            owner = "proxy",
-            event = event,
-            runtimeGeneration = runtimeSupervisorInstance?.currentGeneration() ?: 0L,
-            commandQueue = runtimeSupervisorInstance?.queueSnapshot() ?: RuntimeCommandQueueSnapshot.EMPTY,
-            nativeSnapshot = runtimeInstance?.nativeSnapshot() ?: NativeRuntimeSnapshot.NONE,
-            activeNetworkCallbacks = activeNetworkCallbackCount(),
-            diagnosticsLogger = container.diagnosticsLogger,
-        )
+    private fun recordRuntimeResourceSnapshot(
+        event: String,
+        async: Boolean = true,
+    ) {
+        val runtimeGeneration = runtimeSupervisorInstance?.currentGeneration() ?: 0L
+        val commandQueue = runtimeSupervisorInstance?.queueSnapshot() ?: RuntimeCommandQueueSnapshot.EMPTY
+        val nativeSnapshot = runtimeInstance?.nativeSnapshot() ?: NativeRuntimeSnapshot.NONE
+        val activeNetworkCallbacks = activeNetworkCallbackCount()
+        if (async) {
+            RuntimeHealthMetrics.recordResourceSnapshotAsync(
+                scope = scope,
+                dispatcher = Dispatchers.IO,
+                owner = "proxy",
+                event = event,
+                runtimeGeneration = runtimeGeneration,
+                commandQueue = commandQueue,
+                nativeSnapshot = nativeSnapshot,
+                activeNetworkCallbacks = activeNetworkCallbacks,
+                diagnosticsLogger = container.diagnosticsLogger,
+            )
+        } else {
+            RuntimeHealthMetrics.recordResourceSnapshot(
+                owner = "proxy",
+                event = event,
+                runtimeGeneration = runtimeGeneration,
+                commandQueue = commandQueue,
+                nativeSnapshot = nativeSnapshot,
+                activeNetworkCallbacks = activeNetworkCallbacks,
+                diagnosticsLogger = container.diagnosticsLogger,
+            )
+        }
     }
 
     private fun activeNetworkCallbackCount(): Int =

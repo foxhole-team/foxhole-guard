@@ -73,6 +73,7 @@ plugins {
 
 val enableAbiSplitApks = providers.gradleProperty("foxhole.splitApks").map(String::toBoolean).orElse(false).get()
 val enableReleaseProbe = providers.gradleProperty("foxhole.releaseProbe").map(String::toBoolean).orElse(false).get()
+val enableStrictMode = providers.gradleProperty("foxhole.strictMode").map(String::toBoolean).orElse(false).get()
 val releaseSigningPropertiesFile = rootProject.projectDir.parentFile.resolve("dev/signing/release-signing.properties")
 val releaseSigningProperties =
     Properties().apply {
@@ -255,6 +256,7 @@ android {
             versionNameSuffix = "-Debug"
             buildConfigField("boolean", "ALLOW_INSECURE_TLS_BY_DEFAULT", "true")
             buildConfigField("boolean", "ENABLE_DIAGNOSTIC_LOGCAT", "true")
+            buildConfigField("boolean", "ENABLE_STRICT_MODE", enableStrictMode.toString())
             if (!enableAbiSplitApks) {
                 ndk {
                     abiFilters += listOf("arm64-v8a", "x86_64", "x86")
@@ -266,6 +268,7 @@ android {
             isShrinkResources = true
             buildConfigField("boolean", "ALLOW_INSECURE_TLS_BY_DEFAULT", "false")
             buildConfigField("boolean", "ENABLE_DIAGNOSTIC_LOGCAT", if (enableReleaseProbe) "true" else "false")
+            buildConfigField("boolean", "ENABLE_STRICT_MODE", "false")
             if (releaseSigningReady) {
                 signingConfig = signingConfigs.getByName("release")
             }
