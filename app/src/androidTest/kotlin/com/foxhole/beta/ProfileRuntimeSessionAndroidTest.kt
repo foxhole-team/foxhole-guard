@@ -8,6 +8,9 @@ import android.util.Log
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import androidx.test.uiautomator.By
+import androidx.test.uiautomator.UiDevice
+import androidx.test.uiautomator.Until
 import com.foxhole.beta.core.model.ConnectionState
 import com.foxhole.beta.core.model.LatencyProbeMethod
 import com.foxhole.beta.core.model.PerAppRoutingMode
@@ -28,6 +31,7 @@ import com.foxhole.beta.vpn.TunnelValidationEvidenceClassifier
 import com.foxhole.beta.vpn.localGuardModeOrNull
 import java.io.File
 import java.io.FileInputStream
+import java.util.regex.Pattern
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withTimeoutOrNull
@@ -1014,7 +1018,18 @@ class ProfileRuntimeSessionAndroidTest {
                     }
 
                     disconnectAndWaitForIdle(app)
-                    val stopDetails = waitForRuntimeStopDisconnectDetails(app, sinceMs = startedAt)
+                    val expectedStopEvent =
+                        if (terminalState == ConnectionState.CONNECTED) {
+                            RUNTIME_STOP_DISCONNECT_EVENT
+                        } else {
+                            RUNTIME_SERVICE_DESTROY_CALLBACKS_UNREGISTERED_EVENT
+                        }
+                    val stopDetails =
+                        waitForRuntimeStopDetails(
+                            app = app,
+                            sinceMs = startedAt,
+                            requiredEvent = expectedStopEvent,
+                        )
                     FoxholeConnectionServiceContract.stopAllServices(app)
                     waitUntil(timeoutMs = 20_000L) {
                         !hasFoxholeRuntimeServices(app) && !hasActiveFoxholeVpnNetwork(app)
@@ -1022,7 +1037,7 @@ class ProfileRuntimeSessionAndroidTest {
                     val callbackDetails = waitForRuntimeCallbackCleanupDetails(app, sinceMs = startedAt)
                     val sample = captureRuntimeStressResourceSample(app, cycle, stopDetails, callbackDetails)
                     samples += sample
-                    assertRuntimeStoppedAfterCycle(sample)
+                    assertRuntimeStoppedAfterCycle(sample, expectedStopEvent)
                     Log.d(
                         TEST_TAG,
                         "liveRuntimeStress cycleStopped=$cycle connectionState=${sample.connectionState} runtimePhase=${sample.runtimePhase} runtimeGeneration=${sample.runtimeGeneration} nativeGeneration=${sample.nativeGeneration ?: "unknown"} commandQueueDepth=${sample.commandQueueDepth ?: "unknown"} rssKb=${sample.rssKb ?: "unknown"} pssKb=${sample.pssKb ?: "unknown"} nativeHeapKb=${sample.nativeHeapKb ?: "unknown"} javaHeapKb=${sample.javaHeapKb} threads=${sample.threadCount} event=${sample.latestRuntimeEvent.orEmpty()} nativeServer=${sample.hasNativeServer} tunFd=${sample.hasTunFileDescriptor} callbacks=${sample.networkCallbacks} cleanupUnresolved=${sample.cleanupUnresolved} ipDevice=${sample.ipDeviceState} ipTunnel=${sample.ipTunnelState} ipTor=${sample.ipTorState} torState=${sample.torState}",
@@ -1476,14 +1491,17 @@ class ProfileRuntimeSessionAndroidTest {
         )
     }
 
-    private fun assertRuntimeStoppedAfterCycle(sample: RuntimeStressResourceSample) {
+    private fun assertRuntimeStoppedAfterCycle(
+        sample: RuntimeStressResourceSample,
+        expectedStopEvent: String,
+    ) {
         assertNotNull("cycle ${sample.cycle} missing runtime health snapshot", sample.latestRuntimeEvent)
         assertEquals("cycle ${sample.cycle} connection state was not idle", ConnectionState.IDLE.name, sample.connectionState)
         assertEquals("cycle ${sample.cycle} runtime phase was not idle", "idle", sample.runtimePhase)
         assertFalse("cycle ${sample.cycle} left a FoxHole runtime service active", sample.hasRuntimeService)
         assertFalse("cycle ${sample.cycle} left a FoxHole VPN network active", sample.hasActiveVpnNetwork)
         assertEquals("cycle ${sample.cycle} stop snapshot owner mismatch", "vpn", sample.owner)
-        assertEquals("cycle ${sample.cycle} stop snapshot event mismatch", "stop_success:disconnect", sample.latestRuntimeEvent)
+        assertEquals("cycle ${sample.cycle} stop snapshot event mismatch", expectedStopEvent, sample.latestRuntimeEvent)
         assertEquals("cycle ${sample.cycle} command queue was not empty", 0, sample.commandQueueDepth ?: 0)
         assertFalse("cycle ${sample.cycle} left native server attached event=${sample.latestRuntimeEvent}", sample.hasNativeServer == true)
         assertFalse("cycle ${sample.cycle} left TUN fd attached event=${sample.latestRuntimeEvent}", sample.hasTunFileDescriptor == true)
@@ -1516,13 +1534,14 @@ class ProfileRuntimeSessionAndroidTest {
         )
     }
 
-    private suspend fun waitForRuntimeStopDisconnectDetails(
+    private suspend fun waitForRuntimeStopDetails(
         app: FoxholeApplication,
         sinceMs: Long,
+        requiredEvent: String,
     ): Map<String, String> {
         var details: Map<String, String>? = null
         waitUntil(timeoutMs = 20_000L) {
-            details = latestRuntimeHealthDetails(app, sinceMs, requiredEvent = "stop_success:disconnect")
+            details = latestRuntimeHealthDetails(app, sinceMs, requiredEvent = requiredEvent, requiredOwner = "vpn")
             details != null
         }
         return details.orEmpty()
@@ -1538,7 +1557,8 @@ class ProfileRuntimeSessionAndroidTest {
                 latestRuntimeHealthDetails(
                     app = app,
                     sinceMs = sinceMs,
-                    requiredEvent = "service_destroy_after_callbacks_unregistered",
+                    requiredEvent = RUNTIME_SERVICE_DESTROY_CALLBACKS_UNREGISTERED_EVENT,
+                    requiredOwner = "vpn",
                 )
             details != null
         }
@@ -1549,6 +1569,7 @@ class ProfileRuntimeSessionAndroidTest {
         app: FoxholeApplication,
         sinceMs: Long,
         requiredEvent: String,
+        requiredOwner: String? = null,
     ): Map<String, String>? =
         app.container.diagnosticsLogger.entries.value
             .asReversed()
@@ -1557,7 +1578,10 @@ class ProfileRuntimeSessionAndroidTest {
                     return@firstNotNullOfOrNull null
                 }
                 parseRuntimeHealthDetails(entry.message)
-                    .takeIf { details -> details["event"] == requiredEvent }
+                    .takeIf { details ->
+                        details["event"] == requiredEvent &&
+                            (requiredOwner == null || details["owner"] == requiredOwner)
+                    }
             }
 
     private fun parseRuntimeHealthDetails(message: String): Map<String, String> =
@@ -1705,6 +1729,7 @@ class ProfileRuntimeSessionAndroidTest {
             val granted =
                 withTimeoutOrNull(45_000) {
                     while (VpnService.prepare(app) != null) {
+                        approveVpnPermissionDialogIfPresent()
                         delay(500)
                     }
                     true
@@ -1717,10 +1742,37 @@ class ProfileRuntimeSessionAndroidTest {
         return true
     }
 
+    private fun approveVpnPermissionDialogIfPresent() {
+        val device = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
+        val approveButton =
+            device.findObject(By.res("android:id/button1"))
+                ?: device.findObject(By.res("com.android.vpndialogs:id/confirm"))
+                ?: device.wait(
+                    Until.findObject(
+                        By.text(
+                            Pattern.compile(
+                                "^(OK|Ok|Allow|Разрешить|Да)$",
+                                Pattern.CASE_INSENSITIVE or Pattern.UNICODE_CASE,
+                            ),
+                        ),
+                    ),
+                    VPN_PERMISSION_DIALOG_WAIT_MS,
+                )
+        runCatching { approveButton?.click() }
+            .onSuccess {
+                if (approveButton != null) {
+                    Log.d(TEST_TAG, "vpn permission dialog approve clicked")
+                }
+            }
+    }
+
     companion object {
         private const val TEST_TAG = "FoxholeSessionTest"
         private const val DEFAULT_SMART_SUBSCRIPTION_DEVICE_PATH = "/data/local/tmp/foxhole-subscription.raw"
         private const val VPN_PERMISSION_REQUEST_CODE = 7301
+        private const val VPN_PERMISSION_DIALOG_WAIT_MS = 1_000L
+        private const val RUNTIME_STOP_DISCONNECT_EVENT = "stop_success:disconnect"
+        private const val RUNTIME_SERVICE_DESTROY_CALLBACKS_UNREGISTERED_EVENT = "service_destroy_after_callbacks_unregistered"
         private const val LIVE_DIRECT_LINK_TERMINAL_TIMEOUT_MS = 150_000L
         private const val BYTES_PER_KB = 1024L
         private const val RUNTIME_STRESS_RSS_DELTA_LIMIT_KB = 250L * 1024L
