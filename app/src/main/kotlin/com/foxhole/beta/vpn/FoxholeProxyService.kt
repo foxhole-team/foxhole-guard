@@ -12,7 +12,6 @@ import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import android.os.SystemClock
-import androidx.core.content.getSystemService
 import com.foxhole.beta.FoxholeApplication
 import com.foxhole.beta.FoxholeRuntimeDependencies
 import com.foxhole.beta.R
@@ -52,8 +51,12 @@ private suspend inline fun <T> runCatchingUnlessCancelled(crossinline block: sus
 
 class FoxholeProxyService : Service(), RuntimeServiceHost {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
-    private val connectivityManager by lazy { getSystemService<ConnectivityManager>()!! }
-    private val notificationManager by lazy { getSystemService<NotificationManager>()!! }
+    private val connectivityManager by lazy {
+        requireSystemServiceSafe<ConnectivityManager>("connectivity")
+    }
+    private val notificationManager by lazy {
+        requireSystemServiceSafe<NotificationManager>("notification")
+    }
     private val mainHandler by lazy { Handler(Looper.getMainLooper()) }
     private val container: FoxholeRuntimeDependencies by lazy { (applicationContext as FoxholeApplication).appGraph }
     private var runtimeInstance: VpnCoreRuntime? = null

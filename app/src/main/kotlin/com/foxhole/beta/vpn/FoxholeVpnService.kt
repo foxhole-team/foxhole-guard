@@ -14,7 +14,6 @@ import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import android.os.SystemClock
-import androidx.core.content.getSystemService
 import com.foxhole.beta.FoxholeApplication
 import com.foxhole.beta.FoxholeRuntimeDependencies
 import com.foxhole.beta.R
@@ -60,8 +59,12 @@ import java.net.Socket
 
 class FoxholeVpnService : VpnService(), RuntimeServiceHost {
     internal val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
-    internal val connectivityManager by lazy { getSystemService<ConnectivityManager>()!! }
-    internal val notificationManager by lazy { getSystemService<NotificationManager>()!! }
+    internal val connectivityManager by lazy {
+        requireSystemServiceSafe<ConnectivityManager>("connectivity")
+    }
+    internal val notificationManager by lazy {
+        requireSystemServiceSafe<NotificationManager>("notification")
+    }
     internal val mainHandler by lazy { Handler(Looper.getMainLooper()) }
     internal val trackedNetworkRequest by lazy {
         NetworkRequest.Builder()

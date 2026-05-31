@@ -36,7 +36,9 @@ internal class LibboxReflection(
 ) : LibboxRuntimeNative {
     private val setupDone = AtomicBoolean(false)
     private val appContext = context.applicationContext
-    private val connectivityManager by lazy { appContext.getSystemService<ConnectivityManager>()!! }
+    private val connectivityManager by lazy {
+        appContext.requireSystemServiceSafe<ConnectivityManager>("connectivity")
+    }
     private val packageManager by lazy { appContext.packageManager }
     private val countryResolver by lazy { TorGeoIpCountryResolver(appContext) }
 

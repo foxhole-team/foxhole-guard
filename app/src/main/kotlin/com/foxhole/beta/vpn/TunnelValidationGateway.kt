@@ -4,7 +4,6 @@ import android.content.Context
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
-import androidx.core.content.getSystemService
 import com.foxhole.beta.BuildConfig
 import com.foxhole.beta.core.data.ProfileRepository
 import com.foxhole.beta.core.diagnostics.DiagnosticsLogger
@@ -35,7 +34,9 @@ internal class TunnelValidationGateway(
     private val currentVpnNetwork: () -> Network?,
     private val currentUpstreamNetwork: () -> Network?,
 ) {
-    private val connectivityManager by lazy { context.getSystemService<ConnectivityManager>()!! }
+    private val connectivityManager by lazy {
+        context.requireSystemServiceSafe<ConnectivityManager>("connectivity")
+    }
     private var activeTunnelIpInfoCache: ActiveTunnelIpInfoCache? = null
 
     suspend fun refreshIpInfo(fetchMode: IpInfoFetchMode): IpInfo {

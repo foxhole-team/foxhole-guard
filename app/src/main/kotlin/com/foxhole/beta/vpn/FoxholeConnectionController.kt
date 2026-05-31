@@ -4,7 +4,6 @@ import android.content.Context
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
-import androidx.core.content.getSystemService
 import com.foxhole.beta.R
 import com.foxhole.beta.core.data.ProfileRepository
 import com.foxhole.beta.core.data.RoutingRepository
@@ -37,7 +36,9 @@ class FoxholeConnectionController(
     private val diagnosticsLogger: DiagnosticsLogger,
     private val runtimeConfigAssembler: RuntimeConfigAssembler,
 ) {
-    private val connectivityManager by lazy { context.getSystemService<ConnectivityManager>()!! }
+    private val connectivityManager by lazy {
+        context.requireSystemServiceSafe<ConnectivityManager>("connectivity")
+    }
     val snapshot: StateFlow<ConnectionSnapshot> = FoxholeVpnRuntimeBridge.snapshot
     val ipInfo: StateFlow<IpInfo?> = FoxholeVpnRuntimeBridge.ipInfo
     val deviceIpInfo: StateFlow<IpInfo?> = FoxholeVpnRuntimeBridge.deviceIpInfo
