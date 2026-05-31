@@ -749,7 +749,7 @@ fun FoxholeApp(
                         viewModel.onStatisticsUiVisibilityChanged(true)
                         onDispose { viewModel.onStatisticsUiVisibilityChanged(false) }
                     }
-                    val state by viewModel.settingsRouteState.collectAsStateWithLifecycle()
+                    val state by viewModel.statisticsRouteState.collectAsStateWithLifecycle()
                     val trafficMapState by viewModel.trafficMapUiState.collectAsStateWithLifecycle()
                     StatisticsScreen(
                         state = state,

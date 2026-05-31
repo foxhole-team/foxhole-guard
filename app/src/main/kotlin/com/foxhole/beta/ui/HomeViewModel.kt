@@ -302,15 +302,14 @@ class HomeViewModel(
             )
         }
 
-    val uiState: StateFlow<HomeUiState> =
+    private val coreUiState: StateFlow<HomeUiState> =
         combine(
             connectionStreams,
             routingStreams,
             localState,
-            activityStreams,
-        ) { connectionStreams, routingStreams, localState, activityStreams ->
+            reconnectState,
+        ) { connectionStreams, routingStreams, localState, reconnectState ->
             val localStreams = localState.streams
-            val reconnectState = activityStreams.reconnectState
             val resolvedActiveProfile =
                 HomeActiveProfileResolver.resolve(
                     profiles = connectionStreams.profiles,
@@ -363,24 +362,44 @@ class HomeViewModel(
                 } else {
                     0L
                 },
+                catalogPresetPreviews = localStreams.catalogPresetPreviews,
+            )
+        }
+            .distinctUntilChanged()
+            .flowOn(Dispatchers.Default)
+            .stateIn(
+                viewModelScope,
+                SharingStarted.WhileSubscribed(5_000),
+                HomeUiState(settings = initialSettings),
+            )
+
+    val uiState: StateFlow<HomeUiState> =
+        combine(
+            coreUiState,
+            activityStreams,
+        ) { core, activityStreams ->
+            core.copy(
                 diagnosticEntries = activityStreams.diagnosticEntries,
                 anomalyEvents = activityStreams.anomalyEvents,
                 appTrafficWindows = activityStreams.appTrafficWindows,
                 networkActivityEvents = activityStreams.networkActivityEvents,
                 trafficWindows = activityStreams.trafficWindows,
-                catalogPresetPreviews = localStreams.catalogPresetPreviews,
             )
-        }.stateIn(
-            viewModelScope,
-            SharingStarted.WhileSubscribed(5_000),
-            HomeUiState(settings = initialSettings),
-        )
+        }
+            .distinctUntilChanged()
+            .flowOn(Dispatchers.Default)
+            .stateIn(
+                viewModelScope,
+                SharingStarted.WhileSubscribed(5_000),
+                HomeUiState(settings = initialSettings),
+            )
 
     val themeMode: StateFlow<ThemeMode> = container.settingsRepository.themeMode
 
     val secureScreenEnabled: StateFlow<Boolean> =
-        uiState
+        coreUiState
             .map { it.settings.expert.blockScreenshots }
+            .distinctUntilChanged()
             .stateIn(
                 viewModelScope,
                 SharingStarted.WhileSubscribed(5_000),
@@ -422,7 +441,7 @@ class HomeViewModel(
 
     val homeRouteState: StateFlow<HomeRouteUiState> =
         combine(
-            uiState,
+            coreUiState,
             autoConnectUiStateMutable,
             profileOptionLatenciesMutable,
             profileOptionLatencyUnavailableMutable,
@@ -437,6 +456,8 @@ class HomeViewModel(
                 currentNetworkFingerprintKey = currentNetworkFingerprintForSmartRules()?.key,
             )
         }
+            .distinctUntilChanged()
+            .flowOn(Dispatchers.Default)
             .stateIn(
                 viewModelScope,
                 SharingStarted.WhileSubscribed(5_000),
@@ -527,7 +548,7 @@ class HomeViewModel(
 
     val profilesRouteState: StateFlow<ProfilesRouteUiState> =
         combine(
-            uiState,
+            coreUiState,
             autoConnectUiStateMutable,
             profileOptionLatenciesMutable,
             profileOptionLatencyUnavailableMutable,
@@ -542,6 +563,8 @@ class HomeViewModel(
                 networkFingerprintKey = currentNetworkFingerprintForSmartRules()?.key,
             )
         }
+            .distinctUntilChanged()
+            .flowOn(Dispatchers.Default)
             .stateIn(
                 viewModelScope,
                 SharingStarted.WhileSubscribed(5_000),
@@ -550,26 +573,53 @@ class HomeViewModel(
 
     val settingsRouteState: StateFlow<SettingsRouteUiState> =
         combine(
+            coreUiState,
+            dnsFilterRefreshInProgressMutable,
+        ) { state, dnsFilterRefreshInProgress ->
+            state.toSettingsRouteUiState(
+                dnsFilterRefreshInProgress = dnsFilterRefreshInProgress,
+                includeLiveTraffic = false,
+                includeInstalledApps = false,
+                includeActivityState = false,
+            )
+        }
+            .distinctUntilChanged()
+            .flowOn(Dispatchers.Default)
+            .stateIn(
+                viewModelScope,
+                SharingStarted.WhileSubscribed(5_000),
+                SettingsRouteUiState(),
+            )
+
+    val statisticsRouteState: StateFlow<SettingsRouteUiState> =
+        combine(
             uiState,
             dnsFilterRefreshInProgressMutable,
             trafficMapUiState,
             appTrafficUsageAccessGrantedMutable,
             statisticsVisibleMutable,
         ) { state, dnsFilterRefreshInProgress, trafficMapState, usageAccessGranted, statisticsVisible ->
-            val routeState = state.toSettingsRouteUiState(dnsFilterRefreshInProgress = dnsFilterRefreshInProgress)
-            routeState.copy(
-                statisticsDashboard =
-                if (statisticsVisible) {
+            val routeState =
+                state.toSettingsRouteUiState(
+                    dnsFilterRefreshInProgress = dnsFilterRefreshInProgress,
+                    includeLiveTraffic = true,
+                    includeInstalledApps = true,
+                    includeActivityState = true,
+                )
+            if (statisticsVisible) {
+                routeState.copy(
+                    statisticsDashboard =
                     buildStatisticsDashboardUiState(
                         state = routeState,
                         trafficMapState = trafficMapState,
                         usageAccessGranted = usageAccessGranted,
-                    )
-                } else {
-                    StatisticsDashboardUiState()
-                },
-            )
+                    ),
+                )
+            } else {
+                routeState.copy(statisticsDashboard = StatisticsDashboardUiState())
+            }
         }
+            .distinctUntilChanged()
             .flowOn(Dispatchers.Default)
             .stateIn(
                 viewModelScope,
@@ -578,8 +628,10 @@ class HomeViewModel(
             )
 
     val routingRouteState: StateFlow<RoutingRouteUiState> =
-        uiState
+        coreUiState
             .map(HomeUiState::toRoutingRouteUiState)
+            .distinctUntilChanged()
+            .flowOn(Dispatchers.Default)
             .stateIn(
                 viewModelScope,
                 SharingStarted.WhileSubscribed(5_000),
@@ -589,6 +641,8 @@ class HomeViewModel(
     val diagnosticsRouteState: StateFlow<DiagnosticsRouteUiState> =
         uiState
             .map(HomeUiState::toDiagnosticsRouteUiState)
+            .distinctUntilChanged()
+            .flowOn(Dispatchers.Default)
             .stateIn(
                 viewModelScope,
                 SharingStarted.WhileSubscribed(5_000),

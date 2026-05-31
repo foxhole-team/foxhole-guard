@@ -286,6 +286,9 @@ internal fun HomeUiState.toProfilesRouteUiState(
 internal fun HomeUiState.toSettingsRouteUiState(
     dnsFilterRefreshInProgress: Boolean = false,
     statisticsDashboard: StatisticsDashboardUiState = StatisticsDashboardUiState(),
+    includeLiveTraffic: Boolean = true,
+    includeInstalledApps: Boolean = true,
+    includeActivityState: Boolean = true,
 ): SettingsRouteUiState =
     SettingsRouteUiState(
         settings = settings,
@@ -295,14 +298,14 @@ internal fun HomeUiState.toSettingsRouteUiState(
         hasSubscriptionProfile = profiles.any { profile -> profile.sourceType == ProfileSourceType.SUBSCRIPTION_URL },
         profiles = profiles,
         activeProfile = activeProfile,
-        traffic = traffic,
+        traffic = if (includeLiveTraffic) traffic else TrafficSnapshot(),
         ipInfo = ipInfo,
-        installedApps = installedApps,
-        diagnosticEntries = diagnosticEntries,
-        anomalyEvents = anomalyEvents,
-        appTrafficWindows = appTrafficWindows,
-        networkActivityEvents = networkActivityEvents,
-        trafficWindows = trafficWindows,
+        installedApps = if (includeInstalledApps) installedApps else emptyList(),
+        diagnosticEntries = if (includeActivityState) diagnosticEntries else emptyList(),
+        anomalyEvents = if (includeActivityState) anomalyEvents else emptyList(),
+        appTrafficWindows = if (includeActivityState) appTrafficWindows else emptyList(),
+        networkActivityEvents = if (includeActivityState) networkActivityEvents else emptyList(),
+        trafficWindows = if (includeActivityState) trafficWindows else emptyList(),
         dnsFilterRefreshInProgress = dnsFilterRefreshInProgress,
         statisticsDashboard = statisticsDashboard,
     )
