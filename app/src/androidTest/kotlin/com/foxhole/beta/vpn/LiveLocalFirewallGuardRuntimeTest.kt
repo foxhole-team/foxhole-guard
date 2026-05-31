@@ -1,6 +1,7 @@
 package com.foxhole.beta.vpn
 
 import android.net.VpnService
+import android.os.Debug
 import android.util.Log
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -126,6 +127,62 @@ class LiveLocalFirewallGuardRuntimeTest {
             } finally {
                 stopLocalFirewallGuard(app)
             }
+            assertNoFoxholeVpn(app)
+        }
+
+    @Test
+    fun firewallToggleThirtyTimesNoRuntimeLeak() =
+        runBlocking {
+            assumeTrue(
+                "live local firewall stress test is disabled; pass foxhole.liveLocalGuardStress=1 to run it",
+                InstrumentationRegistry.getArguments().getString("foxhole.liveLocalGuardStress") == "1",
+            )
+            val app = liveLocalGuardApp()
+            val blockedPackage = firstInstalledPackageExcept(app.packageName)
+            val cycleCount = longArgument("foxhole.localGuardStressCycles", 30L).toInt().coerceIn(1, 100)
+            val startedAt = System.currentTimeMillis()
+            val dnsHosts = listOf("ipwho.is", "cloudflare.com", "api.ipify.org")
+            val baselineResolvableDnsHosts = baselineResolvableDnsHosts(dnsHosts)
+            val samples = mutableListOf<LocalGuardStressSample>()
+
+            try {
+                repeat(cycleCount) { index ->
+                    val cycle = index + 1
+                    Log.d(TEST_TAG, "localGuardStress cycleStart=$cycle/$cycleCount")
+                    startLocalFirewallGuard(app, blockedPackage)
+                    runCatching {
+                        app.container.connectionController.refreshIpInfo(IpInfoFetchMode.ENTRY_QUICK)
+                    }.getOrElse { error ->
+                        throw AssertionError(
+                            "local guard stress cycle $cycle dashboard ip refresh failed: " +
+                                "${error.javaClass.simpleName}:${error.message.orEmpty().take(120)}",
+                            error,
+                        )
+                    }
+                    stopLocalFirewallGuard(app)
+                    assertNoFoxholeVpn(app)
+                    val sample = captureLocalGuardStressSample(cycle)
+                    samples += sample
+                    Log.d(
+                        TEST_TAG,
+                        "localGuardStress cycleStopped=$cycle pssKb=${sample.pssKb ?: "unknown"} javaHeapKb=${sample.javaHeapKb} threads=${sample.threadCount}",
+                    )
+                }
+            } finally {
+                stopLocalFirewallGuard(app)
+            }
+
+            val diagnosticsFailures =
+                localGuardNetworkFailureDiagnostics(
+                    app = app,
+                    startedAt = startedAt,
+                    baselineUnresolvableDnsHosts = dnsHosts - baselineResolvableDnsHosts.toSet(),
+                )
+            assertTrue(
+                "local firewall stress network diagnostics failures: ${diagnosticsFailures.joinToString(" | ") { it.take(160) }}",
+                diagnosticsFailures.isEmpty(),
+            )
+            assertLocalGuardStressMemoryStable(samples)
             assertNoFoxholeVpn(app)
         }
 
@@ -280,6 +337,56 @@ class LiveLocalFirewallGuardRuntimeTest {
             ?.toLongOrNull()
             ?: 0L
 
+    private fun longArgument(name: String, defaultValue: Long): Long =
+        InstrumentationRegistry
+            .getArguments()
+            .getString(name)
+            ?.toLongOrNull()
+            ?: defaultValue
+
+    private fun captureLocalGuardStressSample(cycle: Int): LocalGuardStressSample {
+        val runtime = Runtime.getRuntime()
+        return LocalGuardStressSample(
+            cycle = cycle,
+            pssKb = readCurrentPssKb(),
+            javaHeapKb = ((runtime.totalMemory() - runtime.freeMemory()) / BYTES_PER_KB).coerceAtLeast(0L),
+            threadCount = runCatching { Thread.getAllStackTraces().size }.getOrDefault(-1),
+        )
+    }
+
+    private fun assertLocalGuardStressMemoryStable(samples: List<LocalGuardStressSample>) {
+        val pssSamples = samples.mapNotNull(LocalGuardStressSample::pssKb)
+        if (pssSamples.size >= 3) {
+            val strictlyMonotonicGrowth = pssSamples.zipWithNext().all { (before, after) -> after > before }
+            assertTrue("local guard stress PSS grew monotonically: $pssSamples", !strictlyMonotonicGrowth)
+            val first = pssSamples.first()
+            val last = pssSamples.last()
+            val maxDeltaKb = maxOf(LOCAL_GUARD_STRESS_PSS_DELTA_LIMIT_KB, first / 2)
+            assertTrue(
+                "local guard stress PSS delta too high firstKb=$first lastKb=$last samples=$pssSamples",
+                last <= first + maxDeltaKb,
+            )
+        }
+
+        val javaHeapSamples = samples.map(LocalGuardStressSample::javaHeapKb)
+        if (javaHeapSamples.size >= 3) {
+            val first = javaHeapSamples.first()
+            val last = javaHeapSamples.last()
+            val maxDeltaKb = maxOf(LOCAL_GUARD_STRESS_JAVA_HEAP_DELTA_LIMIT_KB, first / 2)
+            assertTrue(
+                "local guard stress Java heap delta too high firstKb=$first lastKb=$last samples=$javaHeapSamples",
+                last <= first + maxDeltaKb,
+            )
+        }
+    }
+
+    private fun readCurrentPssKb(): Long? =
+        runCatching {
+            val memoryInfo = Debug.MemoryInfo()
+            Debug.getMemoryInfo(memoryInfo)
+            memoryInfo.totalPss.takeIf { it >= 0 }?.toLong()
+        }.getOrNull()
+
     private suspend fun waitForCondition(
         timeoutMs: Long,
         predicate: () -> Boolean,
@@ -313,8 +420,18 @@ class LiveLocalFirewallGuardRuntimeTest {
         }
     }
 
+    private data class LocalGuardStressSample(
+        val cycle: Int,
+        val pssKb: Long?,
+        val javaHeapKb: Long,
+        val threadCount: Int,
+    )
+
     private companion object {
         const val TEST_TAG = "LiveLocalFirewallGuard"
         const val CONNECTIVITY_PROBE_TIMEOUT_MS = 5_000L
+        const val BYTES_PER_KB = 1024L
+        const val LOCAL_GUARD_STRESS_PSS_DELTA_LIMIT_KB = 150L * 1024L
+        const val LOCAL_GUARD_STRESS_JAVA_HEAP_DELTA_LIMIT_KB = 80L * 1024L
     }
 }

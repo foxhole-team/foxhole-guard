@@ -368,7 +368,7 @@ class ProfileRepository(
         val preparedProfiles =
             parsed.profiles.mapIndexed { index, importedProfile ->
                 val secretRef = UUID.randomUUID().toString()
-                val selectedProtocolOptionId = importedProfile.resolveSelectedProtocolOptionId(previousSelectedProtocolOptionId = null)
+                val selectedProtocolOptionId = importedProfile.resolveRefreshSelectedProtocolOptionId(previousSecret = null)
                 PreparedLocalImportProfile(
                     entity =
                         ProfileEntity(
@@ -895,7 +895,7 @@ class ProfileRepository(
                     )
                 val nextSecretRef = UUID.randomUUID().toString()
                 val selectedProtocolOptionId =
-                    importedProfile.resolveSelectedProtocolOptionId(matchedProfile?.storedSecret?.selectedProtocolOptionId)
+                    importedProfile.resolveRefreshSelectedProtocolOptionId(previousSecret = matchedProfile?.storedSecret)
                 val importedRequiresInsecureTls = importedProfile.requiresInsecureTls(json)
                 val previousInsecureTlsConsentGranted = matchedProfile?.storedSecret?.hasInsecureTlsConsent() == true
                 PreparedSubscriptionRefreshProfile(
@@ -949,7 +949,7 @@ class ProfileRepository(
                                 protocolHint =
                                     prepared.importedProfile
                                         .resolveProtocolHint(
-                                            prepared.importedProfile.resolveSelectedProtocolOptionId(prepared.previousSelectedProtocolOptionId),
+                                            prepared.stagedSecretWrite.value.selectedProtocolOptionId,
                                         ).name,
                                 lastUpdatedAt = now,
                                 lastEtag = response.etag,
@@ -973,9 +973,7 @@ class ProfileRepository(
                                         protocolHint =
                                             prepared.importedProfile
                                                 .resolveProtocolHint(
-                                                    prepared.importedProfile.resolveSelectedProtocolOptionId(
-                                                        prepared.previousSelectedProtocolOptionId,
-                                                    ),
+                                                    prepared.stagedSecretWrite.value.selectedProtocolOptionId,
                                                 ).name,
                                         lastUpdatedAt = now,
                                         lastEtag = response.etag,
@@ -1158,13 +1156,6 @@ class ProfileRepository(
                     (selectedProtocolOptionId == null && option.id == protocolOptions.firstOrNull()?.id),
             )
         }
-
-    private fun ParsedSubscriptionProfile.resolveSelectedProtocolOptionId(previousSelectedProtocolOptionId: String?): String? {
-        previousSelectedProtocolOptionId?.takeIf(String::isNotBlank)?.let { previousSelectedId ->
-            return previousSelectedId
-        }
-        return selectedProtocolOptionId
-    }
 
     private fun ParsedSubscriptionProfile.resolveProtocolHint(selectedProtocolOptionId: String?): ProtocolHint =
         protocolOptions.firstOrNull { option -> option.id == selectedProtocolOptionId }?.protocolHint ?: protocolHint
