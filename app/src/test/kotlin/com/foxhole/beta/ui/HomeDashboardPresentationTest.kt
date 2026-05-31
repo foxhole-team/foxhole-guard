@@ -1321,6 +1321,51 @@ class HomeDashboardPresentationTest {
     }
 
     @Test
+    fun `local guard firewall separates selected profile from active runtime`() {
+        val state =
+            HomeRouteUiState(
+                activeProfile = smartProfile(),
+                settings = Settings(expert = ExpertSettings(firewallEnabled = true)),
+                connection =
+                    ConnectionSnapshot(
+                        state = ConnectionState.CONNECTED,
+                        profileId = FoxholeVpnService.LOCAL_GUARD_PROFILE_ID,
+                        protocolHint = ProtocolHint.SING_BOX,
+                    ),
+            )
+
+        val model = resolveHomeDashboardProfileModel(state)
+
+        assertEquals(1L, model.selectedProfileId)
+        assertEquals(FoxholeVpnService.LOCAL_GUARD_PROFILE_ID, model.runtimeProfileId)
+        assertEquals(HomeDashboardRuntimeMode.LOCAL_GUARD, model.runtimeMode)
+        assertTrue(model.localGuardActive)
+        assertFalse(model.selectedProfileConnected)
+        assertEquals(R.string.connect_selected_profile, homeConnectionLabelRes(state))
+    }
+
+    @Test
+    fun `selected profile runtime is marked connected only for matching profile`() {
+        val model =
+            resolveHomeDashboardProfileModel(
+                HomeRouteUiState(
+                    activeProfile = smartProfile(),
+                    connection =
+                        ConnectionSnapshot(
+                            state = ConnectionState.CONNECTED,
+                            profileId = 1L,
+                            protocolHint = ProtocolHint.VLESS,
+                        ),
+                ),
+            )
+
+        assertEquals(HomeDashboardRuntimeMode.SELECTED_PROFILE, model.runtimeMode)
+        assertTrue(model.selectedProfileConnected)
+        assertFalse(model.localGuardActive)
+        assertEquals(R.string.disconnect, homeConnectionLabelRes(ConnectionState.CONNECTED, reconnectRequired = false))
+    }
+
+    @Test
     fun `tor only runtime keeps network card on current ip layout with tor title`() {
         val ipInfo =
             IpInfo(

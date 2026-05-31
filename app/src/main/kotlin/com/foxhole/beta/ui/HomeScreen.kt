@@ -331,7 +331,9 @@ fun HomeScreen(
     val networkInfoTitleRes = networkModel.titleRes
     val profileModel = remember(state) { resolveHomeDashboardProfileModel(state = state) }
     val isSmartDashboardProfile = profileModel.isSmartDashboardProfile
-    val activeProfileId = profileModel.activeProfileId
+    val selectedProfileId = profileModel.selectedProfileId
+    val localGuardProfileRuntimeActive = profileModel.localGuardActive
+    val activeProfileId = selectedProfileId
     val firstAnalysisProtocolMenuActive = firstAnalysisProtocolMenuProfileId == activeProfileId
     val firstAnalysisProtocolMenuBusy = state.autoConnect.running || state.protocolMetricsRefreshing
     val firstAnalysisProtocolMenuForceExpanded =
@@ -517,7 +519,14 @@ fun HomeScreen(
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         HomeCardHeader(
                             icon = Icons.Outlined.AccountTree,
-                            title = stringResource(R.string.vpn_profile),
+                            title =
+                                stringResource(
+                                    if (localGuardProfileRuntimeActive) {
+                                        R.string.selected_profile
+                                    } else {
+                                        R.string.vpn_profile
+                                    },
+                                ),
                             trailing = {
                                 HomeHeaderActionButton(
                                     icon = Icons.AutoMirrored.Outlined.ArrowForward,
@@ -557,6 +566,10 @@ fun HomeScreen(
                                             !isSmartDashboardProfile,
                                     trailing = {
                                         when {
+                                            localGuardProfileRuntimeActive ->
+                                                FoxholeValuePill(
+                                                    value = stringResource(R.string.runtime_firewall_only),
+                                                )
                                             dashboardLatencySkeletonVisible ->
                                                 ProtocolLatencyLoadingPill(
                                                     compact = true,

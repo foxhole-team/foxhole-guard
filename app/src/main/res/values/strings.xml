@@ -31,6 +31,7 @@
     <string name="traffic_map_total_header">Total</string>
     <string name="traffic_map_power_save_disabled">Map is disabled to reduce battery usage</string>
     <string name="connect">Start</string>
+    <string name="connect_selected_profile">Connect selected</string>
     <string name="disconnect">Stop</string>
     <string name="reconnect">Restart</string>
     <string name="home_feature_turn_on">Turn on</string>
@@ -42,6 +43,8 @@
     <string name="settings">Settings</string>
     <string name="profile">VPN profile</string>
     <string name="vpn_profile">VPN profile</string>
+    <string name="selected_profile">Selected profile</string>
+    <string name="runtime_firewall_only">Firewall only</string>
     <string name="no_profiles">Saved VPN profiles not found</string>
     <string name="no_profiles_import_hint">Use import to add a VPN profile</string>
     <string name="profiles_empty_message">Saved VPN profiles not found. Use the import button on the dashboard to import VPN configurations</string>

@@ -32,6 +32,7 @@
     <string name="traffic_map_total_header">Всего</string>
     <string name="traffic_map_power_save_disabled">Карта отключена для уменьшения энергопотребления</string>
     <string name="connect">Старт</string>
+    <string name="connect_selected_profile">Подключить выбранный</string>
     <string name="disconnect">Стоп</string>
     <string name="reconnect">Рестарт</string>
     <string name="home_feature_turn_on">Включить</string>
@@ -43,6 +44,8 @@
     <string name="settings">Настройки</string>
     <string name="profile">VPN профиль</string>
     <string name="vpn_profile">VPN профиль</string>
+    <string name="selected_profile">Выбранный профиль</string>
+    <string name="runtime_firewall_only">Только фаервол</string>
     <string name="no_profiles">Сохраненные профили VPN не обнаружены</string>
     <string name="no_profiles_import_hint">Для добавления VPN профиля используйте кнопку импорт</string>
     <string name="profiles_empty_message">Сохраненные VPN профили не обнаружены. Воспользуйтесь кнопкой импорт в дашборде для импорта конфигураций VPN</string>

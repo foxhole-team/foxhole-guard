@@ -81,9 +81,21 @@ internal data class HomeDashboardProtocolModel(
 )
 
 internal data class HomeDashboardProfileModel(
-    val activeProfileId: Long?,
+    val selectedProfileId: Long?,
+    val runtimeProfileId: Long?,
+    val runtimeMode: HomeDashboardRuntimeMode,
+    val selectedProfileConnected: Boolean,
+    val localGuardActive: Boolean,
     val isSmartDashboardProfile: Boolean,
 )
+
+internal enum class HomeDashboardRuntimeMode {
+    NONE,
+    SELECTED_PROFILE,
+    LOCAL_GUARD,
+    TOR_ONLY,
+    OTHER_PROFILE,
+}
 
 private data class HomeDashboardProfileLatencyState(
     val presentation: HomeDashboardLatencyPresentation,
@@ -575,9 +587,23 @@ private fun Set<String>.withoutOption(optionId: String?): Set<String> =
 internal fun resolveHomeDashboardProfileModel(
     state: HomeRouteUiState,
 ): HomeDashboardProfileModel {
-    val activeProfileId = state.activeProfile?.id
+    val selectedProfileId = state.activeProfile?.id
+    val runtimeActive = state.connection.state in ACTIVE_CONNECTION_STATES
+    val runtimeProfileId = state.connection.profileId?.takeIf { runtimeActive }
+    val runtimeMode =
+        when {
+            !runtimeActive || runtimeProfileId == null -> HomeDashboardRuntimeMode.NONE
+            runtimeProfileId == FoxholeVpnService.LOCAL_GUARD_PROFILE_ID -> HomeDashboardRuntimeMode.LOCAL_GUARD
+            runtimeProfileId == FoxholeVpnService.TOR_ONLY_PROFILE_ID -> HomeDashboardRuntimeMode.TOR_ONLY
+            runtimeProfileId == selectedProfileId -> HomeDashboardRuntimeMode.SELECTED_PROFILE
+            else -> HomeDashboardRuntimeMode.OTHER_PROFILE
+        }
     return HomeDashboardProfileModel(
-        activeProfileId = activeProfileId,
+        selectedProfileId = selectedProfileId,
+        runtimeProfileId = runtimeProfileId,
+        runtimeMode = runtimeMode,
+        selectedProfileConnected = runtimeMode == HomeDashboardRuntimeMode.SELECTED_PROFILE,
+        localGuardActive = runtimeMode == HomeDashboardRuntimeMode.LOCAL_GUARD,
         isSmartDashboardProfile = state.activeProfile?.let(MultiProtocolProfileSupport::hasMultipleSupportedOptions) == true,
     )
 }
@@ -1223,19 +1249,36 @@ internal fun homePrimaryAction(
 internal fun homeConnectionLabel(
     state: ConnectionState,
     reconnectRequired: Boolean,
-): String =
+): String = stringResource(homeConnectionLabelRes(state, reconnectRequired))
+
+internal fun homeConnectionLabelRes(
+    state: ConnectionState,
+    reconnectRequired: Boolean,
+): Int =
     when (homePrimaryAction(state, reconnectRequired)) {
-        HomePrimaryAction.START -> stringResource(R.string.connect)
-        HomePrimaryAction.STOP -> stringResource(R.string.disconnect)
-        HomePrimaryAction.RECONNECT -> stringResource(R.string.reconnect)
+        HomePrimaryAction.START -> R.string.connect
+        HomePrimaryAction.STOP -> R.string.disconnect
+        HomePrimaryAction.RECONNECT -> R.string.reconnect
     }
 
 @Composable
 internal fun homeConnectionLabel(state: HomeRouteUiState): String =
+    stringResource(homeConnectionLabelRes(state))
+
+internal fun homeConnectionLabelRes(state: HomeRouteUiState): Int =
     when (homePrimaryAction(state)) {
-        HomePrimaryAction.START -> stringResource(R.string.connect)
-        HomePrimaryAction.STOP -> stringResource(R.string.disconnect)
-        HomePrimaryAction.RECONNECT -> stringResource(R.string.reconnect)
+        HomePrimaryAction.START ->
+            if (
+                state.activeProfile != null &&
+                state.connection.state in ACTIVE_CONNECTION_STATES &&
+                state.connection.profileId == FoxholeVpnService.LOCAL_GUARD_PROFILE_ID
+            ) {
+                R.string.connect_selected_profile
+            } else {
+                R.string.connect
+            }
+        HomePrimaryAction.STOP -> R.string.disconnect
+        HomePrimaryAction.RECONNECT -> R.string.reconnect
     }
 
 internal fun formatBytes(
