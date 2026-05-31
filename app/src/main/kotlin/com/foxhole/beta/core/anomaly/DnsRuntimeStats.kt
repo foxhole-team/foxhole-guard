@@ -1,6 +1,7 @@
 package com.foxhole.beta.core.anomaly
 
-import java.util.Collections
+import java.util.ArrayDeque
+import java.util.HashSet
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
@@ -15,13 +16,15 @@ object DnsRuntimeStats {
     private val blockedQueries = AtomicInteger()
     private val allowedQueries = AtomicInteger()
     private val blockedDomainQueries = ConcurrentHashMap<String, AtomicInteger>()
-    private val seenDnsConnectionIds = Collections.newSetFromMap(ConcurrentHashMap<String, Boolean>())
+    private val seenConnectionLock = Any()
+    private val seenDnsConnectionIdOrder = ArrayDeque<String>()
+    private val seenDnsConnectionIds = HashSet<String>()
 
     fun recordDnsConnection(connectionId: String) {
         if (connectionId.isBlank()) {
             return
         }
-        if (seenDnsConnectionIds.add(connectionId)) {
+        if (recordSeenDnsConnectionId(connectionId)) {
             allowedQueries.incrementAndGet()
         }
     }
@@ -59,8 +62,29 @@ object DnsRuntimeStats {
         blockedQueries.set(0)
         allowedQueries.set(0)
         blockedDomainQueries.clear()
-        seenDnsConnectionIds.clear()
+        synchronized(seenConnectionLock) {
+            seenDnsConnectionIdOrder.clear()
+            seenDnsConnectionIds.clear()
+        }
     }
+
+    internal fun trackedConnectionIdCountForTests(): Int =
+        synchronized(seenConnectionLock) {
+            seenDnsConnectionIds.size
+        }
+
+    private fun recordSeenDnsConnectionId(connectionId: String): Boolean =
+        synchronized(seenConnectionLock) {
+            if (!seenDnsConnectionIds.add(connectionId)) {
+                return@synchronized false
+            }
+            seenDnsConnectionIdOrder.addLast(connectionId)
+            while (seenDnsConnectionIds.size > DNS_RUNTIME_CONNECTION_ID_WINDOW_SIZE) {
+                val expired = seenDnsConnectionIdOrder.removeFirst()
+                seenDnsConnectionIds.remove(expired)
+            }
+            true
+        }
 
     private fun snapshotBlockedDomains(): Map<String, Long> =
         blockedDomainQueries.entries
@@ -131,6 +155,7 @@ private val DNS_LOG_TOKEN_SEPARATOR = Regex("\\s+")
 private val DNS_CONTEXT_PREFIX = Regex("""^\[[^]]+]\s+""")
 
 private const val MAX_DNS_DOMAIN_LENGTH = 253
+internal const val DNS_RUNTIME_CONNECTION_ID_WINDOW_SIZE = 4_096
 private const val DNS_ADGUARD_RULE_SET_TAG = "foxhole-adguard-dns-filter"
 private const val DNS_LOG_TAG_MARKER = "dns: "
 private const val DNS_RCODE_NXDOMAIN = "nxdomain"

@@ -52,4 +52,20 @@ class DnsRuntimeStatsTest {
             ),
         )
     }
+
+    @Test
+    fun `deduplicates DNS connection ids within a bounded memory window`() {
+        DnsRuntimeStats.reset()
+
+        DnsRuntimeStats.recordDnsConnection("dns-1")
+        DnsRuntimeStats.recordDnsConnection("dns-1")
+        assertEquals(1, DnsRuntimeStats.snapshot().allowed)
+        assertEquals(1, DnsRuntimeStats.trackedConnectionIdCountForTests())
+
+        repeat(DNS_RUNTIME_CONNECTION_ID_WINDOW_SIZE + 100) { index ->
+            DnsRuntimeStats.recordDnsConnection("dns-${index + 2}")
+        }
+
+        assertEquals(DNS_RUNTIME_CONNECTION_ID_WINDOW_SIZE, DnsRuntimeStats.trackedConnectionIdCountForTests())
+    }
 }
