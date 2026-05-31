@@ -8,6 +8,7 @@ import com.foxhole.beta.core.settings.networkMemory
 import com.foxhole.beta.core.settings.preferredLastKnownGoodOptionId
 import com.foxhole.beta.core.settings.smartProfilePreference
 
+@Suppress("CyclomaticComplexMethod", "ReturnCount")
 internal fun handleRuntimeServiceCommand(
     intent: Intent?,
     startId: Int,

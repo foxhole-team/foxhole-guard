@@ -103,7 +103,7 @@ class RuntimeConfigAssemblerTest {
     }
 
     @Test
-    fun `system tun stack stays system for non wireguard tunnel protocols`() {
+    fun `system tun stack is coerced to gvisor for tcp-stable tunnel protocols`() {
         val config =
             parse(
                 assembler.assemble(
@@ -116,11 +116,11 @@ class RuntimeConfigAssemblerTest {
 
         val tun = config["inbounds"]!!.jsonArray.first().jsonObject
 
-        assertEquals("system", tun["stack"]!!.jsonPrimitive.content)
+        assertEquals("gvisor", tun["stack"]!!.jsonPrimitive.content)
     }
 
     @Test
-    fun `system tun stack is preserved for wireguard tunnel protocols`() {
+    fun `system tun stack is coerced to gvisor for wireguard tunnel protocols`() {
         val config =
             parse(
                 assembler.assemble(
@@ -133,7 +133,7 @@ class RuntimeConfigAssemblerTest {
 
         val tun = config["inbounds"]!!.jsonArray.first().jsonObject
 
-        assertEquals("system", tun["stack"]!!.jsonPrimitive.content)
+        assertEquals("gvisor", tun["stack"]!!.jsonPrimitive.content)
     }
 
     @Test
@@ -558,6 +558,57 @@ class RuntimeConfigAssemblerTest {
             },
         )
         assertTrue(assembler.redactedRuntimeShape(config.toString()).contains("route_udp_reject=false"))
+    }
+
+    @Test
+    fun `vless vision tcp outbound preserves explicit tcp network`() {
+        val config =
+            parse(
+                assembler.assemble(
+                    baseConfigJson =
+                        baseConfigWithOutbounds(
+                            buildJsonArray {
+                                add(
+                                    buildJsonObject {
+                                        put("type", "vless")
+                                        put("tag", "proxy")
+                                        put("server", "edge.example")
+                                        put("server_port", 443)
+                                        put("uuid", "11111111-1111-1111-1111-111111111111")
+                                        put("flow", "xtls-rprx-vision")
+                                        put("network", "tcp")
+                                        putJsonObject("tls") {
+                                            put("enabled", true)
+                                            putJsonObject("reality") {
+                                                put("enabled", true)
+                                                put("public_key", "pubkey")
+                                                put("short_id", "abcd")
+                                            }
+                                        }
+                                    },
+                                )
+                            },
+                        ),
+                    settings = Settings(),
+                    activePreset = null,
+                    vpnProtocolHint = ProtocolHint.VLESS,
+                ),
+            )
+
+        val outbounds = config["outbounds"]!!.jsonArray.map { it.jsonObject }
+        val vless = outbounds.single { it["type"]?.jsonPrimitive?.content == "vless" }
+        val rules = config["route"]!!.jsonObject["rules"]!!.jsonArray.map { it.jsonObject }
+
+        assertEquals("tcp", vless["network"]!!.jsonPrimitive.content)
+        assertFalse(vless.containsKey("packet_encoding"))
+        assertTrue(
+            rules.any {
+                it["network"]?.jsonPrimitive?.content == "udp" &&
+                    it["action"]?.jsonPrimitive?.content == "reject"
+            },
+        )
+        assertTrue(assembler.redactedRuntimeShape(config.toString()).contains("network=tcp"))
+        assertTrue(assembler.redactedRuntimeShape(config.toString()).contains("route_udp_reject=true"))
     }
 
     @Test

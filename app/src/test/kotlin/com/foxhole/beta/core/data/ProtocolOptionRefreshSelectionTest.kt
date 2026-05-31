@@ -29,18 +29,18 @@ class ProtocolOptionRefreshSelectionTest {
             profile(
                 selectedProtocolOptionId = "hysteria2",
                 options =
-                    listOf(
-                        option("hysteria2", ProtocolHint.HYSTERIA2, "server-b"),
-                        option("vless_2", ProtocolHint.VLESS, "server-a"),
-                    ),
+                listOf(
+                    option("hysteria2", ProtocolHint.HYSTERIA2, "server-b"),
+                    option("vless_2", ProtocolHint.VLESS, "server-a"),
+                ),
             )
         val previous =
             StoredProfileSecret(
                 protocolOptions =
-                    listOf(
-                        option("vless", ProtocolHint.VLESS, "server-a"),
-                        option("hysteria2", ProtocolHint.HYSTERIA2, "server-b"),
-                    ),
+                listOf(
+                    option("vless", ProtocolHint.VLESS, "server-a"),
+                    option("hysteria2", ProtocolHint.HYSTERIA2, "server-b"),
+                ),
                 selectedProtocolOptionId = "vless",
             )
 

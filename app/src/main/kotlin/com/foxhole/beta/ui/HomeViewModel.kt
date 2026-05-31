@@ -56,6 +56,10 @@ import com.foxhole.beta.core.profile.ProfileExportRequest
 import com.foxhole.beta.core.settings.AppTrafficStatsRecorder
 import com.foxhole.beta.core.smart.SmartStartController
 import com.foxhole.beta.vpn.FoxholeVpnService
+import com.foxhole.beta.vpn.RuntimeIpPanelState
+import com.foxhole.beta.vpn.RuntimeIpRefreshReason
+import com.foxhole.beta.vpn.RuntimePhase
+import com.foxhole.beta.vpn.RuntimeUiState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -177,6 +181,14 @@ class HomeViewModel(
             )
         }
 
+    private val dashboardIpInfoLoading =
+        combine(
+            ipInfoLoadingMutable,
+            container.connectionController.runtimeUiState,
+        ) { explicitLoading, runtimeUiState ->
+            explicitLoading || runtimeUiState.hasConnectedPendingDashboardIpRefresh()
+        }.distinctUntilChanged()
+
     internal val routingStreams =
         combine(
             container.routingRepository.presets,
@@ -197,7 +209,7 @@ class HomeViewModel(
                 profilesLoadedMutable,
                 installedAppsLoadingMutable,
                 installedAppsLoadedMutable,
-                ipInfoLoadingMutable,
+                dashboardIpInfoLoading,
             ) { installedApps, profilesLoaded, installedAppsLoading, installedAppsLoaded, ipInfoLoading ->
                 HomeInstalledAppsStreams(
                     profilesLoaded = profilesLoaded,
@@ -543,6 +555,16 @@ class HomeViewModel(
             null
         } else {
             ipInfo
+        }
+    }
+
+    private fun RuntimeUiState.hasConnectedPendingDashboardIpRefresh(): Boolean {
+        if (phase != RuntimePhase.Connected) {
+            return false
+        }
+        return sequenceOf(ip.device, ip.tunnel, ip.tor).any { panel ->
+            panel is RuntimeIpPanelState.Loading &&
+                panel.reason != RuntimeIpRefreshReason.LEGACY_BRIDGE
         }
     }
 

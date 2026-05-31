@@ -336,6 +336,16 @@ internal class ReflectiveLibboxRuntime(
 
     override suspend fun stop(policy: RuntimeStopPolicy): RuntimeStopResult {
         val startedAt = elapsedRealtime()
+        if (nativeSnapshot().isIdleWithoutAttachedRuntimeResources()) {
+            diagnosticsLogger.record("runtime", "stop skipped: native runtime already idle")
+            return RuntimeStopResult(
+                closeServiceOk = true,
+                closeServerOk = true,
+                tunClosed = true,
+                escalatedToKill = false,
+                elapsedMs = elapsedRealtime() - startedAt,
+            )
+        }
         val generation = nextRuntimeGeneration("stop")
         markNativeState(RuntimeState.STOPPING, generation)
         val preclosedTun =

@@ -1,6 +1,6 @@
 # Runtime validation profiling - 2026-05-31
 
-Public release status: BLOCKED.
+Public release status: CLEARED BY 2026-06-01 LOCAL RC PASS.
 
 ## Scope
 
@@ -36,6 +36,7 @@ literal endpoint evidence are not promoted into a success-shaped connected state
 
 ## Device note
 
-Pixel serial `2A091FDH3001PA` appeared in adb but stayed `unauthorized` during
-this pass. Debug install to Pixel is blocked until the RSA debugging prompt is
-accepted on the phone.
+This earlier Pixel authorization note is superseded. Pixel serial
+`2A091FDH3001PA` was available during the current local RC pass; release install,
+launch, validated VPN network, DNS, ping, clean app-side log scan, and memory
+proof were collected.

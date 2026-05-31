@@ -368,7 +368,10 @@ class ProfileRepository(
         val preparedProfiles =
             parsed.profiles.mapIndexed { index, importedProfile ->
                 val secretRef = UUID.randomUUID().toString()
-                val selectedProtocolOptionId = importedProfile.resolveRefreshSelectedProtocolOptionId(previousSecret = null)
+                val selectedProtocolOptionId =
+                    importedProfile.resolveRefreshSelectedProtocolOptionId(
+                        previousSecret = null,
+                    )
                 PreparedLocalImportProfile(
                     entity =
                         ProfileEntity(
@@ -895,7 +898,9 @@ class ProfileRepository(
                     )
                 val nextSecretRef = UUID.randomUUID().toString()
                 val selectedProtocolOptionId =
-                    importedProfile.resolveRefreshSelectedProtocolOptionId(previousSecret = matchedProfile?.storedSecret)
+                    importedProfile.resolveRefreshSelectedProtocolOptionId(
+                        previousSecret = matchedProfile?.storedSecret,
+                    )
                 val importedRequiresInsecureTls = importedProfile.requiresInsecureTls(json)
                 val previousInsecureTlsConsentGranted = matchedProfile?.storedSecret?.hasInsecureTlsConsent() == true
                 PreparedSubscriptionRefreshProfile(

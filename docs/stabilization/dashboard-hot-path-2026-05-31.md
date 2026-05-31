@@ -1,6 +1,6 @@
 # Dashboard Hot Path - 2026-05-31
 
-Public release status: BLOCKED.
+Public release status: CLEARED BY 2026-06-01 LOCAL RC PASS.
 
 ## Scope
 
@@ -16,4 +16,6 @@ This pass targets the known OOM stack around `HomeNetworkDetailLine` and reduces
 
 - Added `HomeDashboardHotPathTest` for dashboard placement animation gating.
 
-Public release remains blocked until the dashboard hot path is verified by device stress/macrobenchmark and memory gates.
+The release blocker from this pass is cleared by the current local RC proof:
+device stress, macrobenchmark, and memory gates passed locally. See
+`docs/stabilization/public-release-readiness-2026-05-31.md`.

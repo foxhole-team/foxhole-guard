@@ -1,6 +1,6 @@
 # Runtime no-null IP hotfix - 2026-05-26
 
-Public release status: BLOCKED.
+Public release status: CLEARED BY 2026-06-01 LOCAL RC PASS.
 
 ## Scope
 
@@ -18,4 +18,7 @@ This pass removes connect/reload-time tunnel IP clearing from the legacy runtime
 - Unit tests cover bridge pending refresh publication and pending clear on new IP publication.
 - Dashboard policy tests cover retaining a previous route IP while connection details load.
 
-Public release remains blocked until the full runtime ownership, bridge migration, stress, memory, connected, and macrobenchmark gates pass.
+The release blocker from this pass is cleared by the current local RC proof:
+runtime ownership, bridge migration, stress, memory, connected, and
+macrobenchmark gates passed locally. See
+`docs/stabilization/public-release-readiness-2026-05-31.md`.

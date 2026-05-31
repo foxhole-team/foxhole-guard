@@ -39,6 +39,7 @@ import com.foxhole.beta.core.settings.AppTrafficStatsRecorder
 import com.foxhole.beta.core.traffic.LibboxDnsRuntimeStatsTracker
 import com.foxhole.beta.core.traffic.RuntimeNetworkActivityContext
 import com.foxhole.beta.core.traffic.TorGeoIpCountryResolver
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -56,6 +57,16 @@ import java.net.DatagramSocket
 import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.net.Socket
+
+@Suppress("TooGenericExceptionCaught")
+private suspend inline fun <T> runCatchingUnlessCancelled(crossinline block: suspend () -> T): Result<T> =
+    try {
+        Result.success(block())
+    } catch (cancelled: CancellationException) {
+        throw cancelled
+    } catch (error: Throwable) {
+        Result.failure(error)
+    }
 
 class FoxholeVpnService : VpnService(), RuntimeServiceHost {
     internal val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -119,6 +130,10 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
                     },
                 ).also { runtimeSupervisorInstance = it }
             }
+
+    @Volatile
+    private var lastRuntimeStopResourceEvent: String? = null
+
     internal val trafficSampler = TrafficStatsSampler()
     internal val anomalyTrafficAggregator = TrafficWindowAggregator()
     internal val anomalyNetworkTypeProvider by lazy { AndroidNetworkTypeProvider(applicationContext) }
@@ -384,11 +399,13 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         validationJob = null
         runtimeSupervisorInstance?.close()
         runtimeInstanceStore.current()?.let { runtime ->
-            stopRuntimeAfterServiceDestroy(
-                runtime = runtime,
-                diagnosticsLogger = container.diagnosticsLogger,
-                owner = "vpn",
-            )
+            if (!runtime.nativeSnapshot().isIdleWithoutAttachedRuntimeResources()) {
+                stopRuntimeAfterServiceDestroy(
+                    runtime = runtime,
+                    diagnosticsLogger = container.diagnosticsLogger,
+                    owner = "vpn",
+                )
+            }
         }
         releaseRuntimeWakeLock()
         if (hadActiveRuntime) {
@@ -410,6 +427,10 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         if (defaultNetworkCallbackRegistered) {
             runCatching { connectivityManager.unregisterNetworkCallback(defaultNetworkCallback) }
             defaultNetworkCallbackRegistered = false
+        }
+        lastRuntimeStopResourceEvent?.let { event ->
+            recordRuntimeResourceSnapshot(event = event, async = false)
+            lastRuntimeStopResourceEvent = null
         }
         recordRuntimeResourceSnapshot(event = "service_destroy_after_callbacks_unregistered", async = false)
     }
@@ -775,7 +796,9 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
                     escalatedToKill = false,
                     elapsedMs = 0L,
                 )
-            recordRuntimeResourceSnapshot(event = "stop_skipped_no_owner:$reason")
+            val event = "stop_skipped_no_owner:$reason"
+            lastRuntimeStopResourceEvent = event
+            recordRuntimeResourceSnapshot(event = event)
             return result
         }
         val result = currentRuntime.stopFailClosed(
@@ -783,8 +806,11 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
             reason = reason,
             diagnosticsLogger = container.diagnosticsLogger,
         )
+        val event = if (result.graceful) "stop_success:$reason" else "stop_escalated:$reason"
+        lastRuntimeStopResourceEvent = event
         recordRuntimeResourceSnapshot(
-            event = if (result.graceful) "stop_success:$reason" else "stop_escalated:$reason",
+            event = event,
+            async = false,
         )
         return result
     }
@@ -1785,7 +1811,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
                 repeat(GEO_REFRESH_ATTEMPTS) { attempt ->
                     val requestNetwork = boundNetworkForAppOwnedRequest(currentUpstreamNetworkOrNull())
                     val success =
-                        runCatching {
+                        runCatchingUnlessCancelled {
                             refreshAppOwnedIpInfo(
                                 callTimeoutMs = GEO_REFRESH_CALL_TIMEOUT_MS,
                                 network = requestNetwork,

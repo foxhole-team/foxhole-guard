@@ -95,6 +95,10 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
                     },
                 ).also { runtimeSupervisorInstance = it }
             }
+
+    @Volatile
+    private var lastRuntimeStopResourceEvent: String? = null
+
     private val runtimeWakeLock by lazy {
         RuntimeWakeLock(
             context = applicationContext,
@@ -193,11 +197,13 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
         cancelScheduledAutoReconnect(resetAttempts = true)
         runtimeSupervisorInstance?.close()
         runtimeInstanceStore.current()?.let { runtime ->
-            stopRuntimeAfterServiceDestroy(
-                runtime = runtime,
-                diagnosticsLogger = container.diagnosticsLogger,
-                owner = "proxy",
-            )
+            if (!runtime.nativeSnapshot().isIdleWithoutAttachedRuntimeResources()) {
+                stopRuntimeAfterServiceDestroy(
+                    runtime = runtime,
+                    diagnosticsLogger = container.diagnosticsLogger,
+                    owner = "proxy",
+                )
+            }
         }
         runtimeWakeLock.release()
         if (hadActiveRuntime) {
@@ -211,6 +217,10 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
         if (defaultNetworkCallbackRegistered) {
             runCatching { connectivityManager.unregisterNetworkCallback(defaultNetworkCallback) }
             defaultNetworkCallbackRegistered = false
+        }
+        lastRuntimeStopResourceEvent?.let { event ->
+            recordRuntimeResourceSnapshot(event = event, async = false)
+            lastRuntimeStopResourceEvent = null
         }
         recordRuntimeResourceSnapshot(event = "service_destroy_after_callbacks_unregistered", async = false)
     }
@@ -414,7 +424,9 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
                     escalatedToKill = false,
                     elapsedMs = 0L,
                 )
-            recordRuntimeResourceSnapshot(event = "stop_skipped_no_owner:$reason")
+            val event = "stop_skipped_no_owner:$reason"
+            lastRuntimeStopResourceEvent = event
+            recordRuntimeResourceSnapshot(event = event)
             return result
         }
         val result =
@@ -423,8 +435,11 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
                 reason = reason,
                 diagnosticsLogger = container.diagnosticsLogger,
             )
+        val event = if (result.graceful) "stop_success:$reason" else "stop_escalated:$reason"
+        lastRuntimeStopResourceEvent = event
         recordRuntimeResourceSnapshot(
-            event = if (result.graceful) "stop_success:$reason" else "stop_escalated:$reason",
+            event = event,
+            async = false,
         )
         return result
     }

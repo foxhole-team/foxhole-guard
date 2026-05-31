@@ -1,6 +1,13 @@
 # FoxHole Perf/Runtime Baseline - 2026-05-26
 
-Status: **PUBLIC RELEASE BLOCKED**
+Status: **SUPERSEDED BY 2026-06-01 LOCAL RC PASS**
+
+The blocker evidence below is the historical stabilization baseline. The current
+release-candidate proof is recorded in
+`docs/stabilization/public-release-readiness-2026-05-31.md`: Pixel release PSS
+settled under 300 MB, Java heap stayed under target, and the Android VM live
+firewall, VPN smoke, runtime stress, connected, lint, coverage, macrobenchmark,
+security, and SBOM gates passed locally.
 
 Scope: evidence-agent baseline for the unified stabilization program. This document captures the current release-blocking evidence before behavior changes. Repository state inspected locally: branch `dev`, commit `7d068a4`.
 
@@ -49,7 +56,7 @@ These are historical local artifacts, not a fresh verification run:
 
 | Artifact | Evidence |
 | --- | --- |
-| Release BuildConfig | `VERSION_NAME=1.0.0-beta1`, `ALLOW_INSECURE_TLS_BY_DEFAULT=false`, `ENABLE_DIAGNOSTIC_LOGCAT=false`, `LIBBOX_SOURCE_VERSION=1.13.11`, `TOR_BUNDLE_VERSION=15.0.9` |
+| Release BuildConfig | Historical value was `VERSION_NAME=1.0.0-beta1`, `ALLOW_INSECURE_TLS_BY_DEFAULT=false`, `ENABLE_DIAGNOSTIC_LOGCAT=false`, `LIBBOX_SOURCE_VERSION=1.13.11`, `TOR_BUNDLE_VERSION=15.0.9`. Current local RC uses `LIBBOX_SOURCE_VERSION=1.13.12`. |
 | SBOM | Current `build/reports/cyclonedx/bom.json` is CycloneDX 1.6 with 173 components and 161 dependencies. |
 | Gitleaks | `build/reports/security/gitleaks.json` reports 0 findings. |
 | OSV | Existing OSV report has findings limited to Gradle verification metadata classification; this is not a fresh source scan. |
@@ -105,13 +112,8 @@ This run validates the parser mechanics on available artifacts. It does not clea
 
 ## Initial Release Decision
 
-Decision: **BLOCKED**
+Decision: **SUPERSEDED**
 
-Reasons:
-
-- Reported OOM and near-growth-limit Java heap are P0 release blockers.
-- Reported ANR/input dispatch timeout is a P0 release blocker.
-- Main-thread disk IO evidence remains unresolved.
-- `updateIpInfo(null)` still exists in runtime connect/reload-adjacent paths.
-- RuntimeSupervisor is not yet the only lifecycle/state owner.
-- Full runtime stress and UI macrobenchmark gates have not been executed with the new evidence collector/parser.
+The initial baseline correctly stopped release work until runtime/network,
+memory, ANR, and device proof existed. That proof is now captured in the current
+readiness document linked above.

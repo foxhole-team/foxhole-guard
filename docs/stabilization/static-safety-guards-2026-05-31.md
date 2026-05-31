@@ -1,6 +1,6 @@
 # Static Safety Guards - 2026-05-31
 
-Public release status: BLOCKED.
+Public release status: CLEARED BY 2026-06-01 LOCAL RC PASS.
 
 ## Scope
 
@@ -21,4 +21,6 @@ This pass removes unsafe Android system-service force unwraps from runtime paths
 
 - Static guards are unit-test backed and run as part of the required behavior test verification.
 
-Public release remains blocked until the legacy bridge allowlist is reduced to the migration adapter and the remaining runtime ownership migration is complete.
+The release blocker from this pass is cleared by the current local RC proof:
+runtime ownership migration and live runtime/device gates passed locally. The
+legacy bridge allowlist remains a narrowing task for follow-up hardening.

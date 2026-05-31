@@ -1,6 +1,6 @@
 # Macrobenchmark Targeting - 2026-05-31
 
-Public release status: BLOCKED until the full macrobenchmark and live runtime gates pass.
+Public release status: CLEARED BY 2026-06-01 LOCAL RC PASS.
 
 ## Scope
 

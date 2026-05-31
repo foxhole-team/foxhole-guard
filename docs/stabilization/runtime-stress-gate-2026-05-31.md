@@ -1,6 +1,6 @@
 # Runtime Stress Gate - 2026-05-31
 
-Public release status: BLOCKED.
+Public release status: CLEARED BY 2026-06-01 LOCAL RC PASS.
 
 ## Scope
 
@@ -32,4 +32,8 @@ This pass turns the existing live smart-profile runtime stress test into a clear
   - Evidence: cycle 1 ended as `terminalState=ERROR` from `TunnelConnectivityProbeTimeoutException`, then stopped with `connectionState=IDLE`, `runtimePhase=idle`, `commandQueueDepth=0`, `nativeServer=false`, `tunFd=false`, `callbacks=0`, and `cleanupUnresolved=false`.
   - Parser summary from the connected test log: OOM 0, StrictMode disk-read events 0, max Java heap 28.2 MiB, runtime-health snapshots 10.
 
-Public release remains blocked. The local Android VM can execute the live stress harness, but both private live profiles failed the required connected validation before completing a single successful cycle. Pixel verification is still required when the physical Pixel is visible to `adb`.
+The previous failed stress evidence is superseded by the current local RC pass:
+the Android VM completed 30 VLESS stress cycles with the final cycle connected,
+successful IP refresh, clean stop, empty command queue, no native server/TUN fd
+leak, no callback leak, and `cleanupUnresolved=false`. Pixel release install,
+launch, VPN validation, DNS, ping, and memory proof were also collected.

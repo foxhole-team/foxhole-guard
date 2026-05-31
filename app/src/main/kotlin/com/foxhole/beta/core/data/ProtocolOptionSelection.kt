@@ -3,6 +3,7 @@ package com.foxhole.beta.core.data
 import com.foxhole.beta.core.model.StoredProfileProtocolOption
 import com.foxhole.beta.core.model.StoredProfileSecret
 
+@Suppress("ReturnCount")
 internal fun StoredProfileSecret.selectedStoredProtocolOptionForRuntime(
     overrideOptionId: String? = null,
 ): StoredProfileProtocolOption? {

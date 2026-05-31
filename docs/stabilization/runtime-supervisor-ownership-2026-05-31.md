@@ -1,6 +1,6 @@
 # Runtime Supervisor Ownership - 2026-05-31
 
-Public release status: BLOCKED.
+Public release status: CLEARED BY 2026-06-01 LOCAL RC PASS.
 
 ## Scope
 
@@ -20,4 +20,9 @@ This pass moves runtime control-plane ownership toward `RuntimeSupervisor` witho
 - Added reducer tests for native start, VPN network availability, validation success, cleanup-unresolved error, and stale lifecycle events.
 - Added supervisor tests for ownership state and explicit command dispatch.
 
-Public release remains blocked until service connect/reload/stop decisions are fully moved behind supervisor commands and native cleanup is serialized by the native adapter.
+The release blocker from this pass is cleared by the current local RC proof:
+service commands dispatch through `RuntimeSupervisor`, native cleanup is
+serialized, stop cleanup is idempotent for already-idle runtimes, and live VM
+runtime stress returned to idle with no command backlog, TUN leak, native server
+leak, cleanup-unresolved state, or callback leak. Further service decomposition
+remains a P1 refactor, not a current release stop.

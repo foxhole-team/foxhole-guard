@@ -190,7 +190,7 @@ class HomeIpRefreshPolicyTest {
     }
 
     @Test
-    fun `post connect refresh does not promote missing ip to full scan`() {
+    fun `post connect refresh shows loading for missing ip without full scan`() {
         val snapshot =
             ConnectionSnapshot(
                 state = ConnectionState.CONNECTED,
@@ -205,7 +205,7 @@ class HomeIpRefreshPolicyTest {
                 currentIpInfo = null,
             ),
         )
-        assertFalse(
+        assertTrue(
             shouldShowDashboardIpRefreshLoading(
                 reason = IpInfoRefreshReason.POST_CONNECT,
                 snapshot = snapshot,

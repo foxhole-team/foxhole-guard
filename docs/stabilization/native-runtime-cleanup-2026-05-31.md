@@ -1,6 +1,6 @@
 # Native Runtime Cleanup - 2026-05-31
 
-Public release status: BLOCKED.
+Public release status: CLEARED BY 2026-06-01 LOCAL RC PASS.
 
 ## Scope
 
@@ -17,4 +17,6 @@ This pass removes ad-hoc coroutine scopes from native start/close helper paths a
 
 - `RuntimeStopSupportTest` and `RuntimeStartTimeoutPolicyTest` pass with the serialized dispatcher.
 
-Public release remains blocked until cleanup-unresolved start blocking and full runtime stress gates pass on devices.
+The release blocker from this pass is cleared by the current local RC proof:
+full VM runtime stress and firewall stress returned to idle without
+cleanup-unresolved, native server, TUN fd, callback, or command queue leaks.

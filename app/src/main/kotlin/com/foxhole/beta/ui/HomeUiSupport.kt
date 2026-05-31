@@ -337,7 +337,7 @@ internal fun shouldClearExistingIpForRefresh(
             IpInfoRefreshReason.TOR_ROUTE,
         )
 
-@Suppress("UNUSED_PARAMETER")
+@Suppress("FunctionOnlyReturningConstant", "UNUSED_PARAMETER")
 internal fun shouldUseFullDashboardIpRefresh(
     reason: IpInfoRefreshReason,
     snapshot: ConnectionSnapshot,
@@ -352,14 +352,26 @@ internal fun shouldShowDashboardIpRefreshLoading(
     when (reason) {
         IpInfoRefreshReason.MANUAL -> true
         IpInfoRefreshReason.NETWORK_CHANGE -> false
-        IpInfoRefreshReason.POST_CONNECT,
-        IpInfoRefreshReason.RESTORED_VPN,
-        -> shouldUseFullDashboardIpRefresh(reason, snapshot, currentIpInfo)
+        IpInfoRefreshReason.POST_CONNECT ->
+            shouldShowMissingConnectedRouteIpLoading(snapshot, currentIpInfo) ||
+                shouldUseFullDashboardIpRefresh(reason, snapshot, currentIpInfo)
+        IpInfoRefreshReason.RESTORED_VPN -> shouldUseFullDashboardIpRefresh(reason, snapshot, currentIpInfo)
         IpInfoRefreshReason.FOREGROUND,
         IpInfoRefreshReason.POST_UPDATE,
         -> false
         IpInfoRefreshReason.TOR_ROUTE -> currentIpInfo == null || !currentIpInfo.hasDashboardLocationDetails()
     }
+
+private fun shouldShowMissingConnectedRouteIpLoading(
+    snapshot: ConnectionSnapshot,
+    currentIpInfo: IpInfo?,
+): Boolean =
+    currentIpInfo == null &&
+        snapshot.state == ConnectionState.CONNECTED &&
+        snapshot.trafficMode == TrafficMode.TUNNEL &&
+        snapshot.profileId != null &&
+        snapshot.profileId != FoxholeVpnService.LOCAL_GUARD_PROFILE_ID &&
+        snapshot.profileId != FoxholeVpnService.TOR_ONLY_PROFILE_ID
 
 internal fun IpInfo.hasDashboardLocationDetails(): Boolean =
     (countryName?.isNotBlank() == true || countryCode?.isNotBlank() == true) &&

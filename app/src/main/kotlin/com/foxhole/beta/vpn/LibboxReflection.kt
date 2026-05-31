@@ -134,7 +134,6 @@ internal class LibboxReflection(
                             message = "auto-detect protected upstream socket",
                         )
                     }
-                    defaultNetworkMonitor.bindSocketToDefaultNetwork(fd)
                     Unit
                 }
                 "clearDNSCache" -> Unit

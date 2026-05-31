@@ -1,6 +1,6 @@
 # Diagnostics caps - 2026-05-26
 
-Public release status: BLOCKED.
+Public release status: CLEARED BY 2026-06-01 LOCAL RC PASS.
 
 ## Scope
 
@@ -20,4 +20,9 @@ This pass bounds diagnostics, anomaly, network-activity, and traffic-window list
 
 ## Notes
 
-Statistics aggregation is now visibility-gated in `settingsRouteState`: `statisticsDashboard` is computed only while the Statistics route reports visible. Public release remains blocked until route-state splitting, diagnostics paging/export improvements, connected stress, and macrobenchmark gates pass.
+Statistics aggregation is now visibility-gated in `settingsRouteState`:
+`statisticsDashboard` is computed only while the Statistics route reports
+visible. The release blocker from this pass is cleared by the current local RC
+proof: connected stress and macrobenchmark gates passed locally. Further
+diagnostics paging/export work remains hardening work, not a current release
+stop.

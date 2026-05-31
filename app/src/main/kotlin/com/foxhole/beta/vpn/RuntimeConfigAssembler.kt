@@ -640,7 +640,12 @@ class RuntimeConfigAssembler(
 
     private fun effectiveTunnelTunStack(
         configured: TunStack,
-    ): TunStack = configured
+    ): TunStack =
+        when (configured) {
+            // Android 16/system TUN can validate ICMP while dropping TCP; profile tunnels need TCP-stable delivery.
+            TunStack.SYSTEM -> TunStack.GVISOR
+            TunStack.GVISOR -> TunStack.GVISOR
+        }
 
     private fun buildSplitPlan(
         settings: Settings,
@@ -911,7 +916,11 @@ class RuntimeConfigAssembler(
     private fun JsonObject.requiresVlessUdpRelayPatch(): Boolean =
         this["type"]?.jsonPrimitive?.contentOrNull?.lowercase() == "vless" &&
             isTcpOnlyNetwork() &&
+            !hasVlessFlow() &&
             stringField("packet_encoding")?.lowercase() in setOf(null, "xudp", "packetaddr")
+
+    private fun JsonObject.hasVlessFlow(): Boolean =
+        stringField("flow") != null
 
     private fun patchDns(
         existing: JsonObject?,

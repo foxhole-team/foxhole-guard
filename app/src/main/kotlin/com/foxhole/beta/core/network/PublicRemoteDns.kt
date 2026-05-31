@@ -9,6 +9,7 @@ internal class PublicRemoteDns(
     private val delegate: (String) -> List<InetAddress>,
     private val fallback: PublicDnsFallback = PublicDohDnsFallback,
 ) : Dns {
+    @Suppress("ReturnCount")
     override fun lookup(hostname: String): List<InetAddress> {
         hostname.requirePublicRemoteHost(resolveHost = false)
         val delegateAddresses =
@@ -35,6 +36,7 @@ internal class PublicRemoteDns(
         return publicAddresses.preferIpv4()
     }
 
+    @Suppress("TooGenericExceptionCaught", "ThrowsCount")
     private fun fallbackPublicAddresses(
         hostname: String,
         primaryFailure: UnknownHostException,

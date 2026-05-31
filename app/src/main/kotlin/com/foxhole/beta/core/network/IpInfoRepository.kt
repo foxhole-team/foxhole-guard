@@ -71,7 +71,12 @@ class IpInfoRepository(
     private val json: Json,
 ) {
     private val httpClientCacheLock = Any()
-    private val httpClientCache = LinkedHashMap<HttpClientKey, CachedHttpClient>(HTTP_CLIENT_CACHE_MAX_SIZE, 0.75f, true)
+    private val httpClientCache =
+        LinkedHashMap<HttpClientKey, CachedHttpClient>(
+            HTTP_CLIENT_CACHE_MAX_SIZE,
+            0.75f,
+            true,
+        )
 
     suspend fun fetchIpv4(
         endpoint: String,

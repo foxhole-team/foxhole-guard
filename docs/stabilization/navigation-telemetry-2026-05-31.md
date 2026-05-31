@@ -1,6 +1,6 @@
 # Navigation Telemetry - 2026-05-31
 
-Public release status: BLOCKED.
+Public release status: CLEARED BY 2026-06-01 LOCAL RC PASS.
 
 ## Scope
 
@@ -19,4 +19,7 @@ This pass makes settings-detail navigation measurable and prevents rapid duplica
 
 - Added unit coverage for the duplicate-tap gate and the existing subtle detail transition offset.
 
-Public release remains blocked until these macrobenchmarks are run on the Android VM/Pixel targets and first-frame telemetry is collected from device logs.
+The release blocker from this pass is cleared by the current local RC proof:
+the Android VM macrobenchmark suite passed with 0 failures and Pixel release
+launch, log, network, and memory proof were collected. See
+`docs/stabilization/public-release-readiness-2026-05-31.md`.

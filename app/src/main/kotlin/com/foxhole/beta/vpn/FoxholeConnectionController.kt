@@ -761,7 +761,7 @@ object FoxholeVpnRuntimeBridge {
     }
 
     fun markIpInfoRefreshPending() {
-        markIpInfoRefreshPending(RuntimeIpRefreshReason.LEGACY_BRIDGE)
+        markIpInfoRefreshPending(RuntimeIpRefreshReason.POST_CONNECT)
     }
 
     internal fun markIpInfoRefreshPending(reason: RuntimeIpRefreshReason) {

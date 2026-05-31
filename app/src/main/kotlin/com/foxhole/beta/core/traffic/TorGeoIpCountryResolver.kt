@@ -301,6 +301,7 @@ private data class GeoIpFieldSlice(
     val end: Int,
 )
 
+@Suppress("ReturnCount")
 private fun String.geoIpSlicesOrNull(): GeoIpLineSlices? {
     val contentStart = indexOfFirstNonWhitespace()
     if (contentStart < 0 || this[contentStart] == '#') {
@@ -368,6 +369,7 @@ private fun String.countryCodeFieldOrNull(field: GeoIpFieldSlice): String? {
     return id.toCountryCode()
 }
 
+@Suppress("ReturnCount")
 private fun String.countryCodeIdFieldOrNull(field: GeoIpFieldSlice): Int? {
     if (field.end - field.start != COUNTRY_CODE_LENGTH) {
         return null

@@ -7,9 +7,9 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import java.io.IOException
 import java.net.InetAddress
+import java.net.URL
 import java.net.URLEncoder
 import java.net.UnknownHostException
-import java.net.URL
 import javax.net.ssl.HttpsURLConnection
 
 internal fun interface PublicDnsFallback {

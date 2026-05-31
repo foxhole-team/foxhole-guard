@@ -1,6 +1,6 @@
 # Route State Split - 2026-05-31
 
-Public release status: BLOCKED.
+Public release status: CLEARED BY 2026-06-01 LOCAL RC PASS.
 
 ## Scope
 
@@ -21,4 +21,7 @@ This pass separates the ViewModel's high-volume activity/diagnostics payload fro
 
 - Added `RouteStateIsolationTest` for Settings payload omission, Statistics payload retention, Dashboard diagnostics insensitivity, and Routing app-inventory gating.
 
-Public release remains blocked until diagnostics paging, dashboard hot-path optimization, runtime ownership migration, native cleanup refactor, connected stress, and macrobenchmark gates pass.
+The release blocker from this pass is cleared by the current local RC proof:
+connected stress, runtime stress, macrobenchmark, memory, and Pixel release
+checks passed locally. See
+`docs/stabilization/public-release-readiness-2026-05-31.md`.

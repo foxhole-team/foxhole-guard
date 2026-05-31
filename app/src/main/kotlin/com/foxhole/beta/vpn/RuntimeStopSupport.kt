@@ -102,6 +102,12 @@ data class NativeRuntimeSnapshot(
     }
 }
 
+internal fun NativeRuntimeSnapshot.hasAttachedRuntimeResources(): Boolean =
+    hasCommandServer || hasTunFileDescriptor || hasHost || hasConfig
+
+internal fun NativeRuntimeSnapshot.isIdleWithoutAttachedRuntimeResources(): Boolean =
+    nativeState == RuntimeState.IDLE && !hasAttachedRuntimeResources()
+
 internal const val RUNTIME_CLEANUP_UNRESOLVED_MESSAGE =
     "Runtime cleanup is unresolved; restart FoxHole before reconnecting"
 

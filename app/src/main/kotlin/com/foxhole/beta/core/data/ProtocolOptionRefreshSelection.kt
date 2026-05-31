@@ -4,6 +4,7 @@ import com.foxhole.beta.core.model.ParsedSubscriptionProfile
 import com.foxhole.beta.core.model.StoredProfileProtocolOption
 import com.foxhole.beta.core.model.StoredProfileSecret
 
+@Suppress("ReturnCount")
 internal fun ParsedSubscriptionProfile.resolveRefreshSelectedProtocolOptionId(
     previousSecret: StoredProfileSecret?,
 ): String? {
