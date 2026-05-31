@@ -1,5 +1,6 @@
 package com.foxhole.beta.vpn
 
+import com.foxhole.beta.core.model.AutoConnectReasonCode
 import com.foxhole.beta.core.model.ProtocolHint
 import com.foxhole.beta.core.model.VpnSession
 import org.junit.Assert.assertEquals
@@ -52,6 +53,36 @@ class RuntimeValidationSessionGuardTest {
         assertTrue(plan.attempts > FoxholeVpnService.CONNECTIVITY_PROBE_ATTEMPTS)
         assertTrue(plan.callTimeoutMs > FoxholeVpnService.CONNECTIVITY_PROBE_CALL_TIMEOUT_MS)
         assertTrue(plan.totalTimeoutMs > ordinaryTotalTimeoutMs)
+    }
+
+    @Test
+    fun `wrapped tunnel timeout still maps to validation timeout`() {
+        val timeout =
+            TunnelConnectivityProbeTimeoutException(
+                attemptsDone = 2,
+                timeoutMs = 1_000L,
+                cause = IllegalStateException("last endpoint failed"),
+            )
+        val wrapped = IllegalStateException("DNS probe failed", timeout)
+
+        assertEquals(
+            AutoConnectReasonCode.VALIDATION_TIMEOUT,
+            runtimeValidationFailureReasonCode(
+                error = wrapped,
+                dnsProbeFailedMessage = "DNS probe failed",
+            ),
+        )
+    }
+
+    @Test
+    fun `generic user-facing dns failure maps to dns failure without timeout cause`() {
+        assertEquals(
+            AutoConnectReasonCode.DNS_FAILURE,
+            runtimeValidationFailureReasonCode(
+                error = IllegalStateException("DNS probe failed"),
+                dnsProbeFailedMessage = "DNS probe failed",
+            ),
+        )
     }
 
     private fun session() =

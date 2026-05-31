@@ -3,10 +3,12 @@ package com.foxhole.beta.vpn
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeoutOrNull
+import java.util.concurrent.TimeUnit
 
 internal class TunnelConnectivityProbeTimeoutException(
     val attemptsDone: Int,
     val timeoutMs: Long,
+    val elapsedMs: Long = timeoutMs,
     cause: Throwable?,
 ) : IllegalStateException(
         buildString {
@@ -23,6 +25,14 @@ internal class TunnelConnectivityProbeTimeoutException(
         cause,
     )
 
+internal data class TunnelConnectivityProbeAttemptReport(
+    val attemptIndex: Int,
+    val attemptNumber: Int,
+    val elapsedMs: Long,
+    val success: Boolean,
+    val failure: Throwable?,
+)
+
 internal object TunnelConnectivityProbe {
     suspend fun <T> run(
         attempts: Int,
@@ -30,6 +40,7 @@ internal object TunnelConnectivityProbe {
         retryDelayMs: Long,
         timeoutMs: Long? = null,
         onFailure: (attemptIndex: Int, Throwable) -> Unit = { _, _ -> },
+        onAttemptCompleted: (TunnelConnectivityProbeAttemptReport) -> Unit = {},
         block: suspend () -> T,
     ): Result<T> {
         require(attempts > 0) { "attempts must be positive" }
@@ -39,6 +50,7 @@ internal object TunnelConnectivityProbe {
 
         var attemptsDone = 0
         var lastFailure: Throwable? = null
+        val probeStartedAtNs = System.nanoTime()
 
         suspend fun runAttempts(): Result<T> {
             if (initialDelayMs > 0) {
@@ -46,6 +58,7 @@ internal object TunnelConnectivityProbe {
             }
             repeat(attempts) { attemptIndex ->
                 attemptsDone = attemptIndex + 1
+                val attemptStartedAtNs = System.nanoTime()
                 val result =
                     try {
                         Result.success(block())
@@ -54,12 +67,22 @@ internal object TunnelConnectivityProbe {
                     } catch (error: Throwable) {
                         Result.failure(error)
                     }
+                val error = result.exceptionOrNull()
+                onAttemptCompleted(
+                    TunnelConnectivityProbeAttemptReport(
+                        attemptIndex = attemptIndex,
+                        attemptNumber = attemptIndex + 1,
+                        elapsedMs = (System.nanoTime() - attemptStartedAtNs).toElapsedMs(),
+                        success = result.isSuccess,
+                        failure = error,
+                    ),
+                )
                 if (result.isSuccess) {
                     return result
                 }
-                val error = result.exceptionOrNull() ?: IllegalStateException("probe failed")
-                lastFailure = error
-                onFailure(attemptIndex, error)
+                val failure = error ?: IllegalStateException("probe failed")
+                lastFailure = failure
+                onFailure(attemptIndex, failure)
                 if (attemptIndex < attempts - 1) {
                     delay(retryDelayMs)
                 }
@@ -75,9 +98,13 @@ internal object TunnelConnectivityProbe {
                     TunnelConnectivityProbeTimeoutException(
                         attemptsDone = attemptsDone,
                         timeoutMs = timeoutMs,
+                        elapsedMs = (System.nanoTime() - probeStartedAtNs).toElapsedMs(),
                         cause = lastFailure,
                     ),
                 )
         }
     }
 }
+
+private fun Long.toElapsedMs(): Long =
+    TimeUnit.NANOSECONDS.toMillis(this).coerceAtLeast(0L)

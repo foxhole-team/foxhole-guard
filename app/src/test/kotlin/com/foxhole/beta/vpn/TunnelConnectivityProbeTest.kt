@@ -2,6 +2,7 @@ package com.foxhole.beta.vpn
 
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -98,5 +99,32 @@ class TunnelConnectivityProbeTest {
             assertTrue(error is TunnelConnectivityProbeTimeoutException)
             assertEquals(1, (error as TunnelConnectivityProbeTimeoutException).attemptsDone)
             assertEquals("boom-1", error.cause?.message)
+        }
+
+    @Test
+    fun `reports attempt duration and outcome for profiling`() =
+        runBlocking {
+            val attempts = mutableListOf<TunnelConnectivityProbeAttemptReport>()
+            var invocationCount = 0
+
+            val result =
+                TunnelConnectivityProbe.run(
+                    attempts = 2,
+                    retryDelayMs = 0,
+                    onAttemptCompleted = attempts::add,
+                ) {
+                    invocationCount += 1
+                    check(invocationCount == 2) { "warming up" }
+                    "ok"
+                }
+
+            assertTrue(result.isSuccess)
+            assertEquals(2, attempts.size)
+            assertEquals(1, attempts[0].attemptNumber)
+            assertEquals(2, attempts[1].attemptNumber)
+            assertFalse(attempts[0].success)
+            assertTrue(attempts[1].success)
+            assertTrue(attempts.all { report -> report.elapsedMs >= 0L })
+            assertEquals("warming up", attempts[0].failure?.message)
         }
 }
