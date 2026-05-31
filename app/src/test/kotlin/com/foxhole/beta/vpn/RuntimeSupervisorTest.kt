@@ -1,5 +1,7 @@
 package com.foxhole.beta.vpn
 
+import com.foxhole.beta.core.model.ProtocolHint
+import com.foxhole.beta.core.model.VpnSession
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -101,6 +103,66 @@ class RuntimeSupervisorTest {
             withTimeout(1_000L) { switchCompleted.await() }
 
             assertEquals(listOf("priority_command_preempt:connect:2:default"), killReasons.toList())
+
+            supervisor.close()
+            scope.cancel()
+        }
+
+    @Test
+    fun `ownership store makes supervisor active runtime owner`() =
+        runBlocking {
+            val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+            val supervisor = supervisor(scope)
+            val session =
+                VpnSession(
+                    profileId = 7L,
+                    profileName = "test",
+                    protocolHint = ProtocolHint.VLESS,
+                    configJson = "{}",
+                    correlationId = "session-7",
+                )
+
+            supervisor.setActiveSession(session)
+            supervisor.setValidationActive(true)
+            supervisor.setNetworkCallbackRegistered(RuntimeNetworkCallbackKind.VPN, true)
+            supervisor.setActiveVpnNetworkHandle(100L)
+
+            assertEquals(session, supervisor.ownership.value.activeSession)
+            assertEquals(null, supervisor.ownership.value.activeLocalGuardMode)
+            assertTrue(supervisor.ownership.value.validationActive)
+            assertTrue(supervisor.ownership.value.vpnNetworkCallbackRegistered)
+            assertEquals(100L, supervisor.ownership.value.activeVpnNetworkHandle)
+
+            supervisor.setActiveLocalGuardMode(LocalGuardMode.FIREWALL)
+
+            assertEquals(null, supervisor.ownership.value.activeSession)
+            assertEquals(LocalGuardMode.FIREWALL, supervisor.ownership.value.activeLocalGuardMode)
+
+            supervisor.clearRuntimeOwnership()
+
+            assertEquals(RuntimeControlPlaneOwnershipState(), supervisor.ownership.value)
+
+            supervisor.close()
+            scope.cancel()
+        }
+
+    @Test
+    fun `explicit runtime command dispatch uses command priority and reason`() =
+        runBlocking {
+            val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+            val supervisor = supervisor(scope)
+            val executed = CompletableDeferred<RuntimeCommand>()
+            val command =
+                RuntimeCommand.Reload(
+                    reason = "settings_changed",
+                    source = RuntimeCommandSource.USER,
+                )
+
+            supervisor.dispatch(command) { runtimeCommand ->
+                executed.complete(runtimeCommand)
+            }
+
+            assertEquals(command, withTimeout(1_000L) { executed.await() })
 
             supervisor.close()
             scope.cancel()

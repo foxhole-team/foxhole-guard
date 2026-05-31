@@ -1,6 +1,7 @@
 package com.foxhole.beta.vpn
 
 import com.foxhole.beta.core.model.IpInfo
+import com.foxhole.beta.core.model.TrafficSnapshot
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
@@ -23,7 +24,60 @@ internal sealed interface RuntimeEvent {
         val result: Result<IpInfo>,
     ) : RuntimeEvent
 
-    data class TrafficSampled(val traffic: com.foxhole.beta.core.model.TrafficSnapshot) : RuntimeEvent
+    data class NativeStarted(
+        val generation: Long,
+        val sessionId: String?,
+    ) : RuntimeEvent
+
+    data class NativeStopped(
+        val generation: Long,
+        val sessionId: String?,
+    ) : RuntimeEvent
+
+    data class NativeCleanupUnresolved(
+        val generation: Long,
+        val message: String,
+    ) : RuntimeEvent
+
+    data class VpnNetworkAvailable(
+        val generation: Long,
+        val networkHandle: Long,
+    ) : RuntimeEvent
+
+    data class VpnNetworkLost(
+        val generation: Long,
+        val networkHandle: Long,
+    ) : RuntimeEvent
+
+    data class UpstreamChanged(
+        val generation: Long,
+        val networkHandle: Long?,
+        val revision: Long,
+    ) : RuntimeEvent
+
+    data class ValidationStarted(
+        val generation: Long,
+        val sessionId: String?,
+    ) : RuntimeEvent
+
+    data class ValidationSucceeded(
+        val generation: Long,
+        val sessionId: String?,
+        val vpnNetworkHandle: Long?,
+    ) : RuntimeEvent
+
+    data class ValidationFailed(
+        val generation: Long,
+        val sessionId: String?,
+        val message: String,
+    ) : RuntimeEvent
+
+    data class TorStateChanged(
+        val generation: Long,
+        val tor: RuntimeTorUiState,
+    ) : RuntimeEvent
+
+    data class TrafficSampled(val traffic: TrafficSnapshot) : RuntimeEvent
 }
 
 internal class RuntimeStateStore(initialState: RuntimeUiState = RuntimeUiState()) {
@@ -35,6 +89,7 @@ internal class RuntimeStateStore(initialState: RuntimeUiState = RuntimeUiState()
     }
 }
 
+@Suppress("CyclomaticComplexMethod")
 internal fun reduceRuntimeState(
     state: RuntimeUiState,
     event: RuntimeEvent,
@@ -74,8 +129,80 @@ internal fun reduceRuntimeState(
                     )
                 state.copy(ip = state.ip.withPanel(event.target, panel))
             }
+        is RuntimeEvent.NativeStarted ->
+            state.whenCurrent(event.generation) {
+                copy(sessionId = event.sessionId, phase = RuntimePhase.WaitingVpnNetwork)
+            }
+        is RuntimeEvent.NativeStopped ->
+            state.whenCurrent(event.generation) {
+                copy(sessionId = null, phase = RuntimePhase.Idle)
+            }
+        is RuntimeEvent.NativeCleanupUnresolved ->
+            state.whenCurrent(event.generation) {
+                copy(
+                    phase = RuntimePhase.Error(RuntimeErrorUi(message = event.message)),
+                    error = RuntimeErrorUi(message = event.message),
+                )
+            }
+        is RuntimeEvent.VpnNetworkAvailable ->
+            state.whenCurrent(event.generation) {
+                copy(
+                    network = network.copy(vpnNetworkHandle = event.networkHandle),
+                    phase = RuntimePhase.ValidatingTunnel,
+                )
+            }
+        is RuntimeEvent.VpnNetworkLost ->
+            state.whenCurrent(event.generation) {
+                if (network.vpnNetworkHandle == event.networkHandle) {
+                    copy(network = network.copy(vpnNetworkHandle = null))
+                } else {
+                    this
+                }
+            }
+        is RuntimeEvent.UpstreamChanged ->
+            state.whenCurrent(event.generation) {
+                copy(
+                    network =
+                    network.copy(
+                        upstreamNetworkHandle = event.networkHandle,
+                        upstreamNetworkRevision = event.revision,
+                    ),
+                )
+            }
+        is RuntimeEvent.ValidationStarted ->
+            state.whenCurrent(event.generation) {
+                copy(sessionId = event.sessionId, phase = RuntimePhase.ValidatingTunnel)
+            }
+        is RuntimeEvent.ValidationSucceeded ->
+            state.whenCurrent(event.generation) {
+                copy(
+                    sessionId = event.sessionId,
+                    phase = RuntimePhase.Connected,
+                    network = network.copy(vpnNetworkHandle = event.vpnNetworkHandle ?: network.vpnNetworkHandle),
+                    error = null,
+                )
+            }
+        is RuntimeEvent.ValidationFailed ->
+            state.whenCurrent(event.generation) {
+                val error = RuntimeErrorUi(message = event.message)
+                copy(sessionId = event.sessionId, phase = RuntimePhase.Error(error), error = error)
+            }
+        is RuntimeEvent.TorStateChanged ->
+            state.whenCurrent(event.generation) {
+                copy(tor = event.tor)
+            }
         is RuntimeEvent.TrafficSampled ->
             state.copy(traffic = event.traffic)
+    }
+
+private inline fun RuntimeUiState.whenCurrent(
+    generation: Long,
+    block: RuntimeUiState.() -> RuntimeUiState,
+): RuntimeUiState =
+    if (generation == this.generation) {
+        block()
+    } else {
+        this
     }
 
 private fun RuntimeIpState.loadingPanel(

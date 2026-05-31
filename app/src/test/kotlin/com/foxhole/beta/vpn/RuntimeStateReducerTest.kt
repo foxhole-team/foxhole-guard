@@ -86,6 +86,74 @@ class RuntimeStateReducerTest {
         assertEquals("probe failed", panel.message)
     }
 
+    @Test
+    fun `runtime lifecycle events advance tunnel phases`() {
+        val generation = 11L
+        val starting = RuntimeUiState(generation = generation, phase = RuntimePhase.StartingNative)
+
+        val nativeStarted =
+            reduceRuntimeState(
+                starting,
+                RuntimeEvent.NativeStarted(generation = generation, sessionId = "session-1"),
+            )
+        assertEquals(RuntimePhase.WaitingVpnNetwork, nativeStarted.phase)
+        assertEquals("session-1", nativeStarted.sessionId)
+
+        val vpnAvailable =
+            reduceRuntimeState(
+                nativeStarted,
+                RuntimeEvent.VpnNetworkAvailable(generation = generation, networkHandle = 42L),
+            )
+        assertEquals(RuntimePhase.ValidatingTunnel, vpnAvailable.phase)
+        assertEquals(42L, vpnAvailable.network.vpnNetworkHandle)
+
+        val connected =
+            reduceRuntimeState(
+                vpnAvailable,
+                RuntimeEvent.ValidationSucceeded(
+                    generation = generation,
+                    sessionId = "session-1",
+                    vpnNetworkHandle = 42L,
+                ),
+            )
+        assertEquals(RuntimePhase.Connected, connected.phase)
+        assertEquals(null, connected.error)
+    }
+
+    @Test
+    fun `cleanup unresolved becomes safe error state`() {
+        val state = RuntimeUiState(generation = 12L, phase = RuntimePhase.Killing)
+
+        val next =
+            reduceRuntimeState(
+                state,
+                RuntimeEvent.NativeCleanupUnresolved(
+                    generation = 12L,
+                    message = "Runtime requires app restart",
+                ),
+            )
+
+        assertEquals(RuntimePhase.Error(RuntimeErrorUi("Runtime requires app restart")), next.phase)
+        assertEquals(RuntimeErrorUi("Runtime requires app restart"), next.error)
+    }
+
+    @Test
+    fun `stale lifecycle events are ignored`() {
+        val state = RuntimeUiState(generation = 13L, phase = RuntimePhase.Connected)
+
+        val next =
+            reduceRuntimeState(
+                state,
+                RuntimeEvent.ValidationFailed(
+                    generation = 12L,
+                    sessionId = "old",
+                    message = "old failure",
+                ),
+            )
+
+        assertSame(state, next)
+    }
+
     private fun readyTunnelIp(ipInfo: IpInfo): RuntimeIpState =
         RuntimeIpState.empty().withPanel(
             RuntimeIpRefreshTarget.TUNNEL,

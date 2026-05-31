@@ -119,26 +119,62 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
             context = applicationContext,
         )
     }
-    internal var activeSession: VpnSession? = null
-    internal var activeLocalGuardMode: LocalGuardMode? = null
+    internal var activeSession: VpnSession?
+        get() = runtimeSupervisor.ownership.value.activeSession
+        set(value) {
+            runtimeSupervisor.setActiveSession(value)
+        }
+    internal var activeLocalGuardMode: LocalGuardMode?
+        get() = runtimeSupervisor.ownership.value.activeLocalGuardMode
+        set(value) {
+            runtimeSupervisor.setActiveLocalGuardMode(value)
+        }
     internal var trafficJob: Job? = null
     internal var trafficMapCountryTrackingJob: Job? = null
     internal var dnsRuntimeStatsJob: Job? = null
     internal var immediateTrafficSampleJob: Job? = null
     internal var geoRefreshJob: Job? = null
     internal var ipv4EnrichmentJob: Job? = null
-    internal var validationJob: Job? = null
+    private var validationJobBacking: Job? = null
+    internal var validationJob: Job?
+        get() = validationJobBacking
+        set(value) {
+            validationJobBacking = value
+            runtimeSupervisor.setValidationActive(value != null)
+        }
     internal var notificationHealthJob: Job? = null
     internal var appTrafficStatsJob: Job? = null
-    internal var networkCallbackRegistered = false
-    internal var vpnNetworkCallbackRegistered = false
-    internal var defaultNetworkCallbackRegistered = false
+    private var networkCallbackRegisteredBacking = false
+    internal var networkCallbackRegistered: Boolean
+        get() = networkCallbackRegisteredBacking
+        set(value) {
+            networkCallbackRegisteredBacking = value
+            runtimeSupervisor.setNetworkCallbackRegistered(RuntimeNetworkCallbackKind.UPSTREAM, value)
+        }
+    private var vpnNetworkCallbackRegisteredBacking = false
+    internal var vpnNetworkCallbackRegistered: Boolean
+        get() = vpnNetworkCallbackRegisteredBacking
+        set(value) {
+            vpnNetworkCallbackRegisteredBacking = value
+            runtimeSupervisor.setNetworkCallbackRegistered(RuntimeNetworkCallbackKind.VPN, value)
+        }
+    private var defaultNetworkCallbackRegisteredBacking = false
+    internal var defaultNetworkCallbackRegistered: Boolean
+        get() = defaultNetworkCallbackRegisteredBacking
+        set(value) {
+            defaultNetworkCallbackRegisteredBacking = value
+            runtimeSupervisor.setNetworkCallbackRegistered(RuntimeNetworkCallbackKind.DEFAULT, value)
+        }
     internal var notificationConnectivityHealthState = ConnectivityHealthState.CHECKING
     internal var consecutiveNotificationHealthFailures = 0
     internal var defaultNetworkAvailable = true
     internal var lastDefaultNetworkSummary: String? = null
     internal val upstreamNetworkHandles = mutableSetOf<Long>()
-    internal var activeVpnNetworkHandle: Long? = null
+    internal var activeVpnNetworkHandle: Long?
+        get() = runtimeSupervisor.ownership.value.activeVpnNetworkHandle
+        set(value) {
+            runtimeSupervisor.setActiveVpnNetworkHandle(value)
+        }
     internal val ignoredVpnNetworkLossHandles = mutableSetOf<Long>()
     internal var runtimeNetworkActivityLoggingSuspended = false
 
