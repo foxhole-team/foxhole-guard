@@ -158,6 +158,7 @@ fun HomeScreen(
     onRenewTorIp: () -> Unit,
     onDashboardCardOrderChanged: (List<DashboardCard>) -> Unit,
 ) {
+    DebugRecompositionCounter("HomeScreen")
     val context = LocalContext.current
     var importMenuExpanded by rememberSaveable { mutableStateOf(false) }
     var showRefreshProfileDialog by rememberSaveable { mutableStateOf(false) }
@@ -452,10 +453,15 @@ fun HomeScreen(
                                     modifier =
                                         Modifier
                                             .then(
-                                                if (activeReorderCard == DashboardCard.TRAFFIC_MAP) {
-                                                    Modifier
-                                                } else {
+                                                if (
+                                                    shouldAnimateDashboardCardPlacement(
+                                                        activeReorderCard,
+                                                        DashboardCard.TRAFFIC_MAP,
+                                                    )
+                                                ) {
                                                     Modifier.animateItem()
+                                                } else {
+                                                    Modifier
                                                 },
                                             )
                                             .dashboardCardZIndex(activeReorderCard, DashboardCard.TRAFFIC_MAP),
@@ -484,10 +490,15 @@ fun HomeScreen(
                                     modifier =
                                         Modifier
                                             .then(
-                                                if (activeReorderCard == DashboardCard.PROFILES) {
-                                                    Modifier
-                                                } else {
+                                                if (
+                                                    shouldAnimateDashboardCardPlacement(
+                                                        activeReorderCard,
+                                                        DashboardCard.PROFILES,
+                                                    )
+                                                ) {
                                                     Modifier.animateItem()
+                                                } else {
+                                                    Modifier
                                                 },
                                             )
                                             .dashboardCardZIndex(activeReorderCard, DashboardCard.PROFILES),
@@ -642,10 +653,15 @@ fun HomeScreen(
                                     modifier =
                                         Modifier
                                             .then(
-                                                if (activeReorderCard == DashboardCard.ACTIONS) {
-                                                    Modifier
-                                                } else {
+                                                if (
+                                                    shouldAnimateDashboardCardPlacement(
+                                                        activeReorderCard,
+                                                        DashboardCard.ACTIONS,
+                                                    )
+                                                ) {
                                                     Modifier.animateItem()
+                                                } else {
+                                                    Modifier
                                                 },
                                             )
                                             .dashboardCardZIndex(activeReorderCard, DashboardCard.ACTIONS),
@@ -782,14 +798,20 @@ fun HomeScreen(
                     DashboardCard.NETWORK -> {
                         if (state.settings.ui.networkCardEnabled) {
                             item(key = DashboardCard.NETWORK) {
+                                DebugRecompositionCounter("HomeNetworkCard")
                                 DashboardCardDragContainer(
                                     modifier =
                                         Modifier
                                             .then(
-                                                if (activeReorderCard == DashboardCard.NETWORK) {
-                                                    Modifier
-                                                } else {
+                                                if (
+                                                    shouldAnimateDashboardCardPlacement(
+                                                        activeReorderCard,
+                                                        DashboardCard.NETWORK,
+                                                    )
+                                                ) {
                                                     Modifier.animateItem()
+                                                } else {
+                                                    Modifier
                                                 },
                                             )
                                             .dashboardCardZIndex(activeReorderCard, DashboardCard.NETWORK),
@@ -984,10 +1006,15 @@ fun HomeScreen(
                                     modifier =
                                         Modifier
                                             .then(
-                                                if (activeReorderCard == DashboardCard.TRAFFIC) {
-                                                    Modifier
-                                                } else {
+                                                if (
+                                                    shouldAnimateDashboardCardPlacement(
+                                                        activeReorderCard,
+                                                        DashboardCard.TRAFFIC,
+                                                    )
+                                                ) {
                                                     Modifier.animateItem()
+                                                } else {
+                                                    Modifier
                                                 },
                                             )
                                             .dashboardCardZIndex(activeReorderCard, DashboardCard.TRAFFIC),
@@ -1621,6 +1648,11 @@ private fun Modifier.dashboardCardZIndex(
     zIndex(
         if (activeCard == card) DASHBOARD_CARD_ACTIVE_Z_INDEX else 0f,
     )
+
+internal fun shouldAnimateDashboardCardPlacement(
+    activeCard: DashboardCard?,
+    card: DashboardCard,
+): Boolean = activeCard != null && activeCard != card
 
 private const val DASHBOARD_CARD_ACTIVE_Z_INDEX = 100f
 private const val DASHBOARD_CARD_REORDER_THRESHOLD_FRACTION = 0.5f

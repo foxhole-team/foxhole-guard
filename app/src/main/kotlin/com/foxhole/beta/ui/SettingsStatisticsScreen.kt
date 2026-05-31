@@ -50,6 +50,7 @@ fun StatisticsScreen(
     onFirewallEnabledChanged: (Boolean) -> Unit,
     onClearUsage: () -> Unit,
 ) {
+    DebugRecompositionCounter("StatisticsScreen")
     var settingsVisible by rememberSaveable { mutableStateOf(false) }
     var retentionMenuExpanded by rememberSaveable { mutableStateOf(false) }
     var allAppsVisible by rememberSaveable { mutableStateOf(false) }

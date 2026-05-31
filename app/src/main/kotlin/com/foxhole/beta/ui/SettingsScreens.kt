@@ -133,6 +133,7 @@ fun SettingsHomeScreen(
     onOpenStatistics: () -> Unit,
     onOpenAbout: () -> Unit,
 ) {
+    DebugRecompositionCounter("SettingsHomeScreen")
     val expertVisible = state.settings.ui.showExpertSettings
     SettingsScaffold(
         title = stringResource(R.string.settings),
