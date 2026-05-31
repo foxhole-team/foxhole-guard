@@ -213,15 +213,15 @@ internal class ReflectiveLibboxRuntime(
             if (!reflection.isAvailable()) {
                 error(host.runtimeContext.getString(com.foxhole.beta.R.string.error_runtime_missing))
             }
-            withContext(Dispatchers.IO) {
-                stopLocked(
-                    RuntimeStopPolicy(
-                        closeServiceTimeoutMs = 500L,
-                        closeServerTimeoutMs = 500L,
-                        totalGracefulTimeoutMs = 1_000L,
-                        forceKillAfterTimeout = true,
-                    ),
-                )
+            stopLocked(
+                RuntimeStopPolicy(
+                    closeServiceTimeoutMs = 500L,
+                    closeServerTimeoutMs = 500L,
+                    totalGracefulTimeoutMs = 1_000L,
+                    forceKillAfterTimeout = true,
+                ),
+            )
+            withContext(RuntimeNativeCallDispatcher.dispatcher) {
                 cleanupUnresolvedFailure("start_replace_stop")?.let { throw it }
                 ensureRuntimeGenerationCurrent(generation)
                 markNativeState(RuntimeState.STARTING, generation)
@@ -309,7 +309,7 @@ internal class ReflectiveLibboxRuntime(
                 error(host.runtimeContext.getString(com.foxhole.beta.R.string.error_runtime_missing))
             }
             val server = commandServerRef.get() ?: error("android: runtime is not running")
-            withContext(Dispatchers.IO) {
+            withContext(RuntimeNativeCallDispatcher.dispatcher) {
                 markNativeState(RuntimeState.RELOADING, generation)
                 currentHost = host
                 currentConfig = session.configJson

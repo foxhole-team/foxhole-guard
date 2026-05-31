@@ -3,13 +3,10 @@ package com.foxhole.beta.vpn
 import com.foxhole.beta.core.diagnostics.DiagnosticsLogger
 import com.foxhole.beta.core.model.TrafficMode
 import com.foxhole.beta.core.model.VpnSession
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.async
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
@@ -142,24 +139,14 @@ internal suspend fun runBlockingRuntimeClose(
     timeoutMs: Long,
     block: () -> Unit,
 ): Boolean {
-    val closeScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    val deferred =
-        closeScope.async {
+    return withTimeoutOrNull(timeoutMs.coerceAtLeast(1L)) {
+        withContext(RuntimeNativeCallDispatcher.dispatcher) {
             runCatching {
                 block()
                 true
             }.getOrDefault(false)
         }
-    return try {
-        withTimeoutOrNull(timeoutMs.coerceAtLeast(1L)) {
-            deferred.await()
-        } == true
-    } finally {
-        if (!deferred.isCompleted) {
-            deferred.cancel()
-        }
-        closeScope.cancel()
-    }
+    } == true
 }
 
 internal suspend fun VpnCoreRuntime.startFailClosed(
@@ -170,36 +157,25 @@ internal suspend fun VpnCoreRuntime.startFailClosed(
     timeoutMessage: String,
     timeoutMs: Long = RUNTIME_START_TIMEOUT_MS,
 ): Result<Unit> {
-    val startScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    val deferred =
-        startScope.async {
-            start(session, host)
-        }
-    return try {
-        val result =
-            withTimeoutOrNull(timeoutMs.coerceAtLeast(1L)) {
-                deferred.await()
+    val result =
+        withTimeoutOrNull(timeoutMs.coerceAtLeast(1L)) {
+            withContext(RuntimeNativeCallDispatcher.dispatcher) {
+                start(session, host)
             }
-        if (result != null) {
-            result
-        } else {
-            deferred.cancel()
-            withContext(NonCancellable + Dispatchers.IO) {
-                diagnosticsLogger.recordStructured(
-                    "runtime",
-                    "$owner runtime start timeout",
-                    "sessionId=${session.correlationId}",
-                    "timeout_ms=$timeoutMs",
-                )
-                forceKill("${owner}_start_timeout")
-            }
-            Result.failure(IllegalStateException(timeoutMessage))
         }
-    } catch (cancelled: CancellationException) {
-        deferred.cancel()
-        throw cancelled
-    } finally {
-        startScope.cancel()
+    return if (result != null) {
+        result
+    } else {
+        withContext(NonCancellable + Dispatchers.IO) {
+            diagnosticsLogger.recordStructured(
+                "runtime",
+                "$owner runtime start timeout",
+                "sessionId=${session.correlationId}",
+                "timeout_ms=$timeoutMs",
+            )
+            forceKill("${owner}_start_timeout")
+        }
+        Result.failure(IllegalStateException(timeoutMessage))
     }
 }
 
