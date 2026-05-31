@@ -80,10 +80,9 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
             .build()
     }
     internal val container: FoxholeRuntimeDependencies by lazy { (applicationContext as FoxholeApplication).appGraph }
-    private var runtimeInstance: VpnCoreRuntime? = null
-    internal val runtime: VpnCoreRuntime
-        get() =
-            runtimeInstance ?: createVpnRuntime(
+    private val runtimeInstanceStore =
+        RuntimeInstanceStore {
+            createVpnRuntime(
                 context = applicationContext,
                 diagnosticsLogger = container.diagnosticsLogger,
                 isNetworkActivityLoggingEnabled = {
@@ -102,15 +101,24 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
                         }
                         ?: NetworkActivityContext()
                 },
-            ).also { runtimeInstance = it }
+            )
+        }
+    internal val runtime: VpnCoreRuntime
+        get() = runtimeInstanceStore.get()
+    private val runtimeSupervisorLock = Any()
     private var runtimeSupervisorInstance: RuntimeSupervisor? = null
     internal val runtimeSupervisor: RuntimeSupervisor
         get() =
-            runtimeSupervisorInstance ?: RuntimeSupervisor(
-                scope = scope,
-                diagnosticsLogger = container.diagnosticsLogger,
-                emergencyKill = { reason -> runtime.forceKill(reason) },
-            ).also { runtimeSupervisorInstance = it }
+            runtimeSupervisorInstance ?: synchronized(runtimeSupervisorLock) {
+                runtimeSupervisorInstance ?: RuntimeSupervisor(
+                    scope = scope,
+                    diagnosticsLogger = container.diagnosticsLogger,
+                    emergencyKill = { reason ->
+                        runtimeInstanceStore.current()?.forceKill(reason)
+                            ?: RuntimeKillResult(reason = reason, tunClosed = true, serverDetached = false)
+                    },
+                ).also { runtimeSupervisorInstance = it }
+            }
     internal val trafficSampler = TrafficStatsSampler()
     internal val anomalyTrafficAggregator = TrafficWindowAggregator()
     internal val anomalyNetworkTypeProvider by lazy { AndroidNetworkTypeProvider(applicationContext) }
@@ -375,7 +383,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         validationJob?.cancel()
         validationJob = null
         runtimeSupervisorInstance?.close()
-        runtimeInstance?.let { runtime ->
+        runtimeInstanceStore.current()?.let { runtime ->
             stopRuntimeAfterServiceDestroy(
                 runtime = runtime,
                 diagnosticsLogger = container.diagnosticsLogger,
@@ -463,7 +471,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
     ) {
         val runtimeGeneration = runtimeSupervisorInstance?.currentGeneration() ?: 0L
         val commandQueue = runtimeSupervisorInstance?.queueSnapshot() ?: RuntimeCommandQueueSnapshot.EMPTY
-        val nativeSnapshot = runtimeInstance?.nativeSnapshot() ?: NativeRuntimeSnapshot.NONE
+        val nativeSnapshot = runtimeInstanceStore.nativeSnapshot()
         val activeNetworkCallbacks = activeNetworkCallbackCount()
         if (async) {
             RuntimeHealthMetrics.recordResourceSnapshotAsync(
@@ -716,7 +724,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         validationJob?.cancel()
         validationJob = null
         stopRuntimeFailClosed(reason = "local_guard_handoff")
-        runtimeInstance = null
+        runtimeInstanceStore.clear()
         container.diagnosticsLogger.record("runtime", "vpn runtime instance reset after local guard handoff")
         container.diagnosticsLogger.record("runtime", "network activity logging suspended for vpn handoff validation")
         releaseRuntimeWakeLock()
@@ -752,7 +760,25 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
     }
 
     private suspend fun stopRuntimeFailClosed(reason: String): RuntimeStopResult {
-        val result = runtime.stopFailClosed(
+        val currentRuntime = runtimeInstanceStore.current()
+        if (currentRuntime == null) {
+            container.diagnosticsLogger.recordStructured(
+                "runtime",
+                "vpn runtime stop skipped without native owner",
+                "reason=$reason",
+            )
+            val result =
+                RuntimeStopResult(
+                    closeServiceOk = true,
+                    closeServerOk = true,
+                    tunClosed = true,
+                    escalatedToKill = false,
+                    elapsedMs = 0L,
+                )
+            recordRuntimeResourceSnapshot(event = "stop_skipped_no_owner:$reason")
+            return result
+        }
+        val result = currentRuntime.stopFailClosed(
             owner = "vpn",
             reason = reason,
             diagnosticsLogger = container.diagnosticsLogger,

@@ -59,10 +59,9 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
     }
     private val mainHandler by lazy { Handler(Looper.getMainLooper()) }
     private val container: FoxholeRuntimeDependencies by lazy { (applicationContext as FoxholeApplication).appGraph }
-    private var runtimeInstance: VpnCoreRuntime? = null
-    private val runtime: VpnCoreRuntime
-        get() =
-            runtimeInstance ?: createVpnRuntime(
+    private val runtimeInstanceStore =
+        RuntimeInstanceStore {
+            createVpnRuntime(
                 context = applicationContext,
                 diagnosticsLogger = container.diagnosticsLogger,
                 isNetworkActivityLoggingEnabled = { container.settingsRepository.settings.value.expert.networkActivityLogging },
@@ -78,15 +77,24 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
                         }
                         ?: NetworkActivityContext()
                 },
-            ).also { runtimeInstance = it }
+            )
+        }
+    private val runtime: VpnCoreRuntime
+        get() = runtimeInstanceStore.get()
+    private val runtimeSupervisorLock = Any()
     private var runtimeSupervisorInstance: RuntimeSupervisor? = null
     private val runtimeSupervisor: RuntimeSupervisor
         get() =
-            runtimeSupervisorInstance ?: RuntimeSupervisor(
-                scope = scope,
-                diagnosticsLogger = container.diagnosticsLogger,
-                emergencyKill = { reason -> runtime.forceKill(reason) },
-            ).also { runtimeSupervisorInstance = it }
+            runtimeSupervisorInstance ?: synchronized(runtimeSupervisorLock) {
+                runtimeSupervisorInstance ?: RuntimeSupervisor(
+                    scope = scope,
+                    diagnosticsLogger = container.diagnosticsLogger,
+                    emergencyKill = { reason ->
+                        runtimeInstanceStore.current()?.forceKill(reason)
+                            ?: RuntimeKillResult(reason = reason, tunClosed = true, serverDetached = false)
+                    },
+                ).also { runtimeSupervisorInstance = it }
+            }
     private val runtimeWakeLock by lazy {
         RuntimeWakeLock(
             context = applicationContext,
@@ -184,7 +192,7 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
         stopNotificationHealthMonitoring()
         cancelScheduledAutoReconnect(resetAttempts = true)
         runtimeSupervisorInstance?.close()
-        runtimeInstance?.let { runtime ->
+        runtimeInstanceStore.current()?.let { runtime ->
             stopRuntimeAfterServiceDestroy(
                 runtime = runtime,
                 diagnosticsLogger = container.diagnosticsLogger,
@@ -391,8 +399,26 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
     }
 
     private suspend fun stopRuntimeFailClosed(reason: String): RuntimeStopResult {
+        val currentRuntime = runtimeInstanceStore.current()
+        if (currentRuntime == null) {
+            container.diagnosticsLogger.recordStructured(
+                "runtime",
+                "proxy runtime stop skipped without native owner",
+                "reason=$reason",
+            )
+            val result =
+                RuntimeStopResult(
+                    closeServiceOk = true,
+                    closeServerOk = true,
+                    tunClosed = true,
+                    escalatedToKill = false,
+                    elapsedMs = 0L,
+                )
+            recordRuntimeResourceSnapshot(event = "stop_skipped_no_owner:$reason")
+            return result
+        }
         val result =
-            runtime.stopFailClosed(
+            currentRuntime.stopFailClosed(
                 owner = "proxy",
                 reason = reason,
                 diagnosticsLogger = container.diagnosticsLogger,
@@ -409,7 +435,7 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
     ) {
         val runtimeGeneration = runtimeSupervisorInstance?.currentGeneration() ?: 0L
         val commandQueue = runtimeSupervisorInstance?.queueSnapshot() ?: RuntimeCommandQueueSnapshot.EMPTY
-        val nativeSnapshot = runtimeInstance?.nativeSnapshot() ?: NativeRuntimeSnapshot.NONE
+        val nativeSnapshot = runtimeInstanceStore.nativeSnapshot()
         val activeNetworkCallbacks = activeNetworkCallbackCount()
         if (async) {
             RuntimeHealthMetrics.recordResourceSnapshotAsync(
