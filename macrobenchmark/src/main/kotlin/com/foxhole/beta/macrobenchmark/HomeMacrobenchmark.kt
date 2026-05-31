@@ -1,5 +1,6 @@
 package com.foxhole.beta.macrobenchmark
 
+import android.content.Intent
 import androidx.benchmark.macro.BaselineProfileMode
 import androidx.benchmark.macro.CompilationMode
 import androidx.benchmark.macro.FrameTimingMetric
@@ -8,11 +9,14 @@ import androidx.benchmark.macro.StartupTimingMetric
 import androidx.benchmark.macro.junit4.MacrobenchmarkRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.uiautomator.By
+import androidx.test.uiautomator.StaleObjectException
 import androidx.test.uiautomator.UiDevice
+import androidx.test.uiautomator.UiObject2
 import org.junit.Ignore
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import java.util.regex.Pattern
 
 @RunWith(AndroidJUnit4::class)
 class HomeMacrobenchmark {
@@ -43,7 +47,7 @@ class HomeMacrobenchmark {
             startupMode = StartupMode.WARM,
             setupBlock = {
                 pressHome()
-                startActivityAndWait()
+                startActivityAndWait(foxholeLauncherIntent())
                 device.waitForIdle()
             },
         ) {
@@ -64,35 +68,76 @@ class HomeMacrobenchmark {
         }
 
     @Test
-    fun settingsTrafficTransition() = measureSettingsDetailTransition("Network", "Сеть")
+    fun settingsTrafficTransition() =
+        measureSettingsDetailTransition(
+            SettingsDetailTarget(
+                tag = "settings_traffic_action",
+                labels = listOf("Network", "Сеть"),
+                tapYRatio = 0.18f,
+            ),
+        )
 
     @Test
-    fun settingsDnsTransition() = measureSettingsDetailTransition("DNS")
+    fun settingsDnsTransition() =
+        measureSettingsDetailTransition(
+            SettingsDetailTarget(
+                tag = "settings_dns_action",
+                labels = listOf("DNS"),
+                tapYRatio = 0.24f,
+            ),
+        )
 
     @Test
-    fun settingsSecurityTransition() = measureSettingsDetailTransition("Security", "Безопасность")
+    fun settingsSecurityTransition() =
+        measureSettingsDetailTransition(
+            SettingsDetailTarget(
+                tag = "settings_security_action",
+                labels = listOf("Security", "Безопасность"),
+                tapYRatio = 0.38f,
+            ),
+        )
 
     @Test
-    fun settingsApplicationTransition() = measureSettingsDetailTransition("App settings", "Настройки приложения")
+    fun settingsApplicationTransition() =
+        measureSettingsDetailTransition(
+            SettingsDetailTarget(
+                tag = "settings_application_action",
+                labels = listOf("App settings", "Настройки приложения"),
+                tapYRatio = 0.62f,
+            ),
+        )
 
     @Test
     fun settingsExpertTransition() =
         measureSettingsDetailTransition(
-            "Expert Settings",
-            "Экспертные настройки",
-            optional = true,
+            SettingsDetailTarget(
+                tag = "settings_expert_action",
+                labels = listOf("Expert Settings", "Экспертные настройки"),
+                optional = true,
+            ),
         )
 
     @Test
-    fun settingsDiagnosticsTransition() = measureSettingsDetailTransition("Logs", "Журналы")
+    fun settingsDiagnosticsTransition() =
+        measureSettingsDetailTransition(
+            SettingsDetailTarget(
+                tag = "settings_diagnostics_action",
+                labels = listOf("Logs", "Журналы"),
+                tapYRatio = 0.68f,
+            ),
+        )
 
     @Test
-    fun settingsStatisticsTransition() = measureSettingsDetailTransition("Statistics", "Статистика")
+    fun settingsStatisticsTransition() =
+        measureSettingsDetailTransition(
+            SettingsDetailTarget(
+                tag = "settings_statistics_action",
+                labels = listOf("Statistics", "Статистика"),
+                tapYRatio = 0.74f,
+            ),
+        )
 
-    private fun measureSettingsDetailTransition(
-        vararg labels: String,
-        optional: Boolean = false,
-    ) {
+    private fun measureSettingsDetailTransition(target: SettingsDetailTarget) {
         benchmarkRule.measureRepeated(
             packageName = PACKAGE_NAME,
             metrics = listOf(FrameTimingMetric()),
@@ -101,12 +146,12 @@ class HomeMacrobenchmark {
             startupMode = StartupMode.WARM,
             setupBlock = {
                 pressHome()
-                startActivityAndWait()
+                startActivityAndWait(foxholeLauncherIntent())
                 device.waitForIdle()
             },
         ) {
             openSettingsHome()
-            if (!openSettingsDetail(labels.toList(), optional)) {
+            if (!openSettingsDetail(target)) {
                 return@measureRepeated
             }
             device.pressBack()
@@ -115,31 +160,99 @@ class HomeMacrobenchmark {
     }
 
     private fun openSettingsHome() {
-        val settingsNavX = (device.displayWidth * SETTINGS_NAV_X_RATIO).toInt()
-        val bottomNavY = (device.displayHeight * BOTTOM_NAV_Y_RATIO).toInt()
-        device.click(settingsNavX, bottomNavY)
-        device.waitForIdle()
+        repeat(OPEN_SETTINGS_ATTEMPTS) { attempt ->
+            if (isSettingsHomeVisible()) {
+                resetSettingsScrollToTop()
+                return
+            }
+            clickSettingsBottomNav()
+            device.waitForIdle()
+            if (isSettingsHomeVisible()) {
+                resetSettingsScrollToTop()
+                return
+            }
+            swipeDashboardToSettings()
+            device.waitForIdle()
+            if (isSettingsHomeVisible()) {
+                resetSettingsScrollToTop()
+                return
+            }
+            if (attempt == 0) {
+                device.pressBack()
+            }
+            device.waitForIdle()
+        }
+        resetSettingsScrollToTop()
     }
 
-    private fun openSettingsDetail(
-        labels: List<String>,
-        optional: Boolean,
-    ): Boolean {
+    private fun openSettingsDetail(target: SettingsDetailTarget): Boolean {
         repeat(SETTINGS_FIND_ATTEMPTS) { attempt ->
-            labels.firstNotNullOfOrNull { label -> device.findObject(By.text(label)) }?.let { row ->
-                row.click()
+            val row =
+                findByTestTag(target.tag)
+                    ?: target.labels.firstNotNullOfOrNull { label -> device.findObject(By.text(label)) }
+            row?.let {
+                if (clickCenter(row)) {
+                    device.waitForIdle()
+                    return true
+                }
                 device.waitForIdle()
-                return true
+                return@repeat
             }
             if (attempt < SETTINGS_FIND_ATTEMPTS - 1) {
                 swipeSettingsUp()
             }
         }
-        if (optional) {
+        if (target.optional) {
             return false
         }
-        error("Settings detail row was not found: ${labels.joinToString()}")
+        target.tapYRatio?.let { tapYRatio ->
+            resetSettingsScrollToTop()
+            device.click(device.displayWidth / 2, (device.displayHeight * tapYRatio).toInt())
+            device.waitForIdle()
+            return true
+        }
+        error("Settings detail row was not found: ${target.tag}, ${target.labels.joinToString()}")
     }
+
+    private fun findByTestTag(tag: String) =
+        device.findObject(By.res(tag))
+            ?: device.findObject(By.res(PACKAGE_NAME, tag))
+            ?: device.findObject(By.res(Pattern.compile(".*${Pattern.quote(tag)}$")))
+
+    private fun findByAnyText(labels: List<String>) =
+        labels.firstNotNullOfOrNull { label -> device.findObject(By.text(label)) }
+
+    private fun isSettingsHomeVisible() =
+        findByTestTag("settings_screen") != null || findByAnyText(SETTINGS_HOME_ANCHOR_LABELS) != null
+
+    private fun clickSettingsBottomNav() {
+        val settingsNavX = (device.displayWidth * SETTINGS_NAV_X_RATIO).toInt()
+        val bottomNavY = (device.displayHeight * BOTTOM_NAV_Y_RATIO).toInt()
+        device.click(settingsNavX, bottomNavY)
+    }
+
+    private fun swipeDashboardToSettings() {
+        val startX = (device.displayWidth * ROOT_SWIPE_START_X_RATIO).toInt()
+        val endX = (device.displayWidth * ROOT_SWIPE_END_X_RATIO).toInt()
+        val centerY = (device.displayHeight * ROOT_SWIPE_Y_RATIO).toInt()
+        device.swipe(startX, centerY, endX, centerY, SWIPE_STEPS)
+    }
+
+    private fun foxholeLauncherIntent() =
+        Intent(Intent.ACTION_MAIN).apply {
+            setClassName(PACKAGE_NAME, MAIN_ACTIVITY_CLASS_NAME)
+            addCategory(Intent.CATEGORY_LAUNCHER)
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+        }
+
+    private fun clickCenter(node: UiObject2): Boolean =
+        try {
+            val center = node.visibleCenter
+            device.click(center.x, center.y)
+            true
+        } catch (_: StaleObjectException) {
+            false
+        }
 
     private fun swipeSettingsUp() {
         val centerX = device.displayWidth / 2
@@ -149,19 +262,43 @@ class HomeMacrobenchmark {
         device.waitForIdle()
     }
 
+    private fun resetSettingsScrollToTop() {
+        val centerX = device.displayWidth / 2
+        val upperY = (device.displayHeight * UPPER_SWIPE_Y_RATIO).toInt()
+        val lowerY = (device.displayHeight * LOWER_SWIPE_Y_RATIO).toInt()
+        repeat(SETTINGS_RESET_SCROLL_ATTEMPTS) {
+            device.swipe(centerX, upperY, centerX, lowerY, SWIPE_STEPS)
+            device.waitForIdle()
+        }
+    }
+
     private val device: UiDevice
         get() = UiDevice.getInstance(androidx.test.platform.app.InstrumentationRegistry.getInstrumentation())
 
+    private data class SettingsDetailTarget(
+        val tag: String,
+        val labels: List<String>,
+        val tapYRatio: Float? = null,
+        val optional: Boolean = false,
+    )
+
     private companion object {
         private const val PACKAGE_NAME = BuildConfig.TARGET_PACKAGE_NAME
+        private const val MAIN_ACTIVITY_CLASS_NAME = "com.foxhole.beta.MainActivity"
         private const val SHORT_ITERATIONS = 3
         private const val DASHBOARD_NAV_X_RATIO = 0.25f
         private const val SETTINGS_NAV_X_RATIO = 0.75f
-        private const val BOTTOM_NAV_Y_RATIO = 0.90f
+        private const val BOTTOM_NAV_Y_RATIO = 0.93f
+        private const val ROOT_SWIPE_START_X_RATIO = 0.86f
+        private const val ROOT_SWIPE_END_X_RATIO = 0.14f
+        private const val ROOT_SWIPE_Y_RATIO = 0.52f
         private const val UPPER_SWIPE_Y_RATIO = 0.32f
         private const val LOWER_SWIPE_Y_RATIO = 0.78f
         private const val SWIPE_STEPS = 24
+        private const val OPEN_SETTINGS_ATTEMPTS = 3
         private const val SETTINGS_FIND_ATTEMPTS = 4
+        private const val SETTINGS_RESET_SCROLL_ATTEMPTS = 3
+        private val SETTINGS_HOME_ANCHOR_LABELS = listOf("Smart start", "Умный старт", "DNS")
         private val BENCHMARK_COMPILATION_MODE =
             CompilationMode.Partial(
                 baselineProfileMode = BaselineProfileMode.Disable,

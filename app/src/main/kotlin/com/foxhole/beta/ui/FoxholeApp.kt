@@ -80,6 +80,8 @@ import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.LayoutDirection
@@ -94,6 +96,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.foxhole.beta.BuildConfig
 import com.foxhole.beta.R
 import com.foxhole.beta.core.data.ProfileImportPayloadTooLargeException
 import com.foxhole.beta.core.data.readLocalProfileImportUtf8Capped
@@ -236,6 +239,13 @@ fun FoxholeApp(
             modifier =
                 Modifier
                     .fillMaxSize()
+                    .then(
+                        if (BuildConfig.DEBUG) {
+                            Modifier.semantics { testTagsAsResourceId = true }
+                        } else {
+                            Modifier
+                        },
+                    )
                     .padding(top = innerPadding.calculateTopPadding())
                     .consumeWindowInsets(innerPadding)
                     .then(
