@@ -30,6 +30,10 @@ internal sealed interface RuntimeCommand {
         override val source: RuntimeCommandSource,
     ) : RuntimeCommand
 
+    data class Restore(
+        override val source: RuntimeCommandSource,
+    ) : RuntimeCommand
+
     data class Stop(
         val reason: String,
         override val source: RuntimeCommandSource,
@@ -57,21 +61,23 @@ internal val RuntimeCommand.priority: RuntimeCommandPriority
             is RuntimeCommand.Kill -> RuntimeCommandPriority.KILL
             is RuntimeCommand.Stop -> RuntimeCommandPriority.USER_STOP
             is RuntimeCommand.Reload -> RuntimeCommandPriority.SWITCH
+            is RuntimeCommand.Restore -> RuntimeCommandPriority.NORMAL
             is RuntimeCommand.StartLocalGuard,
             is RuntimeCommand.StartProxy,
             is RuntimeCommand.StartTunnel,
             RuntimeCommand.StartTorOnly,
-            -> RuntimeCommandPriority.NORMAL
+            -> RuntimeCommandPriority.SWITCH
         }
 
 internal val RuntimeCommand.queueReason: String
     get() =
         when (this) {
-            is RuntimeCommand.Kill -> "kill:$reason"
+            is RuntimeCommand.Kill -> reason
             is RuntimeCommand.Reload -> "reload:$reason"
+            is RuntimeCommand.Restore -> "restore"
             is RuntimeCommand.StartLocalGuard -> "local_guard:${mode.name.lowercase()}"
-            is RuntimeCommand.StartProxy -> "proxy:$profileId:${optionId.orEmpty()}"
-            is RuntimeCommand.StartTunnel -> "tunnel:$profileId:${optionId.orEmpty()}"
+            is RuntimeCommand.StartProxy -> "proxy:$profileId:${optionId ?: "default"}"
+            is RuntimeCommand.StartTunnel -> "connect:$profileId:${optionId ?: "default"}"
             RuntimeCommand.StartTorOnly -> "tor_only"
-            is RuntimeCommand.Stop -> "stop:$reason"
+            is RuntimeCommand.Stop -> reason
         }

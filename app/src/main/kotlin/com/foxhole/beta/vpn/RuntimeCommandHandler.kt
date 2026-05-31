@@ -7,16 +7,17 @@ import android.content.Intent
 import com.foxhole.beta.FoxholeRuntimeDependencies
 import com.foxhole.beta.core.model.ConnectionState
 import com.foxhole.beta.core.model.NotificationSnapshot
+import com.foxhole.beta.core.model.TrafficMode
 
 internal fun Service.handleForegroundRuntimeCommand(
     intent: Intent?,
     startId: Int,
+    trafficMode: TrafficMode,
     notificationManager: NotificationManager,
     currentNotificationSnapshot: () -> NotificationSnapshot,
     buildNotification: (NotificationSnapshot) -> Notification,
     container: FoxholeRuntimeDependencies,
-    launchCommand: (String, suspend () -> Unit) -> Unit,
-    launchPriorityCommand: (RuntimeCommandPriority, String, suspend () -> Unit) -> Unit,
+    dispatchRuntimeCommand: (RuntimeCommand, suspend (RuntimeCommand) -> Unit) -> Unit,
     connect: suspend (
         profileId: Long,
         commandStartId: Int,
@@ -52,7 +53,12 @@ internal fun Service.handleForegroundRuntimeCommand(
                     "runtime service null intent ignored while runtime active",
                 )
             } else {
-                launchCommand("null_intent_reconcile") {
+                dispatchRuntimeCommand(
+                    RuntimeCommand.Stop(
+                        reason = "null_intent_reconcile",
+                        source = RuntimeCommandSource.SYSTEM,
+                    ),
+                ) {
                     disconnectWithOptions(
                         startId,
                         true,
@@ -62,18 +68,20 @@ internal fun Service.handleForegroundRuntimeCommand(
             }
         }
         isFailClosedRuntimeServiceCommand(action) -> {
-            launchPriorityCommand(
-                RuntimeCommandPriority.KILL,
-                "fail_closed:$action",
+            dispatchRuntimeCommand(
+                RuntimeCommand.Kill(
+                    reason = "fail_closed:$action",
+                    source = RuntimeCommandSource.SYSTEM,
+                ),
             ) { failClosedTeardown(startId, action) }
         }
         else -> {
             handleRuntimeServiceCommand(
                 intent = intent,
                 startId = startId,
+                trafficMode = trafficMode,
                 container = container,
-                launchCommand = launchCommand,
-                launchPriorityCommand = launchPriorityCommand,
+                dispatchRuntimeCommand = dispatchRuntimeCommand,
                 connect = connect,
                 disconnect = disconnectWithOptions,
                 reload = reload,

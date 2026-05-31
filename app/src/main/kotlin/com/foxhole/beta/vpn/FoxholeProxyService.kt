@@ -160,12 +160,12 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
         handleForegroundRuntimeCommand(
             intent = intent,
             startId = startId,
+            trafficMode = TrafficMode.PROXY,
             notificationManager = notificationManager,
             currentNotificationSnapshot = ::currentNotificationSnapshot,
             buildNotification = ::buildNotification,
             container = container,
-            launchCommand = ::launchCommand,
-            launchPriorityCommand = ::launchPriorityCommand,
+            dispatchRuntimeCommand = ::dispatchRuntimeCommand,
             connect = ::connect,
             disconnect = { commandStartId -> disconnect(commandStartId = commandStartId) },
             disconnectWithOptions = { commandStartId, _, preserveSmartStartAnalysis ->
@@ -579,6 +579,13 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
         block: suspend () -> Unit,
     ) {
         runtimeSupervisor.launch(priority, reason = reason, block = block)
+    }
+
+    private fun dispatchRuntimeCommand(
+        command: RuntimeCommand,
+        block: suspend (RuntimeCommand) -> Unit,
+    ) {
+        runtimeSupervisor.dispatch(command, block)
     }
 
     private fun scheduleAutoReconnect(reason: String) {

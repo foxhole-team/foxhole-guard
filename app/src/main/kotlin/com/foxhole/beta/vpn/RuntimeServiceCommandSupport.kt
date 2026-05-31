@@ -2,6 +2,7 @@ package com.foxhole.beta.vpn
 
 import android.content.Intent
 import com.foxhole.beta.FoxholeRuntimeDependencies
+import com.foxhole.beta.core.model.TrafficMode
 import com.foxhole.beta.core.network.scopedByNetworkRules
 import com.foxhole.beta.core.settings.networkMemory
 import com.foxhole.beta.core.settings.preferredLastKnownGoodOptionId
@@ -10,9 +11,9 @@ import com.foxhole.beta.core.settings.smartProfilePreference
 internal fun handleRuntimeServiceCommand(
     intent: Intent?,
     startId: Int,
+    trafficMode: TrafficMode,
     container: FoxholeRuntimeDependencies,
-    launchCommand: (String, suspend () -> Unit) -> Unit,
-    launchPriorityCommand: (RuntimeCommandPriority, String, suspend () -> Unit) -> Unit,
+    dispatchRuntimeCommand: (RuntimeCommand, suspend (RuntimeCommand) -> Unit) -> Unit,
     connect: suspend (
         profileId: Long,
         commandStartId: Int,
@@ -32,11 +33,32 @@ internal fun handleRuntimeServiceCommand(
             val profileId = intent.getLongExtra(FoxholeConnectionServiceContract.EXTRA_PROFILE_ID, -1L)
             val protocolOptionId = intent.getStringExtra(FoxholeConnectionServiceContract.EXTRA_PROTOCOL_OPTION_ID)
             val previousVpnNetworkHandle = intent.previousVpnNetworkHandleOrNull()
-            launchPriorityCommand(
-                RuntimeCommandPriority.SWITCH,
-                "connect:$profileId:${protocolOptionId ?: "default"}",
-            ) {
-                connect(profileId, startId, protocolOptionId, previousVpnNetworkHandle)
+            val command =
+                runtimeCommandForServiceAction(
+                    action = intent.action,
+                    trafficMode = trafficMode,
+                    profileId = profileId,
+                    protocolOptionId = protocolOptionId,
+                    previousVpnNetworkHandle = previousVpnNetworkHandle,
+                ) ?: return
+            dispatchRuntimeCommand(command) { runtimeCommand ->
+                when (runtimeCommand) {
+                    is RuntimeCommand.StartTunnel ->
+                        connect(
+                            runtimeCommand.profileId,
+                            startId,
+                            runtimeCommand.optionId,
+                            runtimeCommand.previousVpnNetworkHandle,
+                        )
+                    is RuntimeCommand.StartProxy ->
+                        connect(
+                            runtimeCommand.profileId,
+                            startId,
+                            runtimeCommand.optionId,
+                            null,
+                        )
+                    else -> Unit
+                }
             }
         }
 
@@ -44,7 +66,12 @@ internal fun handleRuntimeServiceCommand(
             val suppressLocalGuard = intent.getBooleanExtra(FoxholeConnectionServiceContract.EXTRA_SUPPRESS_LOCAL_GUARD, false)
             val preserveSmartStartAnalysis =
                 intent.getBooleanExtra(FoxholeConnectionServiceContract.EXTRA_PRESERVE_SMART_START_ANALYSIS, false)
-            launchPriorityCommand(RuntimeCommandPriority.USER_STOP, "disconnect") {
+            val command =
+                runtimeCommandForServiceAction(
+                    action = intent.action,
+                    trafficMode = trafficMode,
+                ) ?: return
+            dispatchRuntimeCommand(command) {
                 disconnect(startId, suppressLocalGuard, preserveSmartStartAnalysis)
             }
         }
@@ -58,7 +85,8 @@ internal fun handleRuntimeServiceCommand(
                 } else {
                     "kill"
                 }
-            launchPriorityCommand(RuntimeCommandPriority.KILL, reason) {
+            val command = RuntimeCommand.Kill(reason = reason, source = RuntimeCommandSource.SERVICE)
+            dispatchRuntimeCommand(command) {
                 disconnect(
                     startId,
                     true,
@@ -69,11 +97,22 @@ internal fun handleRuntimeServiceCommand(
 
         FoxholeConnectionServiceContract.ACTION_RELOAD -> {
             val profileId = intent.getLongExtra(FoxholeConnectionServiceContract.EXTRA_PROFILE_ID, -1L)
-            launchCommand("reload:$profileId") { reload(profileId) }
+            val command =
+                runtimeCommandForServiceAction(
+                    action = intent.action,
+                    trafficMode = trafficMode,
+                    profileId = profileId,
+                ) ?: return
+            dispatchRuntimeCommand(command) { reload(profileId) }
         }
 
         FoxholeConnectionServiceContract.ACTION_RESTORE -> {
-            launchCommand("restore") {
+            val command =
+                runtimeCommandForServiceAction(
+                    action = intent.action,
+                    trafficMode = trafficMode,
+                ) ?: return
+            dispatchRuntimeCommand(command) {
                 restoreLastActiveConnection(
                     container = container,
                     startId = startId,
@@ -91,10 +130,13 @@ internal fun handleRuntimeServiceCommand(
                 intent.getStringExtra(FoxholeConnectionServiceContract.EXTRA_LOCAL_GUARD_MODE)
                     ?.let { raw -> runCatching { LocalGuardMode.valueOf(raw) }.getOrNull() }
                     ?: LocalGuardMode.FIREWALL
-            launchPriorityCommand(
-                RuntimeCommandPriority.SWITCH,
-                "local_guard:${mode.name.lowercase()}",
-            ) {
+            val command =
+                runtimeCommandForServiceAction(
+                    action = intent.action,
+                    trafficMode = trafficMode,
+                    localGuardMode = mode,
+                ) ?: return
+            dispatchRuntimeCommand(command) {
                 startLocalGuard(mode, startId)
             }
         }
@@ -110,6 +152,49 @@ internal fun isPriorityRuntimeServiceCommand(action: String?): Boolean =
 
 internal fun isFailClosedRuntimeServiceCommand(action: String?): Boolean =
     action != null && action !in KNOWN_RUNTIME_SERVICE_ACTIONS
+
+internal fun runtimeCommandForServiceAction(
+    action: String?,
+    trafficMode: TrafficMode,
+    profileId: Long = -1L,
+    protocolOptionId: String? = null,
+    previousVpnNetworkHandle: Long? = null,
+    localGuardMode: LocalGuardMode = LocalGuardMode.FIREWALL,
+): RuntimeCommand? =
+    when (action) {
+        FoxholeConnectionServiceContract.ACTION_CONNECT ->
+            when (trafficMode) {
+                TrafficMode.TUNNEL ->
+                    RuntimeCommand.StartTunnel(
+                        profileId = profileId,
+                        optionId = protocolOptionId,
+                        previousVpnNetworkHandle = previousVpnNetworkHandle,
+                        source = RuntimeCommandSource.SERVICE,
+                    )
+                TrafficMode.PROXY ->
+                    RuntimeCommand.StartProxy(
+                        profileId = profileId,
+                        optionId = protocolOptionId,
+                        source = RuntimeCommandSource.SERVICE,
+                    )
+            }
+        FoxholeConnectionServiceContract.ACTION_DISCONNECT ->
+            RuntimeCommand.Stop(reason = "disconnect", source = RuntimeCommandSource.SERVICE)
+        FoxholeConnectionServiceContract.ACTION_KILL ->
+            RuntimeCommand.Kill(reason = "kill", source = RuntimeCommandSource.SERVICE)
+        FoxholeConnectionServiceContract.ACTION_KILL_TOR ->
+            RuntimeCommand.Kill(reason = "kill_tor", source = RuntimeCommandSource.SERVICE)
+        FoxholeConnectionServiceContract.ACTION_RELOAD ->
+            RuntimeCommand.Reload(reason = profileId.toString(), source = RuntimeCommandSource.SERVICE)
+        FoxholeConnectionServiceContract.ACTION_RESTORE ->
+            RuntimeCommand.Restore(source = RuntimeCommandSource.SERVICE)
+        FoxholeConnectionServiceContract.ACTION_START_LOCAL_GUARD ->
+            RuntimeCommand.StartLocalGuard(
+                mode = localGuardMode,
+                source = RuntimeCommandSource.SERVICE,
+            )
+        else -> null
+    }
 
 private suspend fun restoreLastActiveConnection(
     container: FoxholeRuntimeDependencies,

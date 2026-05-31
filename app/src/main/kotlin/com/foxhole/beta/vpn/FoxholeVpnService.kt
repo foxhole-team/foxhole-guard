@@ -338,12 +338,12 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         return handleForegroundRuntimeCommand(
             intent = intent,
             startId = startId,
+            trafficMode = TrafficMode.TUNNEL,
             notificationManager = notificationManager,
             currentNotificationSnapshot = ::currentNotificationSnapshot,
             buildNotification = ::buildNotification,
             container = container,
-            launchCommand = ::launchCommand,
-            launchPriorityCommand = ::launchPriorityCommand,
+            dispatchRuntimeCommand = ::dispatchRuntimeCommand,
             connect = ::connect,
             disconnect = { commandStartId -> disconnect(commandStartId = commandStartId) },
             disconnectWithOptions = { commandStartId, suppressLocalGuard, preserveSmartStartAnalysis ->
@@ -1376,6 +1376,13 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         block: suspend () -> Unit,
     ) {
         runtimeSupervisor.launch(priority, reason = reason, block = block)
+    }
+
+    internal fun dispatchRuntimeCommand(
+        command: RuntimeCommand,
+        block: suspend (RuntimeCommand) -> Unit,
+    ) {
+        runtimeSupervisor.dispatch(command, block)
     }
 
     internal fun stopService(commandStartId: Int?) {
