@@ -1,5 +1,6 @@
 package com.foxhole.beta.vpn
 
+import com.foxhole.beta.BuildConfig
 import com.foxhole.beta.core.model.ClashApiSettings
 import com.foxhole.beta.core.model.DiagnosticsRetention
 import com.foxhole.beta.core.model.DnsSettings
@@ -718,7 +719,18 @@ class RuntimeConfigAssembler(
                     add(JsonPrimitive("fdfe:dcba:9876::1/126"))
                 }
             }
+            putJsonArray("exclude_package") {
+                localGuardExcludedPackages().forEach { packageName ->
+                    add(JsonPrimitive(packageName))
+                }
+            }
         }
+
+    private fun localGuardExcludedPackages(): List<String> =
+        listOf(BuildConfig.APPLICATION_ID)
+            .map(String::trim)
+            .filter(String::isNotBlank)
+            .distinct()
 
     private fun torOnlyTunInbound(settings: Settings): JsonObject =
         buildJsonObject {

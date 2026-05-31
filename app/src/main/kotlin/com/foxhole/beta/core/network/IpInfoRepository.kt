@@ -37,6 +37,7 @@ import java.net.InetSocketAddress
 import java.net.PasswordAuthentication
 import java.net.Proxy
 import java.net.Socket
+import java.util.LinkedHashMap
 import java.util.concurrent.TimeUnit
 import javax.net.ssl.HttpsURLConnection
 import javax.net.ssl.SSLSocket
@@ -69,6 +70,9 @@ class IpInfoRepository(
     private val client: OkHttpClient,
     private val json: Json,
 ) {
+    private val httpClientCacheLock = Any()
+    private val httpClientCache = LinkedHashMap<HttpClientKey, CachedHttpClient>(HTTP_CLIENT_CACHE_MAX_SIZE, 0.75f, true)
+
     suspend fun fetchIpv4(
         endpoint: String,
         callTimeoutMs: Long? = null,
@@ -365,44 +369,18 @@ class IpInfoRepository(
         val url = endpoint.ensurePublicHttpsUrl()
         val request = Request.Builder().url(url).get().build()
         val effectiveClient =
-            if (callTimeoutMs == null && network == null && addressFamilyPreference == AddressFamilyPreference.ANY && proxy == null) {
-                client
-                    .newBuilder()
-                    .dns(PublicRemoteDns(client.dns::lookup))
-                    .build()
-            } else {
+            cachedHttpClient(
+                HttpClientKey(
+                    callTimeoutMs = callTimeoutMs,
+                    networkHandle = network?.networkHandle,
+                    resolverNetworkHandle = resolverNetwork?.networkHandle,
+                    addressFamilyPreference = addressFamilyPreference,
+                    proxy = proxy,
+                ),
+            ) {
                 client.newBuilder().apply {
                     callTimeoutMs?.let { timeout -> callTimeout(timeout, TimeUnit.MILLISECONDS) }
-                    if (proxy != null) {
-                        proxy(
-                            Proxy(
-                                when (proxy.type) {
-                                    ProxyAccessType.HTTP -> Proxy.Type.HTTP
-                                    ProxyAccessType.SOCKS -> Proxy.Type.SOCKS
-                                },
-                                InetSocketAddress(proxy.host, proxy.port),
-                            ),
-                        )
-                        if (proxy.type == ProxyAccessType.HTTP && !proxy.username.isNullOrBlank() && !proxy.password.isNullOrBlank()) {
-                            proxyAuthenticator { _, response ->
-                                if (response.request.header("Proxy-Authorization") != null) {
-                                    null
-                                } else {
-                                    response.request
-                                        .newBuilder()
-                                        .header(
-                                            "Proxy-Authorization",
-                                            Credentials.basic(proxy.username, proxy.password),
-                                        ).build()
-                                }
-                            }
-                        }
-                    } else {
-                        network?.let {
-                            proxy(Proxy.NO_PROXY)
-                            socketFactory(it.socketFactory)
-                        }
-                    }
+                    applyProxyOrNetwork(proxy, network)
                     if (proxy == null) {
                         dns(
                             PublicRemoteDns { hostname ->
@@ -433,6 +411,79 @@ class IpInfoRepository(
             }
         } else {
             effectiveClient.newCall(request).awaitResponse()
+        }
+    }
+
+    private fun OkHttpClient.Builder.applyProxyOrNetwork(
+        proxyAccess: HttpProxyAccess?,
+        network: Network?,
+    ) {
+        if (proxyAccess != null) {
+            proxy(
+                Proxy(
+                    when (proxyAccess.type) {
+                        ProxyAccessType.HTTP -> Proxy.Type.HTTP
+                        ProxyAccessType.SOCKS -> Proxy.Type.SOCKS
+                    },
+                    InetSocketAddress(proxyAccess.host, proxyAccess.port),
+                ),
+            )
+            if (
+                proxyAccess.type == ProxyAccessType.HTTP &&
+                !proxyAccess.username.isNullOrBlank() &&
+                !proxyAccess.password.isNullOrBlank()
+            ) {
+                proxyAuthenticator { _, response ->
+                    if (response.request.header("Proxy-Authorization") != null) {
+                        null
+                    } else {
+                        response.request
+                            .newBuilder()
+                            .header(
+                                "Proxy-Authorization",
+                                Credentials.basic(proxyAccess.username, proxyAccess.password),
+                            ).build()
+                    }
+                }
+            }
+        } else {
+            network?.let {
+                proxy(Proxy.NO_PROXY)
+                socketFactory(it.socketFactory)
+            }
+        }
+    }
+
+    private inline fun cachedHttpClient(
+        key: HttpClientKey,
+        factory: () -> OkHttpClient,
+    ): OkHttpClient {
+        val now = System.nanoTime()
+        synchronized(httpClientCacheLock) {
+            pruneExpiredHttpClients(now)
+            httpClientCache[key]?.takeIf { cached -> now - cached.createdAtNanos <= HTTP_CLIENT_CACHE_TTL_NANOS }?.let { cached ->
+                return cached.client
+            }
+        }
+        val built = factory()
+        synchronized(httpClientCacheLock) {
+            pruneExpiredHttpClients(now)
+            httpClientCache[key] = CachedHttpClient(built, now)
+            while (httpClientCache.size > HTTP_CLIENT_CACHE_MAX_SIZE) {
+                val eldestKey = httpClientCache.entries.firstOrNull()?.key ?: break
+                httpClientCache.remove(eldestKey)
+            }
+        }
+        return built
+    }
+
+    private fun pruneExpiredHttpClients(nowNanos: Long) {
+        val iterator = httpClientCache.entries.iterator()
+        while (iterator.hasNext()) {
+            val entry = iterator.next()
+            if (nowNanos - entry.value.createdAtNanos > HTTP_CLIENT_CACHE_TTL_NANOS) {
+                iterator.remove()
+            }
         }
     }
 
@@ -598,10 +649,25 @@ class IpInfoRepository(
         IPV6,
     }
 
+    private data class HttpClientKey(
+        val callTimeoutMs: Long?,
+        val networkHandle: Long?,
+        val resolverNetworkHandle: Long?,
+        val addressFamilyPreference: AddressFamilyPreference,
+        val proxy: HttpProxyAccess?,
+    )
+
+    private data class CachedHttpClient(
+        val client: OkHttpClient,
+        val createdAtNanos: Long,
+    )
+
     private fun primaryEndpoint(endpoint: String): String = endpoint.trim().ifBlank { BuildConfig.DEFAULT_IP_INFO_ENDPOINT }
 
     private companion object {
         val SOCKS_AUTH_LOCK = Any()
+        const val HTTP_CLIENT_CACHE_MAX_SIZE = 24
+        val HTTP_CLIENT_CACHE_TTL_NANOS = TimeUnit.MINUTES.toNanos(5)
         const val ENTRY_QUICK_CALL_TIMEOUT_MS = 1_500L
         const val FULL_CALL_TIMEOUT_MS = 4_000L
         const val FAMILY_PROBE_CALL_TIMEOUT_MS = 1_500L

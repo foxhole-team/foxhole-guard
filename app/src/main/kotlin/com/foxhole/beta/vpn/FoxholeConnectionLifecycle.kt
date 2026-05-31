@@ -231,14 +231,28 @@ internal class FoxholeConnectionLifecycle(
 private const val STALE_VPN_DISCONNECT_TIMEOUT_MS = 1_500L
 private const val STALE_VPN_DISCONNECT_POLL_MS = 250L
 
-private fun Profile.runtimeProtocolOption(protocolOptionId: String?) =
-    protocolOptionId
-        ?.takeIf(String::isNotBlank)
-        ?.let { requestedId -> protocolOptions.firstOrNull { option -> option.id == requestedId } }
-        ?: selectedProtocolOptionId
-            ?.takeIf(String::isNotBlank)
-            ?.let { selectedId -> protocolOptions.firstOrNull { option -> option.id == selectedId } }
-        ?: protocolOptions.firstOrNull()
+internal fun Profile.runtimeProtocolOption(protocolOptionId: String?) =
+    run {
+        val requestedOptionId = protocolOptionId.normalizedProtocolOptionId()
+        val storedSelectedOptionId = selectedProtocolOptionId.normalizedProtocolOptionId()
+        if (protocolOptions.isEmpty()) {
+            require(requestedOptionId == null && storedSelectedOptionId == null) {
+                "protocol option is missing"
+            }
+            return@run null
+        }
+        requestedOptionId?.let { requestedId ->
+            return@run protocolOptions.firstOrNull { option -> option.id == requestedId }
+                ?: error("protocol option is missing")
+        }
+        storedSelectedOptionId?.let { selectedId ->
+            return@run protocolOptions.firstOrNull { option -> option.id == selectedId }
+                ?: error("selected protocol option is missing")
+        }
+        protocolOptions.firstOrNull()
+    }
+
+private fun String?.normalizedProtocolOptionId(): String? = this?.trim()?.takeIf(String::isNotBlank)
 
 internal fun disconnectDispatchModeOrNull(snapshot: ConnectionSnapshot): TrafficMode? =
     snapshot.trafficMode.takeIf { snapshot.state in ACTIVE_CONNECTION_STATES }

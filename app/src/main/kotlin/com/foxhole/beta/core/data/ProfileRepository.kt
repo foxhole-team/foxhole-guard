@@ -570,7 +570,7 @@ class ProfileRepository(
         val profile = requireProfile(profileId)
         val secret = secretStore.read(profile.secretRef) ?: error("profile secret is missing")
         val settings = settingsRepository.current()
-        val selectedOption = secret.selectedStoredProtocolOption(protocolOptionIdOverride)
+        val selectedOption = secret.selectedStoredProtocolOptionForRuntime(protocolOptionIdOverride)
         val resolvedConfig =
             selectedOption?.normalizedConfigJson
                 ?: secret.resolvedConfigJson
@@ -619,7 +619,7 @@ class ProfileRepository(
         val entity = dao.getById(profileId) ?: error("profile not found")
         val secret = secretStore.read(entity.secretRef) ?: error("profile secret is missing")
         val settings = settingsRepository.current()
-        val selectedOption = secret.selectedStoredProtocolOption(protocolOptionIdOverride)
+        val selectedOption = secret.selectedStoredProtocolOptionForRuntime(protocolOptionIdOverride)
         val effectiveAllowInsecureTls =
             settings.expert.allowInsecureTls ||
                 secret.requiresInsecureTls ||
@@ -1147,17 +1147,6 @@ class ProfileRepository(
     private fun String.shouldReplaceSubscriptionName(defaultImportedName: String): Boolean =
         isBlank() || this == "subscription" || this == defaultImportedName
 
-    private fun StoredProfileSecret.selectedStoredProtocolOption(
-        overrideOptionId: String? = null,
-    ): StoredProfileProtocolOption? {
-        if (protocolOptions.isEmpty()) {
-            return null
-        }
-        val resolvedOptionId = overrideOptionId?.takeIf(String::isNotBlank) ?: selectedProtocolOptionId
-        return protocolOptions.firstOrNull { it.id == resolvedOptionId }
-            ?: protocolOptions.firstOrNull()
-    }
-
     private fun StoredProfileSecret.profileProtocolOptions(): List<ProfileProtocolOption> =
         protocolOptions.map { option ->
             ProfileProtocolOption(
@@ -1170,9 +1159,12 @@ class ProfileRepository(
             )
         }
 
-    private fun ParsedSubscriptionProfile.resolveSelectedProtocolOptionId(previousSelectedProtocolOptionId: String?): String? =
-        previousSelectedProtocolOptionId?.takeIf { selectedId -> protocolOptions.any { option -> option.id == selectedId } }
-            ?: selectedProtocolOptionId
+    private fun ParsedSubscriptionProfile.resolveSelectedProtocolOptionId(previousSelectedProtocolOptionId: String?): String? {
+        previousSelectedProtocolOptionId?.takeIf(String::isNotBlank)?.let { previousSelectedId ->
+            return previousSelectedId
+        }
+        return selectedProtocolOptionId
+    }
 
     private fun ParsedSubscriptionProfile.resolveProtocolHint(selectedProtocolOptionId: String?): ProtocolHint =
         protocolOptions.firstOrNull { option -> option.id == selectedProtocolOptionId }?.protocolHint ?: protocolHint

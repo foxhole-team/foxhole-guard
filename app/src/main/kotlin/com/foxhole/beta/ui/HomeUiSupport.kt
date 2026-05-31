@@ -223,6 +223,9 @@ internal fun isProfileReconnectRequired(
     if (connection.state !in setOf(ConnectionState.CONNECTING, ConnectionState.CONNECTED, ConnectionState.RECONNECTING)) {
         return false
     }
+    if (connectedProfileId == FoxholeVpnService.LOCAL_GUARD_PROFILE_ID) {
+        return false
+    }
     if (profileId != connectedProfileId) {
         return true
     }

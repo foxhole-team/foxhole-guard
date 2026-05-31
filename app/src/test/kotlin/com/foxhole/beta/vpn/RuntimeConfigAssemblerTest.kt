@@ -1,5 +1,6 @@
 package com.foxhole.beta.vpn
 
+import com.foxhole.beta.BuildConfig
 import com.foxhole.beta.core.model.AppLocale
 import com.foxhole.beta.core.model.ClashApiSettings
 import com.foxhole.beta.core.model.DiagnosticsRetention
@@ -881,6 +882,7 @@ class RuntimeConfigAssemblerTest {
         assertTrue(dnsServers.any { server -> server["tag"]!!.jsonPrimitive.content == "dns-remote" })
         assertFalse(dnsServers.any { server -> server["detour"] != null })
         assertFalse(tunInbound.containsKey("include_package"))
+        assertLocalGuardExcludesFoxHole(tunInbound)
         assertTrue(
             route["rules"]!!.jsonArray.map { it.jsonObject }.any { rule ->
                 rule["package_name"]?.jsonArray?.single()?.jsonPrimitive?.content == "org.mozilla.firefox" &&
@@ -932,7 +934,7 @@ class RuntimeConfigAssemblerTest {
         val route = config["route"]!!.jsonObject
 
         assertFalse(tunInbound.containsKey("include_package"))
-        assertFalse(tunInbound.containsKey("exclude_package"))
+        assertLocalGuardExcludesFoxHole(tunInbound)
         assertEquals(false, tunInbound["strict_route"]!!.jsonPrimitive.content.toBoolean())
         assertEquals("direct", route["final"]!!.jsonPrimitive.content)
         assertTrue(
@@ -1095,6 +1097,7 @@ class RuntimeConfigAssemblerTest {
         assertEquals("direct", route["final"]!!.jsonPrimitive.content)
         assertTrue(rules.any { rule -> rule["action"]?.jsonPrimitive?.content == "hijack-dns" })
         assertFalse(tunInbound.containsKey("include_package"))
+        assertLocalGuardExcludesFoxHole(tunInbound)
         assertEquals(
             listOf("172.19.0.2/32"),
             tunInbound["route_address"]!!.jsonArray.map { it.jsonPrimitive.content },
@@ -1137,7 +1140,7 @@ class RuntimeConfigAssemblerTest {
         assertEquals("dns-remote", route["default_domain_resolver"]!!.jsonPrimitive.content)
         assertEquals("direct", route["final"]!!.jsonPrimitive.content)
         assertFalse(tunInbound.containsKey("include_package"))
-        assertFalse(tunInbound.containsKey("exclude_package"))
+        assertLocalGuardExcludesFoxHole(tunInbound)
         assertTrue(rules.any { rule -> rule["action"]?.jsonPrimitive?.content == "hijack-dns" })
         assertTrue(
             rules.any { rule ->
@@ -1174,6 +1177,7 @@ class RuntimeConfigAssemblerTest {
         assertTrue(dnsServers.any { server -> server["tag"]!!.jsonPrimitive.content == "dns-remote" })
         assertFalse(dnsServers.any { server -> server["detour"]?.jsonPrimitive?.content == "proxy" })
         assertFalse(tunInbound.containsKey("include_package"))
+        assertLocalGuardExcludesFoxHole(tunInbound)
         assertTrue(rules.any { rule -> rule["package_name"]?.jsonArray?.single()?.jsonPrimitive?.content == "org.mozilla.firefox" })
         assertTrue(rules.none { rule -> rule["action"]?.jsonPrimitive?.content == "hijack-dns" })
     }
@@ -2788,6 +2792,13 @@ class RuntimeConfigAssemblerTest {
         assertEquals("hijack-dns", rule["action"]!!.jsonPrimitive.content)
         assertEquals("dns", rule["protocol"]!!.jsonPrimitive.content)
         assertFalse(rule.containsKey("port"))
+    }
+
+    private fun assertLocalGuardExcludesFoxHole(tunInbound: JsonObject) {
+        assertEquals(
+            listOf(BuildConfig.APPLICATION_ID),
+            tunInbound.stringArray("exclude_package"),
+        )
     }
 
     private fun JsonObject.stringArray(key: String): List<String> =

@@ -127,6 +127,21 @@ class HomeReconnectPolicyTest {
     }
 
     @Test
+    fun `local guard runtime does not ask to reconnect selected profile`() {
+        assertFalse(
+            isProfileReconnectRequired(
+                activeProfile = profile(id = 7L, protocolHint = ProtocolHint.VLESS),
+                connection =
+                    ConnectionSnapshot(
+                        state = ConnectionState.CONNECTED,
+                        profileId = FoxholeVpnService.LOCAL_GUARD_PROFILE_ID,
+                        protocolHint = ProtocolHint.SING_BOX,
+                    ),
+            ),
+        )
+    }
+
+    @Test
     fun `reconnect in progress owns top dashboard status`() {
         assertEquals(
             ConnectionState.RECONNECTING,

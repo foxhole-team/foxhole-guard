@@ -1750,7 +1750,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
                     delay(GEO_REFRESH_INITIAL_DELAY_MS)
                 }
                 repeat(GEO_REFRESH_ATTEMPTS) { attempt ->
-                    val requestNetwork = currentUpstreamNetworkOrNull()
+                    val requestNetwork = boundNetworkForAppOwnedRequest(currentUpstreamNetworkOrNull())
                     val success =
                         runCatching {
                             refreshAppOwnedIpInfo(
@@ -1828,17 +1828,16 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         callTimeoutMs: Long,
         network: Network?,
     ): IpInfo {
-        val requestNetwork = network ?: error("upstream network unavailable")
         val endpoint = container.settingsRepository.current().connection.ipInfoEndpoint
         return container.ipInfoRepository
             .fetch(
                 endpoint = endpoint,
                 callTimeoutMs = callTimeoutMs,
-                network = requestNetwork,
-                resolverNetwork = requestNetwork,
+                network = network,
+                resolverNetwork = network,
                 mode = IpInfoFetchMode.ENTRY_QUICK,
             ).withDnsServers(
-                localDnsServers = connectivityManager.dnsServerAddresses(requestNetwork),
+                localDnsServers = connectivityManager.dnsServerAddresses(network),
                 remoteDnsServers = emptyList(),
             )
     }
@@ -1847,16 +1846,15 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         callTimeoutMs: Long,
         network: Network?,
     ): IpInfo? {
-        val requestNetwork = network ?: return null
         val endpoint = container.settingsRepository.current().connection.ipInfoEndpoint
         return container.ipInfoRepository
             .fetchIpv4(
                 endpoint = endpoint,
                 callTimeoutMs = callTimeoutMs,
-                network = requestNetwork,
-                resolverNetwork = requestNetwork,
+                network = network,
+                resolverNetwork = network,
             )?.withDnsServers(
-                localDnsServers = connectivityManager.dnsServerAddresses(requestNetwork),
+                localDnsServers = connectivityManager.dnsServerAddresses(network),
                 remoteDnsServers = emptyList(),
             )
     }

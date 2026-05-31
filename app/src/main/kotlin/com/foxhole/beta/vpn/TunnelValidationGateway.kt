@@ -89,13 +89,13 @@ internal class TunnelValidationGateway(
         val requestNetwork =
             when {
                 trafficMode != TrafficMode.TUNNEL -> null
-                else -> upstreamNetwork
+                else -> boundNetworkForAppOwnedRequest(upstreamNetwork)
             }
         return fetchDeviceIpInfo(
             endpoint = endpoint,
             fetchMode = fetchMode,
             requestNetwork = requestNetwork,
-            requireRequestNetwork = localGuardRuntimeActive,
+            requireRequestNetwork = localGuardRuntimeActive && requestNetwork != null,
             proxy = proxyAccess,
         ).withDnsServers(
             localDnsServers = connectivityManager.dnsServerAddresses(dnsNetwork),
@@ -133,12 +133,30 @@ internal class TunnelValidationGateway(
         fetchMode: IpInfoFetchMode,
         requestNetwork: Network,
     ): IpInfo =
-        ipInfoRepository.fetch(
-            endpoint = endpoint,
-            callTimeoutMs = DASHBOARD_IP_REFRESH_CALL_TIMEOUT_MS,
-            network = requestNetwork,
-            mode = fetchMode,
-        )
+        runCatching {
+            ipInfoRepository.fetch(
+                endpoint = endpoint,
+                callTimeoutMs = DASHBOARD_IP_REFRESH_CALL_TIMEOUT_MS,
+                network = requestNetwork,
+                mode = fetchMode,
+            )
+        }.recoverCatching { error ->
+            if (error is CancellationException) {
+                throw error
+            }
+            if (!shouldFallbackAppOwnedNetworkRequest(error)) {
+                throw error
+            }
+            diagnosticsLogger.record(
+                "ip",
+                "device ip refresh explicit upstream path failed, retrying normal process path: ${error.javaClass.simpleName}",
+            )
+            ipInfoRepository.fetch(
+                endpoint = endpoint,
+                callTimeoutMs = DASHBOARD_IP_REFRESH_CALL_TIMEOUT_MS,
+                mode = fetchMode,
+            )
+        }.getOrThrow()
 
     private suspend fun fetchDeviceIpInfoFromDefaultNetwork(
         endpoint: String,
@@ -154,7 +172,7 @@ internal class TunnelValidationGateway(
             if (error is CancellationException) {
                 throw error
             }
-            val upstreamNetwork = currentUpstreamNetwork() ?: throw error
+            val upstreamNetwork = boundNetworkForAppOwnedRequest(currentUpstreamNetwork()) ?: throw error
             diagnosticsLogger.record(
                 "ip",
                 "device ip refresh failed on default path, retrying explicit upstream network",

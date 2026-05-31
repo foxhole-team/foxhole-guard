@@ -8,7 +8,6 @@ import com.foxhole.beta.core.model.DnsSettings
 import com.foxhole.beta.core.model.Profile
 import com.foxhole.beta.core.model.ProtocolHint
 import com.foxhole.beta.core.model.Settings
-import com.foxhole.beta.core.model.StoredProfileProtocolOption
 import com.foxhole.beta.core.model.StoredProfileSecret
 import com.foxhole.beta.core.model.TrafficMode
 import com.foxhole.beta.core.model.VpnSession
@@ -42,7 +41,7 @@ internal class ProfileSessionFactory(
     ): VpnSession {
         val profile = profileProvider(profileId)
         val secret = secretProvider(profile.secretRef) ?: error("profile secret is missing")
-        val selectedOption = secret.selectedStoredProtocolOption(protocolOptionIdOverride)
+        val selectedOption = secret.selectedStoredProtocolOptionForRuntime(protocolOptionIdOverride)
         val selectedProtocolHint = selectedOption?.protocolHint ?: profile.protocolHint
         val correlationId = newRuntimeCorrelationId()
         val settings = settingsRepository.current()
@@ -145,17 +144,6 @@ internal class ProfileSessionFactory(
         privacyRoute.enabled &&
             traffic.mode == TrafficMode.TUNNEL &&
             (privacyRoute.bypassVpnTunnel || !selectedProtocolHint.isUdpTransport())
-
-    private fun StoredProfileSecret.selectedStoredProtocolOption(
-        overrideOptionId: String? = null,
-    ): StoredProfileProtocolOption? {
-        if (protocolOptions.isEmpty()) {
-            return null
-        }
-        val resolvedOptionId = overrideOptionId?.takeIf(String::isNotBlank) ?: selectedProtocolOptionId
-        return protocolOptions.firstOrNull { it.id == resolvedOptionId }
-            ?: protocolOptions.firstOrNull()
-    }
 
     private fun newRuntimeCorrelationId(): String =
         "s-" + UUID.randomUUID().toString().replace("-", "").take(12)
