@@ -31,10 +31,9 @@ import io.nekohasekai.libbox.CommandClient as LibboxCommandClient
 
 @OptIn(ExperimentalCoroutinesApi::class)
 internal class LibboxTrafficMapConnectionSource(
+    @Suppress("UNUSED_PARAMETER")
     context: Context,
 ) : TrafficMapConnectionSource {
-    private val countryResolver = TorGeoIpCountryResolver(context.applicationContext)
-
     override fun connectionSamples(runtimeAvailable: Flow<Boolean>): Flow<List<TrafficMapConnectionSample>> =
         runtimeAvailable
             .distinctUntilChanged()
@@ -103,7 +102,6 @@ internal class LibboxTrafficMapConnectionSource(
                         val result =
                             synchronized(lock) {
                                 connections.toTrafficMapSamples(
-                                    countryResolver = countryResolver,
                                     maxConnections = MaxTrackedConnections,
                                 ).also { result ->
                                     if (result.truncated) {
@@ -127,7 +125,7 @@ internal class LibboxTrafficMapConnectionSource(
         const val SampleIntervalMillis = 3_000L
         const val ReconnectDelayMillis = 1_000L
         const val StatusIntervalNanos = 1_000_000_000L
-        const val MaxTrackedConnections = 2_000
+        const val MaxTrackedConnections = 512
     }
 }
 
@@ -137,7 +135,6 @@ private data class TrafficMapSampleResult(
 )
 
 private fun Connections.toTrafficMapSamples(
-    countryResolver: TorGeoIpCountryResolver,
     maxConnections: Int,
 ): TrafficMapSampleResult {
     val iterator = iterator()
@@ -151,20 +148,9 @@ private fun Connections.toTrafficMapSamples(
         val connection = iterator.next()
         if (connection.outboundType.equals(DNS_OUTBOUND_TYPE, ignoreCase = true)) {
             DnsRuntimeStats.recordDnsConnection(connection.stableTrafficMapConnectionId())
-        } else {
-            connection.toTrafficMapSample(countryResolver)?.let(samples::add)
         }
     }
     return TrafficMapSampleResult(samples = samples, truncated = false)
-}
-
-private fun Connection.toTrafficMapSample(countryResolver: TorGeoIpCountryResolver): TrafficMapConnectionSample? {
-    val countryCode = countryResolver.countryCodeForDestination(destination) ?: return null
-    return TrafficMapConnectionSample(
-        connectionId = stableTrafficMapConnectionId(),
-        countryCode = countryCode,
-        bytes = maxOf(uplinkTotal + downlinkTotal, uplink + downlink, 0L),
-    )
 }
 
 private fun Connection.stableTrafficMapConnectionId(): String =

@@ -50,7 +50,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.PathFillType
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -67,14 +66,7 @@ import androidx.core.content.getSystemService
 import com.foxhole.beta.R
 import com.foxhole.beta.core.model.TrafficMapPoint
 import com.foxhole.beta.core.model.TrafficMapUiState
-import com.foxhole.beta.core.traffic.TrafficMapCountryGeoJsonParser
-import com.foxhole.beta.core.traffic.TrafficMapCountryShape
-import com.foxhole.beta.core.traffic.TrafficMapCountryShapeAssetParser
-import com.foxhole.beta.core.traffic.TrafficMapGeoPoint
-import com.foxhole.beta.core.traffic.toTrafficMapVisualShape
 import com.foxhole.beta.ui.theme.LocalFoxholeDarkTheme
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import java.util.Locale
 import kotlin.math.atan2
 import kotlin.math.floor
@@ -87,7 +79,6 @@ internal fun TrafficMapDashboardCard(
     modifier: Modifier = Modifier,
     legendLoading: Boolean = false,
 ) {
-    val countries by rememberTrafficMapCountries()
     val powerState = rememberTrafficMapPowerState()
     var forceMapEnabled by rememberSaveable { mutableStateOf(false) }
     val mapDisabledForPower = powerState.mapDisabled && !forceMapEnabled
@@ -123,7 +114,6 @@ internal fun TrafficMapDashboardCard(
                 } else {
                     TrafficMapCanvas(
                         state = state,
-                        countries = countries.orEmpty(),
                         modifier = Modifier
                             .fillMaxWidth()
                             .weight(1f)
@@ -220,19 +210,17 @@ private fun TrafficMapPowerSaveBlock(
 @Suppress("LongMethod")
 private fun TrafficMapCanvas(
     state: TrafficMapUiState,
-    countries: List<TrafficMapCountryShape>,
     modifier: Modifier = Modifier,
 ) {
     val latestState = rememberUpdatedState(state)
     val colors = trafficMapColors()
-    val countryShapes = remember(countries) { countries }
 
     Box(
         modifier = modifier
             .drawWithCache {
                 val viewport = trafficMapViewport(size)
-                val countryPaths = countryShapes.mapNotNull { shape -> shape.toProjectedPath(viewport) }
                 val borderStroke = Stroke(width = 0.55.dp.toPx())
+                val gridStroke = Stroke(width = 0.45.dp.toPx())
                 val maxLineStroke = 2.1.dp.toPx()
                 val minLineStroke = 0.65.dp.toPx()
                 val destinationRadius = 3.3.dp.toPx()
@@ -246,19 +234,13 @@ private fun TrafficMapCanvas(
                 onDrawBehind {
                     val mapState = latestState.value
                     val drawableDestinations = mapState.destinations.toDrawableTrafficMapDestinations()
-                    countryPaths.forEach { country ->
-                        drawPath(
-                            path = country.path,
-                            color = colors.countryFill,
-                        )
-                    }
-                    countryPaths.forEach { country ->
-                        drawPath(
-                            path = country.path,
-                            color = colors.countryBorder,
-                            style = borderStroke,
-                        )
-                    }
+                    drawTrafficMapFrame(
+                        viewport = viewport,
+                        fillColor = colors.countryFill,
+                        lineColor = colors.countryBorder,
+                        borderStroke = borderStroke,
+                        gridStroke = gridStroke,
+                    )
 
                     val origin = project(mapState.originLat, mapState.originLon, viewport)
                     val maxBytes = drawableDestinations.maxOfOrNull { destination -> destination.bytes }?.coerceAtLeast(1L) ?: 1L
@@ -591,57 +573,6 @@ private fun TrafficMapLegendCell(
 }
 
 @Composable
-private fun rememberTrafficMapCountries(): State<List<TrafficMapCountryShape>?> {
-    val appContext = LocalContext.current.applicationContext
-    return produceState<List<TrafficMapCountryShape>?>(initialValue = TrafficMapCountryShapeCache.snapshot(), appContext) {
-        if (value == null) {
-            value = TrafficMapCountryShapeCache.load(appContext)
-        }
-    }
-}
-
-private object TrafficMapCountryShapeCache {
-    @Volatile
-    private var cached: List<TrafficMapCountryShape>? = null
-
-    fun snapshot(): List<TrafficMapCountryShape>? = cached
-
-    suspend fun load(context: Context): List<TrafficMapCountryShape> =
-        cached ?: withContext(Dispatchers.IO) {
-            cached ?: runCatching { loadTrafficMapCountries(context) }
-                .getOrDefault(emptyList())
-                .also { loaded -> cached = loaded }
-        }
-}
-
-private fun loadTrafficMapCountries(context: Context): List<TrafficMapCountryShape> {
-    loadPreprocessedTrafficMapCountries(context)
-        .takeIf(List<TrafficMapCountryShape>::isNotEmpty)
-        ?.let { countries -> return countries }
-    return loadTrafficMapCountriesFromGeoJson(context)
-}
-
-private fun loadPreprocessedTrafficMapCountries(context: Context): List<TrafficMapCountryShape> =
-    runCatching {
-        val raw =
-            context.assets.open(TRAFFIC_MAP_PREPROCESSED_COUNTRIES_ASSET).bufferedReader().use { reader ->
-                reader.readText()
-            }
-        TrafficMapCountryShapeAssetParser().parse(raw)
-            .filterNot { country -> country.countryCode == TRAFFIC_MAP_ANTARCTICA_COUNTRY_CODE }
-    }.getOrDefault(emptyList())
-
-private fun loadTrafficMapCountriesFromGeoJson(context: Context): List<TrafficMapCountryShape> {
-    val raw =
-        context.assets.open(TRAFFIC_MAP_COUNTRIES_GEOJSON_ASSET).bufferedReader().use { reader ->
-            reader.readText()
-        }
-    return TrafficMapCountryGeoJsonParser().parse(raw)
-        .filterNot { country -> country.countryCode == TRAFFIC_MAP_ANTARCTICA_COUNTRY_CODE }
-        .mapNotNull(TrafficMapCountryShape::toTrafficMapVisualShape)
-}
-
-@Composable
 private fun rememberTrafficMapPowerState(): TrafficMapPowerState {
     val appContext = LocalContext.current.applicationContext
     val powerManager = remember(appContext) { appContext.getSystemService<PowerManager>() }
@@ -695,36 +626,6 @@ private fun Intent.batteryPercent(): Int? {
     return ((level * 100f) / scale).toInt()
 }
 
-private fun TrafficMapCountryShape.toProjectedPath(viewport: TrafficMapViewport): ProjectedTrafficMapCountry? {
-    val path =
-        Path().apply {
-            fillType = PathFillType.EvenOdd
-        }
-    var hasRing = false
-    rings.forEach { ring ->
-        if (ring.size >= MIN_TRAFFIC_MAP_RING_POINTS) {
-            ring.addToPath(path, viewport)
-            hasRing = true
-        }
-    }
-    return ProjectedTrafficMapCountry(countryCode = countryCode, path = path).takeIf { hasRing }
-}
-
-private fun List<TrafficMapGeoPoint>.addToPath(
-    path: Path,
-    viewport: TrafficMapViewport,
-) {
-    val first = firstOrNull() ?: return
-    val firstOffset = project(first.lat, first.lon, viewport)
-    path.moveTo(firstOffset.x, firstOffset.y)
-    for (index in 1 until size) {
-        val point = this[index]
-        val offset = project(point.lat, point.lon, viewport)
-        path.lineTo(offset.x, offset.y)
-    }
-    path.close()
-}
-
 private fun project(
     lat: Double,
     lon: Double,
@@ -745,6 +646,51 @@ private fun project(
     val x = ((lon + 180.0) / 360.0 * size.width).toFloat()
     val y = ((TRAFFIC_MAP_MAX_LAT - lat) / TRAFFIC_MAP_LAT_RANGE * size.height).toFloat()
     return Offset(x, y)
+}
+
+private fun DrawScope.drawTrafficMapFrame(
+    viewport: TrafficMapViewport,
+    fillColor: Color,
+    lineColor: Color,
+    borderStroke: Stroke,
+    gridStroke: Stroke,
+) {
+    val cornerRadius = CornerRadius(7.dp.toPx(), 7.dp.toPx())
+    drawRoundRect(
+        color = fillColor,
+        topLeft = viewport.topLeft,
+        size = viewport.size,
+        cornerRadius = cornerRadius,
+    )
+    drawTrafficMapGrid(
+        viewport = viewport,
+        lineColor = lineColor.copy(alpha = lineColor.alpha * 0.72f),
+        stroke = gridStroke,
+    )
+    drawRoundRect(
+        color = lineColor,
+        topLeft = viewport.topLeft,
+        size = viewport.size,
+        cornerRadius = cornerRadius,
+        style = borderStroke,
+    )
+}
+
+private fun DrawScope.drawTrafficMapGrid(
+    viewport: TrafficMapViewport,
+    lineColor: Color,
+    stroke: Stroke,
+) {
+    TRAFFIC_MAP_GRID_LONGITUDES.forEach { lon ->
+        val top = project(lat = TRAFFIC_MAP_MAX_LAT, lon = lon, viewport = viewport)
+        val bottom = project(lat = TRAFFIC_MAP_MIN_LAT, lon = lon, viewport = viewport)
+        drawLine(color = lineColor, start = top, end = bottom, strokeWidth = stroke.width)
+    }
+    TRAFFIC_MAP_GRID_LATITUDES.forEach { lat ->
+        val start = project(lat = lat, lon = -180.0, viewport = viewport)
+        val end = project(lat = lat, lon = 180.0, viewport = viewport)
+        drawLine(color = lineColor, start = start, end = end, strokeWidth = stroke.width)
+    }
 }
 
 private fun DrawScope.drawPhoneMarker(
@@ -833,11 +779,6 @@ private data class TrafficMapViewport(
     val size: Size,
 )
 
-private data class ProjectedTrafficMapCountry(
-    val countryCode: String,
-    val path: Path,
-)
-
 @Immutable
 private data class TrafficMapPowerState(
     val powerSaveMode: Boolean,
@@ -856,10 +797,8 @@ private const val TRAFFIC_MAP_MAX_LAT = 85.0
 private const val TRAFFIC_MAP_LAT_RANGE = TRAFFIC_MAP_MAX_LAT - TRAFFIC_MAP_MIN_LAT
 private const val MAX_TRAFFIC_MAP_DRAW_EDGES = 30
 private const val MAX_TRAFFIC_MAP_DRAW_DESTINATIONS = 30
-private const val MIN_TRAFFIC_MAP_RING_POINTS = 3
-private const val TRAFFIC_MAP_PREPROCESSED_COUNTRIES_ASSET = "maps/ne_110m_admin_0_countries_preprocessed.json"
-private const val TRAFFIC_MAP_COUNTRIES_GEOJSON_ASSET = "maps/ne_110m_admin_0_countries.geojson"
-private const val TRAFFIC_MAP_ANTARCTICA_COUNTRY_CODE = "AQ"
 private const val TRAFFIC_MAP_LOW_BATTERY_PERCENT = 10
 private const val TRAFFIC_ROUTE_PI = 3.141592653589793
 private const val TRAFFIC_ROUTE_ANGLE_BUCKET_RADIANS = 0.17453292519943295
+private val TRAFFIC_MAP_GRID_LONGITUDES = listOf(-120.0, -60.0, 0.0, 60.0, 120.0)
+private val TRAFFIC_MAP_GRID_LATITUDES = listOf(-30.0, 0.0, 30.0, 60.0)

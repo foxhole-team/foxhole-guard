@@ -111,12 +111,16 @@ class RuntimeConfigAssembler(
         mode: LocalGuardMode,
     ): String {
         val localDnsCaptureEnabled = settings.localGuardDnsCaptureEnabled(mode)
-        val dnsSettings =
+        val baseDnsSettings =
             if (settings.expert.systemDnsProtectionEnabled) {
                 settings.dns.systemDnsProtectionSettings()
             } else {
                 settings.dns
             }
+        val dnsSettings =
+            baseDnsSettings.localGuardDnsSettings(
+                forcePublicDoH = localDnsCaptureEnabled && !settings.expert.systemDnsProtectionEnabled,
+            )
         val dns =
             buildFoxholeDnsConfig(
                 strategy = settings.traffic.domainStrategy.configValue,
@@ -128,7 +132,7 @@ class RuntimeConfigAssembler(
                     } else if (!localDnsCaptureEnabled) {
                         DNS_REMOTE_TAG
                     } else {
-                        DNS_DIRECT_TAG
+                        DNS_REMOTE_TAG
                     },
                 includeRemote = true,
                 remoteDetourTag = null,
@@ -153,7 +157,7 @@ class RuntimeConfigAssembler(
                     } else if (!localDnsCaptureEnabled) {
                         DNS_REMOTE_TAG
                     } else {
-                        resolverForRoute(dns, buildJsonObject {})
+                        DNS_REMOTE_TAG
                     }
                 defaultResolver?.let { put("default_domain_resolver", it) }
                 put("auto_detect_interface", true)
@@ -182,7 +186,7 @@ class RuntimeConfigAssembler(
         expert.systemDnsProtectionEnabled ||
             (
                 mode != LocalGuardMode.DNS &&
-                    dns.dnsRuleSetFilteringEnabled()
+                    dns.interceptDnsRequests
             )
 
     internal fun assembleTorOnly(
@@ -1710,6 +1714,17 @@ class RuntimeConfigAssembler(
             dnsThroughVpn = false,
             filteringEnabled = false,
         )
+
+    private fun DnsSettings.localGuardDnsSettings(forcePublicDoH: Boolean): DnsSettings =
+        if (forcePublicDoH && secureMode == SecureDnsMode.PLAIN) {
+            copy(
+                server = FOXHOLE_REMOTE_DNS_SERVER,
+                secureMode = SecureDnsMode.DOH,
+                dnsThroughVpn = false,
+            )
+        } else {
+            copy(dnsThroughVpn = false)
+        }
 
     private fun foxholeRemoteDnsServer(
         dnsSettings: DnsSettings,

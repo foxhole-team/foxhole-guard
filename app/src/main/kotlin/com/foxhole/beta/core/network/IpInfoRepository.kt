@@ -383,10 +383,10 @@ class IpInfoRepository(
                     applyProxyOrNetwork(proxy, network)
                     if (proxy == null) {
                         dns(
-                            PublicRemoteDns { hostname ->
+                            PublicRemoteDns(delegate = { hostname ->
                                 val addresses = resolveAddresses(hostname, network, addressFamilyPreference, resolverNetwork)
                                 prioritize(addresses, addressFamilyPreference)
-                            },
+                            }),
                         )
                     }
                 }.build()
@@ -577,11 +577,13 @@ class IpInfoRepository(
     private fun quickEndpoints(endpoint: String): List<String> {
         val primary = primaryEndpoint(endpoint)
         return buildList {
-            add(primary)
             QUICK_FALLBACK_ENDPOINTS.forEach { candidate ->
                 if (!candidate.equals(primary, ignoreCase = true) && candidate !in this) {
                     add(candidate)
                 }
+            }
+            if (primary !in this) {
+                add(primary)
             }
         }
     }

@@ -876,7 +876,7 @@ class RuntimeConfigAssemblerTest {
         assertEquals("dns-remote", route["default_domain_resolver"]!!.jsonPrimitive.content)
         assertEquals("direct", route["final"]!!.jsonPrimitive.content)
         assertEquals(false, tunInbound["strict_route"]!!.jsonPrimitive.content.toBoolean())
-        assertTrue(route["rules"]!!.jsonArray.map { it.jsonObject }.none { rule ->
+        assertTrue(route["rules"]!!.jsonArray.map { it.jsonObject }.any { rule ->
             rule["action"]?.jsonPrimitive?.content == "hijack-dns"
         })
         assertTrue(dnsServers.any { server -> server["tag"]!!.jsonPrimitive.content == "dns-remote" })
@@ -892,7 +892,7 @@ class RuntimeConfigAssemblerTest {
     }
 
     @Test
-    fun `local firewall guard captures DNS only when rule set filtering is enabled`() {
+    fun `local firewall guard captures DNS with public DoH when intercept is enabled`() {
         val settings =
             Settings(
                 dns = DnsSettings(filteringEnabled = true),
@@ -905,15 +905,37 @@ class RuntimeConfigAssemblerTest {
         val rules = route["rules"]!!.jsonArray.map { it.jsonObject }
         val dnsServers = dns["servers"]!!.jsonArray.map { it.jsonObject }
 
-        assertEquals("dns-direct", dns["final"]!!.jsonPrimitive.content)
-        assertEquals("dns-direct", route["default_domain_resolver"]!!.jsonPrimitive.content)
-        assertTrue(dnsServers.any { server -> server["tag"]!!.jsonPrimitive.content == "dns-remote" })
+        assertEquals("dns-remote", dns["final"]!!.jsonPrimitive.content)
+        assertEquals("dns-remote", route["default_domain_resolver"]!!.jsonPrimitive.content)
+        val remoteServer = dnsServers.single { server -> server["tag"]!!.jsonPrimitive.content == "dns-remote" }
+        assertEquals("https", remoteServer["type"]!!.jsonPrimitive.content)
+        assertEquals("1.1.1.1", remoteServer["server"]!!.jsonPrimitive.content)
+        assertEquals("443", remoteServer["server_port"]!!.jsonPrimitive.content)
+        assertEquals("/dns-query", remoteServer["path"]!!.jsonPrimitive.content)
+        assertFalse(remoteServer.containsKey("detour"))
         assertTrue(rules.any { rule ->
             rule["network"]?.jsonPrimitive?.content == "tcp" &&
                 rule["port"]?.jsonPrimitive?.content == "853" &&
                 rule["outbound"]?.jsonPrimitive?.content == "block"
         })
         assertTrue(rules.any { rule -> rule["action"]?.jsonPrimitive?.content == "hijack-dns" })
+    }
+
+    @Test
+    fun `local firewall guard leaves DNS uncaptured when intercept is disabled`() {
+        val settings =
+            Settings(
+                dns = DnsSettings(interceptDnsRequests = false, filteringEnabled = true),
+                expert = ExpertSettings(firewallEnabled = true),
+            )
+
+        val config = parse(assembler.assembleLocalGuard(settings, LocalGuardMode.FIREWALL))
+        val route = config["route"]!!.jsonObject
+        val rules = route["rules"]!!.jsonArray.map { it.jsonObject }
+
+        assertEquals("dns-remote", config["dns"]!!.jsonObject["final"]!!.jsonPrimitive.content)
+        assertEquals("dns-remote", route["default_domain_resolver"]!!.jsonPrimitive.content)
+        assertTrue(rules.none { rule -> rule["action"]?.jsonPrimitive?.content == "hijack-dns" })
     }
 
     @Test
@@ -1150,7 +1172,7 @@ class RuntimeConfigAssemblerTest {
     }
 
     @Test
-    fun `local journal guard keeps DNS direct while app block rules stay active`() {
+    fun `local journal guard captures DNS while app block rules stay active`() {
         val settings =
             Settings(
                 expert =
@@ -1179,7 +1201,7 @@ class RuntimeConfigAssemblerTest {
         assertFalse(tunInbound.containsKey("include_package"))
         assertLocalGuardExcludesFoxHole(tunInbound)
         assertTrue(rules.any { rule -> rule["package_name"]?.jsonArray?.single()?.jsonPrimitive?.content == "org.mozilla.firefox" })
-        assertTrue(rules.none { rule -> rule["action"]?.jsonPrimitive?.content == "hijack-dns" })
+        assertTrue(rules.any { rule -> rule["action"]?.jsonPrimitive?.content == "hijack-dns" })
     }
 
     @Test

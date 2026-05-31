@@ -317,7 +317,7 @@ class IpInfoRepositoryTest {
     }
 
     @Test
-    fun `entry quick mode keeps primary plus lightweight fallback endpoints`() {
+    fun `entry quick mode starts with dns independent lightweight endpoints`() {
         val repository =
             IpInfoRepository(
                 client = okhttp3.OkHttpClient(),
@@ -330,11 +330,11 @@ class IpInfoRepositoryTest {
                 mode = IpInfoFetchMode.ENTRY_QUICK,
             )
 
-        assertEquals("https://example.com/ip", candidates.first())
-        assertEquals("https://1.1.1.1/cdn-cgi/trace", candidates[1])
-        assertEquals("https://1.0.0.1/cdn-cgi/trace", candidates[2])
-        assertEquals("https://api.ipify.org?format=json", candidates[3])
-        assertEquals("https://cloudflare.com/cdn-cgi/trace", candidates[4])
+        assertEquals("https://1.1.1.1/cdn-cgi/trace", candidates[0])
+        assertEquals("https://1.0.0.1/cdn-cgi/trace", candidates[1])
+        assertEquals("https://api.ipify.org?format=json", candidates[2])
+        assertEquals("https://cloudflare.com/cdn-cgi/trace", candidates[3])
+        assertEquals("https://example.com/ip", candidates[4])
         assertEquals(5, candidates.size)
     }
 
@@ -373,7 +373,7 @@ class IpInfoRepositoryTest {
                 mode = IpInfoFetchMode.ENTRY_QUICK,
             )
 
-        assertEquals("https://example.com/ip", strategy.endpointCandidates.first())
+        assertEquals("https://1.1.1.1/cdn-cgi/trace", strategy.endpointCandidates.first())
         assertEquals(1_500L, strategy.callTimeoutMs)
         assertFalse(strategy.includeFamilyProbes)
     }
@@ -459,6 +459,59 @@ class IpInfoRepositoryTest {
         val ordered = listOf(ipv6Address, ipv4Address).preferIpv4()
 
         assertEquals(listOf(ipv4Address, ipv6Address), ordered)
+    }
+
+    @Test
+    fun `public remote dns falls back to doh resolver when platform dns fails`() {
+        val fallbackAddress = InetAddress.getByName("104.26.12.205")
+        val dns =
+            PublicRemoteDns(
+                delegate = { throw UnknownHostException("platform dns unavailable") },
+                fallback = PublicDnsFallback { hostname ->
+                    assertEquals("api.ipify.org", hostname)
+                    listOf(fallbackAddress)
+                },
+            )
+
+        assertEquals(listOf(fallbackAddress), dns.lookup("api.ipify.org"))
+    }
+
+    @Test
+    fun `public remote dns rejects private fallback answers`() {
+        val dns =
+            PublicRemoteDns(
+                delegate = { throw UnknownHostException("platform dns unavailable") },
+                fallback = PublicDnsFallback { listOf(InetAddress.getByName("192.168.1.10")) },
+            )
+
+        var failure: UnknownHostException? = null
+        try {
+            dns.lookup("api.ipify.org")
+        } catch (error: UnknownHostException) {
+            failure = error
+        }
+
+        assertTrue(failure != null)
+    }
+
+    @Test
+    fun `doh fallback parser extracts matching public answers`() {
+        val addresses =
+            PublicDohDnsFallback.parseDohAddresses(
+                body =
+                    """
+                    {
+                      "Status": 0,
+                      "Answer": [
+                        { "name": "api.ipify.org", "type": 1, "data": "104.26.12.205" },
+                        { "name": "api.ipify.org", "type": 28, "data": "2606:4700:20::681a:ccd" }
+                      ]
+                    }
+                    """.trimIndent(),
+                type = 1,
+            )
+
+        assertEquals(listOf(InetAddress.getByName("104.26.12.205")), addresses)
     }
 }
 

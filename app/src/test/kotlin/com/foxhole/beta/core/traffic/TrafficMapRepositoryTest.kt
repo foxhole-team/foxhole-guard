@@ -10,6 +10,11 @@ class TrafficMapRepositoryTest {
     }
 
     @Test
+    fun `traffic map keeps retained connection window bounded for release memory`() {
+        assertEquals(512, TrafficMapRepository.MaxRetainedConnectionSamples)
+    }
+
+    @Test
     fun `aggregates live traffic by country code before UI mapping`() {
         val aggregates =
             aggregateTrafficMapSamples(
@@ -107,5 +112,23 @@ class TrafficMapRepositoryTest {
 
         assertEquals(null, refreshed.countryAggregates()["US"])
         assertEquals(5L, refreshed.countryAggregates()["DE"]?.bytes)
+    }
+
+    @Test
+    fun `accumulator drops oldest live connections above retained window`() {
+        val samples =
+            (0 until TrafficMapRepository.MaxRetainedConnectionSamples + 3).map { index ->
+                TrafficMapConnectionSample(
+                    connectionId = "connection-$index",
+                    countryCode = "US",
+                    bytes = index.toLong(),
+                )
+            }
+
+        val accumulator = TrafficMapConnectionAccumulator().updatedWith(samples)
+
+        assertEquals(TrafficMapRepository.MaxRetainedConnectionSamples, accumulator.samplesById.size)
+        assertEquals(false, accumulator.samplesById.containsKey("connection-0"))
+        assertEquals(true, accumulator.samplesById.containsKey("connection-3"))
     }
 }

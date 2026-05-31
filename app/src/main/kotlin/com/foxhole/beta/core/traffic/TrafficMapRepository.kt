@@ -7,6 +7,7 @@ import com.foxhole.beta.core.model.TrafficMapUiState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -21,11 +22,7 @@ import java.util.Locale
 class TrafficMapRepository(
     private val connectionSource: TrafficMapConnectionSource = EmptyTrafficMapConnectionSource,
 ) {
-    @Volatile
-    private var retainedConnectionAccumulator = TrafficMapConnectionAccumulator()
-
-    @Volatile
-    private var retainedUiState: TrafficMapUiState? = null
+    private val retainedConnectionAccumulatorState = MutableStateFlow(TrafficMapConnectionAccumulator())
 
     @Volatile
     private var retainedDestinationCountryBytes: Map<String, Long> = emptyMap()
@@ -39,7 +36,6 @@ class TrafficMapRepository(
             originIpInfo = originIpInfo,
             runtimeAvailable = runtimeAvailable,
         )
-            .onEach { state -> retainedUiState = state }
             .stateIn(
                 scope = scope,
                 started = SharingStarted.WhileSubscribed(5_000),
@@ -51,19 +47,19 @@ class TrafficMapRepository(
         runtimeAvailable: Flow<Boolean>,
     ): Job =
         connectionAccumulatorFlow(runtimeAvailable)
-            .map { accumulator ->
-                trafficMapCountryBytesFromAggregates(
-                    aggregates = accumulator.countryAggregates(),
-                    limit = MaxTrafficMapDestinations,
-                )
+            .onEach { accumulator ->
+                retainedConnectionAccumulatorState.value = accumulator
+                retainedDestinationCountryBytes =
+                    trafficMapCountryBytesFromAggregates(
+                        aggregates = accumulator.countryAggregates(),
+                        limit = MaxTrafficMapDestinations,
+                    )
             }
-            .onEach { countryBytes -> retainedDestinationCountryBytes = countryBytes }
             .launchIn(scope)
 
     fun clearDestinationCountryBytes() {
-        retainedConnectionAccumulator = TrafficMapConnectionAccumulator()
+        retainedConnectionAccumulatorState.value = TrafficMapConnectionAccumulator()
         retainedDestinationCountryBytes = emptyMap()
-        retainedUiState = null
     }
 
     fun currentDestinationCountryBytes(): Map<String, Long> = retainedDestinationCountryBytes
@@ -80,7 +76,7 @@ class TrafficMapRepository(
                 .distinctUntilChanged()
                 .runningFold(null as Boolean?) { _, next -> next }
                 .map { available -> available == true },
-            connectionAccumulatorFlow(runtimeAvailable)
+            retainedConnectionAccumulatorState
                 .map { accumulator ->
                     trafficMapPointsFromAggregates(
                         aggregates = accumulator.countryAggregates(),
@@ -133,7 +129,7 @@ class TrafficMapRepository(
                 TrafficMapSampleBatch(samples = samples, runtimeAvailable = available)
             }
             .runningFold(TrafficMapConnectionAccumulator()) { accumulator, batch ->
-                accumulator.updatedForBatch(batch).also { retainedConnectionAccumulator = it }
+                accumulator.updatedForBatch(batch)
             }
     }
 
@@ -160,7 +156,7 @@ class TrafficMapRepository(
     internal companion object {
         const val MaxTrafficMapDestinations = 30
         const val IsoCountryCodeLength = 2
-        const val MaxRetainedConnectionSamples = 2_000
+        const val MaxRetainedConnectionSamples = 512
         const val SameCountryDestinationLatOffset = 1.15
         const val SameCountryDestinationLonOffset = 1.85
         const val TrafficMapMinLat = -55.0
