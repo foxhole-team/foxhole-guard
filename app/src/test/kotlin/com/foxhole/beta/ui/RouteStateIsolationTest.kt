@@ -113,4 +113,31 @@ class RouteStateIsolationTest {
 
         assertEquals(base.toHomeRouteUiState(), withDiagnostics.toHomeRouteUiState())
     }
+
+    @Test
+    fun `routing summary route can omit installed app inventory`() {
+        val state =
+            HomeUiState(
+                installedApps =
+                listOf(
+                    InstalledAppOption(
+                        packageName = "com.example",
+                        label = "Example",
+                        isSystemApp = false,
+                    ),
+                ),
+                installedAppsLoading = true,
+                installedAppsLoaded = true,
+            )
+
+        val summary = state.toRoutingRouteUiState(includeInstalledApps = false)
+        val picker = state.toRoutingRouteUiState(includeInstalledApps = true)
+
+        assertTrue(summary.installedApps.isEmpty())
+        assertEquals(false, summary.installedAppsLoading)
+        assertEquals(false, summary.installedAppsLoaded)
+        assertEquals(state.installedApps, picker.installedApps)
+        assertEquals(true, picker.installedAppsLoading)
+        assertEquals(true, picker.installedAppsLoaded)
+    }
 }

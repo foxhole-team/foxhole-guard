@@ -629,7 +629,18 @@ class HomeViewModel(
 
     val routingRouteState: StateFlow<RoutingRouteUiState> =
         coreUiState
-            .map(HomeUiState::toRoutingRouteUiState)
+            .map { state -> state.toRoutingRouteUiState(includeInstalledApps = false) }
+            .distinctUntilChanged()
+            .flowOn(Dispatchers.Default)
+            .stateIn(
+                viewModelScope,
+                SharingStarted.WhileSubscribed(5_000),
+                RoutingRouteUiState(),
+            )
+
+    val appPickerRouteState: StateFlow<RoutingRouteUiState> =
+        coreUiState
+            .map { state -> state.toRoutingRouteUiState(includeInstalledApps = true) }
             .distinctUntilChanged()
             .flowOn(Dispatchers.Default)
             .stateIn(

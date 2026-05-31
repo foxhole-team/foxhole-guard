@@ -310,15 +310,17 @@ internal fun HomeUiState.toSettingsRouteUiState(
         statisticsDashboard = statisticsDashboard,
     )
 
-internal fun HomeUiState.toRoutingRouteUiState(): RoutingRouteUiState =
+internal fun HomeUiState.toRoutingRouteUiState(
+    includeInstalledApps: Boolean = true,
+): RoutingRouteUiState =
     RoutingRouteUiState(
         settings = settings,
         presets = presets,
         activePreset = activePreset,
         catalogs = catalogs,
-        installedApps = installedApps,
-        installedAppsLoading = installedAppsLoading,
-        installedAppsLoaded = installedAppsLoaded,
+        installedApps = if (includeInstalledApps) installedApps else emptyList(),
+        installedAppsLoading = includeInstalledApps && installedAppsLoading,
+        installedAppsLoaded = includeInstalledApps && installedAppsLoaded,
         catalogPresetPreviews = catalogPresetPreviews,
     )
 

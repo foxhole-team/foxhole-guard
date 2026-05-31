@@ -14,9 +14,11 @@ This pass separates the ViewModel's high-volume activity/diagnostics payload fro
 - Added route-level `distinctUntilChanged()` and `Dispatchers.Default` flow isolation for route model construction.
 - Moved Statistics to `statisticsRouteState`, so normal Settings routes no longer compute or carry `statisticsDashboard`.
 - Settings route construction can now explicitly omit live traffic, installed app inventory, and activity payloads.
+- Added `appPickerRouteState` as the only route state that carries the full installed app inventory.
+- DNS, Privacy route, and Routing apps summary entry no longer trigger installed-app inventory refresh on route entry.
 
 ## Verification
 
-- Added `RouteStateIsolationTest` for Settings payload omission, Statistics payload retention, and Dashboard diagnostics insensitivity.
+- Added `RouteStateIsolationTest` for Settings payload omission, Statistics payload retention, Dashboard diagnostics insensitivity, and Routing app-inventory gating.
 
 Public release remains blocked until diagnostics paging, dashboard hot-path optimization, runtime ownership migration, native cleanup refactor, connected stress, and macrobenchmark gates pass.

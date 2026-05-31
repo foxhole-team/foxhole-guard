@@ -512,9 +512,6 @@ fun FoxholeApp(
                     )
                 }
                 composable(AppRoute.DNS) {
-                    LaunchedEffect(Unit) {
-                        viewModel.ensureInstalledAppsLoaded()
-                    }
                     val state by viewModel.settingsRouteState.collectAsStateWithLifecycle()
                     DnsSettingsScreen(
                         state = state,
@@ -573,9 +570,6 @@ fun FoxholeApp(
                     )
                 }
                 composable(AppRoute.PRIVACY_ROUTE) {
-                    LaunchedEffect(Unit) {
-                        viewModel.ensureInstalledAppsLoaded()
-                    }
                     val state by viewModel.settingsRouteState.collectAsStateWithLifecycle()
                     PrivacyRouteSettingsScreen(
                         state = state,
@@ -589,9 +583,6 @@ fun FoxholeApp(
                     )
                 }
                 composable(AppRoute.ROUTING_APPS) {
-                    LaunchedEffect(Unit) {
-                        viewModel.ensureInstalledAppsLoaded()
-                    }
                     val state by viewModel.routingRouteState.collectAsStateWithLifecycle()
                     RoutingAppsScreen(
                         state = state,
@@ -610,7 +601,7 @@ fun FoxholeApp(
                     LaunchedEffect(Unit) {
                         viewModel.ensureInstalledAppsLoaded()
                     }
-                    val state by viewModel.routingRouteState.collectAsStateWithLifecycle()
+                    val state by viewModel.appPickerRouteState.collectAsStateWithLifecycle()
                     AppPickerScreen(
                         title = stringResource(R.string.app_picker_title),
                         selectionTitle = stringResource(R.string.selected_app_exceptions),
@@ -626,7 +617,7 @@ fun FoxholeApp(
                     LaunchedEffect(Unit) {
                         viewModel.ensureInstalledAppsLoaded()
                     }
-                    val state by viewModel.routingRouteState.collectAsStateWithLifecycle()
+                    val state by viewModel.appPickerRouteState.collectAsStateWithLifecycle()
                     AppPickerScreen(
                         title = stringResource(R.string.blocked_app_exceptions),
                         selectionTitle = stringResource(R.string.blocked_app_exceptions),
@@ -642,7 +633,7 @@ fun FoxholeApp(
                     LaunchedEffect(Unit) {
                         viewModel.ensureInstalledAppsLoaded()
                     }
-                    val state by viewModel.routingRouteState.collectAsStateWithLifecycle()
+                    val state by viewModel.appPickerRouteState.collectAsStateWithLifecycle()
                     AppPickerScreen(
                         title = stringResource(R.string.privacy_route_selected_apps_title),
                         selectionTitle = stringResource(R.string.privacy_route_selected_apps_title),
@@ -658,7 +649,7 @@ fun FoxholeApp(
                     LaunchedEffect(Unit) {
                         viewModel.ensureInstalledAppsLoaded()
                     }
-                    val state by viewModel.routingRouteState.collectAsStateWithLifecycle()
+                    val state by viewModel.appPickerRouteState.collectAsStateWithLifecycle()
                     AppPickerScreen(
                         title = stringResource(R.string.dns_per_app_bypass_title),
                         selectionTitle = stringResource(R.string.dns_per_app_bypass_title),
