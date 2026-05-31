@@ -21,6 +21,9 @@ import com.foxhole.beta.core.model.TunStack
 import com.foxhole.beta.vpn.FoxholeConnectionServiceContract
 import com.foxhole.beta.vpn.FoxholeVpnService
 import com.foxhole.beta.vpn.LocalGuardMode
+import com.foxhole.beta.vpn.RuntimeIpPanelState
+import com.foxhole.beta.vpn.RuntimePhase
+import com.foxhole.beta.vpn.RuntimeTorUiState
 import com.foxhole.beta.vpn.TunnelValidationEvidenceClassifier
 import com.foxhole.beta.vpn.localGuardModeOrNull
 import java.io.File
@@ -1022,7 +1025,7 @@ class ProfileRuntimeSessionAndroidTest {
                     assertRuntimeStoppedAfterCycle(sample)
                     Log.d(
                         TEST_TAG,
-                        "liveRuntimeStress cycleStopped=$cycle rssKb=${sample.rssKb ?: "unknown"} pssKb=${sample.pssKb ?: "unknown"} nativeHeapKb=${sample.nativeHeapKb ?: "unknown"} javaHeapKb=${sample.javaHeapKb} threads=${sample.threadCount} event=${sample.latestRuntimeEvent.orEmpty()} nativeServer=${sample.hasNativeServer} tunFd=${sample.hasTunFileDescriptor} callbacks=${sample.networkCallbacks} cleanupUnresolved=${sample.cleanupUnresolved}",
+                        "liveRuntimeStress cycleStopped=$cycle connectionState=${sample.connectionState} runtimePhase=${sample.runtimePhase} runtimeGeneration=${sample.runtimeGeneration} nativeGeneration=${sample.nativeGeneration ?: "unknown"} commandQueueDepth=${sample.commandQueueDepth ?: "unknown"} rssKb=${sample.rssKb ?: "unknown"} pssKb=${sample.pssKb ?: "unknown"} nativeHeapKb=${sample.nativeHeapKb ?: "unknown"} javaHeapKb=${sample.javaHeapKb} threads=${sample.threadCount} event=${sample.latestRuntimeEvent.orEmpty()} nativeServer=${sample.hasNativeServer} tunFd=${sample.hasTunFileDescriptor} callbacks=${sample.networkCallbacks} cleanupUnresolved=${sample.cleanupUnresolved} ipDevice=${sample.ipDeviceState} ipTunnel=${sample.ipTunnelState} ipTor=${sample.ipTorState} torState=${sample.torState}",
                     )
                 }
                 assertRuntimeStressMemoryStable(samples)
@@ -1439,8 +1442,13 @@ class ProfileRuntimeSessionAndroidTest {
         callbackDetails: Map<String, String>,
     ): RuntimeStressResourceSample {
         val runtime = Runtime.getRuntime()
+        val connectionSnapshot = app.container.connectionController.snapshot.value
+        val runtimeUiState = app.container.connectionController.runtimeUiState.value
         return RuntimeStressResourceSample(
             cycle = cycle,
+            connectionState = connectionSnapshot.state.name,
+            runtimePhase = runtimeUiState.phase.runtimeStressLabel(),
+            runtimeGeneration = runtimeUiState.generation,
             rssKb = readProcStatusKb("VmRSS"),
             pssKb = readCurrentPssKb(),
             nativeHeapKb = runCatching { Debug.getNativeHeapAllocatedSize() / BYTES_PER_KB }.getOrNull(),
@@ -1449,6 +1457,7 @@ class ProfileRuntimeSessionAndroidTest {
             owner = stopDetails["owner"],
             latestRuntimeEvent = stopDetails["event"],
             callbackCleanupEvent = callbackDetails["event"],
+            commandQueueDepth = stopDetails["command_queue_depth"]?.toIntOrNull(),
             networkCallbacks = callbackDetails["network_callbacks"]?.toIntOrNull(),
             hasNativeServer = stopDetails["native_server"]?.toBooleanStrictOrNull(),
             hasTunFileDescriptor = stopDetails["tun_fd"]?.toBooleanStrictOrNull(),
@@ -1458,6 +1467,10 @@ class ProfileRuntimeSessionAndroidTest {
             cleanupUnresolved = stopDetails["cleanup_unresolved"]?.toBooleanStrictOrNull(),
             lastCloseDetached = stopDetails["last_close_detached"]?.toBooleanStrictOrNull(),
             nativeGeneration = stopDetails["native_generation"]?.toLongOrNull(),
+            ipDeviceState = runtimeUiState.ip.device.runtimeStressLabel(),
+            ipTunnelState = runtimeUiState.ip.tunnel.runtimeStressLabel(),
+            ipTorState = runtimeUiState.ip.tor.runtimeStressLabel(),
+            torState = runtimeUiState.tor.runtimeStressLabel(),
             hasRuntimeService = hasFoxholeRuntimeServices(app),
             hasActiveVpnNetwork = hasActiveFoxholeVpnNetwork(app),
         )
@@ -1465,10 +1478,13 @@ class ProfileRuntimeSessionAndroidTest {
 
     private fun assertRuntimeStoppedAfterCycle(sample: RuntimeStressResourceSample) {
         assertNotNull("cycle ${sample.cycle} missing runtime health snapshot", sample.latestRuntimeEvent)
+        assertEquals("cycle ${sample.cycle} connection state was not idle", ConnectionState.IDLE.name, sample.connectionState)
+        assertEquals("cycle ${sample.cycle} runtime phase was not idle", "idle", sample.runtimePhase)
         assertFalse("cycle ${sample.cycle} left a FoxHole runtime service active", sample.hasRuntimeService)
         assertFalse("cycle ${sample.cycle} left a FoxHole VPN network active", sample.hasActiveVpnNetwork)
         assertEquals("cycle ${sample.cycle} stop snapshot owner mismatch", "vpn", sample.owner)
         assertEquals("cycle ${sample.cycle} stop snapshot event mismatch", "stop_success:disconnect", sample.latestRuntimeEvent)
+        assertEquals("cycle ${sample.cycle} command queue was not empty", 0, sample.commandQueueDepth ?: 0)
         assertFalse("cycle ${sample.cycle} left native server attached event=${sample.latestRuntimeEvent}", sample.hasNativeServer == true)
         assertFalse("cycle ${sample.cycle} left TUN fd attached event=${sample.latestRuntimeEvent}", sample.hasTunFileDescriptor == true)
         assertFalse("cycle ${sample.cycle} left native host attached event=${sample.latestRuntimeEvent}", sample.hasNativeHost == true)
@@ -1592,6 +1608,9 @@ class ProfileRuntimeSessionAndroidTest {
 
     private data class RuntimeStressResourceSample(
         val cycle: Int,
+        val connectionState: String,
+        val runtimePhase: String,
+        val runtimeGeneration: Long,
         val rssKb: Long?,
         val pssKb: Long?,
         val nativeHeapKb: Long?,
@@ -1600,6 +1619,7 @@ class ProfileRuntimeSessionAndroidTest {
         val owner: String?,
         val latestRuntimeEvent: String?,
         val callbackCleanupEvent: String?,
+        val commandQueueDepth: Int?,
         val networkCallbacks: Int?,
         val hasNativeServer: Boolean?,
         val hasTunFileDescriptor: Boolean?,
@@ -1609,9 +1629,46 @@ class ProfileRuntimeSessionAndroidTest {
         val cleanupUnresolved: Boolean?,
         val lastCloseDetached: Boolean?,
         val nativeGeneration: Long?,
+        val ipDeviceState: String,
+        val ipTunnelState: String,
+        val ipTorState: String,
+        val torState: String,
         val hasRuntimeService: Boolean,
         val hasActiveVpnNetwork: Boolean,
     )
+
+    private fun RuntimePhase.runtimeStressLabel(): String =
+        when (this) {
+            RuntimePhase.Idle -> "idle"
+            RuntimePhase.Preparing -> "preparing"
+            RuntimePhase.StartingNative -> "starting_native"
+            RuntimePhase.WaitingVpnNetwork -> "waiting_vpn_network"
+            RuntimePhase.ValidatingTunnel -> "validating_tunnel"
+            RuntimePhase.Connected -> "connected"
+            RuntimePhase.Reconnecting -> "reconnecting"
+            RuntimePhase.Reloading -> "reloading"
+            RuntimePhase.Stopping -> "stopping"
+            RuntimePhase.Killing -> "killing"
+            is RuntimePhase.Error -> "error"
+        }
+
+    private fun RuntimeIpPanelState.runtimeStressLabel(): String =
+        when (this) {
+            RuntimeIpPanelState.Hidden -> "hidden"
+            is RuntimeIpPanelState.Loading -> "loading:${target.name.lowercase()}:previous=${previous != null}"
+            is RuntimeIpPanelState.Ready -> "ready:${target.name.lowercase()}:stale=$stale"
+            is RuntimeIpPanelState.Failed -> "failed:${target.name.lowercase()}:previous=${previous != null}"
+        }
+
+    private fun RuntimeTorUiState.runtimeStressLabel(): String =
+        when (this) {
+            RuntimeTorUiState.Off -> "off"
+            is RuntimeTorUiState.Starting -> "starting"
+            is RuntimeTorUiState.Bootstrapping -> "bootstrapping:${progress ?: -1}:previous=${previousExit != null}"
+            is RuntimeTorUiState.Ready -> "ready:exit=${exit.ip}"
+            is RuntimeTorUiState.Rotating -> "rotating:previous=${previousExit.ip}"
+            is RuntimeTorUiState.Failed -> "failed:previous=${previousExit != null}"
+        }
 
     private data class RuntimeProbeTarget(
         val protocolHint: ProtocolHint,

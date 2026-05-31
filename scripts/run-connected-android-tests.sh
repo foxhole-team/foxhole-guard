@@ -38,6 +38,7 @@ readonly OPTIONAL_TEST_SPECS=(
   "com.foxhole.beta.ProfileRuntimeSessionAndroidTest#manualFreshImportConnectsWhenRequested"
   "com.foxhole.beta.ProfileRuntimeSessionAndroidTest#manualDirectShareLinksLogTerminalStateAndDiagnostics"
   "com.foxhole.beta.ProfileRuntimeSessionAndroidTest#manualSmartSubscriptionLogsImportAndTargetProtocolRuntime"
+  "com.foxhole.beta.ProfileRuntimeSessionAndroidTest#manualSmartSubscriptionRuntimeStressCycles"
   "com.foxhole.beta.ProfileRuntimeSessionAndroidTest#restoreBaselineRuntimeSettingsWhenRequested"
   "com.foxhole.beta.ProfileRuntimeSessionAndroidTest#liveOptionProbeMatrixLogsVpnBoundIpResults"
   "com.foxhole.beta.vpn.VpnRuntimeSmokeTest"
@@ -49,9 +50,12 @@ required_test_specs() {
       tr ',' '\n' |
       sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//' |
       awk 'NF > 0'
-    return
+  else
+    printf '%s\n' "${DEFAULT_REQUIRED_TEST_SPECS[@]}"
   fi
-  printf '%s\n' "${DEFAULT_REQUIRED_TEST_SPECS[@]}"
+  if [[ "${FOXHOLE_REQUIRE_RUNTIME_STRESS:-0}" == "1" ]]; then
+    printf '%s\n' "com.foxhole.beta.ProfileRuntimeSessionAndroidTest#manualSmartSubscriptionRuntimeStressCycles"
+  fi
 }
 
 dump_diagnostics() {
@@ -170,23 +174,46 @@ run_test_spec() {
   adb shell pm clear "$TARGET_PACKAGE" >/dev/null 2>&1 || true
   clear_gradle_connected_outputs
 
-  local live_vpn_smoke_arg=""
+  local instrumentation_args=(
+    "-Pandroid.testInstrumentationRunnerArguments.class=$test_spec"
+  )
   if [[ "$test_spec" == com.foxhole.beta.vpn.VpnRuntimeSmokeTest* && "${FOXHOLE_LIVE_VPN_SMOKE:-0}" == "1" ]]; then
     adb shell cmd appops set "$TARGET_PACKAGE" ACTIVATE_VPN allow >/dev/null 2>&1 || true
-    live_vpn_smoke_arg="-Pandroid.testInstrumentationRunnerArguments.foxhole.liveVpnSmoke=1"
+    instrumentation_args+=("-Pandroid.testInstrumentationRunnerArguments.foxhole.liveVpnSmoke=1")
+  fi
+
+  if [[ "$test_spec" == "com.foxhole.beta.ProfileRuntimeSessionAndroidTest#manualSmartSubscriptionRuntimeStressCycles" &&
+        ( "${FOXHOLE_LIVE_RUNTIME_STRESS:-0}" == "1" || "${FOXHOLE_REQUIRE_RUNTIME_STRESS:-0}" == "1" ) ]]; then
+    adb shell cmd appops set "$TARGET_PACKAGE" ACTIVATE_VPN allow >/dev/null 2>&1 || true
+    instrumentation_args+=(
+      "-Pandroid.testInstrumentationRunnerArguments.foxhole.liveRuntimeStress=1"
+      "-Pandroid.testInstrumentationRunnerArguments.foxhole.runtimeStressCycles=${FOXHOLE_RUNTIME_STRESS_CYCLES:-50}"
+      "-Pandroid.testInstrumentationRunnerArguments.foxhole.smartProtocols=${FOXHOLE_RUNTIME_STRESS_PROTOCOLS:-VLESS}"
+      "-Pandroid.testInstrumentationRunnerArguments.foxhole.requireLiveSmartSuccess=${FOXHOLE_REQUIRE_LIVE_RUNTIME_STRESS_SUCCESS:-1}"
+      "-Pandroid.testInstrumentationRunnerArguments.foxhole.requestVpnPermission=1"
+      "-Pandroid.testInstrumentationRunnerArguments.foxhole.allowInsecureTlsForLiveSubscription=${FOXHOLE_ALLOW_INSECURE_TLS_FOR_LIVE_SUBSCRIPTION:-0}"
+    )
+    if [[ -n "${FOXHOLE_RUNTIME_STRESS_SUBSCRIPTION_URL:-}" ]]; then
+      instrumentation_args+=(
+        "-Pandroid.testInstrumentationRunnerArguments.foxhole.smartSubscriptionUrl=$FOXHOLE_RUNTIME_STRESS_SUBSCRIPTION_URL"
+      )
+    fi
+    if [[ -n "${FOXHOLE_RUNTIME_STRESS_SUBSCRIPTION_RAW_FILE:-}" ]]; then
+      instrumentation_args+=(
+        "-Pandroid.testInstrumentationRunnerArguments.foxhole.smartSubscriptionRawFile=$FOXHOLE_RUNTIME_STRESS_SUBSCRIPTION_RAW_FILE"
+      )
+    fi
+    if [[ -n "${FOXHOLE_RUNTIME_STRESS_SUBSCRIPTION_BASE64:-}" ]]; then
+      instrumentation_args+=(
+        "-Pandroid.testInstrumentationRunnerArguments.foxhole.smartSubscriptionBase64=$FOXHOLE_RUNTIME_STRESS_SUBSCRIPTION_BASE64"
+      )
+    fi
   fi
 
   set +e
-  if [[ -n "$live_vpn_smoke_arg" ]]; then
-    run_with_timeout "$test_timeout" \
-      ./gradlew :app:connectedDebugAndroidTest --info \
-        -Pandroid.testInstrumentationRunnerArguments.class="$test_spec" \
-        "$live_vpn_smoke_arg"
-  else
-    run_with_timeout "$test_timeout" \
-      ./gradlew :app:connectedDebugAndroidTest --info \
-        -Pandroid.testInstrumentationRunnerArguments.class="$test_spec"
-  fi
+  run_with_timeout "$test_timeout" \
+    ./gradlew :app:connectedDebugAndroidTest --info \
+      "${instrumentation_args[@]}"
   local status=$?
   set -e
 
