@@ -26,6 +26,9 @@ No GitHub push was performed.
 The debug app was reinstalled on the Android VM after connected and
 macrobenchmark instrumentation runs.
 
+Persisted live proof files for the final VM pass are under
+`build/live-rc-proof-20260601-023847/`.
+
 ## Local gate summary
 
 | Gate | Result | Evidence |
@@ -34,9 +37,9 @@ macrobenchmark instrumentation runs.
 | Unit, behavior, assemble, lint, coverage | PASS | `:app:testDebugUnitTest :app:verifyRequiredBehaviorTests :app:compileDebugAndroidTestKotlin :app:assembleDebug :app:assembleRelease :app:lintDebug :app:lintRelease :app:lintVitalRelease :app:jacocoDebugUnitTestReport :app:jacocoDebugUnitTestCoverageVerification` |
 | Release native asset verification | PASS | `scripts/verify-adguard-dns-assets.sh app/build/outputs/apk/debug/*.apk app/build/outputs/apk/release/*.apk` |
 | Normal connected tests on VM | PASS | XML: `app/build/outputs/androidTest-results/connected/debug/TEST-FoxHole_Debug_VM(AVD) - 17-_app-.xml`, 54 tests, 0 failures, 0 errors, 6 live-gated skips |
-| Live local firewall on VM | PASS | `LiveLocalFirewallGuardRuntimeTest`, 3 live tests, including 30 firewall toggles |
-| Live VPN smoke on VM | PASS | `VpnRuntimeSmokeTest`, 3 live tests |
-| Runtime stress on VM | PASS | `scripts/run-runtime-stress-gate.sh`, 30 VLESS cycles, terminal state `CONNECTED`, final stop idle |
+| Live local firewall on VM | PASS | `build/live-rc-proof-20260601-023847/live-local-firewall.txt`, 3 live tests, including 30 firewall toggles |
+| Live VPN smoke on VM | PASS | `build/live-rc-proof-20260601-023847/live-vpn-smoke.txt`, 3 live tests |
+| Runtime stress on VM | PASS | `build/live-rc-proof-20260601-023847/runtime-stress-vless-30.txt`, 30 VLESS cycles, terminal state `CONNECTED`, final stop idle |
 | UI macrobenchmark on VM | PASS | XML: `macrobenchmark/build/outputs/androidTest-results/connected/debug/TEST-FoxHole_Debug_VM(AVD) - 17-_macrobenchmark-.xml`, 9 tests, 0 failures, 1 expected skip |
 | Pixel release install and launch | PASS | `adb -s 2A091FDH3001PA install -r app/build/outputs/apk/release/app-release.apk`, launch succeeded |
 | Pixel release network and VPN | PASS | VPN network validated, DNS `/1.1.1.1`, `ping google.com` 0 percent packet loss |
@@ -51,16 +54,16 @@ VM VLESS 30-cycle stress:
 - Final cycle: `terminalState=CONNECTED`, `ipRefresh=ok:5.181.3.93`
 - Final stopped snapshot: `commandQueueDepth=0`, `nativeServer=false`,
   `tunFd=false`, `callbacks=0`, `cleanupUnresolved=false`
-- Final memory snapshot: `rssKb=410396`, `pssKb=283684`,
-  `nativeHeapKb=8621`, `javaHeapKb=9456`, `threads=65`
+- Final memory snapshot: `rssKb=412544`, `pssKb=283895`,
+  `nativeHeapKb=8634`, `javaHeapKb=9296`, `threads=63`
 
 VM local firewall live suite:
 
 - `localFirewallGuardPreservesDashboardInternetAndDns`: PASS
 - `localFirewallGuardStartsAndStopsVpnNetwork`: PASS
 - `firewallToggleThirtyTimesNoRuntimeLeak`: PASS
-- Cycle 30 memory snapshot: `pssKb=278326`, `javaHeapKb=15760`,
-  `threads=65`
+- Cycle 30 memory snapshot: `pssKb=279593`, `javaHeapKb=15744`,
+  `threads=66`
 
 VM live VPN smoke:
 
@@ -97,7 +100,7 @@ Runtime/network:
 Memory:
 
 - Settled release snapshot after current release reinstall:
-  `TOTAL PSS=292391 KB`, `TOTAL RSS=413912 KB`, `Java Heap=63624 KB`,
+  `TOTAL PSS=285321 KB`, `TOTAL RSS=406836 KB`, `Java Heap=57536 KB`,
   `Graphics=69548 KB`
 - Transient launch/GC snapshots reached about `301854 KB` and `330553 KB` PSS
   immediately after launch/reinstall, then settled back under the 300 MB PSS
