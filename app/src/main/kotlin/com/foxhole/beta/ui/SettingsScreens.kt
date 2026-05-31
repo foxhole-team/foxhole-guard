@@ -187,6 +187,7 @@ private fun LazyListScope.settingsHomeNavigationItems(
             )
             SettingsGroupDivider()
             SettingsGroupedNavigationRow(
+                modifier = Modifier.testTag("settings_traffic_action"),
                 icon = Icons.Outlined.Public,
                 title = stringResource(R.string.traffic_settings),
                 summary = stringResource(R.string.settings_home_network_summary),
@@ -240,6 +241,7 @@ private fun LazyListScope.settingsHomeNavigationItems(
             }
             SettingsGroupDivider()
             SettingsGroupedNavigationRow(
+                modifier = Modifier.testTag("settings_diagnostics_action"),
                 icon = Icons.AutoMirrored.Outlined.Article,
                 title = stringResource(R.string.diagnostics_and_usage),
                 summary = stringResource(R.string.settings_home_diagnostics_summary),
@@ -247,6 +249,7 @@ private fun LazyListScope.settingsHomeNavigationItems(
             )
             SettingsGroupDivider()
             SettingsGroupedNavigationRow(
+                modifier = Modifier.testTag("settings_statistics_action"),
                 icon = Icons.Outlined.BarChart,
                 title = stringResource(R.string.statistics_title),
                 summary = stringResource(R.string.settings_home_statistics_summary),

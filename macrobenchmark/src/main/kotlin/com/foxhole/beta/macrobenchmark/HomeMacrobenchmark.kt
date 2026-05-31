@@ -7,6 +7,7 @@ import androidx.benchmark.macro.StartupMode
 import androidx.benchmark.macro.StartupTimingMetric
 import androidx.benchmark.macro.junit4.MacrobenchmarkRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.uiautomator.By
 import androidx.test.uiautomator.UiDevice
 import org.junit.Ignore
 import org.junit.Rule
@@ -62,6 +63,92 @@ class HomeMacrobenchmark {
             device.waitForIdle()
         }
 
+    @Test
+    fun settingsTrafficTransition() = measureSettingsDetailTransition("Network", "Сеть")
+
+    @Test
+    fun settingsDnsTransition() = measureSettingsDetailTransition("DNS")
+
+    @Test
+    fun settingsSecurityTransition() = measureSettingsDetailTransition("Security", "Безопасность")
+
+    @Test
+    fun settingsApplicationTransition() = measureSettingsDetailTransition("App settings", "Настройки приложения")
+
+    @Test
+    fun settingsExpertTransition() =
+        measureSettingsDetailTransition(
+            "Expert Settings",
+            "Экспертные настройки",
+            optional = true,
+        )
+
+    @Test
+    fun settingsDiagnosticsTransition() = measureSettingsDetailTransition("Logs", "Журналы")
+
+    @Test
+    fun settingsStatisticsTransition() = measureSettingsDetailTransition("Statistics", "Статистика")
+
+    private fun measureSettingsDetailTransition(
+        vararg labels: String,
+        optional: Boolean = false,
+    ) {
+        benchmarkRule.measureRepeated(
+            packageName = PACKAGE_NAME,
+            metrics = listOf(FrameTimingMetric()),
+            compilationMode = BENCHMARK_COMPILATION_MODE,
+            iterations = SHORT_ITERATIONS,
+            startupMode = StartupMode.WARM,
+            setupBlock = {
+                pressHome()
+                startActivityAndWait()
+                device.waitForIdle()
+            },
+        ) {
+            openSettingsHome()
+            if (!openSettingsDetail(labels.toList(), optional)) {
+                return@measureRepeated
+            }
+            device.pressBack()
+            device.waitForIdle()
+        }
+    }
+
+    private fun openSettingsHome() {
+        val settingsNavX = (device.displayWidth * SETTINGS_NAV_X_RATIO).toInt()
+        val bottomNavY = (device.displayHeight * BOTTOM_NAV_Y_RATIO).toInt()
+        device.click(settingsNavX, bottomNavY)
+        device.waitForIdle()
+    }
+
+    private fun openSettingsDetail(
+        labels: List<String>,
+        optional: Boolean,
+    ): Boolean {
+        repeat(SETTINGS_FIND_ATTEMPTS) { attempt ->
+            labels.firstNotNullOfOrNull { label -> device.findObject(By.text(label)) }?.let { row ->
+                row.click()
+                device.waitForIdle()
+                return true
+            }
+            if (attempt < SETTINGS_FIND_ATTEMPTS - 1) {
+                swipeSettingsUp()
+            }
+        }
+        if (optional) {
+            return false
+        }
+        error("Settings detail row was not found: ${labels.joinToString()}")
+    }
+
+    private fun swipeSettingsUp() {
+        val centerX = device.displayWidth / 2
+        val upperY = (device.displayHeight * UPPER_SWIPE_Y_RATIO).toInt()
+        val lowerY = (device.displayHeight * LOWER_SWIPE_Y_RATIO).toInt()
+        device.swipe(centerX, lowerY, centerX, upperY, SWIPE_STEPS)
+        device.waitForIdle()
+    }
+
     private val device: UiDevice
         get() = UiDevice.getInstance(androidx.test.platform.app.InstrumentationRegistry.getInstrumentation())
 
@@ -74,6 +161,7 @@ class HomeMacrobenchmark {
         private const val UPPER_SWIPE_Y_RATIO = 0.32f
         private const val LOWER_SWIPE_Y_RATIO = 0.78f
         private const val SWIPE_STEPS = 24
+        private const val SETTINGS_FIND_ATTEMPTS = 4
         private val BENCHMARK_COMPILATION_MODE =
             CompilationMode.Partial(
                 baselineProfileMode = BaselineProfileMode.Disable,

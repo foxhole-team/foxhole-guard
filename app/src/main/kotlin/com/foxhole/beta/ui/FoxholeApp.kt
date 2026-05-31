@@ -180,6 +180,16 @@ fun FoxholeApp(
     val showBottomBar = currentRoute.isRootRoute()
     val rootSwipeSection = navBackStackEntry?.destination?.rootSwipeSection()
     val settingsBackSwipeEnabled = navBackStackEntry?.destination?.settingsBackSwipeEnabled() == true
+    val settingsDetailNavigationGate = remember { SettingsDetailNavigationGate() }
+    val navigationTransitionTelemetry = remember { NavigationTransitionTelemetry() }
+    NavigationTransitionTelemetryEffect(currentRoute, navigationTransitionTelemetry)
+    val navigateToSettingsDetail: (String) -> Unit = { route ->
+        navController.navigateToSettingsDetail(
+            route = route,
+            gate = settingsDetailNavigationGate,
+            telemetry = navigationTransitionTelemetry,
+        )
+    }
     val backdropBlurHost =
         remember(bottomDockOverlayHost, bottomDockBlurTarget) {
             if (bottomDockOverlayHost != null && bottomDockBlurTarget != null) {
@@ -308,7 +318,7 @@ fun FoxholeApp(
                         onKillSwitchChanged = viewModel::onKillSwitchChanged,
                         onFirewallEnabledChanged = viewModel::onFirewallEnabledChanged,
                         onPrivacyRouteModeSelected = viewModel::onPrivacyRouteModeSelected,
-                        onOpenPrivacyRoute = { navController.navigate(AppRoute.PRIVACY_ROUTE) },
+                        onOpenPrivacyRoute = { navigateToSettingsDetail(AppRoute.PRIVACY_ROUTE) },
                         onSelectActiveProtocolOptionRequested = viewModel::onSelectActiveProtocolOptionRequested,
                         onUpdateAutoConnectExcludedOptions = { excludedIds ->
                             state.activeProfile?.id?.let { profileId ->
@@ -446,19 +456,19 @@ fun FoxholeApp(
                         state = state,
                         snackbarHostState = snackbarHostState,
                         onNavigateUp = null,
-                        onOpenTraffic = { navController.navigate(AppRoute.TRAFFIC) },
-                        onOpenDns = { navController.navigate(AppRoute.DNS) },
-                        onOpenNetworkRules = { navController.navigate(AppRoute.NETWORK_RULES) },
-                        onOpenSecurity = { navController.navigate(AppRoute.SECURITY) },
-                        onOpenPrivacyRoute = { navController.navigate(AppRoute.PRIVACY_ROUTE) },
-                        onOpenRoutingApps = { navController.navigate(AppRoute.ROUTING_APPS) },
-                        onOpenRoutingSites = { navController.navigate(AppRoute.ROUTING_SITES) },
-                        onOpenSmartStart = { navController.navigate(AppRoute.SMART_START) },
-                        onOpenApplication = { navController.navigate(AppRoute.APPLICATION) },
-                        onOpenExpert = { navController.navigate(AppRoute.EXPERT) },
-                        onOpenDiagnostics = { navController.navigate(AppRoute.DIAGNOSTICS) },
-                        onOpenStatistics = { navController.navigate(AppRoute.STATISTICS) },
-                        onOpenAbout = { navController.navigate(AppRoute.ABOUT) },
+                        onOpenTraffic = { navigateToSettingsDetail(AppRoute.TRAFFIC) },
+                        onOpenDns = { navigateToSettingsDetail(AppRoute.DNS) },
+                        onOpenNetworkRules = { navigateToSettingsDetail(AppRoute.NETWORK_RULES) },
+                        onOpenSecurity = { navigateToSettingsDetail(AppRoute.SECURITY) },
+                        onOpenPrivacyRoute = { navigateToSettingsDetail(AppRoute.PRIVACY_ROUTE) },
+                        onOpenRoutingApps = { navigateToSettingsDetail(AppRoute.ROUTING_APPS) },
+                        onOpenRoutingSites = { navigateToSettingsDetail(AppRoute.ROUTING_SITES) },
+                        onOpenSmartStart = { navigateToSettingsDetail(AppRoute.SMART_START) },
+                        onOpenApplication = { navigateToSettingsDetail(AppRoute.APPLICATION) },
+                        onOpenExpert = { navigateToSettingsDetail(AppRoute.EXPERT) },
+                        onOpenDiagnostics = { navigateToSettingsDetail(AppRoute.DIAGNOSTICS) },
+                        onOpenStatistics = { navigateToSettingsDetail(AppRoute.STATISTICS) },
+                        onOpenAbout = { navigateToSettingsDetail(AppRoute.ABOUT) },
                     )
                 }
                 composable(AppRoute.SMART_START) {
@@ -490,7 +500,7 @@ fun FoxholeApp(
                         onOpenSystemVpnSettings = viewModel::openSystemVpnSettings,
                         onTrafficModeSelected = viewModel::onTrafficModeSelected,
                         onPerAppRoutingModeSelected = viewModel::onPerAppRoutingModeSelected,
-                        onOpenRoutingApps = { navController.navigate(AppRoute.ROUTING_APPS) },
+                        onOpenRoutingApps = { navigateToSettingsDetail(AppRoute.ROUTING_APPS) },
                         onLatencyProbeMethodSelected = viewModel::onLatencyProbeMethodSelected,
                         onTunStackSelected = viewModel::onTunStackSelected,
                         onLocalProxyAuthEnabledChanged = viewModel::onLocalProxyAuthEnabledChanged,
@@ -519,7 +529,7 @@ fun FoxholeApp(
                         onNavigateUp = navController::navigateUp,
                         onDnsSettingsChanged = viewModel::onDnsSettingsChanged,
                         onDomainStrategySelected = viewModel::onDomainStrategySelected,
-                        onOpenDnsBypassApps = { navController.navigate(AppRoute.DNS_APPS_PICKER) },
+                        onOpenDnsBypassApps = { navigateToSettingsDetail(AppRoute.DNS_APPS_PICKER) },
                         onDnsDomainBypassRulesChanged = viewModel::onDnsDomainBypassRulesChanged,
                         onDnsFilterManualRefresh = viewModel::onDnsFilterManualRefresh,
                     )
@@ -578,7 +588,7 @@ fun FoxholeApp(
                         onPrivacyRouteModeSelected = viewModel::onPrivacyRouteModeSelected,
                         onPrivacyRouteScopeSelected = viewModel::onPrivacyRouteScopeSelected,
                         onPrivacyRouteBypassVpnTunnelChanged = viewModel::onPrivacyRouteBypassVpnTunnelChanged,
-                        onOpenPrivacyRouteApps = { navController.navigate(AppRoute.PRIVACY_ROUTE_APPS_PICKER) },
+                        onOpenPrivacyRouteApps = { navigateToSettingsDetail(AppRoute.PRIVACY_ROUTE_APPS_PICKER) },
                         onPrivacyRouteSelectedPackagesChanged = viewModel::onPrivacyRouteSelectedPackagesChanged,
                     )
                 }
@@ -589,8 +599,8 @@ fun FoxholeApp(
                         snackbarHostState = snackbarHostState,
                         onNavigateUp = navController::navigateUp,
                         onPerAppRoutingModeSelected = viewModel::onPerAppRoutingModeSelected,
-                        onOpenPicker = { navController.navigate(AppRoute.ROUTING_APPS_PICKER) },
-                        onOpenBlockedPicker = { navController.navigate(AppRoute.ROUTING_BLOCKED_APPS_PICKER) },
+                        onOpenPicker = { navigateToSettingsDetail(AppRoute.ROUTING_APPS_PICKER) },
+                        onOpenBlockedPicker = { navigateToSettingsDetail(AppRoute.ROUTING_BLOCKED_APPS_PICKER) },
                         onSelectedPackagesChanged = viewModel::onSelectedPackagesChanged,
                         onBlockedPackagesChanged = viewModel::onBlockedPackagesChanged,
                         onBlockAppsAlwaysChanged = viewModel::onBlockAppsAlwaysChanged,
@@ -729,7 +739,7 @@ fun FoxholeApp(
                         onSanitizeNetworkActivityPrivateDataChanged = viewModel::onSanitizeNetworkActivityPrivateDataChanged,
                         onRawLiveDiagnosticsChanged = viewModel::onRawLiveDiagnosticsChanged,
                         onStatisticsMetricEnabledChanged = viewModel::onStatisticsMetricEnabledChanged,
-                        onOpenSecurityAppMonitorSettings = { navController.navigate(AppRoute.SECURITY_APP_MONITOR) },
+                        onOpenSecurityAppMonitorSettings = { navigateToSettingsDetail(AppRoute.SECURITY_APP_MONITOR) },
                     )
                 }
                 composable(AppRoute.STATISTICS) {
@@ -753,7 +763,7 @@ fun FoxholeApp(
                         onStatisticsMetricEnabledChanged = viewModel::onStatisticsMetricEnabledChanged,
                         onAppTrafficStatsEnabledChanged = viewModel::onAppTrafficStatsEnabledChanged,
                         onNetworkActivityLoggingChanged = viewModel::onNetworkActivityLoggingChanged,
-                        onOpenNetworkActivityLogSettings = { navController.navigate(AppRoute.DIAGNOSTICS) },
+                        onOpenNetworkActivityLogSettings = { navigateToSettingsDetail(AppRoute.DIAGNOSTICS) },
                         onFirewallEnabledChanged = viewModel::onFirewallEnabledChanged,
                         onClearUsage = viewModel::resetUsageTracking,
                     )
@@ -1361,6 +1371,34 @@ private fun NavHostController.navigateToProfilesRoot() {
         popUpTo(AppRoute.HOME) {
             inclusive = false
             saveState = false
+        }
+    }
+}
+
+private fun NavHostController.navigateToSettingsDetail(
+    route: String,
+    gate: SettingsDetailNavigationGate,
+    telemetry: NavigationTransitionTelemetry,
+) {
+    val currentRoute = currentDestination?.route
+    when (val decision = gate.tryAccept(currentRoute, route)) {
+        is SettingsDetailNavigationDecision.Accepted -> {
+            telemetry.recordTap(
+                routeFrom = currentRoute,
+                routeTo = route,
+                tapTimeMs = decision.atMs,
+            )
+            telemetry.recordNavigateCall(route)
+            navigate(route) {
+                launchSingleTop = true
+            }
+        }
+        is SettingsDetailNavigationDecision.Rejected -> {
+            telemetry.recordRejected(
+                routeFrom = currentRoute,
+                routeTo = route,
+                reason = decision.reason,
+            )
         }
     }
 }
