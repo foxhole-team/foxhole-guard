@@ -325,25 +325,12 @@ internal fun shouldClearExistingIpForRefresh(
             IpInfoRefreshReason.TOR_ROUTE,
         )
 
+@Suppress("UNUSED_PARAMETER")
 internal fun shouldUseFullDashboardIpRefresh(
     reason: IpInfoRefreshReason,
     snapshot: ConnectionSnapshot,
     currentIpInfo: IpInfo?,
-): Boolean {
-    if (currentIpInfo == null || !currentIpInfo.hasDashboardLocationDetails()) {
-        return reason in setOf(
-            IpInfoRefreshReason.POST_CONNECT,
-            IpInfoRefreshReason.RESTORED_VPN,
-            IpInfoRefreshReason.TOR_ROUTE,
-        )
-    }
-    return reason in setOf(
-        IpInfoRefreshReason.POST_CONNECT,
-        IpInfoRefreshReason.RESTORED_VPN,
-    ) &&
-        snapshot.isPrimaryConnectionRuntime() &&
-        !currentIpInfo.isFreshForConnectedRouteSettle(snapshot.lastChangeAt)
-}
+): Boolean = false
 
 internal fun shouldShowDashboardIpRefreshLoading(
     reason: IpInfoRefreshReason,

@@ -139,7 +139,7 @@ class HomeIpRefreshPolicyTest {
     }
 
     @Test
-    fun `post connect refresh upgrades stale previous route ip to full fetch`() {
+    fun `post connect refresh stays quick even with stale previous route ip`() {
         val snapshot =
             ConnectionSnapshot(
                 state = ConnectionState.CONNECTED,
@@ -159,14 +159,14 @@ class HomeIpRefreshPolicyTest {
             )
         val freshRouteIp = previousRouteIp.copy(fetchedAt = 2_000L)
 
-        assertTrue(
+        assertFalse(
             shouldUseFullDashboardIpRefresh(
                 reason = IpInfoRefreshReason.POST_CONNECT,
                 snapshot = snapshot,
                 currentIpInfo = previousRouteIp,
             ),
         )
-        assertTrue(
+        assertFalse(
             shouldShowDashboardIpRefreshLoading(
                 reason = IpInfoRefreshReason.POST_CONNECT,
                 snapshot = snapshot,
@@ -185,6 +185,31 @@ class HomeIpRefreshPolicyTest {
                 reason = IpInfoRefreshReason.POST_CONNECT,
                 snapshot = snapshot,
                 currentIpInfo = freshRouteIp,
+            ),
+        )
+    }
+
+    @Test
+    fun `post connect refresh does not promote missing ip to full scan`() {
+        val snapshot =
+            ConnectionSnapshot(
+                state = ConnectionState.CONNECTED,
+                trafficMode = TrafficMode.TUNNEL,
+                profileId = 7L,
+            )
+
+        assertFalse(
+            shouldUseFullDashboardIpRefresh(
+                reason = IpInfoRefreshReason.POST_CONNECT,
+                snapshot = snapshot,
+                currentIpInfo = null,
+            ),
+        )
+        assertFalse(
+            shouldShowDashboardIpRefreshLoading(
+                reason = IpInfoRefreshReason.POST_CONNECT,
+                snapshot = snapshot,
+                currentIpInfo = null,
             ),
         )
     }

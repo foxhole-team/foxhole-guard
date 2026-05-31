@@ -488,12 +488,11 @@ private suspend fun HomeViewModel.refreshLocalGuardDashboardIpAfterSettingsChang
     if (container.settingsRepository.current().localGuardModeOrNull() == null) {
         return
     }
-    val missingIpInfo = uiState.value.ipInfo == null
     startIpInfoRefresh(
         reportFailures = false,
         showLoading = true,
         clearExistingIp = false,
-        fetchMode = if (missingIpInfo) IpInfoFetchMode.FULL else IpInfoFetchMode.ENTRY_QUICK,
+        fetchMode = IpInfoFetchMode.ENTRY_QUICK,
         minimumLoadingDurationMs = HomeViewModel.AUTO_IP_REFRESH_MIN_LOADING_MS,
         reason = IpInfoRefreshReason.POST_UPDATE,
     )

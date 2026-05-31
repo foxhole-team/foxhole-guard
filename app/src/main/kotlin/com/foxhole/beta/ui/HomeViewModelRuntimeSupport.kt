@@ -71,7 +71,7 @@ internal fun HomeViewModel.refreshIpInfoSilentlyInternal() {
         reportFailures = false,
         showLoading = false,
         clearExistingIp = false,
-        fetchMode = IpInfoFetchMode.FULL,
+        fetchMode = ipInfoFetchModeForRefreshReason(IpInfoRefreshReason.FOREGROUND),
         minimumLoadingDurationMs = 0L,
         reason = IpInfoRefreshReason.FOREGROUND,
     )
