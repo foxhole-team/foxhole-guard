@@ -229,7 +229,7 @@ android {
         }
         buildConfigField("String", "DEFAULT_IP_INFO_ENDPOINT", "\"https://ipwho.is/\"")
         buildConfigField("String", "DEFAULT_SUPPORT_BOT_HANDLE", "\"@foxhole_repo_support_bot\"")
-        buildConfigField("String", "LIBBOX_SOURCE_VERSION", "\"1.13.11\"")
+        buildConfigField("String", "LIBBOX_SOURCE_VERSION", "\"1.13.12\"")
         buildConfigField("String", "TOR_BUNDLE_VERSION", "\"$bundledTorVersion\"")
     }
 
