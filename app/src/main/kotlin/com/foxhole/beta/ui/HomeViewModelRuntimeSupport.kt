@@ -60,7 +60,7 @@ internal fun HomeViewModel.refreshIpInfoInternal() {
         reportFailures = snapshot.shouldReportManualDashboardIpRefreshFailures(),
         showLoading = true,
         clearExistingIp = false,
-        fetchMode = IpInfoFetchMode.FULL,
+        fetchMode = ipInfoFetchModeForRefreshReason(IpInfoRefreshReason.MANUAL),
         minimumLoadingDurationMs = HomeViewModel.MANUAL_IP_REFRESH_MIN_LOADING_MS,
         reason = IpInfoRefreshReason.MANUAL,
     )

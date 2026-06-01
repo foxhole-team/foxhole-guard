@@ -116,7 +116,7 @@ import kotlinx.coroutines.launch
 @Suppress("LongParameterList")
 @Composable
 fun SettingsHomeScreen(
-    state: SettingsRouteUiState,
+    expertVisible: Boolean,
     snackbarHostState: SnackbarHostState,
     onNavigateUp: (() -> Unit)?,
     onOpenTraffic: () -> Unit,
@@ -134,7 +134,6 @@ fun SettingsHomeScreen(
     onOpenAbout: () -> Unit,
 ) {
     DebugRecompositionCounter("SettingsHomeScreen")
-    val expertVisible = state.settings.ui.showExpertSettings
     SettingsScaffold(
         title = stringResource(R.string.settings),
         snackbarHostState = snackbarHostState,

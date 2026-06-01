@@ -171,6 +171,13 @@ internal fun shouldAutoRefreshIpOnForeground(connectionState: ConnectionState): 
         ConnectionState.ERROR,
     )
 
+internal fun shouldShowForegroundIpRefreshLoading(
+    connectionState: ConnectionState,
+    currentIpInfo: IpInfo?,
+): Boolean =
+    connectionState != ConnectionState.CONNECTED &&
+        currentIpInfo == null
+
 internal fun shouldShowIpInfoLoading(
     currentIpInfo: IpInfo?,
     explicitLoading: Boolean,
@@ -315,7 +322,7 @@ internal fun shouldSupersedeIpRefreshForConnect(activeReason: IpInfoRefreshReaso
 
 internal fun ipInfoFetchModeForRefreshReason(reason: IpInfoRefreshReason): IpInfoFetchMode =
     when (reason) {
-        IpInfoRefreshReason.MANUAL -> IpInfoFetchMode.FULL
+        IpInfoRefreshReason.MANUAL,
         IpInfoRefreshReason.FOREGROUND,
         IpInfoRefreshReason.POST_CONNECT,
         IpInfoRefreshReason.POST_UPDATE,
@@ -752,10 +759,10 @@ private fun HomeRouteUiState.shouldPinVpnIpDuringTorOperation(): Boolean =
 private fun HomeRouteUiState.shouldKeepDashboardIpInfo(info: IpInfo): Boolean =
     when {
         !info.hasVisiblePublicAddress() -> false
-        homeAnalysisOnlyRunning() -> true
+        homeAnalysisOnlyRunning() -> !hasDashboardRouteProfile() || shouldKeepActiveDashboardRouteIpInfo(info)
         shouldPinVpnIpDuringTorOperation() -> true
         hasFailedDashboardRoute() -> info.isPublicFreshForRouteTransition(connection.lastChangeAt)
-        hasActiveDashboardRouteTransition() -> true
+        hasActiveDashboardRouteTransition() -> info.isFreshForRouteTransition(connection.lastChangeAt)
         hasActiveDashboardRouteRuntime() -> shouldKeepActiveDashboardRouteIpInfo(info)
         else -> true
     }
@@ -772,9 +779,7 @@ private fun HomeRouteUiState.hasActiveDashboardRouteRuntime(): Boolean =
         hasDashboardRouteProfile()
 
 private fun HomeRouteUiState.shouldKeepActiveDashboardRouteIpInfo(info: IpInfo): Boolean {
-    val freshForConnectedRoute =
-        info.fetchedAt >= connection.lastChangeAt ||
-            (!ipInfoLoading && info.isFreshForConnectedRouteSettle(connection.lastChangeAt))
+    val freshForConnectedRoute = info.fetchedAt >= connection.lastChangeAt
     return (autoConnect.running && info.isFreshForRouteTransition(connection.lastChangeAt)) ||
         freshForConnectedRoute
 }
@@ -784,9 +789,6 @@ private fun IpInfo.isPublicFreshForRouteTransition(lastChangeAt: Long): Boolean 
 
 private fun IpInfo.isFreshForRouteTransition(lastChangeAt: Long): Boolean =
     lastChangeAt <= 0L || fetchedAt >= lastChangeAt
-
-private fun IpInfo.isFreshForConnectedRouteSettle(lastChangeAt: Long): Boolean =
-    lastChangeAt <= 0L || fetchedAt >= lastChangeAt - CONNECTED_ROUTE_IP_INFO_SETTLE_GRACE_MS
 
 private fun IpInfo.hasVisiblePublicAddress(): Boolean =
     visibleIpCandidates().any { candidate -> candidate.isPublicInternetAddress() }
@@ -811,8 +813,6 @@ private fun InetAddress.isNonPublicLocalAddress(): Boolean =
 private fun InetAddress.isUniqueLocalIpv6Address(): Boolean =
     this is Inet6Address &&
         address.firstOrNull()?.toInt()?.let { firstByte -> (firstByte and 0xfe) == 0xfc } == true
-
-private const val CONNECTED_ROUTE_IP_INFO_SETTLE_GRACE_MS = 250L
 
 internal fun resolveHomeDashboardTrafficModel(
     state: HomeRouteUiState,

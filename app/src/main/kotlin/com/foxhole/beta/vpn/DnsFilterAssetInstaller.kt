@@ -20,6 +20,20 @@ class DnsFilterAssetInstaller(
     private val appContext: Context,
     private val json: Json,
 ) : DnsFilterRuleSetStore {
+    suspend fun prepareVerifiedOrNull(): DnsFilterRuntimePaths? =
+        withContext(Dispatchers.IO) {
+            val targetDir = File(appContext.filesDir, TARGET_DIR_NAME).apply { mkdirs() }
+            val verifiedTarget = File(targetDir, VERIFIED_DNS_FILTER_FILE_NAME)
+            val verifiedManifest = File(targetDir, VERIFIED_DNS_FILTER_MANIFEST_NAME)
+            if (!verifiedTarget.isValidVerifiedDnsFilter(verifiedManifest)) {
+                return@withContext null
+            }
+            DnsFilterRuntimePaths(
+                adGuardDnsFilterPath = verifiedTarget.absolutePath,
+                adGuardVpnCompatibilityDomains = loadAdGuardVpnCompatibilityDomains(),
+            )
+        }
+
     suspend fun prepare(): DnsFilterRuntimePaths =
         withContext(Dispatchers.IO) {
             val targetDir = File(appContext.filesDir, TARGET_DIR_NAME).apply { mkdirs() }

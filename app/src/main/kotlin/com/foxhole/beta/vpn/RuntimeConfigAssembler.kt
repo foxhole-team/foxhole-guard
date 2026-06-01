@@ -115,7 +115,7 @@ class RuntimeConfigAssembler(
             if (settings.expert.systemDnsProtectionEnabled) {
                 settings.dns.systemDnsProtectionSettings()
             } else {
-                settings.dns
+                settings.dns.localGuardVerifiedRuleSetSettings()
             }
         val dnsSettings =
             baseDnsSettings.localGuardDnsSettings(
@@ -198,11 +198,11 @@ class RuntimeConfigAssembler(
         dnsFilterRuntimePaths: DnsFilterRuntimePaths? = null,
     ): String {
         validate(settings.expert)
-        require(settings.privacyRoute.enabled) { "Tor route is disabled" }
+        require(settings.privacyRoute.enabled) { "TOR route is disabled" }
         require(
             settings.privacyRoute.scope == PrivacyRouteScope.ALL_APPS ||
                 settings.privacyRoute.selectedPackages.any(String::isNotBlank),
-        ) { "direct Tor route has no selected apps" }
+        ) { "direct TOR route has no selected apps" }
         val dns =
             buildFoxholeDnsConfig(
                 strategy = settings.traffic.domainStrategy.configValue,
@@ -749,7 +749,7 @@ class RuntimeConfigAssembler(
             put("mtu", settings.traffic.mtu)
             put("auto_route", true)
             put("strict_route", settings.expert.strictRoute || settings.dns.blockOutsideTunnel)
-            put("stack", settings.traffic.tunStack.configValue)
+            put("stack", effectiveTunnelTunStack(settings.traffic.tunStack).configValue)
             putJsonArray("address") {
                 add(JsonPrimitive("172.19.0.1/30"))
                 add(JsonPrimitive("fdfe:dcba:9876::1/126"))
@@ -1733,6 +1733,13 @@ class RuntimeConfigAssembler(
             )
         } else {
             copy(dnsThroughVpn = false)
+        }
+
+    private fun DnsSettings.localGuardVerifiedRuleSetSettings(): DnsSettings =
+        if (bundledAdGuardFilterEnabled() && filtersUpdatedAt == null) {
+            copy(filteringEnabled = false)
+        } else {
+            this
         }
 
     private fun foxholeRemoteDnsServer(

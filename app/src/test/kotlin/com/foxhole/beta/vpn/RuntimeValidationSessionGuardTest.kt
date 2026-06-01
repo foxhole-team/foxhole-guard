@@ -56,6 +56,28 @@ class RuntimeValidationSessionGuardTest {
     }
 
     @Test
+    fun `tor only sessions get an extended validation probe plan`() {
+        val torConfigJson = """{"outbounds":[{"tag":"proxy","type":"tor"}]}"""
+        val plan =
+            runtimeValidationProbePlan(
+                session(
+                    profileId = FoxholeVpnService.TOR_ONLY_PROFILE_ID,
+                    profileName = "TOR",
+                    protocolHint = ProtocolHint.SING_BOX,
+                    protocolOptionId = null,
+                    configJson = torConfigJson,
+                ),
+            )
+        val ordinaryTotalTimeoutMs =
+            FoxholeVpnService.CONNECTIVITY_PROBE_TOTAL_TIMEOUT_MS +
+                maxTunnelValidationGraceTimeoutMs(ProtocolHint.SING_BOX)
+
+        assertTrue(plan.attempts > FoxholeVpnService.CONNECTIVITY_PROBE_ATTEMPTS)
+        assertTrue(plan.callTimeoutMs > FoxholeVpnService.CONNECTIVITY_PROBE_CALL_TIMEOUT_MS)
+        assertTrue(plan.totalTimeoutMs > ordinaryTotalTimeoutMs)
+    }
+
+    @Test
     fun `wrapped tunnel timeout still maps to validation timeout`() {
         val timeout =
             TunnelConnectivityProbeTimeoutException(
@@ -85,15 +107,20 @@ class RuntimeValidationSessionGuardTest {
         )
     }
 
-    private fun session() =
+    private fun session(
+        profileId: Long = 42L,
+        profileName: String = "Smart",
+        protocolHint: ProtocolHint = ProtocolHint.VLESS,
+        protocolOptionId: String? = "vless",
+        configJson: String = "{}",
+    ): VpnSession =
         VpnSession(
-            profileId = 42L,
-            profileName = "Smart",
-            protocolHint = ProtocolHint.VLESS,
-            protocolOptionId = "vless",
-            configJson = "{}",
+            profileId = profileId,
+            profileName = profileName,
+            protocolHint = protocolHint,
+            protocolOptionId = protocolOptionId,
+            configJson = configJson,
             correlationId = "session-1",
         )
 
-    private fun session(configJson: String) = session().copy(configJson = configJson)
 }

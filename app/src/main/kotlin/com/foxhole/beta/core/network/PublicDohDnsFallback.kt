@@ -42,6 +42,23 @@ internal object PublicDohDnsFallback : PublicDnsFallback {
         }
     }
 
+    internal fun lookupTxt(hostname: String): List<String> {
+        val normalized = hostname.requirePublicRemoteHost(resolveHost = false).trim().trimEnd('.')
+        val failures = mutableListOf<Throwable>()
+        DOH_ENDPOINTS.forEach { endpoint ->
+            val result = runCatching { queryTxt(endpoint, normalized) }
+            val records = result.getOrNull().orEmpty()
+            if (records.isNotEmpty()) {
+                return records
+            }
+            result.exceptionOrNull()?.let(failures::add)
+        }
+        val failure = failures.firstOrNull()
+        throw UnknownHostException("public DoH fallback could not resolve TXT record: $normalized").apply {
+            failure?.let(::initCause)
+        }
+    }
+
     private fun query(
         endpoint: String,
         hostname: String,
@@ -62,6 +79,30 @@ internal object PublicDohDnsFallback : PublicDnsFallback {
                 throw IOException("DoH resolver returned HTTP $code")
             }
             parseDohAddresses(connection.inputStream.bufferedReader().use { it.readText() }, type)
+        } finally {
+            connection.disconnect()
+        }
+    }
+
+    private fun queryTxt(
+        endpoint: String,
+        hostname: String,
+    ): List<String> {
+        val encodedName = URLEncoder.encode(hostname, Charsets.UTF_8.name())
+        val url = URL("$endpoint?name=$encodedName&type=$DNS_QUERY_TYPE_TXT")
+        val connection = (url.openConnection() as HttpsURLConnection).apply {
+            connectTimeout = DOH_TIMEOUT_MS
+            readTimeout = DOH_TIMEOUT_MS
+            requestMethod = "GET"
+            setRequestProperty("accept", "application/dns-json")
+            setRequestProperty("user-agent", "FoxHole/${com.foxhole.beta.BuildConfig.VERSION_NAME}")
+        }
+        return try {
+            val code = connection.responseCode
+            if (code !in 200..299) {
+                throw IOException("DoH resolver returned HTTP $code")
+            }
+            parseDohTxtRecords(connection.inputStream.bufferedReader().use { it.readText() })
         } finally {
             connection.disconnect()
         }
@@ -90,10 +131,39 @@ internal object PublicDohDnsFallback : PublicDnsFallback {
             }.orEmpty()
     }
 
+    internal fun parseDohTxtRecords(body: String): List<String> {
+        val root = json.parseToJsonElement(body).jsonObject
+        val status = root["Status"]?.jsonPrimitive?.intOrNull
+        if (status != 0) {
+            return emptyList()
+        }
+        return root["Answer"]
+            ?.jsonArray
+            ?.mapNotNull { answer ->
+                val objectValue = answer.jsonObject
+                val answerType = objectValue["type"]?.jsonPrimitive?.intOrNull
+                val data = objectValue["data"]?.jsonPrimitive?.content
+                if (answerType == DNS_QUERY_TYPE_TXT && !data.isNullOrBlank()) {
+                    data.decodeDnsTxtRecord()
+                } else {
+                    null
+                }
+            }.orEmpty()
+    }
+
+    private fun String.decodeDnsTxtRecord(): String =
+        trim()
+            .removeSurrounding("\"")
+            .replace("\" \"", "")
+            .trim()
+
     private const val DOH_TIMEOUT_MS = 750
+    private const val DNS_QUERY_TYPE_TXT = 16
     private val DNS_QUERY_TYPES = intArrayOf(1, 28)
     private val DOH_ENDPOINTS =
         listOf(
+            "https://1.1.1.1/dns-query",
+            "https://8.8.8.8/resolve",
             "https://cloudflare-dns.com/dns-query",
             "https://dns.google/resolve",
         )

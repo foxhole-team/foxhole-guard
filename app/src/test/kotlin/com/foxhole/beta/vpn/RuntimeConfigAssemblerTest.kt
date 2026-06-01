@@ -492,6 +492,7 @@ class RuntimeConfigAssemblerTest {
         assertTrue(routeOutbounds.contains("proxy"))
         val tunInbound = config["inbounds"]!!.jsonArray.first().jsonObject
         assertEquals("tun", tunInbound["type"]!!.jsonPrimitive.content)
+        assertEquals("gvisor", tunInbound["stack"]!!.jsonPrimitive.content)
         assertFalse(tunInbound.containsKey("exclude_package"))
         assertTrue(
             route["rules"]!!.jsonArray.map { it.jsonObject }

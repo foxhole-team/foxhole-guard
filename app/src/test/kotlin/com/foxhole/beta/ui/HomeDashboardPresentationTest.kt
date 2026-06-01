@@ -26,6 +26,7 @@ import com.foxhole.beta.core.model.UiSettings
 import com.foxhole.beta.vpn.FoxholeVpnService
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -682,7 +683,7 @@ class HomeDashboardPresentationTest {
     }
 
     @Test
-    fun `connected smart metrics refresh keeps pinned network data even when older than snapshot`() {
+    fun `connected smart metrics refresh hides stale device network data`() {
         val deviceIpInfo =
             IpInfo(
                 ip = "198.51.100.20",
@@ -710,7 +711,7 @@ class HomeDashboardPresentationTest {
                 deviceInternetAvailable = true,
             )
 
-        assertEquals(deviceIpInfo, model.visibleIpInfo)
+        assertNull(model.visibleIpInfo)
         assertEquals(R.string.home_network_connection_info_title, model.titleRes)
         assertTrue(model.showConnectionStatus)
         assertFalse(model.showLoading)
@@ -763,7 +764,7 @@ class HomeDashboardPresentationTest {
                 countryName = "Netherlands",
                 city = "Amsterdam",
                 isp = "Example",
-                fetchedAt = 9_900L,
+                fetchedAt = 10_000L,
             )
         val model =
             resolveHomeDashboardNetworkModel(
@@ -796,7 +797,7 @@ class HomeDashboardPresentationTest {
                 countryName = "Netherlands",
                 city = "Amsterdam",
                 isp = "Example",
-                fetchedAt = 9_900L,
+                fetchedAt = 10_000L,
             )
         val model =
             resolveHomeDashboardNetworkModel(
@@ -1106,7 +1107,7 @@ class HomeDashboardPresentationTest {
                 countryCode = "DE",
                 countryName = "Germany",
                 city = "Berlin",
-                isp = "Tor exit",
+                isp = "TOR exit",
                 fetchedAt = 1_000L,
             )
         val presentation =
@@ -1158,11 +1159,11 @@ class HomeDashboardPresentationTest {
                 deviceInternetAvailable = true,
             )
 
-        assertEquals(ipInfo, model.visibleIpInfo)
+        assertNull(model.visibleIpInfo)
         assertEquals(R.string.home_network_connection_info_title, model.titleRes)
         assertTrue(model.showConnectionStatus)
         assertTrue(model.showLoading)
-        assertFalse(model.showIpInfoLoading)
+        assertTrue(model.showIpInfoLoading)
         assertTrue(model.showConnectionDetailsLoading)
     }
 

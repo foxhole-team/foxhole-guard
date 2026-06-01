@@ -461,9 +461,9 @@ fun FoxholeApp(
                     )
                 }
                 composable(AppRoute.SETTINGS) {
-                    val state by viewModel.settingsRouteState.collectAsStateWithLifecycle()
+                    val expertVisible by viewModel.settingsHomeExpertVisible.collectAsStateWithLifecycle()
                     SettingsHomeScreen(
-                        state = state,
+                        expertVisible = expertVisible,
                         snackbarHostState = snackbarHostState,
                         onNavigateUp = null,
                         onOpenTraffic = { navigateToSettingsDetail(AppRoute.TRAFFIC) },
@@ -1274,23 +1274,9 @@ private fun String?.isRootRoute(): Boolean =
 private fun String?.isSettingsDetailRoute(): Boolean =
     this?.startsWith("${AppRoute.SETTINGS}/") == true
 
-private fun rootEnter(): EnterTransition =
-    fadeIn(
-        animationSpec =
-            tween(
-                durationMillis = ROOT_FADE_IN_MS,
-                easing = LinearOutSlowInEasing,
-            ),
-    )
+private fun rootEnter(): EnterTransition = EnterTransition.None
 
-private fun rootExit(): ExitTransition =
-    fadeOut(
-        animationSpec =
-            tween(
-                durationMillis = ROOT_FADE_OUT_MS,
-                easing = FastOutLinearInEasing,
-            ),
-    )
+private fun rootExit(): ExitTransition = ExitTransition.None
 
 private fun detailForwardEnter(): EnterTransition =
     fadeIn(
@@ -1434,9 +1420,7 @@ private fun NavHostController.navigateToSection(section: AppSection) {
 private const val SECTION_SWIPE_THRESHOLD_FRACTION = 0.22f
 private const val DETAIL_BACK_SWIPE_THRESHOLD_FRACTION = 0.18f
 private val DETAIL_BACK_SWIPE_EDGE_WIDTH = 32.dp
-private const val ROOT_FADE_OUT_MS = 90
-private const val ROOT_FADE_IN_MS = 150
-private const val DETAIL_FADE_IN_MS = 120
-private const val DETAIL_FADE_OUT_MS = 90
-private const val DETAIL_TRANSITION_MS = 220
-private const val DETAIL_TRANSITION_OFFSET_FRACTION = 0.18f
+private const val DETAIL_FADE_IN_MS = 80
+private const val DETAIL_FADE_OUT_MS = 60
+private const val DETAIL_TRANSITION_MS = 150
+private const val DETAIL_TRANSITION_OFFSET_FRACTION = 0.14f

@@ -182,6 +182,7 @@ class IpInfoRepository(
             val strategy = resolveFetchStrategy(endpoint, callTimeoutMs, mode)
             var lastFailure: Throwable? = null
             var bestFullCandidate: IpInfo? = null
+            val asnProviderCache = mutableMapOf<String, Result<String?>>()
             strategy.endpointCandidates.forEach { candidate ->
                 currentCoroutineContext().ensureActive()
                 diagnosticLog(
@@ -203,9 +204,14 @@ class IpInfoRepository(
                                 )
                             }
                         }
-                    }
+                }
                 if (result.isSuccess) {
-                    val info = result.getOrThrow()
+                    val info =
+                        enrichWithAsnProviderIfNeeded(
+                            info = result.getOrThrow(),
+                            cache = asnProviderCache,
+                            mode = mode,
+                        )
                     bestFullCandidate = selectBetterFullIpInfoCandidate(bestFullCandidate, info)
                     if (shouldStopIpInfoCandidateScan(mode, info)) {
                         diagnosticLog("fetch candidate succeeded host=${candidate.ipInfoHostLabel()}")
@@ -277,7 +283,7 @@ class IpInfoRepository(
                 EndpointFetchStrategy(
                     endpointCandidates = effectiveEndpoints(endpoint),
                     callTimeoutMs = callTimeoutMs ?: FULL_CALL_TIMEOUT_MS,
-                    includeFamilyProbes = true,
+                    includeFamilyProbes = false,
                 )
             IpInfoFetchMode.ENTRY_QUICK ->
                 EndpointFetchStrategy(
@@ -675,6 +681,66 @@ class IpInfoRepository(
 
     private fun primaryEndpoint(endpoint: String): String = endpoint.trim().ifBlank { BuildConfig.DEFAULT_IP_INFO_ENDPOINT }
 
+    private fun enrichWithAsnProviderIfNeeded(
+        info: IpInfo,
+        cache: MutableMap<String, Result<String?>>,
+        mode: IpInfoFetchMode,
+    ): IpInfo {
+        if (mode != IpInfoFetchMode.FULL || info.isp?.isNotBlank() == true || info.ip.isBlank()) {
+            return info
+        }
+        val provider =
+            cache
+                .getOrPut(info.ip) {
+                    runCatching { lookupAsnProvider(info.ip) }
+                }.getOrNull()
+                ?.takeIf(String::isNotBlank)
+                ?: return info
+        diagnosticLog("asn provider fallback resolved ip=${info.ip} provider=$provider")
+        return info.copy(isp = provider)
+    }
+
+    private fun lookupAsnProvider(ip: String): String? {
+        val asn = lookupOriginAsn(ip) ?: return null
+        val asName =
+            runCatching {
+                PublicDohDnsFallback
+                    .lookupTxt("AS$asn.asn.cymru.com")
+                    .asSequence()
+                    .mapNotNull(::parseCymruAsName)
+                    .firstOrNull()
+            }.getOrNull()
+        return asName?.takeIf(String::isNotBlank) ?: "AS$asn"
+    }
+
+    private fun lookupOriginAsn(ip: String): String? {
+        val originQuery =
+            when {
+                isIpv4Address(ip) -> ip.split('.').asReversed().joinToString(separator = ".") + ".origin.asn.cymru.com"
+                else -> return null
+            }
+        return PublicDohDnsFallback
+            .lookupTxt(originQuery)
+            .asSequence()
+            .mapNotNull(::parseCymruOriginAsn)
+            .firstOrNull()
+    }
+
+    private fun parseCymruOriginAsn(record: String): String? =
+        record
+            .split('|')
+            .firstOrNull()
+            ?.trim()
+            ?.removePrefix("AS")
+            ?.takeIf { value -> value.isNotBlank() && value.all(Char::isDigit) }
+
+    private fun parseCymruAsName(record: String): String? =
+        record
+            .split('|')
+            .lastOrNull()
+            ?.trim()
+            ?.takeIf(String::isNotBlank)
+
     private companion object {
         val SOCKS_AUTH_LOCK = Any()
         const val HTTP_CLIENT_CACHE_MAX_SIZE = 24
@@ -696,8 +762,8 @@ class IpInfoRepository(
         val QUICK_FALLBACK_ENDPOINTS =
             listOf(
                 DNS_INDEPENDENT_IP_INFO_ENDPOINT,
-                "https://ipinfo.io/json",
                 "https://1.0.0.1/cdn-cgi/trace",
+                "https://ipinfo.io/json",
             )
         val IPV4_FALLBACK_ENDPOINTS =
             listOf(
@@ -1042,14 +1108,13 @@ private fun parseCloudflareTraceResponse(body: String): IpInfo? {
             }.toMap()
     val ip = values["ip"]?.takeIf(String::isNotBlank) ?: return null
     val countryCode = values["loc"]?.takeIf { value -> value.length == ISO_COUNTRY_CODE_LENGTH }
-    val city = values["colo"]?.let(::cloudflareColoCity)
     return IpInfo(
         ip = ip,
         ipv4 = ip.takeIf(::isIpv4Address),
         ipv6 = ip.takeIf(::isIpv6Address),
         countryCode = countryCode,
         countryName = countryCode?.let(::countryDisplayName),
-        city = city,
+        city = null,
         isp = null,
         fetchedAt = System.currentTimeMillis(),
     )
@@ -1061,55 +1126,6 @@ private fun countryDisplayName(countryCode: String): String? =
         .build()
         .getDisplayCountry(Locale.US)
         .takeIf { value -> value.isNotBlank() && !value.equals(countryCode, ignoreCase = true) }
-
-private fun cloudflareColoCity(colo: String): String? =
-    CLOUDFLARE_COLO_CITIES[colo.uppercase(Locale.US)]
-
-private val CLOUDFLARE_COLO_CITIES =
-    mapOf(
-        "AMS" to "Amsterdam",
-        "ARN" to "Stockholm",
-        "ATL" to "Atlanta",
-        "BCN" to "Barcelona",
-        "BLR" to "Bengaluru",
-        "BOM" to "Mumbai",
-        "BUD" to "Budapest",
-        "CDG" to "Paris",
-        "DEL" to "Delhi",
-        "DFW" to "Dallas",
-        "DME" to "Moscow",
-        "DXB" to "Dubai",
-        "EWR" to "Newark",
-        "EZE" to "Buenos Aires",
-        "FCO" to "Rome",
-        "FRA" to "Frankfurt",
-        "GRU" to "Sao Paulo",
-        "HEL" to "Helsinki",
-        "HKG" to "Hong Kong",
-        "IAD" to "Ashburn",
-        "ICN" to "Seoul",
-        "IST" to "Istanbul",
-        "JFK" to "New York",
-        "JNB" to "Johannesburg",
-        "LAX" to "Los Angeles",
-        "LED" to "Saint Petersburg",
-        "LHR" to "London",
-        "MAD" to "Madrid",
-        "MEL" to "Melbourne",
-        "MIA" to "Miami",
-        "MXP" to "Milan",
-        "NRT" to "Tokyo",
-        "ORD" to "Chicago",
-        "PRG" to "Prague",
-        "SEA" to "Seattle",
-        "SIN" to "Singapore",
-        "SJC" to "San Jose",
-        "SVO" to "Moscow",
-        "SYD" to "Sydney",
-        "VIE" to "Vienna",
-        "WAW" to "Warsaw",
-        "ZRH" to "Zurich",
-    )
 
 internal fun mergeIpInfo(
     primary: IpInfo,
@@ -1141,7 +1157,10 @@ internal fun shouldStopIpInfoCandidateScan(
     mode: IpInfoFetchMode,
     info: IpInfo,
 ): Boolean =
-    mode != IpInfoFetchMode.FULL || info.hasFullIpInfoDetails()
+    when (mode) {
+        IpInfoFetchMode.FULL -> info.hasFullIpInfoDetails()
+        IpInfoFetchMode.ENTRY_QUICK -> info.hasEntryQuickIpInfoDetails()
+    }
 
 internal fun selectBetterFullIpInfoCandidate(
     current: IpInfo?,
@@ -1151,8 +1170,11 @@ internal fun selectBetterFullIpInfoCandidate(
 
 private fun IpInfo.hasFullIpInfoDetails(): Boolean =
     (countryName?.isNotBlank() == true || countryCode?.isNotBlank() == true) &&
-        city?.isNotBlank() == true &&
         isp?.isNotBlank() == true
+
+private fun IpInfo.hasEntryQuickIpInfoDetails(): Boolean =
+    ip.isNotBlank() &&
+        (countryName?.isNotBlank() == true || countryCode?.isNotBlank() == true)
 
 internal fun IpInfo.fullIpInfoQualityScore(): Int =
     listOf(

@@ -595,6 +595,16 @@ class HomeViewModel(
                 ProfilesRouteUiState(),
             )
 
+    val settingsHomeExpertVisible: StateFlow<Boolean> =
+        container.settingsRepository.settings
+            .map { settings -> settings.ui.showExpertSettings }
+            .distinctUntilChanged()
+            .stateIn(
+                viewModelScope,
+                SharingStarted.WhileSubscribed(5_000),
+                initialSettings.ui.showExpertSettings,
+            )
+
     val settingsRouteState: StateFlow<SettingsRouteUiState> =
         combine(
             coreUiState,
@@ -840,10 +850,10 @@ class HomeViewModel(
                 } else if (shouldRefreshIdleIp && !autoConnectUiStateMutable.value.running) {
                     startIpInfoRefresh(
                         reportFailures = false,
-                        showLoading = false,
-                        clearExistingIp = false,
+                        showLoading = true,
+                        clearExistingIp = true,
                         fetchMode = IpInfoFetchMode.ENTRY_QUICK,
-                        minimumLoadingDurationMs = 0L,
+                        minimumLoadingDurationMs = AUTO_IP_REFRESH_MIN_LOADING_MS,
                     )
                 }
             }
@@ -896,12 +906,17 @@ class HomeViewModel(
         if (runtimeState == ConnectionState.CONNECTED) {
             scheduleForegroundDashboardRefreshIfStale()
         } else {
+            val showLoading =
+                shouldShowForegroundIpRefreshLoading(
+                    connectionState = runtimeState,
+                    currentIpInfo = container.connectionController.ipInfo.value,
+                )
             startIpInfoRefresh(
                 reportFailures = false,
-                showLoading = false,
+                showLoading = showLoading,
                 clearExistingIp = false,
                 fetchMode = IpInfoFetchMode.ENTRY_QUICK,
-                minimumLoadingDurationMs = 0L,
+                minimumLoadingDurationMs = if (showLoading) AUTO_IP_REFRESH_MIN_LOADING_MS else 0L,
             )
         }
     }

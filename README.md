@@ -14,7 +14,7 @@
 <br><strong>Pending publication on F-Droid</strong>
 </p>
 
-Foxhole is an Android client for connecting to and managing `sing-box` VPN profiles with support for v2raytun-format subscriptions, VPN tunnel mode, local proxy mode, split routing, and optional routing of selected apps' TCP traffic through the Tor network inside the VPN.
+Foxhole is an Android client for connecting to and managing `sing-box` VPN profiles with support for v2raytun-format subscriptions, VPN tunnel mode, local proxy mode, split routing, and optional routing of selected apps' TCP traffic through the TOR network inside the VPN.
 
 The app can run connections in VPN tunnel and local proxy modes, configure routing for apps and domains, use a local DNS rule set, and apply basic traffic restriction rules.
 
@@ -30,7 +30,7 @@ Foxhole contains no ads, analytics, or telemetry.
 
 - VPN tunnel and local proxy mode
 - Split Tunnel for apps and domains
-- Optional TCP traffic routing through the Tor network
+- Optional TCP traffic routing through the TOR network
 - Local DNS filtering
 - DNS filtering exceptions for apps and domains
 - LAN Proxy over Wi-Fi
@@ -124,11 +124,11 @@ If signature, size, or checksum verification fails, Foxhole does not use the dow
 
 The user can disable DNS filtering and add exceptions for individual apps or domains.
 
-## Tor network routing
+## TOR network routing
 
-Foxhole can optionally route TCP traffic through the Tor network. UDP traffic is not sent through the Tor network.
+Foxhole can optionally route TCP traffic through the TOR network. UDP traffic is not sent through the TOR network.
 
-If Tor routing is enabled inside the VPN, selected TCP traffic goes through the Tor network, while UDP stays on the regular VPN route or is blocked by app settings. If the Tor network is kept on the device route while VPN is active, VPN and the Tor network run in parallel. This mode can increase battery usage.
+If TOR routing is enabled inside the VPN, selected TCP traffic goes through the TOR network, while UDP stays on the regular VPN route or is blocked by app settings. If the TOR network is kept on the device route while VPN is active, VPN and the TOR network run in parallel. This mode can increase battery usage.
 
 ## Permissions and privacy
 
@@ -202,7 +202,7 @@ Planned work:
 
 - Foxhole: GPL-3.0-or-later
 - sing-box/libbox: GPL-3.0-or-later
-- Tor core components: BSD-3-Clause
+- TOR core components: BSD-3-Clause
 - AdGuard DNS filter: GPL-3.0
 
 ## Donate
@@ -221,7 +221,7 @@ bc1qatnyy7jcpqrp0d3dk9rta9vqfejgh4mysd6m2f
 > Android application development is not our primary focus.
 > Our core focus is backend systems, security, machine learning, and cryptography.
 
-- Tor is a trademark of The Tor Project. Foxhole is not a product of The Tor Project and is not endorsed, sponsored, or affiliated with The Tor Project.
+- TOR is a trademark of The TOR Project. Foxhole is not a product of The TOR Project and is not endorsed, sponsored, or affiliated with The TOR Project.
 
 - Foxhole is not a product of AdGuard and is not affiliated with AdGuard Software Ltd.
 

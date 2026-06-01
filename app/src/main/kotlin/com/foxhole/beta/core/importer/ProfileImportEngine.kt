@@ -939,7 +939,7 @@ internal fun smartConfigOptionDisplayName(heading: SmartConfigHeading): String =
 internal fun normalizeSmartConfigRouteLabel(value: String): String =
     when (value.trim().lowercase()) {
         "direct" -> "Direct"
-        "tor+i2p" -> "Tor + I2P"
+        "tor+i2p" -> "TOR + I2P"
         else ->
             value
                 .trim()

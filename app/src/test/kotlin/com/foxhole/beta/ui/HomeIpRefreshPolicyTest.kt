@@ -98,8 +98,8 @@ class HomeIpRefreshPolicyTest {
     }
 
     @Test
-    fun `automatic dashboard refreshes use quick fetch mode`() {
-        assertEquals(IpInfoFetchMode.FULL, ipInfoFetchModeForRefreshReason(IpInfoRefreshReason.MANUAL))
+    fun `dashboard refreshes use quick fetch mode`() {
+        assertEquals(IpInfoFetchMode.ENTRY_QUICK, ipInfoFetchModeForRefreshReason(IpInfoRefreshReason.MANUAL))
         assertEquals(IpInfoFetchMode.ENTRY_QUICK, ipInfoFetchModeForRefreshReason(IpInfoRefreshReason.POST_CONNECT))
         assertEquals(IpInfoFetchMode.ENTRY_QUICK, ipInfoFetchModeForRefreshReason(IpInfoRefreshReason.POST_UPDATE))
         assertEquals(IpInfoFetchMode.ENTRY_QUICK, ipInfoFetchModeForRefreshReason(IpInfoRefreshReason.FOREGROUND))
@@ -305,7 +305,7 @@ class HomeIpRefreshPolicyTest {
                 countryCode = "US",
                 countryName = "United States",
                 city = "Los Angeles",
-                isp = "Example Tor exit",
+                isp = "Example TOR exit",
                 fetchedAt = 2_500L,
             )
 

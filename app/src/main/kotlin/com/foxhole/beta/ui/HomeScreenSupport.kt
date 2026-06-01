@@ -804,6 +804,7 @@ internal fun HomeConnectionFeatureDialog(
     val title = "${stringResource(indicator.titleRes)}: ${indicator.status.label}"
     val icon = homeConnectionFeatureIcon(feature)
     val restartAvailable = state.homeConnectionFeatureRestartAvailable()
+    val restartAvailableForFeature = restartAvailable && feature != HomeConnectionFeature.FIREWALL
     val enabled = feature.enabledIn(state)
     val torSelectedProtocolIsUdp = feature == HomeConnectionFeature.TOR && homeTorSelectedProtocolIsUdp(state)
     val torRouteNeedsSetup = feature == HomeConnectionFeature.TOR && !enabled && homeTorRouteNeedsSetup(state)
@@ -814,7 +815,7 @@ internal fun HomeConnectionFeatureDialog(
             torOperationActive = torOperationActive,
             torOnlyRuntimeActive = torOnlyRuntimeActive,
             enabled = enabled,
-            restartAvailable = restartAvailable,
+            restartAvailable = restartAvailableForFeature,
         )
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -846,7 +847,7 @@ internal fun HomeConnectionFeatureDialog(
                     handleHomeConnectionFeatureConfirm(
                         feature = feature,
                         enabled = enabled,
-                        restartAvailable = restartAvailable,
+                        restartAvailable = restartAvailableForFeature,
                         onKillSwitchChanged = onKillSwitchChanged,
                         onFirewallEnabledChanged = onFirewallEnabledChanged,
                         onPrivacyRouteModeSelected = onPrivacyRouteModeSelected,

@@ -9,6 +9,7 @@ import com.foxhole.beta.core.model.TrafficMode
 import com.foxhole.beta.vpn.FoxholeVpnService
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -280,9 +281,9 @@ class HomeIpLoadingPolicyTest {
                 deviceInternetAvailable = true,
             )
 
-        assertEquals(previousIp, model.visibleIpInfo)
+        assertNull(model.visibleIpInfo)
         assertTrue(model.showLoading)
-        assertFalse(model.showIpInfoLoading)
+        assertTrue(model.showIpInfoLoading)
         assertTrue(model.showConnectionDetailsLoading)
     }
 

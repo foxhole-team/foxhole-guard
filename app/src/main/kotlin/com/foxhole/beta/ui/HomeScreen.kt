@@ -480,7 +480,6 @@ fun HomeScreen(
                                             shouldShowTrafficMapLegendLoading(
                                                 connectionState = state.connection.state,
                                                 appLoaded = state.profilesLoaded,
-                                                explicitLoading = state.ipInfoLoading,
                                             ),
                                     )
                                 }
@@ -568,10 +567,6 @@ fun HomeScreen(
                                             !isSmartDashboardProfile,
                                     trailing = {
                                         when {
-                                            localGuardProfileRuntimeActive ->
-                                                FoxholeValuePill(
-                                                    value = stringResource(R.string.runtime_firewall_only),
-                                                )
                                             dashboardLatencySkeletonVisible ->
                                                 ProtocolLatencyLoadingPill(
                                                     compact = true,

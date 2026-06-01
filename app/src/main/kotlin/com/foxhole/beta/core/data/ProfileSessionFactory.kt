@@ -14,6 +14,7 @@ import com.foxhole.beta.core.model.VpnSession
 import com.foxhole.beta.core.model.isUdpTransport
 import com.foxhole.beta.core.settings.SettingsRepository
 import com.foxhole.beta.vpn.DnsFilterAssetInstaller
+import com.foxhole.beta.vpn.DnsFilterRuntimePaths
 import com.foxhole.beta.vpn.FoxholeVpnService
 import com.foxhole.beta.vpn.PrivateDnsMode
 import com.foxhole.beta.vpn.PrivateDnsState
@@ -45,15 +46,11 @@ internal class ProfileSessionFactory(
         val selectedProtocolHint = selectedOption?.protocolHint ?: profile.protocolHint
         val correlationId = newRuntimeCorrelationId()
         val settings = settingsRepository.current()
-        val dnsFilterRuntimePaths =
-            if (settings.dns.bundledAdGuardFilterEnabled()) {
-                dnsFilterAssetInstaller.prepare()
-            } else {
-                null
-            }
+        val dnsFilterRuntimePaths = settings.prepareVerifiedDnsFilterRuntimePaths()
+        val runtimeSettings = settings.disableUnverifiedDnsRuleSetFiltering(dnsFilterRuntimePaths)
         val torRuntimePaths =
-            if (settings.shouldPrepareTorRuntime(selectedProtocolHint)) {
-                torRuntimeInstaller.prepare().withIdentityVersion(settings.privacyRoute.identityVersion)
+            if (runtimeSettings.shouldPrepareTorRuntime(selectedProtocolHint)) {
+                torRuntimeInstaller.prepare().withIdentityVersion(runtimeSettings.privacyRoute.identityVersion)
             } else {
                 null
             }
@@ -61,7 +58,7 @@ internal class ProfileSessionFactory(
             runCatching {
                 runtimeConfigAssembler.assemble(
                     baseConfigJson = resolvedConfigProvider(profileId, protocolOptionIdOverride),
-                    settings = settings,
+                    settings = runtimeSettings,
                     activePreset = routingRepository.currentPresetForRuntime(),
                     privateDnsMode = privateDnsMode,
                     privateDnsState = privateDnsState,
@@ -97,22 +94,18 @@ internal class ProfileSessionFactory(
         privateDnsState: PrivateDnsState? = null,
     ): VpnSession {
         val settings = settingsRepository.current()
-        require(settings.privacyRoute.enabled) { "Tor route is disabled" }
+        require(settings.privacyRoute.enabled) { "TOR route is disabled" }
         val correlationId = newRuntimeCorrelationId()
-        val dnsFilterRuntimePaths =
-            if (settings.dns.bundledAdGuardFilterEnabled()) {
-                dnsFilterAssetInstaller.prepare()
-            } else {
-                null
-            }
+        val dnsFilterRuntimePaths = settings.prepareVerifiedDnsFilterRuntimePaths()
+        val runtimeSettings = settings.disableUnverifiedDnsRuleSetFiltering(dnsFilterRuntimePaths)
         val assembled =
             runCatching {
                 val torRuntimePaths =
                     torRuntimeInstaller
                         .prepare()
-                        .withIdentityVersion(settings.privacyRoute.identityVersion)
+                        .withIdentityVersion(runtimeSettings.privacyRoute.identityVersion)
                 runtimeConfigAssembler.assembleTorOnly(
-                    settings = settings,
+                    settings = runtimeSettings,
                     activePreset = routingRepository.currentPresetForRuntime(),
                     privateDnsMode = privateDnsMode,
                     privateDnsState = privateDnsState,
@@ -133,7 +126,7 @@ internal class ProfileSessionFactory(
             }.getOrThrow()
         return VpnSession(
             profileId = FoxholeVpnService.TOR_ONLY_PROFILE_ID,
-            profileName = "Tor",
+            profileName = "TOR",
             protocolHint = ProtocolHint.SING_BOX,
             configJson = assembled,
             correlationId = correlationId,
@@ -144,6 +137,26 @@ internal class ProfileSessionFactory(
         privacyRoute.enabled &&
             traffic.mode == TrafficMode.TUNNEL &&
             (privacyRoute.bypassVpnTunnel || !selectedProtocolHint.isUdpTransport())
+
+    private suspend fun Settings.prepareVerifiedDnsFilterRuntimePaths(): DnsFilterRuntimePaths? {
+        if (!dns.bundledAdGuardFilterEnabled()) {
+            return null
+        }
+        return dnsFilterAssetInstaller.prepareVerifiedOrNull()
+            ?: run {
+                diagnosticsLogger.record("dns", "dns rule-set runtime disabled: verified filter unavailable")
+                null
+            }
+    }
+
+    private fun Settings.disableUnverifiedDnsRuleSetFiltering(
+        dnsFilterRuntimePaths: DnsFilterRuntimePaths?,
+    ): Settings =
+        if (dns.bundledAdGuardFilterEnabled() && dnsFilterRuntimePaths == null) {
+            copy(dns = dns.copy(filteringEnabled = false))
+        } else {
+            this
+        }
 
     private fun newRuntimeCorrelationId(): String =
         "s-" + UUID.randomUUID().toString().replace("-", "").take(12)

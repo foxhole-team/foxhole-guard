@@ -146,7 +146,7 @@ class IpInfoRepositoryTest {
         assertNull(parsed.ipv6)
         assertEquals("NL", parsed.countryCode)
         assertEquals("Netherlands", parsed.countryName)
-        assertEquals("Amsterdam", parsed.city)
+        assertNull(parsed.city)
         assertNull(parsed.isp)
     }
 
@@ -164,13 +164,15 @@ class IpInfoRepositoryTest {
             )
         val countryOnly = ipOnly.copy(countryCode = "NL")
         val fullGeo = countryOnly.copy(countryName = "Netherlands", city = "Amsterdam")
+        val countryWithProvider = countryOnly.copy(countryName = "Netherlands", isp = "Datacamp Limited")
         val fullGeoWithProvider = fullGeo.copy(isp = "Datacamp Limited")
 
         assertFalse(shouldStopIpInfoCandidateScan(IpInfoFetchMode.FULL, ipOnly))
         assertFalse(shouldStopIpInfoCandidateScan(IpInfoFetchMode.FULL, countryOnly))
         assertFalse(shouldStopIpInfoCandidateScan(IpInfoFetchMode.FULL, fullGeo))
+        assertTrue(shouldStopIpInfoCandidateScan(IpInfoFetchMode.FULL, countryWithProvider))
         assertTrue(shouldStopIpInfoCandidateScan(IpInfoFetchMode.FULL, fullGeoWithProvider))
-        assertTrue(shouldStopIpInfoCandidateScan(IpInfoFetchMode.ENTRY_QUICK, ipOnly))
+        assertFalse(shouldStopIpInfoCandidateScan(IpInfoFetchMode.ENTRY_QUICK, ipOnly))
     }
 
     @Test
@@ -338,7 +340,7 @@ class IpInfoRepositoryTest {
     }
 
     @Test
-    fun `entry quick mode tries dns independent endpoint then primary geo endpoint`() {
+    fun `entry quick mode tries dns independent endpoint before primary and provider endpoints`() {
         val repository =
             IpInfoRepository(
                 client = okhttp3.OkHttpClient(),
@@ -353,13 +355,13 @@ class IpInfoRepositoryTest {
 
         assertEquals("https://1.1.1.1/cdn-cgi/trace", candidates[0])
         assertEquals("https://example.com/ip", candidates[1])
-        assertEquals("https://ipinfo.io/json", candidates[2])
-        assertEquals("https://1.0.0.1/cdn-cgi/trace", candidates[3])
+        assertEquals("https://1.0.0.1/cdn-cgi/trace", candidates[2])
+        assertEquals("https://ipinfo.io/json", candidates[3])
         assertEquals(4, candidates.size)
     }
 
     @Test
-    fun `entry quick scan stops after first reachable candidate`() {
+    fun `entry quick scan stops at country details and leaves city provider enrichment to background`() {
         val sparseInfo =
             IpInfo(
                 ip = "84.17.54.10",
@@ -378,10 +380,11 @@ class IpInfoRepositoryTest {
 
         assertTrue(shouldStopIpInfoCandidateScan(IpInfoFetchMode.ENTRY_QUICK, sparseInfo))
         assertTrue(shouldStopIpInfoCandidateScan(IpInfoFetchMode.ENTRY_QUICK, geoInfo))
+        assertTrue(shouldStopIpInfoCandidateScan(IpInfoFetchMode.ENTRY_QUICK, geoInfo.copy(isp = "Datacamp Limited")))
     }
 
     @Test
-    fun `full fetch strategy probes address families without overriding caller timeout`() {
+    fun `full fetch strategy skips family probes without overriding caller timeout`() {
         val repository =
             IpInfoRepository(
                 client = okhttp3.OkHttpClient(),
@@ -397,7 +400,7 @@ class IpInfoRepositoryTest {
 
         assertEquals("https://ipwho.is/", strategy.endpointCandidates.first())
         assertEquals(4_000L, strategy.callTimeoutMs)
-        assertTrue(strategy.includeFamilyProbes)
+        assertFalse(strategy.includeFamilyProbes)
     }
 
     @Test
@@ -555,6 +558,28 @@ class IpInfoRepositoryTest {
             )
 
         assertEquals(listOf(InetAddress.getByName("104.26.12.205")), addresses)
+    }
+
+    @Test
+    fun `doh fallback parser extracts txt records`() {
+        val records =
+            PublicDohDnsFallback.parseDohTxtRecords(
+                body =
+                    """
+                    {
+                      "Status": 0,
+                      "Answer": [
+                        {
+                          "name": "AS12714.asn.cymru.com",
+                          "type": 16,
+                          "data": "\"12714 | RU | ripencc | 1999-10-08 | MEGAFON-AS - PJSC MegaFon, RU\""
+                        }
+                      ]
+                    }
+                    """.trimIndent(),
+            )
+
+        assertEquals(listOf("12714 | RU | ripencc | 1999-10-08 | MEGAFON-AS - PJSC MegaFon, RU"), records)
     }
 }
 

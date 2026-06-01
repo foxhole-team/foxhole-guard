@@ -17,7 +17,7 @@ internal data class RuntimeValidationProbePlan(
 )
 
 internal fun runtimeValidationProbePlan(session: VpnSession?): RuntimeValidationProbePlan =
-    if (session?.configJson.hasTorOverVpnOutbound()) {
+    if (session.hasTorRuntime()) {
         RuntimeValidationProbePlan(
             attempts = TOR_CONNECTIVITY_PROBE_ATTEMPTS,
             initialDelayMs = TOR_CONNECTIVITY_PROBE_INITIAL_DELAY_MS,
@@ -41,7 +41,11 @@ private fun defaultRuntimeValidationTotalTimeoutMs(session: VpnSession?): Long =
     FoxholeVpnService.CONNECTIVITY_PROBE_TOTAL_TIMEOUT_MS +
         maxTunnelValidationGraceTimeoutMs(session?.protocolHint)
 
-private fun String?.hasTorOverVpnOutbound(): Boolean =
+private fun VpnSession?.hasTorRuntime(): Boolean =
+    this?.profileId == FoxholeVpnService.TOR_ONLY_PROFILE_ID ||
+        this?.configJson.hasTorOutbound()
+
+private fun String?.hasTorOutbound(): Boolean =
     runCatching {
         if (isNullOrBlank()) {
             false
@@ -53,8 +57,7 @@ private fun String?.hasTorOverVpnOutbound(): Boolean =
                 .orEmpty()
                 .map { it.jsonObject }
                 .any { outbound ->
-                    outbound["tag"]?.jsonPrimitive?.contentOrNull == VALIDATION_TOR_OVER_VPN_OUTBOUND_TAG &&
-                        outbound["type"]?.jsonPrimitive?.contentOrNull.equals("tor", ignoreCase = true)
+                    outbound["type"]?.jsonPrimitive?.contentOrNull.equals("tor", ignoreCase = true)
                 }
         }
     }.getOrDefault(false)
@@ -65,7 +68,6 @@ private val runtimeValidationProbePlanJson =
         explicitNulls = false
     }
 
-private const val VALIDATION_TOR_OVER_VPN_OUTBOUND_TAG = "tor-over-vpn"
 private const val TOR_CONNECTIVITY_PROBE_ATTEMPTS = 6
 private const val TOR_CONNECTIVITY_PROBE_INITIAL_DELAY_MS = 2_000L
 private const val TOR_CONNECTIVITY_PROBE_RETRY_DELAY_MS = 2_000L

@@ -58,7 +58,7 @@ class TorRuntimeInstaller(
                                 "asset_abi=missing",
                                 "supported_abis=${Build.SUPPORTED_ABIS.joinToString(",")}",
                             )
-                            throw TorRuntimeUnavailableException("Tor Expert Bundle asset is missing for this device ABI")
+                            throw TorRuntimeUnavailableException("TOR Expert Bundle asset is missing for this device ABI")
                         }
                 val assetRoot = "tor/$assetAbi"
                 val targetRoot = File(appContext.filesDir, "tor/$assetAbi")
@@ -81,7 +81,7 @@ class TorRuntimeInstaller(
                                 "asset_version=${assetVersion.ifBlank { "unknown" }}",
                                 "native_tor=false",
                             )
-                            throw TorRuntimeUnavailableException("Tor native executable is missing for this device ABI")
+                            throw TorRuntimeUnavailableException("TOR native executable is missing for this device ABI")
                         }
                 if (!executable.isFile || !executable.ensureExecutable()) {
                     recordTorPreflight(
@@ -90,7 +90,7 @@ class TorRuntimeInstaller(
                         "native_tor=true",
                         "native_tor_executable=false",
                     )
-                    throw TorRuntimeUnavailableException("Tor executable could not be prepared")
+                    throw TorRuntimeUnavailableException("TOR executable could not be prepared")
                 }
                 val dataDirectory = File(appContext.filesDir, "tor-data/$assetAbi").apply { mkdirs() }
                 val geoIpFile = copyTorDataFile(targetRoot, dataDirectory, "geoip")
@@ -206,7 +206,7 @@ class TorRuntimeInstaller(
             return nativeExecutable
         }
         // Android rejects executing binaries copied into app-private data on recent devices.
-        // Omit the transport instead of giving Tor a startup-time EACCES path.
+        // Omit the transport instead of giving TOR a startup-time EACCES path.
         return File("")
     }
 

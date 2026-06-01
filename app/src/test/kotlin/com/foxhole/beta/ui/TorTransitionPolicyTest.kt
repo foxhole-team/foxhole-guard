@@ -18,14 +18,14 @@ import org.junit.Test
 
 class TorTransitionPolicyTest {
     @Test
-    fun `selecting UDP while Tor is active requires disable prompt`() {
+    fun `selecting UDP while TOR is active requires disable prompt`() {
         assertTrue(shouldPromptDisableTorForUdpProtocol(torEnabledOrRuntimeActive = true, switchingToUdp = true))
         assertFalse(shouldPromptDisableTorForUdpProtocol(torEnabledOrRuntimeActive = true, switchingToUdp = false))
         assertFalse(shouldPromptDisableTorForUdpProtocol(torEnabledOrRuntimeActive = false, switchingToUdp = true))
     }
 
     @Test
-    fun `starting TCP VPN while Tor-only is active requires placement prompt`() {
+    fun `starting TCP VPN while TOR-only is active requires placement prompt`() {
         assertTrue(
             shouldPromptStartTcpVpnWhileTorOnlyActive(
                 torRoutePlacement = TorRoutePlacement.TOR_ONLY_DEVICE,
@@ -47,7 +47,7 @@ class TorTransitionPolicyTest {
     }
 
     @Test
-    fun `resolves Tor route placement from settings and connection`() {
+    fun `resolves TOR route placement from settings and connection`() {
         assertEquals(
             TorRoutePlacement.OFF,
             resolveTorRoutePlacement(

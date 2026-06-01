@@ -47,7 +47,11 @@ import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Canvas
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.ImageBitmapConfig
+import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
@@ -67,7 +71,6 @@ import com.foxhole.beta.core.model.TrafficMapPoint
 import com.foxhole.beta.core.model.TrafficMapUiState
 import com.foxhole.beta.core.traffic.TrafficMapCountryShape
 import com.foxhole.beta.core.traffic.TrafficMapCountryShapeAssetParser
-import com.foxhole.beta.core.traffic.TrafficMapGeoPoint
 import com.foxhole.beta.ui.theme.LocalFoxholeDarkTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
@@ -229,12 +232,13 @@ private fun TrafficMapCanvas(
         modifier = modifier
             .drawWithCache {
                 val viewport = trafficMapViewport(size)
-                val countryPaths =
-                    mapCountryShapes.flatMap { shape ->
-                        shape.rings.map { ring -> trafficMapRingPath(ring, viewport) }
-                    }
-                val borderStroke = Stroke(width = 0.55.dp.toPx())
-                val gridStroke = Stroke(width = 0.45.dp.toPx())
+                val countryPath = trafficMapLandPath(mapCountryShapes, viewport)
+                val countryBitmap =
+                    trafficMapLandBitmap(
+                        size = size,
+                        countryPath = countryPath,
+                        color = colors.countryBorder.copy(alpha = 0.44f),
+                    )
                 val maxLineStroke = 2.1.dp.toPx()
                 val minLineStroke = 0.65.dp.toPx()
                 val destinationRadius = 3.3.dp.toPx()
@@ -248,14 +252,7 @@ private fun TrafficMapCanvas(
                 onDrawBehind {
                     val mapState = latestState.value
                     val drawableDestinations = mapState.destinations.toDrawableTrafficMapDestinations()
-                    drawTrafficMapFrame(
-                        viewport = viewport,
-                        countryPaths = countryPaths,
-                        fillColor = colors.countryFill,
-                        lineColor = colors.countryBorder,
-                        borderStroke = borderStroke,
-                        gridStroke = gridStroke,
-                    )
+                    drawImage(countryBitmap)
 
                     val origin = project(mapState.originLat, mapState.originLon, viewport)
                     val maxBytes = drawableDestinations.maxOfOrNull { destination -> destination.bytes }?.coerceAtLeast(1L) ?: 1L
@@ -703,87 +700,41 @@ private fun project(
     return Offset(x, y)
 }
 
-private fun DrawScope.drawTrafficMapFrame(
-    viewport: TrafficMapViewport,
-    countryPaths: List<Path>,
-    fillColor: Color,
-    lineColor: Color,
-    borderStroke: Stroke,
-    gridStroke: Stroke,
-) {
-    val cornerRadius = CornerRadius(7.dp.toPx(), 7.dp.toPx())
-    drawRoundRect(
-        color = fillColor,
-        topLeft = viewport.topLeft,
-        size = viewport.size,
-        cornerRadius = cornerRadius,
-    )
-    drawTrafficMapLand(
-        countryPaths = countryPaths,
-        landColor = lineColor.copy(alpha = 0.36f),
-        borderColor = lineColor.copy(alpha = 0.72f),
-        stroke = gridStroke,
-    )
-    drawTrafficMapGrid(
-        viewport = viewport,
-        lineColor = lineColor.copy(alpha = 0.28f),
-        stroke = gridStroke,
-    )
-    drawRoundRect(
-        color = lineColor,
-        topLeft = viewport.topLeft,
-        size = viewport.size,
-        cornerRadius = cornerRadius,
-        style = borderStroke,
-    )
-}
-
-private fun DrawScope.drawTrafficMapLand(
-    countryPaths: List<Path>,
-    landColor: Color,
-    borderColor: Color,
-    stroke: Stroke,
-) {
-    countryPaths.forEach { path ->
-        drawPath(path = path, color = landColor)
-        drawPath(
-            path = path,
-            color = borderColor,
-            style = Stroke(width = stroke.width),
-        )
-    }
-}
-
-private fun trafficMapRingPath(
-    ring: List<TrafficMapGeoPoint>,
+private fun trafficMapLandPath(
+    shapes: List<TrafficMapCountryShape>,
     viewport: TrafficMapViewport,
 ): Path =
     Path().apply {
-        ring.forEachIndexed { index, point ->
-            val offset = project(lat = point.lat, lon = point.lon, viewport = viewport)
-            if (index == 0) {
-                moveTo(offset.x, offset.y)
-            } else {
-                lineTo(offset.x, offset.y)
+        shapes.forEach { shape ->
+            shape.rings.forEach { ring ->
+                ring.forEachIndexed { index, point ->
+                    val offset = project(lat = point.lat, lon = point.lon, viewport = viewport)
+                    if (index == 0) {
+                        moveTo(offset.x, offset.y)
+                    } else {
+                        lineTo(offset.x, offset.y)
+                    }
+                }
+                close()
             }
         }
-        close()
     }
 
-private fun DrawScope.drawTrafficMapGrid(
-    viewport: TrafficMapViewport,
-    lineColor: Color,
-    stroke: Stroke,
-) {
-    TRAFFIC_MAP_GRID_LONGITUDES.forEach { lon ->
-        val top = project(lat = TRAFFIC_MAP_MAX_LAT, lon = lon, viewport = viewport)
-        val bottom = project(lat = TRAFFIC_MAP_MIN_LAT, lon = lon, viewport = viewport)
-        drawLine(color = lineColor, start = top, end = bottom, strokeWidth = stroke.width)
-    }
-    TRAFFIC_MAP_GRID_LATITUDES.forEach { lat ->
-        val start = project(lat = lat, lon = -180.0, viewport = viewport)
-        val end = project(lat = lat, lon = 180.0, viewport = viewport)
-        drawLine(color = lineColor, start = start, end = end, strokeWidth = stroke.width)
+private fun trafficMapLandBitmap(
+    size: Size,
+    countryPath: Path,
+    color: Color,
+): ImageBitmap {
+    val width = size.width.toInt().coerceAtLeast(1)
+    val height = size.height.toInt().coerceAtLeast(1)
+    return ImageBitmap(width = width, height = height, config = ImageBitmapConfig.Argb8888).also { bitmap ->
+        Canvas(bitmap).drawPath(
+            path = countryPath,
+            paint =
+                Paint().apply {
+                    this.color = color
+                },
+        )
     }
 }
 
@@ -819,7 +770,6 @@ private fun DrawScope.drawPhoneMarker(
 
 @Immutable
 private data class TrafficMapColors(
-    val countryFill: Color,
     val countryBorder: Color,
     val routeLine: Color,
     val destination: Color,
@@ -832,7 +782,6 @@ private fun trafficMapColors(): TrafficMapColors {
     val colorScheme = MaterialTheme.colorScheme
     return if (LocalFoxholeDarkTheme.current) {
         TrafficMapColors(
-            countryFill = Color(0xFF333936),
             countryBorder = Color(0xFFA0ABA5),
             routeLine = FoxholePositiveAccent,
             destination = FoxholePositiveAccent,
@@ -841,7 +790,6 @@ private fun trafficMapColors(): TrafficMapColors {
         )
     } else {
         TrafficMapColors(
-            countryFill = Color(0xFFE5EBEE),
             countryBorder = Color(0xFF56635E),
             routeLine = Color(0xFF278A5B),
             destination = Color(0xFF278A5B),
@@ -894,6 +842,4 @@ private const val MAX_TRAFFIC_MAP_DRAW_DESTINATIONS = 30
 private const val TRAFFIC_MAP_LOW_BATTERY_PERCENT = 10
 private const val TRAFFIC_ROUTE_PI = 3.141592653589793
 private const val TRAFFIC_ROUTE_ANGLE_BUCKET_RADIANS = 0.17453292519943295
-private val TRAFFIC_MAP_GRID_LONGITUDES = listOf(-120.0, -60.0, 0.0, 60.0, 120.0)
-private val TRAFFIC_MAP_GRID_LATITUDES = listOf(-30.0, 0.0, 30.0, 60.0)
 private const val TRAFFIC_MAP_COUNTRY_SHAPES_ASSET = "maps/ne_110m_admin_0_countries_preprocessed.json"

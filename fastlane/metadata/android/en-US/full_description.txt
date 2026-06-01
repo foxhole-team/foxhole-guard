@@ -1,4 +1,4 @@
-Foxhole is an Android client for connecting to and managing sing-box profiles with support for v2raytun-format subscriptions, VPN tunnel mode, local proxy mode, split routing, and optional routing of selected apps' TCP traffic through the Tor network inside the VPN.
+Foxhole is an Android client for connecting to and managing sing-box profiles with support for v2raytun-format subscriptions, VPN tunnel mode, local proxy mode, split routing, and optional routing of selected apps' TCP traffic through the TOR network inside the VPN.
 
 The app can run connections in VPN tunnel and local proxy modes, configure split routing for apps and domains, use DNS filtering, and apply basic traffic restriction rules.
 
@@ -6,7 +6,7 @@ Key features:
 
 * VPN tunnel and local proxy mode
 * split routing for apps and domains
-* optional TCP traffic routing through the Tor network
+* optional TCP traffic routing through the TOR network
 * local DNS filtering
 * DNS filtering exceptions for apps and domains
 * LAN proxy over Wi-Fi
@@ -29,10 +29,10 @@ Supported protocols:
 
 Smart start selects a suitable connection option from the available protocol options. Selection is based on local history of successful and failed connections, latency, network state, and the last working option. This data is not sent to the developer or shared with third-party servers.
 
-Tor network:
-The app includes optional TCP traffic routing through the Tor network. UDP traffic is not sent through the Tor network. If Tor routing is enabled inside the VPN, selected TCP traffic goes through the Tor network, while UDP traffic stays on the regular VPN route or is blocked depending on settings.
+TOR network:
+The app includes optional TCP traffic routing through the TOR network. UDP traffic is not sent through the TOR network. If TOR routing is enabled inside the VPN, selected TCP traffic goes through the TOR network, while UDP traffic stays on the regular VPN route or is blocked depending on settings.
 
-Tor is a trademark of The Tor Project. Foxhole is not a product of The Tor Project and is not endorsed, sponsored, or affiliated with The Tor Project.
+TOR is a trademark of The TOR Project. Foxhole is not a product of The TOR Project and is not endorsed, sponsored, or affiliated with The TOR Project.
 
 DNS filtering:
 Foxhole can use a local DNS rule set to block ad, tracker, telemetry, and potentially malicious domains. The app includes a bundled fallback filter. The user can enable filter updates from the public Foxhole repository. The updated rule set is built in CI from the open AdGuard DNS filter, published with a manifest file, and verified by the app using signature, size, and SHA-256 before use.

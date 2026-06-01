@@ -271,7 +271,11 @@ internal class ConnectionTelemetryProbe(
         snapshot.value.state
             .takeIf { it in ACTIVE_CONNECTION_STATES }
             ?: error("active connection is required for server ping measurement")
-        val session = profileRepository.getSession(profileId, protocolOptionId)
+        val session =
+            profileRepository.getSession(
+                profileId,
+                serverPingRuntimeProtocolOptionId(profileId, protocolOptionId),
+            )
         val target = VpnHealthProbeTargetSelector.select(session.configJson)
             ?: error("vpn server target unavailable")
         require(target.transport == VpnHealthProbeTransport.TCP) {
@@ -290,6 +294,21 @@ internal class ConnectionTelemetryProbe(
                 )
             }
             (SystemClock.elapsedRealtime() - startedAt).coerceAtLeast(1L)
+        }
+    }
+
+    private suspend fun serverPingRuntimeProtocolOptionId(
+        profileId: Long,
+        protocolOptionId: String?,
+    ): String? {
+        if (protocolOptionId.isNullOrBlank()) {
+            return null
+        }
+        val profile = profileRepository.getProfile(profileId) ?: return protocolOptionId
+        return if (profile.protocolOptions.isEmpty()) {
+            null
+        } else {
+            protocolOptionId
         }
     }
 
