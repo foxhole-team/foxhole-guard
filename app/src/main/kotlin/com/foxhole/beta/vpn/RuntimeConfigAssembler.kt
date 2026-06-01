@@ -170,6 +170,7 @@ class RuntimeConfigAssembler(
                     }
                 defaultResolver?.let { put("default_domain_resolver", it) }
                 put("auto_detect_interface", true)
+                put("override_android_vpn", true)
             }
         return json.encodeToString(
             JsonObject.serializer(),

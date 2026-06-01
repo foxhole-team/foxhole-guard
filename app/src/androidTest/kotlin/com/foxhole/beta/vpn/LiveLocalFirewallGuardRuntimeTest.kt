@@ -70,16 +70,19 @@ class LiveLocalFirewallGuardRuntimeTest {
             val startedAt = System.currentTimeMillis()
             val dnsHosts = listOf("ipwho.is", "cloudflare.com", "api.ipify.org", "example.com", "google.com")
             val baselineResolvableDnsHosts = baselineResolvableDnsHosts(dnsHosts)
+            val httpEndpoints =
+                listOf(
+                    DNS_INDEPENDENT_IP_INFO_ENDPOINT,
+                    "https://example.com",
+                    "https://www.google.com/generate_204",
+                    "https://cloudflare.com/cdn-cgi/trace",
+                )
+            val baselineReachableHttpEndpoints = baselineReachableHttpEndpoints(app, httpEndpoints)
             try {
                 startLocalFirewallGuard(app, blockedPackage)
 
                 val failures = mutableListOf<String>()
-                listOf(
-                    DNS_INDEPENDENT_IP_INFO_ENDPOINT,
-                    "https://example.com",
-                    "https://google.com/generate_204",
-                    "https://cloudflare.com/cdn-cgi/trace",
-                ).forEach { endpoint ->
+                baselineReachableHttpEndpoints.forEach { endpoint ->
                     runCatching {
                         app.container.ipInfoRepository.probe(endpoint, callTimeoutMs = CONNECTIVITY_PROBE_TIMEOUT_MS)
                     }.onFailure { error ->
@@ -184,6 +187,26 @@ class LiveLocalFirewallGuardRuntimeTest {
             )
             assertLocalGuardStressMemoryStable(samples)
             assertNoFoxholeVpn(app)
+        }
+
+    private suspend fun baselineReachableHttpEndpoints(
+        app: FoxholeApplication,
+        endpoints: List<String>,
+    ): List<String> =
+        endpoints.filter { endpoint ->
+            val reachable =
+                runCatching {
+                    app.container.ipInfoRepository.probe(
+                        endpoint = endpoint,
+                        callTimeoutMs = CONNECTIVITY_PROBE_TIMEOUT_MS,
+                    )
+                }.isSuccess
+            if (!reachable) {
+                Log.d(TEST_TAG, "baseline http unavailable endpoint=$endpoint")
+            }
+            reachable
+        }.also { reachableEndpoints ->
+            assertTrue("no baseline HTTP endpoints reachable before local firewall guard", reachableEndpoints.isNotEmpty())
         }
 
     private suspend fun waitForNoFoxholeVpn(app: FoxholeApplication): Boolean =

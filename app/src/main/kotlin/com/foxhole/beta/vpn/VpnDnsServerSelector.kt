@@ -30,6 +30,9 @@ internal object VpnDnsServerSelector {
         fallbackServerAddress: String?,
     ): List<String> {
         val localTunDns = fallbackServerAddress?.takeIf { it.isNotBlank() }
+        if (localTunDns != null && shouldAdvertiseLocalTunDns(configJson)) {
+            return listOf(localTunDns)
+        }
         val remoteDnsServers = remoteDnsServerAddresses(configJson).filter { it.isNotBlank() }.distinct()
         if (remoteDnsServers.isNotEmpty()) {
             return remoteDnsServers
@@ -58,6 +61,42 @@ internal object VpnDnsServerSelector {
                         ?: server["address"]?.jsonPrimitive?.content?.let(::extractIpLiteral)
                 }.distinct()
         }.getOrDefault(emptyList())
+
+    private fun shouldAdvertiseLocalTunDns(configJson: String?): Boolean =
+        runCatching {
+            if (configJson == null) {
+                return false
+            }
+            val root = json.parseToJsonElement(configJson).jsonObject
+            root.isLocalGuardConfig() && root.hasHijackDnsRouteRule()
+        }.getOrDefault(false)
+
+    private fun Map<String, kotlinx.serialization.json.JsonElement>.isLocalGuardConfig(): Boolean {
+        val outbounds =
+            this["outbounds"]
+                ?.jsonArray
+                ?.mapNotNull { outbound ->
+                    outbound.jsonObject["type"]?.jsonPrimitive?.content
+                }?.toSet()
+                .orEmpty()
+        return outbounds.isNotEmpty() && outbounds.all { it == "direct" || it == "block" }
+    }
+
+    private fun Map<String, kotlinx.serialization.json.JsonElement>.hasHijackDnsRouteRule(): Boolean =
+        this["route"]
+            ?.jsonObject
+            ?.get("rules")
+            ?.jsonArray
+            .orEmpty()
+            .map { it.jsonObject }
+            .any { rule ->
+                rule["action"]?.jsonPrimitive?.content == "hijack-dns" &&
+                    (
+                        rule["protocol"]?.jsonPrimitive?.content == "dns" ||
+                            rule["port"]?.jsonPrimitive?.content == "53" ||
+                            !rule.containsKey("port")
+                    )
+            }
 
     private fun extractIpLiteral(endpoint: String): String? =
         extractHost(endpoint)?.takeIf(::isIpLiteral)

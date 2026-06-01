@@ -27,7 +27,7 @@ class VpnDnsServerSelectorTest {
     }
 
     @Test
-    fun `local guard advertises remote resolver when DNS is captured`() {
+    fun `local guard advertises local tun dns when DNS is captured`() {
         val selected =
             VpnDnsServerSelector.advertisedDnsServerAddresses(
                 configJson =
@@ -48,6 +48,38 @@ class VpnDnsServerSelectorTest {
                           { "action": "hijack-dns", "port": 53 }
                         ],
                         "final": "direct"
+                      }
+                    }
+                    """.trimIndent(),
+                fallbackServerAddress = "172.19.0.2",
+            )
+
+        assertEquals(listOf("172.19.0.2"), selected)
+    }
+
+    @Test
+    fun `tunnel config keeps remote resolver when DNS is captured`() {
+        val selected =
+            VpnDnsServerSelector.advertisedDnsServerAddresses(
+                configJson =
+                    """
+                    {
+                      "outbounds": [
+                        { "tag": "proxy", "type": "selector" },
+                        { "tag": "direct", "type": "direct" },
+                        { "tag": "block", "type": "block" }
+                      ],
+                      "dns": {
+                        "servers": [
+                          { "tag": "dns-local", "type": "local" },
+                          { "tag": "dns-remote", "type": "udp", "server": "94.140.14.14" }
+                        ]
+                      },
+                      "route": {
+                        "rules": [
+                          { "action": "hijack-dns", "port": 53 }
+                        ],
+                        "final": "proxy"
                       }
                     }
                     """.trimIndent(),

@@ -927,6 +927,7 @@ class RuntimeConfigAssemblerTest {
         assertEquals("dns-remote", dns["final"]!!.jsonPrimitive.content)
         assertEquals("dns-remote", route["default_domain_resolver"]!!.jsonPrimitive.content)
         assertEquals("direct", route["final"]!!.jsonPrimitive.content)
+        assertEquals(true, route["override_android_vpn"]!!.jsonPrimitive.content.toBoolean())
         assertEquals(false, tunInbound["strict_route"]!!.jsonPrimitive.content.toBoolean())
         assertTrue(route["rules"]!!.jsonArray.map { it.jsonObject }.any { rule ->
             rule["action"]?.jsonPrimitive?.content == "hijack-dns"
