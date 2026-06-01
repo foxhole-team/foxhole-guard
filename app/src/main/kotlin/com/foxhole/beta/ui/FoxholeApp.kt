@@ -10,12 +10,9 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FastOutLinearInEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearOutSlowInEasing
-import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -1029,15 +1026,7 @@ private fun FoxholeBottomBarDockContent(
             val sections = AppSection.entries
             val tabWidth = maxWidth / sections.size
             val selectedIndex = sections.indexOf(selectedSection).coerceAtLeast(0)
-            val indicatorOffset by animateDpAsState(
-                targetValue = tabWidth * selectedIndex,
-                animationSpec =
-                    tween(
-                        durationMillis = FoxholeMotionTokens.NavigationIndicatorDurationMs,
-                        easing = FoxholeMotionTokens.NavigationIndicatorEasing,
-                    ),
-                label = "bottom_bar_indicator",
-            )
+            val indicatorOffset = tabWidth * selectedIndex
 
             Box(modifier = Modifier.fillMaxSize()) {
                 Surface(
@@ -1074,48 +1063,16 @@ private fun RowScope.FoxholeBottomBarItem(
     onClick: () -> Unit,
 ) {
     val interactionSource = remember(section) { MutableInteractionSource() }
-    val contentColor by animateColorAsState(
-        targetValue =
-            if (selected) {
-                MaterialTheme.colorScheme.onSurface
-            } else {
-                MaterialTheme.colorScheme.onSurfaceVariant
-            },
-        animationSpec =
-            tween(
-                durationMillis = FoxholeMotionTokens.NavigationIndicatorDurationMs,
-                easing = FoxholeMotionTokens.NavigationIndicatorEasing,
-            ),
-        label = "bottom_bar_color_${section.name.lowercase()}",
-    )
-    val contentAlpha by animateFloatAsState(
-        targetValue = if (selected) 1f else 0.84f,
-        animationSpec =
-            tween(
-                durationMillis = FoxholeMotionTokens.NavigationIndicatorDurationMs,
-                easing = FoxholeMotionTokens.NavigationIndicatorEasing,
-        ),
-        label = "bottom_bar_alpha_${section.name.lowercase()}",
-    )
+    val contentColor =
+        if (selected) {
+            MaterialTheme.colorScheme.onSurface
+        } else {
+            MaterialTheme.colorScheme.onSurfaceVariant
+        }
+    val contentAlpha = if (selected) 1f else 0.84f
     val iconBaseColor = foxholeSystemAwareAccentColor(fallback = contentColor, darkFallback = FoxholeInfoAccent)
-    val iconColor by animateColorAsState(
-        targetValue = if (selected) iconBaseColor else iconBaseColor.copy(alpha = 0.72f),
-        animationSpec =
-            tween(
-                durationMillis = FoxholeMotionTokens.NavigationIndicatorDurationMs,
-                easing = FoxholeMotionTokens.NavigationIndicatorEasing,
-            ),
-        label = "bottom_bar_icon_color_${section.name.lowercase()}",
-    )
-    val iconScale by animateFloatAsState(
-        targetValue = if (selected) 1f else 0.92f,
-        animationSpec =
-            tween(
-                durationMillis = FoxholeMotionTokens.NavigationIndicatorDurationMs,
-                easing = FoxholeMotionTokens.NavigationIndicatorEasing,
-            ),
-        label = "bottom_bar_scale_${section.name.lowercase()}",
-    )
+    val iconColor = if (selected) iconBaseColor else iconBaseColor.copy(alpha = 0.72f)
+    val iconScale = if (selected) 1f else 0.92f
 
     Box(
         modifier =
