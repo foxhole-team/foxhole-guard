@@ -489,6 +489,7 @@ class HomeDashboardPresentationTest {
                         connection =
                             ConnectionSnapshot(
                                 state = ConnectionState.CONNECTED,
+                                profileId = 42L,
                                 lastChangeAt = 500L,
                             ),
                     ),
@@ -499,6 +500,40 @@ class HomeDashboardPresentationTest {
         assertEquals(ipInfo, model.visibleIpInfo)
         assertEquals(R.string.home_network_connection_info_title, model.titleRes)
         assertTrue(model.showConnectionStatus)
+        assertFalse(model.showLoading)
+        assertFalse(model.showIpInfoLoading)
+        assertFalse(model.showConnectionDetailsLoading)
+    }
+
+    @Test
+    fun `network model treats connected snapshot without profile id as current device ip`() {
+        val ipInfo =
+            IpInfo(
+                ip = "198.51.100.20",
+                countryCode = "US",
+                countryName = "United States",
+                city = "New York",
+                isp = "Device network",
+                fetchedAt = 1_000L,
+            )
+        val model =
+            resolveHomeDashboardNetworkModel(
+                state =
+                    HomeRouteUiState(
+                        connection =
+                            ConnectionSnapshot(
+                                state = ConnectionState.CONNECTED,
+                                profileId = null,
+                                lastChangeAt = 500L,
+                            ),
+                    ),
+                visibleIpInfo = ipInfo,
+                deviceInternetAvailable = true,
+            )
+
+        assertEquals(ipInfo, model.visibleIpInfo)
+        assertEquals(R.string.home_network_current_ip_title, model.titleRes)
+        assertFalse(model.showConnectionStatus)
         assertFalse(model.showLoading)
         assertFalse(model.showIpInfoLoading)
         assertFalse(model.showConnectionDetailsLoading)
@@ -522,6 +557,7 @@ class HomeDashboardPresentationTest {
                         connection =
                             ConnectionSnapshot(
                                 state = ConnectionState.CONNECTED,
+                                profileId = 42L,
                                 lastChangeAt = 500L,
                             ),
                         dashboardConnectionMetricsLoading = true,
@@ -619,6 +655,7 @@ class HomeDashboardPresentationTest {
                         connection =
                             ConnectionSnapshot(
                                 state = ConnectionState.CONNECTED,
+                                profileId = 42L,
                                 lastChangeAt = 500L,
                             ),
                         protocolMetricsRefreshing = true,

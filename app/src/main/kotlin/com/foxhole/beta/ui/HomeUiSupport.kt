@@ -720,7 +720,8 @@ private fun HomeRouteUiState.shouldShowVpnTransitionLoading(routeTransitionRunni
         hasDashboardRouteProfile()
 
 private fun HomeRouteUiState.hasDashboardRouteProfile(): Boolean =
-    connection.trafficMode in setOf(TrafficMode.TUNNEL, TrafficMode.PROXY) &&
+    connection.profileId != null &&
+        connection.trafficMode in setOf(TrafficMode.TUNNEL, TrafficMode.PROXY) &&
         connection.profileId != FoxholeVpnService.LOCAL_GUARD_PROFILE_ID &&
         connection.profileId != FoxholeVpnService.TOR_ONLY_PROFILE_ID
 
@@ -737,7 +738,10 @@ private fun HomeRouteUiState.hasRealTunnelConnectionStatus(): Boolean {
     val routeStatusRunning =
         connection.state in setOf(ConnectionState.CONNECTING, ConnectionState.CONNECTED, ConnectionState.RECONNECTING) ||
             (autoConnect.running && connection.state !in ACTIVE_CONNECTION_STATES)
-    return reconnectInProgress || (routeStatusRunning && hasDashboardRouteProfile())
+    val routeIdentityAvailable =
+        hasDashboardRouteProfile() ||
+            (autoConnect.running && connection.state !in ACTIVE_CONNECTION_STATES)
+    return reconnectInProgress || (routeStatusRunning && routeIdentityAvailable)
 }
 
 private fun HomeRouteUiState.hasFailedDashboardRoute(): Boolean =
