@@ -19,71 +19,92 @@ import com.foxhole.beta.core.model.Settings
 import com.foxhole.beta.core.model.StatisticsRetention
 import com.foxhole.beta.core.model.TrafficWindow
 import com.foxhole.beta.core.settings.SettingsRepository
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import java.util.Locale
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class AnomalyRepository(
-    private val dao: AnomalyDao,
+    daoProvider: () -> AnomalyDao,
     private val settingsRepository: SettingsRepository,
     private val diagnosticsLogger: DiagnosticsLogger,
     private val notifier: AnomalyNotifier,
     private val engine: AnomalyEngine = AnomalyEngine(),
-    private val baselineStore: BaselineStore = BaselineStore(dao),
     private val nowProvider: () -> Long = System::currentTimeMillis,
 ) {
+    private val dao by lazy(LazyThreadSafetyMode.SYNCHRONIZED, daoProvider)
+    private val baselineStore by lazy(LazyThreadSafetyMode.SYNCHRONIZED) { BaselineStore(dao) }
     private var lastNetworkActivityCleanupAt = 0L
 
     val recentEvents: Flow<List<AnomalyEvent>> =
-        settingsRepository.settings
-            .flatMapLatest { settings ->
-                val cutoff = nowProvider() - settings.anomaly.historyRetention.retentionHours * HOUR_MS
-                dao.observeAnomalyEvents(cutoff).map { entities -> entities.map(AnomalyEventEntity::toDomain) }
-            }
+        flow {
+            emitAll(
+                settingsRepository.settings
+                    .flatMapLatest { settings ->
+                        val cutoff = nowProvider() - settings.anomaly.historyRetention.retentionHours * HOUR_MS
+                        dao.observeAnomalyEvents(cutoff).map { entities -> entities.map(AnomalyEventEntity::toDomain) }
+                    },
+            )
+        }.flowOn(Dispatchers.IO)
 
     val recentAppTrafficWindows: Flow<List<AppTrafficWindow>> =
-        settingsRepository.settings
-            .flatMapLatest { settings ->
-                if (!settings.appTrafficStatsRuntimeEnabled()) {
-                    flowOf(emptyList())
-                } else {
-                    dao.observeRecentAppTrafficWindows(
-                        cutoff = statisticsRetentionCutoff(nowProvider(), settings.statistics.retention),
-                    )
-                        .map { entities -> entities.map(AppTrafficWindowEntity::toDomain) }
-                }
-            }
+        flow {
+            emitAll(
+                settingsRepository.settings
+                    .flatMapLatest { settings ->
+                        if (!settings.appTrafficStatsRuntimeEnabled()) {
+                            flowOf(emptyList())
+                        } else {
+                            dao.observeRecentAppTrafficWindows(
+                                cutoff = statisticsRetentionCutoff(nowProvider(), settings.statistics.retention),
+                            )
+                                .map { entities -> entities.map(AppTrafficWindowEntity::toDomain) }
+                        }
+                    },
+            )
+        }.flowOn(Dispatchers.IO)
 
     val recentTrafficWindows: Flow<List<TrafficWindow>> =
-        settingsRepository.settings
-            .flatMapLatest { settings ->
-                if (!settings.trafficWindowStatsRuntimeEnabled()) {
-                    flowOf(emptyList())
-                } else {
-                    dao.observeRecentTrafficWindows(
-                        cutoff = statisticsRetentionCutoff(nowProvider(), settings.statistics.retention),
-                    )
-                        .map { entities -> entities.map(TrafficWindowEntity::toDomain) }
-                }
-            }
+        flow {
+            emitAll(
+                settingsRepository.settings
+                    .flatMapLatest { settings ->
+                        if (!settings.trafficWindowStatsRuntimeEnabled()) {
+                            flowOf(emptyList())
+                        } else {
+                            dao.observeRecentTrafficWindows(
+                                cutoff = statisticsRetentionCutoff(nowProvider(), settings.statistics.retention),
+                            )
+                                .map { entities -> entities.map(TrafficWindowEntity::toDomain) }
+                        }
+                    },
+            )
+        }.flowOn(Dispatchers.IO)
 
     val recentNetworkActivityEvents: Flow<List<NetworkActivityEvent>> =
-        settingsRepository.settings
-            .flatMapLatest { settings ->
-                if (!settings.networkActivityStatsRuntimeEnabled()) {
-                    flowOf(emptyList())
-                } else {
-                    dao.observeRecentNetworkActivityEvents(
-                        cutoff = statisticsRetentionCutoff(nowProvider(), settings.statistics.retention),
-                        limit = NETWORK_ACTIVITY_PREVIEW_LIMIT,
-                    )
-                        .map { entities -> entities.map(NetworkActivityEventEntity::toDomain) }
-                }
-            }
+        flow {
+            emitAll(
+                settingsRepository.settings
+                    .flatMapLatest { settings ->
+                        if (!settings.networkActivityStatsRuntimeEnabled()) {
+                            flowOf(emptyList())
+                        } else {
+                            dao.observeRecentNetworkActivityEvents(
+                                cutoff = statisticsRetentionCutoff(nowProvider(), settings.statistics.retention),
+                                limit = NETWORK_ACTIVITY_PREVIEW_LIMIT,
+                            )
+                                .map { entities -> entities.map(NetworkActivityEventEntity::toDomain) }
+                        }
+                    },
+            )
+        }.flowOn(Dispatchers.IO)
 
     suspend fun recordTrafficWindow(
         window: TrafficWindow,

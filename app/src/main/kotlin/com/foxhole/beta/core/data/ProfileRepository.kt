@@ -24,8 +24,11 @@ import com.foxhole.beta.vpn.PrivateDnsState
 import com.foxhole.beta.vpn.RuntimeConfigAssembler
 import com.foxhole.beta.vpn.TorRuntimeInstaller
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
@@ -37,7 +40,7 @@ import java.util.Base64
 import java.util.UUID
 
 class ProfileRepository(
-    private val database: ProfileDatabase,
+    databaseProvider: () -> ProfileDatabase,
     private val secretStore: ProfileSecretStore,
     private val parser: ProfileImportParser,
     private val httpClient: OkHttpClient,
@@ -49,6 +52,8 @@ class ProfileRepository(
     private val dnsFilterAssetInstaller: DnsFilterAssetInstaller,
     private val json: Json,
 ) {
+    private val database: ProfileDatabase by lazy(LazyThreadSafetyMode.SYNCHRONIZED, databaseProvider)
+
     private data class SubscriptionGroupMember(
         val entity: ProfileEntity,
         val storedSecret: StoredProfileSecret,
@@ -95,7 +100,7 @@ class ProfileRepository(
         val replacementActiveId: Long?,
     )
 
-    private val dao = database.profileDao()
+    private val dao by lazy(LazyThreadSafetyMode.SYNCHRONIZED) { database.profileDao() }
     private val subscriptionFetchUseCase = SubscriptionFetchUseCase(httpClient)
     private val sessionFactory by lazy {
         ProfileSessionFactory(
@@ -111,12 +116,20 @@ class ProfileRepository(
         )
     }
 
-    val profiles: Flow<List<Profile>> = dao.observeProfiles().map { list -> list.map { entity -> resolveDomainProfile(entity) } }
+    val profiles: Flow<List<Profile>> =
+        flow {
+            emitAll(dao.observeProfiles().map { list -> list.map { entity -> resolveDomainProfile(entity) } })
+        }.flowOn(Dispatchers.IO)
     val activeProfile: Flow<Profile?> =
-        combine(dao.observeProfiles(), dao.observeActiveProfile()) { profiles, active ->
-            val resolvedProfiles = profiles.map { entity -> resolveDomainProfile(entity) }
-            active?.id?.let { activeId -> resolvedProfiles.firstOrNull { it.id == activeId } } ?: resolvedProfiles.firstOrNull()
-        }
+        flow {
+            emitAll(
+                combine(dao.observeProfiles(), dao.observeActiveProfile()) { profiles, active ->
+                    val resolvedProfiles = profiles.map { entity -> resolveDomainProfile(entity) }
+                    active?.id?.let { activeId -> resolvedProfiles.firstOrNull { it.id == activeId } }
+                        ?: resolvedProfiles.firstOrNull()
+                },
+            )
+        }.flowOn(Dispatchers.IO)
 
     suspend fun rawInputRequiresInsecureTls(rawInput: String): Boolean {
         return rawInputInsecureTlsWarning(rawInput) != null

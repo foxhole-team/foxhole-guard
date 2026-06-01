@@ -1176,7 +1176,7 @@ class RuntimeConfigAssemblerTest {
             ).localGuardModeOrNull(),
         )
         assertEquals(
-            LocalGuardMode.FIREWALL,
+            null,
             Settings(
                 ui = UiSettings(trafficMapEnabled = true),
                 expert = firewall,

@@ -1561,7 +1561,7 @@ class HomeDashboardPresentationTest {
         assertFalse(
             isTrafficMapRuntimeAvailable(
                 connection = ConnectionSnapshot(state = ConnectionState.CONNECTED, profileId = 42L),
-                settings = Settings(),
+                settings = Settings(ui = UiSettings(trafficMapEnabled = false)),
                 activeVpnNetworkAvailable = true,
             ),
         )

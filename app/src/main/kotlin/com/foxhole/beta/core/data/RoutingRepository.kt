@@ -9,7 +9,11 @@ import com.foxhole.beta.core.model.RoutingRule
 import com.foxhole.beta.core.model.RoutingRuleAction
 import com.foxhole.beta.core.network.ensurePublicHttpsUrl
 import com.foxhole.beta.core.network.requirePublicHttpsUrl
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -17,31 +21,46 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 
 class RoutingRepository(
-    private val database: ProfileDatabase,
+    databaseProvider: () -> ProfileDatabase,
     private val httpClient: OkHttpClient,
     private val json: Json,
 ) {
-    private val presetDao = database.routingPresetDao()
-    private val ruleDao = database.routingRuleDao()
-    private val catalogDao = database.routingCatalogDao()
+    private val database: ProfileDatabase by lazy(LazyThreadSafetyMode.SYNCHRONIZED, databaseProvider)
+    private val presetDao by lazy(LazyThreadSafetyMode.SYNCHRONIZED) { database.routingPresetDao() }
+    private val ruleDao by lazy(LazyThreadSafetyMode.SYNCHRONIZED) { database.routingRuleDao() }
+    private val catalogDao by lazy(LazyThreadSafetyMode.SYNCHRONIZED) { database.routingCatalogDao() }
     private val routingCatalogHttpClient: OkHttpClient by lazy {
         httpClient.withBoundedRemoteFetchTimeouts()
     }
 
     val presets: Flow<List<RoutingPreset>> =
-        presetDao.observePresets().map { list -> list.map { it.preset.toDomain(it.rules.map(RoutingRuleEntity::toDomain)) } }
+        flow {
+            emitAll(
+                presetDao.observePresets().map { list ->
+                    list.map { it.preset.toDomain(it.rules.map(RoutingRuleEntity::toDomain)) }
+                },
+            )
+        }.flowOn(Dispatchers.IO)
 
     val activePreset: Flow<RoutingPreset?> =
-        presetDao.observeActivePreset().map { relation ->
-            relation?.preset?.toDomain(relation.rules.map(RoutingRuleEntity::toDomain))?.takeIf { it.enabled }
-        }
+        flow {
+            emitAll(
+                presetDao.observeActivePreset().map { relation ->
+                    relation?.preset?.toDomain(relation.rules.map(RoutingRuleEntity::toDomain))?.takeIf { it.enabled }
+                },
+            )
+        }.flowOn(Dispatchers.IO)
 
     val catalogs: Flow<List<RoutingCatalog>> =
-        catalogDao.observeCatalogs().map { list ->
-            list.map { entity ->
-                entity.toDomain(parsedManifest(entity.cachedManifestJson)?.presets?.size ?: 0)
-            }
-        }
+        flow {
+            emitAll(
+                catalogDao.observeCatalogs().map { list ->
+                    list.map { entity ->
+                        entity.toDomain(parsedManifest(entity.cachedManifestJson)?.presets?.size ?: 0)
+                    }
+                },
+            )
+        }.flowOn(Dispatchers.IO)
 
     suspend fun getPreset(id: Long): RoutingPreset? =
         presetDao.getById(id)?.let { it.preset.toDomain(it.rules.map(RoutingRuleEntity::toDomain)) }

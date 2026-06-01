@@ -1568,7 +1568,8 @@ class SettingsRepository(
 
     private fun Settings.normalized(): Settings =
         run {
-            val resetDefaults = schemaVersion < SETTINGS_SCHEMA_VERSION
+            val resetDefaults = schemaVersion < SETTINGS_RESET_DEFAULTS_SCHEMA_VERSION
+            val enableTrafficMapByDefault = schemaVersion < TRAFFIC_MAP_DEFAULT_ENABLED_SCHEMA_VERSION
             copy(
                 schemaVersion = SETTINGS_SCHEMA_VERSION,
                 ui =
@@ -1577,7 +1578,7 @@ class SettingsRepository(
                         onboardingCompleted = true,
                         showExpertSettings = ui.showExpertSettings && expert.unlockedAt != null,
                         supportBotHandleOverride = storedSupportBotHandleOverride(ui.supportBotHandleOverride),
-                        trafficMapEnabled = if (resetDefaults) false else ui.trafficMapEnabled,
+                        trafficMapEnabled = if (enableTrafficMapByDefault) true else ui.trafficMapEnabled,
                     ),
                 connection =
                     connection.copy(
@@ -1850,6 +1851,8 @@ class SettingsRepository(
         )
 
     companion object {
+        private const val SETTINGS_RESET_DEFAULTS_SCHEMA_VERSION = 16
+        private const val TRAFFIC_MAP_DEFAULT_ENABLED_SCHEMA_VERSION = 17
         private const val MIN_PORT = 1
         private const val MAX_PORT = 65535
         private const val MIN_MTU = 576

@@ -34,7 +34,6 @@ private fun Settings.localFirewallGuardRequired(): Boolean {
             )
     return permanentAppBlockingRequired() ||
         expert.networkActivityPersistentLogging ||
-        ui.trafficMapEnabled ||
         statisticsCaptureRequired
 }
 

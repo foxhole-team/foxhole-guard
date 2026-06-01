@@ -6,6 +6,7 @@ import android.os.StrictMode
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.os.LocaleListCompat
 import androidx.work.BackoffPolicy
+import androidx.work.Configuration
 import androidx.work.Constraints
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.NetworkType
@@ -18,6 +19,7 @@ import com.foxhole.beta.core.model.dnsRuleSetFilteringEnabled
 import com.foxhole.beta.core.profile.PROFILE_EXPORT_DIR_NAME
 import com.foxhole.beta.core.profile.cleanupProfileExportArtifacts
 import com.foxhole.beta.core.settings.readFastStoredAppLocale
+import com.foxhole.beta.ui.prewarmTrafficMapCountryShapes
 import com.foxhole.beta.vpn.DnsFilterUpdateWorker
 import com.foxhole.beta.vpn.SubscriptionRefreshWorker
 import kotlinx.coroutines.CoroutineScope
@@ -27,7 +29,9 @@ import kotlinx.coroutines.launch
 import java.io.File
 import java.util.concurrent.TimeUnit
 
-class FoxholeApplication : Application() {
+class FoxholeApplication :
+    Application(),
+    Configuration.Provider {
     lateinit var appGraph: FoxholeAppGraph
         private set
 
@@ -36,12 +40,27 @@ class FoxholeApplication : Application() {
 
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
+    override val workManagerConfiguration: Configuration
+        get() =
+            Configuration.Builder()
+                .setMinimumLoggingLevel(workManagerMinimumLoggingLevel())
+                .build()
+
     override fun onCreate() {
         super.onCreate()
         installDebugStrictMode()
         appGraph = FoxholeAppGraph(this)
         applyAppLocale(readFastStoredAppLocale(this))
 
+        appScope.launch {
+            runCatching { prewarmTrafficMapCountryShapes(this@FoxholeApplication) }
+                .onFailure { error ->
+                    appGraph.diagnosticsLogger.record(
+                        "traffic-map",
+                        "country shape prewarm failed: ${error.javaClass.simpleName}",
+                    )
+                }
+        }
         appScope.launch {
             initializeInBackground()
         }
@@ -106,6 +125,13 @@ class FoxholeApplication : Application() {
 
     private companion object {
         const val PROFILE_SECRET_CLEANUP_INTERVAL_HOURS = 24L
+
+        fun workManagerMinimumLoggingLevel(): Int =
+            if (BuildConfig.DEBUG) {
+                android.util.Log.DEBUG
+            } else {
+                android.util.Log.INFO
+            }
     }
 }
 

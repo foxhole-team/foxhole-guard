@@ -3,7 +3,7 @@ package com.foxhole.beta.core.model
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
-const val SETTINGS_SCHEMA_VERSION = 16
+const val SETTINGS_SCHEMA_VERSION = 17
 const val NETWORK_FINGERPRINT_SCHEMA_CURRENT = 2
 const val NETWORK_FINGERPRINT_SCHEMA_LEGACY = 1
 const val DEFAULT_DNS_FILTER_UPDATE_URL = "https://foxhole-repo.github.io/foxhole-dns/manifest.json"
@@ -258,7 +258,7 @@ data class UiSettings(
     val supportBotHandleOverride: String? = null,
     val networkCardEnabled: Boolean = true,
     val trafficCardEnabled: Boolean = true,
-    val trafficMapEnabled: Boolean = false,
+    val trafficMapEnabled: Boolean = true,
     val showFirewallStatus: Boolean = false,
     val showTorQuickLaunch: Boolean = true,
     val smartStartDashboardControlsEnabled: Boolean = true,

@@ -774,6 +774,7 @@ class IpInfoRepository(
                 DNS_INDEPENDENT_IP_INFO_ENDPOINT,
                 "https://1.0.0.1/cdn-cgi/trace",
                 "https://cloudflare.com/cdn-cgi/trace",
+                "https://ipwhois.app/json/",
                 "https://ipinfo.io/json",
                 "https://ifconfig.co/json",
                 "https://api64.ipify.org?format=json",
@@ -788,6 +789,7 @@ class IpInfoRepository(
         val GEO_ENRICHMENT_FALLBACK_ENDPOINTS =
             listOf(
                 DNS_INDEPENDENT_IP_INFO_ENDPOINT,
+                "https://ipwhois.app/json/",
                 "https://ipinfo.io/json",
                 "https://ifconfig.co/json",
             )
@@ -1091,11 +1093,11 @@ internal fun parseIpInfoResponse(
         objectValue.string("message") ?: "ip info request failed"
     }
     val ip = objectValue.string("ip")?.takeIf(String::isNotBlank) ?: error("ip info response missing ip")
-    val connection = objectValue["connection"]?.jsonObject
-    val asInfo = objectValue["as"]?.jsonObject
-    val asnInfo = objectValue["asn"]?.jsonObject
-    val company = objectValue["company"]?.jsonObject
-    val traits = objectValue["traits"]?.jsonObject
+    val connection = objectValue.jsonObjectOrNull("connection")
+    val asInfo = objectValue.jsonObjectOrNull("as")
+    val asnInfo = objectValue.jsonObjectOrNull("asn")
+    val company = objectValue.jsonObjectOrNull("company")
+    val traits = objectValue.jsonObjectOrNull("traits")
     val country = objectValue.string("country")
     val countryCode =
         objectValue.string("country_code")
@@ -1239,6 +1241,9 @@ internal fun IpInfo.fullIpInfoQualityScore(): Int =
 private fun Map<String, JsonElement>.string(key: String): String? = this[key]?.jsonPrimitive?.contentOrNull
 
 private fun Map<String, JsonElement>.boolean(key: String): Boolean? = this[key]?.jsonPrimitive?.booleanOrNull
+
+private fun Map<String, JsonElement>.jsonObjectOrNull(key: String): Map<String, JsonElement>? =
+    runCatching { this[key]?.jsonObject }.getOrNull()
 
 private fun firstNonBlank(vararg values: String?): String? =
     values

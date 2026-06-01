@@ -153,6 +153,32 @@ class IpInfoRepositoryTest {
     }
 
     @Test
+    fun `parses ipwhois app schema with literal nested fields`() {
+        val parsed =
+            parseIpInfoResponse(
+                body =
+                    """
+                    {
+                      "ip": "79.120.30.76",
+                      "success": true,
+                      "country": "Russia",
+                      "country_code": "RU",
+                      "city": "Moscow",
+                      "isp": "PJSC MegaFon",
+                      "connection": "mobile"
+                    }
+                    """.trimIndent(),
+                json = json,
+            )
+
+        assertEquals("79.120.30.76", parsed.ip)
+        assertEquals("RU", parsed.countryCode)
+        assertEquals("Russia", parsed.countryName)
+        assertEquals("Moscow", parsed.city)
+        assertEquals("PJSC MegaFon", parsed.isp)
+    }
+
+    @Test
     fun `parses cloudflare trace schema`() {
         val parsed =
             parseIpInfoResponse(
@@ -366,6 +392,7 @@ class IpInfoRepositoryTest {
         assertEquals("https://1.1.1.1/cdn-cgi/trace", candidates[1])
         assertEquals("https://1.0.0.1/cdn-cgi/trace", candidates[2])
         assertEquals("https://cloudflare.com/cdn-cgi/trace", candidates[3])
+        assertEquals("https://ipwhois.app/json/", candidates[4])
         assertTrue(candidates.size > 1)
     }
 
@@ -406,9 +433,10 @@ class IpInfoRepositoryTest {
 
         assertEquals("https://example.com/ip", candidates[0])
         assertEquals("https://1.1.1.1/cdn-cgi/trace", candidates[1])
-        assertEquals("https://ipinfo.io/json", candidates[2])
-        assertEquals("https://ifconfig.co/json", candidates[3])
-        assertEquals(4, candidates.size)
+        assertEquals("https://ipwhois.app/json/", candidates[2])
+        assertEquals("https://ipinfo.io/json", candidates[3])
+        assertEquals("https://ifconfig.co/json", candidates[4])
+        assertEquals(5, candidates.size)
     }
 
     @Test

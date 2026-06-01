@@ -10,6 +10,8 @@ import android.graphics.Paint as AndroidPaint
 import android.graphics.Path as AndroidPath
 import android.os.BatteryManager
 import android.os.PowerManager
+import android.os.SystemClock
+import android.util.Log
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -71,6 +73,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.core.content.getSystemService
+import com.foxhole.beta.BuildConfig
 import com.foxhole.beta.R
 import com.foxhole.beta.core.model.TrafficMapPoint
 import com.foxhole.beta.core.model.TrafficMapUiState
@@ -336,7 +339,7 @@ private fun rememberTrafficMapLandLayerBitmap(
                 shapes = shapes,
                 canvasSize = canvasSize,
                 color = color,
-            )
+            ) ?: TrafficMapLandLayerCache.latestBitmap()
         }
     val bitmap by produceState(
         initialValue = cachedBitmap,
@@ -344,18 +347,18 @@ private fun rememberTrafficMapLandLayerBitmap(
         key2 = canvasSize,
         key3 = color,
     ) {
-        value = cachedBitmap
+        if (cachedBitmap != null) {
+            value = cachedBitmap
+        }
         if (shapes.isEmpty() || canvasSize.width <= 0 || canvasSize.height <= 0) {
             return@produceState
         }
-        if (value == null) {
-            value =
-                TrafficMapLandLayerCache.bitmap(
-                    shapes = shapes,
-                    canvasSize = canvasSize,
-                    color = color,
-                )
-        }
+        value =
+            TrafficMapLandLayerCache.bitmap(
+                shapes = shapes,
+                canvasSize = canvasSize,
+                color = color,
+            )
     }
     return bitmap
 }
@@ -372,6 +375,9 @@ private fun rememberTrafficMapCountryShapes(): List<TrafficMapCountryShape> {
     return shapes
 }
 
+internal suspend fun prewarmTrafficMapCountryShapes(context: Context): Int =
+    TrafficMapCountryShapeCache.load(context.applicationContext).size
+
 private object TrafficMapCountryShapeCache {
     private val mutex = Mutex()
 
@@ -384,6 +390,7 @@ private object TrafficMapCountryShapeCache {
         cachedShapes?.let { shapes -> return shapes }
         return mutex.withLock {
             cachedShapes?.let { shapes -> return@withLock shapes }
+            val startedAtMs = SystemClock.elapsedRealtime()
             val raw =
                 withContext(Dispatchers.IO) {
                     context.assets.open(TRAFFIC_MAP_COUNTRY_SHAPES_ASSET)
@@ -395,6 +402,9 @@ private object TrafficMapCountryShapeCache {
                     .parse(raw)
             }.also { shapes ->
                 cachedShapes = shapes
+                logTrafficMapDebug(
+                    "shapes loaded count=${shapes.size} durationMs=${SystemClock.elapsedRealtime() - startedAtMs}",
+                )
             }
         }
     }
@@ -784,6 +794,7 @@ private fun trafficMapLandBitmap(
 private object TrafficMapLandLayerCache {
     private const val MAX_ENTRIES = 8
     private val lock = Any()
+    private var latestBitmap: ImageBitmap? = null
     private val bitmaps =
         LinkedHashMap<TrafficMapLandLayerKey, ImageBitmap>(
             MAX_ENTRIES,
@@ -802,12 +813,18 @@ private object TrafficMapLandLayerCache {
         }
     }
 
+    fun latestBitmap(): ImageBitmap? =
+        synchronized(lock) {
+            latestBitmap
+        }
+
     suspend fun bitmap(
         shapes: List<TrafficMapCountryShape>,
         canvasSize: IntSize,
         color: Color,
     ): ImageBitmap =
         withContext(Dispatchers.Default) {
+            val startedAtMs = SystemClock.elapsedRealtime()
             val key = landLayerKey(shapes = shapes, canvasSize = canvasSize, color = color)
             synchronized(lock) {
                 bitmaps[key]?.let { bitmap -> return@withContext bitmap }
@@ -819,14 +836,18 @@ private object TrafficMapLandLayerCache {
                     shapes = shapes,
                     viewport = trafficMapViewport(size),
                     color = color,
-                )
+            )
             synchronized(lock) {
                 bitmaps[key] = bitmap
+                latestBitmap = bitmap
                 while (bitmaps.size > MAX_ENTRIES) {
                     val eldest = bitmaps.entries.firstOrNull()?.key ?: break
                     bitmaps.remove(eldest)
                 }
             }
+            logTrafficMapDebug(
+                "land bitmap ready width=${key.width} height=${key.height} shapes=${key.shapeCount} durationMs=${SystemClock.elapsedRealtime() - startedAtMs}",
+            )
             bitmap
         }
 
@@ -957,3 +978,10 @@ private const val TRAFFIC_MAP_LOW_BATTERY_PERCENT = 10
 private const val TRAFFIC_ROUTE_PI = 3.141592653589793
 private const val TRAFFIC_ROUTE_ANGLE_BUCKET_RADIANS = 0.17453292519943295
 private const val TRAFFIC_MAP_COUNTRY_SHAPES_ASSET = "maps/ne_110m_admin_0_countries_preprocessed.json"
+private const val TRAFFIC_MAP_LOG_TAG = "FoxholeDiag"
+
+private fun logTrafficMapDebug(message: String) {
+    if (BuildConfig.DEBUG) {
+        Log.d(TRAFFIC_MAP_LOG_TAG, "[traffic-map] $message")
+    }
+}
