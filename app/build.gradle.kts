@@ -65,7 +65,7 @@ abstract class VerifyBundledLibboxInReleaseApkTask : DefaultTask() {
 
 plugins {
     id("com.android.application")
-    id("com.google.devtools.ksp") version "2.3.7"
+    id("com.google.devtools.ksp") version "2.3.9"
     id("org.jetbrains.kotlin.plugin.compose") version "2.3.21"
     id("org.jetbrains.kotlin.plugin.serialization") version "2.3.21"
     jacoco
