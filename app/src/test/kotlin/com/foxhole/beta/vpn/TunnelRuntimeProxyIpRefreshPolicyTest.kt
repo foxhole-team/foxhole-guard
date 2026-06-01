@@ -3,6 +3,8 @@ package com.foxhole.beta.vpn
 import com.foxhole.beta.BuildConfig
 import com.foxhole.beta.core.model.ConnectionSnapshot
 import com.foxhole.beta.core.model.ConnectionState
+import com.foxhole.beta.core.model.ExpertSettings
+import com.foxhole.beta.core.model.PerAppRoutingMode
 import com.foxhole.beta.core.model.PrivacyRouteMode
 import com.foxhole.beta.core.model.PrivacyRouteScope
 import com.foxhole.beta.core.model.PrivacyRouteSettings
@@ -94,6 +96,81 @@ class TunnelRuntimeProxyIpRefreshPolicyTest {
             )
 
         assertTrue(Settings().requiresStrictRuntimeProxyIpRefresh(snapshot))
+    }
+
+    @Test
+    fun `include selected apps tunnel allows runtime proxy tunnel validation`() {
+        val settings =
+            Settings(
+                expert =
+                    ExpertSettings(
+                        perAppRoutingMode = PerAppRoutingMode.INCLUDE_SELECTED_APPS,
+                        selectedPackages = listOf("com.example.browser"),
+                    ),
+            )
+        val snapshot =
+            ConnectionSnapshot(
+                state = ConnectionState.CONNECTING,
+                trafficMode = TrafficMode.TUNNEL,
+                profileId = 42L,
+                protocolHint = ProtocolHint.VLESS,
+            )
+
+        assertTrue(settings.allowsRuntimeProxyTunnelValidation(snapshot))
+    }
+
+    @Test
+    fun `full tunnel keeps runtime proxy out of tunnel validation`() {
+        val snapshot =
+            ConnectionSnapshot(
+                state = ConnectionState.CONNECTING,
+                trafficMode = TrafficMode.TUNNEL,
+                profileId = 42L,
+                protocolHint = ProtocolHint.VLESS,
+            )
+
+        assertFalse(Settings().allowsRuntimeProxyTunnelValidation(snapshot))
+    }
+
+    @Test
+    fun `tor only selected apps allows runtime proxy tunnel validation`() {
+        val settings =
+            Settings(
+                privacyRoute =
+                    PrivacyRouteSettings(
+                        scope = PrivacyRouteScope.SELECTED_APPS,
+                        selectedPackages = listOf("org.torproject.torbrowser"),
+                    ),
+            )
+        val snapshot =
+            ConnectionSnapshot(
+                state = ConnectionState.CONNECTING,
+                trafficMode = TrafficMode.TUNNEL,
+                profileId = FoxholeVpnService.TOR_ONLY_PROFILE_ID,
+                protocolHint = ProtocolHint.SING_BOX,
+            )
+
+        assertTrue(settings.allowsRuntimeProxyTunnelValidation(snapshot))
+    }
+
+    @Test
+    fun `tor only all apps keeps vpn-bound tunnel validation`() {
+        val settings =
+            Settings(
+                privacyRoute =
+                    PrivacyRouteSettings(
+                        scope = PrivacyRouteScope.ALL_APPS,
+                    ),
+            )
+        val snapshot =
+            ConnectionSnapshot(
+                state = ConnectionState.CONNECTING,
+                trafficMode = TrafficMode.TUNNEL,
+                profileId = FoxholeVpnService.TOR_ONLY_PROFILE_ID,
+                protocolHint = ProtocolHint.SING_BOX,
+            )
+
+        assertFalse(settings.allowsRuntimeProxyTunnelValidation(snapshot))
     }
 
     @Test

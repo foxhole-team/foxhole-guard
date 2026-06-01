@@ -12,6 +12,7 @@ internal enum class TunnelValidationProbeKind {
 internal data class TunnelValidationPolicyContext(
     val allowDnsIndependentLiteralIpValidation: Boolean = false,
     val hasDnsIndependentLiteralIpValidationEvidence: Boolean = false,
+    val allowRuntimeProxyTunnelValidation: Boolean = false,
 )
 
 internal fun tunnelValidationPolicyContextFor(
@@ -47,15 +48,23 @@ internal class TunnelValidationPolicy(
                         null
                     }
                 },
+                TunnelValidationProbeRule { kind, context ->
+                    when (kind) {
+                        TunnelValidationProbeKind.TUNNEL_RUNTIME_PROXY_IP_REFRESH,
+                        TunnelValidationProbeKind.TUNNEL_RUNTIME_PROXY_VALIDATION_ENDPOINT,
+                        -> context.allowRuntimeProxyTunnelValidation
+                        else -> null
+                    }
+                },
                 TunnelValidationProbeRule { kind, _ ->
                     when (kind) {
                         TunnelValidationProbeKind.VPN_IP_REFRESH,
                         TunnelValidationProbeKind.VPN_VALIDATION_ENDPOINT,
                         -> true
-                        TunnelValidationProbeKind.TUNNEL_RUNTIME_PROXY_IP_REFRESH,
-                        TunnelValidationProbeKind.TUNNEL_RUNTIME_PROXY_VALIDATION_ENDPOINT,
                         TunnelValidationProbeKind.VALIDATED_VPN_LITERAL_IP_ENDPOINT,
                         TunnelValidationProbeKind.DNS_INDEPENDENT_LITERAL_IP,
+                        TunnelValidationProbeKind.TUNNEL_RUNTIME_PROXY_IP_REFRESH,
+                        TunnelValidationProbeKind.TUNNEL_RUNTIME_PROXY_VALIDATION_ENDPOINT,
                         -> null
                     }
                 },

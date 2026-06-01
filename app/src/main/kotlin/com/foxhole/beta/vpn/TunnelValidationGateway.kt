@@ -8,7 +8,9 @@ import com.foxhole.beta.BuildConfig
 import com.foxhole.beta.core.data.ProfileRepository
 import com.foxhole.beta.core.diagnostics.DiagnosticsLogger
 import com.foxhole.beta.core.model.ConnectionSnapshot
+import com.foxhole.beta.core.model.ExpertSettings
 import com.foxhole.beta.core.model.IpInfo
+import com.foxhole.beta.core.model.PerAppRoutingMode
 import com.foxhole.beta.core.model.PrivacyRouteMode
 import com.foxhole.beta.core.model.PrivacyRouteScope
 import com.foxhole.beta.core.model.Settings
@@ -577,6 +579,33 @@ internal fun Settings.requiresStrictRuntimeProxyIpRefresh(snapshot: ConnectionSn
                     PrivacyRouteScope.ALL_APPS -> true
                     PrivacyRouteScope.SELECTED_APPS -> privacyRoute.selectedPackages.any(String::isNotBlank)
                 }
+            )
+
+internal fun Settings.allowsRuntimeProxyTunnelValidation(
+    snapshot: ConnectionSnapshot,
+    profileId: Long? = snapshot.profileId,
+): Boolean {
+    if (
+        snapshot.state !in ACTIVE_CONNECTION_STATES ||
+        snapshot.trafficMode != TrafficMode.TUNNEL ||
+        profileId == null ||
+        profileId == FoxholeVpnService.LOCAL_GUARD_PROFILE_ID
+    ) {
+        return false
+    }
+    val includeOnlySplit = expert.runtimeHasIncludeOnlyAppSplit()
+    val torOnlySelectedApps =
+        profileId == FoxholeVpnService.TOR_ONLY_PROFILE_ID &&
+            privacyRoute.scope == PrivacyRouteScope.SELECTED_APPS &&
+            privacyRoute.selectedPackages.any(String::isNotBlank)
+    return includeOnlySplit || torOnlySelectedApps
+}
+
+private fun ExpertSettings.runtimeHasIncludeOnlyAppSplit(): Boolean =
+    perAppRoutingMode == PerAppRoutingMode.INCLUDE_SELECTED_APPS &&
+        (
+            selectedPackages.any(String::isNotBlank) ||
+                (blockedPackagesEnabled && blockedPackages.any(String::isNotBlank))
             )
 
 internal fun Settings.canUseVpnBoundIpRefreshFallback(

@@ -16,6 +16,28 @@ class TunnelValidationPolicyTest {
     }
 
     @Test
+    fun `accepts runtime proxy probes only when app split context allows it`() {
+        assertTrue(
+            acceptsTunnelValidationProbe(
+                TunnelValidationProbeKind.TUNNEL_RUNTIME_PROXY_IP_REFRESH,
+                TunnelValidationPolicyContext(allowRuntimeProxyTunnelValidation = true),
+            ),
+        )
+        assertTrue(
+            acceptsTunnelValidationProbe(
+                TunnelValidationProbeKind.TUNNEL_RUNTIME_PROXY_VALIDATION_ENDPOINT,
+                TunnelValidationPolicyContext(allowRuntimeProxyTunnelValidation = true),
+            ),
+        )
+        assertFalse(
+            acceptsTunnelValidationProbe(
+                TunnelValidationProbeKind.TUNNEL_RUNTIME_PROXY_IP_REFRESH,
+                TunnelValidationPolicyContext(allowRuntimeProxyTunnelValidation = false),
+            ),
+        )
+    }
+
+    @Test
     fun `literal ip validation is diagnostic only`() {
         assertFalse(
             acceptsTunnelValidationProbe(

@@ -21,6 +21,7 @@ internal suspend fun FoxholeVpnService.validateRuntimeProxyEgressWithWarmup(
     settings: Settings,
     vpnNetwork: Network,
     session: VpnSession?,
+    validationPolicyContext: TunnelValidationPolicyContext,
     preferIpv4Validation: Boolean,
     endpointCallTimeoutMs: Long,
     ipRefreshCallTimeoutMs: Long,
@@ -37,6 +38,7 @@ internal suspend fun FoxholeVpnService.validateRuntimeProxyEgressWithWarmup(
                 settings = settings,
                 vpnNetwork = vpnNetwork,
                 session = session,
+                validationPolicyContext = validationPolicyContext,
                 callTimeoutMs = ipRefreshCallTimeoutMs,
                 preferIpv4Validation = preferIpv4Validation,
                 attempt = attempt,
@@ -49,6 +51,7 @@ internal suspend fun FoxholeVpnService.validateRuntimeProxyEgressWithWarmup(
         val endpointProbe =
             attemptRuntimeProxyEndpointValidation(
                 settings = settings,
+                validationPolicyContext = validationPolicyContext,
                 callTimeoutMs = endpointCallTimeoutMs,
                 attempt = attempt,
                 startedAt = startedAt,
@@ -79,6 +82,7 @@ private suspend fun FoxholeVpnService.attemptRuntimeProxyIpRefreshValidation(
     settings: Settings,
     vpnNetwork: Network,
     session: VpnSession?,
+    validationPolicyContext: TunnelValidationPolicyContext,
     callTimeoutMs: Long,
     preferIpv4Validation: Boolean,
     attempt: Int,
@@ -93,9 +97,14 @@ private suspend fun FoxholeVpnService.attemptRuntimeProxyIpRefreshValidation(
                 callTimeoutMs = callTimeoutMs,
                 preferIpv4Validation = preferIpv4Validation,
             )
-        }
+    }
     if (result.isSuccess) {
-        if (acceptsTunnelValidationProbe(TunnelValidationProbeKind.TUNNEL_RUNTIME_PROXY_IP_REFRESH)) {
+        if (
+            acceptsTunnelValidationProbe(
+                TunnelValidationProbeKind.TUNNEL_RUNTIME_PROXY_IP_REFRESH,
+                validationPolicyContext,
+            )
+        ) {
             logRuntimeProxyWarmupRecovery(attempt, "runtime proxy ip refresh recovered after warmup attempt=$attempt")
             return Result.success(
                 RuntimeProxyEgressValidationResult(
@@ -119,6 +128,7 @@ private suspend fun FoxholeVpnService.attemptRuntimeProxyIpRefreshValidation(
 
 private suspend fun FoxholeVpnService.attemptRuntimeProxyEndpointValidation(
     settings: Settings,
+    validationPolicyContext: TunnelValidationPolicyContext,
     callTimeoutMs: Long,
     attempt: Int,
     startedAt: Long,
@@ -129,9 +139,14 @@ private suspend fun FoxholeVpnService.attemptRuntimeProxyEndpointValidation(
                 proxy = settings.tunnelRuntimeProxyAccess(),
                 callTimeoutMs = callTimeoutMs,
             )
-        }
+    }
     if (result.isSuccess) {
-        if (acceptsTunnelValidationProbe(TunnelValidationProbeKind.TUNNEL_RUNTIME_PROXY_VALIDATION_ENDPOINT)) {
+        if (
+            acceptsTunnelValidationProbe(
+                TunnelValidationProbeKind.TUNNEL_RUNTIME_PROXY_VALIDATION_ENDPOINT,
+                validationPolicyContext,
+            )
+        ) {
             logRuntimeProxyWarmupRecovery(
                 attempt,
                 "runtime proxy egress validation recovered after warmup attempt=$attempt",
