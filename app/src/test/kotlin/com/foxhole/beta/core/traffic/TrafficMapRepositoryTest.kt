@@ -131,4 +131,63 @@ class TrafficMapRepositoryTest {
         assertEquals(false, accumulator.samplesById.containsKey("connection-0"))
         assertEquals(true, accumulator.samplesById.containsKey("connection-3"))
     }
+
+    @Test
+    fun `runtime connection sample maps destination traffic to active country`() {
+        val sample =
+            runtimeConnectionTrafficMapSample(
+                connectionId = "tcp-1",
+                outboundType = "direct",
+                destination = "8.8.8.8:443",
+                domain = "dns.google",
+                uplink = 10L,
+                downlink = 20L,
+                uplinkTotal = 100L,
+                downlinkTotal = 200L,
+                countryCodeForDestination = { candidate ->
+                    if (candidate == "8.8.8.8:443" || candidate == "8.8.8.8") {
+                        "us"
+                    } else {
+                        null
+                    }
+                },
+            )
+
+        assertEquals("tcp-1", sample?.connectionId)
+        assertEquals("US", sample?.countryCode)
+        assertEquals(300L, sample?.bytes)
+        assertEquals(1, sample?.connections)
+    }
+
+    @Test
+    fun `runtime connection sample ignores dns unresolved and zero byte connections`() {
+        assertEquals(
+            null,
+            runtimeConnectionTrafficMapSample(
+                connectionId = "dns-1",
+                outboundType = "dns",
+                destination = "8.8.8.8:53",
+                domain = null,
+                uplink = 10L,
+                downlink = 10L,
+                uplinkTotal = 0L,
+                downlinkTotal = 0L,
+                countryCodeForDestination = { "US" },
+            ),
+        )
+        assertEquals(
+            null,
+            runtimeConnectionTrafficMapSample(
+                connectionId = "tcp-2",
+                outboundType = "direct",
+                destination = "example.com:443",
+                domain = "example.com",
+                uplink = 0L,
+                downlink = 0L,
+                uplinkTotal = 0L,
+                downlinkTotal = 0L,
+                countryCodeForDestination = { null },
+            ),
+        )
+    }
 }

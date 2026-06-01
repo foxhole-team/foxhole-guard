@@ -187,10 +187,10 @@ internal fun FoxholeVpnService.scheduleValidationInternal(
     expectedFreshVpnNetworkHandle: Long? = null,
     onSuccess: (Network) -> Unit,
 ) {
-    validationJob?.cancel()
+    val validationEpoch = beginValidationEpoch("schedule:${session.correlationId}")
     val job =
         scope.launch(Dispatchers.Main.immediate) {
-            if (!activeSession.matchesRuntimeValidationSession(session)) {
+            if (!isCurrentValidationEpoch(validationEpoch) || !activeSession.matchesRuntimeValidationSession(session)) {
                 container.diagnosticsLogger.record(
                     "dns",
                     "post-start probe ignored for stale session sessionId=${session.correlationId}",
@@ -198,7 +198,7 @@ internal fun FoxholeVpnService.scheduleValidationInternal(
                 return@launch
             }
             val validation = validateTunnelConnectivity(expectedFreshVpnNetworkHandle, session)
-            if (!activeSession.matchesRuntimeValidationSession(session)) {
+            if (!isCurrentValidationEpoch(validationEpoch) || !activeSession.matchesRuntimeValidationSession(session)) {
                 container.diagnosticsLogger.record(
                     "dns",
                     "post-start probe ignored for stale session sessionId=${session.correlationId}",
@@ -1347,9 +1347,17 @@ internal fun FoxholeVpnService.onTunnelValidatedInternal(
         )
         return
     }
+    val snapshot = FoxholeVpnRuntimeBridge.snapshot.value
+    if (snapshot.state !in setOf(ConnectionState.CONNECTING, ConnectionState.CONNECTED, ConnectionState.RECONNECTING)) {
+        container.diagnosticsLogger.record(
+            "dns",
+            "validated tunnel ignored for inactive state sessionId=${session.correlationId} state=${snapshot.state.name.lowercase()}",
+        )
+        return
+    }
     activeVpnNetworkHandle = vpnNetwork.networkHandle
     registerVpnNetworkCallbackIfNeeded()
-    if (FoxholeVpnRuntimeBridge.snapshot.value.state != ConnectionState.CONNECTED) {
+    if (snapshot.state != ConnectionState.CONNECTED) {
         onConnectionStarted(session, TrafficMode.TUNNEL)
     }
     startGeoRefresh(vpnNetwork)

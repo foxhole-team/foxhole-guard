@@ -752,31 +752,37 @@ internal fun rememberWifiLanAddress(): State<String?> {
         val manager =
             connectivityManager ?: return@DisposableEffect onDispose {
             }
+        fun updateWifiLanAddress() {
+            val resolved = lanAddressProvider.currentWifiIpv4Address()
+            if (wifiLanAddress.value != resolved) {
+                wifiLanAddress.value = resolved
+            }
+        }
         val callback =
             object : ConnectivityManager.NetworkCallback() {
                 override fun onAvailable(network: Network) {
-                    wifiLanAddress.value = lanAddressProvider.currentWifiIpv4Address()
+                    updateWifiLanAddress()
                 }
 
                 override fun onLost(network: Network) {
-                    wifiLanAddress.value = lanAddressProvider.currentWifiIpv4Address()
+                    updateWifiLanAddress()
                 }
 
                 override fun onCapabilitiesChanged(
                     network: Network,
                     networkCapabilities: NetworkCapabilities,
                 ) {
-                    wifiLanAddress.value = lanAddressProvider.currentWifiIpv4Address()
+                    updateWifiLanAddress()
                 }
 
                 override fun onLinkPropertiesChanged(
                     network: Network,
                     linkProperties: LinkProperties,
                 ) {
-                    wifiLanAddress.value = lanAddressProvider.currentWifiIpv4Address()
+                    updateWifiLanAddress()
                 }
             }
-        wifiLanAddress.value = lanAddressProvider.currentWifiIpv4Address()
+        updateWifiLanAddress()
         manager.registerDefaultNetworkCallback(callback)
         onDispose {
             runCatching { manager.unregisterNetworkCallback(callback) }

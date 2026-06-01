@@ -385,6 +385,8 @@ class HomeViewModel(
                 HomeUiState(settings = initialSettings),
             )
 
+    internal val controlUiState: StateFlow<HomeUiState> = coreUiState
+
     val uiState: StateFlow<HomeUiState> =
         combine(
             coreUiState,
@@ -925,7 +927,7 @@ class HomeViewModel(
             PendingConnectAction.AUTO_CONNECT ->
                 if (request.protocolOptionId != null) {
                     connect(request.profileId, protocolOptionId = request.protocolOptionId)
-                } else if (!uiState.value.settings.connection.smartStartEnabled) {
+                } else if (!controlUiState.value.settings.connection.smartStartEnabled) {
                     snackbars.tryEmit(infoBanner(R.string.smart_start_disabled_message))
                 } else {
                     startAutoConnect(request.profileId)
@@ -939,7 +941,7 @@ class HomeViewModel(
     }
 
     fun onRefreshProfile() {
-        val activeProfile = uiState.value.activeProfile ?: return
+        val activeProfile = controlUiState.value.activeProfile ?: return
         if (activeProfile.sourceType != ProfileSourceType.SUBSCRIPTION_URL) {
             snackbars.tryEmit(infoBanner(R.string.profile_not_refreshable))
             return
@@ -959,7 +961,7 @@ class HomeViewModel(
             container.connectionController.setActiveProfile(profileId)
             val updated =
                 container.profileRepository.getProfile(profileId)?.copy(isActive = true)
-                    ?: uiState.value.profiles.firstOrNull { it.id == profileId }?.copy(isActive = true)
+                    ?: controlUiState.value.profiles.firstOrNull { it.id == profileId }?.copy(isActive = true)
             startupActiveProfileMutable.value = updated
             markProfileReconnectPromptWindow()
         }
@@ -1316,7 +1318,7 @@ class HomeViewModel(
     fun dismissTorTransitionPrompt() = dismissTorTransitionPromptInternal()
 
     fun onRenewTorIp() {
-        val state = uiState.value
+        val state = controlUiState.value
         val profileId =
             state.connection.profileId?.takeIf { it == FoxholeVpnService.TOR_ONLY_PROFILE_ID }
                 ?: state.activeProfile?.id
@@ -1609,7 +1611,7 @@ class HomeViewModel(
         val refreshReason =
             runtimeReloadIpRefreshReason(
                 snapshot = snapshot,
-                settings = uiState.value.settings,
+                settings = controlUiState.value.settings,
             )
         scheduleConnectedIpRefresh(reason = refreshReason, clearExistingIp = false)
         if (dashboardVisible && !autoConnectUiStateMutable.value.running) {

@@ -154,6 +154,12 @@ internal fun HomeViewModel.refreshIpInfoInternalInternal(
                         "geo refreshed id=$refreshToken reason=${reason.name.lowercase()} target=${target.name.lowercase()}",
                     )
                     onPublished?.invoke(info)
+                    maybeScheduleIpInfoGeoEnrichment(
+                        reason = reason,
+                        fetchMode = fetchMode,
+                        publishedInfo = info,
+                        publishedTarget = target,
+                    )
                 }
             } catch (cancelled: CancellationException) {
                 container.diagnosticsLogger.record(
@@ -202,6 +208,55 @@ internal fun HomeViewModel.refreshIpInfoInternalInternal(
                 }
             }
         }
+}
+
+private fun HomeViewModel.maybeScheduleIpInfoGeoEnrichment(
+    reason: IpInfoRefreshReason,
+    fetchMode: IpInfoFetchMode,
+    publishedInfo: IpInfo,
+    publishedTarget: IpInfoRefreshTarget,
+) {
+    if (
+        fetchMode != IpInfoFetchMode.ENTRY_QUICK ||
+        reason == IpInfoRefreshReason.TOR_ROUTE ||
+        (publishedInfo.hasDashboardLocationDetails() && publishedInfo.hasDashboardProviderDetails())
+    ) {
+        return
+    }
+    val publishedIp = primaryVisibleIp(publishedInfo)
+    if (publishedIp == "-") {
+        return
+    }
+    viewModelScope.launch {
+        delay(ENTRY_QUICK_GEO_ENRICHMENT_DELAY_MS)
+        if (ipInfoRefreshJob != null) {
+            return@launch
+        }
+        val currentSnapshot = container.connectionController.snapshot.value
+        if (ipInfoRefreshTargetForSnapshot(currentSnapshot) != publishedTarget) {
+            return@launch
+        }
+        val currentInfo = container.connectionController.ipInfo.value
+        if (
+            currentInfo == null ||
+            (currentInfo.hasDashboardLocationDetails() && currentInfo.hasDashboardProviderDetails()) ||
+            primaryVisibleIp(currentInfo) != publishedIp
+        ) {
+            return@launch
+        }
+        container.diagnosticsLogger.record(
+            "ip",
+            "geo enrichment started after entry_quick target=${publishedTarget.name.lowercase()}",
+        )
+        startIpInfoRefresh(
+            reportFailures = false,
+            showLoading = false,
+            clearExistingIp = false,
+            fetchMode = IpInfoFetchMode.FULL,
+            minimumLoadingDurationMs = 0L,
+            reason = IpInfoRefreshReason.POST_UPDATE,
+        )
+    }
 }
 
 private suspend fun HomeViewModel.refreshIpInfoForReason(
@@ -284,8 +339,8 @@ internal suspend fun HomeViewModel.updateResolvedConfigInternal(
         val message =
             if (reconnected) {
                 getApplication<Application>().getString(R.string.profile_config_saved_reconnecting)
-            } else if (uiState.value.activeProfile?.id == profileId &&
-                uiState.value.connection.state in setOf(ConnectionState.CONNECTED, ConnectionState.CONNECTING, ConnectionState.RECONNECTING)
+            } else if (controlUiState.value.activeProfile?.id == profileId &&
+                controlUiState.value.connection.state in setOf(ConnectionState.CONNECTED, ConnectionState.CONNECTING, ConnectionState.RECONNECTING)
             ) {
                 getApplication<Application>().getString(R.string.reconnect_required)
             } else {
@@ -323,7 +378,7 @@ internal fun HomeViewModel.saveSiteRuleInternal(
                     .filter { it.startsWith(SITE_CIDR_PREFIX) }
                     .map { it.removePrefix(SITE_CIDR_PREFIX) }
             val presetId =
-                uiState.value.activePreset?.id ?: container.routingRepository.createPreset(
+                controlUiState.value.activePreset?.id ?: container.routingRepository.createPreset(
                     name = getApplication<Application>().getString(R.string.local_rules_preset_name),
                     activate = true,
                 )
@@ -332,7 +387,7 @@ internal fun HomeViewModel.saveSiteRuleInternal(
                 ruleId = ruleId,
                 name = siteRuleName(action, normalizedTokens.firstOrNull()),
                 enabled = true,
-                order = uiState.value.activePreset?.rules?.firstOrNull { it.id == ruleId }?.order,
+                order = controlUiState.value.activePreset?.rules?.firstOrNull { it.id == ruleId }?.order,
                 action = action,
                 matchDomains = normalizedDomains,
                 matchIpCidrs = normalizedIpCidrs,
@@ -356,7 +411,7 @@ internal fun HomeViewModel.onSiteRuleMovedInternal(
 ) {
     viewModelScope.launch {
         runCatching {
-            val rule = uiState.value.activePreset?.rules?.firstOrNull { it.id == ruleId }
+            val rule = controlUiState.value.activePreset?.rules?.firstOrNull { it.id == ruleId }
                 ?: error(getApplication<Application>().getString(R.string.routing_rule_save_failed))
             val firstToken = (rule.matchDomains + rule.matchIpCidrs.map { "$SITE_CIDR_PREFIX$it" }).firstOrNull()
             container.routingRepository.updateRuleActionAndOrder(
@@ -417,8 +472,8 @@ internal suspend fun HomeViewModel.reconnectProfileIfRequestedInternal(
 ): Boolean {
     val shouldReconnect =
         reconnectNow &&
-            uiState.value.activeProfile?.id == profileId &&
-            uiState.value.connection.state in HomeViewModel.ACTIVE_CONNECTION_STATES
+            controlUiState.value.activeProfile?.id == profileId &&
+            controlUiState.value.connection.state in HomeViewModel.ACTIVE_CONNECTION_STATES
     if (!shouldReconnect) {
         return false
     }
@@ -514,7 +569,7 @@ internal fun HomeViewModel.activeRuntimeProfileIdForReload(): Long? {
     val snapshot = container.connectionController.snapshot.value
     return resolveActiveRuntimeProfileIdForReload(
         snapshot = snapshot,
-        activeProfileId = uiState.value.activeProfile?.id,
+        activeProfileId = controlUiState.value.activeProfile?.id,
     )
 }
 
@@ -539,7 +594,7 @@ internal fun HomeViewModel.connectInternal(
         runCatching {
             if (
                 profileId != FoxholeVpnService.TOR_ONLY_PROFILE_ID &&
-                uiState.value.activeProfile?.id != profileId
+                controlUiState.value.activeProfile?.id != profileId
             ) {
                 container.connectionController.setActiveProfile(profileId)
                 val updated = container.profileRepository.getProfile(profileId)?.copy(isActive = true)
@@ -805,6 +860,8 @@ private fun HomeViewModel.schedulePostConnectLatencyRefreshAfterIp(reason: IpInf
             }
         }
 }
+
+private const val ENTRY_QUICK_GEO_ENRICHMENT_DELAY_MS = 500L
 
 internal fun HomeViewModel.markRuntimeReloadPendingInternal() {
     runtimeReloadPendingJob?.cancel()

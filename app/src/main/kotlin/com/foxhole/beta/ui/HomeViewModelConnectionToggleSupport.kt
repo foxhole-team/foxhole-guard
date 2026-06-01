@@ -1,11 +1,17 @@
 package com.foxhole.beta.ui
 
+import androidx.lifecycle.viewModelScope
 import com.foxhole.beta.R
 import com.foxhole.beta.core.model.ConnectionState
 import com.foxhole.beta.core.model.PrivacyRouteScope
 import com.foxhole.beta.core.model.Profile
 import com.foxhole.beta.core.model.TrafficMode
 import com.foxhole.beta.vpn.FoxholeVpnService
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.security.GeneralSecurityException
 
 @Suppress("ReturnCount")
 internal fun HomeViewModel.toggleConnectionInternal() {
@@ -13,7 +19,7 @@ internal fun HomeViewModel.toggleConnectionInternal() {
         return
     }
     cancelAutoConnect(clearUiOnly = true)
-    val state = uiState.value
+    val state = controlUiState.value
     if (cancelReconnectConnection(state)) {
         return
     }
@@ -22,7 +28,7 @@ internal fun HomeViewModel.toggleConnectionInternal() {
     }
     val activeProfile = state.activeProfile
     if (activeProfile == null) {
-        handleToggleWithoutActiveProfile(state)
+        recoverActiveProfileAndToggleConnection()
         return
     }
     val networkOverride = currentNetworkProfileOverride(state)
@@ -31,6 +37,71 @@ internal fun HomeViewModel.toggleConnectionInternal() {
         return
     }
     connectSelectedProfile(state, connectProfile, networkOverride?.protocolOptionId)
+}
+
+private fun HomeViewModel.recoverActiveProfileAndToggleConnection() {
+    viewModelScope.launch {
+        val recoveredProfile = recoverActiveProfileForToggle()
+        if (recoveredProfile == null) {
+            handleToggleWithoutActiveProfile(controlUiState.value)
+            return@launch
+        }
+        val activeProfile = recoveredProfile.copy(isActive = true)
+        startupActiveProfileMutable.value = activeProfile
+        container.diagnosticsLogger.record("profile", "connect recovered active profile")
+        val currentState = controlUiState.value
+        val recoveredState =
+            currentState.copy(
+                activeProfile = activeProfile,
+                profiles = currentState.profiles.replaceOrAppendActiveProfile(activeProfile),
+            )
+        val networkOverride = currentNetworkProfileOverride(recoveredState)
+        val connectProfile = networkOverride?.profile ?: activeProfile
+        if (togglePrimaryRuntimeConnection(recoveredState, activeProfile)) {
+            return@launch
+        }
+        connectSelectedProfile(recoveredState, connectProfile, networkOverride?.protocolOptionId)
+    }
+}
+
+private suspend fun HomeViewModel.recoverActiveProfileForToggle(): Profile? =
+    try {
+        withContext(Dispatchers.IO) {
+            container.profileRepository.getActiveProfile()
+                ?: run {
+                    container.profileRepository.ensureActiveProfileInvariant()
+                    container.profileRepository.getActiveProfile()
+                }
+        }
+    } catch (error: CancellationException) {
+        throw error
+    } catch (error: RuntimeException) {
+        container.diagnosticsLogger.record("profile", "connect active profile recovery failed: ${error::class.simpleName}")
+        null
+    } catch (error: java.io.IOException) {
+        container.diagnosticsLogger.record("profile", "connect active profile recovery failed: ${error::class.simpleName}")
+        null
+    } catch (error: GeneralSecurityException) {
+        container.diagnosticsLogger.record("profile", "connect active profile recovery failed: ${error::class.simpleName}")
+        null
+    }
+
+private fun List<Profile>.replaceOrAppendActiveProfile(activeProfile: Profile): List<Profile> {
+    var replaced = false
+    val updated =
+        map { profile ->
+            if (profile.id == activeProfile.id) {
+                replaced = true
+                activeProfile
+            } else {
+                profile.copy(isActive = false)
+            }
+        }
+    return if (replaced) {
+        updated
+    } else {
+        updated + activeProfile
+    }
 }
 
 private fun HomeViewModel.cancelProtocolSearchConnection(): Boolean {

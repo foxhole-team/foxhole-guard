@@ -38,6 +38,7 @@ import java.net.PasswordAuthentication
 import java.net.Proxy
 import java.net.Socket
 import java.util.LinkedHashMap
+import java.util.Locale
 import java.util.concurrent.TimeUnit
 import javax.net.ssl.HttpsURLConnection
 import javax.net.ssl.SSLSocket
@@ -586,6 +587,9 @@ class IpInfoRepository(
                 if (!candidate.equals(primary, ignoreCase = true) && candidate !in this) {
                     add(candidate)
                 }
+                if (size == 1 && primary !in this) {
+                    add(primary)
+                }
             }
             if (primary !in this) {
                 add(primary)
@@ -692,9 +696,8 @@ class IpInfoRepository(
         val QUICK_FALLBACK_ENDPOINTS =
             listOf(
                 DNS_INDEPENDENT_IP_INFO_ENDPOINT,
+                "https://ipinfo.io/json",
                 "https://1.0.0.1/cdn-cgi/trace",
-                "https://api.ipify.org?format=json",
-                "https://cloudflare.com/cdn-cgi/trace",
             )
         val IPV4_FALLBACK_ENDPOINTS =
             listOf(
@@ -1039,17 +1042,74 @@ private fun parseCloudflareTraceResponse(body: String): IpInfo? {
             }.toMap()
     val ip = values["ip"]?.takeIf(String::isNotBlank) ?: return null
     val countryCode = values["loc"]?.takeIf { value -> value.length == ISO_COUNTRY_CODE_LENGTH }
+    val city = values["colo"]?.let(::cloudflareColoCity)
     return IpInfo(
         ip = ip,
         ipv4 = ip.takeIf(::isIpv4Address),
         ipv6 = ip.takeIf(::isIpv6Address),
         countryCode = countryCode,
-        countryName = null,
-        city = null,
+        countryName = countryCode?.let(::countryDisplayName),
+        city = city,
         isp = null,
         fetchedAt = System.currentTimeMillis(),
     )
 }
+
+private fun countryDisplayName(countryCode: String): String? =
+    Locale.Builder()
+        .setRegion(countryCode.uppercase(Locale.US))
+        .build()
+        .getDisplayCountry(Locale.US)
+        .takeIf { value -> value.isNotBlank() && !value.equals(countryCode, ignoreCase = true) }
+
+private fun cloudflareColoCity(colo: String): String? =
+    CLOUDFLARE_COLO_CITIES[colo.uppercase(Locale.US)]
+
+private val CLOUDFLARE_COLO_CITIES =
+    mapOf(
+        "AMS" to "Amsterdam",
+        "ARN" to "Stockholm",
+        "ATL" to "Atlanta",
+        "BCN" to "Barcelona",
+        "BLR" to "Bengaluru",
+        "BOM" to "Mumbai",
+        "BUD" to "Budapest",
+        "CDG" to "Paris",
+        "DEL" to "Delhi",
+        "DFW" to "Dallas",
+        "DME" to "Moscow",
+        "DXB" to "Dubai",
+        "EWR" to "Newark",
+        "EZE" to "Buenos Aires",
+        "FCO" to "Rome",
+        "FRA" to "Frankfurt",
+        "GRU" to "Sao Paulo",
+        "HEL" to "Helsinki",
+        "HKG" to "Hong Kong",
+        "IAD" to "Ashburn",
+        "ICN" to "Seoul",
+        "IST" to "Istanbul",
+        "JFK" to "New York",
+        "JNB" to "Johannesburg",
+        "LAX" to "Los Angeles",
+        "LED" to "Saint Petersburg",
+        "LHR" to "London",
+        "MAD" to "Madrid",
+        "MEL" to "Melbourne",
+        "MIA" to "Miami",
+        "MXP" to "Milan",
+        "NRT" to "Tokyo",
+        "ORD" to "Chicago",
+        "PRG" to "Prague",
+        "SEA" to "Seattle",
+        "SIN" to "Singapore",
+        "SJC" to "San Jose",
+        "SVO" to "Moscow",
+        "SYD" to "Sydney",
+        "VIE" to "Vienna",
+        "WAW" to "Warsaw",
+        "ZRH" to "Zurich",
+    )
 
 internal fun mergeIpInfo(
     primary: IpInfo,
@@ -1081,7 +1141,7 @@ internal fun shouldStopIpInfoCandidateScan(
     mode: IpInfoFetchMode,
     info: IpInfo,
 ): Boolean =
-    mode != IpInfoFetchMode.FULL || info.hasFullIpInfoLocation()
+    mode != IpInfoFetchMode.FULL || info.hasFullIpInfoDetails()
 
 internal fun selectBetterFullIpInfoCandidate(
     current: IpInfo?,
@@ -1089,9 +1149,10 @@ internal fun selectBetterFullIpInfoCandidate(
 ): IpInfo =
     current?.takeIf { it.fullIpInfoQualityScore() >= candidate.fullIpInfoQualityScore() } ?: candidate
 
-private fun IpInfo.hasFullIpInfoLocation(): Boolean =
+private fun IpInfo.hasFullIpInfoDetails(): Boolean =
     (countryName?.isNotBlank() == true || countryCode?.isNotBlank() == true) &&
-        city?.isNotBlank() == true
+        city?.isNotBlank() == true &&
+        isp?.isNotBlank() == true
 
 internal fun IpInfo.fullIpInfoQualityScore(): Int =
     listOf(

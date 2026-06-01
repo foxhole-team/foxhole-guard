@@ -7,18 +7,18 @@ import com.foxhole.beta.core.network.scopedByNetworkRules
 
 internal fun HomeViewModel.currentNetworkFingerprintForSmartRules(): NetworkFingerprint? {
     val fingerprint = container.networkFingerprintProvider.currentFingerprint() ?: return null
-    return fingerprint.scopedByNetworkRules(uiState.value.settings.networkRules)
+    return fingerprint.scopedByNetworkRules(controlUiState.value.settings.networkRules)
 }
 
 internal fun HomeViewModel.shouldSkipSpeedTestsOnCurrentNetwork(): Boolean {
-    val networkRules = uiState.value.settings.networkRules
+    val networkRules = controlUiState.value.settings.networkRules
     if (!networkRules.skipSpeedTestsOnCellular) {
         return false
     }
     return container.networkFingerprintProvider.currentFingerprint()?.isCellularOrMetered() == true
 }
 
-internal fun HomeViewModel.mobileNetworkProfileOverride(state: HomeUiState = uiState.value): Profile? {
+internal fun HomeViewModel.mobileNetworkProfileOverride(state: HomeUiState = controlUiState.value): Profile? {
     val fingerprint = container.networkFingerprintProvider.currentFingerprint() ?: return null
     val override = currentNetworkProfileOverride(state)
     return if (fingerprint.isCellularOrMetered()) {
@@ -28,7 +28,7 @@ internal fun HomeViewModel.mobileNetworkProfileOverride(state: HomeUiState = uiS
     }
 }
 
-internal fun HomeViewModel.currentNetworkProfileOverride(state: HomeUiState = uiState.value): NetworkProfileOverride? {
+internal fun HomeViewModel.currentNetworkProfileOverride(state: HomeUiState = controlUiState.value): NetworkProfileOverride? {
     val networkRules = state.settings.networkRules
     val fingerprint = container.networkFingerprintProvider.currentFingerprint() ?: return null
     return when {

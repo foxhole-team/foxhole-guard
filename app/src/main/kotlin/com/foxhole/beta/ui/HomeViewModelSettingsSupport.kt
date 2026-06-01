@@ -45,7 +45,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import android.provider.Settings as AndroidSettings
 
-internal fun HomeViewModel.profileInternal(profileId: Long): Profile? = uiState.value.profiles.firstOrNull { it.id == profileId }
+internal fun HomeViewModel.profileInternal(profileId: Long): Profile? = controlUiState.value.profiles.firstOrNull { it.id == profileId }
 
 internal fun HomeViewModel.refreshProfileInternal(profileId: Long) {
     viewModelScope.launch {
@@ -636,7 +636,7 @@ internal fun HomeViewModel.onPrivacyRouteModeSelectedInternal(value: PrivacyRout
     if (value == PrivacyRouteMode.TOR_OVER_VPN && shouldBlockTorOverUdpVpnEnable()) {
         torTransitionPromptMutable.value =
             TorTransitionPrompt.UdpVpnProtocolNotSupported(
-                protocolName = uiState.value.activeProfile?.protocolOptionOrDefault(null)?.displayName,
+                protocolName = controlUiState.value.activeProfile?.protocolOptionOrDefault(null)?.displayName,
             )
         return
     }
@@ -672,7 +672,7 @@ internal fun HomeViewModel.onPrivacyRouteModeSelectedInternal(value: PrivacyRout
 }
 
 private fun HomeViewModel.shouldBlockTorOverUdpVpnEnable(): Boolean {
-    val state = uiState.value
+    val state = controlUiState.value
     val snapshot = state.connection
     if (
         state.settings.privacyRoute.bypassVpnTunnel ||
@@ -742,7 +742,7 @@ private fun HomeViewModel.updateAppRoutingSettingAndPromptReconnect(
     updateAction: suspend () -> Unit,
 ) {
     viewModelScope.launch {
-        val previousMode = uiState.value.settings.expert.perAppRoutingMode
+        val previousMode = controlUiState.value.settings.expert.perAppRoutingMode
         val targetProfileId = activeRuntimeProfileIdForReload()
         val activeRuntime =
             targetProfileId != null &&
@@ -949,7 +949,7 @@ internal suspend fun HomeViewModel.openSystemVpnSettingsInternal() {
 
 internal fun HomeViewModel.createPresetInternal(name: String) {
     viewModelScope.launch {
-        runCatching { container.routingRepository.createPreset(name = name, activate = uiState.value.presets.isEmpty()) }
+        runCatching { container.routingRepository.createPreset(name = name, activate = controlUiState.value.presets.isEmpty()) }
             .onSuccess { maybeReloadActiveRuntime() }
             .onFailure { emitError(it.message ?: getApplication<Application>().getString(R.string.routing_preset_create_failed)) }
     }

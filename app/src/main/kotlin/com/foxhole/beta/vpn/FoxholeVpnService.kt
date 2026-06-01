@@ -168,6 +168,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
             validationJobBacking = value
             runtimeSupervisor.setValidationActive(value != null)
         }
+    private var validationEpoch: Long = 0L
     internal var notificationHealthJob: Job? = null
     internal var appTrafficStatsJob: Job? = null
     private var networkCallbackRegisteredBacking = false
@@ -268,8 +269,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
                 updateActiveVpnUnderlyingNetwork(null)
                 publishUpstreamNetworkChange(null, reason = "lost")
                 runtime.onDefaultNetworkLost()
-                validationJob?.cancel()
-                validationJob = null
+                invalidateValidationEpoch("upstream_lost")
                 val snapshot = FoxholeVpnRuntimeBridge.snapshot.value
                 if (snapshot.state == ConnectionState.CONNECTED) {
                     stopGeoRefresh()
@@ -395,8 +395,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         stopGeoRefresh()
         stopNotificationHealthMonitoring()
         cancelScheduledAutoReconnect(resetAttempts = true)
-        validationJob?.cancel()
-        validationJob = null
+        invalidateValidationEpoch("service_destroy")
         runtimeSupervisorInstance?.close()
         runtimeInstanceStore.current()?.let { runtime ->
             if (!runtime.nativeSnapshot().isIdleWithoutAttachedRuntimeResources()) {
@@ -742,8 +741,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         stopAppTrafficStatsUpdates()
         stopGeoRefresh()
         stopNotificationHealthMonitoring()
-        validationJob?.cancel()
-        validationJob = null
+        invalidateValidationEpoch("local_guard_handoff")
         stopRuntimeFailClosed(reason = "local_guard_handoff")
         runtimeInstanceStore.clear()
         container.diagnosticsLogger.record("runtime", "vpn runtime instance reset after local guard handoff")
@@ -767,8 +765,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         stopAppTrafficStatsUpdates()
         stopGeoRefresh()
         stopNotificationHealthMonitoring()
-        validationJob?.cancel()
-        validationJob = null
+        invalidateValidationEpoch("tunnel_handoff_to_local_guard")
         stopRuntimeFailClosed(reason = "local_guard_handoff_from_tunnel")
         releaseRuntimeWakeLock()
         activeSession = null
@@ -862,8 +859,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         stopGeoRefresh()
         stopNotificationHealthMonitoring()
         cancelScheduledAutoReconnect(resetAttempts = true)
-        validationJob?.cancel()
-        validationJob = null
+        invalidateValidationEpoch("disconnect")
         container.diagnosticsLogger.recordStructured(
             "connection",
             "session ended",
@@ -955,8 +951,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         stopGeoRefresh()
         stopNotificationHealthMonitoring()
         cancelScheduledAutoReconnect(resetAttempts = true)
-        validationJob?.cancel()
-        validationJob = null
+        invalidateValidationEpoch("local_guard_start")
         if (activeLocalGuardMode != null) {
             container.diagnosticsLogger.record(
                 "connection",
@@ -1119,8 +1114,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         stopGeoRefresh()
         stopNotificationHealthMonitoring()
         cancelScheduledAutoReconnect(resetAttempts = true)
-        validationJob?.cancel()
-        validationJob = null
+        invalidateValidationEpoch("runtime_command_fail_closed")
         container.diagnosticsLogger.recordStructured(
             "connection",
             "runtime command fail-closed teardown",
@@ -1355,8 +1349,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
                 "connection",
                 "runtime reload recovery restart requested after: $message",
             )
-            validationJob?.cancel()
-            validationJob = null
+            invalidateValidationEpoch("reload_recovery")
             stopTrafficUpdates()
             stopAppTrafficStatsUpdates()
             stopGeoRefresh()
@@ -1561,8 +1554,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
             return
         }
         activeVpnNetworkHandle = null
-        validationJob?.cancel()
-        validationJob = null
+        invalidateValidationEpoch("vpn_network_lost")
         stopGeoRefresh()
         markNotificationConnectivityOffline()
         if (session != null) {
@@ -1956,6 +1948,23 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         onSuccess: (Network) -> Unit,
     ) = scheduleValidationInternal(session, failOnFailure, expectedFreshVpnNetworkHandle, onSuccess)
 
+    internal fun beginValidationEpoch(reason: String): Long {
+        validationJob?.cancel()
+        validationJob = null
+        validationEpoch += 1L
+        container.diagnosticsLogger.record("dns", "validation epoch started reason=$reason epoch=$validationEpoch")
+        return validationEpoch
+    }
+
+    internal fun invalidateValidationEpoch(reason: String) {
+        validationJob?.cancel()
+        validationJob = null
+        validationEpoch += 1L
+        container.diagnosticsLogger.record("dns", "validation epoch invalidated reason=$reason epoch=$validationEpoch")
+    }
+
+    internal fun isCurrentValidationEpoch(epoch: Long): Boolean = validationEpoch == epoch
+
     internal suspend fun validateTunnelConnectivity(
         expectedFreshVpnNetworkHandle: Long? = null,
         session: VpnSession? = null,
@@ -2176,7 +2185,8 @@ private fun FoxholeVpnService.appTrafficStatsRuntimeEnabled(settings: Settings):
         appTrafficStatsRecorder.hasUsageAccess()
 
 private fun destinationCountryTrackingRuntimeEnabled(settings: Settings): Boolean =
-    settings.statistics.enabled &&
+    settings.ui.trafficMapEnabled ||
+        settings.statistics.enabled &&
         (
             settings.statistics.countryTrafficEnabled ||
                 (settings.statistics.anomalyMetricsEnabled && settings.anomaly.analyzeDestinationCountries)

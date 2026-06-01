@@ -28,7 +28,7 @@ internal fun shouldPublishDashboardIpRefresh(
         startedTarget == currentTarget
 
 internal fun HomeViewModel.canAcceptTorRouteIpRefresh(info: IpInfo): Boolean {
-    val state = uiState.value
+    val state = controlUiState.value
     val torRouteVisible =
         state.connection.profileId == FoxholeVpnService.TOR_ONLY_PROFILE_ID ||
             state.settings.privacyRoute.enabled

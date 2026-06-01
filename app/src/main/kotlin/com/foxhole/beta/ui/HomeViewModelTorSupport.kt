@@ -15,7 +15,7 @@ import com.foxhole.beta.vpn.FoxholeVpnService
 import kotlinx.coroutines.launch
 
 internal fun HomeViewModel.onSelectActiveProtocolOptionRequestedInternal(optionId: String) {
-    val state = uiState.value
+    val state = controlUiState.value
     val profile = state.activeProfile
     val option = profile?.protocolOptionOrDefault(optionId)
     if (profile != null && option != null) {
@@ -54,7 +54,7 @@ internal fun HomeViewModel.selectProtocolOptionAndMaybeReconnectInternal(
                 startupActiveProfileMutable.value = updated
                 markProfileReconnectPromptWindow()
             }
-            if (uiState.value.activeProfile?.id == profileId && uiState.value.connection.state in ACTIVE_CONNECTION_STATES) {
+            if (controlUiState.value.activeProfile?.id == profileId && controlUiState.value.connection.state in ACTIVE_CONNECTION_STATES) {
                 markRuntimeReloadPending()
                 clearProfileLatencyRefresh()
             }

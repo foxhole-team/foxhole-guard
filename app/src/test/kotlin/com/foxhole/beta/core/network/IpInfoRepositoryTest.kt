@@ -135,6 +135,7 @@ class IpInfoRepositoryTest {
                     ip=84.17.54.10
                     ts=1779634208.000
                     loc=NL
+                    colo=AMS
                     tls=TLSv1.3
                     """.trimIndent(),
                 json = json,
@@ -144,8 +145,8 @@ class IpInfoRepositoryTest {
         assertEquals("84.17.54.10", parsed.ipv4)
         assertNull(parsed.ipv6)
         assertEquals("NL", parsed.countryCode)
-        assertNull(parsed.countryName)
-        assertNull(parsed.city)
+        assertEquals("Netherlands", parsed.countryName)
+        assertEquals("Amsterdam", parsed.city)
         assertNull(parsed.isp)
     }
 
@@ -163,10 +164,12 @@ class IpInfoRepositoryTest {
             )
         val countryOnly = ipOnly.copy(countryCode = "NL")
         val fullGeo = countryOnly.copy(countryName = "Netherlands", city = "Amsterdam")
+        val fullGeoWithProvider = fullGeo.copy(isp = "Datacamp Limited")
 
         assertFalse(shouldStopIpInfoCandidateScan(IpInfoFetchMode.FULL, ipOnly))
         assertFalse(shouldStopIpInfoCandidateScan(IpInfoFetchMode.FULL, countryOnly))
-        assertTrue(shouldStopIpInfoCandidateScan(IpInfoFetchMode.FULL, fullGeo))
+        assertFalse(shouldStopIpInfoCandidateScan(IpInfoFetchMode.FULL, fullGeo))
+        assertTrue(shouldStopIpInfoCandidateScan(IpInfoFetchMode.FULL, fullGeoWithProvider))
         assertTrue(shouldStopIpInfoCandidateScan(IpInfoFetchMode.ENTRY_QUICK, ipOnly))
     }
 
@@ -195,6 +198,24 @@ class IpInfoRepositoryTest {
 
         assertEquals(cityCandidate, selectBetterFullIpInfoCandidate(ipOnly, cityCandidate))
         assertEquals(cityCandidate, selectBetterFullIpInfoCandidate(cityCandidate, ipOnly))
+    }
+
+    @Test
+    fun `best full fetch candidate prefers provider detail over geo only`() {
+        val geoOnly =
+            IpInfo(
+                ip = "84.17.54.10",
+                ipv4 = "84.17.54.10",
+                countryCode = "NL",
+                countryName = "Netherlands",
+                city = "Amsterdam",
+                isp = null,
+                fetchedAt = 1L,
+            )
+        val withProvider = geoOnly.copy(isp = "Datacamp Limited", fetchedAt = 2L)
+
+        assertEquals(withProvider, selectBetterFullIpInfoCandidate(geoOnly, withProvider))
+        assertEquals(withProvider, selectBetterFullIpInfoCandidate(withProvider, geoOnly))
     }
 
     @Test(expected = IllegalArgumentException::class)
@@ -317,7 +338,7 @@ class IpInfoRepositoryTest {
     }
 
     @Test
-    fun `entry quick mode starts with dns independent lightweight endpoints`() {
+    fun `entry quick mode tries dns independent endpoint then primary geo endpoint`() {
         val repository =
             IpInfoRepository(
                 client = okhttp3.OkHttpClient(),
@@ -331,11 +352,32 @@ class IpInfoRepositoryTest {
             )
 
         assertEquals("https://1.1.1.1/cdn-cgi/trace", candidates[0])
-        assertEquals("https://1.0.0.1/cdn-cgi/trace", candidates[1])
-        assertEquals("https://api.ipify.org?format=json", candidates[2])
-        assertEquals("https://cloudflare.com/cdn-cgi/trace", candidates[3])
-        assertEquals("https://example.com/ip", candidates[4])
-        assertEquals(5, candidates.size)
+        assertEquals("https://example.com/ip", candidates[1])
+        assertEquals("https://ipinfo.io/json", candidates[2])
+        assertEquals("https://1.0.0.1/cdn-cgi/trace", candidates[3])
+        assertEquals(4, candidates.size)
+    }
+
+    @Test
+    fun `entry quick scan stops after first reachable candidate`() {
+        val sparseInfo =
+            IpInfo(
+                ip = "84.17.54.10",
+                ipv4 = "84.17.54.10",
+                countryCode = "NL",
+                countryName = null,
+                city = null,
+                isp = null,
+                fetchedAt = 1L,
+            )
+        val geoInfo =
+            sparseInfo.copy(
+                countryName = "Netherlands",
+                city = "Amsterdam",
+            )
+
+        assertTrue(shouldStopIpInfoCandidateScan(IpInfoFetchMode.ENTRY_QUICK, sparseInfo))
+        assertTrue(shouldStopIpInfoCandidateScan(IpInfoFetchMode.ENTRY_QUICK, geoInfo))
     }
 
     @Test
@@ -374,6 +416,7 @@ class IpInfoRepositoryTest {
             )
 
         assertEquals("https://1.1.1.1/cdn-cgi/trace", strategy.endpointCandidates.first())
+        assertEquals("https://example.com/ip", strategy.endpointCandidates[1])
         assertEquals(1_500L, strategy.callTimeoutMs)
         assertFalse(strategy.includeFamilyProbes)
     }

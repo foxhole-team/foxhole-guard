@@ -69,6 +69,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -385,9 +386,10 @@ fun HomeScreen(
         startAutoConnectAfterLocalDialogs()
     }
 
-    DisposableEffect(onTrafficUiVisibilityChanged) {
-        onTrafficUiVisibilityChanged(true)
-        onDispose { onTrafficUiVisibilityChanged(false) }
+    val latestTrafficUiVisibilityChanged by rememberUpdatedState(onTrafficUiVisibilityChanged)
+    DisposableEffect(Unit) {
+        latestTrafficUiVisibilityChanged(true)
+        onDispose { latestTrafficUiVisibilityChanged(false) }
     }
     val dashboardListState = rememberLazyListState()
     val topChromeScrimProgress = rememberFoxholeTopChromeScrimProgress(dashboardListState)

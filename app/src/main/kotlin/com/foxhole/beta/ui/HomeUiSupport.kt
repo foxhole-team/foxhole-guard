@@ -377,6 +377,9 @@ internal fun IpInfo.hasDashboardLocationDetails(): Boolean =
     (countryName?.isNotBlank() == true || countryCode?.isNotBlank() == true) &&
         city?.isNotBlank() == true
 
+internal fun IpInfo.hasDashboardProviderDetails(): Boolean =
+    isp?.isNotBlank() == true
+
 internal fun shouldAutoRefreshIpAfterUpstreamNetworkChange(
     connectionState: ConnectionState,
     previousRevision: Long?,
@@ -864,31 +867,37 @@ internal fun rememberDefaultInternetAvailability(): State<Boolean?> {
         val manager =
             connectivityManager ?: return@DisposableEffect onDispose {
             }
+        fun updateAvailability() {
+            val resolved = resolveDefaultInternetAvailability(manager)
+            if (defaultInternetAvailable.value != resolved) {
+                defaultInternetAvailable.value = resolved
+            }
+        }
         val callback =
             object : ConnectivityManager.NetworkCallback() {
                 override fun onAvailable(network: Network) {
-                    defaultInternetAvailable.value = resolveDefaultInternetAvailability(manager)
+                    updateAvailability()
                 }
 
                 override fun onLost(network: Network) {
-                    defaultInternetAvailable.value = resolveDefaultInternetAvailability(manager)
+                    updateAvailability()
                 }
 
                 override fun onCapabilitiesChanged(
                     network: Network,
                     networkCapabilities: NetworkCapabilities,
                 ) {
-                    defaultInternetAvailable.value = resolveDefaultInternetAvailability(manager)
+                    updateAvailability()
                 }
 
                 override fun onLinkPropertiesChanged(
                     network: Network,
                     linkProperties: LinkProperties,
                 ) {
-                    defaultInternetAvailable.value = resolveDefaultInternetAvailability(manager)
+                    updateAvailability()
                 }
             }
-        defaultInternetAvailable.value = resolveDefaultInternetAvailability(manager)
+        updateAvailability()
         manager.registerDefaultNetworkCallback(callback)
         onDispose {
             runCatching { manager.unregisterNetworkCallback(callback) }

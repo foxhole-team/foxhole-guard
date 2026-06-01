@@ -35,6 +35,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -64,7 +65,14 @@ import androidx.core.content.getSystemService
 import com.foxhole.beta.R
 import com.foxhole.beta.core.model.TrafficMapPoint
 import com.foxhole.beta.core.model.TrafficMapUiState
+import com.foxhole.beta.core.traffic.TrafficMapCountryShape
+import com.foxhole.beta.core.traffic.TrafficMapCountryShapeAssetParser
+import com.foxhole.beta.core.traffic.TrafficMapGeoPoint
 import com.foxhole.beta.ui.theme.LocalFoxholeDarkTheme
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import java.util.Locale
 import kotlin.math.atan2
 import kotlin.math.floor
@@ -80,6 +88,7 @@ internal fun TrafficMapDashboardCard(
     val powerState = rememberTrafficMapPowerState()
     var forceMapEnabled by rememberSaveable { mutableStateOf(false) }
     val mapDisabledForPower = powerState.mapDisabled && !forceMapEnabled
+    val countryShapes = rememberTrafficMapCountryShapes()
     FoxholeCard(
         modifier = modifier
             .fillMaxWidth()
@@ -112,6 +121,7 @@ internal fun TrafficMapDashboardCard(
                 } else {
                     TrafficMapCanvas(
                         state = state,
+                        countryShapes = countryShapes,
                         modifier = Modifier
                             .fillMaxWidth()
                             .weight(1f)
@@ -208,15 +218,21 @@ private fun TrafficMapPowerSaveBlock(
 @Suppress("LongMethod")
 private fun TrafficMapCanvas(
     state: TrafficMapUiState,
+    countryShapes: List<TrafficMapCountryShape>,
     modifier: Modifier = Modifier,
 ) {
     val latestState = rememberUpdatedState(state)
     val colors = trafficMapColors()
+    val mapCountryShapes = countryShapes
 
     Box(
         modifier = modifier
             .drawWithCache {
                 val viewport = trafficMapViewport(size)
+                val countryPaths =
+                    mapCountryShapes.flatMap { shape ->
+                        shape.rings.map { ring -> trafficMapRingPath(ring, viewport) }
+                    }
                 val borderStroke = Stroke(width = 0.55.dp.toPx())
                 val gridStroke = Stroke(width = 0.45.dp.toPx())
                 val maxLineStroke = 2.1.dp.toPx()
@@ -234,6 +250,7 @@ private fun TrafficMapCanvas(
                     val drawableDestinations = mapState.destinations.toDrawableTrafficMapDestinations()
                     drawTrafficMapFrame(
                         viewport = viewport,
+                        countryPaths = countryPaths,
                         fillColor = colors.countryFill,
                         lineColor = colors.countryBorder,
                         borderStroke = borderStroke,
@@ -302,6 +319,46 @@ private fun TrafficMapCanvas(
             }
             .fillMaxSize(),
     )
+}
+
+@Composable
+private fun rememberTrafficMapCountryShapes(): List<TrafficMapCountryShape> {
+    val appContext = LocalContext.current.applicationContext
+    val shapes by produceState(
+        initialValue = TrafficMapCountryShapeCache.current(),
+        key1 = appContext,
+    ) {
+        value = TrafficMapCountryShapeCache.load(appContext)
+    }
+    return shapes
+}
+
+private object TrafficMapCountryShapeCache {
+    private val mutex = Mutex()
+
+    @Volatile
+    private var cachedShapes: List<TrafficMapCountryShape>? = null
+
+    fun current(): List<TrafficMapCountryShape> = cachedShapes.orEmpty()
+
+    suspend fun load(context: Context): List<TrafficMapCountryShape> {
+        cachedShapes?.let { shapes -> return shapes }
+        return mutex.withLock {
+            cachedShapes?.let { shapes -> return@withLock shapes }
+            val raw =
+                withContext(Dispatchers.IO) {
+                    context.assets.open(TRAFFIC_MAP_COUNTRY_SHAPES_ASSET)
+                        .bufferedReader()
+                        .use { reader -> reader.readText() }
+                }
+            withContext(Dispatchers.Default) {
+                TrafficMapCountryShapeAssetParser()
+                    .parse(raw)
+            }.also { shapes ->
+                cachedShapes = shapes
+            }
+        }
+    }
 }
 
 private data class DrawableTrafficMapDestination(
@@ -648,6 +705,7 @@ private fun project(
 
 private fun DrawScope.drawTrafficMapFrame(
     viewport: TrafficMapViewport,
+    countryPaths: List<Path>,
     fillColor: Color,
     lineColor: Color,
     borderStroke: Stroke,
@@ -660,9 +718,15 @@ private fun DrawScope.drawTrafficMapFrame(
         size = viewport.size,
         cornerRadius = cornerRadius,
     )
+    drawTrafficMapLand(
+        countryPaths = countryPaths,
+        landColor = lineColor.copy(alpha = 0.36f),
+        borderColor = lineColor.copy(alpha = 0.72f),
+        stroke = gridStroke,
+    )
     drawTrafficMapGrid(
         viewport = viewport,
-        lineColor = lineColor.copy(alpha = lineColor.alpha * 0.72f),
+        lineColor = lineColor.copy(alpha = 0.28f),
         stroke = gridStroke,
     )
     drawRoundRect(
@@ -673,6 +737,38 @@ private fun DrawScope.drawTrafficMapFrame(
         style = borderStroke,
     )
 }
+
+private fun DrawScope.drawTrafficMapLand(
+    countryPaths: List<Path>,
+    landColor: Color,
+    borderColor: Color,
+    stroke: Stroke,
+) {
+    countryPaths.forEach { path ->
+        drawPath(path = path, color = landColor)
+        drawPath(
+            path = path,
+            color = borderColor,
+            style = Stroke(width = stroke.width),
+        )
+    }
+}
+
+private fun trafficMapRingPath(
+    ring: List<TrafficMapGeoPoint>,
+    viewport: TrafficMapViewport,
+): Path =
+    Path().apply {
+        ring.forEachIndexed { index, point ->
+            val offset = project(lat = point.lat, lon = point.lon, viewport = viewport)
+            if (index == 0) {
+                moveTo(offset.x, offset.y)
+            } else {
+                lineTo(offset.x, offset.y)
+            }
+        }
+        close()
+    }
 
 private fun DrawScope.drawTrafficMapGrid(
     viewport: TrafficMapViewport,
@@ -736,8 +832,8 @@ private fun trafficMapColors(): TrafficMapColors {
     val colorScheme = MaterialTheme.colorScheme
     return if (LocalFoxholeDarkTheme.current) {
         TrafficMapColors(
-            countryFill = colorScheme.onSurfaceVariant.copy(alpha = 0.22f),
-            countryBorder = colorScheme.outline.copy(alpha = 0.46f),
+            countryFill = Color(0xFF333936),
+            countryBorder = Color(0xFFA0ABA5),
             routeLine = FoxholePositiveAccent,
             destination = FoxholePositiveAccent,
             origin = FoxholePositiveAccent,
@@ -745,8 +841,8 @@ private fun trafficMapColors(): TrafficMapColors {
         )
     } else {
         TrafficMapColors(
-            countryFill = Color(0xFFC7D1D8),
-            countryBorder = Color(0xFF95A2AC).copy(alpha = 0.88f),
+            countryFill = Color(0xFFE5EBEE),
+            countryBorder = Color(0xFF56635E),
             routeLine = Color(0xFF278A5B),
             destination = Color(0xFF278A5B),
             origin = Color(0xFF278A5B),
@@ -800,3 +896,4 @@ private const val TRAFFIC_ROUTE_PI = 3.141592653589793
 private const val TRAFFIC_ROUTE_ANGLE_BUCKET_RADIANS = 0.17453292519943295
 private val TRAFFIC_MAP_GRID_LONGITUDES = listOf(-120.0, -60.0, 0.0, 60.0, 120.0)
 private val TRAFFIC_MAP_GRID_LATITUDES = listOf(-30.0, 0.0, 30.0, 60.0)
+private const val TRAFFIC_MAP_COUNTRY_SHAPES_ASSET = "maps/ne_110m_admin_0_countries_preprocessed.json"

@@ -58,7 +58,7 @@ private suspend inline fun <T> runCatchingUnlessCancelled(crossinline block: sus
     }
 
 internal fun HomeViewModel.onAutoConnectActiveProfileInternal() {
-    val state = uiState.value
+    val state = controlUiState.value
     if (!state.settings.connection.smartStartEnabled) {
         snackbars.tryEmit(infoBanner(R.string.smart_start_disabled_message))
         return
@@ -71,7 +71,7 @@ internal fun HomeViewModel.onAutoConnectActiveProfileInternal() {
         if (maybePromptStartTcpVpnWhileTorOnlyActive(profile, protocolOptionId)) {
             return
         }
-        if (uiState.value.settings.traffic.mode == TrafficMode.PROXY) {
+        if (controlUiState.value.settings.traffic.mode == TrafficMode.PROXY) {
             connect(profileId, protocolOptionId = protocolOptionId)
             return
         }
@@ -100,7 +100,7 @@ internal fun HomeViewModel.onAutoConnectActiveProfileInternal() {
         snackbars.tryEmit(infoBanner(R.string.auto_connect_requires_supported_profile))
         return
     }
-    if (uiState.value.settings.traffic.mode == TrafficMode.PROXY) {
+    if (controlUiState.value.settings.traffic.mode == TrafficMode.PROXY) {
         startAutoConnect(profileId)
         return
     }
@@ -118,13 +118,13 @@ internal fun HomeViewModel.onAutoConnectActiveProfileInternal() {
 }
 
 internal fun HomeViewModel.requestReconnectInternal(profileId: Long) {
-    uiState.value.profiles.firstOrNull { profile -> profile.id == profileId }?.let { profile ->
+    controlUiState.value.profiles.firstOrNull { profile -> profile.id == profileId }?.let { profile ->
         if (maybePromptStartTcpVpnWhileTorOnlyActive(profile, null)) {
             return
         }
     }
     clearRouteModeRestartPrompt()
-    if (uiState.value.settings.traffic.mode == TrafficMode.PROXY) {
+    if (controlUiState.value.settings.traffic.mode == TrafficMode.PROXY) {
         reconnect(profileId)
         return
     }
@@ -198,7 +198,7 @@ private fun ConnectionSnapshot?.isConnectedSmartStartWinner(
         (this.protocolOptionId == null || this.protocolOptionId == protocolOptionId)
 
 internal fun HomeViewModel.startAutoConnectInternal(profileId: Long) {
-    if (!uiState.value.settings.connection.smartStartEnabled) {
+    if (!controlUiState.value.settings.connection.smartStartEnabled) {
         snackbars.tryEmit(infoBanner(R.string.smart_start_disabled_message))
         return
     }
@@ -229,7 +229,7 @@ internal fun HomeViewModel.startAutoConnectInternal(profileId: Long) {
                         SmartStartAutoConnectRunner.resolveState(
                             fullScanCandidates = fullScanCandidates,
                             enabledProtocolSetHash = enabledProtocolSetHash,
-                            preference = uiState.value.settings.smartProfilePreference(profileId),
+                            preference = controlUiState.value.settings.smartProfilePreference(profileId),
                             rankedCandidates = rankedCandidates,
                         )
                 ) {
@@ -296,7 +296,7 @@ private fun HomeViewModel.refreshDashboardAfterSmartStartIfConnected() {
 }
 
 private suspend fun HomeViewModel.refreshSubscriptionBeforeSmartStartIfNeeded(profile: Profile): Profile {
-    val settings = uiState.value.settings.connection
+    val settings = controlUiState.value.settings.connection
     if (
         profile.sourceType != ProfileSourceType.SUBSCRIPTION_URL ||
         !settings.smartStartEnabled ||
@@ -520,7 +520,7 @@ private suspend fun HomeViewModel.probeSmartStartCandidateWithinBudget(
     val probeBudgetMs =
         minOf(
             autoConnectCandidateProbeTimeoutMs(
-                timeoutSeconds = uiState.value.settings.connection.smartStartProtocolSelectionTimeoutSeconds,
+                timeoutSeconds = controlUiState.value.settings.connection.smartStartProtocolSelectionTimeoutSeconds,
             ),
             remainingAutoConnectBudgetMs(
                 startedAtElapsedMs = autoConnectStartedAt,
@@ -648,9 +648,9 @@ private fun HomeViewModel.fullScanAutoConnectCandidates(
 ): List<AutoConnectProbeCandidate> =
     MultiProtocolProfileSupport.smartStartFullScanCandidates(
         profile = profile,
-        allowInsecureTlsGlobally = uiState.value.settings.expert.allowInsecureTls,
+        allowInsecureTlsGlobally = controlUiState.value.settings.expert.allowInsecureTls,
         excludedOptionIds = excludedAutoConnectOptionIds(profileId),
-        transportPriority = uiState.value.settings.connection.smartStartTransportPriority,
+        transportPriority = controlUiState.value.settings.connection.smartStartTransportPriority,
     )
 
 private fun HomeViewModel.rankedScoresForCandidates(
@@ -660,7 +660,7 @@ private fun HomeViewModel.rankedScoresForCandidates(
 ): List<AdaptiveProtocolCandidateScore> =
     AdaptiveProtocolRanker.scoreCandidates(
         candidates = candidates,
-        preference = uiState.value.settings.smartProfilePreference(profileId),
+        preference = controlUiState.value.settings.smartProfilePreference(profileId),
         networkFingerprintKey = networkFingerprint?.key,
         networkContext = networkFingerprint,
     )
@@ -936,7 +936,7 @@ private suspend fun HomeViewModel.probeAutoConnectCandidateForMetricsRefresh(
     val startedAt = SystemClock.elapsedRealtime()
     val timeoutMs =
         protocolMetricsCandidateProbeTimeoutMs(
-            timeoutSeconds = uiState.value.settings.connection.smartStartRefreshSelectionTimeoutSeconds,
+            timeoutSeconds = controlUiState.value.settings.connection.smartStartRefreshSelectionTimeoutSeconds,
         )
     val result =
         withTimeoutOrNull(timeoutMs) {
@@ -1105,7 +1105,7 @@ private fun HomeViewModel.buildConnectedAutoConnectFallbackResult(
             rememberedLatencyMs = rememberedLatencyMs,
             penaltyMs = HomeViewModel.AUTO_CONNECT_LATENCY_FALLBACK_PENALTY_MS,
             protocolHint = candidate.protocolHint,
-            latencyProbeMethod = uiState.value.settings.connection.latencyProbeMethod,
+            latencyProbeMethod = controlUiState.value.settings.connection.latencyProbeMethod,
         ),
         displayLatencyMs = rememberedLatencyMs,
         connectDurationMs = elapsedMs,
@@ -1218,7 +1218,7 @@ internal suspend fun HomeViewModel.probeAutoConnectCandidateInternal(
                         rememberedLatencyMs = rememberedLatencyMs,
                         penaltyMs = HomeViewModel.AUTO_CONNECT_LATENCY_FALLBACK_PENALTY_MS,
                         protocolHint = candidate.protocolHint,
-                        latencyProbeMethod = uiState.value.settings.connection.latencyProbeMethod,
+                        latencyProbeMethod = controlUiState.value.settings.connection.latencyProbeMethod,
                     ),
                     displayLatencyMs = null,
                     connectDurationMs = validatedConnectDurationMs,
@@ -1376,7 +1376,7 @@ internal suspend fun HomeViewModel.recordAutoConnectCandidateOutcomeInternal(
             reasonCode = result.reasonCode?.wireCode,
             networkFingerprintPrefix = networkFingerprint?.take(12),
         ),
-        enabled = uiState.value.settings.expert.smartStartReplayLogging,
+        enabled = controlUiState.value.settings.expert.smartStartReplayLogging,
     )
 }
 
@@ -1620,18 +1620,18 @@ internal fun HomeViewModel.scoredAutoConnectCandidatesInternal(
     val excludedOptionIds = excludedAutoConnectOptionIds(profileId)
     return MultiProtocolProfileSupport.scoredProbeCandidates(
         profile = profile,
-        preference = uiState.value.settings.smartProfilePreference(profileId),
+        preference = controlUiState.value.settings.smartProfilePreference(profileId),
         networkFingerprint = networkFingerprint?.key,
         networkContext = networkFingerprint,
-        allowInsecureTlsGlobally = uiState.value.settings.expert.allowInsecureTls,
+        allowInsecureTlsGlobally = controlUiState.value.settings.expert.allowInsecureTls,
         excludedOptionIds = excludedOptionIds,
-        transportPriority = uiState.value.settings.connection.smartStartTransportPriority,
+        transportPriority = controlUiState.value.settings.connection.smartStartTransportPriority,
         controlledExploration = true,
     )
 }
 
 internal fun HomeViewModel.excludedAutoConnectOptionIdsInternal(profileId: Long): Set<String> =
-    uiState.value.settings.smartProfilePreferences
+    controlUiState.value.settings.smartProfilePreferences
         .firstOrNull { preference -> preference.profileId == profileId }
         ?.excludedProtocolOptionIds
         ?.toSet()
@@ -1765,7 +1765,7 @@ internal fun HomeViewModel.scheduleActiveProfileLatencyRefreshInternal(
         return
     }
     val activeProfile =
-        uiState.value.activeProfile ?: run {
+        controlUiState.value.activeProfile ?: run {
             setDashboardConnectionMetricsLoading(false)
             return
         }
@@ -1991,7 +1991,7 @@ private fun HomeViewModel.activeDashboardLatencyTarget(
     fallbackProtocolHint: ProtocolHint?,
 ): ActiveDashboardLatencyTarget? {
     val snapshot = container.connectionController.snapshot.value
-    val currentProfile = uiState.value.activeProfile
+    val currentProfile = controlUiState.value.activeProfile
     val currentOptionId =
         currentProfile?.let { profile ->
             resolveDashboardLatencyOptionId(
@@ -2043,7 +2043,7 @@ internal fun HomeViewModel.rememberedAutoConnectLatency(
     optionId: String,
     networkFingerprint: String?,
 ): Long? {
-    val preference = uiState.value.settings.smartProfilePreference(profileId) ?: return null
+    val preference = controlUiState.value.settings.smartProfilePreference(profileId) ?: return null
     val scopedMemory =
         preference.networkMemory(networkFingerprint)?.protocolMemories?.firstOrNull { memory ->
             memory.optionId == optionId

@@ -27,13 +27,15 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import java.util.Locale
 import io.nekohasekai.libbox.CommandClient as LibboxCommandClient
 
 @OptIn(ExperimentalCoroutinesApi::class)
 internal class LibboxTrafficMapConnectionSource(
-    @Suppress("UNUSED_PARAMETER")
     context: Context,
 ) : TrafficMapConnectionSource {
+    private val countryResolver = TorGeoIpCountryResolver(context.applicationContext)
+
     override fun connectionSamples(runtimeAvailable: Flow<Boolean>): Flow<List<TrafficMapConnectionSample>> =
         runtimeAvailable
             .distinctUntilChanged()
@@ -103,6 +105,7 @@ internal class LibboxTrafficMapConnectionSource(
                             synchronized(lock) {
                                 connections.toTrafficMapSamples(
                                     maxConnections = MaxTrackedConnections,
+                                    countryCodeForDestination = countryResolver::countryCodeForDestination,
                                 ).also { result ->
                                     if (result.truncated) {
                                         connections = Connections()
@@ -136,6 +139,7 @@ private data class TrafficMapSampleResult(
 
 private fun Connections.toTrafficMapSamples(
     maxConnections: Int,
+    countryCodeForDestination: (String) -> String?,
 ): TrafficMapSampleResult {
     val iterator = iterator()
     val samples = mutableListOf<TrafficMapConnectionSample>()
@@ -148,9 +152,72 @@ private fun Connections.toTrafficMapSamples(
         val connection = iterator.next()
         if (connection.outboundType.equals(DNS_OUTBOUND_TYPE, ignoreCase = true)) {
             DnsRuntimeStats.recordDnsConnection(connection.stableTrafficMapConnectionId())
+        } else {
+            connection
+                .toTrafficMapConnectionSample(countryCodeForDestination)
+                ?.let(samples::add)
         }
     }
     return TrafficMapSampleResult(samples = samples, truncated = false)
+}
+
+private fun Connection.toTrafficMapConnectionSample(
+    countryCodeForDestination: (String) -> String?,
+): TrafficMapConnectionSample? =
+    runtimeConnectionTrafficMapSample(
+        connectionId = stableTrafficMapConnectionId(),
+        outboundType = outboundType,
+        destination = destination,
+        domain = domain,
+        uplink = uplink,
+        downlink = downlink,
+        uplinkTotal = uplinkTotal,
+        downlinkTotal = downlinkTotal,
+        countryCodeForDestination = countryCodeForDestination,
+    )
+
+internal fun runtimeConnectionTrafficMapSample(
+    connectionId: String,
+    outboundType: String?,
+    destination: String?,
+    domain: String?,
+    uplink: Long,
+    downlink: Long,
+    uplinkTotal: Long,
+    downlinkTotal: Long,
+    countryCodeForDestination: (String) -> String?,
+): TrafficMapConnectionSample? {
+    if (outboundType.equals(DNS_OUTBOUND_TYPE, ignoreCase = true)) {
+        return null
+    }
+    val totalBytes =
+        maxOf(0L, uplinkTotal) +
+            maxOf(0L, downlinkTotal)
+    val currentBytes =
+        maxOf(0L, uplink) +
+            maxOf(0L, downlink)
+    val bytes = totalBytes.takeIf { value -> value > 0L } ?: currentBytes
+    if (bytes <= 0L) {
+        return null
+    }
+    val destinationHost = destination.orEmpty().toRuntimeEndpoint().host
+    val countryCode =
+        sequenceOf(destination, destinationHost, domain)
+            .filterNotNull()
+            .map(String::trim)
+            .filter(String::isNotEmpty)
+            .firstNotNullOfOrNull { candidate ->
+                countryCodeForDestination(candidate)
+                    ?.takeIf { code -> code.length == 2 }
+                    ?.uppercase(Locale.US)
+            }
+            ?: return null
+    return TrafficMapConnectionSample(
+        connectionId = connectionId,
+        countryCode = countryCode,
+        bytes = bytes,
+        connections = 1,
+    )
 }
 
 private fun Connection.stableTrafficMapConnectionId(): String =

@@ -345,8 +345,7 @@ private suspend fun FoxholeVpnService.stopActiveRuntimeForReconnect(
     stopTrafficUpdates()
     stopGeoRefresh()
     stopNotificationHealthMonitoring()
-    validationJob?.cancel()
-    validationJob = null
+    invalidateValidationEpoch("reconnect_stop")
     val messageRes =
         if (reason.startsWith("smart_start_failover:")) {
             R.string.status_smart_start_reconnecting
