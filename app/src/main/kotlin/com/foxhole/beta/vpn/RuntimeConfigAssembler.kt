@@ -109,13 +109,14 @@ class RuntimeConfigAssembler(
     internal fun assembleLocalGuard(
         settings: Settings,
         mode: LocalGuardMode,
+        dnsFilterRuntimePaths: DnsFilterRuntimePaths? = null,
     ): String {
         val localDnsCaptureEnabled = settings.localGuardDnsCaptureEnabled(mode)
         val baseDnsSettings =
             if (settings.expert.systemDnsProtectionEnabled) {
                 settings.dns.systemDnsProtectionSettings()
             } else {
-                settings.dns.localGuardVerifiedRuleSetSettings()
+                settings.dns.localGuardVerifiedRuleSetSettings(dnsFilterRuntimePaths)
             }
         val dnsSettings =
             baseDnsSettings.localGuardDnsSettings(
@@ -126,6 +127,7 @@ class RuntimeConfigAssembler(
                 strategy = settings.traffic.domainStrategy.configValue,
                 dnsSettings = dnsSettings,
                 privateDnsState = null,
+                dnsFilterRuntimePaths = dnsFilterRuntimePaths,
                 finalTag =
                     if (settings.expert.systemDnsProtectionEnabled) {
                         DNS_REMOTE_TAG
@@ -149,7 +151,14 @@ class RuntimeConfigAssembler(
                             buildAppRouteRules(settings.expert).forEach(::add)
                         }
                     }
+                val ruleSets =
+                    mergedRouteRuleSets(
+                        source = buildJsonObject { },
+                        dnsSettings = dnsSettings,
+                        dnsFilterRuntimePaths = dnsFilterRuntimePaths,
+                    )
                 put("rules", rules)
+                ruleSets?.let { put("rule_set", it) }
                 put("final", "direct")
                 val defaultResolver =
                     if (settings.expert.systemDnsProtectionEnabled) {
@@ -1735,8 +1744,10 @@ class RuntimeConfigAssembler(
             copy(dnsThroughVpn = false)
         }
 
-    private fun DnsSettings.localGuardVerifiedRuleSetSettings(): DnsSettings =
-        if (bundledAdGuardFilterEnabled() && filtersUpdatedAt == null) {
+    private fun DnsSettings.localGuardVerifiedRuleSetSettings(
+        dnsFilterRuntimePaths: DnsFilterRuntimePaths?,
+    ): DnsSettings =
+        if (bundledAdGuardFilterEnabled() && dnsFilterRuntimePaths == null) {
             copy(filteringEnabled = false)
         } else {
             this

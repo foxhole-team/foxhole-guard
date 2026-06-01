@@ -32,6 +32,7 @@ import com.foxhole.beta.core.model.Settings
 import com.foxhole.beta.core.model.TrafficMode
 import com.foxhole.beta.core.model.TrafficSnapshot
 import com.foxhole.beta.core.model.VpnSession
+import com.foxhole.beta.core.model.dnsRuleSetFilteringEnabled
 import com.foxhole.beta.core.model.isUdpTransport
 import com.foxhole.beta.core.network.IpInfoFetchMode
 import com.foxhole.beta.core.network.mergeIpInfo
@@ -964,12 +965,19 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
             runtimeNetworkActivityLoggingSuspended = false
         }
         FoxholeConnectionServiceContract.stopInactiveServices(context = this, activeMode = TrafficMode.TUNNEL)
+        val dnsFilterRuntimePaths = settings.prepareLocalGuardDnsFilterRuntimePaths()
+        val runtimeSettings = settings.disableUnverifiedLocalGuardDnsFiltering(dnsFilterRuntimePaths)
         val session =
             VpnSession(
                 profileId = LOCAL_GUARD_PROFILE_ID,
                 profileName = mode.runtimeProfileName(),
                 protocolHint = com.foxhole.beta.core.model.ProtocolHint.SING_BOX,
-                configJson = container.runtimeConfigAssembler.assembleLocalGuard(settings, mode),
+                configJson =
+                    container.runtimeConfigAssembler.assembleLocalGuard(
+                        settings = runtimeSettings,
+                        mode = mode,
+                        dnsFilterRuntimePaths = dnsFilterRuntimePaths,
+                    ),
                 correlationId = "local-guard-${System.currentTimeMillis()}",
             )
         val previousSnapshot = FoxholeVpnRuntimeBridge.snapshot.value
@@ -1068,6 +1076,26 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
     private fun shouldBlockSystemDnsLocalGuard(mode: LocalGuardMode): Boolean =
         mode == LocalGuardMode.DNS &&
             !PrivateDnsSettings.current(this).isSupportedForSystemDnsProtection()
+
+    private suspend fun Settings.prepareLocalGuardDnsFilterRuntimePaths(): DnsFilterRuntimePaths? {
+        if (!dns.dnsRuleSetFilteringEnabled() || expert.systemDnsProtectionEnabled) {
+            return null
+        }
+        return container.dnsFilterAssetInstaller.prepareVerifiedOrNull()
+            ?: run {
+                container.diagnosticsLogger.record("dns", "dns rule-set runtime disabled: verified filter unavailable")
+                null
+            }
+    }
+
+    private fun Settings.disableUnverifiedLocalGuardDnsFiltering(
+        dnsFilterRuntimePaths: DnsFilterRuntimePaths?,
+    ): Settings =
+        if (dns.dnsRuleSetFilteringEnabled() && !expert.systemDnsProtectionEnabled && dnsFilterRuntimePaths == null) {
+            copy(dns = dns.copy(filteringEnabled = false))
+        } else {
+            this
+        }
 
     internal fun fail(
         message: String,

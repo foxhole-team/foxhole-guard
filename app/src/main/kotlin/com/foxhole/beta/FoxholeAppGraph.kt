@@ -10,6 +10,7 @@ import com.foxhole.beta.core.network.IpInfoRepository
 import com.foxhole.beta.core.network.NetworkFingerprintProvider
 import com.foxhole.beta.core.settings.SettingsRepository
 import com.foxhole.beta.core.traffic.TrafficMapRepository
+import com.foxhole.beta.vpn.DnsFilterAssetInstaller
 import com.foxhole.beta.vpn.DnsFilterUpdateRepository
 import com.foxhole.beta.vpn.FoxholeConnectionController
 import com.foxhole.beta.vpn.RuntimeConfigAssembler
@@ -41,6 +42,7 @@ interface FoxholeRuntimeDependencies {
     val connectionController: FoxholeConnectionController
     val ipInfoRepository: IpInfoRepository
     val runtimeConfigAssembler: RuntimeConfigAssembler
+    val dnsFilterAssetInstaller: DnsFilterAssetInstaller
     val trafficMapRepository: TrafficMapRepository
     val anomalyRepository: AnomalyRepository
 }
@@ -95,6 +97,7 @@ class FoxholeAppGraph(
     override val ipInfoRepository: IpInfoRepository by lazy { runtimeModule.ipInfoRepository }
     override val networkFingerprintProvider: NetworkFingerprintProvider by lazy { runtimeModule.networkFingerprintProvider }
     override val profileRepository: ProfileRepository by lazy { dataModule.profileRepository }
+    override val dnsFilterAssetInstaller: DnsFilterAssetInstaller by lazy { dataModule.dnsFilterAssetInstaller }
     override val dnsFilterUpdateRepository: DnsFilterUpdateRepository by lazy { dataModule.dnsFilterUpdateRepository }
     override val connectionController: FoxholeConnectionController by lazy { runtimeModule.connectionController }
 }

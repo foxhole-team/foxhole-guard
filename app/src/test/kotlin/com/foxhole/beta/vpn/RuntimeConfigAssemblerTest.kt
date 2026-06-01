@@ -974,6 +974,58 @@ class RuntimeConfigAssemblerTest {
     }
 
     @Test
+    fun `local firewall guard does not enable unverified DNS rule set filtering`() {
+        val settings =
+            Settings(
+                dns = DnsSettings(filteringEnabled = true, filtersUpdatedAt = 42L),
+                expert = ExpertSettings(firewallEnabled = true),
+            )
+
+        val config = parse(assembler.assembleLocalGuard(settings, LocalGuardMode.FIREWALL))
+        val dns = config["dns"]!!.jsonObject
+        val route = config["route"]!!.jsonObject
+
+        assertFalse(dns.containsKey("rules"))
+        assertFalse(route.containsKey("rule_set"))
+    }
+
+    @Test
+    fun `local firewall guard attaches verified DNS rule set when prepared`() {
+        val filterPath = "/data/user/0/com.foxhole.beta/files/dns-rule-sets/adguard-dns-filter.verified.srs"
+        val config =
+            parse(
+                assembler.assembleLocalGuard(
+                    settings =
+                        Settings(
+                            dns = DnsSettings(filteringEnabled = true),
+                            expert = ExpertSettings(firewallEnabled = true),
+                        ),
+                    mode = LocalGuardMode.FIREWALL,
+                    dnsFilterRuntimePaths =
+                        DnsFilterRuntimePaths(
+                            adGuardDnsFilterPath = filterPath,
+                            adGuardVpnCompatibilityDomains = listOf("adguard-vpn.com"),
+                        ),
+                ),
+            )
+        val dnsRules = config["dns"]!!.jsonObject["rules"]!!.jsonArray.map { it.jsonObject }
+        val adGuardRule =
+            dnsRules.single { rule -> rule.stringArray("rule_set").contains("foxhole-adguard-dns-filter") }
+        val compatibilityRule =
+            dnsRules.single { rule -> rule.stringArray("domain_suffix").contains("adguard-vpn.com") }
+        val ruleSet = config["route"]!!.jsonObject["rule_set"]!!.jsonArray.single().jsonObject
+
+        assertTrue(dnsRules.indexOf(compatibilityRule) < dnsRules.indexOf(adGuardRule))
+        assertEquals("dns-remote", compatibilityRule["server"]!!.jsonPrimitive.content)
+        assertEquals("predefined", adGuardRule["action"]!!.jsonPrimitive.content)
+        assertEquals("NXDOMAIN", adGuardRule["rcode"]!!.jsonPrimitive.content)
+        assertEquals("local", ruleSet["type"]!!.jsonPrimitive.content)
+        assertEquals("foxhole-adguard-dns-filter", ruleSet["tag"]!!.jsonPrimitive.content)
+        assertEquals("binary", ruleSet["format"]!!.jsonPrimitive.content)
+        assertEquals(filterPath, ruleSet["path"]!!.jsonPrimitive.content)
+    }
+
+    @Test
     fun `local firewall guard leaves DNS uncaptured when intercept is disabled`() {
         val settings =
             Settings(
