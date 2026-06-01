@@ -105,6 +105,18 @@ internal class NavigationTransitionTelemetry(
         )
     }
 
+    fun recordCancelled(routeTo: String) {
+        if (BuildConfig.DEBUG) {
+            pendingTransition.updateAndGet { pending ->
+                when {
+                    pending == null -> null
+                    pending.routeTo == routeTo -> null
+                    else -> pending
+                }
+            }
+        }
+    }
+
     fun recordFirstFrame(
         currentRoute: String,
         firstFrameTimeMs: Long = clock(),

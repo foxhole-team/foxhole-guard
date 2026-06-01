@@ -4,6 +4,10 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.graphics.Bitmap
+import android.graphics.Canvas as AndroidCanvas
+import android.graphics.Paint as AndroidPaint
+import android.graphics.Path as AndroidPath
 import android.os.BatteryManager
 import android.os.PowerManager
 import androidx.compose.foundation.layout.Arrangement
@@ -47,22 +51,22 @@ import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Canvas
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.ImageBitmapConfig
-import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
@@ -228,18 +232,19 @@ private fun TrafficMapCanvas(
     val latestState = rememberUpdatedState(state)
     val colors = trafficMapColors()
     val mapCountryShapes = countryShapes
+    var canvasSize by remember { mutableStateOf(IntSize.Zero) }
+    val countryBitmap =
+        rememberTrafficMapLandLayerBitmap(
+            shapes = mapCountryShapes,
+            canvasSize = canvasSize,
+            color = colors.countryBorder,
+        )
 
     Box(
         modifier = modifier
+            .onSizeChanged { size -> canvasSize = size }
             .drawWithCache {
                 val viewport = trafficMapViewport(size)
-                val countryBitmap =
-                    TrafficMapLandLayerCache.bitmap(
-                        shapes = mapCountryShapes,
-                        canvasSize = size,
-                        viewport = viewport,
-                        color = colors.countryBorder,
-                    )
                 val maxLineStroke = 2.1.dp.toPx()
                 val minLineStroke = 0.65.dp.toPx()
                 val destinationRadius = 3.3.dp.toPx()
@@ -253,7 +258,7 @@ private fun TrafficMapCanvas(
                 onDrawBehind {
                     val mapState = latestState.value
                     val drawableDestinations = mapState.destinations.toDrawableTrafficMapDestinations()
-                    drawImage(countryBitmap)
+                    countryBitmap?.let(::drawImage)
 
                     val origin = project(mapState.originLat, mapState.originLon, viewport)
                     val maxBytes = drawableDestinations.maxOfOrNull { destination -> destination.bytes }?.coerceAtLeast(1L) ?: 1L
@@ -317,6 +322,42 @@ private fun TrafficMapCanvas(
             }
             .fillMaxSize(),
     )
+}
+
+@Composable
+private fun rememberTrafficMapLandLayerBitmap(
+    shapes: List<TrafficMapCountryShape>,
+    canvasSize: IntSize,
+    color: Color,
+): ImageBitmap? {
+    val cachedBitmap =
+        remember(shapes, canvasSize, color) {
+            TrafficMapLandLayerCache.currentBitmap(
+                shapes = shapes,
+                canvasSize = canvasSize,
+                color = color,
+            )
+        }
+    val bitmap by produceState(
+        initialValue = cachedBitmap,
+        key1 = shapes,
+        key2 = canvasSize,
+        key3 = color,
+    ) {
+        value = cachedBitmap
+        if (shapes.isEmpty() || canvasSize.width <= 0 || canvasSize.height <= 0) {
+            return@produceState
+        }
+        if (value == null) {
+            value =
+                TrafficMapLandLayerCache.bitmap(
+                    shapes = shapes,
+                    canvasSize = canvasSize,
+                    color = color,
+                )
+        }
+    }
+    return bitmap
 }
 
 @Composable
@@ -701,11 +742,11 @@ private fun project(
     return Offset(x, y)
 }
 
-private fun trafficMapLandPath(
+private fun androidTrafficMapLandPath(
     shapes: List<TrafficMapCountryShape>,
     viewport: TrafficMapViewport,
-): Path =
-    Path().apply {
+): AndroidPath =
+    AndroidPath().apply {
         shapes.forEach { shape ->
             shape.rings.forEach { ring ->
                 ring.forEachIndexed { index, point ->
@@ -723,20 +764,21 @@ private fun trafficMapLandPath(
 
 private fun trafficMapLandBitmap(
     size: Size,
-    countryPath: Path,
+    shapes: List<TrafficMapCountryShape>,
+    viewport: TrafficMapViewport,
     color: Color,
 ): ImageBitmap {
     val width = size.width.toInt().coerceAtLeast(1)
     val height = size.height.toInt().coerceAtLeast(1)
-    return ImageBitmap(width = width, height = height, config = ImageBitmapConfig.Argb8888).also { bitmap ->
-        Canvas(bitmap).drawPath(
-            path = countryPath,
-            paint =
-                Paint().apply {
-                    this.color = color
-                },
-        )
-    }
+    val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+    AndroidCanvas(bitmap).drawPath(
+        androidTrafficMapLandPath(shapes, viewport),
+        AndroidPaint(AndroidPaint.ANTI_ALIAS_FLAG).apply {
+            style = AndroidPaint.Style.FILL
+            this.color = color.toArgb()
+        },
+    )
+    return bitmap.asImageBitmap()
 }
 
 private object TrafficMapLandLayerCache {
@@ -749,38 +791,57 @@ private object TrafficMapLandLayerCache {
             true,
         )
 
-    fun bitmap(
+    fun currentBitmap(
         shapes: List<TrafficMapCountryShape>,
-        canvasSize: Size,
-        viewport: TrafficMapViewport,
+        canvasSize: IntSize,
         color: Color,
-    ): ImageBitmap {
-        val key =
-            TrafficMapLandLayerKey(
-                width = canvasSize.width.toInt().coerceAtLeast(1),
-                height = canvasSize.height.toInt().coerceAtLeast(1),
-                color = color.toArgb(),
-                shapesIdentity = System.identityHashCode(shapes),
-                shapeCount = shapes.size,
-            )
+    ): ImageBitmap? {
+        val key = landLayerKey(shapes = shapes, canvasSize = canvasSize, color = color)
         synchronized(lock) {
-            bitmaps[key]?.let { bitmap -> return bitmap }
+            return bitmaps[key]
         }
-        val bitmap =
-            trafficMapLandBitmap(
-                size = canvasSize,
-                countryPath = trafficMapLandPath(shapes, viewport),
-                color = color,
-            )
-        synchronized(lock) {
-            bitmaps[key] = bitmap
-            while (bitmaps.size > MAX_ENTRIES) {
-                val eldest = bitmaps.entries.firstOrNull()?.key ?: break
-                bitmaps.remove(eldest)
-            }
-        }
-        return bitmap
     }
+
+    suspend fun bitmap(
+        shapes: List<TrafficMapCountryShape>,
+        canvasSize: IntSize,
+        color: Color,
+    ): ImageBitmap =
+        withContext(Dispatchers.Default) {
+            val key = landLayerKey(shapes = shapes, canvasSize = canvasSize, color = color)
+            synchronized(lock) {
+                bitmaps[key]?.let { bitmap -> return@withContext bitmap }
+            }
+            val size = Size(canvasSize.width.toFloat(), canvasSize.height.toFloat())
+            val bitmap =
+                trafficMapLandBitmap(
+                    size = size,
+                    shapes = shapes,
+                    viewport = trafficMapViewport(size),
+                    color = color,
+                )
+            synchronized(lock) {
+                bitmaps[key] = bitmap
+                while (bitmaps.size > MAX_ENTRIES) {
+                    val eldest = bitmaps.entries.firstOrNull()?.key ?: break
+                    bitmaps.remove(eldest)
+                }
+            }
+            bitmap
+        }
+
+    private fun landLayerKey(
+        shapes: List<TrafficMapCountryShape>,
+        canvasSize: IntSize,
+        color: Color,
+    ): TrafficMapLandLayerKey =
+        TrafficMapLandLayerKey(
+            width = canvasSize.width.coerceAtLeast(1),
+            height = canvasSize.height.coerceAtLeast(1),
+            color = color.toArgb(),
+            shapesIdentity = System.identityHashCode(shapes),
+            shapeCount = shapes.size,
+        )
 }
 
 private data class TrafficMapLandLayerKey(

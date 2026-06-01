@@ -1908,15 +1908,16 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         network: Network?,
     ): IpInfo {
         val endpoint = container.settingsRepository.current().connection.ipInfoEndpoint
+        val appOwnedNetwork = boundNetworkForAppOwnedRequest(network)
         return container.ipInfoRepository
             .fetch(
                 endpoint = endpoint,
                 callTimeoutMs = callTimeoutMs,
-                network = network,
-                resolverNetwork = network,
+                network = appOwnedNetwork,
+                resolverNetwork = appOwnedNetwork,
                 mode = IpInfoFetchMode.ENTRY_QUICK,
             ).withDnsServers(
-                localDnsServers = connectivityManager.dnsServerAddresses(network),
+                localDnsServers = connectivityManager.dnsServerAddresses(appOwnedNetwork),
                 remoteDnsServers = emptyList(),
             )
     }
@@ -1926,14 +1927,15 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         network: Network?,
     ): IpInfo? {
         val endpoint = container.settingsRepository.current().connection.ipInfoEndpoint
+        val appOwnedNetwork = boundNetworkForAppOwnedRequest(network)
         return container.ipInfoRepository
             .fetchIpv4(
                 endpoint = endpoint,
                 callTimeoutMs = callTimeoutMs,
-                network = network,
-                resolverNetwork = network,
+                network = appOwnedNetwork,
+                resolverNetwork = appOwnedNetwork,
             )?.withDnsServers(
-                localDnsServers = connectivityManager.dnsServerAddresses(network),
+                localDnsServers = connectivityManager.dnsServerAddresses(appOwnedNetwork),
                 remoteDnsServers = emptyList(),
             )
     }

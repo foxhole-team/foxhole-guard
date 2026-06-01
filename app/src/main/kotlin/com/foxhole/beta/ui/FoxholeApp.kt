@@ -250,7 +250,12 @@ fun FoxholeApp(
                             rootSwipeSection != null ->
                                 Modifier.sectionSwipeNavigation(
                                     currentSection = rootSwipeSection,
-                                    onSectionSelected = { section -> navController.navigateToSection(section) },
+                                    onSectionSelected = { section ->
+                                        navController.navigateToSection(
+                                            section = section,
+                                            telemetry = navigationTransitionTelemetry,
+                                        )
+                                    },
                                 )
                             settingsBackSwipeEnabled ->
                                 Modifier.settingsBackSwipeNavigation(
@@ -783,7 +788,12 @@ fun FoxholeApp(
     if (showBottomBar) {
         FoxholeBottomBar(
             currentSection = currentSection,
-            onSectionSelected = { section -> navController.navigateToSection(section) },
+            onSectionSelected = { section ->
+                navController.navigateToSection(
+                    section = section,
+                    telemetry = navigationTransitionTelemetry,
+                )
+            },
             overlayHost = bottomDockOverlayHost,
             blurTarget = bottomDockBlurTarget,
         )
@@ -1356,15 +1366,26 @@ private fun NavHostController.navigateToSettingsDetail(
     }
 }
 
-private fun NavHostController.navigateToSection(section: AppSection) {
+private fun NavHostController.navigateToSection(
+    section: AppSection,
+    telemetry: NavigationTransitionTelemetry? = null,
+) {
     val currentRoute = currentDestination?.route
     if (currentRoute == section.rootRoute) {
         return
     }
+    telemetry?.recordTap(
+        routeFrom = currentRoute,
+        routeTo = section.rootRoute,
+    )
     if (currentRoute?.startsWith(section.rootRoute) == true) {
-        popBackStack(section.rootRoute, inclusive = false)
+        telemetry?.recordNavigateCall(section.rootRoute)
+        if (!popBackStack(section.rootRoute, inclusive = false)) {
+            telemetry?.recordCancelled(section.rootRoute)
+        }
         return
     }
+    telemetry?.recordNavigateCall(section.rootRoute)
     navigate(section.rootRoute) {
         launchSingleTop = true
         restoreState = true
