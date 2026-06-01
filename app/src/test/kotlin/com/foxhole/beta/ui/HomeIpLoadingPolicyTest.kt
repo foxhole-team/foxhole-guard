@@ -352,8 +352,8 @@ class HomeIpLoadingPolicyTest {
     }
 
     @Test
-    fun `does not keep pending network loading after app loaded while internet exists and ip is empty`() {
-        assertFalse(
+    fun `shows pending network loading after app loaded while internet exists and ip is empty`() {
+        assertTrue(
             shouldShowPendingNetworkLoading(
                 visibleIpInfo = null,
                 explicitLoading = false,
@@ -363,6 +363,76 @@ class HomeIpLoadingPolicyTest {
                 appLoaded = true,
             ),
         )
+    }
+
+    @Test
+    fun `traffic map origin prefers tunnel ip over device ip for active tunnel`() {
+        val deviceIp =
+            IpInfo(
+                ip = "198.51.100.10",
+                ipv4 = "198.51.100.10",
+                countryCode = "US",
+                countryName = "United States",
+                city = "New York",
+                isp = "Device ISP",
+                fetchedAt = 4_000L,
+            )
+        val tunnelIp =
+            IpInfo(
+                ip = "203.0.113.20",
+                ipv4 = "203.0.113.20",
+                countryCode = "NL",
+                countryName = "Netherlands",
+                city = "Amsterdam",
+                isp = "Tunnel ISP",
+                fetchedAt = 5_000L,
+            )
+
+        val origin =
+            trafficMapOriginIpInfoCandidate(
+                connection =
+                    ConnectionSnapshot(
+                        state = ConnectionState.CONNECTED,
+                        trafficMode = TrafficMode.TUNNEL,
+                        profileId = 7L,
+                        lastChangeAt = 5_000L,
+                    ),
+                deviceIpInfo = deviceIp,
+                ipInfo = tunnelIp,
+                protocolSearchRunning = false,
+            )
+
+        assertEquals(tunnelIp, origin)
+    }
+
+    @Test
+    fun `traffic map origin keeps device ip for local guard firewall`() {
+        val deviceIp =
+            IpInfo(
+                ip = "198.51.100.10",
+                ipv4 = "198.51.100.10",
+                countryCode = "US",
+                countryName = "United States",
+                city = "New York",
+                isp = "Device ISP",
+                fetchedAt = 4_000L,
+            )
+
+        val origin =
+            trafficMapOriginIpInfoCandidate(
+                connection =
+                    ConnectionSnapshot(
+                        state = ConnectionState.CONNECTED,
+                        trafficMode = TrafficMode.TUNNEL,
+                        profileId = FoxholeVpnService.LOCAL_GUARD_PROFILE_ID,
+                        lastChangeAt = 5_000L,
+                    ),
+                deviceIpInfo = deviceIp,
+                ipInfo = null,
+                protocolSearchRunning = false,
+            )
+
+        assertEquals(deviceIp, origin)
     }
 
     @Test

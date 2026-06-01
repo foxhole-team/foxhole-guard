@@ -199,6 +199,7 @@ internal fun shouldShowPendingNetworkLoading(
         explicitLoading -> true
         connectionState in setOf(ConnectionState.CONNECTING, ConnectionState.RECONNECTING) -> true
         autoConnectRunning -> true
+        appLoaded && connectionState == ConnectionState.IDLE -> true
         else -> false
     }
 
@@ -834,6 +835,27 @@ internal fun resolveHomeDashboardTrafficModel(
         selectedProtocolTotalBytes = selectedProtocolTotal?.let { total -> total.rxTotalBytes + total.txTotalBytes },
         selectedProtocolHint = selectedProtocolTotal?.protocolHint,
     )
+}
+
+internal fun trafficMapOriginIpInfoCandidate(
+    connection: ConnectionSnapshot,
+    deviceIpInfo: IpInfo?,
+    ipInfo: IpInfo?,
+    protocolSearchRunning: Boolean,
+): IpInfo? {
+    val realTunnelActive =
+        connection.state in ACTIVE_CONNECTION_STATES &&
+            connection.profileId != FoxholeVpnService.LOCAL_GUARD_PROFILE_ID
+    val staleBeforeActiveTunnel =
+        ipInfo != null &&
+            !protocolSearchRunning &&
+            realTunnelActive &&
+            ipInfo.fetchedAt < connection.lastChangeAt
+    return when {
+        realTunnelActive || staleBeforeActiveTunnel -> ipInfo?.takeUnless { staleBeforeActiveTunnel }
+        deviceIpInfo != null -> deviceIpInfo
+        else -> ipInfo
+    }
 }
 
 private fun selectedSmartProtocolTrafficTotal(

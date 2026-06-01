@@ -536,30 +536,6 @@ class HomeViewModel(
             runtimeAvailable = trafficMapRuntimeAvailable,
         )
 
-    private fun trafficMapOriginIpInfoCandidate(
-        connection: ConnectionSnapshot,
-        deviceIpInfo: IpInfo?,
-        ipInfo: IpInfo?,
-        protocolSearchRunning: Boolean,
-    ): IpInfo? {
-        if (deviceIpInfo != null) {
-            return deviceIpInfo
-        }
-        val realTunnelActive =
-            connection.state in ACTIVE_CONNECTION_STATES &&
-                connection.profileId != FoxholeVpnService.LOCAL_GUARD_PROFILE_ID
-        val staleBeforeActiveTunnel =
-            ipInfo != null &&
-                !protocolSearchRunning &&
-                realTunnelActive &&
-                ipInfo.fetchedAt < connection.lastChangeAt
-        return if (realTunnelActive || staleBeforeActiveTunnel) {
-            null
-        } else {
-            ipInfo
-        }
-    }
-
     private fun RuntimeUiState.hasConnectedPendingDashboardIpRefresh(): Boolean {
         if (phase != RuntimePhase.Connected) {
             return false

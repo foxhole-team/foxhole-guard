@@ -238,7 +238,7 @@ private fun TrafficMapCanvas(
                         shapes = mapCountryShapes,
                         canvasSize = size,
                         viewport = viewport,
-                        color = colors.countryBorder.copy(alpha = 0.44f),
+                        color = colors.countryBorder,
                     )
                 val maxLineStroke = 2.1.dp.toPx()
                 val minLineStroke = 0.65.dp.toPx()
@@ -835,7 +835,7 @@ private fun trafficMapColors(): TrafficMapColors {
     val colorScheme = MaterialTheme.colorScheme
     return if (LocalFoxholeDarkTheme.current) {
         TrafficMapColors(
-            countryBorder = Color(0xFFA0ABA5),
+            countryBorder = Color(0xFFD3DDD7),
             routeLine = FoxholePositiveAccent,
             destination = FoxholePositiveAccent,
             origin = FoxholePositiveAccent,
@@ -843,7 +843,7 @@ private fun trafficMapColors(): TrafficMapColors {
         )
     } else {
         TrafficMapColors(
-            countryBorder = Color(0xFF56635E),
+            countryBorder = Color(0xFF20312A),
             routeLine = Color(0xFF278A5B),
             destination = Color(0xFF278A5B),
             origin = Color(0xFF278A5B),

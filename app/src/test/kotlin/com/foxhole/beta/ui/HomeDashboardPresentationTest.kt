@@ -984,7 +984,7 @@ class HomeDashboardPresentationTest {
     }
 
     @Test
-    fun `network model never shows local device address while disconnected`() {
+    fun `network model hides local device address while disconnected and shows public ip skeleton`() {
         val localDeviceIp =
             IpInfo(
                 ip = "10.13.13.110",
@@ -1007,8 +1007,8 @@ class HomeDashboardPresentationTest {
 
         assertEquals(null, model.visibleIpInfo)
         assertFalse(model.showConnectionStatus)
-        assertFalse(model.showLoading)
-        assertFalse(model.showIpInfoLoading)
+        assertTrue(model.showLoading)
+        assertTrue(model.showIpInfoLoading)
     }
 
     @Test
