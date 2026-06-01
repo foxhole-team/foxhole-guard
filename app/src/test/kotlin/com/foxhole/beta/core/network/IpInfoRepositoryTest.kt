@@ -119,9 +119,37 @@ class IpInfoRepositoryTest {
         assertEquals("84.17.54.10", parsed.ipv4)
         assertNull(parsed.ipv6)
         assertEquals("NL", parsed.countryCode)
-        assertNull(parsed.countryName)
+        assertEquals("Netherlands", parsed.countryName)
         assertEquals("Amsterdam", parsed.city)
         assertEquals("AS60068 Datacamp Limited", parsed.isp)
+    }
+
+    @Test
+    fun `parses country code and nested provider schema`() {
+        val parsed =
+            parseIpInfoResponse(
+                body =
+                    """
+                    {
+                      "ip": "84.17.54.10",
+                      "country_code": "NL",
+                      "city": "Amsterdam",
+                      "as": {
+                        "name": "Datacamp Limited"
+                      },
+                      "company": {
+                        "name": "Fallback Company"
+                      }
+                    }
+                    """.trimIndent(),
+                json = json,
+            )
+
+        assertEquals("84.17.54.10", parsed.ip)
+        assertEquals("NL", parsed.countryCode)
+        assertEquals("Netherlands", parsed.countryName)
+        assertEquals("Amsterdam", parsed.city)
+        assertEquals("Datacamp Limited", parsed.isp)
     }
 
     @Test
@@ -170,9 +198,11 @@ class IpInfoRepositoryTest {
         assertFalse(shouldStopIpInfoCandidateScan(IpInfoFetchMode.FULL, ipOnly))
         assertFalse(shouldStopIpInfoCandidateScan(IpInfoFetchMode.FULL, countryOnly))
         assertFalse(shouldStopIpInfoCandidateScan(IpInfoFetchMode.FULL, fullGeo))
-        assertTrue(shouldStopIpInfoCandidateScan(IpInfoFetchMode.FULL, countryWithProvider))
+        assertFalse(shouldStopIpInfoCandidateScan(IpInfoFetchMode.FULL, countryWithProvider))
         assertTrue(shouldStopIpInfoCandidateScan(IpInfoFetchMode.FULL, fullGeoWithProvider))
         assertFalse(shouldStopIpInfoCandidateScan(IpInfoFetchMode.ENTRY_QUICK, ipOnly))
+        assertFalse(shouldStopIpInfoCandidateScan(IpInfoFetchMode.GEO_ENRICHMENT, countryWithProvider))
+        assertTrue(shouldStopIpInfoCandidateScan(IpInfoFetchMode.GEO_ENRICHMENT, fullGeoWithProvider))
     }
 
     @Test
@@ -361,6 +391,27 @@ class IpInfoRepositoryTest {
     }
 
     @Test
+    fun `geo enrichment mode keeps bounded city provider candidates`() {
+        val repository =
+            IpInfoRepository(
+                client = okhttp3.OkHttpClient(),
+                json = json,
+            )
+
+        val candidates =
+            repository.effectiveEndpointCandidates(
+                "https://example.com/ip",
+                mode = IpInfoFetchMode.GEO_ENRICHMENT,
+            )
+
+        assertEquals("https://example.com/ip", candidates[0])
+        assertEquals("https://1.1.1.1/cdn-cgi/trace", candidates[1])
+        assertEquals("https://ipinfo.io/json", candidates[2])
+        assertEquals("https://ifconfig.co/json", candidates[3])
+        assertEquals(4, candidates.size)
+    }
+
+    @Test
     fun `entry quick scan stops at country details and leaves city provider enrichment to background`() {
         val sparseInfo =
             IpInfo(
@@ -421,6 +472,26 @@ class IpInfoRepositoryTest {
         assertEquals("https://1.1.1.1/cdn-cgi/trace", strategy.endpointCandidates.first())
         assertEquals("https://example.com/ip", strategy.endpointCandidates[1])
         assertEquals(1_500L, strategy.callTimeoutMs)
+        assertFalse(strategy.includeFamilyProbes)
+    }
+
+    @Test
+    fun `geo enrichment fetch strategy uses short bounded timeout and skips family probes`() {
+        val repository =
+            IpInfoRepository(
+                client = okhttp3.OkHttpClient(),
+                json = json,
+            )
+
+        val strategy =
+            repository.resolveFetchStrategy(
+                endpoint = "https://example.com/ip",
+                callTimeoutMs = null,
+                mode = IpInfoFetchMode.GEO_ENRICHMENT,
+            )
+
+        assertEquals("https://example.com/ip", strategy.endpointCandidates.first())
+        assertEquals(1_200L, strategy.callTimeoutMs)
         assertFalse(strategy.includeFamilyProbes)
     }
 

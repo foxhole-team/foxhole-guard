@@ -116,7 +116,7 @@ internal class TunnelValidationGateway(
             proxy != null ->
                 ipInfoRepository.fetch(
                     endpoint = endpoint,
-                    callTimeoutMs = DASHBOARD_IP_REFRESH_CALL_TIMEOUT_MS,
+                    callTimeoutMs = dashboardIpRefreshCallTimeoutMs(fetchMode),
                     proxy = proxy,
                     mode = fetchMode,
                 )
@@ -138,7 +138,7 @@ internal class TunnelValidationGateway(
         runCatching {
             ipInfoRepository.fetch(
                 endpoint = endpoint,
-                callTimeoutMs = DASHBOARD_IP_REFRESH_CALL_TIMEOUT_MS,
+                callTimeoutMs = dashboardIpRefreshCallTimeoutMs(fetchMode),
                 network = requestNetwork,
                 mode = fetchMode,
             )
@@ -155,7 +155,7 @@ internal class TunnelValidationGateway(
             )
             ipInfoRepository.fetch(
                 endpoint = endpoint,
-                callTimeoutMs = DASHBOARD_IP_REFRESH_CALL_TIMEOUT_MS,
+                callTimeoutMs = dashboardIpRefreshCallTimeoutMs(fetchMode),
                 mode = fetchMode,
             )
         }.getOrThrow()
@@ -167,7 +167,7 @@ internal class TunnelValidationGateway(
         runCatching {
             ipInfoRepository.fetch(
                 endpoint = endpoint,
-                callTimeoutMs = DASHBOARD_IP_REFRESH_CALL_TIMEOUT_MS,
+                callTimeoutMs = dashboardIpRefreshCallTimeoutMs(fetchMode),
                 mode = fetchMode,
             )
         }.recoverCatching { error ->
@@ -181,7 +181,7 @@ internal class TunnelValidationGateway(
             )
             ipInfoRepository.fetch(
                 endpoint = endpoint,
-                callTimeoutMs = DASHBOARD_IP_REFRESH_CALL_TIMEOUT_MS,
+                callTimeoutMs = dashboardIpRefreshCallTimeoutMs(fetchMode),
                 network = upstreamNetwork,
                 mode = fetchMode,
             )
@@ -469,14 +469,14 @@ internal class TunnelValidationGateway(
         return if (preferIpv4Validation) {
             ipInfoRepository.fetchIpv4(
                 endpoint = endpoint,
-                callTimeoutMs = DASHBOARD_IP_REFRESH_CALL_TIMEOUT_MS,
+                callTimeoutMs = dashboardIpRefreshCallTimeoutMs(fetchMode),
                 network = requestNetwork,
                 resolverNetwork = resolverNetwork,
             ) ?: error("vpn ipv4 refresh failed")
         } else {
             ipInfoRepository.fetch(
                 endpoint = endpoint,
-                callTimeoutMs = DASHBOARD_IP_REFRESH_CALL_TIMEOUT_MS,
+                callTimeoutMs = dashboardIpRefreshCallTimeoutMs(fetchMode),
                 network = requestNetwork,
                 resolverNetwork = resolverNetwork,
                 mode = fetchMode,
@@ -527,14 +527,14 @@ internal class TunnelValidationGateway(
         return if (preferIpv4Validation) {
             ipInfoRepository.fetchIpv4(
                 endpoint = endpoint,
-                callTimeoutMs = ACTIVE_TUNNEL_RUNTIME_PROXY_IP_REFRESH_CALL_TIMEOUT_MS,
+                callTimeoutMs = activeTunnelRuntimeProxyIpRefreshCallTimeoutMs(fetchMode),
                 proxy = proxy,
                 resolverNetwork = resolverNetwork,
             ) ?: error("runtime proxy ipv4 refresh failed")
         } else {
             ipInfoRepository.fetch(
                 endpoint = endpoint,
-                callTimeoutMs = ACTIVE_TUNNEL_RUNTIME_PROXY_IP_REFRESH_CALL_TIMEOUT_MS,
+                callTimeoutMs = activeTunnelRuntimeProxyIpRefreshCallTimeoutMs(fetchMode),
                 proxy = proxy,
                 resolverNetwork = resolverNetwork,
                 mode = fetchMode,
@@ -542,8 +542,25 @@ internal class TunnelValidationGateway(
         }
     }
 
+    private fun dashboardIpRefreshCallTimeoutMs(fetchMode: IpInfoFetchMode): Long =
+        when (fetchMode) {
+            IpInfoFetchMode.GEO_ENRICHMENT -> DASHBOARD_GEO_ENRICHMENT_CALL_TIMEOUT_MS
+            IpInfoFetchMode.FULL,
+            IpInfoFetchMode.ENTRY_QUICK,
+            -> DASHBOARD_IP_REFRESH_CALL_TIMEOUT_MS
+        }
+
+    private fun activeTunnelRuntimeProxyIpRefreshCallTimeoutMs(fetchMode: IpInfoFetchMode): Long =
+        when (fetchMode) {
+            IpInfoFetchMode.GEO_ENRICHMENT -> DASHBOARD_GEO_ENRICHMENT_CALL_TIMEOUT_MS
+            IpInfoFetchMode.FULL,
+            IpInfoFetchMode.ENTRY_QUICK,
+            -> ACTIVE_TUNNEL_RUNTIME_PROXY_IP_REFRESH_CALL_TIMEOUT_MS
+        }
+
     private companion object {
         const val DASHBOARD_IP_REFRESH_CALL_TIMEOUT_MS = 2_500L
+        const val DASHBOARD_GEO_ENRICHMENT_CALL_TIMEOUT_MS = 1_200L
         const val ACTIVE_TUNNEL_VPN_BOUND_IP_REFRESH_TOTAL_TIMEOUT_MS = 7_500L
         const val ACTIVE_TUNNEL_RUNTIME_PROXY_IP_REFRESH_CALL_TIMEOUT_MS = 4_000L
         const val ACTIVE_TUNNEL_IP_REFRESH_CACHE_MAX_AGE_MS = 10 * 60 * 1_000L

@@ -199,7 +199,7 @@ internal fun shouldShowPendingNetworkLoading(
         explicitLoading -> true
         connectionState in setOf(ConnectionState.CONNECTING, ConnectionState.RECONNECTING) -> true
         autoConnectRunning -> true
-        appLoaded && connectionState == ConnectionState.IDLE -> true
+        connectionState == ConnectionState.IDLE -> true
         else -> false
     }
 
@@ -387,6 +387,10 @@ internal fun IpInfo.hasDashboardLocationDetails(): Boolean =
 
 internal fun IpInfo.hasDashboardProviderDetails(): Boolean =
     isp?.isNotBlank() == true
+
+internal fun shouldShowIpInfoGeoEnrichmentLoading(info: IpInfo): Boolean =
+    !info.hasDashboardLocationDetails() ||
+        !info.hasDashboardProviderDetails()
 
 internal fun shouldAutoRefreshIpAfterUpstreamNetworkChange(
     connectionState: ConnectionState,

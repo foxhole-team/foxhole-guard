@@ -338,8 +338,8 @@ class HomeIpLoadingPolicyTest {
     }
 
     @Test
-    fun `keeps startup network card quiet while disconnected profile state loads`() {
-        assertFalse(
+    fun `shows startup network skeleton while disconnected profile state loads`() {
+        assertTrue(
             shouldShowPendingNetworkLoading(
                 visibleIpInfo = null,
                 explicitLoading = false,

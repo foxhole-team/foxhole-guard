@@ -244,16 +244,17 @@ private fun HomeViewModel.maybeScheduleIpInfoGeoEnrichment(
         ) {
             return@launch
         }
+        val showLoading = shouldShowIpInfoGeoEnrichmentLoading(currentInfo)
         container.diagnosticsLogger.record(
             "ip",
-            "geo enrichment started after entry_quick target=${publishedTarget.name.lowercase()}",
+            "geo enrichment started after entry_quick target=${publishedTarget.name.lowercase()} loading=$showLoading",
         )
         startIpInfoRefresh(
             reportFailures = false,
-            showLoading = false,
+            showLoading = showLoading,
             clearExistingIp = false,
-            fetchMode = IpInfoFetchMode.FULL,
-            minimumLoadingDurationMs = 0L,
+            fetchMode = IpInfoFetchMode.GEO_ENRICHMENT,
+            minimumLoadingDurationMs = if (showLoading) HomeViewModel.AUTO_IP_REFRESH_MIN_LOADING_MS else 0L,
             reason = IpInfoRefreshReason.POST_UPDATE,
         )
     }
@@ -861,7 +862,7 @@ private fun HomeViewModel.schedulePostConnectLatencyRefreshAfterIp(reason: IpInf
         }
 }
 
-private const val ENTRY_QUICK_GEO_ENRICHMENT_DELAY_MS = 500L
+private const val ENTRY_QUICK_GEO_ENRICHMENT_DELAY_MS = 120L
 
 internal fun HomeViewModel.markRuntimeReloadPendingInternal() {
     runtimeReloadPendingJob?.cancel()

@@ -63,6 +63,7 @@ data class HttpProxyAccess(
 enum class IpInfoFetchMode {
     FULL,
     ENTRY_QUICK,
+    GEO_ENRICHMENT,
 }
 
 internal const val DNS_INDEPENDENT_IP_INFO_ENDPOINT = "https://1.1.1.1/cdn-cgi/trace"
@@ -289,6 +290,12 @@ class IpInfoRepository(
                 EndpointFetchStrategy(
                     endpointCandidates = quickEndpoints(endpoint),
                     callTimeoutMs = callTimeoutMs ?: ENTRY_QUICK_CALL_TIMEOUT_MS,
+                    includeFamilyProbes = false,
+                )
+            IpInfoFetchMode.GEO_ENRICHMENT ->
+                EndpointFetchStrategy(
+                    endpointCandidates = geoEnrichmentEndpoints(endpoint),
+                    callTimeoutMs = callTimeoutMs ?: GEO_ENRICHMENT_CALL_TIMEOUT_MS,
                     includeFamilyProbes = false,
                 )
         }
@@ -603,6 +610,18 @@ class IpInfoRepository(
         }
     }
 
+    private fun geoEnrichmentEndpoints(endpoint: String): List<String> {
+        val primary = primaryEndpoint(endpoint)
+        return buildList {
+            add(primary)
+            GEO_ENRICHMENT_FALLBACK_ENDPOINTS.forEach { candidate ->
+                if (!candidate.equals(primary, ignoreCase = true) && candidate !in this) {
+                    add(candidate)
+                }
+            }
+        }
+    }
+
     internal fun effectiveEndpointCandidates(
         endpoint: String,
         mode: IpInfoFetchMode,
@@ -686,7 +705,7 @@ class IpInfoRepository(
         cache: MutableMap<String, Result<String?>>,
         mode: IpInfoFetchMode,
     ): IpInfo {
-        if (mode != IpInfoFetchMode.FULL || info.isp?.isNotBlank() == true || info.ip.isBlank()) {
+        if (mode == IpInfoFetchMode.ENTRY_QUICK || info.isp?.isNotBlank() == true || info.ip.isBlank()) {
             return info
         }
         val provider =
@@ -746,6 +765,7 @@ class IpInfoRepository(
         const val HTTP_CLIENT_CACHE_MAX_SIZE = 24
         val HTTP_CLIENT_CACHE_TTL_NANOS = TimeUnit.MINUTES.toNanos(5)
         const val ENTRY_QUICK_CALL_TIMEOUT_MS = 1_500L
+        const val GEO_ENRICHMENT_CALL_TIMEOUT_MS = 1_200L
         const val FULL_CALL_TIMEOUT_MS = 4_000L
         const val FAMILY_PROBE_CALL_TIMEOUT_MS = 1_500L
         val FALLBACK_ENDPOINTS =
@@ -764,6 +784,12 @@ class IpInfoRepository(
                 DNS_INDEPENDENT_IP_INFO_ENDPOINT,
                 "https://1.0.0.1/cdn-cgi/trace",
                 "https://ipinfo.io/json",
+            )
+        val GEO_ENRICHMENT_FALLBACK_ENDPOINTS =
+            listOf(
+                DNS_INDEPENDENT_IP_INFO_ENDPOINT,
+                "https://ipinfo.io/json",
+                "https://ifconfig.co/json",
             )
         val IPV4_FALLBACK_ENDPOINTS =
             listOf(
@@ -1066,6 +1092,10 @@ internal fun parseIpInfoResponse(
     }
     val ip = objectValue.string("ip")?.takeIf(String::isNotBlank) ?: error("ip info response missing ip")
     val connection = objectValue["connection"]?.jsonObject
+    val asInfo = objectValue["as"]?.jsonObject
+    val asnInfo = objectValue["asn"]?.jsonObject
+    val company = objectValue["company"]?.jsonObject
+    val traits = objectValue["traits"]?.jsonObject
     val country = objectValue.string("country")
     val countryCode =
         objectValue.string("country_code")
@@ -1076,6 +1106,7 @@ internal fun parseIpInfoResponse(
         objectValue.string("country_name")
             ?: objectValue.string("countryName")
             ?: country?.takeUnless { it.length == ISO_COUNTRY_CODE_LENGTH }
+            ?: countryCode?.let(::countryDisplayName)
     return IpInfo(
         ip = ip,
         ipv4 = ip.takeIf(::isIpv4Address),
@@ -1084,12 +1115,28 @@ internal fun parseIpInfoResponse(
         countryName = countryName,
         city = objectValue.string("city"),
         isp =
-            objectValue.string("isp")
-                ?: objectValue.string("organization")
-                ?: objectValue.string("asn_org")
-                ?: objectValue.string("org")
-                ?: connection?.string("isp")
-                ?: connection?.string("org"),
+            firstNonBlank(
+                objectValue.string("isp"),
+                objectValue.string("organization"),
+                objectValue.string("asn_org"),
+                objectValue.string("as_org"),
+                objectValue.string("org"),
+                objectValue.string("provider"),
+                connection?.string("isp"),
+                connection?.string("org"),
+                connection?.string("organization"),
+                connection?.string("asn_org"),
+                connection?.string("name"),
+                asInfo?.string("name"),
+                asInfo?.string("org"),
+                asInfo?.string("organization"),
+                asnInfo?.string("name"),
+                asnInfo?.string("org"),
+                asnInfo?.string("organization"),
+                company?.string("name"),
+                traits?.string("isp"),
+                traits?.string("organization"),
+            ),
         fetchedAt = System.currentTimeMillis(),
     )
 }
@@ -1158,7 +1205,9 @@ internal fun shouldStopIpInfoCandidateScan(
     info: IpInfo,
 ): Boolean =
     when (mode) {
-        IpInfoFetchMode.FULL -> info.hasFullIpInfoDetails()
+        IpInfoFetchMode.FULL,
+        IpInfoFetchMode.GEO_ENRICHMENT,
+        -> info.hasFullIpInfoDetails()
         IpInfoFetchMode.ENTRY_QUICK -> info.hasEntryQuickIpInfoDetails()
     }
 
@@ -1170,6 +1219,7 @@ internal fun selectBetterFullIpInfoCandidate(
 
 private fun IpInfo.hasFullIpInfoDetails(): Boolean =
     (countryName?.isNotBlank() == true || countryCode?.isNotBlank() == true) &&
+        city?.isNotBlank() == true &&
         isp?.isNotBlank() == true
 
 private fun IpInfo.hasEntryQuickIpInfoDetails(): Boolean =
@@ -1189,6 +1239,12 @@ internal fun IpInfo.fullIpInfoQualityScore(): Int =
 private fun Map<String, JsonElement>.string(key: String): String? = this[key]?.jsonPrimitive?.contentOrNull
 
 private fun Map<String, JsonElement>.boolean(key: String): Boolean? = this[key]?.jsonPrimitive?.booleanOrNull
+
+private fun firstNonBlank(vararg values: String?): String? =
+    values
+        .asSequence()
+        .mapNotNull { value -> value?.trim() }
+        .firstOrNull { value -> value.isNotEmpty() }
 
 private fun isIpv4Address(value: String): Boolean = value.contains('.') && !value.contains(':')
 

@@ -139,6 +139,30 @@ class HomeIpRefreshPolicyTest {
     }
 
     @Test
+    fun `entry quick geo enrichment shows loading until city and provider are complete`() {
+        val countryOnly =
+            IpInfo(
+                ip = "203.0.113.7",
+                ipv4 = "203.0.113.7",
+                countryCode = "NL",
+                countryName = "Netherlands",
+                city = null,
+                isp = null,
+                fetchedAt = 1_000L,
+            )
+        val fullInfo =
+            countryOnly.copy(
+                city = "Amsterdam",
+                isp = "Example ISP",
+            )
+
+        assertTrue(shouldShowIpInfoGeoEnrichmentLoading(countryOnly))
+        assertTrue(shouldShowIpInfoGeoEnrichmentLoading(fullInfo.copy(city = null)))
+        assertTrue(shouldShowIpInfoGeoEnrichmentLoading(fullInfo.copy(isp = null)))
+        assertFalse(shouldShowIpInfoGeoEnrichmentLoading(fullInfo))
+    }
+
+    @Test
     fun `post connect refresh stays quick even with stale previous route ip`() {
         val snapshot =
             ConnectionSnapshot(
