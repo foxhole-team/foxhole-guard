@@ -88,6 +88,7 @@ import java.util.Locale
 import kotlin.math.atan2
 import kotlin.math.floor
 import kotlin.math.min
+import kotlin.math.roundToInt
 import kotlin.math.sqrt
 
 @Composable
@@ -287,7 +288,16 @@ private fun TrafficMapCanvas(
                 val originMarker = origin.takeIf { originCountryCode != null }
 
                 onDrawBehind {
-                    countryBitmap?.let(::drawImage)
+                    countryBitmap?.let { bitmap ->
+                        drawImage(
+                            image = bitmap,
+                            dstSize =
+                                IntSize(
+                                    width = size.width.roundToInt().coerceAtLeast(1),
+                                    height = size.height.roundToInt().coerceAtLeast(1),
+                                ),
+                        )
+                    }
 
                     routeDrawModels.forEach { route ->
                         drawPath(
@@ -819,6 +829,7 @@ private fun trafficMapLandBitmap(
 
 private object TrafficMapLandLayerCache {
     private const val MAX_ENTRIES = 8
+    private const val SIZE_BUCKET_PX = 32
     private val lock = Any()
     private var latestBitmap: ImageBitmap? = null
     private val bitmaps =
@@ -855,7 +866,7 @@ private object TrafficMapLandLayerCache {
             synchronized(lock) {
                 bitmaps[key]?.let { bitmap -> return@withContext bitmap }
             }
-            val size = Size(canvasSize.width.toFloat(), canvasSize.height.toFloat())
+            val size = Size(key.width.toFloat(), key.height.toFloat())
             val bitmap =
                 trafficMapLandBitmap(
                     size = size,
@@ -883,12 +894,15 @@ private object TrafficMapLandLayerCache {
         color: Color,
     ): TrafficMapLandLayerKey =
         TrafficMapLandLayerKey(
-            width = canvasSize.width.coerceAtLeast(1),
-            height = canvasSize.height.coerceAtLeast(1),
+            width = bucketDimension(canvasSize.width),
+            height = bucketDimension(canvasSize.height),
             color = color.toArgb(),
             shapesIdentity = System.identityHashCode(shapes),
             shapeCount = shapes.size,
         )
+
+    private fun bucketDimension(value: Int): Int =
+        (((value.coerceAtLeast(1) + SIZE_BUCKET_PX - 1) / SIZE_BUCKET_PX) * SIZE_BUCKET_PX)
 }
 
 private data class TrafficMapLandLayerKey(
@@ -943,7 +957,7 @@ private fun trafficMapColors(): TrafficMapColors {
     val colorScheme = MaterialTheme.colorScheme
     return if (LocalFoxholeDarkTheme.current) {
         TrafficMapColors(
-            countryFill = Color(0xFF46524A),
+            countryFill = Color(0xFF303A34),
             routeLine = FoxholePositiveAccent,
             destination = FoxholePositiveAccent,
             origin = FoxholePositiveAccent,
@@ -951,7 +965,7 @@ private fun trafficMapColors(): TrafficMapColors {
         )
     } else {
         TrafficMapColors(
-            countryFill = Color(0xFF17251E),
+            countryFill = Color(0xFF102018),
             routeLine = Color(0xFF278A5B),
             destination = Color(0xFF278A5B),
             origin = Color(0xFF278A5B),
