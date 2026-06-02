@@ -177,6 +177,37 @@ class RuntimeServiceCommandSupportTest {
     }
 
     @Test
+    fun `disabling local guard does not stop an active profile runtime`() {
+        assertFalse(
+            shouldStopRuntimeAfterLocalGuardDisabled(
+                ConnectionSnapshot(
+                    state = ConnectionState.CONNECTED,
+                    trafficMode = TrafficMode.TUNNEL,
+                    profileId = 7L,
+                ),
+            ),
+        )
+        assertFalse(
+            shouldStopRuntimeAfterLocalGuardDisabled(
+                ConnectionSnapshot(
+                    state = ConnectionState.IDLE,
+                    trafficMode = TrafficMode.TUNNEL,
+                    profileId = FoxholeVpnService.LOCAL_GUARD_PROFILE_ID,
+                ),
+            ),
+        )
+        assertTrue(
+            shouldStopRuntimeAfterLocalGuardDisabled(
+                ConnectionSnapshot(
+                    state = ConnectionState.CONNECTED,
+                    trafficMode = TrafficMode.TUNNEL,
+                    profileId = FoxholeVpnService.LOCAL_GUARD_PROFILE_ID,
+                ),
+            ),
+        )
+    }
+
+    @Test
     fun `local guard start is deferred when the service still owns a profile session`() {
         assertTrue(
             shouldDeferLocalGuardStartForActiveProfileRuntime(

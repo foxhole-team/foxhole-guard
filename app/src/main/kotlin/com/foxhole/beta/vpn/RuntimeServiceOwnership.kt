@@ -18,3 +18,8 @@ internal fun shouldDeferLocalGuardStartForActiveProfileRuntime(
     activeProfileSessionPresent: Boolean,
 ): Boolean =
     activeProfileSessionPresent || snapshot.isActiveProfileRuntime()
+
+internal fun shouldStopRuntimeAfterLocalGuardDisabled(snapshot: ConnectionSnapshot): Boolean =
+    snapshot.state in ACTIVE_CONNECTION_STATES &&
+        snapshot.trafficMode == TrafficMode.TUNNEL &&
+        snapshot.profileId == FoxholeVpnService.LOCAL_GUARD_PROFILE_ID

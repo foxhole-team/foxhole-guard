@@ -6,6 +6,9 @@ import com.foxhole.beta.BuildConfig
 import com.foxhole.beta.core.model.IpInfo
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -184,6 +187,16 @@ class IpInfoRepository(
             var lastFailure: Throwable? = null
             var bestFullCandidate: IpInfo? = null
             val asnProviderCache = mutableMapOf<String, Result<String?>>()
+            if (strategy.parallelCandidates) {
+                return@withContext fetchCandidatesInParallel(
+                    strategy = strategy,
+                    mode = mode,
+                    network = network,
+                    proxy = proxy,
+                    resolverNetwork = resolverNetwork,
+                    asnProviderCache = asnProviderCache,
+                )
+            }
             strategy.endpointCandidates.forEach { candidate ->
                 currentCoroutineContext().ensureActive()
                 diagnosticLog(
@@ -240,6 +253,74 @@ class IpInfoRepository(
             throw lastFailure ?: IllegalStateException("ip info request failed")
         }
 
+    private suspend fun fetchCandidatesInParallel(
+        strategy: EndpointFetchStrategy,
+        mode: IpInfoFetchMode,
+        network: Network?,
+        proxy: HttpProxyAccess?,
+        resolverNetwork: Network?,
+        asnProviderCache: MutableMap<String, Result<String?>>,
+    ): IpInfo =
+        coroutineScope {
+            val results =
+                strategy.endpointCandidates
+                    .map { candidate ->
+                        diagnosticLog(
+                            "fetch candidate host=${candidate.ipInfoHostLabel()} mode=${mode.name.lowercase()} bound=${network != null} proxy=${proxy != null}",
+                        )
+                        async {
+                            candidate to
+                                runCatching {
+                                    withBoundedCallTimeout(strategy.callTimeoutMs) {
+                                        fetchSingle(
+                                            endpoint = candidate,
+                                            callTimeoutMs = strategy.callTimeoutMs,
+                                            network = network,
+                                            addressFamilyPreference = AddressFamilyPreference.ANY,
+                                            proxy = proxy,
+                                            resolverNetwork = resolverNetwork,
+                                        )
+                                    }
+                                }
+                        }
+                    }.awaitAll()
+            var lastFailure: Throwable? = null
+            var bestFullCandidate: IpInfo? = null
+            results.forEach { (candidate, result) ->
+                if (result.isSuccess) {
+                    val info =
+                        enrichWithAsnProviderIfNeeded(
+                            info = result.getOrThrow(),
+                            cache = asnProviderCache,
+                            mode = mode,
+                        )
+                    bestFullCandidate = selectBetterFullIpInfoCandidate(bestFullCandidate, info)
+                    if (shouldStopIpInfoCandidateScan(mode, info)) {
+                        diagnosticLog("fetch candidate succeeded host=${candidate.ipInfoHostLabel()}")
+                        return@coroutineScope info
+                    }
+                    diagnosticLog(
+                        "fetch candidate incomplete host=${candidate.ipInfoHostLabel()} quality=${info.fullIpInfoQualityScore()}",
+                    )
+                }
+                val failure = result.exceptionOrNull()
+                if (failure is CancellationException) {
+                    throw failure
+                }
+                lastFailure = failure
+                if (failure != null) {
+                    diagnosticLog(
+                        "fetch candidate failed host=${candidate.ipInfoHostLabel()} error=${failure.javaClass.simpleName}: ${failure.message.orEmpty()}",
+                    )
+                }
+            }
+            bestFullCandidate?.let { candidate ->
+                diagnosticLog("fetch candidate best-effort quality=${candidate.fullIpInfoQualityScore()}")
+                return@coroutineScope candidate
+            }
+            throw lastFailure ?: IllegalStateException("ip info request failed")
+        }
+
     private suspend fun fetchSingleWithFamilyFallbacks(
         endpoint: String,
         callTimeoutMs: Long?,
@@ -272,6 +353,7 @@ class IpInfoRepository(
         val endpointCandidates: List<String>,
         val callTimeoutMs: Long?,
         val includeFamilyProbes: Boolean,
+        val parallelCandidates: Boolean = false,
     )
 
     internal fun resolveFetchStrategy(
@@ -297,6 +379,7 @@ class IpInfoRepository(
                     endpointCandidates = geoEnrichmentEndpoints(endpoint),
                     callTimeoutMs = callTimeoutMs ?: GEO_ENRICHMENT_CALL_TIMEOUT_MS,
                     includeFamilyProbes = false,
+                    parallelCandidates = true,
                 )
         }
 

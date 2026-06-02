@@ -13,6 +13,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.io.File
 
 class HomeIpRefreshPolicyTest {
     @Test
@@ -66,6 +67,31 @@ class HomeIpRefreshPolicyTest {
         assertEquals(
             HomeViewModel.CONNECTED_IP_REFRESH_DELAY_MS,
             connectedIpRefreshStartDelayMs(IpInfoRefreshReason.POST_CONNECT),
+        )
+    }
+
+    @Test
+    fun `background geo enrichment failure is not logged as connectivity failure`() {
+        assertEquals(
+            "geo enrichment unavailable",
+            ipInfoRefreshFailureDiagnosticLabel(
+                fetchMode = IpInfoFetchMode.GEO_ENRICHMENT,
+                reportFailures = false,
+            ),
+        )
+        assertEquals(
+            "geo refresh failed",
+            ipInfoRefreshFailureDiagnosticLabel(
+                fetchMode = IpInfoFetchMode.GEO_ENRICHMENT,
+                reportFailures = true,
+            ),
+        )
+        assertEquals(
+            "geo refresh failed",
+            ipInfoRefreshFailureDiagnosticLabel(
+                fetchMode = IpInfoFetchMode.FULL,
+                reportFailures = false,
+            ),
         )
     }
 
@@ -537,4 +563,23 @@ class HomeIpRefreshPolicyTest {
             ),
         )
     }
+
+    @Test
+    fun `tor route dashboard refresh uses dedicated tor route ip path`() {
+        val source = uiSourceFile("HomeViewModelRuntimeSupport.kt").readText()
+        val refreshBlock =
+            source.substringAfter("private suspend fun HomeViewModel.refreshIpInfoForReason")
+                .substringBefore("internal fun ipInfoRefreshAttemptsForReason")
+
+        assertTrue(refreshBlock.contains("reason == IpInfoRefreshReason.TOR_ROUTE"))
+        assertTrue(refreshBlock.contains("refreshTorRouteIpInfo(fetchMode = fetchMode)"))
+        assertTrue(refreshBlock.contains("refreshIpInfo(fetchMode = fetchMode)"))
+    }
+
+    private fun uiSourceFile(name: String): File =
+        listOf(
+            File("src/main/kotlin/com/foxhole/beta/ui/$name"),
+            File("app/src/main/kotlin/com/foxhole/beta/ui/$name"),
+            File("../app/src/main/kotlin/com/foxhole/beta/ui/$name"),
+        ).first { file -> file.isFile }
 }

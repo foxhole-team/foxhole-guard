@@ -166,7 +166,7 @@ class FoxholeConnectionController(
                 action = FoxholeConnectionServiceContract.ACTION_START_LOCAL_GUARD,
                 localGuardMode = mode,
             )
-        } else if (localGuardSnapshot || hasActiveVpnNetwork()) {
+        } else if (shouldStopRuntimeAfterLocalGuardDisabled(currentSnapshot)) {
             FoxholeConnectionServiceContract.startForegroundService(
                 context = context,
                 mode = TrafficMode.TUNNEL,
@@ -193,6 +193,9 @@ class FoxholeConnectionController(
 
     suspend fun refreshIpInfo(fetchMode: IpInfoFetchMode = IpInfoFetchMode.FULL): IpInfo =
         validationGateway.refreshIpInfo(fetchMode)
+
+    suspend fun refreshTorRouteIpInfo(fetchMode: IpInfoFetchMode = IpInfoFetchMode.FULL): IpInfo =
+        validationGateway.refreshTorRouteIpInfo(fetchMode)
 
     suspend fun measureCurrentConnectionLatency(timeoutMs: Long = LATENCY_PROBE_TIMEOUT_MS): Long =
         telemetryProbe.measureCurrentConnectionLatency(timeoutMs)

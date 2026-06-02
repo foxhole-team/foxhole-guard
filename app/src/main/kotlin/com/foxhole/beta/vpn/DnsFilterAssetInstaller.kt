@@ -26,7 +26,11 @@ class DnsFilterAssetInstaller(
             val verifiedTarget = File(targetDir, VERIFIED_DNS_FILTER_FILE_NAME)
             val verifiedManifest = File(targetDir, VERIFIED_DNS_FILTER_MANIFEST_NAME)
             if (!verifiedTarget.isValidVerifiedDnsFilter(verifiedManifest)) {
-                return@withContext null
+                installBundledVerifiedRuleSetOrNull(
+                    targetDir = targetDir,
+                    target = verifiedTarget,
+                    manifestFile = verifiedManifest,
+                ) ?: return@withContext null
             }
             DnsFilterRuntimePaths(
                 adGuardDnsFilterPath = verifiedTarget.absolutePath,
@@ -69,6 +73,71 @@ class DnsFilterAssetInstaller(
             val manifest = json.decodeFromString<DnsFilterManifest>(manifestFile.readText(Charsets.UTF_8))
             isValidRuleSet(manifest.artifact.size, manifest.artifact.sha256)
         }.getOrDefault(false)
+
+    private fun installBundledVerifiedRuleSetOrNull(
+        targetDir: File,
+        target: File,
+        manifestFile: File,
+    ): File? =
+        runCatching {
+            val ruleSetBytes =
+                appContext.assets.open(ADGUARD_DNS_FILTER_ASSET_PATH).use { input ->
+                    input.readBytes()
+                }
+            require(ruleSetBytes.size.toLong() == ADGUARD_DNS_FILTER_SIZE_BYTES) {
+                "bundled DNS filter size mismatch"
+            }
+            require(ruleSetBytes.isSingBoxSrs()) { "bundled DNS filter header mismatch" }
+            require(ruleSetBytes.sha256Hex() == ADGUARD_DNS_FILTER_SHA256) {
+                "bundled DNS filter sha256 mismatch"
+            }
+            val temp = File.createTempFile(VERIFIED_DNS_FILTER_FILE_NAME, ".tmp", targetDir)
+            runCatching {
+                temp.writeBytes(ruleSetBytes)
+                require(temp.isValidRuleSet(ADGUARD_DNS_FILTER_SIZE_BYTES, ADGUARD_DNS_FILTER_SHA256)) {
+                    "bundled DNS filter temp validation failed"
+                }
+                moveReplacing(temp, target)
+                require(target.isValidRuleSet(ADGUARD_DNS_FILTER_SIZE_BYTES, ADGUARD_DNS_FILTER_SHA256)) {
+                    "bundled DNS filter install validation failed"
+                }
+                manifestFile.writeText(
+                    json.encodeToString(bundledDnsFilterManifest()),
+                    Charsets.UTF_8,
+                )
+                target
+            }.onFailure {
+                temp.delete()
+            }.getOrThrow()
+        }.getOrNull()
+
+    private fun bundledDnsFilterManifest(): DnsFilterManifest =
+        DnsFilterManifest(
+            schema = 1,
+            name = "foxhole-adguard-dns-filter",
+            format = "sing-box-srs",
+            generatedAt = "1970-01-01T00:00:00Z",
+            source =
+                DnsFilterManifestSource(
+                    name = "AdGuardSDNSFilter",
+                    repo = "https://github.com/AdguardTeam/AdGuardSDNSFilter.git",
+                    commit = "0000000000000000000000000000000000000000",
+                    license = "GPL-3.0",
+                    inputPath = "Filters/filter.txt",
+                    inputSha256 = "0000000000000000000000000000000000000000000000000000000000000000",
+                ),
+            artifact =
+                DnsFilterManifestArtifact(
+                    file = ADGUARD_DNS_FILTER_FILE_NAME,
+                    size = ADGUARD_DNS_FILTER_SIZE_BYTES,
+                    sha256 = ADGUARD_DNS_FILTER_SHA256,
+                ),
+            compatibility =
+                DnsFilterManifestCompatibility(
+                    singBoxVersion = com.foxhole.beta.BuildConfig.LIBBOX_SOURCE_VERSION,
+                    minAppVersion = "0.0.1",
+                ),
+        )
 
     private fun File.isValidRuleSet(
         sizeBytes: Long,
@@ -134,6 +203,10 @@ class DnsFilterAssetInstaller(
 
     private companion object {
         const val TARGET_DIR_NAME = "dns-rule-sets"
+        const val ADGUARD_DNS_FILTER_FILE_NAME = "adguard-dns-filter.srs"
+        const val ADGUARD_DNS_FILTER_ASSET_PATH = "rule-sets/$ADGUARD_DNS_FILTER_FILE_NAME"
+        const val ADGUARD_DNS_FILTER_SIZE_BYTES = 1_450_468L
+        const val ADGUARD_DNS_FILTER_SHA256 = "ccb39947545fbdc4dc3d0660e532f28daf3029c91891fe573c92c0b1caaf951f"
         const val ADGUARD_VPN_COMPATIBILITY_ASSET_PATH = "rule-sets/adguard-vpn-compatibility-allowlist.txt"
         const val VERIFIED_DNS_FILTER_FILE_NAME = "adguard-dns-filter.verified.srs"
         const val VERIFIED_DNS_FILTER_MANIFEST_NAME = "adguard-dns-filter.verified.manifest.json"

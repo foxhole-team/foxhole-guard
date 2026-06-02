@@ -568,6 +568,7 @@ class IpInfoRepositoryTest {
         assertEquals("https://ipwho.is/", strategy.endpointCandidates.first())
         assertEquals(4_000L, strategy.callTimeoutMs)
         assertFalse(strategy.includeFamilyProbes)
+        assertFalse(strategy.parallelCandidates)
     }
 
     @Test
@@ -589,6 +590,7 @@ class IpInfoRepositoryTest {
         assertEquals("https://example.com/ip", strategy.endpointCandidates[1])
         assertEquals(1_500L, strategy.callTimeoutMs)
         assertFalse(strategy.includeFamilyProbes)
+        assertFalse(strategy.parallelCandidates)
     }
 
     @Test
@@ -610,6 +612,7 @@ class IpInfoRepositoryTest {
         assertEquals("https://example.com/ip", strategy.endpointCandidates[1])
         assertEquals(1_200L, strategy.callTimeoutMs)
         assertFalse(strategy.includeFamilyProbes)
+        assertTrue(strategy.parallelCandidates)
     }
 
     @Test

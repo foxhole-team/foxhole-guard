@@ -27,7 +27,7 @@ class VpnDnsServerSelectorTest {
     }
 
     @Test
-    fun `local guard advertises local tun dns when DNS is captured`() {
+    fun `local guard advertises reachable remote dns when DNS is captured`() {
         val selected =
             VpnDnsServerSelector.advertisedDnsServerAddresses(
                 configJson =
@@ -54,7 +54,7 @@ class VpnDnsServerSelectorTest {
                 fallbackServerAddress = "172.19.0.2",
             )
 
-        assertEquals(listOf("172.19.0.2"), selected)
+        assertEquals(listOf("94.140.14.14"), selected)
     }
 
     @Test

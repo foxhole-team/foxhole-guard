@@ -176,7 +176,7 @@ internal fun HomeViewModel.refreshIpInfoInternalInternal(
             } catch (error: Throwable) {
                 container.diagnosticsLogger.record(
                     "ip",
-                    "geo refresh failed: ${error.javaClass.simpleName}: ${error.message.orEmpty()}",
+                    "${ipInfoRefreshFailureDiagnosticLabel(fetchMode, reportFailures)}: ${error.javaClass.simpleName}: ${error.message.orEmpty()}",
                 )
                 if (reportFailures) {
                     emitError(getApplication<Application>().getString(R.string.ip_info_failed))
@@ -295,7 +295,14 @@ private suspend fun HomeViewModel.refreshIpInfoForReason(
     val retryDelayMs = ipInfoRefreshRetryDelayMsForReason(reason)
     var lastError: Throwable? = null
     repeat(attempts) { attemptIndex ->
-        val infoResult = runCatching { container.connectionController.refreshIpInfo(fetchMode = fetchMode) }
+        val infoResult =
+            runCatching {
+                if (reason == IpInfoRefreshReason.TOR_ROUTE) {
+                    container.connectionController.refreshTorRouteIpInfo(fetchMode = fetchMode)
+                } else {
+                    container.connectionController.refreshIpInfo(fetchMode = fetchMode)
+                }
+            }
         val info = infoResult.getOrNull()
         infoResult.exceptionOrNull()?.let { error ->
             if (error is CancellationException) {
@@ -347,6 +354,16 @@ internal fun ipInfoRefreshRetryDelayMsForReason(reason: IpInfoRefreshReason): Lo
         IpInfoRefreshReason.FOREGROUND,
         IpInfoRefreshReason.POST_UPDATE,
         -> 0L
+    }
+
+internal fun ipInfoRefreshFailureDiagnosticLabel(
+    fetchMode: IpInfoFetchMode,
+    reportFailures: Boolean,
+): String =
+    if (!reportFailures && fetchMode == IpInfoFetchMode.GEO_ENRICHMENT) {
+        "geo enrichment unavailable"
+    } else {
+        "geo refresh failed"
     }
 
 internal suspend fun HomeViewModel.getResolvedConfigInternal(

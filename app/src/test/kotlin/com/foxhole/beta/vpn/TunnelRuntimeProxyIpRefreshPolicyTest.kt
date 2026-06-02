@@ -17,6 +17,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.io.File
 
 class TunnelRuntimeProxyIpRefreshPolicyTest {
     @Test
@@ -338,4 +339,26 @@ class TunnelRuntimeProxyIpRefreshPolicyTest {
 
         assertFalse(Settings().requiresStrictRuntimeProxyIpRefresh(snapshot))
     }
+
+    @Test
+    fun `tor route ip refresh is runtime proxy only and cannot recover vpn bound result`() {
+        val source = vpnSourceFile("TunnelValidationGateway.kt").readText()
+        val torRefreshBlock =
+            source.substringAfter("suspend fun refreshTorRouteIpInfo")
+                .substringBefore("private suspend fun refreshIpInfo(")
+        val runtimeProxyPreferenceBlock =
+            source.substringAfter("private suspend fun fetchActiveTunnelIpInfoWithRuntimeProxyPreference")
+                .substringBefore("private fun recoverCachedActiveTunnelIpInfo")
+
+        assertTrue(torRefreshBlock.contains("forceRuntimeProxyOnly = true"))
+        assertTrue(runtimeProxyPreferenceBlock.contains("allowVpnBoundFallback = allowVpnBoundFallback"))
+        assertTrue(runtimeProxyPreferenceBlock.contains("allowVpnBoundFallback &&"))
+    }
+
+    private fun vpnSourceFile(name: String): File =
+        listOf(
+            File("src/main/kotlin/com/foxhole/beta/vpn/$name"),
+            File("app/src/main/kotlin/com/foxhole/beta/vpn/$name"),
+            File("../app/src/main/kotlin/com/foxhole/beta/vpn/$name"),
+        ).first { file -> file.isFile }
 }
