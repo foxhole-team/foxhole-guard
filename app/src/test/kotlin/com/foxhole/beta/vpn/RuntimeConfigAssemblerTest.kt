@@ -216,6 +216,9 @@ class RuntimeConfigAssemblerTest {
         val dnsRemote = config["dns"]!!.jsonObject["servers"]!!.jsonArray.map { it.jsonObject }
             .single { it["tag"]!!.jsonPrimitive.content == "dns-remote" }
         assertEquals("tor-over-vpn", dnsRemote["detour"]!!.jsonPrimitive.content)
+        assertEquals("https", dnsRemote["type"]!!.jsonPrimitive.content)
+        assertEquals(443, dnsRemote["server_port"]!!.jsonPrimitive.int)
+        assertEquals("/dns-query", dnsRemote["path"]!!.jsonPrimitive.content)
 
         val route = config["route"]!!.jsonObject
         assertEquals("tor-over-vpn", route["final"]!!.jsonPrimitive.content)

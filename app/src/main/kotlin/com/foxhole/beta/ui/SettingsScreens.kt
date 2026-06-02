@@ -135,7 +135,11 @@ fun SettingsHomeScreen(
     onOpenAbout: () -> Unit,
 ) {
     DebugRecompositionCounter("SettingsHomeScreen")
-    var startupStage by remember { mutableStateOf(SETTINGS_HOME_STARTUP_STAGE_INITIAL) }
+    val initialStartupStage =
+        remember {
+            initialSettingsHomeStartupStage(SettingsHomeStartupCompositionWarmState.markEntered())
+        }
+    var startupStage by rememberSaveable { mutableStateOf(initialStartupStage) }
     LaunchedEffect(Unit) {
         while (startupStage < SETTINGS_HOME_STARTUP_STAGE_ALL) {
             delay(SETTINGS_HOME_STARTUP_STAGE_DELAY_MS)
@@ -221,7 +225,7 @@ private fun LazyListScope.settingsHomeNavigationItems(
             )
         }
     }
-    if (startupStage >= SETTINGS_HOME_STARTUP_STAGE_SECURITY) {
+    if (shouldComposeSettingsHomeSecurityGroup(startupStage)) {
         item {
             SettingsSecurityRoutingNavigationGroup(
                 onOpenSecurity = onOpenSecurity,
@@ -231,7 +235,7 @@ private fun LazyListScope.settingsHomeNavigationItems(
             )
         }
     }
-    if (startupStage >= SETTINGS_HOME_STARTUP_STAGE_APP) {
+    if (shouldComposeSettingsHomeAppGroup(startupStage)) {
         item {
             SettingsNavigationGroup(name = "SettingsGroup:app") {
                 SettingsGroupedNavigationRow(
@@ -278,6 +282,25 @@ private fun LazyListScope.settingsHomeNavigationItems(
                 )
             }
         }
+    }
+}
+
+internal fun initialSettingsHomeStartupStage(settingsAlreadyWarm: Boolean): Int =
+    if (settingsAlreadyWarm) SETTINGS_HOME_STARTUP_STAGE_ALL else SETTINGS_HOME_STARTUP_STAGE_INITIAL
+
+internal fun shouldComposeSettingsHomeSecurityGroup(startupStage: Int): Boolean =
+    startupStage >= SETTINGS_HOME_STARTUP_STAGE_SECURITY
+
+internal fun shouldComposeSettingsHomeAppGroup(startupStage: Int): Boolean =
+    startupStage >= SETTINGS_HOME_STARTUP_STAGE_APP
+
+private object SettingsHomeStartupCompositionWarmState {
+    private var entered = false
+
+    fun markEntered(): Boolean {
+        val alreadyWarm = entered
+        entered = true
+        return alreadyWarm
     }
 }
 

@@ -1775,6 +1775,16 @@ class RuntimeConfigAssembler(
             copy(dnsThroughVpn = false)
         }
 
+    private fun DnsSettings.torDetourSafeDnsSettings(detourTag: String?): DnsSettings =
+        if (detourTag == TOR_OVER_VPN_OUTBOUND_TAG && secureMode == SecureDnsMode.PLAIN) {
+            copy(
+                server = FOXHOLE_REMOTE_DNS_SERVER,
+                secureMode = SecureDnsMode.DOH,
+            )
+        } else {
+            this
+        }
+
     private fun DnsSettings.localGuardVerifiedRuleSetSettings(
         dnsFilterRuntimePaths: DnsFilterRuntimePaths?,
     ): DnsSettings =
@@ -1811,13 +1821,14 @@ class RuntimeConfigAssembler(
                 put("server_port", SecureDnsMode.DOT.defaultPort)
                 put("domain_resolver", DNS_DIRECT_TAG)
             } else {
-                put("server", dnsSettings.server)
-                put("type", dnsSettings.secureMode.configType)
-                put("server_port", dnsSettings.secureMode.defaultPort)
-                if (dnsSettings.secureMode == SecureDnsMode.DOH) {
+                val effectiveDnsSettings = dnsSettings.torDetourSafeDnsSettings(detourTag)
+                put("server", effectiveDnsSettings.server)
+                put("type", effectiveDnsSettings.secureMode.configType)
+                put("server_port", effectiveDnsSettings.secureMode.defaultPort)
+                if (effectiveDnsSettings.secureMode == SecureDnsMode.DOH) {
                     put("path", "/dns-query")
                 }
-                if (dnsSettings.server.requiresDnsDomainResolver()) {
+                if (effectiveDnsSettings.server.requiresDnsDomainResolver()) {
                     put("domain_resolver", DNS_DIRECT_TAG)
                 }
             }

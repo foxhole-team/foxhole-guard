@@ -99,7 +99,6 @@ import com.foxhole.beta.core.data.ProfileImportPayloadTooLargeException
 import com.foxhole.beta.core.data.readLocalProfileImportUtf8Capped
 import com.foxhole.beta.core.model.ConnectionState
 import com.foxhole.beta.core.model.ThemeMode
-import com.foxhole.beta.core.model.TrafficMapUiState
 import com.foxhole.beta.ui.theme.FoxholeTheme
 import com.foxhole.beta.ui.theme.LocalFoxholeDarkTheme
 import com.foxhole.beta.ui.theme.LocalFoxholeThemeMode
@@ -306,16 +305,9 @@ fun FoxholeApp(
                 ) {
                 composable(AppRoute.HOME) {
                     val state by viewModel.homeRouteState.collectAsStateWithLifecycle()
-                    val trafficMapState =
-                        if (state.settings.ui.trafficMapEnabled) {
-                            val collectedTrafficMapState by viewModel.trafficMapUiState.collectAsStateWithLifecycle()
-                            collectedTrafficMapState
-                        } else {
-                            remember { TrafficMapUiState() }
-                        }
                     HomeScreen(
                         state = state,
-                        trafficMapState = trafficMapState,
+                        trafficMapStateFlow = viewModel.trafficMapUiState,
                         snackbarHostState = snackbarHostState,
                         onImportFromClipboard = viewModel::onPasteFromClipboard,
                         onImportFromFile = {
@@ -1393,7 +1385,15 @@ private fun NavHostController.navigateToSection(
         }
         return
     }
-    telemetry?.recordNavigateCall(section.rootRoute)
+    if (section.rootRoute == AppRoute.HOME) {
+        telemetry?.recordNavigateCall(section.rootRoute)
+        if (popBackStack(AppRoute.HOME, inclusive = false)) {
+            return
+        }
+        telemetry?.recordCancelled(section.rootRoute)
+    } else {
+        telemetry?.recordNavigateCall(section.rootRoute)
+    }
     navigate(section.rootRoute) {
         launchSingleTop = true
         restoreState = true

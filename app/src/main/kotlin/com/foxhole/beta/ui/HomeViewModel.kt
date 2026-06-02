@@ -1730,6 +1730,8 @@ class HomeViewModel(
         internal const val CONNECTED_LATENCY_TIMEOUT_MS = 2_500L
         internal const val CONNECTED_LATENCY_TOTAL_TIMEOUT_MS = 8_000L
         internal const val CONNECTED_DASHBOARD_PING_TIMEOUT_MS = CONNECTED_LATENCY_TIMEOUT_MS
+        internal const val CONNECTED_SERVER_PING_TIMEOUT_MS = 2_500L
+        internal const val CONNECTED_SERVER_PING_TOTAL_TIMEOUT_MS = CONNECTED_SERVER_PING_TIMEOUT_MS + 500L
         internal const val PROFILE_RECONNECT_PROMPT_WINDOW_MS = 13_000L
         internal const val RUNTIME_RELOAD_PENDING_TIMEOUT_MS = 1_500L
         internal const val TOR_OPERATION_MIN_VISIBLE_MS = 3_500L

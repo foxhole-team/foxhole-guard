@@ -238,11 +238,13 @@ class HomeAutoConnectWaitPolicyTest {
     }
 
     @Test
-    fun `dashboard tunnel ping keeps timeout aligned with public latency probe`() {
+    fun `dashboard tunnel ping and server ping keep explicit timeout budgets`() {
         assertEquals(
             HomeViewModel.CONNECTED_LATENCY_TIMEOUT_MS,
             HomeViewModel.CONNECTED_DASHBOARD_PING_TIMEOUT_MS,
         )
+        assertEquals(2_500L, HomeViewModel.CONNECTED_SERVER_PING_TIMEOUT_MS)
+        assertEquals(3_000L, HomeViewModel.CONNECTED_SERVER_PING_TOTAL_TIMEOUT_MS)
     }
 
     @Test
@@ -252,7 +254,7 @@ class HomeAutoConnectWaitPolicyTest {
     }
 
     @Test
-    fun `connected dashboard ping uses public latency instead of vpn server target`() {
+    fun `connected dashboard refresh measures public latency and direct server tcp ping separately`() {
         val source =
             listOf(
                 java.io.File("src/main/kotlin/com/foxhole/beta/ui/HomeViewModelAutoConnectSupport.kt"),
@@ -263,10 +265,31 @@ class HomeAutoConnectWaitPolicyTest {
             source.substringAfter("internal fun HomeViewModel.scheduleActiveProfileLatencyRefreshInternal")
                 .substringBefore("private fun HomeViewModel.clearActiveProfileConnectionMetrics")
 
+        assertTrue(connectedDashboardBlock.contains("measureConnectedDashboardPublicLatency"))
+        assertTrue(connectedDashboardBlock.contains("measureConnectedServerTcpPing"))
         assertTrue(connectedDashboardBlock.contains("measureCurrentConnectionLatency"))
-        assertFalse(connectedDashboardBlock.contains("measureCurrentVpnServerPing"))
+        assertTrue(connectedDashboardBlock.contains("measureCurrentVpnServerPing"))
         assertTrue(connectedDashboardBlock.contains("cacheProtocolTunnelPingInternal"))
-        assertFalse(connectedDashboardBlock.contains("cacheProtocolServerPingInternal"))
+        assertTrue(connectedDashboardBlock.contains("cacheProtocolServerPingInternal"))
+    }
+
+    @Test
+    fun `connected server tcp ping cache is separate from tunnel latency cache`() {
+        val source =
+            listOf(
+                java.io.File("src/main/kotlin/com/foxhole/beta/ui/HomeViewModelAutoConnectSupport.kt"),
+                java.io.File("app/src/main/kotlin/com/foxhole/beta/ui/HomeViewModelAutoConnectSupport.kt"),
+                java.io.File("../app/src/main/kotlin/com/foxhole/beta/ui/HomeViewModelAutoConnectSupport.kt"),
+            ).first { file -> file.isFile }.readText()
+        val serverPingBlock =
+            source.substringAfter("private fun HomeViewModel.cacheConnectedServerTcpPing")
+                .substringBefore("private fun HomeViewModel.clearActiveProfileConnectionMetrics")
+
+        assertTrue(serverPingBlock.contains("cacheProtocolServerPingInternal"))
+        assertTrue(serverPingBlock.contains("markProtocolServerPingUnavailableInternal"))
+        assertFalse(serverPingBlock.contains("cacheProtocolTunnelPingInternal"))
+        assertFalse(serverPingBlock.contains("cacheProtocolLatency"))
+        assertFalse(serverPingBlock.contains("recordConnectedProtocolSmartStartMemory"))
     }
 
     @Test

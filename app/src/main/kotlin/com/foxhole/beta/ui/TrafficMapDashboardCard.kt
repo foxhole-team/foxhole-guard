@@ -67,6 +67,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -96,12 +97,18 @@ import kotlin.math.sqrt
 internal fun TrafficMapDashboardCard(
     state: TrafficMapUiState,
     modifier: Modifier = Modifier,
+    contentReady: Boolean = true,
     legendLoading: Boolean = false,
 ) {
     val powerState = rememberTrafficMapPowerState()
     var forceMapEnabled by rememberSaveable { mutableStateOf(false) }
     val mapDisabledForPower = powerState.mapDisabled && !forceMapEnabled
-    val countryShapes = rememberTrafficMapCountryShapes()
+    val countryShapes =
+        if (contentReady && !mapDisabledForPower) {
+            rememberTrafficMapCountryShapes()
+        } else {
+            remember { emptyList() }
+        }
     FoxholeCard(
         modifier = modifier
             .fillMaxWidth()
@@ -131,6 +138,13 @@ internal fun TrafficMapDashboardCard(
                             .fillMaxWidth()
                             .weight(1f),
                     )
+                } else if (!contentReady) {
+                    TrafficMapCanvasLoadingBlock(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f)
+                            .testTag("home_traffic_world_map_loading"),
+                    )
                 } else {
                     TrafficMapCanvas(
                         state = state,
@@ -143,7 +157,7 @@ internal fun TrafficMapDashboardCard(
                 }
             }
             if (!mapDisabledForPower) {
-                if (legendLoading) {
+                if (legendLoading || !contentReady) {
                     TrafficMapLegendLoadingBlock(
                         modifier = Modifier
                             .weight(TRAFFIC_MAP_LEGEND_WEIGHT)
@@ -163,7 +177,37 @@ internal fun TrafficMapDashboardCard(
 }
 
 @Composable
+private fun TrafficMapCanvasLoadingBlock(modifier: Modifier = Modifier) {
+    val shimmerProgress = rememberFoxholeSkeletonProgress()
+    Column(
+        modifier = modifier.padding(top = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterVertically),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        FoxholeSkeletonBlock(
+            modifier = Modifier.fillMaxWidth(0.92f).height(86.dp),
+            shimmerProgress = shimmerProgress,
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth(0.72f),
+            horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            FoxholeSkeletonBlock(
+                modifier = Modifier.width(42.dp).height(8.dp),
+                shimmerProgress = shimmerProgress,
+            )
+            FoxholeSkeletonBlock(
+                modifier = Modifier.width(72.dp).height(8.dp),
+                shimmerProgress = shimmerProgress,
+            )
+        }
+    }
+}
+
+@Composable
 private fun TrafficMapLegendLoadingBlock(modifier: Modifier = Modifier) {
+    val shimmerProgress = rememberFoxholeSkeletonProgress()
     Column(
         modifier = modifier.padding(top = 24.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -173,12 +217,21 @@ private fun TrafficMapLegendLoadingBlock(modifier: Modifier = Modifier) {
             horizontalArrangement = Arrangement.spacedBy(5.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            FoxholeSkeletonBlock(modifier = Modifier.size(16.dp))
+            FoxholeSkeletonBlock(
+                modifier = Modifier.size(16.dp),
+                shimmerProgress = shimmerProgress,
+            )
             Column(
                 verticalArrangement = Arrangement.spacedBy(3.dp),
             ) {
-                FoxholeSkeletonBlock(modifier = Modifier.width(56.dp).height(9.dp))
-                FoxholeSkeletonBlock(modifier = Modifier.width(42.dp).height(8.dp))
+                FoxholeSkeletonBlock(
+                    modifier = Modifier.width(56.dp).height(9.dp),
+                    shimmerProgress = shimmerProgress,
+                )
+                FoxholeSkeletonBlock(
+                    modifier = Modifier.width(42.dp).height(8.dp),
+                    shimmerProgress = shimmerProgress,
+                )
             }
         }
         Spacer(modifier = Modifier.height(2.dp))
@@ -186,9 +239,18 @@ private fun TrafficMapLegendLoadingBlock(modifier: Modifier = Modifier) {
             modifier = Modifier.weight(1f),
             verticalArrangement = Arrangement.spacedBy(5.dp),
         ) {
-            FoxholeSkeletonBlock(modifier = Modifier.fillMaxWidth(0.92f).height(8.dp))
-            FoxholeSkeletonBlock(modifier = Modifier.fillMaxWidth(0.74f).height(8.dp))
-            FoxholeSkeletonBlock(modifier = Modifier.fillMaxWidth(0.52f).height(8.dp))
+            FoxholeSkeletonBlock(
+                modifier = Modifier.fillMaxWidth(0.92f).height(8.dp),
+                shimmerProgress = shimmerProgress,
+            )
+            FoxholeSkeletonBlock(
+                modifier = Modifier.fillMaxWidth(0.74f).height(8.dp),
+                shimmerProgress = shimmerProgress,
+            )
+            FoxholeSkeletonBlock(
+                modifier = Modifier.fillMaxWidth(0.52f).height(8.dp),
+                shimmerProgress = shimmerProgress,
+            )
         }
     }
 }
@@ -301,10 +363,15 @@ private fun TrafficMapCanvas(
                     countryBitmap?.let { bitmap ->
                         drawImage(
                             image = bitmap,
+                            dstOffset =
+                                IntOffset(
+                                    x = viewport.topLeft.x.roundToInt(),
+                                    y = viewport.topLeft.y.roundToInt(),
+                                ),
                             dstSize =
                                 IntSize(
-                                    width = size.width.roundToInt().coerceAtLeast(1),
-                                    height = size.height.roundToInt().coerceAtLeast(1),
+                                    width = viewport.size.width.roundToInt().coerceAtLeast(1),
+                                    height = viewport.size.height.roundToInt().coerceAtLeast(1),
                                 ),
                         )
                     }
@@ -888,9 +955,9 @@ private object TrafficMapLandLayerCache {
                 trafficMapLandBitmap(
                     size = size,
                     shapes = shapes,
-                    viewport = trafficMapViewport(size),
+                    viewport = TrafficMapViewport(topLeft = Offset.Zero, size = size),
                     color = color,
-            )
+                )
             synchronized(lock) {
                 bitmaps[key] = bitmap
                 latestBitmap = bitmap
@@ -932,7 +999,7 @@ private object TrafficMapLandLayerCache {
                     trafficMapLandBitmap(
                         size = size,
                         shapes = shapes,
-                        viewport = trafficMapViewport(size),
+                        viewport = TrafficMapViewport(topLeft = Offset.Zero, size = size),
                         color = TRAFFIC_MAP_DEFAULT_COUNTRY_FILL,
                     )
                 synchronized(lock) {
@@ -957,14 +1024,16 @@ private object TrafficMapLandLayerCache {
         shapes: List<TrafficMapCountryShape>,
         canvasSize: IntSize,
         color: Color,
-    ): TrafficMapLandLayerKey =
-        TrafficMapLandLayerKey(
-            width = bucketDimension(canvasSize.width),
-            height = bucketDimension(canvasSize.height),
+    ): TrafficMapLandLayerKey {
+        val bitmapSize = trafficMapLandLayerBitmapSize(canvasSize)
+        return TrafficMapLandLayerKey(
+            width = bucketDimension(bitmapSize.width),
+            height = bucketDimension(bitmapSize.height),
             color = color.toArgb(),
             shapesIdentity = System.identityHashCode(shapes),
             shapeCount = shapes.size,
         )
+    }
 
     private fun bucketDimension(value: Int): Int =
         (((value.coerceAtLeast(1) + SIZE_BUCKET_PX - 1) / SIZE_BUCKET_PX) * SIZE_BUCKET_PX)
@@ -972,24 +1041,32 @@ private object TrafficMapLandLayerCache {
     fun bucketDimensionForPrewarm(value: Int): Int = bucketDimension(value)
 }
 
+internal fun trafficMapLandLayerBitmapSize(canvasSize: IntSize): IntSize {
+    if (canvasSize.width <= 0 || canvasSize.height <= 0) {
+        return IntSize.Zero
+    }
+    val viewport =
+        trafficMapViewport(
+            Size(
+                width = canvasSize.width.toFloat(),
+                height = canvasSize.height.toFloat(),
+            ),
+        )
+    return IntSize(
+        width = viewport.size.width.roundToInt().coerceAtLeast(1),
+        height = viewport.size.height.roundToInt().coerceAtLeast(1),
+    )
+}
+
 internal fun trafficMapPrewarmCanvasSizes(displayMetrics: DisplayMetrics): List<IntSize> {
     val shortSide = min(displayMetrics.widthPixels, displayMetrics.heightPixels).coerceAtLeast(1)
-    val widths =
-        listOf(
-            (shortSide * TRAFFIC_MAP_PREWARM_COMPACT_WIDTH_FRACTION).roundToInt(),
-            (shortSide * TRAFFIC_MAP_PREWARM_MID_WIDTH_FRACTION).roundToInt(),
-            (shortSide * TRAFFIC_MAP_PREWARM_WIDE_WIDTH_FRACTION).roundToInt(),
+    val width = (shortSide * TRAFFIC_MAP_PREWARM_PRIMARY_WIDTH_FRACTION).roundToInt()
+    val bucketedWidth = TrafficMapLandLayerCache.bucketDimensionForPrewarm(width)
+    val bucketedHeight =
+        TrafficMapLandLayerCache.bucketDimensionForPrewarm(
+            (bucketedWidth / TRAFFIC_MAP_WORLD_ASPECT_RATIO).roundToInt(),
         )
-    return widths
-        .map { width ->
-            val bucketedWidth = TrafficMapLandLayerCache.bucketDimensionForPrewarm(width)
-            val bucketedHeight =
-                TrafficMapLandLayerCache.bucketDimensionForPrewarm(
-                    (bucketedWidth / TRAFFIC_MAP_WORLD_ASPECT_RATIO).roundToInt(),
-                )
-            IntSize(width = bucketedWidth, height = bucketedHeight)
-        }
-        .distinct()
+    return listOf(IntSize(width = bucketedWidth, height = bucketedHeight))
 }
 
 private data class TrafficMapLandLayerKey(
@@ -1113,9 +1190,7 @@ private const val TRAFFIC_MAP_LAT_RANGE = TRAFFIC_MAP_MAX_LAT - TRAFFIC_MAP_MIN_
 private const val MAX_TRAFFIC_MAP_DRAW_EDGES = 30
 private const val MAX_TRAFFIC_MAP_DRAW_DESTINATIONS = 30
 private const val TRAFFIC_MAP_LOW_BATTERY_PERCENT = 10
-private const val TRAFFIC_MAP_PREWARM_COMPACT_WIDTH_FRACTION = 0.56f
-private const val TRAFFIC_MAP_PREWARM_MID_WIDTH_FRACTION = 0.65f
-private const val TRAFFIC_MAP_PREWARM_WIDE_WIDTH_FRACTION = 0.74f
+private const val TRAFFIC_MAP_PREWARM_PRIMARY_WIDTH_FRACTION = 0.65f
 private const val TRAFFIC_ROUTE_PI = 3.141592653589793
 private const val TRAFFIC_ROUTE_ANGLE_BUCKET_RADIANS = 0.17453292519943295
 private const val TRAFFIC_MAP_COUNTRY_SHAPES_ASSET = "maps/ne_110m_admin_0_countries_preprocessed.json"

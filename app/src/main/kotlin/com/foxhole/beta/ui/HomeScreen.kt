@@ -101,6 +101,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.foxhole.beta.R
 import com.foxhole.beta.core.model.ConnectionState
 import com.foxhole.beta.core.model.DashboardCard
@@ -124,12 +125,13 @@ import com.foxhole.beta.ui.ScreenHorizontalPadding
 import com.foxhole.beta.ui.ScreenSectionSpacing
 import com.foxhole.beta.ui.ScreenVerticalPadding
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.StateFlow
 
 @Composable
 @Suppress("CyclomaticComplexMethod", "LongMethod", "LongParameterList")
 fun HomeScreen(
     state: HomeRouteUiState,
-    trafficMapState: TrafficMapUiState,
+    trafficMapStateFlow: StateFlow<TrafficMapUiState>,
     snackbarHostState: SnackbarHostState,
     onImportFromClipboard: () -> Unit,
     onImportFromFile: () -> Unit,
@@ -405,6 +407,19 @@ fun HomeScreen(
                 startupStage = dashboardStartupStage,
                 activeReorderCard = activeReorderCard,
             )
+    val trafficMapHeavyContentReady =
+        state.settings.ui.trafficMapEnabled &&
+            shouldComposeTrafficMapHeavyContent(
+                startupStage = dashboardStartupStage,
+                activeReorderCard = activeReorderCard,
+            )
+    val trafficMapState =
+        if (trafficMapHeavyContentReady) {
+            val collectedTrafficMapState by trafficMapStateFlow.collectAsStateWithLifecycle()
+            collectedTrafficMapState
+        } else {
+            remember { TrafficMapUiState() }
+        }
     val latestTrafficUiVisibilityChanged by rememberUpdatedState(onTrafficUiVisibilityChanged)
 
     LaunchedEffect(Unit) {
@@ -509,6 +524,7 @@ fun HomeScreen(
                                 ) {
                                     TrafficMapDashboardCard(
                                         state = trafficMapState,
+                                        contentReady = trafficMapHeavyContentReady,
                                         legendLoading =
                                             shouldShowTrafficMapLegendLoading(
                                                 connectionState = state.connection.state,
@@ -1759,8 +1775,16 @@ internal fun shouldComposeDashboardCardNow(
         activeReorderCard != null ||
         startupStage >= DASHBOARD_STARTUP_STAGE_ALL
 
+internal fun shouldComposeTrafficMapHeavyContent(
+    startupStage: Int,
+    activeReorderCard: DashboardCard?,
+): Boolean =
+    startupStage >= DASHBOARD_TRAFFIC_MAP_HEAVY_CONTENT_STAGE ||
+        activeReorderCard != null ||
+        startupStage >= DASHBOARD_STARTUP_STAGE_ALL
+
 internal fun initialDashboardStartupStage(dashboardAlreadyWarm: Boolean): Int =
-    if (dashboardAlreadyWarm) DASHBOARD_STARTUP_STAGE_ALL else DASHBOARD_STARTUP_STAGE_INITIAL
+    if (dashboardAlreadyWarm) DASHBOARD_STARTUP_STAGE_WARM_RETURN else DASHBOARD_STARTUP_STAGE_INITIAL
 
 private object DashboardStartupCompositionWarmState {
     private var entered = false
@@ -1820,6 +1844,8 @@ private const val DASHBOARD_CARD_ACTIVE_Z_INDEX = 100f
 private const val DASHBOARD_CARD_REORDER_THRESHOLD_FRACTION = 0.5f
 private const val DASHBOARD_CARD_EDGE_RESISTANCE_FRACTION = 0.18f
 private const val DASHBOARD_STARTUP_STAGE_INITIAL = 0
+private const val DASHBOARD_STARTUP_STAGE_WARM_RETURN = 2
+private const val DASHBOARD_TRAFFIC_MAP_HEAVY_CONTENT_STAGE = 3
 private const val DASHBOARD_STARTUP_STAGE_ALL = 4
 private const val DASHBOARD_CARD_STARTUP_STAGE_DELAY_MS = 48L
 private val DashboardCardReorderFallbackMoveDistance = 96.dp

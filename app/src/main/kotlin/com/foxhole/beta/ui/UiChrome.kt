@@ -94,6 +94,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.State
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -1921,21 +1922,24 @@ internal fun FoxholeSearchField(
 }
 
 @Composable
+internal fun rememberFoxholeSkeletonProgress(): State<Float> =
+    rememberInfiniteTransition(label = "foxhole_skeleton_group").animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec =
+            infiniteRepeatable(
+                animation = tween(durationMillis = 1_150, easing = LinearEasing),
+                repeatMode = RepeatMode.Restart,
+        ),
+        label = "foxhole_skeleton_shimmer",
+    )
+
+@Composable
 internal fun FoxholeSkeletonBlock(
     modifier: Modifier = Modifier,
     color: Color = MaterialTheme.colorScheme.surfaceVariant,
+    shimmerProgress: State<Float> = rememberFoxholeSkeletonProgress(),
 ) {
-    val shimmerProgress =
-        rememberInfiniteTransition(label = "foxhole_skeleton").animateFloat(
-            initialValue = 0f,
-            targetValue = 1f,
-            animationSpec =
-                infiniteRepeatable(
-                    animation = tween(durationMillis = 1_150, easing = LinearEasing),
-                    repeatMode = RepeatMode.Restart,
-                ),
-            label = "foxhole_skeleton_shimmer",
-        ).value
     val baseColor = color.copy(alpha = if (LocalFoxholeDarkTheme.current) 0.46f else 0.40f)
     val highlightColor = Color.White.copy(alpha = if (LocalFoxholeDarkTheme.current) 0.16f else 0.30f)
     Box(
@@ -1945,19 +1949,19 @@ internal fun FoxholeSkeletonBlock(
                 .background(baseColor)
                 .drawWithCache {
                     val travel = size.width * 2.4f
-                    val startX = -size.width + travel * shimmerProgress
-                    val shimmer =
-                        Brush.linearGradient(
-                            colors =
-                                listOf(
-                                    Color.Transparent,
-                                    highlightColor,
-                                    Color.Transparent,
-                                ),
-                            start = Offset(startX, 0f),
-                            end = Offset(startX + size.width, size.height),
-                        )
                     onDrawWithContent {
+                        val startX = -size.width + travel * shimmerProgress.value
+                        val shimmer =
+                            Brush.linearGradient(
+                                colors =
+                                    listOf(
+                                        Color.Transparent,
+                                        highlightColor,
+                                        Color.Transparent,
+                                    ),
+                                start = Offset(startX, 0f),
+                                end = Offset(startX + size.width, size.height),
+                            )
                         drawContent()
                         drawRect(brush = shimmer)
                     }

@@ -1,6 +1,7 @@
 package com.foxhole.beta.core.traffic
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -90,5 +91,57 @@ class TrafficMapCountryGeoJsonParserTest {
         val visualShape = shape.toTrafficMapVisualShape()
 
         assertEquals(1, visualShape?.rings?.size)
+    }
+
+    @Test
+    fun `parses preprocessed country shape asset with typed dto path`() {
+        val raw =
+            """
+            {
+              "countries": [
+                {
+                  "code": "us",
+                  "rings": [
+                    [[40.0, -74.0], [41.0, -73.0], [42.0, -72.0]]
+                  ]
+                },
+                {
+                  "code": "bad",
+                  "rings": [
+                    [[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]]
+                  ]
+                },
+                {
+                  "code": "DE",
+                  "rings": [
+                    [[50.0, 10.0], [51.0, 11.0]],
+                    [[52.0, 12.0], [53.0, 13.0], [54.0, 14.0]]
+                  ]
+                }
+              ]
+            }
+            """.trimIndent()
+
+        val shapes = TrafficMapCountryShapeAssetParser().parse(raw)
+
+        assertEquals(listOf("US", "DE"), shapes.map(TrafficMapCountryShape::countryCode))
+        assertEquals(TrafficMapGeoPoint(lat = 40.0, lon = -74.0), shapes.first().rings.first().first())
+        assertEquals(1, shapes.first { shape -> shape.countryCode == "DE" }.rings.size)
+    }
+
+    @Test
+    fun `preprocessed country shape asset parser avoids generic json tree parsing`() {
+        val source =
+            listOf(
+                java.io.File("src/main/kotlin/com/foxhole/beta/core/traffic/TrafficMapCountryShapes.kt"),
+                java.io.File("app/src/main/kotlin/com/foxhole/beta/core/traffic/TrafficMapCountryShapes.kt"),
+                java.io.File("../app/src/main/kotlin/com/foxhole/beta/core/traffic/TrafficMapCountryShapes.kt"),
+            ).first { file -> file.isFile }.readText()
+        val assetParserBlock =
+            source.substringAfter("class TrafficMapCountryShapeAssetParser")
+                .substringBefore("internal fun TrafficMapCountryShape.toTrafficMapVisualShape")
+
+        assertTrue(assetParserBlock.contains("decodeFromString<TrafficMapPreprocessedAsset>"))
+        assertFalse(assetParserBlock.contains("parseToJsonElement"))
     }
 }

@@ -1,6 +1,7 @@
 package com.foxhole.beta.ui
 
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.IntSize
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -74,7 +75,7 @@ class TrafficMapStylingTest {
     }
 
     @Test
-    fun `traffic map startup prewarms gray land bitmap`() {
+    fun `traffic map startup prewarms one primary gray land bitmap`() {
         val source =
             listOf(
                 java.io.File("src/main/kotlin/com/foxhole/beta/ui/TrafficMapDashboardCard.kt"),
@@ -92,8 +93,60 @@ class TrafficMapStylingTest {
         assertTrue(landCacheBlock.contains("suspend fun prewarm"))
         assertTrue(landCacheBlock.contains("TRAFFIC_MAP_DEFAULT_COUNTRY_FILL"))
         assertTrue(source.contains("trafficMapPrewarmCanvasSizes"))
-        assertTrue(source.contains("TRAFFIC_MAP_PREWARM_COMPACT_WIDTH_FRACTION"))
-        assertTrue(source.contains("TRAFFIC_MAP_PREWARM_MID_WIDTH_FRACTION"))
-        assertTrue(source.contains("TRAFFIC_MAP_PREWARM_WIDE_WIDTH_FRACTION"))
+        assertTrue(source.contains("TRAFFIC_MAP_PREWARM_PRIMARY_WIDTH_FRACTION"))
+        assertTrue(source.contains("return listOf(IntSize"))
+        assertFalse(source.contains("TRAFFIC_MAP_PREWARM_COMPACT_WIDTH_FRACTION"))
+        assertFalse(source.contains("TRAFFIC_MAP_PREWARM_MID_WIDTH_FRACTION"))
+        assertFalse(source.contains("TRAFFIC_MAP_PREWARM_WIDE_WIDTH_FRACTION"))
+    }
+
+    @Test
+    fun `application delays traffic map prewarm past the first frame`() {
+        val source =
+            listOf(
+                java.io.File("src/main/kotlin/com/foxhole/beta/FoxholeApplication.kt"),
+                java.io.File("app/src/main/kotlin/com/foxhole/beta/FoxholeApplication.kt"),
+                java.io.File("../app/src/main/kotlin/com/foxhole/beta/FoxholeApplication.kt"),
+            ).first { file -> file.isFile }.readText()
+        val prewarmBlock =
+            source.substringAfter("appScope.launch {")
+                .substringBefore("appScope.launch {\n            delay(BACKGROUND_INITIALIZATION_STARTUP_DELAY_MS)")
+
+        assertTrue(prewarmBlock.contains("delay(TRAFFIC_MAP_PREWARM_STARTUP_DELAY_MS)"))
+        assertTrue(source.contains("TRAFFIC_MAP_PREWARM_STARTUP_DELAY_MS = 300L"))
+    }
+
+    @Test
+    fun `traffic map land layer cache keys use visible viewport size`() {
+        assertEquals(
+            IntSize(width = 600, height = 300),
+            trafficMapLandLayerBitmapSize(IntSize(width = 900, height = 300)),
+        )
+        assertEquals(
+            IntSize(width = 500, height = 250),
+            trafficMapLandLayerBitmapSize(IntSize(width = 500, height = 500)),
+        )
+        assertEquals(
+            IntSize.Zero,
+            trafficMapLandLayerBitmapSize(IntSize.Zero),
+        )
+    }
+
+    @Test
+    fun `traffic map defers json backed canvas until content is ready`() {
+        val source =
+            listOf(
+                java.io.File("src/main/kotlin/com/foxhole/beta/ui/TrafficMapDashboardCard.kt"),
+                java.io.File("app/src/main/kotlin/com/foxhole/beta/ui/TrafficMapDashboardCard.kt"),
+                java.io.File("../app/src/main/kotlin/com/foxhole/beta/ui/TrafficMapDashboardCard.kt"),
+            ).first { file -> file.isFile }.readText()
+        val cardBlock =
+            source.substringAfter("internal fun TrafficMapDashboardCard(")
+                .substringBefore("@Composable\nprivate fun TrafficMapCanvasLoadingBlock")
+
+        assertTrue(cardBlock.contains("contentReady: Boolean = true"))
+        assertTrue(cardBlock.contains("if (contentReady && !mapDisabledForPower)"))
+        assertTrue(cardBlock.contains("TrafficMapCanvasLoadingBlock"))
+        assertTrue(source.contains("home_traffic_world_map_loading"))
     }
 }

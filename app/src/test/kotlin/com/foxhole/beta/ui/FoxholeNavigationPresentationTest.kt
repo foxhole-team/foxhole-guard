@@ -1,6 +1,7 @@
 package com.foxhole.beta.ui
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class FoxholeNavigationPresentationTest {
@@ -60,5 +61,21 @@ class FoxholeNavigationPresentationTest {
             SettingsDetailNavigationDecision.Accepted(nowMs),
             gate.tryAccept(currentRoute = "settings", targetRoute = "settings/traffic"),
         )
+    }
+
+    @Test
+    fun `root navigation returns to dashboard by popping existing home destination`() {
+        val source =
+            listOf(
+                java.io.File("src/main/kotlin/com/foxhole/beta/ui/FoxholeApp.kt"),
+                java.io.File("app/src/main/kotlin/com/foxhole/beta/ui/FoxholeApp.kt"),
+                java.io.File("../app/src/main/kotlin/com/foxhole/beta/ui/FoxholeApp.kt"),
+            ).first { file -> file.isFile }.readText()
+        val navigateToSectionBlock =
+            source.substringAfter("private fun NavHostController.navigateToSection(")
+                .substringBefore("private const val SECTION_SWIPE_THRESHOLD_FRACTION")
+
+        assertTrue(navigateToSectionBlock.contains("section.rootRoute == AppRoute.HOME"))
+        assertTrue(navigateToSectionBlock.contains("popBackStack(AppRoute.HOME, inclusive = false)"))
     }
 }

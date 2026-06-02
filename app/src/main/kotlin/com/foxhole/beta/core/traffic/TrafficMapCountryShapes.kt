@@ -1,5 +1,7 @@
 package com.foxhole.beta.core.traffic
 
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -100,50 +102,56 @@ class TrafficMapCountryShapeAssetParser(
         },
 ) {
     fun parse(raw: String): List<TrafficMapCountryShape> {
-        val root = json.parseToJsonElement(raw).jsonObject
-        val countries = root["countries"]?.jsonArray ?: return emptyList()
-        return countries.mapNotNull(::parseCountry)
+        val asset = json.decodeFromString<TrafficMapPreprocessedAsset>(raw)
+        return parse(asset)
     }
 
-    private fun parseCountry(countryElement: JsonElement): TrafficMapCountryShape? =
-        runCatching {
-            val country = countryElement.jsonObject
-            val countryCode =
-                country["code"]
-                    ?.jsonPrimitive
-                    ?.contentOrNull
+    private fun parse(asset: TrafficMapPreprocessedAsset): List<TrafficMapCountryShape> =
+        asset.countries.mapNotNull(::parseCountry)
+
+    private fun parseCountry(country: TrafficMapPreprocessedCountry): TrafficMapCountryShape? {
+        val countryCode =
+                country.code
                     ?.trim()
                     ?.uppercase(Locale.US)
-                    ?.takeIf { code -> code.length == IsoCountryCodeLength && code.all { character -> character in 'A'..'Z' } }
-            val rings =
-                country["rings"]
-                    ?.jsonArray
-                    ?.mapNotNull(::parseRing)
-                    .orEmpty()
-            countryCode?.let { code ->
-                TrafficMapCountryShape(
-                    countryCode = code,
-                    rings = rings,
-                )
-            }?.takeIf { shape -> shape.rings.isNotEmpty() }
-        }.getOrNull()
+                    ?.takeIf(::isIsoCountryCode)
+                    ?: return null
+        val rings = country.rings.mapNotNull(::parseRing)
+        return TrafficMapCountryShape(
+            countryCode = countryCode,
+            rings = rings,
+        ).takeIf { shape -> shape.rings.isNotEmpty() }
+    }
 
-    private fun parseRing(ringElement: JsonElement): List<TrafficMapGeoPoint>? {
-        val ring =
-            ringElement.jsonArray.mapNotNull { pointElement ->
-                val point = pointElement.jsonArray
-                val lat = point.getOrNull(0)?.jsonPrimitive?.doubleOrNull ?: return@mapNotNull null
-                val lon = point.getOrNull(1)?.jsonPrimitive?.doubleOrNull ?: return@mapNotNull null
+    private fun parseRing(ring: List<List<Double>>): List<TrafficMapGeoPoint>? {
+        val points =
+            ring.mapNotNull { point ->
+                val lat = point.getOrNull(0) ?: return@mapNotNull null
+                val lon = point.getOrNull(1) ?: return@mapNotNull null
                 TrafficMapGeoPoint(lat = lat, lon = lon)
             }
-        return ring.takeIf { points -> points.size >= MinPolygonRingPoints }
+        return points.takeIf { it.size >= MinPolygonRingPoints }
     }
 
     private companion object {
         const val IsoCountryCodeLength = 2
         const val MinPolygonRingPoints = 3
+
+        fun isIsoCountryCode(value: String): Boolean =
+            value.length == IsoCountryCodeLength && value.all { character -> character in 'A'..'Z' }
     }
 }
+
+@Serializable
+private data class TrafficMapPreprocessedAsset(
+    val countries: List<TrafficMapPreprocessedCountry> = emptyList(),
+)
+
+@Serializable
+private data class TrafficMapPreprocessedCountry(
+    val code: String? = null,
+    val rings: List<List<List<Double>>> = emptyList(),
+)
 
 internal fun TrafficMapCountryShape.toTrafficMapVisualShape(
     minRelativeRingArea: Double = TrafficMapVisualMinRelativeRingArea,

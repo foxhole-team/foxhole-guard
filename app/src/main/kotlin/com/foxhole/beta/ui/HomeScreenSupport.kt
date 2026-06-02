@@ -2092,6 +2092,7 @@ internal fun HomeNetworkLoadingBlock(
     valueWidth: Dp = HomeNetworkValueLoadingWidth,
     loadingColor: Color = MaterialTheme.colorScheme.surfaceVariant,
 ) {
+    val shimmerProgress = rememberFoxholeSkeletonProgress()
     Column(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(2.dp),
@@ -2103,6 +2104,7 @@ internal fun HomeNetworkLoadingBlock(
                 icon = icons.getOrNull(index),
                 valueWidth = valueWidth,
                 loadingColor = loadingColor,
+                shimmerProgress = shimmerProgress,
             )
             if (index < labels.lastIndex) {
                 HomeNetworkSubtleDivider()
@@ -2144,6 +2146,7 @@ private fun HomeNetworkLoadingLine(
     icon: ImageVector?,
     valueWidth: Dp,
     loadingColor: Color,
+    shimmerProgress: State<Float>,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -2187,6 +2190,7 @@ private fun HomeNetworkLoadingLine(
                         .width(valueWidth)
                         .height(HomeNetworkMetricValueLoadingHeight),
                 color = loadingColor,
+                shimmerProgress = shimmerProgress,
             )
         }
     }

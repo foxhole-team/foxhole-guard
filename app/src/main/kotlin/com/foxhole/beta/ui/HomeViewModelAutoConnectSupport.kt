@@ -38,6 +38,8 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -1856,12 +1858,28 @@ internal fun HomeViewModel.scheduleActiveProfileLatencyRefreshInternal(
                             fallbackProtocolHint = selectedProtocolHint,
                         ) ?: return@launch
                     val countTowardInitialOutcome = waitingForInitialSample
-                    val latencyResult = measureConnectedDashboardPublicLatency()
+                    val (latencyResult, serverPingResult) =
+                        coroutineScope {
+                            val latencyDeferred = async { measureConnectedDashboardPublicLatency() }
+                            val serverPingDeferred =
+                                async {
+                                    measureConnectedServerTcpPing(
+                                        activeProfileId = activeProfile.id,
+                                        selectedOptionId = selectedOptionId,
+                                    )
+                                }
+                            latencyDeferred.await() to serverPingDeferred.await()
+                        }
                     cacheDashboardPublicPing(
                         refreshTarget = refreshTarget,
                         activeProfileId = activeProfile.id,
                         selectedOptionId = selectedOptionId,
                         latencyResult = latencyResult,
+                    )
+                    cacheConnectedServerTcpPing(
+                        activeProfileId = activeProfile.id,
+                        selectedOptionId = selectedOptionId,
+                        serverPingResult = serverPingResult,
                     )
                     waitingForInitialSample = clearDashboardMetricsLoadingAfterInitialSample(waitingForInitialSample)
                     val measuredLatency = latencyResult.getOrNull()
@@ -1928,6 +1946,20 @@ private suspend fun HomeViewModel.measureConnectedDashboardPublicLatency(): Resu
         } ?: error("dashboard public ping timed out")
     }
 
+private suspend fun HomeViewModel.measureConnectedServerTcpPing(
+    activeProfileId: Long,
+    selectedOptionId: String,
+): Result<Long> =
+    runCatchingUnlessCancelled {
+        withTimeoutOrNull(HomeViewModel.CONNECTED_SERVER_PING_TOTAL_TIMEOUT_MS) {
+            container.connectionController.measureCurrentVpnServerPing(
+                profileId = activeProfileId,
+                protocolOptionId = selectedOptionId,
+                timeoutMs = HomeViewModel.CONNECTED_SERVER_PING_TIMEOUT_MS,
+            )
+        } ?: error("server tcp ping timed out")
+    }
+
 private fun HomeViewModel.cacheDashboardPublicPing(
     refreshTarget: ActiveDashboardLatencyTarget,
     activeProfileId: Long,
@@ -1960,6 +1992,34 @@ private fun HomeViewModel.cacheDashboardPublicPing(
     container.diagnosticsLogger.record(
         "latency",
         "dashboard public ping unavailable: $unavailableReason",
+    )
+}
+
+private fun HomeViewModel.cacheConnectedServerTcpPing(
+    activeProfileId: Long,
+    selectedOptionId: String,
+    serverPingResult: Result<Long>,
+) {
+    val pingMs = serverPingResult.getOrNull()
+    if (pingMs != null) {
+        cacheProtocolServerPingInternal(
+            profileId = activeProfileId,
+            optionId = selectedOptionId,
+            pingMs = pingMs,
+        )
+        container.diagnosticsLogger.record(
+            "latency",
+            "server tcp ping refreshed option=$selectedOptionId latency=${pingMs}ms",
+        )
+        return
+    }
+    markProtocolServerPingUnavailableInternal(
+        profileId = activeProfileId,
+        optionId = selectedOptionId,
+    )
+    container.diagnosticsLogger.record(
+        "latency",
+        "server tcp ping unavailable option=$selectedOptionId: ${serverPingResult.exceptionOrNull()?.message.orEmpty()}",
     )
 }
 
