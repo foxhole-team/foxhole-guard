@@ -19,7 +19,10 @@ import com.foxhole.beta.vpn.FoxholeVpnService
 import com.foxhole.beta.vpn.PrivateDnsMode
 import com.foxhole.beta.vpn.PrivateDnsState
 import com.foxhole.beta.vpn.RuntimeConfigAssembler
+import com.foxhole.beta.vpn.TorManager
+import com.foxhole.beta.vpn.TorRuntimePaths
 import com.foxhole.beta.vpn.TorRuntimeInstaller
+import com.foxhole.beta.vpn.TorStartProfile
 import com.foxhole.beta.vpn.withIdentityVersion
 import java.util.UUID
 
@@ -28,6 +31,7 @@ internal class ProfileSessionFactory(
     private val routingRepository: RoutingRepository,
     private val runtimeConfigAssembler: RuntimeConfigAssembler,
     private val torRuntimeInstaller: TorRuntimeInstaller,
+    private val torManager: TorManager,
     private val dnsFilterAssetInstaller: DnsFilterAssetInstaller,
     private val diagnosticsLogger: DiagnosticsLogger,
     private val profileProvider: suspend (Long) -> Profile,
@@ -104,6 +108,7 @@ internal class ProfileSessionFactory(
                     torRuntimeInstaller
                         .prepare()
                         .withIdentityVersion(runtimeSettings.privacyRoute.identityVersion)
+                        .prepareTorOnlyExternalSocksRuntime()
                 runtimeConfigAssembler.assembleTorOnly(
                     settings = runtimeSettings,
                     activePreset = routingRepository.currentPresetForRuntime(),
@@ -132,6 +137,28 @@ internal class ProfileSessionFactory(
             configJson = assembled,
             correlationId = correlationId,
         )
+    }
+
+    private suspend fun TorRuntimePaths.prepareTorOnlyExternalSocksRuntime(): TorRuntimePaths {
+        val started =
+            runCatching {
+                torManager.start(TorStartProfile(paths = this))
+            }.getOrElse { error ->
+                throw IllegalStateException("TOR process did not start: ${error.message.orEmpty()}", error)
+            }
+        val ready = torManager.awaitReady(TOR_ONLY_EXTERNAL_BOOTSTRAP_TIMEOUT_MS)
+        if (!ready.ready) {
+            torManager.kill("tor_only_bootstrap_timeout")
+            val progress = ready.bootstrapProgress?.let { " at $it%" }.orEmpty()
+            throw IllegalStateException("TOR did not finish bootstrapping$progress")
+        }
+        diagnosticsLogger.recordStructured(
+            "runtime",
+            "tor-only external socks ready",
+            "socks_port=${started.socksPort}",
+            "bootstrap_progress=${ready.bootstrapProgress ?: 100}",
+        )
+        return copy(socksPort = started.socksPort)
     }
 
     private fun Settings.shouldPrepareTorRuntime(selectedProtocolHint: ProtocolHint): Boolean =
@@ -164,5 +191,6 @@ internal class ProfileSessionFactory(
 
     private companion object {
         private const val LOG_TAG = "FoxholeProfileSession"
+        private const val TOR_ONLY_EXTERNAL_BOOTSTRAP_TIMEOUT_MS = 210_000L
     }
 }
