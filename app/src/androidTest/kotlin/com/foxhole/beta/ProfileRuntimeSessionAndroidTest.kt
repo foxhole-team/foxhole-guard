@@ -625,7 +625,7 @@ class ProfileRuntimeSessionAndroidTest {
                 val startedAt = System.currentTimeMillis()
                 app.container.connectionController.connectTorOnly(statusMessage = "Live TOR-only")
                 val terminalState =
-                    withTimeoutOrNull(longArgument("foxhole.torOnlyTerminalTimeoutMs", 240_000L)) {
+                    withTimeoutOrNull(longArgument("foxhole.torOnlyTerminalTimeoutMs", 480_000L)) {
                         waitForActiveConnectionAttempt(app)
                         waitForTerminalState(app)
                     }

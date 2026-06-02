@@ -62,8 +62,8 @@ class TorRuntimeInstaller(
                         }
                 val assetRoot = "tor/$assetAbi"
                 val targetRoot = File(appContext.filesDir, "tor/$assetAbi")
-                val assetVersion = readAssetText("$assetRoot/.version").orEmpty()
-                val targetVersion = File(targetRoot, ".version").takeIf(File::isFile)?.readText().orEmpty()
+                val assetVersion = readTorBundleAssetVersion(assetRoot)
+                val targetVersion = readInstalledTorBundleVersion(targetRoot)
                 cachedPaths
                     ?.takeIf { cachedVersion == assetVersion && assetVersion == targetVersion }
                     ?.takeIf { paths -> paths.filesReady() }
@@ -232,18 +232,19 @@ class TorRuntimeInstaller(
                 ?.trim()
                 ?.takeIf(String::isNotBlank)
                 ?: return emptyList()
+        val bridgeGroups = root["bridges"]?.jsonObject ?: return emptyList()
         val bridges =
-            root["bridges"]
-                ?.jsonObject
-                ?.get(recommended)
-                ?.jsonArray
-                ?.mapNotNull { bridge -> bridge.jsonPrimitive.contentOrNull?.trim()?.takeIf(String::isNotBlank) }
-                .orEmpty()
+            (listOf(recommended) + bridgeGroups.keys.filterNot { group -> group == recommended })
+                .flatMap { group ->
+                    bridgeGroups[group]
+                        ?.jsonArray
+                        ?.mapNotNull { bridge -> bridge.jsonPrimitive.contentOrNull?.trim()?.takeIf(String::isNotBlank) }
+                        .orEmpty()
+                }.distinct()
         if (bridges.isEmpty()) {
             return emptyList()
         }
-        val bridgeTransport = bridges.first().substringBefore(' ')
-        val transportReady =
+        fun transportReady(bridgeTransport: String): Boolean =
             transportLines.any { line ->
                 line.startsWith("ClientTransportPlugin ") &&
                     line
@@ -253,10 +254,12 @@ class TorRuntimeInstaller(
                         .map(String::trim)
                         .contains(bridgeTransport)
             }
-        if (!transportReady) {
+        val readyBridges =
+            bridges.filter { bridge -> transportReady(bridge.substringBefore(' ')) }
+        if (readyBridges.isEmpty()) {
             return emptyList()
         }
-        return listOf("UseBridges 1") + bridges.map { bridge -> "Bridge $bridge" }
+        return listOf("UseBridges 1") + readyBridges.map { bridge -> "Bridge $bridge" }
     }
 
     private fun findTorDataFile(
@@ -277,6 +280,22 @@ class TorRuntimeInstaller(
         runCatching {
             appContext.assets.open(path).bufferedReader().use { it.readText() }
         }.getOrNull()
+
+    private fun readTorBundleAssetVersion(assetRoot: String): String =
+        readAssetText("$assetRoot/$TOR_BUNDLE_VERSION_FILE_NAME")
+            .orEmpty()
+            .trim()
+            .ifBlank { readAssetText("$assetRoot/.version").orEmpty().trim() }
+
+    private fun readInstalledTorBundleVersion(targetRoot: File): String =
+        listOf(TOR_BUNDLE_VERSION_FILE_NAME, ".version")
+            .firstNotNullOfOrNull { name ->
+                File(targetRoot, name)
+                    .takeIf(File::isFile)
+                    ?.readText()
+                    ?.trim()
+                    ?.takeIf(String::isNotBlank)
+            }.orEmpty()
 
     private fun copyAssetTree(
         assetPath: String,
@@ -330,6 +349,7 @@ class TorRuntimeInstaller(
     private companion object {
         val json = Json { ignoreUnknownKeys = true }
         const val TOR_NATIVE_LIBRARY_NAME = "libTor.so"
+        const val TOR_BUNDLE_VERSION_FILE_NAME = "bundle.version"
         const val TORRC_DEFAULTS_FILE_NAME = "torrc-defaults"
         val TOR_EXECUTABLE_ASSET_NAMES = listOf("tor", "libTor.so", "tor/libTor.so")
         val TOR_PLUGGABLE_TRANSPORT_NAMES = listOf("lyrebird", "conjure-client")

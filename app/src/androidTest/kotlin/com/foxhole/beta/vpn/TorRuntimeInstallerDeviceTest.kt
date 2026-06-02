@@ -30,13 +30,22 @@ class TorRuntimeInstallerDeviceTest {
             assertTrue(paths.dataDirectory.contains("/files/tor-data/"))
             assertTrue(File(paths.geoIpFilePath.orEmpty()).isFile)
             assertTrue(File(paths.geoIpv6FilePath.orEmpty()).isFile)
+            val abi = File(paths.dataDirectory).name
+            val bundleVersion = File(context.filesDir, "tor/$abi/bundle.version")
+            assertTrue(bundleVersion.isFile)
+            assertTrue(bundleVersion.readText().contains("foxhole-allbridges3"))
             val torrcDefaults = File(paths.torrcDefaultsFilePath.orEmpty())
             val nativeLyrebird = File(context.applicationInfo.nativeLibraryDir, "liblyrebird.so")
             assertTrue(torrcDefaults.isFile)
             val torrcDefaultsText = torrcDefaults.readText()
             assertTrue(torrcDefaultsText.contains(nativeLyrebird.absolutePath))
             assertTrue(torrcDefaultsText.contains("UseBridges 1"))
+            assertTrue(torrcDefaultsText.contains("Bridge snowflake "))
             assertTrue(torrcDefaultsText.contains("Bridge obfs4 "))
+            assertTrue(
+                torrcDefaultsText.indexOf("Bridge obfs4 ") <
+                    torrcDefaultsText.indexOf("Bridge snowflake "),
+            )
         }
     }
 

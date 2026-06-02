@@ -191,6 +191,6 @@ internal class ProfileSessionFactory(
 
     private companion object {
         private const val LOG_TAG = "FoxholeProfileSession"
-        private const val TOR_ONLY_EXTERNAL_BOOTSTRAP_TIMEOUT_MS = 210_000L
+        private const val TOR_ONLY_EXTERNAL_BOOTSTRAP_TIMEOUT_MS = 420_000L
     }
 }
