@@ -625,7 +625,9 @@ private fun ExpertSettings.runtimeHasIncludeOnlyAppSplit(): Boolean =
 internal fun Settings.canUseVpnBoundIpRefreshFallback(
     snapshot: ConnectionSnapshot,
     androidValidatedVpnNetwork: Boolean,
-): Boolean = !requiresStrictRuntimeProxyIpRefresh(snapshot) || androidValidatedVpnNetwork
+): Boolean =
+    !requiresRuntimeProxyOnlyIpRefresh(snapshot) &&
+        (!requiresStrictRuntimeProxyIpRefresh(snapshot) || androidValidatedVpnNetwork)
 
 internal fun Settings.canRecoverCachedActiveTunnelIpInfo(
     snapshot: ConnectionSnapshot,
@@ -639,6 +641,9 @@ internal fun Settings.shouldPreferVpnBoundIpRefresh(
     androidValidatedVpnNetwork &&
         canUseVpnBoundIpRefreshFallback(snapshot, androidValidatedVpnNetwork = true) &&
         snapshot.profileId != FoxholeVpnService.TOR_ONLY_PROFILE_ID
+
+private fun Settings.requiresRuntimeProxyOnlyIpRefresh(snapshot: ConnectionSnapshot): Boolean =
+    allowsRuntimeProxyTunnelValidation(snapshot)
 
 internal fun validatedTunnelIpRefreshFetchMode(
     requestedMode: IpInfoFetchMode,

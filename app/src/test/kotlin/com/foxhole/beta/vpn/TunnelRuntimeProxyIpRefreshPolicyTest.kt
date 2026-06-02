@@ -120,6 +120,30 @@ class TunnelRuntimeProxyIpRefreshPolicyTest {
     }
 
     @Test
+    fun `include selected apps tunnel keeps runtime proxy preferred after android validation`() {
+        val settings =
+            Settings(
+                expert =
+                    ExpertSettings(
+                        perAppRoutingMode = PerAppRoutingMode.INCLUDE_SELECTED_APPS,
+                        selectedPackages = listOf("com.example.browser"),
+                    ),
+            )
+        val snapshot =
+            ConnectionSnapshot(
+                state = ConnectionState.CONNECTED,
+                trafficMode = TrafficMode.TUNNEL,
+                profileId = 42L,
+                protocolHint = ProtocolHint.VLESS,
+            )
+
+        assertTrue(settings.requiresStrictRuntimeProxyIpRefresh(snapshot))
+        assertFalse(settings.canUseVpnBoundIpRefreshFallback(snapshot, androidValidatedVpnNetwork = true))
+        assertFalse(settings.canRecoverCachedActiveTunnelIpInfo(snapshot, androidValidatedVpnNetwork = true))
+        assertFalse(settings.shouldPreferVpnBoundIpRefresh(snapshot, androidValidatedVpnNetwork = true))
+    }
+
+    @Test
     fun `full tunnel keeps runtime proxy out of tunnel validation`() {
         val snapshot =
             ConnectionSnapshot(
