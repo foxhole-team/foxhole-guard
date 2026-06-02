@@ -414,6 +414,30 @@ class HomeDashboardPresentationTest {
     }
 
     @Test
+    fun `protocol model keeps connected tunnel latency and server tcp ping as different metrics`() {
+        val model =
+            resolveHomeDashboardProtocolModel(
+                HomeRouteUiState(
+                    activeProfile = smartProfile(),
+                    connection =
+                        ConnectionSnapshot(
+                            state = ConnectionState.CONNECTED,
+                            profileId = 1L,
+                            protocolOptionId = "vless",
+                        ),
+                    selectedProtocolLatencyMs = 91L,
+                    protocolTunnelPingsByOptionId = mapOf("vless" to 91L),
+                    protocolServerPingsByOptionId = mapOf("vless" to 379L),
+                ),
+            )
+
+        assertEquals(91L, model.latencyPresentation.latencyMs)
+        assertEquals(379L, model.selectedServerPingMs)
+        assertNotEquals(model.latencyPresentation.latencyMs, model.selectedServerPingMs)
+        assertTrue(model.connectionDetailsReady)
+    }
+
+    @Test
     fun `dashboard smart menu receives provider server ping separately from latency`() {
         val source =
             listOf(
