@@ -34,6 +34,7 @@ internal class ConnectionTelemetryProbe(
     private val currentVpnInterfaceName: (Network) -> String?,
     private val isVpnNetworkValidated: (Network) -> Boolean,
     private val activeServerPingTarget: () -> ActiveServerPingTarget?,
+    private val protectDirectSocket: (Socket) -> Boolean = { true },
 ) {
     suspend fun measureCurrentConnectionLatency(timeoutMs: Long): Long {
         val settings = settingsRepository.current()
@@ -309,6 +310,7 @@ internal class ConnectionTelemetryProbe(
         val startedAt = SystemClock.elapsedRealtime()
         // Availability probe only: opens a bounded TCP connect to the configured server target and sends no payload.
         (network?.socketFactory?.createSocket() ?: Socket()).use { socket ->
+            check(protectDirectSocket(socket)) { "server tcp ping socket protect failed" }
             socket.soTimeout = timeoutMs.toInt()
             socket.connect(
                 InetSocketAddress(address, port),

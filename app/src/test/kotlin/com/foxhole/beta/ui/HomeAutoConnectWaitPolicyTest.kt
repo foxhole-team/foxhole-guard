@@ -92,6 +92,23 @@ class HomeAutoConnectWaitPolicyTest {
     }
 
     @Test
+    fun `connected auto connect fallback keeps remembered latency ranking only`() {
+        val source =
+            listOf(
+                java.io.File("src/main/kotlin/com/foxhole/beta/ui/HomeViewModelAutoConnectSupport.kt"),
+                java.io.File("app/src/main/kotlin/com/foxhole/beta/ui/HomeViewModelAutoConnectSupport.kt"),
+                java.io.File("../app/src/main/kotlin/com/foxhole/beta/ui/HomeViewModelAutoConnectSupport.kt"),
+            ).first { file -> file.isFile }.readText()
+        val fallbackBlock =
+            source.substringAfter("private fun HomeViewModel.buildConnectedAutoConnectFallbackResult")
+                .substringBefore("private suspend fun HomeViewModel.restoreConnectionAfterMetricsRefresh")
+
+        assertTrue(fallbackBlock.contains("rememberedLatencyMs = rememberedLatencyMs"))
+        assertTrue(fallbackBlock.contains("displayLatencyMs = null"))
+        assertFalse(fallbackBlock.contains("displayLatencyMs = rememberedLatencyMs"))
+    }
+
+    @Test
     fun `fallback ranking uses validated connect duration when no remembered latency exists`() {
         assertEquals(
             2_550L,

@@ -27,6 +27,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withTimeoutOrNull
 import java.net.InetAddress
+import java.net.Socket
 
 class FoxholeConnectionController(
     private val context: Context,
@@ -84,6 +85,7 @@ class FoxholeConnectionController(
                     ?.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED) == true
             },
             activeServerPingTarget = { FoxholeVpnRuntimeBridge.activeServerPingTarget.value },
+            protectDirectSocket = { socket -> FoxholeVpnRuntimeBridge.protectDirectSocket(socket) },
         )
 
     suspend fun connect(
@@ -733,6 +735,8 @@ object FoxholeVpnRuntimeBridge {
     private val highFrequencyTrafficUpdatesMutable = MutableStateFlow(false)
     private val immediateTrafficSampleRequestsMutable = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     private val runtimeUiStateMutable = MutableStateFlow(RuntimeUiState())
+    @Volatile
+    private var socketProtector: ((Socket) -> Boolean)? = null
     private var pendingIpRefreshReason: RuntimeIpRefreshReason? = null
 
     val snapshot: StateFlow<ConnectionSnapshot> = snapshotMutable
@@ -804,6 +808,13 @@ object FoxholeVpnRuntimeBridge {
     internal fun updateActiveServerPingTarget(value: ActiveServerPingTarget?) {
         activeServerPingTargetMutable.value = value
     }
+
+    internal fun updateSocketProtector(value: ((Socket) -> Boolean)?) {
+        socketProtector = value
+    }
+
+    internal fun protectDirectSocket(socket: Socket): Boolean =
+        socketProtector?.invoke(socket) ?: true
 
     fun setHighFrequencyTrafficUpdates(enabled: Boolean) {
         highFrequencyTrafficUpdatesMutable.value = enabled

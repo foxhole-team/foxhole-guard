@@ -361,6 +361,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        FoxholeVpnRuntimeBridge.updateSocketProtector { socket -> protect(socket) }
         return handleForegroundRuntimeCommand(
             intent = intent,
             startId = startId,
@@ -386,6 +387,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
     }
 
     override fun onDestroy() {
+        FoxholeVpnRuntimeBridge.updateSocketProtector(null)
         val snapshot = FoxholeVpnRuntimeBridge.snapshot.value
         val hadActiveRuntime =
             activeSession != null ||

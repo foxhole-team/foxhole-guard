@@ -1155,7 +1155,7 @@ private fun HomeViewModel.buildConnectedAutoConnectFallbackResult(
             protocolHint = candidate.protocolHint,
             latencyProbeMethod = controlUiState.value.settings.connection.latencyProbeMethod,
         ),
-        displayLatencyMs = rememberedLatencyMs,
+        displayLatencyMs = null,
         connectDurationMs = elapsedMs,
         validatedAt = outcomeRecordedAt,
         trafficObservedAt =

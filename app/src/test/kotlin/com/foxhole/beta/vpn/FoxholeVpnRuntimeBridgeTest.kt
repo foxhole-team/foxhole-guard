@@ -12,8 +12,10 @@ import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.net.Socket
 
 class FoxholeVpnRuntimeBridgeTest {
     @Test
@@ -75,6 +77,24 @@ class FoxholeVpnRuntimeBridgeTest {
             assertNull(FoxholeVpnRuntimeBridge.activeServerPingTarget.value)
         } finally {
             FoxholeVpnRuntimeBridge.updateActiveServerPingTarget(null)
+        }
+    }
+
+    @Test
+    fun `runtime bridge protects direct server ping sockets through registered protector`() {
+        val socket = Socket()
+        var protectedSocket: Socket? = null
+        try {
+            FoxholeVpnRuntimeBridge.updateSocketProtector { candidate ->
+                protectedSocket = candidate
+                true
+            }
+
+            assertTrue(FoxholeVpnRuntimeBridge.protectDirectSocket(socket))
+            assertSame(socket, protectedSocket)
+        } finally {
+            socket.close()
+            FoxholeVpnRuntimeBridge.updateSocketProtector(null)
         }
     }
 

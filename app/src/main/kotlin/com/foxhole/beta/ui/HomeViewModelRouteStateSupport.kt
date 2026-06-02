@@ -132,6 +132,15 @@ internal fun buildHomeRouteUiState(
             }.orEmpty()
     val selectedLatencyOptionId = resolveDashboardLatencyOptionId(state.activeProfile, state.connection)
     val selectedProtocolLatencyMs = selectedLatencyOptionId?.let(activeProfileLatencies::get)
+    val activeConnectedLatencyOptionId =
+        state.activeProfile
+            ?.let { activeProfile ->
+                selectedLatencyOptionId
+                    ?.takeIf {
+                        state.connection.profileId == activeProfile.id &&
+                            state.connection.state in ACTIVE_CONNECTION_STATES
+                    }
+            }
     val selectedProtocolLatencyUnavailable =
         selectedLatencyOptionId != null &&
             selectedProtocolLatencyMs == null &&
@@ -142,7 +151,13 @@ internal fun buildHomeRouteUiState(
                 state.settings
                     .smartProfilePreference(activeProfile.id)
                     ?.rememberedSmartStartLatencyByOptionId(currentNetworkFingerprintKey)
-                    ?.filterKeys { optionId -> optionId !in activeProfileLatencyUnavailable }
+                    ?.filterKeys { optionId ->
+                        optionId !in activeProfileLatencyUnavailable &&
+                            (
+                                optionId != activeConnectedLatencyOptionId ||
+                                    optionId in activeProfileLatencies
+                                )
+                    }
             }.orEmpty()
     val activeKnownLatenciesByOptionId = smartStartRememberedLatenciesByOptionId + activeProfileLatencies
     val activeRecommendedProtocolOptionIds =

@@ -895,6 +895,67 @@ class HomeDashboardProtocolPresentationTest {
     }
 
     @Test
+    fun `connected selected option waits for live tunnel latency instead of remembered latency`() {
+        val activeProfile =
+            profile(
+                selectedProtocolOptionId = "vless",
+                protocolOptions = listOf(option("vless", ProtocolHint.VLESS)),
+            )
+        val baseState =
+            HomeUiState(
+                activeProfile = activeProfile,
+                connection =
+                    ConnectionSnapshot(
+                        state = ConnectionState.CONNECTED,
+                        profileId = activeProfile.id,
+                        protocolHint = ProtocolHint.VLESS,
+                        protocolOptionId = "vless",
+                    ),
+                settings =
+                    Settings(
+                        connection = ConnectionSettings(smartStartEnabled = true),
+                        smartProfilePreferences =
+                            listOf(
+                                SmartProfilePreference(
+                                    profileId = activeProfile.id,
+                                    protocolMemories =
+                                        listOf(
+                                            SmartProfileProtocolMemory(
+                                                optionId = "vless",
+                                                lastSuccessAt = System.currentTimeMillis(),
+                                                lastLatencyMs = 91L,
+                                            ),
+                                        ),
+                                ),
+                            ),
+                    ),
+            )
+
+        val withoutLiveLatency =
+            buildHomeRouteUiState(
+                state = baseState,
+                autoConnect = AutoConnectUiState(),
+                profileOptionLatencies = emptyMap(),
+                profileOptionLatencyUnavailable = emptySet(),
+                protocolMetrics = ProtocolMetricsUiState(),
+                currentNetworkFingerprintKey = null,
+            )
+        val withLiveLatency =
+            buildHomeRouteUiState(
+                state = baseState,
+                autoConnect = AutoConnectUiState(),
+                profileOptionLatencies = mapOf(ProfileOptionLatencyKey(activeProfile.id, "vless") to 379L),
+                profileOptionLatencyUnavailable = emptySet(),
+                protocolMetrics = ProtocolMetricsUiState(),
+                currentNetworkFingerprintKey = null,
+            )
+
+        assertFalse(withoutLiveLatency.smartStartRememberedLatenciesByOptionId.containsKey("vless"))
+        assertNull(resolveDashboardSelectedLatencyMs(withoutLiveLatency))
+        assertEquals(379L, resolveDashboardSelectedLatencyMs(withLiveLatency))
+    }
+
+    @Test
     fun `analysis status label can render current protocol without falling back to Smart start`() {
         listOf(
             ProtocolHint.OUTLINE to "OUTLINE",
