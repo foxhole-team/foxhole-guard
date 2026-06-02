@@ -335,6 +335,29 @@ class HomeDashboardProtocolPresentationTest {
     }
 
     @Test
+    fun `profile import marks pending before insecure tls precheck`() {
+        val source =
+            listOf(
+                java.io.File("src/main/kotlin/com/foxhole/beta/ui/HomeViewModelProfileImportSupport.kt"),
+                java.io.File("app/src/main/kotlin/com/foxhole/beta/ui/HomeViewModelProfileImportSupport.kt"),
+                java.io.File("../app/src/main/kotlin/com/foxhole/beta/ui/HomeViewModelProfileImportSupport.kt"),
+            ).first { file -> file.isFile }.readText()
+        val importEntryBlock =
+            source.substringAfter("internal fun HomeViewModel.importRawInternal")
+                .substringBefore("internal fun HomeViewModel.confirmInsecureTlsImportInternal")
+        val decisionBlock =
+            source.substringAfter("private suspend fun HomeViewModel.importRawWithInsecureTlsDecision")
+                .substringBefore("private fun InsecureTlsImportWarning.toUiState")
+
+        assertFalse(importEntryBlock.contains("rawInputInsecureTlsWarning"))
+        assertTrue(importEntryBlock.contains("precheckInsecureTlsWarning = true"))
+        assertTrue(
+            decisionBlock.indexOf("profileImportInProgressMutable.value = true") <
+                decisionBlock.indexOf("rawInputInsecureTlsWarning"),
+        )
+    }
+
+    @Test
     fun `dashboard Smart start controls require master toggle`() {
         assertFalse(
             isDashboardSmartStartControlsEnabled(

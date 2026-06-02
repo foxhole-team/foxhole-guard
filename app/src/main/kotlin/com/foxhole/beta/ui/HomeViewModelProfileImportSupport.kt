@@ -37,15 +37,11 @@ internal fun HomeViewModel.importProfileRawInternal(value: String) {
 
 internal fun HomeViewModel.importRawInternal(value: String) {
     viewModelScope.launch {
-        val warning = container.profileRepository.rawInputInsecureTlsWarning(value)
-        if (warning != null) {
-            insecureTlsImportWarningMutable.value = warning.toUiState(rawInput = value)
-            return@launch
-        }
         importRawWithInsecureTlsDecision(
             value = value,
             allowInsecureTlsForProfile = false,
             excludeInsecureTlsOptions = false,
+            precheckInsecureTlsWarning = true,
         )
     }
 }
@@ -79,9 +75,17 @@ private suspend fun HomeViewModel.importRawWithInsecureTlsDecision(
     value: String,
     allowInsecureTlsForProfile: Boolean,
     excludeInsecureTlsOptions: Boolean,
+    precheckInsecureTlsWarning: Boolean = false,
 ) {
     profileImportInProgressMutable.value = true
     try {
+        if (precheckInsecureTlsWarning) {
+            val warning = container.profileRepository.rawInputInsecureTlsWarning(value)
+            if (warning != null) {
+                insecureTlsImportWarningMutable.value = warning.toUiState(rawInput = value)
+                return
+            }
+        }
         val imported =
             container.profileRepository.importProfile(
                 rawInput = value,
