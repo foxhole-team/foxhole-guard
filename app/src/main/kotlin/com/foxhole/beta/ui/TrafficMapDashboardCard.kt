@@ -976,18 +976,18 @@ internal fun trafficMapColors(
 ): TrafficMapColors =
     if (darkTheme) {
         TrafficMapColors(
-            countryFill = Color(0xFF1B2A21),
-            routeLine = FoxholePositiveAccent,
-            destination = FoxholePositiveAccent,
-            origin = FoxholePositiveAccent,
+            countryFill = Color(0xFF2F4E3A),
+            routeLine = Color(0xFF56C98C),
+            destination = Color(0xFF63D997),
+            origin = Color(0xFF42CFA4),
             phoneScreen = surfaceColor.copy(alpha = 0.92f),
         )
     } else {
         TrafficMapColors(
-            countryFill = Color(0xFF030D08),
-            routeLine = Color(0xFF278A5B),
-            destination = Color(0xFF278A5B),
-            origin = Color(0xFF278A5B),
+            countryFill = Color(0xFF9FB8A8),
+            routeLine = Color(0xFF177246),
+            destination = Color(0xFF108C55),
+            origin = Color(0xFF0F766E),
             phoneScreen = surfaceColor.copy(alpha = 0.94f),
         )
     }
