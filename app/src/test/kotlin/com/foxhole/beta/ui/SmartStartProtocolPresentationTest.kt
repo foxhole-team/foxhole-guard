@@ -255,6 +255,7 @@ class SmartStartProtocolPresentationTest {
         assertEquals("Status", stringValue(enStrings, "smart_profile_menu_status_column"))
         assertEquals("Server ping", stringValue(enStrings, "smart_profile_menu_server_ping_column"))
         assertEquals("Latency %1\$s", stringValue(enStrings, "smart_profile_menu_latency_column"))
+        assertEquals("Tunnel latency", stringValue(enStrings, "latency_probe_method_title"))
         assertFalse(enStrings.contains("name=\"smart_profile_menu_dashboard_on_column\""))
         assertFalse(enStrings.contains("name=\"smart_profile_menu_on_column\""))
         assertEquals(
@@ -322,6 +323,7 @@ class SmartStartProtocolPresentationTest {
         assertEquals("Пинг сервера:", stringValue(ruStrings, "home_network_server_ping_label"))
         assertEquals("Пинг сервера", stringValue(ruStrings, "smart_profile_menu_server_ping_column"))
         assertEquals("Задержка %1\$s", stringValue(ruStrings, "smart_profile_menu_latency_column"))
+        assertEquals("Задержка туннеля", stringValue(ruStrings, "latency_probe_method_title"))
         assertFalse(ruStrings.contains("name=\"smart_profile_menu_dashboard_on_column\""))
         assertFalse(ruStrings.contains("name=\"smart_profile_menu_on_column\""))
         assertEquals(

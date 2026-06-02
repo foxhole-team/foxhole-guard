@@ -579,7 +579,7 @@
     <string name="traffic_mode_tunnel">Туннель</string>
     <string name="traffic_mode_split">прокси туннель</string>
     <string name="traffic_mode_proxy">Прокси</string>
-    <string name="latency_probe_method_title">Пинг</string>
+    <string name="latency_probe_method_title">Задержка туннеля</string>
     <string name="latency_probe_method_summary">Выберите, как Foxhole измеряет задержку туннеля. ICMP использует VPN-интерфейс; TCP проверяет порт 443; HTTP использует HTTPS-проверку.</string>
     <string name="latency_probe_method_http">HTTP</string>
     <string name="latency_probe_method_icmp">ICMP</string>
