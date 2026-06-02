@@ -1562,7 +1562,7 @@ internal fun dashboardCountryLineForGeoState(
     if (geoRowsLoading) {
         buildCountryLineOrNull(ipInfo)
     } else {
-        formatCountryLineOrNull(ipInfo)
+        formatDashboardCountryLineOrNull(ipInfo)
     }
 
 internal fun formatCountryLine(

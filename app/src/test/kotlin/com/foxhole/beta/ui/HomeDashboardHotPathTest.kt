@@ -189,43 +189,39 @@ class HomeDashboardHotPathTest {
     }
 
     @Test
-    fun `traffic map heavy content waits for startup delay on cold dashboard`() {
+    fun `traffic map heavy content appears as soon as map startup stage is reached`() {
         assertFalse(
             shouldComposeTrafficMapHeavyContent(
-                startupStage = 2,
+                startupStage = 1,
                 activeReorderCard = null,
-                startupDelayElapsed = false,
             ),
         )
         assertTrue(
             shouldComposeTrafficMapHeavyContent(
                 startupStage = 2,
                 activeReorderCard = null,
-                startupDelayElapsed = true,
             ),
         )
         assertTrue(
             shouldComposeTrafficMapHeavyContent(
                 startupStage = 3,
                 activeReorderCard = null,
-                startupDelayElapsed = true,
             ),
         )
         assertTrue(
             shouldComposeTrafficMapHeavyContent(
                 startupStage = 0,
                 activeReorderCard = DashboardCard.TRAFFIC_MAP,
-                startupDelayElapsed = false,
             ),
         )
     }
 
     @Test
-    fun `traffic map heavy startup delay stays short for dashboard returns`() {
+    fun `traffic map heavy content has no extra dashboard return delay`() {
         val homeSource = testSourceFile("HomeScreen.kt").readText()
 
         assertTrue(homeSource.contains("DASHBOARD_CARD_STARTUP_STAGE_DELAY_MS = 32L"))
-        assertTrue(homeSource.contains("TRAFFIC_MAP_HEAVY_CONTENT_STARTUP_DELAY_MS = 96L"))
+        assertFalse(homeSource.contains("TRAFFIC_MAP_HEAVY_CONTENT_STARTUP_DELAY_MS"))
         assertFalse(homeSource.contains("DASHBOARD_CARD_STARTUP_STAGE_DELAY_MS = 48L"))
         assertFalse(homeSource.contains("TRAFFIC_MAP_HEAVY_CONTENT_STARTUP_DELAY_MS = 220L"))
         assertFalse(homeSource.contains("TRAFFIC_MAP_HEAVY_CONTENT_STARTUP_DELAY_MS = 650L"))

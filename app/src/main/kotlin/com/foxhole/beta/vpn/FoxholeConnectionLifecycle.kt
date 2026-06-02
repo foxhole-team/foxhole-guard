@@ -221,7 +221,8 @@ internal class FoxholeConnectionLifecycle(
         FoxholeConnectionServiceContract.stopAllServices(context)
         FoxholeVpnRuntimeBridge.clearTransientState()
         FoxholeVpnRuntimeBridge.update(
-            ConnectionSnapshot(
+            stoppedRuntimeSnapshot(
+                previous = snapshot.value,
                 trafficMode = settingsRepository.settings.value.traffic.mode,
             ),
         )

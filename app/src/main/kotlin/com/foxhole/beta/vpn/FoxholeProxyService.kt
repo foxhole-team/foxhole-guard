@@ -388,7 +388,8 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
         FoxholeVpnRuntimeBridge.updateTraffic(trafficSampler.reset())
         FoxholeVpnRuntimeBridge.clearTransientState(clearIpInfo = true)
         FoxholeVpnRuntimeBridge.update(
-            ConnectionSnapshot(
+            stoppedRuntimeSnapshot(
+                session = session,
                 state = if (message == null) ConnectionState.IDLE else ConnectionState.ERROR,
                 trafficMode = container.settingsRepository.current().traffic.mode,
                 message = message ?: smartStartAnalysis.message,
@@ -528,7 +529,8 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
         FoxholeVpnRuntimeBridge.updateTraffic(trafficSampler.reset())
         FoxholeVpnRuntimeBridge.clearTransientState()
         FoxholeVpnRuntimeBridge.update(
-            ConnectionSnapshot(
+            stoppedRuntimeSnapshot(
+                session = session,
                 state = if (hadActiveRuntime) ConnectionState.ERROR else ConnectionState.IDLE,
                 trafficMode = container.settingsRepository.current().traffic.mode,
                 message = failClosedMessage,

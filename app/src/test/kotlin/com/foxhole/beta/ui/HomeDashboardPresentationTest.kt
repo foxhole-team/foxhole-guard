@@ -1565,6 +1565,45 @@ class HomeDashboardPresentationTest {
         assertEquals("Berlin", presentation.cityText)
         assertTrue(presentation.hasIp)
         assertFalse(presentation.loading)
+        assertFalse(presentation.ipLoading)
+        assertFalse(presentation.countryLoading)
+        assertFalse(presentation.cityLoading)
+    }
+
+    @Test
+    fun `tor ip presentation skeletons missing geo rows while keeping known ip visible`() {
+        val ipInfo =
+            IpInfo(
+                ip = "185.220.101.12",
+                countryCode = "DE",
+                countryName = null,
+                city = null,
+                isp = "TOR exit",
+                fetchedAt = 1_000L,
+            )
+        val presentation =
+            resolveHomeTorIpPresentation(
+                state =
+                    HomeRouteUiState(
+                        torIpInfo = ipInfo,
+                        connection =
+                            ConnectionSnapshot(
+                                state = ConnectionState.CONNECTED,
+                                profileId = FoxholeVpnService.TOR_ONLY_PROFILE_ID,
+                                lastChangeAt = 2_000L,
+                            ),
+                    ),
+                loading = true,
+            )
+
+        assertEquals("185.220.101.12", presentation.ipText)
+        assertEquals("-", presentation.countryText)
+        assertEquals("-", presentation.cityText)
+        assertTrue(presentation.hasIp)
+        assertFalse(presentation.ipLoading)
+        assertFalse(presentation.loading)
+        assertTrue(presentation.countryLoading)
+        assertTrue(presentation.cityLoading)
     }
 
     @Test
@@ -1599,6 +1638,9 @@ class HomeDashboardPresentationTest {
         assertEquals("-", presentation.cityText)
         assertFalse(presentation.hasIp)
         assertTrue(presentation.loading)
+        assertTrue(presentation.ipLoading)
+        assertTrue(presentation.countryLoading)
+        assertTrue(presentation.cityLoading)
     }
 
     @Test

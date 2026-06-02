@@ -1339,21 +1339,21 @@ private fun HomeTorConnectedTable(
                     label = stringResource(R.string.privacy_route_modal_current_ip),
                     value = torIpPresentation.ipText,
                     valueMonospace = torIpPresentation.hasIp,
-                    loading = torIpPresentation.loading,
+                    loading = torIpPresentation.ipLoading,
                 )
                 HomeNetworkSubtleDivider()
                 HomeTorInfoRow(
                     icon = Icons.Outlined.Language,
                     label = stringResource(R.string.home_network_country_label),
                     value = torIpPresentation.countryText,
-                    loading = torIpPresentation.loading,
+                    loading = torIpPresentation.countryLoading,
                 )
                 HomeNetworkSubtleDivider()
                 HomeTorInfoRow(
                     icon = Icons.Outlined.LocationCity,
                     label = stringResource(R.string.home_network_city_label),
                     value = torIpPresentation.cityText,
-                    loading = torIpPresentation.loading,
+                    loading = torIpPresentation.cityLoading,
                 )
                 HomeNetworkSubtleDivider()
                 HomeTorInfoRow(
@@ -1411,9 +1411,14 @@ internal data class HomeTorIpPresentation(
     val ipText: String,
     val countryText: String,
     val cityText: String,
-    val loading: Boolean,
+    val ipLoading: Boolean,
+    val countryLoading: Boolean,
+    val cityLoading: Boolean,
     val hasIp: Boolean,
-)
+) {
+    val loading: Boolean
+        get() = ipLoading
+}
 
 internal fun resolveHomeTorIpPresentation(
     state: HomeRouteUiState,
@@ -1421,16 +1426,22 @@ internal fun resolveHomeTorIpPresentation(
 ): HomeTorIpPresentation {
     val info = state.visibleTorIpInfo()
     val ipText = info?.let(::primaryVisibleIp) ?: "-"
+    val countryName = info?.countryName?.takeIf(String::isNotBlank)
+    val cityName = info?.city?.takeIf(String::isNotBlank)
     val countryText =
-        info?.let { ipInfo ->
-            val country = ipInfo.countryName ?: ipInfo.countryCode
-            country?.let { "${countryEmoji(ipInfo.countryCode)} $it" }
+        countryName?.let { country ->
+            "${countryEmoji(info?.countryCode)} $country".trim()
         } ?: "-"
+    val ipMissingLoading = info == null && (loading || state.connection.state in ACTIVE_CONNECTION_STATES)
+    val countryMissingLoading = info != null && loading && countryName == null
+    val cityMissingLoading = info != null && loading && cityName == null
     return HomeTorIpPresentation(
         ipText = ipText,
         countryText = countryText,
-        cityText = info?.city?.takeIf(String::isNotBlank) ?: "-",
-        loading = info == null && (loading || state.connection.state in ACTIVE_CONNECTION_STATES),
+        cityText = cityName ?: "-",
+        ipLoading = ipMissingLoading,
+        countryLoading = ipMissingLoading || countryMissingLoading,
+        cityLoading = ipMissingLoading || cityMissingLoading,
         hasIp = ipText != "-",
     )
 }
