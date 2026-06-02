@@ -459,16 +459,10 @@ class FoxholeConnectionController(
         }
 
     private fun currentUpstreamNetwork(): Network? =
-        ConnectivityNetworkRegistry.snapshot(context).firstOrNull { network ->
-            connectivityManager.getNetworkCapabilities(network)?.let(::isUpstreamNetwork) == true
-        } ?: connectivityManager.activeNetwork?.takeIf { network ->
-            connectivityManager.getNetworkCapabilities(network)?.let(::isUpstreamNetwork) == true
-        }
+        connectivityManager.preferredNonVpnInternetNetwork(
+            candidates = ConnectivityNetworkRegistry.snapshot(context),
+        )
 
-    private fun isUpstreamNetwork(capabilities: NetworkCapabilities): Boolean =
-        capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
-            capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_RESTRICTED) &&
-            !capabilities.hasTransport(NetworkCapabilities.TRANSPORT_VPN)
 }
 
 private data class RestoredVpnValidation(

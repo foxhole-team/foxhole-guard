@@ -103,5 +103,9 @@ class ConnectionTelemetryProbeTest {
             false,
             shouldUseNetworkForDirectServerPing(upstreamNetworkHandle = null, vpnNetworkHandle = 101L),
         )
+        assertEquals(
+            false,
+            shouldUseNetworkForDirectServerPing(upstreamNetworkHandle = 101L, vpnNetworkHandle = null),
+        )
     }
 }

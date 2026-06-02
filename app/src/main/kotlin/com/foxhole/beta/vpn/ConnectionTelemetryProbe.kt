@@ -482,6 +482,7 @@ internal fun shouldUseNetworkForDirectServerPing(
     vpnNetworkHandle: Long?,
 ): Boolean =
     upstreamNetworkHandle != null &&
+        vpnNetworkHandle != null &&
         upstreamNetworkHandle != vpnNetworkHandle
 
 internal fun icmpPingCommand(

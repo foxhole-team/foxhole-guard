@@ -997,7 +997,7 @@ private suspend fun HomeViewModel.refreshActiveServerTcpPingForMetrics(
         )
         container.diagnosticsLogger.record(
             "latency",
-            "server tcp ping refreshed option=${candidate.optionId} latency=${pingMs}ms",
+            "server tcp ping refreshed option=${candidate.optionId} server_tcp_ping_ms=${pingMs}",
         )
     }.onFailure { error ->
         markProtocolServerPingUnavailableInternal(
@@ -1975,7 +1975,7 @@ private fun HomeViewModel.cacheDashboardPublicPing(
         )
         container.diagnosticsLogger.record(
             "latency",
-            "dashboard public ping refreshed option=${refreshTarget.optionId.orEmpty()} latency=${pingMs}ms",
+            "dashboard public ping refreshed option=${refreshTarget.optionId.orEmpty()} tunnel_public_latency_ms=${pingMs}",
         )
         return
     }
@@ -2009,7 +2009,7 @@ private fun HomeViewModel.cacheConnectedServerTcpPing(
         )
         container.diagnosticsLogger.record(
             "latency",
-            "server tcp ping refreshed option=$selectedOptionId latency=${pingMs}ms",
+            "server tcp ping refreshed option=$selectedOptionId server_tcp_ping_ms=${pingMs}",
         )
         return
     }
