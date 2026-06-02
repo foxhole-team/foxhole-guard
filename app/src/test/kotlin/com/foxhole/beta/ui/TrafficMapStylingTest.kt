@@ -10,11 +10,11 @@ class TrafficMapStylingTest {
     @Test
     fun `traffic map land fill stays dark in both themes`() {
         assertEquals(
-            Color(0xFF26332B),
+            Color(0xFF1B2A21),
             trafficMapColors(darkTheme = true, surfaceColor = Color(0xFF101011)).countryFill,
         )
         assertEquals(
-            Color(0xFF07130D),
+            Color(0xFF030D08),
             trafficMapColors(darkTheme = false, surfaceColor = Color.White).countryFill,
         )
         assertEquals(
@@ -44,5 +44,21 @@ class TrafficMapStylingTest {
         assertFalse(canvasBeforeRoutes.contains("drawRect"))
         assertFalse(canvasBeforeRoutes.contains("drawRoundRect"))
         assertFalse(canvasBeforeRoutes.contains("drawLine"))
+    }
+
+    @Test
+    fun `traffic map country shapes load without card local startup delay`() {
+        val source =
+            listOf(
+                java.io.File("src/main/kotlin/com/foxhole/beta/ui/TrafficMapDashboardCard.kt"),
+                java.io.File("app/src/main/kotlin/com/foxhole/beta/ui/TrafficMapDashboardCard.kt"),
+                java.io.File("../app/src/main/kotlin/com/foxhole/beta/ui/TrafficMapDashboardCard.kt"),
+            ).first { file -> file.isFile }.readText()
+        val shapeLoadBlock =
+            source.substringAfter("private fun rememberTrafficMapCountryShapes()")
+                .substringBefore("internal suspend fun prewarmTrafficMapCountryShapes")
+
+        assertFalse(shapeLoadBlock.contains("delay("))
+        assertFalse(source.contains("TRAFFIC_MAP_COUNTRY_SHAPES_CARD_LOAD_DELAY_MS"))
     }
 }

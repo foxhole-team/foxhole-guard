@@ -393,7 +393,7 @@ fun HomeScreen(
     val dashboardListState = rememberLazyListState()
     val topChromeScrimProgress = rememberFoxholeTopChromeScrimProgress(dashboardListState)
     val connectionHeaderScrolled by remember { derivedStateOf { topChromeScrimProgress() > 0.01f } }
-    var dashboardStartupStage by remember { mutableStateOf(DASHBOARD_STARTUP_STAGE_INITIAL) }
+    var dashboardStartupStage by rememberSaveable { mutableStateOf(DASHBOARD_STARTUP_STAGE_INITIAL) }
     val trafficCardRuntimeVisible =
         state.settings.ui.trafficCardEnabled &&
             shouldComposeDashboardCardNow(
@@ -1802,7 +1802,7 @@ private const val DASHBOARD_CARD_REORDER_THRESHOLD_FRACTION = 0.5f
 private const val DASHBOARD_CARD_EDGE_RESISTANCE_FRACTION = 0.18f
 private const val DASHBOARD_STARTUP_STAGE_INITIAL = 0
 private const val DASHBOARD_STARTUP_STAGE_ALL = 4
-private const val DASHBOARD_CARD_STARTUP_STAGE_DELAY_MS = 80L
+private const val DASHBOARD_CARD_STARTUP_STAGE_DELAY_MS = 48L
 private val DashboardCardReorderFallbackMoveDistance = 96.dp
 private val ImportMenuWidthChrome = 62.dp
 private val ImportMenuMinWidth = 188.dp

@@ -365,6 +365,52 @@ class HomeDashboardTextPolicyTest {
     }
 
     @Test
+    fun `network geo row shows skeleton for country code without country name until settled`() {
+        val partialIpInfo =
+            IpInfo(
+                ip = "203.0.113.7",
+                countryCode = "NL",
+                countryName = null,
+                city = null,
+                isp = "Example ISP",
+                fetchedAt = 10_000L,
+            )
+
+        assertEquals(
+            HomeNetworkDetailValue(text = "", loading = true),
+            homeNetworkGeoRowDetailValue(
+                value = buildCountryLineOrNull(partialIpInfo),
+                refreshLoading = false,
+                geoRowsLoading = true,
+            ),
+        )
+        assertEquals(
+            HomeNetworkDetailValue(text = "", loading = true),
+            homeNetworkGeoRowDetailValue(
+                value = buildCityLineOrNull(partialIpInfo),
+                refreshLoading = false,
+                geoRowsLoading = true,
+            ),
+        )
+        assertEquals(
+            HomeNetworkDetailValue(text = "-", loading = false),
+            homeNetworkGeoRowDetailValue(
+                value = buildCountryLineOrNull(partialIpInfo),
+                refreshLoading = false,
+                geoRowsLoading = false,
+            ),
+        )
+        assertEquals(
+            HomeNetworkDetailValue(text = "-", loading = false),
+            homeNetworkGeoRowDetailValue(
+                value = buildCityLineOrNull(partialIpInfo),
+                refreshLoading = false,
+                geoRowsLoading = false,
+            ),
+        )
+    }
+
+    @Test
     fun `network detail skeletons country and city rows until missing location is settled`() {
         val partialIpInfo =
             IpInfo(

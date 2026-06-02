@@ -390,9 +390,6 @@ private fun rememberTrafficMapCountryShapes(): List<TrafficMapCountryShape> {
         initialValue = TrafficMapCountryShapeCache.current(),
         key1 = appContext,
     ) {
-        if (value.isEmpty()) {
-            delay(TRAFFIC_MAP_COUNTRY_SHAPES_CARD_LOAD_DELAY_MS)
-        }
         value = TrafficMapCountryShapeCache.load(appContext)
     }
     return shapes
@@ -970,7 +967,7 @@ internal fun trafficMapColors(
 ): TrafficMapColors =
     if (darkTheme) {
         TrafficMapColors(
-            countryFill = Color(0xFF26332B),
+            countryFill = Color(0xFF1B2A21),
             routeLine = FoxholePositiveAccent,
             destination = FoxholePositiveAccent,
             origin = FoxholePositiveAccent,
@@ -978,7 +975,7 @@ internal fun trafficMapColors(
         )
     } else {
         TrafficMapColors(
-            countryFill = Color(0xFF07130D),
+            countryFill = Color(0xFF030D08),
             routeLine = Color(0xFF278A5B),
             destination = Color(0xFF278A5B),
             origin = Color(0xFF278A5B),
@@ -1030,7 +1027,6 @@ private const val MAX_TRAFFIC_MAP_DRAW_DESTINATIONS = 30
 private const val TRAFFIC_MAP_LOW_BATTERY_PERCENT = 10
 private const val TRAFFIC_ROUTE_PI = 3.141592653589793
 private const val TRAFFIC_ROUTE_ANGLE_BUCKET_RADIANS = 0.17453292519943295
-private const val TRAFFIC_MAP_COUNTRY_SHAPES_CARD_LOAD_DELAY_MS = 80L
 private const val TRAFFIC_MAP_COUNTRY_SHAPES_ASSET = "maps/ne_110m_admin_0_countries_preprocessed.json"
 private const val TRAFFIC_MAP_LOG_TAG = "FoxholeDiag"
 
