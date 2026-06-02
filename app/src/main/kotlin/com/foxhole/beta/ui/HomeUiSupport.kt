@@ -914,7 +914,26 @@ internal fun trafficMapOriginIpInfoCandidate(
     ipInfo: IpInfo?,
     protocolSearchRunning: Boolean,
 ): IpInfo? {
+    if (deviceIpInfo == null) {
+        return null
+    }
+    if (connection.shouldRejectTrafficMapOriginAsRouteIp(deviceIpInfo = deviceIpInfo, routeIpInfo = ipInfo)) {
+        return null
+    }
     return deviceIpInfo
+}
+
+private fun ConnectionSnapshot.shouldRejectTrafficMapOriginAsRouteIp(
+    deviceIpInfo: IpInfo,
+    routeIpInfo: IpInfo?,
+): Boolean {
+    val routeIp = routeIpInfo?.let(::primaryVisibleIpOrNull) ?: return false
+    val deviceIp = primaryVisibleIpOrNull(deviceIpInfo) ?: return false
+    return state == ConnectionState.CONNECTED &&
+        trafficMode == TrafficMode.TUNNEL &&
+        profileId != FoxholeVpnService.LOCAL_GUARD_PROFILE_ID &&
+        deviceIp == routeIp &&
+        deviceIpInfo.fetchedAt >= lastChangeAt
 }
 
 private fun selectedSmartProtocolTrafficTotal(

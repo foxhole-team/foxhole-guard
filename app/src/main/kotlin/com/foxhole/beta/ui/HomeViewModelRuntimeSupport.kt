@@ -144,7 +144,7 @@ internal fun HomeViewModel.refreshIpInfoInternalInternal(
                     if (shouldPublishTorIpInfoForDashboardRefresh(target = target, reason = reason)) {
                         publishTorIpInfoFromDashboardRefresh(info)
                     } else {
-                        if (container.connectionController.snapshot.value.shouldPublishDeviceIpInfoFromDashboardRefresh()) {
+                        if (shouldPublishDeviceIpInfoFromDashboardRefresh(target)) {
                             FoxholeVpnRuntimeBridge.updateDeviceIpInfo(info)
                         }
                         FoxholeVpnRuntimeBridge.updateIpInfo(info)

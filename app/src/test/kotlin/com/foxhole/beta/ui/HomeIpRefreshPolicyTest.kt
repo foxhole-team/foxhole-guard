@@ -344,6 +344,15 @@ class HomeIpRefreshPolicyTest {
     }
 
     @Test
+    fun `dashboard refresh stores device ip only from upstream or local guard targets`() {
+        assertTrue(shouldPublishDeviceIpInfoFromDashboardRefresh(IpInfoRefreshTarget.UPSTREAM))
+        assertTrue(shouldPublishDeviceIpInfoFromDashboardRefresh(IpInfoRefreshTarget.LOCAL_GUARD))
+        assertFalse(shouldPublishDeviceIpInfoFromDashboardRefresh(IpInfoRefreshTarget.VPN_BOUND))
+        assertFalse(shouldPublishDeviceIpInfoFromDashboardRefresh(IpInfoRefreshTarget.TOR))
+        assertFalse(shouldPublishDeviceIpInfoFromDashboardRefresh(IpInfoRefreshTarget.PROXY))
+    }
+
+    @Test
     fun `tor route refresh rejects same ip during identity change`() {
         val operation =
             HomeTorOperationUiState(

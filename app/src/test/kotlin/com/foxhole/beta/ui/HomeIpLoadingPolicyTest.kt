@@ -518,6 +518,36 @@ class HomeIpLoadingPolicyTest {
     }
 
     @Test
+    fun `traffic map origin rejects freshly saved route ip during active tunnel`() {
+        val routeIp =
+            IpInfo(
+                ip = "203.0.113.20",
+                ipv4 = "203.0.113.20",
+                countryCode = "NL",
+                countryName = "Netherlands",
+                city = "Amsterdam",
+                isp = "Tunnel ISP",
+                fetchedAt = 5_500L,
+            )
+
+        val origin =
+            trafficMapOriginIpInfoCandidate(
+                connection =
+                    ConnectionSnapshot(
+                        state = ConnectionState.CONNECTED,
+                        trafficMode = TrafficMode.TUNNEL,
+                        profileId = 7L,
+                        lastChangeAt = 5_000L,
+                    ),
+                deviceIpInfo = routeIp,
+                ipInfo = routeIp,
+                protocolSearchRunning = false,
+            )
+
+        assertNull(origin)
+    }
+
+    @Test
     fun `traffic map origin keeps device ip for local guard firewall`() {
         val deviceIp =
             IpInfo(

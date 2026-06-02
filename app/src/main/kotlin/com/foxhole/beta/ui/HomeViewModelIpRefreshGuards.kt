@@ -2,13 +2,18 @@ package com.foxhole.beta.ui
 
 import com.foxhole.beta.core.model.ConnectionSnapshot
 import com.foxhole.beta.core.model.IpInfo
-import com.foxhole.beta.core.model.TrafficMode
 import com.foxhole.beta.vpn.FoxholeVpnService
 
-internal fun ConnectionSnapshot.shouldPublishDeviceIpInfoFromDashboardRefresh(): Boolean =
-    state !in HomeViewModel.ACTIVE_CONNECTION_STATES ||
-        trafficMode != TrafficMode.TUNNEL ||
-        profileId == FoxholeVpnService.LOCAL_GUARD_PROFILE_ID
+internal fun shouldPublishDeviceIpInfoFromDashboardRefresh(target: IpInfoRefreshTarget): Boolean =
+    when (target) {
+        IpInfoRefreshTarget.UPSTREAM,
+        IpInfoRefreshTarget.LOCAL_GUARD,
+        -> true
+        IpInfoRefreshTarget.TOR,
+        IpInfoRefreshTarget.VPN_BOUND,
+        IpInfoRefreshTarget.PROXY,
+        -> false
+    }
 
 internal fun ConnectionSnapshot.shouldRefreshDashboardConnectionMetrics(): Boolean =
     state in HomeViewModel.ACTIVE_CONNECTION_STATES &&
