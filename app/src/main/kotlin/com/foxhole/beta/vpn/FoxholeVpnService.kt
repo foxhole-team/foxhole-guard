@@ -954,7 +954,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         ) {
             return
         }
-        if (isSameLocalGuardRuntimeActive(mode)) {
+        if (isSameLocalGuardRuntimeActive(mode) && isLocalGuardRuntimeCurrent()) {
             runtimeNetworkActivityLoggingSuspended = false
             container.diagnosticsLogger.record(
                 "connection",
@@ -2241,6 +2241,10 @@ private fun FoxholeVpnService.isSameLocalGuardRuntimeActive(mode: LocalGuardMode
         snapshot.profileId == FoxholeVpnService.LOCAL_GUARD_PROFILE_ID &&
         snapshot.state == ConnectionState.CONNECTED
 }
+
+private suspend fun FoxholeVpnService.isLocalGuardRuntimeCurrent(): Boolean =
+    container.connectionController.appliedRuntimeSignature.value ==
+        container.connectionController.currentRuntimeFingerprint()
 
 private fun FoxholeVpnService.notificationSmallIconRes(snapshot: NotificationSnapshot): Int =
     when {

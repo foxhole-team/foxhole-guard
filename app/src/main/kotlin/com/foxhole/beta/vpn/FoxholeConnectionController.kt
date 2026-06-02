@@ -147,10 +147,13 @@ class FoxholeConnectionController(
         }
         val mode = settingsRepository.current().localGuardModeOrNull()
         if (mode != null) {
+            val localGuardRuntimeCurrent =
+                appliedRuntimeSignature.value == currentRuntimeFingerprint()
             if (
                 localGuardSnapshot &&
                 hasActiveVpnNetwork() &&
-                currentSnapshot.profileName == mode.runtimeProfileName()
+                currentSnapshot.profileName == mode.runtimeProfileName() &&
+                localGuardRuntimeCurrent
             ) {
                 return
             }

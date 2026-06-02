@@ -283,13 +283,6 @@ private suspend fun HomeViewModel.ensureVerifiedDownloadedDnsRuleSet(value: DnsS
         .getOrDefault(false)
 }
 
-private fun shouldPreflightDnsRuleSetEnable(
-    current: DnsSettings,
-    next: DnsSettings,
-): Boolean =
-    !current.dnsRuleSetFilteringEnabled() &&
-        next.dnsRuleSetFilteringEnabled()
-
 internal fun HomeViewModel.onDnsBypassPackagesChangedInternal(value: List<String>) {
     updateRuntimeSettingAndMaybeReconnect {
         container.settingsRepository.updateDnsBypassPackages(
@@ -314,8 +307,10 @@ internal fun HomeViewModel.onDnsFilterManualRefreshInternal() {
             runCatching { container.dnsFilterUpdateRepository.refreshNow(requireAutoEnabled = false) }
                 .onSuccess {
                     when {
-                        dnsFilterRefreshAllowsRuntime(it.status) ->
+                        dnsFilterRefreshAllowsRuntime(it.status) -> {
+                            reloadRuntimeAfterDnsRuleSetRefreshIfNeeded(it.status)
                             emitSuccess(getApplication<Application>().getString(R.string.dns_filter_refresh_complete))
+                        }
                         else -> {
                             container.diagnosticsLogger.record(
                                 "dns",
@@ -340,6 +335,41 @@ internal fun HomeViewModel.onDnsFilterManualRefreshInternal() {
 
 internal fun dnsFilterRefreshAllowsRuntime(status: DnsFilterUpdateStatus): Boolean =
     status == DnsFilterUpdateStatus.UPDATED
+
+internal fun shouldPreflightDnsRuleSetEnable(
+    current: DnsSettings,
+    next: DnsSettings,
+): Boolean =
+    !current.dnsRuleSetFilteringEnabled() &&
+        next.dnsRuleSetFilteringEnabled()
+
+internal fun shouldReloadRuntimeAfterDnsRuleSetRefresh(
+    status: DnsFilterUpdateStatus,
+    dnsSettings: DnsSettings,
+): Boolean =
+    dnsFilterRefreshAllowsRuntime(status) &&
+        dnsSettings.dnsRuleSetFilteringEnabled()
+
+private suspend fun HomeViewModel.reloadRuntimeAfterDnsRuleSetRefreshIfNeeded(status: DnsFilterUpdateStatus) {
+    if (!shouldReloadRuntimeAfterDnsRuleSetRefresh(status, container.settingsRepository.current().dns)) {
+        return
+    }
+    val snapshot = container.connectionController.snapshot.value
+    if (snapshot.state !in HomeViewModel.ACTIVE_CONNECTION_STATES) {
+        return
+    }
+    if (snapshot.profileId == FoxholeVpnService.LOCAL_GUARD_PROFILE_ID) {
+        container.connectionController.syncLocalGuard()
+        return
+    }
+    val targetProfileId = activeRuntimeProfileIdForReload() ?: return
+    markRuntimeReloadPending()
+    if (container.connectionController.reload(targetProfileId)) {
+        scheduleDashboardRefreshAfterRuntimeReload()
+    } else {
+        clearRuntimeReloadPending()
+    }
+}
 
 internal fun HomeViewModel.onNetworkRulesChangedInternal(value: NetworkRulesSettings) {
     viewModelScope.launch {
