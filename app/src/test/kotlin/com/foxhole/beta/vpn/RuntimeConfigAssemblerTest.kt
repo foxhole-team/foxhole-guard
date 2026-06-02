@@ -999,13 +999,21 @@ class RuntimeConfigAssemblerTest {
 
     @Test
     fun `local firewall guard captures DNS with public DoH when intercept is enabled`() {
+        val filterPath = "/data/user/0/com.foxhole.beta/files/dns-rule-sets/adguard-dns-filter.verified.srs"
         val settings =
             Settings(
                 dns = DnsSettings(filteringEnabled = true),
                 expert = ExpertSettings(firewallEnabled = true),
             )
 
-        val config = parse(assembler.assembleLocalGuard(settings, LocalGuardMode.FIREWALL))
+        val config =
+            parse(
+                assembler.assembleLocalGuard(
+                    settings,
+                    LocalGuardMode.FIREWALL,
+                    dnsFilterRuntimePaths = DnsFilterRuntimePaths(adGuardDnsFilterPath = filterPath),
+                ),
+            )
         val dns = config["dns"]!!.jsonObject
         val route = config["route"]!!.jsonObject
         val rules = route["rules"]!!.jsonArray.map { it.jsonObject }
@@ -1041,6 +1049,9 @@ class RuntimeConfigAssemblerTest {
 
         assertFalse(dns.containsKey("rules"))
         assertFalse(route.containsKey("rule_set"))
+        assertTrue(route["rules"]!!.jsonArray.none { rule ->
+            rule.jsonObject["action"]?.jsonPrimitive?.content == "hijack-dns"
+        })
     }
 
     @Test
@@ -1081,13 +1092,21 @@ class RuntimeConfigAssemblerTest {
 
     @Test
     fun `local firewall guard leaves DNS uncaptured when intercept is disabled`() {
+        val filterPath = "/data/user/0/com.foxhole.beta/files/dns-rule-sets/adguard-dns-filter.verified.srs"
         val settings =
             Settings(
                 dns = DnsSettings(interceptDnsRequests = false, filteringEnabled = true),
                 expert = ExpertSettings(firewallEnabled = true),
             )
 
-        val config = parse(assembler.assembleLocalGuard(settings, LocalGuardMode.FIREWALL))
+        val config =
+            parse(
+                assembler.assembleLocalGuard(
+                    settings,
+                    LocalGuardMode.FIREWALL,
+                    dnsFilterRuntimePaths = DnsFilterRuntimePaths(adGuardDnsFilterPath = filterPath),
+                ),
+            )
         val route = config["route"]!!.jsonObject
         val rules = route["rules"]!!.jsonArray.map { it.jsonObject }
 
@@ -2365,6 +2384,25 @@ class RuntimeConfigAssemblerTest {
     }
 
     @Test
+    fun `unverified DNS rule set fails open for tunnel DNS runtime controls`() {
+        val settings =
+            Settings(
+                expert = ExpertSettings(strictRoute = false),
+                dns = DnsSettings(filteringEnabled = true, filtersUpdatedAt = 42L),
+            )
+
+        val config = parse(assembler.assemble(baseConfigWithRules("profile.example"), settings, null))
+        val tunInbound = config["inbounds"]!!.jsonArray.first().jsonObject
+        val route = config["route"]!!.jsonObject
+        val rules = route["rules"]!!.jsonArray.map { it.jsonObject }
+
+        assertEquals(false, tunInbound["strict_route"]!!.jsonPrimitive.content.toBoolean())
+        assertFalse(config["dns"]!!.jsonObject.containsKey("rules"))
+        assertFalse(route.containsKey("rule_set"))
+        assertTrue(rules.none { rule -> rule["action"]?.jsonPrimitive?.content == "hijack-dns" })
+    }
+
+    @Test
     fun `dns through vpn and secure mode select remote resolver fields`() {
         val settings =
             Settings(
@@ -2453,6 +2491,10 @@ class RuntimeConfigAssemblerTest {
                 dns =
                     DnsSettings(
                         filteringEnabled = true,
+                        blockAds = false,
+                        blockTrackers = false,
+                        blockAppTelemetry = false,
+                        blockMaliciousDomains = false,
                         appBypassPackages = listOf("com.example.bank"),
                         domainBypassRules = listOf("login.example", "push.example"),
                     ),

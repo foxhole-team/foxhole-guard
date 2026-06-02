@@ -25,6 +25,7 @@ import com.foxhole.beta.core.model.TrafficMode
 import com.foxhole.beta.core.model.TrafficSettings
 import com.foxhole.beta.core.model.TunStack
 import com.foxhole.beta.core.model.V2RayApiSettings
+import com.foxhole.beta.core.model.disableUnverifiedRuleSetRuntimeDns
 import com.foxhole.beta.core.model.dnsRuleSetFilteringEnabled
 import com.foxhole.beta.core.model.isUdpTransport
 import kotlinx.serialization.Serializable
@@ -89,20 +90,21 @@ class RuntimeConfigAssembler(
         vpnProtocolHint: ProtocolHint? = null,
     ): String {
         validate(settings.expert)
+        val runtimeSettings = settings.verifiedRuleSetRuntimeSettings(dnsFilterRuntimePaths)
         val base = json.parseToJsonElement(baseConfigJson).jsonObject
         val resolvedPrivateDnsState = privateDnsState ?: privateDnsMode?.let(::PrivateDnsState)
-        return when (settings.traffic.mode) {
+        return when (runtimeSettings.traffic.mode) {
             TrafficMode.TUNNEL ->
                 assembleTunnel(
                     base = base,
-                    settings = settings,
+                    settings = runtimeSettings,
                     activePreset = activePreset,
                     privateDnsState = resolvedPrivateDnsState,
                     torRuntimePaths = torRuntimePaths,
                     dnsFilterRuntimePaths = dnsFilterRuntimePaths,
                     vpnProtocolHint = vpnProtocolHint,
                 )
-            TrafficMode.PROXY -> assembleProxy(base, settings, activePreset, dnsFilterRuntimePaths)
+            TrafficMode.PROXY -> assembleProxy(base, runtimeSettings, activePreset, dnsFilterRuntimePaths)
         }
     }
 
@@ -111,20 +113,26 @@ class RuntimeConfigAssembler(
         mode: LocalGuardMode,
         dnsFilterRuntimePaths: DnsFilterRuntimePaths? = null,
     ): String {
-        val localDnsCaptureEnabled = settings.localGuardDnsCaptureEnabled(mode)
-        val baseDnsSettings =
+        val runtimeSettings =
             if (settings.expert.systemDnsProtectionEnabled) {
-                settings.dns.systemDnsProtectionSettings()
+                settings
             } else {
-                settings.dns.localGuardVerifiedRuleSetSettings(dnsFilterRuntimePaths)
+                settings.verifiedRuleSetRuntimeSettings(dnsFilterRuntimePaths)
+            }
+        val localDnsCaptureEnabled = runtimeSettings.localGuardDnsCaptureEnabled(mode)
+        val baseDnsSettings =
+            if (runtimeSettings.expert.systemDnsProtectionEnabled) {
+                runtimeSettings.dns.systemDnsProtectionSettings()
+            } else {
+                runtimeSettings.dns.localGuardVerifiedRuleSetSettings(dnsFilterRuntimePaths)
             }
         val dnsSettings =
             baseDnsSettings.localGuardDnsSettings(
-                forcePublicDoH = localDnsCaptureEnabled && !settings.expert.systemDnsProtectionEnabled,
+                forcePublicDoH = localDnsCaptureEnabled && !runtimeSettings.expert.systemDnsProtectionEnabled,
             )
         val dns =
             buildFoxholeDnsConfig(
-                strategy = settings.traffic.domainStrategy.configValue,
+                strategy = runtimeSettings.traffic.domainStrategy.configValue,
                 dnsSettings = dnsSettings,
                 privateDnsState = null,
                 dnsFilterRuntimePaths = dnsFilterRuntimePaths,
@@ -147,8 +155,8 @@ class RuntimeConfigAssembler(
                             add(blockPrivateDnsValidationRule())
                             hijackDnsRules().forEach(::add)
                         }
-                        if (mode != LocalGuardMode.DNS && settings.expert.blockAppsAlways) {
-                            buildAppRouteRules(settings.expert).forEach(::add)
+                        if (mode != LocalGuardMode.DNS && runtimeSettings.expert.blockAppsAlways) {
+                            buildAppRouteRules(runtimeSettings.expert).forEach(::add)
                         }
                     }
                 val ruleSets =
@@ -161,7 +169,7 @@ class RuntimeConfigAssembler(
                 ruleSets?.let { put("rule_set", it) }
                 put("final", "direct")
                 val defaultResolver =
-                    if (settings.expert.systemDnsProtectionEnabled) {
+                    if (runtimeSettings.expert.systemDnsProtectionEnabled) {
                         DNS_REMOTE_TAG
                     } else if (!localDnsCaptureEnabled) {
                         DNS_REMOTE_TAG
@@ -176,7 +184,7 @@ class RuntimeConfigAssembler(
             JsonObject.serializer(),
             buildJsonObject {
                 putJsonArray("inbounds") {
-                    add(localGuardTunInbound(settings, mode))
+                    add(localGuardTunInbound(runtimeSettings, mode))
                 }
                 putJsonArray("outbounds") {
                     add(buildJsonObject { put("type", "direct"); put("tag", "direct") })
@@ -208,15 +216,16 @@ class RuntimeConfigAssembler(
         dnsFilterRuntimePaths: DnsFilterRuntimePaths? = null,
     ): String {
         validate(settings.expert)
-        require(settings.privacyRoute.enabled) { "TOR route is disabled" }
+        val runtimeSettings = settings.verifiedRuleSetRuntimeSettings(dnsFilterRuntimePaths)
+        require(runtimeSettings.privacyRoute.enabled) { "TOR route is disabled" }
         require(
-            settings.privacyRoute.scope == PrivacyRouteScope.ALL_APPS ||
-                settings.privacyRoute.selectedPackages.any(String::isNotBlank),
+            runtimeSettings.privacyRoute.scope == PrivacyRouteScope.ALL_APPS ||
+                runtimeSettings.privacyRoute.selectedPackages.any(String::isNotBlank),
         ) { "direct TOR route has no selected apps" }
         val dns =
             buildFoxholeDnsConfig(
-                strategy = settings.traffic.domainStrategy.configValue,
-                dnsSettings = settings.dns,
+                strategy = runtimeSettings.traffic.domainStrategy.configValue,
+                dnsSettings = runtimeSettings.dns,
                 privateDnsState = privateDnsState ?: privateDnsMode?.let(::PrivateDnsState),
                 dnsFilterRuntimePaths = dnsFilterRuntimePaths,
             )
@@ -224,16 +233,16 @@ class RuntimeConfigAssembler(
             patchTorOnlyRoute(
                 dns = dns,
                 activePreset = activePreset,
-                settings = settings,
+                settings = runtimeSettings,
                 dnsFilterRuntimePaths = dnsFilterRuntimePaths,
             )
         return json.encodeToString(
             JsonObject.serializer(),
             buildJsonObject {
                 putJsonArray("inbounds") {
-                    add(torOnlyTunInbound(settings))
-                    add(runtimeLoopbackProxyInbound(settings.expert.localSurfaces))
-                    buildLocalSurfaceInbounds(settings.expert.localSurfaces, includeLocalProxy = false).forEach(::add)
+                    add(torOnlyTunInbound(runtimeSettings))
+                    add(runtimeLoopbackProxyInbound(runtimeSettings.expert.localSurfaces))
+                    buildLocalSurfaceInbounds(runtimeSettings.expert.localSurfaces, includeLocalProxy = false).forEach(::add)
                 }
                 putJsonArray("outbounds") {
                     add(torDirectProxyOutbound(torRuntimePaths))
@@ -1770,7 +1779,16 @@ class RuntimeConfigAssembler(
         dnsFilterRuntimePaths: DnsFilterRuntimePaths?,
     ): DnsSettings =
         if (bundledAdGuardFilterEnabled() && dnsFilterRuntimePaths == null) {
-            copy(filteringEnabled = false)
+            disableUnverifiedRuleSetRuntimeDns()
+        } else {
+            this
+        }
+
+    private fun Settings.verifiedRuleSetRuntimeSettings(
+        dnsFilterRuntimePaths: DnsFilterRuntimePaths?,
+    ): Settings =
+        if (dns.bundledAdGuardFilterEnabled() && dnsFilterRuntimePaths == null) {
+            copy(dns = dns.disableUnverifiedRuleSetRuntimeDns())
         } else {
             this
         }

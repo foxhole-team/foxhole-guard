@@ -325,6 +325,18 @@ data class DnsSettings(
 fun DnsSettings.dnsRuleSetFilteringEnabled(): Boolean =
     filteringEnabled && (blockAds || blockTrackers || blockAppTelemetry || blockMaliciousDomains)
 
+fun DnsSettings.disableUnverifiedRuleSetRuntimeDns(): DnsSettings =
+    if (dnsRuleSetFilteringEnabled()) {
+        copy(
+            dnsThroughVpn = false,
+            blockOutsideTunnel = false,
+            interceptDnsRequests = false,
+            filteringEnabled = false,
+        )
+    } else {
+        this
+    }
+
 @Serializable
 data class NetworkRulesSettings(
     val wifiRulesEnabled: Boolean = true,

@@ -32,6 +32,7 @@ import com.foxhole.beta.core.model.Settings
 import com.foxhole.beta.core.model.TrafficMode
 import com.foxhole.beta.core.model.TrafficSnapshot
 import com.foxhole.beta.core.model.VpnSession
+import com.foxhole.beta.core.model.disableUnverifiedRuleSetRuntimeDns
 import com.foxhole.beta.core.model.dnsRuleSetFilteringEnabled
 import com.foxhole.beta.core.model.isUdpTransport
 import com.foxhole.beta.core.network.IpInfoFetchMode
@@ -1173,7 +1174,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         dnsFilterRuntimePaths: DnsFilterRuntimePaths?,
     ): Settings =
         if (dns.dnsRuleSetFilteringEnabled() && !expert.systemDnsProtectionEnabled && dnsFilterRuntimePaths == null) {
-            copy(dns = dns.copy(filteringEnabled = false))
+            copy(dns = dns.disableUnverifiedRuleSetRuntimeDns())
         } else {
             this
         }

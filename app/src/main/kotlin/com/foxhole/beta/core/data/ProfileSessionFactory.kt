@@ -11,6 +11,7 @@ import com.foxhole.beta.core.model.Settings
 import com.foxhole.beta.core.model.StoredProfileSecret
 import com.foxhole.beta.core.model.TrafficMode
 import com.foxhole.beta.core.model.VpnSession
+import com.foxhole.beta.core.model.disableUnverifiedRuleSetRuntimeDns
 import com.foxhole.beta.core.model.isUdpTransport
 import com.foxhole.beta.core.settings.SettingsRepository
 import com.foxhole.beta.vpn.DnsFilterAssetInstaller
@@ -169,7 +170,7 @@ internal class ProfileSessionFactory(
         dnsFilterRuntimePaths: DnsFilterRuntimePaths?,
     ): Settings =
         if (dns.bundledAdGuardFilterEnabled() && dnsFilterRuntimePaths == null) {
-            copy(dns = dns.copy(filteringEnabled = false))
+            copy(dns = dns.disableUnverifiedRuleSetRuntimeDns())
         } else {
             this
         }
