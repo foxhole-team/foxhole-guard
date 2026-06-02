@@ -224,7 +224,10 @@ class HomeDashboardHotPathTest {
     fun `traffic map heavy startup delay stays short for dashboard returns`() {
         val homeSource = testSourceFile("HomeScreen.kt").readText()
 
-        assertTrue(homeSource.contains("TRAFFIC_MAP_HEAVY_CONTENT_STARTUP_DELAY_MS = 220L"))
+        assertTrue(homeSource.contains("DASHBOARD_CARD_STARTUP_STAGE_DELAY_MS = 32L"))
+        assertTrue(homeSource.contains("TRAFFIC_MAP_HEAVY_CONTENT_STARTUP_DELAY_MS = 96L"))
+        assertFalse(homeSource.contains("DASHBOARD_CARD_STARTUP_STAGE_DELAY_MS = 48L"))
+        assertFalse(homeSource.contains("TRAFFIC_MAP_HEAVY_CONTENT_STARTUP_DELAY_MS = 220L"))
         assertFalse(homeSource.contains("TRAFFIC_MAP_HEAVY_CONTENT_STARTUP_DELAY_MS = 650L"))
     }
 
