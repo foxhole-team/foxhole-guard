@@ -104,7 +104,7 @@ class HomeDashboardTextPolicyTest {
 
         assertEquals(
             HomeNetworkDetailValue(text = "", loading = true),
-            homeNetworkDetailValue(formatCountryLineOrNull(partialIpInfo), loading = policy.country),
+            homeNetworkDetailValue(buildCountryLineOrNull(partialIpInfo), loading = policy.country),
         )
         assertEquals(
             HomeNetworkDetailValue(text = "", loading = true),
@@ -112,7 +112,37 @@ class HomeDashboardTextPolicyTest {
         )
         assertEquals(
             HomeNetworkDetailValue(text = "-", loading = false),
-            homeNetworkDetailValue(formatCountryLineOrNull(partialIpInfo), loading = false),
+            homeNetworkDetailValue(buildCountryLineOrNull(partialIpInfo), loading = false),
+        )
+    }
+
+    @Test
+    fun `network card keeps country and city rows skeletoned until geo lookup settles`() {
+        val partialIpInfo =
+            IpInfo(
+                ip = "203.0.113.7",
+                countryCode = null,
+                countryName = null,
+                city = null,
+                isp = "Example ISP",
+                fetchedAt = 1L,
+            )
+
+        assertEquals(
+            HomeNetworkDetailValue(text = "", loading = true),
+            homeNetworkDetailValue(buildCountryLineOrNull(partialIpInfo), loading = true),
+        )
+        assertEquals(
+            HomeNetworkDetailValue(text = "", loading = true),
+            homeNetworkDetailValue(buildCityLineOrNull(partialIpInfo), loading = true),
+        )
+        assertEquals(
+            HomeNetworkDetailValue(text = "-", loading = false),
+            homeNetworkDetailValue(buildCountryLineOrNull(partialIpInfo), loading = false),
+        )
+        assertEquals(
+            HomeNetworkDetailValue(text = "-", loading = false),
+            homeNetworkDetailValue(buildCityLineOrNull(partialIpInfo), loading = false),
         )
     }
 
