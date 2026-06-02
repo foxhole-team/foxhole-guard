@@ -8,11 +8,11 @@ This pass moves runtime control-plane ownership toward `RuntimeSupervisor` witho
 
 ## Changes
 
-- Added explicit `RuntimeCommand` model for tunnel, proxy, Tor-only, local guard, reload, stop, and kill commands.
+- Added explicit `RuntimeCommand` model for tunnel, proxy, TOR-only, local guard, reload, stop, and kill commands.
 - Added `RuntimeSupervisor.dispatch(command)` so command priority/reason are derived from the command model.
 - Added `RuntimeControlPlaneOwnershipState` owned by `RuntimeSupervisor`.
 - Delegated `FoxholeVpnService` active session, local guard mode, validation-active flag, callback registration flags, and active VPN network handle through supervisor ownership state.
-- Expanded `RuntimeEvent` with native, VPN network, upstream, validation, Tor, and cleanup-unresolved events.
+- Expanded `RuntimeEvent` with native, VPN network, upstream, validation, TOR, and cleanup-unresolved events.
 - Reducer now supports lifecycle phase transitions and turns cleanup-unresolved into a safe error state.
 
 ## Verification

@@ -380,6 +380,52 @@ class HomeIpRefreshPolicyTest {
     }
 
     @Test
+    fun `tor route refresh rejects stale non tor dashboard ip`() {
+        val currentVpnIp =
+            IpInfo(
+                ip = "198.51.100.44",
+                ipv4 = "198.51.100.44",
+                countryCode = "NL",
+                countryName = "Netherlands",
+                city = "Amsterdam",
+                isp = "VPN ISP",
+                fetchedAt = 1_000L,
+            )
+        val staleTorCandidate =
+            currentVpnIp.copy(
+                isp = "VPN ISP through app-owned refresh",
+                fetchedAt = 2_000L,
+            )
+        val actualTorExit =
+            IpInfo(
+                ip = "185.220.101.12",
+                ipv4 = "185.220.101.12",
+                countryCode = "DE",
+                countryName = "Germany",
+                city = "Berlin",
+                isp = "TOR exit",
+                fetchedAt = 2_000L,
+            )
+
+        assertFalse(
+            shouldAcceptTorRouteIpRefresh(
+                info = staleTorCandidate,
+                currentNonTorIpInfo = currentVpnIp,
+                torRouteVisible = true,
+                torOperation = HomeTorOperationUiState(),
+            ),
+        )
+        assertTrue(
+            shouldAcceptTorRouteIpRefresh(
+                info = actualTorExit,
+                currentNonTorIpInfo = currentVpnIp,
+                torRouteVisible = true,
+                torOperation = HomeTorOperationUiState(),
+            ),
+        )
+    }
+
+    @Test
     fun `tor operation start address only uses previous tor ip`() {
         val previousTorIp =
             IpInfo(

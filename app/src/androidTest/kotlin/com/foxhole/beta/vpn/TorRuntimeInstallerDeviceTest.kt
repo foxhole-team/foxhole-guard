@@ -146,7 +146,7 @@ class TorRuntimeInstallerDeviceTest {
                         onDebug = {},
                     ),
                     reflection.platformProxy(host, monitor) { _, _ ->
-                        error("Tor config validation must not open a TUN device")
+                        error("TOR config validation must not open a TUN device")
                     },
                 )
             try {

@@ -8,7 +8,7 @@ This pass turns the existing live smart-profile runtime stress test into a clear
 
 ## Changes
 
-- Extended `manualSmartSubscriptionRuntimeStressCycles` cycle logs with connection state, runtime phase, runtime generation, native generation, command queue depth, IP panel states, and Tor state.
+- Extended `manualSmartSubscriptionRuntimeStressCycles` cycle logs with connection state, runtime phase, runtime generation, native generation, command queue depth, IP panel states, and TOR state.
 - Added assertions that each normal disconnect returns the app-facing connection state and runtime phase to idle.
 - Added an assertion that the runtime command queue is empty after each stress cycle.
 - Kept existing assertions for native server, TUN fd, host/config cleanup, callback cleanup, cleanup-unresolved, active service, active VPN network, RSS monotonic growth, and RSS delta.

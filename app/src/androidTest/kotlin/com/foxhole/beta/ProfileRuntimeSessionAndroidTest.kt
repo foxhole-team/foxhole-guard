@@ -358,21 +358,21 @@ class ProfileRuntimeSessionAndroidTest {
     @Test
     fun manualSmartSubscriptionTcpTorRuntime() {
         if (InstrumentationRegistry.getArguments().getString("foxhole.liveSmartTcpTor") != "1") {
-            Log.d(TEST_TAG, "manual smart TCP Tor live connect skipped")
+            Log.d(TEST_TAG, "manual smart TCP TOR live connect skipped")
             return
         }
         runBlocking {
             val app = ApplicationProvider.getApplicationContext<FoxholeApplication>()
             val subscriptionInput = smartSubscriptionInput()
             if (subscriptionInput == null) {
-                Log.d(TEST_TAG, "manual smart TCP Tor skipped: subscription input missing")
+                Log.d(TEST_TAG, "manual smart TCP TOR skipped: subscription input missing")
                 return@runBlocking
             }
             val requireSuccess = requireLiveSmartSuccess()
             if (!ensureVpnPermission(app)) {
-                Log.d(TEST_TAG, "manual smart TCP Tor skipped: vpn permission missing")
+                Log.d(TEST_TAG, "manual smart TCP TOR skipped: vpn permission missing")
                 if (requireSuccess) {
-                    assertTrue("vpn permission missing for required live TCP Tor test", false)
+                    assertTrue("vpn permission missing for required live TCP TOR test", false)
                 }
                 return@runBlocking
             }
@@ -386,7 +386,7 @@ class ProfileRuntimeSessionAndroidTest {
             val imported =
                 app.container.profileRepository.importProfile(
                     rawInput = subscriptionInput,
-                    preferredName = "Live Smart Tor",
+                    preferredName = "Live Smart TOR",
                     allowInsecureTlsForProfile =
                         InstrumentationRegistry
                             .getArguments()
@@ -403,7 +403,7 @@ class ProfileRuntimeSessionAndroidTest {
                             .map { target -> profile to target }
                     }.firstOrNull()
             if (selectedTarget == null) {
-                Log.d(TEST_TAG, "manual smart TCP Tor skipped: no TCP target for ${targetProtocols.joinToString { it.name }}")
+                Log.d(TEST_TAG, "manual smart TCP TOR skipped: no TCP target for ${targetProtocols.joinToString { it.name }}")
                 if (requireSuccess) {
                     assertTrue("smart subscription did not expose requested TCP target", false)
                 }
@@ -438,7 +438,7 @@ class ProfileRuntimeSessionAndroidTest {
                     TEST_TAG,
                     "liveSmartTcpTor config profileId=${profile.id} targetProtocol=${target.protocolHint.name.lowercase()} sessionProtocol=${torSession.protocolHint.name.lowercase()} optionId=${target.optionId.orEmpty()} privacyMode=${torSettings.privacyRoute.mode.name} privacyScope=${torSettings.privacyRoute.scope.name} trafficMode=${torSettings.traffic.mode.name} torConfigActive=$torConfigActive outbounds=$outboundSummary",
                 )
-                assertTrue("assembled TCP Tor config is missing tor-over-vpn outbound", torConfigActive)
+                assertTrue("assembled TCP TOR config is missing tor-over-vpn outbound", torConfigActive)
 
                 val startedAt = System.currentTimeMillis()
                 app.container.connectionController.connect(profile.id, protocolOptionId = target.optionId)

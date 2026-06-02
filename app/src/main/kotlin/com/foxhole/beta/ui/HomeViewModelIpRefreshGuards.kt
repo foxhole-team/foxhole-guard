@@ -44,6 +44,26 @@ internal fun HomeViewModel.canAcceptTorRouteIpRefresh(info: IpInfo): Boolean {
     val torRouteVisible =
         state.connection.profileId == FoxholeVpnService.TOR_ONLY_PROFILE_ID ||
             state.settings.privacyRoute.enabled
-    return torRouteVisible &&
-        (!state.torOperation.active || state.torOperation.canAcceptTorIp(info))
+    return shouldAcceptTorRouteIpRefresh(
+        info = info,
+        currentNonTorIpInfo = container.connectionController.ipInfo.value,
+        torRouteVisible = torRouteVisible,
+        torOperation = state.torOperation,
+    )
+}
+
+internal fun shouldAcceptTorRouteIpRefresh(
+    info: IpInfo,
+    currentNonTorIpInfo: IpInfo?,
+    torRouteVisible: Boolean,
+    torOperation: HomeTorOperationUiState,
+): Boolean =
+    torRouteVisible &&
+        !info.matchesVisibleIpAddress(currentNonTorIpInfo) &&
+        (!torOperation.active || torOperation.canAcceptTorIp(info))
+
+private fun IpInfo.matchesVisibleIpAddress(other: IpInfo?): Boolean {
+    val currentIp = primaryVisibleIpOrNull(this) ?: return false
+    val otherIp = other?.let(::primaryVisibleIpOrNull) ?: return false
+    return currentIp == otherIp
 }
