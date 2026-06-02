@@ -375,6 +375,35 @@ class HomeRuntimeBehaviorTest {
         assertUnderBudget("dashboard/settings repeated round-trip", roundTripMs, ROUND_TRIP_RESPONSIVENESS_TIMEOUT_MS)
     }
 
+    @Test
+    fun manualNetworkRefreshButtonStartsFullDashboardRefresh() {
+        waitUntilNetworkBlockSettles()
+        val viewModel =
+            ViewModelProvider(
+                composeRule.activity,
+                HomeViewModel.factory(app()),
+            )[HomeViewModel::class.java]
+        app().container.diagnosticsLogger.clear()
+
+        try {
+            composeRule.onNodeWithTag("home_refresh_ip_icon").performClick()
+            composeRule.waitUntil(timeoutMillis = 5_000) {
+                app().container.diagnosticsLogger.entries.value.any {
+                    it.tag == "ip" &&
+                        it.message.contains("dashboard refresh started") &&
+                        it.message.contains("reason=manual") &&
+                        it.message.contains("mode=full") &&
+                        it.message.contains("showLoading=true") &&
+                        it.message.contains("clearExistingIp=false")
+                }
+            }
+        } finally {
+            composeRule.runOnUiThread {
+                viewModel.invalidateIpInfoRefreshes()
+            }
+        }
+    }
+
     private fun waitUntilNetworkBlockSettles() {
         val expectedIp = "198.51.100.11"
         seedNetworkBlock(expectedIp)

@@ -23,15 +23,15 @@ class TrafficMapStylingTest {
             lightColors.countryFill,
         )
         assertEquals(
-            Color(0xFF666B70),
+            Color(0xFF7BD69D),
             lightColors.routeLine,
         )
         assertEquals(
-            Color(0xFFD0D3D6),
+            Color(0xFF7BD69D),
             darkColors.destination,
         )
         assertEquals(
-            Color(0xFF3D4247),
+            Color(0xFF7BD69D),
             lightColors.origin,
         )
     }
@@ -140,21 +140,16 @@ class TrafficMapStylingTest {
     }
 
     @Test
-    fun `application starts traffic map prewarm immediately after app graph setup`() {
+    fun `application does not prewarm traffic map during cold startup`() {
         val source =
             listOf(
                 java.io.File("src/main/kotlin/com/foxhole/beta/FoxholeApplication.kt"),
                 java.io.File("app/src/main/kotlin/com/foxhole/beta/FoxholeApplication.kt"),
                 java.io.File("../app/src/main/kotlin/com/foxhole/beta/FoxholeApplication.kt"),
             ).first { file -> file.isFile }.readText()
-        val prewarmBlock =
-            source.substringAfter("appScope.launch {")
-                .substringBefore("appScope.launch {\n            delay(BACKGROUND_INITIALIZATION_STARTUP_DELAY_MS)")
 
-        assertTrue(prewarmBlock.contains("prewarmTrafficMapCountryShapes"))
-        assertFalse(prewarmBlock.contains("delay("))
+        assertFalse(source.contains("prewarmTrafficMapCountryShapes"))
         assertFalse(source.contains("TRAFFIC_MAP_PREWARM_STARTUP_DELAY_MS"))
-        assertFalse(source.contains("TRAFFIC_MAP_PREWARM_STARTUP_DELAY_MS = 300L"))
     }
 
     @Test
@@ -186,10 +181,12 @@ class TrafficMapStylingTest {
                 .substringBefore("@Composable\nprivate fun TrafficMapCanvasLoadingBlock")
 
         assertTrue(cardBlock.contains("contentReady: Boolean = true"))
-        assertTrue(cardBlock.contains("if (contentReady && !mapDisabledForPower)"))
-        assertTrue(cardBlock.contains("val countryShapesLoading = contentReady && !mapDisabledForPower && countryShapes.isEmpty()"))
-        assertTrue(cardBlock.contains("} else if (!contentReady || countryShapesLoading)"))
+        assertTrue(cardBlock.contains("rememberTrafficMapHeavyContentReady(contentReady && !mapDisabledForPower)"))
+        assertTrue(cardBlock.contains("if (heavyContentReady)"))
+        assertTrue(cardBlock.contains("val countryShapesLoading = heavyContentReady && countryShapes.isEmpty()"))
+        assertTrue(cardBlock.contains("} else if (!heavyContentReady || countryShapesLoading)"))
         assertTrue(cardBlock.contains("TrafficMapCanvasLoadingBlock"))
+        assertTrue(source.contains("delay(TRAFFIC_MAP_HEAVY_CONTENT_SETTLE_DELAY_MS)"))
         assertTrue(source.contains("home_traffic_world_map_loading"))
     }
 

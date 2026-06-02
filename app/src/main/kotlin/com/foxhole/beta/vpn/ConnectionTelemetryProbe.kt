@@ -18,6 +18,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.withContext
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import java.io.IOException
 import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.net.Socket
@@ -307,6 +308,47 @@ internal class ConnectionTelemetryProbe(
         network: Network?,
     ): Long {
         val address = resolvedAddress ?: resolveServerPingAddress(host, network)
+        if (network != null) {
+            val boundAttempt =
+                runCatching {
+                    measureServerTcpConnectLatencyAttempt(
+                        address = address,
+                        port = port,
+                        timeoutMs = timeoutMs,
+                        network = network,
+                    )
+                }
+            boundAttempt.getOrNull()?.let { return it }
+            val boundError = boundAttempt.exceptionOrNull()
+            if (boundError !is IOException) {
+                throw boundError ?: error("server tcp ping failed")
+            }
+            return runCatching {
+                measureServerTcpConnectLatencyAttempt(
+                    address = address,
+                    port = port,
+                    timeoutMs = timeoutMs,
+                    network = null,
+                )
+            }.getOrElse { fallbackError ->
+                fallbackError.addSuppressed(boundError)
+                throw fallbackError
+            }
+        }
+        return measureServerTcpConnectLatencyAttempt(
+            address = address,
+            port = port,
+            timeoutMs = timeoutMs,
+            network = null,
+        )
+    }
+
+    private fun measureServerTcpConnectLatencyAttempt(
+        address: InetAddress,
+        port: Int,
+        timeoutMs: Long,
+        network: Network?,
+    ): Long {
         val startedAt = SystemClock.elapsedRealtime()
         // Availability probe only: opens a bounded TCP connect to the configured server target and sends no payload.
         Socket().use { socket ->

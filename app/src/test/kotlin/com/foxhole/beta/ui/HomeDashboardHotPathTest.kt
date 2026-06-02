@@ -217,15 +217,15 @@ class HomeDashboardHotPathTest {
     }
 
     @Test
-    fun `traffic map heavy content has no extra dashboard return delay`() {
+    fun `traffic map heavy content waits for root navigation settle before parsing`() {
         val homeSource = testSourceFile("HomeScreen.kt").readText()
+        val trafficMapSource = testSourceFile("TrafficMapDashboardCard.kt").readText()
 
         assertTrue(homeSource.contains("DASHBOARD_CARD_STARTUP_STAGE_DELAY_MS = 16L"))
-        assertFalse(homeSource.contains("TRAFFIC_MAP_HEAVY_CONTENT_STARTUP_DELAY_MS"))
+        assertTrue(trafficMapSource.contains("TRAFFIC_MAP_HEAVY_CONTENT_SETTLE_DELAY_MS = 650L"))
+        assertTrue(trafficMapSource.contains("delay(TRAFFIC_MAP_HEAVY_CONTENT_SETTLE_DELAY_MS)"))
         assertFalse(homeSource.contains("DASHBOARD_CARD_STARTUP_STAGE_DELAY_MS = 32L"))
         assertFalse(homeSource.contains("DASHBOARD_CARD_STARTUP_STAGE_DELAY_MS = 48L"))
-        assertFalse(homeSource.contains("TRAFFIC_MAP_HEAVY_CONTENT_STARTUP_DELAY_MS = 220L"))
-        assertFalse(homeSource.contains("TRAFFIC_MAP_HEAVY_CONTENT_STARTUP_DELAY_MS = 650L"))
     }
 
     @Test
@@ -262,6 +262,8 @@ class HomeDashboardHotPathTest {
 
         assertTrue(initializationBlock.contains("delay(BACKGROUND_WORK_SCHEDULE_STARTUP_DELAY_MS)"))
         assertTrue(applicationSource.contains("BACKGROUND_WORK_SCHEDULE_STARTUP_DELAY_MS = 4_500L"))
+        assertFalse(applicationSource.contains("prewarmTrafficMapCountryShapes"))
+        assertFalse(applicationSource.contains("TRAFFIC_MAP_PREWARM_STARTUP_DELAY_MS"))
         assertTrue(
             initializationBlock.indexOf("delay(BACKGROUND_WORK_SCHEDULE_STARTUP_DELAY_MS)") <
                 initializationBlock.indexOf("applyProfileSecretCleanupSchedule()"),
@@ -297,6 +299,15 @@ class HomeDashboardHotPathTest {
         assertTrue(networkLoadingBlock.contains("shimmerProgress = shimmerProgress"))
         assertTrue(legendLoadingBlock.contains("val shimmerProgress = rememberFoxholeSkeletonProgress()"))
         assertTrue(legendLoadingBlock.contains("shimmerProgress = shimmerProgress"))
+    }
+
+    @Test
+    fun `traffic map parsing and bitmap rendering stay off shared default dispatcher`() {
+        val trafficMapSource = testSourceFile("TrafficMapDashboardCard.kt").readText()
+
+        assertTrue(trafficMapSource.contains("TrafficMapRenderDispatcher.dispatcher"))
+        assertTrue(trafficMapSource.contains("Process.THREAD_PRIORITY_BACKGROUND"))
+        assertFalse(trafficMapSource.contains("Dispatchers.Default"))
     }
 
     @Test

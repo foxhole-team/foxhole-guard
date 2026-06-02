@@ -144,5 +144,6 @@ class TrafficMapCountryGeoJsonParserTest {
         assertTrue(assetParserBlock.contains("TrafficMapPreprocessedAssetScanner(raw).parse()"))
         assertFalse(assetParserBlock.contains("decodeFromStream<TrafficMapPreprocessedAsset>"))
         assertFalse(assetParserBlock.contains("parseToJsonElement"))
+        assertFalse(assetParserBlock.contains("raw.substring(start, index).toDoubleOrNull()"))
     }
 }

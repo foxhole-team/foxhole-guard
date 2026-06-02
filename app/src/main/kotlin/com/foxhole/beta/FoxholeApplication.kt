@@ -19,7 +19,6 @@ import com.foxhole.beta.core.model.dnsRuleSetFilteringEnabled
 import com.foxhole.beta.core.profile.PROFILE_EXPORT_DIR_NAME
 import com.foxhole.beta.core.profile.cleanupProfileExportArtifacts
 import com.foxhole.beta.core.settings.readFastStoredAppLocale
-import com.foxhole.beta.ui.prewarmTrafficMapCountryShapes
 import com.foxhole.beta.vpn.DnsFilterUpdateWorker
 import com.foxhole.beta.vpn.SubscriptionRefreshWorker
 import kotlinx.coroutines.CoroutineScope
@@ -53,15 +52,6 @@ class FoxholeApplication :
         appGraph = FoxholeAppGraph(this)
         applyAppLocale(readFastStoredAppLocale(this))
 
-        appScope.launch {
-            runCatching { prewarmTrafficMapCountryShapes(this@FoxholeApplication) }
-                .onFailure { error ->
-                    appGraph.diagnosticsLogger.record(
-                        "traffic-map",
-                        "country shape prewarm failed: ${error.javaClass.simpleName}",
-                    )
-                }
-        }
         appScope.launch {
             delay(BACKGROUND_INITIALIZATION_STARTUP_DELAY_MS)
             initializeInBackground()

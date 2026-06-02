@@ -111,12 +111,15 @@ class ConnectionTelemetryProbeTest {
     }
 
     @Test
-    fun `direct server ping uses protected raw socket before upstream bind`() {
+    fun `direct server ping falls back from upstream bind to protected direct socket`() {
         val source = testVpnSourceFile("ConnectionTelemetryProbe.kt").readText()
         val directServerPingBlock =
             source.substringAfter("private fun measureServerTcpConnectLatency(")
                 .substringBefore("private class LatencyProbeAttempts")
 
+        assertEquals(true, directServerPingBlock.contains("boundAttempt"))
+        assertEquals(true, directServerPingBlock.contains("boundError !is IOException"))
+        assertEquals(true, directServerPingBlock.contains("network = null"))
         assertEquals(true, directServerPingBlock.contains("Socket().use { socket ->"))
         assertEquals(true, directServerPingBlock.contains("check(protectDirectSocket(socket))"))
         assertEquals(true, directServerPingBlock.contains("network?.bindSocket(socket)"))

@@ -10,6 +10,7 @@ import android.graphics.Paint as AndroidPaint
 import android.graphics.Path as AndroidPath
 import android.os.BatteryManager
 import android.os.PowerManager
+import android.os.Process
 import android.os.SystemClock
 import android.util.DisplayMetrics
 import android.util.Log
@@ -39,6 +40,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
@@ -71,29 +73,56 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.core.content.ContextCompat
 import androidx.core.content.getSystemService
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.foxhole.beta.BuildConfig
 import com.foxhole.beta.R
+import com.foxhole.beta.core.model.TrafficMapEdge
 import com.foxhole.beta.core.model.TrafficMapPoint
 import com.foxhole.beta.core.model.TrafficMapUiState
 import com.foxhole.beta.core.traffic.TrafficMapCountryShape
 import com.foxhole.beta.core.traffic.TrafficMapCountryShapeAssetParser
 import com.foxhole.beta.ui.theme.LocalFoxholeDarkTheme
-import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.flow.StateFlow
 import java.util.Locale
+import java.util.concurrent.Executors
+import java.util.concurrent.ThreadFactory
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.math.atan2
 import kotlin.math.floor
 import kotlin.math.min
 import kotlin.math.roundToInt
 import kotlin.math.sqrt
+
+private object TrafficMapRenderDispatcher {
+    val dispatcher: CoroutineDispatcher =
+        Executors
+            .newSingleThreadExecutor(TrafficMapRenderThreadFactory)
+            .asCoroutineDispatcher()
+}
+
+private object TrafficMapRenderThreadFactory : ThreadFactory {
+    private val sequence = AtomicInteger(0)
+
+    override fun newThread(runnable: Runnable): Thread =
+        Thread(
+            {
+                Process.setThreadPriority(Process.THREAD_PRIORITY_BACKGROUND)
+                runnable.run()
+            },
+            "FoxholeTrafficMap-${sequence.incrementAndGet()}",
+        ).apply {
+            isDaemon = true
+        }
+}
 
 @Composable
 internal fun TrafficMapDashboardCard(
@@ -127,13 +156,14 @@ internal fun TrafficMapDashboardCard(
     val powerState = rememberTrafficMapPowerState()
     var forceMapEnabled by rememberSaveable { mutableStateOf(false) }
     val mapDisabledForPower = powerState.mapDisabled && !forceMapEnabled
+    val heavyContentReady = rememberTrafficMapHeavyContentReady(contentReady && !mapDisabledForPower)
     val countryShapes =
-        if (contentReady && !mapDisabledForPower) {
+        if (heavyContentReady) {
             rememberTrafficMapCountryShapes()
         } else {
             remember { emptyList() }
         }
-    val countryShapesLoading = contentReady && !mapDisabledForPower && countryShapes.isEmpty()
+    val countryShapesLoading = heavyContentReady && countryShapes.isEmpty()
     FoxholeCard(
         modifier = modifier
             .fillMaxWidth()
@@ -163,7 +193,7 @@ internal fun TrafficMapDashboardCard(
                             .fillMaxWidth()
                             .weight(1f),
                     )
-                } else if (!contentReady || countryShapesLoading) {
+                } else if (!heavyContentReady || countryShapesLoading) {
                     TrafficMapCanvasLoadingBlock(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -182,7 +212,7 @@ internal fun TrafficMapDashboardCard(
                 }
             }
             if (!mapDisabledForPower) {
-                if (legendLoading || !contentReady || countryShapesLoading) {
+                if (legendLoading || !heavyContentReady || countryShapesLoading) {
                     TrafficMapLegendLoadingBlock(
                         modifier = Modifier
                             .weight(TRAFFIC_MAP_LEGEND_WEIGHT)
@@ -199,6 +229,19 @@ internal fun TrafficMapDashboardCard(
             }
         }
     }
+}
+
+@Composable
+private fun rememberTrafficMapHeavyContentReady(enabled: Boolean): Boolean {
+    var ready by remember(enabled) { mutableStateOf(false) }
+    LaunchedEffect(enabled) {
+        ready = false
+        if (enabled) {
+            delay(TRAFFIC_MAP_HEAVY_CONTENT_SETTLE_DELAY_MS)
+            ready = true
+        }
+    }
+    return enabled && ready
 }
 
 @Composable
@@ -324,6 +367,7 @@ private fun TrafficMapCanvas(
     val colors = trafficMapColors()
     val mapCountryShapes = countryShapes
     val drawableDestinations = remember(state.destinations) { state.destinations.toDrawableTrafficMapDestinations() }
+    val drawableEdges = remember(state.edges) { state.edges.toDrawableTrafficMapEdges() }
     val originLat = state.originLat
     val originLon = state.originLon
     val originCountryCode = state.originCountryCode
@@ -350,26 +394,27 @@ private fun TrafficMapCanvas(
                 val phoneScreenInset = 1.4.dp.toPx()
                 val phoneHomeRadius = 0.65.dp.toPx()
                 val origin = project(originLat, originLon, viewport)
-                val maxBytes = drawableDestinations.maxOfOrNull { destination -> destination.bytes }?.coerceAtLeast(1L) ?: 1L
-                val routeLanes =
-                    if (originCountryCode != null) {
-                        trafficRouteLanes(origin, drawableDestinations, viewport)
-                    } else {
-                        emptyMap()
-                    }
+                val maxBytes =
+                    (
+                        drawableEdges.maxOfOrNull { edge -> edge.bytes }
+                            ?: drawableDestinations.maxOfOrNull { destination -> destination.bytes }
+                            ?: 1L
+                    ).coerceAtLeast(1L)
+                val routeLanes = trafficRouteLanes(origin, drawableDestinations, viewport)
                 val routeDrawModels =
-                    if (originCountryCode != null) {
-                        drawableDestinations
+                    if (drawableEdges.isNotEmpty()) {
+                        drawableEdges
                             .take(MAX_TRAFFIC_MAP_DRAW_EDGES)
-                            .map { destination ->
-                                val to = project(destination.lat, destination.lon, viewport)
-                                val weight = sqrt(destination.bytes.toDouble() / maxBytes.toDouble()).toFloat()
+                            .mapIndexed { index, edge ->
+                                val from = project(edge.fromLat, edge.fromLon, viewport)
+                                val to = project(edge.toLat, edge.toLon, viewport)
+                                val weight = sqrt(edge.bytes.toDouble() / maxBytes.toDouble()).toFloat()
                                 TrafficMapRouteDrawModel(
                                     path =
                                         curvedTrafficRoutePath(
-                                            from = origin,
+                                            from = from,
                                             to = to,
-                                            lane = routeLanes[destination.countryCode] ?: 1,
+                                            lane = routeLanes[drawableDestinations.getOrNull(index)?.countryCode] ?: 1,
                                         ),
                                     strokeWidth = minLineStroke + ((maxLineStroke - minLineStroke) * weight),
                                     alpha = 0.22f + (0.24f * weight),
@@ -382,7 +427,7 @@ private fun TrafficMapCanvas(
                     drawableDestinations
                         .take(MAX_TRAFFIC_MAP_DRAW_DESTINATIONS)
                         .map { point -> project(point.lat, point.lon, viewport) }
-                val originMarker = origin.takeIf { originCountryCode != null }
+                val originMarker = origin.takeIf { originCountryCode != null || drawableEdges.isNotEmpty() }
 
                 onDrawBehind {
                     countryBitmap?.let { bitmap ->
@@ -520,7 +565,7 @@ private object TrafficMapCountryShapeCache {
         return mutex.withLock {
             cachedShapes?.let { shapes -> return@withLock shapes }
             val startedAtMs = SystemClock.elapsedRealtime()
-            withContext(Dispatchers.Default) {
+            withContext(TrafficMapRenderDispatcher.dispatcher) {
                 context.assets.open(TRAFFIC_MAP_COUNTRY_SHAPES_ASSET).use { inputStream ->
                     TrafficMapCountryShapeAssetParser().parse(inputStream)
                 }
@@ -542,6 +587,14 @@ private data class DrawableTrafficMapDestination(
     val bytes: Long,
 )
 
+private data class DrawableTrafficMapEdge(
+    val fromLat: Double,
+    val fromLon: Double,
+    val toLat: Double,
+    val toLon: Double,
+    val bytes: Long,
+)
+
 private data class TrafficMapRouteDrawModel(
     val path: Path,
     val strokeWidth: Float,
@@ -555,6 +608,17 @@ private fun List<TrafficMapPoint>.toDrawableTrafficMapDestinations(): List<Drawa
             lat = point.lat,
             lon = point.lon,
             bytes = point.bytes.coerceAtLeast(1L),
+        )
+    }
+
+private fun List<TrafficMapEdge>.toDrawableTrafficMapEdges(): List<DrawableTrafficMapEdge> =
+    map { edge ->
+        DrawableTrafficMapEdge(
+            fromLat = edge.fromLat,
+            fromLon = edge.fromLon,
+            toLat = edge.toLat,
+            toLon = edge.toLon,
+            bytes = edge.bytes.coerceAtLeast(1L),
         )
     }
 
@@ -967,7 +1031,7 @@ private object TrafficMapLandLayerCache {
         canvasSize: IntSize,
         color: Color,
     ): ImageBitmap =
-        withContext(Dispatchers.Default) {
+        withContext(TrafficMapRenderDispatcher.dispatcher) {
             val startedAtMs = SystemClock.elapsedRealtime()
             val key = landLayerKey(shapes = shapes, canvasSize = canvasSize, color = color)
             val owner = kotlinx.coroutines.CompletableDeferred<ImageBitmap>()
@@ -1022,7 +1086,7 @@ private object TrafficMapLandLayerCache {
         }
         val startedAtMs = SystemClock.elapsedRealtime()
         var renderedCount = 0
-        withContext(Dispatchers.Default) {
+        withContext(TrafficMapRenderDispatcher.dispatcher) {
             val primaryCanvasSize = trafficMapPrimaryPrewarmCanvasSize(displayMetrics)
             val deferredCanvasSizes = trafficMapPrewarmCanvasSizes(displayMetrics) - primaryCanvasSize
             renderedCount += prewarmBitmapIfMissing(shapes = shapes, canvasSize = primaryCanvasSize)
@@ -1219,17 +1283,17 @@ internal fun trafficMapColors(
     if (darkTheme) {
         TrafficMapColors(
             countryFill = TRAFFIC_MAP_DEFAULT_COUNTRY_FILL,
-            routeLine = Color(0xFFB7BBC0),
-            destination = Color(0xFFD0D3D6),
-            origin = Color(0xFFE0E3E6),
+            routeLine = TRAFFIC_MAP_ROUTE_GREEN,
+            destination = TRAFFIC_MAP_ROUTE_GREEN,
+            origin = TRAFFIC_MAP_ROUTE_GREEN,
             phoneScreen = surfaceColor.copy(alpha = 0.92f),
         )
     } else {
         TrafficMapColors(
             countryFill = TRAFFIC_MAP_DEFAULT_COUNTRY_FILL,
-            routeLine = Color(0xFF666B70),
-            destination = Color(0xFF4F5459),
-            origin = Color(0xFF3D4247),
+            routeLine = TRAFFIC_MAP_ROUTE_GREEN,
+            destination = TRAFFIC_MAP_ROUTE_GREEN,
+            origin = TRAFFIC_MAP_ROUTE_GREEN,
             phoneScreen = surfaceColor.copy(alpha = 0.94f),
         )
     }
@@ -1267,6 +1331,8 @@ private data class TrafficMapPowerState(
 
 private val TRAFFIC_MAP_CARD_TOTAL_HEIGHT = 184.dp
 private val TRAFFIC_MAP_DEFAULT_COUNTRY_FILL = Color.Gray
+private val TRAFFIC_MAP_ROUTE_GREEN = Color(0xFF7BD69D)
+private const val TRAFFIC_MAP_HEAVY_CONTENT_SETTLE_DELAY_MS = 650L
 private const val TRAFFIC_MAP_POWER_STATE_STARTUP_DELAY_MS = 1_200L
 private const val TRAFFIC_MAP_WEIGHT = 0.74f
 private const val TRAFFIC_MAP_LEGEND_WEIGHT = 0.26f

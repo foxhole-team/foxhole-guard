@@ -359,7 +359,7 @@ internal fun shouldSupersedeIpRefreshForConnect(activeReason: IpInfoRefreshReaso
 
 internal fun ipInfoFetchModeForRefreshReason(reason: IpInfoRefreshReason): IpInfoFetchMode =
     when (reason) {
-        IpInfoRefreshReason.MANUAL,
+        IpInfoRefreshReason.MANUAL -> IpInfoFetchMode.FULL
         IpInfoRefreshReason.FOREGROUND,
         IpInfoRefreshReason.POST_CONNECT,
         IpInfoRefreshReason.POST_UPDATE,

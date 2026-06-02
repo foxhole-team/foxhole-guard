@@ -13,6 +13,7 @@ import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.ceil
 import kotlin.math.max
+import kotlin.math.pow
 
 data class TrafficMapGeoPoint(
     val lat: Double,
@@ -286,10 +287,73 @@ private class TrafficMapPreprocessedAssetScanner(
     private fun parseNumberOrNull(): Double? {
         skipWhitespace()
         val start = index
-        while (index < raw.length && raw[index] in NumberCharacters) {
+        var sign = 1.0
+        when (raw.getOrNull(index)) {
+            '-' -> {
+                sign = -1.0
+                index += 1
+            }
+            '+' -> index += 1
+        }
+
+        var value = 0.0
+        var hasDigit = false
+        while (index < raw.length) {
+            val digit = raw[index].fastDigitOrMinusOne()
+            if (digit < 0) {
+                break
+            }
+            hasDigit = true
+            value = (value * 10.0) + digit
             index += 1
         }
-        return raw.substring(start, index).toDoubleOrNull()
+
+        if (consume('.')) {
+            var place = 0.1
+            while (index < raw.length) {
+                val digit = raw[index].fastDigitOrMinusOne()
+                if (digit < 0) {
+                    break
+                }
+                hasDigit = true
+                value += digit * place
+                place *= 0.1
+                index += 1
+            }
+        }
+
+        if (!hasDigit) {
+            index = start
+            return null
+        }
+
+        val exponentMarker = raw.getOrNull(index)
+        if (exponentMarker == 'e' || exponentMarker == 'E') {
+            index += 1
+            var exponentSign = 1
+            if (raw.getOrNull(index) == '-' || raw.getOrNull(index) == '+') {
+                if (raw[index] == '-') {
+                    exponentSign = -1
+                }
+                index += 1
+            }
+            var exponent = 0
+            var hasExponentDigit = false
+            while (index < raw.length) {
+                val digit = raw[index].fastDigitOrMinusOne()
+                if (digit < 0) {
+                    break
+                }
+                hasExponentDigit = true
+                exponent = (exponent * 10) + digit
+                index += 1
+            }
+            if (hasExponentDigit) {
+                value *= 10.0.pow(exponentSign * exponent)
+            }
+        }
+
+        return sign * value
     }
 
     private fun parseStringOrNull(): String? {
@@ -352,8 +416,12 @@ private class TrafficMapPreprocessedAssetScanner(
     private companion object {
         const val UnicodeEscapeLength = 4
         val PrimitiveTerminators = charArrayOf(',', '}', ']')
-        const val NumberCharacters = "-+.eE0123456789"
     }
+}
+
+private fun Char.fastDigitOrMinusOne(): Int {
+    val digit = code - '0'.code
+    return if (digit in 0..9) digit else -1
 }
 
 internal fun TrafficMapCountryShape.toTrafficMapVisualShape(
