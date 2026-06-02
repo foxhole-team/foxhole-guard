@@ -69,6 +69,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -78,11 +79,13 @@ import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavDestination
 import androidx.navigation.NavGraph.Companion.findStartDestination
@@ -104,6 +107,7 @@ import com.foxhole.beta.ui.theme.LocalFoxholeDarkTheme
 import com.foxhole.beta.ui.theme.LocalFoxholeThemeMode
 import com.foxhole.beta.ui.theme.LocalFoxholeUiPalette
 import eightbitlab.com.blurview.BlurTarget
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.min
@@ -176,13 +180,57 @@ fun FoxholeApp(
     val scope = rememberCoroutineScope()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
-    val currentSection = navBackStackEntry?.destination?.rootAppSection()
+    var rootSection by rememberSaveable { mutableStateOf(AppSection.DASHBOARD) }
+    val currentSection =
+        when (currentRoute) {
+            AppRoute.HOME -> rootSection
+            AppRoute.SETTINGS -> AppSection.SETTINGS
+            else -> navBackStackEntry?.destination?.rootAppSection()
+        }
     val showBottomBar = currentRoute.isRootRoute()
-    val rootSwipeSection = navBackStackEntry?.destination?.rootSwipeSection()
+    val rootSwipeSection =
+        when (currentRoute) {
+            AppRoute.HOME -> rootSection
+            AppRoute.SETTINGS -> AppSection.SETTINGS
+            else -> navBackStackEntry?.destination?.rootSwipeSection()
+        }
     val settingsBackSwipeEnabled = navBackStackEntry?.destination?.settingsBackSwipeEnabled() == true
     val settingsDetailNavigationGate = remember { SettingsDetailNavigationGate() }
     val navigationTransitionTelemetry = remember { NavigationTransitionTelemetry() }
     NavigationTransitionTelemetryEffect(currentRoute, navigationTransitionTelemetry)
+    val selectRootSection: (AppSection) -> Unit = { section ->
+        if (currentRoute == AppRoute.HOME) {
+            if (rootSection != section) {
+                navigationTransitionTelemetry.recordTap(
+                    routeFrom = rootSection.rootRoute,
+                    routeTo = section.rootRoute,
+                )
+                navigationTransitionTelemetry.recordNavigateCall(section.rootRoute)
+                rootSection = section
+            }
+        } else if (currentRoute == AppRoute.SETTINGS) {
+            if (section != AppSection.SETTINGS) {
+                navigationTransitionTelemetry.recordTap(
+                    routeFrom = AppRoute.SETTINGS,
+                    routeTo = section.rootRoute,
+                )
+                navigationTransitionTelemetry.recordNavigateCall(section.rootRoute)
+                rootSection = section
+                navController.navigate(AppRoute.HOME) {
+                    launchSingleTop = true
+                    restoreState = true
+                    popUpTo(navController.graph.findStartDestination().id) {
+                        saveState = true
+                    }
+                }
+            }
+        } else {
+            navController.navigateToSection(
+                section = section,
+                telemetry = navigationTransitionTelemetry,
+            )
+        }
+    }
     val navigateToSettingsDetail: (String) -> Unit = { route ->
         navController.navigateToSettingsDetail(
             route = route,
@@ -250,12 +298,7 @@ fun FoxholeApp(
                             rootSwipeSection != null ->
                                 Modifier.sectionSwipeNavigation(
                                     currentSection = rootSwipeSection,
-                                    onSectionSelected = { section ->
-                                        navController.navigateToSection(
-                                            section = section,
-                                            telemetry = navigationTransitionTelemetry,
-                                        )
-                                    },
+                                    onSectionSelected = selectRootSection,
                                 )
                             settingsBackSwipeEnabled ->
                                 Modifier.settingsBackSwipeNavigation(
@@ -304,53 +347,79 @@ fun FoxholeApp(
                     },
                 ) {
                 composable(AppRoute.HOME) {
-                    val state by viewModel.homeRouteState.collectAsStateWithLifecycle()
-                    HomeScreen(
-                        state = state,
-                        trafficStateFlow = viewModel.dashboardTraffic,
-                        trafficMapStateFlow = viewModel.trafficMapUiState,
-                        snackbarHostState = snackbarHostState,
-                        onImportFromClipboard = viewModel::onPasteFromClipboard,
-                        onImportFromFile = {
-                            importProfileLauncher.launch(
-                                arrayOf(
-                                    "application/json",
-                                    "text/plain",
-                                    "text/*",
-                                    "application/octet-stream",
-                                ),
+                    RootSectionKeepAliveHost(
+                        selectedSection = rootSection,
+                        dashboard = {
+                            val state by viewModel.homeRouteState.collectAsStateWithLifecycle()
+                            HomeScreen(
+                                state = state,
+                                trafficStateFlow = viewModel.dashboardTraffic,
+                                trafficMapStateFlow = viewModel.trafficMapUiState,
+                                snackbarHostState = snackbarHostState,
+                                onImportFromClipboard = viewModel::onPasteFromClipboard,
+                                onImportFromFile = {
+                                    importProfileLauncher.launch(
+                                        arrayOf(
+                                            "application/json",
+                                            "text/plain",
+                                            "text/*",
+                                            "application/octet-stream",
+                                        ),
+                                    )
+                                },
+                                onImportFromQr = { qrScannerVisible = true },
+                                onRefreshProfile = viewModel::onRefreshProfile,
+                                onToggleConnection = viewModel::onToggleConnection,
+                                onAutoConnect = viewModel::onAutoConnectActiveProfile,
+                                onTrafficModeSelected = viewModel::onTrafficModeSelected,
+                                onPerAppRoutingModeSelected = viewModel::onPerAppRoutingModeSelected,
+                                onKillSwitchChanged = viewModel::onKillSwitchChanged,
+                                onFirewallEnabledChanged = viewModel::onFirewallEnabledChanged,
+                                onPrivacyRouteModeSelected = viewModel::onPrivacyRouteModeSelected,
+                                onOpenPrivacyRoute = { navigateToSettingsDetail(AppRoute.PRIVACY_ROUTE) },
+                                onEnableDirectTorQuickStart = viewModel::onEnableDirectTorQuickStart,
+                                onSelectActiveProtocolOptionRequested = viewModel::onSelectActiveProtocolOptionRequested,
+                                onUpdateAutoConnectExcludedOptions = { excludedIds ->
+                                    state.activeProfile?.id?.let { profileId ->
+                                        viewModel.onSmartProfileAutoConnectExcludedOptionsChanged(profileId, excludedIds)
+                                    }
+                                },
+                                onRefreshSmartProfileMetrics = viewModel::refreshSmartProfileMetrics,
+                                onCancelSmartProfileMetricsRefresh = viewModel::cancelSmartProfileMetricsRefresh,
+                                onConfirmDisableTorForUdpProtocol = viewModel::confirmDisableTorForUdpProtocol,
+                                onConfirmMoveTorIntoVpn = viewModel::confirmMoveTorIntoVpn,
+                                onConfirmKeepTorOnDeviceAndStartVpn = viewModel::confirmKeepTorOnDeviceAndStartVpn,
+                                onDismissTorTransitionPrompt = viewModel::dismissTorTransitionPrompt,
+                                onOpenProfiles = { navController.navigateToProfilesRoot() },
+                                onRefreshIpInfo = viewModel::refreshIpInfo,
+                                onResetUsageTracking = viewModel::resetUsageTracking,
+                                onTrafficUiVisibilityChanged = viewModel::onTrafficUiVisibilityChanged,
+                                onLocalProxyLanAccessChanged = viewModel::onLocalProxyLanAccessChanged,
+                                onRenewTorIp = viewModel::onRenewTorIp,
+                                onDashboardCardOrderChanged = viewModel::onDashboardCardOrderChanged,
                             )
                         },
-                        onImportFromQr = { qrScannerVisible = true },
-                        onRefreshProfile = viewModel::onRefreshProfile,
-                        onToggleConnection = viewModel::onToggleConnection,
-                        onAutoConnect = viewModel::onAutoConnectActiveProfile,
-                        onTrafficModeSelected = viewModel::onTrafficModeSelected,
-                        onPerAppRoutingModeSelected = viewModel::onPerAppRoutingModeSelected,
-                        onKillSwitchChanged = viewModel::onKillSwitchChanged,
-                        onFirewallEnabledChanged = viewModel::onFirewallEnabledChanged,
-                        onPrivacyRouteModeSelected = viewModel::onPrivacyRouteModeSelected,
-                        onOpenPrivacyRoute = { navigateToSettingsDetail(AppRoute.PRIVACY_ROUTE) },
-                        onEnableDirectTorQuickStart = viewModel::onEnableDirectTorQuickStart,
-                        onSelectActiveProtocolOptionRequested = viewModel::onSelectActiveProtocolOptionRequested,
-                        onUpdateAutoConnectExcludedOptions = { excludedIds ->
-                            state.activeProfile?.id?.let { profileId ->
-                                viewModel.onSmartProfileAutoConnectExcludedOptionsChanged(profileId, excludedIds)
-                            }
+                        settings = {
+                            val expertVisible by viewModel.settingsHomeExpertVisible.collectAsStateWithLifecycle()
+                            SettingsHomeScreen(
+                                expertVisible = expertVisible,
+                                snackbarHostState = snackbarHostState,
+                                onNavigateUp = null,
+                                onOpenTraffic = { navigateToSettingsDetail(AppRoute.TRAFFIC) },
+                                onOpenDns = { navigateToSettingsDetail(AppRoute.DNS) },
+                                onOpenNetworkRules = { navigateToSettingsDetail(AppRoute.NETWORK_RULES) },
+                                onOpenSecurity = { navigateToSettingsDetail(AppRoute.SECURITY) },
+                                onOpenPrivacyRoute = { navigateToSettingsDetail(AppRoute.PRIVACY_ROUTE) },
+                                onOpenRoutingApps = { navigateToSettingsDetail(AppRoute.ROUTING_APPS) },
+                                onOpenRoutingSites = { navigateToSettingsDetail(AppRoute.ROUTING_SITES) },
+                                onOpenSmartStart = { navigateToSettingsDetail(AppRoute.SMART_START) },
+                                onOpenApplication = { navigateToSettingsDetail(AppRoute.APPLICATION) },
+                                onOpenExpert = { navigateToSettingsDetail(AppRoute.EXPERT) },
+                                onOpenDiagnostics = { navigateToSettingsDetail(AppRoute.DIAGNOSTICS) },
+                                onOpenStatistics = { navigateToSettingsDetail(AppRoute.STATISTICS) },
+                                onOpenAbout = { navigateToSettingsDetail(AppRoute.ABOUT) },
+                            )
                         },
-                        onRefreshSmartProfileMetrics = viewModel::refreshSmartProfileMetrics,
-                        onCancelSmartProfileMetricsRefresh = viewModel::cancelSmartProfileMetricsRefresh,
-                        onConfirmDisableTorForUdpProtocol = viewModel::confirmDisableTorForUdpProtocol,
-                        onConfirmMoveTorIntoVpn = viewModel::confirmMoveTorIntoVpn,
-                        onConfirmKeepTorOnDeviceAndStartVpn = viewModel::confirmKeepTorOnDeviceAndStartVpn,
-                        onDismissTorTransitionPrompt = viewModel::dismissTorTransitionPrompt,
-                        onOpenProfiles = { navController.navigateToProfilesRoot() },
-                        onRefreshIpInfo = viewModel::refreshIpInfo,
-                        onResetUsageTracking = viewModel::resetUsageTracking,
-                        onTrafficUiVisibilityChanged = viewModel::onTrafficUiVisibilityChanged,
-                        onLocalProxyLanAccessChanged = viewModel::onLocalProxyLanAccessChanged,
-                        onRenewTorIp = viewModel::onRenewTorIp,
-                        onDashboardCardOrderChanged = viewModel::onDashboardCardOrderChanged,
                     )
                 }
                 composable(AppRoute.PROFILES) {
@@ -789,12 +858,7 @@ fun FoxholeApp(
     if (showBottomBar) {
         FoxholeBottomBar(
             currentSection = currentSection,
-            onSectionSelected = { section ->
-                navController.navigateToSection(
-                    section = section,
-                    telemetry = navigationTransitionTelemetry,
-                )
-            },
+            onSectionSelected = selectRootSection,
             overlayHost = bottomDockOverlayHost,
             blurTarget = bottomDockBlurTarget,
         )
@@ -853,6 +917,65 @@ fun FoxholeApp(
     }
 
 }
+
+@Composable
+private fun RootSectionKeepAliveHost(
+    selectedSection: AppSection,
+    dashboard: @Composable () -> Unit,
+    settings: @Composable () -> Unit,
+) {
+    var dashboardVisited by rememberSaveable { mutableStateOf(selectedSection == AppSection.DASHBOARD) }
+    var settingsVisited by rememberSaveable { mutableStateOf(selectedSection == AppSection.SETTINGS) }
+    val composeDashboard = dashboardVisited || selectedSection == AppSection.DASHBOARD
+    val composeSettings = settingsVisited || selectedSection == AppSection.SETTINGS
+
+    LaunchedEffect(selectedSection) {
+        when (selectedSection) {
+            AppSection.DASHBOARD -> dashboardVisited = true
+            AppSection.SETTINGS -> settingsVisited = true
+        }
+    }
+    LaunchedEffect(Unit) {
+        delay(ROOT_SETTINGS_PREWARM_DELAY_MS)
+        settingsVisited = true
+    }
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        if (composeDashboard) {
+            RootSectionKeepAlivePane(active = selectedSection == AppSection.DASHBOARD) {
+                dashboard()
+            }
+        }
+        if (composeSettings) {
+            RootSectionKeepAlivePane(active = selectedSection == AppSection.SETTINGS) {
+                settings()
+            }
+        }
+    }
+}
+
+@Composable
+private fun RootSectionKeepAlivePane(
+    active: Boolean,
+    content: @Composable () -> Unit,
+) {
+    Box(modifier = Modifier.rootSectionKeepAlivePane(active)) {
+        content()
+    }
+}
+
+private fun Modifier.rootSectionKeepAlivePane(active: Boolean): Modifier =
+    if (active) {
+        fillMaxSize().zIndex(1f)
+    } else {
+        fillMaxSize()
+            .zIndex(0f)
+            .clearAndSetSemantics {}
+            .layout { measurable, constraints ->
+                measurable.measure(constraints)
+                layout(0, 0) {}
+            }
+    }
 
 @Composable
 private fun FoxholeBottomBar(
@@ -1411,3 +1534,4 @@ private const val DETAIL_FADE_IN_MS = 80
 private const val DETAIL_FADE_OUT_MS = 60
 private const val DETAIL_TRANSITION_MS = 150
 private const val DETAIL_TRANSITION_OFFSET_FRACTION = 0.14f
+private const val ROOT_SETTINGS_PREWARM_DELAY_MS = 2_400L

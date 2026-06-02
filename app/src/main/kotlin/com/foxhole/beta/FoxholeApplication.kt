@@ -85,6 +85,7 @@ class FoxholeApplication :
         }
         startupDependencies.profileRepository.cleanupOrphanProfileSecrets()
         applyAppLocale(settings.ui.locale)
+        delay(BACKGROUND_WORK_SCHEDULE_STARTUP_DELAY_MS)
         applyProfileSecretCleanupSchedule()
         applySubscriptionRefreshSchedule(
             enabled = settings.connection.autoRefreshSubscriptions,
@@ -198,6 +199,7 @@ internal fun Context.applyDnsFilterUpdateSchedule(enabled: Boolean) {
 
 internal const val DNS_FILTER_UPDATE_INTERVAL_HOURS = 72L
 private const val BACKGROUND_INITIALIZATION_STARTUP_DELAY_MS = 1_500L
+private const val BACKGROUND_WORK_SCHEDULE_STARTUP_DELAY_MS = 4_500L
 
 internal fun applyAppLocale(locale: AppLocale) {
     val locales =

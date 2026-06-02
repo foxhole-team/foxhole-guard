@@ -1,12 +1,9 @@
 package com.foxhole.beta.core.traffic
 
-import kotlinx.serialization.ExperimentalSerializationApi
-import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.decodeFromStream
 import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -96,65 +93,268 @@ class TrafficMapCountryGeoJsonParser(
     }
 }
 
-class TrafficMapCountryShapeAssetParser(
-    private val json: Json =
-        Json {
-            ignoreUnknownKeys = true
-            explicitNulls = false
-        },
-) {
-    fun parse(raw: String): List<TrafficMapCountryShape> = parse(raw.byteInputStream())
+class TrafficMapCountryShapeAssetParser {
+    fun parse(raw: String): List<TrafficMapCountryShape> =
+        TrafficMapPreprocessedAssetScanner(raw).parse()
 
-    @OptIn(ExperimentalSerializationApi::class)
     fun parse(inputStream: InputStream): List<TrafficMapCountryShape> =
-        parse(json.decodeFromStream<TrafficMapPreprocessedAsset>(inputStream))
+        inputStream.bufferedReader(Charsets.UTF_8).use { reader -> parse(reader.readText()) }
 
-    private fun parse(asset: TrafficMapPreprocessedAsset): List<TrafficMapCountryShape> =
-        asset.countries.mapNotNull(::parseCountry)
-
-    private fun parseCountry(country: TrafficMapPreprocessedCountry): TrafficMapCountryShape? {
-        val countryCode =
-            country.code
-                ?.trim()
-                ?.uppercase(Locale.US)
-                ?.takeIf(::isIsoCountryCode)
-                ?: return null
-        val rings = country.rings.mapNotNull(::parseRing)
-        return TrafficMapCountryShape(
-            countryCode = countryCode,
-            rings = rings,
-        ).takeIf { shape -> shape.rings.isNotEmpty() }
-    }
-
-    private fun parseRing(ring: List<List<Double>>): List<TrafficMapGeoPoint>? {
-        val points =
-            ring.mapNotNull { point ->
-                val lat = point.getOrNull(0) ?: return@mapNotNull null
-                val lon = point.getOrNull(1) ?: return@mapNotNull null
-                TrafficMapGeoPoint(lat = lat, lon = lon)
-            }
-        return points.takeIf { it.size >= MinPolygonRingPoints }
-    }
-
-    private companion object {
+    internal companion object {
         const val IsoCountryCodeLength = 2
         const val MinPolygonRingPoints = 3
 
-        fun isIsoCountryCode(value: String): Boolean =
+        internal fun isIsoCountryCode(value: String): Boolean =
             value.length == IsoCountryCodeLength && value.all { character -> character in 'A'..'Z' }
     }
 }
 
-@Serializable
-private data class TrafficMapPreprocessedAsset(
-    val countries: List<TrafficMapPreprocessedCountry> = emptyList(),
-)
+@Suppress("TooManyFunctions")
+private class TrafficMapPreprocessedAssetScanner(
+    private val raw: String,
+) {
+    private var index = 0
 
-@Serializable
-private data class TrafficMapPreprocessedCountry(
-    val code: String? = null,
-    val rings: List<List<List<Double>>> = emptyList(),
-)
+    fun parse(): List<TrafficMapCountryShape> {
+        if (!seekCountriesArray()) {
+            return emptyList()
+        }
+        val countries = mutableListOf<TrafficMapCountryShape>()
+        while (hasNextArrayElement()) {
+            parseCountry()?.let(countries::add)
+        }
+        return countries
+    }
+
+    private fun seekCountriesArray(): Boolean {
+        val countriesIndex = raw.indexOf("\"countries\"")
+        if (countriesIndex < 0) {
+            return false
+        }
+        index = countriesIndex + "\"countries\"".length
+        skipWhitespace()
+        if (!consume(':')) {
+            return false
+        }
+        skipWhitespace()
+        return consume('[')
+    }
+
+    private fun parseCountry(): TrafficMapCountryShape? {
+        if (!consume('{')) {
+            skipValue()
+            return null
+        }
+        var countryCode: String? = null
+        var rings: List<List<TrafficMapGeoPoint>> = emptyList()
+        while (index < raw.length) {
+            skipWhitespace()
+            if (consume('}')) {
+                break
+            }
+            val key = parseStringOrNull() ?: return null
+            skipWhitespace()
+            if (!consume(':')) {
+                return null
+            }
+            skipWhitespace()
+            when (key) {
+                "code" -> countryCode = parseStringOrNull()?.trim()?.uppercase(Locale.US)
+                "rings" -> rings = parseRings()
+                else -> skipValue()
+            }
+            skipWhitespace()
+            consume(',')
+        }
+        return countryCode
+            ?.takeIf(TrafficMapCountryShapeAssetParser::isIsoCountryCode)
+            ?.let { code ->
+                TrafficMapCountryShape(countryCode = code, rings = rings)
+                    .takeIf { shape -> shape.rings.isNotEmpty() }
+            }
+    }
+
+    private fun parseRings(): List<List<TrafficMapGeoPoint>> {
+        if (!consume('[')) {
+            skipValue()
+            return emptyList()
+        }
+        val rings = mutableListOf<List<TrafficMapGeoPoint>>()
+        while (hasNextArrayElement()) {
+            parseRing()?.let(rings::add)
+        }
+        return rings
+    }
+
+    private fun parseRing(): List<TrafficMapGeoPoint>? {
+        if (!consume('[')) {
+            skipValue()
+            return null
+        }
+        val points = mutableListOf<TrafficMapGeoPoint>()
+        while (hasNextArrayElement()) {
+            parsePoint()?.let(points::add)
+        }
+        return points.takeIf { it.size >= TrafficMapCountryShapeAssetParser.MinPolygonRingPoints }
+    }
+
+    private fun parsePoint(): TrafficMapGeoPoint? {
+        if (!consume('[')) {
+            skipValue()
+            return null
+        }
+        val lat = parseNumberOrNull()
+        skipWhitespace()
+        consume(',')
+        val lon = parseNumberOrNull()
+        skipUntilArrayEnd()
+        return if (lat != null && lon != null) {
+            TrafficMapGeoPoint(lat = lat, lon = lon)
+        } else {
+            null
+        }
+    }
+
+    private fun hasNextArrayElement(): Boolean {
+        skipWhitespace()
+        if (consume(']')) {
+            return false
+        }
+        if (peek() == ',') {
+            index += 1
+            skipWhitespace()
+            if (consume(']')) {
+                return false
+            }
+        }
+        return index < raw.length
+    }
+
+    private fun skipValue() {
+        skipWhitespace()
+        when (peek()) {
+            '"' -> parseStringOrNull()
+            '{' -> skipBalanced(open = '{', close = '}')
+            '[' -> skipBalanced(open = '[', close = ']')
+            else -> skipPrimitive()
+        }
+    }
+
+    private fun skipBalanced(
+        open: Char,
+        close: Char,
+    ) {
+        if (!consume(open)) {
+            return
+        }
+        var depth = 1
+        while (index < raw.length && depth > 0) {
+            when (raw[index]) {
+                '"' -> parseStringOrNull()
+                open -> {
+                    depth += 1
+                    index += 1
+                }
+                close -> {
+                    depth -= 1
+                    index += 1
+                }
+                else -> index += 1
+            }
+        }
+    }
+
+    private fun skipPrimitive() {
+        while (index < raw.length && raw[index] !in PrimitiveTerminators) {
+            index += 1
+        }
+    }
+
+    private fun skipUntilArrayEnd() {
+        while (index < raw.length) {
+            when (raw[index]) {
+                '"' -> parseStringOrNull()
+                ']' -> {
+                    index += 1
+                    return
+                }
+                else -> index += 1
+            }
+        }
+    }
+
+    private fun parseNumberOrNull(): Double? {
+        skipWhitespace()
+        val start = index
+        while (index < raw.length && raw[index] in NumberCharacters) {
+            index += 1
+        }
+        return raw.substring(start, index).toDoubleOrNull()
+    }
+
+    private fun parseStringOrNull(): String? {
+        if (!consume('"')) {
+            return null
+        }
+        val builder = StringBuilder()
+        while (index < raw.length) {
+            when (val character = raw[index++]) {
+                '"' -> return builder.toString()
+                '\\' -> builder.append(parseEscapedCharacterOrNull() ?: return null)
+                else -> builder.append(character)
+            }
+        }
+        return null
+    }
+
+    private fun parseEscapedCharacterOrNull(): Char? {
+        if (index >= raw.length) {
+            return null
+        }
+        return when (val escaped = raw[index++]) {
+            '"', '\\', '/' -> escaped
+            'b' -> '\b'
+            'f' -> '\u000C'
+            'n' -> '\n'
+            'r' -> '\r'
+            't' -> '\t'
+            'u' -> parseUnicodeEscapeOrNull()
+            else -> null
+        }
+    }
+
+    private fun parseUnicodeEscapeOrNull(): Char? {
+        if (index + UnicodeEscapeLength > raw.length) {
+            return null
+        }
+        val value = raw.substring(index, index + UnicodeEscapeLength).toIntOrNull(16) ?: return null
+        index += UnicodeEscapeLength
+        return value.toChar()
+    }
+
+    private fun skipWhitespace() {
+        while (index < raw.length && raw[index].isWhitespace()) {
+            index += 1
+        }
+    }
+
+    private fun consume(expected: Char): Boolean {
+        if (peek() != expected) {
+            return false
+        }
+        index += 1
+        return true
+    }
+
+    private fun peek(): Char? =
+        raw.getOrNull(index)
+
+    private companion object {
+        const val UnicodeEscapeLength = 4
+        val PrimitiveTerminators = charArrayOf(',', '}', ']')
+        const val NumberCharacters = "-+.eE0123456789"
+    }
+}
 
 internal fun TrafficMapCountryShape.toTrafficMapVisualShape(
     minRelativeRingArea: Double = TrafficMapVisualMinRelativeRingArea,

@@ -141,8 +141,8 @@ class TrafficMapCountryGeoJsonParserTest {
             source.substringAfter("class TrafficMapCountryShapeAssetParser")
                 .substringBefore("internal fun TrafficMapCountryShape.toTrafficMapVisualShape")
 
-        assertTrue(assetParserBlock.contains("decodeFromStream<TrafficMapPreprocessedAsset>"))
-        assertFalse(assetParserBlock.contains("decodeFromString<TrafficMapPreprocessedAsset>"))
+        assertTrue(assetParserBlock.contains("TrafficMapPreprocessedAssetScanner(raw).parse()"))
+        assertFalse(assetParserBlock.contains("decodeFromStream<TrafficMapPreprocessedAsset>"))
         assertFalse(assetParserBlock.contains("parseToJsonElement"))
     }
 }

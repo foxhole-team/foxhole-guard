@@ -237,6 +237,38 @@ class HomeDashboardHotPathTest {
     }
 
     @Test
+    fun `dashboard and settings root sections stay warm after first visit`() {
+        val appSource = testSourceFile("FoxholeApp.kt").readText()
+        val homeRouteBlock =
+            appSource.substringAfter("composable(AppRoute.HOME)")
+                .substringBefore("composable(AppRoute.PROFILES)")
+
+        assertTrue(homeRouteBlock.contains("RootSectionKeepAliveHost"))
+        assertTrue(appSource.contains("RootSectionKeepAlivePane(active = selectedSection == AppSection.DASHBOARD)"))
+        assertTrue(appSource.contains("RootSectionKeepAlivePane(active = selectedSection == AppSection.SETTINGS)"))
+        assertTrue(appSource.contains("delay(ROOT_SETTINGS_PREWARM_DELAY_MS)"))
+        assertTrue(appSource.contains("ROOT_SETTINGS_PREWARM_DELAY_MS = 2_400L"))
+        assertTrue(appSource.contains("clearAndSetSemantics {}"))
+        assertTrue(appSource.contains("measurable.measure(constraints)"))
+        assertFalse(homeRouteBlock.contains("when (rootSection)"))
+    }
+
+    @Test
+    fun `startup defers work manager scheduling beyond first dashboard frame`() {
+        val applicationSource = testSourceFile("FoxholeApplication.kt").readText()
+        val initializationBlock =
+            applicationSource.substringAfter("private suspend fun initializeInBackground()")
+                .substringBefore("private fun installDebugStrictMode()")
+
+        assertTrue(initializationBlock.contains("delay(BACKGROUND_WORK_SCHEDULE_STARTUP_DELAY_MS)"))
+        assertTrue(applicationSource.contains("BACKGROUND_WORK_SCHEDULE_STARTUP_DELAY_MS = 4_500L"))
+        assertTrue(
+            initializationBlock.indexOf("delay(BACKGROUND_WORK_SCHEDULE_STARTUP_DELAY_MS)") <
+                initializationBlock.indexOf("applyProfileSecretCleanupSchedule()"),
+        )
+    }
+
+    @Test
     fun `skeleton blocks expose shared shimmer progress for hot loading groups`() {
         val uiChromeSource = testSourceFile("UiChrome.kt").readText()
         val skeletonBlock =
@@ -294,7 +326,10 @@ class HomeDashboardHotPathTest {
     private fun testSourceFile(name: String): java.io.File =
         listOf(
             java.io.File("src/main/kotlin/com/foxhole/beta/ui/$name"),
+            java.io.File("src/main/kotlin/com/foxhole/beta/$name"),
             java.io.File("app/src/main/kotlin/com/foxhole/beta/ui/$name"),
+            java.io.File("app/src/main/kotlin/com/foxhole/beta/$name"),
             java.io.File("../app/src/main/kotlin/com/foxhole/beta/ui/$name"),
+            java.io.File("../app/src/main/kotlin/com/foxhole/beta/$name"),
         ).first { file -> file.isFile }
 }
