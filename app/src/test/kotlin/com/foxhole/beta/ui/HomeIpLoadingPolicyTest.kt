@@ -142,6 +142,16 @@ class HomeIpLoadingPolicyTest {
     @Test
     fun `connected tunnel refresh targets vpn bound network`() {
         assertEquals(
+            IpInfoRefreshTarget.TOR,
+            ipInfoRefreshTargetForSnapshot(
+                ConnectionSnapshot(
+                    state = ConnectionState.CONNECTED,
+                    trafficMode = TrafficMode.TUNNEL,
+                    profileId = FoxholeVpnService.TOR_ONLY_PROFILE_ID,
+                ),
+            ),
+        )
+        assertEquals(
             IpInfoRefreshTarget.VPN_BOUND,
             ipInfoRefreshTargetForSnapshot(
                 ConnectionSnapshot(

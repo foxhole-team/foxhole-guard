@@ -332,6 +332,7 @@ internal fun shouldUseTorRouteIpRefreshAfterRuntimeReload(
     }
 
 internal enum class IpInfoRefreshTarget {
+    TOR,
     VPN_BOUND,
     UPSTREAM,
     PROXY,
@@ -340,6 +341,7 @@ internal enum class IpInfoRefreshTarget {
 
 internal fun ipInfoRefreshTargetForSnapshot(snapshot: ConnectionSnapshot): IpInfoRefreshTarget =
     when {
+        snapshot.profileId == FoxholeVpnService.TOR_ONLY_PROFILE_ID -> IpInfoRefreshTarget.TOR
         snapshot.state == ConnectionState.CONNECTED &&
             snapshot.trafficMode == TrafficMode.TUNNEL &&
             snapshot.profileId != FoxholeVpnService.LOCAL_GUARD_PROFILE_ID -> IpInfoRefreshTarget.VPN_BOUND
@@ -803,7 +805,13 @@ private fun HomeRouteUiState.hasFailedDashboardRoute(): Boolean =
         connection.profileId != FoxholeVpnService.LOCAL_GUARD_PROFILE_ID
 
 private fun HomeRouteUiState.dashboardVisibleIpInfo(visibleIpInfo: IpInfo?): IpInfo? {
-    return visibleIpInfo?.takeIf { shouldKeepDashboardIpInfo(it) }
+    val candidate =
+        if (connection.profileId == FoxholeVpnService.TOR_ONLY_PROFILE_ID) {
+            torIpInfo
+        } else {
+            visibleIpInfo
+        }
+    return candidate?.takeIf { shouldKeepDashboardIpInfo(it) }
 }
 
 private fun HomeRouteUiState.shouldPinVpnIpDuringTorOperation(): Boolean =

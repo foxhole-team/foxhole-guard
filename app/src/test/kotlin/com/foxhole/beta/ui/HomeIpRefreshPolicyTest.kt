@@ -315,14 +315,31 @@ class HomeIpRefreshPolicyTest {
     }
 
     @Test
-    fun `only tor route refresh may publish tor ip info`() {
-        assertTrue(shouldPublishTorIpInfoForRefreshReason(IpInfoRefreshReason.TOR_ROUTE))
-        assertFalse(shouldPublishTorIpInfoForRefreshReason(IpInfoRefreshReason.MANUAL))
-        assertFalse(shouldPublishTorIpInfoForRefreshReason(IpInfoRefreshReason.FOREGROUND))
-        assertFalse(shouldPublishTorIpInfoForRefreshReason(IpInfoRefreshReason.POST_CONNECT))
-        assertFalse(shouldPublishTorIpInfoForRefreshReason(IpInfoRefreshReason.POST_UPDATE))
-        assertFalse(shouldPublishTorIpInfoForRefreshReason(IpInfoRefreshReason.RESTORED_VPN))
-        assertFalse(shouldPublishTorIpInfoForRefreshReason(IpInfoRefreshReason.NETWORK_CHANGE))
+    fun `tor target and tor route refresh publish tor ip info`() {
+        assertTrue(
+            shouldPublishTorIpInfoForDashboardRefresh(
+                target = IpInfoRefreshTarget.TOR,
+                reason = IpInfoRefreshReason.POST_CONNECT,
+            ),
+        )
+        assertTrue(
+            shouldPublishTorIpInfoForDashboardRefresh(
+                target = IpInfoRefreshTarget.VPN_BOUND,
+                reason = IpInfoRefreshReason.TOR_ROUTE,
+            ),
+        )
+        assertFalse(
+            shouldPublishTorIpInfoForDashboardRefresh(
+                target = IpInfoRefreshTarget.VPN_BOUND,
+                reason = IpInfoRefreshReason.POST_CONNECT,
+            ),
+        )
+        assertFalse(
+            shouldPublishTorIpInfoForDashboardRefresh(
+                target = IpInfoRefreshTarget.UPSTREAM,
+                reason = IpInfoRefreshReason.MANUAL,
+            ),
+        )
     }
 
     @Test

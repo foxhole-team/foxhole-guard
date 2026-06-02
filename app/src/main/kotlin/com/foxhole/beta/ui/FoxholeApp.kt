@@ -338,6 +338,7 @@ fun FoxholeApp(
                         onFirewallEnabledChanged = viewModel::onFirewallEnabledChanged,
                         onPrivacyRouteModeSelected = viewModel::onPrivacyRouteModeSelected,
                         onOpenPrivacyRoute = { navigateToSettingsDetail(AppRoute.PRIVACY_ROUTE) },
+                        onEnableDirectTorQuickStart = viewModel::onEnableDirectTorQuickStart,
                         onSelectActiveProtocolOptionRequested = viewModel::onSelectActiveProtocolOptionRequested,
                         onUpdateAutoConnectExcludedOptions = { excludedIds ->
                             state.activeProfile?.id?.let { profileId ->

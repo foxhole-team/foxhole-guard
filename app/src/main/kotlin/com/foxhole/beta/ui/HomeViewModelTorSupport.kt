@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.foxhole.beta.R
 import com.foxhole.beta.core.model.ConnectionSnapshot
 import com.foxhole.beta.core.model.PrivacyRouteMode
+import com.foxhole.beta.core.model.PrivacyRouteScope
 import com.foxhole.beta.core.model.Profile
 import com.foxhole.beta.core.model.ProfileProtocolOption
 import com.foxhole.beta.core.model.Settings
@@ -33,6 +34,27 @@ internal fun HomeViewModel.onSelectActiveProtocolOptionRequestedInternal(optionI
                 )
         } else {
             selectProtocolOptionAndMaybeReconnect(profile.id, option.id)
+        }
+    }
+}
+
+internal fun HomeViewModel.onEnableDirectTorQuickStartInternal() {
+    viewModelScope.launch {
+        runCatching {
+            torTransitionPromptMutable.value = null
+            clearRuntimeReconnectRequired()
+            torIpInfoMutable.value = null
+            markTorOperation(HomeTorOperationKind.CONNECTING)
+            container.settingsRepository.updatePrivacyRouteMode(PrivacyRouteMode.TOR_OVER_VPN)
+            container.settingsRepository.updatePrivacyRouteScope(PrivacyRouteScope.ALL_APPS)
+            container.settingsRepository.updatePrivacyRouteBypassVpnTunnel(true)
+            connectNow(
+                profileId = FoxholeVpnService.TOR_ONLY_PROFILE_ID,
+                statusMessage = getApplication<Application>().getString(R.string.notification_status_connecting),
+            )
+        }.onFailure { error ->
+            clearTorOperation()
+            emitError(error.message ?: getApplication<Application>().getString(R.string.error_runtime_stopped))
         }
     }
 }

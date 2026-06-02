@@ -205,6 +205,54 @@ class IpInfoRepositoryTest {
     }
 
     @Test
+    fun `parses cloudflare trace with special loc without failing candidate`() {
+        val parsed =
+            parseIpInfoResponse(
+                body =
+                    """
+                    fl=1272f65
+                    h=1.1.1.1
+                    ip=84.17.54.10
+                    ts=1779634208.000
+                    loc=T1
+                    colo=AMS
+                    tls=TLSv1.3
+                    """.trimIndent(),
+                json = json,
+            )
+
+        assertEquals("84.17.54.10", parsed.ip)
+        assertEquals("84.17.54.10", parsed.ipv4)
+        assertNull(parsed.ipv6)
+        assertNull(parsed.countryCode)
+        assertNull(parsed.countryName)
+        assertNull(parsed.city)
+        assertNull(parsed.isp)
+    }
+
+    @Test
+    fun `ignores invalid two character country code instead of exposing it as geo`() {
+        val parsed =
+            parseIpInfoResponse(
+                body =
+                    """
+                    {
+                      "ip": "84.17.54.10",
+                      "country": "T1",
+                      "org": "AS60068 Datacamp Limited"
+                    }
+                    """.trimIndent(),
+                json = json,
+            )
+
+        assertEquals("84.17.54.10", parsed.ip)
+        assertNull(parsed.countryCode)
+        assertNull(parsed.countryName)
+        assertNull(parsed.city)
+        assertEquals("AS60068 Datacamp Limited", parsed.isp)
+    }
+
+    @Test
     fun `full fetch keeps scanning after incomplete geo candidate`() {
         val ipOnly =
             IpInfo(

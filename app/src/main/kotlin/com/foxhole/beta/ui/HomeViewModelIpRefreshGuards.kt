@@ -27,8 +27,12 @@ internal fun shouldPublishDashboardIpRefresh(
     reason == IpInfoRefreshReason.TOR_ROUTE ||
         startedTarget == currentTarget
 
-internal fun shouldPublishTorIpInfoForRefreshReason(reason: IpInfoRefreshReason): Boolean =
-    reason == IpInfoRefreshReason.TOR_ROUTE
+internal fun shouldPublishTorIpInfoForDashboardRefresh(
+    target: IpInfoRefreshTarget,
+    reason: IpInfoRefreshReason,
+): Boolean =
+    target == IpInfoRefreshTarget.TOR ||
+        reason == IpInfoRefreshReason.TOR_ROUTE
 
 internal fun HomeViewModel.canAcceptTorRouteIpRefresh(info: IpInfo): Boolean {
     val state = controlUiState.value

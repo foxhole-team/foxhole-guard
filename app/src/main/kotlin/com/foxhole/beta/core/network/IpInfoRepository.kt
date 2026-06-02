@@ -1104,14 +1104,16 @@ internal fun parseIpInfoResponse(
     val traits = objectValue.jsonObjectOrNull("traits")
     val country = objectValue.string("country")
     val countryCode =
-        objectValue.string("country_code")
-            ?: objectValue.string("country_iso")
-            ?: objectValue.string("cc")
-            ?: country?.takeIf { it.length == ISO_COUNTRY_CODE_LENGTH }
+        firstNonBlank(
+            objectValue.string("country_code"),
+            objectValue.string("country_iso"),
+            objectValue.string("cc"),
+            country?.takeIf { it.trim().length == ISO_COUNTRY_CODE_LENGTH },
+        )?.toIsoCountryCodeOrNull()
     val countryName =
         objectValue.string("country_name")
             ?: objectValue.string("countryName")
-            ?: country?.takeUnless { it.length == ISO_COUNTRY_CODE_LENGTH }
+            ?: country?.trim()?.takeIf { it.isNotBlank() && it.length != ISO_COUNTRY_CODE_LENGTH }
             ?: countryCode?.let(::countryDisplayName)
     return IpInfo(
         ip = ip,
@@ -1160,7 +1162,7 @@ private fun parseCloudflareTraceResponse(body: String): IpInfo? {
                 }
             }.toMap()
     val ip = values["ip"]?.takeIf(String::isNotBlank) ?: return null
-    val countryCode = values["loc"]?.takeIf { value -> value.length == ISO_COUNTRY_CODE_LENGTH }
+    val countryCode = values["loc"].toIsoCountryCodeOrNull()
     return IpInfo(
         ip = ip,
         ipv4 = ip.takeIf(::isIpv4Address),
@@ -1173,12 +1175,23 @@ private fun parseCloudflareTraceResponse(body: String): IpInfo? {
     )
 }
 
-private fun countryDisplayName(countryCode: String): String? =
-    Locale.Builder()
-        .setRegion(countryCode.uppercase(Locale.US))
-        .build()
-        .getDisplayCountry(Locale.US)
-        .takeIf { value -> value.isNotBlank() && !value.equals(countryCode, ignoreCase = true) }
+private fun String?.toIsoCountryCodeOrNull(): String? {
+    val normalized = this?.trim()?.uppercase(Locale.US) ?: return null
+    return normalized.takeIf { value ->
+        value.length == ISO_COUNTRY_CODE_LENGTH && value.all { char -> char in 'A'..'Z' }
+    }
+}
+
+private fun countryDisplayName(countryCode: String): String? {
+    val normalized = countryCode.toIsoCountryCodeOrNull() ?: return null
+    return runCatching {
+        Locale.Builder()
+            .setRegion(normalized)
+            .build()
+            .getDisplayCountry(Locale.US)
+    }.getOrNull()
+        ?.takeIf { value -> value.isNotBlank() && !value.equals(normalized, ignoreCase = true) }
+}
 
 internal fun mergeIpInfo(
     primary: IpInfo,

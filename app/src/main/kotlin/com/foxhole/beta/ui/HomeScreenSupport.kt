@@ -811,6 +811,7 @@ internal fun HomeConnectionFeatureDialog(
     onFirewallEnabledChanged: (Boolean) -> Unit,
     onPrivacyRouteModeSelected: (PrivacyRouteMode) -> Unit,
     onOpenPrivacyRoute: () -> Unit,
+    onEnableDirectTorQuickStart: () -> Unit,
     onLocalProxyLanAccessChanged: (Boolean) -> Unit,
     onRenewTorIp: () -> Unit,
     onRestart: () -> Unit,
@@ -823,6 +824,8 @@ internal fun HomeConnectionFeatureDialog(
     val enabled = feature.enabledIn(state)
     val torSelectedProtocolIsUdp = feature == HomeConnectionFeature.TOR && homeTorSelectedProtocolIsUdp(state)
     val torRouteNeedsSetup = feature == HomeConnectionFeature.TOR && !enabled && homeTorRouteNeedsSetup(state)
+    val torQuickStartCanPrepareDirectRoute =
+        feature == HomeConnectionFeature.TOR && homeTorQuickStartCanPrepareDirectRoute(state)
     val torOperationActive = feature == HomeConnectionFeature.TOR && state.torOperation.active
     val torOnlyRuntimeActive = feature == HomeConnectionFeature.TOR && state.hasTorOnlyRuntime()
     val confirmLabel =
@@ -867,10 +870,12 @@ internal fun HomeConnectionFeatureDialog(
                         onFirewallEnabledChanged = onFirewallEnabledChanged,
                         onPrivacyRouteModeSelected = onPrivacyRouteModeSelected,
                         onOpenPrivacyRoute = onOpenPrivacyRoute,
+                        onEnableDirectTorQuickStart = onEnableDirectTorQuickStart,
                         onLocalProxyLanAccessChanged = onLocalProxyLanAccessChanged,
                         onRestart = onRestart,
                         onDismiss = onDismiss,
                         torRouteNeedsSetup = torRouteNeedsSetup,
+                        torQuickStartCanPrepareDirectRoute = torQuickStartCanPrepareDirectRoute,
                         torOnlyRuntimeActive = torOnlyRuntimeActive,
                         torSelectedProtocolIsUdp = torSelectedProtocolIsUdp,
                     )
@@ -1035,6 +1040,9 @@ private fun HomeConnectionFeature.enabledIn(state: HomeRouteUiState): Boolean =
 private fun homeTorRouteNeedsSetup(state: HomeRouteUiState): Boolean =
     !homeTorRouteHasRunnableScope(state)
 
+internal fun homeTorQuickStartCanPrepareDirectRoute(state: HomeRouteUiState): Boolean =
+    state.activeProfile == null && !state.hasPrimaryConnectionRuntime()
+
 @Composable
 private fun homeConnectionFeatureConfirmLabel(
     torOperationActive: Boolean,
@@ -1102,10 +1110,12 @@ private fun handleHomeConnectionFeatureConfirm(
     onFirewallEnabledChanged: (Boolean) -> Unit,
     onPrivacyRouteModeSelected: (PrivacyRouteMode) -> Unit,
     onOpenPrivacyRoute: () -> Unit,
+    onEnableDirectTorQuickStart: () -> Unit,
     onLocalProxyLanAccessChanged: (Boolean) -> Unit,
     onRestart: () -> Unit,
     onDismiss: () -> Unit,
     torRouteNeedsSetup: Boolean,
+    torQuickStartCanPrepareDirectRoute: Boolean,
     torOnlyRuntimeActive: Boolean,
     torSelectedProtocolIsUdp: Boolean,
 ) {
@@ -1118,7 +1128,11 @@ private fun handleHomeConnectionFeatureConfirm(
             }
             if (!enabled && torRouteNeedsSetup) {
                 onDismiss()
-                onOpenPrivacyRoute()
+                if (torQuickStartCanPrepareDirectRoute) {
+                    onEnableDirectTorQuickStart()
+                } else {
+                    onOpenPrivacyRoute()
+                }
                 return
             }
             onPrivacyRouteModeSelected(
@@ -1435,7 +1449,7 @@ private fun HomeRouteUiState.torRouteVisible(): Boolean =
 
 private fun HomeRouteUiState.visibleTorRouteIpInfo(): IpInfo? =
     when {
-        connection.profileId == FoxholeVpnService.TOR_ONLY_PROFILE_ID -> torIpInfo ?: ipInfo
+        connection.profileId == FoxholeVpnService.TOR_ONLY_PROFILE_ID -> torIpInfo
         settings.privacyRoute.enabled -> torIpInfo
         else -> null
     }

@@ -141,7 +141,7 @@ internal fun HomeViewModel.refreshIpInfoInternalInternal(
                         )
                         return@launch
                     }
-                    if (shouldPublishTorIpInfoForRefreshReason(reason)) {
+                    if (shouldPublishTorIpInfoForDashboardRefresh(target = target, reason = reason)) {
                         publishTorIpInfoFromDashboardRefresh(info)
                     } else {
                         if (container.connectionController.snapshot.value.shouldPublishDeviceIpInfoFromDashboardRefresh()) {
@@ -238,7 +238,7 @@ private fun HomeViewModel.maybeScheduleIpInfoGeoEnrichment(
         if (ipInfoRefreshTargetForSnapshot(currentSnapshot) != publishedTarget) {
             return@launch
         }
-        val currentInfo = container.connectionController.ipInfo.value
+        val currentInfo = currentDashboardIpInfoForTarget(publishedTarget)
         if (
             currentInfo == null ||
             (currentInfo.hasDashboardLocationDetails() && currentInfo.hasDashboardProviderDetails()) ||
@@ -261,6 +261,16 @@ private fun HomeViewModel.maybeScheduleIpInfoGeoEnrichment(
         )
     }
 }
+
+private fun HomeViewModel.currentDashboardIpInfoForTarget(target: IpInfoRefreshTarget): IpInfo? =
+    when (target) {
+        IpInfoRefreshTarget.TOR -> torIpInfoMutable.value
+        IpInfoRefreshTarget.VPN_BOUND,
+        IpInfoRefreshTarget.UPSTREAM,
+        IpInfoRefreshTarget.PROXY,
+        IpInfoRefreshTarget.LOCAL_GUARD,
+        -> container.connectionController.ipInfo.value
+    }
 
 private suspend fun HomeViewModel.awaitIdleIpInfoRefreshForGeoEnrichment(): Boolean {
     repeat(ENTRY_QUICK_GEO_ENRICHMENT_WAIT_ATTEMPTS) {

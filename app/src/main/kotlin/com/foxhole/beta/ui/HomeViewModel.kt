@@ -1338,6 +1338,8 @@ class HomeViewModel(
         value
     )
 
+    fun onEnableDirectTorQuickStart() = onEnableDirectTorQuickStartInternal()
+
     fun onSelectActiveProtocolOptionRequested(optionId: String) =
         onSelectActiveProtocolOptionRequestedInternal(optionId)
 

@@ -472,6 +472,29 @@ class HomeDashboardPresentationTest {
     }
 
     @Test
+    fun `tor quick launch can prepare direct route only without active vpn profile`() {
+        assertTrue(homeTorQuickStartCanPrepareDirectRoute(HomeRouteUiState()))
+        assertFalse(
+            homeTorQuickStartCanPrepareDirectRoute(
+                HomeRouteUiState(
+                    activeProfile = smartProfile(),
+                ),
+            ),
+        )
+        assertFalse(
+            homeTorQuickStartCanPrepareDirectRoute(
+                HomeRouteUiState(
+                    connection =
+                        ConnectionSnapshot(
+                            state = ConnectionState.CONNECTED,
+                            profileId = 42L,
+                        ),
+                ),
+            ),
+        )
+    }
+
+    @Test
     fun `protocol model shows newly selected option before reconnect is applied`() {
         val model =
             resolveHomeDashboardProtocolModel(
@@ -1192,6 +1215,40 @@ class HomeDashboardPresentationTest {
     }
 
     @Test
+    fun `tor ip presentation does not fall back to dashboard vpn ip`() {
+        val vpnIpInfo =
+            IpInfo(
+                ip = "198.51.100.44",
+                countryCode = "NL",
+                countryName = "Netherlands",
+                city = "Amsterdam",
+                isp = "VPN ISP",
+                fetchedAt = 3_000L,
+            )
+        val presentation =
+            resolveHomeTorIpPresentation(
+                state =
+                    HomeRouteUiState(
+                        ipInfo = vpnIpInfo,
+                        torIpInfo = null,
+                        connection =
+                            ConnectionSnapshot(
+                                state = ConnectionState.CONNECTED,
+                                profileId = FoxholeVpnService.TOR_ONLY_PROFILE_ID,
+                                lastChangeAt = 2_000L,
+                            ),
+                    ),
+                loading = false,
+            )
+
+        assertEquals("-", presentation.ipText)
+        assertEquals("-", presentation.countryText)
+        assertEquals("-", presentation.cityText)
+        assertFalse(presentation.hasIp)
+        assertTrue(presentation.loading)
+    }
+
+    @Test
     fun `network model keeps previous ip during route transition while details load`() {
         val ipInfo =
             IpInfo(
@@ -1426,8 +1483,8 @@ class HomeDashboardPresentationTest {
     }
 
     @Test
-    fun `tor only runtime keeps network card on current ip layout with tor title`() {
-        val ipInfo =
+    fun `tor only runtime does not show ordinary dashboard ip with tor title`() {
+        val deviceIpInfo =
             IpInfo(
                 ip = "198.51.100.20",
                 countryCode = "NL",
@@ -1449,11 +1506,57 @@ class HomeDashboardPresentationTest {
                                 lastChangeAt = 500L,
                             ),
                     ),
-                visibleIpInfo = ipInfo,
+                visibleIpInfo = deviceIpInfo,
                 deviceInternetAvailable = true,
             )
 
-        assertEquals(ipInfo, model.visibleIpInfo)
+        assertNull(model.visibleIpInfo)
+        assertEquals(R.string.home_network_tor_title, model.titleRes)
+        assertFalse(model.showConnectionStatus)
+        assertFalse(model.showLoading)
+        assertFalse(model.showIpInfoLoading)
+        assertFalse(model.showConnectionDetailsLoading)
+    }
+
+    @Test
+    fun `tor only runtime shows tor ip info instead of ordinary dashboard ip`() {
+        val deviceIpInfo =
+            IpInfo(
+                ip = "198.51.100.20",
+                countryCode = "NL",
+                countryName = "Netherlands",
+                city = "Amsterdam",
+                isp = "Device ISP",
+                fetchedAt = 1_000L,
+            )
+        val torIpInfo =
+            IpInfo(
+                ip = "185.220.101.12",
+                countryCode = "DE",
+                countryName = "Germany",
+                city = "Berlin",
+                isp = "TOR exit",
+                fetchedAt = 1_200L,
+            )
+        val model =
+            resolveHomeDashboardNetworkModel(
+                state =
+                    HomeRouteUiState(
+                        profilesLoaded = true,
+                        torIpInfo = torIpInfo,
+                        connection =
+                            ConnectionSnapshot(
+                                state = ConnectionState.CONNECTED,
+                                trafficMode = TrafficMode.TUNNEL,
+                                profileId = FoxholeVpnService.TOR_ONLY_PROFILE_ID,
+                                lastChangeAt = 500L,
+                            ),
+                    ),
+                visibleIpInfo = deviceIpInfo,
+                deviceInternetAvailable = true,
+            )
+
+        assertEquals(torIpInfo, model.visibleIpInfo)
         assertEquals(R.string.home_network_tor_title, model.titleRes)
         assertFalse(model.showConnectionStatus)
         assertFalse(model.showLoading)
