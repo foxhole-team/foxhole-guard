@@ -5,6 +5,8 @@ import android.net.ConnectivityManager
 import android.net.LinkProperties
 import android.net.Network
 import android.net.NetworkCapabilities
+import android.os.Handler
+import android.os.Looper
 import android.text.format.Formatter
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Apps
@@ -133,6 +135,11 @@ internal data class HomeDashboardNetworkModel(
     val showRefreshProgress: Boolean,
     val showConnectionStatus: Boolean,
     val titleRes: Int,
+)
+
+internal data class HomeNetworkDetailValue(
+    val text: String,
+    val loading: Boolean,
 )
 
 internal data class HomeDashboardProxyModel(
@@ -285,7 +292,7 @@ internal fun shouldAutoRefreshIpAfterDisconnect(
     previousState in ACTIVE_CONNECTION_STATES &&
         currentState in setOf(ConnectionState.IDLE, ConnectionState.ERROR)
 
-internal enum class IpInfoRefreshReason {
+enum class IpInfoRefreshReason {
     MANUAL,
     FOREGROUND,
     POST_CONNECT,
@@ -659,17 +666,19 @@ internal fun resolveHomeDashboardNetworkModel(
     val dashboardIpInfo = state.dashboardVisibleIpInfo(visibleIpInfo)
     val routeTransitionRunning = state.homeRouteTransitionRunning()
     val analysisOnlyRunning = state.homeAnalysisOnlyRunning()
+    val explicitIpInfoSkeletonLoading = state.shouldShowExplicitIpInfoSkeletonLoading(dashboardIpInfo)
     val ipInfoLoading =
         state.shouldShowHomeNetworkIpInfoLoading(
             dashboardIpInfo = dashboardIpInfo,
             routeTransitionRunning = routeTransitionRunning,
             deviceInternetAvailable = deviceInternetAvailable,
+            explicitIpInfoSkeletonLoading = explicitIpInfoSkeletonLoading,
         )
     val connectionDetailsLoading =
         state.shouldShowHomeNetworkConnectionDetailsLoading(
             showConnectionStatus = showConnectionStatus,
             routeTransitionRunning = routeTransitionRunning,
-            explicitIpInfoLoading = state.ipInfoLoading,
+            explicitIpInfoLoading = explicitIpInfoSkeletonLoading,
             connectionMetricsLoading = state.dashboardConnectionMetricsLoading,
         )
     return HomeDashboardNetworkModel(
@@ -698,18 +707,19 @@ private fun HomeRouteUiState.shouldShowHomeNetworkIpInfoLoading(
     dashboardIpInfo: IpInfo?,
     routeTransitionRunning: Boolean,
     deviceInternetAvailable: Boolean?,
+    explicitIpInfoSkeletonLoading: Boolean,
 ): Boolean {
     val activeRouteNeedsIp =
         dashboardIpInfo == null &&
             routeTransitionRunning
     val manualRefreshNeedsSkeleton =
-        ipInfoLoading &&
+        explicitIpInfoSkeletonLoading &&
             (deviceInternetAvailable != false || hasDashboardRouteProfile())
     val missingIpCanShowSkeleton =
         activeRouteNeedsIp ||
             shouldShowDashboardNetworkLoading(
                 visibleIpInfo = dashboardIpInfo,
-                explicitLoading = ipInfoLoading,
+                explicitLoading = explicitIpInfoSkeletonLoading,
                 connectionState = connection.state,
                 autoConnectRunning = routeTransitionRunning,
                 deviceInternetAvailable = deviceInternetAvailable,
@@ -718,6 +728,14 @@ private fun HomeRouteUiState.shouldShowHomeNetworkIpInfoLoading(
     val missingIpNeedsSkeleton = dashboardIpInfo == null && missingIpCanShowSkeleton
     return manualRefreshNeedsSkeleton || missingIpNeedsSkeleton
 }
+
+private fun HomeRouteUiState.shouldShowExplicitIpInfoSkeletonLoading(dashboardIpInfo: IpInfo?): Boolean =
+    ipInfoLoading &&
+        (
+            dashboardIpInfo == null ||
+                ipInfoRefreshReason == null ||
+                ipInfoRefreshReason == IpInfoRefreshReason.MANUAL
+            )
 
 private fun HomeRouteUiState.shouldShowHomeNetworkConnectionDetailsLoading(
     showConnectionStatus: Boolean,
@@ -895,12 +913,14 @@ internal fun rememberDefaultInternetAvailability(): State<Boolean?> {
     val connectivityManager = remember(appContext) { appContext.getSystemService<ConnectivityManager>() }
     val defaultInternetAvailable =
         remember(connectivityManager) {
-            mutableStateOf(resolveDefaultInternetAvailability(connectivityManager))
+            mutableStateOf<Boolean?>(null)
         }
     DisposableEffect(connectivityManager) {
         val manager =
             connectivityManager ?: return@DisposableEffect onDispose {
             }
+        val handler = Handler(Looper.getMainLooper())
+        var registered = false
         fun updateAvailability() {
             val resolved = resolveDefaultInternetAvailability(manager)
             if (defaultInternetAvailable.value != resolved) {
@@ -931,10 +951,20 @@ internal fun rememberDefaultInternetAvailability(): State<Boolean?> {
                     updateAvailability()
                 }
             }
-        updateAvailability()
-        manager.registerDefaultNetworkCallback(callback)
+        val registerCallback =
+            Runnable {
+                updateAvailability()
+                runCatching {
+                    manager.registerDefaultNetworkCallback(callback)
+                    registered = true
+                }
+            }
+        handler.postDelayed(registerCallback, DASHBOARD_NETWORK_OBSERVER_START_DELAY_MS)
         onDispose {
-            runCatching { manager.unregisterNetworkCallback(callback) }
+            handler.removeCallbacks(registerCallback)
+            if (registered) {
+                runCatching { manager.unregisterNetworkCallback(callback) }
+            }
         }
     }
     return defaultInternetAvailable
@@ -950,6 +980,8 @@ private fun resolveDefaultInternetAvailability(
         capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED) &&
         !capabilities.hasTransport(NetworkCapabilities.TRANSPORT_VPN)
 }
+
+private const val DASHBOARD_NETWORK_OBSERVER_START_DELAY_MS = 350L
 
 internal fun resolveDashboardSelectedOptionId(activeProfile: Profile?): String? =
     activeProfile
@@ -1425,6 +1457,9 @@ internal fun buildCountryLine(ipInfo: IpInfo): String {
     )
 }
 
+internal fun buildCountryLineOrNull(ipInfo: IpInfo): String? =
+    formatCountryLineOrNull(ipInfo)
+
 internal fun formatCountryLine(
     ipInfo: IpInfo,
     unknownCountry: String,
@@ -1436,10 +1471,34 @@ internal fun formatCountryLine(
     return "${countryEmoji(ipInfo.countryCode)} $country"
 }
 
+internal fun formatCountryLineOrNull(ipInfo: IpInfo): String? {
+    val country =
+        ipInfo.countryName?.takeIf(String::isNotBlank)
+            ?: ipInfo.countryCode?.takeIf(String::isNotBlank)
+            ?: return null
+    return "${countryEmoji(ipInfo.countryCode)} $country".trim()
+}
+
 internal fun buildCityLine(ipInfo: IpInfo): String = ipInfo.city?.takeIf { it.isNotBlank() } ?: "-"
+
+internal fun buildCityLineOrNull(ipInfo: IpInfo): String? = ipInfo.city?.takeIf { it.isNotBlank() }
 
 internal fun primaryVisibleIp(ipInfo: IpInfo): String =
     ipInfo.visibleIpCandidates().firstOrNull { candidate -> candidate.isPublicInternetAddress() } ?: "-"
+
+internal fun primaryVisibleIpOrNull(ipInfo: IpInfo): String? =
+    ipInfo.visibleIpCandidates().firstOrNull { candidate -> candidate.isPublicInternetAddress() }
+
+internal fun providerLineOrNull(ipInfo: IpInfo): String? = ipInfo.isp?.takeIf { it.isNotBlank() }
+
+internal fun homeNetworkDetailValue(
+    value: String?,
+    loading: Boolean,
+): HomeNetworkDetailValue =
+    HomeNetworkDetailValue(
+        text = value ?: "-",
+        loading = loading && value == null,
+    )
 
 @Suppress("UNUSED_PARAMETER")
 @Composable

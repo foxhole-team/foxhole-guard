@@ -31,6 +31,7 @@ data class HomeUiState(
     val ipInfo: IpInfo? = null,
     val torIpInfo: IpInfo? = null,
     val ipInfoLoading: Boolean = false,
+    val ipInfoRefreshReason: IpInfoRefreshReason? = null,
     val dashboardConnectionMetricsLoading: Boolean = false,
     val traffic: TrafficSnapshot = TrafficSnapshot(),
     val presets: List<RoutingPreset> = emptyList(),
@@ -107,6 +108,7 @@ internal data class HomeLocalStreams(
     val installedAppsLoading: Boolean,
     val installedAppsLoaded: Boolean,
     val ipInfoLoading: Boolean,
+    val ipInfoRefreshReason: IpInfoRefreshReason?,
     val torIpInfo: IpInfo?,
     val dashboardConnectionMetricsLoading: Boolean,
     val runtimeReloadPending: Boolean,
@@ -122,6 +124,7 @@ internal data class HomeInstalledAppsStreams(
     val installedAppsLoading: Boolean,
     val installedAppsLoaded: Boolean,
     val ipInfoLoading: Boolean,
+    val ipInfoRefreshReason: IpInfoRefreshReason?,
 )
 
 internal data class HomeLocalState(

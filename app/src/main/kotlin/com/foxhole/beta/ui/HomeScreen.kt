@@ -169,7 +169,9 @@ fun HomeScreen(
     var firstAnalysisProtocolMenuProfileId by rememberSaveable { mutableStateOf<Long?>(null) }
     var firstAnalysisProtocolMenuStarted by rememberSaveable { mutableStateOf(false) }
     var selectedConnectionFeature by rememberSaveable { mutableStateOf<HomeConnectionFeature?>(null) }
-    val wifiLanAddress by rememberWifiLanAddress()
+    val wifiLanAddress by rememberWifiLanAddress(
+        enabled = state.settings.expert.localSurfaces.allowLanAccess,
+    )
     val proxyModel =
         remember(state, wifiLanAddress) {
             resolveHomeDashboardProxyModel(
@@ -386,14 +388,36 @@ fun HomeScreen(
         startAutoConnectAfterLocalDialogs()
     }
 
-    val latestTrafficUiVisibilityChanged by rememberUpdatedState(onTrafficUiVisibilityChanged)
-    DisposableEffect(Unit) {
-        latestTrafficUiVisibilityChanged(true)
-        onDispose { latestTrafficUiVisibilityChanged(false) }
-    }
     val dashboardListState = rememberLazyListState()
     val topChromeScrimProgress = rememberFoxholeTopChromeScrimProgress(dashboardListState)
     val connectionHeaderScrolled by remember { derivedStateOf { topChromeScrimProgress() > 0.01f } }
+    var dashboardStartupStage by rememberSaveable { mutableStateOf(DASHBOARD_STARTUP_STAGE_INITIAL) }
+    val trafficCardRuntimeVisible =
+        state.settings.ui.trafficCardEnabled &&
+            shouldComposeDashboardCardNow(
+                card = DashboardCard.TRAFFIC,
+                startupStage = dashboardStartupStage,
+                activeReorderCard = activeReorderCard,
+            )
+    val latestTrafficUiVisibilityChanged by rememberUpdatedState(onTrafficUiVisibilityChanged)
+
+    LaunchedEffect(Unit) {
+        while (dashboardStartupStage < DASHBOARD_STARTUP_STAGE_ALL) {
+            delay(DASHBOARD_CARD_STARTUP_STAGE_DELAY_MS)
+            dashboardStartupStage += 1
+        }
+    }
+
+    DisposableEffect(trafficCardRuntimeVisible) {
+        if (trafficCardRuntimeVisible) {
+            latestTrafficUiVisibilityChanged(true)
+        }
+        onDispose {
+            if (trafficCardRuntimeVisible) {
+                latestTrafficUiVisibilityChanged(false)
+            }
+        }
+    }
 
     FoxholeScaffold(
         title = stringResource(R.string.app_name),
@@ -449,6 +473,9 @@ fun HomeScreen(
                 )
             }
             dashboardCardOrder.forEach { card ->
+                if (!shouldComposeDashboardCardNow(card, dashboardStartupStage, activeReorderCard)) {
+                    return@forEach
+                }
                 when (card) {
                     DashboardCard.TRAFFIC_MAP -> {
                         if (state.settings.ui.trafficMapEnabled) {
@@ -879,15 +906,27 @@ fun HomeScreen(
                                                 .testTag("home_network_loading"),
                                     )
                                 } else {
-                                    val countryText =
-                                        if (networkIpInfo != null) {
-                                            buildCountryLine(networkIpInfo)
-                                        } else {
-                                            "-"
-                                        }
-                                    val cityText = networkIpInfo?.let(::buildCityLine) ?: "-"
-                                    val ipText = if (networkIpInfo != null) primaryVisibleIp(networkIpInfo) else "-"
-                                    val providerText = networkIpInfo?.isp?.takeIf { it.isNotBlank() } ?: "-"
+                                    val rowValueLoading = networkModel.showRefreshProgress || showNetworkIpInfoLoading
+                                    val countryValue =
+                                        homeNetworkDetailValue(
+                                            value = networkIpInfo?.let(::buildCountryLineOrNull),
+                                            loading = rowValueLoading,
+                                        )
+                                    val cityValue =
+                                        homeNetworkDetailValue(
+                                            value = networkIpInfo?.let(::buildCityLineOrNull),
+                                            loading = rowValueLoading,
+                                        )
+                                    val ipValue =
+                                        homeNetworkDetailValue(
+                                            value = networkIpInfo?.let(::primaryVisibleIpOrNull),
+                                            loading = rowValueLoading,
+                                        )
+                                    val providerValue =
+                                        homeNetworkDetailValue(
+                                            value = networkIpInfo?.let(::providerLineOrNull),
+                                            loading = rowValueLoading,
+                                        )
                                     Column(
                                         modifier = Modifier.weight(1f),
                                         verticalArrangement = Arrangement.spacedBy(2.dp),
@@ -896,29 +935,33 @@ fun HomeScreen(
                                         HomeNetworkDetailLine(
                                             icon = Icons.Outlined.Language,
                                             label = stringResource(R.string.home_network_country_label),
-                                            value = countryText,
+                                            value = countryValue.text,
+                                            valueLoading = countryValue.loading,
                                             modifier = Modifier.testTag("home_network_country"),
                                         )
                                         HomeNetworkSubtleDivider()
                                         HomeNetworkDetailLine(
                                             icon = Icons.Outlined.LocationCity,
                                             label = stringResource(R.string.home_network_city_label),
-                                            value = cityText,
+                                            value = cityValue.text,
+                                            valueLoading = cityValue.loading,
                                             modifier = Modifier.testTag("home_network_city"),
                                         )
                                         HomeNetworkSubtleDivider()
                                         HomeNetworkDetailLine(
                                             icon = Icons.Outlined.Public,
                                             label = stringResource(R.string.home_network_ip_label),
-                                            value = ipText,
+                                            value = ipValue.text,
+                                            valueLoading = ipValue.loading,
                                             modifier = Modifier.testTag("home_network_primary_ip"),
-                                            valueMonospace = networkIpInfo != null,
+                                            valueMonospace = ipValue.text != "-",
                                         )
                                         HomeNetworkSubtleDivider()
                                         HomeNetworkDetailLine(
                                             icon = Icons.Outlined.Business,
                                             label = stringResource(R.string.home_network_provider_label),
-                                            value = providerText,
+                                            value = providerValue.text,
+                                            valueLoading = providerValue.loading,
                                         )
                                     }
                                 }
@@ -1664,9 +1707,30 @@ internal fun shouldAnimateDashboardCardPlacement(
     card: DashboardCard,
 ): Boolean = activeCard != null && activeCard != card
 
+internal fun shouldComposeDashboardCardNow(
+    card: DashboardCard,
+    startupStage: Int,
+    activeReorderCard: DashboardCard?,
+): Boolean =
+    startupStage >= dashboardCardStartupStage(card) ||
+        activeReorderCard != null ||
+        startupStage >= DASHBOARD_STARTUP_STAGE_ALL
+
+private fun dashboardCardStartupStage(card: DashboardCard): Int =
+    when (card) {
+        DashboardCard.TRAFFIC_MAP -> 1
+        DashboardCard.PROFILES -> 2
+        DashboardCard.ACTIONS -> 3
+        DashboardCard.NETWORK -> 4
+        DashboardCard.TRAFFIC -> DASHBOARD_STARTUP_STAGE_ALL
+    }
+
 private const val DASHBOARD_CARD_ACTIVE_Z_INDEX = 100f
 private const val DASHBOARD_CARD_REORDER_THRESHOLD_FRACTION = 0.5f
 private const val DASHBOARD_CARD_EDGE_RESISTANCE_FRACTION = 0.18f
+private const val DASHBOARD_STARTUP_STAGE_INITIAL = 0
+private const val DASHBOARD_STARTUP_STAGE_ALL = 5
+private const val DASHBOARD_CARD_STARTUP_STAGE_DELAY_MS = 70L
 private val DashboardCardReorderFallbackMoveDistance = 96.dp
 private val ImportMenuWidthChrome = 62.dp
 private val ImportMenuMinWidth = 188.dp

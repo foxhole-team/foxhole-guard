@@ -30,4 +30,47 @@ class HomeDashboardHotPathTest {
             ),
         )
     }
+
+    @Test
+    fun `startup composition defers only secondary traffic card`() {
+        assertTrue(
+            shouldComposeDashboardCardNow(
+                card = DashboardCard.TRAFFIC_MAP,
+                startupStage = 1,
+                activeReorderCard = null,
+            ),
+        )
+        assertTrue(
+            shouldComposeDashboardCardNow(
+                card = DashboardCard.NETWORK,
+                startupStage = 4,
+                activeReorderCard = null,
+            ),
+        )
+        assertFalse(
+            shouldComposeDashboardCardNow(
+                card = DashboardCard.TRAFFIC,
+                startupStage = 4,
+                activeReorderCard = null,
+            ),
+        )
+    }
+
+    @Test
+    fun `startup composition restores traffic card after first frame window`() {
+        assertTrue(
+            shouldComposeDashboardCardNow(
+                card = DashboardCard.TRAFFIC,
+                startupStage = 5,
+                activeReorderCard = null,
+            ),
+        )
+        assertTrue(
+            shouldComposeDashboardCardNow(
+                card = DashboardCard.TRAFFIC,
+                startupStage = 0,
+                activeReorderCard = DashboardCard.NETWORK,
+            ),
+        )
+    }
 }

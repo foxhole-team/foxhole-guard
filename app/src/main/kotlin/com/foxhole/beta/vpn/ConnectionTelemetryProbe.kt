@@ -283,18 +283,32 @@ internal class ConnectionTelemetryProbe(
         }
         val upstreamNetwork = currentUpstreamNetwork() ?: error("upstream network unavailable")
         return withContext(Dispatchers.IO) {
-            val address = resolveServerPingAddress(target.host, upstreamNetwork)
-            val startedAt = SystemClock.elapsedRealtime()
-            // Availability probe only: opens a bounded TCP connect to the configured server target and sends no payload.
-            upstreamNetwork.socketFactory.createSocket().use { socket ->
-                socket.soTimeout = timeoutMs.toInt()
-                socket.connect(
-                    InetSocketAddress(address, target.port),
-                    timeoutMs.toInt(),
-                )
-            }
-            (SystemClock.elapsedRealtime() - startedAt).coerceAtLeast(1L)
+            measureServerTcpConnectLatency(
+                host = target.host,
+                port = target.port,
+                timeoutMs = timeoutMs,
+                network = upstreamNetwork,
+            )
         }
+    }
+
+    private fun measureServerTcpConnectLatency(
+        host: String,
+        port: Int,
+        timeoutMs: Long,
+        network: Network?,
+    ): Long {
+        val address = resolveServerPingAddress(host, network)
+        val startedAt = SystemClock.elapsedRealtime()
+        // Availability probe only: opens a bounded TCP connect to the configured server target and sends no payload.
+        (network?.socketFactory?.createSocket() ?: Socket()).use { socket ->
+            socket.soTimeout = timeoutMs.toInt()
+            socket.connect(
+                InetSocketAddress(address, port),
+                timeoutMs.toInt(),
+            )
+        }
+        return (SystemClock.elapsedRealtime() - startedAt).coerceAtLeast(1L)
     }
 
     private suspend fun serverPingRuntimeProtocolOptionId(

@@ -110,12 +110,14 @@ internal fun HomeViewModel.refreshIpInfoInternalInternal(
         ipInfoRefreshJob?.cancel()
         ipInfoRefreshJob = null
         activeIpInfoRefreshReason = null
+        ipInfoRefreshReasonMutable.value = null
         ipInfoLoadingMutable.value = false
     }
     ipInfoRefreshJob =
         viewModelScope.launch {
             val target = startDecision.target
             activeIpInfoRefreshReason = reason
+            ipInfoRefreshReasonMutable.value = reason
             var publishedInfo = false
             container.diagnosticsLogger.record(
                 "ip",
@@ -139,14 +141,13 @@ internal fun HomeViewModel.refreshIpInfoInternalInternal(
                         )
                         return@launch
                     }
-                    if (reason == IpInfoRefreshReason.TOR_ROUTE) {
+                    if (shouldPublishTorIpInfoForRefreshReason(reason)) {
                         publishTorIpInfoFromDashboardRefresh(info)
                     } else {
                         if (container.connectionController.snapshot.value.shouldPublishDeviceIpInfoFromDashboardRefresh()) {
                             FoxholeVpnRuntimeBridge.updateDeviceIpInfo(info)
                         }
                         FoxholeVpnRuntimeBridge.updateIpInfo(info)
-                        publishTorIpInfoFromDashboardRefresh(info)
                     }
                     publishedInfo = true
                     container.diagnosticsLogger.record(
@@ -205,6 +206,7 @@ internal fun HomeViewModel.refreshIpInfoInternalInternal(
                     ipRefreshCoordinator.complete(refreshToken)
                     ipInfoRefreshJob = null
                     activeIpInfoRefreshReason = null
+                    ipInfoRefreshReasonMutable.value = null
                 }
             }
         }
@@ -781,6 +783,7 @@ internal fun HomeViewModel.invalidateIpInfoRefreshesInternal(): Long {
     ipInfoRefreshJob?.cancel()
     ipInfoRefreshJob = null
     activeIpInfoRefreshReason = null
+    ipInfoRefreshReasonMutable.value = null
     ipInfoLoadingMutable.value = false
     ipInfoRefreshToken = ipRefreshCoordinator.cancelAll()
     return ipInfoRefreshToken

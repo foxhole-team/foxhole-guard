@@ -1,6 +1,7 @@
 package com.foxhole.beta.vpn
 
 import com.foxhole.beta.core.diagnostics.DiagnosticsLogger
+import com.foxhole.beta.core.model.DnsSettings
 import com.foxhole.beta.core.model.dnsRuleSetFilteringEnabled
 import com.foxhole.beta.core.settings.SettingsRepository
 
@@ -10,8 +11,11 @@ class DnsFilterUpdateRepository(
     private val store: DnsFilterRuleSetStore,
     private val diagnosticsLogger: DiagnosticsLogger,
 ) {
-    suspend fun refreshNow(requireAutoEnabled: Boolean): DnsFilterUpdateResult {
-        val dnsSettings = settingsRepository.current().dns
+    suspend fun refreshNow(
+        requireAutoEnabled: Boolean,
+        dnsSettingsOverride: DnsSettings? = null,
+    ): DnsFilterUpdateResult {
+        val dnsSettings = dnsSettingsOverride ?: settingsRepository.current().dns
         val result =
             when {
                 !dnsSettings.dnsRuleSetFilteringEnabled() ->

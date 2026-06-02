@@ -38,6 +38,7 @@ import com.foxhole.beta.core.model.isUdpTransport
 import com.foxhole.beta.core.network.IpInfoFetchMode
 import com.foxhole.beta.vpn.ACTIVE_CONNECTION_STATES
 import com.foxhole.beta.vpn.DnsFilterUpdateStatus
+import com.foxhole.beta.vpn.FoxholeVpnService
 import com.foxhole.beta.vpn.PrivateDnsSettings
 import com.foxhole.beta.vpn.isSupportedForSystemDnsProtection
 import com.foxhole.beta.vpn.localGuardModeOrNull
@@ -217,6 +218,15 @@ internal fun HomeViewModel.onDomainStrategySelectedInternal(value: DomainStrateg
 }
 
 internal fun HomeViewModel.onDnsSettingsChangedInternal(value: DnsSettings) {
+    val currentDns = container.settingsRepository.settings.value.dns
+    if (shouldPreflightDnsRuleSetEnable(currentDns, value)) {
+        preflightAndApplyDnsRuleSetSettings(value)
+        return
+    }
+    updateDnsSettingsAndMaybeReconnect(value)
+}
+
+private fun HomeViewModel.updateDnsSettingsAndMaybeReconnect(value: DnsSettings) {
     updateRuntimeSettingAndMaybeReconnect {
         container.settingsRepository.updateDnsSettings(value)
         val dnsSettings = container.settingsRepository.current().dns
@@ -225,6 +235,60 @@ internal fun HomeViewModel.onDnsSettingsChangedInternal(value: DnsSettings) {
         )
     }
 }
+
+private fun HomeViewModel.preflightAndApplyDnsRuleSetSettings(value: DnsSettings) {
+    if (dnsFilterRefreshInProgressMutable.value) {
+        return
+    }
+    viewModelScope.launch {
+        dnsFilterRefreshInProgressMutable.value = true
+        try {
+            val verifiedRuleSetReady = ensureVerifiedDownloadedDnsRuleSet(value)
+            if (!verifiedRuleSetReady) {
+                emitError(getApplication<Application>().getString(R.string.dns_filter_refresh_failed))
+                return@launch
+            }
+            updateDnsSettingsAndMaybeReconnect(value)
+            emitSuccess(getApplication<Application>().getString(R.string.dns_filter_refresh_complete))
+        } finally {
+            dnsFilterRefreshInProgressMutable.value = false
+        }
+    }
+}
+
+private suspend fun HomeViewModel.ensureVerifiedDownloadedDnsRuleSet(value: DnsSettings): Boolean {
+    val existingVerified =
+        runCatching { container.dnsFilterAssetInstaller.prepareVerifiedOrNull() != null }
+            .getOrDefault(false)
+    if (existingVerified) {
+        return true
+    }
+    val updateResult =
+        runCatching {
+            container.dnsFilterUpdateRepository.refreshNow(
+                requireAutoEnabled = false,
+                dnsSettingsOverride = value,
+            )
+        }.getOrElse { error ->
+            container.diagnosticsLogger.record(
+                "dns",
+                "filter preflight failed error=${error.javaClass.simpleName}",
+            )
+            return false
+        }
+    if (updateResult.status != DnsFilterUpdateStatus.UPDATED) {
+        return false
+    }
+    return runCatching { container.dnsFilterAssetInstaller.prepareVerifiedOrNull() != null }
+        .getOrDefault(false)
+}
+
+private fun shouldPreflightDnsRuleSetEnable(
+    current: DnsSettings,
+    next: DnsSettings,
+): Boolean =
+    !current.dnsRuleSetFilteringEnabled() &&
+        next.dnsRuleSetFilteringEnabled()
 
 internal fun HomeViewModel.onDnsBypassPackagesChangedInternal(value: List<String>) {
     updateRuntimeSettingAndMaybeReconnect {
@@ -471,6 +535,9 @@ internal fun HomeViewModel.onSanitizeNetworkActivityPrivateDataChangedInternal(v
 }
 
 internal suspend fun HomeViewModel.syncLocalGuardWithPermissionRequest() {
+    if (shouldDeferLocalGuardSyncForActiveProfileRuntime()) {
+        return
+    }
     val mode = container.settingsRepository.current().localGuardModeOrNull()
     if (mode != null && android.net.VpnService.prepare(getApplication<Application>()) != null) {
         pendingConnectRequest =
@@ -481,6 +548,12 @@ internal suspend fun HomeViewModel.syncLocalGuardWithPermissionRequest() {
         return
     }
     container.connectionController.syncLocalGuard()
+}
+
+private fun HomeViewModel.shouldDeferLocalGuardSyncForActiveProfileRuntime(): Boolean {
+    val snapshot = container.connectionController.snapshot.value
+    return snapshot.state in ACTIVE_CONNECTION_STATES &&
+        snapshot.profileId != FoxholeVpnService.LOCAL_GUARD_PROFILE_ID
 }
 
 private suspend fun HomeViewModel.refreshLocalGuardDashboardIpAfterSettingsChange() {
@@ -608,7 +681,7 @@ internal fun HomeViewModel.onPerAppRoutingModeSelectedInternal(value: PerAppRout
         }
         return
     }
-    updateRouteModeSettingAndPromptRestart {
+    updateAppRoutingSettingAndPromptReconnect {
         container.settingsRepository.updatePerAppRoutingMode(value)
     }
 }

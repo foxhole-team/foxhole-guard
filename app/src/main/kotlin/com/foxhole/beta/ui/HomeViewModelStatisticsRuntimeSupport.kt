@@ -152,7 +152,7 @@ internal fun HomeViewModel.appTrafficStatsRuntimeAllowed(
 ): Boolean =
     appTrafficStatsRuntimeAllowed(
         settings = settings,
-        usageAccessGranted = appTrafficStatsRecorder.hasUsageAccess(),
+        usageAccessGranted = appTrafficUsageAccessGrantedMutable.value,
     )
 
 internal fun appTrafficStatsRuntimeAllowed(

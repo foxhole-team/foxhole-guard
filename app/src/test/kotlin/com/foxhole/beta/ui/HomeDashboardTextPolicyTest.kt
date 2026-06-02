@@ -51,6 +51,22 @@ class HomeDashboardTextPolicyTest {
     }
 
     @Test
+    fun `network detail value skeletons missing rows only while loading`() {
+        assertEquals(
+            HomeNetworkDetailValue(text = "-", loading = true),
+            homeNetworkDetailValue(value = null, loading = true),
+        )
+        assertEquals(
+            HomeNetworkDetailValue(text = "-", loading = false),
+            homeNetworkDetailValue(value = null, loading = false),
+        )
+        assertEquals(
+            HomeNetworkDetailValue(text = "Moscow", loading = false),
+            homeNetworkDetailValue(value = "Moscow", loading = true),
+        )
+    }
+
+    @Test
     fun `country line uses country code instead of unknown when country name is missing`() {
         val ipInfo =
             IpInfo(

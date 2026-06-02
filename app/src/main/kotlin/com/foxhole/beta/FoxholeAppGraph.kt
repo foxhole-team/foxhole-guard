@@ -24,6 +24,7 @@ interface FoxholeStartupDependencies {
 interface FoxholeHomeDependencies {
     val settingsRepository: SettingsRepository
     val profileRepository: ProfileRepository
+    val dnsFilterAssetInstaller: DnsFilterAssetInstaller
     val dnsFilterUpdateRepository: DnsFilterUpdateRepository
     val routingRepository: RoutingRepository
     val connectionController: FoxholeConnectionController

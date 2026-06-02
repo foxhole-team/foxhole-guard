@@ -81,9 +81,6 @@ fun DnsSettingsScreen(
                     leadingIcon = Icons.Outlined.Security,
                     onCheckedChange = { enabled ->
                         updateDns(dns.copy(filteringEnabled = enabled))
-                        if (enabled) {
-                            refreshAfterEnablePrompt = true
-                        }
                     },
                     summaryMaxLines = Int.MAX_VALUE,
                     grouped = true,

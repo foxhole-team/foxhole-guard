@@ -315,6 +315,17 @@ class HomeIpRefreshPolicyTest {
     }
 
     @Test
+    fun `only tor route refresh may publish tor ip info`() {
+        assertTrue(shouldPublishTorIpInfoForRefreshReason(IpInfoRefreshReason.TOR_ROUTE))
+        assertFalse(shouldPublishTorIpInfoForRefreshReason(IpInfoRefreshReason.MANUAL))
+        assertFalse(shouldPublishTorIpInfoForRefreshReason(IpInfoRefreshReason.FOREGROUND))
+        assertFalse(shouldPublishTorIpInfoForRefreshReason(IpInfoRefreshReason.POST_CONNECT))
+        assertFalse(shouldPublishTorIpInfoForRefreshReason(IpInfoRefreshReason.POST_UPDATE))
+        assertFalse(shouldPublishTorIpInfoForRefreshReason(IpInfoRefreshReason.RESTORED_VPN))
+        assertFalse(shouldPublishTorIpInfoForRefreshReason(IpInfoRefreshReason.NETWORK_CHANGE))
+    }
+
+    @Test
     fun `tor route refresh rejects same ip during identity change`() {
         val operation =
             HomeTorOperationUiState(

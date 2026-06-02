@@ -722,7 +722,9 @@ fun TrafficSettingsScreen(
     var mtuDialog by rememberSaveable { mutableStateOf(false) }
     var subscriptionRefreshIntervalMenuExpanded by rememberSaveable { mutableStateOf(false) }
     var endpointDialog by rememberSaveable { mutableStateOf(false) }
-    val wifiLanAddress by rememberWifiLanAddress()
+    val wifiLanAddress by rememberWifiLanAddress(
+        enabled = state.settings.expert.localSurfaces.allowLanAccess,
+    )
     val selectedModeOption = currentHomeModeOption(state.settings)
     val pingHttpLabel = stringResource(R.string.latency_probe_method_http)
     val pingIcmpLabel = stringResource(R.string.latency_probe_method_icmp)

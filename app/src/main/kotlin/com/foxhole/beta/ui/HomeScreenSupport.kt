@@ -214,6 +214,7 @@ internal fun HomeNetworkDetailLine(
     modifier: Modifier = Modifier,
     icon: ImageVector? = null,
     valueMonospace: Boolean = false,
+    valueLoading: Boolean = false,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -239,21 +240,35 @@ internal fun HomeNetworkDetailLine(
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        Text(
-            text = value,
-            modifier = modifier.weight(1f),
-            style =
-                MaterialTheme.typography.labelSmall.copy(
-                    fontSize = 11.sp,
-                    lineHeight = 12.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    fontFamily = if (valueMonospace) FontFamily.Monospace else FontFamily.Default,
-                ),
-            color = MaterialTheme.colorScheme.onSurface,
-            textAlign = TextAlign.End,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
+        if (valueLoading) {
+            Box(
+                modifier = modifier.weight(1f),
+                contentAlignment = Alignment.CenterEnd,
+            ) {
+                FoxholeSkeletonBlock(
+                    modifier =
+                        Modifier
+                            .width(HomeNetworkValueLoadingWidth)
+                            .height(HomeNetworkMetricValueLoadingHeight),
+                )
+            }
+        } else {
+            Text(
+                text = value,
+                modifier = modifier.weight(1f),
+                style =
+                    MaterialTheme.typography.labelSmall.copy(
+                        fontSize = 11.sp,
+                        lineHeight = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        fontFamily = if (valueMonospace) FontFamily.Monospace else FontFamily.Default,
+                    ),
+                color = MaterialTheme.colorScheme.onSurface,
+                textAlign = TextAlign.End,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
     }
 }
 

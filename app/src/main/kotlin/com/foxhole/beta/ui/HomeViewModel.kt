@@ -98,6 +98,7 @@ class HomeViewModel(
     internal val installedAppsLoadedMutable = MutableStateFlow(false)
     internal val appTrafficUsageAccessGrantedMutable = MutableStateFlow(false)
     internal val ipInfoLoadingMutable = MutableStateFlow(false)
+    internal val ipInfoRefreshReasonMutable = MutableStateFlow<IpInfoRefreshReason?>(null)
     internal val torIpInfoMutable = MutableStateFlow<com.foxhole.beta.core.model.IpInfo?>(null)
     internal val dashboardConnectionMetricsLoadingMutable = MutableStateFlow(false)
     internal val statisticsVisibleMutable = MutableStateFlow(false)
@@ -190,6 +191,13 @@ class HomeViewModel(
         ) { explicitLoading, runtimeUiState ->
             explicitLoading || runtimeUiState.hasConnectedPendingDashboardIpRefresh()
         }.distinctUntilChanged()
+    private val dashboardIpRefreshState =
+        combine(
+            dashboardIpInfoLoading,
+            ipInfoRefreshReasonMutable,
+        ) { loading, reason ->
+            loading to reason
+        }.distinctUntilChanged()
 
     internal val routingStreams =
         combine(
@@ -211,14 +219,15 @@ class HomeViewModel(
                 profilesLoadedMutable,
                 installedAppsLoadingMutable,
                 installedAppsLoadedMutable,
-                dashboardIpInfoLoading,
-            ) { installedApps, profilesLoaded, installedAppsLoading, installedAppsLoaded, ipInfoLoading ->
+                dashboardIpRefreshState,
+            ) { installedApps, profilesLoaded, installedAppsLoading, installedAppsLoaded, ipRefreshState ->
                 HomeInstalledAppsStreams(
                     profilesLoaded = profilesLoaded,
                     installedApps = installedApps,
                     installedAppsLoading = installedAppsLoading,
                     installedAppsLoaded = installedAppsLoaded,
-                    ipInfoLoading = ipInfoLoading,
+                    ipInfoLoading = ipRefreshState.first,
+                    ipInfoRefreshReason = ipRefreshState.second,
                 )
             },
             combine(
@@ -265,6 +274,7 @@ class HomeViewModel(
                     installedAppsLoading = installedAppsStreams.installedAppsLoading,
                     installedAppsLoaded = installedAppsStreams.installedAppsLoaded,
                     ipInfoLoading = installedAppsStreams.ipInfoLoading,
+                    ipInfoRefreshReason = installedAppsStreams.ipInfoRefreshReason,
                     torIpInfo = trailingState.torIpInfo,
                     dashboardConnectionMetricsLoading = trailingState.dashboardConnectionMetricsLoading,
                     runtimeReloadPending = trailingState.runtimeReloadPending,
@@ -358,6 +368,7 @@ class HomeViewModel(
                     explicitLoading = localStreams.ipInfoLoading,
                     connectionState = connectionStreams.connection.state,
                 ),
+                ipInfoRefreshReason = localStreams.ipInfoRefreshReason,
                 dashboardConnectionMetricsLoading = localStreams.dashboardConnectionMetricsLoading,
                 traffic = connectionStreams.traffic,
                 presets = routingStreams.presets,

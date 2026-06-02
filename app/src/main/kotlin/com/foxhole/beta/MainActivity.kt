@@ -28,6 +28,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import com.foxhole.beta.core.model.ThemeMode
+import com.foxhole.beta.core.settings.readFastStoredThemeMode
 import com.foxhole.beta.ui.FoxholeApp
 import com.foxhole.beta.ui.FoxholeBannerAction
 import com.foxhole.beta.ui.FoxholeBannerHapticGate
@@ -37,17 +38,17 @@ import com.foxhole.beta.ui.showBanner
 import com.foxhole.beta.ui.theme.FoxholeAppBackground
 import com.foxhole.beta.ui.theme.FoxholeTheme
 import eightbitlab.com.blurview.BlurTarget
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import android.graphics.Color as AndroidColor
 
 class MainActivity : AppCompatActivity() {
     private val homeViewModel: HomeViewModel by viewModels { HomeViewModel.factory(application) }
-    private var vpnPermissionResult: ((Boolean) -> Unit)? = null
     private var appliedSecureScreenPolicy: Boolean? = null
 
     private val vpnPermissionLauncher =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-            vpnPermissionResult?.invoke(result.resultCode == Activity.RESULT_OK)
+            homeViewModel.onVpnPermissionResult(result.resultCode == Activity.RESULT_OK)
         }
     private val notificationPermissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -61,17 +62,11 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        vpnPermissionResult = homeViewModel::onVpnPermissionResult
+        val initialThemeMode = readFastStoredThemeMode(this)
         applyEdgeToEdgeSystemBars(
-            themeMode = homeViewModel.themeMode.value,
+            themeMode = initialThemeMode,
             systemDarkTheme = isSystemDarkTheme(),
         )
-        applySecureScreenPolicy(homeViewModel.secureScreenEnabled.value)
-        lifecycleScope.launch {
-            repeatOnLifecycle(Lifecycle.State.STARTED) {
-                homeViewModel.secureScreenEnabled.collect(::applySecureScreenPolicy)
-            }
-        }
         val contentRoot =
             FrameLayout(this).apply {
                 clipChildren = false
@@ -101,6 +96,20 @@ class MainActivity : AppCompatActivity() {
             ),
         )
         setContentView(contentRoot)
+
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                delay(ACTIVITY_VIEWMODEL_STARTUP_DELAY_MS)
+                homeViewModel.secureScreenEnabled.collect(::applySecureScreenPolicy)
+            }
+        }
+
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.RESUMED) {
+                delay(ACTIVITY_VIEWMODEL_STARTUP_DELAY_MS)
+                homeViewModel.onAppForegrounded()
+            }
+        }
 
         composeView.setContent {
             val themeMode = homeViewModel.themeMode.collectAsStateWithLifecycle()
@@ -166,8 +175,6 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        homeViewModel.onAppForegrounded()
-        applySecureScreenPolicy(homeViewModel.secureScreenEnabled.value)
     }
 
     private fun requestPostNotificationsIfNeeded() {
@@ -236,3 +243,5 @@ class MainActivity : AppCompatActivity() {
             ThemeMode.LIGHT -> false
         }
 }
+
+private const val ACTIVITY_VIEWMODEL_STARTUP_DELAY_MS = 250L

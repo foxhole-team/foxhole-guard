@@ -228,6 +228,78 @@ class HomeIpLoadingPolicyTest {
     }
 
     @Test
+    fun `auto dashboard refresh keeps visible vpn ip instead of returning to skeleton`() {
+        val routeIp =
+            IpInfo(
+                ip = "8.8.8.8",
+                ipv4 = "8.8.8.8",
+                countryCode = "US",
+                countryName = "United States",
+                city = "Mountain View",
+                isp = "Example VPN",
+                fetchedAt = 2_000L,
+            )
+        val model =
+            resolveHomeDashboardNetworkModel(
+                state =
+                    HomeRouteUiState(
+                        profilesLoaded = true,
+                        ipInfoLoading = true,
+                        ipInfoRefreshReason = IpInfoRefreshReason.POST_UPDATE,
+                        connection =
+                            ConnectionSnapshot(
+                                state = ConnectionState.CONNECTED,
+                                trafficMode = TrafficMode.TUNNEL,
+                                profileId = 7L,
+                                lastChangeAt = 1_000L,
+                            ),
+                    ),
+                visibleIpInfo = routeIp,
+                deviceInternetAvailable = true,
+            )
+
+        assertFalse(model.showLoading)
+        assertFalse(model.showIpInfoLoading)
+        assertFalse(model.showConnectionDetailsLoading)
+    }
+
+    @Test
+    fun `manual dashboard refresh still shows skeleton over visible vpn ip`() {
+        val routeIp =
+            IpInfo(
+                ip = "8.8.8.8",
+                ipv4 = "8.8.8.8",
+                countryCode = "US",
+                countryName = "United States",
+                city = "Mountain View",
+                isp = "Example VPN",
+                fetchedAt = 2_000L,
+            )
+        val model =
+            resolveHomeDashboardNetworkModel(
+                state =
+                    HomeRouteUiState(
+                        profilesLoaded = true,
+                        ipInfoLoading = true,
+                        ipInfoRefreshReason = IpInfoRefreshReason.MANUAL,
+                        connection =
+                            ConnectionSnapshot(
+                                state = ConnectionState.CONNECTED,
+                                trafficMode = TrafficMode.TUNNEL,
+                                profileId = 7L,
+                                lastChangeAt = 1_000L,
+                            ),
+                    ),
+                visibleIpInfo = routeIp,
+                deviceInternetAvailable = true,
+            )
+
+        assertTrue(model.showLoading)
+        assertTrue(model.showIpInfoLoading)
+        assertTrue(model.showConnectionDetailsLoading)
+    }
+
+    @Test
     fun `shows ip loading during explicit idle refresh`() {
         assertTrue(
             shouldShowIpInfoLoading(

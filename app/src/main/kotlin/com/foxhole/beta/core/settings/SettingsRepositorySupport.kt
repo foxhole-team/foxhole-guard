@@ -241,6 +241,11 @@ internal fun readFastStoredAppLocale(context: Context): AppLocale {
     return parseOptionalStoredAppLocale(prefs.getString(FAST_LOCALE_KEY, null)) ?: AppLocale.SYSTEM
 }
 
+internal fun readFastStoredThemeMode(context: Context): ThemeMode {
+    val prefs = context.applicationContext.getSharedPreferences(FAST_UI_PREFERENCES_NAME, Context.MODE_PRIVATE)
+    return parseOptionalStoredThemeMode(prefs.getString(FAST_THEME_MODE_KEY, null)) ?: ThemeMode.SYSTEM
+}
+
 internal fun sanitizeStoredThemeModePayload(payload: String): String =
     STORED_THEME_MODE_REGEX.replace(payload) { match ->
         val storedValue = match.groupValues[2]

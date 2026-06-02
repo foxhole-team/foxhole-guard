@@ -7,6 +7,8 @@ import android.net.ConnectivityManager
 import android.net.LinkProperties
 import android.net.Network
 import android.net.NetworkCapabilities
+import android.os.Handler
+import android.os.Looper
 import android.text.format.DateFormat
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
@@ -743,15 +745,24 @@ private fun SettingsInfoBottomSheet(
 }
 
 @Composable
-internal fun rememberWifiLanAddress(): State<String?> {
+internal fun rememberWifiLanAddress(enabled: Boolean = true): State<String?> {
     val appContext = LocalContext.current.applicationContext
+    val wifiLanAddress = remember { mutableStateOf<String?>(null) }
+    if (!enabled) {
+        DisposableEffect(Unit) {
+            wifiLanAddress.value = null
+            onDispose {}
+        }
+        return wifiLanAddress
+    }
     val connectivityManager = remember(appContext) { appContext.getSystemService<ConnectivityManager>() }
     val lanAddressProvider = remember(appContext) { AndroidLanProxyAddressProvider(appContext) }
-    val wifiLanAddress = remember(connectivityManager, lanAddressProvider) { mutableStateOf(lanAddressProvider.currentWifiIpv4Address()) }
     DisposableEffect(connectivityManager, lanAddressProvider) {
         val manager =
             connectivityManager ?: return@DisposableEffect onDispose {
             }
+        val handler = Handler(Looper.getMainLooper())
+        var registered = false
         fun updateWifiLanAddress() {
             val resolved = lanAddressProvider.currentWifiIpv4Address()
             if (wifiLanAddress.value != resolved) {
@@ -782,14 +793,26 @@ internal fun rememberWifiLanAddress(): State<String?> {
                     updateWifiLanAddress()
                 }
             }
-        updateWifiLanAddress()
-        manager.registerDefaultNetworkCallback(callback)
+        val registerCallback =
+            Runnable {
+                updateWifiLanAddress()
+                runCatching {
+                    manager.registerDefaultNetworkCallback(callback)
+                    registered = true
+                }
+            }
+        handler.postDelayed(registerCallback, WIFI_LAN_ADDRESS_OBSERVER_START_DELAY_MS)
         onDispose {
-            runCatching { manager.unregisterNetworkCallback(callback) }
+            handler.removeCallbacks(registerCallback)
+            if (registered) {
+                runCatching { manager.unregisterNetworkCallback(callback) }
+            }
         }
     }
     return wifiLanAddress
 }
+
+private const val WIFI_LAN_ADDRESS_OBSERVER_START_DELAY_MS = 350L
 
 @Composable
 internal fun proxyLanAccessSummary(
