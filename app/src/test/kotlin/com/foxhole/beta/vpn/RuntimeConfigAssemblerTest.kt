@@ -1079,7 +1079,7 @@ class RuntimeConfigAssemblerTest {
             Settings(expert = ExpertSettings(killSwitchEnabled = true)).localGuardModeOrNull(),
         )
         assertEquals(
-            null,
+            LocalGuardMode.FIREWALL,
             Settings(
                 expert =
                     ExpertSettings(
@@ -1115,7 +1115,7 @@ class RuntimeConfigAssemblerTest {
     }
 
     @Test
-    fun `firewall local guard starts only when permanent app blocking is active`() {
+    fun `firewall local guard starts whenever firewall is enabled`() {
         val blockedApps =
             ExpertSettings(
                 blockedPackagesEnabled = true,
@@ -1128,7 +1128,7 @@ class RuntimeConfigAssemblerTest {
             Settings(expert = blockedApps).localGuardModeOrNull(),
         )
         assertEquals(
-            null,
+            LocalGuardMode.FIREWALL,
             Settings(
                 expert =
                     blockedApps.copy(
@@ -1158,11 +1158,11 @@ class RuntimeConfigAssemblerTest {
     }
 
     @Test
-    fun `firewall alone does not start full-device local guard`() {
+    fun `firewall alone starts full-device local guard`() {
         val firewall = ExpertSettings(firewallEnabled = true)
 
         val settings = Settings(expert = firewall)
-        assertEquals(null, settings.localGuardModeOrNull())
+        assertEquals(LocalGuardMode.FIREWALL, settings.localGuardModeOrNull())
     }
 
     @Test
@@ -1176,7 +1176,7 @@ class RuntimeConfigAssemblerTest {
             ).localGuardModeOrNull(),
         )
         assertEquals(
-            null,
+            LocalGuardMode.FIREWALL,
             Settings(
                 ui = UiSettings(trafficMapEnabled = true),
                 expert = firewall,

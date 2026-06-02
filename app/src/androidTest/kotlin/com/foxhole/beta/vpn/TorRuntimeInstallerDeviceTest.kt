@@ -59,9 +59,63 @@ class TorRuntimeInstallerDeviceTest {
                                 ),
                         ),
                     activePreset = null,
-                        torRuntimePaths = paths,
-                        vpnProtocolHint = ProtocolHint.VLESS,
+                    torRuntimePaths = paths,
+                    vpnProtocolHint = ProtocolHint.VLESS,
                 )
+            assertLibboxAcceptsConfig(context, config)
+        }
+    }
+
+    @Test
+    fun assembledTorOnlyConfigIsAcceptedByLibbox() {
+        runBlocking {
+            val context = ApplicationProvider.getApplicationContext<FoxholeApplication>()
+            val paths = TorRuntimeInstaller(context).prepare()
+            val config =
+                RuntimeConfigAssembler(
+                    Json {
+                        ignoreUnknownKeys = true
+                        explicitNulls = false
+                    },
+                ).assembleTorOnly(
+                    settings =
+                        Settings(
+                            privacyRoute =
+                                PrivacyRouteSettings(
+                                    mode = PrivacyRouteMode.TOR_OVER_VPN,
+                                    scope = PrivacyRouteScope.ALL_APPS,
+                                ),
+                        ),
+                    activePreset = null,
+                    torRuntimePaths = paths,
+                )
+
+            assertLibboxAcceptsConfig(context, config)
+        }
+    }
+
+    @Test
+    fun prepareIsIdempotentForInstalledTorBundle() {
+        runBlocking {
+            val context = ApplicationProvider.getApplicationContext<FoxholeApplication>()
+            val installer = TorRuntimeInstaller(context)
+            val first = installer.prepare()
+            val abi = File(first.dataDirectory).name
+            val sentinel = File(context.filesDir, "tor/$abi/.prepare-sentinel").apply { writeText("keep") }
+
+            val second = installer.prepare()
+
+            assertEquals(first, second)
+            assertTrue(sentinel.isFile)
+            assertEquals("keep", sentinel.readText())
+        }
+    }
+
+    private companion object {
+        fun assertLibboxAcceptsConfig(
+            context: FoxholeApplication,
+            config: String,
+        ) {
             val diagnosticsSink =
                 DiagnosticsLoggerRuntimeDiagnosticsSink(context.appGraph.diagnosticsLogger)
             val reflection =
@@ -99,26 +153,7 @@ class TorRuntimeInstallerDeviceTest {
                 runCatching { reflection.closeServer(server) }
             }
         }
-    }
 
-    @Test
-    fun prepareIsIdempotentForInstalledTorBundle() {
-        runBlocking {
-            val context = ApplicationProvider.getApplicationContext<FoxholeApplication>()
-            val installer = TorRuntimeInstaller(context)
-            val first = installer.prepare()
-            val abi = File(first.dataDirectory).name
-            val sentinel = File(context.filesDir, "tor/$abi/.prepare-sentinel").apply { writeText("keep") }
-
-            val second = installer.prepare()
-
-            assertEquals(first, second)
-            assertTrue(sentinel.isFile)
-            assertEquals("keep", sentinel.readText())
-        }
-    }
-
-    private companion object {
         val TOR_RUNTIME_BASE_CONFIG =
             """
             {

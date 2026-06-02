@@ -477,7 +477,7 @@ internal suspend fun HomeViewModel.syncLocalGuardWithPermissionRequest() {
             PendingConnectRequest(
                 action = PendingConnectAction.LOCAL_GUARD,
             )
-        requestVpnPermission.tryEmit(Unit)
+        emitVpnPermissionRequest()
         return
     }
     container.connectionController.syncLocalGuard()

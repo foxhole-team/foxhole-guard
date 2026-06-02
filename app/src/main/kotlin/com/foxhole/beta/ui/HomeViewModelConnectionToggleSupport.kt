@@ -199,7 +199,7 @@ internal fun HomeViewModel.requestManualConnectPermissionOrConnect(
                 protocolOptionId = protocolOptionId,
                 action = PendingConnectAction.MANUAL,
             )
-        requestVpnPermission.tryEmit(Unit)
+        emitVpnPermissionRequest()
     } else {
         connect(profileId, protocolOptionId = protocolOptionId)
     }

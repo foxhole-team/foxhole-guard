@@ -10,6 +10,8 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -113,6 +115,47 @@ class FoxholeVpnRuntimeBridgeTest {
         } finally {
             FoxholeVpnRuntimeBridge.update(previousSnapshot, refreshLastChangeAt = false)
             FoxholeVpnRuntimeBridge.updateIpInfo(previousIpInfo)
+            FoxholeVpnRuntimeBridge.updateDeviceIpInfo(previousDeviceIpInfo)
+        }
+    }
+
+    @Test
+    fun `device ip bridge rejects first active tunnel address when real device ip is unknown`() {
+        val previousDeviceIpInfo = FoxholeVpnRuntimeBridge.deviceIpInfo.value
+        val tunnelIp = ipInfo("203.0.113.10")
+        try {
+            FoxholeVpnRuntimeBridge.updateDeviceIpInfo(null)
+
+            val accepted =
+                FoxholeVpnRuntimeBridge.updateDeviceIpInfo(
+                    value = tunnelIp,
+                    allowNewAddress = false,
+                )
+
+            assertFalse(accepted)
+            assertNull(FoxholeVpnRuntimeBridge.deviceIpInfo.value)
+        } finally {
+            FoxholeVpnRuntimeBridge.updateDeviceIpInfo(previousDeviceIpInfo)
+        }
+    }
+
+    @Test
+    fun `device ip bridge keeps pre vpn device ip when active tunnel address differs`() {
+        val previousDeviceIpInfo = FoxholeVpnRuntimeBridge.deviceIpInfo.value
+        val deviceIp = ipInfo("198.51.100.20")
+        val tunnelIp = ipInfo("203.0.113.10")
+        try {
+            FoxholeVpnRuntimeBridge.updateDeviceIpInfo(deviceIp)
+
+            val accepted =
+                FoxholeVpnRuntimeBridge.updateDeviceIpInfo(
+                    value = tunnelIp,
+                    allowNewAddress = false,
+                )
+
+            assertFalse(accepted)
+            assertEquals(deviceIp, FoxholeVpnRuntimeBridge.deviceIpInfo.value)
+        } finally {
             FoxholeVpnRuntimeBridge.updateDeviceIpInfo(previousDeviceIpInfo)
         }
     }

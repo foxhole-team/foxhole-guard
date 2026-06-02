@@ -932,7 +932,7 @@ private fun trafficMapColors(): TrafficMapColors {
     val colorScheme = MaterialTheme.colorScheme
     return if (LocalFoxholeDarkTheme.current) {
         TrafficMapColors(
-            countryBorder = Color(0xFF8F9F96),
+            countryBorder = Color(0xFF66746C),
             routeLine = FoxholePositiveAccent,
             destination = FoxholePositiveAccent,
             origin = FoxholePositiveAccent,

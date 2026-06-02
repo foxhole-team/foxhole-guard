@@ -769,12 +769,18 @@ object FoxholeVpnRuntimeBridge {
         publishRuntimeUiState()
     }
 
-    fun updateDeviceIpInfo(value: IpInfo?) {
+    fun updateDeviceIpInfo(
+        value: IpInfo?,
+        allowNewAddress: Boolean = true,
+    ): Boolean {
+        val previous = deviceIpInfoMutable.value
+        if (value != null && !allowNewAddress && (previous == null || !value.samePrimaryAddress(previous))) {
+            return false
+        }
         deviceIpInfoMutable.value =
             if (value == null) {
                 null
             } else {
-                val previous = deviceIpInfoMutable.value
                 value.copy(
                     ipv4 = value.ipv4 ?: previous?.ipv4,
                     localDnsServers = value.localDnsServers.ifEmpty { previous?.localDnsServers.orEmpty() },
@@ -782,6 +788,7 @@ object FoxholeVpnRuntimeBridge {
                 ).retainKnownLocationFrom(previous)
             }
         publishRuntimeUiState()
+        return true
     }
 
     fun updateTraffic(value: TrafficSnapshot) {

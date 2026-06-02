@@ -27,17 +27,5 @@ private fun Settings.localFirewallGuardRequired(): Boolean {
     if (!expert.firewallEnabled) {
         return false
     }
-    val statisticsCaptureRequired =
-        statistics.enabled && (
-            statistics.countryTrafficEnabled ||
-                statistics.anomalyMetricsEnabled && anomaly.analyzeDestinationCountries
-            )
-    return permanentAppBlockingRequired() ||
-        expert.networkActivityPersistentLogging ||
-        statisticsCaptureRequired
+    return true
 }
-
-private fun Settings.permanentAppBlockingRequired(): Boolean =
-    expert.blockAppsAlways &&
-        expert.blockedPackagesEnabled &&
-        expert.blockedPackages.any(String::isNotBlank)

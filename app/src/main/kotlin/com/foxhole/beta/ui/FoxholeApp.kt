@@ -99,6 +99,7 @@ import com.foxhole.beta.core.data.ProfileImportPayloadTooLargeException
 import com.foxhole.beta.core.data.readLocalProfileImportUtf8Capped
 import com.foxhole.beta.core.model.ConnectionState
 import com.foxhole.beta.core.model.ThemeMode
+import com.foxhole.beta.core.model.TrafficMapUiState
 import com.foxhole.beta.ui.theme.FoxholeTheme
 import com.foxhole.beta.ui.theme.LocalFoxholeDarkTheme
 import com.foxhole.beta.ui.theme.LocalFoxholeThemeMode
@@ -305,7 +306,13 @@ fun FoxholeApp(
                 ) {
                 composable(AppRoute.HOME) {
                     val state by viewModel.homeRouteState.collectAsStateWithLifecycle()
-                    val trafficMapState by viewModel.trafficMapUiState.collectAsStateWithLifecycle()
+                    val trafficMapState =
+                        if (state.settings.ui.trafficMapEnabled) {
+                            val collectedTrafficMapState by viewModel.trafficMapUiState.collectAsStateWithLifecycle()
+                            collectedTrafficMapState
+                        } else {
+                            remember { TrafficMapUiState() }
+                        }
                     HomeScreen(
                         state = state,
                         trafficMapState = trafficMapState,

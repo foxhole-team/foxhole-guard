@@ -62,6 +62,7 @@ import com.foxhole.beta.vpn.RuntimePhase
 import com.foxhole.beta.vpn.RuntimeUiState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -73,6 +74,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.runningFold
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -671,7 +673,8 @@ class HomeViewModel(
             )
 
     internal val snackbars = MutableSharedFlow<FoxholeBannerEvent>(extraBufferCapacity = 16)
-    val requestVpnPermission = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    private val requestVpnPermissionChannel = Channel<Unit>(Channel.CONFLATED)
+    val requestVpnPermission = requestVpnPermissionChannel.receiveAsFlow()
     val requestNotificationPermission = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     internal var pendingConnectRequest: PendingConnectRequest? = null
     internal val ipRefreshCoordinator = IpRefreshCoordinator()
@@ -711,6 +714,7 @@ class HomeViewModel(
             appTrafficUsageAccessGrantedMutable.value =
                 withContext(Dispatchers.IO) { appTrafficStatsRecorder.hasUsageAccess() }
             syncAppTrafficStatsSampler(appTrafficStatsRuntimeAllowed(settings))
+            syncLocalGuardWithPermissionRequest()
         }
         viewModelScope.launch {
             container.settingsRepository.settings.collect { settings ->
@@ -868,7 +872,7 @@ class HomeViewModel(
             if (reconciledActiveVpn) {
                 scheduleConnectedIpRefresh(reason = IpInfoRefreshReason.RESTORED_VPN, clearExistingIp = false)
             } else {
-                container.connectionController.syncLocalGuard()
+                syncLocalGuardWithPermissionRequest()
                 refreshIpInfoOnForegroundIfNeeded()
             }
         }
@@ -1638,6 +1642,9 @@ class HomeViewModel(
         onTrafficUiVisibilityChangedInternal(dashboardVisible || statisticsVisible)
         if (visible) {
             startPendingProfileReconnectPromptIfNeeded()
+            viewModelScope.launch {
+                syncLocalGuardWithPermissionRequest()
+            }
         } else {
             clearProfileLatencyRefresh()
         }
@@ -1658,6 +1665,10 @@ class HomeViewModel(
     ) = onStatisticsMetricEnabledChangedInternal(metric, value)
 
     fun onAppTrafficStatsEnabledChanged(value: Boolean) = onAppTrafficStatsEnabledChangedInternal(value)
+
+    internal fun emitVpnPermissionRequest() {
+        requestVpnPermissionChannel.trySend(Unit)
+    }
 
     companion object {
         internal const val CONNECTED_IP_REFRESH_DELAY_MS = 250L

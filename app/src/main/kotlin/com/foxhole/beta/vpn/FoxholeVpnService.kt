@@ -1838,16 +1838,26 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
                             )
                         }
                             .onSuccess {
-                                FoxholeVpnRuntimeBridge.updateDeviceIpInfo(it)
+                                val allowNewDeviceAddress = shouldAcceptNewDeviceIpInfoFromAppOwnedRefresh()
+                                val deviceInfoAccepted =
+                                    FoxholeVpnRuntimeBridge.updateDeviceIpInfo(
+                                        value = it,
+                                        allowNewAddress = allowNewDeviceAddress,
+                                    )
                                 if (shouldPublishAppOwnedIpInfo()) {
                                     FoxholeVpnRuntimeBridge.updateIpInfo(it)
                                 }
                                 container.diagnosticsLogger.record("ip", "geo refreshed")
                                 launch(Dispatchers.Main.immediate) { updateNotification() }
-                                startIpv4EnrichmentIfNeeded(
-                                    info = it,
-                                    network = requestNetwork,
-                                )
+                                if (deviceInfoAccepted) {
+                                    startIpv4EnrichmentIfNeeded(
+                                        info = it,
+                                        network = requestNetwork,
+                                        allowNewDeviceAddress = allowNewDeviceAddress,
+                                    )
+                                } else {
+                                    container.diagnosticsLogger.record("ip", "device geo refresh ignored during active tunnel")
+                                }
                             }
                             .onFailure { error ->
                                 container.diagnosticsLogger.record("ip", "geo refresh failed: ${error.message.orEmpty()}")
@@ -1872,6 +1882,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
     internal fun startIpv4EnrichmentIfNeeded(
         info: IpInfo,
         network: Network? = null,
+        allowNewDeviceAddress: Boolean = true,
     ) {
         if (info.ipv4 != null) {
             ipv4EnrichmentJob?.cancel()
@@ -1894,11 +1905,18 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
                         ipv4 = ipv4Info,
                         ipv6 = null,
                     )
-                FoxholeVpnRuntimeBridge.updateDeviceIpInfo(merged)
+                val deviceInfoAccepted =
+                    FoxholeVpnRuntimeBridge.updateDeviceIpInfo(
+                        value = merged,
+                        allowNewAddress = allowNewDeviceAddress,
+                    )
                 if (shouldPublishAppOwnedIpInfo()) {
                     FoxholeVpnRuntimeBridge.updateIpInfo(merged)
                 }
-                container.diagnosticsLogger.record("ip", "ipv4 enriched")
+                container.diagnosticsLogger.record(
+                    "ip",
+                    if (deviceInfoAccepted) "ipv4 enriched" else "ipv4 enrichment ignored during active tunnel",
+                )
                 launch(Dispatchers.Main.immediate) { updateNotification() }
             }
     }
@@ -2094,6 +2112,8 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
             analysisStatus = getString(R.string.notification_status_analysis),
         )
     }
+
+    internal fun shouldAcceptNewDeviceIpInfoFromAppOwnedRefresh(): Boolean = shouldPublishAppOwnedIpInfo()
 
     internal fun isVpnNetworkValidated(network: Network): Boolean = isVpnNetworkValidatedInternal(network)
 

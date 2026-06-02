@@ -83,7 +83,7 @@ internal fun HomeViewModel.onAutoConnectActiveProfileInternal() {
                     protocolOptionId = protocolOptionId,
                     action = PendingConnectAction.AUTO_CONNECT,
                 )
-            requestVpnPermission.tryEmit(Unit)
+            emitVpnPermissionRequest()
         } else {
             connect(profileId, protocolOptionId = protocolOptionId)
         }
@@ -111,7 +111,7 @@ internal fun HomeViewModel.onAutoConnectActiveProfileInternal() {
                 profileId = profileId,
                 action = PendingConnectAction.AUTO_CONNECT,
             )
-        requestVpnPermission.tryEmit(Unit)
+        emitVpnPermissionRequest()
     } else {
         startAutoConnect(profileId)
     }
@@ -135,7 +135,7 @@ internal fun HomeViewModel.requestReconnectInternal(profileId: Long) {
                 profileId = profileId,
                 action = PendingConnectAction.RECONNECT,
             )
-        requestVpnPermission.tryEmit(Unit)
+        emitVpnPermissionRequest()
     } else {
         reconnect(profileId)
     }
