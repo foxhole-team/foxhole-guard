@@ -194,18 +194,28 @@ class HomeDashboardHotPathTest {
             shouldComposeTrafficMapHeavyContent(
                 startupStage = 2,
                 activeReorderCard = null,
+                startupDelayElapsed = true,
+            ),
+        )
+        assertFalse(
+            shouldComposeTrafficMapHeavyContent(
+                startupStage = 3,
+                activeReorderCard = null,
+                startupDelayElapsed = false,
             ),
         )
         assertTrue(
             shouldComposeTrafficMapHeavyContent(
                 startupStage = 3,
                 activeReorderCard = null,
+                startupDelayElapsed = true,
             ),
         )
         assertTrue(
             shouldComposeTrafficMapHeavyContent(
                 startupStage = 0,
                 activeReorderCard = DashboardCard.TRAFFIC_MAP,
+                startupDelayElapsed = false,
             ),
         )
     }

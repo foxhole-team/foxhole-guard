@@ -146,6 +146,8 @@ class TrafficMapStylingTest {
 
         assertTrue(cardBlock.contains("contentReady: Boolean = true"))
         assertTrue(cardBlock.contains("if (contentReady && !mapDisabledForPower)"))
+        assertTrue(cardBlock.contains("val countryShapesLoading = contentReady && !mapDisabledForPower && countryShapes.isEmpty()"))
+        assertTrue(cardBlock.contains("} else if (!contentReady || countryShapesLoading)"))
         assertTrue(cardBlock.contains("TrafficMapCanvasLoadingBlock"))
         assertTrue(source.contains("home_traffic_world_map_loading"))
     }

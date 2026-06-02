@@ -400,6 +400,9 @@ fun HomeScreen(
             initialDashboardStartupStage(DashboardStartupCompositionWarmState.markEntered())
         }
     var dashboardStartupStage by rememberSaveable { mutableStateOf(initialDashboardStartupStage) }
+    var trafficMapStartupDelayElapsed by rememberSaveable {
+        mutableStateOf(initialDashboardStartupStage >= DASHBOARD_STARTUP_STAGE_WARM_RETURN)
+    }
     val trafficCardRuntimeVisible =
         state.settings.ui.trafficCardEnabled &&
             shouldComposeDashboardCardNow(
@@ -412,6 +415,7 @@ fun HomeScreen(
             shouldComposeTrafficMapHeavyContent(
                 startupStage = dashboardStartupStage,
                 activeReorderCard = activeReorderCard,
+                startupDelayElapsed = trafficMapStartupDelayElapsed,
             )
     val trafficMapState =
         if (trafficMapHeavyContentReady) {
@@ -427,6 +431,13 @@ fun HomeScreen(
             delay(DASHBOARD_CARD_STARTUP_STAGE_DELAY_MS)
             dashboardStartupStage += 1
         }
+    }
+    LaunchedEffect(state.settings.ui.trafficMapEnabled, trafficMapStartupDelayElapsed) {
+        if (!state.settings.ui.trafficMapEnabled || trafficMapStartupDelayElapsed) {
+            return@LaunchedEffect
+        }
+        delay(TRAFFIC_MAP_HEAVY_CONTENT_STARTUP_DELAY_MS)
+        trafficMapStartupDelayElapsed = true
     }
 
     DisposableEffect(trafficCardRuntimeVisible) {
@@ -1778,10 +1789,16 @@ internal fun shouldComposeDashboardCardNow(
 internal fun shouldComposeTrafficMapHeavyContent(
     startupStage: Int,
     activeReorderCard: DashboardCard?,
+    startupDelayElapsed: Boolean = true,
 ): Boolean =
-    startupStage >= DASHBOARD_TRAFFIC_MAP_HEAVY_CONTENT_STAGE ||
-        activeReorderCard != null ||
-        startupStage >= DASHBOARD_STARTUP_STAGE_ALL
+    activeReorderCard != null ||
+        (
+            startupDelayElapsed &&
+                (
+                    startupStage >= DASHBOARD_TRAFFIC_MAP_HEAVY_CONTENT_STAGE ||
+                        startupStage >= DASHBOARD_STARTUP_STAGE_ALL
+                )
+        )
 
 internal fun initialDashboardStartupStage(dashboardAlreadyWarm: Boolean): Int =
     if (dashboardAlreadyWarm) DASHBOARD_STARTUP_STAGE_WARM_RETURN else DASHBOARD_STARTUP_STAGE_INITIAL
@@ -1848,6 +1865,7 @@ private const val DASHBOARD_STARTUP_STAGE_WARM_RETURN = 2
 private const val DASHBOARD_TRAFFIC_MAP_HEAVY_CONTENT_STAGE = 3
 private const val DASHBOARD_STARTUP_STAGE_ALL = 4
 private const val DASHBOARD_CARD_STARTUP_STAGE_DELAY_MS = 48L
+private const val TRAFFIC_MAP_HEAVY_CONTENT_STARTUP_DELAY_MS = 650L
 private val DashboardCardReorderFallbackMoveDistance = 96.dp
 private val ImportMenuWidthChrome = 62.dp
 private val ImportMenuMinWidth = 188.dp

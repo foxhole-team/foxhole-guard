@@ -111,11 +111,11 @@ class TrafficMapCountryShapeAssetParser(
 
     private fun parseCountry(country: TrafficMapPreprocessedCountry): TrafficMapCountryShape? {
         val countryCode =
-                country.code
-                    ?.trim()
-                    ?.uppercase(Locale.US)
-                    ?.takeIf(::isIsoCountryCode)
-                    ?: return null
+            country.code
+                ?.trim()
+                ?.uppercase(Locale.US)
+                ?.takeIf(::isIsoCountryCode)
+                ?: return null
         val rings = country.rings.mapNotNull(::parseRing)
         return TrafficMapCountryShape(
             countryCode = countryCode,

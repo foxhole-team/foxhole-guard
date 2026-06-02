@@ -109,6 +109,7 @@ internal fun TrafficMapDashboardCard(
         } else {
             remember { emptyList() }
         }
+    val countryShapesLoading = contentReady && !mapDisabledForPower && countryShapes.isEmpty()
     FoxholeCard(
         modifier = modifier
             .fillMaxWidth()
@@ -138,7 +139,7 @@ internal fun TrafficMapDashboardCard(
                             .fillMaxWidth()
                             .weight(1f),
                     )
-                } else if (!contentReady) {
+                } else if (!contentReady || countryShapesLoading) {
                     TrafficMapCanvasLoadingBlock(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -157,7 +158,7 @@ internal fun TrafficMapDashboardCard(
                 }
             }
             if (!mapDisabledForPower) {
-                if (legendLoading || !contentReady) {
+                if (legendLoading || !contentReady || countryShapesLoading) {
                     TrafficMapLegendLoadingBlock(
                         modifier = Modifier
                             .weight(TRAFFIC_MAP_LEGEND_WEIGHT)
@@ -501,13 +502,16 @@ private object TrafficMapCountryShapeCache {
                         .bufferedReader()
                         .use { reader -> reader.readText() }
                 }
+            val readFinishedAtMs = SystemClock.elapsedRealtime()
             withContext(Dispatchers.Default) {
                 TrafficMapCountryShapeAssetParser()
                     .parse(raw)
             }.also { shapes ->
                 cachedShapes = shapes
+                val finishedAtMs = SystemClock.elapsedRealtime()
                 logTrafficMapDebug(
-                    "shapes loaded count=${shapes.size} durationMs=${SystemClock.elapsedRealtime() - startedAtMs}",
+                    "shapes loaded count=${shapes.size} readMs=${readFinishedAtMs - startedAtMs} " +
+                        "parseMs=${finishedAtMs - readFinishedAtMs} durationMs=${finishedAtMs - startedAtMs}",
                 )
             }
         }
