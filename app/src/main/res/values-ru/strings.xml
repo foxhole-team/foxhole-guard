@@ -89,7 +89,7 @@
     <string name="home_network_city_label">Город:</string>
     <string name="home_network_ip_label">IP:</string>
     <string name="home_network_provider_label">Провайдер:</string>
-    <string name="home_network_server_ping_label">Пинг туннеля:</string>
+    <string name="home_network_server_ping_label">Пинг сервера:</string>
     <string name="home_network_dns_label">DNS:</string>
     <string name="home_network_transport_type_label">Тип:</string>
     <string name="home_network_connect_time_label">Время:</string>

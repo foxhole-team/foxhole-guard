@@ -485,4 +485,56 @@ class HomeIpRefreshPolicyTest {
             torOperationCompletionIpInfo(currentTorIpInfo = null),
         )
     }
+
+    @Test
+    fun `tor operation completion ignores dashboard vpn ip while waiting for tor ip`() {
+        val currentTorIp =
+            IpInfo(
+                ip = "185.220.101.12",
+                ipv4 = "185.220.101.12",
+                countryCode = "DE",
+                countryName = "Germany",
+                city = "Berlin",
+                isp = "TOR exit",
+                fetchedAt = 1_000L,
+            )
+        val activeOperation =
+            HomeTorOperationUiState(
+                kind = HomeTorOperationKind.CONNECTING,
+                startedAt = 2_000L,
+            )
+
+        assertEquals(
+            currentTorIp,
+            torOperationCompletionIpInfo(
+                snapshot = ConnectionSnapshot(state = ConnectionState.CONNECTED),
+                torOperation = activeOperation,
+                currentTorIpInfo = currentTorIp,
+            ),
+        )
+        assertEquals(
+            null,
+            torOperationCompletionIpInfo(
+                snapshot = ConnectionSnapshot(state = ConnectionState.CONNECTING),
+                torOperation = activeOperation,
+                currentTorIpInfo = currentTorIp,
+            ),
+        )
+        assertEquals(
+            null,
+            torOperationCompletionIpInfo(
+                snapshot = ConnectionSnapshot(state = ConnectionState.CONNECTED),
+                torOperation = HomeTorOperationUiState(),
+                currentTorIpInfo = currentTorIp,
+            ),
+        )
+        assertEquals(
+            null,
+            torOperationCompletionIpInfo(
+                snapshot = ConnectionSnapshot(state = ConnectionState.CONNECTED),
+                torOperation = activeOperation,
+                currentTorIpInfo = null,
+            ),
+        )
+    }
 }

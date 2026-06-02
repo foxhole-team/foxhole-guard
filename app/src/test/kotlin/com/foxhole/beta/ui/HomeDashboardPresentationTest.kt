@@ -26,6 +26,7 @@ import com.foxhole.beta.core.model.UiSettings
 import com.foxhole.beta.vpn.FoxholeVpnService
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -202,7 +203,8 @@ class HomeDashboardPresentationTest {
         assertEquals(setOf("wg"), model.downOptionIds)
         assertEquals(setOf("hysteria"), model.latencyUnavailableOptionIds)
         assertTrue(model.showSmartStartLatency)
-        assertEquals(92L, model.selectedServerPingMs)
+        assertEquals(88L, model.selectedServerPingMs)
+        assertNotEquals(model.latencyPresentation.latencyMs, model.selectedServerPingMs)
         assertTrue(model.connectionDetailsReady)
         assertFalse(model.connectionMetricsLoading)
     }
@@ -367,7 +369,7 @@ class HomeDashboardPresentationTest {
     }
 
     @Test
-    fun `protocol model keeps server ping out of dashboard tunnel ping`() {
+    fun `protocol model keeps server ping separate from unavailable latency`() {
         val model =
             resolveHomeDashboardProtocolModel(
                 HomeRouteUiState(
@@ -385,12 +387,12 @@ class HomeDashboardPresentationTest {
 
         assertEquals(null, model.latencyPresentation.latencyMs)
         assertTrue(model.latencyPresentation.isUnavailable)
-        assertEquals(null, model.selectedServerPingMs)
+        assertEquals(379L, model.selectedServerPingMs)
         assertTrue(model.connectionDetailsReady)
     }
 
     @Test
-    fun `protocol model uses public tunnel ping for dashboard connection details`() {
+    fun `protocol model uses direct tcp server ping for dashboard server metric`() {
         val model =
             resolveHomeDashboardProtocolModel(
                 HomeRouteUiState(
@@ -406,12 +408,13 @@ class HomeDashboardPresentationTest {
                 ),
             )
 
-        assertEquals(91L, model.selectedServerPingMs)
+        assertEquals(379L, model.selectedServerPingMs)
+        assertNotEquals(91L, model.selectedServerPingMs)
         assertFalse(model.connectionDetailsReady)
     }
 
     @Test
-    fun `dashboard smart menu receives public tunnel ping instead of provider server ping`() {
+    fun `dashboard smart menu receives provider server ping separately from latency`() {
         val source =
             listOf(
                 java.io.File("src/main/kotlin/com/foxhole/beta/ui/HomeScreen.kt"),
@@ -422,11 +425,11 @@ class HomeDashboardPresentationTest {
             source.substringAfter("SmartProfileAutoConnectMenu(")
                 .substringBefore("forceExpanded = firstAnalysisProtocolMenuForceExpanded")
 
-        assertTrue(smartMenuBlock.contains("serverPingByOptionId = state.protocolTunnelPingsByOptionId"))
-        assertTrue(smartMenuBlock.contains("serverPingUnavailableOptionIds = state.protocolTunnelPingUnavailableOptionIds"))
-        assertTrue(smartMenuBlock.contains("serverPingLabelRes = R.string.home_network_server_ping_label"))
-        assertFalse(smartMenuBlock.contains("state.protocolServerPingsByOptionId"))
-        assertFalse(smartMenuBlock.contains("state.protocolServerPingUnavailableOptionIds"))
+        assertTrue(smartMenuBlock.contains("serverPingByOptionId = state.protocolServerPingsByOptionId"))
+        assertTrue(smartMenuBlock.contains("serverPingUnavailableOptionIds = state.protocolServerPingUnavailableOptionIds"))
+        assertTrue(smartMenuBlock.contains("serverPingLabelRes = R.string.smart_profile_menu_server_ping_column"))
+        assertFalse(smartMenuBlock.contains("serverPingByOptionId = state.protocolTunnelPingsByOptionId"))
+        assertFalse(smartMenuBlock.contains("serverPingUnavailableOptionIds = state.protocolTunnelPingUnavailableOptionIds"))
     }
 
     @Test

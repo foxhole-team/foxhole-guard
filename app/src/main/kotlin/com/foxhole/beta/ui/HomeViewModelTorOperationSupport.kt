@@ -3,6 +3,8 @@ package com.foxhole.beta.ui
 import android.app.Application
 import androidx.lifecycle.viewModelScope
 import com.foxhole.beta.R
+import com.foxhole.beta.core.model.ConnectionSnapshot
+import com.foxhole.beta.core.model.ConnectionState
 import com.foxhole.beta.core.model.IpInfo
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -39,6 +41,15 @@ internal fun torOperationStartedIpAddress(previousTorIpInfo: IpInfo?): String? =
     previousTorIpInfo?.let(::primaryVisibleIp)
 
 internal fun torOperationCompletionIpInfo(currentTorIpInfo: IpInfo?): IpInfo? = currentTorIpInfo
+
+internal fun torOperationCompletionIpInfo(
+    snapshot: ConnectionSnapshot,
+    torOperation: HomeTorOperationUiState,
+    currentTorIpInfo: IpInfo?,
+): IpInfo? =
+    currentTorIpInfo?.takeIf {
+        torOperation.active && snapshot.state == ConnectionState.CONNECTED
+    }
 
 internal suspend fun HomeViewModel.maybeFinishTorOperationInternal(
     torOperation: HomeTorOperationUiState,

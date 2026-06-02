@@ -568,11 +568,11 @@ internal fun resolveHomeDashboardProtocolModel(state: HomeRouteUiState): HomeDas
             pinSelectionToProfile = state.protocolMetricsRefreshing || state.reconnectRequired,
         )
     val selectedServerPingOptionId = resolveDashboardLatencyOptionId(state.activeProfile, state.connection)
-    val selectedServerPingMs = selectedServerPingOptionId?.let(state.protocolTunnelPingsByOptionId::get)
+    val selectedServerPingMs = selectedServerPingOptionId?.let(state.protocolServerPingsByOptionId::get)
     val selectedServerPingUnavailable =
         selectedServerPingOptionId != null &&
             selectedServerPingMs == null &&
-            selectedServerPingOptionId in state.protocolTunnelPingUnavailableOptionIds
+            selectedServerPingOptionId in state.protocolServerPingUnavailableOptionIds
     val latencyState =
         state.resolveDashboardProfileLatencyState(
             latenciesByOptionId = latenciesByOptionId,

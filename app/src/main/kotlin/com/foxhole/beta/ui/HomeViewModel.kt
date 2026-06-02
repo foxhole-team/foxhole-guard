@@ -870,17 +870,17 @@ class HomeViewModel(
         viewModelScope.launch {
             combine(
                 container.connectionController.snapshot,
-                container.connectionController.ipInfo,
+                torIpInfoMutable,
                 torOperationMutable,
-            ) { snapshot, ipInfo, torOperation ->
-                Triple(snapshot, ipInfo, torOperation)
-            }.collect { (snapshot, ipInfo, torOperation) ->
-                if (
-                    torOperation.active &&
-                    snapshot.state == ConnectionState.CONNECTED &&
-                    ipInfo != null
-                ) {
-                    maybeFinishTorOperation(torOperation, ipInfo)
+            ) { snapshot, torIpInfo, torOperation ->
+                Triple(snapshot, torIpInfo, torOperation)
+            }.collect { (snapshot, torIpInfo, torOperation) ->
+                torOperationCompletionIpInfo(
+                    snapshot = snapshot,
+                    torOperation = torOperation,
+                    currentTorIpInfo = torIpInfo,
+                )?.let { completionIpInfo ->
+                    maybeFinishTorOperation(torOperation, completionIpInfo)
                 }
             }
         }

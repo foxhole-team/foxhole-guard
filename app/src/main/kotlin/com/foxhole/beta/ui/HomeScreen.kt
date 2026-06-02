@@ -654,8 +654,8 @@ fun HomeScreen(
                                                     latencyByOptionId = dashboardProtocolLatencies,
                                                     unavailableOptionIds = dashboardDownProtocolIds,
                                                     latencyUnavailableOptionIds = dashboardUnavailableProtocolIds,
-                                                    serverPingByOptionId = state.protocolTunnelPingsByOptionId,
-                                                    serverPingUnavailableOptionIds = state.protocolTunnelPingUnavailableOptionIds,
+                                                    serverPingByOptionId = state.protocolServerPingsByOptionId,
+                                                    serverPingUnavailableOptionIds = state.protocolServerPingUnavailableOptionIds,
                                                     metricsUpdatedAtByOptionId = state.protocolMetricsUpdatedAtByOptionId,
                                                     metricsRefreshing = state.protocolMetricsRefreshing || state.autoConnect.running,
                                                     refreshingOptionId =
@@ -675,7 +675,7 @@ fun HomeScreen(
                                                     showMetricsTable = false,
                                                     showStatusHeader = true,
                                                     latencyProbeMethod = state.settings.connection.latencyProbeMethod,
-                                                    serverPingLabelRes = R.string.home_network_server_ping_label,
+                                                    serverPingLabelRes = R.string.smart_profile_menu_server_ping_column,
                                                     forceExpanded = firstAnalysisProtocolMenuForceExpanded,
                                                 )
                                             }
