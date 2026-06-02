@@ -20,6 +20,7 @@ LOG_SUFFIXES = {
     ".txt",
     ".out",
     ".err",
+    ".logcat",
     ".trace",
     ".stack",
     ".meminfo",
