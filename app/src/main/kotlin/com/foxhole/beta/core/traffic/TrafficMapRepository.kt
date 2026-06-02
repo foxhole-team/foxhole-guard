@@ -100,12 +100,23 @@ class TrafficMapRepository(
             .distinctUntilChanged()
             .flowOn(Dispatchers.Default)
 
+    internal fun trafficMapStateSnapshot(
+        originIpInfo: IpInfo?,
+        runtimeAvailable: Boolean,
+        destinations: List<TrafficMapPoint>,
+    ): TrafficMapUiState =
+        buildTrafficMapUiState(
+            originInfo = trafficMapOriginInfo(originIpInfo),
+            runtimeAvailable = runtimeAvailable,
+            destinations = destinations,
+        )
+
     private fun buildTrafficMapUiState(
         originInfo: TrafficMapOriginInfo?,
         runtimeAvailable: Boolean,
         destinations: List<TrafficMapPoint>,
     ): TrafficMapUiState {
-        val origin = trafficMapOrigin(originInfo?.countryCode)
+        val origin = originInfo?.countryCode?.let(::trafficMapOrigin)
         val visibleDestinations =
             destinations
                 .take(MaxTrafficMapDestinations)
@@ -115,22 +126,25 @@ class TrafficMapRepository(
                 .map { countryCode -> countryCode.uppercase(Locale.US) }
                 .toSet()
         return TrafficMapUiState(
-            originLat = origin.lat,
-            originLon = origin.lon,
+            originLat = origin?.lat ?: FallbackTrafficMapOrigin.lat,
+            originLon = origin?.lon ?: FallbackTrafficMapOrigin.lon,
             originCountryCode = originInfo?.countryCode,
             originCountryName = originInfo?.countryName,
             originCity = originInfo?.city,
             isAvailable = runtimeAvailable,
             destinations = visibleDestinations,
-            edges = visibleDestinations.map { point ->
-                TrafficMapEdge(
-                    fromLat = origin.lat,
-                    fromLon = origin.lon,
-                    toLat = point.lat,
-                    toLon = point.lon,
-                    bytes = point.bytes,
-                )
-            },
+            edges =
+                origin?.let { mapOrigin ->
+                    visibleDestinations.map { point ->
+                        TrafficMapEdge(
+                            fromLat = mapOrigin.lat,
+                            fromLon = mapOrigin.lon,
+                            toLat = point.lat,
+                            toLon = point.lon,
+                            bytes = point.bytes,
+                        )
+                    }
+                }.orEmpty(),
             highlightedCountries = highlightedCountries,
         )
     }
@@ -147,8 +161,8 @@ class TrafficMapRepository(
             }
     }
 
-    private fun trafficMapOrigin(countryCode: String?): TrafficMapCountryCoordinate =
-        countryCode?.let(TrafficMapCountryCoordinates::get) ?: FallbackTrafficMapOrigin
+    private fun trafficMapOrigin(countryCode: String): TrafficMapCountryCoordinate? =
+        TrafficMapCountryCoordinates[countryCode]
 
     private fun normalizeCountryCode(countryCode: String?): String? =
         countryCode
@@ -158,13 +172,15 @@ class TrafficMapRepository(
 
     private fun trafficMapOriginInfo(ipInfo: IpInfo?): TrafficMapOriginInfo? {
         val countryCode = normalizeCountryCode(ipInfo?.countryCode)
-        return countryCode?.let { code ->
-            TrafficMapOriginInfo(
-                countryCode = code,
-                countryName = ipInfo?.countryName?.takeIf(String::isNotBlank),
-                city = ipInfo?.city?.takeIf(String::isNotBlank),
-            )
-        }
+        return countryCode
+            ?.takeIf(TrafficMapCountryCoordinates::containsKey)
+            ?.let { code ->
+                TrafficMapOriginInfo(
+                    countryCode = code,
+                    countryName = ipInfo?.countryName?.takeIf(String::isNotBlank),
+                    city = ipInfo?.city?.takeIf(String::isNotBlank),
+                )
+            }
     }
 
     internal companion object {

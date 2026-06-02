@@ -263,24 +263,33 @@ private fun TrafficMapCanvas(
                 val phoneHomeRadius = 0.65.dp.toPx()
                 val origin = project(originLat, originLon, viewport)
                 val maxBytes = drawableDestinations.maxOfOrNull { destination -> destination.bytes }?.coerceAtLeast(1L) ?: 1L
-                val routeLanes = trafficRouteLanes(origin, drawableDestinations, viewport)
+                val routeLanes =
+                    if (originCountryCode != null) {
+                        trafficRouteLanes(origin, drawableDestinations, viewport)
+                    } else {
+                        emptyMap()
+                    }
                 val routeDrawModels =
-                    drawableDestinations
-                        .take(MAX_TRAFFIC_MAP_DRAW_EDGES)
-                        .map { destination ->
-                            val to = project(destination.lat, destination.lon, viewport)
-                            val weight = sqrt(destination.bytes.toDouble() / maxBytes.toDouble()).toFloat()
-                            TrafficMapRouteDrawModel(
-                                path =
-                                    curvedTrafficRoutePath(
-                                        from = origin,
-                                        to = to,
-                                        lane = routeLanes[destination.countryCode] ?: 1,
-                                    ),
-                                strokeWidth = minLineStroke + ((maxLineStroke - minLineStroke) * weight),
-                                alpha = 0.22f + (0.24f * weight),
-                            )
-                        }
+                    if (originCountryCode != null) {
+                        drawableDestinations
+                            .take(MAX_TRAFFIC_MAP_DRAW_EDGES)
+                            .map { destination ->
+                                val to = project(destination.lat, destination.lon, viewport)
+                                val weight = sqrt(destination.bytes.toDouble() / maxBytes.toDouble()).toFloat()
+                                TrafficMapRouteDrawModel(
+                                    path =
+                                        curvedTrafficRoutePath(
+                                            from = origin,
+                                            to = to,
+                                            lane = routeLanes[destination.countryCode] ?: 1,
+                                        ),
+                                    strokeWidth = minLineStroke + ((maxLineStroke - minLineStroke) * weight),
+                                    alpha = 0.22f + (0.24f * weight),
+                                )
+                            }
+                    } else {
+                        emptyList()
+                    }
                 val destinationOffsets =
                     drawableDestinations
                         .take(MAX_TRAFFIC_MAP_DRAW_DESTINATIONS)

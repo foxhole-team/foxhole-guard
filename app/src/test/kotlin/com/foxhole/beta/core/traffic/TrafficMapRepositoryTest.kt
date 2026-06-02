@@ -1,6 +1,9 @@
 package com.foxhole.beta.core.traffic
 
+import com.foxhole.beta.core.model.IpInfo
+import com.foxhole.beta.core.model.TrafficMapPoint
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Test
 
 class TrafficMapRepositoryTest {
@@ -133,6 +136,76 @@ class TrafficMapRepositoryTest {
     }
 
     @Test
+    fun `traffic map state does not draw fake origin routes when device origin is unknown`() {
+        val state =
+            TrafficMapRepository().trafficMapStateSnapshot(
+                originIpInfo = null,
+                runtimeAvailable = true,
+                destinations = listOf(trafficMapPoint("DE")),
+            )
+
+        assertNull(state.originCountryCode)
+        assertEquals(0, state.edges.size)
+        assertEquals("DE", state.destinations.single().countryCode)
+    }
+
+    @Test
+    fun `traffic map state hides unsupported origin country instead of using fallback marker`() {
+        val state =
+            TrafficMapRepository().trafficMapStateSnapshot(
+                originIpInfo =
+                    IpInfo(
+                        ip = "198.51.100.20",
+                        ipv4 = "198.51.100.20",
+                        countryCode = "ZZ",
+                        countryName = "Unsupported",
+                        city = "Nowhere",
+                        isp = "Device ISP",
+                        fetchedAt = 1_000L,
+                    ),
+                runtimeAvailable = true,
+                destinations = listOf(trafficMapPoint("DE")),
+            )
+
+        assertNull(state.originCountryCode)
+        assertEquals(0, state.edges.size)
+        assertEquals("DE", state.destinations.single().countryCode)
+    }
+
+    @Test
+    fun `traffic map state keeps supported device origin and route edges`() {
+        val state =
+            TrafficMapRepository().trafficMapStateSnapshot(
+                originIpInfo =
+                    IpInfo(
+                        ip = "198.51.100.20",
+                        ipv4 = "198.51.100.20",
+                        countryCode = "US",
+                        countryName = "United States",
+                        city = "New York",
+                        isp = "Device ISP",
+                        fetchedAt = 1_000L,
+                    ),
+                runtimeAvailable = true,
+                destinations = listOf(trafficMapPoint("DE")),
+            )
+
+        assertEquals("US", state.originCountryCode)
+        assertEquals("DE", state.destinations.single().countryCode)
+        assertEquals(1, state.edges.size)
+        assertEquals(
+            TrafficMapRepository.TrafficMapCountryCoordinates.getValue("US").lat,
+            state.edges.single().fromLat,
+            0.0,
+        )
+        assertEquals(
+            TrafficMapRepository.TrafficMapCountryCoordinates.getValue("US").lon,
+            state.edges.single().fromLon,
+            0.0,
+        )
+    }
+
+    @Test
     fun `runtime connection sample maps destination traffic to active country`() {
         val sample =
             runtimeConnectionTrafficMapSample(
@@ -190,4 +263,16 @@ class TrafficMapRepositoryTest {
             ),
         )
     }
+}
+
+private fun trafficMapPoint(countryCode: String): TrafficMapPoint {
+    val coordinate = TrafficMapRepository.TrafficMapCountryCoordinates.getValue(countryCode)
+    return TrafficMapPoint(
+        countryCode = countryCode,
+        label = coordinate.label,
+        lat = coordinate.lat,
+        lon = coordinate.lon,
+        bytes = 1_024L,
+        connections = 1,
+    )
 }
