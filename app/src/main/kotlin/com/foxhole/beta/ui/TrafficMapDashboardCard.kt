@@ -243,7 +243,7 @@ private fun TrafficMapCanvas(
         rememberTrafficMapLandLayerBitmap(
             shapes = mapCountryShapes,
             canvasSize = canvasSize,
-            color = colors.countryBorder,
+            color = colors.countryFill,
         )
 
     Box(
@@ -930,7 +930,7 @@ private fun DrawScope.drawPhoneMarker(
 
 @Immutable
 private data class TrafficMapColors(
-    val countryBorder: Color,
+    val countryFill: Color,
     val routeLine: Color,
     val destination: Color,
     val origin: Color,
@@ -942,7 +942,7 @@ private fun trafficMapColors(): TrafficMapColors {
     val colorScheme = MaterialTheme.colorScheme
     return if (LocalFoxholeDarkTheme.current) {
         TrafficMapColors(
-            countryBorder = Color(0xFF66746C),
+            countryFill = Color(0xFF46524A),
             routeLine = FoxholePositiveAccent,
             destination = FoxholePositiveAccent,
             origin = FoxholePositiveAccent,
@@ -950,7 +950,7 @@ private fun trafficMapColors(): TrafficMapColors {
         )
     } else {
         TrafficMapColors(
-            countryBorder = Color(0xFF20312A),
+            countryFill = Color(0xFF17251E),
             routeLine = Color(0xFF278A5B),
             destination = Color(0xFF278A5B),
             origin = Color(0xFF278A5B),

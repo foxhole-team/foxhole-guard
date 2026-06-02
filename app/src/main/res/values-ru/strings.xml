@@ -1,9 +1,9 @@
 <resources>
-    <!-- RU terms: Foxhole, TOR, Смарт старт, туннель, прокси, фаервол, служба VPN, установщик, оценка, отправка, набор правил. -->
+    <!-- RU terms: FoxHole, TOR, Смарт старт, туннель, прокси, фаервол, служба VPN, установщик, оценка, отправка, набор правил. -->
     <string name="navigate_back">Назад</string>
     <string name="switch_state_on">Включено</string>
     <string name="switch_state_off">Отключено</string>
-    <string name="app_name">Foxhole</string>
+    <string name="app_name">FoxHole</string>
     <string name="beta_badge">BETA</string>
     <string name="home_status_connected">Подключен</string>
     <string name="home_status_not_connected">Отключен</string>

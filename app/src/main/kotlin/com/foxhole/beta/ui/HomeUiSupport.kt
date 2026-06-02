@@ -1510,9 +1510,13 @@ internal fun shouldShowHomeNetworkFullLoading(
 internal fun shouldShowHomeNetworkGeoRowsLoading(
     ipInfo: IpInfo?,
     nowMs: Long,
+    refreshLoading: Boolean = false,
 ): Boolean {
     if (ipInfo == null || !shouldShowIpInfoGeoEnrichmentLoading(ipInfo)) {
         return false
+    }
+    if (refreshLoading) {
+        return true
     }
     val ageMs = nowMs - ipInfo.fetchedAt
     return ageMs in 0..HOME_NETWORK_GEO_ROW_PENDING_LOADING_MS

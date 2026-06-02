@@ -911,30 +911,36 @@ fun HomeScreen(
                                                 .testTag("home_network_loading"),
                                     )
                                 } else {
-                                    val geoRowsLoading = rememberHomeNetworkGeoRowsLoading(networkIpInfo)
                                     val rowValueLoading =
                                         networkModel.showRefreshProgress ||
-                                            showNetworkIpInfoLoading ||
+                                            showNetworkIpInfoLoading
+                                    val geoRowsLoading =
+                                        rememberHomeNetworkGeoRowsLoading(
+                                            networkIpInfo = networkIpInfo,
+                                            refreshLoading = rowValueLoading,
+                                        )
+                                    val networkValueLoading =
+                                        rowValueLoading ||
                                             geoRowsLoading
                                     val countryValue =
                                         homeNetworkDetailValue(
                                             value = networkIpInfo?.let(::buildCountryLineOrNull),
-                                            loading = rowValueLoading,
+                                            loading = networkValueLoading,
                                         )
                                     val cityValue =
                                         homeNetworkDetailValue(
                                             value = networkIpInfo?.let(::buildCityLineOrNull),
-                                            loading = rowValueLoading,
+                                            loading = networkValueLoading,
                                         )
                                     val ipValue =
                                         homeNetworkDetailValue(
                                             value = networkIpInfo?.let(::primaryVisibleIpOrNull),
-                                            loading = rowValueLoading,
+                                            loading = networkValueLoading,
                                         )
                                     val providerValue =
                                         homeNetworkDetailValue(
                                             value = networkIpInfo?.let(::providerLineOrNull),
-                                            loading = rowValueLoading,
+                                            loading = networkValueLoading,
                                         )
                                     Column(
                                         modifier = Modifier.weight(1f),
@@ -1735,7 +1741,10 @@ private fun dashboardCardStartupStage(card: DashboardCard): Int =
     }
 
 @Composable
-private fun rememberHomeNetworkGeoRowsLoading(networkIpInfo: IpInfo?): Boolean {
+private fun rememberHomeNetworkGeoRowsLoading(
+    networkIpInfo: IpInfo?,
+    refreshLoading: Boolean,
+): Boolean {
     val key =
         listOf(
             networkIpInfo?.fetchedAt,
@@ -1743,12 +1752,18 @@ private fun rememberHomeNetworkGeoRowsLoading(networkIpInfo: IpInfo?): Boolean {
             networkIpInfo?.countryName,
             networkIpInfo?.city,
             networkIpInfo?.isp,
+            refreshLoading,
         )
     var nowMs by remember(key) { mutableStateOf(System.currentTimeMillis()) }
-    val loading = shouldShowHomeNetworkGeoRowsLoading(networkIpInfo, nowMs)
+    val loading =
+        shouldShowHomeNetworkGeoRowsLoading(
+            ipInfo = networkIpInfo,
+            nowMs = nowMs,
+            refreshLoading = refreshLoading,
+        )
     LaunchedEffect(key, loading) {
         val info = networkIpInfo ?: return@LaunchedEffect
-        if (!loading) {
+        if (!loading || refreshLoading) {
             return@LaunchedEffect
         }
         val remainingMs = homeNetworkGeoRowsLoadingRemainingMs(info, System.currentTimeMillis())

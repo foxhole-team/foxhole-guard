@@ -113,6 +113,13 @@ class HomeDashboardTextPolicyTest {
                 nowMs = 10_000L + HOME_NETWORK_GEO_ROW_PENDING_LOADING_MS + 1L,
             ),
         )
+        assertTrue(
+            shouldShowHomeNetworkGeoRowsLoading(
+                ipInfo = partialIpInfo,
+                nowMs = 10_000L + HOME_NETWORK_GEO_ROW_PENDING_LOADING_MS + 1L,
+                refreshLoading = true,
+            ),
+        )
         assertEquals(
             HomeNetworkDetailValue(text = "", loading = true),
             homeNetworkDetailValue(buildCityLineOrNull(partialIpInfo), loading = true),
