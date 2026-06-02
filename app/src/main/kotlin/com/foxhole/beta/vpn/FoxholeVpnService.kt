@@ -1017,7 +1017,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         FoxholeVpnRuntimeBridge.clearTransientState(clearIpInfo = false)
         FoxholeVpnRuntimeBridge.update(
             ConnectionSnapshot(
-                state = ConnectionState.IDLE,
+                state = ConnectionState.CONNECTING,
                 trafficMode = TrafficMode.TUNNEL,
                 profileId = LOCAL_GUARD_PROFILE_ID,
                 profileName = mode.runtimeProfileName(),
@@ -1036,6 +1036,10 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         }
         if (result.isSuccess) {
             registerVpnNetworkCallbackIfNeeded()
+            val localGuardVpnNetwork = awaitLocalGuardVpnNetworkReady(mode)
+            if (!isCurrentRuntimeTransition(transitionGeneration, "local_guard_network_ready")) {
+                return
+            }
             updateActiveVpnUnderlyingNetwork(currentUpstreamNetworkOrNull())
             if (mode == LocalGuardMode.DNS) {
                 FoxholeVpnRuntimeBridge.updateTraffic(TrafficSnapshot())
@@ -1055,7 +1059,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
                     isSmartStartConnection = analysisMessage != null,
                 ),
             )
-            startGeoRefresh()
+            startGeoRefresh(localGuardVpnNetwork)
             container.diagnosticsLogger.record("connection", "local guard started mode=${mode.name.lowercase()}")
             RuntimeResumeStateStore.markLocalGuardRuntime(this, mode)
             updateNotification()
@@ -1066,6 +1070,57 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
             val error = result.exceptionOrNull()
             fail(error?.let { describeVpnRuntimeFailure(it) } ?: getString(R.string.error_runtime_missing), commandStartId)
         }
+    }
+
+    private suspend fun awaitLocalGuardVpnNetworkReady(mode: LocalGuardMode): Network? {
+        val initialNetwork = awaitVpnNetworkOrNull(LOCAL_GUARD_VPN_NETWORK_WAIT_TIMEOUT_MS)
+        if (initialNetwork == null) {
+            container.diagnosticsLogger.recordStructured(
+                "connection",
+                "local guard vpn network wait timeout",
+                "mode=${mode.name.lowercase()}",
+            )
+            delay(LOCAL_GUARD_NETWORK_FALLBACK_SETTLE_MS)
+            return null
+        }
+        activeVpnNetworkHandle = initialNetwork.networkHandle
+        if (isVpnNetworkValidated(initialNetwork)) {
+            container.diagnosticsLogger.recordStructured(
+                "connection",
+                "local guard vpn network validated",
+                "mode=${mode.name.lowercase()}",
+                "handle=${initialNetwork.networkHandle}",
+            )
+            return initialNetwork
+        }
+
+        var latestNetwork: Network = initialNetwork
+        val deadline = SystemClock.elapsedRealtime() + LOCAL_GUARD_NETWORK_VALIDATION_TIMEOUT_MS
+        while (currentCoroutineContext().isActive && SystemClock.elapsedRealtime() < deadline) {
+            currentVpnNetworkOrNull()?.let { network ->
+                latestNetwork = network
+                activeVpnNetworkHandle = network.networkHandle
+                if (isVpnNetworkValidated(network)) {
+                    container.diagnosticsLogger.recordStructured(
+                        "connection",
+                        "local guard vpn network validated",
+                        "mode=${mode.name.lowercase()}",
+                        "handle=${network.networkHandle}",
+                    )
+                    return network
+                }
+            }
+            delay(VPN_NETWORK_WAIT_POLL_DELAY_MS)
+        }
+        container.diagnosticsLogger.recordStructured(
+            "connection",
+            "local guard vpn network validation timeout",
+            "mode=${mode.name.lowercase()}",
+            "handle=${latestNetwork.networkHandle}",
+            "settle_ms=$LOCAL_GUARD_NETWORK_FALLBACK_SETTLE_MS",
+        )
+        delay(LOCAL_GUARD_NETWORK_FALLBACK_SETTLE_MS)
+        return latestNetwork
     }
 
     private suspend fun handleLocalGuardPreflight(
@@ -2187,6 +2242,9 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         internal const val GEO_REFRESH_CALL_TIMEOUT_MS = 5_000L
         internal const val VPN_NETWORK_WAIT_TIMEOUT_MS = 3_000L
         internal const val VPN_NETWORK_LOST_SETTLE_MS = 350L
+        private const val LOCAL_GUARD_VPN_NETWORK_WAIT_TIMEOUT_MS = 5_000L
+        private const val LOCAL_GUARD_NETWORK_VALIDATION_TIMEOUT_MS = 12_000L
+        private const val LOCAL_GUARD_NETWORK_FALLBACK_SETTLE_MS = 1_500L
         internal const val CONNECTIVITY_PROBE_NETWORK_WAIT_TIMEOUT_MS = 3_000L
         internal const val VPN_NETWORK_WAIT_POLL_DELAY_MS = 100L
         internal const val IPV4_ENRICHMENT_CALL_TIMEOUT_MS = 4_000L

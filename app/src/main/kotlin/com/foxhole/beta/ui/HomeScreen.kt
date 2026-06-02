@@ -938,15 +938,19 @@ fun HomeScreen(
                                             refreshLoading = rowValueLoading,
                                             geoRowsLoading = geoRowsLoading,
                                         )
+                                    val countryLine = networkIpInfo?.let(::buildCountryLineOrNull)
+                                    val cityLine = networkIpInfo?.let(::buildCityLineOrNull)
                                     val countryValue =
-                                        homeNetworkDetailValue(
-                                            value = networkIpInfo?.let(::buildCountryLineOrNull),
-                                            loading = detailLoadingPolicy.country,
+                                        homeNetworkGeoRowDetailValue(
+                                            value = countryLine,
+                                            refreshLoading = rowValueLoading,
+                                            geoRowsLoading = geoRowsLoading,
                                         )
                                     val cityValue =
-                                        homeNetworkDetailValue(
-                                            value = networkIpInfo?.let(::buildCityLineOrNull),
-                                            loading = detailLoadingPolicy.city,
+                                        homeNetworkGeoRowDetailValue(
+                                            value = cityLine,
+                                            refreshLoading = rowValueLoading,
+                                            geoRowsLoading = geoRowsLoading,
                                         )
                                     val ipValue =
                                         homeNetworkDetailValue(

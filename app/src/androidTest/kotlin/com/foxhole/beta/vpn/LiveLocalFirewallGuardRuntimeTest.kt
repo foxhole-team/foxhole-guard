@@ -325,7 +325,7 @@ class LiveLocalFirewallGuardRuntimeTest {
         )
         assertTrue(
             "local firewall guard did not publish connected snapshot",
-            waitForCondition(timeoutMs = 10_000L) {
+            waitForCondition(timeoutMs = 25_000L) {
                 app.container.connectionController.snapshot.value.state == ConnectionState.CONNECTED &&
                     app.container.connectionController.snapshot.value.profileId == FoxholeVpnService.LOCAL_GUARD_PROFILE_ID
             },

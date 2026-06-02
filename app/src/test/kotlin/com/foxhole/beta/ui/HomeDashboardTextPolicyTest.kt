@@ -69,6 +69,52 @@ class HomeDashboardTextPolicyTest {
     }
 
     @Test
+    fun `network geo rows skeleton missing country and city until loading settles`() {
+        val partialIpInfo =
+            IpInfo(
+                ip = "203.0.113.7",
+                countryCode = "NL",
+                countryName = null,
+                city = null,
+                isp = "Example ISP",
+                fetchedAt = 1L,
+            )
+
+        assertEquals(
+            HomeNetworkDetailValue(text = "", loading = true),
+            homeNetworkGeoRowDetailValue(
+                value = buildCountryLineOrNull(partialIpInfo),
+                refreshLoading = false,
+                geoRowsLoading = true,
+            ),
+        )
+        assertEquals(
+            HomeNetworkDetailValue(text = "", loading = true),
+            homeNetworkGeoRowDetailValue(
+                value = buildCityLineOrNull(partialIpInfo),
+                refreshLoading = false,
+                geoRowsLoading = true,
+            ),
+        )
+        assertEquals(
+            HomeNetworkDetailValue(text = "-", loading = false),
+            homeNetworkGeoRowDetailValue(
+                value = buildCountryLineOrNull(partialIpInfo),
+                refreshLoading = false,
+                geoRowsLoading = false,
+            ),
+        )
+        assertEquals(
+            HomeNetworkDetailValue(text = "-", loading = false),
+            homeNetworkGeoRowDetailValue(
+                value = buildCityLineOrNull(partialIpInfo),
+                refreshLoading = false,
+                geoRowsLoading = false,
+            ),
+        )
+    }
+
+    @Test
     fun `network card keeps rows visible while missing country or city is still loading`() {
         val partialIpInfo =
             IpInfo(

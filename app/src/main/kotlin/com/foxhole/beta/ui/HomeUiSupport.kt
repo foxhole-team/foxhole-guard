@@ -1575,6 +1575,16 @@ internal fun homeNetworkDetailValue(
         loading = loading && value == null,
     )
 
+internal fun homeNetworkGeoRowDetailValue(
+    value: String?,
+    refreshLoading: Boolean,
+    geoRowsLoading: Boolean,
+): HomeNetworkDetailValue =
+    homeNetworkDetailValue(
+        value = value,
+        loading = refreshLoading || (geoRowsLoading && value == null),
+    )
+
 internal fun homeNetworkDetailLoadingPolicy(
     refreshLoading: Boolean,
     geoRowsLoading: Boolean,

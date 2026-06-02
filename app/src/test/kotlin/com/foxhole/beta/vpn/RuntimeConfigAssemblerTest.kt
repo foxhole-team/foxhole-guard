@@ -155,6 +155,21 @@ class RuntimeConfigAssemblerTest {
     }
 
     @Test
+    fun `system tun stack is coerced to gvisor for local firewall guard`() {
+        val config =
+            parse(
+                assembler.assembleLocalGuard(
+                    settings = Settings(traffic = TrafficSettings(tunStack = TunStack.SYSTEM)),
+                    mode = LocalGuardMode.FIREWALL,
+                ),
+            )
+
+        val tun = config["inbounds"]!!.jsonArray.first().jsonObject
+
+        assertEquals("gvisor", tun["stack"]!!.jsonPrimitive.content)
+    }
+
+    @Test
     fun `tor privacy route routes tcp through tor and udp through proxy by default`() {
         val config =
             parse(
@@ -965,7 +980,7 @@ class RuntimeConfigAssemblerTest {
         assertEquals("dns-remote", dns["final"]!!.jsonPrimitive.content)
         assertEquals("dns-remote", route["default_domain_resolver"]!!.jsonPrimitive.content)
         assertEquals("direct", route["final"]!!.jsonPrimitive.content)
-        assertEquals(true, route["override_android_vpn"]!!.jsonPrimitive.content.toBoolean())
+        assertEquals(false, route["override_android_vpn"]!!.jsonPrimitive.content.toBoolean())
         assertEquals(false, tunInbound["strict_route"]!!.jsonPrimitive.content.toBoolean())
         assertTrue(route["rules"]!!.jsonArray.map { it.jsonObject }.any { rule ->
             rule["action"]?.jsonPrimitive?.content == "hijack-dns"

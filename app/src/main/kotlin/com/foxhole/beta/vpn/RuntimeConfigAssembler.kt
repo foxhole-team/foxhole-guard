@@ -170,7 +170,7 @@ class RuntimeConfigAssembler(
                     }
                 defaultResolver?.let { put("default_domain_resolver", it) }
                 put("auto_detect_interface", true)
-                put("override_android_vpn", true)
+                put("override_android_vpn", false)
             }
         return json.encodeToString(
             JsonObject.serializer(),
@@ -726,7 +726,7 @@ class RuntimeConfigAssembler(
             put("mtu", settings.traffic.mtu)
             put("auto_route", true)
             put("strict_route", false)
-            put("stack", settings.traffic.tunStack.configValue)
+            put("stack", effectiveTunnelTunStack(settings.traffic.tunStack).configValue)
             if (mode == LocalGuardMode.DNS) {
                 putJsonArray("route_address") {
                     add(JsonPrimitive("$LOCAL_GUARD_DNS_SERVER_ADDRESS/32"))
