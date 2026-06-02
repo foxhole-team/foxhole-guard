@@ -32,8 +32,21 @@ class HomeDashboardHotPathTest {
     }
 
     @Test
-    fun `startup composition prioritizes map and network first`() {
-        assertTrue(
+    fun `startup composition keeps first frame card free`() {
+        DashboardCard.entries.forEach { card ->
+            assertFalse(
+                shouldComposeDashboardCardNow(
+                    card = card,
+                    startupStage = 0,
+                    activeReorderCard = null,
+                ),
+            )
+        }
+    }
+
+    @Test
+    fun `startup composition prioritizes network before map`() {
+        assertFalse(
             shouldComposeDashboardCardNow(
                 card = DashboardCard.TRAFFIC_MAP,
                 startupStage = 1,
@@ -72,6 +85,13 @@ class HomeDashboardHotPathTest {
 
     @Test
     fun `startup composition adds remaining dashboard cards in short stages`() {
+        assertTrue(
+            shouldComposeDashboardCardNow(
+                card = DashboardCard.TRAFFIC_MAP,
+                startupStage = 2,
+                activeReorderCard = null,
+            ),
+        )
         assertTrue(
             shouldComposeDashboardCardNow(
                 card = DashboardCard.PROFILES,

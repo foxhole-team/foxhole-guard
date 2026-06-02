@@ -149,7 +149,7 @@ internal data class HomeNetworkDetailLoadingPolicy(
     val provider: Boolean,
 )
 
-internal const val HOME_NETWORK_GEO_ROW_PENDING_LOADING_MS = 2_000L
+internal const val HOME_NETWORK_GEO_ROW_PENDING_LOADING_MS = 5_000L
 
 internal data class HomeDashboardProxyModel(
     val modeOption: HomeModeOption,

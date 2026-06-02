@@ -170,9 +170,13 @@ fun HomeScreen(
     var firstAnalysisProtocolMenuProfileId by rememberSaveable { mutableStateOf<Long?>(null) }
     var firstAnalysisProtocolMenuStarted by rememberSaveable { mutableStateOf(false) }
     var selectedConnectionFeature by rememberSaveable { mutableStateOf<HomeConnectionFeature?>(null) }
-    val wifiLanAddress by rememberWifiLanAddress(
-        enabled = state.settings.expert.localSurfaces.allowLanAccess,
-    )
+    val shouldObserveWifiLanAddress =
+        state.settings.expert.localSurfaces.allowLanAccess &&
+            (
+                selectedConnectionFeature == HomeConnectionFeature.LAN_PROXY ||
+                    state.settings.traffic.mode == TrafficMode.PROXY
+                )
+    val wifiLanAddress by rememberWifiLanAddress(enabled = shouldObserveWifiLanAddress)
     val proxyModel =
         remember(state, wifiLanAddress) {
             resolveHomeDashboardProxyModel(
@@ -219,18 +223,6 @@ fun HomeScreen(
             disabledContainerColor = Color.Transparent,
         )
     val dashboardSecondaryActionIconSize = 21.dp
-    val importFromClipboardTitle = stringResource(R.string.import_from_clipboard)
-    val importFromFileTitle = stringResource(R.string.import_from_file)
-    val importFromQrTitle = stringResource(R.string.scan_qr_code)
-    val importDropdownMenuWidth =
-        rememberImportDropdownMenuWidth(
-            titles =
-                listOf(
-                    importFromClipboardTitle,
-                    importFromFileTitle,
-                    importFromQrTitle,
-                ),
-        )
     val connectionDurationText = rememberConnectionDurationText(state.connection)
     val dashboardProtocolModel = remember(state) { resolveHomeDashboardProtocolModel(state) }
     val dashboardProtocolLatencies = dashboardProtocolModel.latenciesByOptionId
@@ -696,6 +688,18 @@ fun HomeScreen(
 
                     DashboardCard.ACTIONS -> {
                         item(key = DashboardCard.ACTIONS) {
+                            val importFromClipboardTitle = stringResource(R.string.import_from_clipboard)
+                            val importFromFileTitle = stringResource(R.string.import_from_file)
+                            val importFromQrTitle = stringResource(R.string.scan_qr_code)
+                            val importDropdownMenuWidth =
+                                rememberImportDropdownMenuWidth(
+                                    titles =
+                                        listOf(
+                                            importFromClipboardTitle,
+                                            importFromFileTitle,
+                                            importFromQrTitle,
+                                        ),
+                                )
                             DashboardCardDragContainer(
                                     modifier =
                                         Modifier
@@ -1747,7 +1751,7 @@ internal fun shouldComposeDashboardCardNow(
 
 private fun dashboardCardStartupStage(card: DashboardCard): Int =
     when (card) {
-        DashboardCard.TRAFFIC_MAP -> 1
+        DashboardCard.TRAFFIC_MAP -> 2
         DashboardCard.NETWORK -> 1
         DashboardCard.PROFILES -> 2
         DashboardCard.ACTIONS -> 3
@@ -1792,7 +1796,7 @@ private fun rememberHomeNetworkGeoRowsLoading(
 private const val DASHBOARD_CARD_ACTIVE_Z_INDEX = 100f
 private const val DASHBOARD_CARD_REORDER_THRESHOLD_FRACTION = 0.5f
 private const val DASHBOARD_CARD_EDGE_RESISTANCE_FRACTION = 0.18f
-private const val DASHBOARD_STARTUP_STAGE_INITIAL = 1
+private const val DASHBOARD_STARTUP_STAGE_INITIAL = 0
 private const val DASHBOARD_STARTUP_STAGE_ALL = 4
 private const val DASHBOARD_CARD_STARTUP_STAGE_DELAY_MS = 80L
 private val DashboardCardReorderFallbackMoveDistance = 96.dp

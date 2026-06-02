@@ -188,6 +188,35 @@ class HomeDashboardTextPolicyTest {
     }
 
     @Test
+    fun `network card keeps missing country and city skeletoned during slow geo enrichment`() {
+        val partialIpInfo =
+            IpInfo(
+                ip = "203.0.113.7",
+                countryCode = null,
+                countryName = null,
+                city = null,
+                isp = "Example ISP",
+                fetchedAt = 10_000L,
+            )
+        val stillPendingMs = 10_000L + 4_000L
+        val loading =
+            shouldShowHomeNetworkGeoRowsLoading(
+                ipInfo = partialIpInfo,
+                nowMs = stillPendingMs,
+            )
+
+        assertTrue(loading)
+        assertEquals(
+            HomeNetworkDetailValue(text = "", loading = true),
+            homeNetworkDetailValue(buildCountryLineOrNull(partialIpInfo), loading = loading),
+        )
+        assertEquals(
+            HomeNetworkDetailValue(text = "", loading = true),
+            homeNetworkDetailValue(buildCityLineOrNull(partialIpInfo), loading = loading),
+        )
+    }
+
+    @Test
     fun `network detail loading skeletons missing geo rows without hiding known ip`() {
         val policy = homeNetworkDetailLoadingPolicy(refreshLoading = false, geoRowsLoading = true)
 
