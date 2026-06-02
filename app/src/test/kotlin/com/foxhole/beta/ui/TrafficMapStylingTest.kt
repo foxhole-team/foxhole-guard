@@ -8,26 +8,29 @@ import org.junit.Test
 
 class TrafficMapStylingTest {
     @Test
-    fun `traffic map uses neutral gray colors in both themes`() {
+    fun `traffic map uses default gray land color in both themes`() {
+        val darkColors = trafficMapColors(darkTheme = true, surfaceColor = Color(0xFF101011))
+        val lightColors = trafficMapColors(darkTheme = false, surfaceColor = Color.White)
+
         assertEquals(
-            Color(0xFF4B4D50),
-            trafficMapColors(darkTheme = true, surfaceColor = Color(0xFF101011)).countryFill,
+            Color(0xFF7B7F84),
+            darkColors.countryFill,
         )
         assertEquals(
-            Color(0xFFC5C8CC),
-            trafficMapColors(darkTheme = false, surfaceColor = Color.White).countryFill,
+            darkColors.countryFill,
+            lightColors.countryFill,
         )
         assertEquals(
             Color(0xFF666B70),
-            trafficMapColors(darkTheme = false, surfaceColor = Color.White).routeLine,
+            lightColors.routeLine,
         )
         assertEquals(
             Color(0xFFD0D3D6),
-            trafficMapColors(darkTheme = true, surfaceColor = Color(0xFF101011)).destination,
+            darkColors.destination,
         )
         assertEquals(
             Color(0xFF3D4247),
-            trafficMapColors(darkTheme = false, surfaceColor = Color.White).origin,
+            lightColors.origin,
         )
     }
 

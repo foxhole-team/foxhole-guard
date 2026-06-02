@@ -976,7 +976,7 @@ internal fun trafficMapColors(
 ): TrafficMapColors =
     if (darkTheme) {
         TrafficMapColors(
-            countryFill = Color(0xFF4B4D50),
+            countryFill = TRAFFIC_MAP_DEFAULT_COUNTRY_FILL,
             routeLine = Color(0xFFB7BBC0),
             destination = Color(0xFFD0D3D6),
             origin = Color(0xFFE0E3E6),
@@ -984,7 +984,7 @@ internal fun trafficMapColors(
         )
     } else {
         TrafficMapColors(
-            countryFill = Color(0xFFC5C8CC),
+            countryFill = TRAFFIC_MAP_DEFAULT_COUNTRY_FILL,
             routeLine = Color(0xFF666B70),
             destination = Color(0xFF4F5459),
             origin = Color(0xFF3D4247),
@@ -1024,6 +1024,7 @@ private data class TrafficMapPowerState(
 }
 
 private val TRAFFIC_MAP_CARD_TOTAL_HEIGHT = 184.dp
+private val TRAFFIC_MAP_DEFAULT_COUNTRY_FILL = Color(0xFF7B7F84)
 private const val TRAFFIC_MAP_POWER_STATE_STARTUP_DELAY_MS = 1_200L
 private const val TRAFFIC_MAP_WEIGHT = 0.74f
 private const val TRAFFIC_MAP_LEGEND_WEIGHT = 0.26f
