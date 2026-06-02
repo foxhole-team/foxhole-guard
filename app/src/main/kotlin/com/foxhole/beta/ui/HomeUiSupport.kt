@@ -178,6 +178,21 @@ internal fun shouldShowForegroundIpRefreshLoading(
     connectionState != ConnectionState.CONNECTED &&
         currentIpInfo == null
 
+internal fun foregroundIpRefreshStartDelayMs(
+    firstForeground: Boolean,
+    connectionState: ConnectionState,
+    currentIpInfo: IpInfo?,
+): Long =
+    if (
+        firstForeground &&
+        connectionState == ConnectionState.IDLE &&
+        currentIpInfo == null
+    ) {
+        HomeViewModel.FIRST_FOREGROUND_IP_REFRESH_DELAY_MS
+    } else {
+        0L
+    }
+
 internal fun shouldShowIpInfoLoading(
     currentIpInfo: IpInfo?,
     explicitLoading: Boolean,

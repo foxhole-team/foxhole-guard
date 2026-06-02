@@ -25,6 +25,7 @@ import com.foxhole.beta.vpn.SubscriptionRefreshWorker
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.io.File
 import java.util.concurrent.TimeUnit
@@ -53,6 +54,7 @@ class FoxholeApplication :
         applyAppLocale(readFastStoredAppLocale(this))
 
         appScope.launch {
+            delay(TRAFFIC_MAP_PREWARM_STARTUP_DELAY_MS)
             runCatching { prewarmTrafficMapCountryShapes(this@FoxholeApplication) }
                 .onFailure { error ->
                     appGraph.diagnosticsLogger.record(
@@ -195,6 +197,7 @@ internal fun Context.applyDnsFilterUpdateSchedule(enabled: Boolean) {
 }
 
 internal const val DNS_FILTER_UPDATE_INTERVAL_HOURS = 72L
+private const val TRAFFIC_MAP_PREWARM_STARTUP_DELAY_MS = 750L
 
 internal fun applyAppLocale(locale: AppLocale) {
     val locales =

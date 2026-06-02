@@ -682,6 +682,7 @@ class HomeViewModel(
     internal var ipInfoRefreshToken: Long = 0L
     internal var activeIpInfoRefreshReason: IpInfoRefreshReason? = null
     internal var pendingPostConnectIpRefresh: Boolean = false
+    internal var firstForegroundIpRefreshPending: Boolean = true
     internal var lastForegroundDashboardRefreshElapsedMs: Long = 0L
     internal var connectedIpRefreshJob: Job? = null
     internal var postConnectLatencyRefreshJob: Job? = null
@@ -859,7 +860,8 @@ class HomeViewModel(
 
     fun onAppForegrounded() {
         viewModelScope.launch {
-            appTrafficUsageAccessGrantedMutable.value = appTrafficStatsRecorder.hasUsageAccess()
+            appTrafficUsageAccessGrantedMutable.value =
+                withContext(Dispatchers.IO) { appTrafficStatsRecorder.hasUsageAccess() }
             val appTrafficStatsAllowed =
                 appTrafficStatsRuntimeAllowed(
                     settings = container.settingsRepository.settings.value,
@@ -873,6 +875,16 @@ class HomeViewModel(
                 scheduleConnectedIpRefresh(reason = IpInfoRefreshReason.RESTORED_VPN, clearExistingIp = false)
             } else {
                 syncLocalGuardWithPermissionRequest()
+                val foregroundRefreshDelayMs =
+                    foregroundIpRefreshStartDelayMs(
+                        firstForeground = firstForegroundIpRefreshPending,
+                        connectionState = container.connectionController.snapshot.value.state,
+                        currentIpInfo = container.connectionController.ipInfo.value,
+                    )
+                firstForegroundIpRefreshPending = false
+                if (foregroundRefreshDelayMs > 0L) {
+                    delay(foregroundRefreshDelayMs)
+                }
                 refreshIpInfoOnForegroundIfNeeded()
             }
         }
@@ -1679,6 +1691,7 @@ class HomeViewModel(
         internal const val MANUAL_IP_REFRESH_MIN_LOADING_MS = 666L
         internal const val AUTO_IP_REFRESH_MIN_LOADING_MS = 450L
         internal const val DASHBOARD_CONNECTION_METRICS_MIN_LOADING_MS = 450L
+        internal const val FIRST_FOREGROUND_IP_REFRESH_DELAY_MS = 900L
         internal const val FOREGROUND_DASHBOARD_REFRESH_MIN_INTERVAL_MS = 20_000L
         internal const val CONNECTED_LATENCY_FIRST_DELAY_MS = 350L
         internal const val CONNECTED_LATENCY_REFRESH_INTERVAL_MS = 15_000L

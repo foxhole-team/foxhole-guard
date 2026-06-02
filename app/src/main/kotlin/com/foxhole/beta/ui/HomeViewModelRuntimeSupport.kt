@@ -229,7 +229,7 @@ private fun HomeViewModel.maybeScheduleIpInfoGeoEnrichment(
     }
     viewModelScope.launch {
         delay(ENTRY_QUICK_GEO_ENRICHMENT_DELAY_MS)
-        if (ipInfoRefreshJob != null) {
+        if (!awaitIdleIpInfoRefreshForGeoEnrichment()) {
             return@launch
         }
         val currentSnapshot = container.connectionController.snapshot.value
@@ -258,6 +258,16 @@ private fun HomeViewModel.maybeScheduleIpInfoGeoEnrichment(
             reason = IpInfoRefreshReason.POST_UPDATE,
         )
     }
+}
+
+private suspend fun HomeViewModel.awaitIdleIpInfoRefreshForGeoEnrichment(): Boolean {
+    repeat(ENTRY_QUICK_GEO_ENRICHMENT_WAIT_ATTEMPTS) {
+        if (ipInfoRefreshJob == null) {
+            return true
+        }
+        delay(ENTRY_QUICK_GEO_ENRICHMENT_WAIT_INTERVAL_MS)
+    }
+    return ipInfoRefreshJob == null
 }
 
 private suspend fun HomeViewModel.refreshIpInfoForReason(
@@ -863,6 +873,8 @@ private fun HomeViewModel.schedulePostConnectLatencyRefreshAfterIp(reason: IpInf
 }
 
 private const val ENTRY_QUICK_GEO_ENRICHMENT_DELAY_MS = 120L
+private const val ENTRY_QUICK_GEO_ENRICHMENT_WAIT_ATTEMPTS = 8
+private const val ENTRY_QUICK_GEO_ENRICHMENT_WAIT_INTERVAL_MS = 80L
 
 internal fun HomeViewModel.markRuntimeReloadPendingInternal() {
     runtimeReloadPendingJob?.cancel()

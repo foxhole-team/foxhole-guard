@@ -2,6 +2,7 @@ package com.foxhole.beta.ui
 
 import com.foxhole.beta.core.model.ConnectionState
 import com.foxhole.beta.core.model.IpInfo
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -45,6 +46,38 @@ class HomeForegroundIpPolicyTest {
         )
         assertFalse(
             shouldShowForegroundIpRefreshLoading(
+                connectionState = ConnectionState.CONNECTED,
+                currentIpInfo = null,
+            ),
+        )
+    }
+
+    @Test
+    fun `first cold foreground idle ip refresh is delayed until first frame settles`() {
+        assertEquals(
+            HomeViewModel.FIRST_FOREGROUND_IP_REFRESH_DELAY_MS,
+            foregroundIpRefreshStartDelayMs(
+                firstForeground = true,
+                connectionState = ConnectionState.IDLE,
+                currentIpInfo = null,
+            ),
+        )
+    }
+
+    @Test
+    fun `foreground ip refresh delay is not applied after cold start or while connected`() {
+        assertEquals(
+            0L,
+            foregroundIpRefreshStartDelayMs(
+                firstForeground = false,
+                connectionState = ConnectionState.IDLE,
+                currentIpInfo = null,
+            ),
+        )
+        assertEquals(
+            0L,
+            foregroundIpRefreshStartDelayMs(
+                firstForeground = true,
                 connectionState = ConnectionState.CONNECTED,
                 currentIpInfo = null,
             ),
