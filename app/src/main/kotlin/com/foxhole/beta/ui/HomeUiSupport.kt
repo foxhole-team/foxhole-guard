@@ -811,9 +811,19 @@ private fun HomeRouteUiState.hasRealTunnelConnectionStatus(): Boolean {
 
 private fun HomeRouteUiState.hasFailedDashboardRoute(): Boolean =
     connection.state == ConnectionState.ERROR &&
-        connection.trafficMode in setOf(TrafficMode.TUNNEL, TrafficMode.PROXY) &&
+        connection.isDashboardRouteTrafficMode() &&
         connection.profileId != null &&
         connection.profileId != FoxholeVpnService.LOCAL_GUARD_PROFILE_ID
+
+private fun HomeRouteUiState.hasStoppedDashboardRouteRuntime(): Boolean =
+    connection.state == ConnectionState.IDLE &&
+        connection.isDashboardRouteTrafficMode() &&
+        connection.profileId != null &&
+        connection.profileId != FoxholeVpnService.LOCAL_GUARD_PROFILE_ID &&
+        connection.profileId != FoxholeVpnService.TOR_ONLY_PROFILE_ID
+
+private fun ConnectionSnapshot.isDashboardRouteTrafficMode(): Boolean =
+    trafficMode == TrafficMode.TUNNEL || trafficMode == TrafficMode.PROXY
 
 private fun HomeRouteUiState.dashboardVisibleIpInfo(visibleIpInfo: IpInfo?): IpInfo? {
     val candidate =
@@ -837,6 +847,7 @@ private fun HomeRouteUiState.shouldKeepDashboardIpInfo(info: IpInfo): Boolean =
         homeAnalysisOnlyRunning() -> !hasDashboardRouteProfile() || shouldKeepActiveDashboardRouteIpInfo(info)
         shouldPinVpnIpDuringTorOperation() -> true
         hasFailedDashboardRoute() -> info.isPublicFreshForRouteTransition(connection.lastChangeAt)
+        hasStoppedDashboardRouteRuntime() -> info.isPublicFreshForRouteTransition(connection.lastChangeAt)
         hasActiveDashboardRouteTransition() -> info.isFreshForRouteTransition(connection.lastChangeAt)
         hasActiveDashboardRouteRuntime() -> shouldKeepActiveDashboardRouteIpInfo(info)
         else -> true

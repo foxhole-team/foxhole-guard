@@ -1756,7 +1756,7 @@ class HomeDashboardPresentationTest {
     }
 
     @Test
-    fun `network model keeps previous tunnel ip after ordinary vpn disconnect`() {
+    fun `network model hides previous tunnel ip after ordinary vpn disconnect`() {
         val staleTunnelIp =
             IpInfo(
                 ip = "203.0.113.10",
@@ -1777,7 +1777,37 @@ class HomeDashboardPresentationTest {
                 deviceInternetAvailable = true,
             )
 
-        assertEquals(staleTunnelIp, model.visibleIpInfo)
+        assertEquals(null, model.visibleIpInfo)
+        assertEquals(R.string.home_network_current_ip_title, model.titleRes)
+        assertFalse(model.showConnectionStatus)
+        assertTrue(model.showLoading)
+        assertTrue(model.showIpInfoLoading)
+        assertFalse(model.showConnectionDetailsLoading)
+    }
+
+    @Test
+    fun `network model shows fresh current ip after ordinary vpn disconnect refresh`() {
+        val currentIp =
+            IpInfo(
+                ip = "198.51.100.20",
+                countryCode = "US",
+                countryName = "United States",
+                city = "New York",
+                isp = "Device network",
+                fetchedAt = 2_100L,
+            )
+        val model =
+            resolveHomeDashboardNetworkModel(
+                state =
+                    HomeRouteUiState(
+                        profilesLoaded = true,
+                        connection = ConnectionSnapshot(state = ConnectionState.IDLE, profileId = 1L, lastChangeAt = 2_000L),
+                    ),
+                visibleIpInfo = currentIp,
+                deviceInternetAvailable = true,
+            )
+
+        assertEquals(currentIp, model.visibleIpInfo)
         assertEquals(R.string.home_network_current_ip_title, model.titleRes)
         assertFalse(model.showConnectionStatus)
         assertFalse(model.showLoading)
