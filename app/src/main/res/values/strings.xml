@@ -88,7 +88,7 @@
     <string name="home_network_city_label">City:</string>
     <string name="home_network_ip_label">IP:</string>
     <string name="home_network_provider_label">Provider:</string>
-    <string name="home_network_server_ping_label">Server ping:</string>
+    <string name="home_network_server_ping_label">Tunnel ping:</string>
     <string name="home_network_dns_label">DNS:</string>
     <string name="home_network_transport_type_label">Type:</string>
     <string name="home_network_connect_time_label">Time:</string>

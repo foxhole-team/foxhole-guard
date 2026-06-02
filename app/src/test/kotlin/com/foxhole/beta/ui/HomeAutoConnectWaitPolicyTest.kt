@@ -238,11 +238,27 @@ class HomeAutoConnectWaitPolicyTest {
     }
 
     @Test
-    fun `dashboard server ping keeps tcp timeout aligned with public latency probe`() {
+    fun `dashboard tunnel ping keeps timeout aligned with public latency probe`() {
         assertEquals(
             HomeViewModel.CONNECTED_LATENCY_TIMEOUT_MS,
-            HomeViewModel.CONNECTED_SERVER_PING_TIMEOUT_MS,
+            HomeViewModel.CONNECTED_DASHBOARD_PING_TIMEOUT_MS,
         )
+    }
+
+    @Test
+    fun `connected dashboard ping uses public latency instead of vpn server target`() {
+        val source =
+            listOf(
+                java.io.File("src/main/kotlin/com/foxhole/beta/ui/HomeViewModelAutoConnectSupport.kt"),
+                java.io.File("app/src/main/kotlin/com/foxhole/beta/ui/HomeViewModelAutoConnectSupport.kt"),
+                java.io.File("../app/src/main/kotlin/com/foxhole/beta/ui/HomeViewModelAutoConnectSupport.kt"),
+            ).first { file -> file.isFile }.readText()
+        val connectedDashboardBlock =
+            source.substringAfter("internal fun HomeViewModel.scheduleActiveProfileLatencyRefreshInternal")
+                .substringBefore("private fun HomeViewModel.clearActiveProfileConnectionMetrics")
+
+        assertTrue(connectedDashboardBlock.contains("measureCurrentConnectionLatency"))
+        assertFalse(connectedDashboardBlock.contains("measureCurrentVpnServerPing"))
     }
 
     @Test

@@ -1818,20 +1818,14 @@ internal fun HomeViewModel.scheduleActiveProfileLatencyRefreshInternal(
                             fallbackProtocolHint = selectedProtocolHint,
                         ) ?: return@launch
                     val countTowardInitialOutcome = waitingForInitialSample
-                    refreshDashboardServerPing(
+                    val latencyResult = measureConnectedDashboardPublicLatency()
+                    cacheDashboardPublicPing(
                         refreshTarget = refreshTarget,
                         activeProfileId = activeProfile.id,
                         selectedOptionId = selectedOptionId,
+                        latencyResult = latencyResult,
                     )
                     waitingForInitialSample = clearDashboardMetricsLoadingAfterInitialSample(waitingForInitialSample)
-                    val latencyResult =
-                        runCatchingUnlessCancelled {
-                            withTimeoutOrNull(HomeViewModel.CONNECTED_LATENCY_TOTAL_TIMEOUT_MS) {
-                                container.connectionController.measureCurrentConnectionLatency(
-                                    timeoutMs = HomeViewModel.CONNECTED_LATENCY_TIMEOUT_MS,
-                                )
-                            } ?: error("dashboard latency timed out")
-                        }
                     val measuredLatency = latencyResult.getOrNull()
                     if (measuredLatency != null && shouldUseConnectedDashboardLatency(measuredLatency)) {
                         cacheProtocolLatency(
@@ -1877,41 +1871,48 @@ internal fun HomeViewModel.scheduleActiveProfileLatencyRefreshInternal(
         }
 }
 
-private suspend fun HomeViewModel.refreshDashboardServerPing(
+private suspend fun HomeViewModel.measureConnectedDashboardPublicLatency(): Result<Long> =
+    runCatchingUnlessCancelled {
+        withTimeoutOrNull(HomeViewModel.CONNECTED_LATENCY_TOTAL_TIMEOUT_MS) {
+            container.connectionController.measureCurrentConnectionLatency(
+                timeoutMs = HomeViewModel.CONNECTED_DASHBOARD_PING_TIMEOUT_MS,
+            )
+        } ?: error("dashboard public ping timed out")
+    }
+
+private fun HomeViewModel.cacheDashboardPublicPing(
     refreshTarget: ActiveDashboardLatencyTarget,
     activeProfileId: Long,
     selectedOptionId: String,
+    latencyResult: Result<Long>,
 ) {
-    if (!shouldMeasureProtocolServerPing(refreshTarget.protocolHint)) {
-        container.diagnosticsLogger.record("latency", "dashboard server ping skipped: unsupported for udp transport")
-        return
-    }
-    runCatchingUnlessCancelled {
-        withTimeoutOrNull(HomeViewModel.CONNECTED_SERVER_PING_TIMEOUT_MS) {
-            container.connectionController.measureCurrentVpnServerPing(
-                profileId = refreshTarget.profile.id,
-                protocolOptionId = refreshTarget.optionId,
-            )
-        } ?: error("dashboard server ping timed out")
-    }.onSuccess { pingMs ->
+    val pingMs = latencyResult.getOrNull()
+    if (pingMs != null && shouldUseConnectedDashboardLatency(pingMs)) {
         cacheProtocolServerPingInternal(
             profileId = activeProfileId,
             optionId = selectedOptionId,
             pingMs = pingMs,
         )
-        container.settingsRepository.recordSmartProfileServerPing(
-            profileId = activeProfileId,
-            optionId = selectedOptionId,
-            serverPingMs = pingMs,
-            networkFingerprint = currentNetworkFingerprintForSmartRules()?.key,
+        container.diagnosticsLogger.record(
+            "latency",
+            "dashboard public ping refreshed option=${refreshTarget.optionId.orEmpty()} latency=${pingMs}ms",
         )
-    }.onFailure { error ->
-        markProtocolServerPingUnavailableInternal(
-            profileId = activeProfileId,
-            optionId = selectedOptionId,
-        )
-        container.diagnosticsLogger.record("latency", "dashboard server ping unavailable: ${error.message.orEmpty()}")
+        return
     }
+    markProtocolServerPingUnavailableInternal(
+        profileId = activeProfileId,
+        optionId = selectedOptionId,
+    )
+    val unavailableReason =
+        if (pingMs != null) {
+            "latency=${pingMs}ms over dashboard display limit"
+        } else {
+            latencyResult.exceptionOrNull()?.message.orEmpty()
+        }
+    container.diagnosticsLogger.record(
+        "latency",
+        "dashboard public ping unavailable: $unavailableReason",
+    )
 }
 
 private fun HomeViewModel.clearActiveProfileConnectionMetrics(
@@ -2136,7 +2137,6 @@ internal fun minimumAutoConnectCandidateProbeBudgetMs(): Long =
         HomeViewModel.AUTO_CONNECT_LATENCY_MEASUREMENT_SETTLE_MS +
         HomeViewModel.CONNECTED_LATENCY_TIMEOUT_MS * 2L +
         HomeViewModel.AUTO_CONNECT_LATENCY_MEASUREMENT_RETRY_DELAY_MS +
-        HomeViewModel.CONNECTED_SERVER_PING_TIMEOUT_MS +
         1_000L
 
 private fun smartStartTimeoutMs(
