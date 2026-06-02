@@ -947,7 +947,7 @@ private fun DrawScope.drawPhoneMarker(
 }
 
 @Immutable
-private data class TrafficMapColors(
+internal data class TrafficMapColors(
     val countryFill: Color,
     val routeLine: Color,
     val destination: Color,
@@ -958,24 +958,33 @@ private data class TrafficMapColors(
 @Composable
 private fun trafficMapColors(): TrafficMapColors {
     val colorScheme = MaterialTheme.colorScheme
-    return if (LocalFoxholeDarkTheme.current) {
+    return trafficMapColors(
+        darkTheme = LocalFoxholeDarkTheme.current,
+        surfaceColor = colorScheme.surface,
+    )
+}
+
+internal fun trafficMapColors(
+    darkTheme: Boolean,
+    surfaceColor: Color,
+): TrafficMapColors =
+    if (darkTheme) {
         TrafficMapColors(
-            countryFill = Color(0xFF303A34),
+            countryFill = Color(0xFF26332B),
             routeLine = FoxholePositiveAccent,
             destination = FoxholePositiveAccent,
             origin = FoxholePositiveAccent,
-            phoneScreen = colorScheme.surface.copy(alpha = 0.92f),
+            phoneScreen = surfaceColor.copy(alpha = 0.92f),
         )
     } else {
         TrafficMapColors(
-            countryFill = Color(0xFF102018),
+            countryFill = Color(0xFF07130D),
             routeLine = Color(0xFF278A5B),
             destination = Color(0xFF278A5B),
             origin = Color(0xFF278A5B),
-            phoneScreen = colorScheme.surface.copy(alpha = 0.94f),
+            phoneScreen = surfaceColor.copy(alpha = 0.94f),
         )
     }
-}
 
 private fun trafficMapViewport(size: Size): TrafficMapViewport {
     val widthForHeight = size.height * TRAFFIC_MAP_WORLD_ASPECT_RATIO
