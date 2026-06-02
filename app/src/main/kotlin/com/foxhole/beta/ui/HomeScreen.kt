@@ -393,7 +393,11 @@ fun HomeScreen(
     val dashboardListState = rememberLazyListState()
     val topChromeScrimProgress = rememberFoxholeTopChromeScrimProgress(dashboardListState)
     val connectionHeaderScrolled by remember { derivedStateOf { topChromeScrimProgress() > 0.01f } }
-    var dashboardStartupStage by rememberSaveable { mutableStateOf(DASHBOARD_STARTUP_STAGE_INITIAL) }
+    val initialDashboardStartupStage =
+        remember {
+            initialDashboardStartupStage(DashboardStartupCompositionWarmState.markEntered())
+        }
+    var dashboardStartupStage by rememberSaveable { mutableStateOf(initialDashboardStartupStage) }
     val trafficCardRuntimeVisible =
         state.settings.ui.trafficCardEnabled &&
             shouldComposeDashboardCardNow(
@@ -1753,6 +1757,19 @@ internal fun shouldComposeDashboardCardNow(
     startupStage >= dashboardCardStartupStage(card) ||
         activeReorderCard != null ||
         startupStage >= DASHBOARD_STARTUP_STAGE_ALL
+
+internal fun initialDashboardStartupStage(dashboardAlreadyWarm: Boolean): Int =
+    if (dashboardAlreadyWarm) DASHBOARD_STARTUP_STAGE_ALL else DASHBOARD_STARTUP_STAGE_INITIAL
+
+private object DashboardStartupCompositionWarmState {
+    private var entered = false
+
+    fun markEntered(): Boolean {
+        val alreadyWarm = entered
+        entered = true
+        return alreadyWarm
+    }
+}
 
 private fun dashboardCardStartupStage(card: DashboardCard): Int =
     when (card) {

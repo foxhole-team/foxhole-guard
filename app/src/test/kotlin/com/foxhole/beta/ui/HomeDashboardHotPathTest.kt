@@ -139,4 +139,32 @@ class HomeDashboardHotPathTest {
             ),
         )
     }
+
+    @Test
+    fun `warm dashboard return skips staged composition delay`() {
+        val coldStage = initialDashboardStartupStage(dashboardAlreadyWarm = false)
+        val warmStage = initialDashboardStartupStage(dashboardAlreadyWarm = true)
+
+        assertFalse(
+            shouldComposeDashboardCardNow(
+                card = DashboardCard.TRAFFIC_MAP,
+                startupStage = coldStage,
+                activeReorderCard = null,
+            ),
+        )
+        assertTrue(
+            shouldComposeDashboardCardNow(
+                card = DashboardCard.TRAFFIC_MAP,
+                startupStage = warmStage,
+                activeReorderCard = null,
+            ),
+        )
+        assertTrue(
+            shouldComposeDashboardCardNow(
+                card = DashboardCard.TRAFFIC,
+                startupStage = warmStage,
+                activeReorderCard = null,
+            ),
+        )
+    }
 }
