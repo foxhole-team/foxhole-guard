@@ -11,6 +11,7 @@ import android.graphics.Path as AndroidPath
 import android.os.BatteryManager
 import android.os.PowerManager
 import android.os.SystemClock
+import android.util.DisplayMetrics
 import android.util.Log
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -404,8 +405,15 @@ private fun rememberTrafficMapCountryShapes(): List<TrafficMapCountryShape> {
     return shapes
 }
 
-internal suspend fun prewarmTrafficMapCountryShapes(context: Context): Int =
-    TrafficMapCountryShapeCache.load(context.applicationContext).size
+internal suspend fun prewarmTrafficMapCountryShapes(context: Context): Int {
+    val appContext = context.applicationContext
+    val shapes = TrafficMapCountryShapeCache.load(appContext)
+    TrafficMapLandLayerCache.prewarm(
+        shapes = shapes,
+        displayMetrics = appContext.resources.displayMetrics,
+    )
+    return shapes.size
+}
 
 private object TrafficMapCountryShapeCache {
     private val mutex = Mutex()
@@ -897,6 +905,54 @@ private object TrafficMapLandLayerCache {
             bitmap
         }
 
+    suspend fun prewarm(
+        shapes: List<TrafficMapCountryShape>,
+        displayMetrics: DisplayMetrics,
+    ) {
+        if (shapes.isEmpty()) {
+            return
+        }
+        val startedAtMs = SystemClock.elapsedRealtime()
+        var renderedCount = 0
+        withContext(Dispatchers.Default) {
+            trafficMapPrewarmCanvasSizes(displayMetrics).forEach { canvasSize ->
+                val key =
+                    landLayerKey(
+                        shapes = shapes,
+                        canvasSize = canvasSize,
+                        color = TRAFFIC_MAP_DEFAULT_COUNTRY_FILL,
+                    )
+                synchronized(lock) {
+                    if (bitmaps.containsKey(key)) {
+                        return@forEach
+                    }
+                }
+                val size = Size(key.width.toFloat(), key.height.toFloat())
+                val bitmap =
+                    trafficMapLandBitmap(
+                        size = size,
+                        shapes = shapes,
+                        viewport = trafficMapViewport(size),
+                        color = TRAFFIC_MAP_DEFAULT_COUNTRY_FILL,
+                    )
+                synchronized(lock) {
+                    bitmaps[key] = bitmap
+                    latestBitmap = bitmap
+                    while (bitmaps.size > MAX_ENTRIES) {
+                        val eldest = bitmaps.entries.firstOrNull()?.key ?: break
+                        bitmaps.remove(eldest)
+                    }
+                }
+                renderedCount += 1
+            }
+        }
+        if (renderedCount > 0) {
+            logTrafficMapDebug(
+                "land bitmap prewarmed count=$renderedCount durationMs=${SystemClock.elapsedRealtime() - startedAtMs}",
+            )
+        }
+    }
+
     private fun landLayerKey(
         shapes: List<TrafficMapCountryShape>,
         canvasSize: IntSize,
@@ -912,6 +968,28 @@ private object TrafficMapLandLayerCache {
 
     private fun bucketDimension(value: Int): Int =
         (((value.coerceAtLeast(1) + SIZE_BUCKET_PX - 1) / SIZE_BUCKET_PX) * SIZE_BUCKET_PX)
+
+    fun bucketDimensionForPrewarm(value: Int): Int = bucketDimension(value)
+}
+
+internal fun trafficMapPrewarmCanvasSizes(displayMetrics: DisplayMetrics): List<IntSize> {
+    val shortSide = min(displayMetrics.widthPixels, displayMetrics.heightPixels).coerceAtLeast(1)
+    val widths =
+        listOf(
+            (shortSide * TRAFFIC_MAP_PREWARM_COMPACT_WIDTH_FRACTION).roundToInt(),
+            (shortSide * TRAFFIC_MAP_PREWARM_MID_WIDTH_FRACTION).roundToInt(),
+            (shortSide * TRAFFIC_MAP_PREWARM_WIDE_WIDTH_FRACTION).roundToInt(),
+        )
+    return widths
+        .map { width ->
+            val bucketedWidth = TrafficMapLandLayerCache.bucketDimensionForPrewarm(width)
+            val bucketedHeight =
+                TrafficMapLandLayerCache.bucketDimensionForPrewarm(
+                    (bucketedWidth / TRAFFIC_MAP_WORLD_ASPECT_RATIO).roundToInt(),
+                )
+            IntSize(width = bucketedWidth, height = bucketedHeight)
+        }
+        .distinct()
 }
 
 private data class TrafficMapLandLayerKey(
@@ -1035,6 +1113,9 @@ private const val TRAFFIC_MAP_LAT_RANGE = TRAFFIC_MAP_MAX_LAT - TRAFFIC_MAP_MIN_
 private const val MAX_TRAFFIC_MAP_DRAW_EDGES = 30
 private const val MAX_TRAFFIC_MAP_DRAW_DESTINATIONS = 30
 private const val TRAFFIC_MAP_LOW_BATTERY_PERCENT = 10
+private const val TRAFFIC_MAP_PREWARM_COMPACT_WIDTH_FRACTION = 0.56f
+private const val TRAFFIC_MAP_PREWARM_MID_WIDTH_FRACTION = 0.65f
+private const val TRAFFIC_MAP_PREWARM_WIDE_WIDTH_FRACTION = 0.74f
 private const val TRAFFIC_ROUTE_PI = 3.141592653589793
 private const val TRAFFIC_ROUTE_ANGLE_BUCKET_RADIANS = 0.17453292519943295
 private const val TRAFFIC_MAP_COUNTRY_SHAPES_ASSET = "maps/ne_110m_admin_0_countries_preprocessed.json"

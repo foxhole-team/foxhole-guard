@@ -72,4 +72,28 @@ class TrafficMapStylingTest {
         assertFalse(shapeLoadBlock.contains("delay("))
         assertFalse(source.contains("TRAFFIC_MAP_COUNTRY_SHAPES_CARD_LOAD_DELAY_MS"))
     }
+
+    @Test
+    fun `traffic map startup prewarms gray land bitmap`() {
+        val source =
+            listOf(
+                java.io.File("src/main/kotlin/com/foxhole/beta/ui/TrafficMapDashboardCard.kt"),
+                java.io.File("app/src/main/kotlin/com/foxhole/beta/ui/TrafficMapDashboardCard.kt"),
+                java.io.File("../app/src/main/kotlin/com/foxhole/beta/ui/TrafficMapDashboardCard.kt"),
+            ).first { file -> file.isFile }.readText()
+        val appPrewarmBlock =
+            source.substringAfter("internal suspend fun prewarmTrafficMapCountryShapes")
+                .substringBefore("private object TrafficMapCountryShapeCache")
+        val landCacheBlock =
+            source.substringAfter("private object TrafficMapLandLayerCache")
+                .substringBefore("private data class TrafficMapLandLayerKey")
+
+        assertTrue(appPrewarmBlock.contains("TrafficMapLandLayerCache.prewarm"))
+        assertTrue(landCacheBlock.contains("suspend fun prewarm"))
+        assertTrue(landCacheBlock.contains("TRAFFIC_MAP_DEFAULT_COUNTRY_FILL"))
+        assertTrue(source.contains("trafficMapPrewarmCanvasSizes"))
+        assertTrue(source.contains("TRAFFIC_MAP_PREWARM_COMPACT_WIDTH_FRACTION"))
+        assertTrue(source.contains("TRAFFIC_MAP_PREWARM_MID_WIDTH_FRACTION"))
+        assertTrue(source.contains("TRAFFIC_MAP_PREWARM_WIDE_WIDTH_FRACTION"))
+    }
 }
