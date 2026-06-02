@@ -139,7 +139,7 @@ class TrafficMapStylingTest {
     }
 
     @Test
-    fun `application starts traffic map prewarm shortly after startup`() {
+    fun `application starts traffic map prewarm immediately after app graph setup`() {
         val source =
             listOf(
                 java.io.File("src/main/kotlin/com/foxhole/beta/FoxholeApplication.kt"),
@@ -150,8 +150,9 @@ class TrafficMapStylingTest {
             source.substringAfter("appScope.launch {")
                 .substringBefore("appScope.launch {\n            delay(BACKGROUND_INITIALIZATION_STARTUP_DELAY_MS)")
 
-        assertTrue(prewarmBlock.contains("delay(TRAFFIC_MAP_PREWARM_STARTUP_DELAY_MS)"))
-        assertTrue(source.contains("TRAFFIC_MAP_PREWARM_STARTUP_DELAY_MS = 120L"))
+        assertTrue(prewarmBlock.contains("prewarmTrafficMapCountryShapes"))
+        assertFalse(prewarmBlock.contains("delay("))
+        assertFalse(source.contains("TRAFFIC_MAP_PREWARM_STARTUP_DELAY_MS"))
         assertFalse(source.contains("TRAFFIC_MAP_PREWARM_STARTUP_DELAY_MS = 300L"))
     }
 
