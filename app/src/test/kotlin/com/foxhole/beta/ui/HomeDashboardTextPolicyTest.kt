@@ -149,6 +149,33 @@ class HomeDashboardTextPolicyTest {
     }
 
     @Test
+    fun `network detail keeps known country while city still skeletons`() {
+        val partialIpInfo =
+            IpInfo(
+                ip = "203.0.113.7",
+                countryCode = "US",
+                countryName = "United States",
+                city = null,
+                isp = null,
+                fetchedAt = 10_000L,
+            )
+        val policy = homeNetworkDetailLoadingPolicy(refreshLoading = false, geoRowsLoading = true)
+
+        assertEquals(
+            HomeNetworkDetailValue(text = "🇺🇸 United States", loading = false),
+            homeNetworkDetailValue(formatCountryLineOrNull(partialIpInfo), loading = policy.country),
+        )
+        assertEquals(
+            HomeNetworkDetailValue(text = "", loading = true),
+            homeNetworkDetailValue(buildCityLineOrNull(partialIpInfo), loading = policy.city),
+        )
+        assertEquals(
+            HomeNetworkDetailValue(text = "", loading = true),
+            homeNetworkDetailValue(providerLineOrNull(partialIpInfo), loading = policy.provider),
+        )
+    }
+
+    @Test
     fun `network card uses full skeleton only before any ip info is available`() {
         assertTrue(shouldShowHomeNetworkFullLoading(visibleIpInfo = null, showIpInfoLoading = true))
         assertFalse(shouldShowHomeNetworkFullLoading(visibleIpInfo = null, showIpInfoLoading = false))

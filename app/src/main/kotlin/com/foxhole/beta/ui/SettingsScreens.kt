@@ -111,6 +111,7 @@ import com.foxhole.beta.ui.FoxholeLazyScaffold
 import com.foxhole.beta.ui.FoxholePreferenceCard
 import com.foxhole.beta.ui.UsageTotalsCard
 import com.foxhole.beta.ui.theme.LocalFoxholeUiPalette
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @Suppress("LongParameterList")
@@ -134,6 +135,13 @@ fun SettingsHomeScreen(
     onOpenAbout: () -> Unit,
 ) {
     DebugRecompositionCounter("SettingsHomeScreen")
+    var startupStage by remember { mutableStateOf(SETTINGS_HOME_STARTUP_STAGE_INITIAL) }
+    LaunchedEffect(Unit) {
+        while (startupStage < SETTINGS_HOME_STARTUP_STAGE_ALL) {
+            delay(SETTINGS_HOME_STARTUP_STAGE_DELAY_MS)
+            startupStage += 1
+        }
+    }
     SettingsScaffold(
         title = stringResource(R.string.settings),
         snackbarHostState = snackbarHostState,
@@ -154,6 +162,7 @@ fun SettingsHomeScreen(
             onOpenExpert = onOpenExpert,
             onOpenDiagnostics = onOpenDiagnostics,
             onOpenStatistics = onOpenStatistics,
+            startupStage = startupStage,
         )
     }
 }
@@ -173,9 +182,10 @@ private fun LazyListScope.settingsHomeNavigationItems(
     onOpenExpert: () -> Unit,
     onOpenDiagnostics: () -> Unit,
     onOpenStatistics: () -> Unit,
+    startupStage: Int,
 ) {
     item {
-        SettingsNavigationGroup {
+        SettingsNavigationGroup(name = "SettingsGroup:network") {
             SettingsGroupedNavigationRow(
                 modifier = Modifier.testTag("settings_smart_start_action"),
                 icon = Icons.Outlined.Speed,
@@ -211,61 +221,71 @@ private fun LazyListScope.settingsHomeNavigationItems(
             )
         }
     }
-    item {
-        SettingsSecurityRoutingNavigationGroup(
-            onOpenSecurity = onOpenSecurity,
-            onOpenRoutingApps = onOpenRoutingApps,
-            onOpenRoutingSites = onOpenRoutingSites,
-            onOpenPrivacyRoute = onOpenPrivacyRoute,
-        )
-    }
-    item {
-        SettingsNavigationGroup {
-            SettingsGroupedNavigationRow(
-                modifier = Modifier.testTag("settings_application_action"),
-                icon = Icons.Outlined.PhoneAndroid,
-                title = stringResource(R.string.app_settings),
-                summary = stringResource(R.string.settings_home_application_summary),
-                onClick = onOpenApplication,
-            )
-            if (expertVisible) {
-                SettingsGroupDivider()
-                SettingsGroupedNavigationRow(
-                    modifier = Modifier.testTag("settings_expert_action"),
-                    icon = Icons.Outlined.Tune,
-                    title = stringResource(R.string.expert_settings),
-                    summary = stringResource(R.string.settings_home_advanced_summary),
-                    onClick = onOpenExpert,
-                )
-            }
-            SettingsGroupDivider()
-            SettingsGroupedNavigationRow(
-                modifier = Modifier.testTag("settings_diagnostics_action"),
-                icon = Icons.AutoMirrored.Outlined.Article,
-                title = stringResource(R.string.diagnostics_and_usage),
-                summary = stringResource(R.string.settings_home_diagnostics_summary),
-                onClick = onOpenDiagnostics,
-            )
-            SettingsGroupDivider()
-            SettingsGroupedNavigationRow(
-                modifier = Modifier.testTag("settings_statistics_action"),
-                icon = Icons.Outlined.BarChart,
-                title = stringResource(R.string.statistics_title),
-                summary = stringResource(R.string.settings_home_statistics_summary),
-                onClick = onOpenStatistics,
-            )
-            SettingsGroupDivider()
-            SettingsGroupedNavigationRow(
-                modifier = Modifier.testTag("settings_about_action"),
-                icon = Icons.Outlined.Info,
-                title = stringResource(R.string.about_settings_title),
-                summary = stringResource(R.string.about_settings_summary),
-                summaryMaxLines = Int.MAX_VALUE,
-                onClick = onOpenAbout,
+    if (startupStage >= SETTINGS_HOME_STARTUP_STAGE_SECURITY) {
+        item {
+            SettingsSecurityRoutingNavigationGroup(
+                onOpenSecurity = onOpenSecurity,
+                onOpenRoutingApps = onOpenRoutingApps,
+                onOpenRoutingSites = onOpenRoutingSites,
+                onOpenPrivacyRoute = onOpenPrivacyRoute,
             )
         }
     }
+    if (startupStage >= SETTINGS_HOME_STARTUP_STAGE_APP) {
+        item {
+            SettingsNavigationGroup(name = "SettingsGroup:app") {
+                SettingsGroupedNavigationRow(
+                    modifier = Modifier.testTag("settings_application_action"),
+                    icon = Icons.Outlined.PhoneAndroid,
+                    title = stringResource(R.string.app_settings),
+                    summary = stringResource(R.string.settings_home_application_summary),
+                    onClick = onOpenApplication,
+                )
+                if (expertVisible) {
+                    SettingsGroupDivider()
+                    SettingsGroupedNavigationRow(
+                        modifier = Modifier.testTag("settings_expert_action"),
+                        icon = Icons.Outlined.Tune,
+                        title = stringResource(R.string.expert_settings),
+                        summary = stringResource(R.string.settings_home_advanced_summary),
+                        onClick = onOpenExpert,
+                    )
+                }
+                SettingsGroupDivider()
+                SettingsGroupedNavigationRow(
+                    modifier = Modifier.testTag("settings_diagnostics_action"),
+                    icon = Icons.AutoMirrored.Outlined.Article,
+                    title = stringResource(R.string.diagnostics_and_usage),
+                    summary = stringResource(R.string.settings_home_diagnostics_summary),
+                    onClick = onOpenDiagnostics,
+                )
+                SettingsGroupDivider()
+                SettingsGroupedNavigationRow(
+                    modifier = Modifier.testTag("settings_statistics_action"),
+                    icon = Icons.Outlined.BarChart,
+                    title = stringResource(R.string.statistics_title),
+                    summary = stringResource(R.string.settings_home_statistics_summary),
+                    onClick = onOpenStatistics,
+                )
+                SettingsGroupDivider()
+                SettingsGroupedNavigationRow(
+                    modifier = Modifier.testTag("settings_about_action"),
+                    icon = Icons.Outlined.Info,
+                    title = stringResource(R.string.about_settings_title),
+                    summary = stringResource(R.string.about_settings_summary),
+                    summaryMaxLines = Int.MAX_VALUE,
+                    onClick = onOpenAbout,
+                )
+            }
+        }
+    }
 }
+
+private const val SETTINGS_HOME_STARTUP_STAGE_INITIAL = 0
+private const val SETTINGS_HOME_STARTUP_STAGE_SECURITY = 1
+private const val SETTINGS_HOME_STARTUP_STAGE_APP = 2
+private const val SETTINGS_HOME_STARTUP_STAGE_ALL = SETTINGS_HOME_STARTUP_STAGE_APP
+private const val SETTINGS_HOME_STARTUP_STAGE_DELAY_MS = 180L
 
 @Composable
 private fun SettingsSecurityRoutingNavigationGroup(
@@ -275,7 +295,7 @@ private fun SettingsSecurityRoutingNavigationGroup(
     onOpenPrivacyRoute: () -> Unit,
 ) {
     val torRouteIcon = ImageVector.vectorResource(R.drawable.ic_tor_route)
-    SettingsNavigationGroup {
+    SettingsNavigationGroup(name = "SettingsGroup:security-routing") {
         SettingsGroupedNavigationRow(
             modifier = Modifier.testTag("settings_security_action"),
             icon = Icons.Outlined.Shield,
@@ -315,7 +335,11 @@ private fun SettingsSecurityRoutingNavigationGroup(
 }
 
 @Composable
-private fun SettingsNavigationGroup(content: @Composable ColumnScope.() -> Unit) {
+private fun SettingsNavigationGroup(
+    name: String = "SettingsGroup",
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    DebugRecompositionCounter(name)
     val shape = MaterialTheme.shapes.large
     Surface(
         modifier =

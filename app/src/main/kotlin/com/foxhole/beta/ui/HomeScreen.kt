@@ -391,7 +391,7 @@ fun HomeScreen(
     val dashboardListState = rememberLazyListState()
     val topChromeScrimProgress = rememberFoxholeTopChromeScrimProgress(dashboardListState)
     val connectionHeaderScrolled by remember { derivedStateOf { topChromeScrimProgress() > 0.01f } }
-    var dashboardStartupStage by rememberSaveable { mutableStateOf(DASHBOARD_STARTUP_STAGE_INITIAL) }
+    var dashboardStartupStage by remember { mutableStateOf(DASHBOARD_STARTUP_STAGE_INITIAL) }
     val trafficCardRuntimeVisible =
         state.settings.ui.trafficCardEnabled &&
             shouldComposeDashboardCardNow(
@@ -1492,6 +1492,7 @@ private fun DashboardCardDragContainer(
 ) {
     val haptic = LocalHapticFeedback.current
     val density = LocalDensity.current
+    DebugRecompositionCounter("DashboardCard:${card.name}")
     val fallbackMoveDistancePx = with(density) { DashboardCardReorderFallbackMoveDistance.toPx() }
     var dragOffset by remember(card) { mutableFloatStateOf(0f) }
     var blockedReorderDirection by remember(card) { mutableStateOf(0) }
@@ -1780,9 +1781,9 @@ private fun rememberHomeNetworkGeoRowsLoading(
 private const val DASHBOARD_CARD_ACTIVE_Z_INDEX = 100f
 private const val DASHBOARD_CARD_REORDER_THRESHOLD_FRACTION = 0.5f
 private const val DASHBOARD_CARD_EDGE_RESISTANCE_FRACTION = 0.18f
-private const val DASHBOARD_STARTUP_STAGE_INITIAL = 0
+private const val DASHBOARD_STARTUP_STAGE_INITIAL = 4
 private const val DASHBOARD_STARTUP_STAGE_ALL = 5
-private const val DASHBOARD_CARD_STARTUP_STAGE_DELAY_MS = 70L
+private const val DASHBOARD_CARD_STARTUP_STAGE_DELAY_MS = 320L
 private val DashboardCardReorderFallbackMoveDistance = 96.dp
 private val ImportMenuWidthChrome = 62.dp
 private val ImportMenuMinWidth = 188.dp

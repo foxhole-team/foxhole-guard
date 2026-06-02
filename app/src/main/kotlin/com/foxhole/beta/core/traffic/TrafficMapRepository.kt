@@ -5,6 +5,7 @@ import com.foxhole.beta.core.model.TrafficMapEdge
 import com.foxhole.beta.core.model.TrafficMapPoint
 import com.foxhole.beta.core.model.TrafficMapUiState
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -12,6 +13,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
@@ -47,13 +49,22 @@ class TrafficMapRepository(
         runtimeAvailable: Flow<Boolean>,
     ): Job =
         connectionAccumulatorFlow(runtimeAvailable)
-            .onEach { accumulator ->
-                retainedConnectionAccumulatorState.value = accumulator
-                retainedDestinationCountryBytes =
+            .map { accumulator ->
+                val aggregates = accumulator.countryAggregates()
+                RetainedTrafficMapSnapshot(
+                    accumulator = accumulator,
+                    countryBytes =
                     trafficMapCountryBytesFromAggregates(
-                        aggregates = accumulator.countryAggregates(),
+                        aggregates = aggregates,
                         limit = MaxTrafficMapDestinations,
-                    )
+                    ),
+                )
+            }
+            .distinctUntilChanged()
+            .flowOn(Dispatchers.Default)
+            .onEach { snapshot ->
+                retainedConnectionAccumulatorState.value = snapshot.accumulator
+                retainedDestinationCountryBytes = snapshot.countryBytes
             }
             .launchIn(scope)
 
@@ -82,9 +93,12 @@ class TrafficMapRepository(
                         aggregates = accumulator.countryAggregates(),
                         limit = MaxTrafficMapDestinations,
                     )
-                },
+                }
+                .distinctUntilChanged(),
             ::buildTrafficMapUiState,
         )
+            .distinctUntilChanged()
+            .flowOn(Dispatchers.Default)
 
     private fun buildTrafficMapUiState(
         originInfo: TrafficMapOriginInfo?,
@@ -226,6 +240,11 @@ private data class TrafficMapOriginInfo(
     val countryCode: String,
     val countryName: String?,
     val city: String?,
+)
+
+private data class RetainedTrafficMapSnapshot(
+    val accumulator: TrafficMapConnectionAccumulator,
+    val countryBytes: Map<String, Long>,
 )
 
 private fun offsetTrafficMapDestinationFromOriginCountry(

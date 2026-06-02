@@ -80,7 +80,6 @@ import com.foxhole.beta.core.traffic.TrafficMapCountryShape
 import com.foxhole.beta.core.traffic.TrafficMapCountryShapeAssetParser
 import com.foxhole.beta.ui.theme.LocalFoxholeDarkTheme
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -380,15 +379,6 @@ private fun rememberTrafficMapCountryShapes(): List<TrafficMapCountryShape> {
         initialValue = TrafficMapCountryShapeCache.current(),
         key1 = appContext,
     ) {
-        if (value.isEmpty()) {
-            delay(TRAFFIC_MAP_STARTUP_SHAPE_LOAD_DELAY_MS)
-            TrafficMapCountryShapeCache.current()
-                .takeIf { cachedShapes -> cachedShapes.isNotEmpty() }
-                ?.let { cachedShapes ->
-                    value = cachedShapes
-                    return@produceState
-                }
-        }
         value = TrafficMapCountryShapeCache.load(appContext)
     }
     return shapes
@@ -1000,7 +990,6 @@ private const val TRAFFIC_MAP_LAT_RANGE = TRAFFIC_MAP_MAX_LAT - TRAFFIC_MAP_MIN_
 private const val MAX_TRAFFIC_MAP_DRAW_EDGES = 30
 private const val MAX_TRAFFIC_MAP_DRAW_DESTINATIONS = 30
 private const val TRAFFIC_MAP_LOW_BATTERY_PERCENT = 10
-private const val TRAFFIC_MAP_STARTUP_SHAPE_LOAD_DELAY_MS = 250L
 private const val TRAFFIC_ROUTE_PI = 3.141592653589793
 private const val TRAFFIC_ROUTE_ANGLE_BUCKET_RADIANS = 0.17453292519943295
 private const val TRAFFIC_MAP_COUNTRY_SHAPES_ASSET = "maps/ne_110m_admin_0_countries_preprocessed.json"
