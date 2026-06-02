@@ -92,6 +92,23 @@ internal fun buildHomeRouteUiState(
                     .filterNot(activeProfileServerPings::containsKey)
                     .toSet()
             }.orEmpty()
+    val activeProfileTunnelPings =
+        state.activeProfile
+            ?.let { activeProfile ->
+                protocolMetrics.tunnelPings
+                    .filterKeys { key -> key.profileId == activeProfile.id }
+                    .mapNotNull { (key, value) -> value.pingMs?.let { key.optionId to it } }
+                    .toMap()
+            }.orEmpty()
+    val activeProfileTunnelPingUnavailable =
+        state.activeProfile
+            ?.let { activeProfile ->
+                protocolMetrics.tunnelPings
+                    .filter { (key, value) -> key.profileId == activeProfile.id && value.unavailable }
+                    .map { (key, _) -> key.optionId }
+                    .filterNot(activeProfileTunnelPings::containsKey)
+                    .toSet()
+            }.orEmpty()
     val activeProfileMetricsUpdatedAt =
         state.activeProfile
             ?.let { activeProfile ->
@@ -156,6 +173,8 @@ internal fun buildHomeRouteUiState(
         protocolLatencyUnavailableOptionIds = activeProfileLatencyUnavailable,
         protocolServerPingsByOptionId = activeProfileServerPings,
         protocolServerPingUnavailableOptionIds = activeProfileServerPingUnavailable,
+        protocolTunnelPingsByOptionId = activeProfileTunnelPings,
+        protocolTunnelPingUnavailableOptionIds = activeProfileTunnelPingUnavailable,
         protocolMetricsUpdatedAtByOptionId = activeProfileMetricsUpdatedAt,
         protocolMetricsRefreshing =
             state.activeProfile?.id in protocolMetrics.refreshingProfileIds ||

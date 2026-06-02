@@ -170,6 +170,7 @@ class HomeDashboardPresentationTest {
                 protocolDownOptionIds = setOf("wg"),
                 protocolLatencyUnavailableOptionIds = setOf("hysteria"),
                 protocolServerPingsByOptionId = mapOf("vless" to 88L),
+                protocolTunnelPingsByOptionId = mapOf("vless" to 92L),
                 autoConnect =
                     AutoConnectUiState(
                         running = true,
@@ -201,7 +202,7 @@ class HomeDashboardPresentationTest {
         assertEquals(setOf("wg"), model.downOptionIds)
         assertEquals(setOf("hysteria"), model.latencyUnavailableOptionIds)
         assertTrue(model.showSmartStartLatency)
-        assertEquals(88L, model.selectedServerPingMs)
+        assertEquals(92L, model.selectedServerPingMs)
         assertTrue(model.connectionDetailsReady)
         assertFalse(model.connectionMetricsLoading)
     }
@@ -366,7 +367,30 @@ class HomeDashboardPresentationTest {
     }
 
     @Test
-    fun `protocol model does not use server ping as connected latency`() {
+    fun `protocol model keeps server ping out of dashboard tunnel ping`() {
+        val model =
+            resolveHomeDashboardProtocolModel(
+                HomeRouteUiState(
+                    activeProfile = smartProfile(),
+                    connection =
+                        ConnectionSnapshot(
+                            state = ConnectionState.CONNECTED,
+                            profileId = 1L,
+                            protocolOptionId = "vless",
+                    ),
+                    selectedProtocolLatencyUnavailable = true,
+                    protocolServerPingsByOptionId = mapOf("vless" to 379L),
+                ),
+            )
+
+        assertEquals(null, model.latencyPresentation.latencyMs)
+        assertTrue(model.latencyPresentation.isUnavailable)
+        assertEquals(null, model.selectedServerPingMs)
+        assertTrue(model.connectionDetailsReady)
+    }
+
+    @Test
+    fun `protocol model uses public tunnel ping for dashboard connection details`() {
         val model =
             resolveHomeDashboardProtocolModel(
                 HomeRouteUiState(
@@ -377,15 +401,13 @@ class HomeDashboardPresentationTest {
                             profileId = 1L,
                             protocolOptionId = "vless",
                         ),
-                    selectedProtocolLatencyUnavailable = true,
                     protocolServerPingsByOptionId = mapOf("vless" to 379L),
+                    protocolTunnelPingsByOptionId = mapOf("vless" to 91L),
                 ),
             )
 
-        assertEquals(null, model.latencyPresentation.latencyMs)
-        assertTrue(model.latencyPresentation.isUnavailable)
-        assertEquals(379L, model.selectedServerPingMs)
-        assertTrue(model.connectionDetailsReady)
+        assertEquals(91L, model.selectedServerPingMs)
+        assertFalse(model.connectionDetailsReady)
     }
 
     @Test

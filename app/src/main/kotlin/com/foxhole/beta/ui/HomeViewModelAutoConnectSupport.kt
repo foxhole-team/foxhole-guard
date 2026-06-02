@@ -1692,6 +1692,18 @@ internal fun HomeViewModel.cacheProtocolServerPingInternal(
     markProtocolMetricsUpdated(profileId, optionId)
 }
 
+internal fun HomeViewModel.cacheProtocolTunnelPingInternal(
+    profileId: Long,
+    optionId: String,
+    pingMs: Long,
+) {
+    val key = ProfileOptionLatencyKey(profileId, optionId)
+    profileOptionTunnelPingsMutable.value =
+        profileOptionTunnelPingsMutable.value +
+        (key to ProfileOptionTunnelPingState(pingMs = pingMs.coerceAtLeast(1L)))
+    markProtocolMetricsUpdated(profileId, optionId)
+}
+
 internal fun HomeViewModel.markProtocolServerPingUnavailableInternal(
     profileId: Long,
     optionId: String,
@@ -1700,6 +1712,17 @@ internal fun HomeViewModel.markProtocolServerPingUnavailableInternal(
     profileOptionServerPingsMutable.value =
         profileOptionServerPingsMutable.value +
         (key to ProfileOptionServerPingState(unavailable = true))
+    markProtocolMetricsUpdated(profileId, optionId)
+}
+
+internal fun HomeViewModel.markProtocolTunnelPingUnavailableInternal(
+    profileId: Long,
+    optionId: String,
+) {
+    val key = ProfileOptionLatencyKey(profileId, optionId)
+    profileOptionTunnelPingsMutable.value =
+        profileOptionTunnelPingsMutable.value +
+        (key to ProfileOptionTunnelPingState(unavailable = true))
     markProtocolMetricsUpdated(profileId, optionId)
 }
 
@@ -1743,6 +1766,12 @@ internal fun HomeViewModel.clearProtocolLatencyStateInternal(
             emptyMap()
         } else {
             profileOptionServerPingsMutable.value.filterKeys { key -> !matches(key) }
+        }
+    profileOptionTunnelPingsMutable.value =
+        if (profileId == null && optionId == null) {
+            emptyMap()
+        } else {
+            profileOptionTunnelPingsMutable.value.filterKeys { key -> !matches(key) }
         }
     profileOptionMetricsUpdatedAtMutable.value =
         if (profileId == null && optionId == null) {
@@ -1888,7 +1917,7 @@ private fun HomeViewModel.cacheDashboardPublicPing(
 ) {
     val pingMs = latencyResult.getOrNull()
     if (pingMs != null && shouldUseConnectedDashboardLatency(pingMs)) {
-        cacheProtocolServerPingInternal(
+        cacheProtocolTunnelPingInternal(
             profileId = activeProfileId,
             optionId = selectedOptionId,
             pingMs = pingMs,
@@ -1899,7 +1928,7 @@ private fun HomeViewModel.cacheDashboardPublicPing(
         )
         return
     }
-    markProtocolServerPingUnavailableInternal(
+    markProtocolTunnelPingUnavailableInternal(
         profileId = activeProfileId,
         optionId = selectedOptionId,
     )
@@ -1924,6 +1953,7 @@ private fun HomeViewModel.clearActiveProfileConnectionMetrics(
     profileOptionLatencyUnavailableMutable.value = profileOptionLatencyUnavailableMutable.value - key
     profileOptionDownMutable.value = profileOptionDownMutable.value - key
     profileOptionServerPingsMutable.value = profileOptionServerPingsMutable.value - key
+    profileOptionTunnelPingsMutable.value = profileOptionTunnelPingsMutable.value - key
     markProtocolMetricsUpdated(profileId, optionId)
 }
 

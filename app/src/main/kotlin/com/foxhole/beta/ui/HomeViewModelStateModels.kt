@@ -243,14 +243,25 @@ internal data class ProfileOptionServerPingState(
     val unavailable: Boolean = false,
 )
 
+internal data class ProfileOptionTunnelPingState(
+    val pingMs: Long? = null,
+    val unavailable: Boolean = false,
+)
+
 internal data class ProtocolRecommendationState(
     val profileId: Long,
     val optionId: String,
     val displayName: String,
 )
 
+internal data class ProtocolMetricsPingUiState(
+    val serverPings: Map<ProfileOptionLatencyKey, ProfileOptionServerPingState> = emptyMap(),
+    val tunnelPings: Map<ProfileOptionLatencyKey, ProfileOptionTunnelPingState> = emptyMap(),
+)
+
 internal data class ProtocolMetricsUiState(
     val serverPings: Map<ProfileOptionLatencyKey, ProfileOptionServerPingState> = emptyMap(),
+    val tunnelPings: Map<ProfileOptionLatencyKey, ProfileOptionTunnelPingState> = emptyMap(),
     val updatedAt: Map<ProfileOptionLatencyKey, Long> = emptyMap(),
     val downOptionIds: Set<ProfileOptionLatencyKey> = emptySet(),
     val refreshingProfileIds: Set<Long> = emptySet(),

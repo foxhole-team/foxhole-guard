@@ -259,6 +259,8 @@ class HomeAutoConnectWaitPolicyTest {
 
         assertTrue(connectedDashboardBlock.contains("measureCurrentConnectionLatency"))
         assertFalse(connectedDashboardBlock.contains("measureCurrentVpnServerPing"))
+        assertTrue(connectedDashboardBlock.contains("cacheProtocolTunnelPingInternal"))
+        assertFalse(connectedDashboardBlock.contains("cacheProtocolServerPingInternal"))
     }
 
     @Test

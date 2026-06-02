@@ -121,6 +121,10 @@ class HomeViewModel(
         MutableStateFlow<Map<ProfileOptionLatencyKey, ProfileOptionServerPingState>>(
             emptyMap()
         )
+    internal val profileOptionTunnelPingsMutable =
+        MutableStateFlow<Map<ProfileOptionLatencyKey, ProfileOptionTunnelPingState>>(
+            emptyMap()
+        )
     internal val profileOptionMetricsUpdatedAtMutable = MutableStateFlow<Map<ProfileOptionLatencyKey, Long>>(emptyMap())
     internal val protocolMetricsRefreshingProfileIdsMutable = MutableStateFlow<Set<Long>>(emptySet())
     internal val protocolMetricsRefreshingOptionIdByProfileIdMutable = MutableStateFlow<Map<Long, String>>(emptyMap())
@@ -438,6 +442,17 @@ class HomeViewModel(
 
     internal val autoConnectUiStateMutable = MutableStateFlow(AutoConnectUiState())
 
+    private val protocolMetricsPingState =
+        combine(
+            profileOptionServerPingsMutable,
+            profileOptionTunnelPingsMutable,
+        ) { serverPings, tunnelPings ->
+            ProtocolMetricsPingUiState(
+                serverPings = serverPings,
+                tunnelPings = tunnelPings,
+            )
+        }
+
     private val protocolMetricsRefreshingState =
         combine(
             protocolMetricsRefreshingProfileIdsMutable,
@@ -451,14 +466,15 @@ class HomeViewModel(
 
     private val protocolMetricsState =
         combine(
-            profileOptionServerPingsMutable,
+            protocolMetricsPingState,
             profileOptionMetricsUpdatedAtMutable,
             profileOptionDownMutable,
             protocolMetricsRefreshingState,
             recommendedProtocolMutable,
-        ) { serverPings, updatedAt, downOptionIds, refreshingState, recommendation ->
+        ) { pingState, updatedAt, downOptionIds, refreshingState, recommendation ->
             ProtocolMetricsUiState(
-                serverPings = serverPings,
+                serverPings = pingState.serverPings,
+                tunnelPings = pingState.tunnelPings,
                 updatedAt = updatedAt,
                 downOptionIds = downOptionIds,
                 refreshingProfileIds = refreshingState.profileIds,
