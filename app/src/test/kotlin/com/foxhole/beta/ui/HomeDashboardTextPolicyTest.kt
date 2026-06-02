@@ -1,5 +1,6 @@
 package com.foxhole.beta.ui
 
+import com.foxhole.beta.core.model.ConnectionState
 import com.foxhole.beta.core.model.IpInfo
 import com.foxhole.beta.core.model.SecureDnsMode
 import org.junit.Assert.assertEquals
@@ -466,6 +467,42 @@ class HomeDashboardTextPolicyTest {
     fun `network card uses full skeleton only before any ip info is available`() {
         assertTrue(shouldShowHomeNetworkFullLoading(visibleIpInfo = null, showIpInfoLoading = true))
         assertFalse(shouldShowHomeNetworkFullLoading(visibleIpInfo = null, showIpInfoLoading = false))
+    }
+
+    @Test
+    fun `network card uses bounded startup skeleton while initial ip is absent`() {
+        assertTrue(
+            shouldShowHomeNetworkEmptyStartupSkeleton(
+                visibleIpInfo = null,
+                explicitLoading = false,
+                connectionState = ConnectionState.IDLE,
+                elapsedMs = HOME_NETWORK_EMPTY_STARTUP_SKELETON_MS - 1,
+            ),
+        )
+        assertFalse(
+            shouldShowHomeNetworkEmptyStartupSkeleton(
+                visibleIpInfo = null,
+                explicitLoading = false,
+                connectionState = ConnectionState.IDLE,
+                elapsedMs = HOME_NETWORK_EMPTY_STARTUP_SKELETON_MS,
+            ),
+        )
+        assertFalse(
+            shouldShowHomeNetworkEmptyStartupSkeleton(
+                visibleIpInfo =
+                    IpInfo(
+                        ip = "203.0.113.7",
+                        countryCode = null,
+                        countryName = null,
+                        city = null,
+                        isp = null,
+                        fetchedAt = 1L,
+                    ),
+                explicitLoading = false,
+                connectionState = ConnectionState.IDLE,
+                elapsedMs = 1L,
+            ),
+        )
     }
 
     @Test

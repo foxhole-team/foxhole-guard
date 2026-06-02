@@ -382,7 +382,13 @@ fun HomeScreen(
             )
         }
     val visibleNetworkIpInfo = networkModel.visibleIpInfo
-    val showNetworkIpInfoLoading = networkModel.showIpInfoLoading
+    val showEmptyStartupNetworkSkeleton =
+        rememberHomeNetworkEmptyStartupSkeleton(
+            networkIpInfo = visibleNetworkIpInfo,
+            explicitLoading = state.ipInfoLoading,
+            connectionState = state.connection.state,
+        )
+    val showNetworkIpInfoLoading = networkModel.showIpInfoLoading || showEmptyStartupNetworkSkeleton
     val showNetworkConnectionDetailsLoading = networkModel.showConnectionDetailsLoading
     val showNetworkConnectionStatus = networkModel.showConnectionStatus
     val showNetworkRouteDetails =
@@ -1905,6 +1911,32 @@ private fun rememberHomeNetworkGeoRowsLoading(
         nowMs = System.currentTimeMillis()
     }
     return loading
+}
+
+@Composable
+private fun rememberHomeNetworkEmptyStartupSkeleton(
+    networkIpInfo: IpInfo?,
+    explicitLoading: Boolean,
+    connectionState: ConnectionState,
+): Boolean {
+    var elapsedMs by remember(networkIpInfo, explicitLoading, connectionState) { mutableStateOf(0L) }
+    LaunchedEffect(networkIpInfo, explicitLoading, connectionState) {
+        elapsedMs = 0L
+        if (
+            networkIpInfo == null &&
+            !explicitLoading &&
+            connectionState == ConnectionState.IDLE
+        ) {
+            delay(HOME_NETWORK_EMPTY_STARTUP_SKELETON_MS)
+            elapsedMs = HOME_NETWORK_EMPTY_STARTUP_SKELETON_MS
+        }
+    }
+    return shouldShowHomeNetworkEmptyStartupSkeleton(
+        visibleIpInfo = networkIpInfo,
+        explicitLoading = explicitLoading,
+        connectionState = connectionState,
+        elapsedMs = elapsedMs,
+    )
 }
 
 private const val DASHBOARD_CARD_ACTIVE_Z_INDEX = 100f

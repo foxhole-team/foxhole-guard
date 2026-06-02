@@ -151,6 +151,7 @@ internal data class HomeNetworkDetailLoadingPolicy(
 )
 
 internal const val HOME_NETWORK_GEO_ROW_PENDING_LOADING_MS = 5_000L
+internal const val HOME_NETWORK_EMPTY_STARTUP_SKELETON_MS = 3_000L
 
 internal data class HomeDashboardProxyModel(
     val modeOption: HomeModeOption,
@@ -1639,6 +1640,17 @@ internal fun shouldShowHomeNetworkFullLoading(
     visibleIpInfo: IpInfo?,
     showIpInfoLoading: Boolean,
 ): Boolean = showIpInfoLoading && visibleIpInfo == null
+
+internal fun shouldShowHomeNetworkEmptyStartupSkeleton(
+    visibleIpInfo: IpInfo?,
+    explicitLoading: Boolean,
+    connectionState: ConnectionState,
+    elapsedMs: Long,
+): Boolean =
+    visibleIpInfo == null &&
+        !explicitLoading &&
+        connectionState == ConnectionState.IDLE &&
+        elapsedMs in 0 until HOME_NETWORK_EMPTY_STARTUP_SKELETON_MS
 
 internal fun shouldShowHomeNetworkGeoRowsLoading(
     ipInfo: IpInfo?,
