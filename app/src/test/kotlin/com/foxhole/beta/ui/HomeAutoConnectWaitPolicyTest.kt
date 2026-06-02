@@ -288,6 +288,8 @@ class HomeAutoConnectWaitPolicyTest {
         assertTrue(connectedDashboardBlock.contains("measureCurrentVpnServerPing"))
         assertTrue(connectedDashboardBlock.contains("cacheProtocolTunnelPingInternal"))
         assertTrue(connectedDashboardBlock.contains("cacheProtocolServerPingInternal"))
+        assertFalse(connectedDashboardBlock.contains("cacheProtocolLatency("))
+        assertFalse(connectedDashboardBlock.contains("recordConnectedProtocolSmartStartMemory"))
     }
 
     @Test

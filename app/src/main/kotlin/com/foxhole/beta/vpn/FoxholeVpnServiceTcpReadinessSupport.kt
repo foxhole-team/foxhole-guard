@@ -6,6 +6,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.net.InetAddress
 import java.net.InetSocketAddress
+import java.net.Socket
 
 internal fun tcpRuntimeReadinessTarget(session: VpnSession): VpnHealthProbeTarget? =
     VpnHealthProbeTargetSelector
@@ -46,8 +47,9 @@ internal suspend fun FoxholeVpnService.prepareTcpRuntimeReadiness(
         val probeResult = runCatching {
             val address = resolveProbeAddress(target.host, upstreamNetwork)
             val startedAt = SystemClock.elapsedRealtime()
-            upstreamNetwork.socketFactory.createSocket().use { socket ->
+            Socket().use { socket ->
                 check(protect(socket)) { "tcp target preflight socket protect failed" }
+                upstreamNetwork.bindSocket(socket)
                 socket.soTimeout = TCP_RUNTIME_PREFLIGHT_TIMEOUT_MS.toInt()
                 socket.connect(
                     InetSocketAddress(address, target.port),

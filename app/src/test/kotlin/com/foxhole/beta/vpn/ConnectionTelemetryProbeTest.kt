@@ -6,6 +6,7 @@ import com.foxhole.beta.core.network.PublicDnsFallback
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Test
+import java.io.File
 import java.net.InetAddress
 import java.net.UnknownHostException
 
@@ -108,4 +109,37 @@ class ConnectionTelemetryProbeTest {
             shouldUseNetworkForDirectServerPing(upstreamNetworkHandle = 101L, vpnNetworkHandle = null),
         )
     }
+
+    @Test
+    fun `direct server ping uses protected raw socket before upstream bind`() {
+        val source = testVpnSourceFile("ConnectionTelemetryProbe.kt").readText()
+        val directServerPingBlock =
+            source.substringAfter("private fun measureServerTcpConnectLatency(")
+                .substringBefore("private class LatencyProbeAttempts")
+
+        assertEquals(true, directServerPingBlock.contains("Socket().use { socket ->"))
+        assertEquals(true, directServerPingBlock.contains("check(protectDirectSocket(socket))"))
+        assertEquals(true, directServerPingBlock.contains("network?.bindSocket(socket)"))
+        assertEquals(false, directServerPingBlock.contains("network?.socketFactory?.createSocket()"))
+    }
+
+    @Test
+    fun `tcp readiness preflight uses protected raw socket before upstream bind`() {
+        val source = testVpnSourceFile("FoxholeVpnServiceTcpReadinessSupport.kt").readText()
+        val preflightBlock =
+            source.substringAfter("val probeResult = runCatching")
+                .substringBefore("TcpRuntimeReadinessResult(")
+
+        assertEquals(true, preflightBlock.contains("Socket().use { socket ->"))
+        assertEquals(true, preflightBlock.contains("check(protect(socket))"))
+        assertEquals(true, preflightBlock.contains("upstreamNetwork.bindSocket(socket)"))
+        assertEquals(false, preflightBlock.contains("upstreamNetwork.socketFactory.createSocket()"))
+    }
+
+    private fun testVpnSourceFile(name: String): File =
+        listOf(
+            File("src/main/kotlin/com/foxhole/beta/vpn/$name"),
+            File("app/src/main/kotlin/com/foxhole/beta/vpn/$name"),
+            File("../app/src/main/kotlin/com/foxhole/beta/vpn/$name"),
+        ).first { file -> file.isFile }
 }

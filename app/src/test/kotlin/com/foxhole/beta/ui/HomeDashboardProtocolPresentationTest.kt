@@ -592,8 +592,18 @@ class HomeDashboardProtocolPresentationTest {
     fun `connected dashboard shows unavailable when request latency refresh failed`() {
         val state =
             HomeRouteUiState(
-                connection = ConnectionSnapshot(state = ConnectionState.CONNECTED),
-                selectedProtocolLatencyUnavailable = true,
+                activeProfile =
+                    profile(
+                        selectedProtocolOptionId = "outline",
+                        protocolOptions = listOf(option("outline", ProtocolHint.OUTLINE)),
+                    ),
+                connection =
+                    ConnectionSnapshot(
+                        state = ConnectionState.CONNECTED,
+                        profileId = 1L,
+                        protocolHint = ProtocolHint.OUTLINE,
+                    ),
+                protocolTunnelPingUnavailableOptionIds = setOf("outline"),
             )
 
         assertNull(resolveDashboardSelectedLatencyMs(state))
@@ -944,9 +954,16 @@ class HomeDashboardProtocolPresentationTest {
             buildHomeRouteUiState(
                 state = baseState,
                 autoConnect = AutoConnectUiState(),
-                profileOptionLatencies = mapOf(ProfileOptionLatencyKey(activeProfile.id, "vless") to 379L),
+                profileOptionLatencies = emptyMap(),
                 profileOptionLatencyUnavailable = emptySet(),
-                protocolMetrics = ProtocolMetricsUiState(),
+                protocolMetrics =
+                    ProtocolMetricsUiState(
+                        tunnelPings =
+                            mapOf(
+                                ProfileOptionLatencyKey(activeProfile.id, "vless") to
+                                    ProfileOptionTunnelPingState(pingMs = 379L),
+                            ),
+                    ),
                 currentNetworkFingerprintKey = null,
             )
 
@@ -1005,7 +1022,7 @@ class HomeDashboardProtocolPresentationTest {
     }
 
     @Test
-    fun `dashboard remembered latency keeps connected card from showing unavailable`() {
+    fun `dashboard remembered latency does not fake connected tunnel latency`() {
         val resolved =
             resolveDashboardLatencyPresentation(
                 HomeRouteUiState(
@@ -1019,13 +1036,13 @@ class HomeDashboardProtocolPresentationTest {
                             state = ConnectionState.CONNECTED,
                             profileId = 1L,
                             protocolHint = ProtocolHint.OUTLINE,
-                        ),
+                    ),
                     selectedProtocolLatencyUnavailable = true,
                     smartStartRememberedLatenciesByOptionId = mapOf("outline" to 426L),
                 ),
             )
 
-        assertEquals(426L, resolved.latencyMs)
+        assertNull(resolved.latencyMs)
         assertFalse(resolved.isUnavailable)
         assertFalse(resolved.isDown)
     }
@@ -1074,7 +1091,7 @@ class HomeDashboardProtocolPresentationTest {
                             profileId = 1L,
                             protocolHint = ProtocolHint.OUTLINE,
                         ),
-                    selectedProtocolLatencyMs = 426L,
+                    protocolTunnelPingsByOptionId = mapOf("outline" to 426L),
                     selectedProtocolLatencyUnavailable = true,
                     protocolDownOptionIds = setOf("outline"),
                 ),

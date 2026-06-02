@@ -309,8 +309,9 @@ internal class ConnectionTelemetryProbe(
         val address = resolvedAddress ?: resolveServerPingAddress(host, network)
         val startedAt = SystemClock.elapsedRealtime()
         // Availability probe only: opens a bounded TCP connect to the configured server target and sends no payload.
-        (network?.socketFactory?.createSocket() ?: Socket()).use { socket ->
+        Socket().use { socket ->
             check(protectDirectSocket(socket)) { "server tcp ping socket protect failed" }
+            network?.bindSocket(socket)
             socket.soTimeout = timeoutMs.toInt()
             socket.connect(
                 InetSocketAddress(address, port),

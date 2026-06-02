@@ -380,7 +380,7 @@ class HomeDashboardPresentationTest {
                             profileId = 1L,
                             protocolOptionId = "vless",
                     ),
-                    selectedProtocolLatencyUnavailable = true,
+                    protocolTunnelPingUnavailableOptionIds = setOf("vless"),
                     protocolServerPingsByOptionId = mapOf("vless" to 379L),
                 ),
             )
@@ -410,7 +410,7 @@ class HomeDashboardPresentationTest {
 
         assertEquals(379L, model.selectedServerPingMs)
         assertNotEquals(91L, model.selectedServerPingMs)
-        assertFalse(model.connectionDetailsReady)
+        assertTrue(model.connectionDetailsReady)
     }
 
     @Test
@@ -425,7 +425,6 @@ class HomeDashboardPresentationTest {
                             profileId = 1L,
                             protocolOptionId = "vless",
                         ),
-                    selectedProtocolLatencyMs = 91L,
                     protocolTunnelPingsByOptionId = mapOf("vless" to 91L),
                     protocolServerPingsByOptionId = mapOf("vless" to 379L),
                 ),

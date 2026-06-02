@@ -1332,16 +1332,14 @@ private fun autoConnectDashboardLatencyPresentation(autoConnect: AutoConnectUiSt
 
 private fun connectedDashboardLatencyPresentation(state: HomeRouteUiState): HomeDashboardLatencyPresentation {
     val selectedOptionId = resolveDashboardLatencyOptionId(state.activeProfile, state.connection)
-    val rememberedLatencyMs = selectedOptionId?.let(state.smartStartRememberedLatenciesByOptionId::get)
+    val tunnelLatencyMs = selectedOptionId?.let(state.protocolTunnelPingsByOptionId::get)
     return when {
-        state.selectedProtocolLatencyMs != null ->
-            HomeDashboardLatencyPresentation(latencyMs = state.selectedProtocolLatencyMs)
+        tunnelLatencyMs != null ->
+            HomeDashboardLatencyPresentation(latencyMs = tunnelLatencyMs)
         state.selectedProtocolRefreshing(selectedOptionId) -> HomeDashboardLatencyPresentation()
         selectedOptionId != null && selectedOptionId in state.protocolDownOptionIds ->
             HomeDashboardLatencyPresentation(isDown = true)
-        rememberedLatencyMs != null ->
-            HomeDashboardLatencyPresentation(latencyMs = rememberedLatencyMs)
-        state.selectedProtocolLatencyUnavailable ->
+        selectedOptionId != null && selectedOptionId in state.protocolTunnelPingUnavailableOptionIds ->
             HomeDashboardLatencyPresentation(isUnavailable = true)
         else -> HomeDashboardLatencyPresentation()
     }
