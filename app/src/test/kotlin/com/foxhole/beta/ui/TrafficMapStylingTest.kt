@@ -149,4 +149,27 @@ class TrafficMapStylingTest {
         assertTrue(cardBlock.contains("TrafficMapCanvasLoadingBlock"))
         assertTrue(source.contains("home_traffic_world_map_loading"))
     }
+
+    @Test
+    fun `traffic map empty state copy reports no active connections`() {
+        val englishStrings =
+            listOf(
+                java.io.File("src/main/res/values/strings.xml"),
+                java.io.File("app/src/main/res/values/strings.xml"),
+                java.io.File("../app/src/main/res/values/strings.xml"),
+            ).first { file -> file.isFile }.readText()
+        val russianStrings =
+            listOf(
+                java.io.File("src/main/res/values-ru/strings.xml"),
+                java.io.File("app/src/main/res/values-ru/strings.xml"),
+                java.io.File("../app/src/main/res/values-ru/strings.xml"),
+            ).first { file -> file.isFile }.readText()
+
+        assertTrue(englishStrings.contains("<string name=\"traffic_map_live_requires_firewall\">No active connections</string>"))
+        assertTrue(englishStrings.contains("<string name=\"traffic_map_waiting_connections\">No active connections</string>"))
+        assertTrue(russianStrings.contains("<string name=\"traffic_map_live_requires_firewall\">Нет активных подключений</string>"))
+        assertTrue(russianStrings.contains("<string name=\"traffic_map_waiting_connections\">Нет активных подключений</string>"))
+        assertFalse(englishStrings.contains("Waiting for active firewall"))
+        assertFalse(russianStrings.contains("Ожидание активного фаервола"))
+    }
 }

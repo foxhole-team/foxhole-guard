@@ -1,19 +1,26 @@
 package com.foxhole.beta.vpn
 
+import android.content.Intent
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.net.VpnService
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import androidx.test.uiautomator.By
+import androidx.test.uiautomator.UiDevice
+import androidx.test.uiautomator.Until
 import com.foxhole.beta.FoxholeApplication
+import com.foxhole.beta.MainActivity
 import com.foxhole.beta.core.diagnostics.DiagnosticsLogger
 import com.foxhole.beta.core.model.ConnectionSnapshot
 import com.foxhole.beta.core.model.ConnectionState
 import com.foxhole.beta.core.model.Profile
 import java.io.FileInputStream
+import java.util.regex.Pattern
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeoutOrNull
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -123,7 +130,14 @@ class VpnRuntimeSmokeTest {
                 rawInput = LIVE_SMOKE_DIRECT_PROFILE,
                 preferredName = "Live Smoke Direct",
             )
-        assumeTrue("device smoke requires pre-granted Android VPN consent", VpnService.prepare(context) == null)
+        if (VpnService.prepare(context) != null) {
+            assumeTrue(
+                "device smoke requires pre-granted Android VPN consent or foxhole.requestVpnPermission=1",
+                InstrumentationRegistry.getArguments().getString("foxhole.requestVpnPermission") == "1",
+            )
+            assertTrue("Android VPN consent was not approved", requestVpnPermission(context))
+        }
+        assumeTrue("device smoke requires Android VPN consent", VpnService.prepare(context) == null)
         return activeProfile
     }
 
@@ -298,9 +312,51 @@ class VpnRuntimeSmokeTest {
     private fun diagnosticSummary(logger: DiagnosticsLogger): String =
         logger.entries.value.joinToString(" || ") { entry -> "[${entry.tag}] ${entry.message}" }
 
+    private suspend fun requestVpnPermission(app: FoxholeApplication): Boolean {
+        val prepareIntent = VpnService.prepare(app) ?: return true
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val activity =
+            instrumentation.startActivitySync(
+                Intent(app, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+            )
+        instrumentation.runOnMainSync {
+            activity.startActivityForResult(prepareIntent, VPN_PERMISSION_REQUEST_CODE)
+        }
+        return withTimeoutOrNull(VPN_PERMISSION_TIMEOUT_MS) {
+            while (VpnService.prepare(app) != null) {
+                approveVpnPermissionDialogIfPresent()
+                delay(VPN_PERMISSION_POLL_MS)
+            }
+            true
+        } ?: false
+    }
+
+    private fun approveVpnPermissionDialogIfPresent() {
+        val device = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
+        val approveButton =
+            device.findObject(By.res("android:id/button1"))
+                ?: device.findObject(By.res("com.android.vpndialogs:id/confirm"))
+                ?: device.wait(
+                    Until.findObject(
+                        By.text(
+                            Pattern.compile(
+                                "^(OK|Ok|Allow|Разрешить|Да)$",
+                                Pattern.CASE_INSENSITIVE or Pattern.UNICODE_CASE,
+                            ),
+                        ),
+                    ),
+                    VPN_PERMISSION_DIALOG_WAIT_MS,
+                )
+        runCatching { approveButton?.click() }
+    }
+
     private companion object {
         private const val DNS_PING_RETRY_TIMEOUT_MS = 15_000L
         private const val DNS_PING_RETRY_INTERVAL_MS = 500L
+        private const val VPN_PERMISSION_REQUEST_CODE = 7302
+        private const val VPN_PERMISSION_TIMEOUT_MS = 45_000L
+        private const val VPN_PERMISSION_POLL_MS = 500L
+        private const val VPN_PERMISSION_DIALOG_WAIT_MS = 1_000L
         private val LIVE_SMOKE_DIRECT_PROFILE =
             """
             {

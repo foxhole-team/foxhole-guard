@@ -597,6 +597,149 @@ class ProfileRuntimeSessionAndroidTest {
     }
 
     @Test
+    fun manualTorOnlyRuntimeConnectsWhenRequested() {
+        if (InstrumentationRegistry.getArguments().getString("foxhole.liveTorOnly") != "1") {
+            Log.d(TEST_TAG, "manual TOR-only live connect skipped")
+            return
+        }
+        runBlocking {
+            val app = ApplicationProvider.getApplicationContext<FoxholeApplication>()
+            val requireSuccess =
+                InstrumentationRegistry.getArguments().getString("foxhole.requireLiveTorOnlySuccess") == "1"
+            if (!ensureVpnPermission(app)) {
+                Log.d(TEST_TAG, "manual TOR-only skipped: vpn permission missing")
+                if (requireSuccess) {
+                    assertTrue("vpn permission missing for required TOR-only live test", false)
+                }
+                return@runBlocking
+            }
+            resetRelevantSettings(app)
+            clearProfiles(app)
+            disconnectAndWaitForIdle(app)
+
+            app.container.settingsRepository.updatePrivacyRouteMode(PrivacyRouteMode.TOR_OVER_VPN)
+            app.container.settingsRepository.updatePrivacyRouteScope(PrivacyRouteScope.ALL_APPS)
+            app.container.settingsRepository.updatePrivacyRouteSelectedPackages(emptyList())
+
+            try {
+                val startedAt = System.currentTimeMillis()
+                app.container.connectionController.connectTorOnly(statusMessage = "Live TOR-only")
+                val terminalState =
+                    withTimeoutOrNull(longArgument("foxhole.torOnlyTerminalTimeoutMs", 240_000L)) {
+                        waitForActiveConnectionAttempt(app)
+                        waitForTerminalState(app)
+                    }
+                delay(2_000)
+                val evidence =
+                    TunnelValidationEvidenceClassifier.classify(
+                        entries = app.container.diagnosticsLogger.entries.value,
+                        sinceMs = startedAt,
+                    )
+                val snapshot = app.container.connectionController.snapshot.value
+                val runtimeUi = app.container.connectionController.runtimeUiState.value
+                Log.d(
+                    TEST_TAG,
+                    "liveTorOnly result terminalState=${terminalState?.name ?: "TIMEOUT"} profileId=${snapshot.profileId} message=${snapshot.message.orEmpty().take(160)} torState=${runtimeUi.tor.runtimeStressLabel()} fatal=${evidence.fatalRuntimeMessage.orEmpty().take(200)} successTraffic=${evidence.hasSuccessfulTunnelActivity}",
+                )
+                if (requireSuccess) {
+                    assertEquals(ConnectionState.CONNECTED, terminalState)
+                    assertEquals(FoxholeVpnService.TOR_ONLY_PROFILE_ID, snapshot.profileId)
+                    assertTrue(evidence.fatalRuntimeMessage.orEmpty().isEmpty())
+                }
+            } finally {
+                app.container.settingsRepository.updatePrivacyRouteMode(PrivacyRouteMode.OFF)
+                disconnectAndWaitForIdle(app)
+            }
+        }
+    }
+
+    @Test
+    fun manualSplitTunnelIncludeOneAppRuntime() {
+        if (InstrumentationRegistry.getArguments().getString("foxhole.liveSplitIncludeOneApp") != "1") {
+            Log.d(TEST_TAG, "manual split include-one-app live runtime skipped")
+            return
+        }
+        runBlocking {
+            val app = ApplicationProvider.getApplicationContext<FoxholeApplication>()
+            val requireSuccess =
+                InstrumentationRegistry.getArguments().getString("foxhole.requireLiveSplitIncludeSuccess") == "1"
+            if (!ensureVpnPermission(app)) {
+                Log.d(TEST_TAG, "manual split include-one-app skipped: vpn permission missing")
+                if (requireSuccess) {
+                    assertTrue("vpn permission missing for required split include-one-app live test", false)
+                }
+                return@runBlocking
+            }
+            resetRelevantSettings(app)
+            clearProfiles(app)
+            disconnectAndWaitForIdle(app)
+
+            val selectedPackage =
+                InstrumentationRegistry.getArguments()
+                    .getString("foxhole.splitSelectedPackage")
+                    ?.trim()
+                    ?.takeIf(String::isNotBlank)
+                    ?: firstInstalledPackageExcept(app.packageName)
+            val imported =
+                app.container.profileRepository.importProfile(
+                    rawInput = LIVE_SPLIT_DIRECT_PROFILE,
+                    preferredName = "Live Split Direct",
+                )
+            app.container.connectionController.setActiveProfile(imported.id)
+            app.container.settingsRepository.updateSelectedPackages(listOf(selectedPackage))
+            app.container.settingsRepository.updatePerAppRoutingMode(PerAppRoutingMode.INCLUDE_SELECTED_APPS)
+            val session = app.container.profileRepository.getSession(imported.id)
+            val config = json.parseToJsonElement(session.configJson).jsonObject
+            val tunInbound = config["inbounds"]!!.jsonArray.first().jsonObject
+            val includePackages =
+                tunInbound["include_package"]
+                    ?.jsonArray
+                    ?.map { it.jsonPrimitive.content }
+                    .orEmpty()
+            assertEquals(listOf(selectedPackage), includePackages)
+
+            try {
+                val startedAt = System.currentTimeMillis()
+                Log.d(TEST_TAG, "liveSplitInclude start profileId=${imported.id} selectedPackage=$selectedPackage")
+                app.container.connectionController.connect(imported.id)
+                val terminalState =
+                    withTimeoutOrNull(longArgument("foxhole.splitIncludeTerminalTimeoutMs", 90_000L)) {
+                        waitForActiveConnectionAttempt(app)
+                        waitForTerminalState(app)
+                    }
+                delay(2_000)
+                val messages = diagnosticMessagesSince(app, startedAt)
+                val splitApplied =
+                    messages.any { message ->
+                        message.contains("VPN app split applied") &&
+                            message.contains("mode=include") &&
+                            message.contains("include_count=1")
+                    }
+                val evidence =
+                    TunnelValidationEvidenceClassifier.classify(
+                        entries = app.container.diagnosticsLogger.entries.value,
+                        sinceMs = startedAt,
+                    )
+                val snapshot = app.container.connectionController.snapshot.value
+                Log.d(
+                    TEST_TAG,
+                    "liveSplitInclude result terminalState=${terminalState?.name ?: "TIMEOUT"} profileId=${snapshot.profileId} selectedPackage=$selectedPackage splitApplied=$splitApplied message=${snapshot.message.orEmpty().take(160)} fatal=${evidence.fatalRuntimeMessage.orEmpty().take(200)} successTraffic=${evidence.hasSuccessfulTunnelActivity}",
+                )
+                if (requireSuccess) {
+                    assertEquals(ConnectionState.CONNECTED, terminalState)
+                    assertEquals(imported.id, snapshot.profileId)
+                    assertTrue("Android VPN package include split was not applied", splitApplied)
+                    assertTrue(evidence.fatalRuntimeMessage.orEmpty().isEmpty())
+                }
+            } finally {
+                app.container.settingsRepository.updatePerAppRoutingMode(PerAppRoutingMode.FULL_TUNNEL)
+                app.container.settingsRepository.updateSelectedPackages(emptyList())
+                disconnectAndWaitForIdle(app)
+            }
+        }
+    }
+
+    @Test
     fun manualSmartSubscriptionVlessTcpBackgroundHold() {
         if (InstrumentationRegistry.getArguments().getString("foxhole.liveSmartVlessTcpBackground") != "1") {
             Log.d(TEST_TAG, "manual smart VLESS TCP background hold skipped")
@@ -1777,6 +1920,15 @@ class ProfileRuntimeSessionAndroidTest {
         private const val LIVE_DIRECT_LINK_TERMINAL_TIMEOUT_MS = 150_000L
         private const val BYTES_PER_KB = 1024L
         private const val RUNTIME_STRESS_RSS_DELTA_LIMIT_KB = 250L * 1024L
+        private val LIVE_SPLIT_DIRECT_PROFILE =
+            """
+            {
+              "outbounds": [
+                { "type": "direct", "tag": "direct-upstream" }
+              ]
+            }
+            """.trimIndent()
+
         private data class DirectLinkCase(
             val label: String,
             val rawLink: String,

@@ -110,7 +110,6 @@ class ProfileRepository(
             routingRepository = routingRepository,
             runtimeConfigAssembler = runtimeConfigAssembler,
             torRuntimeInstaller = torRuntimeInstaller,
-            torManager = torManager,
             dnsFilterAssetInstaller = dnsFilterAssetInstaller,
             diagnosticsLogger = diagnosticsLogger,
             profileProvider = ::requireProfile,
