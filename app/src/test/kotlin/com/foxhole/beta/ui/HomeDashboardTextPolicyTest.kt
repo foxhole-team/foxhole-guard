@@ -365,6 +365,22 @@ class HomeDashboardTextPolicyTest {
     }
 
     @Test
+    fun `network country row falls back to country code after geo lookup settles`() {
+        val partialIpInfo =
+            IpInfo(
+                ip = "203.0.113.7",
+                countryCode = "NL",
+                countryName = null,
+                city = null,
+                isp = "Example ISP",
+                fetchedAt = 10_000L,
+            )
+
+        assertEquals(null, dashboardCountryLineForGeoState(partialIpInfo, geoRowsLoading = true))
+        assertEquals("🇳🇱 NL", dashboardCountryLineForGeoState(partialIpInfo, geoRowsLoading = false))
+    }
+
+    @Test
     fun `network geo row shows skeleton for country code without country name until settled`() {
         val partialIpInfo =
             IpInfo(

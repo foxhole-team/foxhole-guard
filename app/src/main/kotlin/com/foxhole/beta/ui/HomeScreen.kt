@@ -970,7 +970,13 @@ fun HomeScreen(
                                             refreshLoading = rowValueLoading,
                                             geoRowsLoading = geoRowsLoading,
                                         )
-                                    val countryLine = networkIpInfo?.let(::buildCountryLineOrNull)
+                                    val countryLine =
+                                        networkIpInfo?.let { info ->
+                                            dashboardCountryLineForGeoState(
+                                                ipInfo = info,
+                                                geoRowsLoading = geoRowsLoading,
+                                            )
+                                        }
                                     val cityLine = networkIpInfo?.let(::buildCityLineOrNull)
                                     val countryValue =
                                         homeNetworkGeoRowDetailValue(

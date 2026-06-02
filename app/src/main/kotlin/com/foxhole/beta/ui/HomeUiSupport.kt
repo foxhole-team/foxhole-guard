@@ -1543,6 +1543,16 @@ internal fun buildCountryLine(ipInfo: IpInfo): String {
 internal fun buildCountryLineOrNull(ipInfo: IpInfo): String? =
     formatDashboardCountryLineOrNull(ipInfo)
 
+internal fun dashboardCountryLineForGeoState(
+    ipInfo: IpInfo,
+    geoRowsLoading: Boolean,
+): String? =
+    if (geoRowsLoading) {
+        buildCountryLineOrNull(ipInfo)
+    } else {
+        formatCountryLineOrNull(ipInfo)
+    }
+
 internal fun formatCountryLine(
     ipInfo: IpInfo,
     unknownCountry: String,
