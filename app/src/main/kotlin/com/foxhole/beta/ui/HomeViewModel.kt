@@ -573,10 +573,23 @@ class HomeViewModel(
                 initialTrafficMapOriginIpInfo,
             )
 
+    private val trafficMapRouteIpInfo =
+        combine(
+            container.connectionController.snapshot,
+            container.connectionController.ipInfo,
+        ) { connection, ipInfo ->
+            trafficMapRouteIpInfoCandidate(
+                connection = connection,
+                ipInfo = ipInfo,
+            )
+        }
+            .distinctUntilChanged()
+
     val trafficMapUiState =
         container.trafficMapRepository.trafficMapState(
             scope = viewModelScope,
             originIpInfo = trafficMapOriginIpInfo,
+            routeIpInfo = trafficMapRouteIpInfo,
             runtimeAvailable = trafficMapRuntimeAvailable,
         )
 

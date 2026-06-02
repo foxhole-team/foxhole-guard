@@ -284,10 +284,12 @@ internal class ConnectionTelemetryProbe(
         require(target.transport == VpnHealthProbeTransport.TCP) {
             "server ping unavailable for ${target.transport.name.lowercase()} transport"
         }
-        val upstreamNetwork = currentUpstreamNetwork() ?: error("upstream network unavailable")
+        val upstreamNetwork = currentUpstreamNetwork()
         val vpnNetworkHandle = currentVpnNetwork()?.networkHandle
-        require(shouldUseNetworkForDirectServerPing(upstreamNetwork.networkHandle, vpnNetworkHandle)) {
-            "server ping upstream network is vpn"
+        if (upstreamNetwork != null) {
+            require(shouldUseNetworkForDirectServerPing(upstreamNetwork.networkHandle, vpnNetworkHandle)) {
+                "server ping upstream network is vpn"
+            }
         }
         return withContext(Dispatchers.IO) {
             measureServerTcpConnectLatency(
@@ -527,7 +529,6 @@ internal fun shouldUseNetworkForDirectServerPing(
     vpnNetworkHandle: Long?,
 ): Boolean =
     upstreamNetworkHandle != null &&
-        vpnNetworkHandle != null &&
         upstreamNetworkHandle != vpnNetworkHandle
 
 internal fun icmpPingCommand(

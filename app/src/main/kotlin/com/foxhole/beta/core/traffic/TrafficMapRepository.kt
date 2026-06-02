@@ -32,10 +32,12 @@ class TrafficMapRepository(
     fun trafficMapState(
         scope: CoroutineScope,
         originIpInfo: Flow<IpInfo?>,
+        routeIpInfo: Flow<IpInfo?>,
         runtimeAvailable: Flow<Boolean>,
     ): StateFlow<TrafficMapUiState> =
         trafficMapUiStateFlow(
             originIpInfo = originIpInfo,
+            routeIpInfo = routeIpInfo,
             runtimeAvailable = runtimeAvailable,
         )
             .stateIn(
@@ -77,10 +79,14 @@ class TrafficMapRepository(
 
     private fun trafficMapUiStateFlow(
         originIpInfo: Flow<IpInfo?>,
+        routeIpInfo: Flow<IpInfo?>,
         runtimeAvailable: Flow<Boolean>,
     ): Flow<TrafficMapUiState> =
         combine(
             originIpInfo
+                .map(::trafficMapOriginInfo)
+                .distinctUntilChanged(),
+            routeIpInfo
                 .map(::trafficMapOriginInfo)
                 .distinctUntilChanged(),
             runtimeAvailable
@@ -95,30 +101,43 @@ class TrafficMapRepository(
                     )
                 }
                 .distinctUntilChanged(),
-            ::buildTrafficMapUiState,
-        )
+        ) { originInfo, routeInfo, available, destinations ->
+            buildTrafficMapUiState(
+                originInfo = originInfo,
+                routeInfo = routeInfo,
+                runtimeAvailable = available,
+                destinations = destinations,
+            )
+        }
             .distinctUntilChanged()
             .flowOn(Dispatchers.Default)
 
     internal fun trafficMapStateSnapshot(
         originIpInfo: IpInfo?,
+        routeIpInfo: IpInfo? = null,
         runtimeAvailable: Boolean,
         destinations: List<TrafficMapPoint>,
     ): TrafficMapUiState =
         buildTrafficMapUiState(
             originInfo = trafficMapOriginInfo(originIpInfo),
+            routeInfo = trafficMapOriginInfo(routeIpInfo),
             runtimeAvailable = runtimeAvailable,
             destinations = destinations,
         )
 
     private fun buildTrafficMapUiState(
         originInfo: TrafficMapOriginInfo?,
+        routeInfo: TrafficMapOriginInfo?,
         runtimeAvailable: Boolean,
         destinations: List<TrafficMapPoint>,
     ): TrafficMapUiState {
         val origin = originInfo?.countryCode?.let(::trafficMapOrigin)
+        val activeRouteDestination = routeInfo?.let(::trafficMapRouteDestination)
         val visibleDestinations =
-            destinations
+            mergeActiveRouteDestination(
+                activeRouteDestination = activeRouteDestination,
+                liveDestinations = destinations,
+            )
                 .take(MaxTrafficMapDestinations)
                 .map { point -> offsetTrafficMapDestinationFromOriginCountry(point, originInfo?.countryCode) }
         val highlightedCountries =
@@ -181,6 +200,45 @@ class TrafficMapRepository(
                     city = ipInfo?.city?.takeIf(String::isNotBlank),
                 )
             }
+    }
+
+    private fun trafficMapRouteDestination(routeInfo: TrafficMapOriginInfo): TrafficMapPoint? {
+        val coordinate = trafficMapOrigin(routeInfo.countryCode) ?: return null
+        return TrafficMapPoint(
+            countryCode = coordinate.countryCode,
+            label = routeInfo.countryName ?: coordinate.label,
+            lat = coordinate.lat,
+            lon = coordinate.lon,
+            bytes = 0L,
+            connections = 1,
+        )
+    }
+
+    private fun mergeActiveRouteDestination(
+        activeRouteDestination: TrafficMapPoint?,
+        liveDestinations: List<TrafficMapPoint>,
+    ): List<TrafficMapPoint> {
+        val route = activeRouteDestination ?: return liveDestinations
+        val routeCountryCode = route.countryCode.uppercase(Locale.US)
+        val merged = mutableListOf<TrafficMapPoint>()
+        var routeMerged = false
+        liveDestinations.forEach { point ->
+            if (point.countryCode.equals(routeCountryCode, ignoreCase = true)) {
+                merged +=
+                    point.copy(
+                        connections = point.connections.coerceAtLeast(route.connections),
+                        bytes = point.bytes.coerceAtLeast(route.bytes),
+                    )
+                routeMerged = true
+            } else {
+                merged += point
+            }
+        }
+        return if (routeMerged) {
+            merged
+        } else {
+            listOf(route) + merged
+        }
     }
 
     internal companion object {

@@ -4,6 +4,7 @@ import com.foxhole.beta.core.model.IpInfo
 import com.foxhole.beta.core.model.TrafficMapPoint
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class TrafficMapRepositoryTest {
@@ -203,6 +204,99 @@ class TrafficMapRepositoryTest {
             state.edges.single().fromLon,
             0.0,
         )
+    }
+
+    @Test
+    fun `traffic map state shows active vpn endpoint when live samples are still empty`() {
+        val state =
+            TrafficMapRepository().trafficMapStateSnapshot(
+                originIpInfo =
+                    IpInfo(
+                        ip = "198.51.100.20",
+                        ipv4 = "198.51.100.20",
+                        countryCode = "US",
+                        countryName = "United States",
+                        city = "New York",
+                        isp = "Device ISP",
+                        fetchedAt = 1_000L,
+                    ),
+                routeIpInfo =
+                    IpInfo(
+                        ip = "203.0.113.20",
+                        ipv4 = "203.0.113.20",
+                        countryCode = "NL",
+                        countryName = "Netherlands",
+                        city = "Amsterdam",
+                        isp = "Tunnel ISP",
+                        fetchedAt = 2_000L,
+                    ),
+                runtimeAvailable = true,
+                destinations = emptyList(),
+            )
+
+        assertEquals("US", state.originCountryCode)
+        assertEquals("NL", state.destinations.single().countryCode)
+        assertEquals(1, state.destinations.single().connections)
+        assertEquals(0L, state.destinations.single().bytes)
+        assertEquals(1, state.edges.size)
+        assertTrue(state.highlightedCountries.containsAll(listOf("US", "NL")))
+    }
+
+    @Test
+    fun `traffic map state does not draw device route when vpn endpoint is known but device origin is unknown`() {
+        val state =
+            TrafficMapRepository().trafficMapStateSnapshot(
+                originIpInfo = null,
+                routeIpInfo =
+                    IpInfo(
+                        ip = "203.0.113.20",
+                        ipv4 = "203.0.113.20",
+                        countryCode = "NL",
+                        countryName = "Netherlands",
+                        city = "Amsterdam",
+                        isp = "Tunnel ISP",
+                        fetchedAt = 2_000L,
+                    ),
+                runtimeAvailable = true,
+                destinations = emptyList(),
+            )
+
+        assertNull(state.originCountryCode)
+        assertEquals("NL", state.destinations.single().countryCode)
+        assertEquals(0, state.edges.size)
+    }
+
+    @Test
+    fun `traffic map state merges active vpn endpoint with same country live traffic`() {
+        val state =
+            TrafficMapRepository().trafficMapStateSnapshot(
+                originIpInfo =
+                    IpInfo(
+                        ip = "198.51.100.20",
+                        ipv4 = "198.51.100.20",
+                        countryCode = "US",
+                        countryName = "United States",
+                        city = "New York",
+                        isp = "Device ISP",
+                        fetchedAt = 1_000L,
+                    ),
+                routeIpInfo =
+                    IpInfo(
+                        ip = "203.0.113.20",
+                        ipv4 = "203.0.113.20",
+                        countryCode = "DE",
+                        countryName = "Germany",
+                        city = "Frankfurt",
+                        isp = "Tunnel ISP",
+                        fetchedAt = 2_000L,
+                    ),
+                runtimeAvailable = true,
+                destinations = listOf(trafficMapPoint("DE")),
+            )
+
+        assertEquals(1, state.destinations.size)
+        assertEquals("DE", state.destinations.single().countryCode)
+        assertEquals(1, state.edges.size)
     }
 
     @Test

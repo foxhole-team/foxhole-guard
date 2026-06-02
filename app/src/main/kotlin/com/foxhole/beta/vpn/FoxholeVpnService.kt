@@ -835,6 +835,38 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         return result
     }
 
+    private suspend fun awaitStoppedVpnNetworkTeardown(
+        previousVpnNetworkHandle: Long?,
+        reason: String,
+    ) {
+        val handle = previousVpnNetworkHandle ?: return
+        val deadline = SystemClock.elapsedRealtime() + VPN_NETWORK_TEARDOWN_SETTLE_TIMEOUT_MS
+        while (currentCoroutineContext().isActive && SystemClock.elapsedRealtime() < deadline) {
+            val currentHandle = currentVpnNetworkOrNull()?.networkHandle
+            if (currentHandle == null || currentHandle != handle) {
+                container.diagnosticsLogger.recordStructured(
+                    "connection",
+                    "vpn network teardown settled",
+                    "reason=$reason",
+                    "previous_handle=$handle",
+                    currentHandle?.let { "current_handle=$it" } ?: "current_handle=null",
+                )
+                return
+            }
+            delay(VPN_NETWORK_TEARDOWN_SETTLE_POLL_MS)
+        }
+        val lingeringHandle = currentVpnNetworkOrNull()?.networkHandle
+        if (lingeringHandle == handle) {
+            container.diagnosticsLogger.recordStructured(
+                "connection",
+                "vpn network teardown still pending",
+                "reason=$reason",
+                "previous_handle=$handle",
+                "timeout_ms=$VPN_NETWORK_TEARDOWN_SETTLE_TIMEOUT_MS",
+            )
+        }
+    }
+
     private suspend fun stopTorProcessIfNeeded(
         session: VpnSession?,
         reason: String,
@@ -863,6 +895,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         beginRuntimeTransition(if (message == null) "disconnect" else "disconnect_error")
         val session = activeSession
         val localGuardMode = activeLocalGuardMode
+        val previousVpnNetworkHandle = activeVpnNetworkHandle ?: currentVpnNetworkOrNull()?.networkHandle
         val previousSnapshot = FoxholeVpnRuntimeBridge.snapshot.value
         if (
             session == null &&
@@ -916,6 +949,10 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
             )
         }
         stopRuntimeFailClosed(reason = "disconnect")
+        awaitStoppedVpnNetworkTeardown(
+            previousVpnNetworkHandle = previousVpnNetworkHandle,
+            reason = "disconnect",
+        )
         stopTorProcessIfNeeded(session, reason = "disconnect")
         releaseRuntimeWakeLock()
         activeSession = null
@@ -1298,6 +1335,10 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
             action?.let { "action=$it" } ?: "action=null",
         )
         stopRuntimeFailClosed(reason = "runtime_command_fail_closed")
+        awaitStoppedVpnNetworkTeardown(
+            previousVpnNetworkHandle = activeVpnNetworkHandle ?: currentVpnNetworkOrNull()?.networkHandle,
+            reason = "runtime_command_fail_closed",
+        )
         stopTorProcessIfNeeded(session, reason = "runtime_command_fail_closed")
         releaseRuntimeWakeLock()
         activeSession = null
@@ -2352,6 +2393,8 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         internal const val TOR_ONLY_PROFILE_ID = -20L
         internal const val APP_TRAFFIC_SAMPLE_INTERVAL_MS = 60_000L
         internal const val APP_TRAFFIC_SAMPLE_CACHE_MAX_AGE_MS = APP_TRAFFIC_SAMPLE_INTERVAL_MS + 15_000L
+        private const val VPN_NETWORK_TEARDOWN_SETTLE_TIMEOUT_MS = 2_500L
+        private const val VPN_NETWORK_TEARDOWN_SETTLE_POLL_MS = 100L
         private const val ACTION_NATIVE_RUNTIME_STOP = "libbox_service_stop"
     }
 }

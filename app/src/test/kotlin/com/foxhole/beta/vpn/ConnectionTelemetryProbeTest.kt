@@ -105,7 +105,7 @@ class ConnectionTelemetryProbeTest {
             shouldUseNetworkForDirectServerPing(upstreamNetworkHandle = null, vpnNetworkHandle = 101L),
         )
         assertEquals(
-            false,
+            true,
             shouldUseNetworkForDirectServerPing(upstreamNetworkHandle = 101L, vpnNetworkHandle = null),
         )
     }
@@ -124,6 +124,19 @@ class ConnectionTelemetryProbeTest {
         assertEquals(true, directServerPingBlock.contains("check(protectDirectSocket(socket))"))
         assertEquals(true, directServerPingBlock.contains("network?.bindSocket(socket)"))
         assertEquals(false, directServerPingBlock.contains("network?.socketFactory?.createSocket()"))
+    }
+
+    @Test
+    fun `current vpn server ping can use protected direct socket without upstream network`() {
+        val source = testVpnSourceFile("ConnectionTelemetryProbe.kt").readText()
+        val currentServerPingBlock =
+            source.substringAfter("suspend fun measureCurrentVpnServerPing(")
+                .substringBefore("private fun measureServerTcpConnectLatency(")
+
+        assertEquals(true, currentServerPingBlock.contains("val upstreamNetwork = currentUpstreamNetwork()"))
+        assertEquals(true, currentServerPingBlock.contains("if (upstreamNetwork != null)"))
+        assertEquals(true, currentServerPingBlock.contains("network = upstreamNetwork"))
+        assertEquals(false, currentServerPingBlock.contains("error(\"upstream network unavailable\")"))
     }
 
     @Test

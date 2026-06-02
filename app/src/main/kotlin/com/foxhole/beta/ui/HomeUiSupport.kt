@@ -976,6 +976,16 @@ internal fun trafficMapOriginIpInfoCandidate(
     return deviceIpInfo
 }
 
+internal fun trafficMapRouteIpInfoCandidate(
+    connection: ConnectionSnapshot,
+    ipInfo: IpInfo?,
+): IpInfo? {
+    if (!connection.isActiveTrafficMapRouteTunnel()) return null
+    val routeIpInfo = ipInfo ?: return null
+    if (!routeIpInfo.hasVisiblePublicAddress()) return null
+    return routeIpInfo.takeIf { info -> info.countryCode?.isNotBlank() == true }
+}
+
 internal fun shouldRetainTrafficMapOriginIpInfo(
     connection: ConnectionSnapshot,
     previousOriginIpInfo: IpInfo?,

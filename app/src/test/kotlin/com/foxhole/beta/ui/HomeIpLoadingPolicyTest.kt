@@ -760,6 +760,55 @@ class HomeIpLoadingPolicyTest {
     }
 
     @Test
+    fun `traffic map route point uses connected tunnel ip only`() {
+        val tunnelIp =
+            IpInfo(
+                ip = "203.0.113.20",
+                ipv4 = "203.0.113.20",
+                countryCode = "NL",
+                countryName = "Netherlands",
+                city = "Amsterdam",
+                isp = "Tunnel ISP",
+                fetchedAt = 5_000L,
+            )
+
+        assertEquals(
+            tunnelIp,
+            trafficMapRouteIpInfoCandidate(
+                connection =
+                    ConnectionSnapshot(
+                        state = ConnectionState.CONNECTED,
+                        trafficMode = TrafficMode.TUNNEL,
+                        profileId = 7L,
+                    ),
+                ipInfo = tunnelIp,
+            ),
+        )
+        assertNull(
+            trafficMapRouteIpInfoCandidate(
+                connection =
+                    ConnectionSnapshot(
+                        state = ConnectionState.CONNECTED,
+                        trafficMode = TrafficMode.TUNNEL,
+                        profileId = FoxholeVpnService.LOCAL_GUARD_PROFILE_ID,
+                    ),
+                ipInfo = tunnelIp,
+            ),
+        )
+        assertNull(
+            trafficMapRouteIpInfoCandidate(
+                connection =
+                    ConnectionSnapshot(
+                        state = ConnectionState.IDLE,
+                        trafficMode = TrafficMode.TUNNEL,
+                        profileId = 7L,
+                    ),
+                ipInfo = tunnelIp,
+            ),
+        )
+    }
+
+    @Test
     fun `traffic map legend loading is limited to startup vpn transitions and explicit refresh`() {
         assertTrue(
             shouldShowTrafficMapLegendLoading(
