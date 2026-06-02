@@ -789,6 +789,64 @@ class HomeDashboardPresentationTest {
     }
 
     @Test
+    fun `post connect incomplete vpn geo rows skeleton without full card flicker`() {
+        val ipInfo =
+            IpInfo(
+                ip = "203.0.113.10",
+                countryCode = "NL",
+                countryName = null,
+                city = null,
+                isp = null,
+                fetchedAt = 1_000L,
+            )
+        val model =
+            resolveHomeDashboardNetworkModel(
+                state =
+                    HomeRouteUiState(
+                        profilesLoaded = true,
+                        ipInfoLoading = true,
+                        ipInfoRefreshReason = IpInfoRefreshReason.POST_CONNECT,
+                        connection =
+                            ConnectionSnapshot(
+                                state = ConnectionState.CONNECTED,
+                                profileId = 1L,
+                                lastChangeAt = 500L,
+                            ),
+                    ),
+                visibleIpInfo = ipInfo,
+                deviceInternetAvailable = true,
+            )
+        val policy =
+            homeNetworkDetailLoadingPolicy(
+                refreshLoading = model.showRefreshProgress || model.showIpInfoLoading,
+                geoRowsLoading = model.showGeoRowsLoading,
+            )
+
+        assertEquals(ipInfo, model.visibleIpInfo)
+        assertFalse(model.showRefreshProgress)
+        assertFalse(model.showIpInfoLoading)
+        assertFalse(model.showConnectionDetailsLoading)
+        assertTrue(model.showGeoRowsLoading)
+        assertFalse(model.showLoading)
+        assertEquals(
+            HomeNetworkDetailValue(text = "", loading = true),
+            homeNetworkGeoRowDetailValue(
+                value = buildCountryLineOrNull(ipInfo),
+                refreshLoading = false,
+                geoRowsLoading = policy.country,
+            ),
+        )
+        assertEquals(
+            HomeNetworkDetailValue(text = "", loading = true),
+            homeNetworkDetailValue(buildCityLineOrNull(ipInfo), loading = policy.city),
+        )
+        assertEquals(
+            HomeNetworkDetailValue(text = "", loading = true),
+            homeNetworkDetailValue(providerLineOrNull(ipInfo), loading = policy.provider),
+        )
+    }
+
+    @Test
     fun `geo enrichment keeps incomplete city and provider rows skeletoned after first quick ip`() {
         val ipInfo =
             IpInfo(

@@ -779,7 +779,11 @@ private fun HomeRouteUiState.shouldShowHomeNetworkConnectionDetailsLoading(
             )
 
 private fun HomeRouteUiState.shouldShowStartupHomeNetworkGeoRowsLoading(dashboardIpInfo: IpInfo?): Boolean =
-    (!profilesLoaded || ipInfoRefreshReason == IpInfoRefreshReason.POST_UPDATE) &&
+    (
+        ipInfoLoading ||
+            !profilesLoaded ||
+            ipInfoRefreshReason == IpInfoRefreshReason.POST_UPDATE
+        ) &&
         dashboardIpInfo != null &&
         shouldShowIpInfoGeoEnrichmentLoading(dashboardIpInfo)
 
