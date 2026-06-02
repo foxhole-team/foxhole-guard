@@ -705,6 +705,18 @@ internal fun IpInfo.retainKnownLocationFrom(previous: IpInfo?): IpInfo {
     )
 }
 
+internal fun IpInfo.retainKnownDetailsFrom(previous: IpInfo?): IpInfo {
+    val previousInfo = previous ?: return this
+    if (!samePrimaryAddress(previousInfo)) {
+        return this
+    }
+    return retainKnownLocationFrom(previousInfo).copy(
+        ipv4 = ipv4 ?: previousInfo.ipv4,
+        localDnsServers = localDnsServers.ifEmpty { previousInfo.localDnsServers },
+        remoteDnsServers = remoteDnsServers.ifEmpty { previousInfo.remoteDnsServers },
+    )
+}
+
 private fun IpInfo.samePrimaryAddress(other: IpInfo): Boolean =
     primaryAddressKey() == other.primaryAddressKey()
 
@@ -751,11 +763,7 @@ object FoxholeVpnRuntimeBridge {
                 null
             } else {
                 val previous = ipInfoMutable.value
-                value.copy(
-                    ipv4 = value.ipv4 ?: previous?.ipv4,
-                    localDnsServers = value.localDnsServers.ifEmpty { previous?.localDnsServers.orEmpty() },
-                    remoteDnsServers = value.remoteDnsServers.ifEmpty { previous?.remoteDnsServers.orEmpty() },
-                ).retainKnownLocationFrom(previous)
+                value.retainKnownDetailsFrom(previous)
             }
         publishRuntimeUiState()
     }
@@ -781,11 +789,7 @@ object FoxholeVpnRuntimeBridge {
             if (value == null) {
                 null
             } else {
-                value.copy(
-                    ipv4 = value.ipv4 ?: previous?.ipv4,
-                    localDnsServers = value.localDnsServers.ifEmpty { previous?.localDnsServers.orEmpty() },
-                    remoteDnsServers = value.remoteDnsServers.ifEmpty { previous?.remoteDnsServers.orEmpty() },
-                ).retainKnownLocationFrom(previous)
+                value.retainKnownDetailsFrom(previous)
             }
         publishRuntimeUiState()
         return true

@@ -141,6 +141,41 @@ class FoxholeVpnRuntimeBridgeTest {
     }
 
     @Test
+    fun `runtime ip update does not inherit location or ipv4 across different addresses`() {
+        val previousIpInfo = FoxholeVpnRuntimeBridge.ipInfo.value
+        val richDeviceIp =
+            IpInfo(
+                ip = "198.51.100.20",
+                ipv4 = "198.51.100.20",
+                countryCode = "US",
+                countryName = "United States",
+                city = "New York",
+                isp = "Device ISP",
+                fetchedAt = 1_000L,
+            )
+        val newRouteIp =
+            IpInfo(
+                ip = "2001:db8::10",
+                ipv4 = null,
+                ipv6 = "2001:db8::10",
+                countryCode = "NL",
+                countryName = "Netherlands",
+                city = null,
+                isp = null,
+                fetchedAt = 2_000L,
+            )
+        try {
+            FoxholeVpnRuntimeBridge.updateIpInfo(richDeviceIp)
+
+            FoxholeVpnRuntimeBridge.updateIpInfo(newRouteIp)
+
+            assertEquals(newRouteIp, FoxholeVpnRuntimeBridge.ipInfo.value)
+        } finally {
+            FoxholeVpnRuntimeBridge.updateIpInfo(previousIpInfo)
+        }
+    }
+
+    @Test
     fun `device ip bridge rejects first active tunnel address when real device ip is unknown`() {
         val previousDeviceIpInfo = FoxholeVpnRuntimeBridge.deviceIpInfo.value
         val tunnelIp = ipInfo("203.0.113.10")
