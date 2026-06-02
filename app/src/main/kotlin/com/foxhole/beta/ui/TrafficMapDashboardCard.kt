@@ -1064,13 +1064,17 @@ internal fun trafficMapLandLayerBitmapSize(canvasSize: IntSize): IntSize {
 
 internal fun trafficMapPrewarmCanvasSizes(displayMetrics: DisplayMetrics): List<IntSize> {
     val shortSide = min(displayMetrics.widthPixels, displayMetrics.heightPixels).coerceAtLeast(1)
-    val width = (shortSide * TRAFFIC_MAP_PREWARM_PRIMARY_WIDTH_FRACTION).roundToInt()
-    val bucketedWidth = TrafficMapLandLayerCache.bucketDimensionForPrewarm(width)
-    val bucketedHeight =
-        TrafficMapLandLayerCache.bucketDimensionForPrewarm(
-            (bucketedWidth / TRAFFIC_MAP_WORLD_ASPECT_RATIO).roundToInt(),
-        )
-    return listOf(IntSize(width = bucketedWidth, height = bucketedHeight))
+    return TRAFFIC_MAP_PREWARM_WIDTH_FRACTIONS
+        .map { fraction -> (shortSide * fraction).roundToInt() }
+        .map { width ->
+            val bucketedWidth = TrafficMapLandLayerCache.bucketDimensionForPrewarm(width)
+            val bucketedHeight =
+                TrafficMapLandLayerCache.bucketDimensionForPrewarm(
+                    (bucketedWidth / TRAFFIC_MAP_WORLD_ASPECT_RATIO).roundToInt(),
+                )
+            IntSize(width = bucketedWidth, height = bucketedHeight)
+        }
+        .distinct()
 }
 
 private data class TrafficMapLandLayerKey(
@@ -1194,11 +1198,19 @@ private const val TRAFFIC_MAP_LAT_RANGE = TRAFFIC_MAP_MAX_LAT - TRAFFIC_MAP_MIN_
 private const val MAX_TRAFFIC_MAP_DRAW_EDGES = 30
 private const val MAX_TRAFFIC_MAP_DRAW_DESTINATIONS = 30
 private const val TRAFFIC_MAP_LOW_BATTERY_PERCENT = 10
+private const val TRAFFIC_MAP_PREWARM_COMPACT_WIDTH_FRACTION = 0.58f
 private const val TRAFFIC_MAP_PREWARM_PRIMARY_WIDTH_FRACTION = 0.65f
+private const val TRAFFIC_MAP_PREWARM_WIDE_WIDTH_FRACTION = 0.74f
 private const val TRAFFIC_ROUTE_PI = 3.141592653589793
 private const val TRAFFIC_ROUTE_ANGLE_BUCKET_RADIANS = 0.17453292519943295
 private const val TRAFFIC_MAP_COUNTRY_SHAPES_ASSET = "maps/ne_110m_admin_0_countries_preprocessed.json"
 private const val TRAFFIC_MAP_LOG_TAG = "FoxholeDiag"
+private val TRAFFIC_MAP_PREWARM_WIDTH_FRACTIONS =
+    floatArrayOf(
+        TRAFFIC_MAP_PREWARM_COMPACT_WIDTH_FRACTION,
+        TRAFFIC_MAP_PREWARM_PRIMARY_WIDTH_FRACTION,
+        TRAFFIC_MAP_PREWARM_WIDE_WIDTH_FRACTION,
+    )
 
 private fun logTrafficMapDebug(message: String) {
     if (BuildConfig.DEBUG) {

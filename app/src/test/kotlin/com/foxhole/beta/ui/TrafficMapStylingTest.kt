@@ -1,5 +1,6 @@
 package com.foxhole.beta.ui
 
+import android.util.DisplayMetrics
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.IntSize
 import org.junit.Assert.assertEquals
@@ -75,7 +76,7 @@ class TrafficMapStylingTest {
     }
 
     @Test
-    fun `traffic map startup prewarms one primary gray land bitmap`() {
+    fun `traffic map startup prewarms nearby gray land bitmap buckets`() {
         val source =
             listOf(
                 java.io.File("src/main/kotlin/com/foxhole/beta/ui/TrafficMapDashboardCard.kt"),
@@ -93,11 +94,30 @@ class TrafficMapStylingTest {
         assertTrue(landCacheBlock.contains("suspend fun prewarm"))
         assertTrue(landCacheBlock.contains("TRAFFIC_MAP_DEFAULT_COUNTRY_FILL"))
         assertTrue(source.contains("trafficMapPrewarmCanvasSizes"))
+        assertTrue(source.contains("TRAFFIC_MAP_PREWARM_COMPACT_WIDTH_FRACTION"))
         assertTrue(source.contains("TRAFFIC_MAP_PREWARM_PRIMARY_WIDTH_FRACTION"))
-        assertTrue(source.contains("return listOf(IntSize"))
-        assertFalse(source.contains("TRAFFIC_MAP_PREWARM_COMPACT_WIDTH_FRACTION"))
-        assertFalse(source.contains("TRAFFIC_MAP_PREWARM_MID_WIDTH_FRACTION"))
-        assertFalse(source.contains("TRAFFIC_MAP_PREWARM_WIDE_WIDTH_FRACTION"))
+        assertTrue(source.contains("TRAFFIC_MAP_PREWARM_WIDE_WIDTH_FRACTION"))
+        assertTrue(source.contains(".distinct()"))
+    }
+
+    @Test
+    fun `traffic map prewarm sizes cover compact primary and wide viewport buckets`() {
+        val sizes =
+            trafficMapPrewarmCanvasSizes(
+                DisplayMetrics().apply {
+                    widthPixels = 1440
+                    heightPixels = 3120
+                },
+            )
+
+        assertEquals(
+            listOf(
+                IntSize(width = 864, height = 448),
+                IntSize(width = 960, height = 480),
+                IntSize(width = 1088, height = 544),
+            ),
+            sizes,
+        )
     }
 
     @Test
