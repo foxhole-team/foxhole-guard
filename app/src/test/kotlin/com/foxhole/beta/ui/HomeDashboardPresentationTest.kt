@@ -1182,6 +1182,92 @@ class HomeDashboardPresentationTest {
     }
 
     @Test
+    fun `network model skeletons incomplete geo rows during startup restore`() {
+        val ipInfo =
+            IpInfo(
+                ip = "203.0.113.7",
+                countryCode = "NL",
+                countryName = null,
+                city = null,
+                isp = null,
+                fetchedAt = 1_000L,
+            )
+        val model =
+            resolveHomeDashboardNetworkModel(
+                state =
+                    HomeRouteUiState(
+                        profilesLoaded = false,
+                        connection = ConnectionSnapshot(state = ConnectionState.IDLE),
+                    ),
+                visibleIpInfo = ipInfo,
+                deviceInternetAvailable = true,
+            )
+        val policy =
+            homeNetworkDetailLoadingPolicy(
+                refreshLoading = model.showRefreshProgress || model.showIpInfoLoading,
+                geoRowsLoading = model.showGeoRowsLoading,
+            )
+
+        assertEquals(ipInfo, model.visibleIpInfo)
+        assertFalse(model.showLoading)
+        assertFalse(model.showIpInfoLoading)
+        assertTrue(model.showGeoRowsLoading)
+        assertEquals(
+            HomeNetworkDetailValue(text = "", loading = true),
+            homeNetworkDetailValue(buildCountryLineOrNull(ipInfo), loading = policy.country),
+        )
+        assertEquals(
+            HomeNetworkDetailValue(text = "", loading = true),
+            homeNetworkDetailValue(buildCityLineOrNull(ipInfo), loading = policy.city),
+        )
+        assertEquals(
+            HomeNetworkDetailValue(text = "203.0.113.7", loading = false),
+            homeNetworkDetailValue(primaryVisibleIpOrNull(ipInfo), loading = policy.ip),
+        )
+    }
+
+    @Test
+    fun `network model settles incomplete geo rows to dashes after startup restore`() {
+        val ipInfo =
+            IpInfo(
+                ip = "203.0.113.7",
+                countryCode = "NL",
+                countryName = null,
+                city = null,
+                isp = null,
+                fetchedAt = 1_000L,
+            )
+        val model =
+            resolveHomeDashboardNetworkModel(
+                state =
+                    HomeRouteUiState(
+                        profilesLoaded = true,
+                        connection = ConnectionSnapshot(state = ConnectionState.IDLE),
+                    ),
+                visibleIpInfo = ipInfo,
+                deviceInternetAvailable = true,
+            )
+        val policy =
+            homeNetworkDetailLoadingPolicy(
+                refreshLoading = model.showRefreshProgress || model.showIpInfoLoading,
+                geoRowsLoading = model.showGeoRowsLoading,
+            )
+
+        assertEquals(ipInfo, model.visibleIpInfo)
+        assertFalse(model.showLoading)
+        assertFalse(model.showIpInfoLoading)
+        assertFalse(model.showGeoRowsLoading)
+        assertEquals(
+            HomeNetworkDetailValue(text = "-", loading = false),
+            homeNetworkDetailValue(buildCountryLineOrNull(ipInfo), loading = policy.country),
+        )
+        assertEquals(
+            HomeNetworkDetailValue(text = "-", loading = false),
+            homeNetworkDetailValue(buildCityLineOrNull(ipInfo), loading = policy.city),
+        )
+    }
+
+    @Test
     fun `tor ip presentation keeps known ip visible while refresh is loading`() {
         val ipInfo =
             IpInfo(

@@ -131,6 +131,7 @@ internal data class HomeDashboardNetworkModel(
     val visibleIpInfo: IpInfo?,
     val showLoading: Boolean,
     val showIpInfoLoading: Boolean,
+    val showGeoRowsLoading: Boolean,
     val showConnectionDetailsLoading: Boolean,
     val showRefreshProgress: Boolean,
     val showConnectionStatus: Boolean,
@@ -697,10 +698,15 @@ internal fun resolveHomeDashboardNetworkModel(
             explicitIpInfoLoading = explicitIpInfoSkeletonLoading,
             connectionMetricsLoading = state.dashboardConnectionMetricsLoading,
         )
+    val geoRowsLoading =
+        state.shouldShowStartupHomeNetworkGeoRowsLoading(
+            dashboardIpInfo = dashboardIpInfo,
+        )
     return HomeDashboardNetworkModel(
         visibleIpInfo = dashboardIpInfo,
         showLoading = ipInfoLoading || connectionDetailsLoading,
         showIpInfoLoading = ipInfoLoading,
+        showGeoRowsLoading = geoRowsLoading,
         showConnectionDetailsLoading = connectionDetailsLoading,
         showRefreshProgress = routeTransitionRunning || analysisOnlyRunning || (state.ipInfoLoading && dashboardIpInfo != null),
         showConnectionStatus = showConnectionStatus,
@@ -767,6 +773,11 @@ private fun HomeRouteUiState.shouldShowHomeNetworkConnectionDetailsLoading(
                 connectionMetricsLoading ||
                 explicitIpInfoLoading
             )
+
+private fun HomeRouteUiState.shouldShowStartupHomeNetworkGeoRowsLoading(dashboardIpInfo: IpInfo?): Boolean =
+    !profilesLoaded &&
+        dashboardIpInfo != null &&
+        shouldShowIpInfoGeoEnrichmentLoading(dashboardIpInfo)
 
 private fun HomeRouteUiState.shouldShowVpnTransitionLoading(routeTransitionRunning: Boolean): Boolean =
     routeTransitionRunning &&

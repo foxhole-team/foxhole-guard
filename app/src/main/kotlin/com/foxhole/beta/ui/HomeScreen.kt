@@ -932,7 +932,7 @@ fun HomeScreen(
                                         rememberHomeNetworkGeoRowsLoading(
                                             networkIpInfo = networkIpInfo,
                                             refreshLoading = rowValueLoading,
-                                        )
+                                        ) || networkModel.showGeoRowsLoading
                                     val detailLoadingPolicy =
                                         homeNetworkDetailLoadingPolicy(
                                             refreshLoading = rowValueLoading,
