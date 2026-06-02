@@ -130,6 +130,68 @@ class RuntimeServiceCommandSupportTest {
     }
 
     @Test
+    fun `local guard start is deferred while a profile runtime is active`() {
+        listOf(
+            ConnectionState.CONNECTING,
+            ConnectionState.CONNECTED,
+            ConnectionState.RECONNECTING,
+        ).forEach { state ->
+            assertTrue(
+                shouldDeferLocalGuardStartForActiveProfileRuntime(
+                    snapshot =
+                        ConnectionSnapshot(
+                            state = state,
+                            trafficMode = TrafficMode.TUNNEL,
+                            profileId = 7L,
+                        ),
+                    activeProfileSessionPresent = false,
+                ),
+            )
+        }
+    }
+
+    @Test
+    fun `local guard start is not deferred for idle or existing local guard runtime`() {
+        assertFalse(
+            shouldDeferLocalGuardStartForActiveProfileRuntime(
+                snapshot =
+                    ConnectionSnapshot(
+                        state = ConnectionState.IDLE,
+                        trafficMode = TrafficMode.TUNNEL,
+                        profileId = 7L,
+                    ),
+                activeProfileSessionPresent = false,
+            ),
+        )
+        assertFalse(
+            shouldDeferLocalGuardStartForActiveProfileRuntime(
+                snapshot =
+                    ConnectionSnapshot(
+                        state = ConnectionState.CONNECTED,
+                        trafficMode = TrafficMode.TUNNEL,
+                        profileId = FoxholeVpnService.LOCAL_GUARD_PROFILE_ID,
+                    ),
+                activeProfileSessionPresent = false,
+            ),
+        )
+    }
+
+    @Test
+    fun `local guard start is deferred when the service still owns a profile session`() {
+        assertTrue(
+            shouldDeferLocalGuardStartForActiveProfileRuntime(
+                snapshot =
+                    ConnectionSnapshot(
+                        state = ConnectionState.IDLE,
+                        trafficMode = TrafficMode.TUNNEL,
+                        profileId = null,
+                    ),
+                activeProfileSessionPresent = true,
+            ),
+        )
+    }
+
+    @Test
     fun `unknown service action has no runtime command`() {
         assertNull(
             runtimeCommandForServiceAction(

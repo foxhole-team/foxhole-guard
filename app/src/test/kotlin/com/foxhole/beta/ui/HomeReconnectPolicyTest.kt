@@ -268,11 +268,17 @@ class HomeReconnectPolicyTest {
 
     @Test
     fun `local guard sync is deferred while a profile tunnel is active`() {
-        assertTrue(
-            shouldDeferLocalGuardSyncForActiveProfileRuntime(
-                ConnectionSnapshot(state = ConnectionState.CONNECTED, profileId = 42L),
-            ),
-        )
+        listOf(
+            ConnectionState.CONNECTING,
+            ConnectionState.CONNECTED,
+            ConnectionState.RECONNECTING,
+        ).forEach { state ->
+            assertTrue(
+                shouldDeferLocalGuardSyncForActiveProfileRuntime(
+                    ConnectionSnapshot(state = state, profileId = 42L),
+                ),
+            )
+        }
         assertFalse(
             shouldDeferLocalGuardSyncForActiveProfileRuntime(
                 ConnectionSnapshot(

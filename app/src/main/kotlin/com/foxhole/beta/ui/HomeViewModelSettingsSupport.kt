@@ -43,6 +43,7 @@ import com.foxhole.beta.vpn.FoxholeVpnService
 import com.foxhole.beta.vpn.PrivateDnsSettings
 import com.foxhole.beta.vpn.isSupportedForSystemDnsProtection
 import com.foxhole.beta.vpn.localGuardModeOrNull
+import com.foxhole.beta.vpn.shouldDeferLocalGuardStartForActiveProfileRuntime
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import android.provider.Settings as AndroidSettings
@@ -571,6 +572,7 @@ internal fun HomeViewModel.onSanitizeNetworkActivityPrivateDataChangedInternal(v
 
 internal suspend fun HomeViewModel.syncLocalGuardWithPermissionRequest() {
     if (shouldDeferLocalGuardSyncForActiveProfileRuntime(container.connectionController.snapshot.value)) {
+        container.diagnosticsLogger.record("connection", "local guard permission sync deferred: active profile runtime")
         return
     }
     val mode = container.settingsRepository.current().localGuardModeOrNull()
@@ -586,8 +588,10 @@ internal suspend fun HomeViewModel.syncLocalGuardWithPermissionRequest() {
 }
 
 internal fun shouldDeferLocalGuardSyncForActiveProfileRuntime(snapshot: com.foxhole.beta.core.model.ConnectionSnapshot): Boolean =
-    snapshot.state in ACTIVE_CONNECTION_STATES &&
-        snapshot.profileId != FoxholeVpnService.LOCAL_GUARD_PROFILE_ID
+    shouldDeferLocalGuardStartForActiveProfileRuntime(
+        snapshot = snapshot,
+        activeProfileSessionPresent = false,
+    )
 
 private suspend fun HomeViewModel.refreshLocalGuardDashboardIpAfterSettingsChange() {
     delay(HomeViewModel.CONNECTED_IP_REFRESH_DELAY_MS)

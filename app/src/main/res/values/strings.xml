@@ -969,7 +969,7 @@
     <string name="firewall_modal_mode">Mode</string>
     <string name="firewall_modal_mode_local_guard">Local guard</string>
     <string name="firewall_modal_mode_vpn">Inside VPN</string>
-    <string name="firewall_modal_mode_waiting">Waiting</string>
+    <string name="firewall_modal_mode_waiting">Starting</string>
     <string name="firewall_modal_app_blocking">App blocking</string>
     <plurals name="firewall_modal_blocked_apps_count">
         <item quantity="one">%1$d app</item>

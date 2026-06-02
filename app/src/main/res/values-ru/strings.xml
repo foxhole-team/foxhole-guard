@@ -1002,7 +1002,7 @@
     <string name="firewall_modal_mode">Режим</string>
     <string name="firewall_modal_mode_local_guard">Локальная защита</string>
     <string name="firewall_modal_mode_vpn">Внутри VPN</string>
-    <string name="firewall_modal_mode_waiting">Ожидание</string>
+    <string name="firewall_modal_mode_waiting">Включается</string>
     <string name="firewall_modal_app_blocking">Блокировка приложений</string>
     <plurals name="firewall_modal_blocked_apps_count">
         <item quantity="one">%1$d приложение</item>

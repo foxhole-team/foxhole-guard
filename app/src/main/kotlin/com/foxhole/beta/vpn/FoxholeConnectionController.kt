@@ -142,7 +142,8 @@ class FoxholeConnectionController(
     suspend fun syncLocalGuard() {
         val currentSnapshot = snapshot.value
         val localGuardSnapshot = currentSnapshot.profileId == FoxholeVpnService.LOCAL_GUARD_PROFILE_ID
-        if (currentSnapshot.state in ACTIVE_CONNECTION_STATES && !localGuardSnapshot) {
+        if (shouldDeferLocalGuardStartForActiveProfileRuntime(currentSnapshot, activeProfileSessionPresent = false)) {
+            diagnosticsLogger.record("connection", "local guard sync deferred: active profile runtime")
             return
         }
         val mode = settingsRepository.current().localGuardModeOrNull()

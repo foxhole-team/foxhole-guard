@@ -956,6 +956,19 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         ) {
             return
         }
+        if (
+            shouldDeferLocalGuardStartForActiveProfileRuntime(
+                snapshot = FoxholeVpnRuntimeBridge.snapshot.value,
+                activeProfileSessionPresent = activeSession != null,
+            )
+        ) {
+            container.diagnosticsLogger.record(
+                "connection",
+                "local guard start deferred: active profile runtime mode=${mode.name.lowercase()}",
+            )
+            updateNotification()
+            return
+        }
         if (isSameLocalGuardRuntimeActive(mode) && isLocalGuardRuntimeCurrent()) {
             runtimeNetworkActivityLoggingSuspended = false
             container.diagnosticsLogger.record(
