@@ -922,13 +922,20 @@ private fun selectedSmartProtocolTrafficTotal(
 }
 
 @Composable
-internal fun rememberDefaultInternetAvailability(): State<Boolean?> {
+internal fun rememberDefaultInternetAvailability(enabled: Boolean = true): State<Boolean?> {
     val appContext = LocalContext.current.applicationContext
     val connectivityManager = remember(appContext) { appContext.getSystemService<ConnectivityManager>() }
     val defaultInternetAvailable =
         remember(connectivityManager) {
             mutableStateOf<Boolean?>(null)
         }
+    if (!enabled) {
+        DisposableEffect(Unit) {
+            defaultInternetAvailable.value = null
+            onDispose {}
+        }
+        return defaultInternetAvailable
+    }
     DisposableEffect(connectivityManager) {
         val manager =
             connectivityManager ?: return@DisposableEffect onDispose {

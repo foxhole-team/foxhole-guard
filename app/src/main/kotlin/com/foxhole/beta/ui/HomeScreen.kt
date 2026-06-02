@@ -281,7 +281,6 @@ fun HomeScreen(
         }
         return nextOrder != null
     }
-    val deviceInternetAvailable by rememberDefaultInternetAvailability()
     var pinnedIpInfo by remember { mutableStateOf(state.ipInfo) }
     var keepPinnedNetworkInfo by remember { mutableStateOf(false) }
     val pinnedConnectionStates =
@@ -312,6 +311,16 @@ fun HomeScreen(
         }
     }
     val selectedVisibleNetworkIpInfo = if (keepPinnedNetworkInfo) pinnedIpInfo else state.ipInfo
+    val routeTransitionMayNeedInternetProbe =
+        state.reconnectInProgress ||
+            state.connection.state in setOf(ConnectionState.CONNECTING, ConnectionState.RECONNECTING) ||
+            state.autoConnect.running ||
+            state.protocolMetricsRefreshing
+    val shouldObserveDeviceInternet =
+        selectedVisibleNetworkIpInfo == null ||
+            state.ipInfoLoading ||
+            routeTransitionMayNeedInternetProbe
+    val deviceInternetAvailable by rememberDefaultInternetAvailability(enabled = shouldObserveDeviceInternet)
     val networkModel =
         remember(state, selectedVisibleNetworkIpInfo, deviceInternetAvailable) {
             resolveHomeDashboardNetworkModel(
@@ -1783,7 +1792,7 @@ private const val DASHBOARD_CARD_REORDER_THRESHOLD_FRACTION = 0.5f
 private const val DASHBOARD_CARD_EDGE_RESISTANCE_FRACTION = 0.18f
 private const val DASHBOARD_STARTUP_STAGE_INITIAL = 1
 private const val DASHBOARD_STARTUP_STAGE_ALL = 4
-private const val DASHBOARD_CARD_STARTUP_STAGE_DELAY_MS = 220L
+private const val DASHBOARD_CARD_STARTUP_STAGE_DELAY_MS = 80L
 private val DashboardCardReorderFallbackMoveDistance = 96.dp
 private val ImportMenuWidthChrome = 62.dp
 private val ImportMenuMinWidth = 188.dp

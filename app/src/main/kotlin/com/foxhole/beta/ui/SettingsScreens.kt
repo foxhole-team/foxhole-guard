@@ -285,7 +285,7 @@ private const val SETTINGS_HOME_STARTUP_STAGE_INITIAL = 0
 private const val SETTINGS_HOME_STARTUP_STAGE_SECURITY = 1
 private const val SETTINGS_HOME_STARTUP_STAGE_APP = 2
 private const val SETTINGS_HOME_STARTUP_STAGE_ALL = SETTINGS_HOME_STARTUP_STAGE_APP
-private const val SETTINGS_HOME_STARTUP_STAGE_DELAY_MS = 180L
+private const val SETTINGS_HOME_STARTUP_STAGE_DELAY_MS = 80L
 
 @Composable
 private fun SettingsSecurityRoutingNavigationGroup(
