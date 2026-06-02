@@ -578,6 +578,76 @@ class HomeIpLoadingPolicyTest {
     }
 
     @Test
+    fun `traffic map origin rejects fresh active tunnel address even when route ip is stale and different`() {
+        val possibleTunnelIp =
+            IpInfo(
+                ip = "203.0.113.30",
+                ipv4 = "203.0.113.30",
+                countryCode = "DE",
+                countryName = "Germany",
+                city = "Frankfurt",
+                isp = "Tunnel ISP",
+                fetchedAt = 5_500L,
+            )
+        val staleRouteIp =
+            IpInfo(
+                ip = "203.0.113.20",
+                ipv4 = "203.0.113.20",
+                countryCode = "NL",
+                countryName = "Netherlands",
+                city = "Amsterdam",
+                isp = "Old Tunnel ISP",
+                fetchedAt = 4_500L,
+            )
+
+        val origin =
+            trafficMapOriginIpInfoCandidate(
+                connection =
+                    ConnectionSnapshot(
+                        state = ConnectionState.CONNECTED,
+                        trafficMode = TrafficMode.TUNNEL,
+                        profileId = 7L,
+                        lastChangeAt = 5_000L,
+                    ),
+                deviceIpInfo = possibleTunnelIp,
+                ipInfo = staleRouteIp,
+                protocolSearchRunning = false,
+            )
+
+        assertNull(origin)
+    }
+
+    @Test
+    fun `traffic map origin hides marker when device ip has no public address`() {
+        val localIp =
+            IpInfo(
+                ip = "10.0.0.8",
+                ipv4 = "10.0.0.8",
+                countryCode = null,
+                countryName = null,
+                city = null,
+                isp = null,
+                fetchedAt = 4_000L,
+            )
+
+        val origin =
+            trafficMapOriginIpInfoCandidate(
+                connection =
+                    ConnectionSnapshot(
+                        state = ConnectionState.CONNECTED,
+                        trafficMode = TrafficMode.TUNNEL,
+                        profileId = 7L,
+                        lastChangeAt = 5_000L,
+                    ),
+                deviceIpInfo = localIp,
+                ipInfo = null,
+                protocolSearchRunning = false,
+            )
+
+        assertNull(origin)
+    }
+
+    @Test
     fun `traffic map origin keeps device ip for local guard firewall`() {
         val deviceIp =
             IpInfo(

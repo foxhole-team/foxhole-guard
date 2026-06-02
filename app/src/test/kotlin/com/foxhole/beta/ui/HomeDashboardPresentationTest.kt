@@ -2077,6 +2077,37 @@ class HomeDashboardPresentationTest {
     }
 
     @Test
+    fun `network model hides previous tunnel ip after ordinary vpn disconnect even when profile id is missing`() {
+        val staleTunnelIp =
+            IpInfo(
+                ip = "203.0.113.10",
+                countryCode = "NL",
+                countryName = "Netherlands",
+                city = "Amsterdam",
+                isp = "Tunnel ISP",
+                fetchedAt = 1_000L,
+            )
+        val model =
+            resolveHomeDashboardNetworkModel(
+                state =
+                    HomeRouteUiState(
+                        profilesLoaded = true,
+                        activeProfile = smartProfile(),
+                        connection = ConnectionSnapshot(state = ConnectionState.IDLE, profileId = null, lastChangeAt = 2_000L),
+                    ),
+                visibleIpInfo = staleTunnelIp,
+                deviceInternetAvailable = true,
+            )
+
+        assertEquals(null, model.visibleIpInfo)
+        assertEquals(R.string.home_network_current_ip_title, model.titleRes)
+        assertFalse(model.showConnectionStatus)
+        assertTrue(model.showLoading)
+        assertTrue(model.showIpInfoLoading)
+        assertFalse(model.showConnectionDetailsLoading)
+    }
+
+    @Test
     fun `network model shows fresh current ip after ordinary vpn disconnect refresh`() {
         val currentIp =
             IpInfo(
@@ -2093,6 +2124,37 @@ class HomeDashboardPresentationTest {
                     HomeRouteUiState(
                         profilesLoaded = true,
                         connection = ConnectionSnapshot(state = ConnectionState.IDLE, profileId = 1L, lastChangeAt = 2_000L),
+                    ),
+                visibleIpInfo = currentIp,
+                deviceInternetAvailable = true,
+            )
+
+        assertEquals(currentIp, model.visibleIpInfo)
+        assertEquals(R.string.home_network_current_ip_title, model.titleRes)
+        assertFalse(model.showConnectionStatus)
+        assertFalse(model.showLoading)
+        assertFalse(model.showIpInfoLoading)
+        assertFalse(model.showConnectionDetailsLoading)
+    }
+
+    @Test
+    fun `network model shows fresh current ip after ordinary vpn disconnect refresh when profile id is missing`() {
+        val currentIp =
+            IpInfo(
+                ip = "198.51.100.20",
+                countryCode = "US",
+                countryName = "United States",
+                city = "New York",
+                isp = "Device network",
+                fetchedAt = 2_100L,
+            )
+        val model =
+            resolveHomeDashboardNetworkModel(
+                state =
+                    HomeRouteUiState(
+                        profilesLoaded = true,
+                        activeProfile = smartProfile(),
+                        connection = ConnectionSnapshot(state = ConnectionState.IDLE, profileId = null, lastChangeAt = 2_000L),
                     ),
                 visibleIpInfo = currentIp,
                 deviceInternetAvailable = true,

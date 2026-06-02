@@ -864,10 +864,19 @@ private fun HomeRouteUiState.shouldKeepDashboardIpInfo(info: IpInfo): Boolean =
         shouldPinVpnIpDuringTorOperation() -> true
         hasFailedDashboardRoute() -> info.isPublicFreshForRouteTransition(connection.lastChangeAt)
         hasStoppedDashboardRouteRuntime() -> info.isPublicFreshForRouteTransition(connection.lastChangeAt)
+        hasStoppedUnknownDashboardRouteRuntime() -> info.isPublicFreshForRouteTransition(connection.lastChangeAt)
         hasActiveDashboardRouteTransition() -> info.isFreshForRouteTransition(connection.lastChangeAt)
         hasActiveDashboardRouteRuntime() -> shouldKeepActiveDashboardRouteIpInfo(info)
         else -> true
     }
+
+private fun HomeRouteUiState.hasStoppedUnknownDashboardRouteRuntime(): Boolean =
+    connection.state == ConnectionState.IDLE &&
+        connection.isDashboardRouteTrafficMode() &&
+        connection.profileId == null &&
+        activeProfile != null &&
+        !settings.expert.firewallEnabled &&
+        connection.lastChangeAt > 0L
 
 private fun HomeRouteUiState.hasActiveDashboardRouteTransition(): Boolean =
     reconnectInProgress ||
@@ -944,6 +953,9 @@ internal fun trafficMapOriginIpInfoCandidate(
     if (deviceIpInfo == null) {
         return null
     }
+    if (!deviceIpInfo.hasVisiblePublicAddress()) {
+        return null
+    }
     if (connection.shouldRejectTrafficMapOriginAsRouteIp(deviceIpInfo = deviceIpInfo, routeIpInfo = ipInfo)) {
         return null
     }
@@ -954,22 +966,15 @@ private fun ConnectionSnapshot.shouldRejectTrafficMapOriginAsRouteIp(
     deviceIpInfo: IpInfo,
     routeIpInfo: IpInfo?,
 ): Boolean {
-    if (
+    val activeOrdinaryTunnel =
         state == ConnectionState.CONNECTED &&
-        trafficMode == TrafficMode.TUNNEL &&
-        profileId != FoxholeVpnService.LOCAL_GUARD_PROFILE_ID &&
-        deviceIpInfo.fetchedAt >= lastChangeAt &&
-        routeIpInfo == null
-    ) {
-        return true
-    }
+            trafficMode == TrafficMode.TUNNEL &&
+            profileId != FoxholeVpnService.LOCAL_GUARD_PROFILE_ID
+    if (!activeOrdinaryTunnel) return false
+    if (lastChangeAt <= 0L || deviceIpInfo.fetchedAt >= lastChangeAt) return true
     val routeIp = routeIpInfo?.let(::primaryVisibleIpOrNull) ?: return false
     val deviceIp = primaryVisibleIpOrNull(deviceIpInfo) ?: return false
-    return state == ConnectionState.CONNECTED &&
-        trafficMode == TrafficMode.TUNNEL &&
-        profileId != FoxholeVpnService.LOCAL_GUARD_PROFILE_ID &&
-        deviceIp == routeIp &&
-        deviceIpInfo.fetchedAt >= lastChangeAt
+    return deviceIp == routeIp
 }
 
 private fun selectedSmartProtocolTrafficTotal(
