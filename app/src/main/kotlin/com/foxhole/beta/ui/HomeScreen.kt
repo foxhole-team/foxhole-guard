@@ -1801,7 +1801,7 @@ internal fun shouldComposeTrafficMapHeavyContent(
         (
             startupDelayElapsed &&
                 (
-                    startupStage >= DASHBOARD_TRAFFIC_MAP_HEAVY_CONTENT_STAGE ||
+                    startupStage >= DASHBOARD_STARTUP_STAGE_WARM_RETURN ||
                         startupStage >= DASHBOARD_STARTUP_STAGE_ALL
                 )
         )
@@ -1868,10 +1868,9 @@ private const val DASHBOARD_CARD_REORDER_THRESHOLD_FRACTION = 0.5f
 private const val DASHBOARD_CARD_EDGE_RESISTANCE_FRACTION = 0.18f
 private const val DASHBOARD_STARTUP_STAGE_INITIAL = 0
 private const val DASHBOARD_STARTUP_STAGE_WARM_RETURN = 2
-private const val DASHBOARD_TRAFFIC_MAP_HEAVY_CONTENT_STAGE = 3
 private const val DASHBOARD_STARTUP_STAGE_ALL = 4
 private const val DASHBOARD_CARD_STARTUP_STAGE_DELAY_MS = 48L
-private const val TRAFFIC_MAP_HEAVY_CONTENT_STARTUP_DELAY_MS = 650L
+private const val TRAFFIC_MAP_HEAVY_CONTENT_STARTUP_DELAY_MS = 220L
 private val DashboardCardReorderFallbackMoveDistance = 96.dp
 private val ImportMenuWidthChrome = 62.dp
 private val ImportMenuMinWidth = 188.dp

@@ -141,7 +141,7 @@ class HomeDashboardHotPathTest {
     }
 
     @Test
-    fun `warm dashboard return keeps upper dashboard responsive while staging heavy cards`() {
+    fun `warm dashboard return restores cached map content immediately`() {
         val coldStage = initialDashboardStartupStage(dashboardAlreadyWarm = false)
         val warmStage = initialDashboardStartupStage(dashboardAlreadyWarm = true)
 
@@ -180,7 +180,7 @@ class HomeDashboardHotPathTest {
                 activeReorderCard = null,
             ),
         )
-        assertFalse(
+        assertTrue(
             shouldComposeTrafficMapHeavyContent(
                 startupStage = warmStage,
                 activeReorderCard = null,
@@ -189,19 +189,19 @@ class HomeDashboardHotPathTest {
     }
 
     @Test
-    fun `traffic map heavy content waits for later dashboard stage`() {
+    fun `traffic map heavy content waits for startup delay on cold dashboard`() {
         assertFalse(
             shouldComposeTrafficMapHeavyContent(
                 startupStage = 2,
                 activeReorderCard = null,
-                startupDelayElapsed = true,
+                startupDelayElapsed = false,
             ),
         )
-        assertFalse(
+        assertTrue(
             shouldComposeTrafficMapHeavyContent(
-                startupStage = 3,
+                startupStage = 2,
                 activeReorderCard = null,
-                startupDelayElapsed = false,
+                startupDelayElapsed = true,
             ),
         )
         assertTrue(
@@ -218,6 +218,14 @@ class HomeDashboardHotPathTest {
                 startupDelayElapsed = false,
             ),
         )
+    }
+
+    @Test
+    fun `traffic map heavy startup delay stays short for dashboard returns`() {
+        val homeSource = testSourceFile("HomeScreen.kt").readText()
+
+        assertTrue(homeSource.contains("TRAFFIC_MAP_HEAVY_CONTENT_STARTUP_DELAY_MS = 220L"))
+        assertFalse(homeSource.contains("TRAFFIC_MAP_HEAVY_CONTENT_STARTUP_DELAY_MS = 650L"))
     }
 
     @Test
