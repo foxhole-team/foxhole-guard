@@ -43,7 +43,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -232,9 +231,12 @@ private fun TrafficMapCanvas(
     countryShapes: List<TrafficMapCountryShape>,
     modifier: Modifier = Modifier,
 ) {
-    val latestState = rememberUpdatedState(state)
     val colors = trafficMapColors()
     val mapCountryShapes = countryShapes
+    val drawableDestinations = remember(state.destinations) { state.destinations.toDrawableTrafficMapDestinations() }
+    val originLat = state.originLat
+    val originLon = state.originLon
+    val originCountryCode = state.originCountryCode
     var canvasSize by remember { mutableStateOf(IntSize.Zero) }
     val countryBitmap =
         rememberTrafficMapLandLayerBitmap(
@@ -257,40 +259,48 @@ private fun TrafficMapCanvas(
                 val phoneCorner = CornerRadius(2.2.dp.toPx(), 2.2.dp.toPx())
                 val phoneScreenInset = 1.4.dp.toPx()
                 val phoneHomeRadius = 0.65.dp.toPx()
+                val origin = project(originLat, originLon, viewport)
+                val maxBytes = drawableDestinations.maxOfOrNull { destination -> destination.bytes }?.coerceAtLeast(1L) ?: 1L
+                val routeLanes = trafficRouteLanes(origin, drawableDestinations, viewport)
+                val routeDrawModels =
+                    drawableDestinations
+                        .take(MAX_TRAFFIC_MAP_DRAW_EDGES)
+                        .map { destination ->
+                            val to = project(destination.lat, destination.lon, viewport)
+                            val weight = sqrt(destination.bytes.toDouble() / maxBytes.toDouble()).toFloat()
+                            TrafficMapRouteDrawModel(
+                                path =
+                                    curvedTrafficRoutePath(
+                                        from = origin,
+                                        to = to,
+                                        lane = routeLanes[destination.countryCode] ?: 1,
+                                    ),
+                                strokeWidth = minLineStroke + ((maxLineStroke - minLineStroke) * weight),
+                                alpha = 0.22f + (0.24f * weight),
+                            )
+                        }
+                val destinationOffsets =
+                    drawableDestinations
+                        .take(MAX_TRAFFIC_MAP_DRAW_DESTINATIONS)
+                        .map { point -> project(point.lat, point.lon, viewport) }
+                val originMarker = origin.takeIf { originCountryCode != null }
 
                 onDrawBehind {
-                    val mapState = latestState.value
-                    val drawableDestinations = mapState.destinations.toDrawableTrafficMapDestinations()
                     countryBitmap?.let(::drawImage)
 
-                    val origin = project(mapState.originLat, mapState.originLon, viewport)
-                    val maxBytes = drawableDestinations.maxOfOrNull { destination -> destination.bytes }?.coerceAtLeast(1L) ?: 1L
-                    val routeLanes = trafficRouteLanes(origin, drawableDestinations, viewport)
-                    val edgeCount = min(drawableDestinations.size, MAX_TRAFFIC_MAP_DRAW_EDGES)
-                    for (index in 0 until edgeCount) {
-                        val destination = drawableDestinations[index]
-                        val to = project(destination.lat, destination.lon, viewport)
-                        val weight = sqrt(destination.bytes.toDouble() / maxBytes.toDouble()).toFloat()
+                    routeDrawModels.forEach { route ->
                         drawPath(
-                            path =
-                                curvedTrafficRoutePath(
-                                    from = origin,
-                                    to = to,
-                                    lane = routeLanes[destination.countryCode] ?: 1,
-                                ),
-                            color = colors.routeLine.copy(alpha = 0.22f + (0.24f * weight)),
+                            path = route.path,
+                            color = colors.routeLine.copy(alpha = route.alpha),
                             style =
                                 Stroke(
-                                    width = minLineStroke + ((maxLineStroke - minLineStroke) * weight),
+                                    width = route.strokeWidth,
                                     cap = StrokeCap.Round,
                                 ),
                         )
                     }
 
-                    val destinationCount = min(drawableDestinations.size, MAX_TRAFFIC_MAP_DRAW_DESTINATIONS)
-                    for (index in 0 until destinationCount) {
-                        val point = drawableDestinations[index]
-                        val offset = project(point.lat, point.lon, viewport)
+                    destinationOffsets.forEach { offset ->
                         drawCircle(
                             color = colors.destination.copy(alpha = 0.18f),
                             radius = glowRadius,
@@ -303,8 +313,7 @@ private fun TrafficMapCanvas(
                         )
                     }
 
-                    if (mapState.originCountryCode != null) {
-                        val origin = project(mapState.originLat, mapState.originLon, viewport)
+                    originMarker?.let { origin ->
                         drawCircle(
                             color = colors.origin.copy(alpha = 0.18f),
                             radius = glowRadius,
@@ -415,6 +424,12 @@ private data class DrawableTrafficMapDestination(
     val lat: Double,
     val lon: Double,
     val bytes: Long,
+)
+
+private data class TrafficMapRouteDrawModel(
+    val path: Path,
+    val strokeWidth: Float,
+    val alpha: Float,
 )
 
 private fun List<TrafficMapPoint>.toDrawableTrafficMapDestinations(): List<DrawableTrafficMapDestination> =
@@ -917,7 +932,7 @@ private fun trafficMapColors(): TrafficMapColors {
     val colorScheme = MaterialTheme.colorScheme
     return if (LocalFoxholeDarkTheme.current) {
         TrafficMapColors(
-            countryBorder = Color(0xFFD3DDD7),
+            countryBorder = Color(0xFF8F9F96),
             routeLine = FoxholePositiveAccent,
             destination = FoxholePositiveAccent,
             origin = FoxholePositiveAccent,

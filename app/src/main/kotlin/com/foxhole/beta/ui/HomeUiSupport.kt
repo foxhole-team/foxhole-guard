@@ -841,25 +841,14 @@ internal fun resolveHomeDashboardTrafficModel(
     )
 }
 
+@Suppress("UNUSED_PARAMETER")
 internal fun trafficMapOriginIpInfoCandidate(
     connection: ConnectionSnapshot,
     deviceIpInfo: IpInfo?,
     ipInfo: IpInfo?,
     protocolSearchRunning: Boolean,
 ): IpInfo? {
-    val realTunnelActive =
-        connection.state in ACTIVE_CONNECTION_STATES &&
-            connection.profileId != FoxholeVpnService.LOCAL_GUARD_PROFILE_ID
-    val staleBeforeActiveTunnel =
-        ipInfo != null &&
-            !protocolSearchRunning &&
-            realTunnelActive &&
-            ipInfo.fetchedAt < connection.lastChangeAt
-    return when {
-        realTunnelActive || staleBeforeActiveTunnel -> ipInfo?.takeUnless { staleBeforeActiveTunnel }
-        deviceIpInfo != null -> deviceIpInfo
-        else -> ipInfo
-    }
+    return deviceIpInfo
 }
 
 private fun selectedSmartProtocolTrafficTotal(
@@ -1425,7 +1414,10 @@ internal fun formatCountryLine(
     ipInfo: IpInfo,
     unknownCountry: String,
 ): String {
-    val country = ipInfo.countryName ?: ipInfo.countryCode ?: unknownCountry
+    val country =
+        ipInfo.countryName?.takeIf(String::isNotBlank)
+            ?: ipInfo.countryCode?.takeIf(String::isNotBlank)
+            ?: unknownCountry
     return "${countryEmoji(ipInfo.countryCode)} $country"
 }
 

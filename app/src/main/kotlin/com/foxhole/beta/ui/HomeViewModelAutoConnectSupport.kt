@@ -1817,6 +1817,13 @@ internal fun HomeViewModel.scheduleActiveProfileLatencyRefreshInternal(
                             selectedOptionId = selectedOptionId,
                             fallbackProtocolHint = selectedProtocolHint,
                         ) ?: return@launch
+                    val countTowardInitialOutcome = waitingForInitialSample
+                    refreshDashboardServerPing(
+                        refreshTarget = refreshTarget,
+                        activeProfileId = activeProfile.id,
+                        selectedOptionId = selectedOptionId,
+                    )
+                    waitingForInitialSample = clearDashboardMetricsLoadingAfterInitialSample(waitingForInitialSample)
                     val latencyResult =
                         runCatchingUnlessCancelled {
                             withTimeoutOrNull(HomeViewModel.CONNECTED_LATENCY_TOTAL_TIMEOUT_MS) {
@@ -1838,7 +1845,7 @@ internal fun HomeViewModel.scheduleActiveProfileLatencyRefreshInternal(
                             protocolHint = refreshTarget.protocolHint,
                             latencyMs = measuredLatency,
                             reasonCode = null,
-                            countTowardOutcomeHistory = waitingForInitialSample,
+                            countTowardOutcomeHistory = countTowardInitialOutcome,
                         )
                     } else {
                         val error = latencyResult.exceptionOrNull()
@@ -1858,48 +1865,53 @@ internal fun HomeViewModel.scheduleActiveProfileLatencyRefreshInternal(
                             protocolHint = refreshTarget.protocolHint,
                             latencyMs = null,
                             reasonCode = AutoConnectReasonCode.LATENCY_ENDPOINT_BLOCKED,
-                            countTowardOutcomeHistory = waitingForInitialSample,
+                            countTowardOutcomeHistory = countTowardInitialOutcome,
                         )
                         container.diagnosticsLogger.record("latency", "dashboard latency unavailable: $unavailableReason")
                     }
-                    if (!shouldMeasureProtocolServerPing(refreshTarget.protocolHint)) {
-                        container.diagnosticsLogger.record("latency", "dashboard server ping skipped: unsupported for udp transport")
-                        waitingForInitialSample = clearDashboardMetricsLoadingAfterInitialSample(waitingForInitialSample)
-                        continue
-                    }
-                    runCatchingUnlessCancelled {
-                        withTimeoutOrNull(HomeViewModel.CONNECTED_SERVER_PING_TIMEOUT_MS) {
-                            container.connectionController.measureCurrentVpnServerPing(
-                                profileId = refreshTarget.profile.id,
-                                protocolOptionId = refreshTarget.optionId,
-                            )
-                        } ?: error("dashboard server ping timed out")
-                    }.onSuccess { pingMs ->
-                        cacheProtocolServerPingInternal(
-                            profileId = activeProfile.id,
-                            optionId = selectedOptionId,
-                            pingMs = pingMs,
-                        )
-                        container.settingsRepository.recordSmartProfileServerPing(
-                            profileId = activeProfile.id,
-                            optionId = selectedOptionId,
-                            serverPingMs = pingMs,
-                            networkFingerprint = currentNetworkFingerprintForSmartRules()?.key,
-                        )
-                    }.onFailure { error ->
-                        markProtocolServerPingUnavailableInternal(
-                            profileId = activeProfile.id,
-                            optionId = selectedOptionId,
-                        )
-                        container.diagnosticsLogger.record("latency", "dashboard server ping unavailable: ${error.message.orEmpty()}")
-                    }
-                    waitingForInitialSample = clearDashboardMetricsLoadingAfterInitialSample(waitingForInitialSample)
                 }
             } finally {
                 clearDashboardMetricsLoadingAfterInitialSample(waitingForInitialSample)
                 profileLatencyRefreshJob = null
             }
         }
+}
+
+private suspend fun HomeViewModel.refreshDashboardServerPing(
+    refreshTarget: ActiveDashboardLatencyTarget,
+    activeProfileId: Long,
+    selectedOptionId: String,
+) {
+    if (!shouldMeasureProtocolServerPing(refreshTarget.protocolHint)) {
+        container.diagnosticsLogger.record("latency", "dashboard server ping skipped: unsupported for udp transport")
+        return
+    }
+    runCatchingUnlessCancelled {
+        withTimeoutOrNull(HomeViewModel.CONNECTED_SERVER_PING_TIMEOUT_MS) {
+            container.connectionController.measureCurrentVpnServerPing(
+                profileId = refreshTarget.profile.id,
+                protocolOptionId = refreshTarget.optionId,
+            )
+        } ?: error("dashboard server ping timed out")
+    }.onSuccess { pingMs ->
+        cacheProtocolServerPingInternal(
+            profileId = activeProfileId,
+            optionId = selectedOptionId,
+            pingMs = pingMs,
+        )
+        container.settingsRepository.recordSmartProfileServerPing(
+            profileId = activeProfileId,
+            optionId = selectedOptionId,
+            serverPingMs = pingMs,
+            networkFingerprint = currentNetworkFingerprintForSmartRules()?.key,
+        )
+    }.onFailure { error ->
+        markProtocolServerPingUnavailableInternal(
+            profileId = activeProfileId,
+            optionId = selectedOptionId,
+        )
+        container.diagnosticsLogger.record("latency", "dashboard server ping unavailable: ${error.message.orEmpty()}")
+    }
 }
 
 private fun HomeViewModel.clearActiveProfileConnectionMetrics(

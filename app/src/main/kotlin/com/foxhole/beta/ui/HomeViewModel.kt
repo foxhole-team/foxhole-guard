@@ -1673,7 +1673,7 @@ class HomeViewModel(
         internal const val CONNECTED_LATENCY_REFRESH_INTERVAL_MS = 15_000L
         internal const val CONNECTED_LATENCY_TIMEOUT_MS = 2_500L
         internal const val CONNECTED_LATENCY_TOTAL_TIMEOUT_MS = 8_000L
-        internal const val CONNECTED_SERVER_PING_TIMEOUT_MS = 1_200L
+        internal const val CONNECTED_SERVER_PING_TIMEOUT_MS = 2_500L
         internal const val PROFILE_RECONNECT_PROMPT_WINDOW_MS = 13_000L
         internal const val RUNTIME_RELOAD_PENDING_TIMEOUT_MS = 1_500L
         internal const val TOR_OPERATION_MIN_VISIBLE_MS = 3_500L
@@ -1696,7 +1696,7 @@ class HomeViewModel(
         internal const val AUTO_CONNECT_LATENCY_MEASUREMENT_RETRY_DELAY_MS = 160L
         internal const val AUTO_CONNECT_PROTOCOL_TRANSITION_SETTLE_MS = 90L
         internal const val AUTO_CONNECT_RESULT_SETTLE_MS = 500L
-        internal const val AUTO_CONNECT_TOTAL_TIMEOUT_MS = 140_000L
+        internal const val AUTO_CONNECT_TOTAL_TIMEOUT_MS = 145_000L
         internal const val AUTO_CONNECT_MAX_ATTEMPTS = SmartStartController.AUTO_CONNECT_MAX_ATTEMPTS
         internal const val PROTOCOL_METRICS_PROBE_TIMEOUT_MS = 12_000L
         internal const val APP_TRAFFIC_BACKGROUND_SAMPLE_INTERVAL_MS = 60_000L

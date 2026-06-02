@@ -366,7 +366,7 @@ class HomeIpLoadingPolicyTest {
     }
 
     @Test
-    fun `traffic map origin prefers tunnel ip over device ip for active tunnel`() {
+    fun `traffic map origin keeps real device ip while tunnel is active`() {
         val deviceIp =
             IpInfo(
                 ip = "198.51.100.10",
@@ -402,7 +402,37 @@ class HomeIpLoadingPolicyTest {
                 protocolSearchRunning = false,
             )
 
-        assertEquals(tunnelIp, origin)
+        assertEquals(deviceIp, origin)
+    }
+
+    @Test
+    fun `traffic map origin hides device marker when only vpn ip is known`() {
+        val tunnelIp =
+            IpInfo(
+                ip = "203.0.113.20",
+                ipv4 = "203.0.113.20",
+                countryCode = "NL",
+                countryName = "Netherlands",
+                city = "Amsterdam",
+                isp = "Tunnel ISP",
+                fetchedAt = 5_000L,
+            )
+
+        val origin =
+            trafficMapOriginIpInfoCandidate(
+                connection =
+                    ConnectionSnapshot(
+                        state = ConnectionState.CONNECTED,
+                        trafficMode = TrafficMode.TUNNEL,
+                        profileId = 7L,
+                        lastChangeAt = 5_000L,
+                    ),
+                deviceIpInfo = null,
+                ipInfo = tunnelIp,
+                protocolSearchRunning = false,
+            )
+
+        assertNull(origin)
     }
 
     @Test

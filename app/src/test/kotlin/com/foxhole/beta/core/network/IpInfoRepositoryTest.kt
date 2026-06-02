@@ -429,11 +429,11 @@ class IpInfoRepositoryTest {
             repository.effectiveEndpointCandidates(
                 "https://example.com/ip",
                 mode = IpInfoFetchMode.GEO_ENRICHMENT,
-            )
+        )
 
-        assertEquals("https://example.com/ip", candidates[0])
-        assertEquals("https://1.1.1.1/cdn-cgi/trace", candidates[1])
-        assertEquals("https://ipwhois.app/json/", candidates[2])
+        assertEquals("https://ipwhois.app/json/", candidates[0])
+        assertEquals("https://example.com/ip", candidates[1])
+        assertEquals("https://1.1.1.1/cdn-cgi/trace", candidates[2])
         assertEquals("https://ipinfo.io/json", candidates[3])
         assertEquals("https://ifconfig.co/json", candidates[4])
         assertEquals(5, candidates.size)
@@ -518,7 +518,8 @@ class IpInfoRepositoryTest {
                 mode = IpInfoFetchMode.GEO_ENRICHMENT,
             )
 
-        assertEquals("https://example.com/ip", strategy.endpointCandidates.first())
+        assertEquals("https://ipwhois.app/json/", strategy.endpointCandidates.first())
+        assertEquals("https://example.com/ip", strategy.endpointCandidates[1])
         assertEquals(1_200L, strategy.callTimeoutMs)
         assertFalse(strategy.includeFamilyProbes)
     }

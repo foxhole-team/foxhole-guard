@@ -613,7 +613,10 @@ class IpInfoRepository(
     private fun geoEnrichmentEndpoints(endpoint: String): List<String> {
         val primary = primaryEndpoint(endpoint)
         return buildList {
-            add(primary)
+            add(GEO_ENRICHMENT_PRIMARY_ENDPOINT)
+            if (!primary.equals(GEO_ENRICHMENT_PRIMARY_ENDPOINT, ignoreCase = true)) {
+                add(primary)
+            }
             GEO_ENRICHMENT_FALLBACK_ENDPOINTS.forEach { candidate ->
                 if (!candidate.equals(primary, ignoreCase = true) && candidate !in this) {
                     add(candidate)
@@ -768,6 +771,7 @@ class IpInfoRepository(
         const val GEO_ENRICHMENT_CALL_TIMEOUT_MS = 1_200L
         const val FULL_CALL_TIMEOUT_MS = 4_000L
         const val FAMILY_PROBE_CALL_TIMEOUT_MS = 1_500L
+        const val GEO_ENRICHMENT_PRIMARY_ENDPOINT = "https://ipwhois.app/json/"
         val FALLBACK_ENDPOINTS =
             listOf(
                 BuildConfig.DEFAULT_IP_INFO_ENDPOINT,
@@ -788,8 +792,8 @@ class IpInfoRepository(
             )
         val GEO_ENRICHMENT_FALLBACK_ENDPOINTS =
             listOf(
+                GEO_ENRICHMENT_PRIMARY_ENDPOINT,
                 DNS_INDEPENDENT_IP_INFO_ENDPOINT,
-                "https://ipwhois.app/json/",
                 "https://ipinfo.io/json",
                 "https://ifconfig.co/json",
             )

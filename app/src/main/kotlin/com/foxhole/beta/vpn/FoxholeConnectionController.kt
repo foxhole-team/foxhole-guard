@@ -500,7 +500,7 @@ private val STALE_VPN_SNAPSHOT_STATES =
     )
 
 internal const val LATENCY_PROBE_TIMEOUT_MS = 2_500L
-internal const val SERVER_PING_TIMEOUT_MS = 1_200L
+internal const val SERVER_PING_TIMEOUT_MS = 2_500L
 private val LATENCY_PROBE_ENDPOINTS = FoxholeVpnService.CONNECTIVITY_PROBE_ENDPOINTS
 
 internal fun latencyProbeEndpoints(): List<String> = LATENCY_PROBE_ENDPOINTS

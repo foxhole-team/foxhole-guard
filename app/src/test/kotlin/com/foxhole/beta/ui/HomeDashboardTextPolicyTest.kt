@@ -67,6 +67,22 @@ class HomeDashboardTextPolicyTest {
     }
 
     @Test
+    fun `country line falls back to country code when country name is blank`() {
+        val ipInfo =
+            IpInfo(
+                ip = "203.0.113.7",
+                countryCode = "RU",
+                countryName = "",
+                city = "Moscow",
+                isp = "Example ISP",
+                fetchedAt = 1L,
+            )
+
+        assertEquals("🇷🇺 RU", formatCountryLine(ipInfo, unknownCountry = "Unknown"))
+        assertEquals("Moscow", buildCityLine(ipInfo))
+    }
+
+    @Test
     fun `visible ip text skips local addresses`() {
         val ipInfo =
             IpInfo(

@@ -238,6 +238,14 @@ class HomeAutoConnectWaitPolicyTest {
     }
 
     @Test
+    fun `dashboard server ping keeps tcp timeout aligned with public latency probe`() {
+        assertEquals(
+            HomeViewModel.CONNECTED_LATENCY_TIMEOUT_MS,
+            HomeViewModel.CONNECTED_SERVER_PING_TIMEOUT_MS,
+        )
+    }
+
+    @Test
     fun `connected dashboard latency rejects timeout-shaped values`() {
         assertTrue(shouldUseConnectedDashboardLatency(1L))
         assertTrue(shouldUseConnectedDashboardLatency(999L))
