@@ -1002,6 +1002,7 @@ fun HomeScreen(
                                             label = stringResource(R.string.home_network_provider_label),
                                             value = providerValue.text,
                                             valueLoading = providerValue.loading,
+                                            modifier = Modifier.testTag("home_network_provider"),
                                         )
                                     }
                                 }

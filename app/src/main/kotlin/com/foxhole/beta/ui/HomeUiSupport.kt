@@ -712,7 +712,7 @@ internal fun resolveHomeDashboardNetworkModel(
         showIpInfoLoading = ipInfoLoading,
         showGeoRowsLoading = geoRowsLoading,
         showConnectionDetailsLoading = connectionDetailsLoading,
-        showRefreshProgress = routeTransitionRunning || analysisOnlyRunning || (state.ipInfoLoading && dashboardIpInfo != null),
+        showRefreshProgress = routeTransitionRunning || analysisOnlyRunning || (explicitIpInfoSkeletonLoading && dashboardIpInfo != null),
         showConnectionStatus = showConnectionStatus,
         titleRes = state.homeNetworkTitleRes(showConnectionStatus),
     )
@@ -779,7 +779,7 @@ private fun HomeRouteUiState.shouldShowHomeNetworkConnectionDetailsLoading(
             )
 
 private fun HomeRouteUiState.shouldShowStartupHomeNetworkGeoRowsLoading(dashboardIpInfo: IpInfo?): Boolean =
-    !profilesLoaded &&
+    (!profilesLoaded || ipInfoRefreshReason == IpInfoRefreshReason.POST_UPDATE) &&
         dashboardIpInfo != null &&
         shouldShowIpInfoGeoEnrichmentLoading(dashboardIpInfo)
 

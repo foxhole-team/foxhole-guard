@@ -430,6 +430,18 @@ class HomeDashboardPresentationTest {
     }
 
     @Test
+    fun `network provider row exposes a stable test tag`() {
+        val source =
+            listOf(
+                java.io.File("src/main/kotlin/com/foxhole/beta/ui/HomeScreen.kt"),
+                java.io.File("app/src/main/kotlin/com/foxhole/beta/ui/HomeScreen.kt"),
+                java.io.File("../app/src/main/kotlin/com/foxhole/beta/ui/HomeScreen.kt"),
+            ).first { file -> file.isFile }.readText()
+
+        assertTrue(source.contains("Modifier.testTag(\"home_network_provider\")"))
+    }
+
+    @Test
     fun `tor feature stays pending and reports udp when selected vpn protocol is udp`() {
         val state =
             HomeRouteUiState(
@@ -699,6 +711,104 @@ class HomeDashboardPresentationTest {
         assertTrue(model.showLoading)
         assertTrue(model.showIpInfoLoading)
         assertTrue(model.showConnectionDetailsLoading)
+    }
+
+    @Test
+    fun `post connect visible vpn ip does not reskeleton network rows`() {
+        val ipInfo =
+            IpInfo(
+                ip = "203.0.113.10",
+                countryCode = "NL",
+                countryName = "Netherlands",
+                city = "Amsterdam",
+                isp = "Example",
+                fetchedAt = 1_000L,
+            )
+        val model =
+            resolveHomeDashboardNetworkModel(
+                state =
+                    HomeRouteUiState(
+                        profilesLoaded = true,
+                        ipInfoLoading = true,
+                        ipInfoRefreshReason = IpInfoRefreshReason.POST_CONNECT,
+                        connection =
+                            ConnectionSnapshot(
+                                state = ConnectionState.CONNECTED,
+                                profileId = 1L,
+                                lastChangeAt = 500L,
+                            ),
+                    ),
+                visibleIpInfo = ipInfo,
+                deviceInternetAvailable = true,
+            )
+        val policy =
+            homeNetworkDetailLoadingPolicy(
+                refreshLoading = model.showRefreshProgress || model.showIpInfoLoading,
+                geoRowsLoading = model.showGeoRowsLoading,
+            )
+
+        assertEquals(ipInfo, model.visibleIpInfo)
+        assertFalse(model.showRefreshProgress)
+        assertFalse(model.showIpInfoLoading)
+        assertFalse(model.showGeoRowsLoading)
+        assertEquals(
+            HomeNetworkDetailValue(text = "Amsterdam", loading = false),
+            homeNetworkDetailValue(buildCityLineOrNull(ipInfo), loading = policy.city),
+        )
+        assertEquals(
+            HomeNetworkDetailValue(text = "Example", loading = false),
+            homeNetworkDetailValue(providerLineOrNull(ipInfo), loading = policy.provider),
+        )
+    }
+
+    @Test
+    fun `geo enrichment keeps incomplete city and provider rows skeletoned after first quick ip`() {
+        val ipInfo =
+            IpInfo(
+                ip = "203.0.113.10",
+                countryCode = "NL",
+                countryName = "Netherlands",
+                city = null,
+                isp = null,
+                fetchedAt = 1_000L,
+            )
+        val model =
+            resolveHomeDashboardNetworkModel(
+                state =
+                    HomeRouteUiState(
+                        profilesLoaded = true,
+                        ipInfoRefreshReason = IpInfoRefreshReason.POST_UPDATE,
+                        connection = ConnectionSnapshot(state = ConnectionState.IDLE),
+                    ),
+                visibleIpInfo = ipInfo,
+                deviceInternetAvailable = true,
+            )
+        val policy =
+            homeNetworkDetailLoadingPolicy(
+                refreshLoading = model.showRefreshProgress || model.showIpInfoLoading,
+                geoRowsLoading = model.showGeoRowsLoading,
+            )
+
+        assertEquals(ipInfo, model.visibleIpInfo)
+        assertFalse(model.showRefreshProgress)
+        assertFalse(model.showIpInfoLoading)
+        assertTrue(model.showGeoRowsLoading)
+        assertEquals(
+            HomeNetworkDetailValue(text = "🇳🇱 Netherlands", loading = false),
+            homeNetworkGeoRowDetailValue(
+                value = buildCountryLineOrNull(ipInfo),
+                refreshLoading = false,
+                geoRowsLoading = policy.country,
+            ),
+        )
+        assertEquals(
+            HomeNetworkDetailValue(text = "", loading = true),
+            homeNetworkDetailValue(buildCityLineOrNull(ipInfo), loading = policy.city),
+        )
+        assertEquals(
+            HomeNetworkDetailValue(text = "", loading = true),
+            homeNetworkDetailValue(providerLineOrNull(ipInfo), loading = policy.provider),
+        )
     }
 
     @Test
