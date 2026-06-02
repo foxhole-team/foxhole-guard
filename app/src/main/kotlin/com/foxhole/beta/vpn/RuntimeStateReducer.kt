@@ -1,7 +1,6 @@
 package com.foxhole.beta.vpn
 
 import com.foxhole.beta.core.model.IpInfo
-import com.foxhole.beta.core.model.TrafficSnapshot
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
@@ -77,7 +76,6 @@ internal sealed interface RuntimeEvent {
         val tor: RuntimeTorUiState,
     ) : RuntimeEvent
 
-    data class TrafficSampled(val traffic: TrafficSnapshot) : RuntimeEvent
 }
 
 internal class RuntimeStateStore(initialState: RuntimeUiState = RuntimeUiState()) {
@@ -191,8 +189,6 @@ internal fun reduceRuntimeState(
             state.whenCurrent(event.generation) {
                 copy(tor = event.tor)
             }
-        is RuntimeEvent.TrafficSampled ->
-            state.copy(traffic = event.traffic)
     }
 
 private inline fun RuntimeUiState.whenCurrent(

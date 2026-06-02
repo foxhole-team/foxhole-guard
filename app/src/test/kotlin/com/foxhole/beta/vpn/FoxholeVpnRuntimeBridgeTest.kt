@@ -4,6 +4,7 @@ import com.foxhole.beta.core.model.ConnectionSnapshot
 import com.foxhole.beta.core.model.ConnectionState
 import com.foxhole.beta.core.model.IpInfo
 import com.foxhole.beta.core.model.TrafficMode
+import com.foxhole.beta.core.model.TrafficSnapshot
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.first
@@ -95,6 +96,40 @@ class FoxholeVpnRuntimeBridgeTest {
         } finally {
             socket.close()
             FoxholeVpnRuntimeBridge.updateSocketProtector(null)
+        }
+    }
+
+    @Test
+    fun `traffic updates do not republish runtime ui state`() {
+        val previousSnapshot = FoxholeVpnRuntimeBridge.snapshot.value
+        val previousTraffic = FoxholeVpnRuntimeBridge.traffic.value
+        try {
+            FoxholeVpnRuntimeBridge.update(
+                ConnectionSnapshot(
+                    state = ConnectionState.CONNECTED,
+                    trafficMode = TrafficMode.TUNNEL,
+                    profileId = 42L,
+                    lastChangeAt = 500L,
+                ),
+                refreshLastChangeAt = false,
+            )
+            val runtimeUiState = FoxholeVpnRuntimeBridge.runtimeUiState.value
+
+            FoxholeVpnRuntimeBridge.updateTraffic(
+                TrafficSnapshot(
+                    rxTotalBytes = 1_024L,
+                    txTotalBytes = 2_048L,
+                    rxBytesPerSec = 64L,
+                    txBytesPerSec = 128L,
+                    sampledAt = 1_000L,
+                ),
+            )
+
+            assertEquals(1_024L, FoxholeVpnRuntimeBridge.traffic.value.rxTotalBytes)
+            assertSame(runtimeUiState, FoxholeVpnRuntimeBridge.runtimeUiState.value)
+        } finally {
+            FoxholeVpnRuntimeBridge.updateTraffic(previousTraffic)
+            FoxholeVpnRuntimeBridge.update(previousSnapshot, refreshLastChangeAt = false)
         }
     }
 

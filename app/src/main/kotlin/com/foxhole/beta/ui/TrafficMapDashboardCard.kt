@@ -982,11 +982,8 @@ private object TrafficMapLandLayerCache {
             val primaryCanvasSize = trafficMapPrimaryPrewarmCanvasSize(displayMetrics)
             val deferredCanvasSizes = trafficMapPrewarmCanvasSizes(displayMetrics) - primaryCanvasSize
             renderedCount += prewarmBitmapIfMissing(shapes = shapes, canvasSize = primaryCanvasSize)
-            if (deferredCanvasSizes.isNotEmpty()) {
-                delay(TRAFFIC_MAP_DEFERRED_PREWARM_DELAY_MS)
-                deferredCanvasSizes.forEach { canvasSize ->
-                    renderedCount += prewarmBitmapIfMissing(shapes = shapes, canvasSize = canvasSize)
-                }
+            deferredCanvasSizes.forEach { canvasSize ->
+                renderedCount += prewarmBitmapIfMissing(shapes = shapes, canvasSize = canvasSize)
             }
         }
         if (renderedCount > 0) {
@@ -1217,7 +1214,6 @@ private const val TRAFFIC_MAP_LOW_BATTERY_PERCENT = 10
 private const val TRAFFIC_MAP_PREWARM_COMPACT_WIDTH_FRACTION = 0.58f
 private const val TRAFFIC_MAP_PREWARM_PRIMARY_WIDTH_FRACTION = 0.65f
 private const val TRAFFIC_MAP_PREWARM_WIDE_WIDTH_FRACTION = 0.74f
-private const val TRAFFIC_MAP_DEFERRED_PREWARM_DELAY_MS = 350L
 private const val TRAFFIC_ROUTE_PI = 3.141592653589793
 private const val TRAFFIC_ROUTE_ANGLE_BUCKET_RADIANS = 0.17453292519943295
 private const val TRAFFIC_MAP_COUNTRY_SHAPES_ASSET = "maps/ne_110m_admin_0_countries_preprocessed.json"

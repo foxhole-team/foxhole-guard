@@ -802,7 +802,6 @@ object FoxholeVpnRuntimeBridge {
 
     fun updateTraffic(value: TrafficSnapshot) {
         trafficMutable.value = value
-        publishRuntimeUiState()
     }
 
     internal fun updateActiveServerPingTarget(value: ActiveServerPingTarget?) {
@@ -842,7 +841,6 @@ object FoxholeVpnRuntimeBridge {
                 snapshot = snapshotMutable.value,
                 ipInfo = ipInfoMutable.value,
                 deviceIpInfo = deviceIpInfoMutable.value,
-                traffic = trafficMutable.value,
                 pendingIpRefreshReason = pendingIpRefreshReason,
             )
     }

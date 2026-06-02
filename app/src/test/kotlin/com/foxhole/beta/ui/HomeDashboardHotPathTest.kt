@@ -269,6 +269,19 @@ class HomeDashboardHotPathTest {
         assertTrue(homeRouteBlock.contains("trafficMapStateFlow = viewModel.trafficMapUiState"))
     }
 
+    @Test
+    fun `network card model is not keyed by full route state`() {
+        val homeSource = testSourceFile("HomeScreen.kt").readText()
+        val networkModelBlock =
+            homeSource.substringAfter("val networkModel =")
+                .substringBefore("val visibleNetworkIpInfo")
+
+        assertFalse(networkModelBlock.contains("remember(state,"))
+        assertTrue(networkModelBlock.contains("state.connection"))
+        assertTrue(networkModelBlock.contains("state.ipInfoLoading"))
+        assertTrue(networkModelBlock.contains("state.autoConnect.running"))
+    }
+
     private fun testSourceFile(name: String): java.io.File =
         listOf(
             java.io.File("src/main/kotlin/com/foxhole/beta/ui/$name"),

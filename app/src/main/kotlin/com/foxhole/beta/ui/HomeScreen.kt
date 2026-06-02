@@ -317,7 +317,22 @@ fun HomeScreen(
             routeTransitionMayNeedInternetProbe
     val deviceInternetAvailable by rememberDefaultInternetAvailability(enabled = shouldObserveDeviceInternet)
     val networkModel =
-        remember(state, selectedVisibleNetworkIpInfo, deviceInternetAvailable) {
+        remember(
+            selectedVisibleNetworkIpInfo,
+            deviceInternetAvailable,
+            state.connection,
+            state.torIpInfo,
+            state.ipInfoLoading,
+            state.ipInfoRefreshReason,
+            state.dashboardConnectionMetricsLoading,
+            state.profilesLoaded,
+            state.reconnectInProgress,
+            state.autoConnect.running,
+            state.protocolMetricsRefreshing,
+            state.activeProfile,
+            state.settings.expert.firewallEnabled,
+            state.settings.privacyRoute.enabled,
+        ) {
             resolveHomeDashboardNetworkModel(
                 state = state,
                 visibleIpInfo = selectedVisibleNetworkIpInfo,

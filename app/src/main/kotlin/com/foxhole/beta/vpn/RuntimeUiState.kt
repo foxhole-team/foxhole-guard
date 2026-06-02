@@ -6,7 +6,6 @@ import com.foxhole.beta.core.model.ConnectionState
 import com.foxhole.beta.core.model.IpInfo
 import com.foxhole.beta.core.model.ProtocolHint
 import com.foxhole.beta.core.model.TrafficMode
-import com.foxhole.beta.core.model.TrafficSnapshot
 
 internal data class RuntimeUiState(
     val generation: Long = 0L,
@@ -17,7 +16,6 @@ internal data class RuntimeUiState(
     val network: RuntimeNetworkState = RuntimeNetworkState(),
     val ip: RuntimeIpState = RuntimeIpState.empty(),
     val tor: RuntimeTorUiState = RuntimeTorUiState.Off,
-    val traffic: TrafficSnapshot = TrafficSnapshot(),
     val error: RuntimeErrorUi? = null,
 )
 
@@ -130,7 +128,6 @@ internal fun runtimeUiStateFromBridge(
     snapshot: ConnectionSnapshot,
     ipInfo: IpInfo?,
     deviceIpInfo: IpInfo?,
-    traffic: TrafficSnapshot,
     pendingIpRefreshReason: RuntimeIpRefreshReason? = null,
 ): RuntimeUiState {
     val error = snapshot.runtimeError()
@@ -177,7 +174,6 @@ internal fun runtimeUiStateFromBridge(
         network = RuntimeNetworkState(upstreamNetworkRevision = snapshot.upstreamNetworkRevision),
         ip = ipState,
         tor = previous.tor,
-        traffic = traffic,
         error = error,
     )
 }
