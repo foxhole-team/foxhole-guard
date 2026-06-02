@@ -15,10 +15,17 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.core.content.ContextCompat
@@ -112,62 +119,80 @@ class MainActivity : AppCompatActivity() {
         }
 
         composeView.setContent {
-            val themeMode = homeViewModel.themeMode.collectAsStateWithLifecycle()
+            var appContentReady by remember { mutableStateOf(false) }
             val systemDarkTheme = isSystemInDarkTheme()
             val snackbarHostState = remember { SnackbarHostState() }
             val snackbarHapticGate = remember { FoxholeBannerHapticGate() }
+            val themeMode =
+                if (appContentReady) {
+                    homeViewModel.themeMode.collectAsStateWithLifecycle().value
+                } else {
+                    initialThemeMode
+                }
 
-            LaunchedEffect(themeMode.value, systemDarkTheme) {
+            LaunchedEffect(Unit) {
+                withFrameNanos { }
+                delay(ACTIVITY_APP_CONTENT_STARTUP_DELAY_MS)
+                appContentReady = true
+            }
+
+            LaunchedEffect(themeMode, systemDarkTheme) {
                 applyEdgeToEdgeSystemBars(
-                    themeMode = themeMode.value,
+                    themeMode = themeMode,
                     systemDarkTheme = systemDarkTheme,
                 )
             }
 
-            LaunchedEffect(Unit) {
-                homeViewModel.requestVpnPermission.collect {
-                    val intent = android.net.VpnService.prepare(this@MainActivity)
-                    if (intent == null) {
-                        homeViewModel.onVpnPermissionResult(true)
-                    } else {
-                        vpnPermissionLauncher.launch(intent)
+            if (appContentReady) {
+                LaunchedEffect(Unit) {
+                    homeViewModel.requestVpnPermission.collect {
+                        val intent = android.net.VpnService.prepare(this@MainActivity)
+                        if (intent == null) {
+                            homeViewModel.onVpnPermissionResult(true)
+                        } else {
+                            vpnPermissionLauncher.launch(intent)
+                        }
                     }
                 }
-            }
 
-            LaunchedEffect(Unit) {
-                homeViewModel.requestNotificationPermission.collect {
-                    requestPostNotificationsIfNeeded()
+                LaunchedEffect(Unit) {
+                    homeViewModel.requestNotificationPermission.collect {
+                        requestPostNotificationsIfNeeded()
+                    }
                 }
-            }
 
-            LaunchedEffect(Unit) {
-                homeViewModel.snackbars.collect { banner ->
-                    handleSnackbarHaptic(
-                        event = banner,
-                        context = this@MainActivity,
-                        gate = snackbarHapticGate,
-                    )
-                    val result = snackbarHostState.showBanner(banner)
-                    if (
-                        result == SnackbarResult.ActionPerformed &&
-                        banner.action == FoxholeBannerAction.ACCEPT_PROTOCOL_RECOMMENDATION
-                    ) {
-                        homeViewModel.onProtocolRecommendationAccepted()
+                LaunchedEffect(Unit) {
+                    homeViewModel.snackbars.collect { banner ->
+                        handleSnackbarHaptic(
+                            event = banner,
+                            context = this@MainActivity,
+                            gate = snackbarHapticGate,
+                        )
+                        val result = snackbarHostState.showBanner(banner)
+                        if (
+                            result == SnackbarResult.ActionPerformed &&
+                            banner.action == FoxholeBannerAction.ACCEPT_PROTOCOL_RECOMMENDATION
+                        ) {
+                            homeViewModel.onProtocolRecommendationAccepted()
+                        }
                     }
                 }
             }
 
             FoxholeTheme(
-                themeMode = themeMode.value,
+                themeMode = themeMode,
             ) {
                 FoxholeAppBackground {
-                    FoxholeApp(
-                        viewModel = homeViewModel,
-                        snackbarHostState = snackbarHostState,
-                        bottomDockOverlayHost = contentRoot,
-                        bottomDockBlurTarget = blurTarget,
-                    )
+                    if (appContentReady) {
+                        FoxholeApp(
+                            viewModel = homeViewModel,
+                            snackbarHostState = snackbarHostState,
+                            bottomDockOverlayHost = contentRoot,
+                            bottomDockBlurTarget = blurTarget,
+                        )
+                    } else {
+                        Box(modifier = Modifier.fillMaxSize())
+                    }
                 }
             }
         }
@@ -244,4 +269,5 @@ class MainActivity : AppCompatActivity() {
         }
 }
 
-private const val ACTIVITY_VIEWMODEL_STARTUP_DELAY_MS = 250L
+private const val ACTIVITY_APP_CONTENT_STARTUP_DELAY_MS = 180L
+private const val ACTIVITY_VIEWMODEL_STARTUP_DELAY_MS = 1_200L
