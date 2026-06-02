@@ -913,6 +913,8 @@ private object TrafficMapLandLayerCache {
     private const val SIZE_BUCKET_PX = 32
     private val lock = Any()
     private var latestBitmap: ImageBitmap? = null
+    private val inFlight =
+        mutableMapOf<TrafficMapLandLayerKey, kotlinx.coroutines.CompletableDeferred<ImageBitmap>>()
     private val bitmaps =
         LinkedHashMap<TrafficMapLandLayerKey, ImageBitmap>(
             MAX_ENTRIES,
@@ -944,29 +946,47 @@ private object TrafficMapLandLayerCache {
         withContext(Dispatchers.Default) {
             val startedAtMs = SystemClock.elapsedRealtime()
             val key = landLayerKey(shapes = shapes, canvasSize = canvasSize, color = color)
-            synchronized(lock) {
-                bitmaps[key]?.let { bitmap -> return@withContext bitmap }
+            val owner = kotlinx.coroutines.CompletableDeferred<ImageBitmap>()
+            var shouldRender = false
+            val deferred =
+                synchronized(lock) {
+                    bitmaps[key]?.let { bitmap -> return@withContext bitmap }
+                    inFlight[key] ?: owner.also { pending ->
+                        inFlight[key] = pending
+                        shouldRender = true
+                    }
+                }
+            if (!shouldRender) {
+                return@withContext deferred.await()
             }
             val size = Size(key.width.toFloat(), key.height.toFloat())
-            val bitmap =
-                trafficMapLandBitmap(
-                    size = size,
-                    shapes = shapes,
-                    viewport = TrafficMapViewport(topLeft = Offset.Zero, size = size),
-                    color = color,
+            var completed = false
+            try {
+                val bitmap =
+                    trafficMapLandBitmap(
+                        size = size,
+                        shapes = shapes,
+                        viewport = TrafficMapViewport(topLeft = Offset.Zero, size = size),
+                        color = color,
+                    )
+                synchronized(lock) {
+                    storeBitmapLocked(key = key, bitmap = bitmap)
+                    inFlight.remove(key)
+                }
+                owner.complete(bitmap)
+                completed = true
+                logTrafficMapDebug(
+                    "land bitmap ready width=${key.width} height=${key.height} shapes=${key.shapeCount} durationMs=${SystemClock.elapsedRealtime() - startedAtMs}",
                 )
-            synchronized(lock) {
-                bitmaps[key] = bitmap
-                latestBitmap = bitmap
-                while (bitmaps.size > MAX_ENTRIES) {
-                    val eldest = bitmaps.entries.firstOrNull()?.key ?: break
-                    bitmaps.remove(eldest)
+                bitmap
+            } finally {
+                if (!completed) {
+                    synchronized(lock) {
+                        inFlight.remove(key)
+                    }
+                    owner.cancel()
                 }
             }
-            logTrafficMapDebug(
-                "land bitmap ready width=${key.width} height=${key.height} shapes=${key.shapeCount} durationMs=${SystemClock.elapsedRealtime() - startedAtMs}",
-            )
-            bitmap
         }
 
     suspend fun prewarm(
@@ -1023,28 +1043,50 @@ private object TrafficMapLandLayerCache {
                 canvasSize = canvasSize,
                 color = TRAFFIC_MAP_DEFAULT_COUNTRY_FILL,
             )
+        val owner = kotlinx.coroutines.CompletableDeferred<ImageBitmap>()
         synchronized(lock) {
-            if (bitmaps.containsKey(key)) {
+            if (bitmaps.containsKey(key) || inFlight.containsKey(key)) {
                 return 0
             }
+            inFlight[key] = owner
         }
         val size = Size(key.width.toFloat(), key.height.toFloat())
-        val bitmap =
-            trafficMapLandBitmap(
-                size = size,
-                shapes = shapes,
-                viewport = TrafficMapViewport(topLeft = Offset.Zero, size = size),
-                color = TRAFFIC_MAP_DEFAULT_COUNTRY_FILL,
-            )
-        synchronized(lock) {
-            bitmaps[key] = bitmap
-            latestBitmap = bitmap
-            while (bitmaps.size > MAX_ENTRIES) {
-                val eldest = bitmaps.entries.firstOrNull()?.key ?: break
-                bitmaps.remove(eldest)
+        var completed = false
+        try {
+            val bitmap =
+                trafficMapLandBitmap(
+                    size = size,
+                    shapes = shapes,
+                    viewport = TrafficMapViewport(topLeft = Offset.Zero, size = size),
+                    color = TRAFFIC_MAP_DEFAULT_COUNTRY_FILL,
+                )
+            synchronized(lock) {
+                storeBitmapLocked(key = key, bitmap = bitmap)
+                inFlight.remove(key)
+            }
+            owner.complete(bitmap)
+            completed = true
+            return 1
+        } finally {
+            if (!completed) {
+                synchronized(lock) {
+                    inFlight.remove(key)
+                }
+                owner.cancel()
             }
         }
-        return 1
+    }
+
+    private fun storeBitmapLocked(
+        key: TrafficMapLandLayerKey,
+        bitmap: ImageBitmap,
+    ) {
+        bitmaps[key] = bitmap
+        latestBitmap = bitmap
+        while (bitmaps.size > MAX_ENTRIES) {
+            val eldest = bitmaps.entries.firstOrNull()?.key ?: break
+            bitmaps.remove(eldest)
+        }
     }
 }
 

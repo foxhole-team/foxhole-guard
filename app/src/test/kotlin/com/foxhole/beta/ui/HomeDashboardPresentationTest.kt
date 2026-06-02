@@ -1291,7 +1291,8 @@ class HomeDashboardPresentationTest {
 
         assertEquals(null, model.visibleIpInfo)
         assertTrue(model.showConnectionStatus)
-        assertTrue(model.showIpInfoLoading)
+        assertFalse(model.showIpInfoLoading)
+        assertTrue(model.showConnectionDetailsLoading)
     }
 
     @Test
@@ -1342,7 +1343,7 @@ class HomeDashboardPresentationTest {
     }
 
     @Test
-    fun `network model shows ip skeleton during reconnect without route ip`() {
+    fun `network model keeps ip side stable during reconnect without route ip`() {
         val model =
             resolveHomeDashboardNetworkModel(
                 state =
@@ -1361,7 +1362,8 @@ class HomeDashboardPresentationTest {
             )
 
         assertTrue(model.showConnectionStatus)
-        assertTrue(model.showIpInfoLoading)
+        assertFalse(model.showIpInfoLoading)
+        assertTrue(model.showConnectionDetailsLoading)
     }
 
     @Test
@@ -1657,6 +1659,7 @@ class HomeDashboardPresentationTest {
             resolveHomeDashboardNetworkModel(
                 state =
                     HomeRouteUiState(
+                        profilesLoaded = true,
                         connection =
                             ConnectionSnapshot(
                                 state = ConnectionState.CONNECTING,
@@ -1673,7 +1676,7 @@ class HomeDashboardPresentationTest {
         assertEquals(R.string.home_network_connection_info_title, model.titleRes)
         assertTrue(model.showConnectionStatus)
         assertTrue(model.showLoading)
-        assertTrue(model.showIpInfoLoading)
+        assertFalse(model.showIpInfoLoading)
         assertTrue(model.showConnectionDetailsLoading)
     }
 
@@ -1692,6 +1695,7 @@ class HomeDashboardPresentationTest {
             resolveHomeDashboardNetworkModel(
                 state =
                     HomeRouteUiState(
+                        profilesLoaded = true,
                         connection =
                             ConnectionSnapshot(
                                 state = ConnectionState.CONNECTING,
@@ -1727,6 +1731,7 @@ class HomeDashboardPresentationTest {
             resolveHomeDashboardNetworkModel(
                 state =
                     HomeRouteUiState(
+                        profilesLoaded = true,
                         connection =
                             ConnectionSnapshot(
                                 state = ConnectionState.ERROR,

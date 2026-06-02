@@ -227,9 +227,9 @@ internal fun shouldShowPendingNetworkLoading(
 ): Boolean =
     when {
         visibleIpInfo != null -> false
+        !appLoaded -> true
         deviceInternetAvailable == false -> false
         explicitLoading -> true
-        connectionState in setOf(ConnectionState.CONNECTING, ConnectionState.RECONNECTING) -> true
         autoConnectRunning -> true
         connectionState == ConnectionState.IDLE -> true
         else -> false
@@ -735,19 +735,20 @@ private fun HomeRouteUiState.shouldShowHomeNetworkIpInfoLoading(
     deviceInternetAvailable: Boolean?,
     explicitIpInfoSkeletonLoading: Boolean,
 ): Boolean {
-    val activeRouteNeedsIp =
-        dashboardIpInfo == null &&
-            routeTransitionRunning
     val manualRefreshNeedsSkeleton =
         explicitIpInfoSkeletonLoading &&
             (deviceInternetAvailable != false || hasDashboardRouteProfile())
+    val missingIpAnalysisLoading =
+        routeTransitionRunning &&
+            autoConnect.running &&
+            connection.state !in ACTIVE_CONNECTION_STATES
     val missingIpCanShowSkeleton =
-        activeRouteNeedsIp ||
+        missingIpAnalysisLoading ||
             shouldShowDashboardNetworkLoading(
                 visibleIpInfo = dashboardIpInfo,
                 explicitLoading = explicitIpInfoSkeletonLoading,
                 connectionState = connection.state,
-                autoConnectRunning = routeTransitionRunning,
+                autoConnectRunning = autoConnect.running,
                 deviceInternetAvailable = deviceInternetAvailable,
                 appLoaded = profilesLoaded,
             )

@@ -1103,16 +1103,21 @@ internal fun parseIpInfoResponse(
     val company = objectValue.jsonObjectOrNull("company")
     val traits = objectValue.jsonObjectOrNull("traits")
     val country = objectValue.string("country")
+    val explicitCountryName =
+        firstNonBlank(
+            objectValue.string("country_name"),
+            objectValue.string("countryName"),
+        )
     val countryCode =
         firstNonBlank(
             objectValue.string("country_code"),
             objectValue.string("country_iso"),
             objectValue.string("cc"),
             country?.takeIf { it.trim().length == ISO_COUNTRY_CODE_LENGTH },
+            explicitCountryName?.takeIf { it.trim().length == ISO_COUNTRY_CODE_LENGTH },
         )?.toIsoCountryCodeOrNull()
     val countryName =
-        objectValue.string("country_name")
-            ?: objectValue.string("countryName")
+        explicitCountryName?.toCountryDisplayNameOrNull()
             ?: country?.trim()?.takeIf { it.isNotBlank() && it.length != ISO_COUNTRY_CODE_LENGTH }
             ?: countryCode?.let(::countryDisplayName)
     return IpInfo(
@@ -1191,6 +1196,15 @@ private fun countryDisplayName(countryCode: String): String? {
             .getDisplayCountry(Locale.US)
     }.getOrNull()
         ?.takeIf { value -> value.isNotBlank() && !value.equals(normalized, ignoreCase = true) }
+}
+
+private fun String.toCountryDisplayNameOrNull(): String? {
+    val value = trim()
+    return when {
+        value.isBlank() -> null
+        value.length == ISO_COUNTRY_CODE_LENGTH -> value.toIsoCountryCodeOrNull()?.let(::countryDisplayName)
+        else -> value
+    }
 }
 
 internal fun mergeIpInfo(

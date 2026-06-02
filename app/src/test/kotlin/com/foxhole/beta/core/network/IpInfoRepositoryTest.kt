@@ -125,6 +125,46 @@ class IpInfoRepositoryTest {
     }
 
     @Test
+    fun `normalizes iso country name field to display country`() {
+        val parsed =
+            parseIpInfoResponse(
+                body =
+                    """
+                    {
+                      "ip": "84.17.54.10",
+                      "country_name": "NL",
+                      "city": "Amsterdam",
+                      "provider": "Datacamp Limited"
+                    }
+                    """.trimIndent(),
+                json = json,
+            )
+
+        assertEquals("NL", parsed.countryCode)
+        assertEquals("Netherlands", parsed.countryName)
+        assertEquals("Amsterdam", parsed.city)
+        assertEquals("Datacamp Limited", parsed.isp)
+    }
+
+    @Test
+    fun `drops invalid two character country name field`() {
+        val parsed =
+            parseIpInfoResponse(
+                body =
+                    """
+                    {
+                      "ip": "84.17.54.10",
+                      "countryName": "T1"
+                    }
+                    """.trimIndent(),
+                json = json,
+            )
+
+        assertNull(parsed.countryCode)
+        assertNull(parsed.countryName)
+    }
+
+    @Test
     fun `parses country code and nested provider schema`() {
         val parsed =
             parseIpInfoResponse(

@@ -321,8 +321,8 @@ class HomeIpLoadingPolicyTest {
     }
 
     @Test
-    fun `shows ip skeleton while tunnel is connecting without a resolved route ip`() {
-        assertTrue(
+    fun `does not full skeleton ip while tunnel is connecting without a resolved route ip`() {
+        assertFalse(
             shouldShowPendingNetworkLoading(
                 visibleIpInfo = null,
                 explicitLoading = false,
@@ -335,7 +335,7 @@ class HomeIpLoadingPolicyTest {
     }
 
     @Test
-    fun `keeps previous route ip visible while tunnel refresh is pending`() {
+    fun `keeps tunnel transition loading out of ip side while route refresh is pending`() {
         val previousIp =
             IpInfo(
                 ip = "8.8.8.8",
@@ -365,7 +365,7 @@ class HomeIpLoadingPolicyTest {
 
         assertNull(model.visibleIpInfo)
         assertTrue(model.showLoading)
-        assertTrue(model.showIpInfoLoading)
+        assertFalse(model.showIpInfoLoading)
         assertTrue(model.showConnectionDetailsLoading)
     }
 
@@ -384,13 +384,27 @@ class HomeIpLoadingPolicyTest {
     }
 
     @Test
-    fun `does not show pending network loading when device internet is explicitly offline`() {
+    fun `does not show pending network loading when loaded device internet is explicitly offline`() {
         assertFalse(
             shouldShowPendingNetworkLoading(
                 visibleIpInfo = null,
                 explicitLoading = false,
                 connectionState = ConnectionState.CONNECTING,
                 autoConnectRunning = true,
+                deviceInternetAvailable = false,
+                appLoaded = true,
+            ),
+        )
+    }
+
+    @Test
+    fun `shows startup network skeleton before loaded internet availability settles`() {
+        assertTrue(
+            shouldShowPendingNetworkLoading(
+                visibleIpInfo = null,
+                explicitLoading = false,
+                connectionState = ConnectionState.IDLE,
+                autoConnectRunning = false,
                 deviceInternetAvailable = false,
                 appLoaded = false,
             ),

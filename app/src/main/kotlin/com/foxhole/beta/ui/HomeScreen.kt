@@ -180,14 +180,33 @@ fun HomeScreen(
                 )
     val wifiLanAddress by rememberWifiLanAddress(enabled = shouldObserveWifiLanAddress)
     val proxyModel =
-        remember(state, wifiLanAddress) {
+        remember(
+            state.settings.traffic.mode,
+            state.settings.expert.localSurfaces,
+            state.settings.expert.perAppRoutingMode,
+            state.settings.expert.selectedPackages,
+            wifiLanAddress,
+        ) {
             resolveHomeDashboardProxyModel(
                 state = state,
                 wifiLanAddress = wifiLanAddress,
             )
         }
     val modeOption = proxyModel.modeOption
-    val connectionFeatureIndicators = remember(state) { homeConnectionFeatureIndicators(state) }
+    val connectionFeatureIndicators =
+        remember(
+            state.settings.ui.showFirewallStatus,
+            state.settings.expert.firewallEnabled,
+            state.settings.expert.localSurfaces.allowLanAccess,
+            state.settings.privacyRoute,
+            state.settings.traffic.mode,
+            state.activeProfile,
+            state.connection.state,
+            state.connection.profileId,
+            state.connection.protocolHint,
+        ) {
+            homeConnectionFeatureIndicators(state)
+        }
     val homeModeOptions =
         remember(
             state.settings.traffic.mode,
@@ -226,7 +245,27 @@ fun HomeScreen(
         )
     val dashboardSecondaryActionIconSize = 21.dp
     val connectionDurationText = rememberConnectionDurationText(state.connection)
-    val dashboardProtocolModel = remember(state) { resolveHomeDashboardProtocolModel(state) }
+    val dashboardProtocolModel =
+        remember(
+            state.activeProfile,
+            state.connection,
+            state.autoConnect,
+            state.smartStartRememberedLatenciesByOptionId,
+            state.protocolLatenciesByOptionId,
+            state.protocolDownOptionIds,
+            state.protocolLatencyUnavailableOptionIds,
+            state.protocolServerPingsByOptionId,
+            state.protocolServerPingUnavailableOptionIds,
+            state.protocolTunnelPingsByOptionId,
+            state.protocolTunnelPingUnavailableOptionIds,
+            state.protocolMetricsRefreshing,
+            state.protocolMetricsRefreshingOptionId,
+            state.dashboardConnectionMetricsLoading,
+            state.reconnectInProgress,
+            state.reconnectRequired,
+        ) {
+            resolveHomeDashboardProtocolModel(state)
+        }
     val dashboardProtocolLatencies = dashboardProtocolModel.latenciesByOptionId
     val dashboardDownProtocolIds = dashboardProtocolModel.downOptionIds
     val dashboardUnavailableProtocolIds = dashboardProtocolModel.latencyUnavailableOptionIds
@@ -244,7 +283,10 @@ fun HomeScreen(
     val dashboardConnectionMetricsLoading = dashboardProtocolModel.connectionMetricsLoading
     val dashboardLatencySkeletonVisible = dashboardConnectionMetricsLoading && dashboardLatencyPillVisible
     val protocolMetricsAnalysisState =
-        remember(state, dashboardProtocolPresentation) {
+        remember(
+            state.protocolMetricsRefreshingOptionId,
+            dashboardProtocolPresentation,
+        ) {
             homeProtocolMetricsAnalysisState(state, dashboardProtocolPresentation)
         }
     val smartStartDashboardControlsEnabled = isDashboardSmartStartControlsEnabled(state.settings)
@@ -351,7 +393,14 @@ fun HomeScreen(
                     state.connection.state == ConnectionState.CONNECTED
                 )
     val networkInfoTitleRes = networkModel.titleRes
-    val profileModel = remember(state) { resolveHomeDashboardProfileModel(state = state) }
+    val profileModel =
+        remember(
+            state.activeProfile,
+            state.connection.state,
+            state.connection.profileId,
+        ) {
+            resolveHomeDashboardProfileModel(state = state)
+        }
     val isSmartDashboardProfile = profileModel.isSmartDashboardProfile
     val selectedProfileId = profileModel.selectedProfileId
     val localGuardProfileRuntimeActive = profileModel.localGuardActive
@@ -1830,23 +1879,21 @@ private fun rememberHomeNetworkGeoRowsLoading(
     networkIpInfo: IpInfo?,
     refreshLoading: Boolean,
 ): Boolean {
-    val key =
-        listOf(
-            networkIpInfo?.fetchedAt,
-            networkIpInfo?.countryCode,
-            networkIpInfo?.countryName,
-            networkIpInfo?.city,
-            networkIpInfo?.isp,
-            refreshLoading,
-        )
-    var nowMs by remember(key) { mutableStateOf(System.currentTimeMillis()) }
+    val fetchedAt = networkIpInfo?.fetchedAt
+    val countryCode = networkIpInfo?.countryCode
+    val countryName = networkIpInfo?.countryName
+    val city = networkIpInfo?.city
+    val isp = networkIpInfo?.isp
+    var nowMs by remember(fetchedAt, countryCode, countryName, city, isp, refreshLoading) {
+        mutableStateOf(System.currentTimeMillis())
+    }
     val loading =
         shouldShowHomeNetworkGeoRowsLoading(
             ipInfo = networkIpInfo,
             nowMs = nowMs,
             refreshLoading = refreshLoading,
         )
-    LaunchedEffect(key, loading) {
+    LaunchedEffect(fetchedAt, countryCode, countryName, city, isp, refreshLoading, loading) {
         val info = networkIpInfo ?: return@LaunchedEffect
         if (!loading || refreshLoading) {
             return@LaunchedEffect

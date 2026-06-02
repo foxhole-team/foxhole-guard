@@ -113,6 +113,11 @@ internal fun HomeViewModel.refreshIpInfoInternalInternal(
         ipInfoRefreshReasonMutable.value = null
         ipInfoLoadingMutable.value = false
     }
+    if (showLoading) {
+        activeIpInfoRefreshReason = reason
+        ipInfoRefreshReasonMutable.value = reason
+        ipInfoLoadingMutable.value = true
+    }
     ipInfoRefreshJob =
         viewModelScope.launch {
             val target = startDecision.target

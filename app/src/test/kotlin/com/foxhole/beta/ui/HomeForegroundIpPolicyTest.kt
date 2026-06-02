@@ -53,9 +53,9 @@ class HomeForegroundIpPolicyTest {
     }
 
     @Test
-    fun `first cold foreground idle ip refresh is delayed until first frame settles`() {
+    fun `first cold foreground idle ip refresh starts immediately`() {
         assertEquals(
-            HomeViewModel.FIRST_FOREGROUND_IP_REFRESH_DELAY_MS,
+            0L,
             foregroundIpRefreshStartDelayMs(
                 firstForeground = true,
                 connectionState = ConnectionState.IDLE,
