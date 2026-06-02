@@ -496,22 +496,15 @@ private object TrafficMapCountryShapeCache {
         return mutex.withLock {
             cachedShapes?.let { shapes -> return@withLock shapes }
             val startedAtMs = SystemClock.elapsedRealtime()
-            val raw =
-                withContext(Dispatchers.IO) {
-                    context.assets.open(TRAFFIC_MAP_COUNTRY_SHAPES_ASSET)
-                        .bufferedReader()
-                        .use { reader -> reader.readText() }
-                }
-            val readFinishedAtMs = SystemClock.elapsedRealtime()
             withContext(Dispatchers.Default) {
-                TrafficMapCountryShapeAssetParser()
-                    .parse(raw)
+                context.assets.open(TRAFFIC_MAP_COUNTRY_SHAPES_ASSET).use { inputStream ->
+                    TrafficMapCountryShapeAssetParser().parse(inputStream)
+                }
             }.also { shapes ->
                 cachedShapes = shapes
                 val finishedAtMs = SystemClock.elapsedRealtime()
                 logTrafficMapDebug(
-                    "shapes loaded count=${shapes.size} readMs=${readFinishedAtMs - startedAtMs} " +
-                        "parseMs=${finishedAtMs - readFinishedAtMs} durationMs=${finishedAtMs - startedAtMs}",
+                    "shapes loaded count=${shapes.size} streamParseMs=${finishedAtMs - startedAtMs}",
                 )
             }
         }
@@ -986,35 +979,14 @@ private object TrafficMapLandLayerCache {
         val startedAtMs = SystemClock.elapsedRealtime()
         var renderedCount = 0
         withContext(Dispatchers.Default) {
-            trafficMapPrewarmCanvasSizes(displayMetrics).forEach { canvasSize ->
-                val key =
-                    landLayerKey(
-                        shapes = shapes,
-                        canvasSize = canvasSize,
-                        color = TRAFFIC_MAP_DEFAULT_COUNTRY_FILL,
-                    )
-                synchronized(lock) {
-                    if (bitmaps.containsKey(key)) {
-                        return@forEach
-                    }
+            val primaryCanvasSize = trafficMapPrimaryPrewarmCanvasSize(displayMetrics)
+            val deferredCanvasSizes = trafficMapPrewarmCanvasSizes(displayMetrics) - primaryCanvasSize
+            renderedCount += prewarmBitmapIfMissing(shapes = shapes, canvasSize = primaryCanvasSize)
+            if (deferredCanvasSizes.isNotEmpty()) {
+                delay(TRAFFIC_MAP_DEFERRED_PREWARM_DELAY_MS)
+                deferredCanvasSizes.forEach { canvasSize ->
+                    renderedCount += prewarmBitmapIfMissing(shapes = shapes, canvasSize = canvasSize)
                 }
-                val size = Size(key.width.toFloat(), key.height.toFloat())
-                val bitmap =
-                    trafficMapLandBitmap(
-                        size = size,
-                        shapes = shapes,
-                        viewport = TrafficMapViewport(topLeft = Offset.Zero, size = size),
-                        color = TRAFFIC_MAP_DEFAULT_COUNTRY_FILL,
-                    )
-                synchronized(lock) {
-                    bitmaps[key] = bitmap
-                    latestBitmap = bitmap
-                    while (bitmaps.size > MAX_ENTRIES) {
-                        val eldest = bitmaps.entries.firstOrNull()?.key ?: break
-                        bitmaps.remove(eldest)
-                    }
-                }
-                renderedCount += 1
             }
         }
         if (renderedCount > 0) {
@@ -1043,6 +1015,40 @@ private object TrafficMapLandLayerCache {
         (((value.coerceAtLeast(1) + SIZE_BUCKET_PX - 1) / SIZE_BUCKET_PX) * SIZE_BUCKET_PX)
 
     fun bucketDimensionForPrewarm(value: Int): Int = bucketDimension(value)
+
+    private fun prewarmBitmapIfMissing(
+        shapes: List<TrafficMapCountryShape>,
+        canvasSize: IntSize,
+    ): Int {
+        val key =
+            landLayerKey(
+                shapes = shapes,
+                canvasSize = canvasSize,
+                color = TRAFFIC_MAP_DEFAULT_COUNTRY_FILL,
+            )
+        synchronized(lock) {
+            if (bitmaps.containsKey(key)) {
+                return 0
+            }
+        }
+        val size = Size(key.width.toFloat(), key.height.toFloat())
+        val bitmap =
+            trafficMapLandBitmap(
+                size = size,
+                shapes = shapes,
+                viewport = TrafficMapViewport(topLeft = Offset.Zero, size = size),
+                color = TRAFFIC_MAP_DEFAULT_COUNTRY_FILL,
+            )
+        synchronized(lock) {
+            bitmaps[key] = bitmap
+            latestBitmap = bitmap
+            while (bitmaps.size > MAX_ENTRIES) {
+                val eldest = bitmaps.entries.firstOrNull()?.key ?: break
+                bitmaps.remove(eldest)
+            }
+        }
+        return 1
+    }
 }
 
 internal fun trafficMapLandLayerBitmapSize(canvasSize: IntSize): IntSize {
@@ -1065,16 +1071,26 @@ internal fun trafficMapLandLayerBitmapSize(canvasSize: IntSize): IntSize {
 internal fun trafficMapPrewarmCanvasSizes(displayMetrics: DisplayMetrics): List<IntSize> {
     val shortSide = min(displayMetrics.widthPixels, displayMetrics.heightPixels).coerceAtLeast(1)
     return TRAFFIC_MAP_PREWARM_WIDTH_FRACTIONS
-        .map { fraction -> (shortSide * fraction).roundToInt() }
-        .map { width ->
-            val bucketedWidth = TrafficMapLandLayerCache.bucketDimensionForPrewarm(width)
-            val bucketedHeight =
-                TrafficMapLandLayerCache.bucketDimensionForPrewarm(
-                    (bucketedWidth / TRAFFIC_MAP_WORLD_ASPECT_RATIO).roundToInt(),
-                )
-            IntSize(width = bucketedWidth, height = bucketedHeight)
-        }
+        .map { fraction -> trafficMapPrewarmCanvasSize(shortSide, fraction) }
         .distinct()
+}
+
+internal fun trafficMapPrimaryPrewarmCanvasSize(displayMetrics: DisplayMetrics): IntSize {
+    val shortSide = min(displayMetrics.widthPixels, displayMetrics.heightPixels).coerceAtLeast(1)
+    return trafficMapPrewarmCanvasSize(shortSide, TRAFFIC_MAP_PREWARM_PRIMARY_WIDTH_FRACTION)
+}
+
+private fun trafficMapPrewarmCanvasSize(
+    shortSide: Int,
+    fraction: Float,
+): IntSize {
+    val width = (shortSide * fraction).roundToInt()
+    val bucketedWidth = TrafficMapLandLayerCache.bucketDimensionForPrewarm(width)
+    val bucketedHeight =
+        TrafficMapLandLayerCache.bucketDimensionForPrewarm(
+            (bucketedWidth / TRAFFIC_MAP_WORLD_ASPECT_RATIO).roundToInt(),
+        )
+    return IntSize(width = bucketedWidth, height = bucketedHeight)
 }
 
 private data class TrafficMapLandLayerKey(
@@ -1201,6 +1217,7 @@ private const val TRAFFIC_MAP_LOW_BATTERY_PERCENT = 10
 private const val TRAFFIC_MAP_PREWARM_COMPACT_WIDTH_FRACTION = 0.58f
 private const val TRAFFIC_MAP_PREWARM_PRIMARY_WIDTH_FRACTION = 0.65f
 private const val TRAFFIC_MAP_PREWARM_WIDE_WIDTH_FRACTION = 0.74f
+private const val TRAFFIC_MAP_DEFERRED_PREWARM_DELAY_MS = 350L
 private const val TRAFFIC_ROUTE_PI = 3.141592653589793
 private const val TRAFFIC_ROUTE_ANGLE_BUCKET_RADIANS = 0.17453292519943295
 private const val TRAFFIC_MAP_COUNTRY_SHAPES_ASSET = "maps/ne_110m_admin_0_countries_preprocessed.json"

@@ -1,15 +1,17 @@
 package com.foxhole.beta.core.traffic
 
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.decodeFromStream
 import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import java.io.InputStream
 import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.ceil
@@ -101,10 +103,11 @@ class TrafficMapCountryShapeAssetParser(
             explicitNulls = false
         },
 ) {
-    fun parse(raw: String): List<TrafficMapCountryShape> {
-        val asset = json.decodeFromString<TrafficMapPreprocessedAsset>(raw)
-        return parse(asset)
-    }
+    fun parse(raw: String): List<TrafficMapCountryShape> = parse(raw.byteInputStream())
+
+    @OptIn(ExperimentalSerializationApi::class)
+    fun parse(inputStream: InputStream): List<TrafficMapCountryShape> =
+        parse(json.decodeFromStream<TrafficMapPreprocessedAsset>(inputStream))
 
     private fun parse(asset: TrafficMapPreprocessedAsset): List<TrafficMapCountryShape> =
         asset.countries.mapNotNull(::parseCountry)

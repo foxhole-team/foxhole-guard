@@ -122,7 +122,7 @@ class TrafficMapCountryGeoJsonParserTest {
             }
             """.trimIndent()
 
-        val shapes = TrafficMapCountryShapeAssetParser().parse(raw)
+        val shapes = TrafficMapCountryShapeAssetParser().parse(raw.byteInputStream())
 
         assertEquals(listOf("US", "DE"), shapes.map(TrafficMapCountryShape::countryCode))
         assertEquals(TrafficMapGeoPoint(lat = 40.0, lon = -74.0), shapes.first().rings.first().first())
@@ -141,7 +141,8 @@ class TrafficMapCountryGeoJsonParserTest {
             source.substringAfter("class TrafficMapCountryShapeAssetParser")
                 .substringBefore("internal fun TrafficMapCountryShape.toTrafficMapVisualShape")
 
-        assertTrue(assetParserBlock.contains("decodeFromString<TrafficMapPreprocessedAsset>"))
+        assertTrue(assetParserBlock.contains("decodeFromStream<TrafficMapPreprocessedAsset>"))
+        assertFalse(assetParserBlock.contains("decodeFromString<TrafficMapPreprocessedAsset>"))
         assertFalse(assetParserBlock.contains("parseToJsonElement"))
     }
 }

@@ -86,14 +86,23 @@ class TrafficMapStylingTest {
         val appPrewarmBlock =
             source.substringAfter("internal suspend fun prewarmTrafficMapCountryShapes")
                 .substringBefore("private object TrafficMapCountryShapeCache")
+        val shapeCacheLoadBlock =
+            source.substringAfter("suspend fun load(context: Context): List<TrafficMapCountryShape>")
+                .substringBefore("private data class DrawableTrafficMapDestination")
         val landCacheBlock =
             source.substringAfter("private object TrafficMapLandLayerCache")
                 .substringBefore("private data class TrafficMapLandLayerKey")
 
         assertTrue(appPrewarmBlock.contains("TrafficMapLandLayerCache.prewarm"))
+        assertTrue(shapeCacheLoadBlock.contains("context.assets.open(TRAFFIC_MAP_COUNTRY_SHAPES_ASSET).use"))
+        assertTrue(shapeCacheLoadBlock.contains("TrafficMapCountryShapeAssetParser().parse(inputStream)"))
+        assertFalse(shapeCacheLoadBlock.contains("readText()"))
         assertTrue(landCacheBlock.contains("suspend fun prewarm"))
+        assertTrue(landCacheBlock.contains("trafficMapPrimaryPrewarmCanvasSize(displayMetrics)"))
+        assertTrue(landCacheBlock.contains("delay(TRAFFIC_MAP_DEFERRED_PREWARM_DELAY_MS)"))
         assertTrue(landCacheBlock.contains("TRAFFIC_MAP_DEFAULT_COUNTRY_FILL"))
         assertTrue(source.contains("trafficMapPrewarmCanvasSizes"))
+        assertTrue(source.contains("trafficMapPrimaryPrewarmCanvasSize"))
         assertTrue(source.contains("TRAFFIC_MAP_PREWARM_COMPACT_WIDTH_FRACTION"))
         assertTrue(source.contains("TRAFFIC_MAP_PREWARM_PRIMARY_WIDTH_FRACTION"))
         assertTrue(source.contains("TRAFFIC_MAP_PREWARM_WIDE_WIDTH_FRACTION"))
@@ -117,6 +126,15 @@ class TrafficMapStylingTest {
                 IntSize(width = 1088, height = 544),
             ),
             sizes,
+        )
+        assertEquals(
+            IntSize(width = 960, height = 480),
+            trafficMapPrimaryPrewarmCanvasSize(
+                DisplayMetrics().apply {
+                    widthPixels = 1440
+                    heightPixels = 3120
+                },
+            ),
         )
     }
 
