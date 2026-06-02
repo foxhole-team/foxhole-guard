@@ -304,6 +304,37 @@ class HomeDashboardProtocolPresentationTest {
     }
 
     @Test
+    fun `start waits for import before surfacing missing profile`() {
+        assertTrue(
+            shouldWaitForProfileImportBeforeMissingProfileError(
+                activeProfile = null,
+                profileImportInProgress = true,
+            ),
+        )
+        assertFalse(
+            shouldWaitForProfileImportBeforeMissingProfileError(
+                activeProfile = null,
+                profileImportInProgress = false,
+            ),
+        )
+    }
+
+    @Test
+    fun `start does not wait for import when active profile exists`() {
+        assertFalse(
+            shouldWaitForProfileImportBeforeMissingProfileError(
+                activeProfile =
+                    profile(
+                        selectedProtocolOptionId = "vless",
+                        protocolHint = ProtocolHint.VLESS,
+                        protocolOptions = listOf(option("vless", ProtocolHint.VLESS)),
+                    ),
+                profileImportInProgress = true,
+            ),
+        )
+    }
+
+    @Test
     fun `dashboard Smart start controls require master toggle`() {
         assertFalse(
             isDashboardSmartStartControlsEnabled(

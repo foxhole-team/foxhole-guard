@@ -131,6 +131,7 @@ class HomeViewModel(
     internal val torOperationMutable = MutableStateFlow(HomeTorOperationUiState())
     internal val torTransitionPromptMutable = MutableStateFlow<TorTransitionPrompt?>(null)
     internal val dnsFilterRefreshInProgressMutable = MutableStateFlow(false)
+    internal val profileImportInProgressMutable = MutableStateFlow(false)
     internal val profileReconnectPromptUntilMutable = MutableStateFlow(0L)
     internal val insecureTlsImportWarningMutable = MutableStateFlow<InsecureTlsImportWarningState?>(null)
     internal val catalogPresetPreviewsMutable =
@@ -1699,6 +1700,8 @@ class HomeViewModel(
         internal const val CONNECTED_IP_REFRESH_RETRY_DELAY_MS = 1_500L
         internal const val POST_CONNECT_LATENCY_AFTER_IP_DELAY_MS = 5_000L
         internal const val PROFILE_PRELOAD_TIMEOUT_MS = 2_500L
+        internal const val PROFILE_IMPORT_CONNECT_WAIT_TIMEOUT_MS = 8_000L
+        internal const val PROFILE_IMPORT_CONNECT_POLL_MS = 100L
         internal const val MANUAL_IP_REFRESH_MIN_LOADING_MS = 666L
         internal const val AUTO_IP_REFRESH_MIN_LOADING_MS = 450L
         internal const val DASHBOARD_CONNECTION_METRICS_MIN_LOADING_MS = 450L

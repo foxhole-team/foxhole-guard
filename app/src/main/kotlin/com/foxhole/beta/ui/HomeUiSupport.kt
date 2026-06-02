@@ -450,6 +450,11 @@ internal fun shouldShowAutoConnectAction(activeProfile: Profile?): Boolean =
                 )
     } == true
 
+internal fun shouldWaitForProfileImportBeforeMissingProfileError(
+    activeProfile: Profile?,
+    profileImportInProgress: Boolean,
+): Boolean = activeProfile == null && profileImportInProgress
+
 internal fun isDashboardSmartStartControlsEnabled(settings: Settings): Boolean =
     settings.connection.smartStartEnabled && settings.ui.smartStartDashboardControlsEnabled
 

@@ -8,6 +8,7 @@ import com.foxhole.beta.core.data.InsecureTlsImportWarning
 import com.foxhole.beta.core.data.InsecureTlsProfileConsentRequiredException
 import com.foxhole.beta.core.data.ProfileImportPayloadTooLargeException
 import com.foxhole.beta.core.data.requireLocalProfileImportWithinLimit
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
 internal fun HomeViewModel.onPasteFromClipboardInternal() {
@@ -79,17 +80,20 @@ private suspend fun HomeViewModel.importRawWithInsecureTlsDecision(
     allowInsecureTlsForProfile: Boolean,
     excludeInsecureTlsOptions: Boolean,
 ) {
-    runCatching {
-        container.profileRepository.importProfile(
-            rawInput = value,
-            allowInsecureTlsForProfile = allowInsecureTlsForProfile,
-            excludeInsecureTlsOptions = excludeInsecureTlsOptions,
-        )
-    }.onSuccess { imported ->
+    profileImportInProgressMutable.value = true
+    try {
+        val imported =
+            container.profileRepository.importProfile(
+                rawInput = value,
+                allowInsecureTlsForProfile = allowInsecureTlsForProfile,
+                excludeInsecureTlsOptions = excludeInsecureTlsOptions,
+            )
         container.connectionController.setActiveProfile(imported.id)
         startupActiveProfileMutable.value = imported.copy(isActive = true)
         emitSuccess(getApplication<Application>().getString(R.string.profile_imported))
-    }.onFailure { error ->
+    } catch (error: CancellationException) {
+        throw error
+    } catch (error: Throwable) {
         if (error is InsecureTlsProfileConsentRequiredException) {
             val warning = error.warning ?: container.profileRepository.rawInputInsecureTlsWarning(value)
             insecureTlsImportWarningMutable.value =
@@ -97,6 +101,8 @@ private suspend fun HomeViewModel.importRawWithInsecureTlsDecision(
         } else {
             handleProfileImportFailure(value, error)
         }
+    } finally {
+        profileImportInProgressMutable.value = false
     }
 }
 

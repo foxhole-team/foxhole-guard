@@ -9,8 +9,10 @@ import com.foxhole.beta.core.model.TrafficMode
 import com.foxhole.beta.vpn.FoxholeVpnService
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import java.security.GeneralSecurityException
 
 @Suppress("ReturnCount")
@@ -41,6 +43,7 @@ internal fun HomeViewModel.toggleConnectionInternal() {
 
 private fun HomeViewModel.recoverActiveProfileAndToggleConnection() {
     viewModelScope.launch {
+        waitForProfileImportBeforeActiveProfileRecovery()
         val recoveredProfile = recoverActiveProfileForToggle()
         if (recoveredProfile == null) {
             handleToggleWithoutActiveProfile(controlUiState.value)
@@ -61,6 +64,31 @@ private fun HomeViewModel.recoverActiveProfileAndToggleConnection() {
             return@launch
         }
         connectSelectedProfile(recoveredState, connectProfile, networkOverride?.protocolOptionId)
+    }
+}
+
+private suspend fun HomeViewModel.waitForProfileImportBeforeActiveProfileRecovery() {
+    if (
+        !shouldWaitForProfileImportBeforeMissingProfileError(
+            activeProfile = controlUiState.value.activeProfile,
+            profileImportInProgress = profileImportInProgressMutable.value,
+        )
+    ) {
+        return
+    }
+    container.diagnosticsLogger.record("profile", "connect waiting for active profile import")
+    val completed =
+        withTimeoutOrNull(HomeViewModel.PROFILE_IMPORT_CONNECT_WAIT_TIMEOUT_MS) {
+            while (
+                profileImportInProgressMutable.value &&
+                controlUiState.value.activeProfile == null
+            ) {
+                delay(HomeViewModel.PROFILE_IMPORT_CONNECT_POLL_MS)
+            }
+            true
+        } == true
+    if (!completed) {
+        container.diagnosticsLogger.record("profile", "connect active profile import wait timed out")
     }
 }
 
