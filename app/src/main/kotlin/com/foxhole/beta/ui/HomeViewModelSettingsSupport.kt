@@ -313,21 +313,22 @@ internal fun HomeViewModel.onDnsFilterManualRefreshInternal() {
         try {
             runCatching { container.dnsFilterUpdateRepository.refreshNow(requireAutoEnabled = false) }
                 .onSuccess {
-                    when (it.status) {
-                        DnsFilterUpdateStatus.UPDATED ->
+                    when {
+                        dnsFilterRefreshAllowsRuntime(it.status) ->
                             emitSuccess(getApplication<Application>().getString(R.string.dns_filter_refresh_complete))
-                        DnsFilterUpdateStatus.SKIPPED -> {
-                            container.profileRepository.verifyBundledDnsFilters()
-                            emitSuccess(getApplication<Application>().getString(R.string.dns_filter_refresh_complete))
-                        }
-                        DnsFilterUpdateStatus.FAILED ->
+                        else -> {
+                            container.diagnosticsLogger.record(
+                                "dns",
+                                "verified filter refresh unavailable status=${it.status.name.lowercase()}",
+                            )
                             emitError(getApplication<Application>().getString(R.string.dns_filter_refresh_failed))
+                        }
                     }
                 }
                 .onFailure { error ->
                     container.diagnosticsLogger.record(
                         "dns",
-                        "bundled filter verification failed error=${error.javaClass.simpleName}",
+                        "verified filter refresh failed error=${error.javaClass.simpleName}",
                     )
                     emitError(getApplication<Application>().getString(R.string.dns_filter_refresh_failed))
                 }
@@ -336,6 +337,9 @@ internal fun HomeViewModel.onDnsFilterManualRefreshInternal() {
         }
     }
 }
+
+internal fun dnsFilterRefreshAllowsRuntime(status: DnsFilterUpdateStatus): Boolean =
+    status == DnsFilterUpdateStatus.UPDATED
 
 internal fun HomeViewModel.onNetworkRulesChangedInternal(value: NetworkRulesSettings) {
     viewModelScope.launch {

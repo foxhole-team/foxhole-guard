@@ -142,6 +142,13 @@ internal data class HomeNetworkDetailValue(
     val loading: Boolean,
 )
 
+internal data class HomeNetworkDetailLoadingPolicy(
+    val country: Boolean,
+    val city: Boolean,
+    val ip: Boolean,
+    val provider: Boolean,
+)
+
 internal const val HOME_NETWORK_GEO_ROW_PENDING_LOADING_MS = 2_000L
 
 internal data class HomeDashboardProxyModel(
@@ -1500,6 +1507,17 @@ internal fun homeNetworkDetailValue(
     HomeNetworkDetailValue(
         text = value ?: if (loading) "" else "-",
         loading = loading && value == null,
+    )
+
+internal fun homeNetworkDetailLoadingPolicy(
+    refreshLoading: Boolean,
+    geoRowsLoading: Boolean,
+): HomeNetworkDetailLoadingPolicy =
+    HomeNetworkDetailLoadingPolicy(
+        country = refreshLoading || geoRowsLoading,
+        city = refreshLoading || geoRowsLoading,
+        ip = refreshLoading,
+        provider = refreshLoading || geoRowsLoading,
     )
 
 internal fun shouldShowHomeNetworkFullLoading(

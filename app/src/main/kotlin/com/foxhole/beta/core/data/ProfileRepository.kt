@@ -684,12 +684,6 @@ class ProfileRepository(
             privateDnsState = privateDnsState,
         )
 
-    suspend fun verifyBundledDnsFilters() {
-        dnsFilterAssetInstaller.prepare()
-        settingsRepository.markDnsFiltersUpdated()
-        diagnosticsLogger.record("dns", "local DNS filter list verified")
-    }
-
     @Suppress("LongMethod", "CyclomaticComplexMethod")
     suspend fun refreshProfile(
         profileId: Long,

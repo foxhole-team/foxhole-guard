@@ -34,25 +34,6 @@ class DnsFilterAssetInstaller(
             )
         }
 
-    suspend fun prepare(): DnsFilterRuntimePaths =
-        withContext(Dispatchers.IO) {
-            val targetDir = File(appContext.filesDir, TARGET_DIR_NAME).apply { mkdirs() }
-            val verifiedTarget = File(targetDir, VERIFIED_DNS_FILTER_FILE_NAME)
-            val verifiedManifest = File(targetDir, VERIFIED_DNS_FILTER_MANIFEST_NAME)
-            val target = File(targetDir, ADGUARD_DNS_FILTER_FILE_NAME)
-            if (!target.isValidAdGuardDnsFilter()) {
-                appContext.assets.open(ADGUARD_DNS_FILTER_ASSET_PATH).use { input ->
-                    target.outputStream().use { output -> input.copyTo(output) }
-                }
-            }
-            require(target.isValidAdGuardDnsFilter()) { "bundled AdGuard DNS filter checksum mismatch" }
-            DnsFilterRuntimePaths(
-                adGuardDnsFilterPath = verifiedTarget.takeIf { it.isValidVerifiedDnsFilter(verifiedManifest) }?.absolutePath
-                    ?: target.absolutePath,
-                adGuardVpnCompatibilityDomains = loadAdGuardVpnCompatibilityDomains(),
-            )
-        }
-
     override suspend fun installVerifiedDnsRuleSet(
         ruleSetBytes: ByteArray,
         manifest: DnsFilterManifest,
@@ -82,9 +63,6 @@ class DnsFilterAssetInstaller(
                 temp.delete()
             }.getOrThrow()
         }
-
-    private fun File.isValidAdGuardDnsFilter(): Boolean =
-        isValidRuleSet(ADGUARD_DNS_FILTER_SIZE_BYTES, ADGUARD_DNS_FILTER_SHA256)
 
     private fun File.isValidVerifiedDnsFilter(manifestFile: File): Boolean =
         runCatching {
@@ -156,11 +134,7 @@ class DnsFilterAssetInstaller(
 
     private companion object {
         const val TARGET_DIR_NAME = "dns-rule-sets"
-        const val ADGUARD_DNS_FILTER_FILE_NAME = "adguard-dns-filter.srs"
-        const val ADGUARD_DNS_FILTER_ASSET_PATH = "rule-sets/$ADGUARD_DNS_FILTER_FILE_NAME"
         const val ADGUARD_VPN_COMPATIBILITY_ASSET_PATH = "rule-sets/adguard-vpn-compatibility-allowlist.txt"
-        const val ADGUARD_DNS_FILTER_SIZE_BYTES = 1_450_468L
-        const val ADGUARD_DNS_FILTER_SHA256 = "ccb39947545fbdc4dc3d0660e532f28daf3029c91891fe573c92c0b1caaf951f"
         const val VERIFIED_DNS_FILTER_FILE_NAME = "adguard-dns-filter.verified.srs"
         const val VERIFIED_DNS_FILTER_MANIFEST_NAME = "adguard-dns-filter.verified.manifest.json"
     }

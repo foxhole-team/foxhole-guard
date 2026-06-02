@@ -131,6 +131,24 @@ class HomeDashboardTextPolicyTest {
     }
 
     @Test
+    fun `network detail loading skeletons missing geo rows without hiding known ip`() {
+        val policy = homeNetworkDetailLoadingPolicy(refreshLoading = false, geoRowsLoading = true)
+
+        assertTrue(policy.country)
+        assertTrue(policy.city)
+        assertFalse(policy.ip)
+        assertTrue(policy.provider)
+        assertEquals(
+            HomeNetworkDetailValue(text = "", loading = true),
+            homeNetworkDetailValue(value = null, loading = policy.country),
+        )
+        assertEquals(
+            HomeNetworkDetailValue(text = "203.0.113.7", loading = false),
+            homeNetworkDetailValue(value = "203.0.113.7", loading = policy.ip),
+        )
+    }
+
+    @Test
     fun `network card uses full skeleton only before any ip info is available`() {
         assertTrue(shouldShowHomeNetworkFullLoading(visibleIpInfo = null, showIpInfoLoading = true))
         assertFalse(shouldShowHomeNetworkFullLoading(visibleIpInfo = null, showIpInfoLoading = false))

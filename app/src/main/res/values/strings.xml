@@ -593,11 +593,11 @@
     <string name="dns_filter_update_source_title">DNS filter source</string>
     <string name="dns_filter_update_source_summary">Manifest URL for optional signed DNS rule-set updates. The default is the official Foxhole DNS repository.</string>
     <string name="dns_auto_update_consent_title">Enable DNS filter updates?</string>
-    <string name="dns_auto_update_consent_body">Foxhole will periodically contact the public Foxhole DNS repository to download an updated DNS rule set. The request does not include installed apps, DNS logs, or custom exceptions. The server can see the IP address and request time.</string>
+    <string name="dns_auto_update_consent_body">FoxHole will periodically contact the public FoxHole DNS repository to download an updated DNS rule set. The request does not include installed apps, DNS logs, or custom exceptions. The server can see the IP address and request time.</string>
     <string name="dns_filter_refresh_after_enable_title">Download fresh DNS filters now?</string>
-    <string name="dns_filter_refresh_after_enable_body">Foxhole can check the public Foxhole DNS repository now and load the latest verified AdGuard DNS rule set. If you skip this, the bundled filter stays active and you can refresh it later from DNS update status.</string>
+    <string name="dns_filter_refresh_after_enable_body">FoxHole can check the public FoxHole DNS repository now and load the latest verified AdGuard DNS rule set. DNS filtering will stay out of the runtime until a verified rule set is downloaded and checked.</string>
     <string name="dns_auto_update_warning_title">Disable DNS filter updates?</string>
-    <string name="dns_auto_update_warning_body">Foxhole will keep using the bundled or last verified DNS rule set. New tracker and malicious domains may be blocked later.</string>
+    <string name="dns_auto_update_warning_body">FoxHole will keep using the last verified DNS rule set. If none is verified, DNS filtering stays out of the runtime until a refresh succeeds.</string>
     <string name="dns_filter_list_status_title">DNS update status</string>
     <string name="dns_filter_list_status_summary">Bundled or last verified rule set is used. Optional updates require a signed manifest and SHA-256 match.</string>
     <string name="dns_filter_status_never">Never</string>

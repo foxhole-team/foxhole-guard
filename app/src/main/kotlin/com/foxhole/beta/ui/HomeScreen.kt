@@ -919,28 +919,30 @@ fun HomeScreen(
                                             networkIpInfo = networkIpInfo,
                                             refreshLoading = rowValueLoading,
                                         )
-                                    val networkValueLoading =
-                                        rowValueLoading ||
-                                            geoRowsLoading
+                                    val detailLoadingPolicy =
+                                        homeNetworkDetailLoadingPolicy(
+                                            refreshLoading = rowValueLoading,
+                                            geoRowsLoading = geoRowsLoading,
+                                        )
                                     val countryValue =
                                         homeNetworkDetailValue(
                                             value = networkIpInfo?.let(::buildCountryLineOrNull),
-                                            loading = networkValueLoading,
+                                            loading = detailLoadingPolicy.country,
                                         )
                                     val cityValue =
                                         homeNetworkDetailValue(
                                             value = networkIpInfo?.let(::buildCityLineOrNull),
-                                            loading = networkValueLoading,
+                                            loading = detailLoadingPolicy.city,
                                         )
                                     val ipValue =
                                         homeNetworkDetailValue(
                                             value = networkIpInfo?.let(::primaryVisibleIpOrNull),
-                                            loading = networkValueLoading,
+                                            loading = detailLoadingPolicy.ip,
                                         )
                                     val providerValue =
                                         homeNetworkDetailValue(
                                             value = networkIpInfo?.let(::providerLineOrNull),
-                                            loading = networkValueLoading,
+                                            loading = detailLoadingPolicy.provider,
                                         )
                                     Column(
                                         modifier = Modifier.weight(1f),

@@ -608,11 +608,11 @@
     <string name="dns_filter_update_source_title">Источник DNS-фильтра</string>
     <string name="dns_filter_update_source_summary">Manifest URL для опциональных обновлений подписанного DNS rule set. По умолчанию используется официальный репозиторий Foxhole DNS.</string>
     <string name="dns_auto_update_consent_title">Включить обновление DNS-фильтра?</string>
-    <string name="dns_auto_update_consent_body">Foxhole будет периодически обращаться к публичному репозиторию Foxhole для загрузки обновлённого DNS rule set. Запрос не содержит список приложений, DNS-журнал или пользовательские исключения. Сервер может видеть IP-адрес и время запроса.</string>
+    <string name="dns_auto_update_consent_body">FoxHole будет периодически обращаться к публичному репозиторию FoxHole для загрузки обновлённого DNS rule set. Запрос не содержит список приложений, DNS-журнал или пользовательские исключения. Сервер может видеть IP-адрес и время запроса.</string>
     <string name="dns_filter_refresh_after_enable_title">Загрузить свежие DNS-фильтры сейчас?</string>
-    <string name="dns_filter_refresh_after_enable_body">Foxhole может сразу проверить публичный репозиторий Foxhole DNS и загрузить последний проверенный rule set AdGuard DNS. Если пропустить, останется встроенный фильтр, а обновить его можно позже в статусе обновления DNS.</string>
+    <string name="dns_filter_refresh_after_enable_body">FoxHole может сразу проверить публичный репозиторий FoxHole DNS и загрузить последний проверенный rule set AdGuard DNS. DNS-фильтрация не попадет в runtime, пока проверенный rule set не скачан и не проверен.</string>
     <string name="dns_auto_update_warning_title">Выключить обновление DNS-фильтра?</string>
-    <string name="dns_auto_update_warning_body">Foxhole продолжит использовать встроенный или последний проверенный DNS rule set. Новые трекерные и вредоносные домены могут блокироваться позже.</string>
+    <string name="dns_auto_update_warning_body">FoxHole продолжит использовать последний проверенный DNS rule set. Если проверенного списка нет, DNS-фильтрация не попадет в runtime до успешного обновления.</string>
     <string name="dns_filter_list_status_title">Статус обновления DNS</string>
     <string name="dns_filter_list_status_summary">Используется встроенный или последний проверенный rule set. Опциональные обновления требуют подписанный manifest и совпадение SHA-256.</string>
     <string name="dns_filter_status_never">Никогда</string>
