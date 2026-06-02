@@ -863,9 +863,16 @@ internal class ReflectiveLibboxRuntime(
                     includePackages = includePackages,
                     excludePackages = emptyList(),
                 )
-                addPackages(
-                    packages = includePackages,
-                    onPackage = { builder.addAllowedApplication(it) },
+                val packageSplitCounts =
+                    addPackages(
+                        packages = includePackages,
+                        onPackage = { builder.addAllowedApplication(it) },
+                    )
+                validatePackageSplitApplied(
+                    mode = "include",
+                    requestedCount = includePackages.size,
+                    counts = packageSplitCounts,
+                    context = host.runtimeContext,
                 )
             } else {
                 val excludePackages = reflection.collectStrings(reflection.call(tunOptions, "getExcludePackage"))
@@ -874,9 +881,16 @@ internal class ReflectiveLibboxRuntime(
                     includePackages = emptyList(),
                     excludePackages = excludePackages,
                 )
-                addPackages(
-                    packages = excludePackages,
-                    onPackage = { builder.addDisallowedApplication(it) },
+                val packageSplitCounts =
+                    addPackages(
+                        packages = excludePackages,
+                        onPackage = { builder.addDisallowedApplication(it) },
+                    )
+                validatePackageSplitApplied(
+                    mode = "exclude",
+                    requestedCount = excludePackages.size,
+                    counts = packageSplitCounts,
+                    context = host.runtimeContext,
                 )
             }
         }
@@ -1051,13 +1065,19 @@ internal class ReflectiveLibboxRuntime(
     private fun addPackages(
         packages: Iterable<String>,
         onPackage: (String) -> Unit,
-    ) {
+    ): VpnPackageSplitApplyCounts {
+        var appliedCount = 0
+        var skippedCount = 0
         packages.forEach { packageName ->
             runCatching { onPackage(packageName) }
-                .onFailure {
-                    if (it !is PackageManager.NameNotFoundException) {
-                        throw it
+                .onSuccess {
+                    appliedCount += 1
+                }
+                .onFailure { error ->
+                    if (error !is PackageManager.NameNotFoundException) {
+                        throw error
                     }
+                    skippedCount += 1
                     diagnosticsLogger.recordStructured(
                         "split",
                         "VPN package skipped",
@@ -1066,6 +1086,28 @@ internal class ReflectiveLibboxRuntime(
                     )
                 }
         }
+        return VpnPackageSplitApplyCounts(appliedCount = appliedCount, skippedCount = skippedCount)
+    }
+
+    private fun validatePackageSplitApplied(
+        mode: String,
+        requestedCount: Int,
+        counts: VpnPackageSplitApplyCounts,
+        context: Context,
+    ) {
+        if (!shouldFailClosedVpnPackageSplit(requestedCount, counts)) {
+            return
+        }
+        diagnosticsLogger.recordStructured(
+            "split",
+            "VPN app split rejected",
+            "mode=$mode",
+            "requested_count=$requestedCount",
+            "applied_count=${counts.appliedCount}",
+            "skipped_count=${counts.skippedCount}",
+            "reason=package_not_installed",
+        )
+        error(context.getString(R.string.error_vpn_package_split_unavailable))
     }
 
     private fun recordPackageSplitDiagnostics(
@@ -1526,6 +1568,16 @@ private fun Iterable<String>.stablePackageHash(): Int =
         .sorted()
         .joinToString(separator = "|")
         .hashCode()
+
+internal data class VpnPackageSplitApplyCounts(
+    val appliedCount: Int,
+    val skippedCount: Int,
+)
+
+internal fun shouldFailClosedVpnPackageSplit(
+    requestedCount: Int,
+    counts: VpnPackageSplitApplyCounts,
+): Boolean = requestedCount > 0 && (counts.skippedCount > 0 || counts.appliedCount < requestedCount)
 
 private val libboxDiagnosticThrottleLock = Any()
 private val libboxDiagnosticThrottleAt = LinkedHashMap<String, Long>()

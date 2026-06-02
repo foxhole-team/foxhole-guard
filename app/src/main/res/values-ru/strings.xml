@@ -144,6 +144,7 @@
     <string name="error_runtime_missing">В этой сборке пока не подключен мост sing-box</string>
     <string name="error_runtime_start_timeout">Служба подключения не завершила запуск. Проверьте сеть и попробуйте снова</string>
     <string name="error_runtime_stopped">Служба VPN неожиданно остановилась</string>
+    <string name="error_vpn_package_split_unavailable">Одно или несколько выбранных приложений больше не установлены. Обновите список маршрутизации приложений и подключитесь снова</string>
     <string name="error_route_excludes_android_version">Исключения маршрутов требуют Android 13 или новее. Этот  VPN профиль нельзя безопасно запустить на этом устройстве</string>
     <string name="error_route_excludes_too_many">В VPN профиле слишком много исключений маршрутов (%1$d; лимит Android - %2$d). Уменьшите набор маршрутов и попробуйте снова</string>
     <string name="error_tcp_runtime_readiness_failed">TCP-цель VPN недоступна в текущей сети. Попробуйте еще раз или выберите другой протокол.</string>
