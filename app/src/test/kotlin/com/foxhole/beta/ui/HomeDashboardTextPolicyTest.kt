@@ -233,6 +233,34 @@ class HomeDashboardTextPolicyTest {
     }
 
     @Test
+    fun `network detail skeletons unresolved location rows independently`() {
+        val partialIpInfo =
+            IpInfo(
+                ip = "203.0.113.7",
+                countryCode = null,
+                countryName = null,
+                city = "Amsterdam",
+                isp = "Example ISP",
+                fetchedAt = 10_000L,
+            )
+        val loadingPolicy = homeNetworkDetailLoadingPolicy(refreshLoading = false, geoRowsLoading = true)
+        val settledPolicy = homeNetworkDetailLoadingPolicy(refreshLoading = false, geoRowsLoading = false)
+
+        assertEquals(
+            HomeNetworkDetailValue(text = "", loading = true),
+            homeNetworkDetailValue(formatCountryLineOrNull(partialIpInfo), loading = loadingPolicy.country),
+        )
+        assertEquals(
+            HomeNetworkDetailValue(text = "Amsterdam", loading = false),
+            homeNetworkDetailValue(buildCityLineOrNull(partialIpInfo), loading = loadingPolicy.city),
+        )
+        assertEquals(
+            HomeNetworkDetailValue(text = "-", loading = false),
+            homeNetworkDetailValue(formatCountryLineOrNull(partialIpInfo), loading = settledPolicy.country),
+        )
+    }
+
+    @Test
     fun `network card uses full skeleton only before any ip info is available`() {
         assertTrue(shouldShowHomeNetworkFullLoading(visibleIpInfo = null, showIpInfoLoading = true))
         assertFalse(shouldShowHomeNetworkFullLoading(visibleIpInfo = null, showIpInfoLoading = false))

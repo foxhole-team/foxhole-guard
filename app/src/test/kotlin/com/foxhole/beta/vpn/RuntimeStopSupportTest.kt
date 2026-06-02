@@ -129,6 +129,18 @@ class RuntimeStopSupportTest {
         }
 
     @Test
+    fun `native start records phase timings`() =
+        runBlocking {
+            val fixture = runtimeFixture()
+
+            fixture.runtime.start(testSession(), FakeRuntimeHost()).getOrThrow()
+
+            assertTrue(fixture.diagnostics.contains("native_start_phase_begin"))
+            assertTrue(fixture.diagnostics.contains("phase=start_or_reload_service"))
+            assertTrue(fixture.diagnostics.contains("native_start_phase_end"))
+        }
+
+    @Test
     fun `force kill while runtime lock is busy returns detached close and closed tun`() =
         runBlocking {
             val fixture = runtimeFixture()

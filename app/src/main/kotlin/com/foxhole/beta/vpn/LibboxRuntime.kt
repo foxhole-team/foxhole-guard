@@ -225,48 +225,67 @@ internal class ReflectiveLibboxRuntime(
                 cleanupUnresolvedFailure("start_replace_stop")?.let { throw it }
                 ensureRuntimeGenerationCurrent(generation)
                 markNativeState(RuntimeState.STARTING, generation)
-                reflection.setupIfNeeded()
+                recordNativeStartPhase("setup_if_needed") {
+                    reflection.setupIfNeeded()
+                }
                 ensureRuntimeGenerationCurrent(generation)
 
-                defaultNetworkMonitor.start()
+                recordNativeStartPhase("default_network_monitor_start") {
+                    defaultNetworkMonitor.start()
+                }
                 currentHost = host
                 currentConfig = session.configJson
                 diagnosticsLogger.record("runtime", sanitizedConfigFingerprint(session.configJson))
-                val platform = reflection.platformProxy(host, defaultNetworkMonitor, ::openTun)
+                val platform =
+                    recordNativeStartPhase("platform_proxy") {
+                        reflection.platformProxy(host, defaultNetworkMonitor, ::openTun)
+                    }
                 val handler =
-                    reflection.commandServerHandlerProxy(
-                        onReload = {
-                            withRunningServerIfIdle("command_server_reload") { server ->
-                                currentConfig?.let { config ->
-                                    reflection.startOrReloadService(server, config)
-                                }
-                            }
-                        },
-                        onStop = {
-                            diagnosticsLogger.record("libbox", "service stop requested")
-                            currentHost?.stopRuntimeService()
-                        },
-                        onDebug = { message ->
-                            message
-                                .trim()
-                                .takeIf(String::isNotBlank)
-                                ?.let {
-                                    if (shouldRecordDnsRuntimeStats(it)) {
-                                        DnsRuntimeStats.recordLogMessage(it)
+                    recordNativeStartPhase("command_server_handler_proxy") {
+                        reflection.commandServerHandlerProxy(
+                            onReload = {
+                                withRunningServerIfIdle("command_server_reload") { server ->
+                                    currentConfig?.let { config ->
+                                        reflection.startOrReloadService(server, config)
                                     }
-                                    recordLibboxDebugMessage(diagnosticsLogger, it)
                                 }
-                        },
-                    )
-                newServer = reflection.newCommandServer(handler, platform)
+                            },
+                            onStop = {
+                                diagnosticsLogger.record("libbox", "service stop requested")
+                                currentHost?.stopRuntimeService()
+                            },
+                            onDebug = { message ->
+                                message
+                                    .trim()
+                                    .takeIf(String::isNotBlank)
+                                    ?.let {
+                                        if (shouldRecordDnsRuntimeStats(it)) {
+                                            DnsRuntimeStats.recordLogMessage(it)
+                                        }
+                                        recordLibboxDebugMessage(diagnosticsLogger, it)
+                                    }
+                            },
+                        )
+                    }
+                val commandServer =
+                    recordNativeStartPhase("new_command_server") {
+                        reflection.newCommandServer(handler, platform)
+                    }
+                newServer = commandServer
                 ensureRuntimeGenerationCurrent(generation)
-                reflection.startServer(newServer)
+                recordNativeStartPhase("start_server") {
+                    reflection.startServer(commandServer)
+                }
                 ensureRuntimeGenerationCurrent(generation)
-                reflection.checkConfig(newServer, session.configJson)
+                recordNativeStartPhase("check_config") {
+                    reflection.checkConfig(commandServer, session.configJson)
+                }
                 ensureRuntimeGenerationCurrent(generation)
-                reflection.startOrReloadService(newServer, session.configJson)
+                recordNativeStartPhase("start_or_reload_service") {
+                    reflection.startOrReloadService(commandServer, session.configJson)
+                }
                 ensureRuntimeGenerationCurrent(generation)
-                commandServerRef.set(newServer)
+                commandServerRef.set(commandServer)
                 newServer = null
                 markNativeState(RuntimeState.RUNNING, generation)
                 diagnosticsLogger.record("libbox", "runtime started")
@@ -284,6 +303,37 @@ internal class ReflectiveLibboxRuntime(
             diagnosticsLogger.record("runtime", "start failed: ${describeVpnRuntimeFailure(normalized)}")
             logRuntimeFailure("libbox start failed", normalized)
             Result.failure(normalized)
+        }
+    }
+
+    private inline fun <T> recordNativeStartPhase(
+        phase: String,
+        block: () -> T,
+    ): T {
+        val startedAt = elapsedRealtime()
+        diagnosticsLogger.recordStructured(
+            "runtime",
+            "native_start_phase_begin",
+            "phase=$phase",
+        )
+        return try {
+            block().also {
+                diagnosticsLogger.recordStructured(
+                    "runtime",
+                    "native_start_phase_end",
+                    "phase=$phase",
+                    "elapsed_ms=${elapsedRealtime() - startedAt}",
+                )
+            }
+        } catch (error: Throwable) {
+            diagnosticsLogger.recordStructured(
+                "runtime",
+                "native_start_phase_failed",
+                "phase=$phase",
+                "elapsed_ms=${elapsedRealtime() - startedAt}",
+                "error=${describeVpnRuntimeFailure(unwrapVpnRuntimeFailure(error))}",
+            )
+            throw error
         }
     }
 
