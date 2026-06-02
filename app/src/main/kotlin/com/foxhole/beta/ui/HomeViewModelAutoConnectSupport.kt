@@ -1769,12 +1769,12 @@ internal fun HomeViewModel.scheduleActiveProfileLatencyRefreshInternal(
             setDashboardConnectionMetricsLoading(false)
             return
         }
-    if (shouldSkipSpeedTestsOnCurrentNetwork()) {
-        profileLatencyRefreshJob?.cancel()
-        profileLatencyRefreshJob = null
-        setDashboardConnectionMetricsLoading(false)
-        container.diagnosticsLogger.record("latency", "dashboard speed tests skipped: cellular or metered network")
-        return
+    val skipRecurringLatencyRefreshes = shouldSkipSpeedTestsOnCurrentNetwork()
+    if (skipRecurringLatencyRefreshes) {
+        container.diagnosticsLogger.record(
+            "latency",
+            "dashboard recurring latency refresh limited: cellular or metered network",
+        )
     }
     val selectedProtocolHint =
         activeProfile.protocolOptions
@@ -1855,6 +1855,13 @@ internal fun HomeViewModel.scheduleActiveProfileLatencyRefreshInternal(
                         )
                         container.diagnosticsLogger.record("latency", "dashboard latency unavailable: $unavailableReason")
                     }
+                    if (!shouldContinueDashboardLatencyRefreshAfterInitialSample(skipRecurringLatencyRefreshes)) {
+                        container.diagnosticsLogger.record(
+                            "latency",
+                            "dashboard recurring latency refresh skipped after initial sample: cellular or metered network",
+                        )
+                        return@launch
+                    }
                 }
             } finally {
                 clearDashboardMetricsLoadingAfterInitialSample(waitingForInitialSample)
@@ -1862,6 +1869,9 @@ internal fun HomeViewModel.scheduleActiveProfileLatencyRefreshInternal(
             }
         }
 }
+
+internal fun shouldContinueDashboardLatencyRefreshAfterInitialSample(skipSpeedTestsOnCurrentNetwork: Boolean): Boolean =
+    !skipSpeedTestsOnCurrentNetwork
 
 private suspend fun HomeViewModel.measureConnectedDashboardPublicLatency(): Result<Long> =
     runCatchingUnlessCancelled {

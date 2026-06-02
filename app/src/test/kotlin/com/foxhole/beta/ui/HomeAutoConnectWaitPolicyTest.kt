@@ -246,6 +246,12 @@ class HomeAutoConnectWaitPolicyTest {
     }
 
     @Test
+    fun `cellular speed-test guard keeps first dashboard ping and stops recurring refreshes`() {
+        assertTrue(shouldContinueDashboardLatencyRefreshAfterInitialSample(skipSpeedTestsOnCurrentNetwork = false))
+        assertFalse(shouldContinueDashboardLatencyRefreshAfterInitialSample(skipSpeedTestsOnCurrentNetwork = true))
+    }
+
+    @Test
     fun `connected dashboard ping uses public latency instead of vpn server target`() {
         val source =
             listOf(

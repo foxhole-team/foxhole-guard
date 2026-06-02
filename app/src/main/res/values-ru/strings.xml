@@ -1029,7 +1029,7 @@
     <string name="network_rules_skip_subscription_refresh_mobile_title">Не обновлять подписки через мобильную сеть</string>
     <string name="network_rules_skip_subscription_refresh_mobile_summary">Плановое обновление подписок ждёт Wi-Fi или безлимитную сеть.</string>
     <string name="network_rules_skip_speed_tests_mobile_title">Не делать тест скорости через мобильную сеть</string>
-    <string name="network_rules_skip_speed_tests_mobile_summary">Ручные и фоновые замеры задержки пропускаются в мобильной или лимитной сети.</string>
+    <string name="network_rules_skip_speed_tests_mobile_summary">Первый пинг туннеля в дашборде всё равно выполняется; повторные фоновые замеры задержки пропускаются в мобильной или лимитной сети.</string>
     <string name="network_rules_wifi_profile_title">Использовать другой профиль для Wi-Fi</string>
     <string name="network_rules_wifi_profile_summary">При нажатии Старт в Wi-Fi сети Foxhole подключит выбранный Wi-Fi-профиль.</string>
     <string name="network_rules_wifi_profile_summary_empty">Сначала импортируйте ещё один профиль, чтобы выбрать отдельный профиль для Wi-Fi.</string>
