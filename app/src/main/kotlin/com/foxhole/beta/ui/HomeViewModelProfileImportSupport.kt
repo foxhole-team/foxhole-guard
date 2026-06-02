@@ -36,6 +36,7 @@ internal fun HomeViewModel.importProfileRawInternal(value: String) {
 }
 
 internal fun HomeViewModel.importRawInternal(value: String) {
+    profileImportInProgressMutable.value = true
     viewModelScope.launch {
         importRawWithInsecureTlsDecision(
             value = value,
@@ -58,6 +59,7 @@ internal fun HomeViewModel.confirmInsecureTlsImportInternal(excludeInsecureTlsOp
                 excludeInsecureTlsOptions = excludeInsecureTlsOptions,
             )
         } else {
+            profileImportInProgressMutable.value = true
             importRawWithInsecureTlsDecision(
                 value = pending.rawInput,
                 allowInsecureTlsForProfile = !excludeInsecureTlsOptions,

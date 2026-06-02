@@ -352,6 +352,10 @@ class HomeDashboardProtocolPresentationTest {
         assertFalse(importEntryBlock.contains("rawInputInsecureTlsWarning"))
         assertTrue(importEntryBlock.contains("precheckInsecureTlsWarning = true"))
         assertTrue(
+            importEntryBlock.indexOf("profileImportInProgressMutable.value = true") <
+                importEntryBlock.indexOf("viewModelScope.launch"),
+        )
+        assertTrue(
             decisionBlock.indexOf("profileImportInProgressMutable.value = true") <
                 decisionBlock.indexOf("rawInputInsecureTlsWarning"),
         )
