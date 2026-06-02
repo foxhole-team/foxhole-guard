@@ -15,10 +15,16 @@ import com.foxhole.beta.MainActivity
 import com.foxhole.beta.core.diagnostics.DiagnosticsLogger
 import com.foxhole.beta.core.model.ConnectionSnapshot
 import com.foxhole.beta.core.model.ConnectionState
+import com.foxhole.beta.core.model.DnsSettings
 import com.foxhole.beta.core.model.Profile
+import com.foxhole.beta.core.model.dnsRuleSetFilteringEnabled
+import com.foxhole.beta.ui.HomeViewModel
+import java.io.File
 import java.io.FileInputStream
 import java.util.regex.Pattern
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeoutOrNull
 import org.junit.Assert.assertEquals
@@ -59,6 +65,193 @@ class VpnRuntimeSmokeTest {
                 assertDeviceDnsResolution(phase = "reconnect")
                 assertVpnDnsConfigured(context, phase = "reconnect")
             } finally {
+                disconnectAndWait(context)
+            }
+        }
+
+    @Test
+    fun firewallToggleWhileProfileVpnActiveDoesNotSwitchRuntimeOrBreakDns() =
+        runBlocking {
+            val context = requireLiveVpnSmokeContext()
+            val container = context.appGraph
+            val profile = prepareLiveVpnSmoke(context)
+            val blockedPackage = firstInstalledPackageExcept(context.packageName)
+
+            try {
+                val connected = connectAndAssertReady(context, profile.id, phase = "before firewall toggle")
+                assertEquals("smoke profile was not the active runtime before firewall toggle", profile.id, connected.profileId)
+
+                container.diagnosticsLogger.clear()
+                container.settingsRepository.updateNetworkActivityLogging(true)
+                container.settingsRepository.updateNetworkActivityPersistentLogging(true)
+                container.settingsRepository.updateBlockedPackages(listOf(blockedPackage))
+                container.settingsRepository.updateBlockAppsAlways(true)
+                container.settingsRepository.updateFirewallEnabled(true)
+                container.connectionController.syncLocalGuard()
+
+                val afterEnable =
+                    waitForCondition(context, timeoutMs = 5_000L) {
+                        container.diagnosticsLogger.entries.value.any { entry ->
+                            entry.tag == "connection" &&
+                                entry.message.contains("local guard sync deferred: active profile runtime")
+                        }
+                    }
+                assertTrue(
+                    "firewall enable did not record active-profile local guard deferral. diagnostics=${diagnosticSummary(container.diagnosticsLogger)}",
+                    container.diagnosticsLogger.entries.value.any { entry ->
+                        entry.tag == "connection" &&
+                            entry.message.contains("local guard sync deferred: active profile runtime")
+                    },
+                )
+                assertEquals(
+                    "firewall enable switched away from active VPN profile. diagnostics=${diagnosticSummary(container.diagnosticsLogger)}",
+                    profile.id,
+                    afterEnable.profileId,
+                )
+                assertEquals(
+                    "firewall enable changed active VPN state. diagnostics=${diagnosticSummary(container.diagnosticsLogger)}",
+                    ConnectionState.CONNECTED,
+                    afterEnable.state,
+                )
+                assertDeviceDnsResolution(phase = "after firewall enable on active VPN")
+                assertVpnDnsConfigured(context, phase = "after firewall enable on active VPN")
+
+                container.settingsRepository.updateFirewallEnabled(false)
+                container.settingsRepository.updateNetworkActivityLogging(false)
+                container.settingsRepository.updateNetworkActivityPersistentLogging(false)
+                container.settingsRepository.updateBlockedPackages(emptyList())
+                container.settingsRepository.updateBlockAppsAlways(false)
+                container.connectionController.syncLocalGuard()
+
+                val afterDisable =
+                    waitForCondition(context, timeoutMs = 5_000L) {
+                        container.connectionController.snapshot.value.state == ConnectionState.CONNECTED &&
+                            container.connectionController.snapshot.value.profileId == profile.id
+                    }
+                assertEquals(
+                    "firewall disable stopped or replaced active VPN profile. diagnostics=${diagnosticSummary(container.diagnosticsLogger)}",
+                    profile.id,
+                    afterDisable.profileId,
+                )
+                assertEquals(ConnectionState.CONNECTED, afterDisable.state)
+                assertDeviceDnsResolution(phase = "after firewall disable on active VPN")
+                assertVpnDnsConfigured(context, phase = "after firewall disable on active VPN")
+            } finally {
+                container.settingsRepository.updateFirewallEnabled(false)
+                container.settingsRepository.updateNetworkActivityLogging(false)
+                container.settingsRepository.updateNetworkActivityPersistentLogging(false)
+                container.settingsRepository.updateBlockedPackages(emptyList())
+                container.settingsRepository.updateBlockAppsAlways(false)
+                disconnectAndWait(context)
+            }
+        }
+
+    @Test
+    fun dnsFilterEnablePreflightsVerifiedRuleSetAndKeepsVpnDnsWorking() =
+        runBlocking {
+            val context = requireLiveVpnSmokeContext()
+            val container = context.appGraph
+            val profile = prepareLiveVpnSmoke(context)
+            val viewModel = HomeViewModel(context)
+
+            try {
+                connectAndAssertReady(context, profile.id, phase = "before dns filter enable")
+                File(context.filesDir, DNS_RULE_SET_DIR).deleteRecursively()
+                container.diagnosticsLogger.clear()
+
+                viewModel.onDnsSettingsChanged(
+                    DnsSettings(
+                        filteringEnabled = true,
+                        blockAds = true,
+                        blockTrackers = true,
+                        blockAppTelemetry = true,
+                        blockMaliciousDomains = true,
+                        autoUpdateFilters = false,
+                    ),
+                )
+
+                val afterDnsEnable =
+                    waitForCondition(context, timeoutMs = 60_000L) {
+                        val dns = container.settingsRepository.current().dns
+                        val verifiedRuleSetReady =
+                            runCatching { container.dnsFilterAssetInstaller.prepareVerifiedOrNull() != null }
+                                .getOrDefault(false)
+                        dns.dnsRuleSetFilteringEnabled() &&
+                            verifiedRuleSetReady &&
+                            container.connectionController.snapshot.value.state == ConnectionState.CONNECTED &&
+                            container.connectionController.snapshot.value.profileId == profile.id
+                    }
+
+                val dns = container.settingsRepository.current().dns
+                assertTrue(
+                    "DNS filter was applied without enabled rule-set settings. dns=$dns diagnostics=${diagnosticSummary(container.diagnosticsLogger)}",
+                    dns.dnsRuleSetFilteringEnabled(),
+                )
+                assertTrue(
+                    "verified DNS rule set was not prepared before runtime DNS use. diagnostics=${diagnosticSummary(container.diagnosticsLogger)}",
+                    container.dnsFilterAssetInstaller.prepareVerifiedOrNull() != null,
+                )
+                assertEquals(
+                    "DNS filter enable lost the active VPN profile. diagnostics=${diagnosticSummary(container.diagnosticsLogger)}",
+                    profile.id,
+                    afterDnsEnable.profileId,
+                )
+                assertEquals(ConnectionState.CONNECTED, afterDnsEnable.state)
+                assertFalse(
+                    "DNS preflight reported failure. diagnostics=${diagnosticSummary(container.diagnosticsLogger)}",
+                    diagnosticSummary(container.diagnosticsLogger).contains("filter preflight failed"),
+                )
+                assertDeviceDnsResolution(phase = "after dns filter enable")
+                assertVpnDnsConfigured(context, phase = "after dns filter enable")
+            } finally {
+                container.settingsRepository.updateDnsSettings(DnsSettings())
+                disconnectAndWait(context)
+            }
+        }
+
+    @Test
+    fun trafficMapShowsActiveDestinationsAfterTunnelTcpTraffic() =
+        runBlocking {
+            val context = requireLiveVpnSmokeContext()
+            val container = context.appGraph
+            val profile = prepareLiveVpnSmoke(context)
+            val viewModel = HomeViewModel(context)
+            var latestTrafficMapState = viewModel.trafficMapUiState.value
+            val trafficMapJob =
+                launch {
+                    viewModel.trafficMapUiState.collect { state ->
+                        latestTrafficMapState = state
+                    }
+                }
+
+            try {
+                container.settingsRepository.updateTrafficMapEnabled(true)
+                connectAndAssertReady(context, profile.id, phase = "before traffic map probe")
+                assertTrue(
+                    "traffic map did not become available for active VPN profile",
+                    waitForCondition(context, timeoutMs = 10_000L) {
+                        latestTrafficMapState.isAvailable
+                    }.let { latestTrafficMapState.isAvailable },
+                )
+
+                repeat(TRAFFIC_MAP_TCP_PROBE_ATTEMPTS) {
+                    shell(TRAFFIC_MAP_TCP_PROBE_COMMAND)
+                    delay(TRAFFIC_MAP_TCP_PROBE_INTERVAL_MS)
+                }
+
+                waitForCondition(context, timeoutMs = 45_000L) {
+                    latestTrafficMapState.destinations.isNotEmpty()
+                }
+                assertTrue(
+                    "traffic map did not show active destinations after TCP traffic. state=$latestTrafficMapState diagnostics=${diagnosticSummary(container.diagnosticsLogger)}",
+                    latestTrafficMapState.destinations.isNotEmpty(),
+                )
+                assertTrue(
+                    "traffic map destinations did not include live connection counts. destinations=${latestTrafficMapState.destinations}",
+                    latestTrafficMapState.destinations.any { point -> point.connections > 0 && point.bytes > 0L },
+                )
+            } finally {
+                trafficMapJob.cancel()
                 disconnectAndWait(context)
             }
         }
@@ -130,6 +323,7 @@ class VpnRuntimeSmokeTest {
                 rawInput = LIVE_SMOKE_DIRECT_PROFILE,
                 preferredName = "Live Smoke Direct",
             )
+        container.profileRepository.setActiveProfile(activeProfile.id)
         if (VpnService.prepare(context) != null) {
             assumeTrue(
                 "device smoke requires pre-granted Android VPN consent or foxhole.requestVpnPermission=1",
@@ -198,7 +392,7 @@ class VpnRuntimeSmokeTest {
     private suspend fun waitForCondition(
         context: FoxholeApplication,
         timeoutMs: Long,
-        predicate: () -> Boolean,
+        predicate: suspend () -> Boolean,
     ): ConnectionSnapshot {
         val container = context.appGraph
         val deadline = System.currentTimeMillis() + timeoutMs
@@ -300,6 +494,13 @@ class VpnRuntimeSmokeTest {
         )
     }
 
+    private fun firstInstalledPackageExcept(packageName: String): String =
+        shell("cmd package list packages")
+            .lineSequence()
+            .map { line -> line.removePrefix("package:").trim() }
+            .firstOrNull { candidate -> candidate.isNotBlank() && candidate != packageName }
+            ?: "com.android.settings"
+
     private fun shell(command: String): String {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         instrumentation.uiAutomation.executeShellCommand(command).use { descriptor ->
@@ -357,6 +558,11 @@ class VpnRuntimeSmokeTest {
         private const val VPN_PERMISSION_TIMEOUT_MS = 45_000L
         private const val VPN_PERMISSION_POLL_MS = 500L
         private const val VPN_PERMISSION_DIALOG_WAIT_MS = 1_000L
+        private const val DNS_RULE_SET_DIR = "dns-rule-sets"
+        private const val TRAFFIC_MAP_TCP_PROBE_ATTEMPTS = 4
+        private const val TRAFFIC_MAP_TCP_PROBE_INTERVAL_MS = 1_000L
+        private const val TRAFFIC_MAP_TCP_PROBE_COMMAND =
+            "sh -c 'printf \"HEAD / HTTP/1.0\\r\\nHost: 1.1.1.1\\r\\n\\r\\n\" | nc -w 5 1.1.1.1 80 >/dev/null 2>&1'"
         private val LIVE_SMOKE_DIRECT_PROFILE =
             """
             {

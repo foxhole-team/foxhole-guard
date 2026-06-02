@@ -31,6 +31,8 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import okhttp3.OkHttpClient
@@ -103,6 +105,7 @@ class ProfileRepository(
     )
 
     private val dao by lazy(LazyThreadSafetyMode.SYNCHRONIZED) { database.profileDao() }
+    private val secretMutationMutex = Mutex()
     private val subscriptionFetchUseCase = SubscriptionFetchUseCase(httpClient)
     private val sessionFactory by lazy {
         ProfileSessionFactory(
@@ -296,7 +299,7 @@ class ProfileRepository(
                     ),
             )
         val id =
-            executeSecretFirstMutation(
+            executeSerializedSecretFirstMutation(
                 secretStore = secretStore,
                 stagedWrites = listOf(stagedSecretWrite),
                 onCleanupFailure = ::recordSecretCleanupFailure,
@@ -428,7 +431,7 @@ class ProfileRepository(
                 )
             }
         val appliedProfiles =
-            executeSecretFirstMutation(
+            executeSerializedSecretFirstMutation(
                 secretStore = secretStore,
                 stagedWrites = preparedProfiles.map(PreparedLocalImportProfile::stagedSecretWrite),
                 onCleanupFailure = ::recordSecretCleanupFailure,
@@ -478,13 +481,32 @@ class ProfileRepository(
     }
 
     suspend fun cleanupOrphanProfileSecrets(): Int {
-        val activeSecretRefs = dao.getAllProfiles().map(ProfileEntity::secretRef).toSet()
-        val deletedCount = secretStore.deleteOrphans(activeSecretRefs)
-        if (deletedCount > 0) {
-            diagnosticsLogger.record("profile", "orphan profile secret cleanup removed $deletedCount entries")
+        return secretMutationMutex.withLock {
+            val activeSecretRefs = dao.getAllProfiles().map(ProfileEntity::secretRef).toSet()
+            val deletedCount = secretStore.deleteOrphans(activeSecretRefs)
+            if (deletedCount > 0) {
+                diagnosticsLogger.record("profile", "orphan profile secret cleanup removed $deletedCount entries")
+            }
+            deletedCount
         }
-        return deletedCount
     }
+
+    private suspend fun <T> executeSerializedSecretFirstMutation(
+        secretStore: ProfileSecretStore,
+        stagedWrites: List<StagedProfileSecretWrite>,
+        cleanupSecretRefsAfterSuccess: List<String> = emptyList(),
+        onCleanupFailure: (secretRef: String, error: Throwable) -> Unit = { _, _ -> },
+        mutation: suspend () -> T,
+    ): T =
+        secretMutationMutex.withLock {
+            executeSecretFirstMutation(
+                secretStore = secretStore,
+                stagedWrites = stagedWrites,
+                cleanupSecretRefsAfterSuccess = cleanupSecretRefsAfterSuccess,
+                onCleanupFailure = onCleanupFailure,
+                mutation = mutation,
+            )
+        }
 
     suspend fun setActiveProfile(profileId: Long) {
         database.withTransaction {
@@ -943,7 +965,7 @@ class ProfileRepository(
                 )
             }
         val committedRefresh =
-            executeSecretFirstMutation(
+            executeSerializedSecretFirstMutation(
                 secretStore = secretStore,
                 stagedWrites = preparedProfiles.map(PreparedSubscriptionRefreshProfile::stagedSecretWrite),
                 cleanupSecretRefsAfterSuccess =
