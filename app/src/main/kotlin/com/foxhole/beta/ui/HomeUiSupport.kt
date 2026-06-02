@@ -835,13 +835,21 @@ private fun ConnectionSnapshot.isDashboardRouteTrafficMode(): Boolean =
 
 private fun HomeRouteUiState.dashboardVisibleIpInfo(visibleIpInfo: IpInfo?): IpInfo? {
     val candidate =
-        if (connection.profileId == FoxholeVpnService.TOR_ONLY_PROFILE_ID) {
-            torIpInfo
-        } else {
-            visibleIpInfo
+        when {
+            connection.profileId == FoxholeVpnService.TOR_ONLY_PROFILE_ID -> torIpInfo
+            shouldPreferTorRouteIpInfoOnDashboard() -> torIpInfo
+            else -> visibleIpInfo
         }
     return candidate?.takeIf { shouldKeepDashboardIpInfo(it) }
 }
+
+private fun HomeRouteUiState.shouldPreferTorRouteIpInfoOnDashboard(): Boolean =
+    settings.privacyRoute.enabled &&
+        torIpInfo?.hasVisiblePublicAddress() == true &&
+        (
+            torOperation.active ||
+                connection.state in ACTIVE_CONNECTION_STATES
+            )
 
 private fun HomeRouteUiState.shouldPinVpnIpDuringTorOperation(): Boolean =
     torOperation.active &&

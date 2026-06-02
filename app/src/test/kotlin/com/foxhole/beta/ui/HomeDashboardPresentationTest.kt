@@ -979,6 +979,59 @@ class HomeDashboardPresentationTest {
     }
 
     @Test
+    fun `network model uses tor route ip after tor over vpn has exit address`() {
+        val vpnIpInfo =
+            IpInfo(
+                ip = "203.0.113.10",
+                countryCode = "NL",
+                countryName = "Netherlands",
+                city = "Amsterdam",
+                isp = "VPN provider",
+                fetchedAt = 5_500L,
+            )
+        val torIpInfo =
+            IpInfo(
+                ip = "185.220.101.12",
+                countryCode = "DE",
+                countryName = "Germany",
+                city = "Berlin",
+                isp = "TOR exit",
+                fetchedAt = 6_000L,
+            )
+        val model =
+            resolveHomeDashboardNetworkModel(
+                state =
+                    HomeRouteUiState(
+                        connection =
+                            ConnectionSnapshot(
+                                state = ConnectionState.CONNECTED,
+                                trafficMode = TrafficMode.TUNNEL,
+                                profileId = 1L,
+                                lastChangeAt = 5_000L,
+                            ),
+                        settings =
+                            Settings(
+                                privacyRoute =
+                                    PrivacyRouteSettings(
+                                        mode = PrivacyRouteMode.TOR_OVER_VPN,
+                                        scope = PrivacyRouteScope.ALL_APPS,
+                                    ),
+                            ),
+                        torIpInfo = torIpInfo,
+                    ),
+                visibleIpInfo = vpnIpInfo,
+                deviceInternetAvailable = true,
+            )
+
+        assertEquals(torIpInfo, model.visibleIpInfo)
+        assertEquals(R.string.home_network_connection_info_title, model.titleRes)
+        assertTrue(model.showConnectionStatus)
+        assertFalse(model.showLoading)
+        assertFalse(model.showIpInfoLoading)
+        assertFalse(model.showRefreshProgress)
+    }
+
+    @Test
     fun `connected smart metrics refresh hides stale device network data`() {
         val deviceIpInfo =
             IpInfo(
