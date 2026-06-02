@@ -942,6 +942,15 @@ private fun ConnectionSnapshot.shouldRejectTrafficMapOriginAsRouteIp(
     deviceIpInfo: IpInfo,
     routeIpInfo: IpInfo?,
 ): Boolean {
+    if (
+        state == ConnectionState.CONNECTED &&
+        trafficMode == TrafficMode.TUNNEL &&
+        profileId != FoxholeVpnService.LOCAL_GUARD_PROFILE_ID &&
+        deviceIpInfo.fetchedAt >= lastChangeAt &&
+        routeIpInfo == null
+    ) {
+        return true
+    }
     val routeIp = routeIpInfo?.let(::primaryVisibleIpOrNull) ?: return false
     val deviceIp = primaryVisibleIpOrNull(deviceIpInfo) ?: return false
     return state == ConnectionState.CONNECTED &&
