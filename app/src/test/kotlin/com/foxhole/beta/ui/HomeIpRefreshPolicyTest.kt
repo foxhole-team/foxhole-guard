@@ -164,6 +164,30 @@ class HomeIpRefreshPolicyTest {
     }
 
     @Test
+    fun `entry quick geo enrichment stays visually silent once ip is visible`() {
+        val ipOnly =
+            IpInfo(
+                ip = "203.0.113.7",
+                ipv4 = "203.0.113.7",
+                countryCode = null,
+                countryName = null,
+                city = null,
+                isp = null,
+                fetchedAt = 1_000L,
+            )
+        val noVisibleIp =
+            ipOnly.copy(
+                ip = "",
+                ipv4 = null,
+                ipv6 = null,
+            )
+
+        assertTrue(shouldShowIpInfoGeoEnrichmentLoading(ipOnly))
+        assertFalse(shouldShowIpInfoGeoEnrichmentRefreshLoading(ipOnly))
+        assertTrue(shouldShowIpInfoGeoEnrichmentRefreshLoading(noVisibleIp))
+    }
+
+    @Test
     fun `post connect refresh stays quick even with stale previous route ip`() {
         val snapshot =
             ConnectionSnapshot(

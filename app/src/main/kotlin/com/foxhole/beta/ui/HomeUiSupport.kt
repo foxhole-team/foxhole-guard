@@ -426,6 +426,10 @@ internal fun shouldShowIpInfoGeoEnrichmentLoading(info: IpInfo): Boolean =
     !info.hasDashboardLocationDetails() ||
         !info.hasDashboardProviderDetails()
 
+internal fun shouldShowIpInfoGeoEnrichmentRefreshLoading(info: IpInfo): Boolean =
+    shouldShowIpInfoGeoEnrichmentLoading(info) &&
+        primaryVisibleIpOrNull(info) == null
+
 internal fun shouldAutoRefreshIpAfterUpstreamNetworkChange(
     connectionState: ConnectionState,
     previousRevision: Long?,

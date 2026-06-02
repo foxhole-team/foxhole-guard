@@ -246,7 +246,7 @@ private fun HomeViewModel.maybeScheduleIpInfoGeoEnrichment(
         ) {
             return@launch
         }
-        val showLoading = shouldShowIpInfoGeoEnrichmentLoading(currentInfo)
+        val showLoading = shouldShowIpInfoGeoEnrichmentRefreshLoading(currentInfo)
         container.diagnosticsLogger.record(
             "ip",
             "geo enrichment started after entry_quick target=${publishedTarget.name.lowercase()} loading=$showLoading",
