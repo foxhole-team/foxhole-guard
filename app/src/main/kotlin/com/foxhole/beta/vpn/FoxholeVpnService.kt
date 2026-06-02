@@ -613,16 +613,26 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         protocolOptionIdOverride: String? = null,
         previousVpnNetworkHandle: Long? = null,
     ) {
-        val torOnlyConnect = profileId == TOR_ONLY_PROFILE_ID
-        if (profileId <= 0 && !torOnlyConnect) {
+        val resolvedProfileId =
+            resolveRuntimeConnectProfileId(
+                requestedProfileId = profileId,
+                torOnlyProfileId = TOR_ONLY_PROFILE_ID,
+            ) {
+                container.profileRepository.getActiveProfile()?.id
+            }
+        if (resolvedProfileId == null) {
             disconnect(message = getString(R.string.error_profile_missing), commandStartId = commandStartId)
             return
         }
+        if (resolvedProfileId != profileId) {
+            container.diagnosticsLogger.record("profile", "connect recovered missing service profile id")
+        }
+        val torOnlyConnect = resolvedProfileId == TOR_ONLY_PROFILE_ID
         val settings = container.settingsRepository.current()
         val trafficMode = if (torOnlyConnect) TrafficMode.TUNNEL else settings.traffic.mode
         if (trafficMode != TrafficMode.TUNNEL) {
             delegateConnectToForegroundService(
-                profileId = profileId,
+                profileId = resolvedProfileId,
                 trafficMode = trafficMode,
                 commandStartId = commandStartId,
                 protocolOptionIdOverride = protocolOptionIdOverride,
@@ -647,7 +657,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
                     container.profileRepository.getTorOnlySession(privateDnsState = privateDnsState)
                 } else {
                     container.profileRepository.getSession(
-                        profileId = profileId,
+                        profileId = resolvedProfileId,
                         protocolOptionIdOverride = protocolOptionIdOverride,
                         privateDnsState = privateDnsState,
                     )

@@ -233,9 +233,18 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
         protocolOptionIdOverride: String? = null,
         previousVpnNetworkHandle: Long? = null,
     ) {
-        if (profileId <= 0) {
+        val resolvedProfileId =
+            resolveRuntimeConnectProfileId(
+                requestedProfileId = profileId,
+            ) {
+                container.profileRepository.getActiveProfile()?.id
+            }
+        if (resolvedProfileId == null) {
             disconnect(message = getString(R.string.error_profile_missing), commandStartId = commandStartId)
             return
+        }
+        if (resolvedProfileId != profileId) {
+            container.diagnosticsLogger.record("profile", "proxy connect recovered missing service profile id")
         }
         val settings = container.settingsRepository.current()
         val trafficMode = settings.traffic.mode
@@ -244,7 +253,7 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
                 context = this,
                 mode = trafficMode,
                 action = FoxholeConnectionServiceContract.ACTION_CONNECT,
-                profileId = profileId,
+                profileId = resolvedProfileId,
                 protocolOptionId = protocolOptionIdOverride,
                 previousVpnNetworkHandle = previousVpnNetworkHandle,
             )
@@ -255,7 +264,7 @@ class FoxholeProxyService : Service(), RuntimeServiceHost {
         runtimeSupervisor.beginTransition("proxy_connect")
         FoxholeConnectionServiceContract.stopInactiveServices(context = this, activeMode = trafficMode)
         val session =
-            runCatching { container.profileRepository.getSession(profileId, protocolOptionIdOverride) }
+            runCatching { container.profileRepository.getSession(resolvedProfileId, protocolOptionIdOverride) }
                 .getOrElse {
                     fail(it.message ?: getString(R.string.error_profile_invalid), commandStartId)
                     return
