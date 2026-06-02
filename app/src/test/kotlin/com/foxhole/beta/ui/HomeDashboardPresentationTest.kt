@@ -1889,6 +1889,28 @@ class HomeDashboardPresentationTest {
     }
 
     @Test
+    fun `firewall feature confirm toggles directly even when reconnect is available`() {
+        assertFalse(
+            homeConnectionFeatureRestartAvailableForFeature(
+                feature = HomeConnectionFeature.FIREWALL,
+                restartAvailable = true,
+            ),
+        )
+        assertTrue(
+            homeConnectionFeatureRestartAvailableForFeature(
+                feature = HomeConnectionFeature.TOR,
+                restartAvailable = true,
+            ),
+        )
+        assertFalse(
+            homeConnectionFeatureRestartAvailableForFeature(
+                feature = HomeConnectionFeature.LAN_PROXY,
+                restartAvailable = false,
+            ),
+        )
+    }
+
+    @Test
     fun `tor indicator is pending until a compatible tunnel is connected`() {
         val settings =
             Settings(

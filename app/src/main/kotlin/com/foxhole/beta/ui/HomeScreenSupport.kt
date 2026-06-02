@@ -820,7 +820,7 @@ internal fun HomeConnectionFeatureDialog(
     val title = "${stringResource(indicator.titleRes)}: ${indicator.status.label}"
     val icon = homeConnectionFeatureIcon(feature)
     val restartAvailable = state.homeConnectionFeatureRestartAvailable()
-    val restartAvailableForFeature = restartAvailable && feature != HomeConnectionFeature.FIREWALL
+    val restartAvailableForFeature = homeConnectionFeatureRestartAvailableForFeature(feature, restartAvailable)
     val enabled = feature.enabledIn(state)
     val torSelectedProtocolIsUdp = feature == HomeConnectionFeature.TOR && homeTorSelectedProtocolIsUdp(state)
     val torRouteNeedsSetup = feature == HomeConnectionFeature.TOR && !enabled && homeTorRouteNeedsSetup(state)
@@ -1039,6 +1039,11 @@ private fun HomeConnectionFeature.enabledIn(state: HomeRouteUiState): Boolean =
 
 private fun homeTorRouteNeedsSetup(state: HomeRouteUiState): Boolean =
     !homeTorRouteHasRunnableScope(state)
+
+internal fun homeConnectionFeatureRestartAvailableForFeature(
+    feature: HomeConnectionFeature,
+    restartAvailable: Boolean,
+): Boolean = restartAvailable && feature != HomeConnectionFeature.FIREWALL
 
 internal fun homeTorQuickStartCanPrepareDirectRoute(state: HomeRouteUiState): Boolean =
     state.activeProfile == null && !state.hasPrimaryConnectionRuntime()
