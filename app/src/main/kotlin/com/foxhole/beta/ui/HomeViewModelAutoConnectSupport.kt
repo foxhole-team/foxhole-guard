@@ -1232,7 +1232,6 @@ internal suspend fun HomeViewModel.probeAutoConnectCandidateInternal(
         optionId = candidate.optionId,
         latencyMs = measuredLatency,
     )
-    measureAndCacheProtocolServerPing(profileId, candidate.optionId, candidate.protocolHint, networkFingerprint)
     return AutoConnectProbeResult(
         candidate = candidate,
         success = true,
@@ -1241,42 +1240,6 @@ internal suspend fun HomeViewModel.probeAutoConnectCandidateInternal(
         validatedAt = outcomeRecordedAt,
         trafficObservedAt = trafficObservedAt,
     )
-}
-
-private suspend fun HomeViewModel.measureAndCacheProtocolServerPing(
-    profileId: Long,
-    optionId: String,
-    protocolHint: ProtocolHint?,
-    networkFingerprint: String? = null,
-) {
-    if (!shouldMeasureProtocolServerPing(protocolHint)) {
-        container.diagnosticsLogger.record("latency", "server ping skipped: unsupported for udp transport")
-        return
-    }
-    runCatchingUnlessCancelled {
-        container.connectionController.measureCurrentVpnServerPing(
-            profileId = profileId,
-            protocolOptionId = optionId,
-        )
-    }.onSuccess { pingMs ->
-        cacheProtocolServerPingInternal(
-            profileId = profileId,
-            optionId = optionId,
-            pingMs = pingMs,
-        )
-        container.settingsRepository.recordSmartProfileServerPing(
-            profileId = profileId,
-            optionId = optionId,
-            serverPingMs = pingMs,
-            networkFingerprint = networkFingerprint,
-        )
-    }.onFailure { error ->
-        markProtocolServerPingUnavailableInternal(
-            profileId = profileId,
-            optionId = optionId,
-        )
-        container.diagnosticsLogger.record("latency", "server ping unavailable: ${error.message.orEmpty()}")
-    }
 }
 
 internal suspend fun HomeViewModel.measureAutoConnectCandidateLatency(): Long {
@@ -2019,9 +1982,6 @@ internal fun HomeViewModel.clearProfileLatencyRefreshInternal() {
     setDashboardConnectionMetricsLoading(false)
 }
 
-private fun shouldMeasureProtocolServerPing(protocolHint: ProtocolHint?): Boolean =
-    protocolHint?.isUdpTransport() != true
-
 private data class ActiveDashboardLatencyTarget(
     val profile: Profile,
     val optionId: String,
@@ -2183,7 +2143,7 @@ internal fun resolveAutoConnectLatencyMeasurementResult(
     warmupLatencyMs: Long,
     settledLatencyMs: Long?,
 ): Long =
-    (settledLatencyMs?.let { settled -> minOf(warmupLatencyMs, settled) } ?: warmupLatencyMs)
+    (settledLatencyMs ?: warmupLatencyMs)
         .coerceAtLeast(1L)
 
 internal fun currentTrafficObservedAt(

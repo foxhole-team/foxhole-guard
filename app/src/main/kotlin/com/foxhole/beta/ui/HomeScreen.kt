@@ -650,8 +650,8 @@ fun HomeScreen(
                                                     latencyByOptionId = dashboardProtocolLatencies,
                                                     unavailableOptionIds = dashboardDownProtocolIds,
                                                     latencyUnavailableOptionIds = dashboardUnavailableProtocolIds,
-                                                    serverPingByOptionId = state.protocolServerPingsByOptionId,
-                                                    serverPingUnavailableOptionIds = state.protocolServerPingUnavailableOptionIds,
+                                                    serverPingByOptionId = state.protocolTunnelPingsByOptionId,
+                                                    serverPingUnavailableOptionIds = state.protocolTunnelPingUnavailableOptionIds,
                                                     metricsUpdatedAtByOptionId = state.protocolMetricsUpdatedAtByOptionId,
                                                     metricsRefreshing = state.protocolMetricsRefreshing || state.autoConnect.running,
                                                     refreshingOptionId =

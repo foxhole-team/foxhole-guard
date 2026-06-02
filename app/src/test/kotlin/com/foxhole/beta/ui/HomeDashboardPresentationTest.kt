@@ -411,6 +411,24 @@ class HomeDashboardPresentationTest {
     }
 
     @Test
+    fun `dashboard smart menu receives public tunnel ping instead of provider server ping`() {
+        val source =
+            listOf(
+                java.io.File("src/main/kotlin/com/foxhole/beta/ui/HomeScreen.kt"),
+                java.io.File("app/src/main/kotlin/com/foxhole/beta/ui/HomeScreen.kt"),
+                java.io.File("../app/src/main/kotlin/com/foxhole/beta/ui/HomeScreen.kt"),
+            ).first { file -> file.isFile }.readText()
+        val smartMenuBlock =
+            source.substringAfter("SmartProfileAutoConnectMenu(")
+                .substringBefore("metricsUpdatedAtByOptionId")
+
+        assertTrue(smartMenuBlock.contains("serverPingByOptionId = state.protocolTunnelPingsByOptionId"))
+        assertTrue(smartMenuBlock.contains("serverPingUnavailableOptionIds = state.protocolTunnelPingUnavailableOptionIds"))
+        assertFalse(smartMenuBlock.contains("state.protocolServerPingsByOptionId"))
+        assertFalse(smartMenuBlock.contains("state.protocolServerPingUnavailableOptionIds"))
+    }
+
+    @Test
     fun `tor feature stays pending and reports udp when selected vpn protocol is udp`() {
         val state =
             HomeRouteUiState(

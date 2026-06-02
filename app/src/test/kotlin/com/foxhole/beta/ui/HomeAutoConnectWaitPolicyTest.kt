@@ -264,6 +264,25 @@ class HomeAutoConnectWaitPolicyTest {
     }
 
     @Test
+    fun `auto connect candidate probe does not measure provider server tcp ping`() {
+        val source =
+            listOf(
+                java.io.File("src/main/kotlin/com/foxhole/beta/ui/HomeViewModelAutoConnectSupport.kt"),
+                java.io.File("app/src/main/kotlin/com/foxhole/beta/ui/HomeViewModelAutoConnectSupport.kt"),
+                java.io.File("../app/src/main/kotlin/com/foxhole/beta/ui/HomeViewModelAutoConnectSupport.kt"),
+            ).first { file -> file.isFile }.readText()
+        val candidateProbeBlock =
+            source.substringAfter("internal suspend fun HomeViewModel.probeAutoConnectCandidateInternal")
+                .substringBefore("internal suspend fun HomeViewModel.measureAutoConnectCandidateLatency")
+
+        assertTrue(candidateProbeBlock.contains("measureAutoConnectCandidateLatency"))
+        assertTrue(candidateProbeBlock.contains("cacheProtocolLatency"))
+        assertFalse(candidateProbeBlock.contains("measureCurrentVpnServerPing"))
+        assertFalse(candidateProbeBlock.contains("recordSmartProfileServerPing"))
+        assertFalse(candidateProbeBlock.contains("cacheProtocolServerPingInternal"))
+    }
+
+    @Test
     fun `connected dashboard latency rejects timeout-shaped values`() {
         assertTrue(shouldUseConnectedDashboardLatency(1L))
         assertTrue(shouldUseConnectedDashboardLatency(999L))
@@ -285,9 +304,9 @@ class HomeAutoConnectWaitPolicyTest {
     }
 
     @Test
-    fun `auto connect keeps lower warmup latency when settled retry is slower`() {
+    fun `auto connect prefers settled latency when retry is available`() {
         assertEquals(
-            380L,
+            430L,
             resolveAutoConnectLatencyMeasurementResult(
                 warmupLatencyMs = 380L,
                 settledLatencyMs = 430L,
