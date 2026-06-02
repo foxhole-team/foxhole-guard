@@ -1,12 +1,17 @@
 package com.foxhole.beta.vpn
 
+import android.content.Intent
 import android.net.VpnService
 import android.os.Debug
 import android.util.Log
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import androidx.test.uiautomator.By
+import androidx.test.uiautomator.UiDevice
+import androidx.test.uiautomator.Until
 import com.foxhole.beta.FoxholeApplication
+import com.foxhole.beta.MainActivity
 import com.foxhole.beta.core.model.ConnectionState
 import com.foxhole.beta.core.model.StatisticsMetric
 import com.foxhole.beta.core.model.TrafficMode
@@ -18,6 +23,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Assume.assumeTrue
@@ -25,6 +31,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import java.io.FileInputStream
 import java.net.InetAddress
+import java.util.regex.Pattern
 
 @RunWith(AndroidJUnit4::class)
 class LiveLocalFirewallGuardRuntimeTest {
@@ -226,9 +233,54 @@ class LiveLocalFirewallGuardRuntimeTest {
         )
         val app = ApplicationProvider.getApplicationContext<FoxholeApplication>()
         shell("pm grant ${app.packageName} android.permission.POST_NOTIFICATIONS")
-        assumeTrue("live local firewall guard requires pre-granted Android VPN consent", VpnService.prepare(app) == null)
+        if (VpnService.prepare(app) != null) {
+            assumeTrue(
+                "live local firewall guard requires pre-granted Android VPN consent or foxhole.requestVpnPermission=1",
+                InstrumentationRegistry.getArguments().getString("foxhole.requestVpnPermission") == "1",
+            )
+            assertTrue("Android VPN consent was not approved", requestVpnPermission(app))
+        }
+        assumeTrue("live local firewall guard requires Android VPN consent", VpnService.prepare(app) == null)
         resetLocalGuardTestState(app)
         return app
+    }
+
+    private suspend fun requestVpnPermission(app: FoxholeApplication): Boolean {
+        val prepareIntent = VpnService.prepare(app) ?: return true
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val activity =
+            instrumentation.startActivitySync(
+                Intent(app, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+            )
+        instrumentation.runOnMainSync {
+            activity.startActivityForResult(prepareIntent, VPN_PERMISSION_REQUEST_CODE)
+        }
+        return withTimeoutOrNull(VPN_PERMISSION_TIMEOUT_MS) {
+            while (VpnService.prepare(app) != null) {
+                approveVpnPermissionDialogIfPresent()
+                delay(VPN_PERMISSION_POLL_MS)
+            }
+            true
+        } ?: false
+    }
+
+    private fun approveVpnPermissionDialogIfPresent() {
+        val device = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
+        val approveButton =
+            device.findObject(By.res("android:id/button1"))
+                ?: device.findObject(By.res("com.android.vpndialogs:id/confirm"))
+                ?: device.wait(
+                    Until.findObject(
+                        By.text(
+                            Pattern.compile(
+                                "^(OK|Ok|Allow|Разрешить|Да)$",
+                                Pattern.CASE_INSENSITIVE or Pattern.UNICODE_CASE,
+                            ),
+                        ),
+                    ),
+                    VPN_PERMISSION_DIALOG_WAIT_MS,
+                )
+        runCatching { approveButton?.click() }
     }
 
     private suspend fun resetLocalGuardTestState(app: FoxholeApplication) {
@@ -456,5 +508,9 @@ class LiveLocalFirewallGuardRuntimeTest {
         const val BYTES_PER_KB = 1024L
         const val LOCAL_GUARD_STRESS_PSS_DELTA_LIMIT_KB = 150L * 1024L
         const val LOCAL_GUARD_STRESS_JAVA_HEAP_DELTA_LIMIT_KB = 80L * 1024L
+        const val VPN_PERMISSION_REQUEST_CODE = 7302
+        const val VPN_PERMISSION_TIMEOUT_MS = 45_000L
+        const val VPN_PERMISSION_POLL_MS = 500L
+        const val VPN_PERMISSION_DIALOG_WAIT_MS = 1_000L
     }
 }

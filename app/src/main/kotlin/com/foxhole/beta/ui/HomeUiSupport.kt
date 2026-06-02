@@ -142,6 +142,8 @@ internal data class HomeNetworkDetailValue(
     val loading: Boolean,
 )
 
+internal const val HOME_NETWORK_GEO_ROW_PENDING_LOADING_MS = 2_000L
+
 internal data class HomeDashboardProxyModel(
     val modeOption: HomeModeOption,
     val proxySurface: HomeProxySurface?,
@@ -1496,7 +1498,7 @@ internal fun homeNetworkDetailValue(
     loading: Boolean,
 ): HomeNetworkDetailValue =
     HomeNetworkDetailValue(
-        text = value ?: "-",
+        text = value ?: if (loading) "" else "-",
         loading = loading && value == null,
     )
 
@@ -1504,6 +1506,22 @@ internal fun shouldShowHomeNetworkFullLoading(
     visibleIpInfo: IpInfo?,
     showIpInfoLoading: Boolean,
 ): Boolean = showIpInfoLoading && visibleIpInfo == null
+
+internal fun shouldShowHomeNetworkGeoRowsLoading(
+    ipInfo: IpInfo?,
+    nowMs: Long,
+): Boolean {
+    if (ipInfo == null || !shouldShowIpInfoGeoEnrichmentLoading(ipInfo)) {
+        return false
+    }
+    val ageMs = nowMs - ipInfo.fetchedAt
+    return ageMs in 0..HOME_NETWORK_GEO_ROW_PENDING_LOADING_MS
+}
+
+internal fun homeNetworkGeoRowsLoadingRemainingMs(
+    ipInfo: IpInfo,
+    nowMs: Long,
+): Long = (ipInfo.fetchedAt + HOME_NETWORK_GEO_ROW_PENDING_LOADING_MS - nowMs).coerceAtLeast(0L)
 
 @Suppress("UNUSED_PARAMETER")
 @Composable

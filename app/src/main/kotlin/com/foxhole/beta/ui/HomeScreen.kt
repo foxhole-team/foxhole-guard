@@ -911,7 +911,11 @@ fun HomeScreen(
                                                 .testTag("home_network_loading"),
                                     )
                                 } else {
-                                    val rowValueLoading = networkModel.showRefreshProgress || showNetworkIpInfoLoading
+                                    val geoRowsLoading = rememberHomeNetworkGeoRowsLoading(networkIpInfo)
+                                    val rowValueLoading =
+                                        networkModel.showRefreshProgress ||
+                                            showNetworkIpInfoLoading ||
+                                            geoRowsLoading
                                     val countryValue =
                                         homeNetworkDetailValue(
                                             value = networkIpInfo?.let(::buildCountryLineOrNull),
@@ -1729,6 +1733,32 @@ private fun dashboardCardStartupStage(card: DashboardCard): Int =
         DashboardCard.NETWORK -> 4
         DashboardCard.TRAFFIC -> DASHBOARD_STARTUP_STAGE_ALL
     }
+
+@Composable
+private fun rememberHomeNetworkGeoRowsLoading(networkIpInfo: IpInfo?): Boolean {
+    val key =
+        listOf(
+            networkIpInfo?.fetchedAt,
+            networkIpInfo?.countryCode,
+            networkIpInfo?.countryName,
+            networkIpInfo?.city,
+            networkIpInfo?.isp,
+        )
+    var nowMs by remember(key) { mutableStateOf(System.currentTimeMillis()) }
+    val loading = shouldShowHomeNetworkGeoRowsLoading(networkIpInfo, nowMs)
+    LaunchedEffect(key, loading) {
+        val info = networkIpInfo ?: return@LaunchedEffect
+        if (!loading) {
+            return@LaunchedEffect
+        }
+        val remainingMs = homeNetworkGeoRowsLoadingRemainingMs(info, System.currentTimeMillis())
+        if (remainingMs > 0L) {
+            delay(remainingMs)
+        }
+        nowMs = System.currentTimeMillis()
+    }
+    return loading
+}
 
 private const val DASHBOARD_CARD_ACTIVE_Z_INDEX = 100f
 private const val DASHBOARD_CARD_REORDER_THRESHOLD_FRACTION = 0.5f

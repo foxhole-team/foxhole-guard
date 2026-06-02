@@ -55,7 +55,7 @@ class HomeDashboardTextPolicyTest {
     @Test
     fun `network detail value skeletons missing rows only while loading`() {
         assertEquals(
-            HomeNetworkDetailValue(text = "-", loading = true),
+            HomeNetworkDetailValue(text = "", loading = true),
             homeNetworkDetailValue(value = null, loading = true),
         )
         assertEquals(
@@ -83,6 +83,40 @@ class HomeDashboardTextPolicyTest {
         assertFalse(shouldShowHomeNetworkFullLoading(partialIpInfo, showIpInfoLoading = true))
         assertTrue(homeNetworkDetailValue(formatCountryLineOrNull(partialIpInfo), loading = true).loading)
         assertTrue(homeNetworkDetailValue(buildCityLineOrNull(partialIpInfo), loading = true).loading)
+        assertEquals(
+            HomeNetworkDetailValue(text = "-", loading = false),
+            homeNetworkDetailValue(buildCityLineOrNull(partialIpInfo), loading = false),
+        )
+    }
+
+    @Test
+    fun `network card skeletons fresh missing geo rows and later falls back to dash`() {
+        val partialIpInfo =
+            IpInfo(
+                ip = "203.0.113.7",
+                countryCode = null,
+                countryName = null,
+                city = null,
+                isp = "Example ISP",
+                fetchedAt = 10_000L,
+            )
+
+        assertTrue(
+            shouldShowHomeNetworkGeoRowsLoading(
+                ipInfo = partialIpInfo,
+                nowMs = 10_000L + HOME_NETWORK_GEO_ROW_PENDING_LOADING_MS,
+            ),
+        )
+        assertFalse(
+            shouldShowHomeNetworkGeoRowsLoading(
+                ipInfo = partialIpInfo,
+                nowMs = 10_000L + HOME_NETWORK_GEO_ROW_PENDING_LOADING_MS + 1L,
+            ),
+        )
+        assertEquals(
+            HomeNetworkDetailValue(text = "", loading = true),
+            homeNetworkDetailValue(buildCityLineOrNull(partialIpInfo), loading = true),
+        )
         assertEquals(
             HomeNetworkDetailValue(text = "-", loading = false),
             homeNetworkDetailValue(buildCityLineOrNull(partialIpInfo), loading = false),
