@@ -2,12 +2,14 @@ package com.foxhole.beta.ui
 
 import com.foxhole.beta.core.model.ConnectionSnapshot
 import com.foxhole.beta.core.model.ConnectionState
+import com.foxhole.beta.core.model.ExpertSettings
 import com.foxhole.beta.core.model.PerAppRoutingMode
 import com.foxhole.beta.core.model.PrivacyRouteMode
 import com.foxhole.beta.core.model.Profile
 import com.foxhole.beta.core.model.ProfileProtocolOption
 import com.foxhole.beta.core.model.ProfileSourceType
 import com.foxhole.beta.core.model.ProtocolHint
+import com.foxhole.beta.core.model.Settings
 import com.foxhole.beta.core.model.TrafficMode
 import com.foxhole.beta.vpn.FoxholeVpnService
 import org.junit.Assert.assertEquals
@@ -260,6 +262,60 @@ class HomeReconnectPolicyTest {
                 currentMode = PerAppRoutingMode.FULL_TUNNEL,
                 nextMode = PerAppRoutingMode.INCLUDE_SELECTED_APPS,
                 activeRuntime = true,
+            ),
+        )
+    }
+
+    @Test
+    fun `local guard sync is deferred while a profile tunnel is active`() {
+        assertTrue(
+            shouldDeferLocalGuardSyncForActiveProfileRuntime(
+                ConnectionSnapshot(state = ConnectionState.CONNECTED, profileId = 42L),
+            ),
+        )
+        assertFalse(
+            shouldDeferLocalGuardSyncForActiveProfileRuntime(
+                ConnectionSnapshot(
+                    state = ConnectionState.CONNECTED,
+                    profileId = FoxholeVpnService.LOCAL_GUARD_PROFILE_ID,
+                ),
+            ),
+        )
+        assertFalse(
+            shouldDeferLocalGuardSyncForActiveProfileRuntime(
+                ConnectionSnapshot(state = ConnectionState.IDLE, profileId = 42L),
+            ),
+        )
+    }
+
+    @Test
+    fun `firewall dashboard refresh waits for active local guard runtime`() {
+        val firewallSettings = Settings(expert = ExpertSettings(firewallEnabled = true))
+
+        assertTrue(
+            shouldRefreshLocalGuardDashboardIpAfterSettingsChange(
+                snapshot =
+                    ConnectionSnapshot(
+                        state = ConnectionState.CONNECTED,
+                        profileId = FoxholeVpnService.LOCAL_GUARD_PROFILE_ID,
+                    ),
+                settings = firewallSettings,
+            ),
+        )
+        assertFalse(
+            shouldRefreshLocalGuardDashboardIpAfterSettingsChange(
+                snapshot = ConnectionSnapshot(state = ConnectionState.CONNECTED, profileId = 42L),
+                settings = firewallSettings,
+            ),
+        )
+        assertFalse(
+            shouldRefreshLocalGuardDashboardIpAfterSettingsChange(
+                snapshot =
+                    ConnectionSnapshot(
+                        state = ConnectionState.CONNECTED,
+                        profileId = FoxholeVpnService.LOCAL_GUARD_PROFILE_ID,
+                    ),
+                settings = Settings(expert = ExpertSettings(firewallEnabled = false)),
             ),
         )
     }

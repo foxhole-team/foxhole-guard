@@ -11,6 +11,7 @@ import com.foxhole.beta.core.model.AnomalyHistoryRetention
 import com.foxhole.beta.core.model.AnomalySensitivity
 import com.foxhole.beta.core.model.AppLocale
 import com.foxhole.beta.core.model.ClashApiSettings
+import com.foxhole.beta.core.model.ConnectionState
 import com.foxhole.beta.core.model.DiagnosticsRetention
 import com.foxhole.beta.core.model.DnsSettings
 import com.foxhole.beta.core.model.DomainStrategy
@@ -569,7 +570,7 @@ internal fun HomeViewModel.onSanitizeNetworkActivityPrivateDataChangedInternal(v
 }
 
 internal suspend fun HomeViewModel.syncLocalGuardWithPermissionRequest() {
-    if (shouldDeferLocalGuardSyncForActiveProfileRuntime()) {
+    if (shouldDeferLocalGuardSyncForActiveProfileRuntime(container.connectionController.snapshot.value)) {
         return
     }
     val mode = container.settingsRepository.current().localGuardModeOrNull()
@@ -584,15 +585,18 @@ internal suspend fun HomeViewModel.syncLocalGuardWithPermissionRequest() {
     container.connectionController.syncLocalGuard()
 }
 
-private fun HomeViewModel.shouldDeferLocalGuardSyncForActiveProfileRuntime(): Boolean {
-    val snapshot = container.connectionController.snapshot.value
-    return snapshot.state in ACTIVE_CONNECTION_STATES &&
+internal fun shouldDeferLocalGuardSyncForActiveProfileRuntime(snapshot: com.foxhole.beta.core.model.ConnectionSnapshot): Boolean =
+    snapshot.state in ACTIVE_CONNECTION_STATES &&
         snapshot.profileId != FoxholeVpnService.LOCAL_GUARD_PROFILE_ID
-}
 
 private suspend fun HomeViewModel.refreshLocalGuardDashboardIpAfterSettingsChange() {
     delay(HomeViewModel.CONNECTED_IP_REFRESH_DELAY_MS)
-    if (container.settingsRepository.current().localGuardModeOrNull() == null) {
+    if (
+        !shouldRefreshLocalGuardDashboardIpAfterSettingsChange(
+            snapshot = container.connectionController.snapshot.value,
+            settings = container.settingsRepository.current(),
+        )
+    ) {
         return
     }
     startIpInfoRefresh(
@@ -604,6 +608,14 @@ private suspend fun HomeViewModel.refreshLocalGuardDashboardIpAfterSettingsChang
         reason = IpInfoRefreshReason.POST_UPDATE,
     )
 }
+
+internal fun shouldRefreshLocalGuardDashboardIpAfterSettingsChange(
+    snapshot: com.foxhole.beta.core.model.ConnectionSnapshot,
+    settings: com.foxhole.beta.core.model.Settings,
+): Boolean =
+    settings.localGuardModeOrNull() != null &&
+        snapshot.state == ConnectionState.CONNECTED &&
+        snapshot.profileId == FoxholeVpnService.LOCAL_GUARD_PROFILE_ID
 
 internal fun HomeViewModel.onSmartStartReplayLoggingChangedInternal(value: Boolean) {
     viewModelScope.launch {
