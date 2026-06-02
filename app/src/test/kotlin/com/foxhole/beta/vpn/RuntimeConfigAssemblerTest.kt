@@ -554,6 +554,103 @@ class RuntimeConfigAssemblerTest {
     }
 
     @Test
+    fun `tor only all apps ignores stale include split tunnel packages`() {
+        val config =
+            parse(
+                assembler.assembleTorOnly(
+                    settings =
+                        Settings(
+                            privacyRoute =
+                                com.foxhole.beta.core.model.PrivacyRouteSettings(
+                                    mode = PrivacyRouteMode.TOR_OVER_VPN,
+                                    scope = PrivacyRouteScope.ALL_APPS,
+                                ),
+                            expert =
+                                ExpertSettings(
+                                    perAppRoutingMode = PerAppRoutingMode.INCLUDE_SELECTED_APPS,
+                                    selectedPackages = listOf("com.example.stale"),
+                                ),
+                        ),
+                    activePreset = null,
+                    torRuntimePaths = TorRuntimePaths(executablePath = "/tor", dataDirectory = "/tor-data"),
+                ),
+            )
+
+        val tunInbound = config["inbounds"]!!.jsonArray.first().jsonObject
+
+        assertFalse(tunInbound.containsKey("include_package"))
+        assertEquals(
+            listOf(BuildConfig.APPLICATION_ID),
+            tunInbound["exclude_package"]!!.jsonArray.map { it.jsonPrimitive.content },
+        )
+    }
+
+    @Test
+    fun `tor only all apps ignores stale exclude split tunnel packages`() {
+        val config =
+            parse(
+                assembler.assembleTorOnly(
+                    settings =
+                        Settings(
+                            privacyRoute =
+                                com.foxhole.beta.core.model.PrivacyRouteSettings(
+                                    mode = PrivacyRouteMode.TOR_OVER_VPN,
+                                    scope = PrivacyRouteScope.ALL_APPS,
+                                ),
+                            expert =
+                                ExpertSettings(
+                                    perAppRoutingMode = PerAppRoutingMode.EXCLUDE_SELECTED_APPS,
+                                    selectedPackages = listOf("com.bank.app"),
+                                ),
+                        ),
+                    activePreset = null,
+                    torRuntimePaths = TorRuntimePaths(executablePath = "/tor", dataDirectory = "/tor-data"),
+                ),
+            )
+
+        val tunInbound = config["inbounds"]!!.jsonArray.first().jsonObject
+
+        assertFalse(tunInbound.containsKey("include_package"))
+        assertEquals(
+            listOf(BuildConfig.APPLICATION_ID),
+            tunInbound["exclude_package"]!!.jsonArray.map { it.jsonPrimitive.content },
+        )
+    }
+
+    @Test
+    fun `tor only selected apps uses privacy route packages instead of stale split tunnel packages`() {
+        val config =
+            parse(
+                assembler.assembleTorOnly(
+                    settings =
+                        Settings(
+                            privacyRoute =
+                                com.foxhole.beta.core.model.PrivacyRouteSettings(
+                                    mode = PrivacyRouteMode.TOR_OVER_VPN,
+                                    scope = PrivacyRouteScope.SELECTED_APPS,
+                                    selectedPackages = listOf("org.mozilla.firefox"),
+                                ),
+                            expert =
+                                ExpertSettings(
+                                    perAppRoutingMode = PerAppRoutingMode.INCLUDE_SELECTED_APPS,
+                                    selectedPackages = listOf("com.example.stale"),
+                                ),
+                        ),
+                    activePreset = null,
+                    torRuntimePaths = TorRuntimePaths(executablePath = "/tor", dataDirectory = "/tor-data"),
+                ),
+            )
+
+        val tunInbound = config["inbounds"]!!.jsonArray.first().jsonObject
+
+        assertEquals(
+            listOf("org.mozilla.firefox"),
+            tunInbound["include_package"]!!.jsonArray.map { it.jsonPrimitive.content },
+        )
+        assertFalse(tunInbound.containsKey("exclude_package"))
+    }
+
+    @Test
     fun `default settings expose loopback proxy for runtime owned refresh only`() {
         val config = parse(assembler.assemble(baseConfigWithRules("profile.example"), Settings(), null))
         val inbounds = config["inbounds"]!!.jsonArray.map { it.jsonObject }

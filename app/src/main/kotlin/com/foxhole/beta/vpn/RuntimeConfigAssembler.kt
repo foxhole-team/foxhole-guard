@@ -778,13 +778,13 @@ class RuntimeConfigAssembler(
                     normalizedRuntimePackages(settings.privacyRoute.selectedPackages)
                 } else {
                     emptyList()
-            }
-            val includePackages = torPackages.ifEmpty { settings.expert.vpnIncludedPackages() }
+                }
+            val includePackages = torPackages
             val excludePackages =
-                if (includePackages.isEmpty() && torPackages.isEmpty()) {
-                    normalizedRuntimePackages(settings.expert.vpnExcludedPackages() + BuildConfig.APPLICATION_ID)
-                } else {
+                if (settings.privacyRoute.scope == PrivacyRouteScope.SELECTED_APPS) {
                     emptyList()
+                } else {
+                    localGuardExcludedPackages()
                 }
             when {
                 includePackages.isNotEmpty() ->
