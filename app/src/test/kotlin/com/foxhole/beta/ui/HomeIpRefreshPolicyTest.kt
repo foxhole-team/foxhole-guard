@@ -351,4 +351,41 @@ class HomeIpRefreshPolicyTest {
             ),
         )
     }
+
+    @Test
+    fun `tor operation start address only uses previous tor ip`() {
+        val previousTorIp =
+            IpInfo(
+                ip = "185.220.101.12",
+                ipv4 = "185.220.101.12",
+                countryCode = "DE",
+                countryName = "Germany",
+                city = "Berlin",
+                isp = "TOR exit",
+                fetchedAt = 1_000L,
+            )
+
+        assertEquals("185.220.101.12", torOperationStartedIpAddress(previousTorIp))
+        assertEquals(null, torOperationStartedIpAddress(previousTorIpInfo = null))
+    }
+
+    @Test
+    fun `tor operation completion only uses current tor ip`() {
+        val currentTorIp =
+            IpInfo(
+                ip = "185.220.101.12",
+                ipv4 = "185.220.101.12",
+                countryCode = "DE",
+                countryName = "Germany",
+                city = "Berlin",
+                isp = "TOR exit",
+                fetchedAt = 1_000L,
+            )
+
+        assertEquals(currentTorIp, torOperationCompletionIpInfo(currentTorIp))
+        assertEquals(
+            null,
+            torOperationCompletionIpInfo(currentTorIpInfo = null),
+        )
+    }
 }

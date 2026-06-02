@@ -10,9 +10,7 @@ import kotlinx.coroutines.launch
 internal fun HomeViewModel.markTorOperationInternal(kind: HomeTorOperationKind) {
     torOperationTimeoutJob?.cancel()
     val startedAt = System.currentTimeMillis()
-    val startedIpAddress =
-        (torIpInfoMutable.value ?: container.connectionController.ipInfo.value)
-            ?.let(::primaryVisibleIp)
+    val startedIpAddress = torOperationStartedIpAddress(torIpInfoMutable.value)
     torOperationMutable.value =
         HomeTorOperationUiState(
             kind = kind,
@@ -37,6 +35,11 @@ internal fun HomeViewModel.markTorOperationInternal(kind: HomeTorOperationKind) 
         }
 }
 
+internal fun torOperationStartedIpAddress(previousTorIpInfo: IpInfo?): String? =
+    previousTorIpInfo?.let(::primaryVisibleIp)
+
+internal fun torOperationCompletionIpInfo(currentTorIpInfo: IpInfo?): IpInfo? = currentTorIpInfo
+
 internal suspend fun HomeViewModel.maybeFinishTorOperationInternal(
     torOperation: HomeTorOperationUiState,
     ipInfo: IpInfo?,
@@ -52,7 +55,10 @@ private suspend fun HomeViewModel.maybeFinishTorOperation(startedAt: Long) {
     if (torOperation.startedAt != startedAt) {
         return
     }
-    maybeFinishTorOperationInternal(torOperation, container.connectionController.ipInfo.value)
+    maybeFinishTorOperationInternal(
+        torOperation,
+        torOperationCompletionIpInfo(torIpInfoMutable.value),
+    )
 }
 
 private fun HomeViewModel.markTorBootstrappingIfStillConnecting(
