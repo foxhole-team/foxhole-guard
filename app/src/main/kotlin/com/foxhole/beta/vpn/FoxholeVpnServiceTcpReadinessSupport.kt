@@ -1,31 +1,63 @@
 package com.foxhole.beta.vpn
 
+import android.os.SystemClock
 import com.foxhole.beta.core.model.VpnSession
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.net.InetAddress
+import java.net.InetSocketAddress
 
 internal fun tcpRuntimeReadinessTarget(session: VpnSession): VpnHealthProbeTarget? =
     VpnHealthProbeTargetSelector
         .select(session.configJson)
         ?.takeIf { target -> target.transport == VpnHealthProbeTransport.TCP }
 
-internal suspend fun FoxholeVpnService.prepareTcpRuntimeReadiness(target: VpnHealthProbeTarget?): Result<Unit> {
+internal fun activeServerPingTarget(
+    session: VpnSession,
+    target: VpnHealthProbeTarget? = tcpRuntimeReadinessTarget(session),
+    readiness: TcpRuntimeReadinessResult? = null,
+): ActiveServerPingTarget? =
+    target?.let {
+        ActiveServerPingTarget(
+            profileId = session.profileId,
+            protocolOptionId = session.protocolOptionId,
+            target = it,
+            resolvedAddress = readiness?.address,
+            preflightLatencyMs = readiness?.latencyMs,
+        )
+    }
+
+internal data class TcpRuntimeReadinessResult(
+    val address: InetAddress,
+    val latencyMs: Long,
+)
+
+internal suspend fun FoxholeVpnService.prepareTcpRuntimeReadiness(
+    target: VpnHealthProbeTarget?,
+): Result<TcpRuntimeReadinessResult?> {
     if (target == null) {
-        return Result.success(Unit)
+        return Result.success(null)
     }
     return withContext(Dispatchers.IO) {
         val upstreamNetwork = currentUpstreamNetworkOrNull()
         if (upstreamNetwork == null) {
             container.diagnosticsLogger.record("runtime", "tcp target preflight skipped: upstream network unavailable")
-            return@withContext Result.success(Unit)
+            return@withContext Result.success(null)
         }
         val probeResult = runCatching {
-            probeSessionTarget(
-                target = target,
-                network = upstreamNetwork,
-                timeoutMs = TCP_RUNTIME_PREFLIGHT_TIMEOUT_MS,
+            val address = resolveProbeAddress(target.host, upstreamNetwork)
+            val startedAt = SystemClock.elapsedRealtime()
+            upstreamNetwork.socketFactory.createSocket().use { socket ->
+                socket.soTimeout = TCP_RUNTIME_PREFLIGHT_TIMEOUT_MS.toInt()
+                socket.connect(
+                    InetSocketAddress(address, target.port),
+                    TCP_RUNTIME_PREFLIGHT_TIMEOUT_MS.toInt(),
+                )
+            }
+            TcpRuntimeReadinessResult(
+                address = address,
+                latencyMs = (SystemClock.elapsedRealtime() - startedAt).coerceAtLeast(1L),
             )
-            Unit
         }.onSuccess {
             container.diagnosticsLogger.record("runtime", "tcp target preflight passed")
         }.onFailure { error ->
@@ -35,8 +67,8 @@ internal suspend fun FoxholeVpnService.prepareTcpRuntimeReadiness(target: VpnHea
             )
         }
         probeResult.fold(
-            onSuccess = { Result.success(Unit) },
-            onFailure = { Result.success(Unit) },
+            onSuccess = { result -> Result.success(result) },
+            onFailure = { Result.success(null) },
         )
     }
 }

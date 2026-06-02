@@ -665,11 +665,15 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
             "mode=${trafficMode.name.lowercase()}",
         )
         val tcpReadinessTarget = tcpRuntimeReadinessTarget(session)
-        prepareTcpRuntimeReadiness(tcpReadinessTarget)
+        val tcpReadiness = prepareTcpRuntimeReadiness(tcpReadinessTarget)
             .onFailure {
                 fail(getString(R.string.error_tcp_runtime_readiness_failed), commandStartId)
                 return
             }
+            .getOrNull()
+        FoxholeVpnRuntimeBridge.updateActiveServerPingTarget(
+            activeServerPingTarget(session, tcpReadinessTarget, tcpReadiness),
+        )
         FoxholeVpnRuntimeBridge.markIpInfoRefreshPending(RuntimeIpRefreshReason.POST_CONNECT)
         FoxholeVpnRuntimeBridge.update(
             ConnectionSnapshot(
@@ -770,6 +774,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         stopRuntimeFailClosed(reason = "local_guard_handoff_from_tunnel")
         releaseRuntimeWakeLock()
         activeSession = null
+        FoxholeVpnRuntimeBridge.updateActiveServerPingTarget(null)
         activeLocalGuardMode = null
         activeVpnNetworkHandle = null
         runtimeNetworkActivityLoggingSuspended = false
@@ -1227,6 +1232,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         }
         if (result.isSuccess) {
             activeSession = session
+            FoxholeVpnRuntimeBridge.updateActiveServerPingTarget(activeServerPingTarget(session))
             container.connectionController.markCurrentRuntimeApplied()
             container.diagnosticsLogger.record("connection", "runtime reloaded, tunnel validation required")
             val connectedSnapshot = snapshot.state == ConnectionState.CONNECTED
@@ -1342,6 +1348,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         previousSnapshot: ConnectionSnapshot,
     ) {
         activeSession = restoreSession
+        FoxholeVpnRuntimeBridge.updateActiveServerPingTarget(activeServerPingTarget(restoreSession))
         container.diagnosticsLogger.record(
             "connection",
             "runtime reload restored previous config, tunnel validation required",
@@ -1384,6 +1391,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
             stopRuntimeFailClosed(reason = "reload_recovery")
             activeVpnNetworkHandle = null
             activeSession = session
+            FoxholeVpnRuntimeBridge.updateActiveServerPingTarget(activeServerPingTarget(session))
             FoxholeVpnRuntimeBridge.updateTraffic(trafficSampler.reset())
             FoxholeVpnRuntimeBridge.markIpInfoRefreshPending(RuntimeIpRefreshReason.POST_UPDATE)
             FoxholeVpnRuntimeBridge.update(

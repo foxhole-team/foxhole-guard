@@ -26,6 +26,7 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withTimeoutOrNull
+import java.net.InetAddress
 
 class FoxholeConnectionController(
     private val context: Context,
@@ -71,7 +72,6 @@ class FoxholeConnectionController(
         )
     private val telemetryProbe =
         ConnectionTelemetryProbe(
-            profileRepository = profileRepository,
             settingsRepository = settingsRepository,
             ipInfoRepository = ipInfoRepository,
             snapshot = snapshot,
@@ -83,6 +83,7 @@ class FoxholeConnectionController(
                     .getNetworkCapabilities(network)
                     ?.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED) == true
             },
+            activeServerPingTarget = { FoxholeVpnRuntimeBridge.activeServerPingTarget.value },
         )
 
     suspend fun connect(
@@ -718,6 +719,7 @@ object FoxholeVpnRuntimeBridge {
     private val ipInfoMutable = MutableStateFlow<IpInfo?>(null)
     private val deviceIpInfoMutable = MutableStateFlow<IpInfo?>(null)
     private val trafficMutable = MutableStateFlow(TrafficSnapshot())
+    private val activeServerPingTargetMutable = MutableStateFlow<ActiveServerPingTarget?>(null)
     private val highFrequencyTrafficUpdatesMutable = MutableStateFlow(false)
     private val immediateTrafficSampleRequestsMutable = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     private val runtimeUiStateMutable = MutableStateFlow(RuntimeUiState())
@@ -727,6 +729,7 @@ object FoxholeVpnRuntimeBridge {
     val ipInfo: StateFlow<IpInfo?> = ipInfoMutable
     val deviceIpInfo: StateFlow<IpInfo?> = deviceIpInfoMutable
     val traffic: StateFlow<TrafficSnapshot> = trafficMutable
+    internal val activeServerPingTarget: StateFlow<ActiveServerPingTarget?> = activeServerPingTargetMutable
     val highFrequencyTrafficUpdates: StateFlow<Boolean> = highFrequencyTrafficUpdatesMutable
     val immediateTrafficSampleRequests: SharedFlow<Unit> = immediateTrafficSampleRequestsMutable
     internal val runtimeUiState: StateFlow<RuntimeUiState> = runtimeUiStateMutable
@@ -796,6 +799,10 @@ object FoxholeVpnRuntimeBridge {
         publishRuntimeUiState()
     }
 
+    internal fun updateActiveServerPingTarget(value: ActiveServerPingTarget?) {
+        activeServerPingTargetMutable.value = value
+    }
+
     fun setHighFrequencyTrafficUpdates(enabled: Boolean) {
         highFrequencyTrafficUpdatesMutable.value = enabled
     }
@@ -809,6 +816,7 @@ object FoxholeVpnRuntimeBridge {
         if (clearIpInfo) {
             ipInfoMutable.value = null
         }
+        activeServerPingTargetMutable.value = null
         trafficMutable.value = TrafficSnapshot()
         highFrequencyTrafficUpdatesMutable.value = false
         publishRuntimeUiState()
@@ -825,4 +833,23 @@ object FoxholeVpnRuntimeBridge {
                 pendingIpRefreshReason = pendingIpRefreshReason,
             )
     }
+}
+
+internal data class ActiveServerPingTarget(
+    val profileId: Long,
+    val protocolOptionId: String?,
+    val target: VpnHealthProbeTarget,
+    val resolvedAddress: InetAddress? = null,
+    val preflightLatencyMs: Long? = null,
+) {
+    fun matchesRequest(
+        requestedProfileId: Long,
+        requestedProtocolOptionId: String?,
+    ): Boolean =
+        profileId == requestedProfileId &&
+            (
+                requestedProtocolOptionId.isNullOrBlank() ||
+                    protocolOptionId.isNullOrBlank() ||
+                    protocolOptionId == requestedProtocolOptionId
+                )
 }

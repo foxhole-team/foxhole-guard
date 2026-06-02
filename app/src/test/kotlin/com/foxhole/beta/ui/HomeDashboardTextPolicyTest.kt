@@ -3,6 +3,8 @@ package com.foxhole.beta.ui
 import com.foxhole.beta.core.model.IpInfo
 import com.foxhole.beta.core.model.SecureDnsMode
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class HomeDashboardTextPolicyTest {
@@ -64,6 +66,33 @@ class HomeDashboardTextPolicyTest {
             HomeNetworkDetailValue(text = "Moscow", loading = false),
             homeNetworkDetailValue(value = "Moscow", loading = true),
         )
+    }
+
+    @Test
+    fun `network card keeps rows visible while missing country or city is still loading`() {
+        val partialIpInfo =
+            IpInfo(
+                ip = "203.0.113.7",
+                countryCode = null,
+                countryName = null,
+                city = null,
+                isp = "Example ISP",
+                fetchedAt = 1L,
+            )
+
+        assertFalse(shouldShowHomeNetworkFullLoading(partialIpInfo, showIpInfoLoading = true))
+        assertTrue(homeNetworkDetailValue(formatCountryLineOrNull(partialIpInfo), loading = true).loading)
+        assertTrue(homeNetworkDetailValue(buildCityLineOrNull(partialIpInfo), loading = true).loading)
+        assertEquals(
+            HomeNetworkDetailValue(text = "-", loading = false),
+            homeNetworkDetailValue(buildCityLineOrNull(partialIpInfo), loading = false),
+        )
+    }
+
+    @Test
+    fun `network card uses full skeleton only before any ip info is available`() {
+        assertTrue(shouldShowHomeNetworkFullLoading(visibleIpInfo = null, showIpInfoLoading = true))
+        assertFalse(shouldShowHomeNetworkFullLoading(visibleIpInfo = null, showIpInfoLoading = false))
     }
 
     @Test

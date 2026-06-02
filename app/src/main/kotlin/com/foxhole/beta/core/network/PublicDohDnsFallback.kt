@@ -23,12 +23,20 @@ internal object PublicDohDnsFallback : PublicDnsFallback {
             explicitNulls = false
         }
 
-    override fun lookup(hostname: String): List<InetAddress> {
+    override fun lookup(hostname: String): List<InetAddress> =
+        lookupWithConnectionFactory(hostname) { url ->
+            url.openConnection() as HttpsURLConnection
+        }
+
+    internal fun lookupWithConnectionFactory(
+        hostname: String,
+        connectionFactory: (URL) -> HttpsURLConnection,
+    ): List<InetAddress> {
         val normalized = hostname.requirePublicRemoteHost(resolveHost = false).trim().trimEnd('.')
         val failures = mutableListOf<Throwable>()
         DOH_ENDPOINTS.forEach { endpoint ->
             DNS_QUERY_TYPES.forEach { type ->
-                val result = runCatching { query(endpoint, normalized, type) }
+                val result = runCatching { query(endpoint, normalized, type, connectionFactory) }
                 val addresses = result.getOrNull().orEmpty().filterNot(InetAddress::isPrivateOrLocalAddress)
                 if (addresses.isNotEmpty()) {
                     return addresses.preferIpv4()
@@ -63,10 +71,11 @@ internal object PublicDohDnsFallback : PublicDnsFallback {
         endpoint: String,
         hostname: String,
         type: Int,
+        connectionFactory: (URL) -> HttpsURLConnection,
     ): List<InetAddress> {
         val encodedName = URLEncoder.encode(hostname, Charsets.UTF_8.name())
         val url = URL("$endpoint?name=$encodedName&type=$type")
-        val connection = (url.openConnection() as HttpsURLConnection).apply {
+        val connection = connectionFactory(url).apply {
             connectTimeout = DOH_TIMEOUT_MS
             readTimeout = DOH_TIMEOUT_MS
             requestMethod = "GET"

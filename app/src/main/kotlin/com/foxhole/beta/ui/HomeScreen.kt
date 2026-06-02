@@ -883,7 +883,12 @@ fun HomeScreen(
                                 verticalAlignment = Alignment.Top,
                             ) {
                                 val networkIpInfo = visibleNetworkIpInfo
-                                if (showNetworkIpInfoLoading) {
+                                if (
+                                    shouldShowHomeNetworkFullLoading(
+                                        visibleIpInfo = networkIpInfo,
+                                        showIpInfoLoading = showNetworkIpInfoLoading,
+                                    )
+                                ) {
                                     HomeNetworkLoadingBlock(
                                         title = stringResource(networkInfoTitleRes),
                                         labels =

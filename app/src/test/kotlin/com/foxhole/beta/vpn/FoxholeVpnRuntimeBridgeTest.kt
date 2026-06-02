@@ -58,6 +58,27 @@ class FoxholeVpnRuntimeBridgeTest {
     }
 
     @Test
+    fun `runtime bridge clears active server ping target with transient state`() {
+        val target =
+            ActiveServerPingTarget(
+                profileId = 42L,
+                protocolOptionId = "vless-1",
+                target = VpnHealthProbeTarget("edge.example.com", 443, VpnHealthProbeTransport.TCP),
+            )
+        try {
+            FoxholeVpnRuntimeBridge.updateActiveServerPingTarget(target)
+
+            assertEquals(target, FoxholeVpnRuntimeBridge.activeServerPingTarget.value)
+
+            FoxholeVpnRuntimeBridge.clearTransientState(clearIpInfo = false)
+
+            assertNull(FoxholeVpnRuntimeBridge.activeServerPingTarget.value)
+        } finally {
+            FoxholeVpnRuntimeBridge.updateActiveServerPingTarget(null)
+        }
+    }
+
+    @Test
     fun `runtime ui state marks previous tunnel ip loading without clearing bridge ip`() {
         val previousSnapshot = FoxholeVpnRuntimeBridge.snapshot.value
         val previousIpInfo = FoxholeVpnRuntimeBridge.ipInfo.value

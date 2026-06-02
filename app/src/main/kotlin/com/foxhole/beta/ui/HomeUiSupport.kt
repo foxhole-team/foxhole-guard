@@ -1500,6 +1500,11 @@ internal fun homeNetworkDetailValue(
         loading = loading && value == null,
     )
 
+internal fun shouldShowHomeNetworkFullLoading(
+    visibleIpInfo: IpInfo?,
+    showIpInfoLoading: Boolean,
+): Boolean = showIpInfoLoading && visibleIpInfo == null
+
 @Suppress("UNUSED_PARAMETER")
 @Composable
 internal fun dashboardDnsModeLine(

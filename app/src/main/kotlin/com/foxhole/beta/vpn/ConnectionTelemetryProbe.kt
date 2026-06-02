@@ -2,7 +2,6 @@ package com.foxhole.beta.vpn
 
 import android.net.Network
 import android.os.SystemClock
-import com.foxhole.beta.core.data.ProfileRepository
 import com.foxhole.beta.core.model.ConnectionSnapshot
 import com.foxhole.beta.core.model.LatencyProbeMethod
 import com.foxhole.beta.core.model.RuntimeFailureCode
@@ -11,6 +10,9 @@ import com.foxhole.beta.core.model.Settings
 import com.foxhole.beta.core.model.TrafficMode
 import com.foxhole.beta.core.network.HttpProxyAccess
 import com.foxhole.beta.core.network.IpInfoRepository
+import com.foxhole.beta.core.network.PublicDnsFallback
+import com.foxhole.beta.core.network.PublicDohDnsFallback
+import com.foxhole.beta.core.network.PublicRemoteDns
 import com.foxhole.beta.core.settings.SettingsRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.StateFlow
@@ -20,10 +22,10 @@ import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.net.Socket
 import java.util.concurrent.TimeUnit
+import javax.net.ssl.HttpsURLConnection
 import kotlin.math.roundToLong
 
 internal class ConnectionTelemetryProbe(
-    private val profileRepository: ProfileRepository,
     private val settingsRepository: SettingsRepository,
     private val ipInfoRepository: IpInfoRepository,
     private val snapshot: StateFlow<ConnectionSnapshot>,
@@ -31,6 +33,7 @@ internal class ConnectionTelemetryProbe(
     private val currentUpstreamNetwork: () -> Network?,
     private val currentVpnInterfaceName: (Network) -> String?,
     private val isVpnNetworkValidated: (Network) -> Boolean,
+    private val activeServerPingTarget: () -> ActiveServerPingTarget?,
 ) {
     suspend fun measureCurrentConnectionLatency(timeoutMs: Long): Long {
         val settings = settingsRepository.current()
@@ -271,21 +274,21 @@ internal class ConnectionTelemetryProbe(
         snapshot.value.state
             .takeIf { it in ACTIVE_CONNECTION_STATES }
             ?: error("active connection is required for server ping measurement")
-        val session =
-            profileRepository.getSession(
-                profileId,
-                serverPingRuntimeProtocolOptionId(profileId, protocolOptionId),
-            )
-        val target = VpnHealthProbeTargetSelector.select(session.configJson)
-            ?: error("vpn server target unavailable")
+        val activeTarget =
+            activeServerPingTarget()
+                ?.takeIf { activeTarget -> activeTarget.matchesRequest(profileId, protocolOptionId) }
+                ?: error("active vpn server target unavailable")
+        val target = activeTarget.target
         require(target.transport == VpnHealthProbeTransport.TCP) {
             "server ping unavailable for ${target.transport.name.lowercase()} transport"
         }
+        activeTarget.preflightLatencyMs?.let { return it.coerceAtLeast(1L) }
         val upstreamNetwork = currentUpstreamNetwork() ?: error("upstream network unavailable")
         return withContext(Dispatchers.IO) {
             measureServerTcpConnectLatency(
                 host = target.host,
                 port = target.port,
+                resolvedAddress = activeTarget.resolvedAddress,
                 timeoutMs = timeoutMs,
                 network = upstreamNetwork,
             )
@@ -295,10 +298,11 @@ internal class ConnectionTelemetryProbe(
     private fun measureServerTcpConnectLatency(
         host: String,
         port: Int,
+        resolvedAddress: InetAddress?,
         timeoutMs: Long,
         network: Network?,
     ): Long {
-        val address = resolveServerPingAddress(host, network)
+        val address = resolvedAddress ?: resolveServerPingAddress(host, network)
         val startedAt = SystemClock.elapsedRealtime()
         // Availability probe only: opens a bounded TCP connect to the configured server target and sends no payload.
         (network?.socketFactory?.createSocket() ?: Socket()).use { socket ->
@@ -309,21 +313,6 @@ internal class ConnectionTelemetryProbe(
             )
         }
         return (SystemClock.elapsedRealtime() - startedAt).coerceAtLeast(1L)
-    }
-
-    private suspend fun serverPingRuntimeProtocolOptionId(
-        profileId: Long,
-        protocolOptionId: String?,
-    ): String? {
-        if (protocolOptionId.isNullOrBlank()) {
-            return null
-        }
-        val profile = profileRepository.getProfile(profileId) ?: return protocolOptionId
-        return if (profile.protocolOptions.isEmpty()) {
-            null
-        } else {
-            protocolOptionId
-        }
     }
 
     private class LatencyProbeAttempts {
@@ -407,8 +396,33 @@ private fun resolveServerPingAddress(
     host: String,
     network: Network?,
 ): InetAddress =
-    network?.getAllByName(host)?.firstOrNull()
-        ?: InetAddress.getByName(host)
+    resolveServerPingAddresses(
+        host = host,
+        primaryResolver = { hostname ->
+            network?.getAllByName(hostname)?.toList()
+                ?: InetAddress.getAllByName(hostname).toList()
+        },
+        fallback = network?.let(::NetworkBoundPublicDnsFallback) ?: PublicDohDnsFallback,
+    ).first()
+
+internal fun resolveServerPingAddresses(
+    host: String,
+    primaryResolver: (String) -> List<InetAddress>,
+    fallback: PublicDnsFallback = PublicDohDnsFallback,
+): List<InetAddress> =
+    PublicRemoteDns(
+        delegate = primaryResolver,
+        fallback = fallback,
+    ).lookup(host)
+
+private class NetworkBoundPublicDnsFallback(
+    private val network: Network,
+) : PublicDnsFallback {
+    override fun lookup(hostname: String): List<InetAddress> =
+        PublicDohDnsFallback.lookupWithConnectionFactory(hostname) { url ->
+            network.openConnection(url) as HttpsURLConnection
+        }
+}
 
 internal fun effectiveLatencyProbeMethod(
     trafficMode: TrafficMode,
