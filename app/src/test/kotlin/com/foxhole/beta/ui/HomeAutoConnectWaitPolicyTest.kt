@@ -289,6 +289,24 @@ class HomeAutoConnectWaitPolicyTest {
     }
 
     @Test
+    fun `manual smart metrics refresh records direct tcp server ping separately from dashboard tunnel ping`() {
+        val source =
+            listOf(
+                java.io.File("src/main/kotlin/com/foxhole/beta/ui/HomeViewModelAutoConnectSupport.kt"),
+                java.io.File("app/src/main/kotlin/com/foxhole/beta/ui/HomeViewModelAutoConnectSupport.kt"),
+                java.io.File("../app/src/main/kotlin/com/foxhole/beta/ui/HomeViewModelAutoConnectSupport.kt"),
+            ).first { file -> file.isFile }.readText()
+        val metricsRefreshBlock =
+            source.substringAfter("private suspend fun HomeViewModel.refreshActiveServerTcpPingForMetrics")
+                .substringBefore("private fun HomeViewModel.protocolMetricsProbeTimeoutResult")
+
+        assertTrue(metricsRefreshBlock.contains("measureCurrentVpnServerPing"))
+        assertTrue(metricsRefreshBlock.contains("cacheProtocolServerPingInternal"))
+        assertTrue(metricsRefreshBlock.contains("recordSmartProfileServerPing"))
+        assertFalse(metricsRefreshBlock.contains("cacheProtocolTunnelPingInternal"))
+    }
+
+    @Test
     fun `connected dashboard latency rejects timeout-shaped values`() {
         assertTrue(shouldUseConnectedDashboardLatency(1L))
         assertTrue(shouldUseConnectedDashboardLatency(999L))

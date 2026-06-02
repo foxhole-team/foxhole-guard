@@ -947,8 +947,8 @@ private suspend fun HomeViewModel.probeAutoConnectCandidateForMetricsRefresh(
                 previousVpnNetworkHandle = previousVpnNetworkHandle,
             )
         }
-    return result
-        ?: connectedAutoConnectFallbackResult(
+    val resolvedResult =
+        result ?: connectedAutoConnectFallbackResult(
             profileId = profileId,
             candidate = candidate,
             networkFingerprint = networkFingerprint,
@@ -961,6 +961,52 @@ private suspend fun HomeViewModel.probeAutoConnectCandidateForMetricsRefresh(
             startedAtElapsedMs = startedAt,
             timeoutMs = timeoutMs,
         )
+    if (resolvedResult.success) {
+        refreshActiveServerTcpPingForMetrics(
+            profileId = profileId,
+            candidate = candidate,
+            networkFingerprint = networkFingerprint,
+        )
+    }
+    return resolvedResult
+}
+
+private suspend fun HomeViewModel.refreshActiveServerTcpPingForMetrics(
+    profileId: Long,
+    candidate: AutoConnectProbeCandidate,
+    networkFingerprint: String?,
+) {
+    runCatchingUnlessCancelled {
+        container.connectionController.measureCurrentVpnServerPing(
+            profileId = profileId,
+            protocolOptionId = candidate.optionId,
+        )
+    }.onSuccess { pingMs ->
+        cacheProtocolServerPingInternal(
+            profileId = profileId,
+            optionId = candidate.optionId,
+            pingMs = pingMs,
+        )
+        container.settingsRepository.recordSmartProfileServerPing(
+            profileId = profileId,
+            optionId = candidate.optionId,
+            serverPingMs = pingMs,
+            networkFingerprint = networkFingerprint,
+        )
+        container.diagnosticsLogger.record(
+            "latency",
+            "server tcp ping refreshed option=${candidate.optionId} latency=${pingMs}ms",
+        )
+    }.onFailure { error ->
+        markProtocolServerPingUnavailableInternal(
+            profileId = profileId,
+            optionId = candidate.optionId,
+        )
+        container.diagnosticsLogger.record(
+            "latency",
+            "server tcp ping unavailable option=${candidate.optionId}: ${error.message.orEmpty()}",
+        )
+    }
 }
 
 private fun HomeViewModel.protocolMetricsProbeTimeoutResult(
