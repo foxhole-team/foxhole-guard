@@ -198,7 +198,7 @@ internal fun Context.applyDnsFilterUpdateSchedule(enabled: Boolean) {
 }
 
 internal const val DNS_FILTER_UPDATE_INTERVAL_HOURS = 72L
-private const val TRAFFIC_MAP_PREWARM_STARTUP_DELAY_MS = 2_500L
+private const val TRAFFIC_MAP_PREWARM_STARTUP_DELAY_MS = 350L
 private const val BACKGROUND_INITIALIZATION_STARTUP_DELAY_MS = 1_500L
 
 internal fun applyAppLocale(locale: AppLocale) {

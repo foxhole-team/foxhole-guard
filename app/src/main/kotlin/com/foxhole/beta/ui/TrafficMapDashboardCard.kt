@@ -1021,7 +1021,7 @@ private const val MAX_TRAFFIC_MAP_DRAW_DESTINATIONS = 30
 private const val TRAFFIC_MAP_LOW_BATTERY_PERCENT = 10
 private const val TRAFFIC_ROUTE_PI = 3.141592653589793
 private const val TRAFFIC_ROUTE_ANGLE_BUCKET_RADIANS = 0.17453292519943295
-private const val TRAFFIC_MAP_COUNTRY_SHAPES_CARD_LOAD_DELAY_MS = 300L
+private const val TRAFFIC_MAP_COUNTRY_SHAPES_CARD_LOAD_DELAY_MS = 80L
 private const val TRAFFIC_MAP_COUNTRY_SHAPES_ASSET = "maps/ne_110m_admin_0_countries_preprocessed.json"
 private const val TRAFFIC_MAP_LOG_TAG = "FoxholeDiag"
 
