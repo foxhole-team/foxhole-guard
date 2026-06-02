@@ -332,6 +332,16 @@ class LiveLocalFirewallGuardRuntimeTest {
         )
         assertEquals(ConnectionState.CONNECTED, app.container.connectionController.snapshot.value.state)
         assertEquals(FoxholeVpnService.LOCAL_GUARD_PROFILE_ID, app.container.connectionController.snapshot.value.profileId)
+        assertTrue(
+            "local firewall guard published connected without network proof diagnostic",
+            app.container.diagnosticsLogger.entries.value.any { entry ->
+                entry.tag == "connection" &&
+                    (
+                        entry.message.contains("local guard vpn network validated") ||
+                            entry.message.contains("local guard reachability fallback passed")
+                        )
+            },
+        )
         assertEquals(LocalGuardMode.FIREWALL, app.container.settingsRepository.current().localGuardModeOrNull())
         assertTrue(
             "local firewall guard config did not include blocked package",

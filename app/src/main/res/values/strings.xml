@@ -141,6 +141,7 @@
     <string name="error_profile_missing">Select or import a VPN profile first</string>
     <string name="error_profile_invalid">VPN profile configuration is invalid</string>
     <string name="error_runtime_missing">The sing-box core bridge is not bundled in this source build yet</string>
+    <string name="error_local_guard_network_unavailable">Firewall could not verify internet access. Check the connection and try again</string>
     <string name="error_runtime_start_timeout">Connection runtime did not finish starting. Check the network and try again</string>
     <string name="error_runtime_stopped">VPN runtime stopped unexpectedly</string>
     <string name="error_vpn_package_split_unavailable">One or more selected apps are no longer installed. Update the app routing list and reconnect</string>

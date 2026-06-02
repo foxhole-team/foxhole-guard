@@ -142,6 +142,7 @@
     <string name="error_profile_missing">Сначала выберите или импортируйте VPN профиль</string>
     <string name="error_profile_invalid">Конфигурация VPN профиля некорректна</string>
     <string name="error_runtime_missing">В этой сборке пока не подключен мост sing-box</string>
+    <string name="error_local_guard_network_unavailable">Фаервол не подтвердил доступ к интернету. Проверьте соединение и попробуйте снова</string>
     <string name="error_runtime_start_timeout">Служба подключения не завершила запуск. Проверьте сеть и попробуйте снова</string>
     <string name="error_runtime_stopped">Служба VPN неожиданно остановилась</string>
     <string name="error_vpn_package_split_unavailable">Одно или несколько выбранных приложений больше не установлены. Обновите список маршрутизации приложений и подключитесь снова</string>

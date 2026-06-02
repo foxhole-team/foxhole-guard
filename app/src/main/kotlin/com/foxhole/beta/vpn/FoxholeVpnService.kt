@@ -35,6 +35,7 @@ import com.foxhole.beta.core.model.VpnSession
 import com.foxhole.beta.core.model.disableUnverifiedRuleSetRuntimeDns
 import com.foxhole.beta.core.model.dnsRuleSetFilteringEnabled
 import com.foxhole.beta.core.model.isUdpTransport
+import com.foxhole.beta.core.network.DNS_INDEPENDENT_IP_INFO_ENDPOINT
 import com.foxhole.beta.core.network.IpInfoFetchMode
 import com.foxhole.beta.core.network.mergeIpInfo
 import com.foxhole.beta.core.settings.AppTrafficStatsRecorder
@@ -54,6 +55,7 @@ import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.net.DatagramPacket
 import java.net.DatagramSocket
 import java.net.InetAddress
@@ -1041,6 +1043,11 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
             if (!isCurrentRuntimeTransition(transitionGeneration, "local_guard_network_ready")) {
                 return
             }
+            if (localGuardVpnNetwork == null) {
+                activeLocalGuardMode = null
+                fail(getString(R.string.error_local_guard_network_unavailable), commandStartId)
+                return
+            }
             updateActiveVpnUnderlyingNetwork(currentUpstreamNetworkOrNull())
             if (mode == LocalGuardMode.DNS) {
                 FoxholeVpnRuntimeBridge.updateTraffic(TrafficSnapshot())
@@ -1121,7 +1128,42 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
             "settle_ms=$LOCAL_GUARD_NETWORK_FALLBACK_SETTLE_MS",
         )
         delay(LOCAL_GUARD_NETWORK_FALLBACK_SETTLE_MS)
-        return latestNetwork
+        return latestNetwork.takeIf { probeLocalGuardFallbackReachability(mode, it) }
+    }
+
+    private suspend fun probeLocalGuardFallbackReachability(
+        mode: LocalGuardMode,
+        network: Network,
+    ): Boolean {
+        val httpResult =
+            runCatchingUnlessCancelled {
+                container.ipInfoRepository.probe(
+                    endpoint = DNS_INDEPENDENT_IP_INFO_ENDPOINT,
+                    callTimeoutMs = LOCAL_GUARD_CONNECTIVITY_PROBE_TIMEOUT_MS,
+                )
+            }
+        val dnsResult =
+            runCatchingUnlessCancelled {
+                withContext(Dispatchers.IO) {
+                    InetAddress.getAllByName(LOCAL_GUARD_CONNECTIVITY_DNS_PROBE_HOST).isNotEmpty()
+                }
+            }
+        val reachable = httpResult.isSuccess && dnsResult.getOrDefault(false)
+        container.diagnosticsLogger.recordStructured(
+            "connection",
+            if (reachable) {
+                "local guard reachability fallback passed"
+            } else {
+                "local guard reachability fallback failed"
+            },
+            "mode=${mode.name.lowercase()}",
+            "handle=${network.networkHandle}",
+            "http=${httpResult.isSuccess}",
+            "dns=${dnsResult.getOrDefault(false)}",
+            httpResult.exceptionOrNull()?.let { "http_error=${it.javaClass.simpleName}" },
+            dnsResult.exceptionOrNull()?.let { "dns_error=${it.javaClass.simpleName}" },
+        )
+        return reachable
     }
 
     private suspend fun handleLocalGuardPreflight(
@@ -2246,6 +2288,8 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         private const val LOCAL_GUARD_VPN_NETWORK_WAIT_TIMEOUT_MS = 5_000L
         private const val LOCAL_GUARD_NETWORK_VALIDATION_TIMEOUT_MS = 12_000L
         private const val LOCAL_GUARD_NETWORK_FALLBACK_SETTLE_MS = 1_500L
+        private const val LOCAL_GUARD_CONNECTIVITY_PROBE_TIMEOUT_MS = 3_000L
+        private const val LOCAL_GUARD_CONNECTIVITY_DNS_PROBE_HOST = "example.com"
         internal const val CONNECTIVITY_PROBE_NETWORK_WAIT_TIMEOUT_MS = 3_000L
         internal const val VPN_NETWORK_WAIT_POLL_DELAY_MS = 100L
         internal const val IPV4_ENRICHMENT_CALL_TIMEOUT_MS = 4_000L
