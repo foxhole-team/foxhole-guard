@@ -384,8 +384,8 @@ private fun TrafficMapCanvas(
             .onSizeChanged { size -> canvasSize = size }
             .drawWithCache {
                 val viewport = trafficMapViewport(size)
-                val maxLineStroke = 2.1.dp.toPx()
-                val minLineStroke = 0.65.dp.toPx()
+                val maxLineStroke = TRAFFIC_MAP_ROUTE_MAX_STROKE_DP.dp.toPx()
+                val minLineStroke = TRAFFIC_MAP_ROUTE_MIN_STROKE_DP.dp.toPx()
                 val destinationRadius = 3.3.dp.toPx()
                 val glowRadius = 8.dp.toPx()
                 val phoneWidth = 8.dp.toPx()
@@ -417,7 +417,9 @@ private fun TrafficMapCanvas(
                                             lane = routeLanes[drawableDestinations.getOrNull(index)?.countryCode] ?: 1,
                                         ),
                                     strokeWidth = minLineStroke + ((maxLineStroke - minLineStroke) * weight),
-                                    alpha = 0.22f + (0.24f * weight),
+                                    alpha =
+                                        TRAFFIC_MAP_ROUTE_MIN_ALPHA +
+                                            (TRAFFIC_MAP_ROUTE_ALPHA_RANGE * weight),
                                 )
                             }
                     } else {
@@ -1332,6 +1334,10 @@ private data class TrafficMapPowerState(
 private val TRAFFIC_MAP_CARD_TOTAL_HEIGHT = 184.dp
 private val TRAFFIC_MAP_DEFAULT_COUNTRY_FILL = Color.Gray
 private val TRAFFIC_MAP_ROUTE_GREEN = Color(0xFF7BD69D)
+private const val TRAFFIC_MAP_ROUTE_MIN_STROKE_DP = 1.1f
+private const val TRAFFIC_MAP_ROUTE_MAX_STROKE_DP = 2.6f
+private const val TRAFFIC_MAP_ROUTE_MIN_ALPHA = 0.42f
+private const val TRAFFIC_MAP_ROUTE_ALPHA_RANGE = 0.34f
 private const val TRAFFIC_MAP_HEAVY_CONTENT_SETTLE_DELAY_MS = 650L
 private const val TRAFFIC_MAP_POWER_STATE_STARTUP_DELAY_MS = 1_200L
 private const val TRAFFIC_MAP_WEIGHT = 0.74f

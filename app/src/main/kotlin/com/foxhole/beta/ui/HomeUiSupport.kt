@@ -976,20 +976,37 @@ internal fun trafficMapOriginIpInfoCandidate(
     return deviceIpInfo
 }
 
+internal fun shouldRetainTrafficMapOriginIpInfo(
+    connection: ConnectionSnapshot,
+    previousOriginIpInfo: IpInfo?,
+    candidateOriginIpInfo: IpInfo?,
+    routeIpInfo: IpInfo?,
+): Boolean {
+    val previous = previousOriginIpInfo ?: return false
+    if (candidateOriginIpInfo != null) return false
+    if (!previous.hasVisiblePublicAddress()) return false
+    if (!connection.isActiveTrafficMapRouteTunnel()) return false
+    if (connection.lastChangeAt <= 0L || previous.fetchedAt >= connection.lastChangeAt) return false
+    val previousIp = primaryVisibleIpOrNull(previous) ?: return false
+    val routeIp = routeIpInfo?.let(::primaryVisibleIpOrNull)
+    return routeIp == null || previousIp != routeIp
+}
+
 private fun ConnectionSnapshot.shouldRejectTrafficMapOriginAsRouteIp(
     deviceIpInfo: IpInfo,
     routeIpInfo: IpInfo?,
 ): Boolean {
-    val activeOrdinaryTunnel =
-        state == ConnectionState.CONNECTED &&
-            trafficMode == TrafficMode.TUNNEL &&
-            profileId != FoxholeVpnService.LOCAL_GUARD_PROFILE_ID
-    if (!activeOrdinaryTunnel) return false
+    if (!isActiveTrafficMapRouteTunnel()) return false
     if (lastChangeAt <= 0L || deviceIpInfo.fetchedAt >= lastChangeAt) return true
     val routeIp = routeIpInfo?.let(::primaryVisibleIpOrNull) ?: return false
     val deviceIp = primaryVisibleIpOrNull(deviceIpInfo) ?: return false
     return deviceIp == routeIp
 }
+
+private fun ConnectionSnapshot.isActiveTrafficMapRouteTunnel(): Boolean =
+    state == ConnectionState.CONNECTED &&
+        trafficMode == TrafficMode.TUNNEL &&
+        profileId != FoxholeVpnService.LOCAL_GUARD_PROFILE_ID
 
 private fun selectedSmartProtocolTrafficTotal(
     activeProfile: Profile?,

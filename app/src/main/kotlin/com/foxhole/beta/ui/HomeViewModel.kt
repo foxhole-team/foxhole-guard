@@ -541,21 +541,31 @@ class HomeViewModel(
             protocolMetricsRefreshingProfileIdsMutable,
         ) { connection, deviceIpInfo, ipInfo, autoConnect, protocolMetricsRefreshingProfileIds ->
             val protocolSearchRunning = autoConnect.running || protocolMetricsRefreshingProfileIds.isNotEmpty()
-            trafficMapOriginIpInfoCandidate(
+            TrafficMapOriginSelection(
                 connection = connection,
-                deviceIpInfo = deviceIpInfo,
-                ipInfo = ipInfo,
+                routeIpInfo = ipInfo,
+                candidate =
+                    trafficMapOriginIpInfoCandidate(
+                        connection = connection,
+                        deviceIpInfo = deviceIpInfo,
+                        ipInfo = ipInfo,
+                        protocolSearchRunning = protocolSearchRunning,
+                    ),
                 protocolSearchRunning = protocolSearchRunning,
-            ) to protocolSearchRunning
+            )
         }
-            .runningFold(initialTrafficMapOriginIpInfo to false) { previous, next ->
-                if (next.second) {
-                    previous.first to true
-                } else {
-                    next
+            .runningFold(initialTrafficMapOriginIpInfo) { previous, next ->
+                when {
+                    next.protocolSearchRunning -> previous
+                    shouldRetainTrafficMapOriginIpInfo(
+                        connection = next.connection,
+                        previousOriginIpInfo = previous,
+                        candidateOriginIpInfo = next.candidate,
+                        routeIpInfo = next.routeIpInfo,
+                    ) -> previous
+                    else -> next.candidate
                 }
             }
-            .map { (ipInfo, _) -> ipInfo }
             .distinctUntilChanged()
             .stateIn(
                 viewModelScope,
@@ -1797,3 +1807,10 @@ private fun CachedActiveProfile.toStartupProfile(): Profile =
         lastEtag = null,
         isActive = true,
     )
+
+private data class TrafficMapOriginSelection(
+    val connection: ConnectionSnapshot,
+    val routeIpInfo: IpInfo?,
+    val candidate: IpInfo?,
+    val protocolSearchRunning: Boolean,
+)

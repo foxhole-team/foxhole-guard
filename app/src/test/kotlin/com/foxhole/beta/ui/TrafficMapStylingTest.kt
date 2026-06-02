@@ -37,6 +37,23 @@ class TrafficMapStylingTest {
     }
 
     @Test
+    fun `traffic map route lines use visible green stroke constants`() {
+        val source =
+            listOf(
+                java.io.File("src/main/kotlin/com/foxhole/beta/ui/TrafficMapDashboardCard.kt"),
+                java.io.File("app/src/main/kotlin/com/foxhole/beta/ui/TrafficMapDashboardCard.kt"),
+                java.io.File("../app/src/main/kotlin/com/foxhole/beta/ui/TrafficMapDashboardCard.kt"),
+            ).first { file -> file.isFile }.readText()
+
+        assertTrue(source.contains("TRAFFIC_MAP_ROUTE_MIN_STROKE_DP = 1.1f"))
+        assertTrue(source.contains("TRAFFIC_MAP_ROUTE_MAX_STROKE_DP = 2.6f"))
+        assertTrue(source.contains("TRAFFIC_MAP_ROUTE_MIN_ALPHA = 0.42f"))
+        assertTrue(source.contains("TRAFFIC_MAP_ROUTE_ALPHA_RANGE = 0.34f"))
+        assertTrue(source.contains("colors.routeLine.copy(alpha = route.alpha)"))
+        assertTrue(source.contains("TRAFFIC_MAP_ROUTE_GREEN"))
+    }
+
+    @Test
     fun `traffic map draws only filled land before routes`() {
         val source =
             listOf(

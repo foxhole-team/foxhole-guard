@@ -632,6 +632,74 @@ class HomeIpLoadingPolicyTest {
     }
 
     @Test
+    fun `traffic map origin retains last real device ip after connected refresh is rejected`() {
+        val deviceIp =
+            IpInfo(
+                ip = "198.51.100.10",
+                ipv4 = "198.51.100.10",
+                countryCode = "US",
+                countryName = "United States",
+                city = "New York",
+                isp = "Device ISP",
+                fetchedAt = 4_000L,
+            )
+        val tunnelIp =
+            IpInfo(
+                ip = "203.0.113.20",
+                ipv4 = "203.0.113.20",
+                countryCode = "NL",
+                countryName = "Netherlands",
+                city = "Amsterdam",
+                isp = "Tunnel ISP",
+                fetchedAt = 5_500L,
+            )
+
+        assertTrue(
+            shouldRetainTrafficMapOriginIpInfo(
+                connection =
+                    ConnectionSnapshot(
+                        state = ConnectionState.CONNECTED,
+                        trafficMode = TrafficMode.TUNNEL,
+                        profileId = 7L,
+                        lastChangeAt = 5_000L,
+                    ),
+                previousOriginIpInfo = deviceIp,
+                candidateOriginIpInfo = null,
+                routeIpInfo = tunnelIp,
+            ),
+        )
+    }
+
+    @Test
+    fun `traffic map origin does not retain previous ip when it matches route ip`() {
+        val routeIp =
+            IpInfo(
+                ip = "203.0.113.20",
+                ipv4 = "203.0.113.20",
+                countryCode = "NL",
+                countryName = "Netherlands",
+                city = "Amsterdam",
+                isp = "Tunnel ISP",
+                fetchedAt = 4_000L,
+            )
+
+        assertFalse(
+            shouldRetainTrafficMapOriginIpInfo(
+                connection =
+                    ConnectionSnapshot(
+                        state = ConnectionState.CONNECTED,
+                        trafficMode = TrafficMode.TUNNEL,
+                        profileId = 7L,
+                        lastChangeAt = 5_000L,
+                    ),
+                previousOriginIpInfo = routeIp,
+                candidateOriginIpInfo = null,
+                routeIpInfo = routeIp,
+            ),
+        )
+    }
+
+    @Test
     fun `traffic map origin hides marker when device ip has no public address`() {
         val localIp =
             IpInfo(

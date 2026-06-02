@@ -247,9 +247,10 @@ class HomeDashboardHotPathTest {
         assertTrue(appSource.contains("RootSectionKeepAlivePane(active = selectedSection == AppSection.DASHBOARD)"))
         assertTrue(appSource.contains("RootSectionKeepAlivePane(active = selectedSection == AppSection.SETTINGS)"))
         assertTrue(appSource.contains("delay(ROOT_SETTINGS_PREWARM_DELAY_MS)"))
-        assertTrue(appSource.contains("ROOT_SETTINGS_PREWARM_DELAY_MS = 2_400L"))
+        assertTrue(appSource.contains("ROOT_SETTINGS_PREWARM_DELAY_MS = 4_800L"))
         assertTrue(appSource.contains("clearAndSetSemantics {}"))
-        assertTrue(appSource.contains("measurable.measure(constraints)"))
+        assertFalse(appSource.contains("measurable.measure(constraints)"))
+        assertTrue(appSource.contains(".layout { _, _ ->"))
         assertFalse(homeRouteBlock.contains("when (rootSection)"))
     }
 

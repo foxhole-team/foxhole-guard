@@ -971,8 +971,7 @@ private fun Modifier.rootSectionKeepAlivePane(active: Boolean): Modifier =
         fillMaxSize()
             .zIndex(0f)
             .clearAndSetSemantics {}
-            .layout { measurable, constraints ->
-                measurable.measure(constraints)
+            .layout { _, _ ->
                 layout(0, 0) {}
             }
     }
@@ -1534,4 +1533,4 @@ private const val DETAIL_FADE_IN_MS = 80
 private const val DETAIL_FADE_OUT_MS = 60
 private const val DETAIL_TRANSITION_MS = 150
 private const val DETAIL_TRANSITION_OFFSET_FRACTION = 0.14f
-private const val ROOT_SETTINGS_PREWARM_DELAY_MS = 2_400L
+private const val ROOT_SETTINGS_PREWARM_DELAY_MS = 4_800L
