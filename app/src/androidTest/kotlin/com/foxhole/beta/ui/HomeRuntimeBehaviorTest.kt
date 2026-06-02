@@ -1,5 +1,6 @@
 package com.foxhole.beta.ui
 
+import android.os.SystemClock
 import android.text.format.Formatter
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.assertCountEquals
@@ -331,13 +332,66 @@ class HomeRuntimeBehaviorTest {
         }
     }
 
+    @Test
+    fun dashboardSettingsRoundTripKeepsWarmMapAndNetworkResponsive() {
+        val expectedIp = "198.51.100.88"
+        seedNetworkBlock(expectedIp)
+        waitUntilTagExists("home_traffic_world_map", timeoutMs = INITIAL_TRAFFIC_MAP_READY_TIMEOUT_MS)
+
+        val settingsOpenMs =
+            measureUntil("settings bottom nav opens settings") {
+                composeRule.onNodeWithTag("bottom_nav_settings").performClick()
+                waitUntilTagExists("settings_screen", timeoutMs = NAVIGATION_RESPONSIVENESS_TIMEOUT_MS)
+            }
+        assertUnderBudget("settings bottom nav", settingsOpenMs, NAVIGATION_RESPONSIVENESS_TIMEOUT_MS)
+
+        val dashboardMapReturnMs =
+            measureUntil("dashboard bottom nav restores warm traffic map") {
+                composeRule.onNodeWithTag("bottom_nav_dashboard").performClick()
+                waitUntilTagExists("home_traffic_world_map", timeoutMs = WARM_DASHBOARD_RETURN_TIMEOUT_MS)
+            }
+        assertUnderBudget("dashboard warm map return", dashboardMapReturnMs, WARM_DASHBOARD_RETURN_TIMEOUT_MS)
+
+        val networkRevealMs =
+            measureUntil("dashboard network card reveal") {
+                scrollToNetworkBlock()
+                composeRule.waitUntil(timeoutMillis = NETWORK_WIDGET_RESPONSIVENESS_TIMEOUT_MS) {
+                    composeRule.onAllNodesWithTag("home_network_card").fetchSemanticsNodes().isNotEmpty() &&
+                        composeRule.onAllNodesWithTag("home_network_loading").fetchSemanticsNodes().isEmpty() &&
+                        !networkPrimaryIpText().isNullOrBlank()
+                }
+            }
+        assertUnderBudget("dashboard network card reveal", networkRevealMs, NETWORK_WIDGET_RESPONSIVENESS_TIMEOUT_MS)
+
+        val roundTripMs =
+            measureUntil("dashboard settings repeated round-trip") {
+                repeat(DASHBOARD_SETTINGS_ROUND_TRIP_COUNT) {
+                    composeRule.onNodeWithTag("bottom_nav_settings").performClick()
+                    waitUntilTagExists("settings_screen", timeoutMs = NAVIGATION_RESPONSIVENESS_TIMEOUT_MS)
+                    composeRule.onNodeWithTag("bottom_nav_dashboard").performClick()
+                    waitUntilTagExists("home_dashboard_list", timeoutMs = NAVIGATION_RESPONSIVENESS_TIMEOUT_MS)
+                }
+            }
+        assertUnderBudget("dashboard/settings repeated round-trip", roundTripMs, ROUND_TRIP_RESPONSIVENESS_TIMEOUT_MS)
+    }
+
     private fun waitUntilNetworkBlockSettles() {
+        val expectedIp = "198.51.100.11"
+        seedNetworkBlock(expectedIp)
+        scrollToNetworkBlock()
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            composeRule.onAllNodesWithTag("home_network_loading").fetchSemanticsNodes().isEmpty() &&
+                textOfOrNull("home_network_primary_ip") == expectedIp
+        }
+        scrollToNetworkBlock()
+    }
+
+    private fun seedNetworkBlock(expectedIp: String) {
         val viewModel =
             ViewModelProvider(
                 composeRule.activity,
                 HomeViewModel.factory(app()),
             )[HomeViewModel::class.java]
-        val expectedIp = "198.51.100.11"
         composeRule.runOnUiThread {
             viewModel.invalidateIpInfoRefreshes()
             FoxholeVpnRuntimeBridge.update(
@@ -348,12 +402,7 @@ class HomeRuntimeBehaviorTest {
             )
             FoxholeVpnRuntimeBridge.updateIpInfo(testIpInfo(expectedIp))
         }
-        scrollToNetworkBlock()
-        composeRule.waitUntil(timeoutMillis = 5_000) {
-            composeRule.onAllNodesWithTag("home_network_loading").fetchSemanticsNodes().isEmpty() &&
-                textOfOrNull("home_network_primary_ip") == expectedIp
-        }
-        scrollToNetworkBlock()
+        composeRule.waitForIdle()
     }
 
     private fun testIpInfo(ip: String): IpInfo =
@@ -403,6 +452,38 @@ class HomeRuntimeBehaviorTest {
                 }
         }.getOrDefault(emptyList())
 
+    private fun waitUntilTagExists(
+        tag: String,
+        timeoutMs: Long,
+    ) {
+        composeRule.waitUntil(timeoutMillis = timeoutMs) {
+            composeRule.onAllNodesWithTag(tag, useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty()
+        }
+        composeRule.waitForIdle()
+    }
+
+    private fun measureUntil(
+        label: String,
+        block: () -> Unit,
+    ): Long {
+        val startedAtMs = SystemClock.elapsedRealtime()
+        block()
+        val elapsedMs = SystemClock.elapsedRealtime() - startedAtMs
+        app().container.diagnosticsLogger.record("ui-perf", "$label elapsedMs=$elapsedMs")
+        return elapsedMs
+    }
+
+    private fun assertUnderBudget(
+        label: String,
+        elapsedMs: Long,
+        budgetMs: Long,
+    ) {
+        assertTrue(
+            "$label took ${elapsedMs}ms, budget=${budgetMs}ms",
+            elapsedMs <= budgetMs,
+        )
+    }
+
     private fun grantNotificationsPermission(packageName: String) {
         shell("pm grant $packageName android.permission.POST_NOTIFICATIONS")
     }
@@ -437,4 +518,13 @@ class HomeRuntimeBehaviorTest {
 
     private fun app(): FoxholeApplication =
         InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as FoxholeApplication
+
+    private companion object {
+        private const val INITIAL_TRAFFIC_MAP_READY_TIMEOUT_MS = 5_000L
+        private const val NAVIGATION_RESPONSIVENESS_TIMEOUT_MS = 1_500L
+        private const val WARM_DASHBOARD_RETURN_TIMEOUT_MS = 1_200L
+        private const val NETWORK_WIDGET_RESPONSIVENESS_TIMEOUT_MS = 1_500L
+        private const val DASHBOARD_SETTINGS_ROUND_TRIP_COUNT = 3
+        private const val ROUND_TRIP_RESPONSIVENESS_TIMEOUT_MS = 4_500L
+    }
 }
