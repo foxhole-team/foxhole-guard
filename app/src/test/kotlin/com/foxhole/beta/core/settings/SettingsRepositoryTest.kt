@@ -13,6 +13,7 @@ import com.foxhole.beta.core.model.DnsSettings
 import com.foxhole.beta.core.model.ExpertSettings
 import com.foxhole.beta.core.model.LatencyProbeMethod
 import com.foxhole.beta.core.model.NETWORK_FINGERPRINT_SCHEMA_CURRENT
+import com.foxhole.beta.core.model.PerAppRoutingMode
 import com.foxhole.beta.core.model.SMART_START_PROTOCOL_TIMEOUT_DEFAULT_SECONDS
 import com.foxhole.beta.core.model.SMART_START_REFRESH_TIMEOUT_DEFAULT_SECONDS
 import com.foxhole.beta.core.model.SMART_START_SUBSCRIPTION_RETRY_ATTEMPTS_DEFAULT
@@ -93,6 +94,31 @@ class SettingsRepositoryTest {
 
         assertFalse(dns.autoUpdateFilters)
         assertEquals(DEFAULT_DNS_FILTER_UPDATE_URL, dns.dnsFilterUpdateUrl)
+    }
+
+    @Test
+    fun `selected split apps restore include mode when routing was full tunnel`() {
+        assertEquals(
+            PerAppRoutingMode.INCLUDE_SELECTED_APPS,
+            selectedPackagesRoutingMode(
+                currentMode = PerAppRoutingMode.FULL_TUNNEL,
+                selectedPackages = listOf("com.example.app"),
+            ),
+        )
+        assertEquals(
+            PerAppRoutingMode.EXCLUDE_SELECTED_APPS,
+            selectedPackagesRoutingMode(
+                currentMode = PerAppRoutingMode.EXCLUDE_SELECTED_APPS,
+                selectedPackages = listOf("com.example.app"),
+            ),
+        )
+        assertEquals(
+            PerAppRoutingMode.FULL_TUNNEL,
+            selectedPackagesRoutingMode(
+                currentMode = PerAppRoutingMode.INCLUDE_SELECTED_APPS,
+                selectedPackages = emptyList(),
+            ),
+        )
     }
 
     @Test

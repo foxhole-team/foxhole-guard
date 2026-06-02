@@ -1083,11 +1083,7 @@ class SettingsRepository(
                     it.expert.copy(
                         selectedPackages = normalizedSelectedPackages,
                         blockedPackages = it.expert.blockedPackages.filterNot { packageName -> packageName in normalizedSelectedPackages },
-                        perAppRoutingMode =
-                            when {
-                                normalizedSelectedPackages.isEmpty() -> PerAppRoutingMode.FULL_TUNNEL
-                                else -> it.expert.perAppRoutingMode
-                            },
+                        perAppRoutingMode = selectedPackagesRoutingMode(it.expert.perAppRoutingMode, normalizedSelectedPackages),
                     ),
             )
         }
@@ -2297,6 +2293,16 @@ private fun ProfileTrafficTotal.trafficKey(): ProfileTrafficKey =
 
 private fun String?.normalizedProfileTrafficProtocolOptionId(): String? =
     this?.trim()?.takeIf(String::isNotBlank)
+
+internal fun selectedPackagesRoutingMode(
+    currentMode: PerAppRoutingMode,
+    selectedPackages: List<String>,
+): PerAppRoutingMode =
+    when {
+        selectedPackages.isEmpty() -> PerAppRoutingMode.FULL_TUNNEL
+        currentMode == PerAppRoutingMode.FULL_TUNNEL -> PerAppRoutingMode.INCLUDE_SELECTED_APPS
+        else -> currentMode
+    }
 
 internal fun normalizeSmartProfilePreferences(
     preferences: List<SmartProfilePreference>,
