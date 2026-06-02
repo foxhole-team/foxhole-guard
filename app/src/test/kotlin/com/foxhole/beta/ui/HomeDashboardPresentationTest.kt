@@ -420,10 +420,11 @@ class HomeDashboardPresentationTest {
             ).first { file -> file.isFile }.readText()
         val smartMenuBlock =
             source.substringAfter("SmartProfileAutoConnectMenu(")
-                .substringBefore("metricsUpdatedAtByOptionId")
+                .substringBefore("forceExpanded = firstAnalysisProtocolMenuForceExpanded")
 
         assertTrue(smartMenuBlock.contains("serverPingByOptionId = state.protocolTunnelPingsByOptionId"))
         assertTrue(smartMenuBlock.contains("serverPingUnavailableOptionIds = state.protocolTunnelPingUnavailableOptionIds"))
+        assertTrue(smartMenuBlock.contains("serverPingLabelRes = R.string.home_network_server_ping_label"))
         assertFalse(smartMenuBlock.contains("state.protocolServerPingsByOptionId"))
         assertFalse(smartMenuBlock.contains("state.protocolServerPingUnavailableOptionIds"))
     }

@@ -671,6 +671,7 @@ fun HomeScreen(
                                                     showMetricsTable = false,
                                                     showStatusHeader = true,
                                                     latencyProbeMethod = state.settings.connection.latencyProbeMethod,
+                                                    serverPingLabelRes = R.string.home_network_server_ping_label,
                                                     forceExpanded = firstAnalysisProtocolMenuForceExpanded,
                                                 )
                                             }

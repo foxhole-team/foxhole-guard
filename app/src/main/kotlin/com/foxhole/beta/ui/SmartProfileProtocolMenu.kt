@@ -90,12 +90,14 @@ internal fun SmartProfileAutoConnectMenu(
     showStatusHeader: Boolean = false,
     showTransportBadges: Boolean = false,
     latencyProbeMethod: LatencyProbeMethod = LatencyProbeMethod.HTTP,
+    serverPingLabelRes: Int = R.string.smart_profile_menu_server_ping_column,
     forceExpanded: Boolean = false,
 ) {
     val options = MultiProtocolProfileSupport.supportedOptions(profile)
     if (options.size < 2) {
         return
     }
+    val serverPingLabel = stringResource(serverPingLabelRes)
     val menuLayout = resolveSmartStartProtocolMenuLayout(showMetricsTable = showMetricsTable)
     var showRefreshWarning by rememberSaveable(profile.id) { mutableStateOf(false) }
     val requestRefreshMetrics: () -> Unit = {
@@ -143,6 +145,7 @@ internal fun SmartProfileAutoConnectMenu(
                 maxWidth = (screenWidth - ScreenHorizontalPadding - ScreenHorizontalPadding).coerceAtLeast(SmartProfileMenuCompactMinWidth),
                 showRefreshHeader = menuLayout.showHeader || onRefreshMetrics != null,
                 latencyProbeMethod = latencyProbeMethod,
+                serverPingLabel = serverPingLabel,
             )
         val actionTint = foxholeSystemAwareAccentColor(fallback = MaterialTheme.colorScheme.primary)
         Surface(
@@ -212,6 +215,7 @@ internal fun SmartProfileAutoConnectMenu(
                 showTransportBadges = showTransportBadges,
                 showStatusHeader = showStatusHeader,
                 latencyProbeMethod = latencyProbeMethod,
+                serverPingLabel = serverPingLabel,
             )
         }
     }
@@ -251,6 +255,7 @@ private fun rememberSmartProfileMenuWidth(
     maxWidth: Dp,
     showRefreshHeader: Boolean,
     latencyProbeMethod: LatencyProbeMethod,
+    serverPingLabel: String,
 ): Dp {
     val density = LocalDensity.current
     val metricColumnWidthPx = with(density) { SmartProfileMetricColumnWidth.toPx() }
@@ -260,7 +265,6 @@ private fun rememberSmartProfileMenuWidth(
     val recommendedLegend = stringResource(R.string.smart_profile_legend_reconnect_recommended)
     val protocolLabel = stringResource(R.string.smart_profile_menu_protocol_column)
     val statusLabel = stringResource(R.string.smart_profile_menu_status_column)
-    val serverPingLabel = stringResource(R.string.smart_profile_menu_server_ping_column)
     val vpnLatencyLabel = smartProfileLatencyColumnLabel(latencyProbeMethod)
     val unavailableMetric = stringResource(R.string.smart_profile_metric_unavailable)
     val downMetric = stringResource(R.string.latency_pill_down)
@@ -612,6 +616,7 @@ private fun SmartProfileProtocolMenuContent(
     showTransportBadges: Boolean,
     showStatusHeader: Boolean,
     latencyProbeMethod: LatencyProbeMethod,
+    serverPingLabel: String,
 ) {
     Column(
         modifier = Modifier.padding(if (menuLayout.showDetailedMetrics) 2.dp else 0.dp),
@@ -631,7 +636,11 @@ private fun SmartProfileProtocolMenuContent(
         val hasMenuHeader = menuLayout.showHeader || onRefreshMetrics != null || showCompactStatusHeader
         val hasFooter = menuLayout.showDetailedMetrics || menuLayout.showCompactStatusRows
         if (menuLayout.showDetailedMetrics) {
-            SmartProfileProtocolTableHeader(compact = true, latencyProbeMethod = latencyProbeMethod)
+            SmartProfileProtocolTableHeader(
+                compact = true,
+                latencyProbeMethod = latencyProbeMethod,
+                serverPingLabel = serverPingLabel,
+            )
         } else if (showCompactStatusHeader) {
             SmartProfileProtocolStatusHeader(compact = true)
         }
@@ -1248,6 +1257,7 @@ private fun SmartProfileMetricsRefreshButton(
 private fun SmartProfileProtocolTableHeader(
     compact: Boolean,
     latencyProbeMethod: LatencyProbeMethod,
+    serverPingLabel: String,
 ) {
     Column {
         Row(
@@ -1267,7 +1277,7 @@ private fun SmartProfileProtocolTableHeader(
                 textAlign = TextAlign.Start,
             )
             SmartProfileTableHeaderText(
-                text = stringResource(R.string.smart_profile_menu_server_ping_column),
+                text = serverPingLabel,
                 modifier = Modifier.width(SmartProfileMetricColumnWidth),
                 textAlign = TextAlign.Center,
             )
