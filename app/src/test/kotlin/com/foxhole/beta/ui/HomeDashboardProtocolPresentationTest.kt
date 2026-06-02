@@ -828,6 +828,73 @@ class HomeDashboardProtocolPresentationTest {
     }
 
     @Test
+    fun `connected selected option waits for live server ping instead of remembered ping`() {
+        val activeProfile =
+            profile(
+                selectedProtocolOptionId = "vless",
+                protocolOptions = listOf(option("vless", ProtocolHint.VLESS)),
+            )
+        val baseState =
+            HomeUiState(
+                activeProfile = activeProfile,
+                connection =
+                    ConnectionSnapshot(
+                        state = ConnectionState.CONNECTED,
+                        profileId = activeProfile.id,
+                        protocolHint = ProtocolHint.VLESS,
+                        protocolOptionId = "vless",
+                    ),
+                settings =
+                    Settings(
+                        connection = ConnectionSettings(smartStartEnabled = true),
+                        smartProfilePreferences =
+                            listOf(
+                                SmartProfilePreference(
+                                    profileId = activeProfile.id,
+                                    protocolMemories =
+                                        listOf(
+                                            SmartProfileProtocolMemory(
+                                                optionId = "vless",
+                                                lastServerPingMs = 91L,
+                                                lastServerPingAt = 10_000L,
+                                            ),
+                                        ),
+                                ),
+                            ),
+                    ),
+            )
+
+        val withoutLivePing =
+            buildHomeRouteUiState(
+                state = baseState,
+                autoConnect = AutoConnectUiState(),
+                profileOptionLatencies = emptyMap(),
+                profileOptionLatencyUnavailable = emptySet(),
+                protocolMetrics = ProtocolMetricsUiState(),
+                currentNetworkFingerprintKey = null,
+            )
+        val withLivePing =
+            buildHomeRouteUiState(
+                state = baseState,
+                autoConnect = AutoConnectUiState(),
+                profileOptionLatencies = emptyMap(),
+                profileOptionLatencyUnavailable = emptySet(),
+                protocolMetrics =
+                    ProtocolMetricsUiState(
+                        serverPings =
+                            mapOf(
+                                ProfileOptionLatencyKey(activeProfile.id, "vless") to
+                                    ProfileOptionServerPingState(pingMs = 379L),
+                            ),
+                    ),
+                currentNetworkFingerprintKey = null,
+            )
+
+        assertFalse(withoutLivePing.protocolServerPingsByOptionId.containsKey("vless"))
+        assertEquals(379L, withLivePing.protocolServerPingsByOptionId["vless"])
+    }
+
+    @Test
     fun `analysis status label can render current protocol without falling back to Smart start`() {
         listOf(
             ProtocolHint.OUTLINE to "OUTLINE",

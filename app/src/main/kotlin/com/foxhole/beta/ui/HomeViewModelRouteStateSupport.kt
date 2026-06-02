@@ -13,6 +13,7 @@ import com.foxhole.beta.core.settings.rememberedSmartProfileServerPingByProfileI
 import com.foxhole.beta.core.settings.rememberedSmartStartLatencyByOptionId
 import com.foxhole.beta.core.settings.rememberedSmartStartLatencyByProfileId
 import com.foxhole.beta.core.settings.smartProfilePreference
+import com.foxhole.beta.vpn.ACTIVE_CONNECTION_STATES
 
 internal fun buildHomeRouteUiState(
     state: HomeUiState,
@@ -71,16 +72,28 @@ internal fun buildHomeRouteUiState(
                         .keys
                         .map(ProfileOptionLatencyKey::optionId)
                         .toSet()
-                val rememberedServerPings =
-                    state.settings
-                        .smartProfilePreference(activeProfile.id)
-                        ?.rememberedSmartProfileServerPingByOptionId(currentNetworkFingerprintKey)
-                        ?.filterKeys { optionId -> optionId !in liveServerPingUnavailableOptionIds }
-                        .orEmpty()
                 val liveServerPings =
                     liveServerPingStates
                         .mapNotNull { (key, value) -> value.pingMs?.let { key.optionId to it } }
                         .toMap()
+                val activeConnectedOptionId =
+                    resolveDashboardLatencyOptionId(activeProfile, state.connection)
+                        ?.takeIf {
+                            state.connection.profileId == activeProfile.id &&
+                                state.connection.state in ACTIVE_CONNECTION_STATES
+                        }
+                val rememberedServerPings =
+                    state.settings
+                        .smartProfilePreference(activeProfile.id)
+                        ?.rememberedSmartProfileServerPingByOptionId(currentNetworkFingerprintKey)
+                        ?.filterKeys { optionId ->
+                            optionId !in liveServerPingUnavailableOptionIds &&
+                                (
+                                    optionId != activeConnectedOptionId ||
+                                        optionId in liveServerPings
+                                    )
+                        }
+                        .orEmpty()
                 rememberedServerPings + liveServerPings
             }.orEmpty()
     val activeProfileServerPingUnavailable =
