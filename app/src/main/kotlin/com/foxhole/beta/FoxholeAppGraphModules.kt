@@ -20,6 +20,8 @@ import com.foxhole.beta.vpn.DnsFilterUpdateClient
 import com.foxhole.beta.vpn.DnsFilterUpdateRepository
 import com.foxhole.beta.vpn.FoxholeConnectionController
 import com.foxhole.beta.vpn.RuntimeConfigAssembler
+import com.foxhole.beta.vpn.TorManager
+import com.foxhole.beta.vpn.TorProcessManager
 import com.foxhole.beta.vpn.TorRuntimeInstaller
 import kotlinx.serialization.json.Json
 import okhttp3.OkHttpClient
@@ -68,6 +70,7 @@ internal class FoxholeDataGraphModule(
     val importParser: ProfileImportParser by lazy { ProfileImportParser(core.json) }
     val routingRepository: RoutingRepository by lazy { RoutingRepository({ profileDatabase }, core.httpClient, core.json) }
     val torRuntimeInstaller: TorRuntimeInstaller by lazy { TorRuntimeInstaller(appContext, core.diagnosticsLogger) }
+    val torManager: TorManager by lazy { TorProcessManager(torRuntimeInstaller, core.diagnosticsLogger) }
     val dnsFilterAssetInstaller: DnsFilterAssetInstaller by lazy { DnsFilterAssetInstaller(appContext, core.json) }
     val dnsFilterUpdateClient: DnsFilterUpdateClient by lazy { DnsFilterUpdateClient(core.httpClient, core.json) }
     val dnsFilterUpdateRepository: DnsFilterUpdateRepository by lazy {
@@ -93,6 +96,7 @@ internal class FoxholeDataGraphModule(
             routingRepository = routingRepository,
             runtimeConfigAssembler = runtimeConfigAssembler,
             torRuntimeInstaller = torRuntimeInstaller,
+            torManager = torManager,
             dnsFilterAssetInstaller = dnsFilterAssetInstaller,
             json = core.json,
         )

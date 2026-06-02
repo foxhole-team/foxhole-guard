@@ -22,6 +22,7 @@ import com.foxhole.beta.vpn.DnsFilterAssetInstaller
 import com.foxhole.beta.vpn.PrivateDnsMode
 import com.foxhole.beta.vpn.PrivateDnsState
 import com.foxhole.beta.vpn.RuntimeConfigAssembler
+import com.foxhole.beta.vpn.TorManager
 import com.foxhole.beta.vpn.TorRuntimeInstaller
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.emitAll
@@ -49,6 +50,7 @@ class ProfileRepository(
     private val routingRepository: RoutingRepository,
     private val runtimeConfigAssembler: RuntimeConfigAssembler,
     private val torRuntimeInstaller: TorRuntimeInstaller,
+    private val torManager: TorManager,
     private val dnsFilterAssetInstaller: DnsFilterAssetInstaller,
     private val json: Json,
 ) {
@@ -108,6 +110,7 @@ class ProfileRepository(
             routingRepository = routingRepository,
             runtimeConfigAssembler = runtimeConfigAssembler,
             torRuntimeInstaller = torRuntimeInstaller,
+            torManager = torManager,
             dnsFilterAssetInstaller = dnsFilterAssetInstaller,
             diagnosticsLogger = diagnosticsLogger,
             profileProvider = ::requireProfile,

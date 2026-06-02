@@ -14,6 +14,7 @@ import com.foxhole.beta.vpn.DnsFilterAssetInstaller
 import com.foxhole.beta.vpn.DnsFilterUpdateRepository
 import com.foxhole.beta.vpn.FoxholeConnectionController
 import com.foxhole.beta.vpn.RuntimeConfigAssembler
+import com.foxhole.beta.vpn.TorManager
 
 interface FoxholeStartupDependencies {
     val settingsRepository: SettingsRepository
@@ -44,6 +45,7 @@ interface FoxholeRuntimeDependencies {
     val ipInfoRepository: IpInfoRepository
     val runtimeConfigAssembler: RuntimeConfigAssembler
     val dnsFilterAssetInstaller: DnsFilterAssetInstaller
+    val torManager: TorManager
     val trafficMapRepository: TrafficMapRepository
     val anomalyRepository: AnomalyRepository
 }
@@ -100,5 +102,6 @@ class FoxholeAppGraph(
     override val profileRepository: ProfileRepository by lazy { dataModule.profileRepository }
     override val dnsFilterAssetInstaller: DnsFilterAssetInstaller by lazy { dataModule.dnsFilterAssetInstaller }
     override val dnsFilterUpdateRepository: DnsFilterUpdateRepository by lazy { dataModule.dnsFilterUpdateRepository }
+    override val torManager: TorManager by lazy { dataModule.torManager }
     override val connectionController: FoxholeConnectionController by lazy { runtimeModule.connectionController }
 }

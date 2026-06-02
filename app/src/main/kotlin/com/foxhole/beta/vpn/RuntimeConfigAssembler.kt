@@ -769,9 +769,14 @@ class RuntimeConfigAssembler(
                     normalizedRuntimePackages(settings.privacyRoute.selectedPackages)
                 } else {
                     emptyList()
-                }
+            }
             val includePackages = torPackages.ifEmpty { settings.expert.vpnIncludedPackages() }
-            val excludePackages = if (torPackages.isEmpty()) settings.expert.vpnExcludedPackages() else emptyList()
+            val excludePackages =
+                if (includePackages.isEmpty() && torPackages.isEmpty()) {
+                    normalizedRuntimePackages(settings.expert.vpnExcludedPackages() + BuildConfig.APPLICATION_ID)
+                } else {
+                    emptyList()
+                }
             when {
                 includePackages.isNotEmpty() ->
                     putJsonArray("include_package") {
@@ -853,6 +858,22 @@ class RuntimeConfigAssembler(
         }
 
     private fun torDirectProxyOutbound(paths: TorRuntimePaths): JsonObject =
+        paths.socksPort
+            ?.takeIf { port -> port in 1..65535 }
+            ?.let(::torSocksProxyOutbound)
+            ?: torNativeProxyOutbound(paths)
+
+    private fun torSocksProxyOutbound(port: Int): JsonObject =
+        buildJsonObject {
+            put("type", "socks")
+            put("tag", "proxy")
+            put("server", "127.0.0.1")
+            put("server_port", port)
+            put("version", "5")
+            put("network", "tcp")
+        }
+
+    private fun torNativeProxyOutbound(paths: TorRuntimePaths): JsonObject =
         buildJsonObject {
             put("type", "tor")
             put("tag", "proxy")

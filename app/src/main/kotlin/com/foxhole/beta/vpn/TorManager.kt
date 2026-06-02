@@ -39,6 +39,7 @@ data class TorStartResult(
 
 data class TorReadyResult(
     val ready: Boolean,
+    val bootstrapProgress: Int? = null,
 )
 
 data class TorStopPolicy(
@@ -106,6 +107,8 @@ class TorProcessManager(
                     add("127.0.0.1:$socksPort")
                     add("--ControlPort")
                     add("127.0.0.1:$controlPort")
+                    add("--CookieAuthentication")
+                    add("0")
                     profile.paths.geoIpFilePath?.let {
                         add("--GeoIPFile")
                         add(it)
@@ -120,6 +123,7 @@ class TorProcessManager(
                     .directory(File(profile.paths.dataDirectory))
                     .redirectErrorStream(true)
                     .start()
+            drainProcessOutput(startedProcess)
             process = startedProcess
             currentSnapshot = TorSnapshot(TorState.RUNNING, socksPort, controlPort)
             diagnosticsLogger.recordStructured(
@@ -132,17 +136,45 @@ class TorProcessManager(
         }
 
     override suspend fun awaitReady(timeoutMs: Long): TorReadyResult {
-        val port = currentSnapshot.socksPort ?: return TorReadyResult(false)
+        val controlPort = currentSnapshot.controlPort ?: return TorReadyResult(false)
+        var lastProgress: Int? = null
+        var lastProbe = TorBootstrapProbe()
         val ready =
             withTimeoutOrNull(timeoutMs.coerceAtLeast(1L)) {
                 while (true) {
-                    if (canConnect(port)) {
+                    val activeProcess = process
+                    if (activeProcess == null || !activeProcess.isAlive) {
+                        return@withTimeoutOrNull false
+                    }
+                    val probe = queryBootstrap(controlPort)
+                    lastProbe = probe
+                    if (probe.progress != null && probe.progress != lastProgress) {
+                        lastProgress = probe.progress
+                        diagnosticsLogger.recordStructured(
+                            "runtime",
+                            "tor bootstrap progress",
+                            "progress=${probe.progress}",
+                            probe.summary?.let { "summary=$it" },
+                        )
+                    }
+                    if (probe.ready) {
                         return@withTimeoutOrNull true
                     }
-                    delay(100L)
+                    delay(TOR_BOOTSTRAP_POLL_MS)
                 }
             } == true
-        return TorReadyResult(ready)
+        if (!ready) {
+            diagnosticsLogger.recordStructured(
+                "runtime",
+                "tor bootstrap wait failed",
+                "progress=${lastProbe.progress ?: "unknown"}",
+                lastProbe.summary?.let { "summary=$it" },
+            )
+        }
+        return TorReadyResult(
+            ready = ready,
+            bootstrapProgress = lastProbe.progress,
+        )
     }
 
     override suspend fun stop(policy: TorStopPolicy): TorStopResult =
@@ -177,11 +209,80 @@ class TorProcessManager(
     private fun allocateLoopbackPort(): Int =
         ServerSocket(0, 1, InetAddress.getByName("127.0.0.1")).use { socket -> socket.localPort }
 
-    private fun canConnect(port: Int): Boolean =
+    private fun queryBootstrap(controlPort: Int): TorBootstrapProbe =
         runCatching {
             Socket().use { socket ->
-                socket.connect(InetSocketAddress("127.0.0.1", port), 200)
-                true
+                socket.connect(InetSocketAddress("127.0.0.1", controlPort), TOR_CONTROL_CONNECT_TIMEOUT_MS)
+                socket.soTimeout = TOR_CONTROL_READ_TIMEOUT_MS
+                val writer = socket.getOutputStream().bufferedWriter(Charsets.US_ASCII)
+                writer.write("AUTHENTICATE\r\n")
+                writer.write("GETINFO status/bootstrap-phase\r\n")
+                writer.write("QUIT\r\n")
+                writer.flush()
+                val response = socket.getInputStream().bufferedReader(Charsets.UTF_8).readText()
+                TorBootstrapProbe(
+                    ready = response.hasCompletedTorBootstrap(),
+                    progress = response.torBootstrapProgress(),
+                    summary = response.torBootstrapSummary(),
+                )
             }
-        }.getOrDefault(false)
+        }.getOrDefault(TorBootstrapProbe())
+
+    private fun String.hasCompletedTorBootstrap(): Boolean =
+        torBootstrapProgress() == 100 || contains("TAG=done", ignoreCase = true)
+
+    private fun String.torBootstrapProgress(): Int? =
+        BOOTSTRAP_PROGRESS_REGEX.find(this)
+            ?.groupValues
+            ?.getOrNull(1)
+            ?.toIntOrNull()
+
+    private fun String.torBootstrapSummary(): String? =
+        BOOTSTRAP_SUMMARY_REGEX.find(this)
+            ?.groupValues
+            ?.getOrNull(1)
+            ?.takeIf(String::isNotBlank)
+
+    private fun drainProcessOutput(activeProcess: Process) {
+        Thread(
+            {
+                runCatching {
+                    activeProcess.inputStream.bufferedReader().useLines { lines ->
+                        lines.forEach { line ->
+                            line
+                                .trim()
+                                .takeIf(String::isNotBlank)
+                                ?.let { message ->
+                                    diagnosticsLogger.recordThrottled(
+                                        tag = "tor",
+                                        throttleKey = "tor_process_output",
+                                        windowMs = TOR_PROCESS_LOG_THROTTLE_MS,
+                                        message = "tor process: $message",
+                                    )
+                                }
+                        }
+                    }
+                }
+            },
+            "FoxHoleTorProcessLog",
+        ).apply {
+            isDaemon = true
+            start()
+        }
+    }
+
+    private companion object {
+        const val TOR_PROCESS_LOG_THROTTLE_MS = 1_000L
+        const val TOR_BOOTSTRAP_POLL_MS = 500L
+        const val TOR_CONTROL_CONNECT_TIMEOUT_MS = 300
+        const val TOR_CONTROL_READ_TIMEOUT_MS = 500
+        val BOOTSTRAP_PROGRESS_REGEX = Regex("""PROGRESS=(\d{1,3})""")
+        val BOOTSTRAP_SUMMARY_REGEX = Regex("""SUMMARY="?([^"\r\n]+)"?""")
+    }
 }
+
+private data class TorBootstrapProbe(
+    val ready: Boolean = false,
+    val progress: Int? = null,
+    val summary: String? = null,
+)

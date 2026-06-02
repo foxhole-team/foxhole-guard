@@ -407,6 +407,9 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
                 )
             }
         }
+        if (activeSession?.profileId == TOR_ONLY_PROFILE_ID) {
+            container.torManager.kill("service_destroy")
+        }
         releaseRuntimeWakeLock()
         if (hadActiveRuntime) {
             container.diagnosticsLogger.record(
@@ -818,6 +821,23 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
         return result
     }
 
+    private suspend fun stopTorProcessIfNeeded(
+        session: VpnSession?,
+        reason: String,
+    ) {
+        if (session?.profileId != TOR_ONLY_PROFILE_ID) {
+            return
+        }
+        val result = container.torManager.stop()
+        container.diagnosticsLogger.recordStructured(
+            "runtime",
+            "tor process stopped",
+            "reason=$reason",
+            "graceful=${result.graceful}",
+            "killed=${result.killed}",
+        )
+    }
+
     @Suppress("CyclomaticComplexMethod")
     internal suspend fun disconnect(
         message: String? = null,
@@ -882,6 +902,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
             )
         }
         stopRuntimeFailClosed(reason = "disconnect")
+        stopTorProcessIfNeeded(session, reason = "disconnect")
         releaseRuntimeWakeLock()
         activeSession = null
         activeLocalGuardMode = null
@@ -1154,6 +1175,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
             action?.let { "action=$it" } ?: "action=null",
         )
         stopRuntimeFailClosed(reason = "runtime_command_fail_closed")
+        stopTorProcessIfNeeded(session, reason = "runtime_command_fail_closed")
         releaseRuntimeWakeLock()
         activeSession = null
         activeLocalGuardMode = null

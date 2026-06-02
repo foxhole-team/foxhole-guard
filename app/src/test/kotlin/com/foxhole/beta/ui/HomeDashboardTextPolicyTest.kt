@@ -261,6 +261,35 @@ class HomeDashboardTextPolicyTest {
     }
 
     @Test
+    fun `network detail skeletons country row when only flag code is available`() {
+        val partialIpInfo =
+            IpInfo(
+                ip = "203.0.113.7",
+                countryCode = "NL",
+                countryName = null,
+                city = "Amsterdam",
+                isp = "Example ISP",
+                fetchedAt = 10_000L,
+            )
+        val loadingPolicy = homeNetworkDetailLoadingPolicy(refreshLoading = false, geoRowsLoading = true)
+        val settledPolicy = homeNetworkDetailLoadingPolicy(refreshLoading = false, geoRowsLoading = false)
+
+        assertEquals("🇳🇱 NL", formatCountryLineOrNull(partialIpInfo))
+        assertEquals(
+            HomeNetworkDetailValue(text = "", loading = true),
+            homeNetworkDetailValue(buildCountryLineOrNull(partialIpInfo), loading = loadingPolicy.country),
+        )
+        assertEquals(
+            HomeNetworkDetailValue(text = "Amsterdam", loading = false),
+            homeNetworkDetailValue(buildCityLineOrNull(partialIpInfo), loading = loadingPolicy.city),
+        )
+        assertEquals(
+            HomeNetworkDetailValue(text = "-", loading = false),
+            homeNetworkDetailValue(buildCountryLineOrNull(partialIpInfo), loading = settledPolicy.country),
+        )
+    }
+
+    @Test
     fun `network card uses full skeleton only before any ip info is available`() {
         assertTrue(shouldShowHomeNetworkFullLoading(visibleIpInfo = null, showIpInfoLoading = true))
         assertFalse(shouldShowHomeNetworkFullLoading(visibleIpInfo = null, showIpInfoLoading = false))

@@ -29,7 +29,7 @@ class RuntimeStartTimeoutPolicyTest {
     }
 
     @Test
-    fun `tor only sessions use the extended tor runtime start timeout`() {
+    fun `tor only native tor sessions use the extended tor runtime start timeout`() {
         val session =
             session(
                 profileId = FoxholeVpnService.TOR_ONLY_PROFILE_ID,
@@ -37,6 +37,17 @@ class RuntimeStartTimeoutPolicyTest {
             )
 
         assertEquals(TOR_RUNTIME_START_TIMEOUT_MS, runtimeStartTimeoutMsForSession(session))
+    }
+
+    @Test
+    fun `tor only socks sessions use the standard runtime start timeout`() {
+        val session =
+            session(
+                profileId = FoxholeVpnService.TOR_ONLY_PROFILE_ID,
+                configJson = """{"outbounds":[{"type":"socks","tag":"proxy","server":"127.0.0.1","server_port":19050}]}""",
+            )
+
+        assertEquals(RUNTIME_START_TIMEOUT_MS, runtimeStartTimeoutMsForSession(session))
     }
 
     private fun session(

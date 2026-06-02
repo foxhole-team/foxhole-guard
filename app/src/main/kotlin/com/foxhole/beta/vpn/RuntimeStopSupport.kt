@@ -21,7 +21,7 @@ internal const val RUNTIME_START_TIMEOUT_MS = 20_000L
 internal const val TOR_RUNTIME_START_TIMEOUT_MS = 240_000L
 
 internal fun runtimeStartTimeoutMsForSession(session: VpnSession): Long =
-    if (session.profileId == FoxholeVpnService.TOR_ONLY_PROFILE_ID || session.configJson.hasTorOutbound()) {
+    if (session.configJson.hasTorOutbound()) {
         TOR_RUNTIME_START_TIMEOUT_MS
     } else {
         RUNTIME_START_TIMEOUT_MS

@@ -611,11 +611,8 @@ internal fun Settings.allowsRuntimeProxyTunnelValidation(
         return false
     }
     val includeOnlySplit = expert.runtimeHasIncludeOnlyAppSplit()
-    val torOnlySelectedApps =
-        profileId == FoxholeVpnService.TOR_ONLY_PROFILE_ID &&
-            privacyRoute.scope == PrivacyRouteScope.SELECTED_APPS &&
-            privacyRoute.selectedPackages.any(String::isNotBlank)
-    return includeOnlySplit || torOnlySelectedApps
+    val torOnly = profileId == FoxholeVpnService.TOR_ONLY_PROFILE_ID
+    return includeOnlySplit || torOnly
 }
 
 private fun ExpertSettings.runtimeHasIncludeOnlyAppSplit(): Boolean =

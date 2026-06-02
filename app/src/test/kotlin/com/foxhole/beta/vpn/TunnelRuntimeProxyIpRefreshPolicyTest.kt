@@ -154,7 +154,7 @@ class TunnelRuntimeProxyIpRefreshPolicyTest {
     }
 
     @Test
-    fun `tor only all apps keeps vpn-bound tunnel validation`() {
+    fun `tor only all apps allows runtime proxy tunnel validation`() {
         val settings =
             Settings(
                 privacyRoute =
@@ -170,7 +170,7 @@ class TunnelRuntimeProxyIpRefreshPolicyTest {
                 protocolHint = ProtocolHint.SING_BOX,
             )
 
-        assertFalse(settings.allowsRuntimeProxyTunnelValidation(snapshot))
+        assertTrue(settings.allowsRuntimeProxyTunnelValidation(snapshot))
     }
 
     @Test

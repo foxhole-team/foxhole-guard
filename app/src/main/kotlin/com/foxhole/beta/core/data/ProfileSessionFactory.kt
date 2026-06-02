@@ -19,6 +19,8 @@ import com.foxhole.beta.vpn.FoxholeVpnService
 import com.foxhole.beta.vpn.PrivateDnsMode
 import com.foxhole.beta.vpn.PrivateDnsState
 import com.foxhole.beta.vpn.RuntimeConfigAssembler
+import com.foxhole.beta.vpn.TorManager
+import com.foxhole.beta.vpn.TorStartProfile
 import com.foxhole.beta.vpn.TorRuntimeInstaller
 import com.foxhole.beta.vpn.withIdentityVersion
 import java.util.UUID
@@ -28,6 +30,7 @@ internal class ProfileSessionFactory(
     private val routingRepository: RoutingRepository,
     private val runtimeConfigAssembler: RuntimeConfigAssembler,
     private val torRuntimeInstaller: TorRuntimeInstaller,
+    private val torManager: TorManager,
     private val dnsFilterAssetInstaller: DnsFilterAssetInstaller,
     private val diagnosticsLogger: DiagnosticsLogger,
     private val profileProvider: suspend (Long) -> Profile,
@@ -98,21 +101,34 @@ internal class ProfileSessionFactory(
         val correlationId = newRuntimeCorrelationId()
         val dnsFilterRuntimePaths = settings.prepareVerifiedDnsFilterRuntimePaths()
         val runtimeSettings = settings.disableUnverifiedDnsRuleSetFiltering(dnsFilterRuntimePaths)
+        var torProcessStarted = false
         val assembled =
             runCatching {
                 val torRuntimePaths =
-                    torRuntimeInstaller
+                    torManager
                         .prepare()
                         .withIdentityVersion(runtimeSettings.privacyRoute.identityVersion)
+                val torStart = torManager.start(TorStartProfile(paths = torRuntimePaths))
+                torProcessStarted = true
+                val torReady = torManager.awaitReady(TOR_BOOTSTRAP_READY_TIMEOUT_MS)
+                if (!torReady.ready) {
+                    error(
+                        "TOR bootstrap did not finish" +
+                            torReady.bootstrapProgress?.let { progress -> " (progress=$progress)" }.orEmpty(),
+                    )
+                }
                 runtimeConfigAssembler.assembleTorOnly(
                     settings = runtimeSettings,
                     activePreset = routingRepository.currentPresetForRuntime(),
                     privateDnsMode = privateDnsMode,
                     privateDnsState = privateDnsState,
-                    torRuntimePaths = torRuntimePaths,
+                    torRuntimePaths = torRuntimePaths.copy(socksPort = torStart.socksPort),
                     dnsFilterRuntimePaths = dnsFilterRuntimePaths,
                 )
             }.onFailure { error ->
+                if (torProcessStarted) {
+                    torManager.kill("tor_only_session_build_failed")
+                }
                 diagnosticsLogger.record(
                     "profile",
                     "tor-only session build failed sessionId=$correlationId error=${error.javaClass.simpleName}: ${error.message.orEmpty()}",
@@ -163,6 +179,7 @@ internal class ProfileSessionFactory(
 
     private companion object {
         private const val LOG_TAG = "FoxholeProfileSession"
+        private const val TOR_BOOTSTRAP_READY_TIMEOUT_MS = 120_000L
     }
 }
 

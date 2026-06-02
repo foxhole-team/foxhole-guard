@@ -415,7 +415,7 @@ private fun shouldShowMissingConnectedRouteIpLoading(
         snapshot.profileId != FoxholeVpnService.TOR_ONLY_PROFILE_ID
 
 internal fun IpInfo.hasDashboardLocationDetails(): Boolean =
-    (countryName?.isNotBlank() == true || countryCode?.isNotBlank() == true) &&
+    countryName?.isNotBlank() == true &&
         city?.isNotBlank() == true
 
 internal fun IpInfo.hasDashboardProviderDetails(): Boolean =
@@ -1487,7 +1487,7 @@ internal fun buildCountryLine(ipInfo: IpInfo): String {
 }
 
 internal fun buildCountryLineOrNull(ipInfo: IpInfo): String? =
-    formatCountryLineOrNull(ipInfo)
+    formatDashboardCountryLineOrNull(ipInfo)
 
 internal fun formatCountryLine(
     ipInfo: IpInfo,
@@ -1505,6 +1505,11 @@ internal fun formatCountryLineOrNull(ipInfo: IpInfo): String? {
         ipInfo.countryName?.takeIf(String::isNotBlank)
             ?: ipInfo.countryCode?.takeIf(String::isNotBlank)
             ?: return null
+    return "${countryEmoji(ipInfo.countryCode)} $country".trim()
+}
+
+internal fun formatDashboardCountryLineOrNull(ipInfo: IpInfo): String? {
+    val country = ipInfo.countryName?.takeIf(String::isNotBlank) ?: return null
     return "${countryEmoji(ipInfo.countryCode)} $country".trim()
 }
 

@@ -33,7 +33,10 @@ class TorRuntimeInstallerDeviceTest {
             val torrcDefaults = File(paths.torrcDefaultsFilePath.orEmpty())
             val nativeLyrebird = File(context.applicationInfo.nativeLibraryDir, "liblyrebird.so")
             assertTrue(torrcDefaults.isFile)
-            assertTrue(torrcDefaults.readText().contains(nativeLyrebird.absolutePath))
+            val torrcDefaultsText = torrcDefaults.readText()
+            assertTrue(torrcDefaultsText.contains(nativeLyrebird.absolutePath))
+            assertTrue(torrcDefaultsText.contains("UseBridges 1"))
+            assertTrue(torrcDefaultsText.contains("Bridge obfs4 "))
         }
     }
 

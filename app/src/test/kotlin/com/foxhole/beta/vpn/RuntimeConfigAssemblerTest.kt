@@ -34,6 +34,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -493,10 +494,47 @@ class RuntimeConfigAssemblerTest {
         val tunInbound = config["inbounds"]!!.jsonArray.first().jsonObject
         assertEquals("tun", tunInbound["type"]!!.jsonPrimitive.content)
         assertEquals("gvisor", tunInbound["stack"]!!.jsonPrimitive.content)
-        assertFalse(tunInbound.containsKey("exclude_package"))
+        assertEquals(
+            listOf(BuildConfig.APPLICATION_ID),
+            tunInbound["exclude_package"]!!.jsonArray.map { it.jsonPrimitive.content },
+        )
         assertTrue(
             route["rules"]!!.jsonArray.map { it.jsonObject }
                 .any { it["outbound"]?.jsonPrimitive?.content == "block" },
+        )
+    }
+
+    @Test
+    fun `tor only config uses external tor socks outbound when socks port is prepared`() {
+        val config =
+            parse(
+                assembler.assembleTorOnly(
+                    settings =
+                        Settings(
+                            privacyRoute =
+                                com.foxhole.beta.core.model.PrivacyRouteSettings(
+                                    mode = PrivacyRouteMode.TOR_OVER_VPN,
+                                    scope = PrivacyRouteScope.ALL_APPS,
+                                ),
+                        ),
+                    activePreset = null,
+                    torRuntimePaths = TorRuntimePaths(executablePath = "/tor", dataDirectory = "/tor-data", socksPort = 19_050),
+                ),
+            )
+
+        val proxy = config["outbounds"]!!.jsonArray.map { it.jsonObject }
+            .single { it["tag"]!!.jsonPrimitive.content == "proxy" }
+
+        assertEquals("socks", proxy["type"]!!.jsonPrimitive.content)
+        assertEquals("127.0.0.1", proxy["server"]!!.jsonPrimitive.content)
+        assertEquals(19_050, proxy["server_port"]!!.jsonPrimitive.int)
+        assertEquals("5", proxy["version"]!!.jsonPrimitive.content)
+        assertEquals("tcp", proxy["network"]!!.jsonPrimitive.content)
+        assertFalse(proxy.containsKey("executable_path"))
+        val tunInbound = config["inbounds"]!!.jsonArray.first().jsonObject
+        assertEquals(
+            listOf(BuildConfig.APPLICATION_ID),
+            tunInbound["exclude_package"]!!.jsonArray.map { it.jsonPrimitive.content },
         )
     }
 

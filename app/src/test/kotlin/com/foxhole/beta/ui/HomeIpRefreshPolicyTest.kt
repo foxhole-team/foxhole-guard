@@ -158,6 +158,7 @@ class HomeIpRefreshPolicyTest {
 
         assertTrue(shouldShowIpInfoGeoEnrichmentLoading(countryOnly))
         assertTrue(shouldShowIpInfoGeoEnrichmentLoading(fullInfo.copy(city = null)))
+        assertTrue(shouldShowIpInfoGeoEnrichmentLoading(fullInfo.copy(countryName = null)))
         assertTrue(shouldShowIpInfoGeoEnrichmentLoading(fullInfo.copy(isp = null)))
         assertFalse(shouldShowIpInfoGeoEnrichmentLoading(fullInfo))
     }

@@ -7,6 +7,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import java.io.File
 
 data class TorRuntimePaths(
@@ -15,6 +20,7 @@ data class TorRuntimePaths(
     val geoIpFilePath: String? = null,
     val geoIpv6FilePath: String? = null,
     val torrcDefaultsFilePath: String? = null,
+    val socksPort: Int? = null,
 )
 
 internal fun TorRuntimePaths.withIdentityVersion(identityVersion: Long): TorRuntimePaths {
@@ -161,8 +167,9 @@ class TorRuntimeInstaller(
             source
                 .readLines()
                 .mapNotNull { line -> normalizedTorrcDefaultsLine(line) }
+        val bridgeLines = defaultBridgeTorrcLines(targetRoot, transportLines)
         val content =
-            transportLines
+            (transportLines + bridgeLines)
                 .joinToString(separator = "\n", postfix = "\n")
         return File(dataDirectory, TORRC_DEFAULTS_FILE_NAME)
             .also { target -> target.writeTextIfChanged(content) }
@@ -206,6 +213,50 @@ class TorRuntimeInstaller(
     private fun nativePluggableTransportExists(name: String): Boolean {
         val nativeName = TOR_NATIVE_PLUGGABLE_TRANSPORT_NAMES[name].orEmpty()
         return nativeName.isNotBlank() && File(appContext.applicationInfo.nativeLibraryDir, nativeName).isFile
+    }
+
+    @Suppress("ReturnCount")
+    private fun defaultBridgeTorrcLines(
+        targetRoot: File,
+        transportLines: List<String>,
+    ): List<String> {
+        val ptConfig = File(targetRoot, "tor/pluggable_transports/pt_config.json").takeIf(File::isFile) ?: return emptyList()
+        val root =
+            runCatching { json.parseToJsonElement(ptConfig.readText()).jsonObject }
+                .getOrNull()
+                ?: return emptyList()
+        val recommended =
+            root["recommendedDefault"]
+                ?.jsonPrimitive
+                ?.contentOrNull
+                ?.trim()
+                ?.takeIf(String::isNotBlank)
+                ?: return emptyList()
+        val bridges =
+            root["bridges"]
+                ?.jsonObject
+                ?.get(recommended)
+                ?.jsonArray
+                ?.mapNotNull { bridge -> bridge.jsonPrimitive.contentOrNull?.trim()?.takeIf(String::isNotBlank) }
+                .orEmpty()
+        if (bridges.isEmpty()) {
+            return emptyList()
+        }
+        val bridgeTransport = bridges.first().substringBefore(' ')
+        val transportReady =
+            transportLines.any { line ->
+                line.startsWith("ClientTransportPlugin ") &&
+                    line
+                        .substringAfter("ClientTransportPlugin ")
+                        .substringBefore(" exec ")
+                        .split(',')
+                        .map(String::trim)
+                        .contains(bridgeTransport)
+            }
+        if (!transportReady) {
+            return emptyList()
+        }
+        return listOf("UseBridges 1") + bridges.map { bridge -> "Bridge $bridge" }
     }
 
     private fun findTorDataFile(
@@ -277,6 +328,7 @@ class TorRuntimeInstaller(
     }
 
     private companion object {
+        val json = Json { ignoreUnknownKeys = true }
         const val TOR_NATIVE_LIBRARY_NAME = "libTor.so"
         const val TORRC_DEFAULTS_FILE_NAME = "torrc-defaults"
         val TOR_EXECUTABLE_ASSET_NAMES = listOf("tor", "libTor.so", "tor/libTor.so")
