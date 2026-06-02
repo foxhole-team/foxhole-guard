@@ -88,4 +88,20 @@ class ConnectionTelemetryProbeTest {
         assertEquals(address, active?.resolvedAddress)
         assertEquals(true, active?.matchesRequest(42L, "vless-1"))
     }
+
+    @Test
+    fun `server tcp ping refuses vpn network handle`() {
+        assertEquals(
+            true,
+            shouldUseNetworkForDirectServerPing(upstreamNetworkHandle = 101L, vpnNetworkHandle = 202L),
+        )
+        assertEquals(
+            false,
+            shouldUseNetworkForDirectServerPing(upstreamNetworkHandle = 101L, vpnNetworkHandle = 101L),
+        )
+        assertEquals(
+            false,
+            shouldUseNetworkForDirectServerPing(upstreamNetworkHandle = null, vpnNetworkHandle = 101L),
+        )
+    }
 }
