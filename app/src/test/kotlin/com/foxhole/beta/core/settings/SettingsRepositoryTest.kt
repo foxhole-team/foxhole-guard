@@ -26,6 +26,7 @@ import com.foxhole.beta.core.model.SmartProfileProtocolMemory
 import com.foxhole.beta.core.model.SmartStartTransportPriority
 import com.foxhole.beta.core.model.SubscriptionRefreshInterval
 import com.foxhole.beta.core.model.ThemeMode
+import com.foxhole.beta.core.model.TrafficMode
 import com.foxhole.beta.core.model.UiSettings
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
@@ -117,6 +118,31 @@ class SettingsRepositoryTest {
             selectedPackagesRoutingMode(
                 currentMode = PerAppRoutingMode.INCLUDE_SELECTED_APPS,
                 selectedPackages = emptyList(),
+            ),
+        )
+    }
+
+    @Test
+    fun `split tunnel app routing forces tunnel traffic mode`() {
+        assertEquals(
+            TrafficMode.TUNNEL,
+            splitTunnelTrafficMode(
+                currentMode = TrafficMode.PROXY,
+                perAppRoutingMode = PerAppRoutingMode.INCLUDE_SELECTED_APPS,
+            ),
+        )
+        assertEquals(
+            TrafficMode.TUNNEL,
+            splitTunnelTrafficMode(
+                currentMode = TrafficMode.PROXY,
+                perAppRoutingMode = PerAppRoutingMode.EXCLUDE_SELECTED_APPS,
+            ),
+        )
+        assertEquals(
+            TrafficMode.PROXY,
+            splitTunnelTrafficMode(
+                currentMode = TrafficMode.PROXY,
+                perAppRoutingMode = PerAppRoutingMode.FULL_TUNNEL,
             ),
         )
     }

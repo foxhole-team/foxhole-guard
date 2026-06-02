@@ -1065,6 +1065,7 @@ class SettingsRepository(
                     current.connection.copy(
                         safeModeEnabled = current.connection.safeModeEnabled && nextMode == PerAppRoutingMode.FULL_TUNNEL,
                     ),
+                traffic = current.traffic.copy(mode = splitTunnelTrafficMode(current.traffic.mode, nextMode)),
                 expert =
                     current.expert.copy(
                         perAppRoutingMode = nextMode,
@@ -1078,12 +1079,14 @@ class SettingsRepository(
                 value
                     .filterNot { packageName -> packageName == BuildConfig.APPLICATION_ID }
                     .distinct()
+            val nextMode = selectedPackagesRoutingMode(it.expert.perAppRoutingMode, normalizedSelectedPackages)
             it.copy(
+                traffic = it.traffic.copy(mode = splitTunnelTrafficMode(it.traffic.mode, nextMode)),
                 expert =
                     it.expert.copy(
                         selectedPackages = normalizedSelectedPackages,
                         blockedPackages = it.expert.blockedPackages.filterNot { packageName -> packageName in normalizedSelectedPackages },
-                        perAppRoutingMode = selectedPackagesRoutingMode(it.expert.perAppRoutingMode, normalizedSelectedPackages),
+                        perAppRoutingMode = nextMode,
                     ),
             )
         }
@@ -2302,6 +2305,16 @@ internal fun selectedPackagesRoutingMode(
         selectedPackages.isEmpty() -> PerAppRoutingMode.FULL_TUNNEL
         currentMode == PerAppRoutingMode.FULL_TUNNEL -> PerAppRoutingMode.INCLUDE_SELECTED_APPS
         else -> currentMode
+    }
+
+internal fun splitTunnelTrafficMode(
+    currentMode: TrafficMode,
+    perAppRoutingMode: PerAppRoutingMode,
+): TrafficMode =
+    if (perAppRoutingMode == PerAppRoutingMode.FULL_TUNNEL) {
+        currentMode
+    } else {
+        TrafficMode.TUNNEL
     }
 
 internal fun normalizeSmartProfilePreferences(
