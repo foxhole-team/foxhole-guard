@@ -23,7 +23,6 @@ internal fun activeServerPingTarget(
             protocolOptionId = session.protocolOptionId,
             target = it,
             resolvedAddress = readiness?.address,
-            preflightLatencyMs = readiness?.latencyMs,
         )
     }
 

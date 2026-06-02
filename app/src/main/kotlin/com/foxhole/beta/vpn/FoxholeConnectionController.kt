@@ -843,7 +843,6 @@ internal data class ActiveServerPingTarget(
     val protocolOptionId: String?,
     val target: VpnHealthProbeTarget,
     val resolvedAddress: InetAddress? = null,
-    val preflightLatencyMs: Long? = null,
 ) {
     fun matchesRequest(
         requestedProfileId: Long,

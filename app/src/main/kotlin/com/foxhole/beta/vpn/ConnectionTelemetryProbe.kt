@@ -282,7 +282,6 @@ internal class ConnectionTelemetryProbe(
         require(target.transport == VpnHealthProbeTransport.TCP) {
             "server ping unavailable for ${target.transport.name.lowercase()} transport"
         }
-        activeTarget.preflightLatencyMs?.let { return it.coerceAtLeast(1L) }
         val upstreamNetwork = currentUpstreamNetwork() ?: error("upstream network unavailable")
         return withContext(Dispatchers.IO) {
             measureServerTcpConnectLatency(
