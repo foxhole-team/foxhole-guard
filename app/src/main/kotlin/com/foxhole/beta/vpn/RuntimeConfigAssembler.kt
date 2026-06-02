@@ -1778,7 +1778,7 @@ class RuntimeConfigAssembler(
     private fun DnsSettings.localGuardVerifiedRuleSetSettings(
         dnsFilterRuntimePaths: DnsFilterRuntimePaths?,
     ): DnsSettings =
-        if (bundledAdGuardFilterEnabled() && dnsFilterRuntimePaths == null) {
+        if (filteringEnabled && dnsFilterRuntimePaths == null) {
             disableUnverifiedRuleSetRuntimeDns()
         } else {
             this
@@ -1787,7 +1787,7 @@ class RuntimeConfigAssembler(
     private fun Settings.verifiedRuleSetRuntimeSettings(
         dnsFilterRuntimePaths: DnsFilterRuntimePaths?,
     ): Settings =
-        if (dns.bundledAdGuardFilterEnabled() && dnsFilterRuntimePaths == null) {
+        if (dns.filteringEnabled && dnsFilterRuntimePaths == null) {
             copy(dns = dns.disableUnverifiedRuleSetRuntimeDns())
         } else {
             this

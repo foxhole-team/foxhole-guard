@@ -13,7 +13,7 @@ class TrafficMapStylingTest {
         val lightColors = trafficMapColors(darkTheme = false, surfaceColor = Color.White)
 
         assertEquals(
-            Color(0xFF7B7F84),
+            Color.Gray,
             darkColors.countryFill,
         )
         assertEquals(

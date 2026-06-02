@@ -326,7 +326,7 @@ fun DnsSettings.dnsRuleSetFilteringEnabled(): Boolean =
     filteringEnabled && (blockAds || blockTrackers || blockAppTelemetry || blockMaliciousDomains)
 
 fun DnsSettings.disableUnverifiedRuleSetRuntimeDns(): DnsSettings =
-    if (dnsRuleSetFilteringEnabled()) {
+    if (filteringEnabled) {
         copy(
             dnsThroughVpn = false,
             blockOutsideTunnel = false,

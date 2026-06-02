@@ -1102,7 +1102,7 @@ private data class TrafficMapPowerState(
 }
 
 private val TRAFFIC_MAP_CARD_TOTAL_HEIGHT = 184.dp
-private val TRAFFIC_MAP_DEFAULT_COUNTRY_FILL = Color(0xFF7B7F84)
+private val TRAFFIC_MAP_DEFAULT_COUNTRY_FILL = Color.Gray
 private const val TRAFFIC_MAP_POWER_STATE_STARTUP_DELAY_MS = 1_200L
 private const val TRAFFIC_MAP_WEIGHT = 0.74f
 private const val TRAFFIC_MAP_LEGEND_WEIGHT = 0.26f

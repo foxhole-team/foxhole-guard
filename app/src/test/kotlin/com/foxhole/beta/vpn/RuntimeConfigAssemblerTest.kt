@@ -1152,6 +1152,31 @@ class RuntimeConfigAssemblerTest {
     }
 
     @Test
+    fun `local firewall guard suppresses bypass DNS rules until filtering is verified`() {
+        val settings =
+            Settings(
+                dns =
+                    DnsSettings(
+                        filteringEnabled = true,
+                        blockAds = false,
+                        blockTrackers = false,
+                        blockAppTelemetry = false,
+                        blockMaliciousDomains = false,
+                        appBypassPackages = listOf("com.example.bank"),
+                        domainBypassRules = listOf("login.example", "push.example"),
+                    ),
+                expert = ExpertSettings(firewallEnabled = true),
+            )
+
+        val config = parse(assembler.assembleLocalGuard(settings, LocalGuardMode.FIREWALL))
+        val dns = config["dns"]!!.jsonObject
+        val route = config["route"]!!.jsonObject
+
+        assertFalse(dns.containsKey("rules"))
+        assertFalse(route.containsKey("rule_set"))
+    }
+
+    @Test
     fun `local firewall guard attaches verified DNS rule set when prepared`() {
         val filterPath = "/data/user/0/com.foxhole.beta/files/dns-rule-sets/adguard-dns-filter.verified.srs"
         val config =
@@ -2582,7 +2607,7 @@ class RuntimeConfigAssemblerTest {
     }
 
     @Test
-    fun `dns filtering bypass rules use remote resolver and disappear when filtering is disabled`() {
+    fun `unverified DNS filtering suppresses bypass runtime rules`() {
         val settings =
             Settings(
                 dns =
@@ -2598,6 +2623,36 @@ class RuntimeConfigAssemblerTest {
             )
 
         val config = parse(assembler.assemble(baseConfigWithRules("profile.example"), settings, null))
+
+        assertFalse(config["dns"]!!.jsonObject.containsKey("rules"))
+    }
+
+    @Test
+    fun `verified DNS filtering bypass rules use remote resolver and disappear when filtering is disabled`() {
+        val filterPath = "/data/user/0/com.foxhole.beta/files/dns-rule-sets/adguard-dns-filter.srs"
+        val settings =
+            Settings(
+                dns =
+                    DnsSettings(
+                        filteringEnabled = true,
+                        blockAds = false,
+                        blockTrackers = false,
+                        blockAppTelemetry = false,
+                        blockMaliciousDomains = false,
+                        appBypassPackages = listOf("com.example.bank"),
+                        domainBypassRules = listOf("login.example", "push.example"),
+                    ),
+            )
+
+        val config =
+            parse(
+                assembler.assemble(
+                    baseConfigWithRules("profile.example"),
+                    settings,
+                    null,
+                    dnsFilterRuntimePaths = DnsFilterRuntimePaths(adGuardDnsFilterPath = filterPath),
+                ),
+            )
         val dnsRules = config["dns"]!!.jsonObject["rules"]!!.jsonArray.map { it.jsonObject }
 
         assertEquals(2, dnsRules.size)

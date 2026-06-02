@@ -33,7 +33,6 @@ import com.foxhole.beta.core.model.TrafficMode
 import com.foxhole.beta.core.model.TrafficSnapshot
 import com.foxhole.beta.core.model.VpnSession
 import com.foxhole.beta.core.model.disableUnverifiedRuleSetRuntimeDns
-import com.foxhole.beta.core.model.dnsRuleSetFilteringEnabled
 import com.foxhole.beta.core.model.isUdpTransport
 import com.foxhole.beta.core.network.DNS_INDEPENDENT_IP_INFO_ENDPOINT
 import com.foxhole.beta.core.network.IpInfoFetchMode
@@ -1202,7 +1201,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
             !PrivateDnsSettings.current(this).isSupportedForSystemDnsProtection()
 
     private suspend fun Settings.prepareLocalGuardDnsFilterRuntimePaths(): DnsFilterRuntimePaths? {
-        if (!dns.dnsRuleSetFilteringEnabled() || expert.systemDnsProtectionEnabled) {
+        if (!dns.filteringEnabled || expert.systemDnsProtectionEnabled) {
             return null
         }
         return container.dnsFilterAssetInstaller.prepareVerifiedOrNull()
@@ -1215,7 +1214,7 @@ class FoxholeVpnService : VpnService(), RuntimeServiceHost {
     private fun Settings.disableUnverifiedLocalGuardDnsFiltering(
         dnsFilterRuntimePaths: DnsFilterRuntimePaths?,
     ): Settings =
-        if (dns.dnsRuleSetFilteringEnabled() && !expert.systemDnsProtectionEnabled && dnsFilterRuntimePaths == null) {
+        if (dns.filteringEnabled && !expert.systemDnsProtectionEnabled && dnsFilterRuntimePaths == null) {
             copy(dns = dns.disableUnverifiedRuleSetRuntimeDns())
         } else {
             this

@@ -4,7 +4,6 @@ import android.util.Log
 import com.foxhole.beta.BuildConfig
 import com.foxhole.beta.core.diagnostics.DiagnosticSanitizer
 import com.foxhole.beta.core.diagnostics.DiagnosticsLogger
-import com.foxhole.beta.core.model.DnsSettings
 import com.foxhole.beta.core.model.Profile
 import com.foxhole.beta.core.model.ProtocolHint
 import com.foxhole.beta.core.model.Settings
@@ -156,7 +155,7 @@ internal class ProfileSessionFactory(
             (privacyRoute.bypassVpnTunnel || !selectedProtocolHint.isUdpTransport())
 
     private suspend fun Settings.prepareVerifiedDnsFilterRuntimePaths(): DnsFilterRuntimePaths? {
-        if (!dns.bundledAdGuardFilterEnabled()) {
+        if (!dns.filteringEnabled) {
             return null
         }
         return dnsFilterAssetInstaller.prepareVerifiedOrNull()
@@ -169,7 +168,7 @@ internal class ProfileSessionFactory(
     private fun Settings.disableUnverifiedDnsRuleSetFiltering(
         dnsFilterRuntimePaths: DnsFilterRuntimePaths?,
     ): Settings =
-        if (dns.bundledAdGuardFilterEnabled() && dnsFilterRuntimePaths == null) {
+        if (dns.filteringEnabled && dnsFilterRuntimePaths == null) {
             copy(dns = dns.disableUnverifiedRuleSetRuntimeDns())
         } else {
             this
@@ -183,6 +182,3 @@ internal class ProfileSessionFactory(
         private const val TOR_BOOTSTRAP_READY_TIMEOUT_MS = 120_000L
     }
 }
-
-private fun DnsSettings.bundledAdGuardFilterEnabled(): Boolean =
-    filteringEnabled && (blockAds || blockTrackers || blockAppTelemetry || blockMaliciousDomains)
