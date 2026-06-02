@@ -214,6 +214,7 @@ internal fun buildHomeRouteUiState(
         recommendedProtocolOptionIds = activeRecommendedProtocolOptionIds,
         favoriteProtocolOptionId = activeFavoriteProtocolOptionId,
         smartStartRememberedLatenciesByOptionId = smartStartRememberedLatenciesByOptionId,
+        includeLiveTraffic = false,
     )
 }
 

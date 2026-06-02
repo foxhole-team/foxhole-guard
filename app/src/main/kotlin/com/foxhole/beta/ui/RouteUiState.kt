@@ -210,6 +210,7 @@ internal fun HomeUiState.toHomeRouteUiState(
     recommendedProtocolOptionIds: Set<String> = emptySet(),
     favoriteProtocolOptionId: String? = null,
     smartStartRememberedLatenciesByOptionId: Map<String, Long> = emptyMap(),
+    includeLiveTraffic: Boolean = true,
 ): HomeRouteUiState =
     HomeRouteUiState(
         profilesLoaded = profilesLoaded,
@@ -230,7 +231,7 @@ internal fun HomeUiState.toHomeRouteUiState(
         ipInfoLoading = ipInfoLoading,
         ipInfoRefreshReason = ipInfoRefreshReason,
         dashboardConnectionMetricsLoading = dashboardConnectionMetricsLoading,
-        traffic = traffic,
+        traffic = if (includeLiveTraffic) traffic else TrafficSnapshot(),
         reconnectRequired = reconnectRequired,
         reconnectInProgress = reconnectInProgress,
         torOperation = torOperation,

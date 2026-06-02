@@ -114,6 +114,7 @@ import com.foxhole.beta.core.model.Profile
 import com.foxhole.beta.core.model.ProfileSourceType
 import com.foxhole.beta.core.model.ProtocolHint
 import com.foxhole.beta.core.model.ProxyInboundSettings
+import com.foxhole.beta.core.model.TrafficSnapshot
 import com.foxhole.beta.core.model.TrafficMapUiState
 import com.foxhole.beta.core.model.TrafficMode
 import com.foxhole.beta.core.model.UiSettings
@@ -131,6 +132,7 @@ import kotlinx.coroutines.flow.StateFlow
 @Suppress("CyclomaticComplexMethod", "LongMethod", "LongParameterList")
 fun HomeScreen(
     state: HomeRouteUiState,
+    trafficStateFlow: StateFlow<TrafficSnapshot>,
     trafficMapStateFlow: StateFlow<TrafficMapUiState>,
     snackbarHostState: SnackbarHostState,
     onImportFromClipboard: () -> Unit,
@@ -244,7 +246,6 @@ fun HomeScreen(
             disabledContainerColor = Color.Transparent,
         )
     val dashboardSecondaryActionIconSize = 21.dp
-    val connectionDurationText = rememberConnectionDurationText(state.connection)
     val dashboardProtocolModel =
         remember(
             state.activeProfile,
@@ -483,13 +484,6 @@ fun HomeScreen(
                 startupStage = dashboardStartupStage,
                 activeReorderCard = activeReorderCard,
             )
-    val trafficMapState =
-        if (trafficMapHeavyContentReady) {
-            val collectedTrafficMapState by trafficMapStateFlow.collectAsStateWithLifecycle()
-            collectedTrafficMapState
-        } else {
-            remember { TrafficMapUiState() }
-        }
     val latestTrafficUiVisibilityChanged by rememberUpdatedState(onTrafficUiVisibilityChanged)
 
     LaunchedEffect(Unit) {
@@ -592,7 +586,7 @@ fun HomeScreen(
                                     onMove = ::moveDashboardCard,
                                 ) {
                                     TrafficMapDashboardCard(
-                                        state = trafficMapState,
+                                        stateFlow = trafficMapStateFlow,
                                         contentReady = trafficMapHeavyContentReady,
                                         legendLoading =
                                             shouldShowTrafficMapLegendLoading(
@@ -1111,6 +1105,7 @@ fun HomeScreen(
                                             modifier = Modifier.weight(1f),
                                             verticalArrangement = Arrangement.spacedBy(2.dp),
                                         ) {
+                                            val connectionDurationText = rememberConnectionDurationText(state.connection)
                                             val connectionMetricsAvailable = state.connection.state == ConnectionState.CONNECTED
                                             val serverPingText =
                                                 when {
@@ -1208,10 +1203,12 @@ fun HomeScreen(
                                     onActiveCardChange = { activeReorderCard = it },
                                     onMove = ::moveDashboardCard,
                                 ) {
+                                    val traffic by trafficStateFlow.collectAsStateWithLifecycle()
                                     val trafficModel =
                                         resolveHomeDashboardTrafficModel(
-                                            state,
-                                            System.currentTimeMillis(),
+                                            state = state,
+                                            traffic = traffic,
+                                            now = System.currentTimeMillis(),
                                         )
                                     val trafficLoading = false
                                     val totalTrafficText =
@@ -1307,12 +1304,12 @@ fun HomeScreen(
                                                             value =
                                                                 formatBytes(
                                                                     context,
-                                                                    state.traffic.rxTotalBytes,
+                                                                    traffic.rxTotalBytes,
                                                                 ),
                                                             secondary =
                                                                 formatRate(
                                                                     context,
-                                                                    state.traffic.rxBytesPerSec,
+                                                                    traffic.rxBytesPerSec,
                                                                 ),
                                                             valueTag = "home_traffic_rx_value",
                                                             secondaryTag = "home_traffic_rx_rate",
@@ -1328,12 +1325,12 @@ fun HomeScreen(
                                                             value =
                                                                 formatBytes(
                                                                     context,
-                                                                    state.traffic.txTotalBytes,
+                                                                    traffic.txTotalBytes,
                                                                 ),
                                                             secondary =
                                                                 formatRate(
                                                                     context,
-                                                                    state.traffic.txBytesPerSec,
+                                                                    traffic.txBytesPerSec,
                                                                 ),
                                                             valueTag = "home_traffic_tx_value",
                                                             secondaryTag = "home_traffic_tx_rate",
@@ -1358,11 +1355,11 @@ fun HomeScreen(
                                                             leadingContentSpacing = 0.dp,
                                                             labelColor = trafficLabelTint,
                                                             label = stringResource(R.string.home_total_label),
-                                                            value = formatBytes(context, state.traffic.rxTotalBytes + state.traffic.txTotalBytes),
+                                                            value = formatBytes(context, traffic.rxTotalBytes + traffic.txTotalBytes),
                                                             secondary =
                                                                 formatRate(
                                                                     context,
-                                                                    state.traffic.rxBytesPerSec + state.traffic.txBytesPerSec,
+                                                                    traffic.rxBytesPerSec + traffic.txBytesPerSec,
                                                                 ),
                                                             valueTag = "home_traffic_total_value",
                                                             secondaryTag = "home_traffic_total_rate",
@@ -1945,7 +1942,7 @@ private const val DASHBOARD_CARD_EDGE_RESISTANCE_FRACTION = 0.18f
 private const val DASHBOARD_STARTUP_STAGE_INITIAL = 0
 private const val DASHBOARD_STARTUP_STAGE_WARM_RETURN = 2
 private const val DASHBOARD_STARTUP_STAGE_ALL = 4
-private const val DASHBOARD_CARD_STARTUP_STAGE_DELAY_MS = 32L
+private const val DASHBOARD_CARD_STARTUP_STAGE_DELAY_MS = 16L
 private val DashboardCardReorderFallbackMoveDistance = 96.dp
 private val ImportMenuWidthChrome = 62.dp
 private val ImportMenuMinWidth = 188.dp

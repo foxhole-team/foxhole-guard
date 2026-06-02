@@ -37,6 +37,7 @@ import com.foxhole.beta.core.model.ProtocolHint
 import com.foxhole.beta.core.model.ProxyInboundSettings
 import com.foxhole.beta.core.model.SecureDnsMode
 import com.foxhole.beta.core.model.Settings
+import com.foxhole.beta.core.model.TrafficSnapshot
 import com.foxhole.beta.core.model.TrafficMode
 import com.foxhole.beta.core.model.isUdpTransport
 import com.foxhole.beta.core.network.IpInfoFetchMode
@@ -930,16 +931,27 @@ private fun InetAddress.isUniqueLocalIpv6Address(): Boolean =
 internal fun resolveHomeDashboardTrafficModel(
     state: HomeRouteUiState,
     now: Long,
+): HomeDashboardTrafficModel =
+    resolveHomeDashboardTrafficModel(
+        state = state,
+        traffic = state.traffic,
+        now = now,
+    )
+
+internal fun resolveHomeDashboardTrafficModel(
+    state: HomeRouteUiState,
+    traffic: TrafficSnapshot,
+    now: Long,
 ): HomeDashboardTrafficModel {
-    val totals = visibleProfileTrafficTotals(state)
+    val totals = visibleProfileTrafficTotals(state = state, traffic = traffic)
     val totalBytes = totals.sumOf { total -> total.rxTotalBytes + total.txTotalBytes }
     val totalDays = ((now - state.settings.usageTrackingStartedAt).coerceAtLeast(0L) / 86_400_000L) + 1L
     val selectedProtocolTotal = selectedSmartProtocolTrafficTotal(state.activeProfile, totals)
     return HomeDashboardTrafficModel(
         totalBytes = totalBytes,
         totalDays = totalDays,
-        hasIncomingTraffic = state.traffic.rxBytesPerSec > 0L,
-        hasOutgoingTraffic = state.traffic.txBytesPerSec > 0L,
+        hasIncomingTraffic = traffic.rxBytesPerSec > 0L,
+        hasOutgoingTraffic = traffic.txBytesPerSec > 0L,
         selectedProtocolTotalBytes = selectedProtocolTotal?.let { total -> total.rxTotalBytes + total.txTotalBytes },
         selectedProtocolHint = selectedProtocolTotal?.protocolHint,
     )

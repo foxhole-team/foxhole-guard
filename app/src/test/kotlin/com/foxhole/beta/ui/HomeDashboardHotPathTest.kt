@@ -220,11 +220,20 @@ class HomeDashboardHotPathTest {
     fun `traffic map heavy content has no extra dashboard return delay`() {
         val homeSource = testSourceFile("HomeScreen.kt").readText()
 
-        assertTrue(homeSource.contains("DASHBOARD_CARD_STARTUP_STAGE_DELAY_MS = 32L"))
+        assertTrue(homeSource.contains("DASHBOARD_CARD_STARTUP_STAGE_DELAY_MS = 16L"))
         assertFalse(homeSource.contains("TRAFFIC_MAP_HEAVY_CONTENT_STARTUP_DELAY_MS"))
+        assertFalse(homeSource.contains("DASHBOARD_CARD_STARTUP_STAGE_DELAY_MS = 32L"))
         assertFalse(homeSource.contains("DASHBOARD_CARD_STARTUP_STAGE_DELAY_MS = 48L"))
         assertFalse(homeSource.contains("TRAFFIC_MAP_HEAVY_CONTENT_STARTUP_DELAY_MS = 220L"))
         assertFalse(homeSource.contains("TRAFFIC_MAP_HEAVY_CONTENT_STARTUP_DELAY_MS = 650L"))
+    }
+
+    @Test
+    fun `settings home startup staging stays under one frame per stage`() {
+        val settingsSource = testSourceFile("SettingsScreens.kt").readText()
+
+        assertTrue(settingsSource.contains("SETTINGS_HOME_STARTUP_STAGE_DELAY_MS = 16L"))
+        assertFalse(settingsSource.contains("SETTINGS_HOME_STARTUP_STAGE_DELAY_MS = 80L"))
     }
 
     @Test

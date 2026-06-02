@@ -115,6 +115,23 @@ class RouteStateIsolationTest {
     }
 
     @Test
+    fun `dashboard route model can omit live traffic ticks`() {
+        val traffic =
+            TrafficSnapshot(
+                available = true,
+                rxBytesPerSec = 512L,
+                txBytesPerSec = 128L,
+                rxTotalBytes = 4096L,
+                txTotalBytes = 1024L,
+                sampledAt = 42L,
+            )
+
+        val route = HomeUiState(traffic = traffic).toHomeRouteUiState(includeLiveTraffic = false)
+
+        assertEquals(TrafficSnapshot(), route.traffic)
+    }
+
+    @Test
     fun `routing summary route can omit installed app inventory`() {
         val state =
             HomeUiState(

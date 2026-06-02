@@ -71,6 +71,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.core.content.ContextCompat
 import androidx.core.content.getSystemService
 import com.foxhole.beta.BuildConfig
@@ -86,12 +87,35 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.flow.StateFlow
 import java.util.Locale
 import kotlin.math.atan2
 import kotlin.math.floor
 import kotlin.math.min
 import kotlin.math.roundToInt
 import kotlin.math.sqrt
+
+@Composable
+internal fun TrafficMapDashboardCard(
+    stateFlow: StateFlow<TrafficMapUiState>,
+    modifier: Modifier = Modifier,
+    contentReady: Boolean = true,
+    legendLoading: Boolean = false,
+) {
+    val state =
+        if (contentReady) {
+            val collectedState by stateFlow.collectAsStateWithLifecycle()
+            collectedState
+        } else {
+            remember { TrafficMapUiState() }
+        }
+    TrafficMapDashboardCard(
+        state = state,
+        modifier = modifier,
+        contentReady = contentReady,
+        legendLoading = legendLoading,
+    )
+}
 
 @Composable
 internal fun TrafficMapDashboardCard(

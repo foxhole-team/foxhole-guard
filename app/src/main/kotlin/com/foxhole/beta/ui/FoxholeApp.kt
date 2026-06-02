@@ -307,6 +307,7 @@ fun FoxholeApp(
                     val state by viewModel.homeRouteState.collectAsStateWithLifecycle()
                     HomeScreen(
                         state = state,
+                        trafficStateFlow = viewModel.dashboardTraffic,
                         trafficMapStateFlow = viewModel.trafficMapUiState,
                         snackbarHostState = snackbarHostState,
                         onImportFromClipboard = viewModel::onPasteFromClipboard,

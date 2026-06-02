@@ -44,6 +44,7 @@ import com.foxhole.beta.core.model.StatisticsRefreshInterval
 import com.foxhole.beta.core.model.StatisticsRetention
 import com.foxhole.beta.core.model.SubscriptionRefreshInterval
 import com.foxhole.beta.core.model.ThemeMode
+import com.foxhole.beta.core.model.TrafficSnapshot
 import com.foxhole.beta.core.model.TrafficMode
 import com.foxhole.beta.core.model.TunStack
 import com.foxhole.beta.core.model.V2RayApiSettings
@@ -404,6 +405,9 @@ class HomeViewModel(
             )
 
     internal val controlUiState: StateFlow<HomeUiState> = coreUiState
+
+    val dashboardTraffic: StateFlow<TrafficSnapshot> =
+        container.connectionController.traffic
 
     val uiState: StateFlow<HomeUiState> =
         combine(

@@ -86,10 +86,16 @@ internal fun visibleProfileTrafficTotals(state: DiagnosticsRouteUiState): List<P
     )
 
 internal fun visibleProfileTrafficTotals(state: HomeRouteUiState): List<ProfileTrafficTotal> =
+    visibleProfileTrafficTotals(state = state, traffic = state.traffic)
+
+internal fun visibleProfileTrafficTotals(
+    state: HomeRouteUiState,
+    traffic: TrafficSnapshot,
+): List<ProfileTrafficTotal> =
     visibleProfileTrafficTotals(
         settings = state.settings,
         activeProfile = state.activeProfile,
-        traffic = state.traffic,
+        traffic = traffic,
         currentProtocolOptionId = state.connection.protocolOptionId,
         currentProtocolHint = state.connection.protocolHint,
     )
