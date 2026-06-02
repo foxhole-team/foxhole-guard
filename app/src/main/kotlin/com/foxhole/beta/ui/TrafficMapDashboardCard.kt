@@ -37,7 +37,6 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -80,6 +79,8 @@ import com.foxhole.beta.core.traffic.TrafficMapCountryShape
 import com.foxhole.beta.core.traffic.TrafficMapCountryShapeAssetParser
 import com.foxhole.beta.ui.theme.LocalFoxholeDarkTheme
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -695,17 +696,23 @@ private fun TrafficMapLegendCell(
 private fun rememberTrafficMapPowerState(): TrafficMapPowerState {
     val appContext = LocalContext.current.applicationContext
     val powerManager = remember(appContext) { appContext.getSystemService<PowerManager>() }
-    var state by remember(appContext, powerManager) {
-        mutableStateOf(resolveTrafficMapPowerState(appContext, powerManager))
-    }
-    DisposableEffect(appContext, powerManager) {
+    val state by produceState(
+        initialValue =
+            TrafficMapPowerState(
+                powerSaveMode = powerManager?.isPowerSaveMode == true,
+                batteryPercent = null,
+            ),
+        key1 = appContext,
+        key2 = powerManager,
+    ) {
+        delay(TRAFFIC_MAP_POWER_STATE_STARTUP_DELAY_MS)
         val receiver =
             object : BroadcastReceiver() {
                 override fun onReceive(
                     context: Context?,
                     intent: Intent?,
                 ) {
-                    state = resolveTrafficMapPowerState(appContext, powerManager, intent)
+                    value = resolveTrafficMapPowerState(appContext, powerManager, intent)
                 }
             }
         val filter =
@@ -720,8 +727,12 @@ private fun rememberTrafficMapPowerState(): TrafficMapPowerState {
                 filter,
                 ContextCompat.RECEIVER_NOT_EXPORTED,
             )
-        state = resolveTrafficMapPowerState(appContext, powerManager, stickyIntent)
-        onDispose { runCatching { appContext.unregisterReceiver(receiver) } }
+        value = resolveTrafficMapPowerState(appContext, powerManager, stickyIntent)
+        try {
+            awaitCancellation()
+        } finally {
+            runCatching { appContext.unregisterReceiver(receiver) }
+        }
     }
     return state
 }
@@ -981,6 +992,7 @@ private data class TrafficMapPowerState(
 }
 
 private val TRAFFIC_MAP_CARD_TOTAL_HEIGHT = 184.dp
+private const val TRAFFIC_MAP_POWER_STATE_STARTUP_DELAY_MS = 1_200L
 private const val TRAFFIC_MAP_WEIGHT = 0.74f
 private const val TRAFFIC_MAP_LEGEND_WEIGHT = 0.26f
 private const val TRAFFIC_MAP_WORLD_ASPECT_RATIO = 2f

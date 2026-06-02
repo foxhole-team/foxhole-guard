@@ -1737,9 +1737,9 @@ internal fun shouldComposeDashboardCardNow(
 private fun dashboardCardStartupStage(card: DashboardCard): Int =
     when (card) {
         DashboardCard.TRAFFIC_MAP -> 1
+        DashboardCard.NETWORK -> 1
         DashboardCard.PROFILES -> 2
         DashboardCard.ACTIONS -> 3
-        DashboardCard.NETWORK -> 4
         DashboardCard.TRAFFIC -> DASHBOARD_STARTUP_STAGE_ALL
     }
 
@@ -1781,9 +1781,9 @@ private fun rememberHomeNetworkGeoRowsLoading(
 private const val DASHBOARD_CARD_ACTIVE_Z_INDEX = 100f
 private const val DASHBOARD_CARD_REORDER_THRESHOLD_FRACTION = 0.5f
 private const val DASHBOARD_CARD_EDGE_RESISTANCE_FRACTION = 0.18f
-private const val DASHBOARD_STARTUP_STAGE_INITIAL = 4
-private const val DASHBOARD_STARTUP_STAGE_ALL = 5
-private const val DASHBOARD_CARD_STARTUP_STAGE_DELAY_MS = 320L
+private const val DASHBOARD_STARTUP_STAGE_INITIAL = 1
+private const val DASHBOARD_STARTUP_STAGE_ALL = 4
+private const val DASHBOARD_CARD_STARTUP_STAGE_DELAY_MS = 220L
 private val DashboardCardReorderFallbackMoveDistance = 96.dp
 private val ImportMenuWidthChrome = 62.dp
 private val ImportMenuMinWidth = 188.dp
