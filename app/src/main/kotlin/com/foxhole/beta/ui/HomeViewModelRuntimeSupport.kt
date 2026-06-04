@@ -77,7 +77,7 @@ internal fun HomeViewModel.refreshIpInfoSilentlyInternal() {
     )
 }
 
-@Suppress("CyclomaticComplexMethod", "TooGenericExceptionCaught")
+@Suppress("CyclomaticComplexMethod", "LongMethod", "TooGenericExceptionCaught")
 internal fun HomeViewModel.refreshIpInfoInternalInternal(
     reportFailures: Boolean,
     showLoading: Boolean,
@@ -85,10 +85,11 @@ internal fun HomeViewModel.refreshIpInfoInternalInternal(
     fetchMode: IpInfoFetchMode,
     minimumLoadingDurationMs: Long = 0L,
     reason: IpInfoRefreshReason = IpInfoRefreshReason.FOREGROUND,
+    targetOverride: IpInfoRefreshTarget? = null,
     onPublished: (suspend (IpInfo) -> Unit)? = null,
 ) {
     val requestSnapshot = container.connectionController.snapshot.value
-    val requestTarget = ipInfoRefreshTargetForSnapshot(requestSnapshot)
+    val requestTarget = targetOverride ?: ipInfoRefreshTargetForSnapshot(requestSnapshot)
     val requestGeneration = ipInfoRefreshGenerationForSnapshot(requestSnapshot)
     val decision =
         ipRefreshCoordinator.request(
@@ -263,6 +264,7 @@ private fun HomeViewModel.maybeScheduleIpInfoGeoEnrichment(
             fetchMode = IpInfoFetchMode.GEO_ENRICHMENT,
             minimumLoadingDurationMs = if (showLoading) HomeViewModel.AUTO_IP_REFRESH_MIN_LOADING_MS else 0L,
             reason = IpInfoRefreshReason.POST_UPDATE,
+            targetOverride = publishedTarget,
         )
     }
 }
@@ -525,7 +527,7 @@ internal suspend fun HomeViewModel.reconnectProfileIfRequestedInternal(
 
     return runCatching {
         setDashboardConnectionMetricsLoading(true)
-        container.connectionController.disconnect(suppressLocalGuard = true)
+        container.connectionController.disconnect(suppressLocalGuard = true, userInitiated = false)
         waitForRuntimeDisconnect()
         connectNow(profileId)
         true
@@ -555,7 +557,7 @@ internal fun HomeViewModel.updateRuntimeSettingAndMaybeReconnectInternal(
             updateAction()
             if (reconnectProfileId != null) {
                 setDashboardConnectionMetricsLoading(true)
-                container.connectionController.disconnect(suppressLocalGuard = true)
+                container.connectionController.disconnect(suppressLocalGuard = true, userInitiated = false)
                 waitForRuntimeDisconnect()
                 connectNow(reconnectProfileId)
             }

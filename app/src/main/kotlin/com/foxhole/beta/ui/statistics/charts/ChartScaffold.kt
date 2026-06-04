@@ -37,6 +37,7 @@ fun ChartScaffold(
                     text = model.title,
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface,
                 )
                 val subtitle = model.subtitle.orEmpty()
                 if (subtitle.isNotBlank() || model.quality != ChartDataQuality.REAL) {

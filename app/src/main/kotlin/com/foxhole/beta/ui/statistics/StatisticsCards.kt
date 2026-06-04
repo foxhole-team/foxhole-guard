@@ -73,7 +73,10 @@ internal fun StatisticsDashboardCard(
         }
     Card(
         modifier = modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = container),
+        colors = CardDefaults.cardColors(
+            containerColor = container,
+            contentColor = MaterialTheme.colorScheme.onSurface,
+        ),
         shape = shape,
         border = BorderStroke(tokens.dimens.cardBorderWidth, borderColor),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
@@ -204,6 +207,7 @@ internal fun StatisticsMetricTile(
         modifier = modifier.heightIn(min = 64.dp),
         shape = RoundedCornerShape(tokens.dimens.tileRadius),
         color = tokens.colors.metricTileContainer,
+        contentColor = MaterialTheme.colorScheme.onSurface,
         border =
         BorderStroke(
             tokens.dimens.cardBorderWidth,
@@ -257,6 +261,7 @@ internal fun StatisticsEmptyState(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(tokens.dimens.innerRadius),
         color = tokens.colors.rowContainer,
+        contentColor = MaterialTheme.colorScheme.onSurface,
         border = BorderStroke(tokens.dimens.cardBorderWidth, tokens.colors.cardBorder),
         tonalElevation = 0.dp,
     ) {
@@ -333,6 +338,7 @@ internal fun StatisticsRowSurface(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(tokens.dimens.innerRadius),
         color = if (selected) tokens.colors.rowContainerSelected else tokens.colors.rowContainer,
+        contentColor = MaterialTheme.colorScheme.onSurface,
         border = BorderStroke(tokens.dimens.cardBorderWidth, borderColor ?: tokens.colors.metricTileBorder),
         tonalElevation = 0.dp,
     ) {

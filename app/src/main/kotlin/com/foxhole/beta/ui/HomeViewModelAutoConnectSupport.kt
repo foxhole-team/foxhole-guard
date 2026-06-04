@@ -154,7 +154,7 @@ internal fun HomeViewModel.reconnectInternal(profileId: Long) {
         try {
             cancelSmartProfileMetricsRefreshInternal(restoreConnection = false)
             if (container.connectionController.snapshot.value.state in HomeViewModel.ACTIVE_CONNECTION_STATES) {
-                container.connectionController.disconnect(suppressLocalGuard = true)
+                container.connectionController.disconnect(suppressLocalGuard = true, userInitiated = false)
                 awaitDisconnectedForAutoConnect()
             }
             connectNow(profileId)
@@ -185,7 +185,7 @@ private suspend fun HomeViewModel.awaitReconnectConnectionOutcome(): ConnectionS
     if (outcome == null) {
         container.diagnosticsLogger.record("connection", "manual reconnect status wait timed out")
         setDashboardConnectionMetricsLoading(false)
-        container.connectionController.disconnect(suppressLocalGuard = true)
+        container.connectionController.disconnect(suppressLocalGuard = true, userInitiated = false)
         error("Connection timed out")
     }
     return outcome
@@ -197,7 +197,10 @@ private fun ConnectionSnapshot?.isConnectedSmartStartWinner(
 ): Boolean =
     this?.state == ConnectionState.CONNECTED &&
         this.profileId == profileId &&
-        (this.protocolOptionId == null || this.protocolOptionId == protocolOptionId)
+        isExactSmartStartRuntimeOption(
+            actualProtocolOptionId = this.protocolOptionId,
+            expectedProtocolOptionId = protocolOptionId,
+        )
 
 internal fun HomeViewModel.startAutoConnectInternal(profileId: Long) {
     if (!controlUiState.value.settings.connection.smartStartEnabled) {
@@ -535,6 +538,7 @@ private suspend fun HomeViewModel.probeSmartStartCandidateWithinBudget(
             container.connectionController.disconnect(
                 suppressLocalGuard = true,
                 preserveSmartStartAnalysis = true,
+                userInitiated = false,
             )
         }
         return BudgetedAutoConnectProbe(
@@ -569,6 +573,7 @@ private suspend fun HomeViewModel.probeSmartStartCandidateWithinBudget(
                 container.connectionController.disconnect(
                     suppressLocalGuard = true,
                     preserveSmartStartAnalysis = true,
+                    userInitiated = false,
                 )
             }
             return BudgetedAutoConnectProbe(
@@ -1022,6 +1027,7 @@ private fun HomeViewModel.protocolMetricsProbeTimeoutResult(
         container.connectionController.disconnect(
             suppressLocalGuard = true,
             preserveSmartStartAnalysis = true,
+            userInitiated = false,
         )
     }
     val reasonCode =
@@ -1117,8 +1123,16 @@ private fun HomeViewModel.connectedAutoConnectFallbackResult(
 }
 
 private fun ConnectionSnapshot.matchesAutoConnectCandidate(candidate: AutoConnectProbeCandidate): Boolean =
-    protocolOptionId == candidate.optionId ||
-        (protocolOptionId == null && protocolHint == candidate.protocolHint)
+    isExactSmartStartRuntimeOption(
+        actualProtocolOptionId = protocolOptionId,
+        expectedProtocolOptionId = candidate.optionId,
+    )
+
+internal fun isExactSmartStartRuntimeOption(
+    actualProtocolOptionId: String?,
+    expectedProtocolOptionId: String,
+): Boolean =
+    actualProtocolOptionId == expectedProtocolOptionId
 
 private fun HomeViewModel.buildConnectedAutoConnectFallbackResult(
     profileId: Long,
@@ -1425,6 +1439,7 @@ internal suspend fun HomeViewModel.awaitDisconnectedForAutoConnectInternal(
         container.connectionController.disconnect(
             suppressLocalGuard = true,
             preserveSmartStartAnalysis = true,
+            userInitiated = false,
         )
     }
     val deadlineAt = SystemClock.elapsedRealtime() + HomeViewModel.AUTO_CONNECT_DISCONNECT_TIMEOUT_MS

@@ -32,6 +32,7 @@ internal class FoxholeConnectionLifecycle(
         isSmartStartConnection: Boolean,
         previousVpnNetworkHandle: Long?,
     ) {
+        RuntimeResumeStateStore.clearRecentUserStop(context)
         val profile = profileRepository.getProfile(profileId) ?: error("profile not found")
         val settings = settingsRepository.current()
         val runtimeProtocolOption = profile.runtimeProtocolOption(protocolOptionId)
@@ -67,6 +68,7 @@ internal class FoxholeConnectionLifecycle(
     }
 
     suspend fun connectTorOnly(statusMessage: String?) {
+        RuntimeResumeStateStore.clearRecentUserStop(context)
         val settings = settingsRepository.current()
         require(settings.privacyRoute.enabled) { "TOR route is disabled" }
         if (snapshot.value.state !in ACTIVE_CONNECTION_STATES) {
@@ -152,10 +154,14 @@ internal class FoxholeConnectionLifecycle(
     fun disconnect(
         suppressLocalGuard: Boolean = false,
         preserveSmartStartAnalysis: Boolean = false,
+        userInitiated: Boolean = true,
     ) {
         clearAppliedRuntime()
         diagnosticsLogger.record("connection", "disconnect requested")
         val currentSnapshot = snapshot.value
+        if (userInitiated) {
+            RuntimeResumeStateStore.markUserStop(context)
+        }
         val activeVpnNetworkAvailable = hasActiveVpnNetwork()
         if (shouldClearDetachedTunnelReconnect(currentSnapshot, activeVpnNetworkAvailable)) {
             diagnosticsLogger.record("connection", "disconnect clearing detached reconnect snapshot")
@@ -171,6 +177,15 @@ internal class FoxholeConnectionLifecycle(
             diagnosticsLogger.record("connection", "disconnect skipped: no active runtime")
             stopAllServicesAndPublishIdle()
             return
+        }
+        if (userInitiated) {
+            FoxholeVpnRuntimeBridge.clearTransientState()
+            FoxholeVpnRuntimeBridge.update(
+                stoppedRuntimeSnapshot(
+                    previous = currentSnapshot,
+                    trafficMode = settingsRepository.settings.value.traffic.mode,
+                ),
+            )
         }
         disconnectModes.forEach { disconnectMode ->
             FoxholeConnectionServiceContract.startForegroundService(

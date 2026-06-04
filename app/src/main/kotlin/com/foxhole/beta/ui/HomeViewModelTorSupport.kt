@@ -48,6 +48,7 @@ internal fun HomeViewModel.onEnableDirectTorQuickStartInternal() {
             container.settingsRepository.updatePrivacyRouteMode(PrivacyRouteMode.TOR_OVER_VPN)
             container.settingsRepository.updatePrivacyRouteScope(PrivacyRouteScope.ALL_APPS)
             container.settingsRepository.updatePrivacyRouteBypassVpnTunnel(true)
+            check(container.settingsRepository.current().privacyRoute.enabled) { "TOR route is disabled" }
             connectNow(
                 profileId = FoxholeVpnService.TOR_ONLY_PROFILE_ID,
                 statusMessage = getApplication<Application>().getString(R.string.notification_status_connecting),

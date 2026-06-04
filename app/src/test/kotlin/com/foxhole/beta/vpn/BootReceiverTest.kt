@@ -17,6 +17,7 @@ class BootReceiverTest {
                 RuntimeResumeState(
                     trafficMode = TrafficMode.TUNNEL,
                     profileId = null,
+                    protocolOptionId = null,
                     localGuardMode = LocalGuardMode.FIREWALL,
                 ),
                 hasActiveVpnNetwork = true,
@@ -39,6 +40,7 @@ class BootReceiverTest {
                 RuntimeResumeState(
                     trafficMode = TrafficMode.PROXY,
                     profileId = 42L,
+                    protocolOptionId = "vless-main",
                     localGuardMode = null,
                 ),
                 hasActiveVpnNetwork = true,
@@ -50,6 +52,7 @@ class BootReceiverTest {
         assertTrue(plan.killStaleRuntime)
         assertEquals(TrafficMode.PROXY, plan.killTrafficMode)
         assertEquals(42L, plan.profileId)
+        assertEquals("vless-main", plan.protocolOptionId)
         assertEquals(TrafficMode.PROXY, plan.profileTrafficMode)
         assertEquals(null, plan.localGuardMode)
     }

@@ -109,6 +109,13 @@ class HomeAutoConnectWaitPolicyTest {
     }
 
     @Test
+    fun `smart start winner requires exact selected protocol option`() {
+        assertTrue(isExactSmartStartRuntimeOption("vless-main", "vless-main"))
+        assertFalse(isExactSmartStartRuntimeOption(null, "vless-main"))
+        assertFalse(isExactSmartStartRuntimeOption("trojan-main", "vless-main"))
+    }
+
+    @Test
     fun `fallback ranking uses validated connect duration when no remembered latency exists`() {
         assertEquals(
             2_550L,

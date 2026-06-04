@@ -1596,6 +1596,7 @@ class HomeViewModel(
         fetchMode: IpInfoFetchMode,
         minimumLoadingDurationMs: Long,
         reason: IpInfoRefreshReason = IpInfoRefreshReason.FOREGROUND,
+        targetOverride: IpInfoRefreshTarget? = null,
         onPublished: (suspend (IpInfo) -> Unit)? = null,
     ) = refreshIpInfoInternalInternal(
         reportFailures = reportFailures,
@@ -1604,6 +1605,7 @@ class HomeViewModel(
         fetchMode = fetchMode,
         minimumLoadingDurationMs = minimumLoadingDurationMs,
         reason = reason,
+        targetOverride = targetOverride,
         onPublished = onPublished,
     )
 

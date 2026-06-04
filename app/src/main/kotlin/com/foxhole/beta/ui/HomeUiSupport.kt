@@ -352,8 +352,9 @@ internal enum class IpInfoRefreshTarget {
 internal fun ipInfoRefreshTargetForSnapshot(snapshot: ConnectionSnapshot): IpInfoRefreshTarget =
     when {
         snapshot.profileId == FoxholeVpnService.TOR_ONLY_PROFILE_ID -> IpInfoRefreshTarget.TOR
-        snapshot.state == ConnectionState.CONNECTED &&
+        snapshot.state in HomeViewModel.ACTIVE_CONNECTION_STATES &&
             snapshot.trafficMode == TrafficMode.TUNNEL &&
+            snapshot.profileId != null &&
             snapshot.profileId != FoxholeVpnService.LOCAL_GUARD_PROFILE_ID -> IpInfoRefreshTarget.VPN_BOUND
         snapshot.state == ConnectionState.CONNECTED && snapshot.trafficMode == TrafficMode.PROXY -> IpInfoRefreshTarget.PROXY
         snapshot.profileId == FoxholeVpnService.LOCAL_GUARD_PROFILE_ID -> IpInfoRefreshTarget.LOCAL_GUARD

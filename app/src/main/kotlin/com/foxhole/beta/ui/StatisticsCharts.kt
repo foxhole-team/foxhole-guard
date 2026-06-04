@@ -187,6 +187,7 @@ internal fun DnsCategoryDonutChart(summary: DnsProtectionSummary) {
     Surface(
         shape = MaterialTheme.shapes.small,
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.26f),
+        contentColor = MaterialTheme.colorScheme.onSurface,
     ) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(12.dp),
@@ -269,6 +270,7 @@ internal fun DnsTrafficShareRing(
         modifier = modifier,
         shape = RoundedCornerShape(statisticsVisualTokens().dimens.innerRadius),
         color = statisticsVisualTokens().colors.rowContainer,
+        contentColor = MaterialTheme.colorScheme.onSurface,
         border = BorderStroke(1.dp, statisticsVisualTokens().colors.metricTileBorder),
     ) {
         Row(

@@ -146,6 +146,7 @@ class BootReceiver : BroadcastReceiver() {
                     mode = plan.profileTrafficMode,
                     action = FoxholeConnectionServiceContract.ACTION_CONNECT,
                     profileId = plan.profileId,
+                    protocolOptionId = plan.protocolOptionId,
                 )
             }
 
@@ -215,6 +216,7 @@ internal data class PackageReplaceRecoveryPlan(
     val killTrafficMode: TrafficMode,
     val localGuardMode: LocalGuardMode? = null,
     val profileId: Long? = null,
+    val protocolOptionId: String? = null,
     val profileTrafficMode: TrafficMode? = null,
     val reconnectRequired: Boolean = false,
 )
@@ -246,6 +248,7 @@ internal fun packageReplaceRecoveryPlan(
                 killStaleRuntime = true,
                 killTrafficMode = resumeTrafficMode,
                 profileId = resumeProfileId,
+                protocolOptionId = resumeState.protocolOptionId,
                 profileTrafficMode = resumeTrafficMode,
             )
 

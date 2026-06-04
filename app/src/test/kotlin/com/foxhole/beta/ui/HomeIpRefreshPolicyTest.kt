@@ -290,6 +290,30 @@ class HomeIpRefreshPolicyTest {
     }
 
     @Test
+    fun `connecting tunnel profile uses vpn-bound ip target`() {
+        assertEquals(
+            IpInfoRefreshTarget.VPN_BOUND,
+            ipInfoRefreshTargetForSnapshot(
+                ConnectionSnapshot(
+                    state = ConnectionState.CONNECTING,
+                    trafficMode = TrafficMode.TUNNEL,
+                    profileId = 7L,
+                ),
+            ),
+        )
+        assertEquals(
+            IpInfoRefreshTarget.VPN_BOUND,
+            ipInfoRefreshTargetForSnapshot(
+                ConnectionSnapshot(
+                    state = ConnectionState.RECONNECTING,
+                    trafficMode = TrafficMode.TUNNEL,
+                    profileId = 7L,
+                ),
+            ),
+        )
+    }
+
+    @Test
     fun `manual network refresh failure is silent for local guard firewall`() {
         assertFalse(
             ConnectionSnapshot(

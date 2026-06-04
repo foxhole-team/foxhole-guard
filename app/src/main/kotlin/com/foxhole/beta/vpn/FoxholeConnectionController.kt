@@ -107,10 +107,12 @@ class FoxholeConnectionController(
     fun disconnect(
         suppressLocalGuard: Boolean = false,
         preserveSmartStartAnalysis: Boolean = false,
+        userInitiated: Boolean = true,
     ) {
         lifecycle.disconnect(
             suppressLocalGuard = suppressLocalGuard,
             preserveSmartStartAnalysis = preserveSmartStartAnalysis,
+            userInitiated = userInitiated,
         )
     }
 
@@ -239,6 +241,29 @@ class FoxholeConnectionController(
 
             currentSnapshot.state in ACTIVE_CONNECTION_STATES || vpnNetwork == null -> false
 
+            RuntimeResumeStateStore.hasRecentUserStop(context) -> {
+                diagnosticsLogger.record(
+                    "connection",
+                    "active vpn network found after recent user stop; teardown requested instead of restore",
+                )
+                clearAppliedRuntime()
+                FoxholeVpnRuntimeBridge.clearTransientState()
+                FoxholeVpnRuntimeBridge.update(
+                    stoppedRuntimeSnapshot(
+                        previous = currentSnapshot,
+                        trafficMode = settingsRepository.current().traffic.mode,
+                    ),
+                    refreshLastChangeAt = false,
+                )
+                FoxholeConnectionServiceContract.startForegroundService(
+                    context = context,
+                    mode = TrafficMode.TUNNEL,
+                    action = FoxholeConnectionServiceContract.ACTION_DISCONNECT,
+                    suppressLocalGuard = true,
+                )
+                false
+            }
+
             settingsRepository.current().localGuardModeOrNull() != null -> {
                 diagnosticsLogger.record(
                     "connection",
@@ -277,6 +302,18 @@ class FoxholeConnectionController(
 
     private suspend fun restoreActiveVpnNetwork(vpnNetwork: Network): Boolean {
         val activeProfile = profileRepository.getActiveProfile()
+        val resumeState = RuntimeResumeStateStore.read(context)
+        val restoredProtocolOptionId =
+            resumeState
+                ?.protocolOptionId
+                ?.takeIf { resumeState.profileId == activeProfile?.id }
+                ?: activeProfile?.selectedProtocolOptionId
+        val restoredProtocolHint =
+            activeProfile
+                ?.protocolOptions
+                ?.firstOrNull { option -> option.id == restoredProtocolOptionId }
+                ?.protocolHint
+                ?: activeProfile?.protocolHint
         diagnosticsLogger.record(
             "connection",
             "active vpn network found with idle snapshot; validating before restore",
@@ -287,8 +324,8 @@ class FoxholeConnectionController(
                 trafficMode = TrafficMode.TUNNEL,
                 profileId = activeProfile?.id,
                 profileName = activeProfile?.name,
-                protocolHint = activeProfile?.protocolHint,
-                protocolOptionId = activeProfile?.selectedProtocolOptionId,
+                protocolHint = restoredProtocolHint,
+                protocolOptionId = restoredProtocolOptionId,
                 message = context.getString(R.string.status_reconnecting),
             ),
         )
@@ -308,8 +345,8 @@ class FoxholeConnectionController(
                         trafficMode = TrafficMode.TUNNEL,
                         profileId = activeProfile?.id,
                         profileName = activeProfile?.name,
-                        protocolHint = activeProfile?.protocolHint,
-                        protocolOptionId = activeProfile?.selectedProtocolOptionId,
+                        protocolHint = restoredProtocolHint,
+                        protocolOptionId = restoredProtocolOptionId,
                     ),
                 )
                 true
