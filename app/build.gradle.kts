@@ -631,6 +631,8 @@ tasks.register("verifyRequiredBehaviorTests") {
                 "com.foxhole.beta.core.smart.SmartStartControllerTest",
                 "com.foxhole.beta.core.traffic.TorGeoIpCountryResolverTest",
                 "com.foxhole.beta.core.traffic.TrafficMapRepositoryTest",
+                "com.foxhole.beta.ui.HomeDashboardHotPathTest",
+                "com.foxhole.beta.ui.RouteStateIsolationTest",
                 "com.foxhole.beta.vpn.AppOwnedRequestPathTest",
                 "com.foxhole.beta.vpn.FoxholeConnectionControllerLatencyTest",
                 "com.foxhole.beta.vpn.RuntimeCommandActorTest",
