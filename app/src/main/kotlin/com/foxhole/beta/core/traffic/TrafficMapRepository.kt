@@ -148,21 +148,37 @@ class TrafficMapRepository(
         val vpnRoute =
             routeInfo
                 ?.let(::trafficMapRoutePoint)
-                ?.let { point -> offsetTrafficMapDestinationFromOriginCountry(point, originInfo?.countryCode) }
+                ?.let { point ->
+                    offsetTrafficMapPointFromSameCountries(
+                        point = point,
+                        anchorCountryCodes = listOf(originInfo?.countryCode),
+                        latOffset = SameCountryVpnRouteLatOffset,
+                        lonOffset = SameCountryVpnRouteLonOffset,
+                    )
+                }
         val torExit =
             torInfo
                 ?.let(::trafficMapTorPoint)
                 ?.let { point ->
-                    offsetTrafficMapDestinationFromOriginCountry(
+                    offsetTrafficMapPointFromSameCountries(
                         point = point,
-                        originCountryCode = vpnRoute?.countryCode ?: originInfo?.countryCode,
+                        anchorCountryCodes = listOf(vpnRoute?.countryCode, originInfo?.countryCode),
+                        latOffset = SameCountryTorExitLatOffset,
+                        lonOffset = SameCountryTorExitLonOffset,
                     )
                 }
         val liveRouteSourceInfo = torInfo ?: routeInfo ?: originInfo
         val visibleDestinations =
             destinations
                 .take(MaxTrafficMapDestinations)
-                .map { point -> offsetTrafficMapDestinationFromOriginCountry(point, liveRouteSourceInfo?.countryCode) }
+                .map { point ->
+                    offsetTrafficMapPointFromSameCountries(
+                        point = point,
+                        anchorCountryCodes = listOf(liveRouteSourceInfo?.countryCode),
+                        latOffset = SameCountryDestinationLatOffset,
+                        lonOffset = SameCountryDestinationLonOffset,
+                    )
+                }
         val highlightedCountries =
             (
                 visibleDestinations.map(TrafficMapPoint::countryCode) +
@@ -335,6 +351,10 @@ class TrafficMapRepository(
         const val MaxRetainedConnectionSamples = 512
         const val SameCountryDestinationLatOffset = 1.15
         const val SameCountryDestinationLonOffset = 1.85
+        const val SameCountryVpnRouteLatOffset = 1.65
+        const val SameCountryVpnRouteLonOffset = 2.55
+        const val SameCountryTorExitLatOffset = -1.75
+        const val SameCountryTorExitLonOffset = 2.65
         const val TrafficMapMinLat = -55.0
         const val TrafficMapMaxLat = 85.0
         const val TrafficMapMinLon = -179.0
@@ -409,23 +429,28 @@ private data class RetainedTrafficMapSnapshot(
     val countryBytes: Map<String, Long>,
 )
 
-private fun offsetTrafficMapDestinationFromOriginCountry(
+private fun offsetTrafficMapPointFromSameCountries(
     point: TrafficMapPoint,
-    originCountryCode: String?,
+    anchorCountryCodes: List<String?>,
+    latOffset: Double,
+    lonOffset: Double,
 ): TrafficMapPoint {
-    val normalizedOrigin =
-        originCountryCode
-            ?.trim()
-            ?.uppercase(Locale.US)
-            ?.takeIf { value ->
-                value.length == TrafficMapRepository.IsoCountryCodeLength &&
-                    value.all { character -> character in 'A'..'Z' }
-            }
-    return if (normalizedOrigin != null && point.countryCode.equals(normalizedOrigin, ignoreCase = true)) {
+    val anchorCountries =
+        anchorCountryCodes
+            .mapNotNull { countryCode ->
+                countryCode
+                    ?.trim()
+                    ?.uppercase(Locale.US)
+                    ?.takeIf { value ->
+                        value.length == TrafficMapRepository.IsoCountryCodeLength &&
+                            value.all { character -> character in 'A'..'Z' }
+                    }
+            }.toSet()
+    return if (point.countryCode.uppercase(Locale.US) in anchorCountries) {
         point.copy(
-            lat = (point.lat + TrafficMapRepository.SameCountryDestinationLatOffset)
+            lat = (point.lat + latOffset)
                 .coerceIn(TrafficMapRepository.TrafficMapMinLat, TrafficMapRepository.TrafficMapMaxLat),
-            lon = (point.lon + TrafficMapRepository.SameCountryDestinationLonOffset)
+            lon = (point.lon + lonOffset)
                 .coerceIn(TrafficMapRepository.TrafficMapMinLon, TrafficMapRepository.TrafficMapMaxLon),
         )
     } else {

@@ -532,15 +532,15 @@ class HomeIpLoadingPolicyTest {
     }
 
     @Test
-    fun `traffic map origin rejects fresh active tunnel address before route ip is published`() {
-        val possibleTunnelIp =
+    fun `traffic map origin keeps fresh device address before route ip is published`() {
+        val deviceIp =
             IpInfo(
-                ip = "203.0.113.20",
-                ipv4 = "203.0.113.20",
-                countryCode = "NL",
-                countryName = "Netherlands",
-                city = "Amsterdam",
-                isp = "Tunnel ISP",
+                ip = "198.51.100.10",
+                ipv4 = "198.51.100.10",
+                countryCode = "US",
+                countryName = "United States",
+                city = "New York",
+                isp = "Device ISP",
                 fetchedAt = 5_500L,
             )
 
@@ -553,12 +553,12 @@ class HomeIpLoadingPolicyTest {
                         profileId = 7L,
                         lastChangeAt = 5_000L,
                     ),
-                deviceIpInfo = possibleTunnelIp,
+                deviceIpInfo = deviceIp,
                 ipInfo = null,
                 protocolSearchRunning = false,
             )
 
-        assertNull(origin)
+        assertEquals(deviceIp, origin)
     }
 
     @Test
@@ -592,15 +592,15 @@ class HomeIpLoadingPolicyTest {
     }
 
     @Test
-    fun `traffic map origin rejects fresh active tunnel address even when route ip is stale and different`() {
-        val possibleTunnelIp =
+    fun `traffic map origin keeps fresh device address when route ip is stale and different`() {
+        val deviceIp =
             IpInfo(
-                ip = "203.0.113.30",
-                ipv4 = "203.0.113.30",
-                countryCode = "DE",
-                countryName = "Germany",
-                city = "Frankfurt",
-                isp = "Tunnel ISP",
+                ip = "198.51.100.10",
+                ipv4 = "198.51.100.10",
+                countryCode = "US",
+                countryName = "United States",
+                city = "New York",
+                isp = "Device ISP",
                 fetchedAt = 5_500L,
             )
         val staleRouteIp =
@@ -623,12 +623,12 @@ class HomeIpLoadingPolicyTest {
                         profileId = 7L,
                         lastChangeAt = 5_000L,
                     ),
-                deviceIpInfo = possibleTunnelIp,
+                deviceIpInfo = deviceIp,
                 ipInfo = staleRouteIp,
                 protocolSearchRunning = false,
             )
 
-        assertNull(origin)
+        assertEquals(deviceIp, origin)
     }
 
     @Test

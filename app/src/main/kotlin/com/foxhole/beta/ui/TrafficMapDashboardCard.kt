@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
@@ -44,6 +45,7 @@ import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -167,66 +169,114 @@ internal fun TrafficMapDashboardCard(
             .fillMaxWidth()
             .testTag("home_traffic_map_card"),
     ) {
-        Row(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(TRAFFIC_MAP_CARD_TOTAL_HEIGHT),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-            verticalAlignment = Alignment.Top,
+            verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            Column(
+            val colors = trafficMapColors()
+            TrafficMapCardHeader(
+                state = state,
+                colors = colors,
+            )
+            Row(
                 modifier = Modifier
-                    .weight(TRAFFIC_MAP_WEIGHT)
-                    .fillMaxHeight(),
-                verticalArrangement = Arrangement.spacedBy(6.dp),
+                    .fillMaxWidth()
+                    .weight(1f),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.Top,
             ) {
-                HomeCardHeader(
-                    icon = Icons.Outlined.Map,
-                    title = stringResource(R.string.traffic_map_title),
-                )
-                if (mapDisabledForPower) {
-                    TrafficMapPowerSaveBlock(
-                        onEnable = { forceMapEnabled = true },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .weight(1f),
-                    )
-                } else if (!heavyContentReady || countryShapesLoading) {
-                    TrafficMapCanvasLoadingBlock(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .weight(1f)
-                            .testTag("home_traffic_world_map_loading"),
-                    )
-                } else {
-                    TrafficMapCanvas(
-                        state = state,
-                        countryShapes = countryShapes,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .weight(1f)
-                            .testTag("home_traffic_world_map"),
-                    )
+                Column(
+                    modifier = Modifier
+                        .weight(TRAFFIC_MAP_WEIGHT)
+                        .fillMaxHeight(),
+                ) {
+                    if (mapDisabledForPower) {
+                        TrafficMapPowerSaveBlock(
+                            onEnable = { forceMapEnabled = true },
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    } else if (!heavyContentReady || countryShapesLoading) {
+                        TrafficMapCanvasLoadingBlock(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .testTag("home_traffic_world_map_loading"),
+                        )
+                    } else {
+                        TrafficMapCanvas(
+                            state = state,
+                            countryShapes = countryShapes,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .testTag("home_traffic_world_map"),
+                        )
+                    }
                 }
-            }
-            if (!mapDisabledForPower) {
-                if (legendLoading || !heavyContentReady || countryShapesLoading) {
-                    TrafficMapLegendLoadingBlock(
-                        modifier = Modifier
-                            .weight(TRAFFIC_MAP_LEGEND_WEIGHT)
-                            .fillMaxHeight(),
-                    )
-                } else {
-                    TrafficMapLegend(
-                        state = state,
-                        modifier = Modifier
-                            .weight(TRAFFIC_MAP_LEGEND_WEIGHT)
-                            .fillMaxHeight(),
-                    )
+                if (!mapDisabledForPower) {
+                    if (legendLoading || !heavyContentReady || countryShapesLoading) {
+                        TrafficMapLegendLoadingBlock(
+                            modifier = Modifier
+                                .weight(TRAFFIC_MAP_LEGEND_WEIGHT)
+                                .fillMaxHeight(),
+                        )
+                    } else {
+                        TrafficMapLegend(
+                            state = state,
+                            modifier = Modifier
+                                .weight(TRAFFIC_MAP_LEGEND_WEIGHT)
+                                .fillMaxHeight(),
+                        )
+                    }
                 }
             }
         }
     }
+}
+
+@Composable
+private fun TrafficMapCardHeader(
+    state: TrafficMapUiState,
+    colors: TrafficMapColors,
+) {
+    val title = stringResource(R.string.traffic_map_title)
+    val originLabel = remember(state.originCity, state.originCountryName, state.originCountryCode) {
+        state.originLocationLabel()
+    }
+    HomeCardHeader(
+        icon = Icons.Outlined.Map,
+        title = title,
+        trailing = {
+            if (state.originCountryCode != null) {
+                Row(
+                    modifier =
+                        Modifier
+                            .widthIn(min = 136.dp, max = 184.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.PhoneAndroid,
+                        contentDescription = null,
+                        tint = colors.origin,
+                        modifier = Modifier.size(13.dp),
+                    )
+                    Text(
+                        text = originLabel,
+                        modifier = Modifier.weight(1f),
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontSize = 9.sp,
+                            lineHeight = 10.sp,
+                        ),
+                        fontWeight = FontWeight.SemiBold,
+                        color = colors.legendText,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+        },
+    )
 }
 
 @Composable
@@ -244,6 +294,7 @@ private fun rememberTrafficMapHeavyContentReady(enabled: Boolean): Boolean {
             return@LaunchedEffect
         }
         ready = false
+        withFrameNanos { frameTimeNanos -> frameTimeNanos }
         if (TRAFFIC_MAP_HEAVY_CONTENT_SETTLE_DELAY_MS > 0L) {
             delay(TRAFFIC_MAP_HEAVY_CONTENT_SETTLE_DELAY_MS)
         }
@@ -399,8 +450,8 @@ private fun TrafficMapCanvas(
                 val routeHaloStrokeExtra = TRAFFIC_MAP_ROUTE_HALO_STROKE_EXTRA_DP.dp.toPx()
                 val defaultDestinationRadius = 3.15.dp.toPx()
                 val europeDestinationRadius = 2.35.dp.toPx()
-                val routeNodeRadius = 4.6.dp.toPx()
-                val torNodeRadius = 4.25.dp.toPx()
+                val routeNodeRadius = 2.75.dp.toPx()
+                val torNodeRadius = 2.65.dp.toPx()
                 val phoneWidth = 8.5.dp.toPx()
                 val phoneHeight = 12.8.dp.toPx()
                 val phoneCorner = CornerRadius(2.4.dp.toPx(), 2.4.dp.toPx())
@@ -482,9 +533,8 @@ private fun TrafficMapCanvas(
                             color =
                                 when (route.role) {
                                     TrafficMapEdgeRole.DIRECT -> colors.origin
-                                    TrafficMapEdgeRole.VPN_ROUTE,
-                                    TrafficMapEdgeRole.TOR_ROUTE,
-                                    -> colors.routeLine
+                                    TrafficMapEdgeRole.VPN_ROUTE -> colors.vpnRoute
+                                    TrafficMapEdgeRole.TOR_ROUTE -> colors.torExit
                                 }.copy(alpha = route.alpha),
                             style =
                                 Stroke(
@@ -683,20 +733,12 @@ private fun TrafficMapLegend(
     val context = LocalContext.current
     val colors = trafficMapColors()
     val destinations = remember(state.destinations) { state.destinations }
-    val originLabel = remember(state.originCity, state.originCountryName, state.originCountryCode) { state.originLocationLabel() }
     val routePoints = remember(state.vpnRoute, state.torExit) { listOfNotNull(state.vpnRoute, state.torExit) }
     val scrollState = rememberScrollState()
     Column(
         modifier = modifier.fillMaxHeight(),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        if (routePoints.isEmpty()) {
-            TrafficMapOriginRow(
-                originLabel = originLabel,
-                showIcon = state.originCountryCode != null,
-                colors = colors,
-            )
-        }
         if (destinations.isEmpty() && routePoints.isEmpty()) {
             Text(
                 modifier = Modifier.weight(1f),
@@ -752,39 +794,6 @@ private fun TrafficMapLegend(
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun TrafficMapOriginRow(
-    originLabel: String,
-    showIcon: Boolean,
-    colors: TrafficMapColors,
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(5.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        if (showIcon) {
-            Icon(
-                imageVector = Icons.Outlined.PhoneAndroid,
-                contentDescription = stringResource(R.string.traffic_map_device_location_icon),
-                tint = colors.origin,
-                modifier = Modifier.size(16.dp),
-            )
-        }
-        Text(
-            text = originLabel,
-            style = MaterialTheme.typography.labelSmall.copy(
-                fontSize = 10.sp,
-                lineHeight = 12.sp,
-            ),
-            fontWeight = FontWeight.Bold,
-            color = colors.legendText,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-        )
     }
 }
 
@@ -866,8 +875,8 @@ private fun TrafficMapLegendDestinationRow(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Row(
-            modifier = Modifier.weight(0.58f),
-            horizontalArrangement = Arrangement.spacedBy(3.dp),
+            modifier = Modifier.weight(if (showMetrics) 0.94f else 1f),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(
@@ -891,25 +900,33 @@ private fun TrafficMapLegendDestinationRow(
                 ),
                 maxLines = 1,
             )
-            TrafficMapLegendCell(
+            Text(
                 text = point.countryCode.uppercase(Locale.US),
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.width(24.dp),
+                style = MaterialTheme.typography.labelSmall.copy(
+                    fontSize = 10.sp,
+                    lineHeight = 12.sp,
+                ),
+                fontWeight = FontWeight.SemiBold,
+                color = textColor,
                 textAlign = TextAlign.Start,
+                maxLines = 1,
+            )
+        }
+        if (showMetrics) {
+            TrafficMapLegendCell(
+                text = point.connections.toString(),
+                modifier = Modifier.weight(0.48f),
+                textAlign = TextAlign.End,
+                color = textColor,
+            )
+            TrafficMapLegendCell(
+                text = formatBytes(context, point.bytes),
+                modifier = Modifier.weight(0.68f),
+                textAlign = TextAlign.End,
                 color = textColor,
             )
         }
-        TrafficMapLegendCell(
-            text = if (showMetrics) point.connections.toString() else "",
-            modifier = Modifier.weight(0.62f),
-            textAlign = TextAlign.End,
-            color = textColor,
-        )
-        TrafficMapLegendCell(
-            text = if (showMetrics) formatBytes(context, point.bytes) else "",
-            modifier = Modifier.weight(0.82f),
-            textAlign = TextAlign.End,
-            color = textColor,
-        )
     }
 }
 
@@ -1432,8 +1449,8 @@ private const val TRAFFIC_MAP_ROUTE_HALO_STROKE_EXTRA_DP = 0.2f
 private const val TRAFFIC_MAP_ROUTE_HALO_ALPHA_MULTIPLIER = 0.08f
 private const val TRAFFIC_MAP_HEAVY_CONTENT_SETTLE_DELAY_MS = 0L
 private const val TRAFFIC_MAP_POWER_STATE_STARTUP_DELAY_MS = 0L
-private const val TRAFFIC_MAP_WEIGHT = 0.74f
-private const val TRAFFIC_MAP_LEGEND_WEIGHT = 0.26f
+private const val TRAFFIC_MAP_WEIGHT = 0.62f
+private const val TRAFFIC_MAP_LEGEND_WEIGHT = 0.38f
 private const val TRAFFIC_MAP_WORLD_ASPECT_RATIO = 2f
 private const val TRAFFIC_MAP_MIN_LAT = -55.0
 private const val TRAFFIC_MAP_MAX_LAT = 85.0

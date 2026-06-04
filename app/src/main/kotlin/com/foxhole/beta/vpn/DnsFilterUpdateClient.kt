@@ -182,7 +182,9 @@ class DnsFilterUpdateClient(
         require(artifact.file == EXPECTED_ARTIFACT_FILE) { "unexpected artifact file" }
         require(artifact.size in MIN_RULE_SET_BYTES..MAX_RULE_SET_BYTES) { "unexpected artifact size" }
         require(artifact.sha256.isSha256Hex()) { "invalid artifact sha256" }
-        require(compatibility.singBoxVersion == BuildConfig.LIBBOX_SOURCE_VERSION) { "unsupported sing-box version" }
+        require(supportsSingBoxRuleSetVersion(BuildConfig.LIBBOX_SOURCE_VERSION, compatibility.singBoxVersion)) {
+            "unsupported sing-box version"
+        }
         require(
             compareAppVersions(currentVersionName, compatibility.minAppVersion) >= 0,
         ) {
@@ -285,6 +287,19 @@ internal fun compareAppVersions(
     return 0
 }
 
+internal fun supportsSingBoxRuleSetVersion(
+    runtimeVersion: String,
+    ruleSetVersion: String,
+): Boolean {
+    val runtimeParts = runtimeVersion.versionNumberParts()
+    val ruleSetParts = ruleSetVersion.versionNumberParts()
+    return runtimeParts.size >= SING_BOX_MAJOR_MINOR_PARTS &&
+        ruleSetParts.size >= SING_BOX_MAJOR_MINOR_PARTS &&
+        runtimeParts[0] == ruleSetParts[0] &&
+        runtimeParts[1] == ruleSetParts[1] &&
+        compareAppVersions(runtimeVersion, ruleSetVersion) >= 0
+}
+
 private fun String.versionNumberParts(): List<Int> =
     substringBefore('-')
         .split('.')
@@ -295,6 +310,8 @@ private fun String.isSha256Hex(): Boolean =
 
 private fun String.isShaLike(): Boolean =
     length in 7..64 && all { character -> character in '0'..'9' || character.lowercaseChar() in 'a'..'f' }
+
+private const val SING_BOX_MAJOR_MINOR_PARTS = 2
 
 private fun ResponseBody.readBytesCapped(maxBytes: Long): ByteArray {
     require(maxBytes > 0L) { "maxBytes must be positive" }

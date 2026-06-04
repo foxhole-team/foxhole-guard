@@ -4,6 +4,7 @@ import com.foxhole.beta.core.model.IpInfo
 import com.foxhole.beta.core.model.TrafficMapPoint
 import com.foxhole.beta.core.model.TrafficMapPointRole
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -347,6 +348,72 @@ class TrafficMapRepositoryTest {
         assertEquals("FR", state.destinations.single().countryCode)
         assertEquals(3, state.edges.size)
         assertTrue(state.highlightedCountries.containsAll(listOf("US", "NL", "DE", "FR")))
+    }
+
+    @Test
+    fun `traffic map offsets vpn and tor route nodes when they share the device country`() {
+        val state =
+            TrafficMapRepository().trafficMapStateSnapshot(
+                originIpInfo =
+                    IpInfo(
+                        ip = "198.51.100.20",
+                        ipv4 = "198.51.100.20",
+                        countryCode = "US",
+                        countryName = "United States",
+                        city = "New York",
+                        isp = "Device ISP",
+                        fetchedAt = 1_000L,
+                    ),
+                routeIpInfo =
+                    IpInfo(
+                        ip = "203.0.113.20",
+                        ipv4 = "203.0.113.20",
+                        countryCode = "US",
+                        countryName = "United States",
+                        city = "New York",
+                        isp = "Tunnel ISP",
+                        fetchedAt = 2_000L,
+                    ),
+                torIpInfo =
+                    IpInfo(
+                        ip = "203.0.113.44",
+                        ipv4 = "203.0.113.44",
+                        countryCode = "US",
+                        countryName = "United States",
+                        city = "New York",
+                        isp = "Tor Exit",
+                        fetchedAt = 2_500L,
+                    ),
+                runtimeAvailable = true,
+                destinations = emptyList(),
+            )
+        val origin = TrafficMapRepository.TrafficMapCountryCoordinates.getValue("US")
+
+        assertEquals("US", state.vpnRoute?.countryCode)
+        assertEquals("US", state.torExit?.countryCode)
+        assertEquals(
+            origin.lat + TrafficMapRepository.SameCountryVpnRouteLatOffset,
+            state.vpnRoute?.lat ?: 0.0,
+            0.0,
+        )
+        assertEquals(
+            origin.lon + TrafficMapRepository.SameCountryVpnRouteLonOffset,
+            state.vpnRoute?.lon ?: 0.0,
+            0.0,
+        )
+        assertEquals(
+            origin.lat + TrafficMapRepository.SameCountryTorExitLatOffset,
+            state.torExit?.lat ?: 0.0,
+            0.0,
+        )
+        assertEquals(
+            origin.lon + TrafficMapRepository.SameCountryTorExitLonOffset,
+            state.torExit?.lon ?: 0.0,
+            0.0,
+        )
+        assertNotEquals(state.vpnRoute?.lat, state.torExit?.lat)
+        assertNotEquals(state.vpnRoute?.lon, state.torExit?.lon)
+        assertEquals(2, state.edges.size)
     }
 
     @Test

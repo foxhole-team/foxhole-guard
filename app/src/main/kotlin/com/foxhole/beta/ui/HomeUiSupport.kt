@@ -1075,7 +1075,6 @@ private fun ConnectionSnapshot.shouldRejectTrafficMapOriginAsRouteIp(
     routeIpInfo: IpInfo?,
 ): Boolean {
     if (!isActiveTrafficMapRouteTunnel()) return false
-    if (lastChangeAt <= 0L || deviceIpInfo.fetchedAt >= lastChangeAt) return true
     val routeIp = routeIpInfo?.let(::primaryVisibleIpOrNull) ?: return false
     val deviceIp = primaryVisibleIpOrNull(deviceIpInfo) ?: return false
     return deviceIp == routeIp

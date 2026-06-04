@@ -6,6 +6,7 @@ import android.view.Gravity
 import android.view.ViewGroup
 import android.view.ViewOutlineProvider
 import android.widget.FrameLayout
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.EnterTransition
@@ -233,6 +234,9 @@ fun FoxholeApp(
             gate = settingsDetailNavigationGate,
             telemetry = navigationTransitionTelemetry,
         )
+    }
+    BackHandler(enabled = currentRoute.isRootRoute() && currentSection == AppSection.SETTINGS) {
+        selectRootSection(AppSection.DASHBOARD)
     }
     val backdropBlurHost =
         remember(bottomDockOverlayHost, bottomDockBlurTarget) {
@@ -822,7 +826,6 @@ fun FoxholeApp(
                         onDiagnosticsRetentionSelected = viewModel::onDiagnosticsRetentionSelected,
                         onSanitizeNetworkActivityPrivateDataChanged = viewModel::onSanitizeNetworkActivityPrivateDataChanged,
                         onRawLiveDiagnosticsChanged = viewModel::onRawLiveDiagnosticsChanged,
-                        onStatisticsMetricEnabledChanged = viewModel::onStatisticsMetricEnabledChanged,
                         onOpenSecurityAppMonitorSettings = { navigateToSettingsDetail(AppRoute.SECURITY_APP_MONITOR) },
                     )
                 }

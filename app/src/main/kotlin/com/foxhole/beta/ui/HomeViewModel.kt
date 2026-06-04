@@ -797,6 +797,7 @@ class HomeViewModel(
     internal var pendingPostConnectIpRefresh: Boolean = false
     internal var firstForegroundIpRefreshPending: Boolean = true
     internal var lastForegroundDashboardRefreshElapsedMs: Long = 0L
+    internal var foregroundRefreshJob: Job? = null
     internal var connectedIpRefreshJob: Job? = null
     internal var postConnectLatencyRefreshJob: Job? = null
     internal var profileLatencyRefreshJob: Job? = null
@@ -972,7 +973,11 @@ class HomeViewModel(
     }
 
     fun onAppForegrounded() {
-        viewModelScope.launch {
+        foregroundRefreshJob?.takeIf { job -> job.isActive }?.let {
+            container.diagnosticsLogger.record("ip", "foreground refresh skipped: active")
+            return
+        }
+        foregroundRefreshJob = viewModelScope.launch {
             appTrafficUsageAccessGrantedMutable.value =
                 withContext(Dispatchers.IO) { appTrafficStatsRecorder.hasUsageAccess() }
             val appTrafficStatsAllowed =

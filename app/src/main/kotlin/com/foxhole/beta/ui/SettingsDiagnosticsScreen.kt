@@ -56,7 +56,6 @@ import com.foxhole.beta.core.model.InstalledAppInventoryChange
 import com.foxhole.beta.core.model.InstalledAppRiskLevel
 import com.foxhole.beta.core.model.IpInfo
 import com.foxhole.beta.core.model.NetworkActivityEvent
-import com.foxhole.beta.core.model.StatisticsMetric
 import com.foxhole.beta.core.security.labelRes
 import com.foxhole.beta.core.statistics.countryDisplayName
 import com.foxhole.beta.core.statistics.normalizedCountryCode
@@ -85,7 +84,6 @@ fun DiagnosticsScreen(
     onDiagnosticsRetentionSelected: (DiagnosticsRetention) -> Unit,
     onSanitizeNetworkActivityPrivateDataChanged: (Boolean) -> Unit,
     onRawLiveDiagnosticsChanged: (Boolean) -> Unit,
-    onStatisticsMetricEnabledChanged: (StatisticsMetric, Boolean) -> Unit,
     onOpenSecurityAppMonitorSettings: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -229,7 +227,6 @@ fun DiagnosticsScreen(
             onDismiss = { appChangesEnableVisible = false },
             onConfirm = {
                 appChangesEnableVisible = false
-                onStatisticsMetricEnabledChanged(StatisticsMetric.APP_CHANGES, true)
                 onOpenSecurityAppMonitorSettings()
             },
         )
