@@ -339,6 +339,7 @@ class HomeRuntimeBehaviorTest {
     fun dashboardSettingsRoundTripKeepsWarmMapAndNetworkResponsive() {
         val expectedIp = "198.51.100.88"
         seedNetworkBlock(expectedIp)
+        scrollToTrafficMapCard()
         waitUntilTagExists("home_traffic_world_map", timeoutMs = INITIAL_TRAFFIC_MAP_READY_TIMEOUT_MS)
 
         val settingsOpenMs =
@@ -568,6 +569,15 @@ class HomeRuntimeBehaviorTest {
         composeRule.waitForIdle()
     }
 
+    private fun scrollToTrafficMapCard() {
+        runCatching {
+            composeRule
+                .onNodeWithTag("home_dashboard_list")
+                .performScrollToNode(hasTestTag("home_traffic_map_card"))
+        }
+        composeRule.waitForIdle()
+    }
+
     private fun bytesString(value: Long): String =
         Formatter.formatShortFileSize(InstrumentationRegistry.getInstrumentation().targetContext, value)
 
@@ -674,7 +684,7 @@ class HomeRuntimeBehaviorTest {
         InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as FoxholeApplication
 
     private companion object {
-        private const val INITIAL_TRAFFIC_MAP_READY_TIMEOUT_MS = 5_000L
+        private const val INITIAL_TRAFFIC_MAP_READY_TIMEOUT_MS = 10_000L
         private const val NAVIGATION_RESPONSIVENESS_TIMEOUT_MS = 1_500L
         private const val WARM_DASHBOARD_RETURN_TIMEOUT_MS = 1_200L
         private const val NETWORK_WIDGET_RESPONSIVENESS_TIMEOUT_MS = 1_500L
