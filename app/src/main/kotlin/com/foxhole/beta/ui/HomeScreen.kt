@@ -1651,6 +1651,7 @@ private fun DashboardCardDragContainer(
     var cardHeightPx by remember(card) { mutableFloatStateOf(0f) }
     val active = activeCard == card
     val dragShape = MaterialTheme.shapes.large
+    val activeDragElevationPx = with(density) { foxholeElevation(FoxholeElevationRole.Dragged).toPx() }
     val moveDistancePx = cardHeightPx.takeIf { it > 0f } ?: fallbackMoveDistancePx
     val moveThresholdPx =
         (moveDistancePx * DASHBOARD_CARD_REORDER_THRESHOLD_FRACTION)
@@ -1676,7 +1677,7 @@ private fun DashboardCardDragContainer(
                     scaleY = scale
                     shape = dragShape
                     clip = active
-                    shadowElevation = if (active) 8f else 0f
+                    shadowElevation = if (active) activeDragElevationPx else 0f
                 }
                 .zIndex(if (active) DASHBOARD_CARD_ACTIVE_Z_INDEX else 0f)
                 .pointerInput(card, moveDistancePx, moveThresholdPx) {

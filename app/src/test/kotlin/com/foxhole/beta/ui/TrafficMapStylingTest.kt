@@ -5,41 +5,54 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.IntSize
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class TrafficMapStylingTest {
     @Test
-    fun `traffic map uses dark gray land and translucent route colors in both themes`() {
-        val darkColors = trafficMapColors(darkTheme = true, surfaceColor = Color(0xFF101011))
-        val lightColors = trafficMapColors(darkTheme = false, surfaceColor = Color.White)
+    fun `traffic map uses theme aware land and semantic route colors in both themes`() {
+        val darkSurface = Color(0xFF101011)
+        val darkSurfaceVariant = Color(0xFF242629)
+        val darkOnSurfaceVariant = Color(0xFFC6CBD1)
+        val lightSurface = Color.White
+        val lightSurfaceVariant = Color(0xFFE6E8EC)
+        val lightOnSurfaceVariant = Color(0xFF62676E)
+        val success = Color(0xFF5EE4A1)
+        val accent = Color(0xFF8AAED8)
+        val darkColors =
+            trafficMapColors(
+                darkTheme = true,
+                surfaceColor = darkSurface,
+                surfaceVariantColor = darkSurfaceVariant,
+                onSurfaceVariantColor = darkOnSurfaceVariant,
+                successColor = success,
+                accentColor = accent,
+            )
+        val lightColors =
+            trafficMapColors(
+                darkTheme = false,
+                surfaceColor = lightSurface,
+                surfaceVariantColor = lightSurfaceVariant,
+                onSurfaceVariantColor = lightOnSurfaceVariant,
+                successColor = success,
+                accentColor = accent,
+            )
 
-        assertEquals(
-            Color(0xFF3E3F41),
-            darkColors.countryFill,
-        )
-        assertEquals(
-            Color(0xFF414345),
-            lightColors.countryFill,
-        )
-        assertEquals(
-            Color(0xFF8CE8B3),
-            lightColors.routeLine,
-        )
-        assertEquals(
-            Color(0xFF8CE8B3),
-            darkColors.destination,
-        )
-        assertEquals(
-            Color(0xFF8CE8B3),
-            lightColors.origin,
-        )
-        assertEquals(Color(0xFF050606), darkColors.routeHalo)
+        assertNotEquals(Color.Gray, darkColors.countryFill)
+        assertNotEquals(Color.Gray, lightColors.countryFill)
+        assertNotEquals(darkColors.countryFill, lightColors.countryFill)
+        assertEquals(success, lightColors.routeLine)
+        assertEquals(success, darkColors.destination)
+        assertEquals(accent, lightColors.origin)
+        assertEquals(darkSurface, darkColors.routeHalo)
         assertEquals(Color.White, lightColors.routeHalo)
+        assertEquals(darkOnSurfaceVariant.copy(alpha = 0.88f), darkColors.legendText)
+        assertEquals(lightOnSurfaceVariant.copy(alpha = 0.76f), lightColors.inactiveText)
     }
 
     @Test
-    fun `traffic map route lines use thin translucent stroke constants`() {
+    fun `traffic map route lines use thin translucent stroke constants and semantic tokens`() {
         val source =
             listOf(
                 java.io.File("src/main/kotlin/com/foxhole/beta/ui/TrafficMapDashboardCard.kt"),
@@ -55,7 +68,13 @@ class TrafficMapStylingTest {
         assertTrue(source.contains("TRAFFIC_MAP_ROUTE_HALO_ALPHA_MULTIPLIER = 0.08f"))
         assertTrue(source.contains("colors.routeHalo.copy("))
         assertTrue(source.contains("colors.routeLine.copy(alpha = route.alpha)"))
-        assertTrue(source.contains("TRAFFIC_MAP_ROUTE_GREEN"))
+        assertTrue(source.contains("successColor = semanticColors.success"))
+        assertTrue(source.contains("accentColor = colorScheme.primary"))
+        assertTrue(source.contains("surfaceVariantColor = colorScheme.surfaceVariant"))
+        assertTrue(source.contains("onSurfaceVariantColor = colorScheme.onSurfaceVariant"))
+        assertTrue(source.contains("colors.legendText"))
+        assertTrue(source.contains("fontSize = 10.sp"))
+        assertFalse(source.contains("fontSize = 8.5.sp"))
     }
 
     @Test

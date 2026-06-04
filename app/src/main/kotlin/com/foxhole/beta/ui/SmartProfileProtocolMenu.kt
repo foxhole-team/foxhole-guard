@@ -152,7 +152,7 @@ internal fun SmartProfileAutoConnectMenu(
             modifier =
                 Modifier
                     .size(if (compact) 30.dp else 36.dp)
-                    .foxholeMenuShadow(shape = CircleShape, elevation = 2.dp)
+                    .foxholeMenuShadow(shape = CircleShape, role = FoxholeElevationRole.Control)
                     .clip(CircleShape)
                     .clickable(enabled = enabled) { expanded = true }
                     .testTag("smart_profile_auto_connect_menu_action"),

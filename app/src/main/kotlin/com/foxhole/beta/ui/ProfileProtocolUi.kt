@@ -377,7 +377,7 @@ private fun ProtocolMarkOrSelector(
                 Modifier
                     .testTag("protocol_selector_${selected.id}")
                     .width(selectorWidth)
-                    .foxholeMenuShadow(shape = selectorShape, elevation = 2.dp)
+                    .foxholeMenuShadow(shape = selectorShape, role = FoxholeElevationRole.Control)
                     .clip(selectorShape)
                     .clickable { expanded = true },
             shape = selectorShape,

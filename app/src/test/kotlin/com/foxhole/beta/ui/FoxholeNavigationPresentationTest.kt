@@ -115,10 +115,24 @@ class FoxholeNavigationPresentationTest {
                 java.io.File("app/src/main/kotlin/com/foxhole/beta/ui/theme/Theme.kt"),
                 java.io.File("../app/src/main/kotlin/com/foxhole/beta/ui/theme/Theme.kt"),
             ).first { file -> file.isFile }.readText()
+        val appSource =
+            listOf(
+                java.io.File("src/main/kotlin/com/foxhole/beta/ui/FoxholeApp.kt"),
+                java.io.File("app/src/main/kotlin/com/foxhole/beta/ui/FoxholeApp.kt"),
+                java.io.File("../app/src/main/kotlin/com/foxhole/beta/ui/FoxholeApp.kt"),
+            ).first { file -> file.isFile }.readText()
 
         assertTrue(chromeSource.contains("BOTTOM_DOCK_CONTAINER_DARK_ALPHA = 1f"))
         assertTrue(chromeSource.contains("BOTTOM_DOCK_CONTAINER_LIGHT_ALPHA = 1f"))
+        assertTrue(chromeSource.contains("FoxholeElevationRole.Dock -> 12.dp"))
+        assertTrue(chromeSource.contains("internal fun foxholeBottomDockBorderColor()"))
+        assertTrue(chromeSource.contains("internal fun foxholeBottomDockElevation()"))
+        assertTrue(chromeSource.contains("role = FoxholeElevationRole.Dock"))
         assertFalse(chromeSource.contains("containerColor.alpha * 0.96f"))
+        assertTrue(appSource.contains("val borderColor = foxholeBottomDockBorderColor().toArgb()"))
+        assertTrue(appSource.contains("val dockElevationPx = with(density) { foxholeBottomDockElevation().toPx() }"))
+        assertTrue(appSource.contains("elevation = dockElevationPx"))
+        assertTrue(appSource.contains("borderColor = foxholeBottomDockBorderColor()"))
         assertTrue(themeSource.contains("bottomBarContainerColor = FoxholeDarkSurface,"))
         assertTrue(themeSource.contains("bottomBarContainerColor = colorScheme.surface,"))
         assertTrue(themeSource.contains("bottomBarContainerColor = colorScheme.surfaceContainerHigh,"))

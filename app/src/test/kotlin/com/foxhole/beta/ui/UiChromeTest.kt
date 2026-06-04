@@ -2,13 +2,36 @@ package com.foxhole.beta.ui
 
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHostState
-import org.junit.Assert.assertEquals
-import org.junit.Test
+import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.yield
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
+import org.junit.Test
 
 class UiChromeTest {
+    @Test
+    fun `top scrim alpha ramps continuously before the minimum scrolled state`() {
+        assertEquals(0f, foxholeTopScrimAlpha(0f), 0.0001f)
+        assertTrue(foxholeTopScrimAlpha(0.01f) in 0f..0.64f)
+        assertEquals(0.64f, foxholeTopScrimAlpha(0.36f), 0.0001f)
+        assertEquals(1f, foxholeTopScrimAlpha(1f), 0.0001f)
+    }
+
+    @Test
+    fun `elevation roles keep shared chrome depths explicit`() {
+        assertEquals(0.dp, foxholeElevation(FoxholeElevationRole.Surface))
+        assertEquals(1.dp, foxholeElevation(FoxholeElevationRole.Pill))
+        assertEquals(2.dp, foxholeElevation(FoxholeElevationRole.Control))
+        assertEquals(3.dp, foxholeElevation(FoxholeElevationRole.Card))
+        assertEquals(8.dp, foxholeElevation(FoxholeElevationRole.Menu))
+        assertEquals(8.dp, foxholeElevation(FoxholeElevationRole.Banner))
+        assertEquals(12.dp, foxholeBottomDockElevation())
+        assertEquals(18.dp, foxholeElevation(FoxholeElevationRole.Dialog))
+        assertEquals(8.dp, foxholeElevation(FoxholeElevationRole.Dragged))
+    }
+
     @Test
     fun `show banner gives success tone a countdown duration`() =
         runBlocking {

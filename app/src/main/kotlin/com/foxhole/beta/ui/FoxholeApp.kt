@@ -944,8 +944,9 @@ private fun FoxholeBottomBar(
     val cornerRadiusPx = with(density) { 28.dp.toPx() }
     val themeMode = LocalFoxholeThemeMode.current
     val backgroundColor = foxholeBottomDockBackgroundColor()
-    val borderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.24f).toArgb()
+    val borderColor = foxholeBottomDockBorderColor().toArgb()
     val borderWidthPx = with(density) { 1.dp.roundToPx() }
+    val dockElevationPx = with(density) { foxholeBottomDockElevation().toPx() }
     val navigationBottomPadding = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val windowWidth = with(density) { LocalWindowInfo.current.containerSize.width.toDp() }
     val dockWidth = (windowWidth * 0.62f).coerceIn(180.dp, 248.dp)
@@ -969,7 +970,7 @@ private fun FoxholeBottomBar(
                     gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
                     bottomMargin = dockBottomMarginPx
                 }
-            elevation = 0f
+            elevation = dockElevationPx
         }
     }
     if (externalDockView != null) {
@@ -989,7 +990,7 @@ private fun FoxholeBottomBar(
                     .width(dockWidth)
                     .height(60.dp),
             shape = MaterialTheme.shapes.extraLarge,
-            borderColor = MaterialTheme.colorScheme.outlineVariant,
+            borderColor = foxholeBottomDockBorderColor(),
         ) {
             FoxholeBottomBarDockContent(
                 selectedSection = selectedSection,

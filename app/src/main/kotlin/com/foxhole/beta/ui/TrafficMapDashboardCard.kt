@@ -5,9 +5,6 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.graphics.Bitmap
-import android.graphics.Canvas as AndroidCanvas
-import android.graphics.Paint as AndroidPaint
-import android.graphics.Path as AndroidPath
 import android.os.BatteryManager
 import android.os.PowerManager
 import android.os.Process
@@ -59,6 +56,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.toArgb
@@ -84,6 +82,7 @@ import com.foxhole.beta.core.model.TrafficMapUiState
 import com.foxhole.beta.core.traffic.TrafficMapCountryShape
 import com.foxhole.beta.core.traffic.TrafficMapCountryShapeAssetParser
 import com.foxhole.beta.ui.theme.LocalFoxholeDarkTheme
+import com.foxhole.beta.ui.theme.LocalFoxholeSemanticColors
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.awaitCancellation
@@ -101,6 +100,9 @@ import kotlin.math.floor
 import kotlin.math.min
 import kotlin.math.roundToInt
 import kotlin.math.sqrt
+import android.graphics.Canvas as AndroidCanvas
+import android.graphics.Paint as AndroidPaint
+import android.graphics.Path as AndroidPath
 
 private object TrafficMapRenderDispatcher {
     val dispatcher: CoroutineDispatcher =
@@ -656,6 +658,7 @@ private fun TrafficMapLegend(
         TrafficMapOriginRow(
             originLabel = originLabel,
             showIcon = state.originCountryCode != null,
+            colors = colors,
         )
         if (destinations.isEmpty()) {
             Text(
@@ -669,10 +672,10 @@ private fun TrafficMapLegend(
                         },
                     ),
                 style = MaterialTheme.typography.labelSmall.copy(
-                    fontSize = 8.sp,
-                    lineHeight = 10.sp,
+                    fontSize = 10.sp,
+                    lineHeight = 12.sp,
                 ),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = colors.inactiveText,
                 maxLines = 6,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -684,9 +687,14 @@ private fun TrafficMapLegend(
                         .verticalScroll(scrollState),
                 verticalArrangement = Arrangement.spacedBy(3.dp),
             ) {
-                TrafficMapLegendHeader()
+                TrafficMapLegendHeader(colors = colors)
                 destinations.forEach { point ->
-                    TrafficMapLegendDestinationRow(context = context, point = point, markerColor = colors.destination)
+                    TrafficMapLegendDestinationRow(
+                        context = context,
+                        point = point,
+                        markerColor = colors.destination,
+                        textColor = colors.legendText,
+                    )
                 }
             }
         }
@@ -697,6 +705,7 @@ private fun TrafficMapLegend(
 private fun TrafficMapOriginRow(
     originLabel: String,
     showIcon: Boolean,
+    colors: TrafficMapColors,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -707,7 +716,7 @@ private fun TrafficMapOriginRow(
             Icon(
                 imageVector = Icons.Outlined.PhoneAndroid,
                 contentDescription = stringResource(R.string.traffic_map_device_location_icon),
-                tint = MaterialTheme.colorScheme.primary,
+                tint = colors.origin,
                 modifier = Modifier.size(16.dp),
             )
         }
@@ -718,7 +727,7 @@ private fun TrafficMapOriginRow(
                 lineHeight = 12.sp,
             ),
             fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onSurface,
+            color = colors.legendText,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
         )
@@ -787,7 +796,7 @@ private fun TrafficMapUiState.originLocationLabel(): String =
         .ifBlank { "IP" }
 
 @Composable
-private fun TrafficMapLegendHeader() {
+private fun TrafficMapLegendHeader(colors: TrafficMapColors) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -798,21 +807,21 @@ private fun TrafficMapLegendHeader() {
             modifier = Modifier.weight(0.58f),
             textAlign = TextAlign.Start,
             fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = colors.inactiveText,
         )
         TrafficMapLegendCell(
             text = stringResource(R.string.traffic_map_sessions_header),
             modifier = Modifier.weight(0.62f),
             textAlign = TextAlign.End,
             fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = colors.inactiveText,
         )
         TrafficMapLegendCell(
             text = stringResource(R.string.traffic_map_total_header),
             modifier = Modifier.weight(0.82f),
             textAlign = TextAlign.End,
             fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = colors.inactiveText,
         )
     }
 }
@@ -822,6 +831,7 @@ private fun TrafficMapLegendDestinationRow(
     context: Context,
     point: TrafficMapPoint,
     markerColor: Color,
+    textColor: Color,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -850,17 +860,20 @@ private fun TrafficMapLegendDestinationRow(
                 text = point.countryCode.uppercase(Locale.US),
                 modifier = Modifier.weight(1f),
                 textAlign = TextAlign.Start,
+                color = textColor,
             )
         }
         TrafficMapLegendCell(
             text = point.connections.toString(),
             modifier = Modifier.weight(0.62f),
             textAlign = TextAlign.End,
+            color = textColor,
         )
         TrafficMapLegendCell(
             text = formatBytes(context, point.bytes),
             modifier = Modifier.weight(0.82f),
             textAlign = TextAlign.End,
+            color = textColor,
         )
     }
 }
@@ -877,8 +890,8 @@ private fun TrafficMapLegendCell(
         text = text,
         modifier = modifier,
         style = MaterialTheme.typography.labelSmall.copy(
-            fontSize = 8.5.sp,
-            lineHeight = 10.sp,
+            fontSize = 10.sp,
+            lineHeight = 12.sp,
         ),
         fontWeight = fontWeight,
         color = color,
@@ -1283,40 +1296,54 @@ internal data class TrafficMapColors(
     val destination: Color,
     val origin: Color,
     val phoneScreen: Color,
+    val legendText: Color,
+    val inactiveText: Color,
 )
 
 @Composable
 private fun trafficMapColors(): TrafficMapColors {
     val colorScheme = MaterialTheme.colorScheme
+    val semanticColors = LocalFoxholeSemanticColors.current
     return trafficMapColors(
         darkTheme = LocalFoxholeDarkTheme.current,
         surfaceColor = colorScheme.surface,
+        surfaceVariantColor = colorScheme.surfaceVariant,
+        onSurfaceVariantColor = colorScheme.onSurfaceVariant,
+        successColor = semanticColors.success,
+        accentColor = colorScheme.primary,
     )
 }
 
 internal fun trafficMapColors(
     darkTheme: Boolean,
     surfaceColor: Color,
-): TrafficMapColors =
-    if (darkTheme) {
-        TrafficMapColors(
-            countryFill = TRAFFIC_MAP_DARK_COUNTRY_FILL,
-            routeLine = TRAFFIC_MAP_ROUTE_GREEN,
-            routeHalo = TRAFFIC_MAP_DARK_ROUTE_HALO,
-            destination = TRAFFIC_MAP_ROUTE_GREEN,
-            origin = TRAFFIC_MAP_ROUTE_GREEN,
-            phoneScreen = surfaceColor.copy(alpha = 0.92f),
-        )
-    } else {
-        TrafficMapColors(
-            countryFill = TRAFFIC_MAP_LIGHT_COUNTRY_FILL,
-            routeLine = TRAFFIC_MAP_ROUTE_GREEN,
-            routeHalo = TRAFFIC_MAP_LIGHT_ROUTE_HALO,
-            destination = TRAFFIC_MAP_ROUTE_GREEN,
-            origin = TRAFFIC_MAP_ROUTE_GREEN,
-            phoneScreen = surfaceColor.copy(alpha = 0.94f),
-        )
-    }
+    surfaceVariantColor: Color,
+    onSurfaceVariantColor: Color,
+    successColor: Color,
+    accentColor: Color,
+): TrafficMapColors {
+    val landBaseAlpha = if (darkTheme) 0.46f else 0.58f
+    val landDetailAlpha = if (darkTheme) 0.22f else 0.30f
+    val countryBase = surfaceVariantColor.copy(alpha = landBaseAlpha).compositeOver(surfaceColor)
+    val countryFill = onSurfaceVariantColor.copy(alpha = landDetailAlpha).compositeOver(countryBase)
+    val routeHalo =
+        if (darkTheme) {
+            surfaceColor
+        } else {
+            Color.White
+        }
+    val legendText = onSurfaceVariantColor.copy(alpha = if (darkTheme) 0.88f else 0.92f)
+    return TrafficMapColors(
+        countryFill = countryFill,
+        routeLine = successColor,
+        routeHalo = routeHalo,
+        destination = successColor,
+        origin = accentColor,
+        phoneScreen = surfaceColor.copy(alpha = if (darkTheme) 0.92f else 0.94f),
+        legendText = legendText,
+        inactiveText = onSurfaceVariantColor.copy(alpha = if (darkTheme) 0.72f else 0.76f),
+    )
+}
 
 private fun trafficMapViewport(size: Size): TrafficMapViewport {
     val widthForHeight = size.height * TRAFFIC_MAP_WORLD_ASPECT_RATIO
@@ -1350,12 +1377,7 @@ private data class TrafficMapPowerState(
 }
 
 private val TRAFFIC_MAP_CARD_TOTAL_HEIGHT = 184.dp
-private val TRAFFIC_MAP_DARK_COUNTRY_FILL = Color(0xFF3E3F41)
-private val TRAFFIC_MAP_LIGHT_COUNTRY_FILL = Color(0xFF414345)
-private val TRAFFIC_MAP_DEFAULT_COUNTRY_FILL = TRAFFIC_MAP_DARK_COUNTRY_FILL
-private val TRAFFIC_MAP_ROUTE_GREEN = Color(0xFF8CE8B3)
-private val TRAFFIC_MAP_DARK_ROUTE_HALO = Color(0xFF050606)
-private val TRAFFIC_MAP_LIGHT_ROUTE_HALO = Color(0xFFFFFFFF)
+private val TRAFFIC_MAP_DEFAULT_COUNTRY_FILL = Color(0xFF3E3F41)
 private const val TRAFFIC_MAP_ROUTE_MIN_STROKE_DP = 0.35f
 private const val TRAFFIC_MAP_ROUTE_MAX_STROKE_DP = 0.72f
 private const val TRAFFIC_MAP_ROUTE_MIN_ALPHA = 0.32f

@@ -226,23 +226,66 @@ internal object FoxholeMotionTokens {
     val NavigationExitEasing = FastOutLinearInEasing
 }
 
+internal enum class FoxholeElevationRole {
+    Surface,
+    Pill,
+    Control,
+    Card,
+    TopChrome,
+    Floating,
+    Dock,
+    Menu,
+    Banner,
+    Dialog,
+    Dragged,
+}
+
+internal fun foxholeElevation(role: FoxholeElevationRole): Dp =
+    when (role) {
+        FoxholeElevationRole.Surface -> 0.dp
+        FoxholeElevationRole.Pill -> 1.dp
+        FoxholeElevationRole.Control -> 2.dp
+        FoxholeElevationRole.Card -> 3.dp
+        FoxholeElevationRole.TopChrome -> 4.dp
+        FoxholeElevationRole.Floating -> 8.dp
+        FoxholeElevationRole.Dock -> 12.dp
+        FoxholeElevationRole.Menu -> 8.dp
+        FoxholeElevationRole.Banner -> 8.dp
+        FoxholeElevationRole.Dialog -> 18.dp
+        FoxholeElevationRole.Dragged -> 8.dp
+    }
+
 internal val FoxholePositiveAccent = Color(0xFF2F9E6A)
 internal val FoxholeAnalysisAccent = Color(0xFF6288AE)
 internal val FoxholeInfoAccent = Color(0xFFA8ADB3)
 internal val FoxholeWarningAccent = Color(0xFFE0B84A)
 private val FoxholeErrorAccent = Color(0xFFC63C3C)
-private val FoxholeCardShadowElevation = 3.dp
-private val FoxholeDropdownShadowElevation = 8.dp
 private const val TOP_CHROME_SCRIM_DARK_ALPHA = 0.14f
 private const val TOP_CHROME_SCRIM_LIGHT_ALPHA = 0.24f
 private const val TOP_CHROME_FROST_DARK_ALPHA = 0.018f
 private const val TOP_CHROME_FROST_LIGHT_ALPHA = 0.030f
 private const val TOP_CHROME_MIN_SCROLL_ALPHA = 0.64f
+private const val TOP_CHROME_MIN_SCROLL_RAMP_PROGRESS = 0.36f
 private const val BOTTOM_DOCK_CONTAINER_DARK_ALPHA = 1f
 private const val BOTTOM_DOCK_CONTAINER_LIGHT_ALPHA = 1f
 private const val BOTTOM_DOCK_BORDER_ALPHA = 0.24f
 
 internal fun foxholeTopChromeBackgroundColor(): Int = Color.Transparent.toArgb()
+
+internal fun foxholeTopScrimAlpha(rawProgress: Float): Float {
+    val progress = rawProgress.coerceIn(0f, 1f)
+    if (progress <= 0f) {
+        return 0f
+    }
+    val rampProgress = (progress / TOP_CHROME_MIN_SCROLL_RAMP_PROGRESS).coerceIn(0f, 1f)
+    val settledProgress =
+        (
+            (progress - TOP_CHROME_MIN_SCROLL_RAMP_PROGRESS) /
+                (1f - TOP_CHROME_MIN_SCROLL_RAMP_PROGRESS)
+        ).coerceIn(0f, 1f)
+    return (TOP_CHROME_MIN_SCROLL_ALPHA * rampProgress) +
+        ((1f - TOP_CHROME_MIN_SCROLL_ALPHA) * settledProgress)
+}
 
 @Composable
 internal fun foxholeBottomDockBackgroundColor(): Int {
@@ -251,6 +294,12 @@ internal fun foxholeBottomDockBackgroundColor(): Int {
         .copy(alpha = if (dark) BOTTOM_DOCK_CONTAINER_DARK_ALPHA else BOTTOM_DOCK_CONTAINER_LIGHT_ALPHA)
         .toArgb()
 }
+
+@Composable
+internal fun foxholeBottomDockBorderColor(): Color =
+    MaterialTheme.colorScheme.outlineVariant.copy(alpha = BOTTOM_DOCK_BORDER_ALPHA)
+
+internal fun foxholeBottomDockElevation(): Dp = foxholeElevation(FoxholeElevationRole.Dock)
 
 @Composable
 internal fun foxholeSystemAwareAccentColor(
@@ -306,8 +355,24 @@ internal fun Modifier.foxholeAnimateContentSize(): Modifier =
 @Composable
 internal fun Modifier.foxholeMenuShadow(
     shape: Shape,
-    elevation: Dp = FoxholeCardShadowElevation,
+    role: FoxholeElevationRole = FoxholeElevationRole.Card,
+    elevation: Dp = foxholeElevation(role),
+): Modifier = foxholeRoleShadow(shape = shape, elevation = elevation)
+
+@Composable
+internal fun Modifier.foxholeRoleShadow(
+    shape: Shape,
+    role: FoxholeElevationRole,
+): Modifier = foxholeRoleShadow(shape = shape, elevation = foxholeElevation(role))
+
+@Composable
+private fun Modifier.foxholeRoleShadow(
+    shape: Shape,
+    elevation: Dp,
 ): Modifier {
+    if (elevation <= 0.dp) {
+        return this
+    }
     val shadowColor =
         if (LocalFoxholeDarkTheme.current) {
             Color.Black.copy(alpha = 0.30f)
@@ -642,12 +707,7 @@ internal fun FoxholeTopScrimLayer(
             modifier.drawWithCache {
                 onDrawBehind {
                     val rawProgress = progress().coerceIn(0f, 1f)
-                    val scrimProgress =
-                        if (rawProgress > 0f) {
-                            TOP_CHROME_MIN_SCROLL_ALPHA + ((1f - TOP_CHROME_MIN_SCROLL_ALPHA) * rawProgress)
-                        } else {
-                            0f
-                        }
+                    val scrimProgress = foxholeTopScrimAlpha(rawProgress)
                     if (scrimProgress > 0f) {
                         drawRect(topScrimColor, alpha = scrimProgress)
                         drawRect(frostTopColor, alpha = scrimProgress)
@@ -962,7 +1022,7 @@ private fun FoxholeBanner(
         shape = MaterialTheme.shapes.large,
         color = containerColor,
         tonalElevation = 0.dp,
-        shadowElevation = 8.dp,
+        shadowElevation = foxholeElevation(FoxholeElevationRole.Banner),
         border = BorderStroke(1.dp, Color.White.copy(alpha = 0.12f)),
     ) {
         Box(
@@ -1218,7 +1278,7 @@ private val FoxholeDialogActionButtonPadding = PaddingValues(horizontal = 14.dp,
 
 @Composable
 internal fun Modifier.foxholeDialogChrome(): Modifier =
-    this.shadow(elevation = 18.dp, shape = FoxholeDialogShape, clip = false)
+    foxholeRoleShadow(shape = FoxholeDialogShape, role = FoxholeElevationRole.Dialog)
 
 @Composable
 internal fun FoxholeCard(
@@ -1248,7 +1308,7 @@ internal fun FoxholeCard(
         }
     val elevation =
         CardDefaults.cardElevation(
-            defaultElevation = FoxholeCardShadowElevation,
+            defaultElevation = foxholeElevation(FoxholeElevationRole.Card),
         )
     val cardShape = MaterialTheme.shapes.large
     val cardModifier =
@@ -1296,11 +1356,17 @@ internal fun FoxholeCard(
 internal fun FoxholeBottomDockGlassLayer(
     modifier: Modifier = Modifier,
     shape: Shape = MaterialTheme.shapes.large,
-    borderColor: Color,
+    borderColor: Color = Color.Unspecified,
     content: @Composable BoxScope.() -> Unit,
 ) {
     val dark = LocalFoxholeDarkTheme.current
     val scheme = MaterialTheme.colorScheme
+    val resolvedBorderColor =
+        if (borderColor == Color.Unspecified) {
+            foxholeBottomDockBorderColor()
+        } else {
+            borderColor
+        }
     val containerColor =
         scheme.surface.copy(alpha = if (dark) BOTTOM_DOCK_CONTAINER_DARK_ALPHA else BOTTOM_DOCK_CONTAINER_LIGHT_ALPHA)
     val frostColor =
@@ -1313,13 +1379,13 @@ internal fun FoxholeBottomDockGlassLayer(
         modifier =
             modifier.foxholeMenuShadow(
                 shape = shape,
-                elevation = FoxholeDropdownShadowElevation,
+                role = FoxholeElevationRole.Dock,
             ),
         shape = shape,
         color = Color.Transparent,
         tonalElevation = 0.dp,
         shadowElevation = 0.dp,
-        border = BorderStroke(1.dp, borderColor.copy(alpha = BOTTOM_DOCK_BORDER_ALPHA)),
+        border = BorderStroke(1.dp, resolvedBorderColor),
     ) {
         Box(
             modifier =
@@ -1398,7 +1464,7 @@ internal fun FoxholeDropdownMenu(
                     .heightIn(max = menuMaxHeight)
                     .foxholeMenuShadow(
                         shape = FoxholeDropdownShape,
-                        elevation = FoxholeDropdownShadowElevation,
+                        role = FoxholeElevationRole.Menu,
                     )
                     .clip(FoxholeDropdownShape),
             shape = FoxholeDropdownShape,
@@ -1709,7 +1775,7 @@ internal fun FoxholeValuePill(
     val pillShape = MaterialTheme.shapes.medium
     val pillColor = uiPalette.valuePillContainerColor
     val pillColors = CardDefaults.cardColors(containerColor = pillColor)
-    val pillElevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+    val pillElevation = CardDefaults.cardElevation(defaultElevation = foxholeElevation(FoxholeElevationRole.Pill))
     val pillBorder =
         if (uiPalette.valuePillBorderColor == Color.Transparent) {
             null
