@@ -155,11 +155,11 @@ class HomeDashboardHotPathTest {
     }
 
     @Test
-    fun `warm dashboard return restores cached map content immediately`() {
+    fun `dashboard root entry restores cached map content immediately`() {
         val coldStage = initialDashboardStartupStage(dashboardAlreadyWarm = false)
         val warmStage = initialDashboardStartupStage(dashboardAlreadyWarm = true)
 
-        assertFalse(
+        assertTrue(
             shouldComposeDashboardCardNow(
                 card = DashboardCard.TRAFFIC_MAP,
                 startupStage = coldStage,
@@ -231,23 +231,20 @@ class HomeDashboardHotPathTest {
     }
 
     @Test
-    fun `traffic map heavy content waits for root navigation settle before parsing`() {
+    fun `traffic map heavy content has no artificial root navigation settle delay`() {
         val homeSource = testSourceFile("HomeScreen.kt").readText()
         val trafficMapSource = testSourceFile("TrafficMapDashboardCard.kt").readText()
 
-        assertTrue(homeSource.contains("DASHBOARD_CARD_STARTUP_STAGE_DELAY_MS = 96L"))
-        assertTrue(trafficMapSource.contains("TRAFFIC_MAP_HEAVY_CONTENT_SETTLE_DELAY_MS = 650L"))
-        assertTrue(trafficMapSource.contains("delay(TRAFFIC_MAP_HEAVY_CONTENT_SETTLE_DELAY_MS)"))
-        assertFalse(homeSource.contains("DASHBOARD_CARD_STARTUP_STAGE_DELAY_MS = 16L"))
-        assertFalse(homeSource.contains("DASHBOARD_CARD_STARTUP_STAGE_DELAY_MS = 32L"))
+        assertFalse(homeSource.contains("DASHBOARD_CARD_STARTUP_STAGE_DELAY_MS"))
+        assertTrue(trafficMapSource.contains("TRAFFIC_MAP_HEAVY_CONTENT_SETTLE_DELAY_MS = 0L"))
+        assertTrue(trafficMapSource.contains("if (TRAFFIC_MAP_HEAVY_CONTENT_SETTLE_DELAY_MS > 0L)"))
     }
 
     @Test
-    fun `settings home startup staging stays under one frame per stage`() {
+    fun `settings home has no artificial startup staging delay`() {
         val settingsSource = testSourceFile("SettingsScreens.kt").readText()
 
-        assertTrue(settingsSource.contains("SETTINGS_HOME_STARTUP_STAGE_DELAY_MS = 16L"))
-        assertFalse(settingsSource.contains("SETTINGS_HOME_STARTUP_STAGE_DELAY_MS = 80L"))
+        assertFalse(settingsSource.contains("SETTINGS_HOME_STARTUP_STAGE_DELAY_MS"))
     }
 
     @Test

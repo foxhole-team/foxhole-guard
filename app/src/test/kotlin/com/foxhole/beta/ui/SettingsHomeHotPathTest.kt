@@ -1,16 +1,15 @@
 package com.foxhole.beta.ui
 
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class SettingsHomeHotPathTest {
     @Test
-    fun `cold settings home starts with first group only`() {
+    fun `cold settings home starts with all groups ready`() {
         val coldStage = initialSettingsHomeStartupStage(settingsAlreadyWarm = false)
 
-        assertFalse(shouldComposeSettingsHomeSecurityGroup(coldStage))
-        assertFalse(shouldComposeSettingsHomeAppGroup(coldStage))
+        assertTrue(shouldComposeSettingsHomeSecurityGroup(coldStage))
+        assertTrue(shouldComposeSettingsHomeAppGroup(coldStage))
     }
 
     @Test

@@ -281,7 +281,17 @@ fun HomeScreen(
     val dashboardSelectedLatencyUnavailable = dashboardLatencyPresentation.isUnavailable
     val dashboardConnectionDetailsReady = dashboardProtocolModel.connectionDetailsReady
     val dashboardConnectionMetricsLoading = dashboardProtocolModel.connectionMetricsLoading
-    val dashboardLatencySkeletonVisible = dashboardConnectionMetricsLoading && state.activeProfile != null
+    val dashboardLatencySkeletonVisible =
+        state.activeProfile != null &&
+            (
+                dashboardConnectionMetricsLoading ||
+                    (
+                        state.connection.state in setOf(ConnectionState.CONNECTING, ConnectionState.RECONNECTING) &&
+                            dashboardSelectedLatencyMs == null &&
+                            !dashboardSelectedLatencyDown &&
+                            !dashboardSelectedLatencyUnavailable
+                        )
+                )
     val dashboardProtocolPresentation = dashboardProtocolModel.presentation
     val protocolMetricsAnalysisState =
         remember(
@@ -492,11 +502,10 @@ fun HomeScreen(
     val dashboardListState = rememberLazyListState()
     val topChromeScrimProgress = rememberFoxholeTopChromeScrimProgress(dashboardListState)
     val connectionHeaderScrolled by remember { derivedStateOf { topChromeScrimProgress() > 0.01f } }
-    val initialDashboardStartupStage =
+    val dashboardStartupStage =
         remember {
             initialDashboardStartupStage(DashboardStartupCompositionWarmState.markEntered())
         }
-    var dashboardStartupStage by rememberSaveable { mutableStateOf(initialDashboardStartupStage) }
     val trafficCardRuntimeVisible =
         state.settings.ui.trafficCardEnabled &&
             shouldComposeDashboardCardNow(
@@ -511,13 +520,6 @@ fun HomeScreen(
                 activeReorderCard = activeReorderCard,
             )
     val latestTrafficUiVisibilityChanged by rememberUpdatedState(onTrafficUiVisibilityChanged)
-
-    LaunchedEffect(Unit) {
-        while (dashboardStartupStage < DASHBOARD_STARTUP_STAGE_ALL) {
-            delay(DASHBOARD_CARD_STARTUP_STAGE_DELAY_MS)
-            dashboardStartupStage += 1
-        }
-    }
     DisposableEffect(trafficCardRuntimeVisible) {
         if (trafficCardRuntimeVisible) {
             latestTrafficUiVisibilityChanged(true)
@@ -1899,8 +1901,9 @@ internal fun shouldComposeTrafficMapHeavyContent(
     activeReorderCard != null ||
         startupStage >= DASHBOARD_STARTUP_STAGE_ALL
 
+@Suppress("UNUSED_PARAMETER")
 internal fun initialDashboardStartupStage(dashboardAlreadyWarm: Boolean): Int =
-    if (dashboardAlreadyWarm) DASHBOARD_STARTUP_STAGE_ALL else DASHBOARD_STARTUP_STAGE_INITIAL
+    DASHBOARD_STARTUP_STAGE_ALL
 
 private object DashboardStartupCompositionWarmState {
     private var entered = false
@@ -1971,9 +1974,7 @@ private fun rememberHomeNetworkEmptyStartupSkeleton(
 private const val DASHBOARD_CARD_ACTIVE_Z_INDEX = 100f
 private const val DASHBOARD_CARD_REORDER_THRESHOLD_FRACTION = 0.5f
 private const val DASHBOARD_CARD_EDGE_RESISTANCE_FRACTION = 0.18f
-private const val DASHBOARD_STARTUP_STAGE_INITIAL = 0
 private const val DASHBOARD_STARTUP_STAGE_ALL = 4
-private const val DASHBOARD_CARD_STARTUP_STAGE_DELAY_MS = 96L
 private val DashboardCardReorderFallbackMoveDistance = 96.dp
 private val ImportMenuWidthChrome = 62.dp
 private val ImportMenuMinWidth = 188.dp

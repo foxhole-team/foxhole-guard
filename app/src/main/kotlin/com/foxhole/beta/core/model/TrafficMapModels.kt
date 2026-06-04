@@ -7,6 +7,7 @@ data class TrafficMapPoint(
     val lon: Double,
     val bytes: Long,
     val connections: Int,
+    val role: TrafficMapPointRole = TrafficMapPointRole.DESTINATION,
 )
 
 data class TrafficMapEdge(
@@ -15,7 +16,20 @@ data class TrafficMapEdge(
     val toLat: Double,
     val toLon: Double,
     val bytes: Long,
+    val role: TrafficMapEdgeRole = TrafficMapEdgeRole.DIRECT,
 )
+
+enum class TrafficMapPointRole {
+    DESTINATION,
+    VPN_ROUTE,
+    TOR_EXIT,
+}
+
+enum class TrafficMapEdgeRole {
+    DIRECT,
+    VPN_ROUTE,
+    TOR_ROUTE,
+}
 
 data class TrafficMapUiState(
     val originLat: Double = 48.8566,
@@ -23,6 +37,8 @@ data class TrafficMapUiState(
     val originCountryCode: String? = null,
     val originCountryName: String? = null,
     val originCity: String? = null,
+    val vpnRoute: TrafficMapPoint? = null,
+    val torExit: TrafficMapPoint? = null,
     val isAvailable: Boolean = false,
     val destinations: List<TrafficMapPoint> = emptyList(),
     val edges: List<TrafficMapEdge> = emptyList(),

@@ -26,22 +26,23 @@ internal fun StatisticsOverviewHeroCard(
     StatisticsDashboardCard(
         icon = Icons.Outlined.QueryStats,
         title = stringResource(R.string.statistics_title),
-        subtitle =
-        stringResource(
-            if (firewallEnabled) {
-                R.string.statistics_traffic_scope_all_traffic
-            } else {
-                R.string.statistics_traffic_scope_vpn_only
-            },
-        ),
         tone = StatisticsCardTone.Elevated,
     ) {
+        val trafficScopeText =
+            stringResource(
+                if (firewallEnabled) {
+                    R.string.statistics_traffic_scope_all_traffic
+                } else {
+                    R.string.statistics_traffic_scope_vpn_only
+                },
+            )
         StatisticsMetricTileGrid(
             metrics =
             listOf(
                 StatisticsMetricTileModel(
                     label = stringResource(R.string.statistics_total_traffic),
                     value = formatBytes(context, totalProfileTraffic),
+                    caption = trafficScopeText,
                     accent = MaterialTheme.colorScheme.primary,
                 ),
                 StatisticsMetricTileModel(

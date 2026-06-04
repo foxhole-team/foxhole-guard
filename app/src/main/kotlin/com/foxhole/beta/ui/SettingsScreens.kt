@@ -57,7 +57,6 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -111,7 +110,6 @@ import com.foxhole.beta.ui.FoxholeLazyScaffold
 import com.foxhole.beta.ui.FoxholePreferenceCard
 import com.foxhole.beta.ui.UsageTotalsCard
 import com.foxhole.beta.ui.theme.LocalFoxholeUiPalette
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @Suppress("LongParameterList")
@@ -135,17 +133,10 @@ fun SettingsHomeScreen(
     onOpenAbout: () -> Unit,
 ) {
     DebugRecompositionCounter("SettingsHomeScreen")
-    val initialStartupStage =
+    val startupStage =
         remember {
             initialSettingsHomeStartupStage(SettingsHomeStartupCompositionWarmState.markEntered())
         }
-    var startupStage by rememberSaveable { mutableStateOf(initialStartupStage) }
-    LaunchedEffect(Unit) {
-        while (startupStage < SETTINGS_HOME_STARTUP_STAGE_ALL) {
-            delay(SETTINGS_HOME_STARTUP_STAGE_DELAY_MS)
-            startupStage += 1
-        }
-    }
     SettingsScaffold(
         title = stringResource(R.string.settings),
         snackbarHostState = snackbarHostState,
@@ -285,8 +276,9 @@ private fun LazyListScope.settingsHomeNavigationItems(
     }
 }
 
+@Suppress("UNUSED_PARAMETER")
 internal fun initialSettingsHomeStartupStage(settingsAlreadyWarm: Boolean): Int =
-    if (settingsAlreadyWarm) SETTINGS_HOME_STARTUP_STAGE_ALL else SETTINGS_HOME_STARTUP_STAGE_INITIAL
+    SETTINGS_HOME_STARTUP_STAGE_ALL
 
 internal fun shouldComposeSettingsHomeSecurityGroup(startupStage: Int): Boolean =
     startupStage >= SETTINGS_HOME_STARTUP_STAGE_SECURITY
@@ -304,11 +296,9 @@ private object SettingsHomeStartupCompositionWarmState {
     }
 }
 
-private const val SETTINGS_HOME_STARTUP_STAGE_INITIAL = 0
 private const val SETTINGS_HOME_STARTUP_STAGE_SECURITY = 1
 private const val SETTINGS_HOME_STARTUP_STAGE_APP = 2
 private const val SETTINGS_HOME_STARTUP_STAGE_ALL = SETTINGS_HOME_STARTUP_STAGE_APP
-private const val SETTINGS_HOME_STARTUP_STAGE_DELAY_MS = 16L
 
 @Composable
 private fun SettingsSecurityRoutingNavigationGroup(

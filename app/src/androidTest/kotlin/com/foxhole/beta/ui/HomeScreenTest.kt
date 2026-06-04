@@ -71,8 +71,10 @@ class HomeScreenTest {
 
     @Test
     fun opensSettingsFromBottomNavigation() {
-        composeRule.onNodeWithTag("home_connect_button").assertIsDisplayed()
+        waitUntilTagExists("home_dashboard_list")
+        composeRule.onNodeWithTag("bottom_nav_settings").assertIsDisplayed()
         composeRule.onNodeWithTag("bottom_nav_settings").performClick()
+        waitUntilTagExists("settings_screen")
         composeRule.onNodeWithTag("settings_screen").assertIsDisplayed()
         composeRule.onAllNodesWithText("show debug logs").assertCountEquals(0)
         composeRule.onAllNodesWithText("показывать локальные логи").assertCountEquals(0)
@@ -86,12 +88,14 @@ class HomeScreenTest {
 
     @Test
     fun horizontalSwipesSwitchDashboardAndSettingsSections() {
-        composeRule.onNodeWithTag("home_connect_button").assertIsDisplayed()
+        waitUntilTagExists("home_dashboard_list")
         composeRule.onNodeWithTag("app_section_swipe_surface").performTouchInput { swipeLeft() }
+        waitUntilTagExists("settings_screen")
         composeRule.onNodeWithTag("settings_screen").assertIsDisplayed()
 
         composeRule.onNodeWithTag("app_section_swipe_surface").performTouchInput { swipeRight() }
-        composeRule.onNodeWithTag("home_connect_button").assertIsDisplayed()
+        waitUntilTagExists("home_dashboard_list")
+        composeRule.onNodeWithTag("home_dashboard_list").assertIsDisplayed()
     }
 
     @Test
@@ -132,15 +136,19 @@ class HomeScreenTest {
             composeRule.onNodeWithTag("bottom_nav_dashboard").performClick()
         }
 
-        composeRule.onNodeWithTag("home_connect_button").assertIsDisplayed()
+        waitUntilTagExists("home_dashboard_list")
+        composeRule.onNodeWithTag("home_dashboard_list").assertIsDisplayed()
         composeRule.onNodeWithTag("bottom_nav_settings").performClick()
+        waitUntilTagExists("settings_screen")
         composeRule.onNodeWithTag("settings_screen").assertIsDisplayed()
     }
 
     @Test
     fun opensProfilesFromHomeAction() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
+        waitUntilTagExists("home_profiles_action")
         composeRule.onNodeWithTag("home_profiles_action").performClick()
+        waitUntilTagExists("settings_screen")
         composeRule.onNodeWithTag("settings_screen").assertIsDisplayed()
         composeRule.onNodeWithText(context.getString(R.string.profile_list_title)).assertIsDisplayed()
     }
@@ -257,6 +265,7 @@ class HomeScreenTest {
 
     @Test
     fun opensUniversalImportMenuFromHomeAction() {
+        waitUntilTagExists("home_import_action")
         composeRule.onNodeWithTag("home_import_action").performClick()
         composeRule.waitUntil(timeoutMillis = 5_000) {
             composeRule
@@ -425,6 +434,15 @@ class HomeScreenTest {
         waitForSettingsHomeExpertActionVisible()
         composeRule.onNodeWithTag("settings_screen").performScrollToNode(hasTestTag("settings_expert_action"))
         composeRule.onNodeWithTag("settings_expert_action").assertIsDisplayed()
+    }
+
+    private fun waitUntilTagExists(
+        tag: String,
+        timeoutMs: Long = 5_000,
+    ) {
+        composeRule.waitUntil(timeoutMillis = timeoutMs) {
+            composeRule.onAllNodesWithTag(tag).fetchSemanticsNodes().isNotEmpty()
+        }
     }
 
     private fun setBlockScreenshots(enabled: Boolean) {

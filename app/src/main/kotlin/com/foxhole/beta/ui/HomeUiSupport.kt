@@ -1035,6 +1035,25 @@ internal fun trafficMapRouteIpInfoCandidate(
     return routeIpInfo.takeIf { info -> info.countryCode?.isNotBlank() == true }
 }
 
+internal fun trafficMapTorIpInfoCandidate(
+    connection: ConnectionSnapshot,
+    settings: Settings,
+    torIpInfo: IpInfo?,
+): IpInfo? {
+    val routeTorActive =
+        connection.state in ACTIVE_CONNECTION_STATES &&
+            (
+                connection.profileId == FoxholeVpnService.TOR_ONLY_PROFILE_ID ||
+                    settings.privacyRoute.enabled
+                )
+    val routeIpInfo = torIpInfo
+    return routeIpInfo?.takeIf { info ->
+        routeTorActive &&
+            info.hasVisiblePublicAddress() &&
+            info.countryCode?.isNotBlank() == true
+    }
+}
+
 internal fun shouldRetainTrafficMapOriginIpInfo(
     connection: ConnectionSnapshot,
     previousOriginIpInfo: IpInfo?,

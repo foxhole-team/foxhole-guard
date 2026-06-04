@@ -761,12 +761,14 @@ class RuntimeCommandActorTest {
         }
         val recorder =
             RuntimeCommandDiagnosticsRecorder { tag, headline, details ->
-                diagnostics +=
-                    RuntimeCommandDiagnosticEvent(
-                        tag = tag,
-                        headline = headline,
-                        details = details.filterNotNull(),
-                    )
+                synchronized(diagnostics) {
+                    diagnostics +=
+                        RuntimeCommandDiagnosticEvent(
+                            tag = tag,
+                            headline = headline,
+                            details = details.filterNotNull(),
+                        )
+                }
             }
         return RuntimeCommandActor(
             scope = scope,

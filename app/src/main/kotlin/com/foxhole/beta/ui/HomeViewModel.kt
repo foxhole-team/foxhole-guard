@@ -629,11 +629,26 @@ class HomeViewModel(
         }
             .distinctUntilChanged()
 
+    private val trafficMapTorIpInfo =
+        combine(
+            container.connectionController.snapshot,
+            container.settingsRepository.settings,
+            torIpInfoMutable,
+        ) { connection, settings, torIpInfo ->
+            trafficMapTorIpInfoCandidate(
+                connection = connection,
+                settings = settings,
+                torIpInfo = torIpInfo,
+            )
+        }
+            .distinctUntilChanged()
+
     val trafficMapUiState =
         container.trafficMapRepository.trafficMapState(
             scope = viewModelScope,
             originIpInfo = trafficMapOriginIpInfo,
             routeIpInfo = trafficMapRouteIpInfo,
+            torIpInfo = trafficMapTorIpInfo,
             runtimeAvailable = trafficMapRuntimeAvailable,
         )
 

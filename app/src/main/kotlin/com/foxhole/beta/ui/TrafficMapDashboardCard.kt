@@ -77,7 +77,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.foxhole.beta.BuildConfig
 import com.foxhole.beta.R
 import com.foxhole.beta.core.model.TrafficMapEdge
+import com.foxhole.beta.core.model.TrafficMapEdgeRole
 import com.foxhole.beta.core.model.TrafficMapPoint
+import com.foxhole.beta.core.model.TrafficMapPointRole
 import com.foxhole.beta.core.model.TrafficMapUiState
 import com.foxhole.beta.core.traffic.TrafficMapCountryShape
 import com.foxhole.beta.core.traffic.TrafficMapCountryShapeAssetParser
@@ -242,7 +244,9 @@ private fun rememberTrafficMapHeavyContentReady(enabled: Boolean): Boolean {
             return@LaunchedEffect
         }
         ready = false
-        delay(TRAFFIC_MAP_HEAVY_CONTENT_SETTLE_DELAY_MS)
+        if (TRAFFIC_MAP_HEAVY_CONTENT_SETTLE_DELAY_MS > 0L) {
+            delay(TRAFFIC_MAP_HEAVY_CONTENT_SETTLE_DELAY_MS)
+        }
         ready = true
     }
     return enabled && ready
@@ -362,7 +366,7 @@ private fun TrafficMapPowerSaveBlock(
 }
 
 @Composable
-@Suppress("LongMethod")
+@Suppress("CyclomaticComplexMethod", "LongMethod")
 private fun TrafficMapCanvas(
     state: TrafficMapUiState,
     countryShapes: List<TrafficMapCountryShape>,
@@ -371,6 +375,8 @@ private fun TrafficMapCanvas(
     val colors = trafficMapColors()
     val mapCountryShapes = countryShapes
     val drawableDestinations = remember(state.destinations) { state.destinations.toDrawableTrafficMapDestinations() }
+    val drawableVpnRoute = remember(state.vpnRoute) { state.vpnRoute?.toDrawableTrafficMapDestination() }
+    val drawableTorExit = remember(state.torExit) { state.torExit?.toDrawableTrafficMapDestination() }
     val drawableEdges = remember(state.edges) { state.edges.toDrawableTrafficMapEdges() }
     val originLat = state.originLat
     val originLon = state.originLon
@@ -391,8 +397,10 @@ private fun TrafficMapCanvas(
                 val maxLineStroke = TRAFFIC_MAP_ROUTE_MAX_STROKE_DP.dp.toPx()
                 val minLineStroke = TRAFFIC_MAP_ROUTE_MIN_STROKE_DP.dp.toPx()
                 val routeHaloStrokeExtra = TRAFFIC_MAP_ROUTE_HALO_STROKE_EXTRA_DP.dp.toPx()
-                val destinationRadius = 3.6.dp.toPx()
-                val glowRadius = 9.dp.toPx()
+                val defaultDestinationRadius = 3.15.dp.toPx()
+                val europeDestinationRadius = 2.35.dp.toPx()
+                val routeNodeRadius = 4.6.dp.toPx()
+                val torNodeRadius = 4.25.dp.toPx()
                 val phoneWidth = 8.5.dp.toPx()
                 val phoneHeight = 12.8.dp.toPx()
                 val phoneCorner = CornerRadius(2.4.dp.toPx(), 2.4.dp.toPx())
@@ -405,12 +413,12 @@ private fun TrafficMapCanvas(
                             ?: drawableDestinations.maxOfOrNull { destination -> destination.bytes }
                             ?: 1L
                     ).coerceAtLeast(1L)
-                val routeLanes = trafficRouteLanes(origin, drawableDestinations, viewport)
+                val routeLanes = trafficRouteLanes(origin, drawableEdges, viewport)
                 val routeDrawModels =
                     if (drawableEdges.isNotEmpty()) {
                         drawableEdges
                             .take(MAX_TRAFFIC_MAP_DRAW_EDGES)
-                            .mapIndexed { index, edge ->
+                            .map { edge ->
                                 val from = project(edge.fromLat, edge.fromLon, viewport)
                                 val to = project(edge.toLat, edge.toLon, viewport)
                                 val weight = sqrt(edge.bytes.toDouble() / maxBytes.toDouble()).toFloat()
@@ -419,12 +427,13 @@ private fun TrafficMapCanvas(
                                         curvedTrafficRoutePath(
                                             from = from,
                                             to = to,
-                                            lane = routeLanes[drawableDestinations.getOrNull(index)?.countryCode] ?: 1,
+                                            lane = routeLanes[trafficMapEdgeLaneKey(edge)] ?: 1,
                                         ),
                                     strokeWidth = minLineStroke + ((maxLineStroke - minLineStroke) * weight),
                                     alpha =
                                         TRAFFIC_MAP_ROUTE_MIN_ALPHA +
                                             (TRAFFIC_MAP_ROUTE_ALPHA_RANGE * weight),
+                                    role = edge.role,
                                 )
                             }
                     } else {
@@ -433,8 +442,10 @@ private fun TrafficMapCanvas(
                 val destinationOffsets =
                     drawableDestinations
                         .take(MAX_TRAFFIC_MAP_DRAW_DESTINATIONS)
-                        .map { point -> project(point.lat, point.lon, viewport) }
-                val originMarker = origin.takeIf { originCountryCode != null || drawableEdges.isNotEmpty() }
+                        .map { point -> point to project(point.lat, point.lon, viewport) }
+                val vpnRouteOffset = drawableVpnRoute?.let { point -> point to project(point.lat, point.lon, viewport) }
+                val torExitOffset = drawableTorExit?.let { point -> point to project(point.lat, point.lon, viewport) }
+                val originMarker = origin.takeIf { originCountryCode != null }
 
                 onDrawBehind {
                     countryBitmap?.let { bitmap ->
@@ -468,7 +479,13 @@ private fun TrafficMapCanvas(
                         )
                         drawPath(
                             path = route.path,
-                            color = colors.routeLine.copy(alpha = route.alpha),
+                            color =
+                                when (route.role) {
+                                    TrafficMapEdgeRole.DIRECT -> colors.origin
+                                    TrafficMapEdgeRole.VPN_ROUTE,
+                                    TrafficMapEdgeRole.TOR_ROUTE,
+                                    -> colors.routeLine
+                                }.copy(alpha = route.alpha),
                             style =
                                 Stroke(
                                     width = route.strokeWidth,
@@ -477,25 +494,36 @@ private fun TrafficMapCanvas(
                         )
                     }
 
-                    destinationOffsets.forEach { offset ->
-                        drawCircle(
-                            color = colors.destination.copy(alpha = 0.18f),
-                            radius = glowRadius,
-                            center = offset,
-                        )
+                    destinationOffsets.forEach { (point, offset) ->
                         drawCircle(
                             color = colors.destination,
-                            radius = destinationRadius,
+                            radius =
+                                if (point.countryCode in TRAFFIC_MAP_EUROPE_COUNTRY_CODES) {
+                                    europeDestinationRadius
+                                } else {
+                                    defaultDestinationRadius
+                                },
+                            center = offset,
+                        )
+                    }
+
+                    vpnRouteOffset?.let { (_, offset) ->
+                        drawCircle(
+                            color = colors.vpnRoute,
+                            radius = routeNodeRadius,
+                            center = offset,
+                        )
+                    }
+
+                    torExitOffset?.let { (_, offset) ->
+                        drawCircle(
+                            color = colors.torExit,
+                            radius = torNodeRadius,
                             center = offset,
                         )
                     }
 
                     originMarker?.let { origin ->
-                        drawCircle(
-                            color = colors.origin.copy(alpha = 0.18f),
-                            radius = glowRadius,
-                            center = origin,
-                        )
                         drawPhoneMarker(
                             center = origin,
                             bodyColor = colors.origin,
@@ -604,6 +632,7 @@ private data class DrawableTrafficMapDestination(
     val lat: Double,
     val lon: Double,
     val bytes: Long,
+    val role: TrafficMapPointRole,
 )
 
 private data class DrawableTrafficMapEdge(
@@ -612,23 +641,27 @@ private data class DrawableTrafficMapEdge(
     val toLat: Double,
     val toLon: Double,
     val bytes: Long,
+    val role: TrafficMapEdgeRole,
 )
 
 private data class TrafficMapRouteDrawModel(
     val path: Path,
     val strokeWidth: Float,
     val alpha: Float,
+    val role: TrafficMapEdgeRole,
 )
 
 private fun List<TrafficMapPoint>.toDrawableTrafficMapDestinations(): List<DrawableTrafficMapDestination> =
-    map { point ->
-        DrawableTrafficMapDestination(
-            countryCode = point.countryCode.uppercase(Locale.US),
-            lat = point.lat,
-            lon = point.lon,
-            bytes = point.bytes.coerceAtLeast(1L),
-        )
-    }
+    map(TrafficMapPoint::toDrawableTrafficMapDestination)
+
+private fun TrafficMapPoint.toDrawableTrafficMapDestination(): DrawableTrafficMapDestination =
+    DrawableTrafficMapDestination(
+        countryCode = countryCode.uppercase(Locale.US),
+        lat = lat,
+        lon = lon,
+        bytes = bytes.coerceAtLeast(1L),
+        role = role,
+    )
 
 private fun List<TrafficMapEdge>.toDrawableTrafficMapEdges(): List<DrawableTrafficMapEdge> =
     map { edge ->
@@ -638,6 +671,7 @@ private fun List<TrafficMapEdge>.toDrawableTrafficMapEdges(): List<DrawableTraff
             toLat = edge.toLat,
             toLon = edge.toLon,
             bytes = edge.bytes.coerceAtLeast(1L),
+            role = edge.role,
         )
     }
 
@@ -650,17 +684,20 @@ private fun TrafficMapLegend(
     val colors = trafficMapColors()
     val destinations = remember(state.destinations) { state.destinations }
     val originLabel = remember(state.originCity, state.originCountryName, state.originCountryCode) { state.originLocationLabel() }
+    val routePoints = remember(state.vpnRoute, state.torExit) { listOfNotNull(state.vpnRoute, state.torExit) }
     val scrollState = rememberScrollState()
     Column(
         modifier = modifier.fillMaxHeight(),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        TrafficMapOriginRow(
-            originLabel = originLabel,
-            showIcon = state.originCountryCode != null,
-            colors = colors,
-        )
-        if (destinations.isEmpty()) {
+        if (routePoints.isEmpty()) {
+            TrafficMapOriginRow(
+                originLabel = originLabel,
+                showIcon = state.originCountryCode != null,
+                colors = colors,
+            )
+        }
+        if (destinations.isEmpty() && routePoints.isEmpty()) {
             Text(
                 modifier = Modifier.weight(1f),
                 text =
@@ -687,7 +724,24 @@ private fun TrafficMapLegend(
                         .verticalScroll(scrollState),
                 verticalArrangement = Arrangement.spacedBy(3.dp),
             ) {
-                TrafficMapLegendHeader(colors = colors)
+                state.vpnRoute?.let { point ->
+                    TrafficMapLegendDestinationRow(
+                        context = context,
+                        point = point,
+                        markerColor = colors.vpnRoute,
+                        textColor = colors.legendText,
+                        showMetrics = false,
+                    )
+                }
+                state.torExit?.let { point ->
+                    TrafficMapLegendDestinationRow(
+                        context = context,
+                        point = point,
+                        markerColor = colors.torExit,
+                        textColor = colors.legendText,
+                        showMetrics = false,
+                    )
+                }
                 destinations.forEach { point ->
                     TrafficMapLegendDestinationRow(
                         context = context,
@@ -761,19 +815,22 @@ private fun curvedTrafficRoutePath(
 
 private fun trafficRouteLanes(
     origin: Offset,
-    destinations: List<DrawableTrafficMapDestination>,
+    edges: List<DrawableTrafficMapEdge>,
     viewport: TrafficMapViewport,
 ): Map<String, Int> {
     val countsByBucket = mutableMapOf<Int, Int>()
-    return destinations.associate { destination ->
-        val point = project(destination.lat, destination.lon, viewport)
+    return edges.associate { edge ->
+        val point = project(edge.toLat, edge.toLon, viewport)
         val angle = atan2(point.y - origin.y, point.x - origin.x)
         val bucket = floor((angle + TRAFFIC_ROUTE_PI) / TRAFFIC_ROUTE_ANGLE_BUCKET_RADIANS).toInt()
         val indexInBucket = countsByBucket[bucket] ?: 0
         countsByBucket[bucket] = indexInBucket + 1
-        destination.countryCode to routeLane(bucket, indexInBucket)
+        trafficMapEdgeLaneKey(edge) to routeLane(bucket, indexInBucket)
     }
 }
+
+private fun trafficMapEdgeLaneKey(edge: DrawableTrafficMapEdge): String =
+    "${edge.role}:${edge.toLat}:${edge.toLon}"
 
 private fun routeLane(
     bucket: Int,
@@ -796,42 +853,12 @@ private fun TrafficMapUiState.originLocationLabel(): String =
         .ifBlank { "IP" }
 
 @Composable
-private fun TrafficMapLegendHeader(colors: TrafficMapColors) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        TrafficMapLegendCell(
-            text = stringResource(R.string.traffic_map_country_header),
-            modifier = Modifier.weight(0.58f),
-            textAlign = TextAlign.Start,
-            fontWeight = FontWeight.SemiBold,
-            color = colors.inactiveText,
-        )
-        TrafficMapLegendCell(
-            text = stringResource(R.string.traffic_map_sessions_header),
-            modifier = Modifier.weight(0.62f),
-            textAlign = TextAlign.End,
-            fontWeight = FontWeight.SemiBold,
-            color = colors.inactiveText,
-        )
-        TrafficMapLegendCell(
-            text = stringResource(R.string.traffic_map_total_header),
-            modifier = Modifier.weight(0.82f),
-            textAlign = TextAlign.End,
-            fontWeight = FontWeight.SemiBold,
-            color = colors.inactiveText,
-        )
-    }
-}
-
-@Composable
 private fun TrafficMapLegendDestinationRow(
     context: Context,
     point: TrafficMapPoint,
     markerColor: Color,
     textColor: Color,
+    showMetrics: Boolean = true,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -840,7 +867,7 @@ private fun TrafficMapLegendDestinationRow(
     ) {
         Row(
             modifier = Modifier.weight(0.58f),
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            horizontalArrangement = Arrangement.spacedBy(3.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(
@@ -856,6 +883,14 @@ private fun TrafficMapLegendDestinationRow(
                     color = markerColor,
                 ) {}
             }
+            Text(
+                text = countryEmoji(point.countryCode),
+                style = MaterialTheme.typography.labelSmall.copy(
+                    fontSize = 10.sp,
+                    lineHeight = 12.sp,
+                ),
+                maxLines = 1,
+            )
             TrafficMapLegendCell(
                 text = point.countryCode.uppercase(Locale.US),
                 modifier = Modifier.weight(1f),
@@ -864,13 +899,13 @@ private fun TrafficMapLegendDestinationRow(
             )
         }
         TrafficMapLegendCell(
-            text = point.connections.toString(),
+            text = if (showMetrics) point.connections.toString() else "",
             modifier = Modifier.weight(0.62f),
             textAlign = TextAlign.End,
             color = textColor,
         )
         TrafficMapLegendCell(
-            text = formatBytes(context, point.bytes),
+            text = if (showMetrics) formatBytes(context, point.bytes) else "",
             modifier = Modifier.weight(0.82f),
             textAlign = TextAlign.End,
             color = textColor,
@@ -914,7 +949,9 @@ private fun rememberTrafficMapPowerState(): TrafficMapPowerState {
         key1 = appContext,
         key2 = powerManager,
     ) {
-        delay(TRAFFIC_MAP_POWER_STATE_STARTUP_DELAY_MS)
+        if (TRAFFIC_MAP_POWER_STATE_STARTUP_DELAY_MS > 0L) {
+            delay(TRAFFIC_MAP_POWER_STATE_STARTUP_DELAY_MS)
+        }
         val receiver =
             object : BroadcastReceiver() {
                 override fun onReceive(
@@ -1294,6 +1331,8 @@ internal data class TrafficMapColors(
     val routeLine: Color,
     val routeHalo: Color,
     val destination: Color,
+    val vpnRoute: Color,
+    val torExit: Color,
     val origin: Color,
     val phoneScreen: Color,
     val legendText: Color,
@@ -1335,9 +1374,16 @@ internal fun trafficMapColors(
     val legendText = onSurfaceVariantColor.copy(alpha = if (darkTheme) 0.88f else 0.92f)
     return TrafficMapColors(
         countryFill = countryFill,
-        routeLine = successColor,
+        routeLine =
+            if (darkTheme) {
+                Color.White.copy(alpha = 0.88f)
+            } else {
+                Color(0xFFFAFAFA)
+            },
         routeHalo = routeHalo,
-        destination = successColor,
+        destination = onSurfaceVariantColor.copy(alpha = if (darkTheme) 0.78f else 0.70f),
+        vpnRoute = successColor,
+        torExit = Color(0xFFFF8A3D),
         origin = accentColor,
         phoneScreen = surfaceColor.copy(alpha = if (darkTheme) 0.92f else 0.94f),
         legendText = legendText,
@@ -1384,8 +1430,8 @@ private const val TRAFFIC_MAP_ROUTE_MIN_ALPHA = 0.32f
 private const val TRAFFIC_MAP_ROUTE_ALPHA_RANGE = 0.18f
 private const val TRAFFIC_MAP_ROUTE_HALO_STROKE_EXTRA_DP = 0.2f
 private const val TRAFFIC_MAP_ROUTE_HALO_ALPHA_MULTIPLIER = 0.08f
-private const val TRAFFIC_MAP_HEAVY_CONTENT_SETTLE_DELAY_MS = 650L
-private const val TRAFFIC_MAP_POWER_STATE_STARTUP_DELAY_MS = 1_200L
+private const val TRAFFIC_MAP_HEAVY_CONTENT_SETTLE_DELAY_MS = 0L
+private const val TRAFFIC_MAP_POWER_STATE_STARTUP_DELAY_MS = 0L
 private const val TRAFFIC_MAP_WEIGHT = 0.74f
 private const val TRAFFIC_MAP_LEGEND_WEIGHT = 0.26f
 private const val TRAFFIC_MAP_WORLD_ASPECT_RATIO = 2f
@@ -1402,6 +1448,24 @@ private const val TRAFFIC_ROUTE_PI = 3.141592653589793
 private const val TRAFFIC_ROUTE_ANGLE_BUCKET_RADIANS = 0.17453292519943295
 private const val TRAFFIC_MAP_COUNTRY_SHAPES_ASSET = "maps/ne_110m_admin_0_countries_preprocessed.json"
 private const val TRAFFIC_MAP_LOG_TAG = "FoxholeDiag"
+private val TRAFFIC_MAP_EUROPE_COUNTRY_CODES =
+    setOf(
+        "CH",
+        "DE",
+        "ES",
+        "FI",
+        "FR",
+        "GB",
+        "IE",
+        "IT",
+        "NL",
+        "NO",
+        "PL",
+        "RO",
+        "SE",
+        "TR",
+        "UA",
+    )
 private val TRAFFIC_MAP_PREWARM_WIDTH_FRACTIONS =
     floatArrayOf(
         TRAFFIC_MAP_PREWARM_COMPACT_WIDTH_FRACTION,

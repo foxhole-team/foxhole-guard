@@ -2,6 +2,7 @@ package com.foxhole.beta.core.traffic
 
 import com.foxhole.beta.core.model.IpInfo
 import com.foxhole.beta.core.model.TrafficMapPoint
+import com.foxhole.beta.core.model.TrafficMapPointRole
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -207,7 +208,7 @@ class TrafficMapRepositoryTest {
     }
 
     @Test
-    fun `traffic map state shows active vpn endpoint when live samples are still empty`() {
+    fun `traffic map state shows active vpn endpoint as route node when live samples are still empty`() {
         val state =
             TrafficMapRepository().trafficMapStateSnapshot(
                 originIpInfo =
@@ -235,15 +236,15 @@ class TrafficMapRepositoryTest {
             )
 
         assertEquals("US", state.originCountryCode)
-        assertEquals("NL", state.destinations.single().countryCode)
-        assertEquals(1, state.destinations.single().connections)
-        assertEquals(0L, state.destinations.single().bytes)
+        assertEquals("NL", state.vpnRoute?.countryCode)
+        assertEquals(TrafficMapPointRole.VPN_ROUTE, state.vpnRoute?.role)
+        assertEquals(0, state.destinations.size)
         assertEquals(1, state.edges.size)
         assertTrue(state.highlightedCountries.containsAll(listOf("US", "NL")))
     }
 
     @Test
-    fun `traffic map state uses active vpn endpoint as origin fallback when device origin is unknown`() {
+    fun `traffic map state keeps active vpn endpoint separate when device origin is unknown`() {
         val state =
             TrafficMapRepository().trafficMapStateSnapshot(
                 originIpInfo = null,
@@ -261,14 +262,15 @@ class TrafficMapRepositoryTest {
                 destinations = emptyList(),
             )
 
-        assertEquals("NL", state.originCountryCode)
-        assertEquals("NL", state.destinations.single().countryCode)
-        assertEquals(1, state.edges.size)
+        assertNull(state.originCountryCode)
+        assertEquals("NL", state.vpnRoute?.countryCode)
+        assertEquals(0, state.destinations.size)
+        assertEquals(0, state.edges.size)
         assertTrue(state.highlightedCountries.contains("NL"))
     }
 
     @Test
-    fun `traffic map state merges active vpn endpoint with same country live traffic`() {
+    fun `traffic map state keeps active vpn endpoint above same country live traffic`() {
         val state =
             TrafficMapRepository().trafficMapStateSnapshot(
                 originIpInfo =
@@ -295,9 +297,56 @@ class TrafficMapRepositoryTest {
                 destinations = listOf(trafficMapPoint("DE")),
             )
 
+        assertEquals("DE", state.vpnRoute?.countryCode)
         assertEquals(1, state.destinations.size)
         assertEquals("DE", state.destinations.single().countryCode)
-        assertEquals(1, state.edges.size)
+        assertEquals(2, state.edges.size)
+    }
+
+    @Test
+    fun `traffic map state draws tor exit as route source when tor is active`() {
+        val state =
+            TrafficMapRepository().trafficMapStateSnapshot(
+                originIpInfo =
+                    IpInfo(
+                        ip = "198.51.100.20",
+                        ipv4 = "198.51.100.20",
+                        countryCode = "US",
+                        countryName = "United States",
+                        city = "New York",
+                        isp = "Device ISP",
+                        fetchedAt = 1_000L,
+                    ),
+                routeIpInfo =
+                    IpInfo(
+                        ip = "203.0.113.20",
+                        ipv4 = "203.0.113.20",
+                        countryCode = "NL",
+                        countryName = "Netherlands",
+                        city = "Amsterdam",
+                        isp = "Tunnel ISP",
+                        fetchedAt = 2_000L,
+                    ),
+                torIpInfo =
+                    IpInfo(
+                        ip = "203.0.113.44",
+                        ipv4 = "203.0.113.44",
+                        countryCode = "DE",
+                        countryName = "Germany",
+                        city = "Frankfurt",
+                        isp = "Tor Exit",
+                        fetchedAt = 2_500L,
+                    ),
+                runtimeAvailable = true,
+                destinations = listOf(trafficMapPoint("FR")),
+            )
+
+        assertEquals("NL", state.vpnRoute?.countryCode)
+        assertEquals("DE", state.torExit?.countryCode)
+        assertEquals(TrafficMapPointRole.TOR_EXIT, state.torExit?.role)
+        assertEquals("FR", state.destinations.single().countryCode)
+        assertEquals(3, state.edges.size)
+        assertTrue(state.highlightedCountries.containsAll(listOf("US", "NL", "DE", "FR")))
     }
 
     @Test
